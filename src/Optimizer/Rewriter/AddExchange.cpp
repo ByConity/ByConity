@@ -30,6 +30,8 @@ void AddExchange::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
     ExchangeVisitor visitor{};
     Property required{Partitioning{Partitioning::Handle::SINGLE}};
+
+    required.getNodePartitioningRef().setComponent(Partitioning::Component::COORDINATOR);
     if (context->getSettingsRef().offloading_with_query_plan)
         required.setEnforceNotMatch(true);
     ExchangeContext cxt{context, required};
