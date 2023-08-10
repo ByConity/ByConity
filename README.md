@@ -39,58 +39,6 @@ Byconity is designed with a cloud-native approach, optimized to take full advant
 
 The easiest way to build ByConity is built in [docker](https://github.com/ByConity/ByConity/tree/master/docker/builder). ByConity executable file depend on Foundation DB library `libfdb_c.so`. So in order to run it, we need to install the FoundationDB client package. This [link](https://apple.github.io/foundationdb/getting-started-linux.html) tells how to install. We can download client package from FoundationDB GitHub release pages, for example [here][foundationdb-client-library].
 
-It can also be built through the following operating systems in physical machine:
-
-- Linux
-
-### 1. Prepare Prerequisites
-The following packages are required:
-
-- Git
-- CMake 3.17 or newer
-- Ninja
-- C++ compiler: clang-11 or clang-12
-- Linker: lld
-- FoundationDB client [library][foundationdb-client-library]
-
-```sh
-sudo apt-get update
-sudo apt-get install git cmake ccache python3 ninja-build libssl-dev libsnappy-dev apt-transport-https
-
-# install llvm 12
-sudo apt install lsb-release wget software-properties-common gnupg # pre-requisites of llvm.sh
-wget https://apt.llvm.org/llvm.sh
-chmod +x llvm.sh
-sudo ./llvm.sh 12
-```
-
-### 2. Checkout Source Code
-
-```sh
-git clone --recursive https://github.com/ByConity/ByConity.git
-```
-
-### 3. Build
-
-```sh
-cd ByConity
-mkdir build && cd build
-export CC=clang-12
-export CXX=clang++-12
-cmake ..
-ninja
-```
-
-Then you can find the binary in the programs folder
-
-```sh
-clickhouse-client    # byconity client
-clickhouse-server    # byconity server
-clickhouse-worker    # byconity worker
-tso_server           # byconity tso
-daemon_manager       # byconity daemon manager
-resource_manager     # byconity resource manager
-```
-
+In case you want to build ByConity in metal machine, follow this [guide](https://github.com/ByConity/ByConity/tree/master/doc/build_in_metal_machine.md)
 
 [foundationdb-client-library]: https://github.com/apple/foundationdb/releases/tag/7.1.3
