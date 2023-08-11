@@ -427,7 +427,7 @@ public:
     /// TODO:
     DataPartsVector getAllDataPartsBetween(const StoragePtr &, const TxnTimestamp &, const TxnTimestamp &) { return {}; }
 
-    void setTableClusterStatus(const UUID & table_uuid, const bool clustered);
+    void setTableClusterStatus(const UUID & table_uuid, const bool clustered, const UInt64 & table_definition_hash);
     void getTableClusterStatus(const UUID & table_uuid, bool & clustered);
     bool isTableClustered(const UUID & table_uuid);
 

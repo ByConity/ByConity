@@ -128,7 +128,8 @@ void createColumnWithDtsPartitionHash(Block & block, const Names & bucket_column
 
     // Create DTSPartition hasher and execute hashing on the block to populate split_value column
     auto dts_hasher = FunctionFactory::instance().get("dtspartition", context)->build({ block.getByName(bucket_columns[0]), split_number_column_with_type });
-    auto col_to = dts_hasher->execute(args, {}, block.rows(), 0);
+    auto uint64 = std::make_shared<DataTypeUInt64>();
+    auto col_to = dts_hasher->execute(args, uint64, block.rows(), 0);
     block.getByPosition(block.columns() - 1).column = std::move(col_to);
 }
 

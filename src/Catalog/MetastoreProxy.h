@@ -73,6 +73,7 @@ namespace DB::Catalog
 #define DATABASE_TRASH_PREFIX "DTRASH_"
 #define SERVERS_TOPOLOGY_KEY "SERVERS_TOPOLOGY"
 #define TABLE_CLUSTER_STATUS "TCS_"
+#define TABLE_DEFINITION_HASH "TDH_"
 #define CLUSTER_BG_JOB_STATUS "CLUSTER_BGJS_"
 #define MERGE_BG_JOB_STATUS "MERGE_BGJS_"
 #define PARTGC_BG_JOB_STATUS "PARTGC_BGJS_"
@@ -396,6 +397,13 @@ public:
         return ss.str();
     }
 
+    static std::string tableDefinitionHashKey(const std::string & name_space, const std::string & uuid)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << TABLE_DEFINITION_HASH << uuid;
+        return ss.str();
+    }
+
     static std::string allClusterBGJobStatusKeyPrefix(const std::string & name_space)
     {
         return escapeString(name_space) + '_' + CLUSTER_BG_JOB_STATUS;
@@ -707,7 +715,7 @@ public:
     TxnTimestamp getTransactionForKafkaConsumer(const String & name_space, const String & uuid, size_t consumer_index);
     void clearKafkaTransactions(const String & name_space, const String & uuid);
 
-    void setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered);
+    void setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered, const UInt64 & table_definition_hash);
     void getTableClusterStatus(const String & name_space, const String & uuid, bool & is_clustered);
 
     /// BackgroundJob related API

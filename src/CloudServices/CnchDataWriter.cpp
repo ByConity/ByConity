@@ -513,26 +513,31 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             if (!tpl.empty() && !consumer_group.empty())
                 txn->setKafkaTpl(consumer_group, tpl);
 
-            /// check the part is already correctly clustered for bucket table. All new inserted parts should be clustered.
-            // if (storage->isBucketTable())
-            // {
-            //     auto table_definition_hash = storage->getTableHashForClusterBy();
-            //     for (auto & part : prepared_parts)
-            //     {
-            //         if (context->getSettings().skip_table_definition_hash_check)
-            //             part->table_definition_hash = table_definition_hash;
+            // check the part is already correctly clustered for bucket table. All new inserted parts should be clustered.
+            if (storage_ptr->isBucketTable())
+            {
+                auto table_definition_hash = storage_ptr->getTableHashForClusterBy();
+                for (auto & part : dumped_data.parts)
+                {
+                    // NOTE: set allow_attach_parts_with_different_table_definition_hash to false and
+                    // skip_table_definition_hash_check to true if you want to force set part's TDH to table's TDH
+                    if (context->getSettings().skip_table_definition_hash_check)
+                        part->table_definition_hash = table_definition_hash;
 
-            //         if (!part->deleted &&
-            //             (part->bucket_number < 0 || table_definition_hash != part->table_definition_hash))
-            //         {
-            //             throw Exception(
-            //                 "Part " + part->name + " is not clustered or it has different table definition with storage. Part bucket number : "
-            //                 + std::to_string(part->bucket_number) + ", part table_definition_hash : [" + std::to_string(part->table_definition_hash)
-            //                 + "], table's table_definition_hash : [" + std::to_string(table_definition_hash) + "]",
-            //                 ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
-            //         }
-            //     }
-            // }
+                    if (context->getSettings().allow_attach_parts_with_different_table_definition_hash)
+                        continue;
+
+                    if (!part->deleted &&
+                        (part->bucket_number < 0 || table_definition_hash != part->table_definition_hash))
+                    {
+                        throw Exception(
+                            "Part " + part->name + " is not clustered or it has different table definition with storage. Part bucket number : "
+                            + std::to_string(part->bucket_number) + ", part table_definition_hash : [" + std::to_string(part->table_definition_hash)
+                            + "], table's table_definition_hash : [" + std::to_string(table_definition_hash) + "]",
+                            ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
+                    }
+                }
+            }
 
             // Precommit stage. Write intermediate parts to KV
             auto action = txn->createAction<InsertAction>(storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
