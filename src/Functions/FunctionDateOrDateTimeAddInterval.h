@@ -728,6 +728,7 @@ public:
         size_t input_rows_count /*input_rows_count*/) const override
     {
         const IDataType * from_type = arguments[0].type.get();
+        const IDataType * delta_type = arguments[1].type.get();
         WhichDataType which(from_type);
 
         ColumnsWithTypeAndName converted_arguments;
@@ -740,6 +741,15 @@ public:
             auto to_int = FunctionFactory::instance().get("toInt64", nullptr);
             auto to_int_col = to_int->build({time_col})->execute({time_col}, std::make_shared<DataTypeInt64>(), input_rows_count);
             ColumnWithTypeAndName int_col(to_int_col, std::make_shared<DataTypeInt64>(), "unixtime_int");
+            converted_arguments.emplace_back(arguments[0]);
+            converted_arguments.emplace_back(int_col);
+        }
+        else if (!std::is_same_v<Transform, NextDayImp> && isStringOrFixedString(delta_type))
+        {
+            ColumnsWithTypeAndName temp{arguments[1]};
+            auto to_int = FunctionFactory::instance().get("toInt64", nullptr);
+            auto to_int_col = to_int->build({temp})->execute({temp}, std::make_shared<DataTypeInt64>(), input_rows_count);
+            ColumnWithTypeAndName int_col(to_int_col, std::make_shared<DataTypeInt64>(), "delta_int");
             converted_arguments.emplace_back(arguments[0]);
             converted_arguments.emplace_back(int_col);
         }
