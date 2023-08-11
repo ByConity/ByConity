@@ -1219,3 +1219,4 @@ void MergeTreeDataPartCNCH::prefetchChecksums() const
         }
     }
 }
+}
