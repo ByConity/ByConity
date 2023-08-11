@@ -654,7 +654,7 @@ void CnchServerClient::submitQueryWorkerMetrics(const QueryWorkerMetricElementPt
     RPCHelpers::checkResponse(response);
 }
 
-void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, bool sync, UInt64 timeout_ms)
+void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & parts, UInt64 timeout_ms)
 {
     if (parts.empty())
         return;
@@ -666,7 +666,6 @@ void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, cons
         cntl.set_timeout_ms(timeout_ms);
 
     RPCHelpers::fillUUID(storage.getStorageUUID(), *request.mutable_uuid());
-    request.set_sync(sync);
     for (const auto & part : parts)
     {
         auto new_part = request.add_parts();

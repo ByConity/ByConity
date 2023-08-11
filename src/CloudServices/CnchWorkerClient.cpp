@@ -216,13 +216,16 @@ brpc::CallId CnchWorkerClient::preloadDataParts(
     const IStorage & storage,
     const String & create_local_table_query,
     const ServerDataPartsVector & parts,
-    bool sync,
-    const ExceptionHandlerPtr & handler)
+    const ExceptionHandlerPtr & handler,
+    bool enable_parts_sync_preload,
+    UInt64 parts_preload_level
+   )
 {
     Protos::PreloadDataPartsReq request;
     request.set_txn_id(txn_id);
     request.set_create_table_query(create_local_table_query);
-    request.set_sync(sync);
+    request.set_sync(enable_parts_sync_preload);
+    request.set_preload_level(parts_preload_level);
     fillPartsModelForSend(storage, parts, *request.mutable_parts());
 
     auto * cntl = new brpc::Controller();

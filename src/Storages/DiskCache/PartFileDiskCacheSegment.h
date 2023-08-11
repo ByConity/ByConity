@@ -24,6 +24,7 @@
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
 #include <Storages/IStorage_fwd.h>
+#include "Storages/MergeTree/MergeTreeSuffix.h"
 
 namespace DB
 {
@@ -46,13 +47,16 @@ public:
         size_t marks_count_,
         const String & stream_name_,
         const String & extension_,
-        const FileOffsetAndSize & stream_file_pos);
+        const FileOffsetAndSize & stream_file_pos,
+        bool is_preload_ = false,
+        UInt64 preload_level_ = 1);
 
     static String
     getSegmentKey(const StorageID& storage_id, const String& part_name,
         const String& stream_name, UInt32 segment_index, const String& extension);
 
     String getSegmentName() const override;
+    String getMarkName() const override;
     void cacheToDisk(IDiskCache & cache) override;
 
 private:
@@ -64,6 +68,8 @@ private:
     String stream_name;
     String extension;
     FileOffsetAndSize stream_file_pos;
+    bool is_preload;
+    UInt64 preload_level;
 
     MergeTreeMarksLoader marks_loader;
 };

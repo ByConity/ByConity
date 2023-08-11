@@ -55,6 +55,7 @@ class ReadBuffer;
     M(ASTAlterCommand) \
     M(ASTAssignment) \
     M(ASTAsterisk) \
+    M(ASTAlterDiskCacheQuery) \
     M(ASTCheckQuery) \
     M(ASTColumnDeclaration) \
     M(ASTColumnsMatcher) \

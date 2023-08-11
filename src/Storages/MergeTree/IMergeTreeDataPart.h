@@ -385,9 +385,11 @@ public:
 
     /// load checksum on demand. return ChecksumsPtr from global cache or its own checksums_ptr;
     ChecksumsPtr getChecksums() const;
+    virtual void prefetchChecksums() const { getChecksums(); }
 
     /// Get primary index, load if primary index is not initialized.
     IndexPtr getIndex() const;
+    virtual void prefetchIndex() const { getIndex(); }
 
     /// For data in RAM ('index')
     UInt64 getIndexSizeInBytes() const;

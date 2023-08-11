@@ -70,7 +70,7 @@ public:
 
     void set(const String& seg_name, ReadBuffer& value, size_t weight_hint) override;
     std::pair<DiskPtr, String> get(const String& seg_name) override;
-    void load();
+    void load() override;
 
     size_t getKeyCount() const override { return containers.count(); }
     size_t getCachedSize() const override { return containers.weight(); }

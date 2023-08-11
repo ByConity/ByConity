@@ -455,6 +455,8 @@ void CnchWorkerServiceImpl::preloadDataParts(
         auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
         auto data_parts = createPartVectorFromModelsForSend<MutableMergeTreeDataPartCNCHPtr>(cloud_merge_tree, request->parts());
 
+        LOG_TRACE(log, "Receiving preload parts task level = {}, sync = {}", request->preload_level(), request->sync());
+
         std::unique_ptr<ThreadPool> pool;
         ThreadPool *pool_ptr;
         if (request->sync())
@@ -467,13 +469,13 @@ void CnchWorkerServiceImpl::preloadDataParts(
 
         for (const auto & part : data_parts)
         {
-            part->preload(*pool_ptr);
+            part->preload(request->preload_level(), *pool_ptr);
         }
 
         if (request->sync())
             pool->wait();
 
-        LOG_DEBUG(storage->getLogger(), "Finish preload tasks in {} ms, sync {}", watch.elapsedMilliseconds(), request->sync());
+        LOG_DEBUG(storage->getLogger(), "Finish preload tasks in {} ms, level: {}, sync: {}", watch.elapsedMilliseconds(), request->preload_level(), request->sync());
     }
     catch (...)
     {

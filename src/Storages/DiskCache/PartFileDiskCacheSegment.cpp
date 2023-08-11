@@ -22,6 +22,8 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
+#include "Common/Exception.h"
+#include "Core/Settings.h"
 
 namespace DB
 {
@@ -33,7 +35,9 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     size_t marks_count_,
     const String & stream_name_,
     const String & extension_,
-    const FileOffsetAndSize & stream_file_pos_)
+    const FileOffsetAndSize & stream_file_pos_,
+    bool is_preload_,
+    UInt64 preload_level_)
     : IDiskCacheSegment(segment_number_, segment_size_)
     , data_part(data_part_)
     , storage(data_part_->storage.shared_from_this()) /// Need to extend the lifetime of storage because disk cache can run async
@@ -42,6 +46,8 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     , stream_name(stream_name_)
     , extension(extension_)
     , stream_file_pos(stream_file_pos_)
+    , is_preload(is_preload_)
+    , preload_level(preload_level_)
     , marks_loader(
           data_part->volume->getDisk(),
           nullptr,
@@ -68,9 +74,21 @@ String PartFileDiskCacheSegment::getSegmentName() const
         UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->getUniquePartName(), stream_name, segment_number, extension);
 }
 
+String PartFileDiskCacheSegment::getMarkName() const
+{
+    return formatSegmentName(
+        UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->getUniquePartName(), stream_name, 0, MARKS_FILE_EXTENSION);
+}
+
 void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
 {
     Poco::Logger * log = disk_cache.getLogger();
+
+    if (is_preload && preload_level == PreloadLevelSettings::ClosePreload)
+    {
+        //LOG_TRACE(log, "skip cache data preload = " << preload_level << " is_preload = " << is_preload);
+        return;
+    }
 
     try
     {
@@ -116,15 +134,25 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
         auto data_file = disk->readFile(data_path);
 
         /// cache data segment
-        data_file->seek(stream_file_pos.file_offset + cache_data_left_offset);
-        LimitReadBuffer segment_value(*data_file, cache_data_bytes, false);
-        disk_cache.set(getSegmentName(), segment_value, cache_data_bytes);
+        LOG_DEBUG(disk_cache.getLogger(), "level: {}, cache data: {}, cache mark: {} ", preload_level, preload_level & PreloadLevelSettings::DataPreload, preload_level & PreloadLevelSettings::MetaPreload);
+        if (!is_preload || (preload_level & PreloadLevelSettings::DataPreload) == PreloadLevelSettings::DataPreload)
+        {
+            data_file->seek(stream_file_pos.file_offset + cache_data_left_offset);
+            LimitReadBuffer segment_value(*data_file, cache_data_bytes, false);
+            disk_cache.set(getSegmentName(), segment_value, cache_data_bytes);
+            LOG_DEBUG(disk_cache.getLogger(), "cache data file: {}, is_preload: {}", getSegmentName(), is_preload);
+        }
 
         /// cache mark segment
-        data_file->seek(mrk_file_pos.file_offset);
-        LimitReadBuffer marks_value(*data_file, mrk_file_pos.file_size, false);
-        String marks_key = formatSegmentName(UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->getUniquePartName(), stream_name, 0, MARKS_FILE_EXTENSION);
-        disk_cache.set(marks_key, marks_value, mrk_file_pos.file_size);
+        if (!is_preload || (preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
+        {
+            data_file->seek(mrk_file_pos.file_offset);
+            LimitReadBuffer marks_value(*data_file, mrk_file_pos.file_size, false);
+            String marks_key = getMarkName();
+            disk_cache.set(marks_key, marks_value, mrk_file_pos.file_size);
+            LOG_DEBUG(disk_cache.getLogger(), "cache mark file: {}, is_preload: {}", marks_key, is_preload);
+        }
+        
     }
     catch (...)
     {

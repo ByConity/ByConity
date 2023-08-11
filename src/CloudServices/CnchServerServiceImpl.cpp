@@ -1044,7 +1044,7 @@ void CnchServerServiceImpl::submitPreloadTask(
             if (parts.empty())
                 return;
 
-            cnch->sendPreloadTasks(rpc_context, std::move(parts), request->sync());
+            cnch->sendPreloadTasks(rpc_context, std::move(parts), cnch->getSettings()->enable_parts_sync_preload, (cnch->getSettings()->enable_preload_parts ? PreloadLevelSettings::AllPreload : cnch->getSettings()->parts_preload_level.value));
         }
         catch (...)
         {
