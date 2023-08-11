@@ -177,7 +177,7 @@ public:
     MutableDataPartsVector createDropRangesFromParts(ContextPtr query_context, const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn);
     LocalDeleteBitmaps createDeleteBitmapTombstones(const IMutableMergeTreeDataPartsVector & drop_range_parts, UInt64 txnID);
 
-    StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table, ContextPtr local_context) const;
+    StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
 
     const String & getLocalStorePath() const;
 

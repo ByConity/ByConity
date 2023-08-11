@@ -662,7 +662,6 @@ void PartCacheManager::insertDataPartsIntoCache(const IStorage & table, const pb
 void PartCacheManager::reloadPartitionMetrics(const UUID & uuid, const TableMetaEntryPtr & table_meta)
 {
     table_meta->loading_metrics = true;
-    auto current_table_definition_hash = table_meta->table_definition_hash.load(); // store table TDH used for comparison with part TDH as it table TDH may change during comparison
     try
     {
         auto cnch_catalog = getContext()->getCnchCatalog();
@@ -683,7 +682,7 @@ void PartCacheManager::reloadPartitionMetrics(const UUID & uuid, const TableMeta
                 total_parts_number += partition_info_ptr->metrics_ptr->total_parts_number;
                 if (!partition_info_ptr->metrics_ptr->is_deleted)
                 {
-                    auto is_partition_clustered = (partition_info_ptr->metrics_ptr->is_single_table_definition_hash && partition_info_ptr->metrics_ptr->table_definition_hash == current_table_definition_hash) && !partition_info_ptr->metrics_ptr->has_bucket_number_neg_one;
+                    auto is_partition_clustered = (partition_info_ptr->metrics_ptr->is_single_table_definition_hash && partition_info_ptr->metrics_ptr->table_definition_hash == table_meta->table_definition_hash) && !partition_info_ptr->metrics_ptr->has_bucket_number_neg_one;
                     if(!is_partition_clustered)
                         is_fully_clustered = false;
                 }
@@ -694,7 +693,7 @@ void PartCacheManager::reloadPartitionMetrics(const UUID & uuid, const TableMeta
             if (table_meta->load_parts_by_partition && total_parts_number<5000000)
                 table_meta->load_parts_by_partition = false;
             if (is_fully_clustered && table_meta->is_clustered == false)
-                cnch_catalog->setTableClusterStatus(uuid, is_fully_clustered, current_table_definition_hash);
+                cnch_catalog->setTableClusterStatus(uuid, is_fully_clustered);
         }
     }
     catch (...)

@@ -685,7 +685,7 @@ namespace Catalog
                 // Strings masking_policy_names = getMaskingPolicyNames(ast);
                 Strings masking_policy_names = {};
                 meta_proxy->createTable(name_space, tb_data, dependencies, masking_policy_names);
-                meta_proxy->setTableClusterStatus(name_space, uuid_str, true, createTableFromDataModel(context, tb_data)->getTableHashForClusterBy());
+                meta_proxy->setTableClusterStatus(name_space, uuid_str, true);
 
                 LOG_INFO(log, "finish createTable namespace {} table_name {}, uuid {}", name_space, storage_id.getFullTableName(), uuid_str);
             },
@@ -865,7 +865,7 @@ namespace Catalog
 
                 // Set cluster status after Alter table is successful to update PartCacheManager with new table metadata
                 if (is_recluster)
-                    setTableClusterStatus(storage->getStorageUUID(), false, new_table->getTableHashForClusterBy());
+                    setTableClusterStatus(storage->getStorageUUID(), false);
 
                 if (context.getCnchStorageCache())
                 {
@@ -1527,7 +1527,7 @@ namespace Catalog
                 // If target table is a bucket table, ensure that the source part is not a bucket part or if the source part is a bucket part
                 // ensure that the table_definition_hash is the same before committing
                 // TODO: Implement rollback for this to work properly
-                if (storage->isBucketTable() && !context.getSettings().allow_attach_parts_with_different_table_definition_hash)
+                if (storage->isBucketTable())
                 {
                     for (auto & part : parts)
                     {
@@ -1544,22 +1544,6 @@ namespace Catalog
                                 "Source table is not a bucket table or has a different CLUSTER BY definition from the target table. ",
                                 ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
                         }
-                    }
-                }
-
-                // If target table is a bucket table, table_definition_hash check was skipped and is initially fully clustered
-                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false 
-                if (storage->isBucketTable()
-                    && context.getSettings().allow_attach_parts_with_different_table_definition_hash
-                    && isTableClustered(storage->getStorageUUID()))
-                {
-                    for (auto & part : parts)
-                    {
-                        if (!part->deleted && (storage->getTableHashForClusterBy() != part->table_definition_hash))
-                        {
-                            setTableClusterStatus(storage->getStorageUUID(), false, storage->getTableHashForClusterBy());
-                            break;
-                        }       
                     }
                 }
 
@@ -2443,7 +2427,7 @@ namespace Catalog
                 // If target table is a bucket table, ensure that the source part is not a bucket part or if the source part is a bucket part
                 // ensure that the table_definition_hash is the same before committing
                 // TODO: Implement rollback for this to work properly
-                if (table->isBucketTable() && !context.getSettings().allow_attach_parts_with_different_table_definition_hash)
+                if (table->isBucketTable())
                 {
                     for (auto & part : commit_data.data_parts)
                     {
@@ -2453,22 +2437,6 @@ namespace Catalog
                                     + "] is different from target table's table_definition_hash  ["
                                     + std::to_string(table->getTableHashForClusterBy()) + "]",
                                 ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
-                    }
-                }
-
-                // If target table is a bucket table, table_definition_hash check was skipped and is initially fully clustered
-                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false 
-                if (table->isBucketTable()
-                    && context.getSettings().allow_attach_parts_with_different_table_definition_hash
-                    && isTableClustered(table->getStorageUUID()))
-                {
-                    for (auto & part : commit_data.data_parts)
-                    {
-                        if (!part->deleted && (table->getTableHashForClusterBy() != part->table_definition_hash))
-                        {
-                            setTableClusterStatus(table->getStorageUUID(), false, table->getTableHashForClusterBy());
-                            break;
-                        }       
                     }
                 }
 
@@ -3630,11 +3598,11 @@ namespace Catalog
         return res;
     }
 
-    void Catalog::setTableClusterStatus(const UUID & table_uuid, const bool clustered, const UInt64 & table_definition_hash)
+    void Catalog::setTableClusterStatus(const UUID & table_uuid, const bool clustered)
     {
         runWithMetricSupport(
             [&] {
-                meta_proxy->setTableClusterStatus(name_space, UUIDHelpers::UUIDToString(table_uuid), clustered, table_definition_hash);
+                meta_proxy->setTableClusterStatus(name_space, UUIDHelpers::UUIDToString(table_uuid), clustered);
                 /// keep the cache status up to date.
                 if (context.getPartCacheManager())
                     context.getPartCacheManager()->setTableClusterStatus(table_uuid, clustered);
