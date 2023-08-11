@@ -37,6 +37,7 @@ extern const int METASTORE_CLEAR_INTENT_CAS_FAILURE;
 extern const int VIRTUAL_WAREHOUSE_NOT_FOUND;
 extern const int FUNCTION_ALREADY_EXISTS;
 extern const int METASTORE_COMMIT_CAS_FAILURE;
+extern const int METASTORE_TABLE_TDH_CAS_ERROR;
 }
 
 namespace DB::Catalog
@@ -1333,9 +1334,45 @@ void MetastoreProxy::clearKafkaTransactions(const String & name_space, const Str
     metastore_ptr->clean(prefix);
 }
 
-void MetastoreProxy::setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered)
+void MetastoreProxy::setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered, const UInt64 & table_definition_hash)
 {
-    metastore_ptr->put(clusterStatusKey(name_space, uuid), already_clustered ? "true" : "false");
+    // TDH key may not exist in KV either because the table does not exist or there is an upgrade of CNCH version
+    String table_definition_hash_meta;
+    metastore_ptr->get(tableDefinitionHashKey(name_space, uuid), table_definition_hash_meta);
+    String expected_table_definition_hash = toString(table_definition_hash);
+    bool if_not_exists = false;
+    if (table_definition_hash_meta.empty())
+    {
+        expected_table_definition_hash = "";
+        if_not_exists = true;
+    }
+
+    auto table_definition_hash_put_request = SinglePutRequest(tableDefinitionHashKey(name_space, uuid), toString(table_definition_hash), expected_table_definition_hash);
+    table_definition_hash_put_request.if_not_exists = if_not_exists;
+
+    BatchCommitRequest batch_write;
+    batch_write.AddPut(SinglePutRequest(clusterStatusKey(name_space, uuid), already_clustered ? "true" : "false"));
+    batch_write.AddPut(table_definition_hash_put_request);
+    
+    BatchCommitResponse resp;
+    try
+    {
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
+        {
+            String error_message;
+            if (resp.puts.count(1) && if_not_exists)
+                error_message = "table_definition_hash of Table with uuid(" + uuid + ") already exists.";
+            else if (resp.puts.count(1))
+                error_message = "table_definition_hash of Table with uuid(" + uuid + ") has recently been changed in catalog. Please try the request again.";
+            throw Exception(error_message, ErrorCodes::METASTORE_TABLE_TDH_CAS_ERROR);
+        }
+        else
+            throw e;
+    }
 }
 
 void MetastoreProxy::getTableClusterStatus(const String & name_space, const String & uuid, bool & is_clustered)
