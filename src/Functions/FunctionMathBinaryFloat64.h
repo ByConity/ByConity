@@ -8,6 +8,8 @@
 #include <Columns/ColumnConst.h>
 #include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/castColumn.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_functions.h"
@@ -28,12 +30,15 @@ class FunctionMathBinaryFloat64 : public IFunction
 {
 public:
     static constexpr auto name = Impl::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMathBinaryFloat64>(); }
+    FunctionMathBinaryFloat64(ContextPtr context_) : context(context_) {}
+    static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionMathBinaryFloat64>(context_); }
     static_assert(Impl::rows_per_iteration > 0, "Impl must process at least one row per iteration");
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
 private:
+    ContextPtr context;
+
     String getName() const override { return name; }
 
     size_t getNumberOfArguments() const override { return 2; }
@@ -42,7 +47,7 @@ private:
     {
         const auto check_argument_type = [this] (const IDataType * arg)
         {
-            if (!isNativeNumber(arg))
+            if (!isNativeNumber(arg) && !(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE && isNumber(arg)))
                 throw Exception{"Illegal type " + arg->getName() + " of argument of function " + getName(),
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
         };
@@ -167,8 +172,21 @@ private:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/) const override
     {
-        const ColumnWithTypeAndName & col_left = arguments[0];
-        const ColumnWithTypeAndName & col_right = arguments[1];
+        ColumnsWithTypeAndName new_arguments = arguments;
+        if (isDecimal(arguments[0].type))
+        {
+            ColumnWithTypeAndName temp{castColumn(arguments[0], std::make_shared<DataTypeFloat64>()), std::make_shared<DataTypeFloat64>(), "left_arg_float"};
+            new_arguments[0] = temp;
+        }
+
+        if (isDecimal(arguments[1].type))
+        {
+            ColumnWithTypeAndName temp{castColumn(arguments[1], std::make_shared<DataTypeFloat64>()), std::make_shared<DataTypeFloat64>(), "right_arg_float"};
+            new_arguments[1] = temp;
+        }
+
+        const ColumnWithTypeAndName & col_left = new_arguments[0];
+        const ColumnWithTypeAndName & col_right = new_arguments[1];
         ColumnPtr res;
 
         auto call = [&](const auto & types) -> bool

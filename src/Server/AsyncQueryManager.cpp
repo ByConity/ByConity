@@ -27,7 +27,12 @@ AsyncQueryManager::AsyncQueryManager(ContextWeakMutablePtr context_) : WithConte
 }
 
 void AsyncQueryManager::insertAndRun(
-    BlockIO streams, ASTPtr ast, ContextMutablePtr context, SendAsyncQueryIdCallback send_async_query_id, AsyncQueryHandlerFunc && func)
+    String & query,
+    ASTPtr ast,
+    ContextMutablePtr context,
+    ReadBuffer * istr,
+    SendAsyncQueryIdCallback send_async_query_id,
+    AsyncQueryHandlerFunc && func)
 {
     if (pool)
     {
@@ -42,9 +47,10 @@ void AsyncQueryManager::insertAndRun(
 
         send_async_query_id(id);
 
-        pool->scheduleOrThrowOnError(make_copyable_function<void()>([streams = std::move(streams),
+        pool->scheduleOrThrowOnError(make_copyable_function<void()>([query = std::move(query),
                                                                      ast = std::move(ast),
                                                                      context = std::move(context),
+                                                                     istr,
                                                                      func = std::move(func),
                                                                      id = std::move(id),
                                                                      status = std::move(status)]() mutable {
@@ -55,12 +61,12 @@ void AsyncQueryManager::insertAndRun(
 
             std::optional<CurrentThread::QueryScope> query_scope;
             query_scope.emplace(context);
-            func(std::move(streams), ast, context);
+            func(query, ast, context, istr);
         }));
     }
     else
     {
-        func(std::move(streams), ast, context);
+        func(query, ast, context, istr);
     }
 }
 

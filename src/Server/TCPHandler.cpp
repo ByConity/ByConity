@@ -57,6 +57,7 @@
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/TablesStatus.h>
 #include <Interpreters/executeQuery.h>
+#include <Parsers/ParserQuery.h>
 #include <Storages/ColumnDefault.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -363,19 +364,32 @@ void TCPHandler::runImpl()
                 return receiveReadTaskResponseAssumeLocked();
             });
 
+            ASTPtr ast;
             bool may_have_embedded_data = client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_SUPPORT_EMBEDDED_DATA;
             /// Processing Query
             if (state.plan_segment)
                 executePlanSegmentInternal(std::move(state.plan_segment), query_context, true);
             else
-                state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
+            {
+                const char * begin = state.query.data();
+                const char * end = state.query.data() + state.query.size();
+                ParserQuery parser(end, ParserSettings::valueOf(query_context->getSettings().dialect_type));
+                parser.setContext(query_context.get());
 
-            if (!state.io.out && query_context->isAsyncMode())
+                /// TODO: parser should fail early when max_query_size limit is reached.
+                ast = parseQuery(
+                    parser, begin, end, "", query_context->getSettings().max_query_size, query_context->getSettings().max_parser_depth);
+                interpretSettings(ast, query_context);
+            }
+
+            auto * insert_query = ast->as<ASTInsertQuery>();
+            if (!(insert_query && insert_query->data) && query_context->isAsyncMode())
             {
                 query_context->getAsyncQueryManager()->insertAndRun(
-                    std::move(state.io),
-                    nullptr,
+                    state.query,
+                    ast,
                     query_context,
+                    nullptr,
                     [this](const String & id) {
                         MutableColumnPtr table_column_mut = ColumnString::create();
                         table_column_mut->insert(id);
@@ -384,7 +398,9 @@ void TCPHandler::runImpl()
                             ColumnWithTypeAndName(std::move(table_column_mut), std::make_shared<DataTypeString>(), "async_query_id"));
                         sendData(res);
                     },
-                    [need_receive_data_for_input = state.need_receive_data_for_input](BlockIO io, ASTPtr ast, ContextMutablePtr context) {
+                    [need_receive_data_for_input = state.need_receive_data_for_input,
+                     may_have_embedded_data](String query, ASTPtr ast, ContextMutablePtr context, ReadBuffer * istr) {
+                        BlockIO io = executeQuery(query, ast, context, false, QueryProcessingStage::Complete, may_have_embedded_data);
                         try
                         {
                             if (need_receive_data_for_input) // It implies pipeline execution
@@ -445,6 +461,8 @@ void TCPHandler::runImpl()
             }
             else
             {
+                if (!state.plan_segment)
+                    state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
                 unknown_packet_in_send_data = query_context->getSettingsRef().unknown_packet_in_send_data;
 
                 after_check_cancelled.restart();
@@ -2009,6 +2027,10 @@ void TCPHandler::sendException(const Exception & e, bool with_stack_trace)
 
 void TCPHandler::sendEndOfStream()
 {
+    if (query_context->isAsyncMode())
+    {
+        query_context->waitReadFromClientFinished();
+    }
     writeVarUInt(Protocol::Server::EndOfStream, *out);
     out->next();
 }

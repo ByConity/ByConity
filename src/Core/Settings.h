@@ -1705,7 +1705,7 @@ class IColumn;
 \
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
-    M(Bool, enable_optimizer_white_list, true, "Whether enable query optimizer whilte list inorder to only support join and agg", 0) \
+    M(Bool, enable_optimizer_white_list, false, "Whether enable query optimizer whilte list inorder to only support join and agg", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
     M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \
@@ -2102,7 +2102,8 @@ class IColumn;
     M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0) \
     M(String, tenant_id, "", "tenant_id of cnch user", 0) \
     M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
-    M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0)
+    M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \
+    M(Bool, offloading_with_query_plan, false, "utilize query plan to offload the computation comoetely to worker", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

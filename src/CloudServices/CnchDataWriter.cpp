@@ -574,7 +574,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             }
             else
             {
-                merge_mutate_thread->finishTask(task_id, dumped_data.parts.front(), [&] {
+                merge_mutate_thread->finishTask(task_id, dumped_data.parts.back(), [&] {
                     auto action = txn->createAction<MergeMutateAction>(txn->getTransactionRecord(), type, storage_ptr);
 
                     for (const auto & part : dumped_data.parts)

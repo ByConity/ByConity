@@ -245,6 +245,11 @@ Field convertFieldToTypeImpl(const Field & src, const IDataType & type, const ID
             return src;
         }
 
+        if (which_type.isTime() && src.getType() == Field::Types::Decimal64)
+        {
+            return src;
+        }
+
         if (which_type.isDateTime64()
             && (which_from_type.isNativeInt() || which_from_type.isNativeUInt() || which_from_type.isDateOrDate32() || which_from_type.isDateTime() || which_from_type.isDateTime64()))
         {
