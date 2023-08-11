@@ -39,7 +39,8 @@ void PartMergerImpl::copyPartData(const DiskPtr & from_disk, const DiskPtr & to_
     to_disk->createDirectory(relative_path);
     for (auto it = from_disk->iterateDirectory(relative_path); it->isValid(); it->next())
     {
-        from_disk->copy(relative_path + it->name(), to_disk, relative_path + it->name());
+        /// Copy data from the source file to the target directory.
+        from_disk->copy(relative_path + it->name(), to_disk, relative_path + '/');
     }
 }
 
