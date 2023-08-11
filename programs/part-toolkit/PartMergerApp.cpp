@@ -1,11 +1,18 @@
 #include "PartMergerApp.h"
-#include <Server/ServerHelper.h>
 
 /**
- * @brief Use `./part-merger/` instead of `./` to reduce disturbance to the root directory.
+ * Copied from `Server.cpp`.
  */
+static std::string getCanonicalPath(std::string && path)
+{
+    Poco::trimInPlace(path);
+    if (path.empty())
+        throw DB::Exception("path configuration parameter is empty", DB::ErrorCodes::INVALID_CONFIG_PARAMETER);
+    if (path.back() != '/')
+        path += '/';
+    return std::move(path);
+}
 
-const String part_merger_path = "part-merger/";
 const std::string PartMergerApp::help_message
     = "Usage:\n\t"
       "part_merger_tool\n\t\t"
@@ -153,7 +160,7 @@ int PartMergerApp::main([[maybe_unused]] const std::vector<DB::String> & args)
         // render default config
         Poco::JSON::Object::Ptr params = new Poco::JSON::Object();
         params->set("source-path", config().getString("source-path"));
-        params->set("local-path", Poco::Path::current() + "/" + part_merger_path);
+        params->set("local-path", Poco::Path::current());
         Poco::JSON::Template tpl;
         tpl.parse(default_config);
         std::stringstream out;
@@ -183,23 +190,12 @@ int PartMergerApp::main([[maybe_unused]] const std::vector<DB::String> & args)
 
     // Initialize storage directory.
     //
-    std::string path = Coordination::getCanonicalPath(config().getString("path", part_merger_path));
+    // Currently, we use CWD as the base directory.
+    std::string path = getCanonicalPath(config().getString("path", "./"));
     global_context->setPath(path);
     {
         fs::create_directories(fs::path(path) / "disks/");
     }
-
-    /// Setup storage with temporary data for processing of heavy queries.
-    {
-        std::string tmp_path = config().getString("tmp_path", path + "tmp/");
-        std::string tmp_policy = config().getString("tmp_policy", "");
-        const auto & volume = global_context->setTemporaryStorage(tmp_path, tmp_policy);
-
-        for (const auto & disk : volume->getDisks())
-            Coordination::setupTmpPath(log, disk->getPath());
-        global_context->setTemporaryStoragePath();
-    }
-
 
     global_context->setCurrentQueryId(DB::UUIDHelpers::UUIDToString(DB::UUIDHelpers::generateV4()));
 

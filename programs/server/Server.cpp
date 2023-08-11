@@ -56,14 +56,11 @@
 #include <Interpreters/ServerPartLog.h>
 #include <Interpreters/loadMetadata.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
-#include <QueryPlan/Hints/registerHints.h>
-#include <QueryPlan/PlanCache.h>
 #include <Server/HTTP/HTTPServer.h>
 #include <Server/HTTPHandlerFactory.h>
 #include <Server/MySQLHandlerFactory.h>
 #include <Server/PostgreSQLHandlerFactory.h>
 #include <Server/ProtocolServerAdapter.h>
-#include <Server/ServerHelper.h>
 #include <Server/TCPHandlerFactory.h>
 #include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <Statistics/CacheManager.h>
@@ -121,6 +118,14 @@
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
 #include "MetricsTransmitter.h"
+#include <QueryPlan/PlanCache.h>
+#include <DataTypes/MapHelpers.h>
+#include <Statistics/CacheManager.h>
+#include <CloudServices/CnchServerServiceImpl.h>
+#include <CloudServices/CnchWorkerServiceImpl.h>
+#include <CloudServices/CnchWorkerClientPools.h>
+#include <Catalog/Catalog.h>
+#include <QueryPlan/Hints/registerHints.h>
 
 #include <CloudServices/CnchServerClientPool.h>
 
@@ -282,6 +287,25 @@ int mainEntryClickHouseServer(int argc, char ** argv)
 namespace
 {
 
+void setupTmpPath(Poco::Logger * log, const std::string & path)
+{
+    LOG_DEBUG(log, "Setting up {} to store temporary data in it", path);
+
+    fs::create_directories(path);
+
+    /// Clearing old temporary files.
+    fs::directory_iterator dir_end;
+    for (fs::directory_iterator it(path); it != dir_end; ++it)
+    {
+        if (it->is_regular_file() && startsWith(it->path().filename(), "tmp"))
+        {
+            LOG_DEBUG(log, "Removing old temporary file {}", it->path().string());
+            fs::remove(it->path());
+        }
+        else
+            LOG_DEBUG(log, "Skipped file in temporary path {}", it->path().string());
+    }
+}
 
 int waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t seconds_to_wait)
 {
@@ -315,6 +339,16 @@ int waitServersToFinish(std::vector<DB::ProtocolServerAdapter> & servers, size_t
 
 namespace DB
 {
+
+static std::string getCanonicalPath(std::string && path)
+{
+    Poco::trimInPlace(path);
+    if (path.empty())
+        throw Exception("path configuration parameter is empty", ErrorCodes::INVALID_CONFIG_PARAMETER);
+    if (path.back() != '/')
+        path += '/';
+    return std::move(path);
+}
 
 static std::string getUserName(uid_t user_id)
 {
