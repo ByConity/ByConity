@@ -54,7 +54,8 @@ public:
         LIMIT_BY,
         LIMIT_OFFSET,
         LIMIT_LENGTH,
-        SETTINGS
+        SETTINGS,
+        ESCAPE
     };
 
     static String expressionToString(Expression expr)
@@ -67,10 +68,10 @@ public:
                 return "SELECT";
             case Expression::TABLES:
                 return "TABLES";
+            case Expression::IMPLICITWHERE:
+                return "IMPLICIT WHERE";
             case Expression::PREWHERE:
                 return "PREWHERE";
-            case Expression::IMPLICITWHERE:
-                return "IMPLICITWHERE";
             case Expression::WHERE:
                 return "WHERE";
             case Expression::GROUP_BY:
@@ -93,6 +94,8 @@ public:
                 return "LIMIT LENGTH";
             case Expression::SETTINGS:
                 return "SETTINGS";
+            case Expression::ESCAPE:
+                return "ESCAPE";
         }
         return "";
     }
@@ -104,7 +107,7 @@ public:
 
     ASTPtr clone() const override;
 
-    void collectAllTables(std::vector<ASTPtr> &, bool &) const;
+    static void collectAllTables(const IAST * ast, std::vector<ASTPtr> &, bool &);
 
     bool distinct = false;
     bool group_by_with_totals = false;
@@ -138,6 +141,7 @@ public:
     const ASTPtr limitOffset()    const { return getExpression(Expression::LIMIT_OFFSET); }
     const ASTPtr limitLength()    const { return getExpression(Expression::LIMIT_LENGTH); }
     const ASTPtr settings()       const { return getExpression(Expression::SETTINGS); }
+    const ASTPtr escape()       const { return getExpression(Expression::ESCAPE); }
 
     ASTPtr getWith()            { return getExpression(Expression::WITH, true); }
     ASTPtr getSelect()          { return getExpression(Expression::SELECT, true); }

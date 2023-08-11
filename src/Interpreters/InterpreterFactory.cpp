@@ -133,6 +133,12 @@
 #include <Common/typeid_cast.h>
 #include "Interpreters/DistributedStages/PlanSegment.h"
 
+#include <Interpreters/InterpreterBeginQuery.h>
+#include <Interpreters/InterpreterCommitQuery.h>
+#include <Interpreters/InterpreterRollbackQuery.h>
+#include <Interpreters/InterpreterShowStatementsQuery.h>
+#include <Parsers/ASTTransaction.h>
+
 
 namespace ProfileEvents
 {
@@ -417,6 +423,26 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTReproduceQuery>())
     {
         return std::make_unique<InterpreterReproduceQueryUseOptimizer>(query, context);
+    }
+    else if (query->as<ASTBeginQuery>())
+    {
+        return std::make_unique<InterpreterBeginQuery>(query, context);
+    }
+    else if (query->as<ASTBeginTransactionQuery>())
+    {
+        return std::make_unique<InterpreterBeginQuery>(query, context);
+    }
+    else if (query->as<ASTCommitQuery>())
+    {
+        return std::make_unique<InterpreterCommitQuery>(query, context);
+    }
+    else if (query->as<ASTRollbackQuery>())
+    {
+        return std::make_unique<InterpreterRollbackQuery>(query, context);
+    }
+    else if (query->as<ASTShowStatementsQuery>())
+    {
+        return std::make_unique<InterpreterShowStatementsQuery>(query, context);
     }
     else if (query->as<ASTDeleteQuery>())
     {

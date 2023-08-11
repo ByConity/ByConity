@@ -99,7 +99,6 @@ ColumnsDescription ITableFunctionFileLike::getActualTableStructure(ContextPtr co
 {
     if (structure.empty())
     {
-        assert(getName() == "file" && format == "Distributed");
         size_t total_bytes_to_read = 0;
         Strings paths = StorageFile::getPathsList(filename, context->getUserFilesPath(), context, total_bytes_to_read);
         if (paths.empty())

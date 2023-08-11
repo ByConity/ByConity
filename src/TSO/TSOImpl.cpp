@@ -80,10 +80,11 @@ void TSOImpl::GetTimestamp(
 
         UInt64 cur_ts = fetchAddLogical(1);
         if (ts_to_physical(cur_ts) == 0)
-            throw Exception("Timestamp not found.", ErrorCodes::TSO_TIMESTAMP_NOT_FOUND_ERROR);
+            throw Exception("Timestamp has not been initialized yet. Please retry request in a few seconds.", ErrorCodes::TSO_TIMESTAMP_NOT_FOUND_ERROR);
 
         response->set_timestamp(cur_ts);
         response->set_is_leader(true);
+        LOG_TRACE(log, "Request received by TSO Node. Physical: {} | Logical: {}", ts_to_physical(cur_ts), ts_to_logical(cur_ts));
     }
     catch (...)
     {
@@ -121,6 +122,7 @@ void TSOImpl::GetTimestamps(::google::protobuf::RpcController *,
         UInt64 max_ts = physical_logical_to_ts(physical, logical);
         response->set_max_timestamp(max_ts);
         response->set_is_leader(true);
+        LOG_TRACE(log, "Request received by TSO Node. Physical: {} | Logical: {}", ts_to_physical(cur_ts), ts_to_logical(cur_ts));
     }
     catch (...)
     {
@@ -143,7 +145,8 @@ void TSOImpl::checkLogicalClock(UInt32 logical_value)
                 std::this_thread::sleep_for(std::chrono::milliseconds(TSO_UPDATE_INTERVAL));
                 /// Check the leader result in case the node yielded the leadership during sleeping
                 TSOClock cur_ts = getClock();
-                if (exitLeaderElection && is_leader.load(std::memory_order_acquire) && cur_ts.logical >= MAX_LOGICAL)
+                LOG_DEBUG(log, "Checking for TSO logical clock overflow. is_leader: {} |  Physical: {} | Logical: {}", std::to_string(exitLeaderElection && is_leader.load(std::memory_order_acquire)), cur_ts.physical, cur_ts.logical);
+                if (exitLeaderElection && is_leader.load(std::memory_order_acquire) && cur_ts.logical >= MAX_LOGICAL - 1)
                 {
                     // Failback to leader election if an overflow issue happens even after sleep_for(TSO_UPDATE_INTERVAL).
                     setIsLeader(false);
@@ -161,7 +164,7 @@ void TSOImpl::checkLogicalClock(UInt32 logical_value)
     }
 
     TSOClock cur_ts = getClock();
-    throw Exception("GetTimestamp: TSO logical clock overflow. Physical: " + std::to_string(cur_ts.physical) + " | Logical: " + std::to_string(cur_ts.logical), ErrorCodes::TSO_INTERNAL_ERROR);
+    throw Exception("GetTimestamp: TSO logical clock overflow. Physical: " + std::to_string(cur_ts.physical) + " | Logical: " + std::to_string(cur_ts.logical) + " | Input logical value: " + std::to_string(logical_value), ErrorCodes::TSO_INTERNAL_ERROR);
 }
 
 }

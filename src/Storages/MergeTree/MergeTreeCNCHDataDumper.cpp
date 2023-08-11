@@ -518,9 +518,6 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(const String & projection_na
     // Write data file
     CNCHDataMeta meta;
     {   
-        auto * data_out = dynamic_cast<WriteBufferFromHDFS *>(out);
-        if (!data_out)
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Writing part to hdfs but write buffer is not hdfs");
         const DiskPtr& proj_part_disk = projection_part->volume->getDisk();
         LOG_TRACE(log, "Getting local disk for projection {} at {}\n", proj_part_disk->getName(), proj_part_disk->getPath());
 
@@ -536,10 +533,10 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(const String & projection_na
                     throw Exception("Fail to dump projection file: " + file_rel_path + " because file doesn't exists", ErrorCodes::FILE_DOESNT_EXIST);
 
                 ReadBufferFromFile from(file_full_path);
-                copyData(from, *data_out);
-                data_out->next();
+                copyData(from, *out);
+                out->next();
                 /// TODO: fix getPositionInFile
-                if (file.second.file_offset + file.second.file_size != static_cast<UInt64>(data_out->getPositionInFile()))
+                if (file.second.file_offset + file.second.file_size != static_cast<UInt64>(out->count()))
                 {
                     throw Exception(file.first + " in projection part "  + projection_name + " check error, checksum offset: " +
                         std::to_string(file.second.file_offset) + " checksums size: " + std::to_string(file.second.file_size) +
@@ -557,11 +554,11 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(const String & projection_na
         if (proj_part_disk->exists(index_file_rel_path))
         {
             ReadBufferFromFile from(index_file_full_path);
-            copyData(from, *data_out);
+            copyData(from, *out);
             index_size = index_checksum.file_size;
             index_hash = index_checksum.file_hash;
-            data_out->next();
-            if (index_offset + index_size != static_cast<UInt64>(data_out->getPositionInFile()))
+            out->next();
+            if (index_offset + index_size != static_cast<UInt64>(out->count()))
             {
                 throw Exception(
                     ErrorCodes::BAD_CNCH_DATA_FILE,
@@ -577,12 +574,12 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(const String & projection_na
         uint128 checksums_hash;
         if (projection_part->checksums_ptr)
         {
-            HashingWriteBuffer checksums_hashing(*data_out);
+            HashingWriteBuffer checksums_hashing(*out);
             projection_part->checksums_ptr->write(checksums_hashing);
             checksums_hashing.next();
-            checksums_size = data_out->getPositionInFile() - checksums_offset;
+            checksums_size = out->count() - checksums_offset;
             checksums_hash = checksums_hashing.getHash();
-            if (checksums_offset + checksums_size != static_cast<UInt64>(data_out->getPositionInFile()))
+            if (checksums_offset + checksums_size != static_cast<UInt64>(out->count()))
             {
                  throw Exception("checksums.txt in projection part "  + projection_name + " check error, checksum offset: " +
                         std::to_string(checksums_offset) + " checksums size: " + std::to_string(checksums_size) +
@@ -595,12 +592,12 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(const String & projection_na
         size_t meta_info_size = 0;
         uint128 meta_info_hash;
         {
-            HashingWriteBuffer meta_info_hashing(*data_out);
+            HashingWriteBuffer meta_info_hashing(*out);
             writeProjectionBinary(*projection_part, meta_info_hashing);
             meta_info_hashing.next();
-            meta_info_size = data_out->getPositionInFile() - meta_info_offset;
+            meta_info_size = out->count() - meta_info_offset;
             meta_info_hash = meta_info_hashing.getHash();
-            if (meta_info_offset + meta_info_size != static_cast<UInt64>(data_out->getPositionInFile()))
+            if (meta_info_offset + meta_info_size != static_cast<UInt64>(out->count()))
             {
                  throw Exception("meta info in projection part "  + projection_name + " check error, meta offset: " + std::to_string(meta_info_offset) + " meta size: " + std::to_string(meta_info_size), ErrorCodes::BAD_CNCH_DATA_FILE);
             }
@@ -612,10 +609,10 @@ size_t MergeTreeCNCHDataDumper::writeProjectionPart(const String & projection_na
                             checksums_offset, checksums_size, checksums_hash,
                             meta_info_offset, meta_info_size, meta_info_hash,
                             static_cast<off_t>(uki_checksum.file_offset), uki_checksum.file_size, uki_checksum.file_hash};
-        writeDataFileFooter(*data_out, meta);
-        data_out->next();
+        writeDataFileFooter(*out, meta);
+        out->next();
         data_file_offset = footer_offset + MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE;
-        if (data_file_offset != static_cast<UInt64>(data_out->getPositionInFile()))
+        if (data_file_offset != static_cast<UInt64>(out->count()))
         {
             throw Exception("data footer in projection part "  + projection_name + " check error, footer offset: " +
                                 std::to_string(footer_offset) + " footer size: " + std::to_string(MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE), ErrorCodes::BAD_CNCH_DATA_FILE);

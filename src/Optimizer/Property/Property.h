@@ -331,6 +331,7 @@ public:
     const Constants & getConstants() const { return constants; }
     const CTEDescriptions & getCTEDescriptions() const { return cte_descriptions; }
     CTEDescriptions & getCTEDescriptions() { return cte_descriptions; }
+    bool isEnforceNotMatch() const { return enforce_not_match; } 
 
     void setPreferred(bool preferred_) { preferred = preferred_; }
     void setNodePartitioning(Partitioning node_partitioning_) { node_partitioning = std::move(node_partitioning_); }
@@ -338,6 +339,7 @@ public:
     void setCTEDescriptions(CTEDescriptions descriptions) { cte_descriptions = std::move(descriptions); }
     void setSorting(Sorting sorting_) { sorting = std::move(sorting_); }
     void setConstants(Constants constants_) { constants = std::move(constants_); }
+    void setEnforceNotMatch(bool enforce_not_match_) { enforce_not_match = enforce_not_match_; }
 
     Property clearSorting() const
     {
@@ -374,6 +376,8 @@ private:
     Constants constants;
     // Description of the requirements of the common table expressions.
     CTEDescriptions cte_descriptions;
+    // used by offloading
+    bool enforce_not_match = false;
 };
 
 /**

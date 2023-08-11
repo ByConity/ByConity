@@ -4,7 +4,12 @@
 #include <vector>
 #include <Interpreters/Context.h>
 #include <Interpreters/WorkerStatusManager.h>
+#include <ResourceManagement/ResourceManagerClient.h>
 #include <Poco/Util/AbstractConfiguration.h>
+namespace CurrentMetrics
+{
+extern const Metric BackgroundRMHeartbeatSchedulePoolTask;
+}
 namespace DB
 {
 String WorkerStatus::toDebugString() const
@@ -73,6 +78,62 @@ std::optional<std::vector<size_t>> WorkerGroupStatus::selectHealthNode(const Hos
     if (filter_indices.size() == host_ports_vec.size())
         return std::nullopt;
     return filter_indices;
+}
+
+WorkerStatusManager::WorkerStatusManager(ContextWeakMutablePtr context_)
+    : WithContext(context_), log(&Poco::Logger::get("WorkerStatusManager"))
+{
+    schedule_pool.emplace(1, CurrentMetrics::BackgroundRMHeartbeatSchedulePoolTask, "RMHeart");
+    startHeartbeat(*schedule_pool);
+}
+
+WorkerStatusManager::~WorkerStatusManager()
+{
+    stop();
+    schedule_pool.reset();
+}
+
+void WorkerStatusManager::heartbeat()
+{
+    LOG_DEBUG(log, "update worker status from rm heartbeat");
+    try
+    {
+        auto rm_client = getContext()->getResourceManagerClient();
+        if (!rm_client)
+        {
+            LOG_WARNING(log, "The client of ResourceManagement is not initialized");
+        }
+        else
+        {
+            std::vector<WorkerNodeResourceData> data;
+            rm_client->getAllWorkers(data);
+            if (data.empty())
+            {
+                LOG_WARNING(log, "No worker group found from RM");
+            }
+            else
+            {
+                auto cannot_update_workers = getWorkersCannotUpdateFromRM();
+                for (const auto & group_data : data)
+                {
+                    auto worker_id = WorkerStatusManager::getWorkerId(group_data.vw_name, group_data.worker_group_id, group_data.id);
+                    if (!cannot_update_workers.count(worker_id))
+                    {
+                        LOG_TRACE(log, "resource_data : " + group_data.toDebugString());
+                        LOG_TRACE(log, "update worker {} from rm", worker_id.ToString());
+                        Protos::WorkerNodeResourceData resource_info;
+                        group_data.fillProto(resource_info);
+                        updateWorkerNode(resource_info, WorkerStatusManager::UpdateSource::ComeFromRM);
+                    }
+                }
+            }
+        }
+    }
+    catch (...)
+    {
+        tryLogDebugCurrentException(__PRETTY_FUNCTION__);
+    }
+    task->scheduleAfter(interval);
 }
 
 void WorkerStatusManager::updateWorkerNode(

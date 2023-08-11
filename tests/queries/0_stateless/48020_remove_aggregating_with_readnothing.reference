@@ -1,0 +1,9 @@
+0
+Projection Est. 0 rows, cost 0.000000e+00
+│     Expressions: count():=`expr#count()`
+└─ Aggregating Est. 0 rows, cost 0.000000e+00
+   │     Group by: {}
+   │     Aggregates: expr#count():=count()
+   └─ ReadNothing Est. 0 rows, cost 0.000000e+00
+ReadNothing Est. 0 rows, cost 0.000000e+00
+ReadNothing Est. 0 rows, cost 0.000000e+00

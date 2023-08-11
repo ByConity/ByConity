@@ -47,20 +47,10 @@ ResourceManagerServiceImpl::ResourceManagerServiceImpl(ResourceManagerController
 template <typename T>
 bool ResourceManagerServiceImpl::checkForLeader(T & response)
 {
-    // FIXME: (zuochuang.zema) RM-LeaderElection
-
-    // auto & election_controller = rm_controller.getElectionController();
-    // auto election_res = election_controller.getLeaderElectionResult();
-    // auto is_leader = election_res.is_leader;
-    // response->set_is_leader(is_leader);
-    // if (!is_leader)
-    // {
-    //     response->set_leader_host_port(election_res.leader_host_port);
-    // }
-    // return is_leader;
-
-    response->set_is_leader(true);
-    return true;
+    auto & election_controller = rm_controller.getElectionController();
+    auto is_leader = election_controller.isLeader();
+    response->set_is_leader(is_leader);
+    return is_leader;
 }
 
 void ResourceManagerServiceImpl::syncResourceUsage(
@@ -78,7 +68,6 @@ void ResourceManagerServiceImpl::syncResourceUsage(
 
         auto entry = WorkerNodeResourceData::createFromProto(request->resource_data());
 
-        auto log = &Poco::Logger::get("ResourceManagerServiceImpl");
         LOG_TRACE(log, "Worker resource report: {}", entry.toDebugString());
 
         auto & resource_tracker = rm_controller.getResourceTracker();
@@ -107,8 +96,8 @@ void ResourceManagerServiceImpl::registerWorkerNode(
             return;
 
         auto data = WorkerNodeResourceData::createFromProto(request->resource_data());
+        LOG_DEBUG(log, "Register worker {} - {}", data.host_ports.toDebugString(), data.toDebugString());
         rm_controller.registerWorkerNode(data);
-        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Register worker {} - {}", data.host_ports.toDebugString(), data.toDebugString());
     }
     catch (...)
     {
@@ -132,10 +121,10 @@ void ResourceManagerServiceImpl::removeWorkerNode(
         if (!checkForLeader(response))
             return;
 
-        auto vw_name = request->vw_name();
-        auto worker_group_id = request->worker_group_id();
+        LOG_DEBUG(log, "Remove worker {}", worker_id);
+        const auto & vw_name = request->vw_name();
+        const auto & worker_group_id = request->worker_group_id();
         rm_controller.removeWorkerNode(worker_id, vw_name, worker_group_id);
-        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Removed worker {}", worker_id);
     }
     catch (...)
     {
@@ -157,7 +146,7 @@ void ResourceManagerServiceImpl::createVirtualWarehouse(
         if (!checkForLeader(response))
             return;
 
-        auto vw_name = request->vw_name();
+        const auto & vw_name = request->vw_name();
         auto vw_settings = VirtualWarehouseSettings::createFromProto(request->vw_settings());
 
         vw_manager.createVirtualWarehouse(vw_name, vw_settings, request->if_not_exists());
@@ -182,7 +171,7 @@ void ResourceManagerServiceImpl::updateVirtualWarehouse(
         if (!checkForLeader(response))
             return;
 
-        auto vw_name = request->vw_name();
+        const auto & vw_name = request->vw_name();
         auto vw_settings = VirtualWarehouseAlterSettings::createFromProto(request->vw_settings());
 
         vw_manager.alterVirtualWarehouse(vw_name, vw_settings);
@@ -326,7 +315,7 @@ void ResourceManagerServiceImpl::dropWorkerGroup(
         if (!checkForLeader(response))
             return;
 
-        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Drop worker group: {}", request->worker_group_id());
+        LOG_TRACE(log, "Drop worker group: {}", request->worker_group_id());
         rm_controller.dropWorkerGroup(request->worker_group_id(), request->if_exists());
     }
     catch (...)
@@ -350,9 +339,10 @@ void ResourceManagerServiceImpl::getWorkerGroups(
             return;
 
         auto groups = vw_manager.getVirtualWarehouse(request->vw_name())->getAllWorkerGroups();
-        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Got {} worker groups of {}", groups.size(), request->vw_name());
+        LOG_TRACE(log, "Got {} worker groups of {}", groups.size(), request->vw_name());
         for (const auto & group : groups)
-            group->getData(true).fillProto(*response->add_worker_group_data(), true, true);
+            group->getData(/*with_metrics*/true, /*only_running_state*/true)
+                .fillProto(*response->add_worker_group_data(), /*with_host_ports*/true, /*with_metrics*/true);
     }
     catch (...)
     {
@@ -378,7 +368,8 @@ void ResourceManagerServiceImpl::getAllWorkerGroups(
         auto with_metrics = request->with_metrics();
         for (auto & [_, group] : groups)
         {
-            group->getData(with_metrics).fillProto(*response->add_worker_group_data(), false, with_metrics);
+            group->getData(/*with_metrics*/with_metrics, /*only_running_state*/true)
+                .fillProto(*response->add_worker_group_data(), /*with_host_ports*/false, with_metrics);
         }
     }
     catch (...)
@@ -412,7 +403,7 @@ void ResourceManagerServiceImpl::pickWorker(
         if (!host_ports.empty())
         {
             RPCHelpers::fillHostWithPorts(host_ports, *response->mutable_host_ports());
-            LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Picked worker {} from vw {}", host_ports.getHost(), request->vw_name());
+            LOG_TRACE(log, "Picked worker {} from vw {}", host_ports.getHost(), request->vw_name());
         }
         else
             throw Exception("No available worker!", ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
@@ -452,7 +443,7 @@ void ResourceManagerServiceImpl::pickWorkers(
             {
                 RPCHelpers::fillHostWithPorts(worker, *response->add_workers());
             }
-            LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Picked {} workers from vw {}", workers.size(), request->vw_name());
+            LOG_TRACE(log, "Picked {} workers from vw {}", workers.size(), request->vw_name());
         }
         else
             throw Exception("No available worker!", ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
@@ -484,12 +475,11 @@ void ResourceManagerServiceImpl::pickWorkerGroup(
         if (requirement.expected_workers == 0)
             requirement.expected_workers = vw->getExpectedNumWorkers() >> 1;
         auto group = query_scheduler.pickWorkerGroup(vw_schedule_algo, requirement);
-        const auto & group_data = group->getData();
+        const auto & group_data = group->getData(/*with_metrics*/false, /*only_running_state*/true);
         if (group_data.host_ports_vec.empty() && group_data.psm.empty())
             throw Exception("No available worker group for " + request->vw_name(), ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER_GROUP);
 
-        LOG_TRACE(&Poco::Logger::get("ResourceManagerServiceImpl"), "Selected group {} with {} workers",
-                    group->getID(), std::to_string(group->getNumWorkers()));
+        LOG_TRACE(log, "Selected group {} with {} workers", group->getID(), std::to_string(group->getNumWorkers()));
         group_data.fillProto(*response->mutable_worker_group_data(), true, true);
     }
     catch (...)
@@ -526,7 +516,7 @@ void ResourceManagerServiceImpl::syncQueueDetails(
             server_query_queue_map[name] = entry;
         }
 
-        LOG_DEBUG(&Poco::Logger::get("ResourceManagerServiceImpl"), "Received vw queue update from {}", server_hostport);
+        LOG_DEBUG(log, "Received vw queue update from {}", server_hostport);
 
         std::vector<String> deleted_vw_list;
 
@@ -545,7 +535,7 @@ void ResourceManagerServiceImpl::syncQueueDetails(
     }
     catch (...)
     {
-        tryLogCurrentException(&Poco::Logger::get("ResourceManagerServiceImpl"), __PRETTY_FUNCTION__);
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
         RPCHelpers::handleException(response->mutable_exception());
     }
 }

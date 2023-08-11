@@ -27,8 +27,8 @@ namespace DB
     M(UInt64, max_retry_times, "", 3, ConfigFlag::Default, "") \
     M(UInt64, check_leader_info_interval_ms, "", 1000, ConfigFlag::Default, "") \
     M(UInt64, wait_before_become_leader_ms, "", 3000, ConfigFlag::Default, "") \
-    M(Bool, enable_auto_resource_sharing, "", false, ConfigFlag::Default, "") \
-    M(UInt64, auto_resource_sharing_task_interval_ms, "", 5000, ConfigFlag::Default, "") \
+    M(String, resource_coordinate_mode, "", "None", ConfigFlag::Default, "None, Sharing, Scaling.") \
+    M(UInt64, resource_coordinate_task_interval_ms, "", 5000, ConfigFlag::Default, "") \
     M(UInt64, worker_register_visible_granularity_sec, "", 5, ConfigFlag::Default, "change workers' state from Registering to Running every N seconds to avoid changing worker topology frequently.") \
     M(UInt64, lost_worker_timeout_seconds, "", 10, ConfigFlag::Default, "") \
 
@@ -78,7 +78,8 @@ struct SDConfiguration final : public SDConfigurationData
     M(UInt64, cnch_task_heartbeat_max_retries, "", 5, ConfigFlag::Default, "") \
     M(Float32, max_ratio_of_cnch_tasks_to_threads, "", 1.5, ConfigFlag::Default, "") \
     M(Float32, vw_ratio_of_busy_worker, "", 1.2, ConfigFlag::Default, "The ratio for detecting busy worker in the VW.") \
-    M(UInt64, max_async_query_threads, "", 5000, ConfigFlag::Default, "Maximum threads that async queries use") \
+    M(UInt64, max_async_query_threads, "", 5000, ConfigFlag::Default, "Maximum threads that async queries use.") \
+    M(UInt64, async_query_status_ttl, "", 86400, ConfigFlag::Default, "TTL for async query status stored in catalog, in seconds.") \
     /**
      * Mutable */ \
     M(MutableUInt64, max_server_memory_usage, "", 0, ConfigFlag::Default, "") \

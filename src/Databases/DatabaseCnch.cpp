@@ -43,6 +43,61 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
 }
 
+namespace
+{
+    String getObjectDefinitionFromCreateQueryForCnch(const ASTPtr & query)
+    {
+        ASTPtr query_clone = query->clone();
+        auto & create = query_clone->as<ASTCreateQuery &>();
+
+        /// We remove everything that is not needed for ATTACH from the query.
+        create.attach = false;
+        create.as_database.clear();
+        create.as_table.clear();
+        create.if_not_exists = false;
+        create.is_populate = false;
+        create.replace_view = false;
+        create.replace_table = false;
+        create.create_or_replace = false;
+
+        /// For views it is necessary to save the SELECT query itself, for the rest - on the contrary
+        if (!create.isView() && !create.is_materialized_view)
+            create.select = nullptr;
+
+        create.format = nullptr;
+        create.out_file = nullptr;
+
+        WriteBufferFromOwnString statement_buf;
+        formatAST(create, statement_buf, false);
+        writeChar('\n', statement_buf);
+        return statement_buf.str();
+    }
+
+void checkCreateIsAllowedInCnch(const ASTPtr & query)
+{
+    auto * create_query = query->as<ASTCreateQuery>();
+    if (!create_query)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Query is not create query");
+
+    // Disable create table as function for cnch database first.
+    // Todo: add proper support for this new feature
+    if (!create_query->storage && create_query->as_table_function)
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "create table as table function is not supported under cnch database");
+
+    if (create_query->is_dictionary || create_query->isView())
+        return;
+
+    if (!create_query->storage->engine)
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Table engine is unknown, you should specific engine to Cnch/MySQL");
+
+    static constexpr auto allowed_engine = {"Cnch", "MySQL"};
+
+    if (!std::any_of(allowed_engine.begin(), allowed_engine.end(), [&](auto & engine) { return startsWith(create_query->storage->engine->name, engine); }))
+        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only support creating Cnch/MySQL tables");
+}
+
+}
+
 class CnchDatabaseTablesSnapshotIterator final : public DatabaseTablesSnapshotIterator
 {
 public:
@@ -65,20 +120,12 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
     auto txn = local_context->getCurrentTransaction();
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
-    if (!query->as<ASTCreateQuery>())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Query is not create query");
 
-    // Disable create table as function for cnch database first.
-    // Todo: add proper support for this new feature
-    auto create_query = query->as<ASTCreateQuery &>();
-    if (!create_query.storage && create_query.as_table_function)
-        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "create table as table function is not supported under cnch database");
+    checkCreateIsAllowedInCnch(query);
 
-    if ((!create_query.is_dictionary) && (!create_query.isView())
-        && (!create_query.storage->engine || !startsWith(create_query.storage->engine->name, "Cnch")))
-        throw Exception(ErrorCodes::SUPPORT_IS_DISABLED, "Cnch database only suport creating Cnch tables");
+    bool attach = query->as<ASTCreateQuery&>().attach;
 
-    CreateActionParams params = {table->getStorageID(), serializeAST(*query), create_query.attach, table->isDictionary()};
+    CreateActionParams params = {table->getStorageID(), getObjectDefinitionFromCreateQueryForCnch(query), attach, table->isDictionary()};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
     txn->commitV1();
@@ -284,7 +331,7 @@ ASTPtr DatabaseCnch::getCreateTableQueryImpl(const String & name, ContextPtr loc
         {
             LOG_DEBUG(
                 log,
-                "Fail to try to get create query for dictionary {} in datase {} query id {}",
+                "Fail to try to get create query for dictionary {} in database {} query id {}",
                 name,
                 getDatabaseName(),
                 local_context->getCurrentQueryId());
@@ -315,7 +362,7 @@ ASTPtr DatabaseCnch::getCreateTableQueryImpl(const String & name, ContextPtr loc
         else
             LOG_DEBUG(
                 log,
-                "Fail to parseQuery for table {} in datase {} query id {}, create query {}",
+                "Fail to parseQuery for table {} in database {} query id {}, create query {}",
                 name,
                 getDatabaseName(),
                 local_context->getCurrentQueryId(),

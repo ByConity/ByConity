@@ -31,6 +31,7 @@
 #include <common/logger_useful.h>
 #include <common/find_symbols.h>
 #include <Common/randomSeed.h>
+#include <Common/HostWithPorts.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/Exception.h>
 
@@ -238,7 +239,7 @@ struct ZooKeeperArgs
             {
                 if (!endpoint.tags.count("PORT2"))
                     throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Can't find `PORT2`(Keeper TCP port) from service_discovery");
-                hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + endpoint.host + ":" + endpoint.tags.at("PORT2"));
+                hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + DB::createHostPortString(endpoint.host, endpoint.tags.at("PORT2")));
             }
         }
         else if (!endpoints.empty())

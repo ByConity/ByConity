@@ -120,6 +120,8 @@ public:
         START_DEDUP_WORKER,
         STOP_DEDUP_WORKER,
         DUMP_SERVER_STATUS,
+        CLEAN_TRANSACTION,
+        CLEAN_FILESYSTEM_LOCK,
         JEPROF_DUMP,
         LOCK_MEMORY_LOCK,
         END
@@ -155,6 +157,9 @@ public:
 
     // For DEDUP
     ASTPtr partition; // The value or ID of the partition is stored here.
+
+    /// for CLEAN TRANSACTION txn_id
+    UInt64 txn_id;
 
     String getID(char) const override { return "SYSTEM query"; }
 

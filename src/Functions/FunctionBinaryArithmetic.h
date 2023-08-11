@@ -45,6 +45,13 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnConst.h>
 #include <Columns/ColumnAggregateFunction.h>
+#include <Common/Arena.h>
+#include <Common/FieldVisitorsAccurateComparison.h>
+#include <Common/assert_cast.h>
+#include <Common/typeid_cast.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/castColumn.h>
+#include <common/map.h>
 #include "Core/DecimalFunctions.h"
 #include "IFunction.h"
 #include "FunctionHelpers.h"
@@ -605,7 +612,13 @@ class FunctionBinaryArithmetic : public IFunction
     static FunctionOverloadResolverPtr
     getFunctionForIntervalArithmetic(const DataTypePtr & type0, const DataTypePtr & type1, ContextPtr context)
     {
-        bool first_is_date_or_datetime = isDateOrDate32(type0) || isDateTime(type0) || isDateTime64(type0) || isTime(type0);
+        DataTypePtr ntype0 = type0;
+
+        // MySQL does not allow reordering of arguments unlike ClickHouse
+        if (context->getSettingsRef().dialect_type == DialectType::MYSQL && isStringOrFixedString(type0))
+            ntype0 = std::make_shared<DataTypeDateTime>();
+
+        bool first_is_date_or_datetime = isDateOrDate32(ntype0) || isDateTime(ntype0) || isDateTime64(ntype0) || isTime(ntype0);
         bool second_is_date_or_datetime = isDateOrDate32(type1) || isDateTime(type1) || isDateTime64(type1) || isTime(type1);
 
         /// Exactly one argument must be Date or DateTime
@@ -618,8 +631,8 @@ class FunctionBinaryArithmetic : public IFunction
         if constexpr (!is_plus && !is_minus)
             return {};
 
-        const DataTypePtr & type_time = first_is_date_or_datetime ? type0 : type1;
-        const DataTypePtr & type_interval = first_is_date_or_datetime ? type1 : type0;
+        const DataTypePtr & type_time = first_is_date_or_datetime ? ntype0 : type1;
+        const DataTypePtr & type_interval = first_is_date_or_datetime ? type1 : ntype0;
 
         bool interval_is_number = isNumber(type_interval);
 
@@ -796,6 +809,16 @@ class FunctionBinaryArithmetic : public IFunction
                                                size_t input_rows_count, const FunctionOverloadResolverPtr & function_builder) const
     {
         ColumnsWithTypeAndName new_arguments = arguments;
+        // First argument can be a string only if the dialect is MySQL
+        // The function's caller already checks for this
+        if (isStringOrFixedString(arguments[0].type))
+        {
+            ColumnsWithTypeAndName temp{arguments[0]};
+            auto to_datetime = FunctionFactory::instance().get("toDateTime", context);
+            auto col = to_datetime->build(temp)->execute(temp, std::make_shared<DataTypeDateTime>(), input_rows_count);
+            ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime>(), "datetime");
+            new_arguments[0] = converted_col;
+        }
 
         /// Interval argument must be second.
         if (isDateOrDate32(arguments[1].type) || isDateTime(arguments[1].type)
@@ -1003,7 +1026,8 @@ public:
 
             for (size_t i = 0; i < 2; ++i)
                 new_arguments[i].type = arguments[i];
-
+            if (isStringOrFixedString(new_arguments[0].type))
+                new_arguments[0].type = std::make_shared<DataTypeDateTime>();
             /// Interval argument must be second.
             if (isDateOrDate32(new_arguments[1].type) || isDateTime(new_arguments[1].type)
                 || isDateTime64(new_arguments[1].type) || isTime(new_arguments[1].type))

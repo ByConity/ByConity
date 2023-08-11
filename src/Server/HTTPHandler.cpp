@@ -821,6 +821,11 @@ void HTTPHandler::processQuery(
         pushDelayedResults(used_output);
     }
 
+    if (context->isAsyncMode())
+    {
+        context->waitReadFromClientFinished();
+    }
+
     /// Send HTTP headers with code 200 if no exception happened and the data is still not sent to
     /// the client.
     used_output.out->finalize();

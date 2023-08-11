@@ -217,46 +217,8 @@ void CnchPartGCThread::clearOldPartsByPartition(const StoragePtr & istorage, Sto
     }
 }
 
-/// TODO: optimize me
-static time_t calcTTLForPartition(
-    const MergeTreePartition & partition, const KeyDescription & partition_key_description, const TTLDescription & ttl_description)
-{
-    auto columns = partition_key_description.sample_block.cloneEmptyColumns();
-    for (size_t i = 0; i < partition.value.size(); ++i)
-        columns[i]->insert(partition.value[i]);
-
-    auto block = partition_key_description.sample_block.cloneWithColumns(std::move(columns));
-    ttl_description.expression->execute(block);
-
-    auto & result_column_with_tn = block.getByName(ttl_description.result_column);
-    auto & result_column = result_column_with_tn.column;
-    auto & result_type = result_column_with_tn.type;
-
-    if (isDate(result_type))
-    {
-        auto value = UInt16(result_column->getUInt(0));
-        const auto & date_lut = DateLUT::instance();
-        return date_lut.fromDayNum(DayNum(value));
-    }
-    else if (isDateTime(result_type))
-    {
-        return UInt32(result_column->getUInt(0));
-    }
-    else
-    {
-        throw Exception("Logical error in calculate TTL value: unexpected TTL result column type", ErrorCodes::LOGICAL_ERROR);
-    }
-}
-
 void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, const ServerDataPartsVector & visible_parts)
 {
-    auto metadata_snapshot = storage.getInMemoryMetadataPtr();
-    if (!metadata_snapshot->hasPartitionLevelTTL())
-        return;
-
-    const auto & partition_key_description = metadata_snapshot->partition_key;
-    const auto & rows_ttl = metadata_snapshot->table_ttl.rows_ttl;
-
     time_t now = time(nullptr);
 
     StorageCnchMergeTree::PartitionDropInfos partition_infos;
@@ -271,8 +233,8 @@ void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, 
         }
         else
         {
-            auto ttl = calcTTLForPartition(part->get_partition(), partition_key_description, rows_ttl);
-            if (ttl < now)
+            auto ttl = storage.getTTLForPartition(part->get_partition());
+            if (ttl && ttl < now)
             {
                 auto it = partition_infos.try_emplace(part->info().partition_id).first;
                 it->second.max_block = part->info().max_block;

@@ -41,8 +41,6 @@ public:
 
     void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 
-    void collectAllTables(std::vector<ASTPtr> &, bool &) const;
-
     void resetTEALimit();
 
     using  Mode = SelectUnionMode;

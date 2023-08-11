@@ -354,7 +354,7 @@ public:
 
     String getName() const override
     {
-        return "finderFunnel";
+        return "finderFunnelByTimes";
     }
 
     void create(const AggregateDataPtr place) const override

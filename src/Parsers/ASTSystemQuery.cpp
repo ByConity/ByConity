@@ -184,6 +184,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "STOP DEDUP WORKER";
         case Type::DUMP_SERVER_STATUS:
             return "DUMP SERVER STATUS";
+        case Type::CLEAN_TRANSACTION:
+            return "CLEAN TRANSACTION";
+        case Type::CLEAN_FILESYSTEM_LOCK:
+            return "CLEAN FILESYSTEM LOCK";
         case Type::JEPROF_DUMP:
             return "JEPROF DUMP";
         case Type::LOCK_MEMORY_LOCK:
@@ -296,6 +300,10 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
             partition->formatImpl(settings, state, frame);
         }
         settings.ostr << " FOR REPAIR";
+    }
+    else if (type == Type::CLEAN_TRANSACTION)
+    {
+        settings.ostr << " " << txn_id;
     }
 }
 

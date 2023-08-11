@@ -1,0 +1,3 @@
+SELECT TO_SECONDS(toDateTime('2022-02-02 09:09:00', 'UTC'));
+SELECT TO_SECONDS(timestamp '2022-02-02 09:09:00') - plus(unix_timestamp(timestamp '2022-02-02 09:09:00'), 62167219200);
+SELECT TO_SECONDS('2022-02-02 09:09:00') - plus(unix_timestamp('2022-02-02 09:09:00'), 62167219200);

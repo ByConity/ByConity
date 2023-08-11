@@ -13,8 +13,6 @@
  * limitations under the License.
  */
 
-#pragma once
-
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
@@ -33,9 +31,8 @@
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeTuple.h>
 
-#include <Common/ArenaAllocator.h>
-
-namespace DB {
+namespace DB
+{
 
 namespace ErrorCodes
 {
@@ -49,7 +46,6 @@ using Vector = std::vector<T, TrackAllocator<T>>;
 
 static const int TRANSFORM_TIME_GAP = 10;
 static const int TRANSFORM_STEP_GAP = 10;
-using ArrayPairs = Vector<std::pair<Float64, Float64>>;
 
 struct AnalysisEnum
 {
@@ -63,14 +59,9 @@ struct AnalysisEnum
     Vector<Vector<UInt64>> transform_step_distribution;
     Vector<Float64> value;
     Vector<Float64> contribution;
-
-    // for correlation calculation
-    Vector<Float64> correlation;
-    Vector<ArrayPairs> features;
-    Vector<UInt32> sizes;
 };
 
-struct AggregateFunctionAttributionCorrelationMergeData
+struct AggregateFunctionAttributionAnalysisFuseData
 {
     AnalysisEnum outer_result;
     std::map<Vector<String>, int> touch_events_map;
@@ -86,14 +77,10 @@ struct AggregateFunctionAttributionCorrelationMergeData
         outer_result.transform_step_distribution.emplace_back();
         outer_result.value.push_back(0.0);
         outer_result.contribution.push_back(0.0);
-
-        outer_result.features.emplace_back();
-        outer_result.sizes.push_back(0);
     }
 
-    void integrateOuterResult(const AnalysisEnum & analysis_enum, Arena *)
+    void integrateOuterResult(const AnalysisEnum& analysis_enum)
     {
-        int trans_sum = std::accumulate(analysis_enum.valid_transform_cnt.begin(), analysis_enum.valid_transform_cnt.end(), 0);
         for (size_t i = 0; i < analysis_enum.touch_events.size(); i++)
         {
             Vector<String> key = Vector<String>{analysis_enum.touch_events[i][0], analysis_enum.touch_events[i][1]};
@@ -110,21 +97,10 @@ struct AggregateFunctionAttributionCorrelationMergeData
             outer_result.value[index] += analysis_enum.value[i];
 
             if (!analysis_enum.transform_times.empty() && !analysis_enum.transform_times[i].empty())
-                outer_result.transform_times[index].insert(outer_result.transform_times[index].end(),
-                                                           analysis_enum.transform_times[i].begin(),
-                                                           analysis_enum.transform_times[i].end());
+                outer_result.transform_times[index].insert(outer_result.transform_times[index].end(), analysis_enum.transform_times[i].begin(), analysis_enum.transform_times[i].end());
 
             if (!analysis_enum.transform_steps.empty() && !analysis_enum.transform_steps[i].empty())
-                outer_result.transform_steps[index].insert(outer_result.transform_steps[index].end(),
-                                                           analysis_enum.transform_steps[i].begin(),
-                                                           analysis_enum.transform_steps[i].end());
-
-            // correlations
-            if (trans_sum > 0)
-            {
-                outer_result.features[index].emplace_back(analysis_enum.click_cnt[i], analysis_enum.valid_transform_cnt[i]);
-                outer_result.sizes[index] ++;
-            }
+                outer_result.transform_steps[index].insert(outer_result.transform_steps[index].end(), analysis_enum.transform_steps[i].begin(), analysis_enum.transform_steps[i].end());
         }
     }
 
@@ -170,20 +146,20 @@ struct AggregateFunctionAttributionCorrelationMergeData
         }
     }
 
-    void add(AnalysisEnum & analysis_enum, Arena *arena)
+    void add(const AnalysisEnum& analysis_enum, Arena *)
     {
-        integrateOuterResult(analysis_enum, arena);
+        integrateOuterResult(analysis_enum);
     }
 
-    void merge(const AggregateFunctionAttributionCorrelationMergeData &other, Arena *arena)
+    void merge(const AggregateFunctionAttributionAnalysisFuseData & other, Arena *)
     {
-        integrateOuterResult(other.outer_result, arena);
+        integrateOuterResult(other.outer_result);
     }
 
-    void serialize(WriteBuffer &buf) const 
+    void serialize(WriteBuffer & buf) const
     {
         writeBinary(touch_events_map.size(), buf);
-        for (const auto & map : touch_events_map) 
+        for (const auto & map : touch_events_map)
         {
             serializeVector(map.first, buf);
             writeBinary(map.second, buf);
@@ -195,16 +171,9 @@ struct AggregateFunctionAttributionCorrelationMergeData
         serializeVectorVector(outer_result.transform_times, buf);
         serializeVectorVector(outer_result.transform_steps, buf);
         serializeVector(outer_result.value, buf);
-
-        // correlation
-        serializeVector(outer_result.sizes, buf);
-
-        for (size_t i = 0; i < outer_result.sizes.size(); i++)
-            buf.write(reinterpret_cast<const char *>(outer_result.features[i].data()),
-                      outer_result.sizes[i] * sizeof(outer_result.features[i][0]));
     }
 
-    void deserialize(ReadBuffer &buf, Arena *) 
+    void deserialize(ReadBuffer & buf, Arena *)
     {
         size_t size;
         readBinary(size, buf);
@@ -213,7 +182,7 @@ struct AggregateFunctionAttributionCorrelationMergeData
         String event_attribute;
         int index;
         touch_events_map.clear();
-        for (size_t i = 0; i < size; i++) 
+        for(size_t i = 0; i < size; i++) 
         {
             readBinary(touch_event, buf);
             readBinary(index, buf);
@@ -226,166 +195,25 @@ struct AggregateFunctionAttributionCorrelationMergeData
         deserializeVectorVector(outer_result.transform_times, buf);
         deserializeVectorVector(outer_result.transform_steps, buf);
         deserializeVector(outer_result.value, buf);
-
-        // correlation
-        deserializeVector(outer_result.sizes, buf);
-
-        for (size_t i = 0; i < outer_result.sizes.size(); i++)
-        {
-            outer_result.features[i].resize(outer_result.sizes[i]);
-            buf.read(reinterpret_cast<char *>(outer_result.features[i].data()), outer_result.sizes[i] * sizeof(outer_result.features[i][0]));
-        }
-    }
-
-    template <template <typename> class Comparator>
-    struct ComparePairFirst final
-    {
-        template <typename X, typename Y>
-        bool operator()(const std::pair<X, Y> & lhs, const std::pair<X, Y> & rhs) const
-        {
-            return Comparator<X>{}(lhs.first, rhs.first);
-        }
-    };
-
-    template <template <typename> class Comparator>
-    struct ComparePairSecond final
-    {
-        template <typename X, typename Y>
-        bool operator()(const std::pair<X, Y> & lhs, const std::pair<X, Y> & rhs) const
-        {
-            return Comparator<Y>{}(lhs.second, rhs.second);
-        }
-    };
-
-    static Float64 getRankCorrelation(ArrayPairs &value)
-    {
-        size_t size = value.size();
-
-        // create a copy of values not to format data
-        PODArrayWithStackMemory<std::pair<Float64, Float64>, 32> tmp_values;
-        tmp_values.resize(size);
-        for (size_t j = 0; j < size; ++ j)
-            tmp_values[j] = static_cast<std::pair<Float64, Float64>>(value[j]);
-
-        // std::cout << " calculate corre:\n";
-
-        // for (size_t i = 0; i < size; i++)
-        //     std::cout << tmp_values[i].first << ",";
-
-        // std::cout << " y:\n";
-        // for (size_t i = 0; i < size; i++)
-        //     std::cout << tmp_values[i].second << ",";
-
-        // std::cout << " y:\n";
-
-        // sort x_values
-        std::sort(std::begin(tmp_values), std::end(tmp_values), ComparePairFirst<std::greater>{});
-        Float64 sumx = 0;
-        Float64 sumy = 0;
-
-        for (size_t j = 0; j < size;)
-        {
-            // replace x_values with their ranks
-            size_t rank = j + 1;
-            size_t same = 1;
-            size_t cur_sum = rank;
-            size_t cur_start = j;
-            sumx += tmp_values[j].first;
-
-            while (j < size - 1)
-            {
-                if (tmp_values[j].first == tmp_values[j + 1].first)
-                {
-                    // rank of (j + 1)th number
-                    rank += 1;
-                    ++same;
-                    cur_sum += rank;
-                    ++j;
-                }
-                else
-                    break;
-            }
-
-            // insert rank is calculated as average of ranks of equal values
-            Float64 insert_rank = static_cast<Float64>(cur_sum) / same;
-            for (size_t i = cur_start; i <= j; ++i)
-                tmp_values[i].first = insert_rank;
-            ++j;
-        }
-
-        // sort y_values
-        std::sort(std::begin(tmp_values), std::end(tmp_values), ComparePairSecond<std::greater>{});
-
-        // replace y_values with their ranks
-        for (size_t j = 0; j < size;)
-        {
-            // replace x_values with their ranks
-            size_t rank = j + 1;
-            size_t same = 1;
-            size_t cur_sum = rank;
-            size_t cur_start = j;
-            sumy += tmp_values[j].second;
-
-            while (j < size - 1)
-            {
-                if (tmp_values[j].second == tmp_values[j + 1].second)
-                {
-                    // rank of (j + 1)th number
-                    rank += 1;
-                    ++same;
-                    cur_sum += rank;
-                    ++j;
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            // insert rank is calculated as average of ranks of equal values
-            Float64 insert_rank = static_cast<Float64>(cur_sum) / same;
-            for (size_t i = cur_start; i <= j; ++i)
-                tmp_values[i].second = insert_rank;
-            ++j;
-        }
-
-        if (sumy == 0)
-            return 0.0;
-
-        // count d^2 sum
-        Float64 answer = static_cast<Float64>(0);
-        for (size_t j = 0; j < size; ++ j)
-            answer += (tmp_values[j].first - tmp_values[j].second) * (tmp_values[j].first - tmp_values[j].second);
-
-        answer *= 6;
-        answer /= size * (size * size - 1);
-        answer = 1 - answer;
-
-        if (std::isnan(answer))
-            return 0.0;
-        return answer;
     }
 };
 
-
-
-class AggregateFunctionAttributionCorrelationMerge final
-        : public IAggregateFunctionDataHelper<AggregateFunctionAttributionCorrelationMergeData, AggregateFunctionAttributionCorrelationMerge> {
+class AggregateFunctionAttributionAnalysisTupleMerge final : public IAggregateFunctionDataHelper<AggregateFunctionAttributionAnalysisFuseData, AggregateFunctionAttributionAnalysisTupleMerge>
+{
 private:
     UInt64 N; // Return the largest first N events by value
     bool need_others; // Weather need other conversion
 
 public:
-    AggregateFunctionAttributionCorrelationMerge(
-            UInt64 N_, bool need_others_,
-            const DataTypes &arguments, const Array &params) :
-            IAggregateFunctionDataHelper<AggregateFunctionAttributionCorrelationMergeData, AggregateFunctionAttributionCorrelationMerge>(
-                    arguments, params),
-            N(N_), need_others(need_others_) {}
+    AggregateFunctionAttributionAnalysisTupleMerge(
+        UInt64 N_, bool need_others_,
+        const DataTypes & arguments, const Array & params) :
+        IAggregateFunctionDataHelper<AggregateFunctionAttributionAnalysisFuseData, AggregateFunctionAttributionAnalysisTupleMerge>(arguments, params),
+        N(N_), need_others(need_others_) {}
 
     String getName() const override
     {
-        return "attributionCorrelationMerge";
+        return "attributionAnalysisFuse";
     }
 
     DataTypePtr getAttributionAnalysisReturnType() const
@@ -393,8 +221,6 @@ public:
         DataTypes types;
         DataTypePtr touch_events_type =
             std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()));
-        DataTypePtr correlation_type =
-            std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat64>());
         DataTypePtr click_cnt_type =
             std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>());
         DataTypePtr valid_transform_cnt_type =
@@ -411,7 +237,6 @@ public:
             std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat64>());
 
         types.push_back(touch_events_type);
-        types.push_back(correlation_type);
         types.push_back(click_cnt_type);
         types.push_back(valid_transform_cnt_type);
         types.push_back(valid_transform_ratio_type);
@@ -483,7 +308,7 @@ public:
         this->data(place).merge(this->data(rhs), arena);
     }
 
-    void serialize(ConstAggregateDataPtr place, WriteBuffer &buf) const override
+    void serialize(ConstAggregateDataPtr place, WriteBuffer & buf) const override
     {
         this->data(place).serialize(buf);
     }
@@ -495,40 +320,29 @@ public:
 
     void insertResultInto(AggregateDataPtr __restrict place, IColumn & to, Arena * ) const override
     {
-       AnalysisEnum * outer_result = const_cast<AnalysisEnum *>(&(this->data(place).outer_result));
+        AnalysisEnum outer_result = this->data(place).outer_result;
 
-        Float64 total_value = accumulate(outer_result->value.begin(), outer_result->value.end(), 0.0);
+        Float64 total_value = std::accumulate(outer_result.value.begin() , outer_result.value.end() , 0.0);
         if (total_value > 0)
         {
-            for (size_t i = 0; i < outer_result->touch_events.size(); i++)
+            for (size_t i = 0; i < outer_result.touch_events.size(); i++)
             {
-                outer_result->valid_transform_ratio[i] =
-                    (outer_result->click_cnt[i] != 0) ?
-                    (outer_result->valid_transform_cnt[i] * 1.0) / (outer_result->click_cnt[i] * 1.0) : 0;
-                outer_result->contribution[i] = outer_result->value[i] / total_value;
+                outer_result.valid_transform_ratio[i] =
+                    (outer_result.click_cnt[i] != 0) ?
+                    (outer_result.valid_transform_cnt[i]*1.0) / (outer_result.click_cnt[i]*1.0) : 0;
+                outer_result.contribution[i] = outer_result.value[i] / total_value;
             }
         }
-        getDistributionByOriginal(outer_result->transform_times, outer_result->transform_time_distribution, TRANSFORM_TIME_GAP);
-        getDistributionByOriginal(outer_result->transform_steps, outer_result->transform_step_distribution, TRANSFORM_STEP_GAP);
+        getDistributionByOriginal(outer_result.transform_times, outer_result.transform_time_distribution, TRANSFORM_TIME_GAP);
+        getDistributionByOriginal(outer_result.transform_steps, outer_result.transform_step_distribution, TRANSFORM_STEP_GAP);
 
-        if (N && N < outer_result->touch_events.size())
-        {
-            getTopByValue(*outer_result);
-        }
-        else
-        {
-            // get correlation
-            outer_result->correlation.resize(outer_result->features.size());
+        if(N && N < outer_result.touch_events.size()) getTopByValue(outer_result);
 
-            for (size_t i = 0; i < outer_result->features.size(); i++)
-                outer_result->correlation[i] = AggregateFunctionAttributionCorrelationMergeData::getRankCorrelation(outer_result->features[i]);
-        }
-
-        insertResultIntoColumn(to, *outer_result);
+        insertResultIntoColumn(to, outer_result);
     }
 
     template<typename TYPE>
-    void getTopFromIndexVector(Vector<TYPE> &vec, const Vector<std::pair<Float64, UInt64>> &index_vec) const
+    void getTopFromIndexVector(Vector<TYPE>& vec, const Vector<std::pair<Float64, UInt64>>& index_vec) const
     {
         for (size_t i = 0; i < index_vec.size(); i++)
             std::swap(vec[index_vec[i].second], vec[i]);
@@ -536,7 +350,7 @@ public:
         vec.resize(index_vec.size());
     }
 
-    void getTopByValue(AnalysisEnum &outer_result) const
+    void getTopByValue(AnalysisEnum& outer_result) const
     {
         Vector<std::pair<Float64, UInt64>> index_vec;
         int other_index = -1;
@@ -550,7 +364,7 @@ public:
             index_vec.emplace_back(outer_result.value[i], i);
         }
 
-        std::nth_element(index_vec.begin(), index_vec.begin() + N, index_vec.end(),
+        std::nth_element(index_vec.begin(), index_vec.begin()+N, index_vec.end(),
                          [](std::pair<Float64, UInt64> value1, std::pair<Float64, UInt64> value2) {
                              return value1.first != value2.first ? value1.first > value2.first : value1.second < value2.second;
                          });
@@ -559,10 +373,9 @@ public:
         if (need_others && other_index > -1)
             index_vec.emplace_back(outer_result.value[other_index], other_index);
 
-        std::sort(index_vec.begin(), index_vec.end(), [](auto &i1, auto &i2) {
+        std::sort(index_vec.begin(), index_vec.end(), [](auto& i1, auto& i2) {
             return i1.second < i2.second;
         });
-
         getTopFromIndexVector(outer_result.touch_events, index_vec);
         getTopFromIndexVector(outer_result.click_cnt, index_vec);
         getTopFromIndexVector(outer_result.valid_transform_cnt, index_vec);
@@ -571,15 +384,9 @@ public:
         getTopFromIndexVector(outer_result.transform_step_distribution, index_vec);
         getTopFromIndexVector(outer_result.value, index_vec);
         getTopFromIndexVector(outer_result.contribution, index_vec);
-
-        // correlation
-        outer_result.correlation.resize(index_vec.size());
-
-        for (size_t i = 0; i < index_vec.size(); i++)
-            outer_result.correlation[i] = AggregateFunctionAttributionCorrelationMergeData::getRankCorrelation(outer_result.features[index_vec[i].second]);
     }
 
-    void getDistributionByOriginal(Vector<Vector<UInt64>> &original, Vector<Vector<UInt64>> &distribution, int gap_count) const
+    void getDistributionByOriginal(const Vector<Vector<UInt64>> & original, Vector<Vector<UInt64>> & distribution, int gap_count) const
     {
         for (size_t i = 0; i < original.size(); i++)
         {
@@ -591,17 +398,17 @@ public:
 
             Vector<UInt64> max_and_min = getMaxAndMinIndex(original[i]);
 
-            UInt64 gap = ceil((max_and_min[0] - max_and_min[1]) / gap_count) + 1;
+            UInt64 gap = ceil((max_and_min[0]-max_and_min[1]) / gap_count) + 1;
             distribution[i].insert(distribution[i].begin(), gap_count, 0);
             for (UInt64 item : original[i])
             {
                 if (item > 0)
-                    distribution[i][floor((item - max_and_min[1]) / gap)]++;
+                    distribution[i][floor((item-max_and_min[1])/gap)]++;
             }
         }
     }
 
-    Vector<UInt64> getMaxAndMinIndex(const Vector<UInt64> &vec) const
+    Vector<UInt64> getMaxAndMinIndex(const Vector<UInt64>& vec) const
     {
         UInt64 max = 0, min = UINT_MAX;
         for (UInt64 i : vec)
@@ -609,7 +416,6 @@ public:
             max = (i > max) ? i : max;
             min = (i < min) ? i : min;
         }
-
         return Vector<UInt64>{max, min};
     }
 
@@ -617,7 +423,7 @@ public:
     void insertNestedVectorNumberIntoColumn(ColumnArray& vec_to, const Vector<Num>& vec) const
     {
         auto& vec_to_offset = vec_to.getOffsets();
-        vec_to_offset.push_back((vec_to_offset.size() == 0 ? 0 : vec_to_offset.back()) + vec.size());
+        vec_to_offset.push_back((vec_to_offset.empty() ? 0 : vec_to_offset.back()) + vec.size());
         auto& vec_to_nest = static_cast<ColumnArray &>(vec_to.getData());
         auto& vec_data_to = static_cast<ColumnNum &>(static_cast<ColumnArray &>(vec_to_nest).getData());
         auto& vec_to_nest_offset = vec_to_nest.getOffsets();
@@ -626,7 +432,7 @@ public:
             for (const auto& i : item)
                 vec_data_to.insert(i);
 
-            vec_to_nest_offset.push_back((vec_to_nest_offset.size() == 0 ? 0 : vec_to_nest_offset.back()) + item.size());
+            vec_to_nest_offset.push_back((vec_to_nest_offset.empty() ? 0 : vec_to_nest_offset.back()) + item.size());
         }
     }
 
@@ -634,7 +440,7 @@ public:
     void insertVectorNumberIntoColumn(ColumnArray& vec_to, const Vector<Num>& vec) const
     {
         auto& vec_to_offset = vec_to.getOffsets();
-        vec_to_offset.push_back((vec_to_offset.size() == 0 ? 0 : vec_to_offset.back()) + vec.size());
+        vec_to_offset.push_back((vec_to_offset.empty() ? 0 : vec_to_offset.back()) + vec.size());
         auto& vec_data_to = static_cast<ColumnNum &>(vec_to.getData());
         for (const auto& item : vec)
             vec_data_to.insert(item);
@@ -646,38 +452,35 @@ public:
 
         ColumnArray& touch_events_to = static_cast<ColumnArray &>(tuple_to.getColumn(0));
         auto& touch_events_to_offset = touch_events_to.getOffsets();
-        touch_events_to_offset.push_back((touch_events_to_offset.size() == 0 ? 0 : touch_events_to_offset.back()) + result.touch_events.size());
+        touch_events_to_offset.push_back((touch_events_to_offset.empty() ? 0 : touch_events_to_offset.back()) + result.touch_events.size());
         auto& touch_events_to_nest = static_cast<ColumnArray &>(touch_events_to.getData());
         auto &touch_events_to_nest_offset = touch_events_to_nest.getOffsets();
         auto& touch_events_data_to = static_cast<ColumnString &>(touch_events_to_nest.getData());
         for (const auto& item : result.touch_events)
         {
             for (const auto& s : item) touch_events_data_to.insertData(s.data(), s.size());
-            touch_events_to_nest_offset.push_back((touch_events_to_nest_offset.size() == 0 ? 0 : touch_events_to_nest_offset.back()) + item.size());
+            touch_events_to_nest_offset.push_back((touch_events_to_nest_offset.empty() ? 0 : touch_events_to_nest_offset.back()) + item.size());
         }
 
-        ColumnArray& correlation_to = static_cast<ColumnArray &>(tuple_to.getColumn(1));
-        insertVectorNumberIntoColumn<ColumnFloat64>(correlation_to, result.correlation);
-
-        auto& click_cnt_to = static_cast<ColumnArray &>(tuple_to.getColumn(2));
+        auto& click_cnt_to = static_cast<ColumnArray &>(tuple_to.getColumn(1));
         insertVectorNumberIntoColumn<ColumnUInt64>(click_cnt_to, result.click_cnt);
 
-        ColumnArray& valid_transform_cnt_to = static_cast<ColumnArray &>(tuple_to.getColumn(3));
+        ColumnArray& valid_transform_cnt_to = static_cast<ColumnArray &>(tuple_to.getColumn(2));
         insertVectorNumberIntoColumn<ColumnUInt64>(valid_transform_cnt_to, result.valid_transform_cnt);
 
-        ColumnArray& valid_transform_ratio_to = static_cast<ColumnArray &>(tuple_to.getColumn(4));
+        ColumnArray& valid_transform_ratio_to = static_cast<ColumnArray &>(tuple_to.getColumn(3));
         insertVectorNumberIntoColumn<ColumnFloat64>(valid_transform_ratio_to, result.valid_transform_ratio);
 
-        ColumnArray& transform_time_distribution_to = static_cast<ColumnArray &>(tuple_to.getColumn(5));
+        ColumnArray& transform_time_distribution_to = static_cast<ColumnArray &>(tuple_to.getColumn(4));
         insertNestedVectorNumberIntoColumn<ColumnUInt64>(transform_time_distribution_to, result.transform_time_distribution);
 
-        ColumnArray& transform_step_distribution_to = static_cast<ColumnArray &>(tuple_to.getColumn(6));
+        ColumnArray& transform_step_distribution_to = static_cast<ColumnArray &>(tuple_to.getColumn(5));
         insertNestedVectorNumberIntoColumn<ColumnUInt64>(transform_step_distribution_to, result.transform_step_distribution);
 
-        ColumnArray& value_to = static_cast<ColumnArray &>(tuple_to.getColumn(7));
+        ColumnArray& value_to = static_cast<ColumnArray &>(tuple_to.getColumn(6));
         insertVectorNumberIntoColumn<ColumnFloat64>(value_to, result.value);
 
-        ColumnArray& contribution_to = static_cast<ColumnArray &>(tuple_to.getColumn(8));
+        ColumnArray& contribution_to = static_cast<ColumnArray &>(tuple_to.getColumn(7));
         insertVectorNumberIntoColumn<ColumnFloat64>(contribution_to, result.contribution);
     }
 

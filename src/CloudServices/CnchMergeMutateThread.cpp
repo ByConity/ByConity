@@ -557,25 +557,9 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     auto storage_settings = storage.getSettings();
     const bool enable_batch_select = storage_settings->cnch_merge_enable_batch_select;
 
-    SCOPE_EXIT(
-        auto total = metrics.elapsed_get_data_parts
-            + metrics.elapsed_calc_visible_parts
-            + metrics.elapsed_calc_merge_parts
-            + metrics.elapsed_select_parts;
-
-        if (total >= 200 * 1000)
-        {
-            LOG_DEBUG(
-                log,
-                "trySelectPartsToMerge elapsed ~{} us; get data parts elapsed {} us; calc visible parts elapsed {} us; calc merge parts "
-                "elapsed {} us; select parts elapsed {} us;",
-                total,
-                metrics.elapsed_get_data_parts,
-                metrics.elapsed_calc_visible_parts,
-                metrics.elapsed_calc_visible_parts,
-                metrics.elapsed_calc_merge_parts,
-                metrics.elapsed_select_parts);
-        });
+    SCOPE_EXIT(if (metrics.totalElapsed() >= 200 * 1000) {
+        LOG_DEBUG(log, "trySelectPartsToMerge digest: {}", metrics.toDebugString());
+    });
 
     /// Step 1: copy currently_merging_mutating_parts
     /// Must do it before getting data parts so that the copy won't change during selection
@@ -636,6 +620,34 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
 
     /// TODO: support checkpoints
 
+    size_t max_bytes = storage_settings->cnch_merge_max_total_bytes_to_merge;
+    /// If selecting nonadjacent parts is allowed,
+    /// we will filter out some parts before selecting:
+    /// 1. all merging parts.
+    /// 2. a single part that big enough (limited by rows | bytes).
+    if (storage.getSettings()->cnch_merge_select_nonadjacent_parts)
+    {
+        size_t max_rows = storage_settings->cnch_merge_max_total_rows_to_merge;
+        visible_parts.erase(
+            std::remove_if(
+                visible_parts.begin(),
+                visible_parts.end(),
+                [&merging_mutating_parts_snapshot, max_bytes, max_rows](const auto & p) {
+                    return merging_mutating_parts_snapshot.erase(p->name())
+                           || p->part_model().rows_count() >= max_rows
+                           || p->part_model().size() >= max_bytes;
+                }),
+            visible_parts.end()
+        );
+
+        if (visible_parts.size() <= 1)
+        {
+            LOG_TRACE(log, "Only {} parts in visible_parts, exit merge selection.", visible_parts.size());
+            return false;
+        }
+
+    }
+
     /// Step 3: selection
     std::vector<ServerDataPartsVector> res;
     [[maybe_unused]] auto decision = selectPartsToMerge(
@@ -643,7 +655,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
         res,
         visible_parts,
         getMergePred(merging_mutating_parts_snapshot),
-        storage_settings->max_bytes_to_merge_at_max_space_in_pool,
+        max_bytes,
         false, /// aggressive
         enable_batch_select,
         false, /// merge_with_ttl_allowed

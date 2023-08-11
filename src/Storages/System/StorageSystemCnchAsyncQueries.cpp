@@ -15,11 +15,11 @@ namespace DB
 NamesAndTypesList StorageSystemCnchAsyncQueries::getNamesAndTypes()
 {
     return {
-        {"id", std::make_shared<DataTypeString>()},
+        {"async_query_id", std::make_shared<DataTypeString>()},
         {"query_id", std::make_shared<DataTypeString>()},
         {"status", std::make_shared<DataTypeString>()},
         {"error_msg", std::make_shared<DataTypeString>()},
-        {"upate_time", std::make_shared<DataTypeDateTime>()},
+        {"update_time", std::make_shared<DataTypeDateTime>()},
     };
 }
 
@@ -27,15 +27,15 @@ void StorageSystemCnchAsyncQueries::fillData(MutableColumns & res_columns, Conte
 {
     ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->where();
 
-    const std::vector<std::map<String, String>> value_by_column_names = collectWhereORClausePredicate(where_expression, context);
+    const std::vector<std::map<String, Field>> value_by_column_names = collectWhereORClausePredicate(where_expression, context);
 
     if (value_by_column_names.size() == 1)
     {
-        const auto value_by_column_name = value_by_column_names.at(0);
-        auto it = value_by_column_name.find("id");
+        const auto & value_by_column_name = value_by_column_names.at(0);
+        auto it = value_by_column_name.find("async_query_id");
         if (it != value_by_column_name.end())
         {
-            String selected_id = it->second;
+            String selected_id = it->second.safeGet<String>();
             Protos::AsyncQueryStatus data;
             if (context->getCnchCatalog()->tryGetAsyncQueryStatus(selected_id, data))
             {
@@ -44,11 +44,11 @@ void StorageSystemCnchAsyncQueries::fillData(MutableColumns & res_columns, Conte
                 res_columns[i++]->insert(data.query_id());
                 res_columns[i++]->insert(AsyncQueryStatus_Status_Name(data.status()));
                 res_columns[i++]->insert(data.error_msg());
-                res_columns[i++]->insert(UInt64(data.update_time()));
+                res_columns[i++]->insert(static_cast<UInt64>(data.update_time()));
             }
             else
             {
-                LOG_TRACE(&Poco::Logger::get(getName()), "return empty result with id {}", selected_id);
+                LOG_TRACE(&Poco::Logger::get(getName()), "return empty result with async_query_id {}", selected_id);
             }
         }
         else

@@ -15,12 +15,13 @@
 
 #include <FormaterTool/PartToolkitBase.h>
 #include <FormaterTool/ZipHelper.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTPartToolKit.h>
-#include <Interpreters/InterpreterCreateQuery.h>
-#include <Interpreters/Context.h>
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageMergeTree.h>
+#include <Poco/JSON/Template.h>
 
 namespace DB
 {
@@ -30,10 +31,30 @@ namespace ErrorCodes
     extern const int INCORRECT_QUERY;
 }
 
+const std::string default_config = "<yandex>\n"
+                                   "<storage_configuration>\n"
+                                   "<disks>\n"
+                                   "    <hdfs>\n"
+                                   "        <path><?= source-path ?></path>\n"
+                                   "        <type>hdfs</type>\n"
+                                   "    </hdfs>\n"
+                                   "</disks>\n"
+                                   "<policies>\n"
+                                   "    <cnch_default_hdfs>\n"
+                                   "        <volumes>\n"
+                                   "            <hdfs>\n"
+                                   "                <default>hdfs</default>\n"
+                                   "                <disk>hdfs</disk>\n"
+                                   "            </hdfs>\n"
+                                   "        </volumes>\n"
+                                   "    </cnch_default_hdfs>\n"
+                                   "</policies>\n"
+                                   "</storage_configuration>\n"
+                                   "</yandex>";
+
 PartToolkitBase::PartToolkitBase(const ASTPtr & query_ptr_, ContextMutablePtr context_)
     : WithMutableContext(context_), query_ptr(query_ptr_)
 {
-
 }
 
 PartToolkitBase::~PartToolkitBase()
@@ -60,7 +81,7 @@ void PartToolkitBase::applySettings()
     if (pw_query.settings)
     {
         const ASTSetQuery & set_ast = pw_query.settings->as<ASTSetQuery &>();
-        for (auto & change : set_ast.changes)
+        for (const auto & change : set_ast.changes)
         {
             if (settings.has(change.name))
                 settings.set(change.name, change.value);
@@ -74,6 +95,38 @@ void PartToolkitBase::applySettings()
                 user_settings.emplace(change.name, change.value);
         }
     }
+
+    /// Init HDFS params.
+    ///
+    /// User can bypass nnproxy by passing a string to `hdfs_nnproxy` with prefixs like `hdfs://` or `cfs://`.
+    HDFSConnectionParams hdfs_params
+        = HDFSConnectionParams::parseFromMisusedNNProxyStr(getContext()->getHdfsNNProxy(), getContext()->getHdfsUser());
+    getContext()->setHdfsConnectionParams(hdfs_params);
+
+    /// Register default HDFS file system as well in case of
+    /// lower level logic call `getDefaultHdfsFileSystem`.
+    /// Default values are the same as those on the ClickHouse server.
+    {
+        const int hdfs_max_fd_num = user_settings.count("hdfs_max_fd_num") ? user_settings["hdfs_max_fd_num"].safeGet<int>() : 100000;
+        const int hdfs_skip_fd_num = user_settings.count("hdfs_skip_fd_num") ? user_settings["hdfs_skip_fd_num"].safeGet<int>() : 100;
+        const int hdfs_io_error_num_to_reconnect
+            = user_settings.count("hdfs_io_error_num_to_reconnect") ? user_settings["hdfs_io_error_num_to_reconnect"].safeGet<int>() : 10;
+        registerDefaultHdfsFileSystem(hdfs_params, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
+    }
+
+    /// Renders default config to initialize storage configurations.
+    Poco::JSON::Object::Ptr params = new Poco::JSON::Object();
+    params->set("source-path", pw_query.source_path->as<ASTLiteral &>().value.safeGet<String>());
+    Poco::JSON::Template tpl;
+    tpl.parse(default_config);
+    std::stringstream out;
+    tpl.render(params, out);
+    std::string default_xml_config = "<?xml version=\"1.0\"?>";
+    default_xml_config = default_xml_config + out.str();
+
+    DB::ConfigProcessor config_processor("", false, false);
+    auto config = config_processor.loadConfig(default_xml_config).configuration;
+    getContext()->setConfig(config);
 }
 
 StoragePtr PartToolkitBase::getTable()

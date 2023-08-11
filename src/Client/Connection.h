@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include "common/types.h"
 #include <common/logger_useful.h>
 
 #include <Poco/Net/StreamSocket.h>
@@ -203,6 +204,7 @@ public:
 
     /// send cnch query
     void sendCnchQuery(
+        UInt64 primary_txn_id,
         UInt64 txn_id,
         const ConnectionTimeouts & timeouts,
         const String & query,

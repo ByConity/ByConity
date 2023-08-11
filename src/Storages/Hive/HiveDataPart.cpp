@@ -54,14 +54,14 @@ Range createRangeFromParquetStatistics(std::shared_ptr<StatisticsType> stats)
 {
     ///
     if (!stats->HasMinMax())
-        return Range();
+        return Range::createWholeUniverseWithoutNull();
     return Range(FieldType(stats->min()), true, FieldType(stats->max()), true);
 }
 
 Range createRangeFromParquetStatistics(std::shared_ptr<parquet::ByteArrayStatistics> stats)
 {
     if (!stats->HasMinMax())
-        return Range();
+        return Range::createWholeUniverseWithoutNull();
 
     String min_val(reinterpret_cast<const char *>(stats->min().ptr), stats->min().len);
     String max_val(reinterpret_cast<const char *>(stats->max().ptr), stats->max().len);
@@ -217,7 +217,7 @@ void HiveParquetFile::loadSplitMinMaxIndexesImpl()
     {
         auto row_group_meta = meta->RowGroup(static_cast<int>(i));
         split_minmax_idxes[i] = std::make_shared<IMergeTreeDataPart::MinMaxIndex>();
-        split_minmax_idxes[i]->hyperrectangle.resize(num_cols, Range());
+        split_minmax_idxes[i]->hyperrectangle.resize(num_cols, Range::createWholeUniverseWithoutNull());
 
         size_t j = 0;
         auto it = index_names_and_types.begin();

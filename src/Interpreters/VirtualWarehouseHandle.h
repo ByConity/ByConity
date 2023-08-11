@@ -23,9 +23,9 @@
 #include <ServiceDiscovery/IServiceDiscovery.h>
 
 #include <atomic>
+#include <map>
 #include <memory>
 #include <mutex>
-#include <unordered_map>
 #include <vector>
 #include <boost/noncopyable.hpp>
 
@@ -42,6 +42,8 @@ namespace ErrorCodes
 namespace DB
 {
 class Context;
+class CnchWorkerClient;
+using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
 class WorkerGroupHandleImpl;
 using WorkerGroupHandle = std::shared_ptr<WorkerGroupHandleImpl>;
 
@@ -53,11 +55,13 @@ enum class VirtualWarehouseHandleSource
 
 constexpr auto toString(VirtualWarehouseHandleSource s)
 {
-    if (s == VirtualWarehouseHandleSource::RM)
-        return "RM";
-    else if (s == VirtualWarehouseHandleSource::PSM)
-        return "PSM";
-    throw Exception("Unknown VW source", ErrorCodes::LOGICAL_ERROR);
+    switch (s)
+    {
+        case VirtualWarehouseHandleSource::RM:
+            return "RM";
+        case VirtualWarehouseHandleSource::PSM:
+            return "PSM";
+    }
 }
 
 /**
@@ -82,7 +86,7 @@ private:
     VirtualWarehouseHandleImpl(VirtualWarehouseHandleSource source, const VirtualWarehouseData & vw_data, const ContextPtr global_context_);
 
 public:
-    using Container = std::unordered_map<String, WorkerGroupHandle>;
+    using Container = std::map<String, WorkerGroupHandle>;
     using VirtualWarehouseHandle = std::shared_ptr<VirtualWarehouseHandleImpl>;
     using CnchWorkerClientPtr = std::shared_ptr<CnchWorkerClient>;
     using VWScheduleAlgo = ResourceManagement::VWScheduleAlgo;
@@ -117,6 +121,11 @@ public:
     CnchWorkerClientPtr getWorker();
     CnchWorkerClientPtr getWorkerByHash(const String & key);
     std::vector<CnchWorkerClientPtr> getAllWorkers();
+    /// Caller should already know the worker group id when picking a single worker.
+    /// So VW handle just forward the request to the target WG handle, or forward to a random WG if it's not specified.
+    CnchWorkerClientPtr pickWorker(const String & worker_group_id, bool skip_busy_worker = true);
+
+    std::pair<UInt64, CnchWorkerClientPtr> pickWorker(const String & worker_group_id, UInt64 sequence, bool skip_busy_worker = true);
 
 private:
     bool addWorkerGroupImpl(const WorkerGroupHandle & worker_group, const std::lock_guard<std::mutex> & lock);

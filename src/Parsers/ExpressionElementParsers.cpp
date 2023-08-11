@@ -21,6 +21,7 @@
 
 #include <errno.h>
 #include <cstdlib>
+#include <string>
 #include <type_traits>
 #include <errno.h>
 
@@ -1562,9 +1563,14 @@ bool ParserDateDiffExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
 {
     ASTPtr left_node;
     ASTPtr right_node;
+    auto func_node = std::make_shared<ASTFunction>();
+    func_node->name = "dateDiff";
 
-    if (!(ParserKeyword("DATEDIFF").ignore(pos, expected) || ParserKeyword("DATE_DIFF").ignore(pos, expected)
-        || ParserKeyword("TIMESTAMPDIFF").ignore(pos, expected) || ParserKeyword("TIMESTAMP_DIFF").ignore(pos, expected)))
+    if (ParserKeyword("DATEDIFF").ignore(pos, expected) || ParserKeyword("DATE_DIFF").ignore(pos, expected))
+        func_node->name = "dateDiff";
+    else if (ParserKeyword("TIMESTAMPDIFF").ignore(pos, expected) || ParserKeyword("TIMESTAMP_DIFF").ignore(pos, expected))
+        func_node->name = "timestampDiff";
+    else
         return false;
 
     if (pos->type != TokenType::OpeningRoundBracket)
@@ -1596,8 +1602,6 @@ bool ParserDateDiffExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
     auto expr_list_args = std::make_shared<ASTExpressionList>();
     expr_list_args->children = {std::make_shared<ASTLiteral>(interval_kind.toDateDiffUnit()), left_node, right_node};
 
-    auto func_node = std::make_shared<ASTFunction>();
-    func_node->name = "dateDiff";
     func_node->arguments = std::move(expr_list_args);
     func_node->children.push_back(func_node->arguments);
 
@@ -2838,6 +2842,25 @@ bool ParserAssignment::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     tryGetIdentifierNameInto(column, assignment->column_name);
     if (expression)
         assignment->children.push_back(expression);
+
+    return true;
+}
+
+bool ParserEscapeExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserStringLiteral escape_exp;
+    if(!escape_exp.parse(pos, node, expected))
+        return false;
+
+    const auto * literal = node->as<ASTLiteral>();
+    String escape_char;
+
+    if (!literal || !literal->value.tryGet(escape_char))
+        return false;
+
+    // We only accept escape chars of length 1. Only exception is '\\'.
+    if (escape_char != "\\\\" && escape_char.size() != 1)
+        return false;
 
     return true;
 }

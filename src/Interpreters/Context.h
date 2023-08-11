@@ -551,6 +551,8 @@ private:
 
     String async_query_id;
 
+    bool read_from_client_finished = false;
+
     Context();
     Context(const Context &);
     Context & operator=(const Context &);
@@ -1427,6 +1429,9 @@ public:
     bool removeMergeMutateTasksOnPartitions(const StorageID &, const std::unordered_set<String> &);
     bool getTableReclusterTaskStatus(const StorageID & storage_id) const;
     ClusterTaskProgress getTableReclusterTaskProgress(const StorageID & storage_id) const;
+    void startResourceReport();
+    void stopResourceReport();
+    bool isResourceReportRegistered();
 
     CnchBGThreadPtr tryGetDedupWorkerManager(const StorageID & storage_id) const;
 
@@ -1456,6 +1461,9 @@ public:
     {
         return async_query_id;
     }
+    bool isAsyncMode() const;
+    void markReadFromClientFinished();
+    void waitReadFromClientFinished() const;
 
 private:
     String tenant_id;

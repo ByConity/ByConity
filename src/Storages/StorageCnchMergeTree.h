@@ -142,6 +142,7 @@ public:
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr local_context) const override;
     void alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & table_lock_holder) override;
     void checkAlterSettings(const AlterCommands & commands) const;
+    void checkAlterVW(const String & vw_name) const;
 
     void checkAlterPartitionIsPossible(
         const PartitionCommands & commands, const StorageMetadataPtr & metadata_snapshot, const Settings & settings) const override;
@@ -238,7 +239,7 @@ private:
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
 
     /// For select in interactive transaction session
-    void filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const;
+    ServerDataPartsVector filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const;
 
     /// Generate view dependency create queries for materialized view writing
     Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);

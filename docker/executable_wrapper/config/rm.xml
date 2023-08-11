@@ -1,0 +1,41 @@
+<?xml version="1.0" ?>
+<yandex>
+    <logger>
+        <level>trace</level>
+        <log>/root/app/logs/rm/rm.log</log>
+        <errorlog>/root/app/logs/rm/rm.err.log</errorlog>
+        <testlog>/root/app/logs/rm/rm.test.log</testlog>
+        <size>1000M</size>
+        <count>10</count>
+    </logger>
+
+    <resource_manager>
+        <port>18702</port>
+        <vws>
+            <vw>
+                <name>vw_default</name>
+                <type>Default</type>
+                <num_workers>1</num_workers>
+                <worker_groups>
+                    <worker_group>
+                        <name>vw_default_A</name>
+                        <type>Physical</type>
+                    </worker_group>
+                </worker_groups>
+            </vw>
+            <vw>
+                <name>vw_write</name>
+                <type>Default</type>
+                <num_workers>1</num_workers>
+                <worker_groups>
+                    <worker_group>
+                        <name>vw_write_A</name>
+                        <type>Physical</type>
+                    </worker_group>
+                </worker_groups>
+            </vw>
+        </vws>
+    </resource_manager>
+
+    <cnch_config>/root/app/config/cnch_config.xml</cnch_config>
+</yandex>

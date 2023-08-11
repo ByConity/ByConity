@@ -1580,7 +1580,7 @@ using FunctionSHA256 = FunctionStringHashFixedString<SHA256Impl>;
 #endif
 using FunctionSipHash128 = FunctionStringHashFixedString<SipHash128Impl>;
 using FunctionCityHash64 = FunctionAnyHash<ImplCityHash64>;
-using FunctionHiveHash64 = FunctionAnyHash<ImplHiveCityHash64>;
+using FunctionHiveCityHash64 = FunctionAnyHash<ImplHiveCityHash64>;
 using FunctionFarmFingerprint64 = FunctionAnyHash<ImplFarmFingerprint64>;
 using FunctionFarmHash64 = FunctionAnyHash<ImplFarmHash64>;
 using FunctionMetroHash64 = FunctionAnyHash<ImplMetroHash64>;

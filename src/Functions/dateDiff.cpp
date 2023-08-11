@@ -56,6 +56,16 @@ namespace ErrorCodes
 namespace
 {
 
+    struct NameDateDiff
+    {
+        static constexpr auto name = "dateDiff";
+    };
+
+    struct NameTimestampDiff
+    {
+        static constexpr auto name = "timestampDiff";
+    };
+
 /** dateDiff('unit', t1, t2, [timezone])
   * t1 and t2 can be Date or DateTime
   *
@@ -65,11 +75,12 @@ namespace
   *
   * Timezone matters because days can have different length.
   */
+template <typename Name = NameDateDiff>
 class FunctionDateDiff : public IFunction
 {
     using ColumnDateTime64 = ColumnDecimal<DateTime64>;
 public:
-    static constexpr auto name = "dateDiff";
+    static constexpr auto name = Name::name;
 
     explicit FunctionDateDiff(ContextPtr context_, bool mysql_mode_) : context(context_), mysql_mode(mysql_mode_) { }
 
@@ -96,18 +107,27 @@ public:
         auto is_date_or_datetime = [](const DataTypePtr & type) { return isDate(type) || isDateTime(type) || isDateTime64(type); };
 
         // MySQL datediff(date, date)
-        if (mysql_mode && arguments.size() == 2)
+        if constexpr(std::is_same_v<Name, NameDateDiff>)
         {
-            if (!(isStringOrFixedString(arguments[0]) || is_date_or_datetime(arguments[0])))
-                throw Exception(
-                    "First argument for function " + getName() + " must be Date, DateTime or String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            if (mysql_mode)
+            {
+                if (arguments.size() != 2)
+                    throw Exception(
+                        "Number of arguments for MySQL format of function " + getName() + " doesn't match: passed " + toString(arguments.size())
+                            + ", should be 2",
+                        ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-            if (!(isStringOrFixedString(arguments[1]) || is_date_or_datetime(arguments[1])))
-                throw Exception(
-                    "Second argument for function " + getName() + " must be Date, DateTime or String",
-                    ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                if (!(isStringOrFixedString(arguments[0]) || is_date_or_datetime(arguments[0])))
+                    throw Exception(
+                        "First argument for function " + getName() + " must be Date, DateTime or String", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-            return std::make_shared<DataTypeInt64>();
+                if (!(isStringOrFixedString(arguments[1]) || is_date_or_datetime(arguments[1])))
+                    throw Exception(
+                        "Second argument for function " + getName() + " must be Date, DateTime or String",
+                        ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+                return std::make_shared<DataTypeInt64>();
+            }
         }
 
         // format hive
@@ -148,13 +168,17 @@ public:
     bool useDefaultImplementationForConstants() const override { return true; }
 
     ColumnNumbers getArgumentsThatAreAlwaysConstant() const override
-    {
+    {   
+        if constexpr(std::is_same_v<Name, NameDateDiff>)
+        {
+            if (mysql_mode)
+                return {3};
+        }
+
         if (format_hive)
             return {2};
-        else if (!mysql_mode)
-            return {0, 3};
         else
-            return {3};
+            return {0, 3};
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
@@ -166,17 +190,18 @@ public:
                 return input;
             ColumnsWithTypeAndName temp{input};
             auto to_datetime = FunctionFactory::instance().get("toDateTime", context);
-            auto col = to_datetime->build(temp)->execute(temp, temp[0].type, input_rows_count);
+            auto col = to_datetime->build(temp)->execute(temp, std::make_shared<DataTypeDateTime>(), input_rows_count);
             ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeDateTime>(), "datetime");
             return converted_col;
         };
 
         ColumnsWithTypeAndName converted;
+        const bool mysql_date_diff = mysql_mode && (arguments.size() == 2); // MySQL datediff(date, date)
         if (format_hive)
         {
             converted = arguments;
         }
-        else if (mysql_mode && arguments.size() == 2) // MySQL datediff(date, date)
+        else if (mysql_date_diff)
         {
             // swap order of arguments
             converted.emplace_back(get_datetime_column(arguments[1]));
@@ -191,7 +216,7 @@ public:
                 converted.emplace_back(arguments[3]);
         }
 
-        if (!format_hive && !mysql_mode)
+        if (!format_hive && !mysql_date_diff)
         {
             const auto * unit_column = checkAndGetColumnConst<ColumnString>(converted[0].column.get());
             if (!unit_column)
@@ -200,11 +225,9 @@ public:
             unit = Poco::toLower(unit_column->getValue<String>());
         }
 
-        // MySQL mode and hive format are different. The two booleans cannot both be true
-        chassert(!(format_hive && mysql_mode));
-        size_t x_idx = 1 - (format_hive || mysql_mode);
-        size_t y_idx = 2 - (format_hive || mysql_mode);
-        size_t zone_idx = 3 - (format_hive || mysql_mode);
+        size_t x_idx = 1 - (format_hive || mysql_date_diff);
+        size_t y_idx = 2 - (format_hive || mysql_date_diff);
+        size_t zone_idx = 3 - (format_hive || mysql_date_diff);
 
         const IColumn & x = *converted[x_idx].column;
         const IColumn & y = *converted[y_idx].column;
@@ -381,10 +404,10 @@ private:
 
 void registerFunctionDateDiff(FunctionFactory & factory)
 {
-    factory.registerFunction<FunctionDateDiff>(FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionDateDiff<>>(FunctionFactory::CaseInsensitive);
     factory.registerAlias("date_diff", "datediff", FunctionFactory::CaseInsensitive);
-    factory.registerAlias("timestampdiff", "datediff", FunctionFactory::CaseInsensitive);
-    factory.registerAlias("timestamp_diff", "datediff", FunctionFactory::CaseInsensitive);
+    factory.registerFunction<FunctionDateDiff<NameTimestampDiff>>(FunctionFactory::CaseInsensitive);
+    factory.registerAlias("timestamp_diff", "timestampdiff", FunctionFactory::CaseInsensitive);
 }
 
 }

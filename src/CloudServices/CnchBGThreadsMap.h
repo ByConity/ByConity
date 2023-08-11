@@ -83,16 +83,16 @@ private:
 class CnchBGThreadsMapArray : protected WithContext, private boost::noncopyable
 {
 public:
-    CnchBGThreadsMapArray(ContextPtr global_context_);
+    explicit CnchBGThreadsMapArray(ContextPtr global_context_);
     ~CnchBGThreadsMapArray();
 
     void destroy();
 
     inline CnchBGThreadsMap * at(size_t type)
     {
-        auto res = threads_array[size_t(type)].get();
+        auto *res = threads_array[type].get();
         if (unlikely(!res))
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "CnchBGThread for type {} is not initialized", toString(CnchBGThreadType(type)));
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "CnchBGThread for type {} is not initialized", toString(static_cast<CnchBGThreadType>(type)));
         return res;
     }
 
@@ -100,6 +100,7 @@ public:
 
     void startResourceReport();
     void stopResourceReport();
+    bool isResourceReportRegistered();
 
 private:
     std::array<std::unique_ptr<CnchBGThreadsMap>, CnchBGThread::NumType> threads_array;

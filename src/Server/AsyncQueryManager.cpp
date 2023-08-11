@@ -1,5 +1,6 @@
 #include "AsyncQueryManager.h"
 #include <memory>
+#include <optional>
 #include <thread>
 
 #include <Catalog/Catalog.h>
@@ -9,6 +10,8 @@
 #include "Common/Configurations.h"
 #include <Common/setThreadName.h>
 #include <common/logger_useful.h>
+#include "Formats/FormatSettings.h"
+#include "IO/WriteBuffer.h"
 
 using DB::Context;
 using DB::RootConfiguration;
@@ -23,32 +26,47 @@ AsyncQueryManager::AsyncQueryManager(ContextWeakMutablePtr context_) : WithConte
     pool = std::make_unique<ThreadPool>(max_threads, max_threads, max_threads, false);
 }
 
-void AsyncQueryManager::insertAndRun(std::shared_ptr<TCPQuery> info, TCPQueryHandleFunc && func)
+void AsyncQueryManager::insertAndRun(
+    String & query,
+    ASTPtr ast,
+    ContextMutablePtr context,
+    ReadBuffer * istr,
+    SendAsyncQueryIdCallback send_async_query_id,
+    AsyncQueryHandlerFunc && func)
 {
     if (pool)
     {
         String id = UUIDHelpers::UUIDToString(UUIDHelpers::generateV4());
-        info->getContext()->setAsyncQueryId(id);
-        info->sendAsyncQueryId(id);
+        context->setAsyncQueryId(id);
         AsyncQueryStatus status;
         status.set_id(id);
-        status.set_query_id(info->getState().query_id);
+        status.set_query_id(context->getClientInfo().current_query_id);
         status.set_status(AsyncQueryStatus::NotStarted);
         status.set_update_time(time(nullptr));
-        info->getContext()->getCnchCatalog()->setAsyncQueryStatus(id, status);
-        info->resetIOBuffer();
-        pool->scheduleOrThrowOnError(
-            [&, id = std::move(id), info = std::move(info), func = std::move(func), status = std::move(status)]() mutable {
-                setThreadName("async_query");
-                status.set_status(AsyncQueryStatus::Running);
-                status.set_update_time(time(nullptr));
-                info->getContext()->getCnchCatalog()->setAsyncQueryStatus(id, status);
-                func(info);
-            });
+        context->getCnchCatalog()->setAsyncQueryStatus(id, status);
+
+        send_async_query_id(id);
+
+        pool->scheduleOrThrowOnError(make_copyable_function<void()>([query = std::move(query),
+                                                                     ast = std::move(ast),
+                                                                     context = std::move(context),
+                                                                     istr,
+                                                                     func = std::move(func),
+                                                                     id = std::move(id),
+                                                                     status = std::move(status)]() mutable {
+            setThreadName("async_query");
+            status.set_status(AsyncQueryStatus::Running);
+            status.set_update_time(time(nullptr));
+            context->getCnchCatalog()->setAsyncQueryStatus(id, status);
+
+            std::optional<CurrentThread::QueryScope> query_scope;
+            query_scope.emplace(context);
+            func(query, ast, context, istr);
+        }));
     }
     else
     {
-        func(info);
+        func(query, ast, context, istr);
     }
 }
 

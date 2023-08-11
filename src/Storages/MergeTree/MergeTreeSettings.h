@@ -211,6 +211,7 @@ struct Settings;
     M(UInt64, cnch_merge_parts_cache_timeout, 10 * 60, "", 0)                                  \
     M(UInt64, cnch_merge_parts_cache_min_count, 1000, "", 0)                                                  \
     M(UInt64, cnch_merge_max_total_rows_to_merge, 50000000, "", 0) \
+    M(UInt64, cnch_merge_max_total_bytes_to_merge, 150ULL * 1024 * 1024 * 1024, "", 0) \
     \
     /* Unique table related settings */\
     M(Bool, cloud_enable_staging_area, false, "", 0) \
@@ -237,10 +238,9 @@ struct Settings;
     M(UInt64, check_delay_period, 60, "Obsolete setting, does nothing.", 0) \
     M(Bool, allow_floating_point_partition_key, false, "Allow floating point as partition key", 0) \
     M(Bool, cnch_enable_memory_buffer, false, "", 0) \
-    /** Set to current max_rows in merge_scheduler to avoid generating too many merge tasks when disable merge_scheduler */ \
     M(Bool, cnch_merge_only_realtime_partition, false, "", 0) \
-    /** RM - using RM, RoundRobin: - local round robin strategy */ \
-    M(String, cnch_merge_pick_worker_algo, "RM", "", 0) \
+    M(Bool, cnch_merge_select_nonadjacent_parts, false, "Select nonadjacent parts is allowed in the original design. Remove this when the feature is fully verified", 0) \
+    M(String, cnch_merge_pick_worker_algo, "RM", "RM - using RM, RoundRobin: - local round robin strategy", 0) \
     M(UInt64, cnch_merge_round_robin_partitions_interval, 600, "", 0) \
     M(UInt64, cnch_gc_round_robin_partitions_interval, 600, "", 0) \
     M(UInt64, cnch_gc_round_robin_partitions_number, 10, "", 0) \

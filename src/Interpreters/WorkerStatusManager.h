@@ -4,7 +4,9 @@
 #include <optional>
 #include <unordered_set>
 #include <vector>
+#include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Cluster.h>
+#include <Interpreters/Context_fwd.h>
 #include <Protos/data_models.pb.h>
 #include <ResourceManagement/CommonData.h>
 #include <boost/noncopyable.hpp>
@@ -282,9 +284,10 @@ private:
 using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
 using UnhealthWorkerStatusMap = std::unordered_map<WorkerId, UnhealthWorkerStatus, WorkerIdHash, WorkerIdEqual>;
 
-class WorkerStatusManager
+class WorkerStatusManager : public WithContext
 {
 public:
+    static inline const String prefix{"worker_status_manager"};
     enum class UpdateSource : uint8_t
     {
         ComeFromRM = 1,
@@ -298,7 +301,9 @@ public:
 
     constexpr static const size_t CIRCUIT_BREAKER_THRESHOLD = 20;
 
-    WorkerStatusManager() : log(&Poco::Logger::get("WorkerStatusManager")) { }
+    explicit WorkerStatusManager(ContextWeakMutablePtr context_);
+
+    ~WorkerStatusManager();
 
     void updateWorkerNode(
         const Protos::WorkerNodeResourceData & resource_info,
@@ -352,6 +357,14 @@ public:
         }
     }
 
+    void startHeartbeat(BackgroundSchedulePool & pool_)
+    {
+        task = pool_.createTask(prefix, [&] { heartbeat(); });
+        task->activateAndSchedule();
+    }
+    void stop() { task->deactivate(); }
+    void heartbeat();
+
 private:
     ThreadSafeMap<WorkerId, WorkerStatusExtra, WorkerIdHash, WorkerIdEqual> global_extra_workers_status;
     ThreadSafeMap<WorkerId, UnhealthWorkerStatus, WorkerIdHash, WorkerIdEqual> unhealth_workers_status;
@@ -360,6 +373,10 @@ private:
     AdaptiveSchedulerConfig adaptive_scheduler_config;
     mutable bthread::Mutex map_mutex;
     Poco::Logger * log;
+    // rm heartbeat
+    mutable std::optional<BackgroundSchedulePool> schedule_pool;
+    UInt64 interval{10000}; /// in ms;
+    BackgroundSchedulePool::TaskHolder task;
 };
 
 template <class WorkersVecType, class GetWorkerFunc>

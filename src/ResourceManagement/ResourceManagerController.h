@@ -23,6 +23,7 @@
 #include <memory>
 
 #include <boost/noncopyable.hpp>
+#include <bthread/mutex.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -44,6 +45,8 @@ class ElectionController;
 class WorkerGroupResourceCoordinator;
 class IWorkerGroup;
 using WorkerGroupPtr = std::shared_ptr<IWorkerGroup>;
+struct ResourceCoordinateDecision;
+using CoordinateDecisions = std::vector<ResourceCoordinateDecision>;
 
 class ResourceManagerController : public WithContext, private boost::noncopyable
 {
@@ -70,15 +73,18 @@ public:
         const std::string & group_id,
         bool if_not_exists,
         const std::string & vw_name,
-        WorkerGroupData data,
-        std::lock_guard<std::mutex> * vw_lock = nullptr,
-        std::lock_guard<std::mutex> * wg_lock = nullptr);
+        const WorkerGroupData & data,
+        std::lock_guard<bthread::Mutex> * vw_lock = nullptr,
+        std::lock_guard<bthread::Mutex> * wg_lock = nullptr);
 
     void dropWorkerGroup(
         const std::string & group_id,
         bool if_exists,
-        std::lock_guard<std::mutex> * vw_lock = nullptr,
-        std::lock_guard<std::mutex> * wg_lock = nullptr);
+        std::lock_guard<bthread::Mutex> * vw_lock = nullptr,
+        std::lock_guard<bthread::Mutex> * wg_lock = nullptr);
+
+    CoordinateDecisions swapCoordinateDecisions();
+
 
 private:
     Poco::Logger * log{nullptr};

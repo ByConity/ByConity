@@ -20,6 +20,7 @@
 #include <Poco/Net/TCPServerParams.h>
 #include <Poco/Util/HelpFormatter.h>
 #include <brpc/server.h>
+#include "Common/Config/ConfigProcessor.h"
 #include <Common/Exception.h>
 #include <common/LocalDateTime.h>
 #include <common/logger_useful.h>
@@ -181,6 +182,8 @@ void TSOServer::syncTSO()
         proxy_ptr->setTimestamp(t_last);
         /// sync to tso service
         tso_service->setPhysicalTime(t_next);
+        bool is_leader = tso_service->getIsLeader();
+        LOG_TRACE(log, "This node ({}) has called updateTSO. Current status: [is_leader = {}], [t_now = {}], [t_next = {}], [t_last = {}],", host_port, is_leader, t_now, t_next, t_last);
     }
     catch (...)
     {
@@ -197,6 +200,9 @@ void TSOServer::updateTSO(Poco::Timer &)
         milliseconds ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
         UInt64 t_now = ms.count();
         TSOClock cur_ts = tso_service->getClock();
+        bool is_leader = tso_service->getIsLeader();
+
+        LOG_TRACE(log, "This node ({}) has retrieved values of atomic variables. Current status: [is_leader = {}], [t_now = {}]", host_port, is_leader, t_now);
 
         if (t_now > t_next + 1)  /// machine time is larger than physical time, keep physical time close to machine time
         {
@@ -210,6 +216,7 @@ void TSOServer::updateTSO(Poco::Timer &)
         else
         {
             /// No update for physical time
+            LOG_TRACE(log, "No update for physical time: [is_leader = {}], [t_now = {}], [t_next = {}], [t_last = {}], [cur_ts.physical = {}], [cur_ts.logical = {}]", host_port, is_leader, t_now, t_next, t_last, cur_ts.physical, cur_ts.logical);
             return;
         }
 
@@ -217,9 +224,12 @@ void TSOServer::updateTSO(Poco::Timer &)
         {
             t_last = t_next + tso_window;
             /// save to KV
+            LOG_TRACE(log, "This node ({}) is about to call proxy_ptr->setTimestamp(t_last). Current status: [is_leader = {}], [t_now = {}]", host_port, is_leader, t_now);
             proxy_ptr->setTimestamp(t_last);
+            LOG_TRACE(log, "This node ({}) has called proxy_ptr->setTimestamp(t_last) successfully. Current status: [is_leader = {}], [t_now = {}]", host_port, is_leader, t_now);
         }
         tso_service->setPhysicalTime(t_next);
+        LOG_TRACE(log, "This node ({}) has called updateTSO. Current status: [is_leader = {}], [t_now = {}], [t_next = {}], [t_last = {}], [cur_ts.physical = {}], [cur_ts.logical = {}]", host_port, is_leader, t_now, t_next, t_last, cur_ts.physical, cur_ts.logical);
     }
     catch (Exception & e)
     {
@@ -306,7 +316,7 @@ void TSOServer::onLeader()
 
 void TSOServer::exitLeaderElection()
 {
-    LOG_DEBUG(log, "Exit leader election");
+    LOG_INFO(log, "Exit leader election");
 
     tso_service->setIsLeader(false);
     leader_election.reset();

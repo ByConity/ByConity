@@ -35,6 +35,10 @@
 #include <Common/FieldVisitorsAccurateComparison.h>
 #include <Common/FieldVisitorToString.h>
 #include <Common/typeid_cast.h>
+#include <DataTypes/IDataType.h>
+#include <Storages/SelectQueryInfo.h>
+#include <Core/Block.h>
+#include <Parsers/ASTFunction.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/Set.h>
 #include <Parsers/queryToString.h>
@@ -48,7 +52,6 @@
 #include <cassert>
 #include <stack>
 #include <limits>
-
 
 namespace DB
 {
@@ -103,6 +106,30 @@ static String extractFixedPrefixFromLikePattern(const String & like_pattern)
     return fixed_prefix;
 }
 
+static String extractFixedPrefixFromLikePattern(const String & like_pattern, const char escape_char)
+{
+    String fixed_prefix;
+
+    const char * pos = like_pattern.data();
+    const char * end = pos + like_pattern.size();
+    while (pos < end)
+    {
+        if (*pos == '%' || *pos == '_')
+            return fixed_prefix;
+        else if (*pos == escape_char)
+        {
+            ++pos;
+            if (pos != end)
+                fixed_prefix += *pos;
+        }
+        else
+            fixed_prefix += *pos;
+
+        ++pos;
+    }
+
+    return fixed_prefix;
+}
 
 /** For a given string, get a minimum string that is strictly greater than all strings with this prefix,
   *  or return an empty string if there are no such strings.
@@ -129,6 +156,63 @@ static String firstStringThatIsGreaterThanAllStringsWithPrefix(const String & pr
     return res;
 }
 
+KeyCondition::FunctionWithEscape KeyCondition::like_with_escape = [] (RPNElement & out, const Field & value, const Field & escape_value)->bool
+{
+    if (value.getType() != Field::Types::String)
+        return false;
+
+    std::string escape_seq = escape_value.get<const String &>();
+    if (escape_seq.size() != 1)
+        return false;
+    const char escape_char = escape_seq.front();
+
+    String prefix;
+    if (escape_char == '\\')
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>());
+    else
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), escape_char);
+
+    if (prefix.empty())
+        return false;
+
+    String right_bound = firstStringThatIsGreaterThanAllStringsWithPrefix(prefix);
+
+    out.function = RPNElement::FUNCTION_IN_RANGE;
+    out.range = !right_bound.empty()
+        ? Range(prefix, true, right_bound, false)
+        : Range::createLeftBounded(prefix, true);
+
+    return true;
+};
+
+KeyCondition::FunctionWithEscape KeyCondition::not_like_with_escape = [] (RPNElement & out, const Field & value, const Field & escape_value)->bool
+{
+    if (value.getType() != Field::Types::String)
+        return false;
+
+    std::string escape_seq = escape_value.get<const String &>();
+    if (escape_seq.size() != 1)
+        return false;
+    const char escape_char = escape_seq.front();
+
+    String prefix;
+    if (escape_char == '\\')
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>());
+    else
+        prefix = extractFixedPrefixFromLikePattern(value.get<const String &>(), escape_char);
+
+    if (prefix.empty())
+        return false;
+
+    String right_bound = firstStringThatIsGreaterThanAllStringsWithPrefix(prefix);
+
+    out.function = RPNElement::FUNCTION_IN_RANGE;
+    out.range = !right_bound.empty()
+        ? Range(prefix, true, right_bound, false)
+        : Range::createLeftBounded(prefix, true);
+
+    return true;
+};
 
 /// A dictionary containing actions to the corresponding functions to turn them into `RPNElement`
 const KeyCondition::AtomMap KeyCondition::atom_map
@@ -343,8 +427,8 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         [] (RPNElement & out, const Field &)
         {
             out.function = RPNElement::FUNCTION_IS_NOT_NULL;
-            // isNotNull means (-Inf, +Inf), which is the default Range
-            out.range = Range();
+            // isNotNull means (-Inf, +Inf)
+            out.range = Range::createWholeUniverseWithoutNull();
             return true;
         }
     },
@@ -353,8 +437,10 @@ const KeyCondition::AtomMap KeyCondition::atom_map
         [] (RPNElement & out, const Field &)
         {
             out.function = RPNElement::FUNCTION_IS_NULL;
-            // When using NULL_LAST, isNull means [+Inf, +Inf]
-            out.range = Range(Field(PositiveInfinity{}));
+            // isNull means +Inf (NULLS_LAST) or -Inf (NULLS_FIRST), We don't support discrete
+            // ranges, instead will use the inverse of (-Inf, +Inf). The inversion happens in
+            // checkInHyperrectangle.
+            out.range = Range::createWholeUniverseWithoutNull();
             return true;
         }
     }
@@ -646,9 +732,9 @@ static FieldRef applyFunction(const FunctionBasePtr & func, const DataTypePtr & 
             result_idx = i;
     }
 
-    ColumnsWithTypeAndName args{(*columns)[field.column_idx]};
     if (result_idx == columns->size())
     {
+        ColumnsWithTypeAndName args{(*columns)[field.column_idx]};
         field.columns->emplace_back(ColumnWithTypeAndName {nullptr, func->getResultType(), result_name});
         (*columns)[result_idx].column = func->execute(args, (*columns)[result_idx].type, columns->front().column->size());
     }
@@ -1234,6 +1320,9 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
       */
     Field const_value;
     DataTypePtr const_type;
+    Field const_escape_value = "\\";
+    DataTypePtr const_escape_type;
+
     if (const auto * func = node->as<ASTFunction>())
     {
         const ASTs & args = func->arguments->children;
@@ -1254,7 +1343,7 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
             if (key_column_num == static_cast<size_t>(-1))
                 throw Exception("`key_column_num` wasn't initialized. It is a bug.", ErrorCodes::LOGICAL_ERROR);
         }
-        else if (args.size() == 2)
+        else if (args.size() == 2 || (args.size() == 3 && functionIsEscapeLikeOperator(func_name)))
         {
             size_t key_arg_pos;           /// Position of argument with key column (non-const argument)
             bool is_set_const = false;
@@ -1336,6 +1425,12 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
             else
                 return false;
 
+            if (args.size() == 3 && functionIsEscapeLikeOperator(func_name))
+            {
+                if (!getConstant(args[2], block_with_constants, const_escape_value, const_escape_type))
+                    return false;
+            }
+
             if (key_column_num == static_cast<size_t>(-1))
                 throw Exception("`key_column_num` wasn't initialized. It is a bug.", ErrorCodes::LOGICAL_ERROR);
 
@@ -1360,34 +1455,49 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
                 }
             }
 
-            bool cast_not_needed = is_set_const /// Set args are already casted inside Set::createFromAST
-                || ((isNativeNumber(key_expr_type) || isDateTime(key_expr_type))
-                    && (isNativeNumber(const_type) || isDateTime(const_type))); /// Numbers and DateTime are accurately compared without cast.
+            key_expr_type = recursiveRemoveLowCardinality(key_expr_type);
+            DataTypePtr key_expr_type_not_null;
+            bool key_expr_type_is_nullable = false;
+            if (const auto * nullable_type = typeid_cast<const DataTypeNullable *>(key_expr_type.get()))
+            {
+                key_expr_type_is_nullable = true;
+                key_expr_type_not_null = nullable_type->getNestedType();
+            }
+            else
+                key_expr_type_not_null = key_expr_type;
 
-            if (!cast_not_needed && !key_expr_type->equals(*const_type))
+            bool cast_not_needed = is_set_const /// Set args are already casted inside Set::createFromAST
+                || ((isNativeInteger(key_expr_type_not_null) || isDateTime(key_expr_type_not_null))
+                    && (isNativeInteger(const_type) || isDateTime(const_type))); /// Numbers and DateTime are accurately compared without cast.
+
+            if (!cast_not_needed && !key_expr_type_not_null->equals(*const_type))
             {
                 if (const_value.getType() == Field::Types::String)
                 {
-                    const_value = convertFieldToType(const_value, *key_expr_type);
+                    const_value = convertFieldToType(const_value, *key_expr_type_not_null);
                     if (const_value.isNull())
                         return false;
                     // No need to set is_constant_transformed because we're doing exact conversion
                 }
                 else
                 {
-                    DataTypePtr common_type = getLeastSupertype({key_expr_type, const_type});
+                    DataTypePtr common_type = getLeastSupertype({key_expr_type_not_null, const_type});
                     if (!const_type->equals(*common_type))
                     {
                         castValueToType(common_type, const_value, const_type, node);
 
                         // Need to set is_constant_transformed unless we're doing exact conversion
-                        if (!key_expr_type->equals(*common_type))
+                        if (!key_expr_type_not_null->equals(*common_type))
                             is_constant_transformed = true;
                     }
-                    if (!key_expr_type->equals(*common_type))
+                    if (!key_expr_type_not_null->equals(*common_type))
                     {
+                        auto common_type_maybe_nullable = (key_expr_type_is_nullable && !common_type->isNullable())
+                            ? DataTypePtr(std::make_shared<DataTypeNullable>(common_type))
+                            : common_type;
                         ColumnsWithTypeAndName arguments{
-                            {nullptr, key_expr_type, ""}, {DataTypeString().createColumnConst(1, common_type->getName()), common_type, ""}};
+                            {nullptr, key_expr_type, ""},
+                            {DataTypeString().createColumnConst(1, common_type_maybe_nullable->getName()), common_type_maybe_nullable, ""}};
                         FunctionOverloadResolverPtr func_builder_cast = CastOverloadResolver<CastType::nonAccurate>::createImpl(false);
                         auto func_cast = func_builder_cast->build(arguments);
 
@@ -1416,6 +1526,14 @@ bool KeyCondition::tryParseAtomFromAST(const ASTPtr & node, ContextPtr context, 
 
         out.key_column = key_column_num;
         out.monotonic_functions_chain = std::move(chain);
+
+        if (args.size() == 3 && functionIsEscapeLikeOperator(func_name))
+        {
+            if (func_name == "escapeLike")
+                return like_with_escape(out, const_value, const_escape_value);
+            else if (func_name == "escapeNotLike")
+                return not_like_with_escape(out, const_value, const_escape_value);
+        }
 
         return atom_it->second(out, const_value);
     }
@@ -1761,6 +1879,7 @@ static BoolMask forAnyHyperrectangle(
     bool left_bounded,
     bool right_bounded,
     std::vector<Range> & hyperrectangle,
+    const DataTypes & data_types,
     size_t prefix_size,
     BoolMask initial_mask,
     F && callback)
@@ -1804,12 +1923,17 @@ static BoolMask forAnyHyperrectangle(
     if (left_bounded && right_bounded)
         hyperrectangle[prefix_size] = Range(left_keys[prefix_size], false, right_keys[prefix_size], false);
     else if (left_bounded)
-        hyperrectangle[prefix_size] = Range::createLeftBounded(left_keys[prefix_size], false);
+        hyperrectangle[prefix_size] = Range::createLeftBounded(left_keys[prefix_size], false, data_types[prefix_size]->isNullable());
     else if (right_bounded)
-        hyperrectangle[prefix_size] = Range::createRightBounded(right_keys[prefix_size], false);
+        hyperrectangle[prefix_size] = Range::createRightBounded(right_keys[prefix_size], false, data_types[prefix_size]->isNullable());
 
     for (size_t i = prefix_size + 1; i < key_size; ++i)
-        hyperrectangle[i] = Range();
+    {
+        if (data_types[i]->isNullable())
+            hyperrectangle[i] = Range::createWholeUniverse();
+        else
+            hyperrectangle[i] = Range::createWholeUniverseWithoutNull();
+    }
 
 
     BoolMask result = initial_mask;
@@ -1827,7 +1951,9 @@ static BoolMask forAnyHyperrectangle(
     if (left_bounded)
     {
         hyperrectangle[prefix_size] = Range(left_keys[prefix_size]);
-        result = result | forAnyHyperrectangle(key_size, left_keys, right_keys, true, false, hyperrectangle, prefix_size + 1, initial_mask, callback);
+        result = result
+            | forAnyHyperrectangle(
+                     key_size, left_keys, right_keys, true, false, hyperrectangle, data_types, prefix_size + 1, initial_mask, callback);
         if (result.isComplete())
             return result;
     }
@@ -1837,7 +1963,9 @@ static BoolMask forAnyHyperrectangle(
     if (right_bounded)
     {
         hyperrectangle[prefix_size] = Range(right_keys[prefix_size]);
-        result = result | forAnyHyperrectangle(key_size, left_keys, right_keys, false, true, hyperrectangle, prefix_size + 1, initial_mask, callback);
+        result = result
+            | forAnyHyperrectangle(
+                     key_size, left_keys, right_keys, false, true, hyperrectangle, data_types, prefix_size + 1, initial_mask, callback);
         if (result.isComplete())
             return result;
     }
@@ -1853,7 +1981,16 @@ BoolMask KeyCondition::checkInRange(
     const DataTypes & data_types,
     BoolMask initial_mask) const
 {
-    std::vector<Range> key_ranges(used_key_size, Range());
+    std::vector<Range> key_ranges;
+
+    key_ranges.reserve(used_key_size);
+    for (size_t i = 0; i < used_key_size; ++i)
+    {
+        if (data_types[i]->isNullable())
+            key_ranges.push_back(Range::createWholeUniverse());
+        else
+            key_ranges.push_back(Range::createWholeUniverseWithoutNull());
+    }
 
     // std::cerr << "Checking for: [";
     // for (size_t i = 0; i != used_key_size; ++i)
@@ -1864,7 +2001,7 @@ BoolMask KeyCondition::checkInRange(
     //     std::cerr << (i != 0 ? ", " : "") << applyVisitor(FieldVisitorToString(), right_keys[i]);
     // std::cerr << "]\n";
 
-    return forAnyHyperrectangle(used_key_size, left_keys, right_keys, true, true, key_ranges, 0, initial_mask,
+    return forAnyHyperrectangle(used_key_size, left_keys, right_keys, true, true, key_ranges, data_types, 0, initial_mask,
         [&] (const std::vector<Range> & key_ranges_hyperrectangle)
     {
         auto res = checkInHyperrectangle(key_ranges_hyperrectangle, data_types);
@@ -2039,7 +2176,7 @@ BoolMask KeyCondition::checkInHyperrectangle(
             const Range * key_range = &hyperrectangle[element.key_column];
 
             /// The case when the column is wrapped in a chain of possibly monotonic functions.
-            Range transformed_range;
+            Range transformed_range = Range::createWholeUniverse();
             if (!element.monotonic_functions_chain.empty())
             {
                 std::optional<Range> new_range = applyMonotonicFunctionsChainToRange(
@@ -2075,6 +2212,8 @@ BoolMask KeyCondition::checkInHyperrectangle(
             bool intersects = element.range.intersectsRange(*key_range);
             bool contains = element.range.containsRange(*key_range);
             rpn_stack.emplace_back(intersects, !contains);
+            if (element.function == RPNElement::FUNCTION_IS_NULL)
+                rpn_stack.back() = !rpn_stack.back();
         }
         else if (
             element.function == RPNElement::FUNCTION_IN_SET

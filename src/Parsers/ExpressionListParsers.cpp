@@ -29,7 +29,7 @@
 #include <Parsers/ParserUnionQueryElement.h>
 #include <Parsers/ASTQuantifiedComparison.h>
 #include <Common/StringUtils/StringUtils.h>
-
+#include <Interpreters/misc.h>
 
 namespace DB
 {
@@ -291,6 +291,19 @@ bool ParserLeftAssociativeBinaryOperatorList::parseImpl(Pos & pos, ASTPtr & node
 
             if (allow_any_all_operators && have_quantifier_comparison && !ParserSubquery().parse(pos, elem, expected))
                 return false;
+            ASTPtr escape_elem;
+            bool has_escape_char = false;
+
+            ParserKeyword s_escape("escape");
+            if (s_escape.check(pos, expected))
+            {
+                has_escape_char = true;
+                s_escape.ignore(pos, expected);
+                ParserEscapeExpression p_escape;
+
+                if (!p_escape.parse(pos, escape_elem, expected))
+                    return false;
+            }
 
             if (!have_quantifier_comparison)
             {
@@ -302,7 +315,20 @@ bool ParserLeftAssociativeBinaryOperatorList::parseImpl(Pos & pos, ASTPtr & node
                 exp_list->children.push_back(node);
                 exp_list->children.push_back(elem);
 
-                /** special exception for the access operator to the element of the array `x[y]`, which
+            if (has_escape_char && function->name.size() >= 4 && functionIsLikeOperator(function->name))
+            {
+                exp_list->children.push_back(escape_elem);
+
+                if (function->name == "like")
+                    function->name = "escapeLike";
+                else if (function->name == "notLike")
+                    function->name = "escapeNotLike";
+                else if (function->name == "ilike")
+                    function->name = "escapeILike";
+                else if (function->name == "notILike")
+                    function->name = "escapeNotILike";
+            }
+            /** special exception for the access operator to the element of the array `x[y]`, which
               * contains the infix part '[' and the suffix ''] '(specified as' [')
               */
                 if (0 == strcmp(it[0], "["))

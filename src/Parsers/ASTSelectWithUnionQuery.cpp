@@ -118,15 +118,6 @@ void ASTSelectWithUnionQuery::formatQueryImpl(const FormatSettings & settings, F
     }
 }
 
-void ASTSelectWithUnionQuery::collectAllTables(std::vector<ASTPtr>& all_tables, bool & has_table_functions) const
-{
-    for (auto & child : list_of_selects->children)
-    {
-        auto& select = typeid_cast<ASTSelectQuery&>(*child);
-        select.collectAllTables(all_tables, has_table_functions);
-    }
-}
-
 void ASTSelectWithUnionQuery::resetTEALimit()
 {
     if (tealimit)

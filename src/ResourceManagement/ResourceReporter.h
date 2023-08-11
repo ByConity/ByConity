@@ -34,6 +34,7 @@ public:
     void run();
     void start();
     void stop();
+    bool registered();
 
 private:
     bool sendHeartbeat();
@@ -43,7 +44,8 @@ private:
     inline String getenv(const char * name) { return std::getenv(name) ? std::getenv(name) : ""; }
 
 private:
-    bool init_request = true;
+    std::atomic_bool init_request = true;
+
     Poco::Logger * log;
     std::unique_ptr<ResourceMonitor> resource_monitor;
     BackgroundSchedulePool::TaskHolder background_task;

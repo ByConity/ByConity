@@ -81,9 +81,9 @@ HostWithPorts CnchServerTopology::getTargetServer(const String & uuid, const Str
     auto it = vw_topologies.find(server_vw_name);
     if (it == vw_topologies.end() || it->second.getServerList().empty())
         return {};
-    const auto & servers = it->second.getServerList();
-    auto hashed_index = consistentHashForString(uuid, servers.size());
-    return servers[hashed_index];
+    const auto & servers_list = it->second.getServerList();
+    auto hashed_index = consistentHashForString(uuid, servers_list.size());
+    return servers_list[hashed_index];
 }
 
 HostWithPortsVec CnchServerTopology::getServerList() const

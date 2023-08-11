@@ -322,8 +322,8 @@ Void QueryAnalyzerVisitor::visitASTSubquery(ASTPtr & node, const Void &)
 Void QueryAnalyzerVisitor::visitASTExplainQuery(ASTPtr & node, const Void &)
 {
     ASTExplainQuery & explain = node->as<ASTExplainQuery &>();
-    // if (explain.getKind() != ASTExplainQuery::ExplainKind::LogicalAnalyze && explain.getKind() != ASTExplainQuery::ExplainKind::DistributedAnalyze)
-        // throw Exception("Unexpected explain kind", ErrorCodes::LOGICAL_ERROR);
+    if (explain.getKind() != ASTExplainQuery::ExplainKind::LogicalAnalyze && explain.getKind() != ASTExplainQuery::ExplainKind::DistributedAnalyze)
+        throw Exception("Unexpected explain kind", ErrorCodes::LOGICAL_ERROR);
     if (!explain.getExplainedQuery())
         throw Exception("Explain query has syntax error ", ErrorCodes::LOGICAL_ERROR);
 

@@ -1,6 +1,8 @@
 #include "PartMergerImpl.h"
+#include "Poco/Format.h"
 #include "CloudServices/CnchPartsHelper.h"
 #include "Core/UUID.h"
+#include "Storages/HDFS/HDFSCommon.h"
 #include "Storages/MergeTree/MergeTreeReaderCompact.h"
 
 namespace DB
@@ -78,8 +80,8 @@ PartMergerImpl::PartMergerImpl(ContextMutablePtr context_, Poco::Util::AbstractC
 
     /// Check source path.
     Poco::URI uri_in(params.source_path);
-    if (!isHdfsScheme(uri_in.getScheme()))
-        throw Exception("Source path should be a hdfs path.", ErrorCodes::BAD_ARGUMENTS);
+    if (!isHdfsOrCfsScheme(uri_in.getScheme()))
+        throw Exception("Source path should be a HDFS or CFS path.", ErrorCodes::BAD_ARGUMENTS);
 
     if (!DB::HDFSCommon::exists(uri_in.getPath()))
         throw Exception("Source path " + uri_in.getPath() + " doesn't exists.", ErrorCodes::BAD_ARGUMENTS);
@@ -88,13 +90,13 @@ PartMergerImpl::PartMergerImpl(ContextMutablePtr context_, Poco::Util::AbstractC
 
     /// Check output path
     Poco::URI uri_out(params.output_path);
-    if (!isHdfsScheme(uri_out.getScheme()))
-        throw Exception("Output path should be a hdfs path.", ErrorCodes::BAD_ARGUMENTS);
+    if (!isHdfsOrCfsScheme(uri_out.getScheme()))
+        throw Exception("Output path should be a HDFS or CFS path.", ErrorCodes::BAD_ARGUMENTS);
 
     params.output_path = uri_out.getPath();
     if (DB::HDFSCommon::exists(params.output_path))
     {
-        LOG_WARNING(log, "Output path {} already exists on hdfs. Will remove it.", params.output_path);
+        LOG_WARNING(log, "Output path {} already exists on target. Will remove it.", params.output_path);
         DB::HDFSCommon::remove(params.output_path, true);
     }
 
@@ -141,6 +143,24 @@ PartMergerImpl::PartMergerImpl(ContextMutablePtr context_, Poco::Util::AbstractC
                 user_settings.emplace(change.name, change.value);
         }
     }
+
+    /// Init HDFS params.
+    ///
+    /// User can bypass nnproxy by passing a string to `hdfs_nnproxy` with prefixs like `hdfs://` or `cfs://`.
+    HDFSConnectionParams hdfs_params
+        = HDFSConnectionParams::parseFromMisusedNNProxyStr(getContext()->getHdfsNNProxy(), getContext()->getHdfsUser());
+    getContext()->setHdfsConnectionParams(hdfs_params);
+
+    /// Register default HDFS file system as well in case of
+    /// lower level logic call `getDefaultHdfsFileSystem`.
+    /// Default values are the same as those on the ClickHouse server.
+    {
+        const int hdfs_max_fd_num = user_settings.count("hdfs_max_fd_num") ? user_settings["hdfs_max_fd_num"].safeGet<int>() : 100000;
+        const int hdfs_skip_fd_num = user_settings.count("hdfs_skip_fd_num") ? user_settings["hdfs_skip_fd_num"].safeGet<int>() : 100;
+        const int hdfs_io_error_num_to_reconnect
+            = user_settings.count("hdfs_io_error_num_to_reconnect") ? user_settings["hdfs_io_error_num_to_reconnect"].safeGet<int>() : 10;
+        registerDefaultHdfsFileSystem(hdfs_params, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
+    }
 }
 
 void PartMergerImpl::execute()
@@ -177,7 +197,7 @@ void PartMergerImpl::execute()
     LOG_DEBUG(log, "Get total {} parts.", parts.size());
 
     /// Init remote_disk & target_disk.
-    HDFSConnectionParams hdfs_params{HDFSConnectionParams::CONN_NNPROXY, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy()};
+    HDFSConnectionParams hdfs_params = getContext()->getHdfsConnectionParams();
     std::shared_ptr<DiskByteHDFS> remote_disk = std::make_shared<DiskByteHDFS>("hdfs", params.source_path, hdfs_params);
 
     DiskPtr target_disk = std::make_shared<DiskByteHDFS>("target", params.output_path, hdfs_params);
@@ -247,6 +267,8 @@ void PartMergerImpl::execute()
     {
         ManipulationTaskParams merge_task_params(cloud_trees[0]);
         merge_task_params.type = ManipulationType::Merge;
+        /// Manually construct id for tasks.
+        merge_task_params.task_id = Poco::format("task-{%s}", future_part.name);
         IMergeTreeDataPartsVector source_parts;
         LOG_DEBUG(log, "Future part's name: {}, type: {}", future_part.name, future_part.type.toString());
         for (auto & server_part : future_part.parts)
@@ -325,7 +347,7 @@ void PartMergerImpl::executeMergeTask(MergeTreeMetaBase & merge_tree, DiskPtr & 
 
 IMergeTreeDataPartsVector PartMergerImpl::collectSourceParts(const std::vector<StorageCloudMergeTreePtr> & merge_trees)
 {
-    HDFSConnectionParams hdfs_params{HDFSConnectionParams::CONN_NNPROXY, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy()};
+    HDFSConnectionParams hdfs_params = getContext()->getHdfsConnectionParams();
     std::shared_ptr<DiskByteHDFS> remote_disk = std::make_shared<DiskByteHDFS>("hdfs", params.source_path, hdfs_params);
     auto volume = std::make_shared<SingleDiskVolume>("volume_single", remote_disk, 0);
     IMergeTreeDataPartsVector parts{};

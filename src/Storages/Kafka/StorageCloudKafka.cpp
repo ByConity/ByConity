@@ -20,6 +20,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Configurations.h>
+#include <Common/CurrentMetrics.h>
 #include <Common/Macros.h>
 #include <Common/escapeForFileName.h>
 #include <Common/SettingsChanges.h>
@@ -38,6 +39,12 @@
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Transaction/CnchWorkerTransaction.h>
+
+
+namespace CurrentMetrics
+{
+    extern const Metric Consumer;
+}
 
 namespace DB
 {
@@ -76,12 +83,14 @@ StorageCloudKafka::StorageCloudKafka
     if (server_client_address.getHost().empty() || server_client_address.rpc_port == 0)
         throw Exception("Invalid server client " + server_client_address.getRPCAddress()
                         + " for kafka consumer " + getStorageID().getNameForLogs(), ErrorCodes::BAD_ARGUMENTS);
+    CurrentMetrics::add(CurrentMetrics::Consumer);
 }
 
 StorageCloudKafka::~StorageCloudKafka()
 {
     try
     {
+        CurrentMetrics::sub(CurrentMetrics::Consumer);
         auto & schema_path = settings.format_schema_path.value;
         if (!schema_path.empty() && !Kafka::startsWithHDFSOrCFS(schema_path) && Poco::File(schema_path).exists())
         {

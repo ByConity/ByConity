@@ -922,7 +922,10 @@ public:
 
     String getName() const override
     {
-        return "finderGroupFunnel";
+        if (need_order)
+            return "finderGroupFunnelStable";
+        else
+            return "finderGroupFunnel";
     }
 
     bool handleNullItSelf() const override

@@ -100,6 +100,7 @@ void registerFunctionDateDiff(FunctionFactory &);
 void registerFunctionDateName(FunctionFactory &);
 void registerFunctionDayName(FunctionFactory &);
 void registerFunctionToTimeZone(FunctionFactory &);
+void registerFunctionToSeconds(FunctionFactory &);
 void registerFunctionFormatDateTime(FunctionFactory &);
 void registerFunctionFromModifiedJulianDay(FunctionFactory &);
 void registerFunctionDateTrunc(FunctionFactory &);
@@ -111,11 +112,11 @@ void registerFunctionUTCTimestamp(FunctionFactory &);
 void registerFunctionPeriodAdd(FunctionFactory &);
 void registerFunctionPeriodDiff(FunctionFactory &);
 void registerFunctionMakeDate(FunctionFactory &);
+void registerFunctionParseDateTime(FunctionFactory &);
 
 void registerFunctiontimezoneOffset(FunctionFactory &);
 void registerFunctionNextDay(FunctionFactory &);
 void registerFunctionLastDay(FunctionFactory &);
-void registerFunctionDateFormat(FunctionFactory & factory);
 
 void registerFunctionsDateTime(FunctionFactory & factory)
 {
@@ -195,13 +196,13 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionDateName(factory);
     registerFunctionDayName(factory);
     registerFunctionToTimeZone(factory);
+    registerFunctionToSeconds(factory);
     registerFunctionFormatDateTime(factory);
     registerFunctionFromModifiedJulianDay(factory);
     registerFunctionDateTrunc(factory);
     registerFunctiontimezoneOffset(factory);
     registerFunctionNextDay(factory);
     registerFunctionLastDay(factory);
-    registerFunctionDateFormat(factory);
     registerFunctionFromDays(factory);
     registerFunctionToDays(factory);
     registerFunctionUTCDate(factory);
@@ -210,6 +211,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionPeriodAdd(factory);
     registerFunctionPeriodDiff(factory);
     registerFunctionMakeDate(factory);
+    registerFunctionParseDateTime(factory);
 }
 
 }

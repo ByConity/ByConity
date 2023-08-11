@@ -20,6 +20,8 @@
  */
 
 #include <Common/typeid_cast.h>
+#include <Parsers/ASTSelectIntersectExceptQuery.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -83,28 +85,46 @@ ASTPtr ASTSelectQuery::clone() const
     return res;
 }
 
-void ASTSelectQuery::collectAllTables(std::vector<ASTPtr>& all_tables, bool & has_table_functions) const
+void ASTSelectQuery::collectAllTables(const IAST * ast, std::vector<ASTPtr>& all_tables, bool & has_table_functions)
 {
+    if (!ast) return;
     // BFS ASTSelectQuery and get all Tables;
     std::queue<const IAST*> q;
-    q.push(this);
-    while (!q.empty())
+    if (const auto * select = ast->as<ASTSelectQuery>())
     {
-        auto & n = q.front();
-        for (const auto& c : n->children)
+        q.push(select);
+        while (!q.empty())
         {
-            q.push(c.get());
-        }
+            auto & n = q.front();
+            for (const auto& c : n->children)
+            {
+                q.push(c.get());
+            }
 
-        if (const ASTTableExpression* tbl = typeid_cast<const ASTTableExpression *>(n))
+            if (const ASTTableExpression* tbl = typeid_cast<const ASTTableExpression *>(n))
+            {
+                if (tbl->database_and_table_name)
+                    all_tables.push_back(tbl->database_and_table_name);
+                else if (tbl->table_function)
+                    has_table_functions = true;
+            }
+
+            q.pop();
+        }
+    }
+    else if (const auto * select_union = ast->as<ASTSelectWithUnionQuery>())
+    {
+        for (const auto & child : select_union->list_of_selects->children)
         {
-            if (tbl->database_and_table_name)
-                all_tables.push_back(tbl->database_and_table_name);
-            else if (tbl->table_function)
-                has_table_functions = true;
+            collectAllTables(child.get(), all_tables, has_table_functions);
         }
-
-        q.pop();
+    }
+    else if (const auto * intersect_or_except = ast->as<ASTSelectIntersectExceptQuery>())
+    {
+        for (const auto & child : intersect_or_except->getListOfSelects())
+        {
+            collectAllTables(child.get(), all_tables, has_table_functions);
+        }
     }
 }
 
@@ -159,6 +179,12 @@ void ASTSelectQuery::formatImpl(const FormatSettings & s, FormatState & state, F
     {
         s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "WHERE " << (s.hilite ? hilite_none : "");
         where()->formatImpl(s, state, frame);
+    }
+
+    if (escape())
+    {
+        s.ostr << (s.hilite ? hilite_keyword : "") << s.nl_or_ws << indent_str << "ESCAPE " << (s.hilite ? hilite_none : "");
+        escape()->formatImpl(s, state, frame);
     }
 
     if (groupBy())

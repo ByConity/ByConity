@@ -1534,14 +1534,12 @@ class IColumn;
       0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
     M(Bool, adaptive_type_cast, false, "Performs type cast operations adaptively, according to the value", 0) \
-    M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0) \
-    M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0) \
-    M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0) \
-    M(Milliseconds, \
-      meta_sync_task_interval_ms, \
-      1 * 60 * 60 * 1000, \
-      "Interval of background schedule task for metasore synchronization", \
-      0) \
+    M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
+    M(Bool, formatdatetime_parsedatetime_m_is_month_name, true, "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", 0) \
+    M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
+    M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
+    M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\
+    M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
     M(Bool, enable_fetch_part_incrementally, true, "Whether to enable fetching part incrementally", 0) \
     M(String, \
       blocklist_for_merge_thread_regex, \
@@ -1707,7 +1705,7 @@ class IColumn;
 \
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
-    M(Bool, enable_optimizer_white_list, true, "Whether enable query optimizer whilte list inorder to only support join and agg", 0) \
+    M(Bool, enable_optimizer_white_list, false, "Whether enable query optimizer whilte list inorder to only support join and agg", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
     M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \
@@ -1759,7 +1757,6 @@ class IColumn;
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
     M(Float, stats_estimator_join_filter_selectivity, 1, "Join filter selectivity", 0) \
     M(Bool, print_graphviz, false, "Whether print graphviz", 0) \
-    M(Bool, print_explain_analyze_graphviz, false, "Whether print explain analyze graphviz", 0) \
     M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
     M(Bool, eliminate_cross_joins, true, "Whether eliminate cross joins", 0) \
     M(UInt64, iterative_optimizer_timeout, 10000, "Max running time of a single iterative optimizer in ms", 0) \
@@ -1896,6 +1893,27 @@ class IColumn;
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
     M(Bool, bypass_ddl_db_lock, true, "Bypass locking database while creating tables", 0) \
     M(Bool, prefer_cnch_catalog, false, "Force using cnch catalog to get table first when resolving database and table", 0) \
+    M(Bool, enable_interactive_transaction, true, "Enable interactive transaction", 0) \
+    M(Bool, force_clean_transaction_by_dm, false, "Force clean transaction by dm, can be used for testing purpose", 0) \
+    M(Bool, cnch_atomic_attach_part, true, "Whether to ATTACH PARTITION/PARTS in atomic way", 0) \
+    M(Bool, cnch_atomic_attach_part_preemtive_lock_acquire, false, "Whether to acquire lock preemptively during atomic attach part", 0) \
+    M(Bool, allow_full_scan_txn_records, false, "Whether to allow full scan of all transaction records on catalog", 0) \
+    \
+    /* Outfile related Settings */ \
+    M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
+    M(String, tos_access_key, "", "The access_key set by user when accessing ve tos.", 0) \
+    M(String, tos_secret_key, "", "The secret_key set by user when accessing ve tos.", 0) \
+    M(String, tos_region, "", "The region set by user when accessing ve tos.", 0) \
+    M(String, tos_security_token, "", "The security_key set by user when accessing ve tos with assume role.", 0) \
+    M(String, lasfs_session_token, "", "the session_token set by user when accessing lasfs", 0) \
+    M(String, lasfs_identity_id, "", "the identity_id set by user when accessing lasfs", 0) \
+    M(String, lasfs_identity_type, "", "the identity_type set by user when accessing lasfs", 0) \
+    M(String, lasfs_access_key, "", "the access_key set by user when accessing lasfs", 0) \
+    M(String, lasfs_secret_key, "", "the secret_key set by user when accessing lasfs", 0) \
+    M(String, lasfs_service_name, "", "the service_name set by user when accessing lasfs", 0) \
+    M(String, lasfs_endpoint, "", "the endpoint set by user when accessing lasfs", 0) \
+    M(String, lasfs_region, "", "the region set by user when accessing lasfs", 0) \
+    M(String, lasfs_overwrite, "false" ,"pass true if user want to overwrite when the file exists", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0)
 
@@ -2084,7 +2102,8 @@ class IColumn;
     M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0) \
     M(String, tenant_id, "", "tenant_id of cnch user", 0) \
     M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
-    M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0)
+    M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \
+    M(Bool, offloading_with_query_plan, false, "utilize query plan to offload the computation comoetely to worker", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS
