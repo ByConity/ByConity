@@ -24,6 +24,8 @@ namespace DB
 {
 class Context;
 
+void turnOffOptimizer(ContextMutablePtr context, ASTPtr & node);
+
 class QueryUseOptimizerChecker
 {
 public:
