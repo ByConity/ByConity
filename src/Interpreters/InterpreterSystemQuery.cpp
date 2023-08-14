@@ -463,8 +463,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
     {
         case Type::START_CONSUME:
         case Type::STOP_CONSUME:
+        case Type::DROP_CONSUME:
         case Type::RESTART_CONSUME:
-            startOrStopConsume(query.type);
+            controlConsume(query.type);
             break;
         case Type::RESET_CONSUME_OFFSET:
             resetConsumeOffset(query, system_context);
@@ -645,7 +646,7 @@ void InterpreterSystemQuery::executeSyncDedupWorker(ContextMutablePtr & system_c
     cnch_storage->waitForStagedPartsToPublish(system_context);
 }
 
-void InterpreterSystemQuery::startOrStopConsume(ASTSystemQuery::Type type)
+void InterpreterSystemQuery::controlConsume(ASTSystemQuery::Type type)
 {
     if (table_id.empty())
         throw Exception("Empty table id for executing START/STOP consume", ErrorCodes::LOGICAL_ERROR);
@@ -671,6 +672,9 @@ void InterpreterSystemQuery::startOrStopConsume(ASTSystemQuery::Type type)
             daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop);
             usleep(500 * 1000);
             daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Start);
+            break;
+        case Type::DROP_CONSUME:
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Drop);
             break;
         default:
             throw Exception("Unknown command type " + String(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
@@ -1265,6 +1269,7 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
 
         case Type::START_CONSUME: [[fallthrough]];
         case Type::STOP_CONSUME: [[fallthrough]];
+        case Type::DROP_CONSUME: [[fallthrough]];
         case Type::RESTART_CONSUME:
         {
             required_access.emplace_back(AccessType::SYSTEM_CONSUME, query.database, query.table);

@@ -274,6 +274,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::START_REPLICATION_QUEUES:
         case Type::START_CONSUME:
         case Type::STOP_CONSUME:
+        case Type::DROP_CONSUME:
         case Type::RESTART_CONSUME:
         case Type::DROP_CHECKSUMS_CACHE:
         case Type::SYNC_DEDUP_WORKER:

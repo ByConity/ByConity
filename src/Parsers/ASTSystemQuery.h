@@ -110,6 +110,7 @@ public:
         START_DISTRIBUTED_SENDS,
         START_CONSUME,
         STOP_CONSUME,
+        DROP_CONSUME,
         RESTART_CONSUME,
         RESET_CONSUME_OFFSET,
         FETCH_PARTS,
