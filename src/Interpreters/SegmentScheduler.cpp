@@ -54,7 +54,7 @@ namespace ErrorCodes
     extern const int BRPC_EXCEPTION;
 }
 
-void DAGGraph::joinAsyncRpcPerStage(const Context * query_context)
+void DAGGraph::joinAsyncRpcPerStage()
 {
     if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_at_last || query_context->getSettingsRef().send_plan_segment_by_brpc)
         return;
@@ -72,7 +72,7 @@ void DAGGraph::joinAsyncRpcWithThrow()
             ErrorCodes::BRPC_EXCEPTION);
 }
 
-void DAGGraph::joinAsyncRpcAtLast(const Context * query_context)
+void DAGGraph::joinAsyncRpcAtLast()
 {
     if (query_context->getSettingsRef().send_plan_segment_by_brpc)
         return;
@@ -666,7 +666,7 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
             AddressInfos address_infos;
             // TODO dongyifeng support send plansegment parallel
             address_infos = sendPlanSegment(it->second, true, query_context, dag_graph_ptr, rank_worker_ids);
-            dag_graph_ptr->joinAsyncRpcPerStage(query_context.get());
+            dag_graph_ptr->joinAsyncRpcPerStage();
             dag_graph_ptr->id_to_address.emplace(std::make_pair(segment_id, std::move(address_infos)));
             dag_graph_ptr->scheduler_segments.emplace(segment_id);
         }
@@ -720,13 +720,13 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
                     watch.restart();
                     address_infos = sendPlanSegment(it->second, false, query_context, dag_graph_ptr, rank_worker_ids);
                     total_send_time_ms += watch.elapsedMilliseconds();
-                    dag_graph_ptr->joinAsyncRpcPerStage(query_context.get());
+                    dag_graph_ptr->joinAsyncRpcPerStage();
                     dag_graph_ptr->id_to_address.emplace(std::make_pair(it->first, std::move(address_infos)));
                     dag_graph_ptr->scheduler_segments.emplace(it->first);
                 }
             }
         }
-        dag_graph_ptr->joinAsyncRpcAtLast(query_context.get());
+        dag_graph_ptr->joinAsyncRpcAtLast();
         LOG_DEBUG(log, "SegmentScheduler send plansegments takes:{}", total_send_time_ms);
 
         auto final_it = dag_graph_ptr->id_to_segment.find(dag_graph_ptr->final);

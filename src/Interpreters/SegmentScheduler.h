@@ -101,8 +101,8 @@ struct DAGGraph {
         async_context = std::move(other.async_context);
     }
     void joinAsyncRpcWithThrow();
-    void joinAsyncRpcPerStage(const Context * query_context);
-    void joinAsyncRpcAtLast(const Context * query_context);
+    void joinAsyncRpcPerStage();
+    void joinAsyncRpcAtLast();
 
     Source sources;
     size_t final = std::numeric_limits<size_t>::max();
