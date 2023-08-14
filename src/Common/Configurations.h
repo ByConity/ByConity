@@ -139,7 +139,6 @@ struct RootConfiguration final : public RootConfigurationData
         sub_configs.push_back(&resource_manager);
         sub_configs.push_back(&service_discovery);
         sub_configs.push_back(&queue_manager);
-        sub_configs.push_back(&tracer);
         sub_configs.push_back(&adaptive_scheduler);
     }
 
