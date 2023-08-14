@@ -496,6 +496,7 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             break;
         case Type::CLEAN_FILESYSTEM_LOCK:
             cleanFilesystemLock();
+            break;
         case Type::LOCK_MEMORY_LOCK:
             lockMemoryLock(query, table_id, system_context);
             break;
