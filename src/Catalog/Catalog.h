@@ -401,6 +401,29 @@ public:
     void clearStagePartsMeta(const StoragePtr & table, const DataPartsVector & parts);
     void clearDataPartsMetaForTable(const StoragePtr & table);
 
+    /**
+     * @brief Move specified items into trash.
+     *
+     * @param skip_part_cache Evict parts caches if set to `false`.
+     */
+    void moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, bool skip_part_cache = false);
+
+    /**
+     * @brief Delete specified trashed items from catalog.
+     */
+    void clearTrashItems(const StoragePtr & table, const TrashItems & items);
+
+    /**
+     * @brief Get all trashed parts in given table.
+     *
+     * Trashed items including data parts, staged parts, and deleted bitmaps.
+     *
+     * @param limit Limit the result retured. Disabled with value `0`.
+     * @return Trashed parts.
+     */
+    TrashItems getDataItemsInTrash(const StoragePtr & storage, const size_t & limit = 0);
+
+
     /// APIs to sync data parts for preallocate mode
     std::vector<TxnTimestamp> getSyncList(const StoragePtr & table);
     void clearSyncList(const StoragePtr & table, std::vector<TxnTimestamp> & sync_list);

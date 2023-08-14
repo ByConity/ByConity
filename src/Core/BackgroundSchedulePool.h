@@ -136,6 +136,9 @@ public:
     /// Atomically activate task and schedule it for execution.
     bool activateAndSchedule();
 
+    /// Check if the current task is active.
+    bool taskIsActive() const { return !deactivated; }
+
     /// get Coordination::WatchCallback needed for notifications from ZooKeeper watches.
     Coordination::WatchCallback getWatchCallback();
 

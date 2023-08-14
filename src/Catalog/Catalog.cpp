@@ -3478,6 +3478,150 @@ namespace Catalog
             ProfileEvents::ClearDataPartsMetaForTableFailed);
     }
 
+    TrashItems Catalog::getDataItemsInTrash(const StoragePtr & storage, const size_t & limit)
+    {
+        TrashItems res;
+        auto & merge_tree_storage = dynamic_cast<MergeTreeMetaBase &>(*storage);
+        String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+        size_t prefix_length = MetastoreProxy::trashItemsPrefix(name_space, uuid).length();
+
+        auto it = meta_proxy->getItemsInTrash(name_space, uuid, limit);
+        while (it->next())
+        {
+            const auto & key = it->key();
+            String meta_key = key.substr(prefix_length, String::npos);
+            if (startsWith(meta_key, PART_STORE_PREFIX))
+            {
+                Protos::DataModelPart part_model;
+                part_model.ParseFromString(it->value());
+                auto part_model_wrapper = createPartWrapperFromModel(merge_tree_storage, part_model);
+                res.data_parts.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
+
+            }
+            else if (startsWith(meta_key, DELETE_BITMAP_PREFIX))
+            {
+                DataModelDeleteBitmapPtr model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();
+                model_ptr->ParseFromString(it->value());
+                res.delete_bitmaps.push_back(std::make_shared<DeleteBitmapMeta>(merge_tree_storage, model_ptr));
+            }
+        }
+
+        return res;
+    }
+
+    void Catalog::moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, const bool skip_part_cache)
+    {
+        if (items.empty())
+            return;
+
+        LOG_DEBUG(
+            log,
+            "Start drop metadata of {} parts, {} delete bitmaps, {} staged parts of table {}",
+            items.data_parts.size(),
+            items.delete_bitmaps.size(),
+            items.staged_parts.size(),
+            table->getStorageID().getNameForLogs());
+
+        String table_uuid = UUIDHelpers::UUIDToString(table->getStorageUUID());
+        String part_meta_prefix = MetastoreProxy::dataPartPrefix(name_space, table_uuid);
+        String trash_item_prefix = MetastoreProxy::trashItemsPrefix(name_space, table_uuid);
+
+        bool need_invalid_cache = context.getPartCacheManager() && !skip_part_cache;
+
+        size_t batch_size = 2000;
+        size_t parts_index{0}, delete_bitmaps_index{0}, staged_parts_index{0};
+        size_t drop_items_count = 0;
+
+        BatchCommitRequest batch_writes;
+
+        while (true)
+        {
+            if (parts_index < items.data_parts.size())
+            {
+                // Drop part metadata and add new one in trash;
+                const auto & server_part = items.data_parts[parts_index];
+                batch_writes.AddDelete(part_meta_prefix + server_part->info().getPartName());
+                batch_writes.AddPut(
+                    {MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, server_part->name()),
+                     server_part->part_model_wrapper->part_model->SerializeAsString()});
+                parts_index++;
+            }
+            else if (delete_bitmaps_index < items.delete_bitmaps.size())
+            {
+                // Drop delete bitmap metadata and add new one in trash;
+                const auto & model = *(items.delete_bitmaps[delete_bitmaps_index]->getModel());
+                batch_writes.AddDelete(MetastoreProxy::deleteBitmapKey(name_space, table_uuid, model));
+                batch_writes.AddPut({MetastoreProxy::deleteBitmapKeyInTrash(name_space, table_uuid, model), model.SerializeAsString()});
+                delete_bitmaps_index++;
+            }
+            else if (staged_parts_index < items.staged_parts.size())
+            {
+                // Drop staged part metadata;
+                batch_writes.AddDelete(part_meta_prefix + items.staged_parts[staged_parts_index]->info().getPartName());
+                staged_parts_index++;
+            }
+            else
+                // Stop loop if no more drop item.
+                break;
+
+            drop_items_count++;
+
+            if (drop_items_count >= batch_size)
+            {
+                /// Commit the current batch.
+                BatchCommitResponse resp;
+                meta_proxy->batchWrite(batch_writes, resp);
+
+                /// Reset BatchCommitRequest.
+                batch_writes = {};
+                drop_items_count = 0;
+            }
+        }
+
+        if (drop_items_count)
+        {
+            /// Commit the current batch.
+            BatchCommitResponse resp;
+            meta_proxy->batchWrite(batch_writes, resp);
+        }
+
+        if (need_invalid_cache)
+            context.getPartCacheManager()->invalidPartCache(table->getStorageUUID(), items.data_parts);
+
+        LOG_DEBUG(
+            log,
+            "Finish clear metadata of {} parts, {} delete bitmaps, {} staged parts of table {}",
+            items.data_parts.size(),
+            items.delete_bitmaps.size(),
+            items.staged_parts.size(),
+            table->getStorageID().getNameForLogs());
+    }
+
+    void Catalog::clearTrashItems(const StoragePtr & table, const TrashItems & items)
+    {
+        if (items.empty())
+            return;
+
+        Strings drop_keys;
+        drop_keys.reserve(items.data_parts.size() + items.delete_bitmaps.size());
+        String table_uuid = UUIDHelpers::UUIDToString(table->getStorageUUID());
+
+        // Clear part meta record from trash
+        for (const auto & part : items.data_parts)
+            drop_keys.emplace_back(MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, part->name()));
+
+        // Clear bitmap meta record from trash
+        for (const auto & bitmap : items.delete_bitmaps)
+        {
+            const auto & model = *(bitmap->getModel());
+            drop_keys.emplace_back(MetastoreProxy::deleteBitmapKeyInTrash(name_space, table_uuid, model));
+        }
+
+        meta_proxy->multiDrop(drop_keys);
+
+        LOG_DEBUG(log, "Removed trash record of {} parts and {} delete bitmaps.", items.data_parts.size(), items.delete_bitmaps.size());
+    }
+
     std::vector<TxnTimestamp> Catalog::getSyncList(const StoragePtr & storage)
     {
         std::vector<TxnTimestamp> res;

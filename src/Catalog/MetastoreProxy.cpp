@@ -1849,4 +1849,10 @@ bool MetastoreProxy::tryGetAsyncQueryStatus(const String & name_space, const Str
     return true;
 }
 
+
+IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit)
+{
+    return metastore_ptr->getByPrefix(trashItemsPrefix(name_space, table_uuid), limit);
+}
+
 } /// end of namespace DB::Catalog

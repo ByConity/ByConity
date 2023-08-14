@@ -71,6 +71,7 @@ namespace DB::Catalog
 #define DICTIONARY_TRASH_PREFIX "DICTRASH_"
 #define CNCH_LOG_PREFIX "LG_"
 #define DATABASE_TRASH_PREFIX "DTRASH_"
+#define DATA_ITEM_TRASH_PREFIX "GCTRASH_"
 #define SERVERS_TOPOLOGY_KEY "SERVERS_TOPOLOGY"
 #define TABLE_CLUSTER_STATUS "TCS_"
 #define CLUSTER_BG_JOB_STATUS "CLUSTER_BGJS_"
@@ -164,6 +165,15 @@ public:
         ss << deleteBitmapPrefix(name_space, uuid)
            << bitmap.partition_id() << "_" << bitmap.part_min_block() << "_" << bitmap.part_max_block() << "_"
            << bitmap.reserved() << "_" << bitmap.type() << "_" << bitmap.txn_id();
+        return ss.str();
+    }
+
+    static std::string
+    deleteBitmapKeyInTrash(const std::string & name_space, const std::string & uuid, const Protos::DataModelDeleteBitmap & bitmap)
+    {
+        std::stringstream ss;
+        ss << trashItemsPrefix(name_space, uuid) << DELETE_BITMAP_PREFIX << bitmap.partition_id() << "_" << bitmap.part_min_block() << "_"
+           << bitmap.part_max_block() << "_" << bitmap.reserved() << "_" << bitmap.type() << "_" << bitmap.txn_id();
         return ss.str();
     }
 
@@ -321,6 +331,11 @@ public:
     static std::string dataPartKey(const std::string & name_space, const std::string & uuid, const String & part_name)
     {
         return dataPartPrefix(name_space, uuid) + part_name;
+    }
+
+    static std::string dataPartKeyInTrash(const std::string & name_space, const std::string & uuid, const String & part_name)
+    {
+        return trashItemsPrefix(name_space, uuid) + PART_STORE_PREFIX + part_name;
     }
 
     static std::string stagedDataPartKey(const std::string & name_space, const std::string & uuid, const String & part_name)
@@ -552,6 +567,25 @@ public:
         return escapeString(name_space) + '_' + AYSNC_QUERY_STATUS_PREFIX + id;
     }
 
+<<<<<<< HEAD
+=======
+    static String detachedPartPrefix(const String& name_space, const String& uuid)
+    {
+        return escapeString(name_space) + '_' + DETACHED_PART_PREFIX + uuid + '_';
+    }
+
+    static String detachedPartKey(const String& name_space, const String& uuid,
+        const String& part_name)
+    {
+        return escapeString(name_space) + '_' + DETACHED_PART_PREFIX + uuid + '_' + part_name;
+    }
+
+    static String trashItemsPrefix(const String & name_space, const String & uuid)
+    {
+        return escapeString(name_space) + "_" + DATA_ITEM_TRASH_PREFIX + uuid + "_";
+    }
+
+>>>>>>> 0e35001c075 (Merge branch 'fky-cnch-ce-merge-two-phase-gc' into 'cnch-ce-merge')
     /// end of Metastore Proxy keying schema
 
     void createTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data);
@@ -776,6 +810,13 @@ public:
     void setAsyncQueryStatus(
         const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl /* 1 day */ = 86400) const;
     bool tryGetAsyncQueryStatus(const String & name_space, const String & id, Protos::AsyncQueryStatus & status) const;
+
+    /**
+     * @brief Get all items in the trash state. This is a GC related function.
+     *
+     * @param limit Limit the results, disabled by passing 0.
+     */
+    IMetaStore::IteratorPtr getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit);
 
 private:
 
