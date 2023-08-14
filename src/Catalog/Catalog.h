@@ -540,8 +540,6 @@ public:
     /// TODO(WangTao): consider add some scan/delete interfaces for ops.
     bool tryGetAsyncQueryStatus(const String & id, Protos::AsyncQueryStatus & status) const;
 
-<<<<<<< HEAD
-=======
     // Interfaces to support s3 storage
     // Delete detached parts from 'from_tbl' with `detached_part_names`,
     // if part name in `detached_part_names` is empty, skip this delete.
@@ -562,7 +560,6 @@ public:
     ServerDataPartsVector listDetachedParts(const MergeTreeMetaBase& storage,
         const AttachFilter& filter);
 
->>>>>>> 0e35001c075 (Merge branch 'fky-cnch-ce-merge-two-phase-gc' into 'cnch-ce-merge')
 private:
     Poco::Logger * log = &Poco::Logger::get("Catalog");
     Context & context;
