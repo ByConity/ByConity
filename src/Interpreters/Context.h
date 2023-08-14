@@ -696,7 +696,7 @@ public:
     WorkerGroupStatusPtr & getWorkerGroupStatusPtr() { return worker_group_status; }
     const WorkerGroupStatusPtr & getWorkerGroupStatusPtr() const { return worker_group_status; }
 
-    void updateAdaptiveSchdulerConfig(const ConfigurationPtr & config);
+    void updateAdaptiveSchdulerConfig();
     WorkerStatusManagerPtr getWorkerStatusManager();
     WorkerStatusManagerPtr getWorkerStatusManager() const;
     WorkerGroupHandle tryGetHealthWorkerGroup() const;

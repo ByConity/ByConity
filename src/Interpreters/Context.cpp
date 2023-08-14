@@ -637,10 +637,9 @@ WorkerStatusManagerPtr Context::getWorkerStatusManager()
     return shared->worker_status_manager;
 }
 
-void Context::updateAdaptiveSchdulerConfig(const ConfigurationPtr & config)
+void Context::updateAdaptiveSchdulerConfig()
 {
-    auto worker_status_manager = getWorkerStatusManager();
-    worker_status_manager->updateConfig(*config);
+    getWorkerStatusManager()->updateConfig(getRootConfig().adaptive_scheduler);
 }
 
 WorkerStatusManagerPtr Context::getWorkerStatusManager() const

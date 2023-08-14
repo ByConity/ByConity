@@ -1033,14 +1033,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             global_context->updateStorageConfiguration(*config);
             global_context->updateInterserverCredentials(*config);
-            if (config->has("adaptive_scheduler"))
-            {
-                global_context->updateAdaptiveSchdulerConfig(config);
-            }
-
             global_context->setMergeSchedulerSettings(*config);
             CGroupManagerFactory::loadFromConfig(*config);
             global_context->updateQueueManagerConfig();
+            global_context->updateAdaptiveSchdulerConfig();
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
 
