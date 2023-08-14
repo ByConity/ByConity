@@ -37,9 +37,6 @@ struct ReplaceViewWithSubquery
             auto table_name = db_and_table.table;
             auto database_name = db_and_table.database;
 
-            if (database_name == "system")
-                return;
-
             auto table_id = context->tryResolveStorageID(table_expression.database_and_table_name);
             auto table = DatabaseCatalog::instance().tryGetTable(table_id, context);
             if (!table)
