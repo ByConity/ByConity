@@ -160,14 +160,14 @@ DROP TABLE IF EXISTS test.mv_data;
 CREATE TABLE mv_data_local ENGINE = MergeTree()
 PRIMARY KEY deptno
 ORDER BY deptno AS
-select empid, deptno, count(*) as c, sumState(empid) as s, avgState(salary) as a
+select empid, deptno, countState(*) as c, sumState(empid) as s, avgState(salary) as a
 from emps
 group by empid, deptno;
 CREATE TABLE mv_data AS mv_data_local ENGINE = Distributed(test_shard_localhost, currentDatabase(), mv_data_local);
 
 DROP TABLE IF EXISTS test.mv_define;
 CREATE MATERIALIZED VIEW mv_define TO mv_data AS
-select empid, deptno, count(*) as c, sumState(empid) as s, avgState(salary) as a
+select empid, deptno, countState(*) as c, sumState(empid) as s, avgState(salary) as a
 from emps
 group by empid, deptno;
 
@@ -183,22 +183,24 @@ select '5.2 test rollup aggregate have at least 1 grouping key';
 explain select count(*) as c, avg(salary) as a, empid from emps where empid = 150 group by empid;
 select count(*) as c, avg(salary) as a, empid from emps where empid = 150 group by empid order by empid;
 
--- 6. test distributed table on local mv
+-- 6. test order by rewrite with multi mv';
 DROP TABLE IF EXISTS test.mv_data_local;
 DROP TABLE IF EXISTS test.mv_data;
-DROP TABLE IF EXISTS test.mv_define_local;
-DROP TABLE IF EXISTS test.mv_define;
 CREATE TABLE mv_data_local ENGINE = MergeTree()
     PRIMARY KEY deptno
     ORDER BY deptno AS
 select empid, deptno, count(*) as c, sum(empid) as s, avg(salary) as a
 from emps_local
 group by empid, deptno;
+CREATE TABLE mv_data AS mv_data_local ENGINE = Distributed(test_shard_localhost, currentDatabase(), mv_data_local);
+
+DROP TABLE IF EXISTS test.mv_define_local;
 CREATE MATERIALIZED VIEW mv_define_local to mv_data_local AS
 select empid, deptno, count(*) as c, sum(empid) as s, avg(salary) as a
 from emps_local
 group by empid, deptno;
 
+DROP TABLE IF EXISTS test.mv_define;
 CREATE TABLE mv_define AS mv_define_local ENGINE = Distributed(test_shard_localhost, currentDatabase(), mv_define_local);
 
 select '6. test distributed table on local mv';

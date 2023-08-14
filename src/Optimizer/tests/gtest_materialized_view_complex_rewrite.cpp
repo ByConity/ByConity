@@ -39,6 +39,11 @@ public:
         tester = std::make_shared<BaseMaterializedViewTest>(settings);
     }
 
+    static void TearDownTestSuite()
+    {
+        tester.reset();
+    }
+
     void SetUp() override {
         GTEST_SKIP() << "Skipping all tests for this fixture";
     }
@@ -83,10 +88,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateProject)
                                     "            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#c:=c, expr#deptno:=deptno\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [c, deptno]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [c, deptno]")
         .ok();
 }
 
@@ -110,10 +113,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
                                     "            │     Group by: {expr#deptno}\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#deptno:=deptno\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [deptno]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [deptno]")
         .ok();
 }
 
@@ -139,10 +140,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
                                     "            │     Group by: {expr#deptno}\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#deptno:=deptno\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [deptno]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [deptno]")
         .ok();
 }
 
@@ -207,10 +206,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
                                     "            │     Group by: {expr#deptno}\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#deptno:=deptno\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [deptno]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [deptno]")
         .ok();
 }
 
@@ -231,10 +228,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
                                     "            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c), expr#sum(s):=AggNull(sum)(expr#s)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#c:=c, expr#deptno:=deptno, expr#s:=s\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [c, deptno, s]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [c, deptno, s]")
         .ok();
 }
 
@@ -245,12 +240,18 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
         "select deptno, empid, sum(empid) as s, count(*) as c\n"
             "from emps group by empid, deptno")
         .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: [c, deptno, empid, s]\n"
+                                    "│     Expressions: c:=`expr#sum(c)`, deptno:=`expr#deptno`, empid:=`expr#empid`, s:=`expr#sum(s)`\n"
                                     "└─ Gather Exchange\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: 1\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Outputs: [c, deptno, empid, s]")
+                                    "   └─ MergingAggregated\n"
+                                    "      └─ Repartition Exchange\n"
+                                    "         │     Partition by: {expr#deptno, expr#empid}\n"
+                                    "         └─ Aggregating\n"
+                                    "            │     Group by: {expr#deptno, expr#empid}\n"
+                                    "            │     Aggregates: expr#sum(s):=sum(expr#s), expr#sum(c):=sum(expr#c)\n"
+                                    "            └─ Projection\n"
+                                    "               │     Expressions: expr#c:=c, expr#deptno:=deptno, expr#empid:=empid, expr#s:=s\n"
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [c, deptno, empid, s]")
         .ok();
 }
 
@@ -1245,10 +1246,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testQueryProjectWithBetween)
         .checkingThatResultContains("Projection\n"
                                     "│     Expressions: and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3)):=(time_id >= 1) AND (time_id <= 3)\n"
                                     "└─ Gather Exchange\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: 1\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Outputs: [time_id]")
+                                    "   └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "            Outputs: [time_id]")
         .ok();
 }
 
@@ -1281,10 +1280,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testViewProjectWithBetween)
         .checkingThatResultContains("Projection\n"
                                     "│     Expressions: [time_id]\n"
                                     "└─ Gather Exchange\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: 1\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Outputs: [time_id]")
+                                    "   └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "            Outputs: [time_id]")
         .ok();
 }
 
@@ -1299,10 +1296,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testQueryAndViewProjectWithBetween)
         .checkingThatResultContains("Projection\n"
                                     "│     Expressions: [and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3))]\n"
                                     "└─ Gather Exchange\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: 1\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Outputs: and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3)):=and(greaterOrEquals(time_id, 1), lessOrEquals(time_id, 3))")
+                                    "   └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "            Outputs: and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3)):=and(greaterOrEquals(time_id, 1), lessOrEquals(time_id, 3))")
         .ok();
 }
 
@@ -1320,10 +1315,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testViewProjectWithMultifieldExpressi
         .checkingThatResultContains("Projection\n"
                                     "│     Expressions: [time_id]\n"
                                     "└─ Gather Exchange\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: 1\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Outputs: [time_id]")
+                                    "   └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "            Outputs: [time_id]")
         .ok();
 }
 
@@ -1383,7 +1376,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "         │     Partition by: {deptno}\n"
                                     "         └─ Aggregating\n"
                                     "            │     Group by: {deptno}\n"
-                                    "            │     Aggregates: expr#uniqExact(empid):=AggNull(uniqExact)(empid)\n"
+                                    "            │     Aggregates: expr#uniqExact(empid):=uniqExact(empid)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: deptno:=`expr#deptno`, empid:=`expr#empid`\n"
                                     "               └─ MergingAggregated\n"
@@ -1393,10 +1386,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "                        │     Group by: {expr#deptno, expr#empid}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#empid:=empid\n"
-                                    "                           └─ Filter\n"
-                                    "                              │     Condition: 1\n"
-                                    "                              └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                       Outputs: [deptno, empid]")
+                                    "                           └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                                    Outputs: [deptno, empid]")
         .ok();
 }
 
@@ -1420,7 +1411,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "         │     Partition by: {deptno}\n"
                                     "         └─ Aggregating\n"
                                     "            │     Group by: {deptno}\n"
-                                    "            │     Aggregates: expr#uniqExact(empid):=AggNull(uniqExact)(empid)\n"
+                                    "            │     Aggregates: expr#uniqExact(empid):=uniqExact(empid)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: deptno:=`expr#deptno`, empid:=`expr#empid`\n"
                                     "               └─ MergingAggregated\n"
@@ -1430,10 +1421,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "                        │     Group by: {expr#deptno, expr#empid}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#empid:=empid\n"
-                                    "                           └─ Filter\n"
-                                    "                              │     Condition: 1\n"
-                                    "                              └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                       Outputs: [deptno, empid]")
+                                    "                           └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                                    Outputs: [deptno, empid]")
         .ok();
 }
 
@@ -1457,7 +1446,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "         │     Partition by: {deptno}\n"
                                     "         └─ Aggregating\n"
                                     "            │     Group by: {deptno}\n"
-                                    "            │     Aggregates: expr#uniqExact(salary):=AggNull(uniqExact)(salary)\n"
+                                    "            │     Aggregates: expr#uniqExact(salary):=uniqExact(salary)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: deptno:=`expr#deptno`, salary:=`expr#salary`\n"
                                     "               └─ MergingAggregated\n"
@@ -1467,10 +1456,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "                        │     Group by: {expr#deptno, expr#salary}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#salary:=salary\n"
-                                    "                           └─ Filter\n"
-                                    "                              │     Condition: 1\n"
-                                    "                              └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                       Outputs: [deptno, salary]")
+                                    "                           └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                                    Outputs: [deptno, salary]")
         .ok();
 }
 
@@ -1504,9 +1491,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "                        │     Group by: {expr#deptno, expr#salary}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#salary:=salary\n"
-                                    "                           └─ Filter\n"
-                                    "                              │     Condition: 1\n"
-                                    "                              └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                       Outputs: [deptno, salary]")
+                                    "                           └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                                    Outputs: [deptno, salary]")
         .ok();
 }

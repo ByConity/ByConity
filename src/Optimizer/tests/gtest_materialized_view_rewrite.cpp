@@ -37,6 +37,11 @@ public:
         tester = std::make_shared<BaseMaterializedViewTest>(settings);
     }
 
+    static void TearDownTestSuite()
+    {
+        tester.reset();
+    }
+
     void SetUp() override {
         GTEST_SKIP() << "Skipping all tests for this fixture";
     }
@@ -361,7 +366,7 @@ TEST_F(MaterializedViewRewriteTest, testAlias)
    * materialization. */
 TEST_F(MaterializedViewRewriteTest, testAggregate0)
 {
-    sql("select count(*) as c from emps group by empid",
+    sql("select empid, count(*) as c from emps group by empid",
         "select count(*) + 1 as c from emps group by empid")
         .ok();
 }
@@ -371,7 +376,7 @@ TEST_F(MaterializedViewRewriteTest, testAggregate0)
    * materialization but with different row types. */
 TEST_F(MaterializedViewRewriteTest, testAggregate1)
 {
-    sql("select count(*) as c0 from emps group by empid",
+    sql("select empid, count(*) as c0 from emps group by empid",
         "select count(*) as c1 from emps group by empid")
         .ok();
 }
@@ -458,6 +463,7 @@ TEST_F(MaterializedViewRewriteTest, testAggregate6)
 TEST_F(MaterializedViewRewriteTest,
        DISABLED_testCompensatingCalcWithAggregate0)
 {
+    GTEST_SKIP() << "Having is not support in clickhouse";
     String mv = ""
         "select * from\n"
         "(select deptno, sum(salary) as sum_salary, sum(commission)\n"
@@ -479,6 +485,7 @@ TEST_F(MaterializedViewRewriteTest,
    */
 TEST_F(MaterializedViewRewriteTest, DISABLED_testCompensatingCalcWithAggregate1)
 {
+    GTEST_SKIP() << "Having is not support in clickhouse";
     String mv = ""
         "select * from\n"
         "(select deptno, sum(salary) as sum_salary, sum(commission)\n"
@@ -561,10 +568,8 @@ TEST_F(MaterializedViewRewriteTest, testAggregateRollUp1)
                                     "            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#c:=c, expr#deptno:=deptno\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [c, deptno]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [c, deptno]")
         .ok();
 }
 
@@ -691,10 +696,8 @@ TEST_F(MaterializedViewRewriteTest, testAggregateOnProject5)
                                     "            │     Aggregates: expr#sum(count()):=AggNull(sum)(expr#count()_2)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#count()_2:=`count()`, expr#empid:=empid, expr#name:=name\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [count(), empid, name]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [count(), empid, name]")
         .ok();
 }
 
@@ -714,6 +717,7 @@ TEST_F(MaterializedViewRewriteTest, testAggregateOnProjectAndFilter)
 
 TEST_F(MaterializedViewRewriteTest, testProjectOnProject)
 {
+    GTEST_SKIP() << "Not support in clickhouse because rollup is needed.";
     String mv = ""
         "select deptno, sum(salary) + 2, sum(commission)\n"
         "from emps\n"
@@ -1110,6 +1114,7 @@ TEST_F(MaterializedViewRewriteTest, testIntersectToCalcOnIntersect)
 
 TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg)
 {
+    GTEST_SKIP() << "ConstantFilter is not supported in clickhouse";
     String mv = ""
         "select name, count(distinct deptno) as cnt\n"
         "from emps group by name";
@@ -1130,6 +1135,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg)
 
 TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg2)
 {
+    GTEST_SKIP() << "Not support in clickhouse because rollup is needed.";
     String mv = ""
         "select name, deptno, count(distinct commission) as cnt\n"
         "from emps\n"
@@ -1152,6 +1158,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg2)
 
 TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg3)
 {
+    GTEST_SKIP() << "Not support in clickhouse because rollup is needed.";
     String mv = ""
         "select name, deptno, count(distinct commission) as cnt\n"
         "from emps\n"
@@ -1195,7 +1202,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAggUsingSubquery)
         " select name, count(distinct deptno) as cnt "
         " from emps group by name) t\n"
         "where name = 'hello'";
-    sql(mv, query).ok();
+    sql(mv, query).noMat();
 }
 /** Unit test for FilterBottomJoin can be pulled up. */
 TEST_F(MaterializedViewRewriteTest, testLeftFilterOnLeftJoinToJoinOk1)

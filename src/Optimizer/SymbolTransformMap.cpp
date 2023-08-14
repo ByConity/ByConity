@@ -18,6 +18,7 @@
 #include <Optimizer/SimpleExpressionRewriter.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTTableColumnReference.h>
+#include <Parsers/formatAST.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <Interpreters/InDepthNodeVisitor.h>
 
@@ -37,10 +38,7 @@ public:
         return visitChildren(node, context);
     }
 
-    Void visitFilterNode(FilterNode & node, Void & context) override
-    {
-        return visitChildren(node, context);
-    }
+    Void visitFilterNode(FilterNode & node, Void & context) override { return visitChildren(node, context); }
 
     Void visitProjectionNode(ProjectionNode & node, Void & context) override
     {
@@ -61,6 +59,11 @@ public:
         return visitChildren(node, context);
     }
 
+    Void visitSortingNode(SortingNode & node, Void & context) override
+    {
+        return visitChildren(node, context);
+    }
+
     Void visitJoinNode(JoinNode & node, Void & context) override { return visitChildren(node, context); }
 
     Void visitTableScanNode(TableScanNode & node, Void &) override
@@ -68,8 +71,7 @@ public:
         const auto * table_step = dynamic_cast<const TableScanStep *>(node.getStep().get());
         for (const auto & item : table_step->getColumnAlias())
         {
-            auto column_reference = std::make_shared<ASTTableColumnReference>(table_step->getStorage().get(), item.first);
-            column_reference->setStep(table_step);
+            auto column_reference = std::make_shared<ASTTableColumnReference>(table_step->getStorage().get(), node.getId(), item.first);
             addSymbolExpressionMapping(item.second, column_reference);
         }
         return Void{};
@@ -144,6 +146,18 @@ ASTPtr SymbolTransformMap::inlineReferences(const ConstASTPtr & expression) cons
     return ASTVisitorUtil::accept(expression->clone(), rewriter, context);
 }
 
+String SymbolTransformMap::toString() const
+{
+    String str;
+    str += "expression_lineage: ";
+    for (const auto & x: expression_lineage)
+        str += x.first + " = " + serializeAST(*x.second) + ", ";
+    str += "symbol_to_expressions: ";
+    for (const auto & x: symbol_to_expressions)
+        str += x.first + " = " + serializeAST(*x.second) + ", ";
+    return str;
+}
+
 namespace
 {
     struct RewriteIdentifier
@@ -152,7 +166,7 @@ namespace
 
         void visit(ASTIdentifier & identifier, ASTPtr & ast)
         {
-            ast = std::make_shared<ASTTableColumnReference>(storage, identifier.name());
+            ast = std::make_shared<ASTTableColumnReference>(storage, 0, identifier.name());
         }
 
         const IStorage * storage;
@@ -179,4 +193,5 @@ std::optional<String> SymbolTranslationMap::tryGetTranslation(const ASTPtr & exp
 
     return result;
 }
+
 }

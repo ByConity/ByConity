@@ -6,6 +6,8 @@ SET materialized_view_consistency_check_method = 'PARTITION';
 CREATE DATABASE IF NOT EXISTS test;
 USE test;
 
+DROP TABLE IF EXISTS mv40037;
+DROP TABLE IF EXISTS mv40037_2;
 DROP TABLE IF EXISTS base40037;
 
 CREATE TABLE base40037(server_time UInt64, event_date Date, uid String, click UInt64)

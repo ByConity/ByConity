@@ -1814,17 +1814,10 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
     M(Bool, enable_materialized_view_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
-    M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
-    M(Bool, \
-      enable_materialized_view_join_rewriting, \
-      false, \
-      "Whether enable materialized view based rewriter for query using join materialized views", \
-      0) \
-    M(MaterializedViewConsistencyCheckMethod, \
-      materialized_view_consistency_check_method, \
-      MaterializedViewConsistencyCheckMethod::NONE, \
-      "The method to check whether a materialized view is consistent with the base table for a query", \
-      0) \
+    M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0)               \
+    M(Bool, enable_materialized_view_empty_grouping_rewriting, true, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
+    M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::NONE, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
     M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \

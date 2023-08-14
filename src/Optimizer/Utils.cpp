@@ -15,6 +15,7 @@
 
 #include <Optimizer/Utils.h>
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
@@ -137,6 +138,16 @@ ASTPtr extractAggregateToFunction(const AggregateDescription & aggregate_descrip
     return function;
 }
 
+bool containsAggregateFunction(const ASTPtr & ast)
+{
+    if (auto function = ast->as<ASTFunction>())
+        if (AggregateFunctionFactory::instance().isAggregateFunctionName(function->name))
+            return true;
+    for (const auto & child : ast->children)
+        if (containsAggregateFunction(child))
+            return true;
+    return false;
+}
 
 bool checkFunctionName(const ASTFunction & function, const String & expect_name)
 {

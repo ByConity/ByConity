@@ -30,10 +30,6 @@ class SymbolTransformMap
 {
 public:
     static std::optional<SymbolTransformMap> buildFrom(PlanNodeBase & plan);
-//    SymbolTransformMap(const SymbolTransformMap &) = default;
-//    SymbolTransformMap & operator=(const SymbolTransformMap &) = default;
-//    SymbolTransformMap(SymbolTransformMap &&) = default;
-//    SymbolTransformMap & operator=(SymbolTransformMap &&) = default;
 
     ASTPtr inlineReferences(const ConstASTPtr & expression) const;
     ASTPtr inlineReferences(const String & column) const
@@ -43,6 +39,8 @@ public:
     }
 
     SymbolTransformMap() = default;
+
+    String toString() const;
 
 private:
     SymbolTransformMap(
@@ -61,7 +59,6 @@ private:
     class Visitor;
     class Rewriter;
 };
-
 
 class SymbolTranslationMap
 {
