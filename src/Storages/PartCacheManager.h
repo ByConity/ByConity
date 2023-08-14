@@ -129,6 +129,14 @@ public:
 
     void invalidPartCache(const UUID & uuid, const DataPartsVector & parts);
 
+
+    /**
+     * @brief Evict all parts specified.
+     */
+    void invalidPartCache(const UUID & uuid, const ServerDataPartsVector & parts);
+
+    void invalidPartCache(const UUID & uuid, const Strings & part_names, MergeTreeDataFormatVersion version);
+
     void insertDataPartsIntoCache(const IStorage & table, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model, const bool is_merged_parts, const bool should_update_metrics);
 
     /// Get count and weight in Part cache

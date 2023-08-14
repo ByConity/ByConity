@@ -58,7 +58,7 @@ Catalog::PartitionMap TableMetaEntry::getPartitions(const Strings & wanted_parti
         std::unordered_set<String> wanted_partition_set;
         for (const auto & partition_id : wanted_partition_ids)
             wanted_partition_set.insert(partition_id);
-        
+
         for (auto it = partitions.begin(); it != partitions.end(); it++)
         {
             auto & partition_info_ptr = *it;
@@ -527,7 +527,38 @@ void PartCacheManager::invalidPartCache(const UUID & uuid, const DataPartsVector
         }
     }
 
-    auto meta_partitions = meta_ptr->getPartitions(partition_ids);
+void PartCacheManager::invalidPartCache(const UUID & uuid, const ServerDataPartsVector & parts)
+{
+    TableMetaEntryPtr meta_ptr = getTableMeta(uuid);
+
+    if (!meta_ptr)
+        return;
+
+    std::unordered_map<String, Names> partition_to_parts;
+    for (const auto & part : parts)
+    {
+        const String & partition_id = part->info().partition_id;
+        auto it = partition_to_parts.find(partition_id);
+        if (it != partition_to_parts.end())
+        {
+            it->second.emplace_back(part->name());
+        }
+        else
+        {
+            Names part_list{part->name()};
+            partition_to_parts.emplace(partition_id, part_list);
+        }
+    }
+
+    invalidPartCache(uuid, meta_ptr, partition_to_parts);
+}
+
+void PartCacheManager::invalidPartCache(const UUID & uuid, const Strings & part_names, MergeTreeDataFormatVersion version)
+{
+    TableMetaEntryPtr meta_ptr = getTableMeta(uuid);
+
+    if (!meta_ptr)
+        return;
 
     for (auto it = partition_to_parts.begin(); it != partition_to_parts.end(); it++)
     {
@@ -871,7 +902,7 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
             auto partition_write_lock = partition_info->writeLock();
             if (partition_info->cache_status == CacheStatus::LOADING)
                 partition_info->cache_status = CacheStatus::UINIT;
-        } 
+        }
     };
 
     try
@@ -964,7 +995,7 @@ DB::ServerDataPartsVector PartCacheManager::getServerPartsInternal(
                     {
                         res.push_back(std::make_shared<ServerDataPart>(part_wrapper_ptr));
                         logPartsVector(storage, res);
-                    }                    
+                    }
                 }
             }
         }
@@ -1049,7 +1080,7 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
                     fetched_data.push_back(createPartWrapperFromModel(storage, *dataModelPartPtr));
                 }
 
-                /// It happens that new parts have been inserted into cache during loading parts from bytekv, we need merge them to make 
+                /// It happens that new parts have been inserted into cache during loading parts from bytekv, we need merge them to make
                 /// sure the cache contains all parts of the partition.
                 auto partition_write_lock = partition_info_ptr->writeLock();
                 auto cached = part_cache_ptr->get({uuid, partition_id});
@@ -1093,7 +1124,7 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
                     {
                         res.push_back(std::make_shared<ServerDataPart>(data_wrapper_ptr));
                         logPartsVector(storage, res);
-                    }                    
+                    }
                 }
 
                 /// go to next partition;
