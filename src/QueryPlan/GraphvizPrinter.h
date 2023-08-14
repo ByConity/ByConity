@@ -185,8 +185,6 @@ public:
     static String printExchangeStep(const ExchangeStep & step);
     static String printRemoteExchangeSourceStep(const RemoteExchangeSourceStep & step);
     static String printTableScanStep(const TableScanStep & step);
-    static String printTableWriteStep(const TableWriteStep & step);
-    static String printTableFinishStep(const TableFinishStep & step);
     static String printReadStorageRowCountStep(const ReadStorageRowCountStep & step);
     static String printValuesStep(const ValuesStep & step);
     static String printLimitStep(const LimitStep & step);
