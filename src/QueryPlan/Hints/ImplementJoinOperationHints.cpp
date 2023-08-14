@@ -192,18 +192,12 @@ void TableScanHintVisitor::visitTableScanNode(TableScanNode & node, TableScanCon
     context.hint_list = node.getStep()->getHints();
 }
 
-void TableScanHintVisitor::visitProjectionNode(ProjectionNode & node, TableScanContext & context)
+void TableScanHintVisitor::visitPlanNode(PlanNodeBase & node, TableScanContext & context)
 {
-    VisitorUtil::accept(*node.getChildren()[0], *this, context);
-}
-void TableScanHintVisitor::visitFilterNode(FilterNode & node, TableScanContext & context)
-{
-    VisitorUtil::accept(*node.getChildren()[0], *this, context);
-}
-
-void TableScanHintVisitor::visitPlanNode(PlanNodeBase & , TableScanContext & context)
-{
-    context.hint_list.clear();
+    if (node.getChildren().size() == 1)
+        VisitorUtil::accept(*node.getChildren()[0], *this, context);
+    else
+        context.hint_list.clear();
 }
 
 }

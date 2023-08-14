@@ -28,12 +28,7 @@ void HintsVisitor::attachPlanHints(PlanNodeBase & node, HintOptions & hint_optio
                 plan_hints.emplace_back(hint);
         }
     }
-    if (!plan_hints.empty())
-    {
-        auto new_step = node.getStep()->copy(context);
-        new_step->setHints(plan_hints);
-        node.setStep(new_step);
-    }
+    node.getStep()->setHints(plan_hints);
 }
 
 void HintsVisitor::processNodeWithHints(PlanNodeBase & node, HintsVisitorContext & hints_context, HintOptions & hint_options)

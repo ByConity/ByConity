@@ -48,8 +48,6 @@ struct TableScanContext
 class TableScanHintVisitor : public PlanNodeVisitor<void, TableScanContext>
 {
 private:
-    void visitProjectionNode(ProjectionNode & node, TableScanContext & table_names) override;
-    void visitFilterNode(FilterNode & node, TableScanContext & table_names) override;
     void visitTableScanNode(TableScanNode & node, TableScanContext & table_names) override;
     void visitPlanNode(PlanNodeBase & node, TableScanContext & table_names)  override;
 

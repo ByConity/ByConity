@@ -1227,6 +1227,16 @@ String StepPrinter::printJoinStep(const JoinStep & step)
         details << "parallel|";
     }
 
+    if (step.getDistributionType() != DistributionType::UNKNOWN)
+    {
+        details << "DistributionType : " ;
+        if (step.getDistributionType() == DistributionType::REPARTITION)
+            details << "repartition";
+        else if (step.getDistributionType() == DistributionType::BROADCAST)
+            details << "broadcast";
+        details << "|";
+    }
+    
     if (step.isOrdered())
     {
         details << "isOrdered:" << step.isOrdered() << "|";
