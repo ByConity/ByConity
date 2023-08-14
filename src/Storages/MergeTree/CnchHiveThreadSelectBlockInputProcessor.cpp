@@ -25,6 +25,7 @@
 #include <Storages/DiskCache/DiskCacheSimpleStrategy.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Core/Defines.h>
+#include <Storages/DiskCache/DiskCache_fwd.h>
 
 namespace DB
 {
@@ -115,9 +116,13 @@ bool CnchHiveThreadSelectBlockInputProcessor::getNewTask()
             auto cache = DiskCacheFactory::instance().get(DiskCacheType::Hive);
             auto strategy = cache->getStrategy();
 
-            ParquetRanges all_parquet_ranges{FileRange()};
-            auto parquet_segments = strategy->getCacheSegments(strategy->transferRangesToSegments<ParquetFileDiskCacheSegment>(
-                all_parquet_ranges, uuid, part_path, context->getHdfsConnectionParams()));
+			// avoid using func transferRangesToSegmentNumbers and create IDiskCacheSegmentsVector manaually for specialization of FileDiskCache
+            IDiskCacheSegmentsVector segments;
+            // Since there is only one file for parquet_segments, the result for transferRangesToSegmentsNumbers<ParquetFileDiskCacheSegment> will only be set {0}
+            // the first parameter of ParquetFileDiskCacheSegment's constructor is the segment_num it owned. Set it as 0 directly for reason above.
+            auto segment = std::make_shared<ParquetFileDiskCacheSegment>(uuid,part_path,context->getHdfsConnectionParams());
+            segments.push_back(std::move(segment));
+            auto parquet_segments = strategy->getCacheSegments(segments);
 
             cache->cacheSegmentsToLocalDisk(parquet_segments);
         }

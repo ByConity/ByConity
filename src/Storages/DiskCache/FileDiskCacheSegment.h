@@ -28,12 +28,12 @@ class FileDiskCacheSegment : public IDiskCacheSegment
 {
 public:
     FileDiskCacheSegment(
-        UInt32 segment_number_,
-        UInt32 segment_size_,
         const String & uuid_, /// Note: pass `part_name` in old version, cached data will be `not-reload` and lost if upgraded cur version
         const String & path_ /* it's also part_name */,
         const HDFSConnectionParams & params_)
-        : IDiskCacheSegment(segment_number_, segment_size_), uuid(uuid_), path(path_), hdfs_params(params_)
+        // The two arguments given here are two meaningless values (useless_segment_number_ and useless_segment_size_) just to satisfy the instantiation of the parent class, like ChecksumsDiskCahce
+        : IDiskCacheSegment(0, 0),
+            uuid(uuid_), path(path_), hdfs_params(params_)
     {
     }
 
