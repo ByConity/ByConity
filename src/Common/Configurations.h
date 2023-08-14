@@ -131,7 +131,6 @@ struct RootConfiguration final : public RootConfigurationData
     RMConfiguration resource_manager;
     SDConfiguration service_discovery;
     QMConfiguration queue_manager;
-    TracerConfiguration tracer;
     ASConfiguration adaptive_scheduler;
 
 
