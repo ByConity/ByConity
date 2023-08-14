@@ -441,6 +441,11 @@ Property DeriverVisitor::visitReadNothingStep(const ReadNothingStep &, DeriverCo
     return Property{Partitioning(Partitioning::Handle::SINGLE), Partitioning(Partitioning::Handle::ARBITRARY)};
 }
 
+Property DeriverVisitor::visitReadStorageRowCountStep(const ReadStorageRowCountStep &, DeriverContext &)
+{
+    return Property{Partitioning(Partitioning::Handle::SINGLE), Partitioning(Partitioning::Handle::ARBITRARY)};
+}
+
 Property DeriverVisitor::visitValuesStep(const ValuesStep &, DeriverContext &)
 {
     return Property{Partitioning(Partitioning::Handle::SINGLE), Partitioning(Partitioning::Handle::ARBITRARY)};

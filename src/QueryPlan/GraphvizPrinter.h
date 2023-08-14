@@ -61,6 +61,7 @@ public:
     Void visitRemoteExchangeSourceNode(RemoteExchangeSourceNode & node, PrinterContext & context) override;
     Void visitTableScanNode(TableScanNode & node, PrinterContext & context) override;
     Void visitReadNothingNode(ReadNothingNode & node, PrinterContext & context) override;
+    Void visitReadStorageRowCountNode(ReadStorageRowCountNode & node, PrinterContext & context) override;
     Void visitValuesNode(ValuesNode & node, PrinterContext & context) override;
     Void visitLimitNode(LimitNode & node, PrinterContext & context) override;
     Void visitLimitByNode(LimitByNode & node, PrinterContext & context) override;
@@ -129,6 +130,7 @@ public:
     Void visitRemoteExchangeSourceNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitTableScanNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitReadNothingNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitReadStorageRowCountNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitValuesNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitLimitNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitLimitByNode(QueryPlan::Node * node, PrinterContext & context) override;
@@ -183,6 +185,9 @@ public:
     static String printExchangeStep(const ExchangeStep & step);
     static String printRemoteExchangeSourceStep(const RemoteExchangeSourceStep & step);
     static String printTableScanStep(const TableScanStep & step);
+    static String printTableWriteStep(const TableWriteStep & step);
+    static String printTableFinishStep(const TableFinishStep & step);
+    static String printReadStorageRowCountStep(const ReadStorageRowCountStep & step);
     static String printValuesStep(const ValuesStep & step);
     static String printLimitStep(const LimitStep & step);
     static String printLimitByStep(const LimitByStep & step);

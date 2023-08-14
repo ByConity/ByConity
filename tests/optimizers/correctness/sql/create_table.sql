@@ -74,3 +74,16 @@ CREATE TABLE q15_t2
     a UInt64,
     b UInt64
 ) ENGINE = Memory();
+
+CREATE TABLE q16_t1
+(
+    a UInt64,
+    b UInt64
+) ENGINE = Memory();
+
+CREATE TABLE q16_t2
+(
+    a UInt64,
+    b UInt64
+) ENGINE = Memory();
+

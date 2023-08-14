@@ -158,8 +158,8 @@ public:
         M(CTERef) \
         M(TopNFiltering) \
         M(MarkDistinct) \
-        M(IntersectOrExcept)
-
+        M(IntersectOrExcept)\
+        M(ReadStorageRowCount)
 #define ENUM_DEF(ITEM) ITEM,
 
     enum class Type

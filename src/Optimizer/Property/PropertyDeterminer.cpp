@@ -254,6 +254,11 @@ PropertySets DeterminerVisitor::visitReadNothingStep(const ReadNothingStep &, De
     return {{}};
 }
 
+PropertySets DeterminerVisitor::visitReadStorageRowCountStep(const ReadStorageRowCountStep &, DeterminerContext &)
+{
+    return {{}};
+}
+
 PropertySets DeterminerVisitor::visitValuesStep(const ValuesStep &, DeterminerContext &)
 {
     return {{}};

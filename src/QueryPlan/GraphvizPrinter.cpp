@@ -51,6 +51,7 @@
 #include <Storages/StorageDistributed.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <QueryPlan/Hints/Leading.h>
+#include <QueryPlan/ReadStorageRowCountStep.h>
 
 #include <filesystem>
 #include <iostream>
@@ -81,6 +82,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::RemoteExchangeSource, "gold"},
     {IQueryPlanStep::Type::TableScan, "deepskyblue"},
     {IQueryPlanStep::Type::ReadNothing, "deepskyblue"},
+    {IQueryPlanStep::Type::ReadStorageRowCount, "deepskyblue"},
     {IQueryPlanStep::Type::Values, "deepskyblue"},
     {IQueryPlanStep::Type::Limit, "gray83"},
     {IQueryPlanStep::Type::LimitBy, "gray83"},
@@ -274,6 +276,15 @@ Void PlanNodePrinter::visitReadNothingNode(ReadNothingNode & node, PrinterContex
     String details{"ReadNothingNode"};
     String color{NODE_COLORS[stepPtr->getType()]};
     printNode(node, label, details, color, context);
+    return Void{};
+}
+
+Void PlanNodePrinter::visitReadStorageRowCountNode(ReadStorageRowCountNode & node, PrinterContext & context)
+{
+    String label{"ReadStorageRowCountNode"};
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printReadStorageRowCountStep(step), color, context);
     return Void{};
 }
 
@@ -746,6 +757,16 @@ Void PlanSegmentNodePrinter::visitReadNothingNode(QueryPlan::Node * node, Printe
     String details{"ReadNothingNode"};
     String color{NODE_COLORS[stepPtr->getType()]};
     printNode(node, label, details, color, context);
+    return Void{};
+}
+
+Void PlanSegmentNodePrinter::visitReadStorageRowCountNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & stepPtr = node->step;
+    String label{"ReadStorageRowCountNode"};
+    auto & step = dynamic_cast<const ReadStorageRowCountStep &>(*stepPtr);
+    String color{NODE_COLORS[stepPtr->getType()]};
+    printNode(node, label, StepPrinter::printReadStorageRowCountStep(step), color, context);
     return Void{};
 }
 
@@ -1642,6 +1663,62 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
         details << column.type->getName() << "\\n";
     }
 
+    return details.str();
+}
+
+String StepPrinter::printReadStorageRowCountStep(const ReadStorageRowCountStep & step)
+{
+    String database = step.getStorageID().getDatabaseName();
+    String table = step.getStorageID().getTableName();
+    std::stringstream details;
+    details << database << "." << table << "|";
+
+    auto ast = step.getQuery();
+    auto query = ast->as<ASTSelectQuery>();
+    if (query && query->getWhere())
+    {
+        details << "Filter : \\n";
+        details << printFilter(query->refWhere());
+        details << "|";
+    }
+
+    if (query && query->getPrewhere())
+    {
+        details << "Prewhere : \\n";
+        details << printFilter(query->refPrewhere());
+        details << "|";
+    }
+
+    details << "Functions:\\n";
+    auto desc = step.getAggregateDescription();
+    auto type_name = String(typeid(desc.function.get()).name());
+    String func_name = desc.function->getName();
+    if (type_name.find("AggregateFunctionNull"))
+    {
+        func_name = String("AggNull(").append(std::move(func_name)).append(")");
+    }
+    details << desc.column_name << ":=" << func_name;
+    details << "( ";
+    details << "Argument:";
+    for (const auto & argument : desc.argument_names)
+    {
+        details << argument << " ";
+    }
+    details << "Types:";
+    for (const auto & type : desc.function->getArgumentTypes())
+    {
+        details << type->getName() << " ";
+    }
+    details << ")";
+    details << "\\n";
+    details << "|";
+
+    details << "Output \\n";
+    for (auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
     return details.str();
 }
 

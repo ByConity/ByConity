@@ -1804,7 +1804,7 @@ UInt64 QueryAnalyzerVisitor::analyzeUIntConstExpression(const ASTPtr & expressio
 
 void QueryAnalyzerVisitor::countLeadingHint(const IAST & ast)
 {
-    for (auto hint : ast.hints)
+    for (auto & hint : ast.hints)
     {
         if (Poco::toLower(hint.getName()) == "leading")
             ++analysis.hint_analysis.leading_hint_count;

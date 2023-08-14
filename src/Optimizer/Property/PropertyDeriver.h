@@ -63,6 +63,7 @@ public:
     Property visitRemoteExchangeSourceStep(const RemoteExchangeSourceStep &, DeriverContext & context) override;
     Property visitTableScanStep(const TableScanStep &, DeriverContext &) override;
     Property visitReadNothingStep(const ReadNothingStep &, DeriverContext &) override;
+    Property visitReadStorageRowCountStep(const ReadStorageRowCountStep &, DeriverContext &) override;
     Property visitValuesStep(const ValuesStep &, DeriverContext &) override;
     Property visitLimitStep(const LimitStep &, DeriverContext & context) override;
     Property visitLimitByStep(const LimitByStep &, DeriverContext & context) override;
