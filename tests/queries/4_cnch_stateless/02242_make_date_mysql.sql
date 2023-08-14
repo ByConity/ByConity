@@ -37,5 +37,8 @@ select makeDate(1970,0);
 select makeDate(1970,1);
 select makeDate(1970,2);
 
+select makeDate(2022,366);
+select makeDate(2020,366);
+
 select makeDate(NULL, 3);
 select makeDate(1980, NULL);
