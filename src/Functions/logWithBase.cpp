@@ -61,9 +61,6 @@ public:
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
         // log_a(b) = ln(b)/ln(a)
-        auto res_column = ColumnFloat64::create(input_rows_count);
-        auto & result_data = res_column->getData();
-
         ColumnsWithTypeAndName converted_time;
 
         const ColumnsWithTypeAndName arg1 = {arguments[0]};
@@ -73,9 +70,6 @@ public:
         const ColumnsWithTypeAndName arg2 = {arguments[1]};
         auto log2_func = FunctionFactory::instance().get("log", context_);
         auto col_num = log1_func->build(arg2)->execute(arg2, std::make_shared<DataTypeFloat64>(), input_rows_count);
-
-        const auto * col_base_casted = checkAndGetColumn<ColumnVector<Float64>>(*col_base);
-        const auto * col_num_casted = checkAndGetColumn<ColumnVector<Float64>>(*col_num);
 
         const ColumnsWithTypeAndName div_arg
             = {{col_num, std::make_shared<DataTypeFloat64>(), "num_col"}, {col_base, std::make_shared<DataTypeFloat64>(), "col_base"}};

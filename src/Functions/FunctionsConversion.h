@@ -56,6 +56,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnMap.h>
 #include <Columns/ColumnsCommon.h>
+#include <Columns/ColumnsDateTime.h>
 #include <Common/assert_cast.h>
 #include <Common/quoteString.h>
 #include <Core/AccurateComparison.h>
@@ -69,6 +70,7 @@
 #include <Columns/ColumnLowCardinality.h>
 #include <Interpreters/Context.h>
 
+#include <common/DateLUT.h>
 
 namespace DB
 {
@@ -406,14 +408,71 @@ template <typename Name> struct ConvertImpl<DataTypeDateTime64, DataTypeTime, Na
     }
 };
 
-/** Conversion of Time to other temporal types which needs date is not valid
+
+/** Conversion of Time to other temporal types which needs date
   */
 template <typename ToDataType, typename Name>
-struct ConvertImpl<std::enable_if_t<IsDataTypeDateOrDateTime<ToDataType> && !std::is_same_v<ToDataType, DataTypeTime>, DataTypeTime>, ToDataType, Name, ConvertDefaultBehaviorTag>
+struct ConvertImpl<
+    std::enable_if_t<IsDataTypeDateOrDateTime<ToDataType> && !std::is_same_v<ToDataType, DataTypeTime>, DataTypeTime>,
+    ToDataType,
+    Name,
+    ConvertDefaultBehaviorTag>
 {
-    static ColumnPtr execute(const ColumnsWithTypeAndName &, const DataTypePtr &, size_t , UInt16 = 0)
+    static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, UInt16 = 0)
     {
-        throw Exception("Conversion from time to other temporal types is not supported", ErrorCodes::CANNOT_CONVERT_TYPE);
+        const auto & time_zone = DateLUT::instance();
+        const auto today = time_zone.toDayNum(time(nullptr));
+        auto date_time = DateLUT::instance().fromDayNum(today);
+
+        if constexpr (std::is_same_v<ToDataType, DataTypeDate>)
+        {
+            // only today's date
+            return result_type->createColumnConst(input_rows_count, DayNum(today.toUnderType()));
+        }
+
+        // digest source time
+        ColumnPtr source_col = arguments[0].column;
+        const auto * sources = checkAndGetColumn<ColumnTime>(source_col.get());
+        auto & source_data = sources->getData();
+        auto time_scale = sources->getScale();
+        auto scale_multiplier = DecimalUtils::scaleMultiplier<Decimal64>(time_scale);
+        // result
+        auto mutable_result_col = result_type->createColumn();
+        auto * col_to = assert_cast<typename ToDataType::ColumnType *>(mutable_result_col.get());
+        auto & col_to_data = col_to->getData();
+        col_to_data.resize(input_rows_count);
+
+        if constexpr (std::is_same_v<ToDataType, DataTypeDateTime>)
+        {
+            for (size_t i = 0; i < input_rows_count; i++)
+            {
+                // today's date + input time
+                auto components = DecimalUtils::splitWithScaleMultiplier(source_data[i], scale_multiplier);
+                col_to_data[i] = UInt32(date_time) + components.whole;
+            }
+        }
+        else if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64>)
+        {
+            auto dt64_scale = col_to->getScale();
+            auto dt_scale_multiplier = DecimalUtils::scaleMultiplier<Decimal64>(dt64_scale);
+            int scale_arg = dt64_scale - time_scale;
+            auto scale_change = scale_arg > 0 ? intExp10(scale_arg) : intExp10(-scale_arg);
+
+            for (size_t i = 0; i < input_rows_count; i++)
+            {
+                auto components = DecimalUtils::splitWithScaleMultiplier(source_data[i], scale_multiplier);
+                if (dt_scale_multiplier > scale_multiplier)
+                    components.fractional *= scale_change;
+                else if (dt_scale_multiplier < scale_multiplier)
+                    components.fractional /= scale_change;
+
+                // today's date + input time + calculated fractions
+                col_to_data[i] = DecimalUtils::decimalFromComponentsWithMultiplier<Decimal64>(
+                    UInt32(date_time) + components.whole, components.fractional, dt_scale_multiplier);
+            }
+        }
+
+        return mutable_result_col;
     }
 };
 
@@ -1691,14 +1750,13 @@ public:
 
         if (!to_decimal && (isDateTime64<Name, ToDataType>(arguments)))
         {
-            mandatory_args.push_back({"scale", &isNativeInteger, &isColumnConst, "const Integer"});
+            optional_args.push_back({"scale", &isNativeInteger, &isColumnConst, "const Integer"});
         }
 
         if (!to_decimal && (to_time))
         {
             optional_args.push_back({"scale", &isNativeInteger, &isColumnConst, "const Integer"});
         }
-
 
         // toString(DateTime or DateTime64, [timezone: String])
         if ((std::is_same_v<Name, NameToString> && !arguments.empty() && (isDateTime64(arguments[0].type) || isDateTime(arguments[0].type)))
@@ -1747,7 +1805,9 @@ public:
             if (isDateTime64<Name, ToDataType>(arguments))
             {
                 timezone_arg_position += 1;
-                scale = static_cast<UInt32>(arguments[1].column->get64(0));
+                scale = DataTypeDateTime64::default_scale;
+                if (arguments.size() > 1)
+                    scale = static_cast<UInt32>(arguments[1].column->get64(0));
 
                 if (to_datetime64 || scale != 0) /// toDateTime('xxxx-xx-xx xx:xx:xx', 0) return DateTime
                     return std::make_shared<DataTypeDateTime64>(scale,
@@ -1757,7 +1817,7 @@ public:
             }
 
             if constexpr (to_time) {
-                scale = 0;
+                scale = DataTypeTime::default_scale;
                 if (arguments.size() > 1)
                     scale = static_cast<UInt32>(arguments[1].column->get64(0));
                 return std::make_shared<DataTypeTime>(scale);
@@ -1857,7 +1917,7 @@ private:
                 if constexpr (std::is_same_v<RightDataType, DataTypeDateTime64>)
                 {
                     /// Account for optional timezone argument.
-                    if (arguments.size() != 2 && arguments.size() != 3)
+                    if (arguments.size() != 1 && arguments.size() != 2 && arguments.size() != 3)
                         throw Exception{"Function " + getName() + " expects 2 or 3 arguments for DateTime64.",
                             ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
                 }
@@ -1874,7 +1934,7 @@ private:
                         ErrorCodes::TOO_FEW_ARGUMENTS_FOR_FUNCTION};
                 }
 
-                UInt32 scale = 0;
+                UInt32 scale = DataTypeTime::default_scale;
                 if (arguments.size() > 1)
                 {
                     const ColumnWithTypeAndName & scale_column = arguments[1];
@@ -1929,8 +1989,9 @@ private:
         if (isDateTime64<Name, ToDataType>(arguments))
         {
             /// For toDateTime('xxxx-xx-xx xx:xx:xx.00', 2[, 'timezone']) we need to it convert to DateTime64
-            const ColumnWithTypeAndName & scale_column = arguments[1];
-            UInt32 scale = extractToDecimalScale(scale_column);
+            UInt32 scale = DataTypeDateTime64::default_scale;
+            if (arguments.size() > 1)
+                scale = extractToDecimalScale(arguments[1]);
 
             if (to_datetime64 || scale != 0) /// When scale = 0, the data type is DateTime otherwise the data type is DateTime64
             {
