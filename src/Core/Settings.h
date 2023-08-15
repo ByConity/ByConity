@@ -1687,6 +1687,7 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Bool, enable_rewrite_alias_in_select, true, "Whether rewrite alias in select (Obsolete setting).", 0) \
     /** Ingestion */ \
+    M(Seconds, ingest_column_memory_lock_timeout, 5, "The time that spend on wait for memory lock", 0) \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
     M(UInt64, \
       memory_efficient_ingest_partition_max_key_count_in_memory, \
