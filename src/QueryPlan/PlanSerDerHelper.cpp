@@ -63,6 +63,7 @@
 #include <QueryPlan/QueryCacheStep.h>
 #include <QueryPlan/ReadFromMergeTree.h>
 #include <QueryPlan/ReadFromPreparedSource.h>
+#include <QueryPlan/ReadStorageRowCountStep.h>
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
 #include <QueryPlan/RollupStep.h>

@@ -21,6 +21,7 @@
 #include <Analyzers/function_utils.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Parsers/ASTTableColumnReference.h>
 #include <DataTypes/DataTypeFunction.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -73,6 +74,7 @@ public:
     ColumnWithTypeAndName visitASTLiteral(ASTPtr & node, const Void &) override;
     ColumnWithTypeAndName visitASTOrderByElement(ASTPtr & node, const Void &) override;
     ColumnWithTypeAndName visitASTQuantifiedComparison(ASTPtr & node, const Void &) override;
+    ColumnWithTypeAndName visitASTTableColumnReference(ASTPtr & node, const Void &) override;
 
     ExprAnalyzerVisitor(ContextMutablePtr context_, Analysis & analysis_, ScopePtr scope_, ExprAnalyzerOptions options_):
         context(std::move(context_)),
@@ -187,6 +189,13 @@ ColumnsWithTypeAndName ExprAnalyzerVisitor::processNodes(ASTs & nodes)
 ColumnWithTypeAndName ExprAnalyzerVisitor::visitNode(ASTPtr & node, const Void &)
 {
     throw Exception("Unsupported Node" + node->getID(), ErrorCodes::NOT_IMPLEMENTED);
+}
+
+ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTTableColumnReference(ASTPtr & node, const Void &)
+{
+    auto & ref = node->as<ASTTableColumnReference &>();
+    auto name_and_type = ref.storage->getInMemoryMetadataPtr()->getColumns().getPhysical(ref.column_name);
+    return {nullptr, name_and_type.type, name_and_type.name};
 }
 
 ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTLiteral(ASTPtr & node, const Void &)
@@ -413,7 +422,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
         {
             const auto & resolved_field = column_reference->getFieldDescription();
-            if (resolved_field.hasOriginInfo() && 
+            if (resolved_field.hasOriginInfo() &&
                 resolved_field.type->isMap() &&
                 (check_subcolumn(resolved_field, [](const auto & origin_col) { return !origin_col.storage->supportsMapImplicitColumn(); })
                 || resolved_field.type->isMapKVStore()))
@@ -721,18 +730,18 @@ String ExprAnalyzerVisitor::getFunctionColumnName(const String & func_name, cons
     return getFunctionResultName(func_name, arg_result_names);
 }
 
-void ExprAnalyzerVisitor::expandAsterisk(ASTs & nodes) 
+void ExprAnalyzerVisitor::expandAsterisk(ASTs & nodes)
 {
-    if (!options.expand_asterisk) 
+    if (!options.expand_asterisk)
         return;
 
     ASTs new_nodes;
     new_nodes.reserve(nodes.size());
     bool has_asterisk = false;
-    
-    for (auto & node: nodes) 
+
+    for (auto & node: nodes)
     {
-        if (auto * asterisk = node->as<ASTAsterisk>()) 
+        if (auto * asterisk = node->as<ASTAsterisk>())
         {
             has_asterisk = true;
             for (size_t field_index = 0; field_index < baseScope()->size(); ++field_index)
@@ -745,12 +754,12 @@ void ExprAnalyzerVisitor::expandAsterisk(ASTs & nodes)
                 }
             }
          }
-        else if (auto * qualified_asterisk = node->as<ASTQualifiedAsterisk>()) 
-        {   
+        else if (auto * qualified_asterisk = node->as<ASTQualifiedAsterisk>())
+        {
             if (qualified_asterisk->children.empty() || !qualified_asterisk->getChildren()[0]->as<ASTTableIdentifier>())
                 throw Exception("Unable to resolve qualified asterisk", ErrorCodes::UNKNOWN_IDENTIFIER);
 
-            has_asterisk = true;    
+            has_asterisk = true;
             ASTIdentifier& astidentifier = qualified_asterisk->getChildren()[0]->as<ASTTableIdentifier&>();
             auto prefix = QualifiedName::extractQualifiedName(astidentifier);
             bool matched = false;
@@ -767,7 +776,7 @@ void ExprAnalyzerVisitor::expandAsterisk(ASTs & nodes)
             if (!matched)
                 throw Exception("Can not find column of " + prefix.toString() + " in Scope", ErrorCodes::UNKNOWN_IDENTIFIER);
         }
-        else 
+        else
             new_nodes.push_back(node);
     }
     if (has_asterisk)

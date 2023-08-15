@@ -51,8 +51,7 @@ public:
                               .where([](auto & node) { return node.getStep()->getType() == IQueryPlanStep::Type::TableScan; })
                               .findAll();
             bool contains_mv = std::any_of(tables.begin(), tables.end(), [&](auto & node) {
-                return dynamic_cast<const TableScanStep *>(node->getStep().get())->getStorage()->getName().find("MV_DATA")
-                    != std::string::npos;
+                return dynamic_cast<const TableScanStep *>(node->getStep().get())->getTable().find("MV_DATA") != std::string::npos;
             });
             ASSERT_FALSE(contains_mv) << "expect no matched materialized views";
         }).execution();

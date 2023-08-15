@@ -73,6 +73,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -83,6 +84,7 @@
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
 #include <Interpreters/SelectIntersectExceptQueryVisitor.h>
 #include <Interpreters/SelectQueryOptions.h>
+#include <Interpreters/VirtualWarehouseHandle.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <QueryPlan/QueryCacheStep.h>
@@ -134,6 +136,8 @@
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
+#include <Optimizer/OptimizerMetrics.h>
+#include <Optimizer/QueryUseOptimizerChecker.h>
 #include <Protos/cnch_common.pb.h>
 
 using AsyncQueryStatus = DB::Protos::AsyncQueryStatus;
@@ -907,7 +911,27 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
             catch (...)
             {
-                if (!context->getSettingsRef().enable_optimizer && context->getSettingsRef().distributed_perfect_shard
+                if (typeid_cast<const InterpreterSelectQueryUseOptimizer *>(&*interpreter))
+                {
+                    // fallback to simple query process
+                    if (context->getSettingsRef().enable_optimizer_fallback)
+                    {
+                        LOG_INFO(&Poco::Logger::get("executeQuery"), "Query failed in optimizer enabled, try to fallback to simple query.");
+                        turnOffOptimizer(context, ast);
+                        auto retry_interpreter = InterpreterFactory::get(ast, context, stage);
+                        res = retry_interpreter->execute();
+
+                        // Used to identify 'fallback' queries in query_log
+                        context->setSetting("operator_profile_receive_timeout", 3001);
+                    }
+                    else
+                    {
+                        LOG_INFO(&Poco::Logger::get("executeQuery"), "Query failed in optimizer enabled, throw exception.");
+                        throw;
+                    }
+                }
+                else if (
+                    !context->getSettingsRef().enable_optimizer && context->getSettingsRef().distributed_perfect_shard
                     && context->getSettingsRef().fallback_perfect_shard)
                 {
                     LOG_INFO(&Poco::Logger::get("executeQuery"), "Query failed in perfect-shard enabled, try to fallback to normal mode.");

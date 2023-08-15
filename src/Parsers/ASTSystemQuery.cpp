@@ -164,6 +164,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "START CONSUME";
         case Type::STOP_CONSUME:
             return "STOP CONSUME";
+        case Type::DROP_CONSUME:
+            return "DROP CONSUME";
         case Type::RESTART_CONSUME:
             return "RESTART CONSUME";
         case Type::RESET_CONSUME_OFFSET:
@@ -265,8 +267,9 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     }
     else if (
         type == Type::RESTART_REPLICA || type == Type::RESTORE_REPLICA || type == Type::SYNC_REPLICA || type == Type::FLUSH_DISTRIBUTED
-        || type == Type::RELOAD_DICTIONARY || type == Type::START_CONSUME || type == Type::STOP_CONSUME || type == Type::RESTART_CONSUME
-        || type == Type::DROP_CNCH_PART_CACHE || type == Type::SYNC_DEDUP_WORKER || type == Type::DROP_CNCH_PART_CACHE)
+        || type == Type::RELOAD_DICTIONARY || type == Type::START_CONSUME || type == Type::STOP_CONSUME || type == Type::DROP_CONSUME
+        || type == Type::RESTART_CONSUME || type == Type::DROP_CNCH_PART_CACHE || type == Type::SYNC_DEDUP_WORKER
+        || type == Type::DROP_CNCH_PART_CACHE)
     {
         print_database_table();
     }

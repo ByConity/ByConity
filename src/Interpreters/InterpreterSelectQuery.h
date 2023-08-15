@@ -139,6 +139,8 @@ public:
     MaterializedViewOptimizerResultPtr getMaterializeViewMatchResult() { return mv_optimizer_result; }
 
     static FillColumnDescription getWithFillDescription(const ASTOrderByElement & order_by_elem, ContextPtr context);
+
+    TreeRewriterResultPtr getSyntaxAnalyzerResult() { return syntax_analyzer_result; }
 private:
     friend class InterpreterPerfectShard;
 

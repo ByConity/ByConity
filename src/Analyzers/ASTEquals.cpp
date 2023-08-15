@@ -83,7 +83,7 @@ bool compareNode(const ASTSetQuery & left, const ASTSetQuery & right)
 
 bool compareNode(const ASTTableColumnReference & left, const ASTTableColumnReference & right)
 {
-    return left.storage == right.storage && left.column_name == right.column_name;
+    return left.storage == right.storage && left.unique_id == right.unique_id && left.column_name == right.column_name;
 }
 
 

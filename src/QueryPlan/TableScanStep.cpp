@@ -1617,7 +1617,6 @@ void TableScanStep::allocate(ContextPtr context)
             }
         }
     }
-
 }
 
 bool TableScanStep::setQueryInfoFilter(const std::vector<ConstASTPtr> & filters) const

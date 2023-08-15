@@ -175,39 +175,6 @@ struct AddHoursImpl
     }
 };
 
-struct AddTimeImpl
-{
-    static constexpr auto name = "addTime";
-
-    static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<DateTime64>
-    execute(DecimalUtils::DecimalComponents<DateTime64> t, Int64 delta, const DateLUTImpl &)
-    {
-        return {t.whole + delta, t.fractional};
-    }
-
-    static inline NO_SANITIZE_UNDEFINED DecimalUtils::DecimalComponents<Decimal64>
-    executeTime(DecimalUtils::DecimalComponents<Decimal64> t, Int64 delta, const DateLUTImpl &)
-    {
-        Int64 x = (t.whole + delta) % 86400;
-        if (x < 0)
-        {
-            x += 86400;
-        }
-        return {x, t.fractional};
-    }
-
-    static inline NO_SANITIZE_UNDEFINED UInt32 execute(UInt32 t, Int64 delta, const DateLUTImpl &) { return t + delta; }
-    static inline NO_SANITIZE_UNDEFINED Int64 execute(Int32 d, Int64 delta, const DateLUTImpl & time_zone)
-    {
-        // use default datetime64 scale
-        return (time_zone.fromDayNum(ExtendedDayNum(d)) + delta) * 1000;
-    }
-    static inline NO_SANITIZE_UNDEFINED UInt32 execute(UInt16 d, Int64 delta, const DateLUTImpl & time_zone)
-    {
-        return time_zone.fromDayNum(DayNum(d)) + delta;
-    }
-};
-
 struct AddDaysImpl
 {
     static constexpr auto name = "addDays";
@@ -421,10 +388,7 @@ struct SubtractIntervalImpl : public Transform
 struct SubtractSecondsImpl : SubtractIntervalImpl<AddSecondsImpl> { static constexpr auto name = "subtractSeconds"; };
 struct SubtractMinutesImpl : SubtractIntervalImpl<AddMinutesImpl> { static constexpr auto name = "subtractMinutes"; };
 struct SubtractHoursImpl : SubtractIntervalImpl<AddHoursImpl> { static constexpr auto name = "subtractHours"; };
-struct SubtractTimeImpl : SubtractIntervalImpl<AddTimeImpl>
-{
-    static constexpr auto name = "subtractTime";
-};
+
 struct SubtractDaysImpl : SubtractIntervalImpl<AddDaysImpl> { static constexpr auto name = "subtractDays"; };
 struct SubtractWeeksImpl : SubtractIntervalImpl<AddWeeksImpl> { static constexpr auto name = "subtractWeeks"; };
 struct SubtractMonthsImpl : SubtractIntervalImpl<AddMonthsImpl> { static constexpr auto name = "subtractMonths"; };
@@ -610,9 +574,9 @@ public:
                 + toString(arguments.size()) + ", should be 2 or 3",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        if (!isNativeNumber(arguments[1].type) && !isStringOrFixedString(arguments[1].type) && !isTime(arguments[1].type))
+        if (!isNativeNumber(arguments[1].type) && !isStringOrFixedString(arguments[1].type))
             throw Exception(
-                "Second argument for function " + getName() + " (delta) must be number, string or time",
+                "Second argument for function " + getName() + " (delta) must be number, string",
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
         if (arguments.size() == 2)
@@ -725,26 +689,14 @@ public:
     ColumnPtr executeImpl(
         const ColumnsWithTypeAndName & arguments,
         const DataTypePtr & result_type,
-        size_t input_rows_count /*input_rows_count*/) const override
+        size_t input_rows_count) const override
     {
         const IDataType * from_type = arguments[0].type.get();
         const IDataType * delta_type = arguments[1].type.get();
         WhichDataType which(from_type);
 
         ColumnsWithTypeAndName converted_arguments;
-        if (std::is_same_v<Transform, AddTimeImpl> || std::is_same_v<Transform, SubtractTimeImpl>)
-        {
-            auto to_time = FunctionFactory::instance().get("toTimeType", nullptr);
-            auto to_time_col = to_time->build({arguments[1]})->execute({arguments[1]}, std::make_shared<DataTypeTime>(0), input_rows_count);
-            ColumnWithTypeAndName time_col(to_time_col, std::make_shared<DataTypeTime>(0), "unixtime");
-
-            auto to_int = FunctionFactory::instance().get("toInt64", nullptr);
-            auto to_int_col = to_int->build({time_col})->execute({time_col}, std::make_shared<DataTypeInt64>(), input_rows_count);
-            ColumnWithTypeAndName int_col(to_int_col, std::make_shared<DataTypeInt64>(), "unixtime_int");
-            converted_arguments.emplace_back(arguments[0]);
-            converted_arguments.emplace_back(int_col);
-        }
-        else if (!std::is_same_v<Transform, NextDayImp> && isStringOrFixedString(delta_type))
+        if (!std::is_same_v<Transform, NextDayImp> && isStringOrFixedString(delta_type))
         {
             ColumnsWithTypeAndName temp{arguments[1]};
             auto to_int = FunctionFactory::instance().get("toInt64", nullptr);

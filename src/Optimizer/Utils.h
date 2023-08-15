@@ -47,6 +47,7 @@ namespace Utils
     NameToNameMap extractIdentities(const ProjectionStep & project);
     std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments);
     ASTPtr extractAggregateToFunction(const AggregateDescription & agg_descr);
+    bool containsAggregateFunction(const ASTPtr & ast);
 
     // this method is used to deal with function names which are case-insensitive or have an alias to.
     // should be called after `registerFunctions`

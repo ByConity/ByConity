@@ -42,6 +42,7 @@
 #include <QueryPlan/Hints/HintsPropagator.h>
 #include <QueryPlan/Hints/ImplementJoinOperationHints.h>
 #include <QueryPlan/Hints/ImplementJoinOrderHints.h>
+#include <Optimizer/Rewriter/OptimizeTrivialCount.h>
 
 namespace DB
 {
@@ -95,6 +96,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // use property
         std::make_shared<SortingOrderedSource>(),
 
+        std::make_shared<OptimizeTrivialCount>(),
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
 
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
@@ -227,6 +229,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // use property
         std::make_shared<SortingOrderedSource>(),
 
+        std::make_shared<OptimizeTrivialCount>(),
         // push predicate into storage
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
         // TODO cost-based projection push down

@@ -1,6 +1,4 @@
 DROP TABLE IF EXISTS u10101;
--- TODO @zhoukun support optimizer trivial count
-set enable_optimizer=0;
 
 CREATE TABLE u10101 (d Date, k1 Int64, c1 Int64, c2 Int64) ENGINE = CnchMergeTree() PARTITION BY d ORDER BY k1 UNIQUE KEY k1;
 

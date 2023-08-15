@@ -147,6 +147,35 @@ struct ToWeekImpl
     using FactorTransform = ToStartOfYearImpl;
 };
 
+struct ToWeekOfYearImpl
+{
+    static constexpr auto name = "toWeekOfYear";
+
+    static inline UInt8 execute(Int64 t, UInt8 week_mode, const DateLUTImpl & time_zone)
+    {
+        // TODO: ditch conversion to DayNum, since it doesn't support extended range.
+        YearWeek yw = time_zone.toYearWeek(time_zone.toDayNum(t), week_mode);
+        return yw.second;
+    }
+    static inline UInt8 execute(UInt32 t, UInt8 week_mode, const DateLUTImpl & time_zone)
+    {
+        YearWeek yw = time_zone.toYearWeek(time_zone.toDayNum(t), week_mode);
+        return yw.second;
+    }
+    static inline UInt8 execute(Int32 d, UInt8 week_mode, const DateLUTImpl & time_zone)
+    {
+        YearWeek yw = time_zone.toYearWeek(ExtendedDayNum(d), week_mode);
+        return yw.second;
+    }
+    static inline UInt8 execute(UInt16 d, UInt8 week_mode, const DateLUTImpl & time_zone)
+    {
+        YearWeek yw = time_zone.toYearWeek(DayNum(d), week_mode);
+        return yw.second;
+    }
+
+    using FactorTransform = ToStartOfYearImpl;
+};
+
 template <typename FromType, typename ToType, typename Transform, bool is_extended_result = false>
 struct WeekTransformer
 {
@@ -187,9 +216,17 @@ struct CustomWeekTransformImpl
         const auto op = WeekTransformer<typename FromDataType::FieldType, typename ToDataType::FieldType, Transform, is_extended_result>{std::move(transform)};
 
         UInt8 week_mode = mysql_mode_ ? DEFAULT_WEEK_MODE_MYSQL : DEFAULT_WEEK_MODE;
-        if (strcmp(transform.name, "toDayOfWeekMySQL") == 0 && mysql_mode_)
+        if (mysql_mode_)
         {
-            week_mode = DEFAULT_DAY_WEEK_MODE_MYSQL;
+            if constexpr(std::is_same_v<Transform, ToDayOfWeekMySQLImpl>)
+                week_mode = DEFAULT_DAY_WEEK_MODE_MYSQL;
+            else if constexpr(std::is_same_v<Transform, ToWeekImpl> || std::is_same_v<Transform, ToYearWeekImpl>)
+                week_mode = DEFAULT_WEEK_MODE;
+        }
+        
+        if constexpr(std::is_same_v<Transform, ToWeekOfYearImpl>)
+        {
+            week_mode = DEFAULT_WEEK_MODE_MYSQL;
         }
 
         if (arguments.size() > 1)

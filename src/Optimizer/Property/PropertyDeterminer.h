@@ -61,6 +61,7 @@ public:
     PropertySets visitRemoteExchangeSourceStep(const RemoteExchangeSourceStep & node, DeterminerContext & context) override;
     PropertySets visitTableScanStep(const TableScanStep &, DeterminerContext &) override;
     PropertySets visitReadNothingStep(const ReadNothingStep &, DeterminerContext &) override;
+    PropertySets visitReadStorageRowCountStep(const ReadStorageRowCountStep &, DeterminerContext &) override;
     PropertySets visitValuesStep(const ValuesStep &, DeterminerContext &) override;
     PropertySets visitLimitStep(const LimitStep & step, DeterminerContext & context) override;
     PropertySets visitLimitByStep(const LimitByStep & node, DeterminerContext & context) override;

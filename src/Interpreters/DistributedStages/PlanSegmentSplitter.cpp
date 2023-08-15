@@ -329,6 +329,11 @@ PlanSegmentInputs PlanSegmentVisitor::findInputs(QueryPlan::Node * node)
         auto input = std::make_shared<PlanSegmentInput>(values->getOutputStream().header, PlanSegmentType::SOURCE);
         return {input};
     }
+    else if (auto * read_row_count_step = dynamic_cast<ReadStorageRowCountStep *>(node->step.get()))
+    {
+        auto input = std::make_shared<PlanSegmentInput>(read_row_count_step->getOutputStream().header, PlanSegmentType::SOURCE);
+        return {input};
+    }
     else
     {
         PlanSegmentInputs inputs;
@@ -421,6 +426,11 @@ std::optional<Partitioning::Handle> SourceNodeFinder::visitValuesNode(QueryPlan:
 std::optional<Partitioning::Handle> SourceNodeFinder::visitReadNothingNode(QueryPlan::Node *, const Context &)
 {
     return Partitioning::Handle::SINGLE;
+}
+
+std::optional<Partitioning::Handle> SourceNodeFinder::visitReadStorageRowCountNode(QueryPlan::Node *, const Context &)
+{
+    return Partitioning::Handle::COORDINATOR;
 }
 
 std::optional<Partitioning::Handle> SourceNodeFinder::visitTableScanNode(QueryPlan::Node * node, const Context & context)

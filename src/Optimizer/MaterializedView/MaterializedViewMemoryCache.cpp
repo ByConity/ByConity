@@ -122,7 +122,7 @@ MaterializedViewMemoryCache::getMaterializedViewStructure(
     for (auto & rewriter : rewriters)
         rewriter->rewrite(*query_plan, context);
 
-    GraphvizPrinter::printLogicalPlan(*query_plan, context, "MaterializedViewMemoryCache");
+    GraphvizPrinter::printLogicalPlan(*query_plan, context, "MaterializedViewPlan_" + std::to_string(context->nextNodeId()));
     return MaterializedViewStructure::buildFrom(materialized_view_id, target_table_id.value(), query_plan->getPlanNode(), context);
 }
 
