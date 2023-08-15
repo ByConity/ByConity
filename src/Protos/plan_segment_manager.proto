@@ -76,6 +76,7 @@ message ExecutePlanSegmentRequest {
   required uint64 txn_id = 24;
 
   optional uint32 brpc_protocol_major_revision = 25;
+  optional uint64 primary_txn_id = 26;
 }
 
 message ExecutePlanSegmentResponse {

@@ -19,6 +19,8 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -259,6 +261,9 @@ struct ContextSharedPart
     mutable std::mutex storage_policies_mutex;
     /// Separate mutex for re-initialization of zookeeper session. This operation could take a long time and must not interfere with another operations.
     mutable std::mutex zookeeper_mutex;
+    /// Shared mutex and cv for reading data from clients.
+    mutable std::mutex read_mutex;
+    std::condition_variable read_cv;
 
     mutable zkutil::ZooKeeperPtr zookeeper; /// Client for ZooKeeper.
     ConfigurationPtr zookeeper_config; /// Stores zookeeper configs
@@ -628,7 +633,7 @@ Context::~Context() = default;
 WorkerStatusManagerPtr Context::getWorkerStatusManager()
 {
     if (!shared->worker_status_manager)
-        shared->worker_status_manager = std::make_shared<WorkerStatusManager>();
+        shared->worker_status_manager = std::make_shared<WorkerStatusManager>(global_context);
     return shared->worker_status_manager;
 }
 
@@ -641,7 +646,7 @@ void Context::updateAdaptiveSchdulerConfig(const ConfigurationPtr & config)
 WorkerStatusManagerPtr Context::getWorkerStatusManager() const
 {
     if (!shared->worker_status_manager)
-        shared->worker_status_manager = std::make_shared<WorkerStatusManager>();
+        shared->worker_status_manager = std::make_shared<WorkerStatusManager>(global_context);
     return shared->worker_status_manager;
 }
 
@@ -4213,7 +4218,10 @@ std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
         updateTSOLeaderHostPort();
 
     if (auto updated_host_port = getTSOLeaderHostPort(); !updated_host_port.empty())
+    {
+        LOG_TRACE(&Poco::Logger::get("Context::getCnchTSOClient"), "TSO Leader host-port is: {} ", updated_host_port);
         return shared->tso_client_pool->get(updated_host_port);
+    }
     else
         throw Exception(ErrorCodes::NOT_A_LEADER, "Get an empty tso leader from keeper");
 }
@@ -4252,6 +4260,7 @@ void Context::updateTSOLeaderHostPort() const
         throw Exception(
             ErrorCodes::LOGICAL_ERROR, "Can't get current tso-leader, leader_node `{}` in keeper is empty.", current_leader_node);
 
+    LOG_TRACE(&Poco::Logger::get("Context::updateTSO"), "Upated TSO Leader host-port to: {} ", current_leader);
     {
         std::lock_guard lock(shared->tso_mutex);
         shared->tso_leader_host_port = std::move(current_leader);
@@ -4935,4 +4944,26 @@ String Context::getCnchAuxilityPolicyName() const
     return getConfigRef().getString("storage_configuration.cnch_auxility_policy", "default");
 }
 
+bool Context::isAsyncMode() const
+{
+    return getClientInfo().query_kind == ClientInfo::QueryKind::INITIAL_QUERY && getServerType() == ServerType::cnch_server
+        && getSettingsRef().enable_async_execution;
+}
+
+void Context::markReadFromClientFinished()
+{
+    {
+        std::lock_guard lk(shared->read_mutex);
+        read_from_client_finished = true;
+    }
+    shared->read_cv.notify_all();
+}
+
+void Context::waitReadFromClientFinished() const
+{
+    int64_t timeout = getSettingsRef().receive_timeout.totalMilliseconds();
+    std::unique_lock lk(shared->read_mutex);
+    if (!shared->read_cv.wait_for(lk, std::chrono::milliseconds(timeout), [this] { return read_from_client_finished; }))
+        throw Exception("Timeout exceeded while reading data from client.", ErrorCodes::TIMEOUT_EXCEEDED);
+}
 }

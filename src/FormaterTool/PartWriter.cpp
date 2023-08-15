@@ -14,7 +14,6 @@
  */
 
 #include <FormaterTool/PartWriter.h>
-#include <FormaterTool/HDFSDumper.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTIdentifier.h>
@@ -125,7 +124,7 @@ void PartWriter::execute()
     getContext()->setCurrentTransaction(std::make_shared<CnchServerTransaction>(getContext(), record));
 
     /// prepare remote disk
-    HDFSConnectionParams params{HDFSConnectionParams::CONN_NNPROXY, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy()};
+    HDFSConnectionParams params = getContext()->getHdfsConnectionParams();
     std::shared_ptr<DiskByteHDFS> remote_disk = std::make_shared<DiskByteHDFS>("hdfs", dest_path, params);
 
     if (remote_disk->exists(uuid))

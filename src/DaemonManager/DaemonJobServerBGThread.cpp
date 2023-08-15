@@ -43,11 +43,12 @@ void DaemonJobServerBGThread::init()
 {
     if (getType() == CnchBGThreadType::Consumer)
         fixKafkaActiveStatuses(this);
-    background_jobs = fetchCnchBGThreadStatus();
     status_persistent_store =
         std::make_unique<BGJobStatusInCatalog::CatalogBGJobStatusPersistentStoreProxy>(getContext()->getCnchCatalog(), type);
     bg_job_executor = std::make_unique<BackgroundJobExecutor>(*getContext(), getType());
     target_server_calculator = std::make_unique<TargetServerCalculator>(*getContext(), getType(), getLog());
+    /// fetchCnchBGThreadStatus must be called after initialisation of status_persistent_store and etc
+    background_jobs = fetchCnchBGThreadStatus();
     DaemonJob::init();
 }
 

@@ -9,8 +9,9 @@ First step, at the root directory of the source code, rm folder `build_docker` i
 For example to build a deb package:
 
 ``` sh
-mkdir deb/test_output/
-./packager --output-dir deb/test_output/ --package-type deb --docker-image-version 0.1 --ccache_dir=/data01/minh.dao/.ccache_for_docker --version 0.1.1.1
+mkdir -p deb/test_output/
+mkdir -p /data01/$USER/.ccache_for_docker
+./packager --output-dir deb/test_output/ --package-type deb --docker-image-version 0.1 --ccache_dir=/data01/$USER/.ccache_for_docker --version 0.1.1.1
 ls -l deb/test_output/
 ```
 

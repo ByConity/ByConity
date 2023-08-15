@@ -34,6 +34,7 @@
 #include <CloudServices/CnchDataWriter.h>
 #include <CloudServices/DedupWorkerManager.h>
 #include <CloudServices/DedupWorkerStatus.h>
+#include <Catalog/CatalogUtils.h>
 #include <WorkerTasks/ManipulationType.h>
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
 #include <Storages/PartCacheManager.h>
@@ -214,7 +215,7 @@ void CnchServerServiceImpl::finishTransaction(
 
         try
         {
-            global_context.getCnchTransactionCoordinator().finishTransaction(request->txn_id());
+            global_context.getCnchTransactionCoordinator().finishTransaction(request->txn_id(), true);
 
             LOG_TRACE(log, "Finish transaction by request: {}\n", request->txn_id());
         }

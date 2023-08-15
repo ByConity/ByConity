@@ -74,6 +74,7 @@ void PlanSegmentManagerRpcService::executeQuery(
             auto named_session = context->acquireNamedCnchSession(txn_id, {}, true);
             query_context = Context::createCopy(named_session->context);
             query_context->setSessionContext(named_session->context);
+            query_context->setTemporaryTransaction(txn_id, request->primary_txn_id());
         }
         else
         {

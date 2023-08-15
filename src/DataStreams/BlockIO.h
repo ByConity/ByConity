@@ -27,6 +27,7 @@
 #include <memory>
 
 #include <Processors/QueryPipeline.h>
+#include <Client/Connection.h>
 
 
 namespace DB
@@ -63,9 +64,9 @@ struct BlockIO
     /// When it is true, don't bother sending any non-empty blocks to the out stream
     bool null_format = false;
 
-    Stopwatch watch;
-
     ConnectionPtr remote_execution_conn;
+
+    Stopwatch watch;
 
     /// Call these functions if you want to log the request.
     void onFinish()

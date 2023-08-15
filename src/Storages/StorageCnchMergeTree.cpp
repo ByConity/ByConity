@@ -610,10 +610,8 @@ static void touchActiveTimestampForInsertSelectQuery(const ASTInsertQuery & inse
 
     ASTs related_tables;
     bool has_table_func = false;
-    if (auto * select_query = insert_query.select->as<ASTSelectQuery>())
-        select_query->collectAllTables(related_tables, has_table_func);
-    else if (auto * select_with_union = insert_query.select->as<ASTSelectWithUnionQuery>())
-        select_with_union->collectAllTables(related_tables, has_table_func);
+    if (const auto * select = insert_query.select.get())
+        ASTSelectQuery::collectAllTables(select, related_tables, has_table_func);
 
     for (auto & db_and_table_ast : related_tables)
     {
@@ -973,7 +971,7 @@ ServerDataPartsVector StorageCnchMergeTree::getAllParts(ContextPtr local_context
             LOG_DEBUG(log, "Current transaction is secondary transaction, result may include uncommited data");
             all_parts = local_context->getCnchCatalog()->getAllServerDataParts(shared_from_this(), {0}, local_context.get());
             /// Fillter by commited parts and parts written by same explicit transaction
-            filterPartsInExplicitTransaction(all_parts, local_context);
+            all_parts = filterPartsInExplicitTransaction(all_parts, local_context);
         }
         else
         {
@@ -1009,7 +1007,7 @@ ServerDataPartsVector StorageCnchMergeTree::getAllPartsInPartitions(
             all_parts = local_context->getCnchCatalog()->getServerDataPartsInPartitions(
                 shared_from_this(), pruned_partitions, {0}, local_context.get());
             /// Fillter by commited parts and parts written by same explicit transaction
-            filterPartsInExplicitTransaction(all_parts, local_context);
+            all_parts = filterPartsInExplicitTransaction(all_parts, local_context);
         }
         else
         {
@@ -1390,11 +1388,11 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
         });
 }
 
-void StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
+ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
 {
     Int64 primary_txn_id = local_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();
     TxnTimestamp start_time = local_context->getCurrentTransaction()->getStartTime();
-
+    ServerDataPartsVector target_parts;
     std::map<TxnTimestamp, bool> success_secondary_txns;
     auto check_success_txn = [&success_secondary_txns, this](const TxnTimestamp & txn_id) -> bool {
         if (auto it = success_secondary_txns.find(txn_id); it != success_secondary_txns.end())
@@ -1403,12 +1401,17 @@ void StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVecto
         success_secondary_txns.emplace(txn_id, record.status() == CnchTransactionStatus::Finished);
         return record.status() == CnchTransactionStatus::Finished;
     };
-    std::erase_if(data_parts, [&](const auto & part) {
-        return !(
-            part->info().mutation == primary_txn_id && part->part_model_wrapper->part_model->has_secondary_txn_id()
-            && check_success_txn(part->part_model_wrapper->part_model->secondary_txn_id()));
+    std::for_each(data_parts.begin(), data_parts.end(), [&](const auto & part)
+    {
+        if (part->info().mutation == primary_txn_id
+            && part->part_model_wrapper->part_model->has_secondary_txn_id()
+            && check_success_txn(part->part_model_wrapper->part_model->secondary_txn_id()))
+            target_parts.push_back(part);
     });
     getCommittedServerDataParts(data_parts, start_time, &(*local_context->getCnchCatalog()));
+    std::move(data_parts.begin(), data_parts.end(), std::back_inserter(target_parts));
+    return target_parts;
+
 }
 
 namespace

@@ -2977,9 +2977,9 @@ namespace Catalog
     }
 
 
-    bool Catalog::writeFilesysLock(TxnTimestamp txn_id, const String & dir, const String & db, const String & table)
+    TxnTimestamp Catalog::writeFilesysLock(TxnTimestamp txn_id, const String & dir, const String & db, const String & table)
     {
-        bool res;
+        TxnTimestamp res;
         runWithMetricSupport(
             [&] {
                 if (dir.empty() || db.empty() || table.empty())
@@ -3006,16 +3006,19 @@ namespace Catalog
 
                 while (!cur_dir.empty())
                 {
-                    if (getFilesysLock(cur_dir))
+                    if (auto lk = getFilesysLock(cur_dir))
                     {
-                        LOG_DEBUG(log, "{} is locked, cannot lock {}", cur_dir, normalized_dir);
-                        res = false;
-                        return;
+                        LOG_DEBUG(log, "{} is locked, cannot lock {} because it is locked by transaction {}", cur_dir, normalized_dir, lk->txn_id());
+                        res = lk->txn_id();
+                        break;
                     }
                     get_parent_dir(cur_dir);
                 }
-                meta_proxy->writeFilesysLock(name_space, txn_id, normalized_dir, db, table);
-                res = true;
+                if (!res)
+                {
+                    meta_proxy->writeFilesysLock(name_space, txn_id, normalized_dir, db, table);
+                    res = txn_id;
+                }
             },
             ProfileEvents::WriteFilesysLockSuccess,
             ProfileEvents::WriteFilesysLockFailed);
@@ -4173,7 +4176,7 @@ namespace Catalog
         {
             ASTs tables;
             bool has_table_func = false;
-            create_ast->select->collectAllTables(tables, has_table_func);
+            ASTSelectQuery::collectAllTables(create_ast->select, tables, has_table_func);
             if (!tables.empty())
             {
                 std::unordered_set<String> table_set{};

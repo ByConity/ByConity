@@ -23,6 +23,7 @@
 #include <Client/Connection.h>
 #include "common/logger_useful.h"
 #include <Common/Config/VWCustomizedSettings.h>
+#include <Common/Exception.h>
 #include <Common/PODArray.h>
 #include <Common/ThreadProfileEvents.h>
 #include <Common/formatReadable.h>
@@ -37,6 +38,8 @@
 
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/CountingBlockOutputStream.h>
+#include <DataStreams/RemoteBlockOutputStream.h>
+#include <DataStreams/RemoteBlockInputStream.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/RemoteBlockInputStream.h>
 #include <DataStreams/RemoteBlockOutputStream.h>
@@ -89,28 +92,32 @@
 #include <DataStreams/RemoteQueryExecutor.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/NamedSession.h>
+#include <Processors/QueryPipeline.h>
+#include <Interpreters/StorageID.h>
 #include <Interpreters/VirtualWarehouseHandle.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
-#include <Parsers/ASTSystemQuery.h>
-#include <Storages/StorageCloudMergeTree.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/SensitiveDataMasker.h>
-#include "DataStreams/IBlockStream_fwd.h"
-#include "DataStreams/NullBlockOutputStream.h"
-#include "IO/WriteBuffer.h"
-#include "IO/WriteBufferFromString.h"
-#include "Interpreters/Cluster.h"
-#include "Interpreters/Context_fwd.h"
-#include "Interpreters/DatabaseCatalog.h"
-#include "Interpreters/Set.h"
-#include "Parsers/IAST_fwd.h"
+#include <DataStreams/IBlockStream_fwd.h>
+#include <DataStreams/NullBlockOutputStream.h>
+#include <IO/ReadBuffer.h>
+#include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromString.h>
+#include <Interpreters/Cluster.h>
+#include <Interpreters/Context_fwd.h>
+#include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/InterpreterCommitQuery.h>
+#include <Interpreters/Set.h>
+#include <Parsers/IAST_fwd.h>
+#include <Storages/StorageCloudMergeTree.h>
 
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/InterpreterPerfectShard.h>
+
 
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SinkToOutputStream.h>
@@ -505,13 +512,17 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
     if (server_type == ServerType::cnch_server)
     {
         bool read_only = isReadOnlyTransaction(ast.get());
-        // auto session_txn = isQueryInInteractiveSession(context,ast) ? context.getSessionContext().getCurrentTransaction()->as<CnchExplicitTransaction>() : nullptr;
-        // TxnTimestamp primary_txn_id = session_txn ? session_txn->getTransactionID() : TxnTimestamp{0};
+        auto session_txn = isQueryInInteractiveSession(context,ast) ? context->getSessionContext()->getCurrentTransaction()->as<CnchExplicitTransaction>() : nullptr;
+        TxnTimestamp primary_txn_id = session_txn ? session_txn->getTransactionID() : TxnTimestamp{0};
         auto txn = context->getCnchTransactionCoordinator().createTransaction(
-            CreateTransactionOption().setContext(context).setReadOnly(read_only).setAsyncPostCommit(
-                context->getSettingsRef().async_post_commit));
+            CreateTransactionOption()
+                .setContext(context)
+                .setReadOnly(read_only)
+                .setForceCleanByDM(context->getSettingsRef().force_clean_transaction_by_dm)
+                .setAsyncPostCommit(context->getSettingsRef().async_post_commit)
+                .setPrimaryTransactionId(primary_txn_id));
         context->setCurrentTransaction(txn);
-        // if (session_txn && !read_only) session_txn->addStatement(queryToString(ast));
+        if (session_txn && !read_only) session_txn->addStatement(queryToString(ast));
         return txn;
     }
     else if (server_type == ServerType::cnch_worker)
@@ -554,9 +565,43 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
     return {};
 }
 
+void interpretSettings(ASTPtr ast, ContextMutablePtr context)
+{
+    if (const auto * select_query = ast->as<ASTSelectQuery>())
+    {
+        if (auto new_settings = select_query->settings())
+            InterpreterSetQuery(new_settings, context).executeForCurrentContext();
+    }
+    else if (const auto * select_with_union_query = ast->as<ASTSelectWithUnionQuery>())
+    {
+        if (!select_with_union_query->list_of_selects->children.empty())
+        {
+            // We might have an arbitrarily complex UNION tree, so just give
+            // up if the last first-order child is not a plain SELECT.
+            // It is flattened later, when we process UNION ALL/DISTINCT.
+            const auto * last_select = select_with_union_query->list_of_selects->children.back()->as<ASTSelectQuery>();
+            if (last_select && last_select->settings())
+            {
+                InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
+            }
+        }
+    }
+    else if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
+    {
+        if (query_with_output->settings_ast)
+            InterpreterSetQuery(query_with_output->settings_ast, context).executeForCurrentContext();
+    }
+    else if (const auto * insert_query = ast->as<ASTInsertQuery>())
+    {
+        if (insert_query->settings_ast)
+            InterpreterSetQuery(insert_query->settings_ast, context).executeForCurrentContext();
+    }
+}
+
 static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     const char * begin,
     const char * end,
+    ASTPtr input_ast,
     ContextMutablePtr context,
     bool internal,
     QueryProcessingStage::Enum stage,
@@ -618,11 +663,18 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
     try
     {
-        ParserQuery parser(end, ParserSettings::valueOf(settings.dialect_type));
-        parser.setContext(context.get());
+        if (input_ast == nullptr)
+        {
+            ParserQuery parser(end, ParserSettings::valueOf(context->getSettings().dialect_type));
+            parser.setContext(context.get());
 
-        /// TODO: parser should fail early when max_query_size limit is reached.
-        ast = parseQuery(parser, begin, end, "", max_query_size, settings.max_parser_depth);
+            /// TODO: parser should fail early when max_query_size limit is reached.
+            ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+        }
+        else
+        {
+            ast = input_ast;
+        }
         if (context->getServerType() == ServerType::cnch_server && context->getVWCustomizedSettings())
         {
             auto vw_name = tryGetVirtualWarehouseName(ast, context);
@@ -653,30 +705,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         /// Interpret SETTINGS clauses as early as possible (before invoking the corresponding interpreter),
         /// to allow settings to take effect.
-        if (const auto * select_query = ast->as<ASTSelectQuery>())
-        {
-            if (auto new_settings = select_query->settings())
-                InterpreterSetQuery(new_settings, context).executeForCurrentContext();
-        }
-        else if (const auto * select_with_union_query = ast->as<ASTSelectWithUnionQuery>())
-        {
-            if (!select_with_union_query->list_of_selects->children.empty())
-            {
-                // We might have an arbitrarily complex UNION tree, so just give
-                // up if the last first-order child is not a plain SELECT.
-                // It is flattened later, when we process UNION ALL/DISTINCT.
-                const auto * last_select = select_with_union_query->list_of_selects->children.back()->as<ASTSelectQuery>();
-                if (last_select && last_select->settings())
-                {
-                    InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
-                }
-            }
-        }
-        else if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
-        {
-            if (query_with_output->settings_ast)
-                InterpreterSetQuery(query_with_output->settings_ast, context).executeForCurrentContext();
-        }
+        if (input_ast == nullptr)
+            interpretSettings(ast, context);
 
         if (const auto * query_with_table_output = dynamic_cast<const ASTQueryWithTableAndOutput *>(ast.get()))
         {
@@ -685,9 +715,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         }
 
         auto * insert_query = ast->as<ASTInsertQuery>();
-
-        if (insert_query && insert_query->settings_ast)
-            InterpreterSetQuery(insert_query->settings_ast, context).executeForCurrentContext();
 
         if (insert_query && insert_query->data)
         {
@@ -714,6 +741,36 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         }
 
         throw;
+    }
+
+
+    /// NOTES: Interactive transaction session
+    /// 0. if query is ddl, commit the active transaction
+    /// 1. if this is non-write query, execute on local server
+    /// 2. if this is write query, need to create proxy transaction and include primary_txn_id and txn_id in query packet
+
+    if (isQueryInInteractiveSession(context, ast))
+    {
+        if (isDDLQuery(context, ast))
+        {
+            /// Commit the current explicit transaction
+            LOG_WARNING(&Poco::Logger::get("executeQuery"), "Receive DDL in interactive transaction session, will commit the session implicitly");
+            InterpreterCommitQuery(nullptr, context).execute();
+        }
+        else
+        {
+            auto host_ports = getTargetServer(context, ast);
+            if (!host_ports.empty() && !isLocalServer(host_ports.getRPCAddress(), std::to_string(context->getRPCPort())))
+            {
+                LOG_INFO(&Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.getTCPAddress());
+                /// TODO: currently, this called only for compability with formal query flow, may need more shophisticated logic
+                /// in the future
+                context->initializeExternalTablesIfSet();
+                executeQueryByProxy(context, host_ports, ast, res);
+                LOG_INFO(&Poco::Logger::get("executeQuery"), "Query execution on remote server done");
+                return std::make_tuple(ast, std::move(res));
+            }
+        }
     }
 
     setQuerySpecificSettings(ast, context);
@@ -811,6 +868,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         else
             /// reset Input callbacks if query is not INSERT SELECT
             context->resetInputCallbacks();
+
+        context->markReadFromClientFinished();
 
         auto interpreter = InterpreterFactory::get(ast, context, SelectQueryOptions(stage).setInternal(internal));
 
@@ -1048,25 +1107,27 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             auto query_id = context->getCurrentQueryId();
             /// Also make possible for caller to log successful query finish and exception during execution.
-            auto finish_callback = [elem,
-                                    context,
-                                    query,
-                                    ast,
-                                    log_queries,
-                                    log_queries_min_type = settings.log_queries_min_type,
-                                    log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
-                                    log_processors_profiles = settings.log_processors_profiles,
-                                    status_info_to_query_log,
-                                    query_id,
-                                    finish_current_transaction,
-                                    complex_query,
-                                    init_time](
-                                       IBlockInputStream * stream_in,
-                                       IBlockOutputStream * stream_out,
-                                       QueryPipeline * query_pipeline,
-                                       UInt64 runtime_latency) mutable {
-                finish_current_transaction(context);
-                QueryStatus * process_list_elem = context->getProcessListElement();
+            auto finish_callback
+                =
+                    [elem,
+                     context,
+                     query,
+                     ast,
+                     log_queries,
+                     log_queries_min_type = settings.log_queries_min_type,
+                     log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
+                     log_processors_profiles = settings.log_processors_profiles,
+                     status_info_to_query_log,
+                     query_id,
+                     finish_current_transaction,
+                     complex_query,
+                     init_time](
+                        IBlockInputStream * stream_in,
+                        IBlockOutputStream * stream_out,
+                        QueryPipeline * query_pipeline,
+                        UInt64 runtime_latency) mutable {
+                        finish_current_transaction(context);
+                        QueryStatus * process_list_elem = context->getProcessListElement();
 
                 if (!process_list_elem)
                     return;
@@ -1225,12 +1286,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 elem.used_table_functions = factories_info.table_functions;
                 elem.partition_ids = context->getPartitionIds();
 
-                if (log_queries && elem.type >= log_queries_min_type && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
-                {
-                    if (auto query_log = context->getQueryLog())
-                        query_log->add(elem);
-                }
-
                 if (log_processors_profiles)
                 {
                     auto processors_profile_log = context->getProcessorsProfileLog();
@@ -1277,6 +1332,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         }
                     }
                 }
+
 
                 if (auto opentelemetry_span_log = context->getOpenTelemetrySpanLog();
                     context->query_trace_context.trace_id != UUID() && opentelemetry_span_log)
@@ -1363,6 +1419,26 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 if (current_settings.calculate_text_stack_trace)
                     setExceptionStackTrace(elem);
+
+                bool throw_root_cause = false;
+                auto coordinator = MPPQueryManager::instance().getCoordinator(query_id);
+                if (coordinator)
+                {
+                    coordinator->updateSegmentInstanceStatus(RuntimeSegmentsStatus{
+                        .query_id = query_id,
+                        .segment_id = 0,
+                        .is_succeed = false,
+                        .message = elem.exception,
+                        .code = elem.exception_code});
+                    if (isAmbiguosError(elem.exception_code))
+                    {
+                        auto query_status = coordinator->waitUntilFinish(elem.exception_code, elem.exception);
+                        throw_root_cause = query_status.error_code != elem.exception_code;
+                        elem.exception_code = query_status.error_code;
+                        elem.exception = query_status.summarized_error_msg;
+                    }
+                }
+
                 logException(context, elem);
 
                 /// In case of exception we log internal queries also
@@ -1415,6 +1491,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         .is_succeed = false,
                         .message = elem.exception,
                         .code = elem.exception_code});
+                if (throw_root_cause)
+                {
+                    throw Exception(elem.exception, elem.exception_code);
+                }
             };
 
             res.finish_callback = std::move(finish_callback);
@@ -1453,7 +1533,30 @@ executeQuery(const String & query, ContextMutablePtr context, bool internal, Que
     ASTPtr ast;
     BlockIO streams;
     std::tie(ast, streams)
-        = executeQueryImpl(query.data(), query.data() + query.size(), context, internal, stage, !may_have_embedded_data, nullptr);
+        = executeQueryImpl(query.data(), query.data() + query.size(), nullptr, context, internal, stage, !may_have_embedded_data, nullptr);
+
+    if (const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
+    {
+        String format_name = ast_query_with_output->format ? getIdentifierName(ast_query_with_output->format) : context->getDefaultFormat();
+
+        if (format_name == "Null")
+            streams.null_format = true;
+    }
+
+    return streams;
+}
+
+BlockIO executeQuery(
+    const String & query,
+    ASTPtr ast,
+    ContextMutablePtr context,
+    bool internal,
+    QueryProcessingStage::Enum stage,
+    bool may_have_embedded_data)
+{
+    BlockIO streams;
+    std::tie(ast, streams)
+        = executeQueryImpl(query.data(), query.data() + query.size(), ast, context, internal, stage, !may_have_embedded_data, nullptr);
 
     if (const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
     {
@@ -1530,16 +1633,29 @@ void executeQuery(
     ASTPtr ast;
     BlockIO streams;
 
-    std::tie(ast, streams) = executeQueryImpl(begin, end, context, internal, QueryProcessingStage::Complete, may_have_tail, &istr);
+    ParserQuery parser(end, ParserSettings::valueOf(context->getSettings().dialect_type));
+    parser.setContext(context.get());
 
-    if (!streams.out && isAsyncMode(context))
+    /// TODO: parser should fail early when max_query_size limit is reached.
+    ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+    interpretSettings(ast, context);
+
+    auto * insert_query = ast->as<ASTInsertQuery>();
+
+    if (!(insert_query && insert_query->data) && context->isAsyncMode())
     {
-        executeHttpQueryInAsyncMode(std::move(streams), ast, context, ostr, output_format_settings, set_result_details);
+        String query(begin, end);
+        executeHttpQueryInAsyncMode(query, ast, context, ostr, &istr, may_have_tail, output_format_settings, set_result_details);
         return;
+    }
+    else
+    {
+        std::tie(ast, streams) = executeQueryImpl(begin, end, ast, context, internal, QueryProcessingStage::Complete, may_have_tail, &istr);
     }
 
     auto & pipeline = streams.pipeline;
 
+    std::exception_ptr exception;
     try
     {
         if (streams.out)
@@ -1677,102 +1793,154 @@ void executeQuery(
     }
     catch (...)
     {
-        streams.onException();
-        throw;
+        try
+        {
+            streams.onException();
+            exception = std::current_exception();
+        }
+        catch (...)
+        {
+            exception = std::current_exception();
+        }
+    }
+
+    if (exception)
+    {
+        std::rethrow_exception(exception);
     }
 
     streams.onFinish();
 }
 
-HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
+bool isQueryInInteractiveSession(const ContextPtr & context, [[maybe_unused]] const ASTPtr & query)
+{
+    return context->hasSessionContext() && (context->getSessionContext().get() != context.get())
+        && context->getSessionContext()->getCurrentTransaction() != nullptr;
+}
+
+bool isDDLQuery( [[maybe_unused]] const ContextPtr & context, const ASTPtr & query)
+{
+    auto * alter = query->as<ASTAlterQuery>();
+    if (alter)
+    {
+        auto * command_list = alter->command_list;
+        /// ATTACH PARTS FROM `dir` and ATTACH DETACHED PARTITION can be considered as DML
+        if (command_list && command_list->children.size() == 1
+            && (command_list->children[0]->as<ASTAlterCommand>()->attach_from_detached || command_list->children[0]->as<ASTAlterCommand>()->parts))
+            return false;
+
+        /// DROP PARTITION and DROP PARTITION WHERE without DETACH can be considered as DML
+        if (command_list && command_list->children.size() == 1
+            && ((command_list->children[0]->as<ASTAlterCommand>()->type == ASTAlterCommand::Type::DROP_PARTITION
+                 || command_list->children[0]->as<ASTAlterCommand>()->type == ASTAlterCommand::Type::DROP_PARTITION_WHERE)
+                && !command_list->children[0]->as<ASTAlterCommand>()->detach))
+            return false;
+
+        /// All other ATTACH considered DDL
+        return true;
+    }
+
+    auto * create = query->as<ASTCreateQuery>();
+    auto * drop = query->as<ASTDropQuery>();
+    auto * rename = query->as<ASTRenameQuery>();
+
+    return create || (drop && drop->kind != ASTDropQuery::Kind::Truncate) || rename;
+}
+
+HostWithPorts getTargetServer(const ContextPtr & context, ASTPtr &ast)
 {
     /// Only get target server for main table
-    String database, table;
-
-    if (const auto * alter = ast->as<ASTAlterQuery>())
+    StorageID table_id = StorageID::createEmpty();
+    if (auto * insert = ast->as<ASTInsertQuery>())
     {
-        database = alter->database;
-        table = alter->table;
+        table_id = insert->table_id;
     }
-    else if (const auto * select = ast->as<ASTSelectWithUnionQuery>())
+    else if (auto * alter = ast->as<ASTAlterQuery>())
     {
-        ASTs tables;
-        bool has_table_func = false;
-        select->collectAllTables(tables, has_table_func);
-        if (!has_table_func && !tables.empty())
-        {
-            // simplily use the first table if there are multiple tables used
-            DatabaseAndTableWithAlias db_and_table(tables[0]);
-            LOG_DEBUG(
-                &Poco::Logger::get("executeQuery"),
-                "Extract db and table {}.{} from the query.",
-                db_and_table.database,
-                db_and_table.table);
-            database = db_and_table.database;
-            table = db_and_table.table;
-        }
-        else
-            return {};
+        table_id = StorageID(alter->database, alter->table, alter->uuid);
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Get storage id: {}", table_id.getNameForLogs());
+    }
+    else if (auto * drop = ast->as<ASTDropQuery>())
+    {
+        table_id = StorageID(drop->database, drop->table, drop->uuid);
     }
     else
+    {
+        /// TODO: DDL query should auto commit?
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Executing query at local server");
         return {};
+    }
 
-    if (database.empty())
-        database = context->getCurrentDatabase();
+    if (table_id.database_name.empty())
+    {
+        table_id.database_name = context->getCurrentDatabase();
+    }
 
-    if (database == "system")
-        return {};
+    auto table = DatabaseCatalog::instance().getTable(table_id, context);
 
-    auto table_id = context->getCnchCatalog()->getTableIDByName(database, table);
-    if (!table_id)
-        throw Exception("Table " + database + "." + table + " not found in catalog", ErrorCodes::UNKNOWN_TABLE);
+    if (table_id.database_name == "system") return {};
 
     auto topology_master = context->getCnchTopologyMaster();
-    auto storage = context->getCnchCatalog()->getTable(*context, database, table, TxnTimestamp::maxTS());
-    return topology_master->getTargetServer(table_id->uuid(), storage->getServerVwName(), context->getTimestamp(), false);
+
+    return topology_master->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table_id.server_vw_name, false);
 }
 
 void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
 {
-    // Todo: support explicit transaction
-    res.finish_callback = [&](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *, UInt64) {
+    /// Create a proxy transaction for insert/alter query
+    auto & coordinator = context->getCnchTransactionCoordinator();
+    auto primary_txn_id = context->getSessionContext()->getCurrentTransaction()->getTransactionID();
+    auto proxy_txn = coordinator.createProxyTransaction(server, primary_txn_id);
+    context->setCurrentTransaction(proxy_txn);
+    context->getSessionContext()->getCurrentTransaction()->as<CnchExplicitTransaction>()->addStatement(queryToString(ast));
+    /// Anyway, on finish and exception, we need to finish the proxy transaction
+    res.finish_callback = [proxy_txn](IBlockInputStream * , IBlockOutputStream *, QueryPipeline *, UInt64)
+    {
         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
+        proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
     };
-    res.exception_callback = [&](int) { LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server"); };
-
+    res.exception_callback = [proxy_txn](int)
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server");
+        proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
+    };
     /// Create connection to host
-    const auto & query_client_info = context->getClientInfo();
+    auto query_client_info = context->getClientInfo();
+    query_client_info.client_type = ClientInfo::ClientType::CNCH_SERVER;
     auto settings = context->getSettingsRef();
     res.remote_execution_conn = std::make_shared<Connection>(
-        server.getHost(),
-        server.tcp_port,
+        server.getHost(), server.tcp_port,
         context->getCurrentDatabase(), /*default_database_*/
-        query_client_info.current_user,
-        query_client_info.current_password,
+        query_client_info.current_user, query_client_info.current_password,
         "", /*cluster_*/
         "", /*cluster_secret*/
         "server", /*client_name_*/
-        Protocol::Compression::Enable,
+        Protocol::Compression::Disable,
         Protocol::Secure::Disable);
 
-    String query = queryToString(ast);
-    LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
-    Block header;
-    if (ast->as<ASTSelectWithUnionQuery>())
-        header = InterpreterSelectWithUnionQuery(ast, context, SelectQueryOptions(QueryProcessingStage::Complete)).getSampleBlock();
-    Pipes remote_pipes;
-    auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(*res.remote_execution_conn, query, header, context);
-    remote_query_executor->setPoolMode(PoolMode::GET_ONE);
-    remote_pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, true, false, false, true));
-    remote_pipes.back().addInterpreterContext(context);
+    res.remote_execution_conn->setDefaultDatabase(context->getCurrentDatabase());
 
-    auto plan = std::make_unique<QueryPlan>();
-    auto read_from_remote = std::make_unique<ReadFromPreparedSource>(Pipe::unitePipes(std::move(remote_pipes)));
-    read_from_remote->setStepDescription("Read from remote server");
-    plan->addStep(std::move(read_from_remote));
-    res.pipeline = std::move(
-        *plan->buildQueryPipeline(QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
-    res.pipeline.addInterpreterContext(context);
+    String query = queryToString(ast);
+    auto * insert_ast = ast->as<ASTInsertQuery>();
+    bool wait_insert_data = insert_ast && !insert_ast->select && !insert_ast->in_file;
+    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings).getSaturated(settings.max_execution_time);
+    if (wait_insert_data)
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as INSERT VALUES query");
+        res.out = std::make_shared<DB::RemoteBlockOutputStream>(*res.remote_execution_conn, timeouts, query, settings, query_client_info, context);
+    }
+    else
+    {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
+        auto remote_stream = std::make_shared<DB::RemoteBlockInputStream>(*res.remote_execution_conn, query, Block(), context);
+        remote_stream->setPoolMode(PoolMode::GET_ONE);
+        remote_stream->readPrefix();
+        while (Block block = remote_stream->read());
+        remote_stream->readSuffix();
+        /// Get the extended profile info which is mainly for INSERT SELECT/INFILE
+        context->setExtendedProfileInfo(remote_stream->getExtendedProfileInfo());
+        res.in = std::move(remote_stream);
+    }
 }
 
 bool isAsyncMode(ContextMutablePtr context)
@@ -1808,10 +1976,12 @@ void updateAsyncQueryStatus(
 }
 
 void executeHttpQueryInAsyncMode(
-    BlockIO s,
+    String & query,
     ASTPtr ast,
     ContextMutablePtr c,
     WriteBuffer & ostr,
+    ReadBuffer * istr,
+    bool has_query_tail,
     const std::optional<FormatSettings> & f,
     std::function<void(const String &, const String &, const String &, const String &)> set_result_details)
 {
@@ -1824,12 +1994,26 @@ void executeHttpQueryInAsyncMode(
             c->getClientInfo().current_query_id, "text/plain; charset=UTF-8", format_name, DateLUT::instance().getTimeZone());
 
     c->getAsyncQueryManager()->insertAndRun(
-        std::move(s),
+        query,
         ast,
         c,
-        ostr,
-        f,
-        [](BlockIO streams, ASTPtr ast, ContextMutablePtr context, const std::optional<FormatSettings> & output_format_settings) {
+        istr,
+        [c, &ostr, &f](const String & id) {
+            MutableColumnPtr table_column_mut = ColumnString::create();
+            table_column_mut->insert(id);
+            Block res;
+            res.insert(ColumnWithTypeAndName(std::move(table_column_mut), std::make_shared<DataTypeString>(), "async_query_id"));
+
+            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(c->getDefaultFormat(), ostr, res, c, {}, f);
+
+            out->write(res);
+            out->flush();
+        },
+        [f, has_query_tail](String & query, ASTPtr ast, ContextMutablePtr context, ReadBuffer * istr) {
+            ASTPtr ast_output;
+            BlockIO streams;
+            std::tie(ast_output, streams) = executeQueryImpl(
+                query.data(), query.data() + query.size(), ast, context, false, QueryProcessingStage::Complete, has_query_tail, istr);
             auto & pipeline = streams.pipeline;
             try
             {
@@ -1877,7 +2061,7 @@ void executeHttpQueryInAsyncMode(
                         : context->getDefaultFormat();
 
                     BlockOutputStreamPtr out = write_to_hdfs ? FormatFactory::instance().getOutputStreamParallelIfPossible(
-                                                   format_name, *out_buf, streams.in->getHeader(), context, {}, output_format_settings)
+                                                   format_name, *out_buf, streams.in->getHeader(), context, {}, f)
                                                              : std::make_shared<NullBlockOutputStream>(Block{});
 
                     copyData(
@@ -1901,7 +2085,7 @@ void executeHttpQueryInAsyncMode(
                         pipeline.addSimpleTransform([](const Block & header) { return std::make_shared<MaterializingTransform>(header); });
 
                         auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                            "Null", *new WriteBuffer(nullptr, 0), pipeline.getHeader(), context, {}, output_format_settings);
+                            "Null", *new WriteBuffer(nullptr, 0), pipeline.getHeader(), context, {}, f);
 
                         pipeline.setOutputFormat(std::move(out));
                     }
@@ -1925,4 +2109,5 @@ void executeHttpQueryInAsyncMode(
             streams.onFinish();
         });
 }
+
 }

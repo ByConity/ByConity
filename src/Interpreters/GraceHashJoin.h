@@ -73,7 +73,7 @@ public:
     void joinBlock(Block & block, std::shared_ptr<ExtraBlock> & not_processed) override;
 
     void setTotals(const Block & block) override;
-    const Block & getTotals() const override {return {};}
+    const Block & getTotals() const override { static Block empty_block; return empty_block; }
 
     size_t getTotalRowCount() const override;
     size_t getTotalByteCount() const override;

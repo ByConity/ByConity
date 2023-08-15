@@ -179,7 +179,7 @@ UndoResourceNames integrateResources(const UndoResources & resources)
         {
             /// try to get part name from dst path
             String dst_path = resource.placeholders(1);
-            if (dst_path.empty() && dst_path.back() == '/')
+            if (!dst_path.empty() && dst_path.back() == '/')
                 dst_path.pop_back();
             String part_name = dst_path.substr(dst_path.find_last_of('/') + 1);
             if (MergeTreePartInfo::tryParsePartName(part_name, nullptr, MERGE_TREE_CHCH_DATA_STORAGTE_VERSION))

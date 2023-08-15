@@ -52,6 +52,8 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
 
     auto root_id = root->getGroupId();
     auto single = Property{Partitioning{Partitioning::Handle::SINGLE}};
+    if (context->getSettingsRef().offloading_with_query_plan)
+        single.setEnforceNotMatch(true);
 
     auto actual_property = optimize(root_id, cascades_context, single);
     LOG_DEBUG(cascades_context.getLog(), cascades_context.getInfo());

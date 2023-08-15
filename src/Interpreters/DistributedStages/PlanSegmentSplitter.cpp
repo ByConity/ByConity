@@ -141,8 +141,13 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
         input->setExchangeMode(step->getExchangeMode());
         // TODO: Not support one ExchangeStep with multi children yet(multi children can't share one exchange id), we may need to support it later.
         input->setExchangeId(plan_segment->getPlanSegmentOutputs().back()->getExchangeId());
-
+        input->setKeepOrder(step->needKeepOrder());
         inputs.push_back(input);
+
+        if (auto *output = dynamic_cast<PlanSegmentOutput *>(plan_segment->getPlanSegmentOutput().get()))
+        {
+            output->setKeepOrder(step->needKeepOrder());
+        }
 
         split_context.inputs.emplace_back(input);
         split_context.children.emplace_back(plan_segment);

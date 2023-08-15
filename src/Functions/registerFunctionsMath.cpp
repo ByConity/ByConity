@@ -32,6 +32,7 @@ void registerFunctionLog2(FunctionFactory & factory);
 void registerFunctionLog1p(FunctionFactory & factory);
 void registerFunctionExp10(FunctionFactory & factory);
 void registerFunctionLog10(FunctionFactory & factory);
+void registerFunctionLogWithBase(FunctionFactory & factory);
 void registerFunctionSqrt(FunctionFactory & factory);
 void registerFunctionCbrt(FunctionFactory & factory);
 void registerFunctionErf(FunctionFactory & factory);
@@ -72,6 +73,7 @@ void registerFunctionsMath(FunctionFactory & factory)
     registerFunctionLog1p(factory);
     registerFunctionExp10(factory);
     registerFunctionLog10(factory);
+    registerFunctionLogWithBase(factory);
     registerFunctionSqrt(factory);
     registerFunctionCbrt(factory);
     registerFunctionErf(factory);

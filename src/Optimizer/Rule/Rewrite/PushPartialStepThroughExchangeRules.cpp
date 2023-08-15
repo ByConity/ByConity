@@ -30,7 +30,7 @@
 namespace DB
 {
 
-NameSet PushPartialAggThroughExchange::BLOCK_AGGS{"pathCount", "attributionAnalysis", "attributionCorrelationMerge"};
+NameSet PushPartialAggThroughExchange::BLOCK_AGGS{"pathCount", "attributionAnalysis", "attributionCorrelationFuse"};
 
 PatternPtr PushPartialAggThroughExchange::getPattern() const
 {

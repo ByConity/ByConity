@@ -69,22 +69,22 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             kind = ASTExplainQuery::ExplainKind::PlanSegment;
         else if (s_opt_plan.ignore(pos, expected))
             kind = ASTExplainQuery::ExplainKind::OptimizerPlan;
-        // else if (s_distributed.ignore(pos, expected))
-        //     kind = ASTExplainQuery::ExplainKind::Distributed;
-        // else if (s_analyze.ignore(pos, expected))
-        // {
-        //     if (s_distributed.ignore(pos, expected))
-        //         kind = ASTExplainQuery::ExplainKind::DistributedAnalyze;
-        //     else
-        //         kind = ASTExplainQuery::ExplainKind::LogicalAnalyze;
-        // }
-        else if (s_trace.ignore(pos, expected))
+        else if (s_distributed.ignore(pos, expected))
+            kind = ASTExplainQuery::ExplainKind::Distributed;
+        else if (s_analyze.ignore(pos, expected))
         {
-            if (s_rule.ignore(pos, expected))
-                kind = ASTExplainQuery::ExplainKind::TraceOptimizerRule;
+            if (s_distributed.ignore(pos, expected))
+                kind = ASTExplainQuery::ExplainKind::DistributedAnalyze;
             else
-                kind = ASTExplainQuery::ExplainKind::TraceOptimizer;
+                kind = ASTExplainQuery::ExplainKind::LogicalAnalyze;
         }
+        // else if (s_trace.ignore(pos, expected))
+        // {
+        //     if (s_rule.ignore(pos, expected))
+        //         kind = ASTExplainQuery::ExplainKind::TraceOptimizerRule;
+        //     else
+        //         kind = ASTExplainQuery::ExplainKind::TraceOptimizer;
+        // }
     }
     else
         return false;

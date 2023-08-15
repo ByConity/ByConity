@@ -45,6 +45,33 @@ namespace ErrorCodes
 
 namespace
 {
+    String getObjectDefinitionFromCreateQueryForCnch(const ASTPtr & query)
+    {
+        ASTPtr query_clone = query->clone();
+        auto & create = query_clone->as<ASTCreateQuery &>();
+
+        /// We remove everything that is not needed for ATTACH from the query.
+        create.attach = false;
+        create.as_database.clear();
+        create.as_table.clear();
+        create.if_not_exists = false;
+        create.is_populate = false;
+        create.replace_view = false;
+        create.replace_table = false;
+        create.create_or_replace = false;
+
+        /// For views it is necessary to save the SELECT query itself, for the rest - on the contrary
+        if (!create.isView() && !create.is_materialized_view)
+            create.select = nullptr;
+
+        create.format = nullptr;
+        create.out_file = nullptr;
+
+        WriteBufferFromOwnString statement_buf;
+        formatAST(create, statement_buf, false);
+        writeChar('\n', statement_buf);
+        return statement_buf.str();
+    }
 
 void checkCreateIsAllowedInCnch(const ASTPtr & query)
 {
@@ -97,7 +124,8 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
     checkCreateIsAllowedInCnch(query);
 
     bool attach = query->as<ASTCreateQuery&>().attach;
-    CreateActionParams params = {table->getStorageID(), serializeAST(*query), attach, table->isDictionary()};
+
+    CreateActionParams params = {table->getStorageID(), getObjectDefinitionFromCreateQueryForCnch(query), attach, table->isDictionary()};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
     txn->commitV1();

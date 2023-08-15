@@ -51,6 +51,7 @@
     M(BackgroundMemoryTableSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for memory table threads, etc.") \
     M(BackgroundCNCHTopologySchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for topology related background threads.") \
     M(BackgroundQueueManagerSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for queue manager threads.") \
+    M(BackgroundRMHeartbeatSchedulePoolTask, "Number of active tasks in BackgroundRMHeartBeatSchedulePool. This pool is used for update worker status.") \
     M(CacheDictionaryUpdateQueueBatches, "Number of 'batches' (a set of keys) in update queue in CacheDictionaries.") \
     M(CacheDictionaryUpdateQueueKeys, "Exact number of keys in update queue in CacheDictionaries.") \
     M(DiskSpaceReservedForMerge, "Disk space reserved for currently running background merges. It is slightly more than the total size of currently merging parts.") \

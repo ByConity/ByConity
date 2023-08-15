@@ -103,7 +103,8 @@ std::vector<RulePtr> Rules::removeRedundantRules()
         std::make_shared<RemoveRedundantLimit>(),
         // std::make_shared<RemoveRedundantOuterJoin>()
         std::make_shared<RemoveRedundantTwoApply>(),
-    };
+        std::make_shared<RemoveRedundantAggregateWithReadNothing>(),
+        };
 }
 
 std::vector<RulePtr> Rules::pushAggRules()

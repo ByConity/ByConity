@@ -93,8 +93,10 @@ function stop_byconity() {
         docker stop -t 30 byconity-write-worker
     elif [ "$1" = "dm" ]; then
         docker stop -t 30 byconity-dm
+    elif [ "$1" = "rm" ]; then
+        docker stop -t 30 byconity-rm
     else
-        echo "valid argument stop tso, stop server, stop read_worker, stop write_worker, stop dm"
+        echo "valid argument stop tso, stop server, stop read_worker, stop write_worker, stop dm, stop rm"
     fi
 }
 
@@ -109,6 +111,8 @@ function start_byconity() {
         docker start byconity-write-worker
     elif [ "$1" = "dm" ]; then
         docker start byconity-dm
+    elif [ "$1" = "rm" ]; then
+        docker start byconity-rm
     elif [ "$1" = "cli" ]; then
         docker start -i byconity-cli
     else

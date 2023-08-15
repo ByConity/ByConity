@@ -472,13 +472,13 @@ void OptimizeInput::execute()
             GroupExprPtr remote_exchange;
             GroupExprPtr local_exchange;
             Property actual = output_prop;
-            if (!is_preferred
+            if ((!is_preferred
                 && !PropertyMatcher::matchNodePartitioning(
                     *context->getOptimizerContext().getContext(),
                     require.getNodePartitioningRef(),
                     output_prop.getNodePartitioning(),
                     *equivalences,
-                    output_prop.getConstants()))
+                    output_prop.getConstants())) || require.isEnforceNotMatch())
             {
                 // add remote exchange
                 remote_exchange

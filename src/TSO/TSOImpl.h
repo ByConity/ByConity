@@ -48,6 +48,7 @@ public:
     void setPhysicalTime(UInt64 time);
 
     void setIsLeader(bool is_leader_) { is_leader.store(is_leader_, std::memory_order_release); }
+    bool getIsLeader() { return is_leader.load(std::memory_order_acquire); }
 
     TSOClock getClock() const
     {

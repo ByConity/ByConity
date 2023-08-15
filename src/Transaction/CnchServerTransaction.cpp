@@ -256,7 +256,6 @@ TxnTimestamp CnchServerTransaction::commit()
                     ProfileEvents::increment(ProfileEvents::CnchTxnCommitted);
                     ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
                     LOG_DEBUG(log, "Successfully committed transaction {} at {}\n", txn_record.txnID().toUInt64(), commit_ts);
-                    //unlock();
                     return commit_ts;
                 }
                 else // CAS failed
@@ -424,7 +423,7 @@ void CnchServerTransaction::clean(TxnCleanTask & task)
 
             for (const auto & [uuid, resources] : undo_buffer)
             {
-                StoragePtr table = catalog->getTableByUUID(*getContext(), uuid, txn_id, true);
+                StoragePtr table = catalog->getTableByUUID(*global_context, uuid, txn_id, true);
                 auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
                 if (!storage)
                     throw Exception("Table is not of MergeTree class", ErrorCodes::LOGICAL_ERROR);

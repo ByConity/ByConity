@@ -227,10 +227,10 @@ BlockIO InterpreterKillQueryQuery::execute()
     {
             auto where_clause = DB::collectWhereORClausePredicate(query.where_expression, getContext());
             String query_id;
-            std::for_each(where_clause.begin(), where_clause.end(), [&query_id](const std::map<String, String> & wheres) {
+            std::for_each(where_clause.begin(), where_clause.end(), [&query_id](const std::map<String, Field> & wheres) {
                 auto iter = wheres.find("query_id");
                 if (iter != wheres.end())
-                    query_id = iter->second;
+                    query_id = iter->second.get<String>();
             });
             if (!query_id.empty())
                 getContext()->getQueueManager()->cancel(query_id);

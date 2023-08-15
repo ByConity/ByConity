@@ -1,6 +1,8 @@
+UID := $(shell id -u)
+GID := $(shell id -g)
 build: image
 	mkdir -p $(HOME)/.ccache
-	docker run --network=host --rm --workdir /server --volume $(realpath ../../..):/server --cap-add=SYS_PTRACE --mount=type=bind,source=$(HOME)/.ccache,destination=/ccache -e CCACHE_DIR=/ccache -it byconity/byconity-builder-centos:stable
+	docker run --network=host --user=$(UID):$(GID) --rm --workdir /server --volume $(realpath ../../..):/server --cap-add=SYS_PTRACE --mount=type=bind,source=$(HOME)/.ccache,destination=/ccache -e CCACHE_DIR=/ccache -it byconity/byconity-builder-centos:stable
 
 pull:
 	docker pull byconity/byconity-builder-centos:stable

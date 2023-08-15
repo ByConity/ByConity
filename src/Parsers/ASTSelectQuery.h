@@ -68,10 +68,10 @@ public:
                 return "SELECT";
             case Expression::TABLES:
                 return "TABLES";
+            case Expression::IMPLICITWHERE:
+                return "IMPLICIT WHERE";
             case Expression::PREWHERE:
                 return "PREWHERE";
-            case Expression::IMPLICITWHERE:
-                return "IMPLICITWHERE";
             case Expression::WHERE:
                 return "WHERE";
             case Expression::GROUP_BY:
@@ -94,6 +94,8 @@ public:
                 return "LIMIT LENGTH";
             case Expression::SETTINGS:
                 return "SETTINGS";
+            case Expression::ESCAPE:
+                return "ESCAPE";
         }
         return "";
     }
@@ -105,7 +107,7 @@ public:
 
     ASTPtr clone() const override;
 
-    void collectAllTables(std::vector<ASTPtr> &, bool &) const;
+    static void collectAllTables(const IAST * ast, std::vector<ASTPtr> &, bool &);
 
     bool distinct = false;
     bool group_by_with_totals = false;

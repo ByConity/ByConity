@@ -81,7 +81,7 @@ void PartToolkitBase::applySettings()
     if (pw_query.settings)
     {
         const ASTSetQuery & set_ast = pw_query.settings->as<ASTSetQuery &>();
-        for (auto & change : set_ast.changes)
+        for (const auto & change : set_ast.changes)
         {
             if (settings.has(change.name))
                 settings.set(change.name, change.value);
@@ -97,9 +97,23 @@ void PartToolkitBase::applySettings()
     }
 
     /// Init HDFS params.
+    ///
+    /// User can bypass nnproxy by passing a string to `hdfs_nnproxy` with prefixs like `hdfs://` or `cfs://`.
     HDFSConnectionParams hdfs_params
-        = HDFSConnectionParams(HDFSConnectionParams::CONN_NNPROXY, getContext()->getHdfsUser(), getContext()->getHdfsNNProxy());
+        = HDFSConnectionParams::parseFromMisusedNNProxyStr(getContext()->getHdfsNNProxy(), getContext()->getHdfsUser());
     getContext()->setHdfsConnectionParams(hdfs_params);
+
+    /// Register default HDFS file system as well in case of
+    /// lower level logic call `getDefaultHdfsFileSystem`.
+    /// Default values are the same as those on the ClickHouse server.
+    {
+        const int hdfs_max_fd_num = user_settings.count("hdfs_max_fd_num") ? user_settings["hdfs_max_fd_num"].safeGet<int>() : 100000;
+        const int hdfs_skip_fd_num = user_settings.count("hdfs_skip_fd_num") ? user_settings["hdfs_skip_fd_num"].safeGet<int>() : 100;
+        const int hdfs_io_error_num_to_reconnect
+            = user_settings.count("hdfs_io_error_num_to_reconnect") ? user_settings["hdfs_io_error_num_to_reconnect"].safeGet<int>() : 10;
+        registerDefaultHdfsFileSystem(hdfs_params, hdfs_max_fd_num, hdfs_skip_fd_num, hdfs_io_error_num_to_reconnect);
+    }
+
     /// Renders default config to initialize storage configurations.
     Poco::JSON::Object::Ptr params = new Poco::JSON::Object();
     params->set("source-path", pw_query.source_path->as<ASTLiteral &>().value.safeGet<String>());

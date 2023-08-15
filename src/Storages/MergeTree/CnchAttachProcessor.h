@@ -139,12 +139,19 @@ public:
         new_txn = txn;
     }
 
+
+    void setSourceDirectory(const String& dir)
+    {
+        src_directory = dir;
+    }
+
 private:
     const Context& query_ctx;
     const int expand_thread_pool_threshold;
     const int max_worker_threads;
 
     TransactionCnchPtr new_txn;
+    String src_directory;
 
     std::unique_ptr<ThreadPool> worker_pool;
 

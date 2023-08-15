@@ -38,4 +38,26 @@ void DiskCacheSettings::loadFromConfig(const Poco::Util::AbstractConfiguration &
     latest_disk_cache_dir = config.getString(config_prefix + ".disk_cache_dir", "disk_cache_v1");
 }
 
+std::string DiskCacheSettings::toString() const
+    {
+        return fmt::format(R"({{
+            "lru_max_size": {},
+            "random_drop_threshold": {},
+            "mapping_bucket_size": {},
+            "lru_update_interval": {},
+            "cache_shard_num": {},
+            "cache_dispatcher_per_disk": {},
+            "cache_loader_per_disk": {},
+            "cache_load_dispatcher_drill_down_level": {},
+            "cache_set_rate_limit": {},
+            "segment_size": {},
+            "hits_to_cache": {},
+            "stats_bucket_size": {},
+            "previous_disk_cache_dir": "{}",
+            "latest_disk_cache_dir": "{}"
+        }})", lru_max_size, random_drop_threshold, mapping_bucket_size, lru_update_interval,
+           cache_shard_num, cache_dispatcher_per_disk, cache_loader_per_disk,
+           cache_load_dispatcher_drill_down_level, cache_set_rate_limit, segment_size,
+           hits_to_cache, stats_bucket_size, previous_disk_cache_dir, latest_disk_cache_dir);
+    }
 }

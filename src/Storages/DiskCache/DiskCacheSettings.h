@@ -51,6 +51,8 @@ struct DiskCacheSettings
     // load previous folder cached data if it's not empty for compatible when data dir config is changed
     std::string previous_disk_cache_dir{};
     std::string latest_disk_cache_dir{"disk_cache_v1"};
+
+    std::string toString() const;
 };
 
 }

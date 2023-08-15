@@ -128,47 +128,33 @@ namespace
 BlockIO InterpreterExplainQuery::execute()
 {
     BlockIO res;
-    auto context = getContext();
-    // TODO: support explain analyze
-    #if 0  
-    const auto & ast = query->as<ASTExplainQuery &>();
-    if ((ast.getKind() == ASTExplainQuery::DistributedAnalyze || ast.getKind() == ASTExplainQuery::LogicalAnalyze)
-        && QueryUseOptimizerChecker::check(query, context))
-    {
-        if (!context->getSettingsRef().log_processors_profiles || !context->getSettingsRef().report_processors_profiles)
-        {
-            throw Exception("log_processors_profiles=1 and report_processors_profiles=1 must be set when using Explain Analyze", ErrorCodes::NOT_IMPLEMENTED);
-        }
-
-        std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> consumer
-            = std::make_shared<ExplainConsumer>(context->getCurrentQueryId());
-        ProfileLogHub<ProcessorProfileLogElement>::getInstance().initLogChannel(context->getCurrentQueryId(), consumer);
-        context->setProcessorProfileElementConsumer(consumer);
-        context->setIsExplainQuery(true);
-        try
-        {
-            res = explainAnalyze();
-        }
-        catch (...)
-        {
-            if (context->getProcessorProfileElementConsumer())
-                context->getProcessorProfileElementConsumer()->finish();
-        }
-
-        return res;
-    }
-#endif
 
     const auto & ast = query->as<ASTExplainQuery &>();
 
     if ((ast.getKind() == ASTExplainQuery::DistributedAnalyze || ast.getKind() == ASTExplainQuery::LogicalAnalyze)
         && QueryUseOptimizerChecker::check(query, getContext()))
     {
+        if (!getContext()->getSettingsRef().log_processors_profiles || !getContext()->getSettingsRef().report_processors_profiles)
+        {
+            getContext()->setSetting("log_processors_profiles", true);
+            getContext()->setSetting("report_processors_profiles", true);
+        }
         std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> consumer
             = std::make_shared<ExplainConsumer>(getContext()->getCurrentQueryId());
         ProfileLogHub<ProcessorProfileLogElement>::getInstance().initLogChannel(getContext()->getCurrentQueryId(), consumer);
         getContext()->setProcessorProfileElementConsumer(consumer);
         getContext()->setIsExplainQuery(true);
+        try
+        {
+            res = explainAnalyze();
+        }
+        catch (...)
+        {
+            if (getContext()->getProcessorProfileElementConsumer())
+                getContext()->getProcessorProfileElementConsumer()->finish();
+        }
+
+        return res;
     }
 
     res.in = executeImpl();
@@ -901,13 +887,10 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
     {
         explainPlanWithOptimizer(explain, *query_plan, buffer, context, single_line);
     }
-    // TODO: support explain
-    #if 0
     else if (explain.getKind() == ASTExplainQuery::ExplainKind::Distributed)
     {
         explainDistributedWithOptimizer(explain, *query_plan, buffer, context);
     }
-    #endif
     else if (explain.getKind() == ASTExplainQuery::ExplainKind::QueryPipeline)
     {
         explainPipelineWithOptimizer(explain, *query_plan, buffer, context);

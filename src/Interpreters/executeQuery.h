@@ -72,6 +72,14 @@ BlockIO executeQuery(
     bool may_have_embedded_data = false /// If insert query may have embedded data
 );
 
+BlockIO executeQuery(
+    const String & query,
+    ASTPtr ast,
+    ContextMutablePtr context,
+    bool internal,
+    QueryProcessingStage::Enum stage,
+    bool may_have_embedded_data);
+
 /// Old interface with allow_processors flag. For compatibility.
 BlockIO executeQuery(
     const String & query,
@@ -82,19 +90,32 @@ BlockIO executeQuery(
     bool allow_processors /// If can use processors pipeline
 );
 
+/// For interactive transaction
+
+/// Return true if current query is in an interactive transaction session
+bool isQueryInInteractiveSession(const ContextPtr & context, [[maybe_unused]] const ASTPtr & query = nullptr);
+
+/// Return true if query is ddl
+bool isDDLQuery(const ContextPtr & context, const ASTPtr & query);
+
 /// Get target server for a query, can be localhost
-HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast);
+HostWithPorts getTargetServer(const ContextPtr & context, ASTPtr & ast);
 
 /// Execute the query on the target server.
 void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res);
 
+
+/// Async query execution
+
 bool isAsyncMode(ContextMutablePtr context);
 
 void executeHttpQueryInAsyncMode(
-    BlockIO s,
+    String & query,
     ASTPtr ast,
     ContextMutablePtr c,
     WriteBuffer & ostr,
+    ReadBuffer * istr,
+    bool has_query_tail,
     const std::optional<FormatSettings> & f,
     std::function<void(const String &, const String &, const String &, const String &)> set_result_details);
 
@@ -104,4 +125,6 @@ void updateAsyncQueryStatus(
     const String & query_id,
     const AsyncQueryStatus::Status & status,
     const String & error_msg = "");
+
+void interpretSettings(ASTPtr ast, ContextMutablePtr context);
 }

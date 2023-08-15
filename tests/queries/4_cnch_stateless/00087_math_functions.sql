@@ -26,6 +26,12 @@ select pow(2, 1) = 2;
 select sum(abs(pow(x, 1) - x) < 1.0e-9) / count() from system.one array join range(1000000) as x;
 select sum(pow(x, 2) = x * x) / count() from system.one array join range(10000) as x;
 
+SET dialect_type='MYSQL';
+SELECT pow(1.2,3.4)=1.858729691979481;
+SET dialect_type='ANSI';
+SELECT pow(1.2,3.4)=1.858729691979481;
+SET dialect_type='CLICKHOUSE';
+
 select tgamma(0) = inf;
 select tgamma(1) = 1;
 select tgamma(2) = 1;
@@ -81,6 +87,18 @@ select acos(-1) = pi();
 
 select atan(0) = 0;
 select atan(1) = pi() / 4;
+
+select atan2(0, 1) = 0;
+select atan2(0, 2) = 0;
+select atan2(1, 0) = pi() / 2;
+select atan2(1, 1) = pi() / 4;
+select atan2(-1, -1) = -3 * pi() / 4;
+
+SET dialect_type='MYSQL';
+SELECT atan2(0.5,0.3)=1.0303768265243125;
+SET dialect_type='ANSI';
+SELECT atan2(0.5,0.3)=1.0303768265243125;
+SET dialect_type='CLICKHOUSE';
 
 select erf(0) = 0;
 select erf(-10) = -1;

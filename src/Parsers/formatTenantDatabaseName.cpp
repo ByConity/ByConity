@@ -11,14 +11,20 @@ namespace ErrorCodes
     extern const int THERE_IS_NO_SESSION;
 }
 
-static const Context* getQueryContext()
+static String getTenantId()
 {
-    /*
-        It should be the global session context. Use thread-local query context instead.
-    */
-    if (CurrentThread::isInitialized())
-        return CurrentThread::get().getQueryContext().get();
-    return nullptr;
+    String empty_result;
+    if (!CurrentThread::isInitialized())
+        return empty_result;
+    const Context *context = CurrentThread::get().getQueryContext().get();
+    if (context)
+    {
+        if (!context->getTenantId().empty())
+            return context->getTenantId();
+        else if (!context->getSettings().tenant_id.toString().empty())
+            return context->getSettings().tenant_id.toString();
+    }
+    return CurrentThread::get().getTenantId();
 }
 
 static String internal_databases[] = {
@@ -40,19 +46,30 @@ static bool isInternalDatabaseName(const String& database_name)
 //Format pattern {tenant_id}.{database_name}
 static String formatTenantDatabaseNameImpl(const String & database_name, char separator = '.')
 {
-    auto query_context = getQueryContext();
-    if (!query_context)
-        return database_name;
-    const String *tenant_id = &query_context->getTenantId();
-    if (!tenant_id->empty() && !isInternalDatabaseName(database_name)
-     && database_name.find(*tenant_id) != 0)
+    auto tenant_id = getTenantId();
+    if (!tenant_id.empty() && !isInternalDatabaseName(database_name)
+     && database_name.find(tenant_id) != 0)
     {
-        String result = *tenant_id;
+        String result = tenant_id;
         result += separator;
         result += database_name;
         return result;
     }
     return database_name;
+}
+
+//Format pattern {tenant_id}.{username}
+static String formatTenantUserNameImpl(const String & user_name, char separator = '`')
+{
+    auto tenant_id = getTenantId();
+    if (!tenant_id.empty() && user_name.find(tenant_id) != 0)
+    {
+        String result = tenant_id;
+        result += separator;
+        result += user_name;
+        return result;
+    }
+    return user_name;
 }
 
 //Format pattern {tenant_id}.{database_name}
@@ -70,20 +87,24 @@ String formatTenantDefaultDatabaseName(const String & database_name)
 // {tenant_id}.{original_database_name}
 String getOriginalDatabaseName(const String & tenant_database_name)
 {
-    auto query_context = getQueryContext();
-    if (!query_context)
-        return tenant_database_name;
-
-    const String *tenant_id = &query_context->getTenantId();
-    if (tenant_id->empty())
-        tenant_id = &query_context->getSettings().tenant_id.toString();
-    if (!tenant_id->empty()) {
-        auto size = tenant_id->size();
+    auto tenant_id = getTenantId();
+    if (!tenant_id.empty()) {
+        auto size = tenant_id.size();
         if (tenant_database_name.size() > size + 1 && tenant_database_name[size] == '.'
-            && memcmp(tenant_id->data(),tenant_database_name.data(), size) == 0)
+            && memcmp(tenant_id.data(),tenant_database_name.data(), size) == 0)
             return tenant_database_name.substr(size + 1);
     }
     return tenant_database_name;
+}
+
+void pushTenantId(const String &tenant_id)
+{
+    CurrentThread::get().pushTenantId(tenant_id);
+}
+
+void popTenantId()
+{
+    CurrentThread::get().popTenantId();
 }
 
 }

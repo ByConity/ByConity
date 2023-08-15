@@ -171,6 +171,8 @@ public:
         txn_cleaner->finalize();
     }
 
+    void addTransaction(const TransactionCnchPtr & txn);
+
 private:
     void eraseActiveTimestamp(const TransactionCnchPtr & txn);
 

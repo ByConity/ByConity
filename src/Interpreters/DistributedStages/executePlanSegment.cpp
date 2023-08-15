@@ -164,6 +164,7 @@ void executePlanSegmentRemotely(
 
     // Set cnch Transaction id as seesion id
     request.set_txn_id(context->getCurrentTransactionID().toUInt64());
+    request.set_primary_txn_id(context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64());
 
     WriteBufferFromBrpcBuf write_buf;
     plan_segment.serialize(write_buf);

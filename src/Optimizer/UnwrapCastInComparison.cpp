@@ -15,6 +15,8 @@
 
 #include <Optimizer/UnwrapCastInComparison.h>
 
+#include <Analyzers/function_utils.h>
+#include <DataTypes/DataTypeFunction.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
@@ -23,6 +25,8 @@
 #include <Optimizer/LiteralEncoder.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Utils.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Common/typeid_cast.h>
 
 #include <cmath>
 
@@ -36,11 +40,9 @@ const static auto type_int64 = std::make_shared<DataTypeInt64>(); // NOLINT(cert
 ASTPtr unwrapCastInComparison(const ConstASTPtr & expression, ContextMutablePtr context, const NameToType & column_types)
 {
     UnwrapCastInComparisonVisitor unwrap_cast_visitor;
-    auto type_analyzer = TypeAnalyzer::create(context, column_types);
     UnwrapCastInComparisonContext unwrap_cast_context{
         .context = context,
         .column_types = column_types,
-        .type_analyzer = type_analyzer,
     };
     return ASTVisitorUtil::accept(expression->clone(), unwrap_cast_visitor, unwrap_cast_context);
 }
@@ -72,8 +74,9 @@ ASTPtr UnwrapCastInComparisonVisitor::visitASTFunction(ASTPtr & node, UnwrapCast
         return rewriteArgs(function, context, true);
 
     auto & cast_source = cast->arguments->as<ASTExpressionList &>().children[0];
-    auto source_type = context.type_analyzer.getType(cast_source);
-    auto target_type = context.type_analyzer.getType(left);
+    auto type_analyzer = TypeAnalyzer::create(context.context, context.column_types);
+    auto source_type = type_analyzer.getType(cast_source);
+    auto target_type = type_analyzer.getType(left);
 
     if (!source_type || !target_type)
         return node;
@@ -203,7 +206,36 @@ ASTPtr UnwrapCastInComparisonVisitor::rewriteArgs(ASTFunction & function, Unwrap
         for (size_t i = 0; i < function.arguments->children.size(); ++i)
         {
             auto & arg = function.arguments->children[i];
-            new_args[i] = (first_only && i > 0) ? arg : ASTVisitorUtil::accept(arg, *this, context);
+            if (first_only && i > 0)
+            {
+                new_args[i] = arg;
+                continue;
+            }
+
+            UnwrapCastInComparisonContext * child_ctx = &context;
+            UnwrapCastInComparisonContext context_with_lambda_args;
+
+            if (auto * arg_func = arg->as<ASTFunction>(); arg_func && arg_func->name == "lambda")
+            {
+                context_with_lambda_args = context;
+                auto type_analyzer = TypeAnalyzer::create(context.context, context.column_types);
+                auto expression_types = type_analyzer.getExpressionTypes(function.ptr());
+                auto arg_type = expression_types.at(arg);
+                auto arg_type_func = typeid_cast<const DataTypeFunction *>(arg_type.get());
+
+                if (!arg_type_func)
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "unexpected type found for lambda expression");
+
+                auto lambda_args_types = arg_type_func->getArgumentTypes();
+                auto lambda_args_asts = getLambdaExpressionArguments(*arg_func);
+
+                for (size_t idx = 0; idx < lambda_args_asts.size(); idx++)
+                    context_with_lambda_args.column_types[getIdentifierName(lambda_args_asts.at(idx))] = lambda_args_types.at(idx);
+
+                child_ctx = &context_with_lambda_args;
+            }
+
+            new_args[i] = ASTVisitorUtil::accept(arg, *this, *child_ctx);
         }
 
         new_func->children.clear();
