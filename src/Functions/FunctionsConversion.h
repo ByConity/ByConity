@@ -424,7 +424,7 @@ struct ConvertImpl<
         const auto today = time_zone.toDayNum(time(nullptr));
         auto date_time = DateLUT::instance().fromDayNum(today);
 
-        if constexpr (std::is_same_v<ToDataType, DataTypeDate>)
+        if constexpr (std::is_same_v<ToDataType, DataTypeDate> || std::is_same_v<ToDataType, DataTypeDate32>)
         {
             // only today's date
             return result_type->createColumnConst(input_rows_count, DayNum(today.toUnderType()));
