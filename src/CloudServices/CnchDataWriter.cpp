@@ -668,10 +668,10 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
 
 void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts)
 {
-    auto & settings = context->getSettingsRef();
-    if (settings.enable_preload_parts || storage.getSettings()->enable_preload_parts)
+    const auto & settings = context->getSettingsRef();
+    // storage.getSettings()->enable_preload_parts is old setting, use it for compitablity
+    if (settings.parts_preload_level && storage.getSettings()->enable_local_disk_cache && (storage.getSettings()->enable_preload_parts || storage.getSettings()->parts_preload_level))
     {
-        bool sync_preload = !settings.enable_async_preload_parts;
 
         try
         {
@@ -685,7 +685,7 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
             if (!preload_parts.empty())
             {
                 auto max_timeout = std::max(30 * 1000L, settings.max_execution_time.totalMilliseconds());
-                server_client->submitPreloadTask(storage, preload_parts, sync_preload, max_timeout);
+                server_client->submitPreloadTask(storage, preload_parts, max_timeout);
                 LOG_DEBUG(
                     storage.getLogger(),
                     "Finish submit preload task for {} parts to server {}, elapsed {} ms",
@@ -698,7 +698,7 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
         catch (...)
         {
             tryLogCurrentException(__PRETTY_FUNCTION__, "Fail to preload");
-            if (sync_preload)
+            if (storage.getSettings()->enable_parts_sync_preload)
                 throw;
         }
     }

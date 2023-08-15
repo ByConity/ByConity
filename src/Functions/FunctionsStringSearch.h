@@ -130,7 +130,7 @@ public:
         UInt8 column_haystack_index;
         UInt8 column_needle_index;
 
-        if (mysql_mode_ && (this->name == "locate" || this->name == "position"))
+        if (mysql_mode_ && this->name == "locate")
         {
             column_haystack_index = 1;
             column_needle_index = 0;

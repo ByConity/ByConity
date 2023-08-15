@@ -17,6 +17,7 @@
 
 #include <Core/Types.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
 
 #include <memory>
 #include <vector>
@@ -32,6 +33,7 @@ public:
     virtual ~IDiskCacheSegment() = default;
 
     virtual String getSegmentName() const = 0;
+    virtual String getMarkName() const {return {};}
     virtual void cacheToDisk(IDiskCache & diskcache) = 0;
 
     static String formatSegmentName(

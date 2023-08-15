@@ -52,6 +52,15 @@ class IColumn;
   * A setting is "IMPORTANT" if it affects the results of queries and can't be ignored by older versions.
   */
 
+// The variable need be same with `parts_preload_level`
+enum PreloadLevelSettings : UInt64
+{
+    ClosePreload = 0,
+    MetaPreload = 1,
+    DataPreload = 2,
+    AllPreload = 3
+};
+
 #define COMMON_SETTINGS(M) \
     M(UInt64, \
       TEST_KNOB, \
@@ -1606,13 +1615,10 @@ class IColumn;
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
     M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
-    M(UInt64, \
-      cloud_task_auto_stop_timeout, \
-      60, \
-      "We will remove this task when heartbeat can't find this task more than retries_count times.", \
-      0) \
     M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
     M(Bool, enable_async_preload_parts, true, "Allow to preload data parts asynchronously", 0) \
+    M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
+    M(UInt64, parts_preload_level, 1, "used for global preload(manual alter&table auto), 0=close preload;1=preload meta;2=preload data;3=preload meta&data, Note: for table auto preload, 0 will disable all table preload, > 0 will use table preload setting", 0) \
     M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
     M(Bool, enable_vw_customized_setting, false, "Allow vw customized overwrite profile settings", 0) \
     M(Bool, enable_async_execution, false, "Whether to enable async execution", 0) \

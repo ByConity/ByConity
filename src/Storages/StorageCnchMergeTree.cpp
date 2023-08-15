@@ -1352,7 +1352,7 @@ void StorageCnchMergeTree::removeCheckpoint(const Protos::Checkpoint & checkpoin
     // getContext()->getCnchCatalog()->markCheckpoint(shared_from_this(), new_checkpoint);
 }
 
-void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool sync)
+void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload, UInt64 parts_preload_level)
 {
     auto worker_group = getWorkerGroupForTable(*this, local_context);
     local_context->setCurrentWorkerGroup(worker_group);
@@ -1374,18 +1374,17 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
     }
     server_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, "");
     server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
-    /// TODO: async rpc?
-    server_resource->sendResources(
-        local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
-            std::vector<brpc::CallId> ids;
-            for (const auto & resource : resources)
-            {
-                brpc::CallId id
-                    = client->preloadDataParts(local_context, txn_id, *this, create_table_query, resource.server_parts, sync, handler);
-                ids.emplace_back(id);
-            }
-            return ids;
-        });
+
+    server_resource->sendResources(local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
+        std::vector<brpc::CallId> ids;
+        for (const auto & resource : resources)
+        {
+            brpc::CallId id = client->preloadDataParts(local_context, txn_id, *this, create_table_query, resource.server_parts, handler, enable_parts_sync_preload, parts_preload_level);
+            ids.emplace_back(id);
+            LOG_TRACE(log, "send preload data parts size = {}, enable_parts_sync_preload = {}, enable_parts_sync_preload = {}", resource.server_parts.size(), enable_parts_sync_preload, parts_preload_level);
+        }
+        return ids;
+    });
 }
 
 ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
@@ -1979,6 +1978,8 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "insertion_label_ttl",
         "enable_local_disk_cache",
         "enable_preload_parts",
+        "enable_parts_sync_preload",
+        "parts_preload_level",
 
         "enable_addition_bg_task",
         "max_addition_bg_task_num",

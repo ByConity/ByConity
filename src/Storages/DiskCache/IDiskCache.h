@@ -79,7 +79,8 @@ public:
 
     virtual IDiskCacheStrategyPtr getStrategy() const = 0;
 
-    void cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments);
+    using CacheSegmentsCallback = std::function<void(const String &)>;
+    void cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments, CacheSegmentsCallback callback = {});
 
     VolumePtr getStorageVolume() const { return volume; }
     ThrottlerPtr getDiskCacheThrottler() const { return disk_cache_throttler; }

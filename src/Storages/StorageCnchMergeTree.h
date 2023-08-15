@@ -30,6 +30,7 @@ struct PrepareContextResult;
 class StorageCnchMergeTree final : public shared_ptr_helper<StorageCnchMergeTree>, public MergeTreeMetaBase, public CnchStorageCommonHelper
 {
     friend struct shared_ptr_helper<StorageCnchMergeTree>;
+    friend class InterpreterAlterDiskCacheQuery;
 
 public:
     ~StorageCnchMergeTree() override;
@@ -188,8 +189,7 @@ public:
     ServerDataPartsVector
     getServerPartsByPredicate(const ASTPtr & predicate, const std::function<ServerDataPartsVector()> & get_parts, ContextPtr local_context);
 
-
-    void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool sync = true);
+    void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload = true, UInt64 parts_preload_level = 0);
 
 protected:
     StorageCnchMergeTree(

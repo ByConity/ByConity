@@ -3,6 +3,8 @@ namespace DB
 
 class FunctionFactory;
 
+void registerFunctionLocate(FunctionFactory &);
+
 void registerFunctionPosition(FunctionFactory &);
 void registerFunctionPositionUTF8(FunctionFactory &);
 void registerFunctionPositionCaseInsensitive(FunctionFactory &);
@@ -38,6 +40,8 @@ void registerFunctionCountSubstringsCaseInsensitiveUTF8(FunctionFactory &);
 
 void registerFunctionsStringSearch(FunctionFactory & factory)
 {
+    registerFunctionLocate(factory);
+
     registerFunctionPosition(factory);
     registerFunctionPositionUTF8(factory);
     registerFunctionPositionCaseInsensitive(factory);
