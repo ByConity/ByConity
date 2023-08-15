@@ -20,6 +20,8 @@
 #include <Core/NamesAndAliases.h>
 #include <Processors/IProcessor.h>
 
+#include <chrono>
+
 namespace DB
 {
 
@@ -32,6 +34,8 @@ struct ProcessorProfileLogElement
     std::vector<UInt64> parent_ids;
 
     UInt64 plan_step{};
+    /// -------32bit----------|----16bit----|---16bit---|
+    /// times work() is called  segment id    group id
     UInt64 plan_group{};
 
     String query_id;
@@ -51,7 +55,7 @@ struct ProcessorProfileLogElement
 
     Int64 step_id{};
     String worker_address;
-    
+
     static std::string name() { return "ProcessorsProfileLog"; }
     static NamesAndTypesList getNamesAndTypes();
     static NamesAndAliases getNamesAndAliases() { return {}; }
@@ -67,6 +71,15 @@ public:
         const String & table_name_,
         const String & storage_def_,
         size_t flush_interval_milliseconds_);
+
+    /// Add profile logs for processors from the same pipeline.
+    /// For queries processed by the optimizer, the log of each segment except
+    /// the final segment (id=0) is added by PlanSegmentExecutor;
+    /// The final segment's log is added in executeQuery.cpp.
+    void addLogs(const QueryPipeline *pipeline,
+                 const String& query_id,
+                 std::chrono::time_point<std::chrono::system_clock> finish_time,
+                 int segment_id = 0);
 };
 
 }
