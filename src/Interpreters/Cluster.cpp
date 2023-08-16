@@ -117,8 +117,8 @@ Cluster::Address::Address(
 {
     host_name = config.getString(config_prefix + ".host");
     port = static_cast<UInt16>(config.getInt(config_prefix + ".port"));
-    exchange_port = static_cast<UInt16>(config.getInt(config_prefix + ".exchange_port", 0));
-    exchange_status_port = static_cast<UInt16>(config.getInt(config_prefix + ".exchange_status_port", 0));
+    exchange_port = static_cast<UInt16>(config.getInt(config_prefix + ".rpc_port", 0));
+    exchange_status_port = static_cast<UInt16>(config.getInt(config_prefix + ".rpc_port", 0));
     if (config.has(config_prefix + ".user"))
         user_specified = true;
 

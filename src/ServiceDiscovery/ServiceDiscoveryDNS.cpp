@@ -149,8 +149,8 @@ HostWithPortsVec ServiceDiscoveryDNS::lookup(const String & psm_name, ComponentT
         tcp_port = resolvePort(client, service_pair.serviceName, "PORT0");
         rpc_port = resolvePort(client, service_pair.serviceName, "PORT1");
         http_port = resolvePort(client, service_pair.serviceName, "PORT2");
-        exchange_port = resolvePort(client, service_pair.serviceName, "PORT5");
-        exchange_status_port = resolvePort(client, service_pair.serviceName, "PORT6");
+        exchange_port = rpc_port;
+        exchange_status_port = rpc_port;
 
         // Server and worker pods must contain tcp port and rpc port
         if (tcp_port <= 0 || rpc_port <= 0)
@@ -178,8 +178,8 @@ HostWithPortsVec ServiceDiscoveryDNS::lookup(const String & psm_name, ComponentT
         host_with_ports.rpc_port = rpc_port;
         host_with_ports.tcp_port = tcp_port > 0 ? tcp_port : 0;
         host_with_ports.http_port = http_port > 0 ? http_port : 0;
-        host_with_ports.exchange_port = exchange_port > 0 ? exchange_port : 0;
-        host_with_ports.exchange_status_port = exchange_status_port > 0 ? exchange_status_port : 0;
+        host_with_ports.exchange_port = rpc_port;
+        host_with_ports.exchange_status_port = rpc_port;
         res.push_back(host_with_ports);
     }
 

@@ -63,7 +63,7 @@ namespace ErrorCodes
     extern const int PREALLOCATE_QUERY_INTENT_NOT_FOUND;
 }
 
-CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextPtr context_)
+CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextMutablePtr context_)
     : WithMutableContext(context_->getGlobalContext()), log(&Poco::Logger::get("CnchWorkerService"))
 {
 }

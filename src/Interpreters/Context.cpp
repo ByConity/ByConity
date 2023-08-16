@@ -2864,28 +2864,12 @@ std::pair<String, UInt16> Context::getInterserverIOAddress() const
 
 UInt16 Context::getExchangePort(bool check_port_exists) const
 {
-    if (auto env_port = getPortFromEnvForConsul("PORT5"))
-        return env_port;
-
-    if (check_port_exists && !getRootConfig().exchange_port)
-        throw Exception(
-            ErrorCodes::NO_ELEMENTS_IN_CONFIG,
-            "Parameter 'exchange_port' required for replication is not specified in configuration file.");
-
-    return getRootConfig().exchange_port;
+    return getRPCPort();
 }
 
 UInt16 Context::getExchangeStatusPort(bool check_port_exists) const
 {
-    if (auto env_port = getPortFromEnvForConsul("PORT6"))
-        return env_port;
-
-    if (check_port_exists && !getRootConfig().exchange_status_port)
-        throw Exception(
-            ErrorCodes::NO_ELEMENTS_IN_CONFIG,
-            "Parameter 'exchange_status_port' required for replication is not specified in configuration file.");
-
-    return getRootConfig().exchange_status_port;
+    return getRPCPort();
 }
 
 void Context::setComplexQueryActive(bool active)

@@ -20,13 +20,17 @@
 #include <brpc/server.h>
 #include <brpc/stream.h>
 #include <common/logger_useful.h>
+#include <Common/Brpc/BrpcServiceDefines.h>
 
 namespace DB
 {
 class BrpcExchangeReceiverRegistryService : public Protos::RegistryService
 {
 public:
-    explicit BrpcExchangeReceiverRegistryService(int max_buf_size_) : max_buf_size(max_buf_size_) { }
+    explicit BrpcExchangeReceiverRegistryService(ContextMutablePtr context_)
+        : max_buf_size(context_->getSettingsRef().exchange_stream_max_buf_size) { }
+    explicit BrpcExchangeReceiverRegistryService(int max_buf_size_)
+        : max_buf_size(max_buf_size_) { }
 
     void registry(
         ::google::protobuf::RpcController * controller,
@@ -39,4 +43,7 @@ private:
     int max_buf_size;
     Poco::Logger * log = &Poco::Logger::get("BrpcExchangeReceiverRegistryService");
 };
+
+REGISTER_SERVICE_IMPL(BrpcExchangeReceiverRegistryService);
+
 }

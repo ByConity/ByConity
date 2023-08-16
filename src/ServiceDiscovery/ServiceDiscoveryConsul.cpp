@@ -98,13 +98,13 @@ IServiceDiscovery::WorkerGroupMap ServiceDiscoveryConsul::lookupWorkerGroupsInVW
         if (ep.tags.count("hostname"))
             host_with_ports.id = ep.tags.at("hostname");
         if (ep.tags.count("PORT1"))
+        {
             host_with_ports.rpc_port = parse<UInt16>(ep.tags.at("PORT1"));
+            host_with_ports.exchange_port = host_with_ports.rpc_port;
+            host_with_ports.exchange_status_port = host_with_ports.rpc_port;
+        }
         if (ep.tags.count("PORT2"))
             host_with_ports.http_port = parse<UInt16>(ep.tags.at("PORT2"));
-        if (ep.tags.count("PORT5"))
-            host_with_ports.exchange_port = parse<UInt16>(ep.tags.at("PORT5"));
-        if (ep.tags.count("PORT6"))
-            host_with_ports.exchange_status_port = parse<UInt16>(ep.tags.at("PORT6"));
 
         group.push_back(std::move(host_with_ports));
     }
@@ -165,13 +165,13 @@ HostWithPortsVec ServiceDiscoveryConsul::formatResult(const Endpoints & eps, Com
             if (e.tags.count("hostname"))
                 host_with_ports.id = e.tags.at("hostname");
             if (e.tags.count("PORT1"))
+            {
                 host_with_ports.rpc_port = parse<UInt16>(e.tags.at("PORT1"));
+                host_with_ports.exchange_port = host_with_ports.rpc_port;
+                host_with_ports.exchange_status_port = host_with_ports.rpc_port;
+            }
             if (e.tags.count("PORT2"))
                 host_with_ports.http_port = parse<UInt16>(e.tags.at("PORT2"));
-            if (e.tags.count("PORT5"))
-                host_with_ports.exchange_port = parse<UInt16>(e.tags.at("PORT5"));
-            if (e.tags.count("PORT6"))
-                host_with_ports.exchange_status_port = parse<UInt16>(e.tags.at("PORT6"));
 
             result.push_back(std::move(host_with_ports));
         }

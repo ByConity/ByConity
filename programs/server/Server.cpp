@@ -121,6 +121,13 @@
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
 #include "MetricsTransmitter.h"
+#include <QueryPlan/PlanCache.h>
+#include <DataTypes/MapHelpers.h>
+#include <Statistics/CacheManager.h>
+#include <CloudServices/CnchWorkerClientPools.h>
+#include "BrpcServerHolder.h"
+#include <Catalog/Catalog.h>
+#include <QueryPlan/Hints/registerHints.h>
 
 #include <CloudServices/CnchServerClientPool.h>
 
@@ -603,11 +610,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Init bRPC
     BrpcApplication::getInstance().initialize(config());
 
-    if (config().has("exchange_port") && config().has("exchange_status_port")
-        && (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker))
-    {
+    if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
         global_context->setComplexQueryActive(true);
-    }
 
     Catalog::CatalogConfig catalog_conf(global_context->getCnchConfigRef());
 
@@ -1427,8 +1431,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     http_params->setTimeout(settings.http_receive_timeout);
     http_params->setKeepAliveTimeout(keep_alive_timeout);
 
-    std::vector<std::unique_ptr<::google::protobuf::Service>> rpc_services;
-    std::vector<std::unique_ptr<brpc::Server>> rpc_servers;
     auto servers = std::make_shared<std::vector<ProtocolServerAdapter>>();
 
     std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config(), "", "listen_host");
@@ -1718,84 +1720,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                                                                      "distributed_ddl", "DDLWorker", &CurrentMetrics::MaxDDLEntryID));
         }
 
-        bool enable_brpc_builtin_services = global_context->getSettingsRef().enable_brpc_builtin_services;
-
         if (global_context->getComplexQueryActive())
         {
             Statistics::CacheManager::initialize(global_context);
             PlanCacheManager::initialize(global_context);
-            bool exchange_server_started = false;
-            /// Brpc data trans registry service
-            for (size_t i = 0; i < listen_hosts.size(); i++)
-            {
-                auto& listen_host = listen_hosts[i];
-                /// Brpc data trans registry service
-                auto exchange_server = std::make_unique<brpc::Server>();
-                auto exchange_status_server = std::make_unique<brpc::Server>();
-
-                auto exchange_service = std::make_unique<BrpcExchangeReceiverRegistryService>(global_context->getSettingsRef().exchange_stream_max_buf_size);
-                auto plan_segment_service = std::make_unique<PlanSegmentManagerRpcService>(global_context);
-                auto runtime_filter_service = std::make_unique<RuntimeFilterService>(global_context);
-
-                if (exchange_server->AddService(exchange_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
-                    throw Exception("Fail to add BrpcExchangeReceiverRegistryService", ErrorCodes::LOGICAL_ERROR);
-
-                if (exchange_status_server->AddService(plan_segment_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
-                    throw Exception("Fail to add PlanSegmentManagerRpcService", ErrorCodes::LOGICAL_ERROR);
-
-                // RuntimeFilterService reuse PlanSegmentManagerRpcService port
-                if (exchange_status_server->AddService(runtime_filter_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
-                    throw Exception("Fail to add RuntimeFilterService", ErrorCodes::LOGICAL_ERROR);
-
-                std::string host_exchange_port = createHostPortString(listen_host, global_context->getExchangePort(true));
-                brpc::ServerOptions stream_options;
-                stream_options.idle_timeout_sec = -1;
-                if (i > 0)
-                    stream_options.server_info_name = fmt::format("stm{}", i);
-                else
-                    stream_options.server_info_name = fmt::format("stm");
-                stream_options.has_builtin_services = enable_brpc_builtin_services;
-                if (exchange_server->Start(host_exchange_port.c_str(), &stream_options) != 0)
-                {
-                    if (listen_try)
-                    {
-                        LOG_WARNING(log, "Failed to start exchange server on {}\n", host_exchange_port);
-                        continue;
-                    }
-                    else
-                    {
-                        throw Exception("Fail to start exchange server", ErrorCodes::BRPC_EXCEPTION);
-                    }
-                }
-
-                std::string host_exchange_status_port = createHostPortString(listen_host, global_context->getExchangeStatusPort(true));
-                brpc::ServerOptions cmd_options;
-                if (i > 0)
-                    cmd_options.server_info_name = fmt::format("cmd{}", i);
-                else
-                    cmd_options.server_info_name = fmt::format("cmd");
-                cmd_options.has_builtin_services = enable_brpc_builtin_services;
-                if (exchange_status_server->Start(host_exchange_status_port.c_str(), &cmd_options) != 0)
-                {
-                    throw Exception("Fail to start exchange status server", ErrorCodes::BRPC_EXCEPTION);
-                }
-
-                rpc_servers.emplace_back(std::move(exchange_server));
-                rpc_servers.emplace_back(std::move(exchange_status_server));
-
-                rpc_services.emplace_back(std::move(exchange_service));
-                rpc_services.emplace_back(std::move(plan_segment_service));
-                rpc_services.emplace_back(std::move(runtime_filter_service));
-
-                exchange_server_started = true;
-                LOG_INFO(log, "start BrpcExchangeReceiverRegistryService listening :: {}", host_exchange_port);
-                LOG_INFO(log, "start PlanSegmentManagerRpcService listening :: {}", host_exchange_status_port);
-            }
-
-            if (!exchange_server_started)
-            {
-                throw Exception("Exchange server not started!", ErrorCodes::LOGICAL_ERROR);
-            }
         }
 
         if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
@@ -1811,47 +1739,22 @@ int Server::main(const std::vector<std::string> & /*args*/)
             LOG_INFO(log, "Listening for {}", server.getDescription());
         }
 
-        /// Server and worker rpc services
-        std::unique_ptr<CnchServerServiceImpl> cnch_server_endpoint;
-        std::unique_ptr<CnchWorkerServiceImpl> cnch_worker_endpoint;
-
-        if (global_context->getServerType() == ServerType::cnch_server)
-            cnch_server_endpoint = std::make_unique<CnchServerServiceImpl>(global_context);
-        if (global_context->getServerType() == ServerType::cnch_worker)
-            cnch_worker_endpoint = std::make_unique<CnchWorkerServiceImpl>(global_context);
-
-        if (cnch_server_endpoint || cnch_worker_endpoint)
+        std::vector<std::unique_ptr<BrpcServerHolder>> rpc_server_holders;
+        for (auto & host : listen_hosts)
         {
-            UInt64 rpc_port = config().getInt("rpc_port");
+            std::string brpc_host_port = createHostPortString(host, root_config.rpc_port);
+            rpc_server_holders.emplace_back(std::make_unique<BrpcServerHolder>(brpc_host_port, global_context, listen_try));
+        }
 
-            for (const auto & listen : listen_hosts)
-            {
-                rpc_servers.push_back(std::make_unique<brpc::Server>());
-                auto & rpc_server = rpc_servers.back();
+        bool service_available = false;
+        for (auto& holder : rpc_server_holders)
+        {
+            service_available |= holder->available();
+        }
 
-                if (cnch_server_endpoint && 0 != rpc_server->AddService(cnch_server_endpoint.get(), brpc::SERVER_DOESNT_OWN_SERVICE))
-                    throw Exception("Failed to add cnch server rpc service.", ErrorCodes::BRPC_EXCEPTION);
-                if (cnch_worker_endpoint && 0 != rpc_server->AddService(cnch_worker_endpoint.get(), brpc::SERVER_DOESNT_OWN_SERVICE))
-                    throw Exception("Failed to add cnch worker rpc service.", ErrorCodes::BRPC_EXCEPTION);
-
-                std::string host_port = createHostPortString(listen, rpc_port);
-                brpc::ServerOptions options;
-                options.server_info_name = "def";
-                options.has_builtin_services = enable_brpc_builtin_services;
-                if (0 != rpc_server->Start(host_port.c_str(), &options))
-                {
-                    if (listen_try)
-                    {
-                        LOG_ERROR(log, "Failed to start rpc server on {}\n", host_port);
-                    }
-                    else
-                    {
-                        throw Exception("Failed to start rpc server on " + host_port, ErrorCodes::BRPC_EXCEPTION);
-                    }
-                }
-
-                LOG_INFO(log, "Listening rpc: " + host_port);
-            }
+        if (!service_available)
+        {
+            throw Exception("Failed to start rpc server in all listen_hosts.", ErrorCodes::BRPC_EXCEPTION);
         }
 
 
@@ -1870,8 +1773,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 current_connections += server.currentConnections();
             }
 
-            for (auto & rpc_server : rpc_servers)
-                rpc_server->Stop(0);
+            for (auto & holder : rpc_server_holders)
+                holder->stop();
 
             if (current_connections)
                 LOG_INFO(log, "Closed all listening sockets. Waiting for {} outstanding connections.", current_connections);
@@ -1891,8 +1794,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             else
                 LOG_INFO(log, "Closed connections.");
 
-            for (auto & rpc_server : rpc_servers)
-                rpc_server->Join();
+            for (auto & holder : rpc_server_holders)
+                holder->join();
+
             /// Wait server pool to avoid use-after-free of destroyed context in the handlers
             server_pool.joinAll();
 
