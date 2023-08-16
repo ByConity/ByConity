@@ -155,11 +155,11 @@ Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, Derive
 
 Property DeriverVisitor::visitFilterStep(const FilterStep & step, DeriverContext & context)
 {
-    Predicate::DomainTranslator translator{context.getContext()};
+    Predicate::DomainTranslator<String> translator{context.getContext()};
     // TODO, remove clone. step.getFilter()->clone()
-    Predicate::ExtractionResult result
+    Predicate::ExtractionResult<String> result
         = translator.getExtractionResult(step.getFilter()->clone(), step.getOutputStream().header.getNamesAndTypes());
-    std::optional<Predicate::FieldWithTypeMap> values = result.tuple_domain.extractFixedValues();
+    auto values = result.tuple_domain.extractFixedValues();
     if (values.has_value())
     {
         Property input = context.getInput()[0];

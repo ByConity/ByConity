@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Core/NameToType.h>
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTExpressionList.h>
@@ -25,6 +26,7 @@
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <QueryPlan/Assignment.h>
+#include <QueryPlan/PlanNode.h>
 
 #include <unordered_map>
 
@@ -102,6 +104,9 @@ namespace Utils
 
     bool canChangeOutputRows(const Assignments & assignments, ContextPtr context);
     bool canChangeOutputRows(const ProjectionStep & project, ContextPtr context);
+
+    // return nullopt if ambiguous symbol exists(rarely)
+    std::optional<NameToType> extractNameToType(const PlanNodeBase & node);
 }
 
 }

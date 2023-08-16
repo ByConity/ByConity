@@ -66,7 +66,8 @@ public:
 
             tester->execute("DROP TABLE IF EXISTS " + mv_name);
             tester->execute("DROP TABLE IF EXISTS " + target_table_name);
-            tester->execute("CREATE TABLE " + target_table_name + " ENGINE=Memory() AS " + materialized_views[i]);
+            // TODO: CREATE TABLE SELECT will throw exception: Context has expired. Use ATTACH TABLE as work around.
+            tester->execute("ATTACH TABLE " + target_table_name + " ENGINE=Memory() AS " + materialized_views[i]);
             auto create_mv = String("CREATE MATERIALIZED VIEW ")
                                  .append(mv_name)
                                  .append(" TO ")

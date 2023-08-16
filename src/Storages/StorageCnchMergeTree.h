@@ -191,6 +191,8 @@ public:
 
     void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload = true, UInt64 parts_preload_level = 0);
 
+    Strings getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context);
+
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,

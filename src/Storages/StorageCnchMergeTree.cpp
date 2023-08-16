@@ -1387,6 +1387,18 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
     });
 }
 
+Strings StorageCnchMergeTree::getPrunedPartitions(
+    const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context)
+{
+    Strings pruned_partitions;
+    if (local_context->getCnchCatalog())
+    {
+        auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
+        pruned_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names_to_return, local_context);
+    }
+    return pruned_partitions;
+}
+
 ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
 {
     Int64 primary_txn_id = local_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();

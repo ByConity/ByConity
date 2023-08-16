@@ -14,16 +14,22 @@
  */
 #pragma once
 
-#include <initializer_list>
-#include <type_traits>
-#include <unordered_map>
+#include <Core/Types.h>
+#include <Parsers/formatAST.h>
+#include <Common/ErrorCodes.h>
 #include <Common/Exception.h>
-#include <vector>
+
+#include <boost/hana.hpp>
+
+#include <functional>
+#include <initializer_list>
 #include <list>
 #include <string>
 #include <string_view>
-#include <Common/ErrorCodes.h>
-#include <Parsers/formatAST.h>
+#include <type_traits>
+#include <unordered_map>
+#include <vector>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -32,12 +38,13 @@ namespace ErrorCodes
 }
 
 // this append only
-template<typename Key, typename Value>
-class LinkedHashMap {
+template <typename Key, typename Value, typename Hash = std::hash<Key>, typename Equal = std::equal_to<Key>>
+class LinkedHashMap
+{
 public:
     LinkedHashMap() = default;
-    template<typename KeyArg, typename ValueArg>
-    void emplace_back(KeyArg&& key_arg, ValueArg&& value_args)
+    template <typename KeyArg, typename ValueArg>
+    void emplace_back(KeyArg && key_arg, ValueArg && value_args)
     {
         emplace(std::forward<KeyArg>(key_arg), std::forward<ValueArg>(value_args));
     }
@@ -63,7 +70,7 @@ public:
         }
     }
 
-    template<typename Iter>
+    template <typename Iter>
     LinkedHashMap(Iter beg, Iter end)
     {
         insert_back(beg, end);
@@ -85,10 +92,10 @@ public:
         emplace_back(std::move(assignment.first), std::move(assignment.second));
     }
 
-    template<typename Iter>
+    template <typename Iter>
     void insert_back(Iter beg, Iter end)
     {
-        for(auto iter = beg; iter != end; ++iter)
+        for (auto iter = beg; iter != end; ++iter)
         {
             this->emplace_back(iter->first, iter->second);
         }
@@ -140,7 +147,7 @@ public:
 
     Value& at(const Key& key) {
         auto iter = mapping.find(key);
-        if(iter == mapping.end())
+        if (iter == mapping.end())
         {
             throw Exception("out of bounds", ErrorCodes::LOGICAL_ERROR);
         }
@@ -148,8 +155,9 @@ public:
         return ordered_storage.at(index).second;
     }
 
-    const Value& at(const Key& key) const {
-        return const_cast<LinkedHashMap<Key, Value>*>(this)->at(key);
+    const Value & at(const Key & key) const
+    {
+        return const_cast<LinkedHashMap<Key, Value, Hash, Equal> *>(this)->at(key);
     }
 
     const auto& front() const
@@ -157,24 +165,44 @@ public:
         return ordered_storage.front();
     }
 
-    const auto& back() const
+    const auto & back() const
     {
         return ordered_storage.back();
     }
 
-    String dump() const
+    __attribute__((__used__)) String toString() const
     {
-        if constexpr (std::is_same_v<Value, ConstASTPtr>)
-        {
-            std::stringstream os;
-            for (const auto & item: ordered_storage)
-                os << item.first << " := " << serializeAST(*item.second, true) << std::endl;
-            return os.str();
-        }
-        else
-        {
-            return "";
-        }
+        auto to_string = [](const auto & obj) -> String {
+            using T = std::decay_t<decltype(obj)>;
+            constexpr auto has_std_to_string = boost::hana::is_valid([](auto && x) -> decltype(std::to_string(x)) {});
+            constexpr auto has_to_string = boost::hana::is_valid([](auto && x) -> decltype(x.toString()) {});
+
+            if constexpr (std::is_same_v<T, String>)
+            {
+                return obj;
+            }
+            else if constexpr (std::is_same_v<T, ASTPtr> || std::is_same_v<T, ConstASTPtr>)
+            {
+                return serializeAST(*obj, true);
+            }
+            else if constexpr (decltype(has_std_to_string(obj))::value)
+            {
+                return std::to_string(obj);
+            }
+            else if constexpr (decltype(has_to_string(obj))::value)
+            {
+                return obj.toString();
+            }
+            else
+            {
+                return "[unserializable object]";
+            }
+        };
+
+        std::stringstream os;
+        for (const auto & item : ordered_storage)
+            os << to_string(item.first) << " := " << to_string(item.second) << std::endl;
+        return os.str();
     }
 
     bool operator==(const LinkedHashMap & other) const
@@ -200,7 +228,7 @@ public:
     LinkedHashMap& operator=(LinkedHashMap &&) = default;
 private:
     std::vector<std::pair<Key, Value>> ordered_storage;
-    std::unordered_map<Key, size_t> mapping;
+    std::unordered_map<Key, size_t, Hash, Equal> mapping;
 };
 
 } // namespace DB

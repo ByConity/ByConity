@@ -1,0 +1,34 @@
+Projection Est. ? rows
+│     Expressions: event_date:=`expr#event_date`, event_type:=`expr#event_type`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#event_date, expr#event_type, expr#server_time_hour, expr#uid}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#event_date, expr#event_type, expr#server_time_hour, expr#uid}
+            │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#event_date:=event_date, expr#event_type:=event_type, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
+               └─ Filter Est. ? rows
+                  │     Condition: uid = \'xx\'
+                  └─ TableScan test.target40051 Est. ? rows
+                           Condition : uid = \'xx\'.Prewhere : uid = \'xx\'.
+                           Outputs: [event_date, event_type, server_time_hour, sum_click, uid]
+note: Materialized Views is applied for 1 times: test.mv40051.
+Projection Est. ? rows
+│     Expressions: event_date:=`expr#event_date`, event_type:=`expr#event_type`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#event_date, expr#event_type, expr#server_time_hour, expr#uid}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#event_date, expr#event_type, expr#server_time_hour, expr#uid}
+            │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#event_date:=event_date, expr#event_type:=event_type, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
+               └─ Filter Est. ? rows
+                  │     Condition: event_type = 1
+                  └─ TableScan test.target40051 Est. ? rows
+                           Condition : event_type = 1.Prewhere : event_type = 1.
+                           Outputs: [event_date, event_type, server_time_hour, sum_click, uid]
+note: Materialized Views is applied for 1 times: test.mv40051.

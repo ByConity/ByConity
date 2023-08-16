@@ -23,6 +23,7 @@
 
 using namespace DB;
 using namespace DB::Predicate;
+using PredicateRange = Predicate::Range;
 
 
 class RangeTest : public testing::Test
@@ -52,34 +53,34 @@ protected:
 
 TEST_F(RangeTest, testInvertedBounds)
 {
-//    EXPECT_ANY_THROW(Range(typeFromString("String"), true, String("ab"), true, String("a")));
-//
-//    EXPECT_ANY_THROW(Range(typeFromString("Int64"), true, Field(Int64(1)), true, Field(Int64(0))));
+    //    EXPECT_ANY_THROW(PredicateRange(typeFromString("String"), true, String("ab"), true, String("a")));
+    //
+    //    EXPECT_ANY_THROW(PredicateRange(typeFromString("Int64"), true, Field(Int64(1)), true, Field(Int64(0))));
 }
 
 TEST_F(RangeTest, testSingleValueExclusive)
 {
-//    // (10, 10]
-//    EXPECT_ANY_THROW(Range(typeFromString("Int64"), false, Field(Int64(10)), true, Field(Int64(10))));
-//
-//    // [10, 10)
-//    EXPECT_ANY_THROW(Range(typeFromString("Int64"), true, Field(Int64(10)), false, Field(Int64(10))));
-//
-//    // (10, 10)
-//    EXPECT_ANY_THROW(Predicate::Range(typeFromString("Int64"), false, Field(Int64(10)), false, Field(Int64(10))));
+    //    // (10, 10]
+    //    EXPECT_ANY_THROW(PredicateRange(typeFromString("Int64"), false, Field(Int64(10)), true, Field(Int64(10))));
+    //
+    //    // [10, 10)
+    //    EXPECT_ANY_THROW(PredicateRange(typeFromString("Int64"), true, Field(Int64(10)), false, Field(Int64(10))));
+    //
+    //    // (10, 10)
+    //    EXPECT_ANY_THROW(Predicate::PredicateRange(typeFromString("Int64"), false, Field(Int64(10)), false, Field(Int64(10))));
 }
 
 TEST_F(RangeTest, testSingleValue)
 {
-    ASSERT_TRUE(Range(typeFromString("Int64"), true, Field(Int64(1)), true, Field(Int64(1))).isSingleValue());
-    ASSERT_FALSE(Range(typeFromString("Int64"), true, Field(Int64(1)), true, Field(Int64(2))).isSingleValue());
-    ASSERT_TRUE(Range(typeFromString("Float64"), true, Field(Float64(1.1)), true, Field(Float64(1.1))).isSingleValue());
-    ASSERT_FALSE(Range(typeFromString("String"), true, Field(String("a")), true, Field(String("ab"))).isSingleValue());
+    ASSERT_TRUE(PredicateRange(typeFromString("Int64"), true, Field(Int64(1)), true, Field(Int64(1))).isSingleValue());
+    ASSERT_FALSE(PredicateRange(typeFromString("Int64"), true, Field(Int64(1)), true, Field(Int64(2))).isSingleValue());
+    ASSERT_TRUE(PredicateRange(typeFromString("Float64"), true, Field(Float64(1.1)), true, Field(Float64(1.1))).isSingleValue());
+    ASSERT_FALSE(PredicateRange(typeFromString("String"), true, Field(String("a")), true, Field(String("ab"))).isSingleValue());
 }
 
 TEST_F(RangeTest, testAllRange)
 {
-    Range range = Range::allRange(typeFromString("Int64"));
+    PredicateRange range = PredicateRange::allRange(typeFromString("Int64"));
 
     ASSERT_TRUE(range.isLowUnbounded());
     ASSERT_FALSE(range.isLowInclusive());
@@ -96,7 +97,7 @@ TEST_F(RangeTest, testAllRange)
 
 TEST_F(RangeTest, testGreaterThanRange)
 {
-    Range range = Range::greaterThanRange(typeFromString("Int64"), Field(Int64(1)));
+    PredicateRange range = PredicateRange::greaterThanRange(typeFromString("Int64"), Field(Int64(1)));
 
     ASSERT_FALSE(range.isLowUnbounded());
     ASSERT_FALSE(range.isLowInclusive());
@@ -113,7 +114,7 @@ TEST_F(RangeTest, testGreaterThanRange)
 
 TEST_F(RangeTest, testGreaterThanOrEqualRange)
 {
-    Range range = Range::greaterThanOrEqualRange(typeFromString("Int64"), Field(Int64(1)));
+    PredicateRange range = PredicateRange::greaterThanOrEqualRange(typeFromString("Int64"), Field(Int64(1)));
 
     ASSERT_FALSE(range.isLowUnbounded());
     ASSERT_TRUE(range.isLowInclusive());
@@ -130,7 +131,7 @@ TEST_F(RangeTest, testGreaterThanOrEqualRange)
 
 TEST_F(RangeTest, testLessThanRange)
 {
-    Range range = Range::lessThanRange(typeFromString("Int64"), Field(Int64(1)));
+    PredicateRange range = PredicateRange::lessThanRange(typeFromString("Int64"), Field(Int64(1)));
 
     ASSERT_TRUE(range.isLowUnbounded());
     ASSERT_FALSE(range.isLowInclusive());
@@ -147,7 +148,7 @@ TEST_F(RangeTest, testLessThanRange)
 
 TEST_F(RangeTest, testLessThanOrEqualRange)
 {
-    Range range = Range::lessThanOrEqualRange(typeFromString("Int64"), Field(Int64(1)));
+    PredicateRange range = PredicateRange::lessThanOrEqualRange(typeFromString("Int64"), Field(Int64(1)));
 
     ASSERT_TRUE(range.isLowUnbounded());
     ASSERT_FALSE(range.isLowInclusive());
@@ -164,7 +165,7 @@ TEST_F(RangeTest, testLessThanOrEqualRange)
 
 TEST_F(RangeTest, testEqualRange)
 {
-    Range range = Range::equalRange(typeFromString("Int64"), Field(Int64(1)));
+    PredicateRange range = PredicateRange::equalRange(typeFromString("Int64"), Field(Int64(1)));
 
     ASSERT_FALSE(range.isLowUnbounded());
     ASSERT_TRUE(range.isLowInclusive());
@@ -182,7 +183,7 @@ TEST_F(RangeTest, testEqualRange)
 TEST_F(RangeTest, testRange)
 {
     //(0,2]
-    Range range = Range(typeFromString("Int64"), false, Field(Int64(0)), true, Field(Int64(2)));
+    PredicateRange range = PredicateRange(typeFromString("Int64"), false, Field(Int64(0)), true, Field(Int64(2)));
     ASSERT_FALSE(range.isLowUnbounded());
     ASSERT_FALSE(range.isLowInclusive());
     ASSERT_TRUE(range.getLowValue() == Field(Int64(0)));
@@ -198,88 +199,115 @@ TEST_F(RangeTest, testRange)
 
 TEST_F(RangeTest, testGetSingleValue)
 {
-    ASSERT_TRUE(Range::equalRange(typeFromString("Int64"), Field(Int64(0))).getSingleValue() == Field(Int64(0)));
-//    try
-//    {
-//        Range::lessThanRange(typeFromString("Int64"), Field(Int64(0))).getSingleValue();
-//    }
-//    catch (...)
-//    {
-//        std::cerr << "Range does not have just a single value" << std::endl;
-//    }
+    ASSERT_TRUE(PredicateRange::equalRange(typeFromString("Int64"), Field(Int64(0))).getSingleValue() == Field(Int64(0)));
+    //    try
+    //    {
+    //        PredicateRange::lessThanRange(typeFromString("Int64"), Field(Int64(0))).getSingleValue();
+    //    }
+    //    catch (...)
+    //    {
+    //        std::cerr << "PredicateRange does not have just a single value" << std::endl;
+    //    }
 }
 
 TEST_F(RangeTest, testContains)
 {
-    ASSERT_TRUE(Range::allRange(type_int64).contains(Range::allRange(type_int64)));
-    ASSERT_TRUE(Range::allRange(type_int64).contains(Range::equalRange(type_int64, field_0)));
-    ASSERT_TRUE(Range::allRange(type_int64).contains(Range::greaterThanRange(type_int64, field_0)));
-    ASSERT_TRUE(Range::equalRange(type_int64, field_0).contains(Range::equalRange(type_int64, field_0)));
-    ASSERT_FALSE(Range::equalRange(type_int64, field_0).contains(Range::greaterThanRange(type_int64, field_0)));
-    ASSERT_FALSE(Range::equalRange(type_int64, field_0).contains(Range::greaterThanOrEqualRange(type_int64, field_0)));
-    ASSERT_FALSE(Range::equalRange(type_int64, field_0).contains(Range::allRange(type_int64)));
-    ASSERT_TRUE(Range::greaterThanOrEqualRange(type_int64, field_0).contains(Range::greaterThanRange(type_int64, field_0)));
-    ASSERT_TRUE(Range::greaterThanRange(type_int64, field_0).contains(Range::greaterThanRange(type_int64, field_1)));
-    ASSERT_FALSE(Range::greaterThanRange(type_int64, field_0).contains(Range::lessThanRange(type_int64, field_0)));
-    ASSERT_TRUE(Range(type_int64, true, field_0, true, field_2).contains(Range(type_int64, true, field_1, true, field_2)));
-    ASSERT_FALSE(Range(type_int64, true, field_0, true, field_2).contains(Range(type_int64, true, field_1, false, field_3)));
+    ASSERT_TRUE(PredicateRange::allRange(type_int64).contains(PredicateRange::allRange(type_int64)));
+    ASSERT_TRUE(PredicateRange::allRange(type_int64).contains(PredicateRange::equalRange(type_int64, field_0)));
+    ASSERT_TRUE(PredicateRange::allRange(type_int64).contains(PredicateRange::greaterThanRange(type_int64, field_0)));
+    ASSERT_TRUE(PredicateRange::equalRange(type_int64, field_0).contains(PredicateRange::equalRange(type_int64, field_0)));
+    ASSERT_FALSE(PredicateRange::equalRange(type_int64, field_0).contains(PredicateRange::greaterThanRange(type_int64, field_0)));
+    ASSERT_FALSE(PredicateRange::equalRange(type_int64, field_0).contains(PredicateRange::greaterThanOrEqualRange(type_int64, field_0)));
+    ASSERT_FALSE(PredicateRange::equalRange(type_int64, field_0).contains(PredicateRange::allRange(type_int64)));
+    ASSERT_TRUE(
+        PredicateRange::greaterThanOrEqualRange(type_int64, field_0).contains(PredicateRange::greaterThanRange(type_int64, field_0)));
+    ASSERT_TRUE(PredicateRange::greaterThanRange(type_int64, field_0).contains(PredicateRange::greaterThanRange(type_int64, field_1)));
+    ASSERT_FALSE(PredicateRange::greaterThanRange(type_int64, field_0).contains(PredicateRange::lessThanRange(type_int64, field_0)));
+    ASSERT_TRUE(
+        PredicateRange(type_int64, true, field_0, true, field_2).contains(PredicateRange(type_int64, true, field_1, true, field_2)));
+    ASSERT_FALSE(
+        PredicateRange(type_int64, true, field_0, true, field_2).contains(PredicateRange(type_int64, true, field_1, false, field_3)));
 }
 
 TEST_F(RangeTest, testSpan)
 {
-    ASSERT_TRUE(Range::greaterThanRange(type_int64, field_1).span(Range::lessThanOrEqualRange(type_int64, field_2)) == Range::allRange(type_int64));
-    ASSERT_TRUE(Range::greaterThanRange(type_int64, field_2).span(Range::lessThanOrEqualRange(type_int64, field_0)) == Range::allRange(type_int64));
-    ASSERT_TRUE(Range(type_int64, true, field_1, false, field_3).span(Range::equalRange(type_int64, field_2)) == Range(type_int64, true, field_1, false, field_3));
-    ASSERT_TRUE(Range(type_int64, true, field_1, false, field_3).span(Range(type_int64, false, field_2, false, field_10)) == Range(type_int64, true, field_1, false, field_10));
-    ASSERT_TRUE(Range::greaterThanRange(type_int64, field_1).span(Range::equalRange(type_int64, field_0)) == Range::greaterThanOrEqualRange(type_int64, field_0));
-    ASSERT_TRUE(Range::greaterThanRange(type_int64, field_1).span(Range::greaterThanOrEqualRange(type_int64, field_10)) == Range::greaterThanRange(type_int64, field_1));
-    ASSERT_TRUE(Range::lessThanRange(type_int64, field_1).span(Range::lessThanOrEqualRange(type_int64, field_1)) == Range::lessThanOrEqualRange(type_int64, field_1));
-    ASSERT_TRUE(Range::allRange(type_int64).span(Range::lessThanOrEqualRange(type_int64, field_1)) == Range::allRange(type_int64));
+    ASSERT_TRUE(
+        PredicateRange::greaterThanRange(type_int64, field_1).span(PredicateRange::lessThanOrEqualRange(type_int64, field_2))
+        == PredicateRange::allRange(type_int64));
+    ASSERT_TRUE(
+        PredicateRange::greaterThanRange(type_int64, field_2).span(PredicateRange::lessThanOrEqualRange(type_int64, field_0))
+        == PredicateRange::allRange(type_int64));
+    ASSERT_TRUE(
+        PredicateRange(type_int64, true, field_1, false, field_3).span(PredicateRange::equalRange(type_int64, field_2))
+        == PredicateRange(type_int64, true, field_1, false, field_3));
+    ASSERT_TRUE(
+        PredicateRange(type_int64, true, field_1, false, field_3).span(PredicateRange(type_int64, false, field_2, false, field_10))
+        == PredicateRange(type_int64, true, field_1, false, field_10));
+    ASSERT_TRUE(
+        PredicateRange::greaterThanRange(type_int64, field_1).span(PredicateRange::equalRange(type_int64, field_0))
+        == PredicateRange::greaterThanOrEqualRange(type_int64, field_0));
+    ASSERT_TRUE(
+        PredicateRange::greaterThanRange(type_int64, field_1).span(PredicateRange::greaterThanOrEqualRange(type_int64, field_10))
+        == PredicateRange::greaterThanRange(type_int64, field_1));
+    ASSERT_TRUE(
+        PredicateRange::lessThanRange(type_int64, field_1).span(PredicateRange::lessThanOrEqualRange(type_int64, field_1))
+        == PredicateRange::lessThanOrEqualRange(type_int64, field_1));
+    ASSERT_TRUE(
+        PredicateRange::allRange(type_int64).span(PredicateRange::lessThanOrEqualRange(type_int64, field_1))
+        == PredicateRange::allRange(type_int64));
 }
 
 TEST_F(RangeTest, testOverlaps)
 {
-    ASSERT_TRUE(Range::greaterThanRange(type_int64, field_1).overlaps(Range::lessThanOrEqualRange(type_int64, field_2)));
-    ASSERT_FALSE(Range::greaterThanRange(type_int64, field_2).overlaps(Range::lessThanRange(type_int64, field_2)));
-    ASSERT_TRUE(Range(type_int64, true, field_1, false, field_3).overlaps(Range::equalRange(type_int64, field_2)));
-    ASSERT_TRUE(Range(type_int64, true, field_1, false, field_3).overlaps(Range(type_int64, false, field_2, false, field_10)));
-    ASSERT_FALSE(Range(type_int64, true, field_1, false, field_3).overlaps(Range(type_int64, true, field_3, false, field_10)));
-    ASSERT_TRUE(Range(type_int64, true, field_1, true, field_3).overlaps(Range(type_int64, true, field_3, false, field_10)));
-    ASSERT_TRUE(Range::allRange(type_int64).overlaps(Range::equalRange(type_int64, type_int64->getRange().value().max)));
+    ASSERT_TRUE(PredicateRange::greaterThanRange(type_int64, field_1).overlaps(PredicateRange::lessThanOrEqualRange(type_int64, field_2)));
+    ASSERT_FALSE(PredicateRange::greaterThanRange(type_int64, field_2).overlaps(PredicateRange::lessThanRange(type_int64, field_2)));
+    ASSERT_TRUE(PredicateRange(type_int64, true, field_1, false, field_3).overlaps(PredicateRange::equalRange(type_int64, field_2)));
+    ASSERT_TRUE(
+        PredicateRange(type_int64, true, field_1, false, field_3).overlaps(PredicateRange(type_int64, false, field_2, false, field_10)));
+    ASSERT_FALSE(
+        PredicateRange(type_int64, true, field_1, false, field_3).overlaps(PredicateRange(type_int64, true, field_3, false, field_10)));
+    ASSERT_TRUE(
+        PredicateRange(type_int64, true, field_1, true, field_3).overlaps(PredicateRange(type_int64, true, field_3, false, field_10)));
+    ASSERT_TRUE(PredicateRange::allRange(type_int64).overlaps(PredicateRange::equalRange(type_int64, type_int64->getRange().value().max)));
 }
 
 TEST_F(RangeTest, testIntersect)
 {
-    std::optional<Range> range_1 = Range::greaterThanRange(type_int64, field_1).intersect(Range::lessThanOrEqualRange(type_int64, field_2));
+    std::optional<PredicateRange> range_1
+        = PredicateRange::greaterThanRange(type_int64, field_1).intersect(PredicateRange::lessThanOrEqualRange(type_int64, field_2));
     ASSERT_TRUE(range_1.has_value());
-    ASSERT_TRUE(range_1.value() == Range(type_int64, false, field_1, true, field_2));
+    ASSERT_TRUE(range_1.value() == PredicateRange(type_int64, false, field_1, true, field_2));
 
-    std::optional<Range> range_2 = Range(type_int64, true, field_1, false, field_3).intersect(Range::equalRange(type_int64, field_2));
+    std::optional<PredicateRange> range_2
+        = PredicateRange(type_int64, true, field_1, false, field_3).intersect(PredicateRange::equalRange(type_int64, field_2));
     ASSERT_TRUE(range_2.has_value());
-    ASSERT_TRUE(range_2 == Range::equalRange(type_int64, field_2));
+    ASSERT_TRUE(range_2 == PredicateRange::equalRange(type_int64, field_2));
 
-    std::optional<Range> range_3 = Range(type_int64, true, field_1, false, field_3).intersect(Range(type_int64, false, field_2, false, field_10));
+    std::optional<PredicateRange> range_3
+        = PredicateRange(type_int64, true, field_1, false, field_3).intersect(PredicateRange(type_int64, false, field_2, false, field_10));
     ASSERT_TRUE(range_3.has_value());
-    ASSERT_TRUE(range_3 == Range(type_int64, false, field_2, false, field_3));
+    ASSERT_TRUE(range_3 == PredicateRange(type_int64, false, field_2, false, field_3));
 
-    std::optional<Range> range_4 = Range(type_int64, true, field_1, true, field_3).intersect(Range(type_int64, true, field_3, false, field_10));
+    std::optional<PredicateRange> range_4
+        = PredicateRange(type_int64, true, field_1, true, field_3).intersect(PredicateRange(type_int64, true, field_3, false, field_10));
     ASSERT_TRUE(range_4.has_value());
-    ASSERT_TRUE(range_4 == Range::equalRange(type_int64, field_3));
+    ASSERT_TRUE(range_4 == PredicateRange::equalRange(type_int64, field_3));
 
-    std::optional<Range> range_5 = Range::allRange(type_int64).intersect(Range::equalRange(type_int64, type_int64->getRange().value().max));
+    std::optional<PredicateRange> range_5
+        = PredicateRange::allRange(type_int64).intersect(PredicateRange::equalRange(type_int64, type_int64->getRange().value().max));
     ASSERT_TRUE(range_5.has_value());
-    ASSERT_TRUE(range_5 == Range::equalRange(type_int64, type_int64->getRange().value().max));
+    ASSERT_TRUE(range_5 == PredicateRange::equalRange(type_int64, type_int64->getRange().value().max));
 }
 
 
 TEST_F(RangeTest, testExceptionalIntersect)
 {
-    Range greater_than_2 = Range::greaterThanRange(type_int64, field_2);
-    Range less_than_2 = Range::lessThanRange(type_int64, field_2);
+    PredicateRange greater_than_2 = PredicateRange::greaterThanRange(type_int64, field_2);
+    PredicateRange less_than_2 = PredicateRange::lessThanRange(type_int64, field_2);
     ASSERT_FALSE(greater_than_2.intersect(less_than_2).has_value());
 
-    Range range_1_to_3_Exclusive = Range(type_int64, true, field_1, false, field_3);
-    Range range_3_to_10 = Range(type_int64, true, field_3, false, field_10);
+    PredicateRange range_1_to_3_Exclusive = PredicateRange(type_int64, true, field_1, false, field_3);
+    PredicateRange range_3_to_10 = PredicateRange(type_int64, true, field_3, false, field_10);
     ASSERT_FALSE(range_1_to_3_Exclusive.intersect(range_3_to_10).has_value());
 }
 

@@ -17,8 +17,10 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <Analyzers/TypeAnalyzer.h>
+#include <Catalog/Catalog.h>
 #include <Core/SettingsEnums.h>
 #include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
+#include <Optimizer/DomainTranslator.h>
 #include <Optimizer/JoinGraph.h>
 #include <Optimizer/MaterializedView/MaterializeViewChecker.h>
 #include <Optimizer/MaterializedView/MaterializedViewMemoryCache.h>
@@ -37,10 +39,9 @@
 #include <QueryPlan/TableScanStep.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
 #include <common/logger_useful.h>
-#include <Optimizer/EqualityASTMap.h>
-#include <Catalog/Catalog.h>
 
 #include <map>
 #include <memory>
@@ -258,6 +259,10 @@ bool checkMVConsistencyByPartition(
     std::optional<DataTypes> first_partition_key_types;
     String first_partition_table;
     auto check_partition_schema = [&](const auto & key_description, const auto & storage_id) -> bool {
+        // skip non-partitioned table
+        if (key_description.data_types.empty())
+            return true;
+
         if (!first_partition_key_types)
         {
             first_partition_key_types = key_description.data_types;
@@ -269,26 +274,14 @@ bool checkMVConsistencyByPartition(
         return partition_key_types.size() == first_partition_key_types->size();
     };
 
-    auto get_local_storage = [&](const StorageID & storage_id) -> StoragePtr {
-        auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-        if (const auto * distributed = dynamic_cast<StorageDistributed *>(storage.get()))
-        {
-            auto remote_db = distributed->getRemoteDatabaseName();
-            auto remote_table = distributed->getRemoteTableName();
-            storage = DatabaseCatalog::instance().getTable(StorageID{remote_db, remote_table}, context);
-        }
-
-        return storage;
-    };
-
     for (const auto & table_scan : query_table_scans)
     {
         const auto * table_step = dynamic_cast<const TableScanStep *>(table_scan->getStep().get());
         if (!table_step)
-            return false;
+            continue;
 
-        auto storage = get_local_storage(table_step->getStorageID());
-        auto * merge_tree = dynamic_cast<MergeTreeData *>(storage.get());
+        auto storage = DatabaseCatalog::instance().getTable(table_step->getStorageID(), context);
+        auto * merge_tree = dynamic_cast<StorageCnchMergeTree *>(storage.get());
         if (!merge_tree || merge_tree->getSettings()->disable_block_output)
             continue;
 
@@ -308,8 +301,12 @@ bool checkMVConsistencyByPartition(
 
         auto select_query = std::make_shared<ASTSelectQuery>();
         auto select_expr = std::make_shared<ASTExpressionList>();
+        Names column_names_to_return;
         for (const auto & col_name : table_step->getColumnNames())
+        {
             select_expr->children.push_back(std::make_shared<ASTIdentifier>(col_name));
+            column_names_to_return.push_back(col_name);
+        }
         select_query->setExpression(ASTSelectQuery::Expression::SELECT, std::move(select_expr));
         select_query->replaceDatabaseAndTable(storage->getStorageID());
         auto & table_preds = predicates_by_table[table_scan->getId()];
@@ -317,12 +314,11 @@ bool checkMVConsistencyByPartition(
             select_query->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineConjuncts(table_preds));
 
         SelectQueryInfo query_info = buildSelectQueryInfoForQuery(select_query, context);
-        auto required_partitions = merge_tree->getRequiredPartitions(query_info, context);
+        auto required_partitions = merge_tree->getPrunedPartitions(query_info, column_names_to_return, context);
         std::unordered_set<String> required_part_name_set_for_this_table;
         for (const auto & part : required_partitions)
         {
-            String partition_id = part->partition.getID(*merge_tree);
-            required_part_name_set_for_this_table.emplace(partition_id);
+            required_part_name_set_for_this_table.emplace(part);
         }
 
         LOG_DEBUG(
@@ -339,8 +335,8 @@ bool checkMVConsistencyByPartition(
         return true;
 
     // check mv partition schema
-    auto mv_target_storage = get_local_storage(mv_target_table);
-    const auto * mv_target_merge_tree = dynamic_cast<MergeTreeData *>(mv_target_storage.get());
+    auto mv_target_storage = DatabaseCatalog::instance().getTable(mv_target_table, context);
+    const auto * mv_target_merge_tree = dynamic_cast<StorageCnchMergeTree *>(mv_target_storage.get());
     if (!mv_target_merge_tree)
         return true;
 
@@ -354,13 +350,15 @@ bool checkMVConsistencyByPartition(
     }
 
     // check mv partitions
-    auto view_partitions = mv_target_merge_tree->getDataPartsVector();
     std::unordered_set<String> view_part_name_set;
-    for (const auto & part : view_partitions)
+    if (context->getCnchCatalog())
     {
-        String partition_id = part->partition.getID(*mv_target_merge_tree);
-        view_part_name_set.emplace(partition_id);
+        auto view_partitions = context->getCnchCatalog()->getPartitionList(mv_target_storage, context.get());
+        MergeTreeMetaBase * view_tree_base = dynamic_cast<MergeTreeMetaBase *>(mv_target_storage.get());
+        for (const auto & partition : view_partitions)
+            view_part_name_set.emplace(partition->getID(*view_tree_base));
     }
+
     LOG_DEBUG(
         logger,
         "Get mv target table {} owned partition set: {}",
@@ -562,23 +560,26 @@ protected:
         }
 
         std::optional<SymbolTransformMap> query_map; // lazy initialization later
+        std::optional<NameToType> query_symbol_types; // lazy initialization later
 
         for (const auto & view : related_materialized_views)
             if (auto result = match(
-                query,
-                query_join_graph,
-                query_other_predicates,
-                query_map,
-                query_aggregate,
-                view->join_graph,
-                view->other_predicates,
-                view->symbol_map,
-                view->output_columns,
-                view->output_columns_to_table_columns_map,
-                view->expression_equivalences,
-                view->top_aggregating_step,
-                view->view_storage_id,
-                view->target_storage_id))
+                    query,
+                    query_join_graph,
+                    query_other_predicates,
+                    query_map,
+                    query_aggregate,
+                    query_symbol_types,
+                    view->join_graph,
+                    view->other_predicates,
+                    view->symbol_map,
+                    view->output_columns,
+                    view->output_columns_to_table_columns_map,
+                    view->expression_equivalences,
+                    view->top_aggregating_step,
+                    view->symbol_types,
+                    view->view_storage_id,
+                    view->target_storage_id))
                 candidates[query.shared_from_this()].emplace_back(*result);
     }
 
@@ -591,6 +592,7 @@ protected:
         const std::vector<ConstASTPtr> & query_other_predicates,
         std::optional<SymbolTransformMap> & query_map,
         const std::shared_ptr<const AggregatingStep> & query_aggregate,
+        std::optional<NameToType> query_symbol_types,
         const JoinGraph & view_join_graph,
         const std::vector<ConstASTPtr> & view_other_predicates,
         const SymbolTransformMap & view_map,
@@ -598,6 +600,7 @@ protected:
         const std::unordered_map<String, String> & view_outputs_to_table_columns_map,
         const ExpressionEquivalences & view_equivalences,
         const std::shared_ptr<const AggregatingStep> & view_aggregate,
+        const NameToType view_symbol_types,
         const StorageID view_storage_id,
         const StorageID target_storage_id)
     {
@@ -615,6 +618,17 @@ protected:
         {
             add_failure_message("join graph rewrite fail.");
             return {};
+        }
+
+        if (!query_symbol_types)
+        {
+            query_symbol_types = Utils::extractNameToType(query);
+            // actually we should skip all subsequent matches for this plan node
+            if (!query_symbol_types)
+            {
+                add_failure_message("query has ambiguous names.");
+                return {};
+            }
         }
 
         // get all predicates from join graph
@@ -674,31 +688,61 @@ protected:
             if (has_missing_predicate)
                 continue; // bail out
 
-            // 2-2. range-predicates
-            // TupleDomainResult query_domain_result = TupleDomain::buildFrom(query_predicates.first);
-            // TupleDomainResult view_domain_result = TupleDomain::buildFrom(view_predicates.first);
-            //
-            // TupleDomain view_based_query_domain;
-            // for (auto & domain : query_domain_result.getDomain())
-            //     view_based_query_domain.emplace(domain.first, domain.second);
-            //
-            // auto result = view_based_query_domain.subtract(view_domain_result.getDomain());
-            // if (!result.second)
-            //     continue; // bail out // try union rewrite
-            //
-            // compensation_predicates.emplace_back(result.first.toPredicate());
+            ASTPtr query_other_predicate;
+            ASTPtr view_other_predicate;
+
+            // 2-2. range-predicates(optional)
+            //// Currently range predicate matching is not perfect, as TupleDomain can not normalize OR filters.
+            //// See also MV unit test case: MaterializedViewRewriteTest.testFilterQueryOnFilterView3
+            if (context->getSettingsRef().enable_materialized_view_rewrite_match_range_filter)
+            {
+                using namespace DB::Predicate;
+                DomainTranslator<ASTPtr> domain_translator(context);
+                auto query_extraction_result
+                    = domain_translator.getExtractionResult(PredicateUtils::combineConjuncts(query_predicates.second), *query_symbol_types);
+                auto view_extraction_result
+                    = domain_translator.getExtractionResult(PredicateUtils::combineConjuncts(view_predicates.second), view_symbol_types);
+
+                TupleDomain<ASTPtr> & query_domain_result = query_extraction_result.tuple_domain;
+                TupleDomain<ASTPtr> & view_domain_result = view_extraction_result.tuple_domain;
+
+                TupleDomain<ASTPtr> view_based_query_domain = query_domain_result.mapKey<TupleDomain<ASTPtr>>([&](const ASTPtr & ast) {
+                    auto res = normalizeExpression(ast, *query_map, query_to_view_table_mappings);
+                    return res;
+                });
+
+                TupleDomain<ASTPtr> view_domain = view_domain_result.mapKey<TupleDomain<ASTPtr>>([&](const ASTPtr & ast) {
+                    auto res = normalizeExpression(ast, view_map);
+                    return res;
+                });
+
+                if (!view_domain.contains(view_based_query_domain))
+                {
+                    add_failure_message("range predicates rewrite fail.");
+                    continue; // bail out
+                }
+
+                if (view_domain != view_based_query_domain)
+                {
+                    compensation_predicates.emplace_back(domain_translator.toPredicate(view_based_query_domain));
+                }
+
+                query_other_predicate = query_extraction_result.remaining_expression;
+                view_other_predicate = view_extraction_result.remaining_expression;
+            }
+            else
+            {
+                query_other_predicate = PredicateUtils::combineConjuncts(query_predicates.second);
+                view_other_predicate = PredicateUtils::combineConjuncts(view_predicates.second);
+            }
 
             // 2-3. other-predicates
             // compensation_predicates.emplace_back(PredicateUtils.splitPredicates(
             //     query_domain_result.getOtherPredicates(), view_domain_result.getOtherPredicates()));
-            auto view_based_query_predicates = normalizeExpression(
-                PredicateUtils::combineConjuncts(query_predicates.second),
-                *query_map,
-                query_to_view_table_mappings,
-                view_based_query_equivalences_map);
+            auto view_based_query_predicates
+                = normalizeExpression(query_other_predicate, *query_map, query_to_view_table_mappings, view_based_query_equivalences_map);
             auto other_compensation_predicate = PredicateUtils::splitPredicates(
-                view_based_query_predicates,
-                normalizeExpression(PredicateUtils::combineConjuncts(view_predicates.second), view_map, view_based_query_equivalences_map));
+                view_based_query_predicates, normalizeExpression(view_other_predicate, view_map, view_based_query_equivalences_map));
             if (!other_compensation_predicate)
             {
                 add_failure_message("other-predicates rewrite fail.");
@@ -1465,7 +1509,7 @@ protected:
         SelectQueryInfo query_info;
         const auto generated_query = std::make_shared<ASTSelectQuery>();
         generated_query->setExpression(ASTSelectQuery::Expression::SELECT, select_expression_list);
-
+        generated_query->replaceDatabaseAndTable(target_database_and_table_name);
         if (prewhere_expr)
             generated_query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(prewhere_expr));
 

@@ -38,6 +38,10 @@ struct IterativeRewriterContext
     std::chrono::time_point<std::chrono::system_clock> start_time;
     UInt64 optimizer_timeout;
     ExcludedRulesMap * excluded_rules_map;
+
+    // for debugging
+    QueryPlan & plan;
+    int rule_apply_count = 0;
 };
 
 /**

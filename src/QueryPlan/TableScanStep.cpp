@@ -161,7 +161,7 @@ namespace _scan_execute_impl
             if (rewritten_projection_step)
             {
                 os << "Column Mapping: " << std::endl;
-                auto assignment_dump = dynamic_cast<ProjectionStep &>(*rewritten_projection_step).getAssignments().dump();
+                auto assignment_dump = dynamic_cast<ProjectionStep &>(*rewritten_projection_step).getAssignments().toString();
                 os << assignment_dump;
             }
         }
