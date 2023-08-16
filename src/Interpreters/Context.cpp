@@ -716,13 +716,15 @@ InterserverIOHandler & Context::getInterserverIOHandler()
 ReadSettings Context::getReadSettings() const
 {
     ReadSettings res;
+    res.enable_io_scheduler = settings.enable_io_scheduler;
+    res.enable_io_pfra = settings.enable_io_pfra || settings.s3_use_read_ahead;
     res.buffer_size = settings.max_read_buffer_size;
     res.aio_threshold = settings.min_bytes_to_use_direct_io;
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
+    res.mmap_cache = getMMappedFileCache().get();
     res.remote_read_min_bytes_for_seek = settings.remote_read_min_bytes_for_seek;
     res.disk_cache_mode = settings.disk_cache_mode;
     res.skip_download_if_exceeds_query_cache = settings.skip_download_if_exceeds_query_cache;
-    res.s3_use_read_ahead = settings.s3_use_read_ahead;
     return res;
 }
 

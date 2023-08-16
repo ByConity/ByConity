@@ -26,6 +26,8 @@ class MMappedFileCache;
 
 struct ReadSettings
 {
+    bool enable_io_scheduler = false;
+    bool enable_io_pfra = false;
     size_t buffer_size = DBMS_DEFAULT_BUFFER_SIZE;
     size_t estimated_size = 0;
     size_t aio_threshold = 0;
@@ -38,7 +40,6 @@ struct ReadSettings
     size_t remote_read_min_bytes_for_seek = DBMS_DEFAULT_BUFFER_SIZE;
     DiskCacheMode disk_cache_mode {DiskCacheMode::AUTO};
 
-    bool s3_use_read_ahead {true};
 };
 
 }

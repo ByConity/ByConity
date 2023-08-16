@@ -721,17 +721,6 @@
     \
     M(PartsToAttach, "") \
     M(NumOfRowsToAttach, "") \
-    M(WriteBufferFromS3WriteOp, "S3 write op count") \
-    M(WriteBufferFromS3WriteOpFailed, "s3 write op failed count") \
-    M(WriteBufferFromS3WriteOpMicro, "s3 write op time") \
-    M(WriteBufferFromS3WriteOpBytes, "s3 write op size") \
-    M(WriteBufferFromS3ControlOp, "s3 control op count") \
-    M(WriteBufferFromS3ControlOpFailed, "s3 control op failed count") \
-    M(WriteBufferFromS3ControlOpMicro, "s3 control op time") \
-    M(ReadBufferFromS3Read, "s3 read op count") \
-    M(ReadBufferFromS3ReadFailed, "s3 read failed count") \
-    M(ReadBufferFromS3ReadBytes, "s3 read op size") \
-    M(ReadBufferFromS3ReadMicro, "s3 read op time") \
     M(ScheduleTimeMilliseconds, "Total time spent to schedule plan segment") \
     \
     M(ScheduledDedupTaskNumber, "Total number of scheduled dedup task") \
@@ -749,6 +738,48 @@
     M(UnhealthWorkerSize, "Number of unhealth worker") \
     M(NotConnectedWorkerSize, "Number of not connected worker size") \
     M(SelectHealthWorkerMilliSeconds, "Total time for select health worker") \
+    \
+    M(WriteBufferFromS3Write, "S3 write op count") \
+    M(WriteBufferFromS3WriteFailed, "s3 write op failed count") \
+    M(WriteBufferFromS3WriteMicro, "s3 write op time") \
+    M(WriteBufferFromS3WriteBytes, "s3 write op size") \
+    \
+    M(ReadBufferFromS3Read, "remote s3 read op count") \
+    M(ReadBufferFromS3ReadFailed, "remote s3 read failed count") \
+    M(ReadBufferFromS3ReadBytes, "remote s3 read op size") \
+    M(ReadBufferFromS3ReadMicro, "remote s3 read op time") \
+    \
+    M(IOSchedulerOpenFileMicro, "Time used in open file when using io scheduler") \
+    M(IOSchedulerScheduleMicro, "Time used in schedule io request") \
+    M(IOSchedulerSubmittedUserRequests, "Number of submitted user request from user") \
+    M(IOSchedulerExecutedRawReuqests, "Number of submitted raw request from io scheduler") \
+    \
+    M(WSReadBufferReadFailed, "WSReadBufferFromFS failed read count") \
+    M(WSReadBufferReadCount, "WSReadBufferFromFS read count") \
+    M(WSReadBufferReadBytes, "WSReadBufferFromFS readed bytes") \
+    M(WSReadBufferReadMicro, "WSReadBufferFromFS readed time in micro seconds") \
+    \
+    M(PFRAWSReadBufferReadCount, "PFRAWSReadBufferFromFS nextImpl invoked count") \
+    M(PFRAWSReadBufferPrefetchCount, "PFRAWSReadBufferFromFS prefetch triggered count") \
+    M(PFRAWSReadBufferPrefetchUtilCount, "PFRAWSReadBufferFromFS prefetch used count") \
+    M(PFRAWSReadBufferPrefetchWaitMicro, "PFRAWSReadBufferFromFS wait time before prefetch finished when utilize it") \
+    M(PFRAWSReadBufferRemoteReadCount, "PFRAWSReadBufferFromFS remote read count, including direct read and prefetch read") \
+    M(PFRAWSReadBufferRemoteReadBytes, "PFRAWSReadBufferFromFS triggered remote read bytes") \
+    M(PFRAWSReadBufferReadMicro, "PFRAWSReadBufferFromFS read time, including seek and nextImpl") \
+    \
+    M(S3TrivialReaderReadCount, "S3TrivialReader read count") \
+    M(S3TrivialReaderReadMicro, "S3TrivialReader read micro seconds") \
+    M(S3TrivialReaderReadBytes, "S3TrivialReader read bytes") \
+    M(S3ReadAheadReaderReadCount, "S3ReadAheadReader read count") \
+    M(S3ReadAheadReaderRemoteReadCount, "S3ReadAheadReader remote read count") \
+    M(S3ReadAheadReaderReadMicro, "S3ReadAheadReader read micro seconds") \
+    M(S3ReadAheadReaderExpectReadBytes, "S3ReadAheadReader expected read bytes") \
+    M(S3ReadAheadReaderReadBytes, "S3ReadAheadReader readed bytes") \
+    M(ConnectionPoolIsFullMicroseconds, "Total time spent waiting for a slot in connection pool.") \
+    \
+    M(PocoHTTPS3GetCount, "") \
+    M(PocoHTTPS3GetTime, "") \
+    M(PocoHTTPS3GetSessionTime, "") \
 
 namespace ProfileEvents
 {

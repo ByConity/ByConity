@@ -49,6 +49,7 @@ MergeTreeMarksLoader::MergeTreeMarksLoader(
     bool save_marks_in_cache_,
     off_t mark_file_offset_,
     size_t mark_file_size_,
+    const ReadSettings& read_settings_,
     size_t columns_in_mark_,
     IDiskCache * disk_cache_,
     UUID storage_uuid_,
@@ -63,6 +64,7 @@ MergeTreeMarksLoader::MergeTreeMarksLoader(
     , index_granularity_info(index_granularity_info_)
     , save_marks_in_cache(save_marks_in_cache_)
     , columns_in_mark(columns_in_mark_)
+    , read_settings(read_settings_)
     , disk_cache(disk_cache_)
     , storage_uuid {storage_uuid_}
     , part_name(part_name_) {}
@@ -114,7 +116,9 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                                     + stream_name + "': " + std::to_string(cached_mark_file_size)
                                     + ", must be: " + std::to_string(expected_file_size),
                                 ErrorCodes::CORRUPTED_DATA);
-                        return local_cache_disk->readFile(local_cache_path, {.buffer_size = cached_mark_file_size});
+                        ReadSettings load_mark_read_settings = read_settings;
+                        load_mark_read_settings.buffer_size = cached_mark_file_size;
+                        return local_cache_disk->readFile(local_cache_path, load_mark_read_settings);
                     }
                 }
                 catch (...)
@@ -123,7 +127,9 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                 }
             }
 
-            auto buf = disk->readFile(mrk_path, {.buffer_size = mark_file_size});
+            ReadSettings load_mark_read_settings = read_settings;
+            load_mark_read_settings.buffer_size = mark_file_size;
+            auto buf = disk->readFile(mrk_path, load_mark_read_settings);
             if (buf->seek(mark_file_offset) != mark_file_offset)
                 throw Exception("Cannot seek to mark file  " + mrk_path + " for stream " + stream_name, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
             return buf;
@@ -146,7 +152,9 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
     }
     else
     {
-        auto buffer = disk->readFile(mrk_path, {.buffer_size = mark_file_size});
+        ReadSettings load_mark_read_settings = read_settings;
+        load_mark_read_settings.buffer_size = mark_file_size;
+        auto buffer = disk->readFile(mrk_path, load_mark_read_settings);
         if (buffer->seek(mark_file_offset) != mark_file_offset)
             throw Exception("Cannot seek to mark file  " + mrk_path + " for stream " + stream_name, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
 

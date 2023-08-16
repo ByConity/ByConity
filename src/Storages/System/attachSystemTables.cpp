@@ -134,6 +134,8 @@
 #include <Storages/System/StorageSystemVirtualWarehouses.h>
 #include <Storages/System/StorageSystemWorkerGroups.h>
 #include <Storages/System/StorageSystemWorkers.h>
+#include <Storages/System/StorageSystemIOSchedulers.h>
+#include <Storages/System/StorageSystemIOWorkers.h>
 
 namespace DB
 {
@@ -188,6 +190,8 @@ void attachSystemTablesLocal(IDatabase & system_database)
 #ifdef OS_LINUX
     attach<StorageSystemStackTrace>(system_database, "stack_trace");
 #endif
+    attach<StorageSystemIOSchedulers>(system_database, "io_schedulers");
+    attach<StorageSystemIOWorkers>(system_database, "io_workers");
 }
 
 void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)

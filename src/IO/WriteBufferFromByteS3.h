@@ -71,20 +71,18 @@ public:
         const String& key_,
         UInt64 max_single_put_threshold_ = 16 * 1024 * 1024,
         UInt64 min_segment_size_ = 16 * 1024 * 1024,
-        bool allow_overwrite_ = false,
         std::optional<std::map<String, String>> object_metadata_ = std::nullopt,
         size_t buf_size_ = DBMS_DEFAULT_BUFFER_SIZE,
+        bool allow_overwrite_ = false,
         char* mem_ = nullptr,
         size_t alignment_ = 0);
 
     ~WriteBufferFromByteS3() override;
 
     /// Receives response from the server after sending all data.
-    void finalize() override;
+    virtual void finalize() override;
 
     void nextImpl() override;
-
-    off_t getPositionInFile() ;
 
     void sync() override;
 
@@ -93,10 +91,6 @@ public:
         return s3_util.getBucket() + "/" + key;
     }
 
-    static int getFD()  
-    {
-        return -1;
-    }
 private:
     bool finalized = false;
 

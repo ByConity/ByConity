@@ -117,8 +117,7 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
     const StorageID& storage_id_, const String& part_name_, const String& stream_name_,
     const DiskPtr& source_disk_, const String& source_file_path_,
     size_t source_data_offset_, size_t source_data_size_, size_t cache_segment_size_,
-    IDiskCache* segment_cache_, size_t estimated_range_bytes_,
-    size_t buffer_size_, const MergeTreeReaderSettings& settings_,
+    IDiskCache* segment_cache_, const MergeTreeReaderSettings& settings_,
     size_t total_segment_count_, MergeTreeMarksLoader& marks_loader_,
     UncompressedCache* uncompressed_cache_,
     const ReadBufferFromFileBase::ProfileCallback& profile_callback_,
@@ -128,7 +127,6 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
         source_disk(source_disk_), source_file_path(source_file_path_),
         source_data_offset(source_data_offset_), source_data_size(source_data_size_),
         cache_segment_size(cache_segment_size_), segment_cache(segment_cache_),
-        estimated_range_bytes(estimated_range_bytes_), buffer_size(buffer_size_),
         settings(settings_), uncompressed_cache(uncompressed_cache_),
         profile_callback(profile_callback_), clock_type(clock_type_),
         total_segment_count(total_segment_count_), marks_loader(marks_loader_),
@@ -315,15 +313,7 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
                 auto cached_compressed_buffer = std::make_unique<CachedCompressedReadBuffer>(
                     fullPath(cache_disk, cache_path),
                     [this, cache_disk, cache_path]() {
-                        return cache_disk->readFile(
-                            cache_path, {
-                                .buffer_size = buffer_size,
-                                .estimated_size = estimated_range_bytes,
-                                .aio_threshold = settings.min_bytes_to_use_direct_io,
-                                .mmap_threshold = settings.min_bytes_to_use_mmap_io,
-                                .mmap_cache = settings.mmap_cache.get()
-                            }
-                        );
+                        return cache_disk->readFile(cache_path, settings.read_settings);
                     },
                     uncompressed_cache
                 );
@@ -333,15 +323,7 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
             else
             {
                 auto non_cached_compressed_buffer = std::make_unique<CompressedReadBufferFromFile>(
-                    cache_disk->readFile(
-                        cache_path, {
-                            .buffer_size = buffer_size,
-                            .estimated_size = estimated_range_bytes,
-                            .aio_threshold = settings.min_bytes_to_use_direct_io,
-                            .mmap_threshold = settings.min_bytes_to_use_mmap_io,
-                            .mmap_cache = settings.mmap_cache.get()
-                        }
-                    )
+                    cache_disk->readFile(cache_path, settings.read_settings)
                 );
 
                 cache_buffer.initialize(nullptr, std::move(non_cached_compressed_buffer));
@@ -384,13 +366,7 @@ void MergedReadBufferWithSegmentCache::initSourceBufferIfNeeded()
         auto cached_compressed_buffer = std::make_unique<CachedCompressedReadBuffer>(
             fullPath(source_disk, source_file_path),
             [this]() {
-                return source_disk->readFile(source_file_path, {
-                    .buffer_size = buffer_size,
-                    .estimated_size = estimated_range_bytes,
-                    .aio_threshold = settings.min_bytes_to_use_direct_io,
-                    .mmap_threshold = settings.min_bytes_to_use_mmap_io,
-                    .mmap_cache = settings.mmap_cache.get()
-                });
+                return source_disk->readFile(source_file_path, settings.read_settings);
             },
             uncompressed_cache, false, source_data_offset, source_data_size, true
         );
@@ -400,13 +376,7 @@ void MergedReadBufferWithSegmentCache::initSourceBufferIfNeeded()
     else
     {
         auto non_cached_compressed_buffer = std::make_unique<CompressedReadBufferFromFile>(
-            source_disk->readFile(source_file_path, {
-                .buffer_size = buffer_size,
-                .estimated_size = estimated_range_bytes,
-                .aio_threshold = settings.min_bytes_to_use_direct_io,
-                .mmap_threshold = settings.min_bytes_to_use_mmap_io,
-                .mmap_cache = settings.mmap_cache.get()
-            }),
+            source_disk->readFile(source_file_path, settings.read_settings),
             false, source_data_offset, source_data_size, true
         );
 

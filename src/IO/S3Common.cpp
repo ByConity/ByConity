@@ -433,7 +433,9 @@ public:
             else if (Aws::Utils::StringUtils::ToLower(ec2_metadata_disabled.c_str()) != "true")
             {
                 DB::S3::PocoHTTPClientConfiguration aws_client_configuration = DB::S3::ClientFactory::instance().createClientConfiguration(
-                    configuration.region, configuration.remote_host_filter, configuration.s3_max_redirects);
+                    configuration.region, configuration.remote_host_filter, configuration.s3_max_redirects,
+                    configuration.http_keep_alive_timeout_ms, configuration.http_connection_pool_size,
+                    configuration.wait_on_pool_size_limit);
 
                 /// See MakeDefaultHttpResourceClientConfiguration().
                 /// This is part of EC2 metadata client, but unfortunately it can't be accessed from outside
@@ -629,9 +631,14 @@ namespace S3
     PocoHTTPClientConfiguration ClientFactory::createClientConfiguration( // NOLINT
         const String & force_region,
         const RemoteHostFilter & remote_host_filter,
-        unsigned int s3_max_redirects)
+        unsigned int s3_max_redirects,
+        uint32_t http_keep_alive_timeout_ms,
+        size_t http_connection_pool_size,
+        bool wait_on_pool_size_limit)
     {
-        return PocoHTTPClientConfiguration(force_region, remote_host_filter, s3_max_redirects);
+        return PocoHTTPClientConfiguration(force_region, remote_host_filter,
+            s3_max_redirects, http_keep_alive_timeout_ms, http_connection_pool_size,
+            wait_on_pool_size_limit);
     }
 
     URI::URI(const Poco::URI & uri_)
@@ -740,7 +747,6 @@ namespace S3
         po::options_description s3_opts("s3_opts");
 
         s3_opts.add_options()
-            ("s3.virtual_host_style", po::value<bool>(&virtual_host_style)->default_value(false)->implicit_value(false), "use virutal host style")
             ("s3.max_redirects", po::value<int>(&max_redirects)->default_value(10)->implicit_value(10), "max_redirects")
             ("s3.connect_timeout_ms", po::value<int>(&connect_timeout_ms)->default_value(30000)->implicit_value(30000), "connect timeout ms")
             ("s3.request_timeout_ms", po::value<int>(&request_timeout_ms)->default_value(30000)->implicit_value(30000), "request timeout ms")
@@ -750,7 +756,10 @@ namespace S3
             ("s3.bucket", po::value<String>(&bucket)->required(), "bucket")
             ("s3.ak_id", po::value<String>(&ak_id)->required(), "ak id")
             ("s3.ak_secret", po::value<String>(&ak_secret)->required(), "ak secret")
-            ("s3.root_prefix", po::value<String>(&root_prefix)->required(), "root prefix");
+            ("s3.root_prefix", po::value<String>(&root_prefix)->required(), "root prefix")
+            ("s3.is_virtual_hosted_style", po::value<bool>(&is_virtual_hosted_style)->default_value(false)->implicit_value(false), "is virtual hosted style or not")
+            ("s3.http_keep_alive_timeout_ms", po::value<uint32_t>(&http_keep_alive_timeout_ms)->default_value(10000)->implicit_value(10000), "http keep alive time")
+            ("s3.http_connection_pool_size", po::value<size_t>(&http_connection_pool_size)->implicit_value(1024)->default_value(1024), "http pool size");
 
         po::parsed_options opts = po::parse_config_file(ini_file_path.c_str(), s3_opts);
         po::variables_map vm;
@@ -763,7 +772,6 @@ namespace S3
 
     S3Config::S3Config(const Poco::Util::AbstractConfiguration & cfg, const String & cfg_prefix)
     {
-        virtual_host_style = cfg.getBool(cfg_prefix + ".virtual_host_style", false);
         max_redirects = cfg.getInt(cfg_prefix + ".max_redirects", 10);
         connect_timeout_ms = cfg.getInt(cfg_prefix + ".connect_timeout_ms", 10000);
         request_timeout_ms = cfg.getInt(cfg_prefix + ".request_timeout_ms", 30000);
@@ -784,6 +792,10 @@ namespace S3
         // Not required, we can still obtain this from environment variable
         ak_id = cfg.getString(cfg_prefix + ".ak_id", "");
         ak_secret = cfg.getString(cfg_prefix + ".ak_secret", "");
+
+        is_virtual_hosted_style = cfg.getBool(cfg_prefix + ".is_virtual_hosted_style", false);
+        http_keep_alive_timeout_ms = cfg.getUInt(cfg_prefix + ".http_keep_alive_timeout_ms", 10000);
+        http_connection_pool_size = cfg.getUInt(cfg_prefix + ".http_connection_pool_size", 1024);
 
         if (ak_id.empty())
             collectCredentialsFromEnv();
@@ -808,8 +820,9 @@ namespace S3
 
     std::shared_ptr<Aws::S3::S3Client> S3Config::create() const
     {
-        PocoHTTPClientConfiguration client_cfg
-            = S3::ClientFactory::instance().createClientConfiguration(region, RemoteHostFilter(), max_redirects);
+        PocoHTTPClientConfiguration client_cfg = S3::ClientFactory::instance().createClientConfiguration(
+            region, RemoteHostFilter(), max_redirects, http_keep_alive_timeout_ms,
+            http_connection_pool_size, false);
         client_cfg.endpointOverride = endpoint;
         client_cfg.region = region;
         client_cfg.connectTimeoutMs = connect_timeout_ms;
@@ -817,7 +830,7 @@ namespace S3
         client_cfg.maxConnections = max_connections;
         client_cfg.enableTcpKeepAlive = true;
 
-        return S3::ClientFactory::instance().create(client_cfg, virtual_host_style,
+        return S3::ClientFactory::instance().create(client_cfg, is_virtual_hosted_style,
             ak_id, ak_secret, "", {}, false, false);
     }
 

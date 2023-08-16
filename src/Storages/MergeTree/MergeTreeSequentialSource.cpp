@@ -25,6 +25,7 @@
 #include <Storages/MergeTree/MergeTreePrefetchedReaderCNCH.h>
 #include <Interpreters/Context.h>
 #include <DataTypes/DataTypeFactory.h>
+#include "Core/Defines.h"
 
 namespace DB
 {
@@ -98,8 +99,10 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     MergeTreeReaderSettings reader_settings =
     {
         /// bytes to use AIO (this is hack)
-        .min_bytes_to_use_direct_io = read_with_direct_io ? 1UL : std::numeric_limits<size_t>::max(),
-        .max_read_buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
+        .read_settings = ReadSettings {
+            .aio_threshold = read_with_direct_io ? 1UL : std::numeric_limits<size_t>::max(),
+            .buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
+        },
         .save_marks_in_cache = false,
     };
 

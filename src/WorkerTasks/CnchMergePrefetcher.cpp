@@ -35,7 +35,7 @@ void CnchMergePrefetcher::PartFutureFiles::schedulePrefetchTask(FutureSegment & 
             LOG_TRACE(&Poco::Logger::get("CnchMergePrefetcher"), "Stage {} copying to {}", stage, local_path);
 
             std::unique_ptr<ReadBufferFromFileBase> in = part->volume->getDisk()->readFile(
-                remote_rel_path);
+                remote_rel_path, future_segment.prefetcher->read_settings);
 
             in->seek(offset);
             WriteBufferFromFile out(local_path);
@@ -295,6 +295,7 @@ CnchMergePrefetcher::CnchMergePrefetcher(const Context & context_, const MergeTr
     : storage(storage_)
     , segment_size(context_.getSettingsRef().cnch_merge_prefetch_segment_size)
     , temp_dir_rel_path(temp_dir_.empty() ? temp_dir_ : (temp_dir_.back() == '/' ? temp_dir_ : temp_dir_ + '/'))
+    , read_settings(context_.getReadSettings())
 {
     StoragePolicyPtr policy = storage.getStoragePolicy(IStorage::StorageLocation::AUXILITY);
     for (const DiskPtr& disk : policy->getDisks())

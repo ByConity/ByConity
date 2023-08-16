@@ -22,6 +22,7 @@
 #pragma once
 #include <Disks/IDisk.h>
 #include <Storages/MarkCache.h>
+#include "IO/ReadSettings.h"
 
 namespace DB
 {
@@ -44,6 +45,7 @@ public:
         bool save_marks_in_cache_,
         off_t mark_file_offset_,
         size_t mark_file_size_,
+        const ReadSettings& read_settings_,
         size_t columns_in_mark_ = 1,
         IDiskCache * disk_cache_ = nullptr,
         UUID storage_uuid_ = {},
@@ -69,6 +71,8 @@ private:
     bool save_marks_in_cache = false;
     size_t columns_in_mark;
     MarkCache::MappedPtr marks;
+
+    ReadSettings read_settings;
 
     IDiskCache * disk_cache;
     UUID storage_uuid;
