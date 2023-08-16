@@ -134,21 +134,24 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
     for (auto & block_with_partition : part_blocks)
     {
         Row original_partition{block_with_partition.partition};
-        auto bucketed_part_blocks = writer.splitBlockPartitionIntoPartsByClusterKey(block_with_partition, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot, context);
+
+        /// We need to dedup in block before split block by cluster key when unique table supports cluster key because cluster key may be different with unique key. Otherwise, we will lost the insert order.
+        if (metadata_snapshot->hasUniqueKey()
+            && (merge_tree_settings->partition_level_unique_keys || storage.merging_params.partitionValueAsVersion()))
+        {
+            FilterInfo filter_info = dedupWithUniqueKey(block_with_partition.block);
+            if (filter_info.num_filtered)
+                block_with_partition.block = CnchDedupHelper::filterBlock(block_with_partition.block, filter_info);
+        }
+
+        auto bucketed_part_blocks = writer.splitBlockPartitionIntoPartsByClusterKey(
+            block_with_partition, context->getSettingsRef().max_partitions_per_insert_block, metadata_snapshot, context);
         LOG_TRACE(storage.getLogger(), "size of bucketed_part_blocks {}", bucketed_part_blocks.size());
 
         for (auto & bucketed_block_with_partition : bucketed_part_blocks)
         {
             Stopwatch watch;
-
             bucketed_block_with_partition.partition = Row(original_partition);
-            if (metadata_snapshot->hasUniqueKey()
-                && (merge_tree_settings->partition_level_unique_keys || storage.merging_params.partitionValueAsVersion()))
-            {
-                FilterInfo filter_info = dedupWithUniqueKey(bucketed_block_with_partition.block);
-                if (filter_info.num_filtered)
-                    bucketed_block_with_partition.block = CnchDedupHelper::filterBlock(bucketed_block_with_partition.block, filter_info);
-            }
 
             DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
             if (metadata_snapshot->hasUniqueKey() && bucketed_block_with_partition.block.has(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME))

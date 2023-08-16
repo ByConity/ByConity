@@ -1112,7 +1112,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
     DeleteBitmapMetaPtrVector bitmaps;
     CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, bitmaps);
 
-    /// Both the parts and bitmaps are sorted in (partitioin_id, min_block, max_block, commit_time) order
+    /// Both the parts and bitmaps are sorted in (partition_id, min_block, max_block, commit_time) order
     auto bitmap_it = bitmaps.begin();
     for (auto & part : parts)
     {
@@ -1878,6 +1878,9 @@ Pipe StorageCnchMergeTree::alterPartition(
 
 void StorageCnchMergeTree::reclusterPartition(const PartitionCommand & command, ContextPtr query_context)
 {
+    if (getInMemoryMetadataPtr()->hasUniqueKey())
+        throw Exception("Table with UNIQUE KEY doesn't support recluster partition commands.", ErrorCodes::SUPPORT_IS_DISABLED);
+
     // create mutation command with partition or predicate attribute
     MutationCommand mutation_command;
     mutation_command.type = MutationCommand::Type::RECLUSTER;

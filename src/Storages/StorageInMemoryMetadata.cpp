@@ -503,6 +503,25 @@ bool StorageInMemoryMetadata::getWithRangeFromClusterByKey() const
     return false;
 }
 
+bool StorageInMemoryMetadata::checkIfClusterByKeySameWithUniqueKey() const
+{
+    if (!hasUniqueKey())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Only unique table can call method checkIfClusterByKeySameWithUniqueKey, but it's not unique table.");
+    if (!isClusterByKeyDefined())
+        return false;
+
+    const auto & unique_key = getUniqueKey();
+    const auto & cluster_by_key = getClusterByKey();
+    if (unique_key.column_names.size() != cluster_by_key.column_names.size())
+        return false;
+    for (size_t i = 0; i < unique_key.column_names.size(); ++i)
+    {
+        if (unique_key.column_names[i] != cluster_by_key.column_names[i])
+            return false;
+    }
+    return true;
+}
+
 const KeyDescription & StorageInMemoryMetadata::getSortingKey() const
 {
     return sorting_key;

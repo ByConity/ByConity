@@ -1,10 +1,12 @@
--- unique table doesn't support `cluster by`
+-- unique table support `cluster by`
 DROP TABLE IF EXISTS u10100_cluster_by;
 
 CREATE TABLE u10100_cluster_by (d Date, id Int32, s String)
 ENGINE = CnchMergeTree PARTITION BY d ORDER BY id
 UNIQUE KEY id
-CLUSTER BY(id) INTO 32 BUCKETS; -- { serverError 36 }
+CLUSTER BY(id) INTO 32 BUCKETS;
+
+DROP TABLE IF EXISTS u10100_cluster_by;
 
 -- unique key does not allow nullable column
 DROP TABLE IF EXISTS u10100_nullable1;
