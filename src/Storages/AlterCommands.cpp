@@ -62,6 +62,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
     extern const int DUPLICATE_COLUMN;
     extern const int NOT_IMPLEMENTED;
+    extern const int TYPE_MISMATCH;
 }
 
 namespace
@@ -1241,6 +1242,11 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
                         "Column {} doesn't have COMMENT, cannot remove it",
                         backQuote(column_name));
             }
+
+            const auto & column = all_columns.get(column_name);
+
+            if (column.type->isMap() && command.data_type && command.data_type->isMapKVStore() != column.type->isMapKVStore())
+                throw Exception("Not support modifying map column between KV Map and Byte Map", ErrorCodes::TYPE_MISMATCH);
 
             modified_columns.emplace(column_name);
         }
