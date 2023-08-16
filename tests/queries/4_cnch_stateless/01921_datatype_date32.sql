@@ -17,11 +17,11 @@ select toDayOfWeek(x1) from t1;
 select '-------toDayOfYear---------';
 select toDayOfYear(x1) from t1;
 select '-------toHour---------';
-select toHour(x1) from t1; -- { serverError 43 }
+select toHour(x1) from t1;
 select '-------toMinute---------';
-select toMinute(x1) from t1; -- { serverError 43 }
+select toMinute(x1) from t1;
 select '-------toSecond---------';
-select toSecond(x1) from t1; -- { serverError 43 }
+select toSecond(x1) from t1;
 select '-------toStartOfDay---------';
 select toStartOfDay(x1, 'Asia/Istanbul') from t1;
 select '-------toMonday---------';

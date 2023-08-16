@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <memory>
 #include <Interpreters/Context.h>
 #include <Interpreters/IInterpreter.h>
 #include <Interpreters/SelectQueryOptions.h>
@@ -33,11 +34,10 @@ class IInterpreterUnionOrSelectQuery : public IInterpreter
 public:
     IInterpreterUnionOrSelectQuery(const ASTPtr & query_ptr_, ContextPtr context_, const SelectQueryOptions & options_)
         : query_ptr(query_ptr_)
-        , context(Context::createCopy(context_))
+        , context(std::const_pointer_cast<Context>(context_))
         , options(options_)
         , max_streams(context->getSettingsRef().max_threads)
-    {
-    }
+    {}
 
     virtual void buildQueryPlan(QueryPlan & query_plan) = 0;
 

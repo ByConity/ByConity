@@ -63,6 +63,14 @@
     M(Int32) \
     M(Int64)
 
+// added for advertising algorithms platform
+#define FOR_AD_NUMERIC_TYPES(M) \
+    M(Int16) \
+    M(Int32) \
+    M(Int64) \
+    M(Float32) \
+    M(Float64)
+
 namespace DB
 {
 struct Settings;
@@ -414,4 +422,44 @@ static IAggregateFunction * createWithTypesAndIntegerType(const IDataType & firs
 #undef DISPATCH
     return nullptr;
 }
+
+/**
+ * For template with three arguments. Added for advertising algorithms platform.
+ */
+template <typename FirstType, typename SecondType, template <typename, typename, typename> class AggregateFunctionTemplate, typename... TArgs>
+static IAggregateFunction * createWithThreeNumericTypesThird(const IDataType & third_type, TArgs && ... args)
+{
+    WhichDataType which(third_type);
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) \
+        return new AggregateFunctionTemplate<FirstType, SecondType, TYPE>(std::forward<TArgs>(args)...);
+    FOR_AD_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
+
+template <typename FirstType, template <typename, typename, typename> class AggregateFunctionTemplate, typename... TArgs>
+static IAggregateFunction * createWithThreeNumericTypesSecond(const IDataType & second_type, const IDataType & third_type, TArgs && ... args)
+{
+    WhichDataType which(second_type);
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) \
+        return createWithThreeNumericTypesThird<FirstType, TYPE, AggregateFunctionTemplate>(third_type, std::forward<TArgs>(args)...);
+    FOR_AD_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
+
+template <template <typename, typename, typename> class AggregateFunctionTemplate, typename... TArgs>
+static IAggregateFunction * createWithThreeNumericTypes(const IDataType & first_type, const IDataType & second_type, const IDataType & third_type, TArgs && ... args)
+{
+    WhichDataType which(first_type);
+#define DISPATCH(TYPE) \
+    if (which.idx == TypeIndex::TYPE) \
+        return createWithThreeNumericTypesSecond<TYPE, AggregateFunctionTemplate>(second_type, third_type, std::forward<TArgs>(args)...);
+    FOR_AD_NUMERIC_TYPES(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
+
 }

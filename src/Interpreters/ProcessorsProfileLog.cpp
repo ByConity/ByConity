@@ -43,6 +43,7 @@ NamesAndTypesList ProcessorProfileLogElement::getNamesAndTypes()
         {"parent_ids", std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())},
         {"plan_step", std::make_shared<DataTypeUInt64>()},
         {"plan_group", std::make_shared<DataTypeUInt64>()},
+
         {"query_id", std::make_shared<DataTypeString>()},
         {"name", std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>())},
         {"elapsed_us", std::make_shared<DataTypeUInt64>()},
@@ -71,6 +72,7 @@ void ProcessorProfileLogElement::appendToBlock(MutableColumns & columns) const
             parent_ids_array.emplace_back(parent);
         columns[i++]->insert(parent_ids_array);
     }
+
     columns[i++]->insert(plan_step);
     columns[i++]->insert(plan_group);
     columns[i++]->insertData(query_id.data(), query_id.size());
@@ -90,6 +92,64 @@ ProcessorsProfileLog::ProcessorsProfileLog(ContextPtr context_, const String & d
   : SystemLog<ProcessorProfileLogElement>(context_, database_name_, table_name_,
         storage_def_, flush_interval_milliseconds_)
 {
+}
+
+static UInt64 time_in_microseconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
+{
+    return std::chrono::duration_cast<std::chrono::microseconds>(timepoint.time_since_epoch()).count();
+}
+
+static UInt64 time_in_seconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
+{
+    return std::chrono::duration_cast<std::chrono::seconds>(timepoint.time_since_epoch()).count();
+}
+
+void ProcessorsProfileLog::addLogs(const QueryPipeline *pipeline, const String& query_id, std::chrono::time_point<std::chrono::system_clock> finish_time, int segment_id)
+{
+    ProcessorProfileLogElement processor_elem;
+    processor_elem.event_time = time_in_seconds(finish_time);
+    processor_elem.event_time_microseconds = time_in_microseconds(finish_time);
+    processor_elem.query_id = query_id;
+
+    auto get_proc_id = [](const IProcessor & proc) -> UInt64
+    {
+        return reinterpret_cast<std::uintptr_t>(&proc);
+    };
+    for (const auto & processor : pipeline->getProcessors())
+    {
+        std::vector<UInt64> parents;
+        for (const auto & port : processor->getOutputs())
+        {
+            if (!port.isConnected())
+                continue;
+            const IProcessor & next = port.getInputPort().getProcessor();
+            parents.push_back(get_proc_id(next));
+        }
+
+        processor_elem.id = get_proc_id(*processor);
+        processor_elem.parent_ids = std::move(parents);
+        processor_elem.plan_step = reinterpret_cast<std::uintptr_t>(processor->getQueryPlanStep());
+        /// plan_group is set differently to community CH,
+        /// which is processor->getQueryPlanStepGroup();
+        /// here, it is combined with the segment_id and 
+        /// invoking count for visualizing processors in the profiling website
+        uint64_t count = processor->getWorkCount();
+        processor_elem.plan_group = processor->getQueryPlanStepGroup() | (segment_id << 16) | (count << 32);
+
+        processor_elem.processor_name = processor->getName();
+
+        processor_elem.elapsed_us = processor->getElapsedUs();
+        processor_elem.input_wait_elapsed_us = processor->getInputWaitElapsedUs();
+        processor_elem.output_wait_elapsed_us = processor->getOutputWaitElapsedUs();
+
+        auto stats = processor->getProcessorDataStats();
+        processor_elem.input_rows = stats.input_rows;
+        processor_elem.input_bytes = stats.input_bytes;
+        processor_elem.output_rows = stats.output_rows;
+        processor_elem.output_bytes = stats.output_bytes;
+
+        add(processor_elem);
+    }
 }
 
 }

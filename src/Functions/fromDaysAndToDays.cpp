@@ -164,8 +164,7 @@ namespace
 
             WhichDataType which_first(arguments[0]->getTypeId());
 
-            /// TODO: support Time type
-            if (!which_first.isDateOrDate32() && !which_first.isDateTime() && !which_first.isDateTime64()
+            if (!which_first.isDateOrDate32() && !which_first.isDateTime() && !which_first.isDateTime64() && !which_first.isTime()
                 && !which_first.isStringOrFixedString())
                 throw Exception(
                     ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "The argument of function {} must be Date, or DateTime or String", getName());
@@ -179,7 +178,7 @@ namespace
             DataTypePtr from_type = arguments[0].type;
             WhichDataType which(from_type);
 
-            if (which.isStringOrFixedString())
+            if (which.isStringOrFixedString() || which.isTime())
             {
                 auto to_datetime = FunctionFactory::instance().get("toDateTime64", context);
                 const auto scale_type = std::make_shared<DataTypeUInt8>();

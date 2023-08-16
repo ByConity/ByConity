@@ -37,7 +37,8 @@ template <typename ToDataType, typename Transform>
 class FunctionDateOrDateTimeToSomething : public IFunctionDateOrDateTime<Transform>
 {
 public:
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionDateOrDateTimeToSomething>(); }
+    FunctionDateOrDateTimeToSomething(ContextPtr context_) : context(context_) { }
+    static FunctionPtr create(ContextPtr context_) { return std::make_shared<FunctionDateOrDateTimeToSomething>(context_); }
 
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
@@ -73,6 +74,27 @@ public:
         const IDataType * from_type = arguments[0].type.get();
         WhichDataType which(from_type);
 
+        if constexpr (std::is_same_v<Transform, ToHourImpl> || std::is_same_v<Transform, ToMinuteImpl> || std::is_same_v<Transform, ToSecondImpl>)
+        {
+            if (which.isDateOrDate32())
+            {
+                ColumnsWithTypeAndName temp_args;
+                convertToDateTime(arguments, &temp_args, input_rows_count);
+                return DateTimeTransformImpl<DataTypeDateTime, ToDataType, Transform>::execute(temp_args, result_type, input_rows_count);
+            }
+        }
+        else if constexpr (
+            std::is_same_v<Transform, ToYearImpl> || std::is_same_v<Transform, ToQuarterImpl> || std::is_same_v<Transform, ToMonthImpl>
+            || std::is_same_v<Transform, ToDayOfMonthImpl>)
+        {
+            if (which.isTime())
+            {
+                ColumnsWithTypeAndName temp_args;
+                convertToDateTime(arguments, &temp_args, input_rows_count);
+                return DateTimeTransformImpl<DataTypeDateTime, ToDataType, Transform>::execute(temp_args, result_type, input_rows_count);
+            }
+        }
+
         if (which.isDate())
             return DateTimeTransformImpl<DataTypeDate, ToDataType, Transform>::execute(arguments, result_type, input_rows_count);
         else if (which.isDate32())
@@ -82,7 +104,6 @@ public:
         else if (which.isDateTime64() || which.isString())
         {
             const UInt32 scale = which.isString() ? 0 : static_cast<const DataTypeDateTime64 *>(from_type)->getScale();
-
             const TransformDateTime64<Transform> transformer(scale);
             return DateTimeTransformImpl<DataTypeDateTime64, ToDataType, decltype(transformer)>::execute(arguments, result_type, input_rows_count, transformer);
         }
@@ -96,6 +117,13 @@ public:
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
                 "Illegal type {} of argument of function {}",
                 arguments[0].type->getName(), this->getName());
+    }
+
+    inline void convertToDateTime(const ColumnsWithTypeAndName & arguments, ColumnsWithTypeAndName * result, size_t input_rows_count) const
+    {
+        auto to_func = FunctionFactory::instance().get("toDateTime", context);
+        auto to_col = to_func->build(arguments)->execute(arguments, std::make_shared<DataTypeDateTime>(), input_rows_count);
+        result->emplace_back(std::move(to_col), std::make_shared<DataTypeDateTime>(), "datetime");
     }
 
     bool hasInformationAboutMonotonicity() const override
@@ -136,6 +164,10 @@ public:
                 ? is_monotonic : is_not_monotonic;
         }
     }
+
+    private:
+        ContextPtr context;
+
 };
 
 }

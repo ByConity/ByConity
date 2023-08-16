@@ -1518,7 +1518,7 @@ void TCPHandler::receiveCnchQuery()
     {
         auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, false);
         query_context = Context::createCopy(named_session->context);
-        query_context->setSessionContext(named_session->context);
+        query_context->setSessionContext(query_context);
         query_context->setTemporaryTransaction(txn_id, primary_txn_id);
         query_context->setProgressCallback([this] (const Progress & value) { return this->updateProgress(value); });
     }
