@@ -730,7 +730,7 @@ LocalDeleteBitmaps MergeTreeDataDeduper::repairParts(TxnTimestamp txn_id, IMerge
             if (!delta_bitmaps[i])
                 continue;
             res.push_back(LocalDeleteBitmap::createBaseOrDelta(
-                visible_parts[i]->info, visible_parts[i]->getDeleteBitmap(), delta_bitmaps[i], txn_id.toUInt64()));
+                visible_parts[i]->info, visible_parts[i]->getDeleteBitmap(/*allow_null*/ true), delta_bitmaps[i], txn_id.toUInt64()));
             num_bitmaps++;
         }
         return num_bitmaps;
