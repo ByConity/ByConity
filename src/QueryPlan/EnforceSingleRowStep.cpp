@@ -17,12 +17,14 @@
 
 #include <Processors/Transforms/EnforceSingleRowTransform.h>
 #include <Processors/QueryPipeline.h>
+#include <Interpreters/join_common.h>
 
 namespace DB
 {
 EnforceSingleRowStep::EnforceSingleRowStep(const DB::DataStream & input_stream_)
     : ITransformingStep(input_stream_, input_stream_.header, {})
 {
+    makeOutputNullable();
 }
 
 void EnforceSingleRowStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &)
@@ -34,6 +36,21 @@ void EnforceSingleRowStep::transformPipeline(QueryPipeline & pipeline, const Bui
 void EnforceSingleRowStep::setInputStreams(const DataStreams & input_streams_)
 {
     input_streams = input_streams_;
+    makeOutputNullable();
+}
+
+void EnforceSingleRowStep::makeOutputNullable()
+{
+    auto input_header = input_streams[0].header;
+    NamesAndTypes nullable_output_header;
+    for(auto & input : input_header)
+    {
+        if (!JoinCommon::canBecomeNullable(input.type))
+            nullable_output_header.emplace_back(input.name, input.type);
+        else
+            nullable_output_header.emplace_back(input.name, JoinCommon::convertTypeToNullable(input.type));
+    }
+    output_stream = DataStream{.header = {nullable_output_header}};
 }
 
 void EnforceSingleRowStep::serialize(WriteBuffer & buf) const

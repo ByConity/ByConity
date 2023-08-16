@@ -199,7 +199,7 @@ QueryPlanStepPtr ProjectionStep::deserialize(ReadBuffer & buf, ContextPtr)
 
 std::shared_ptr<IQueryPlanStep> ProjectionStep::copy(ContextPtr) const
 {
-    return std::make_shared<ProjectionStep>(input_streams[0], assignments, name_to_type, final_project, dynamic_filters);
+    return std::make_shared<ProjectionStep>(input_streams[0], assignments, name_to_type, final_project, dynamic_filters, hints);
 }
 
 ActionsDAGPtr ProjectionStep::createActions(ContextPtr context) const
