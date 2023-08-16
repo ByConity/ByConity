@@ -21,6 +21,9 @@
 
 #if USE_KRB5
 
-void kerberosInit(const String & keytab_file, const String & principal, const String & cache_name = "");
+// the default_kinit_timeout is 30min
+constexpr time_t DEFAULT_KINIT_TIMEOUT = 30 * 60;
+
+void kerberosInit(const String & keytab_file, const String & principal, const String & cache_name = "", time_t kinit_timeout = DEFAULT_KINIT_TIMEOUT);
 
 #endif // USE_KRB5
