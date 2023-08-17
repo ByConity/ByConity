@@ -1968,35 +1968,35 @@ void updateAsyncQueryStatus(
 }
 
 void executeHttpQueryInAsyncMode(
-    String & query,
-    ASTPtr ast,
+    String & query1,
+    ASTPtr ast1,
     ContextMutablePtr c,
-    WriteBuffer & ostr,
-    ReadBuffer * istr,
+    WriteBuffer & ostr1,
+    ReadBuffer * istr1,
     bool has_query_tail,
     const std::optional<FormatSettings> & f,
     std::function<void(const String &, const String &, const String &, const String &)> set_result_details)
 {
-    const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
-    String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
-        ? getIdentifierName(ast_query_with_output->format)
+    const auto * ast_query_with_output1 = dynamic_cast<const ASTQueryWithOutput *>(ast1.get());
+    String format_name1 = ast_query_with_output1 && (ast_query_with_output1->format != nullptr)
+        ? getIdentifierName(ast_query_with_output1->format)
         : c->getDefaultFormat();
     if (set_result_details)
         set_result_details(
-            c->getClientInfo().current_query_id, "text/plain; charset=UTF-8", format_name, DateLUT::instance().getTimeZone());
+            c->getClientInfo().current_query_id, "text/plain; charset=UTF-8", format_name1, DateLUT::instance().getTimeZone());
 
     c->getAsyncQueryManager()->insertAndRun(
-        query,
-        ast,
+        query1,
+        ast1,
         c,
-        istr,
-        [c, &ostr, &f](const String & id) {
+        istr1,
+        [c, &ostr1, &f](const String & id) {
             MutableColumnPtr table_column_mut = ColumnString::create();
             table_column_mut->insert(id);
             Block res;
             res.insert(ColumnWithTypeAndName(std::move(table_column_mut), std::make_shared<DataTypeString>(), "async_query_id"));
 
-            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(c->getDefaultFormat(), ostr, res, c, {}, f);
+            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(c->getDefaultFormat(), ostr1, res, c, {}, f);
 
             out->write(res);
             out->flush();
