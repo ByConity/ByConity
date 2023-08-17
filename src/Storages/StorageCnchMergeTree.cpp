@@ -2611,13 +2611,10 @@ std::optional<UInt64> StorageCnchMergeTree::totalRows(const ContextPtr & query_c
     size_t rows = 0;
     for (const auto & part : parts)
     {
-        if (!part->isPartial())
-        {
-            if (const auto & delete_bitmap = part->getDeleteBitmap(*this, false))
-                rows += part->rowsCount() - delete_bitmap->cardinality();
-            else
-                rows += part->rowsCount();
-        }
+        if (const auto & delete_bitmap = part->getDeleteBitmap(*this, false))
+            rows += part->rowsCount() - delete_bitmap->cardinality();
+        else
+            rows += part->rowsCount();
     }
     return rows;
 }

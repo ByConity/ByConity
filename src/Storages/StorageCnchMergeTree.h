@@ -210,6 +210,7 @@ private:
 
     CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts) const;
 
+    // get all Visible Parts
     ServerDataPartsVector getAllParts(ContextPtr local_context) const;
 
     ServerDataPartsVector
