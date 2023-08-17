@@ -1112,7 +1112,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
     DeleteBitmapMetaPtrVector bitmaps;
     CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, bitmaps);
 
-    /// Both the parts and bitmaps are sorted in (partitioin_id, min_block, max_block, commit_time) order
+    /// Both the parts and bitmaps are sorted in (partition_id, min_block, max_block, commit_time) order
     auto bitmap_it = bitmaps.begin();
     for (auto & part : parts)
     {
@@ -1385,6 +1385,18 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
         }
         return ids;
     });
+}
+
+Strings StorageCnchMergeTree::getPrunedPartitions(
+    const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context)
+{
+    Strings pruned_partitions;
+    if (local_context->getCnchCatalog())
+    {
+        auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
+        pruned_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names_to_return, local_context);
+    }
+    return pruned_partitions;
 }
 
 ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
@@ -1878,6 +1890,9 @@ Pipe StorageCnchMergeTree::alterPartition(
 
 void StorageCnchMergeTree::reclusterPartition(const PartitionCommand & command, ContextPtr query_context)
 {
+    if (getInMemoryMetadataPtr()->hasUniqueKey())
+        throw Exception("Table with UNIQUE KEY doesn't support recluster partition commands.", ErrorCodes::SUPPORT_IS_DISABLED);
+
     // create mutation command with partition or predicate attribute
     MutationCommand mutation_command;
     mutation_command.type = MutationCommand::Type::RECLUSTER;
@@ -2596,13 +2611,10 @@ std::optional<UInt64> StorageCnchMergeTree::totalRows(const ContextPtr & query_c
     size_t rows = 0;
     for (const auto & part : parts)
     {
-        if (!part->isPartial())
-        {
-            if (const auto & delete_bitmap = part->getDeleteBitmap(*this, false))
-                rows += part->rowsCount() - delete_bitmap->cardinality();
-            else
-                rows += part->rowsCount();
-        }
+        if (const auto & delete_bitmap = part->getDeleteBitmap(*this, false))
+            rows += part->rowsCount() - delete_bitmap->cardinality();
+        else
+            rows += part->rowsCount();
     }
     return rows;
 }

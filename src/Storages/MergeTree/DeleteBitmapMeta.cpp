@@ -43,8 +43,12 @@ std::shared_ptr<LocalDeleteBitmap> LocalDeleteBitmap::createBaseOrDelta(
     const DeleteBitmapPtr & delta_bitmap,
     UInt64 txn_id)
 {
-    if (!base_bitmap || !delta_bitmap)
+    if (!delta_bitmap)
         throw Exception("base_bitmap and delta_bitmap cannot be null", ErrorCodes::LOGICAL_ERROR);
+
+    /// In repair mode, base delete bitmap may not exists due to some bugs, just return delta bitmap.
+    if (!base_bitmap)
+        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Base, txn_id, delta_bitmap);
 
     if (delta_bitmap->cardinality() <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
     {

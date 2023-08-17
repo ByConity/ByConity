@@ -18,6 +18,7 @@ public:
         // debug mode may time out.
         settings.emplace("cascades_optimizer_timeout", "300000");
 #endif
+        settings.emplace("enable_materialized_view_rewrite", "1");
         settings.emplace("enable_materialized_view_join_rewriting", "1");
         settings.emplace("enable_materialized_view_rewrite_verbose_log", "1");
         settings.emplace("cte_mode", "INLINED");
@@ -30,8 +31,8 @@ public:
         tester.reset();
     }
 
-    void SetUp() override {
-        GTEST_SKIP() << "Skipping all tests for this fixture";
+    void SetUp() override
+    {
     }
 
     static MaterializedViewRewriteTester sql(const String & materialize, const String & query) { return tester->sql(materialize, query); }
@@ -93,20 +94,22 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testAggDistinctInMvGrouping)
 {
   String mv = "select avgState(deptno), empid from emps group by empid";
   String query = "select avg(deptno), max(empid) from emps group by empid";
-    sql(mv, query)
-      .checkingThatResultContains("Projection\n"
-                                  "│     Expressions: avg(deptno):=`expr#avgMerge(avgState(deptno))`, empid:=`expr#empid`\n"
-                                  "└─ Gather Exchange\n"
-                                  "   └─ MergingAggregated\n"
-                                  "      └─ Repartition Exchange\n"
-                                  "         │     Partition by: {expr#empid}\n"
-                                  "         └─ Aggregating\n"
-                                  "            │     Group by: {expr#empid}\n"
-                                  "            │     Aggregates: expr#avgMerge(avgState(deptno)):=avgMerge(expr#avgState(deptno)_1)\n"
-                                  "            └─ Projection\n"
-                                  "               │     Expressions: expr#avgState(deptno)_1:=`avgState(deptno)`, expr#empid:=empid\n"
-                                  "               └─ TableScan test_mview.MV0_MV_DATA\n"
-                                  "                        Outputs: [avgState(deptno), empid]")
+  sql(mv, query)
+      .checkingThatResultContains(
+          "Projection\n"
+          "│     Expressions: avg(deptno):=`expr#avgMerge(avgState(deptno))`, max(empid):=`expr#max(empid)_1`\n"
+          "└─ Gather Exchange\n"
+          "   └─ MergingAggregated\n"
+          "      └─ Repartition Exchange\n"
+          "         │     Partition by: {expr#empid}\n"
+          "         └─ Aggregating\n"
+          "            │     Group by: {expr#empid}\n"
+          "            │     Aggregates: expr#avgMerge(avgState(deptno)):=AggNull(avgMerge)(expr#avgState(deptno)_1), "
+          "expr#max(empid)_1:=AggNull(max)(expr#empid_1)\n"
+          "            └─ Projection\n"
+          "               │     Expressions: expr#avgState(deptno)_1:=`avgState(deptno)`, expr#empid:=empid, expr#empid_1:=empid\n"
+          "               └─ TableScan test_mview.MV0_MV_DATA\n"
+          "                        Outputs: [avgState(deptno), empid]")
       .ok();
 }
 
@@ -117,17 +120,18 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testAggDistinctInMvGrouping2)
     String mv = "select count(deptno) cd, empid from emps group by empid";
     String query = "select count(deptno), max(empid) from emps";
     sql(mv, query)
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: count(deptno):=coalesce(`expr#sum(cd)`, 0), max(empid):=`expr#max(empid)_1`\n"
-                                    "└─ MergingAggregated\n"
-                                    "   └─ Gather Exchange\n"
-                                    "      └─ Aggregating\n"
-                                    "         │     Group by: {}\n"
-                                    "         │     Aggregates: expr#sum(cd):=sum(expr#cd), expr#max(empid)_1:=max(expr#empid)\n"
-                                    "         └─ Projection\n"
-                                    "            │     Expressions: expr#cd:=cd, expr#empid:=empid\n"
-                                    "            └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                     Outputs: [cd, empid]")
+        .checkingThatResultContains(
+            "Projection\n"
+            "│     Expressions: count(deptno):=coalesce(`expr#sum(cd)`, 0), max(empid):=`expr#max(empid)_1`\n"
+            "└─ MergingAggregated\n"
+            "   └─ Gather Exchange\n"
+            "      └─ Aggregating\n"
+            "         │     Group by: {}\n"
+            "         │     Aggregates: expr#sum(cd):=AggNull(sum)(expr#cd), expr#max(empid)_1:=AggNull(max)(expr#empid)\n"
+            "         └─ Projection\n"
+            "            │     Expressions: expr#cd:=cd, expr#empid:=empid\n"
+            "            └─ TableScan test_mview.MV0_MV_DATA\n"
+            "                     Outputs: [cd, empid]")
         .ok();
 }
 
@@ -135,22 +139,23 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testAggDistinctInMvGrouping3)
 {
   String mv = "select count(deptno) cd, empid from emps group by empid";
   String query = "select count(deptno), max(empid) from emps where empid = 5";
-    sql(mv, query)
-        .checkingThatResultContains("Projection\n"
-                                  "│     Expressions: count(deptno):=coalesce(`expr#sum(cd)`, 0), max(empid):=`expr#max(empid)_1`\n"
-                                  "└─ MergingAggregated\n"
-                                  "   └─ Gather Exchange\n"
-                                  "      └─ Aggregating\n"
-                                  "         │     Group by: {}\n"
-                                  "         │     Aggregates: expr#sum(cd):=sum(expr#cd), expr#max(empid)_1:=max(expr#empid)\n"
-                                  "         └─ Projection\n"
-                                  "            │     Expressions: expr#cd:=cd, expr#empid:=empid\n"
-                                  "            └─ Filter\n"
-                                  "               │     Condition: empid = 5\n"
-                                  "               └─ TableScan test_mview.MV0_MV_DATA\n"
-                                  "                        Where: empid = 5\n"
-                                  "                        Outputs: [cd, empid]")
-        .ok();
+  sql(mv, query)
+      .checkingThatResultContains(
+          "Projection\n"
+          "│     Expressions: count(deptno):=coalesce(`expr#sum(cd)`, 0), max(empid):=`expr#max(empid)_1`\n"
+          "└─ MergingAggregated\n"
+          "   └─ Gather Exchange\n"
+          "      └─ Aggregating\n"
+          "         │     Group by: {}\n"
+          "         │     Aggregates: expr#sum(cd):=AggNull(sum)(expr#cd), expr#max(empid)_1:=AggNull(max)(expr#empid)\n"
+          "         └─ Projection\n"
+          "            │     Expressions: expr#cd:=cd, expr#empid:=empid\n"
+          "            └─ Filter\n"
+          "               │     Condition: empid = 5\n"
+          "               └─ TableScan test_mview.MV0_MV_DATA\n"
+          "                        Condition : empid = 5.\n"
+          "                        Outputs: [cd, empid]")
+      .ok();
 }
 
 TEST_F(MaterializedViewRewriteAdditionalTest, testSimpleAggregate)
@@ -163,7 +168,7 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testSimpleAggregate)
                                   "   └─ Gather Exchange\n"
                                   "      └─ Aggregating\n"
                                   "         │     Group by: {}\n"
-                                  "         │     Aggregates: expr#sum(count()):=sum(expr#count()_2)\n"
+                                  "         │     Aggregates: expr#sum(count()):=AggNull(sum)(expr#count()_2)\n"
                                   "         └─ Projection\n"
                                   "            │     Expressions: expr#count()_2:=`count()`\n"
                                   "            └─ TableScan test_mview.MV0_MV_DATA\n"
@@ -176,18 +181,18 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testEmptyGrouping)
   String mv = "select deptno, empid, count(commission) as count from emps group by deptno, empid";
   String query = "select count(commission) from emps";
   sql(mv, query)
-        .checkingThatResultContains("Projection\n"
+      .checkingThatResultContains("Projection\n"
                                   "│     Expressions: count(commission):=coalesce(`expr#sum(count)`, 0)\n"
                                   "└─ MergingAggregated\n"
                                   "   └─ Gather Exchange\n"
                                   "      └─ Aggregating\n"
                                   "         │     Group by: {}\n"
-                                  "         │     Aggregates: expr#sum(count):=sum(expr#count)\n"
+                                  "         │     Aggregates: expr#sum(count):=AggNull(sum)(expr#count)\n"
                                   "         └─ Projection\n"
                                   "            │     Expressions: expr#count:=count\n"
                                   "            └─ TableScan test_mview.MV0_MV_DATA\n"
                                   "                     Outputs: [count]")
-        .ok();
+      .ok();
 }
 
 TEST_F(MaterializedViewRewriteAdditionalTest, testEmptyGrouping2)
@@ -195,21 +200,21 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testEmptyGrouping2)
   String mv = "select deptno, empid, count(commission) as count from emps group by deptno, empid";
   String query = "select count(commission) from emps where deptno = 1 and empid = 2";
   sql(mv, query)
-        .checkingThatResultContains("Projection\n"
+      .checkingThatResultContains("Projection\n"
                                   "│     Expressions: count(commission):=coalesce(`expr#sum(count)`, 0)\n"
                                   "└─ MergingAggregated\n"
                                   "   └─ Gather Exchange\n"
                                   "      └─ Aggregating\n"
                                   "         │     Group by: {}\n"
-                                  "         │     Aggregates: expr#sum(count):=sum(expr#count)\n"
+                                  "         │     Aggregates: expr#sum(count):=AggNull(sum)(expr#count)\n"
                                   "         └─ Projection\n"
                                   "            │     Expressions: expr#count:=count\n"
                                   "            └─ Filter\n"
                                   "               │     Condition: (deptno = 1) AND (empid = 2)\n"
                                   "               └─ TableScan test_mview.MV0_MV_DATA\n"
-                                  "                        Where: (deptno = 1) AND (empid = 2)\n"
-                                  "                        Outputs: [count, deptno, empid]")
-        .ok();
+                                  "                        Condition : (deptno = 1) AND (empid = 2).\n"
+                                  "                        Outputs: [count, deptno, empid]\n")
+      .ok();
 }
 
 TEST_F(MaterializedViewRewriteAdditionalTest, testAggOnViewNoAgg)

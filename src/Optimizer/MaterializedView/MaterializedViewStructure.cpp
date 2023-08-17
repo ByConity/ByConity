@@ -17,6 +17,7 @@
 
 #include <Optimizer/MaterializedView/MaterializeViewChecker.h>
 #include <Optimizer/PredicateUtils.h>
+#include <Optimizer/Utils.h>
 
 namespace DB
 {
@@ -112,6 +113,13 @@ MaterializedViewStructure::buildFrom(
     std::shared_ptr<const AggregatingStep> aggregating_step = top_aggregate_node
         ? dynamic_pointer_cast<const AggregatingStep>(top_aggregate_node->getStep())
         : std::shared_ptr<const AggregatingStep>{};
+    auto symbol_type = Utils::extractNameToType(*query);
+    if (!symbol_type)
+    {
+        LOG_WARNING(
+            log, "materialized view " + view_storage_id.getFullTableName() + " has ambiguous column names, please re-define the MV");
+        return {};
+    }
     return std::make_shared<MaterializedViewStructure>(
         view_storage_id,
         target_storage_id,
@@ -121,6 +129,7 @@ MaterializedViewStructure::buildFrom(
         std::move(output_columns),
         std::move(output_columns_to_table_columns_map),
         std::move(expression_equivalences),
-        std::move(aggregating_step));
+        std::move(aggregating_step),
+        std::move(*symbol_type));
 }
 }

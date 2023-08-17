@@ -15,6 +15,7 @@
 
 #include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/Rule/Patterns.h>
+#include <QueryPlan/GraphvizPrinter.h>
 
 namespace DB
 {
@@ -65,9 +66,10 @@ void IterativeRewriter::rewrite(QueryPlan & plan, ContextMutablePtr ctx) const
         .globalContext = ctx,
         .cte_info = plan.getCTEInfo(),
         .start_time = std::chrono::system_clock::now(),
-        .optimizer_timeout = ctx->getSettingsRef().iterative_optimizer_timeout};
+        .optimizer_timeout = ctx->getSettingsRef().iterative_optimizer_timeout,
+        .excluded_rules_map = &ctx->getExcludedRulesMap(),
+        .plan = plan};
 
-    context.excluded_rules_map = &ctx->getExcludedRulesMap();
     for (auto & item : plan.getCTEInfo().getCTEs())
         explorePlan(item.second, context);
     explorePlan(plan.getPlanNode(), context);
@@ -130,6 +132,19 @@ bool IterativeRewriter::exploreNode(PlanNodePtr & node, IterativeRewriterContext
                     node = rewrite_result.getPlans()[0];
                     done = false;
                     progress = true;
+                    if (ctx.globalContext->getSettingsRef().debug_iterative_optimizer)
+                    {
+                        // avoid too many file generated in case of infinite loop
+                        if (ctx.rule_apply_count < 100)
+                        {
+                            // graphviz file path: Iterative_{rewriterName}_{ruleApplyCount}_{ruleName}_{beforeNodeId}_{afterNodeId}...
+                            GraphvizPrinter::printLogicalPlan(
+                                ctx.plan,
+                                ctx.globalContext,
+                                "Iterative_" + name() + "_" + std::to_string(ctx.rule_apply_count++) + "_" + rule->getName() + "_"
+                                    + std::to_string(node_id) + "_" + std::to_string(node->getId()));
+                        }
+                    }
                 }
                 else
                 {
@@ -150,7 +165,7 @@ bool IterativeRewriter::exploreChildren(PlanNodePtr & plan, IterativeRewriterCon
     PlanNodes children;
     DataStreams inputs;
 
-    for (PlanNodePtr child : plan->getChildren())
+    for (PlanNodePtr & child : plan->getChildren())
     {
         progress |= explorePlan(child, ctx);
 

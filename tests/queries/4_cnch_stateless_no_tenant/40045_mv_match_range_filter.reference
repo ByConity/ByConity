@@ -1,0 +1,121 @@
+case 1, expect hit mv
+Projection Est. ? rows
+│     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#event_date, expr#server_time_hour, expr#uid}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#event_date, expr#server_time_hour, expr#uid}
+            │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#event_date:=event_date, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
+               └─ Filter Est. ? rows
+                  │     Condition: event_date = cast(19359, \'Date\')
+                  └─ TableScan test.target40045 Est. ? rows
+                           Condition : event_date = cast(19359, \'Date\').
+                           Outputs: [event_date, server_time_hour, sum_click, uid]
+note: Materialized Views is applied for 1 times: test.mv40045.
+case 2, expect hit mv
+Projection Est. ? rows
+│     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#event_date, expr#server_time_hour, expr#uid}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#event_date, expr#server_time_hour, expr#uid}
+            │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#event_date:=event_date, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
+               └─ Filter Est. ? rows
+                  │     Condition: event_date > cast(19358, \'Date\')
+                  └─ TableScan test.target40045 Est. ? rows
+                           Condition : event_date > cast(19358, \'Date\').
+                           Outputs: [event_date, server_time_hour, sum_click, uid]
+note: Materialized Views is applied for 1 times: test.mv40045.
+case 3, expect not hit mv
+Projection Est. ? rows
+│     Expressions: [event_date, uid], server_time_hour:=`expr#toHour(toDateTime(server_time))`, sum_click:=`expr#sum(click)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {event_date, expr#toHour(toDateTime(server_time)), uid}
+         └─ Aggregating Est. ? rows
+            │     Group by: {event_date, expr#toHour(toDateTime(server_time)), uid}
+            │     Aggregates: expr#sum(click):=AggNull(sum)(click)
+            └─ Projection Est. ? rows
+               │     Expressions: [click, event_date, uid], expr#toHour(toDateTime(server_time)):=toHour(toDateTime(server_time))
+               └─ Filter Est. ? rows
+                  │     Condition: event_date >= cast(18993, \'Date\')
+                  └─ TableScan test.base40045 Est. ? rows
+                           Condition : event_date >= cast(18993, \'Date\').
+                           Outputs: [click, event_date, server_time, uid]
+case 4, expect not hit mv
+Projection Est. ? rows
+│     Expressions: [event_date, uid], server_time_hour:=`expr#toHour(toDateTime(server_time))`, sum_click:=`expr#sum(click)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {event_date, expr#toHour(toDateTime(server_time)), uid}
+         └─ Aggregating Est. ? rows
+            │     Group by: {event_date, expr#toHour(toDateTime(server_time)), uid}
+            │     Aggregates: expr#sum(click):=AggNull(sum)(click)
+            └─ Projection Est. ? rows
+               │     Expressions: [click, event_date, uid], expr#toHour(toDateTime(server_time)):=toHour(toDateTime(server_time))
+               └─ TableScan test.base40045 Est. ? rows
+                        Outputs: [click, event_date, server_time, uid]
+case 5, expect hit mv
+Projection Est. ? rows
+│     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#event_date, expr#server_time_hour, expr#uid}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#event_date, expr#server_time_hour, expr#uid}
+            │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#event_date:=event_date, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
+               └─ Filter Est. ? rows
+                  │     Condition: event_date IN (cast(19358, \'Date\'), cast(19359, \'Date\'))
+                  └─ TableScan test.target40045 Est. ? rows
+                           Condition : event_date IN (cast(19358, \'Date\'), cast(19359, \'Date\')).
+                           Outputs: [event_date, server_time_hour, sum_click, uid]
+note: Materialized Views is applied for 1 times: test.mv40045.
+case 6, expect hit mv
+Projection Est. ? rows
+│     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#event_date, expr#server_time_hour, expr#uid}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#event_date, expr#server_time_hour, expr#uid}
+            │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#event_date:=event_date, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
+               └─ Filter Est. ? rows
+                  │     Condition: (event_date IN (cast(19358, \'Date\'), cast(19359, \'Date\'))) AND (uid = \'xxx\')
+                  └─ TableScan test.target40045 Est. ? rows
+                           Condition : (event_date IN (cast(19358, \'Date\'), cast(19359, \'Date\'))) AND (uid = \'xxx\').
+                           Outputs: [event_date, server_time_hour, sum_click, uid]
+note: Materialized Views is applied for 1 times: test.mv40045.
+case 7, expect hit mv
+Projection Est. ? rows
+│     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#event_date, expr#server_time_hour, expr#uid}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#event_date, expr#server_time_hour, expr#uid}
+            │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
+            └─ Projection Est. ? rows
+               │     Expressions: expr#event_date:=event_date, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
+               └─ Filter Est. ? rows
+                  │     Condition: server_time_hour = 2
+                  └─ TableScan test.target40045 Est. ? rows
+                           Condition : server_time_hour = 2.
+                           Outputs: [event_date, server_time_hour, sum_click, uid]
+note: Materialized Views is applied for 1 times: test.mv40045.

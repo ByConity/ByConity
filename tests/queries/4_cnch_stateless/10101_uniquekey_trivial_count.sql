@@ -43,4 +43,12 @@ SELECT count() FROM u10101 WHERE d = '2021-03-01' SETTINGS max_rows_to_read = 1;
 SELECT count() FROM u10101 WHERE toYear(d) = '2021'  SETTINGS max_rows_to_read = 1;
 SELECT count() FROM u10101 WHERE toYear(d) = '2022'  SETTINGS max_rows_to_read = 1;
 
+-- alter table 
+ALTER TABLE u10101 DROP COLUMN c2;
+SELECT 'after alter table drop column c2';
+SELECT count() FROM u10101 SETTINGS max_rows_to_read = 1;
+SELECT count() FROM u10101 WHERE d = '2021-03-01' SETTINGS max_rows_to_read = 1;
+SELECT count() FROM u10101 WHERE toYear(d) = '2021'  SETTINGS max_rows_to_read = 1;
+SELECT count() FROM u10101 WHERE toYear(d) = '2022'  SETTINGS max_rows_to_read = 1;
+
 DROP TABLE IF EXISTS u10101;

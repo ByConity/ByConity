@@ -221,6 +221,7 @@ struct Settings;
     M(UInt64, staged_part_lifetime_threshold_ms_to_block_kafka_consume, 10000, "", 0) \
     M(Seconds, unique_acquire_write_lock_timeout, 300, "", 0) \
     M(MaxThreads, cnch_parallel_dumping_threads, 8, "", 0) \
+    M(MaxThreads, unique_table_dedup_threads, 8, "", 0) \
     \
     /* Metastore settings */\
     M(Bool, enable_metastore, true, "Use KV metastore to manage data parts.", 0) \

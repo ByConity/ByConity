@@ -227,5 +227,37 @@ bool canChangeOutputRows(const ProjectionStep & project, ContextPtr context)
     return canChangeOutputRows(project.getAssignments(), context);
 }
 
+static void extractNameToTypeImpl(PlanNodeBase * node, std::optional<NameToType> & res)
+{
+    if (node && res)
+    {
+        for (const auto & item : node->getCurrentDataStream().header)
+        {
+            const auto & name = item.name;
+            const auto & type = item.type;
+            if (auto it = res->find(name); it != res->end() && !it->second->equals(*type))
+            {
+                res = std::nullopt;
+                break;
+            }
+
+            res->emplace(name, type);
+        }
+    }
+
+    if (res)
+    {
+        for (auto & child : node->getChildren())
+            extractNameToTypeImpl(child.get(), res);
+    }
+}
+
+
+std::optional<NameToType> extractNameToType(const PlanNodeBase & node)
+{
+    std::optional<NameToType> res = NameToType{};
+    extractNameToTypeImpl(const_cast<PlanNodeBase *>(&node), res);
+    return res;
+}
 }
 }

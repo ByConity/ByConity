@@ -238,6 +238,8 @@ struct StorageInMemoryMetadata
     Int64 getBucketNumberFromClusterByKey() const;
     Int64 getSplitNumberFromClusterByKey() const;
     bool getWithRangeFromClusterByKey() const;
+    /// Check if cluster by key is same with unique key, only valid for unique table
+    bool checkIfClusterByKeySameWithUniqueKey() const;
 
     /// Returns structure with sorting key.
     const KeyDescription & getSortingKey() const;
@@ -286,7 +288,7 @@ struct StorageInMemoryMetadata
     const KeyDescription & getUniqueKey() const;
     /// Returns ASTExpressionList of unique key expression for storage or nullptr if there is none.
     ASTPtr getUniqueKeyAST() const { return unique_key.definition_ast; }
-    /// Storage has user-defined (in CREATE query) sorting key.
+    /// Storage has user-defined (in CREATE query) unique key.
     bool isUniqueKeyDefined() const;
     /// Storage has unique key (maybe part of some other key). It means, that
     /// it contains at least one column.

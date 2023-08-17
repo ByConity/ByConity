@@ -23,7 +23,7 @@
 #include <Common/tests/gtest_global_context.h>
 using namespace DB;
 using namespace DB::Predicate;
-
+using PredicateRange = Predicate::Range;
 
 
 class DomainTest : public testing::Test
@@ -249,17 +249,21 @@ TEST_F(DomainTest, testOrderableSingleValue)
     ASSERT_TRUE(domain.isNullableSingleValue());
     ASSERT_FALSE(domain.isOnlyNull());
     ASSERT_FALSE(domain.isNullAllowed());
-    ASSERT_EQ(domain.getValueSet(), createValueSet({Range::equalRange(int64_type, field_0)}));
+    ASSERT_EQ(domain.getValueSet(), createValueSet({PredicateRange::equalRange(int64_type, field_0)}));
     ASSERT_EQ(domain.getType(), int64_type);
     ASSERT_FALSE(domain.includesNullableValue(int64_type->getRange().value().min));
     ASSERT_TRUE(domain.includesNullableValue(field_0));
     ASSERT_FALSE(domain.includesNullableValue(int64_type->getRange().value().max));
-    ASSERT_EQ(domain.complement(), Domain(createValueSet({Range::lessThanRange(int64_type, field_0), Range::greaterThanRange(int64_type, field_0)}), true));
+    ASSERT_EQ(
+        domain.complement(),
+        Domain(
+            createValueSet({PredicateRange::lessThanRange(int64_type, field_0), PredicateRange::greaterThanRange(int64_type, field_0)}),
+            true));
     ASSERT_EQ(domain.getSingleValue(), field_0);
     ASSERT_EQ(domain.getNullableSingleValue(), field_0);
     //ASSERT_EQ(domain.toString(), "[ SortedRangeSet[type=bigint, ranges=1, {[0]}] ]");
 
-    //    assertThatThrownBy(() -> Domain(createValueSet({Range.range(int64_type, field_1, true, field_2, true)), false).getSingleValue())
+    //    assertThatThrownBy(() -> Domain(createValueSet({PredicateRange.range(int64_type, field_1, true, field_2, true)), false).getSingleValue())
     //        .isInstanceOf(IllegalStateException.class)
     //        .hasMessage("Domain is not a single value");
 }
@@ -368,11 +372,14 @@ TEST_F(DomainTest, testIntersect)
         Domain::none(int64_type));
 
     ASSERT_EQ(
-        Domain(createValueSet({Range::equalRange(int64_type, field_1)}), true).intersect(Domain(createValueSet({Range::equalRange(int64_type, field_2)}), true)),
+        Domain(createValueSet({PredicateRange::equalRange(int64_type, field_1)}), true)
+            .intersect(Domain(createValueSet({PredicateRange::equalRange(int64_type, field_2)}), true)),
         Domain::onlyNull(int64_type));
 
     ASSERT_EQ(
-        Domain(createValueSet({Range::equalRange(int64_type, field_1)}), true).intersect(Domain(createValueSet({Range::equalRange(int64_type, field_1), Range::equalRange(int64_type, field_2)}), false)),
+        Domain(createValueSet({PredicateRange::equalRange(int64_type, field_1)}), true)
+            .intersect(Domain(
+                createValueSet({PredicateRange::equalRange(int64_type, field_1), PredicateRange::equalRange(int64_type, field_2)}), false)),
         Domain::singleValue(int64_type, field_1));
 }
 
@@ -384,24 +391,29 @@ TEST_F(DomainTest, testUnion)
     ASSERT_EQ(Domain::notNull(int64_type).unionn(Domain::onlyNull(int64_type)), Domain::all(int64_type));
     ASSERT_EQ(Domain::singleValue(int64_type, field_0).unionn(Domain::all(int64_type)), Domain::all(int64_type));
     ASSERT_EQ(Domain::singleValue(int64_type, field_0).unionn(Domain::notNull(int64_type)), Domain::notNull(int64_type));
-    ASSERT_EQ(Domain::singleValue(int64_type, field_0).unionn(Domain::onlyNull(int64_type)), Domain(createValueSet({Range::equalRange(int64_type, field_0)}), true));
-
-    ASSERT_EQ(Domain(createValueSet({Range::equalRange(int64_type, field_1)}), true).unionn(
-                  Domain(createValueSet({Range::equalRange(int64_type, field_2)}), true)),
-              Domain(createValueSet({Range::equalRange(int64_type, field_1), Range::equalRange(int64_type, field_2)}), true));
-
-    ASSERT_EQ(Domain(createValueSet({Range::equalRange(int64_type, field_1)}), true).unionn(
-                  Domain(createValueSet({Range::equalRange(int64_type, field_1), Range::equalRange(int64_type, field_2)}), false)),
-              Domain(createValueSet({Range::equalRange(int64_type, field_1), Range::equalRange(int64_type, field_2)}), true));
+    ASSERT_EQ(
+        Domain::singleValue(int64_type, field_0).unionn(Domain::onlyNull(int64_type)),
+        Domain(createValueSet({PredicateRange::equalRange(int64_type, field_0)}), true));
 
     ASSERT_EQ(
-        Domain(createValueSet({Range::lessThanOrEqualRange(int64_type, 20L)}), true).unionn(
-            Domain(createValueSet({Range::greaterThanOrEqualRange(int64_type, 10L)}), true)),
+        Domain(createValueSet({PredicateRange::equalRange(int64_type, field_1)}), true)
+            .unionn(Domain(createValueSet({PredicateRange::equalRange(int64_type, field_2)}), true)),
+        Domain(createValueSet({PredicateRange::equalRange(int64_type, field_1), PredicateRange::equalRange(int64_type, field_2)}), true));
+
+    ASSERT_EQ(
+        Domain(createValueSet({PredicateRange::equalRange(int64_type, field_1)}), true)
+            .unionn(Domain(
+                createValueSet({PredicateRange::equalRange(int64_type, field_1), PredicateRange::equalRange(int64_type, field_2)}), false)),
+        Domain(createValueSet({PredicateRange::equalRange(int64_type, field_1), PredicateRange::equalRange(int64_type, field_2)}), true));
+
+    ASSERT_EQ(
+        Domain(createValueSet({PredicateRange::lessThanOrEqualRange(int64_type, 20L)}), true)
+            .unionn(Domain(createValueSet({PredicateRange::greaterThanOrEqualRange(int64_type, 10L)}), true)),
         Domain::all(int64_type));
 
     ASSERT_EQ(
-        Domain(createValueSet({Range::lessThanOrEqualRange(int64_type, 20L)}), false).unionn(
-            Domain(createValueSet({Range::greaterThanOrEqualRange(int64_type, 10L)}), false)),
+        Domain(createValueSet({PredicateRange::lessThanOrEqualRange(int64_type, 20L)}), false)
+            .unionn(Domain(createValueSet({PredicateRange::greaterThanOrEqualRange(int64_type, 10L)}), false)),
         Domain(createAll(int64_type), false));
 }
 
@@ -421,7 +433,9 @@ TEST_F(DomainTest, testSubtract)
         Domain::notNull(int64_type));
     ASSERT_EQ(
         Domain::all(int64_type).subtract(Domain::singleValue(int64_type, field_0)),
-        Domain(createValueSet({Range::lessThanRange(int64_type, field_0), Range::greaterThanRange(int64_type, field_0)}), true));
+        Domain(
+            createValueSet({PredicateRange::lessThanRange(int64_type, field_0), PredicateRange::greaterThanRange(int64_type, field_0)}),
+            true));
 
     ASSERT_EQ(
         Domain::none(int64_type).subtract(Domain::all(int64_type)),
@@ -453,7 +467,9 @@ TEST_F(DomainTest, testSubtract)
         Domain::notNull(int64_type));
     ASSERT_EQ(
         Domain::notNull(int64_type).subtract(Domain::singleValue(int64_type, field_0)),
-        Domain(createValueSet({Range::lessThanRange(int64_type, field_0), Range::greaterThanRange(int64_type, field_0)}), false));
+        Domain(
+            createValueSet({PredicateRange::lessThanRange(int64_type, field_0), PredicateRange::greaterThanRange(int64_type, field_0)}),
+            false));
 
     ASSERT_EQ(
         Domain::onlyNull(int64_type).subtract(Domain::all(int64_type)),
@@ -488,11 +504,14 @@ TEST_F(DomainTest, testSubtract)
         Domain::none(int64_type));
 
     ASSERT_EQ(
-        Domain(createValueSet({Range::equalRange(int64_type, field_1)}), true).subtract(Domain(createValueSet({Range::equalRange(int64_type, field_2)}), true)),
+        Domain(createValueSet({PredicateRange::equalRange(int64_type, field_1)}), true)
+            .subtract(Domain(createValueSet({PredicateRange::equalRange(int64_type, field_2)}), true)),
         Domain::singleValue(int64_type, field_1));
 
     ASSERT_EQ(
-        Domain(createValueSet({Range::equalRange(int64_type, field_1)}), true).subtract(Domain(createValueSet({Range::equalRange(int64_type, field_1), Range::equalRange(int64_type, field_2)}), false)),
+        Domain(createValueSet({PredicateRange::equalRange(int64_type, field_1)}), true)
+            .subtract(Domain(
+                createValueSet({PredicateRange::equalRange(int64_type, field_1), PredicateRange::equalRange(int64_type, field_2)}), false)),
         Domain::onlyNull(int64_type));
 }
 

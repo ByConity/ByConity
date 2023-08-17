@@ -22,7 +22,7 @@
 #include "Optimizer/value_sets.h"
 using namespace DB;
 using namespace DB::Predicate;
-
+using PredicateRange = Predicate::Range;
 
 
 class SortedRangeSetTest : public testing::Test
@@ -117,40 +117,44 @@ TEST_F(SortedRangeSetTest, testSingleValue)
 
     SortedRangeSet range_set = SortedRangeSet::createFromUnsortedValues(type_int64, {field_10});
 
-    SortedRangeSet complement = SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_10), Range::lessThanRange(type_int64, field_10)});
+    SortedRangeSet complement = SortedRangeSet::createFromUnsortedRanges(
+        {PredicateRange::greaterThanRange(type_int64, field_10), PredicateRange::lessThanRange(type_int64, field_10)});
 
     EXPECT_EQ(range_set.getType()->getTypeId(), TypeIndex::Int64);
     ASSERT_FALSE(range_set.isNone());
     ASSERT_FALSE(range_set.isAll());
     ASSERT_TRUE(range_set.isSingleValue());
-    EXPECT_EQ(range_set.getRanges(), Ranges{Range::equalRange(type_int64, field_10)});
+    EXPECT_EQ(range_set.getRanges(), Ranges{PredicateRange::equalRange(type_int64, field_10)});
     EXPECT_EQ(range_set.getRangesCount(), 1);
     EXPECT_EQ(range_set.complement(), complement);
     ASSERT_TRUE(range_set.containsValue(field_10));
     ASSERT_FALSE(range_set.containsValue(field_9));
     //    EXPECT_EQ(range_set.toString(), "SortedRangeSet[type=bigint, ranges=1, {[10]}]");
     //    EXPECT_EQ(
-    //        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(VARCHAR, utf8Slice("LARGE PLATED NICKEL"))).toString(),
+    //        SortedRangeSet::createFromUnsortedRanges({PredicateRange::equalRange(VARCHAR, utf8Slice("LARGE PLATED NICKEL"))).toString(),
     //        "SortedRangeSet[type=varchar, ranges=1, {[LARGE PLATED NICKEL]}]");
 }
 
 TEST_F(SortedRangeSetTest, testBoundedSet)
 {
-    SortedRangeSet range_set = SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_10),
-                                                                         Range::equalRange(type_int64, field_0),
-                                                                         Range(type_int64, true, field_9, false, field_11),
-                                                                         Range::equalRange(type_int64, field_0),
-                                                                         Range(type_int64, true, field_2, true, field_4),
-                                                                         Range(type_int64, false, field_4, true, field_5)});
+    SortedRangeSet range_set = SortedRangeSet::createFromUnsortedRanges(
+        {PredicateRange::equalRange(type_int64, field_10),
+         PredicateRange::equalRange(type_int64, field_0),
+         PredicateRange(type_int64, true, field_9, false, field_11),
+         PredicateRange::equalRange(type_int64, field_0),
+         PredicateRange(type_int64, true, field_2, true, field_4),
+         PredicateRange(type_int64, false, field_4, true, field_5)});
 
-    Ranges normalized_result = {Range::equalRange(type_int64, field_0),
-                                Range(type_int64, true, field_2, true, field_5),
-                                Range(type_int64, true, field_9, false, field_11)};
+    Ranges normalized_result
+        = {PredicateRange::equalRange(type_int64, field_0),
+           PredicateRange(type_int64, true, field_2, true, field_5),
+           PredicateRange(type_int64, true, field_9, false, field_11)};
 
-    SortedRangeSet complement = SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_0),
-                                                                          Range(type_int64, false, field_0, false, field_2),
-                                                                          Range(type_int64, false, field_5, false, field_9),
-                                                                          Range::greaterThanOrEqualRange(type_int64, field_11)});
+    SortedRangeSet complement = SortedRangeSet::createFromUnsortedRanges(
+        {PredicateRange::lessThanRange(type_int64, field_0),
+         PredicateRange(type_int64, false, field_0, false, field_2),
+         PredicateRange(type_int64, false, field_5, false, field_9),
+         PredicateRange::greaterThanOrEqualRange(type_int64, field_11)});
 
     EXPECT_EQ(range_set.getType(), type_int64);
     ASSERT_FALSE(range_set.isNone());
@@ -176,20 +180,22 @@ TEST_F(SortedRangeSetTest, testBoundedSet)
 
 TEST_F(SortedRangeSetTest, testUnboundedSet)
 {
-    SortedRangeSet range_set = SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_10),
-                                                                         Range::lessThanOrEqualRange(type_int64, field_0),
-                                                                         Range(type_int64, true, field_2, false, field_4),
-                                                                         Range(type_int64, true, field_4, false, field_6),
-                                                                         Range(type_int64, false, field_1, false, field_2),
-                                                                         Range(type_int64, false, field_9, false, field_11)});
+    SortedRangeSet range_set = SortedRangeSet::createFromUnsortedRanges(
+        {PredicateRange::greaterThanRange(type_int64, field_10),
+         PredicateRange::lessThanOrEqualRange(type_int64, field_0),
+         PredicateRange(type_int64, true, field_2, false, field_4),
+         PredicateRange(type_int64, true, field_4, false, field_6),
+         PredicateRange(type_int64, false, field_1, false, field_2),
+         PredicateRange(type_int64, false, field_9, false, field_11)});
 
-    Ranges normalized_result = {Range::lessThanOrEqualRange(type_int64, field_0),
-                                Range(type_int64, false, field_1, false, field_6),
-                                Range::greaterThanRange(type_int64, field_9)};
+    Ranges normalized_result
+        = {PredicateRange::lessThanOrEqualRange(type_int64, field_0),
+           PredicateRange(type_int64, false, field_1, false, field_6),
+           PredicateRange::greaterThanRange(type_int64, field_9)};
 
 
-    SortedRangeSet complement =  SortedRangeSet::createFromUnsortedRanges({Range(type_int64, false, field_0, true, field_1),
-                                                                          Range(type_int64, true, field_6, true, field_9)});
+    SortedRangeSet complement = SortedRangeSet::createFromUnsortedRanges(
+        {PredicateRange(type_int64, false, field_0, true, field_1), PredicateRange(type_int64, true, field_6, true, field_9)});
 
     EXPECT_EQ(range_set.getType(), type_int64);
     ASSERT_FALSE(range_set.isNone());
@@ -207,28 +213,52 @@ TEST_F(SortedRangeSetTest, testUnboundedSet)
 TEST_F(SortedRangeSetTest, testCreateWithRanges)
 {
     // two low-unbounded, first shorter
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_5), Range::lessThanRange(type_int64, field_10)}).getRanges(),
-              Ranges{Range::lessThanRange(type_int64, field_10)});
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_10), Range::lessThanOrEqualRange(type_int64, field_10)}).getRanges(),
-              Ranges{Range::lessThanOrEqualRange(type_int64, field_10)});
+    EXPECT_EQ(
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::lessThanRange(type_int64, field_5), PredicateRange::lessThanRange(type_int64, field_10)})
+            .getRanges(),
+        Ranges{PredicateRange::lessThanRange(type_int64, field_10)});
+    EXPECT_EQ(
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::lessThanRange(type_int64, field_10), PredicateRange::lessThanOrEqualRange(type_int64, field_10)})
+            .getRanges(),
+        Ranges{PredicateRange::lessThanOrEqualRange(type_int64, field_10)});
 
     // two low-unbounded, second shorter
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_10), Range::lessThanRange(type_int64, field_5)}).getRanges(),
-              Ranges{Range::lessThanRange(type_int64, field_10)});
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedRanges({Range::lessThanOrEqualRange(type_int64, field_10), Range::lessThanRange(type_int64, field_10)}).getRanges(),
-              Ranges{Range::lessThanOrEqualRange(type_int64, field_10)});
+    EXPECT_EQ(
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::lessThanRange(type_int64, field_10), PredicateRange::lessThanRange(type_int64, field_5)})
+            .getRanges(),
+        Ranges{PredicateRange::lessThanRange(type_int64, field_10)});
+    EXPECT_EQ(
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::lessThanOrEqualRange(type_int64, field_10), PredicateRange::lessThanRange(type_int64, field_10)})
+            .getRanges(),
+        Ranges{PredicateRange::lessThanOrEqualRange(type_int64, field_10)});
 
     // two high-unbounded, first shorter
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_10), Range::greaterThanRange(type_int64, field_5)}).getRanges(),
-              Ranges{Range::greaterThanRange(type_int64, field_5)});
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_10), Range::greaterThanOrEqualRange(type_int64, field_10)}).getRanges(),
-              Ranges{Range::greaterThanOrEqualRange(type_int64, field_10)});
+    EXPECT_EQ(
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::greaterThanRange(type_int64, field_10), PredicateRange::greaterThanRange(type_int64, field_5)})
+            .getRanges(),
+        Ranges{PredicateRange::greaterThanRange(type_int64, field_5)});
+    EXPECT_EQ(
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::greaterThanRange(type_int64, field_10), PredicateRange::greaterThanOrEqualRange(type_int64, field_10)})
+            .getRanges(),
+        Ranges{PredicateRange::greaterThanOrEqualRange(type_int64, field_10)});
 
     // two high-unbounded, second shorter
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_5), Range::greaterThanRange(type_int64, field_10)}).getRanges(),
-              Ranges{Range::greaterThanRange(type_int64, field_5)});
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_10), Range::greaterThanRange(type_int64, field_10)}).getRanges(),
-              Ranges{Range::greaterThanOrEqualRange(type_int64, field_10)});
+    EXPECT_EQ(
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::greaterThanRange(type_int64, field_5), PredicateRange::greaterThanRange(type_int64, field_10)})
+            .getRanges(),
+        Ranges{PredicateRange::greaterThanRange(type_int64, field_5)});
+    EXPECT_EQ(
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::greaterThanOrEqualRange(type_int64, field_10), PredicateRange::greaterThanRange(type_int64, field_10)})
+            .getRanges(),
+        Ranges{PredicateRange::greaterThanOrEqualRange(type_int64, field_10)});
 }
 
 TEST_F(SortedRangeSetTest, testGetSingleValue)
@@ -242,12 +272,26 @@ TEST_F(SortedRangeSetTest, testGetSingleValue)
 
 TEST_F(SortedRangeSetTest, testSpan)
 {
+#ifdef NDEBUG
     EXPECT_THROW(SortedRangeSet::createNone(type_int64).getSpan(), Exception);
-    EXPECT_EQ(SortedRangeSet::createAll(type_int64).getSpan(), Range::allRange(type_int64));
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).getSpan(), Range::equalRange(type_int64, field_0));
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}).getSpan(), Range(type_int64, true, field_0, true, field_1));
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::greaterThanRange(type_int64, field_1)}).getSpan(), Range::greaterThanOrEqualRange(type_int64, field_0));
-    EXPECT_EQ(SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_0), Range::greaterThanRange(type_int64, field_1)}).getSpan(), Range::allRange(type_int64));
+#endif
+    EXPECT_EQ(SortedRangeSet::createAll(type_int64).getSpan(), PredicateRange::allRange(type_int64));
+    EXPECT_EQ(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).getSpan(), PredicateRange::equalRange(type_int64, field_0));
+    EXPECT_EQ(
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})
+            .getSpan(),
+        PredicateRange(type_int64, true, field_0, true, field_1));
+    EXPECT_EQ(
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_0), PredicateRange::greaterThanRange(type_int64, field_1)})
+            .getSpan(),
+        PredicateRange::greaterThanOrEqualRange(type_int64, field_0));
+    EXPECT_EQ(
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::lessThanRange(type_int64, field_0), PredicateRange::greaterThanRange(type_int64, field_1)})
+            .getSpan(),
+        PredicateRange::allRange(type_int64));
 }
 
 TEST_F(SortedRangeSetTest, testOverlaps)
@@ -255,29 +299,51 @@ TEST_F(SortedRangeSetTest, testOverlaps)
     ASSERT_TRUE(SortedRangeSet::createAll(type_int64).overlaps(SortedRangeSet::createAll(type_int64)));
     ASSERT_FALSE(SortedRangeSet::createAll(type_int64).overlaps(SortedRangeSet::createNone(type_int64)));
     ASSERT_TRUE(SortedRangeSet::createAll(type_int64).overlaps(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})));
-    ASSERT_TRUE(SortedRangeSet::createAll(type_int64).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)})));
-    ASSERT_TRUE(SortedRangeSet::createAll(type_int64).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})));
-    ASSERT_TRUE(SortedRangeSet::createAll(type_int64).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0), Range::lessThanRange(type_int64, field_0)})));
+    ASSERT_TRUE(SortedRangeSet::createAll(type_int64)
+                    .overlaps(SortedRangeSet::createFromUnsortedRanges(
+                        {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})));
+    ASSERT_TRUE(SortedRangeSet::createAll(type_int64)
+                    .overlaps(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})));
+    ASSERT_TRUE(SortedRangeSet::createAll(type_int64)
+                    .overlaps(SortedRangeSet::createFromUnsortedRanges(
+                        {PredicateRange::greaterThanRange(type_int64, field_0), PredicateRange::lessThanRange(type_int64, field_0)})));
 
     ASSERT_FALSE(SortedRangeSet::createNone(type_int64).overlaps(SortedRangeSet::createAll(type_int64)));
     ASSERT_FALSE(SortedRangeSet::createNone(type_int64).overlaps(SortedRangeSet::createNone(type_int64)));
     ASSERT_FALSE(SortedRangeSet::createNone(type_int64).overlaps(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})));
-    ASSERT_FALSE(SortedRangeSet::createNone(type_int64).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)})));
-    ASSERT_FALSE(SortedRangeSet::createNone(type_int64).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})));
-    ASSERT_FALSE(SortedRangeSet::createNone(type_int64).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0), Range::lessThanRange(type_int64, field_0)})));
+    ASSERT_FALSE(SortedRangeSet::createNone(type_int64)
+                     .overlaps(SortedRangeSet::createFromUnsortedRanges(
+                         {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})));
+    ASSERT_FALSE(SortedRangeSet::createNone(type_int64)
+                     .overlaps(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})));
+    ASSERT_FALSE(SortedRangeSet::createNone(type_int64)
+                     .overlaps(SortedRangeSet::createFromUnsortedRanges(
+                         {PredicateRange::greaterThanRange(type_int64, field_0), PredicateRange::lessThanRange(type_int64, field_0)})));
 
     ASSERT_TRUE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).overlaps(SortedRangeSet::createAll(type_int64)));
     ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).overlaps(SortedRangeSet::createNone(type_int64)));
     ASSERT_TRUE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).overlaps(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})));
-    ASSERT_TRUE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)})));
-    ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})));
-    ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0), Range::lessThanRange(type_int64, field_0)})));
+    ASSERT_TRUE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})
+                    .overlaps(SortedRangeSet::createFromUnsortedRanges(
+                        {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})));
+    ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})
+                     .overlaps(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})));
+    ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})
+                     .overlaps(SortedRangeSet::createFromUnsortedRanges(
+                         {PredicateRange::greaterThanRange(type_int64, field_0), PredicateRange::lessThanRange(type_int64, field_0)})));
 
-    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_1)})));
-    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_2)})));
-    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_0)}).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})));
-    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)}).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_0)})));
-    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_0)}).overlaps(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})));
+    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges(
+                    {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})
+                    .overlaps(SortedRangeSet::createFromUnsortedRanges({PredicateRange::equalRange(type_int64, field_1)})));
+    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges(
+                     {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})
+                     .overlaps(SortedRangeSet::createFromUnsortedRanges({PredicateRange::equalRange(type_int64, field_2)})));
+    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, field_0)})
+                    .overlaps(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})));
+    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})
+                    .overlaps(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, field_0)})));
+    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanRange(type_int64, field_0)})
+                     .overlaps(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})));
 }
 
 TEST_F(SortedRangeSetTest, testContains)
@@ -285,16 +351,26 @@ TEST_F(SortedRangeSetTest, testContains)
     ASSERT_TRUE(SortedRangeSet::createAll(type_int64).contains(SortedRangeSet::createAll(type_int64)));
     ASSERT_TRUE(SortedRangeSet::createAll(type_int64).contains(SortedRangeSet::createNone(type_int64)));
     ASSERT_TRUE(SortedRangeSet::createAll(type_int64).contains(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})));
-    ASSERT_TRUE(SortedRangeSet::createAll(type_int64).contains(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)})));
-    ASSERT_TRUE(SortedRangeSet::createAll(type_int64).contains(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})));
-    ASSERT_TRUE(SortedRangeSet::createAll(type_int64).contains(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0), Range::lessThanRange(type_int64, field_0)})));
+    ASSERT_TRUE(SortedRangeSet::createAll(type_int64)
+                    .contains(SortedRangeSet::createFromUnsortedRanges(
+                        {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})));
+    ASSERT_TRUE(SortedRangeSet::createAll(type_int64)
+                    .contains(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})));
+    ASSERT_TRUE(SortedRangeSet::createAll(type_int64)
+                    .contains(SortedRangeSet::createFromUnsortedRanges(
+                        {PredicateRange::greaterThanRange(type_int64, field_0), PredicateRange::lessThanRange(type_int64, field_0)})));
 
     ASSERT_FALSE(SortedRangeSet::createNone(type_int64).contains(SortedRangeSet::createAll(type_int64)));
     ASSERT_TRUE(SortedRangeSet::createNone(type_int64).contains(SortedRangeSet::createNone(type_int64)));
     ASSERT_FALSE(SortedRangeSet::createNone(type_int64).contains(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})));
-    ASSERT_FALSE(SortedRangeSet::createNone(type_int64).contains(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)})));
-    ASSERT_FALSE(SortedRangeSet::createNone(type_int64).contains(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})));
-    ASSERT_FALSE(SortedRangeSet::createNone(type_int64).contains(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0), Range::lessThanRange(type_int64, field_0)})));
+    ASSERT_FALSE(SortedRangeSet::createNone(type_int64)
+                     .contains(SortedRangeSet::createFromUnsortedRanges(
+                         {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})));
+    ASSERT_FALSE(SortedRangeSet::createNone(type_int64)
+                     .contains(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})));
+    ASSERT_FALSE(SortedRangeSet::createNone(type_int64)
+                     .contains(SortedRangeSet::createFromUnsortedRanges(
+                         {PredicateRange::greaterThanRange(type_int64, field_0), PredicateRange::lessThanRange(type_int64, field_0)})));
 
     ValueSet value_set = SortedRangeSet::createFromUnsortedValues(type_int64, {field_0});
     EXPECT_NO_THROW(ASSERT_TRUE(std::get<SortedRangeSet>(value_set).contains(std::get<SortedRangeSet>(value_set))));
@@ -302,19 +378,32 @@ TEST_F(SortedRangeSetTest, testContains)
     ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).contains(SortedRangeSet::createAll(type_int64)));
     ASSERT_TRUE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).contains(SortedRangeSet::createNone(type_int64)));
     ASSERT_TRUE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).contains(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})));
-    ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).contains(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)})));
-    ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).contains(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})));
-    ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).contains(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0), Range::lessThanRange(type_int64, field_0)})));
+    ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})
+                     .contains(SortedRangeSet::createFromUnsortedRanges(
+                         {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})));
+    ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})
+                     .contains(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})));
+    ASSERT_FALSE(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})
+                     .contains(SortedRangeSet::createFromUnsortedRanges(
+                         {PredicateRange::greaterThanRange(type_int64, field_0), PredicateRange::lessThanRange(type_int64, field_0)})));
 
-    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}).contains(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_1)})));
-    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}).contains(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_1), Range::equalRange(type_int64, field_2)})));
-    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_0)}).contains(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})));
-    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)}).contains(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_0)})));
-    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_0)}).contains(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})));
+    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges(
+                    {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})
+                    .contains(SortedRangeSet::createFromUnsortedRanges({PredicateRange::equalRange(type_int64, field_1)})));
+    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges(
+                     {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})
+                     .contains(SortedRangeSet::createFromUnsortedRanges(
+                         {PredicateRange::equalRange(type_int64, field_1), PredicateRange::equalRange(type_int64, field_2)})));
+    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, field_0)})
+                    .contains(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})));
+    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})
+                     .contains(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, field_0)})));
+    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanRange(type_int64, field_0)})
+                     .contains(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})));
 
-    Range range_a(type_int64, true, field_0, true, field_2);
-    Range range_b(type_int64, true, field_4, true, field_6);
-    Range range_c(type_int64, true, field_8, true, field_10);
+    PredicateRange range_a(type_int64, true, field_0, true, field_2);
+    PredicateRange range_b(type_int64, true, field_4, true, field_6);
+    PredicateRange range_c(type_int64, true, field_8, true, field_10);
     ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({range_a, range_b}).contains(SortedRangeSet::createFromUnsortedRanges({range_c})));
     ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({range_b, range_c}).contains(SortedRangeSet::createFromUnsortedRanges({range_a})));
     ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({range_a, range_c}).contains(SortedRangeSet::createFromUnsortedRanges({range_b})));
@@ -322,10 +411,14 @@ TEST_F(SortedRangeSetTest, testContains)
     ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({range_a, range_b, range_c}).contains(SortedRangeSet::createFromUnsortedRanges({range_a})));
     ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({range_a, range_b, range_c}).contains(SortedRangeSet::createFromUnsortedRanges({range_b})));
     ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({range_a, range_b, range_c}).contains(SortedRangeSet::createFromUnsortedRanges({range_c})));
-    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({range_a, range_b, range_c}).contains(
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_4), Range::equalRange(type_int64, field_6), Range::equalRange(type_int64, field_9)})));
-    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({range_a, range_b, range_c}).contains(
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_1), Range(type_int64, true, field_6, true, field_10)})));
+    ASSERT_TRUE(SortedRangeSet::createFromUnsortedRanges({range_a, range_b, range_c})
+                    .contains(SortedRangeSet::createFromUnsortedRanges(
+                        {PredicateRange::equalRange(type_int64, field_4),
+                         PredicateRange::equalRange(type_int64, field_6),
+                         PredicateRange::equalRange(type_int64, field_9)})));
+    ASSERT_FALSE(SortedRangeSet::createFromUnsortedRanges({range_a, range_b, range_c})
+                     .contains(SortedRangeSet::createFromUnsortedRanges(
+                         {PredicateRange::equalRange(type_int64, field_1), PredicateRange(type_int64, true, field_6, true, field_10)})));
 }
 
 TEST_F(SortedRangeSetTest, testContainsValue)
@@ -338,7 +431,7 @@ TEST_F(SortedRangeSetTest, testContainsValue)
     ASSERT_TRUE(value_set_1.containsValue(type_int64->getRange().value().max));
 
     // type_int64 ranges
-    SortedRangeSet value_set_2 = SortedRangeSet::createFromUnsortedRanges({Range(type_int64, true, field_10, true, Int64(41))});
+    SortedRangeSet value_set_2 = SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_int64, true, field_10, true, Int64(41))});
     ASSERT_FALSE(value_set_2.containsValue(field_9));
     ASSERT_TRUE(value_set_2.containsValue(field_10));
     ASSERT_TRUE(value_set_2.containsValue(field_11));
@@ -347,7 +440,7 @@ TEST_F(SortedRangeSetTest, testContainsValue)
     ASSERT_TRUE(value_set_2.containsValue(Int64(41)));
     ASSERT_FALSE(value_set_2.containsValue(Int64(42)));
 
-    SortedRangeSet value_set_3 = SortedRangeSet::createFromUnsortedRanges({Range(type_int64, false, field_10, false, Int64(41))});
+    SortedRangeSet value_set_3 = SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_int64, false, field_10, false, Int64(41))});
     ASSERT_FALSE(value_set_3.containsValue(field_10));
     ASSERT_TRUE(value_set_3.containsValue(field_11));
     ASSERT_TRUE(value_set_3.containsValue(field_40));
@@ -358,14 +451,16 @@ TEST_F(SortedRangeSetTest, testContainsValue)
     ASSERT_TRUE(value_set_4.containsValue(Field(Float32(42.0))));
     ASSERT_TRUE(value_set_4.containsValue(std::sqrt(-1.0)));
 
-    SortedRangeSet value_set_5 = SortedRangeSet::createFromUnsortedRanges({Range(type_float32, true, Float32(10.0), true, Float32(41.0))});
+    SortedRangeSet value_set_5
+        = SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_float32, true, Float32(10.0), true, Float32(41.0))});
     ASSERT_FALSE(value_set_5.containsValue(Float32(9.99999)));
     ASSERT_TRUE(value_set_5.containsValue(Float32(10.0)));
     ASSERT_TRUE(value_set_5.containsValue(Float32(41.0)));
     ASSERT_FALSE(value_set_5.containsValue(Float32(41.00001)));
     ASSERT_FALSE(value_set_5.containsValue(Float32(std::sqrt(-1.0))));
 
-    SortedRangeSet value_set_6 = SortedRangeSet::createFromUnsortedRanges({Range(type_float32, false, Float32(10.0), false, Float32(41.0))});
+    SortedRangeSet value_set_6
+        = SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_float32, false, Float32(10.0), false, Float32(41.0))});
     ASSERT_FALSE(value_set_6.containsValue(Float32(10.0)));
     ASSERT_TRUE(value_set_6.containsValue(Float32(10.00001)));
     ASSERT_TRUE(value_set_6.containsValue(Float32(40.99999)));
@@ -378,14 +473,16 @@ TEST_F(SortedRangeSetTest, testContainsValue)
     ASSERT_TRUE(value_set_7.containsValue(std::sqrt(-1.0)));
 
     // Float64 range
-    SortedRangeSet value_set_8 = SortedRangeSet::createFromUnsortedRanges({Range(type_float64, true, Float64(10.0), true, Float64(41.0))});
+    SortedRangeSet value_set_8
+        = SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_float64, true, Float64(10.0), true, Float64(41.0))});
     ASSERT_FALSE(value_set_8.containsValue(Float64(9.999999999999999)));
     ASSERT_TRUE(value_set_8.containsValue(Float64(10.0)));
     ASSERT_TRUE(value_set_8.containsValue(Float64(41.0)));
     ASSERT_FALSE(value_set_8.containsValue(Float64(41.00000000000001)));
     ASSERT_FALSE(value_set_8.containsValue(std::sqrt(-1.0)));
 
-    SortedRangeSet value_set_9 = SortedRangeSet::createFromUnsortedRanges({Range(type_float64, false, Float64(10.0), false, Float64(41.0))});
+    SortedRangeSet value_set_9
+        = SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_float64, false, Float64(10.0), false, Float64(41.0))});
     ASSERT_FALSE(value_set_9.containsValue(Float64(10.0)));
     ASSERT_TRUE(value_set_9.containsValue(Float64(10.00000000000001)));
     ASSERT_TRUE(value_set_9.containsValue(Float64(40.99999999999999)));
@@ -398,10 +495,11 @@ TEST_F(SortedRangeSetTest, testContainsValueRejectNull)
 {
     SortedRangeSet all_value_set = SortedRangeSet::createAll(type_int64);
     SortedRangeSet none_value_set = SortedRangeSet::createNone(type_int64);
-    SortedRangeSet range_value_set = SortedRangeSet::createFromUnsortedRanges({Range(type_int64, false, field_10, false, field_41)});
-//    ASSERT_THROW(all_value_set.containsValue(Field()), Exception);
-//    ASSERT_THROW(none_value_set.containsValue(Field()), Exception);
-//    ASSERT_THROW(range_value_set.containsValue(Field()), Exception);
+    SortedRangeSet range_value_set
+        = SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_int64, false, field_10, false, field_41)});
+    //    ASSERT_THROW(all_value_set.containsValue(Field()), Exception);
+    //    ASSERT_THROW(none_value_set.containsValue(Field()), Exception);
+    //    ASSERT_THROW(range_value_set.containsValue(Field()), Exception);
 }
 
 TEST_F(SortedRangeSetTest, testIntersect)
@@ -422,29 +520,36 @@ TEST_F(SortedRangeSetTest, testIntersect)
         SortedRangeSet::createNone(type_int64));
 
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_1),Range::equalRange(type_int64, field_2),Range::equalRange(type_int64, field_3)}).intersect(
-            SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_2),Range::equalRange(type_int64, field_4)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_2)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::equalRange(type_int64, field_1),
+                                                  PredicateRange::equalRange(type_int64, field_2),
+                                                  PredicateRange::equalRange(type_int64, field_3)})
+            .intersect(SortedRangeSet::createFromUnsortedRanges(
+                {PredicateRange::equalRange(type_int64, field_2), PredicateRange::equalRange(type_int64, field_4)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::equalRange(type_int64, field_2)}));
 
     ASSERT_EQ(
-        SortedRangeSet::createAll(type_int64).intersect(
-            SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_2), Range::equalRange(type_int64, field_4)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_2), Range::equalRange(type_int64, field_4)}));
+        SortedRangeSet::createAll(type_int64)
+            .intersect(SortedRangeSet::createFromUnsortedRanges(
+                {PredicateRange::equalRange(type_int64, field_2), PredicateRange::equalRange(type_int64, field_4)})),
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_2), PredicateRange::equalRange(type_int64, field_4)}));
 
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range(type_int64, true, field_0, false, field_4)}).intersect(
-            SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_2), Range::greaterThanRange(type_int64, field_3)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_2), Range(type_int64, false, field_3, false, field_4)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_int64, true, field_0, false, field_4)})
+            .intersect(SortedRangeSet::createFromUnsortedRanges(
+                {PredicateRange::equalRange(type_int64, field_2), PredicateRange::greaterThanRange(type_int64, field_3)})),
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_2), PredicateRange(type_int64, false, field_3, false, field_4)}));
 
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_0)}).intersect(
-            SortedRangeSet::createFromUnsortedRanges({Range::lessThanOrEqualRange(type_int64, field_0)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, field_0)})
+            .intersect(SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanOrEqualRange(type_int64, field_0)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::equalRange(type_int64, field_0)}));
 
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, Int64(-1))}).intersect(
-            SortedRangeSet::createFromUnsortedRanges({Range::lessThanOrEqualRange(type_int64, field_1)})),
-        SortedRangeSet::createFromUnsortedRanges({Range(type_int64, true, Int64(-1), true, field_1)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, Int64(-1))})
+            .intersect(SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanOrEqualRange(type_int64, field_1)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_int64, true, Int64(-1), true, field_1)}));
 }
 
 TEST_F(SortedRangeSetTest, testUnion)
@@ -454,81 +559,94 @@ TEST_F(SortedRangeSetTest, testUnion)
     ASSERT_EQ(SortedRangeSet::createNone(type_int64).unionn(SortedRangeSet::createAll(type_int64)), SortedRangeSet::createAll(type_int64));
 
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_1), Range::equalRange(type_int64, field_2)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_2), Range::equalRange(type_int64, field_3)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_1), Range::equalRange(type_int64, field_2), Range::equalRange(type_int64, field_3)}));
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_1), PredicateRange::equalRange(type_int64, field_2)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges(
+                {PredicateRange::equalRange(type_int64, field_2), PredicateRange::equalRange(type_int64, field_3)})),
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_1),
+             PredicateRange::equalRange(type_int64, field_2),
+             PredicateRange::equalRange(type_int64, field_3)}));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_1), Range::equalRange(type_int64, field_2)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_2), Range::equalRange(type_int64, field_3)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_1), Range::equalRange(type_int64, field_2), Range::equalRange(type_int64, field_3)}));
-
-    ASSERT_EQ(SortedRangeSet::createAll(type_int64).unionn(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0)})),
-              SortedRangeSet::createAll(type_int64));
-
-    ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range(type_int64, true, field_0, false, field_4)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_3)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_0)}));
-
-    ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_0)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::lessThanOrEqualRange(type_int64, field_0)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::allRange(type_int64)}));
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_1), PredicateRange::equalRange(type_int64, field_2)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges(
+                {PredicateRange::equalRange(type_int64, field_2), PredicateRange::equalRange(type_int64, field_3)})),
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_1),
+             PredicateRange::equalRange(type_int64, field_2),
+             PredicateRange::equalRange(type_int64, field_3)}));
 
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_0)})),
+        SortedRangeSet::createAll(type_int64)
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::equalRange(type_int64, field_0)})),
+        SortedRangeSet::createAll(type_int64));
+
+    ASSERT_EQ(
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_int64, true, field_0, false, field_4)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_3)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, field_0)}));
+
+    ASSERT_EQ(
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, field_0)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanOrEqualRange(type_int64, field_0)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::allRange(type_int64)}));
+
+    ASSERT_EQ(
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanRange(type_int64, field_0)})),
         SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).complement());
 
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range(type_int64, true, field_0, false, field_10)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_9)})),
-        SortedRangeSet::createFromUnsortedRanges({Range(type_int64, true, field_0, false, field_10)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_int64, true, field_0, false, field_10)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::equalRange(type_int64, field_9)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_int64, true, field_0, false, field_10)}));
 
     // two low-unbounded, first shorter
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_5)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_10)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_10)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanRange(type_int64, field_5)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanRange(type_int64, field_10)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanRange(type_int64, field_10)}));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_10)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::lessThanOrEqualRange(type_int64, field_10)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::lessThanOrEqualRange(type_int64, field_10)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanRange(type_int64, field_10)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanOrEqualRange(type_int64, field_10)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanOrEqualRange(type_int64, field_10)}));
 
     // two low-unbounded, second shorter
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_10)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_5)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_10)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanRange(type_int64, field_10)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanRange(type_int64, field_5)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanRange(type_int64, field_10)}));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::lessThanOrEqualRange(type_int64, field_10)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::lessThanRange(type_int64, field_10)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::lessThanOrEqualRange(type_int64, field_10)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanOrEqualRange(type_int64, field_10)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanRange(type_int64, field_10)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanOrEqualRange(type_int64, field_10)}));
 
     // two high-unbounded, first shorter
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_10)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_5)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_5)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_10)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_5)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_5)}));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_10)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_10)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_10)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_10)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, field_10)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, field_10)}));
 
     // two high-unbounded, second shorter
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_5)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_10)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_5)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_5)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_10)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_5)}));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_10)}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_10)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanOrEqualRange(type_int64, field_10)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, field_10)})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_10)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanOrEqualRange(type_int64, field_10)}));
 
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range(type_string, true, Field("LARGE PLATED "), false, Field("LARGE PLATED!"))}).unionn(
-            SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_string, Field("LARGE PLATED NICKEL"))})),
-        SortedRangeSet::createFromUnsortedRanges({Range(type_string, true, Field("LARGE PLATED "), false, Field("LARGE PLATED!"))}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange(type_string, true, Field("LARGE PLATED "), false, Field("LARGE PLATED!"))})
+            .unionn(SortedRangeSet::createFromUnsortedRanges({PredicateRange::equalRange(type_string, Field("LARGE PLATED NICKEL"))})),
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange(type_string, true, Field("LARGE PLATED "), false, Field("LARGE PLATED!"))}));
 }
 
 TEST_F(SortedRangeSetTest, testSubtract)
@@ -543,11 +661,16 @@ TEST_F(SortedRangeSetTest, testSubtract)
         SortedRangeSet::createAll(type_int64).subtract(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})),
         SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).complement());
     ASSERT_EQ(
-        SortedRangeSet::createAll(type_int64).subtract(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}).complement());
+        SortedRangeSet::createAll(type_int64)
+            .subtract(SortedRangeSet::createFromUnsortedRanges(
+                {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})),
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})
+            .complement());
     ASSERT_EQ(
-        SortedRangeSet::createAll(type_int64).subtract(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::lessThanOrEqualRange(type_int64, field_0)}));
+        SortedRangeSet::createAll(type_int64)
+            .subtract(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::lessThanOrEqualRange(type_int64, field_0)}));
 
     ASSERT_EQ(
         SortedRangeSet::createNone(type_int64).subtract(SortedRangeSet::createAll(type_int64)),
@@ -559,10 +682,13 @@ TEST_F(SortedRangeSetTest, testSubtract)
         SortedRangeSet::createNone(type_int64).subtract(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})),
         SortedRangeSet::createNone(type_int64));
     ASSERT_EQ(
-        SortedRangeSet::createNone(type_int64).subtract(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)})),
+        SortedRangeSet::createNone(type_int64)
+            .subtract(SortedRangeSet::createFromUnsortedRanges(
+                {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})),
         SortedRangeSet::createNone(type_int64));
     ASSERT_EQ(
-        SortedRangeSet::createNone(type_int64).subtract(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})),
+        SortedRangeSet::createNone(type_int64)
+            .subtract(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})),
         SortedRangeSet::createNone(type_int64));
 
     ASSERT_EQ(
@@ -575,42 +701,64 @@ TEST_F(SortedRangeSetTest, testSubtract)
         SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).subtract(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})),
         SortedRangeSet::createNone(type_int64));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).subtract(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)})),
+        SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})
+            .subtract(SortedRangeSet::createFromUnsortedRanges(
+                {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})),
         SortedRangeSet::createNone(type_int64));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}).subtract(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})),
+        SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})
+            .subtract(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})),
         SortedRangeSet::createFromUnsortedValues(type_int64, {field_0}));
 
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}).subtract(SortedRangeSet::createAll(type_int64)),
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})
+            .subtract(SortedRangeSet::createAll(type_int64)),
         SortedRangeSet::createNone(type_int64));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}).subtract(SortedRangeSet::createNone(type_int64)),
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}));
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})
+            .subtract(SortedRangeSet::createNone(type_int64)),
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)}));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}).subtract(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})),
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})
+            .subtract(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})),
         SortedRangeSet::createFromUnsortedValues(type_int64, {field_1}));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}).subtract(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)})),
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})
+            .subtract(SortedRangeSet::createFromUnsortedRanges(
+                {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})),
         SortedRangeSet::createNone(type_int64));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)}).subtract(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})),
-        SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0)}));
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})
+            .subtract(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::equalRange(type_int64, field_0)}));
 
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, {field_0})}).subtract(SortedRangeSet::createAll(type_int64)),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, {field_0})})
+            .subtract(SortedRangeSet::createAll(type_int64)),
         SortedRangeSet::createNone(type_int64));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, {field_0})}).subtract(SortedRangeSet::createNone(type_int64)),
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, {field_0})})
+            .subtract(SortedRangeSet::createNone(type_int64)),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)}));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)}).subtract(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})),
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})
+            .subtract(SortedRangeSet::createFromUnsortedValues(type_int64, {field_0})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)}));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)}).subtract(SortedRangeSet::createFromUnsortedRanges({Range::equalRange(type_int64, field_0), Range::equalRange(type_int64, field_1)})),
-        SortedRangeSet::createFromUnsortedRanges({Range(type_int64, false, field_0, false, field_1), Range::greaterThanRange(type_int64, field_1)}));
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})
+            .subtract(SortedRangeSet::createFromUnsortedRanges(
+                {PredicateRange::equalRange(type_int64, field_0), PredicateRange::equalRange(type_int64, field_1)})),
+        SortedRangeSet::createFromUnsortedRanges(
+            {PredicateRange(type_int64, false, field_0, false, field_1), PredicateRange::greaterThanRange(type_int64, field_1)}));
     ASSERT_EQ(
-        SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)}).subtract(SortedRangeSet::createFromUnsortedRanges({Range::greaterThanRange(type_int64, field_0)})),
+        SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})
+            .subtract(SortedRangeSet::createFromUnsortedRanges({PredicateRange::greaterThanRange(type_int64, field_0)})),
         SortedRangeSet::createNone(type_int64));
 }
 

@@ -14,18 +14,43 @@
  */
 
 #pragma once
-#include <Optimizer/value_sets.h>
+
+#include <Analyzers/ASTEquals.h>
 #include <Optimizer/FunctionInvoker.h>
+#include <Optimizer/value_sets.h>
+#include <Parsers/IAST_fwd.h>
+
+#include <functional>
 #include <utility>
 
 namespace DB::Predicate
 {
 class Domain;
-class TupleDomain;
+template <typename T, typename Hash, typename Equal>
+class TupleDomainImpl;
+
+template <typename T>
+struct TupleDomainType
+{
+    using Value = void;
+};
+
+template <>
+struct TupleDomainType<String>
+{
+    using Value = TupleDomainImpl<String, std::hash<String>, std::equal_to<String>>;
+};
+
+template <>
+struct TupleDomainType<ASTPtr>
+{
+    using Value = TupleDomainImpl<ASTPtr, ASTEquality::ASTHash, ASTEquality::ASTEquals>;
+};
+
+template <typename T>
+using TupleDomain = typename TupleDomainType<T>::Value;
 
 using Domains = std::vector<Domain>;
-using TupleDomains = std::vector<TupleDomain>;
-using FieldWithTypeMap = LinkedHashMap<String, FieldWithType>;
 class Domain
 {
 private:
@@ -73,6 +98,11 @@ public:
     bool overlaps(const Domain & other) const;
     bool contains(const Domain & other) const;
     bool operator==(const Domain & other) const;
+    bool operator!=(const Domain & other) const
+    {
+        return !operator==(other);
+    }
+    String toString() const;
 
     static Domain none(const DataTypePtr & type) { return {createNone(type), false}; }
     static Domain all(const DataTypePtr & type) { return {createAll(type), true}; }
@@ -107,8 +137,6 @@ private:
     }
 };
 
-using DomainMap = LinkedHashMap<String, Domain>;
-
 /** TupleDomain defines a set of valid tuples according to the constraints on each of its constituent columns
     * TupleDomain is internally represented as a normalized map of each column to its
     * respective allowable value Domain. Conceptually, these Domains can be thought of
@@ -122,40 +150,92 @@ using DomainMap = LinkedHashMap<String, Domain>;
     * any unmentioned column is equivalent to having Domain.all(). To normalize this structure,
     * we remove any Domain.all() values from the map.
     */
-class TupleDomain
+template <typename T, typename Hash, typename Equal>
+class TupleDomainImpl
 {
+public:
+    using DomainMap = LinkedHashMap<T, Domain, Hash, Equal>;
+    using FieldWithTypeMap = LinkedHashMap<T, FieldWithType, Hash, Equal>;
+
 private:
     bool is_none;
     DomainMap domains;
 
 public:
-    explicit TupleDomain(bool is_none_): is_none(is_none_) {}
-    explicit TupleDomain(DomainMap domains_);
+    explicit TupleDomainImpl(bool is_none_) : is_none(is_none_)
+    {
+    }
+    explicit TupleDomainImpl(DomainMap domains_);
+    explicit TupleDomainImpl(std::initializer_list<std::pair<T, Domain>> init_list) : TupleDomainImpl(DomainMap(std::move(init_list)))
+    {
+    }
 
-    DomainMap getDomains() const { return domains; }
+    const DomainMap & getDomains() const
+    {
+        return domains;
+    }
     size_t getDomainCount() const { return domains.size(); }
     const Domain & getOnlyElement() const { return domains.begin()->second; }
     bool domainsIsEmpty() const { return domains.empty(); }
     bool isNone() const { return is_none; }
     bool isAll() const { return !is_none && domains.empty(); }
-    bool haveSpecificDomain(const String & column) const { return domains.count(column); }
-    TupleDomain intersect(const TupleDomain & other) { return intersect(std::vector<TupleDomain>{other, *this}); }
-    bool contains(const TupleDomain & other) const;
-    bool overlaps(const TupleDomain & other) const;
-    bool operator==(const TupleDomain & other) const
+    bool haveSpecificDomain(const T & column) const
+    {
+        return domains.count(column);
+    }
+    TupleDomainImpl<T, Hash, Equal> intersect(const TupleDomainImpl<T, Hash, Equal> & other)
+    {
+        return intersect(std::vector<TupleDomainImpl<T, Hash, Equal>>{other, *this});
+    }
+    bool contains(const TupleDomainImpl<T, Hash, Equal> & other) const;
+    bool overlaps(const TupleDomainImpl<T, Hash, Equal> & other) const;
+    bool operator==(const TupleDomainImpl<T, Hash, Equal> & other) const
     {
         return is_none == other.isNone() && domains == other.getDomains();
     }
+    bool operator!=(const TupleDomainImpl<T, Hash, Equal> & other) const
+    {
+        return !operator==(other);
+    }
     std::optional<FieldWithTypeMap> extractFixedValues() const;
-    std::optional<LinkedHashMap<String, Array>> extractDiscreteValues() const;
+    std::optional<LinkedHashMap<T, Array, Hash, Equal>> extractDiscreteValues() const;
 
-    static TupleDomain none() { return TupleDomain{true}; }
-    static TupleDomain all() { return TupleDomain{false}; }
+    static TupleDomainImpl<T, Hash, Equal> none()
+    {
+        return TupleDomainImpl{true};
+    }
+    static TupleDomainImpl<T, Hash, Equal> all()
+    {
+        return TupleDomainImpl{false};
+    }
 
-    static TupleDomain fromFixedValues(const FieldWithTypeMap & fixed_values);
-    static TupleDomain intersect(const std::vector<TupleDomain> & others);
-    static std::optional<TupleDomain> maximal(const std::vector<TupleDomain> & domains);
-    static TupleDomain columnWiseUnion(const std::vector<TupleDomain> & tuple_domains);
+    static TupleDomainImpl<T, Hash, Equal> fromFixedValues(const FieldWithTypeMap & fixed_values);
+    static TupleDomainImpl<T, Hash, Equal> intersect(const std::vector<TupleDomainImpl<T, Hash, Equal>> & others);
+    static std::optional<TupleDomainImpl<T, Hash, Equal>> maximal(const std::vector<TupleDomainImpl<T, Hash, Equal>> & domains);
+    static TupleDomainImpl<T, Hash, Equal> columnWiseUnion(const std::vector<TupleDomainImpl<T, Hash, Equal>> & tuple_domains);
+
+    template <typename TargetType, typename KeyMapper>
+    TargetType mapKey(KeyMapper && key_mapper)
+    {
+        if (is_none)
+            return TargetType::none();
+
+        typename TargetType::DomainMap mapped_domains;
+        for (const auto & [key, domain] : domains)
+            mapped_domains.emplace(key_mapper(key), domain);
+        return TargetType{mapped_domains};
+    }
+
+    String toString() const
+    {
+        if (is_none)
+            return "NONE";
+
+        if (domains.empty())
+            return "ALL";
+
+        return domains.toString();
+    }
 };
 
 }

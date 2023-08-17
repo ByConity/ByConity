@@ -112,12 +112,17 @@ MaterializedViewMemoryCache::getMaterializedViewStructure(
         return {};
     QueryPlanPtr query_plan = QueryPlanner().plan(query_ptr, *analysis, context);
 
+    auto wrap_rewriter_name = [&](const String & name) -> String {
+        return "MV_" + name + "_" + database_and_table_name.getDatabaseName() + "." + database_and_table_name.getTableName();
+    };
+
     static Rewriters rewriters
         = {std::make_shared<PredicatePushdown>(),
-           std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
-           std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
-           std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
-           std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression")};
+           std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), wrap_rewriter_name("SimplifyExpression")),
+           std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), wrap_rewriter_name("RemoveRedundant")),
+           std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), wrap_rewriter_name("InlineProjection")),
+           std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), wrap_rewriter_name("NormalizeExpression")),
+           std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), wrap_rewriter_name("SwapPredicate"))};
 
     for (auto & rewriter : rewriters)
         rewriter->rewrite(*query_plan, context);

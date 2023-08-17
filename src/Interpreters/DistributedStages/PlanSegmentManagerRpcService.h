@@ -12,6 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 #include <memory>
 #include <Interpreters/Context.h>
@@ -29,6 +30,7 @@
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
 #include <Interpreters/ProcessorsProfileLog.h>
 #include <Interpreters/profile/ProfileLogHub.h>
+#include <Common/Brpc/BrpcServiceDefines.h>
 
 namespace DB
 {
@@ -162,4 +164,7 @@ private:
     std::unique_ptr<ResourceMonitorTimer> report_metrics_timer;
     Poco::Logger * log;
 };
+
+REGISTER_SERVICE_IMPL(PlanSegmentManagerRpcService);
+
 }

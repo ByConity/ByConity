@@ -953,8 +953,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         throw Exception("Temporary tables cannot be inside a database. You should not specify a database for a temporary table.",
             ErrorCodes::BAD_DATABASE_FOR_TEMPORARY_TABLE);
 
-    if (create.storage && create.storage->unique_key && create.storage->cluster_by)
-        throw Exception("`CLUSTER BY` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
     if (create.storage && create.storage->unique_key && create.columns_list->projections)
         throw Exception("`Projection` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
 

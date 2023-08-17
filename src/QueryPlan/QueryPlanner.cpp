@@ -437,9 +437,7 @@ PlanBuilder QueryPlannerVisitor::planTables(ASTTablesInSelectQuery & tables_in_s
         }
     }
 
-    auto step = builder.plan->getStep()->copy(context);
-    planHint(step, tables_in_select.hints);
-    builder.plan->setStep(step);
+    planHint(builder.plan->getStep(), tables_in_select.hints);
 
     return builder;
 }
@@ -510,9 +508,7 @@ PlanBuilder QueryPlannerVisitor::planTableSubquery(ASTSubquery & subquery, ASTPt
     auto builder = toPlanBuilder(plan, analysis.getScope(subquery));
 
     //set hints
-    auto step = builder.plan->getStep()->copy(context);
-    planHint(step, hints);
-    builder.plan->setStep(step);
+    planHint(builder.plan->getStep(), hints);
 
     PRINT_PLAN(builder.plan, plan_table_subquery);
     return builder;

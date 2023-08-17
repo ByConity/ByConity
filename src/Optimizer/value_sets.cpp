@@ -13,10 +13,12 @@
  * limitations under the License.
  */
 
-#include <Common/FieldVisitors.h>
-#include <Common/SipHash.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <Optimizer/value_sets.h>
+#include <Common/FieldVisitorToString.h>
+#include <Common/FieldVisitors.h>
+#include <Common/SipHash.h>
+
 #include <algorithm>
 
 namespace DB::Predicate
@@ -335,6 +337,17 @@ const Field & Range::getSingleValue() const
     return low_value;
 }
 
+String Range::toString() const
+{
+    String str;
+    str += low_inclusive ? '[' : '(';
+    str += low_value.isNull() ? "-inf" : applyVisitor(FieldVisitorToString(), low_value);
+    str += ',';
+    str += high_value.isNull() ? "+inf" : applyVisitor(FieldVisitorToString(), high_value);
+    str += high_inclusive ? ']' : ')';
+    return str;
+}
+
 bool SortedRangeSet::isAll() const
 {
     if (ranges.size() != 1)
@@ -644,6 +657,19 @@ SortedRangeSet SortedRangeSet::createFromUnsortedValues(const DataTypePtr & type
     }
 
     return SortedRangeSet{type, std::move(ranges)};
+}
+
+String SortedRangeSet::toString() const
+{
+    String str = "{";
+    for (const auto & range : ranges)
+    {
+        if (str.length() > 2)
+            str += ", ";
+        str += range.toString();
+    }
+    str += "}";
+    return str;
 }
 
 template <typename F>

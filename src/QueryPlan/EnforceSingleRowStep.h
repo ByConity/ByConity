@@ -31,6 +31,9 @@ public:
     static QueryPlanStepPtr deserialize(ReadBuffer & buffer, ContextPtr context);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+    
+    /// make output columns nullable, we should generate a null output value when subquery return empty results
+    void makeOutputNullable();
 };
 
 }
