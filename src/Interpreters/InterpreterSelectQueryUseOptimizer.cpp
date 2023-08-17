@@ -108,39 +108,7 @@ PlanSegmentTreePtr InterpreterSelectQueryUseOptimizer::getPlanSegment()
 {
     Stopwatch stage_watch, total_watch;
     total_watch.start();
-    QueryPlanPtr query_plan;
-    if (context->getSettingsRef().enable_plan_cache)
-    {
-        auto hash = PlanCacheManager::hash(query_ptr, context->getSettingsRef());
-        auto & cache = PlanCacheManager::instance();
-        if (cache.has(hash))
-        {
-            query_plan = std::make_unique<QueryPlan>();
-            String plan_str = *cache.get(hash);
-
-            ReadBufferFromString query_buffer(plan_str);
-            query_plan->addInterpreterContext(context);
-            query_plan->deserialize(query_buffer);
-            LOG_INFO(log, "hit plan cache");
-        }
-        else
-        {
-            query_plan = buildQueryPlan();
-
-            WriteBufferFromOwnString query_buffer;
-            query_plan->serialize(query_buffer);
-            auto & query_str = query_buffer.str();
-            if (query_str.size() <= context->getSettingsRef().max_plan_mem_size)
-            {
-                cache.add(hash, query_str);
-            }
-        }
-    }
-
-    if (!query_plan)
-    {
-        query_plan = buildQueryPlan();
-    }
+    QueryPlanPtr query_plan = buildQueryPlan();
 
     query_plan->setResetStepId(false);
     stage_watch.start();
