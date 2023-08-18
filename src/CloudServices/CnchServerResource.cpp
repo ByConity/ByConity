@@ -19,13 +19,15 @@
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
+#include <Storages/Hive/HiveDataPart.h>
+#include <Storages/StorageCnchHive.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Storages/Hive/StorageCnchHive.h"
-
-#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
