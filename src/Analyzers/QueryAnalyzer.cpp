@@ -44,7 +44,7 @@
 #include <QueryPlan/Void.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/StorageCnchHive.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/StorageMemory.h>
 #include <Optimizer/Utils.h>
 #include <DataTypes/DataTypeTuple.h>

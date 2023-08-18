@@ -12,9 +12,18 @@
 #include "DataTypes/DataTypeNullable.h"
 #include "DataTypes/DataTypesDecimal.h"
 #include "Interpreters/Context.h"
+<<<<<<< HEAD
 #include "Parsers/ASTExpressionList.h"
 #include "Parsers/ASTFunction.h"
 #include "Parsers/ASTIdentifier.h"
+=======
+#include "Interpreters/InterpreterCreateQuery.h"
+#include "Parsers/ASTCreateQuery.h"
+#include "Parsers/ASTExpressionList.h"
+#include "Parsers/ASTFunction.h"
+#include "Parsers/ASTIdentifier.h"
+#include "Parsers/formatAST.h"
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 #include "Storages/ColumnsDescription.h"
 #include "Storages/KeyDescription.h"
 #include "Storages/StorageInMemoryMetadata.h"
@@ -25,6 +34,13 @@
 
 namespace DB
 {
+<<<<<<< HEAD
+=======
+namespace ErrorCodes
+{
+    extern const int ILLEGAL_COLUMN;
+}
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 
 static std::pair<String, String> getKeywordWithInnerType(const String & hive_type_name)
 {
@@ -122,9 +138,15 @@ HiveSchemaConverter::HiveSchemaConverter(ContextPtr context_, std::shared_ptr<Ap
 StorageInMemoryMetadata HiveSchemaConverter::convert() const
 {
     ColumnsDescription columns;
+<<<<<<< HEAD
     auto addColumn = [&](const Apache::Hadoop::Hive::FieldSchema & hive_field, bool make_columns_nullable) {
         // bool make_columns_nullable = getContext()->getSettingsRef().data_type_default_nullable;
         DataTypePtr ch_type = hiveTypeToCHType(hive_field.type, make_columns_nullable);
+=======
+    auto addColumn = [&](const Apache::Hadoop::Hive::FieldSchema & hive_field, bool make_column_nullable) {
+        // bool make_columns_nullable = getContext()->getSettingsRef().data_type_default_nullable;
+        DataTypePtr ch_type = hiveTypeToCHType(hive_field.type, make_column_nullable);
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
         if (ch_type)
             columns.add(ColumnDescription(hive_field.name, ch_type));
         else
@@ -133,7 +155,11 @@ StorageInMemoryMetadata HiveSchemaConverter::convert() const
 
     for (const auto & hive_field : hive_table->sd.cols)
     {
+<<<<<<< HEAD
         addColumn(hive_field,true);
+=======
+        addColumn(hive_field, true);
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
     }
 
     auto partition_def = std::make_shared<ASTFunction>();
@@ -157,6 +183,7 @@ StorageInMemoryMetadata HiveSchemaConverter::convert() const
     return metadata;
 }
 
+<<<<<<< HEAD
 void HiveSchemaConverter::check(const ColumnsDescription & columns) const
 {
     const auto & hive_fields = hive_table->sd.cols;
@@ -169,14 +196,100 @@ void HiveSchemaConverter::check(const ColumnsDescription & columns) const
         if (it != hive_fields.end())
         {
             DataTypePtr expected = hiveTypeToCHType(it->type, false);
+=======
+void HiveSchemaConverter::check(const StorageInMemoryMetadata & metadata) const
+{
+    const auto & columns = metadata.columns;
+    std::unordered_map<String, String> hive_table_columns;
+    {
+        for (const auto & field : hive_table->sd.cols)
+            hive_table_columns.emplace(field.name, field.type);
+
+        for (const auto & field : hive_table->partitionKeys)
+            hive_table_columns.emplace(field.name, field.type);
+    }
+
+    for (const auto & column : columns)
+    {
+        auto it = hive_table_columns.find(column.name);
+
+        if (it != hive_table_columns.end())
+        {
+            DataTypePtr expected = hiveTypeToCHType(it->second, false);
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
             DataTypePtr actual = column.type->isNullable() ? static_cast<const DataTypeNullable &>(*column.type).getNestedType() : column.type;
             actual->equals(*expected);
         }
         else
         {
+<<<<<<< HEAD
             throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "Unable to find column {} in hive metastore cols", column.name);
+=======
+            throw Exception(ErrorCodes::ILLEGAL_COLUMN, "Unable to find column {} in hive table {}.{}", column.name, hive_table->dbName, hive_table->tableName);
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
         }
     }
 }
 
+<<<<<<< HEAD
+=======
+CloudTableBuilder::CloudTableBuilder() : create_query(std::make_shared<ASTCreateQuery>())
+{
+}
+
+CloudTableBuilder & CloudTableBuilder::setMetadata(const StorageMetadataPtr & metadata)
+{
+    ASTPtr new_columns = InterpreterCreateQuery::formatColumns(metadata->getColumns());
+    create_query->set(create_query->columns_list, std::make_shared<ASTColumns>());
+    create_query->set(create_query->columns_list->columns, new_columns);
+
+    if (metadata->hasPartitionKey())
+    {
+        if (!create_query->storage)
+            create_query->set(create_query->storage, std::make_shared<ASTStorage>());
+
+        create_query->storage->set(create_query->storage->partition_by, metadata->getPartitionKeyAST());
+    }
+    /// TODO: Storage Settings
+
+    return *this;
+}
+
+CloudTableBuilder & CloudTableBuilder::setCloudEngine(const String & cloudEngineName)
+{
+    if (!create_query->storage)
+        create_query->set(create_query->storage, std::make_shared<ASTStorage>());
+
+    auto engine = std::make_shared<ASTFunction>();
+    {
+        engine->name = cloudEngineName;
+        engine->arguments = std::make_shared<ASTExpressionList>();
+    }
+    create_query->storage->set(create_query->storage->engine, engine);
+
+    return *this;
+}
+
+CloudTableBuilder & CloudTableBuilder::setStorageID(const StorageID & storage_id)
+{
+    create_query->table = storage_id.table_name;
+    create_query->database = storage_id.database_name;
+    create_query->uuid = storage_id.uuid;
+    return *this;
+}
+
+String CloudTableBuilder::build() const
+{
+    WriteBufferFromOwnString statement_buf;
+    formatAST(*create_query, statement_buf, false);
+    writeChar('\n', statement_buf);
+    return statement_buf.str();
+}
+
+const String & CloudTableBuilder::cloudTableName() const
+{
+    return create_query->table;
+}
+
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 }

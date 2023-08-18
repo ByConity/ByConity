@@ -163,11 +163,12 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrictBounded
     return ret;
 }
 
-HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveDataPartsCNCHVector & parts)
+HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveFiles & parts)
 {
     auto workers = worker_group->getWorkerIDVec();
     auto num_workers = workers.size();
     HivePartsAssignMap ret;
+    /// TODO: SORT !!!!
     for (size_t i = 0 ; i < parts.size(); i++)
     {
         auto index = i % num_workers;

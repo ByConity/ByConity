@@ -16,56 +16,54 @@
 
 #pragma once
 
-#include <memory>
-#include <set>
-#include <unordered_map>
-#include <Storages/IStorage.h>
-#include <Storages/SelectQueryInfo.h>
+#include "Common/config.h"
+#if USE_HIVE
+
+#include "Core/Names.h"
+#include "Parsers/IAST_fwd.h"
 #include <boost/noncopyable.hpp>
+#include "common/types.h"
+#include <list>
+
+namespace Poco { class Logger; }
 
 namespace DB
 {
-class ASTSelectQuery;
-class StorageCnchHive;
-using StoragePtr = std::shared_ptr<IStorage>;
+class ASTFunction;
+struct SelectQueryInfo;
+struct StorageInMemoryMetadata;
+using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 
 class HiveWhereOptimizer : private boost::noncopyable
 {
 public:
-    HiveWhereOptimizer(const SelectQueryInfo & query_info_, ContextPtr & /*context_*/, const StoragePtr & storage_);
+    HiveWhereOptimizer(
+        const StorageMetadataPtr & metadata_snapshot_,
+        const SelectQueryInfo & query_info_,
+        Poco::Logger * log_);
 
-    void implicitwhereOptimize() const;
+    using Conditions = ASTs;
 
-    struct Condition
+    /// results
+    ASTPtr partition_key_conds;
+    ASTPtr cluster_key_conds;
+
+private:
+    static ASTPtr reconstruct(const Conditions & conditions);
+
+    struct Data 
     {
-        ASTPtr node;
-        NameSet identifiers;
-        bool viable = false; //is partitionkey condition
-        bool good = false;
-
-        auto tuple() const { return std::make_tuple(!viable, !good); }
-
-        bool operator<(const Condition & rhs) const { return tuple() < rhs.tuple(); }
-
-        Condition clone() const
-        {
-            Condition condition;
-            condition.node = node->clone();
-            condition.identifiers = identifiers;
-            condition.viable = viable;
-            condition.good = good;
-            return condition;
-        }
+        Conditions partiton_key_conditions;
+        Conditions cluster_key_conditions;
     };
 
-    using Conditions = std::list<Condition>;
+    void extractKeyConditions(Data & res, const ASTPtr & node);
+    void extractKeyConditions(Data & res, const ASTPtr & node, const ASTFunction & func);
 
-    ASTs getConditions(const ASTPtr & ast) const;
+    bool isPartitionKey(const String & column_name) const;
+    bool isClusterKey(const String & column_name) const;
 
-    ASTs getWhereOptimizerConditions(const ASTPtr & ast) const;
-
-    void implicitAnalyzeImpl(Conditions & res, const ASTPtr & node) const;
-
+<<<<<<< HEAD
     /// Transform conjunctions chain in WHERE expression to Conditions list.
     Conditions implicitAnalyze(const ASTPtr & expression) const;
 
@@ -92,6 +90,13 @@ private:
     // const Context & context;
     ASTSelectQuery & select;
     const StoragePtr & storage;
+=======
+    NameSet partition_key_names;
+    NameSet cluster_key_names;
+    Poco::Logger * log;
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 };
 
 }
+
+#endif

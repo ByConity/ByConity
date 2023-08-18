@@ -665,7 +665,7 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
         /// Create table as should set projections
         if (as_storage_metadata->hasProjections())
             properties.projections = as_storage_metadata->getProjections().clone();
-        
+
         properties.constraints = as_storage_metadata->getConstraints();
     }
     else if (create.select)

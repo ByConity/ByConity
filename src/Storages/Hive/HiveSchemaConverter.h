@@ -2,6 +2,10 @@
 
 #include "DataTypes/IDataType.h"
 #include "Interpreters/Context_fwd.h"
+<<<<<<< HEAD
+=======
+#include "Parsers/ASTCreateQuery.h"
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 #include "Storages/ColumnsDescription.h"
 #include "Storages/StorageInMemoryMetadata.h"
 
@@ -24,11 +28,31 @@ public:
     StorageInMemoryMetadata convert() const;
 
     /// check schema
+<<<<<<< HEAD
     void check(const ColumnsDescription & columns) const;
+=======
+    void check(const StorageInMemoryMetadata & metadata) const;
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 
 private:
     std::shared_ptr<Apache::Hadoop::Hive::Table> hive_table;
     Poco::Logger * log {&Poco::Logger::get("HiveSchemaConverter")};
 };
 
+<<<<<<< HEAD
+=======
+struct CloudTableBuilder
+{
+    CloudTableBuilder();
+    CloudTableBuilder & setMetadata(const StorageMetadataPtr & metadata);
+    CloudTableBuilder & setCloudEngine(const String & cloudEngineName);
+    CloudTableBuilder & setStorageID(const StorageID & storage_id);
+
+    String build() const;
+    const String & cloudTableName() const;
+private:
+    std::shared_ptr<ASTCreateQuery> create_query;
+};
+
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 }

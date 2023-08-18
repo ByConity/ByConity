@@ -16,18 +16,16 @@
 #include <Interpreters/trySetVirtualWarehouse.h>
 
 #include <Interpreters/DatabaseAndTableWithAlias.h>
-#include <Interpreters/VirtualWarehousePool.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/VirtualWarehousePool.h>
 #include <Parsers/ASTDeleteQuery.h>
-#include <Parsers/ASTInsertQuery.h>
-#include <Parsers/ASTUpdateQuery.h>
-#include <Parsers/ASTRefreshQuery.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTInsertQuery.h>
+#include <Parsers/ASTRefreshQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ASTUpdateQuery.h>
 #include <Parsers/queryToString.h>
-#include <Parsers/ASTSetQuery.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
-#include <Storages/StorageCnchHive.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/StorageView.h>
 #include <unicode/tzfmt.h>
@@ -38,7 +36,6 @@
 
 namespace DB
 {
-
 /// Forward declaration
 static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr & context);
 static String tryGetVirtualWarehouseNameFromAST(const ASTPtr & ast, ContextMutablePtr & context);
@@ -49,9 +46,12 @@ static void setVirtualWarehouseByName(const String & vw_name, ContextMutablePtr 
     context->setCurrentVW(std::move(vw_handle));
 }
 
-static bool trySetVirtualWarehouseFromTable(const String & database, const String & table, ContextMutablePtr & context, VirtualWarehouseType vw_type = VirtualWarehouseType::Default)
+static bool trySetVirtualWarehouseFromTable(
+    const String & database,
+    const String & table,
+    ContextMutablePtr & context,
+    VirtualWarehouseType vw_type = VirtualWarehouseType::Default)
 {
-    LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouse"), "Try set virtual warehouse for table `{}.{}`", database, table);
     auto & database_catalog = DatabaseCatalog::instance();
     StorageID table_id(database, table);
     auto storage = database_catalog.tryGetTable(table_id, context);
@@ -60,26 +60,23 @@ static bool trySetVirtualWarehouseFromTable(const String & database, const Strin
 
     if (auto cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
     {
-        String vw_name = vw_type == VirtualWarehouseType::Write
-                         ? cnch_table->getSettings()->cnch_vw_write
-                         : cnch_table->getSettings()->cnch_vw_default;
+        String vw_name = vw_type == VirtualWarehouseType::Write ? cnch_table->getSettings()->cnch_vw_write
+                                                                : cnch_table->getSettings()->cnch_vw_default;
 
         setVirtualWarehouseByName(vw_name, context);
-        LOG_DEBUG(
-            &Poco::Logger::get("trySetVirtualWarehouse"),
-            "Set virtual warehouse {} from {}", context->getCurrentVW()->getName(), storage->getStorageID().getNameForLogs());
         return true;
     }
-    else if (auto cnchhive = dynamic_cast<StorageCnchHive *>(storage.get()))
+    else if (auto vw_name = storage->getVirtualWarehouseName(vw_type); vw_name)
     {
-        String vw_name = vw_type == VirtualWarehouseType::Write
-                         ? cnchhive->settings.cnch_vw_write
-                         : cnchhive->settings.cnch_vw_default;
+        /// I hate dynamic_cast
+        setVirtualWarehouseByName(*vw_name, context);
+        return true;
+    }
+    else if (auto * cnchfile = dynamic_cast<IStorageCnchFile *>(storage.get()))
+    {
+        String vw_name = vw_type == VirtualWarehouseType::Write ? cnchfile->settings.cnch_vw_write : cnchfile->settings.cnch_vw_default;
 
         setVirtualWarehouseByName(vw_name, context);
-        LOG_DEBUG(
-            &Poco::Logger::get("trySetVirtualWarehouse"),
-            "CnchHive Set virtual warehouse {} from {}", context->getCurrentVW()->getName(), storage->getStorageID().getNameForLogs());
         return true;
     }
     else if (auto * view_table = dynamic_cast<StorageView *>(storage.get()))
@@ -98,7 +95,6 @@ static bool trySetVirtualWarehouseFromTable(const String & database, const Strin
 
 static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr & context)
 {
-    LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouse"), "Trying to set virtual warehouse for expression `{}` ...", ast->formatForErrorMessage());
     do
     {
         auto & database_catalog = DatabaseCatalog::instance();
@@ -116,6 +112,10 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
         }
         else if (auto * insert = ast->as<ASTInsertQuery>())
         {
+            //this means the query is function insert, for example `insert into function CnchS3(...)
+            if (insert->table_id.empty())
+                break;
+
             auto table_id = insert->table_id;
             if (table_id.database_name.empty())
                 table_id.database_name = context->getCurrentDatabase();
@@ -128,7 +128,8 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
                 break;
 
             DatabaseAndTableWithAlias db_and_table(table_expr->database_and_table_name);
-            if (db_and_table.database.empty()) db_and_table.database = context->getCurrentDatabase();
+            if (db_and_table.database.empty())
+                db_and_table.database = context->getCurrentDatabase();
             if (trySetVirtualWarehouseFromTable(db_and_table.database, db_and_table.table, context))
                 return true;
         }
@@ -159,7 +160,7 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
                 break;
 
             if (trySetVirtualWarehouseFromTable(refresh_mv->database, refresh_mv->table, context))
-               return true;
+                return true;
         }
 
     } while (false);
@@ -192,11 +193,9 @@ static String tryGetVirtualWarehouseNameFromTable(
 
         return vw_name;
     }
-    else if (auto * cnchhive = dynamic_cast<StorageCnchHive *>(storage.get()))
+    else if (auto vw_name = storage->getVirtualWarehouseName(vw_type); vw_name)
     {
-        String vw_name = vw_type == VirtualWarehouseType::Write ? cnchhive->settings.cnch_vw_write : cnchhive->settings.cnch_vw_default;
-
-        return vw_name;
+        return *vw_name;
     }
     else if (auto * view_table = dynamic_cast<StorageView *>(storage.get()))
     {
@@ -212,10 +211,6 @@ static String tryGetVirtualWarehouseNameFromTable(
 
 static String tryGetVirtualWarehouseNameFromAST(const ASTPtr & ast, ContextMutablePtr & context)
 {
-    LOG_DEBUG(
-        &Poco::Logger::get("trySetVirtualWarehouse"),
-        "Trying to get virtual warehouse name for expression `{}` ...",
-        ast->formatForErrorMessage());
     do
     {
         auto & database_catalog = DatabaseCatalog::instance();
@@ -231,6 +226,9 @@ static String tryGetVirtualWarehouseNameFromAST(const ASTPtr & ast, ContextMutab
         }
         else if (auto * insert = ast->as<ASTInsertQuery>())
         {
+            //this means the query is function insert, for example `insert into function CnchS3(...)
+            if (insert->table_id.empty())
+                break;
             auto table_id = insert->table_id;
             if (table_id.database_name.empty())
                 table_id.database_name = context->getCurrentDatabase();
@@ -364,14 +362,9 @@ bool trySetVirtualWarehouse(const ASTPtr & ast, ContextMutablePtr & context)
     if (context->tryGetCurrentVW())
         return true;
 
-    LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouse"), "Trying to set virtual warehouse for query `{}` ...", ast->formatForErrorMessage());
-
     if (const auto & vw_name = context->getSettingsRef().virtual_warehouse.value; !vw_name.empty())
     {
         setVirtualWarehouseByName(vw_name, context);
-        LOG_DEBUG(
-            &Poco::Logger::get("trySetVirtualWarehouse"),
-            "Set virtual warehouse {} from query settings", context->getCurrentVW()->getName());
         return true;
     }
     else
@@ -390,7 +383,6 @@ bool trySetVirtualWarehouseAndWorkerGroup(const ASTPtr & ast, ContextMutablePtr 
         auto value = context->getSettingsRef().vw_schedule_algo.value;
         auto algo = ResourceManagement::toVWScheduleAlgo(&value[0]);
         auto worker_group = context->getCurrentVW()->pickWorkerGroup(algo);
-        LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouse"), "Picked worker group {}", worker_group->getQualifiedName());
 
         context->setCurrentWorkerGroup(std::move(worker_group));
         return true;
@@ -418,7 +410,6 @@ VirtualWarehouseHandle getVirtualWarehouseForTable(const MergeTreeMetaBase & sto
     }
 
     auto vw = context->getVirtualWarehousePool().get(vw_name);
-    LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouse"), "Get virtual warehouse {} from {}", vw->getName(), source);
 
     return vw;
 }
@@ -430,7 +421,6 @@ WorkerGroupHandle getWorkerGroupForTable(const MergeTreeMetaBase & storage, cons
     auto algo = ResourceManagement::toVWScheduleAlgo(&value[0]);
     auto worker_group = vw->pickWorkerGroup(algo);
 
-    LOG_DEBUG(&Poco::Logger::get("trySetVirtualWarehouse"), "Picked worker group {}", worker_group->getQualifiedName());
     return worker_group;
 }
 

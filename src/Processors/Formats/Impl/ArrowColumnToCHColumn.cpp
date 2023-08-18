@@ -46,7 +46,6 @@
 #include <Interpreters/castColumn.h>
 #include <algorithm>
 #include <fmt/format.h>
-#include "common/logger_useful.h"
 #include <DataTypes/NestedUtils.h>
 #include <Common/escapeForFileName.h>
 
@@ -671,13 +670,11 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
         std::shared_ptr<arrow::Schema> schema_,
         const std::string & format_name_,
         bool allow_missing_columns_,
-        bool null_as_default_,
-        const std::map<String, String> & partition_kv_)
+        bool null_as_default_)
         : header(header_)
         , format_name(format_name_)
         , allow_missing_columns(allow_missing_columns_)
         , null_as_default(null_as_default_)
-        , partition_kv(partition_kv_)
     {
         for (const auto & field : schema_->fields())
         {
@@ -713,50 +710,17 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
             String nested_table_name = Nested::extractTableName(header_column.name);
             if (name_to_column_ptr.find(header_column.name) == name_to_column_ptr.end())
             {
-                // // TODO: What if some columns were not presented? Insert NULLs? What if a column is not nullable?
-                // throw Exception{fmt::format("Column \"{}\" is not presented in input data.", header_column.name),
-                //                 ErrorCodes::THERE_IS_NO_COLUMN};
-
-                auto partition_column = partition_kv.find(column_name);
-                if (partition_column != partition_kv.end())
-                {
-                    auto column_type = header_column.type;
-                    ColumnWithTypeAndName column;
-                    column.name = column_name;
-                    column.type = column_type;
-                    Field value = partition_column->second;
-                    if (!isString(column_type))
-                        value = column_type->stringToVisitorField(partition_column->second);
-                    MutableColumnPtr col = column.type->createColumn();
-                    for(int i = 0; i < table->num_rows(); ++i)
-                        col->insert(value);
-                    column.column = std::move(col);
-                    num_rows = column.column->size();
-                    columns_list.push_back(std::move(column.column));
-                    continue;
-                }
-                else if (name_to_column_ptr.contains(nested_table_name))
-                {
-                    column_name = nested_table_name;
-                }
+                if (!allow_missing_columns)
+                    throw Exception{ErrorCodes::THERE_IS_NO_COLUMN, "Column '{}' is not presented in input data.", header_column.name};
                 else
                 {
-                    column_name = escapeForFileName(column_name);
-                    if (name_to_column_ptr.find(column_name) == name_to_column_ptr.end())
-                    {
-                        if (!allow_missing_columns)
-                            throw Exception{ErrorCodes::THERE_IS_NO_COLUMN, "Column '{}' is not presented in input data.", header_column.name};
-                        else
-                        {
-                            ColumnWithTypeAndName column;
-                            column.name = header_column.name;
-                            column.type = header_column.type;
-                            column.column = header_column.column->cloneResized(num_rows);
-                            columns_list.push_back(std::move(column.column));
+                    ColumnWithTypeAndName column;
+                    column.name = header_column.name;
+                    column.type = header_column.type;
+                    column.column = header_column.column->cloneResized(num_rows);
+                    columns_list.push_back(std::move(column.column));
 
-                            continue;
-                        }
-                    }
+                    continue;
                 }
             }
             std::shared_ptr<arrow::ChunkedArray> arrow_column = name_to_column_ptr[header_column.name];

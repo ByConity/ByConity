@@ -236,7 +236,7 @@ ASTPtr ASTCreateQuery::clone() const
     auto res = std::make_shared<ASTCreateQuery>(*this);
     res->children.clear();
 
-    if (columns_list)
+    if (columns_list && !columns_list->empty())
         res->set(res->columns_list, columns_list->clone());
     if (storage)
         res->set(res->storage, storage->clone());

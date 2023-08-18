@@ -300,8 +300,16 @@ String getNameNodeCluster(const String & hdfs_url)
     auto pos2 = hdfs_url.find('/', pos1);
     return hdfs_url.substr(pos1, pos2 - pos1);
 }
+<<<<<<< HEAD
 HDFSConnectionParams hdfsParamsFromUrl(const Poco::URI & uri)
 {
+=======
+std::optional<HDFSConnectionParams> hdfsParamsFromUrl(const Poco::URI & uri)
+{
+    if (uri.getPort() == 0)
+        return {};
+
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
     /// ignore password
     String user_info = uri.getUserInfo();
     user_info = user_info.substr(0, user_info.find(':'));

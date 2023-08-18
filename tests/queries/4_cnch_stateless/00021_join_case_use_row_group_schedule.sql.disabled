@@ -1,0 +1,69 @@
+DROP TABLE IF EXISTS hive_external_table_join_test_3;
+
+CREATE TABLE hive_external_table_join_test_3
+(
+    `app_id` Int64,
+    `device_id` String,
+    `action_type` Nullable(String),
+    `commodity_id` Int32,
+    `date` String,
+    `live_id` Int64,
+    `app_name` String
+)
+ENGINE = CnchHive(`data.olap.cnch_hms.service.lf`, `cnch_hive_external_table`, `hive_external_table_test`)
+PARTITION BY (date, live_id, app_name);
+
+SELECT
+    _1700016021265,
+    _1700016021285,
+    _sum_1700016021296,
+    (_sum_1700016021296 - table_1700016021261_30d._sum_1700016021296) / table_1700016021261_30d._sum_1700016021296 AS table_1700016021261_30d_sum_1700016021296_ratio,
+    _1700016042840,
+    (_1700016042840 - table_1700016021261_30d._1700016042840) / table_1700016021261_30d._1700016042840 AS table_1700016021261_30d_1700016042840_ratio,
+    _1700016042934,
+    (_1700016042934 - table_1700016021261_30d._1700016042934) / table_1700016021261_30d._1700016042934 AS table_1700016021261_30d_1700016042934_ratio,
+    _1700016043595,
+    (_1700016043595 - table_1700016021261_30d._1700016043595) / table_1700016021261_30d._1700016043595 AS table_1700016021261_30d_1700016043595_ratio
+FROM
+(
+    SELECT *
+    FROM
+    (
+        SELECT
+            device_id AS _1700016021265,
+            action_type AS _1700016021285,
+            sum(app_id) AS _sum_1700016021296,
+            ((count(device_id) / sum(commodity_id)) * 1000) / 100 AS _1700016042840,
+            (count(action_type) / sum(live_id)) / 100 AS _1700016042934,
+            count(app_name) / 100 AS _1700016043595
+        FROM hive_external_table_join_test_3
+        WHERE ((date >= '20211013') AND (date <= '20211015')) AND (commodity_id = 2)
+        GROUP BY
+            device_id,
+            action_type
+    )
+    ANY LEFT JOIN
+    (
+        SELECT
+            device_id AS _1700016021265,
+            action_type AS _1700016021285,
+            sum(app_id) AS _sum_1700016021296,
+            ((count(device_id) / sum(commodity_id)) * 1000) / 100 AS _1700016042840,
+            (count(action_type) / sum(live_id)) / 100 AS _1700016042934,
+            count(app_name) / 100 AS _1700016043595
+        FROM hive_external_table_join_test_3
+        WHERE ((date >= '20211016') AND (date <= '20211018')) AND (commodity_id = 2)
+        GROUP BY
+            device_id,
+            action_type
+    ) AS table_1700016021261_30d USING (_1700016021265, _1700016021285)
+    ORDER BY _sum_1700016021296 DESC
+    LIMIT 1000
+    SETTINGS skip_nullinput_notnull_col = 1
+)
+ORDER BY _sum_1700016021296 DESC
+LIMIT 1000
+SETTINGS skip_nullinput_notnull_col = 1, use_hive_split_level_filter = 0;
+
+
+DROP TABLE IF EXISTS hive_external_table_join_test_3;

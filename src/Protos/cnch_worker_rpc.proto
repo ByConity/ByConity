@@ -3,6 +3,7 @@ package DB.Protos;
 
 import "data_models.proto";
 import "cnch_common.proto";
+import "hive_models.proto";
 
 option cc_generic_services = true;
 
@@ -340,15 +341,11 @@ message SendDataPartsResp
 
 message SendCnchHiveDataPartsReq
 {
-  required uint64 txn_id = 1;
-  required string database_name = 2;
-  required string table_name = 3;
-  repeated CnchHivePartModel parts = 4;
+
 }
 
 message SendCnchHiveDataPartsResp
 {
-  optional string exception = 1;
 }
 
 message CheckDataPartsReq
@@ -393,7 +390,7 @@ message TableDataParts
   required string table = 2;
   repeated DataModelPart server_parts = 3;
   repeated DataModelDeleteBitmap server_part_bitmaps = 4;
-  repeated CnchHivePartModel hive_parts = 5;
+  optional ProtoHiveFiles hive_parts = 5;
   repeated int64 bucket_numbers = 6;
 }
 

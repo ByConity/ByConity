@@ -63,4 +63,19 @@ bool PartitionPruner::canBePruned(const ServerDataPart & part)
     return !is_valid;
 }
 
+bool PartitionPruner::canBePruned(const String & partition_id, const Row & value)
+{
+    bool is_valid = false;
+    if (auto it = partition_filter_map.find(partition_id); it != partition_filter_map.end())
+        is_valid = it->second;
+    else
+    {
+        std::vector<FieldRef> index_value(value.begin(), value.end());
+        is_valid = partition_condition.mayBeTrueInRange(
+            value.size(), index_value.data(), index_value.data(), partition_key.data_types);
+        partition_filter_map.emplace(partition_id, is_valid);
+    }
+    return !is_valid;
+}
+
 }

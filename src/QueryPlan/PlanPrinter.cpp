@@ -787,7 +787,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
 
         auto query_info = table_scan->getQueryInfo();
         auto *query = query_info.query->as<ASTSelectQuery>();
-        if (query->getWhere() || query->getPrewhere() || query->implicitWhere() || query->getLimitLength())
+        if (query->getWhere() || query->getPrewhere() || query->getLimitLength())
         {
             out << intent.detailIntent();
             if (query->getWhere())
@@ -813,12 +813,6 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             {
                 out << "Prewhere : ";
                 out << serializeAST(*query->getPrewhere());
-                out << ".";
-            }
-            if (query->implicitWhere())
-            {
-                out << "Implicit Filter : ";
-                out << serializeAST(*query->implicitWhere());
                 out << ".";
             }
 

@@ -15,15 +15,14 @@
 
 #pragma once
 
-#include <Core/Types.h>
-#include <hivemetastore/hive_metastore_types.h>
+#include "Common/config.h"
+#if USE_HIVE
 
-namespace DB
-{
-using namespace Apache::Hadoop::Hive;
+#include "Core/Field.h"
 
-struct HivePartitionInfo
+namespace Apache::Hadoop::Hive
 {
+<<<<<<< HEAD
     String db_name;
     String table_name;
     String hdfs_uri;
@@ -40,13 +39,29 @@ struct HivePartitionInfo
     const std::vector<String> & getPartsName() const { return parts_name; }
     const String & getLocation() const { return partition_path; }
 };
+=======
+    class Partition;
+    class StorageDescriptor;
+}
 
-class HivePartition
+namespace DB
 {
-public:
-    HivePartition(const String & partition_id, HivePartitionInfo & info_);
-    ~HivePartition();
+namespace Protos
+{
+    class ProtoHiveFile;
+    class ProtoHiveFiles;
+}
 
+struct KeyDescription;
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
+
+struct HivePartition
+{
+    Row value;
+    /// partition values in csv format
+    String partition_id;
+
+<<<<<<< HEAD
     const String & getID() const;
     const String & getTablePath() const;
     const String & getPartitionPath();
@@ -59,10 +74,24 @@ public:
     const String & getOutputFromat() const;
     const std::vector<String> & getPartsName() const;
     const String & getHDFSUri() const;
+=======
+    /// deserialize from hive partition value
+    void load(const Apache::Hadoop::Hive::Partition & apache_partition, const KeyDescription & description);
+    void load(const String & partition_id_, const KeyDescription & description);
 
+    /// non partition case
+    void load(const Apache::Hadoop::Hive::StorageDescriptor & sd);
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
+
+    /// just for listing
+    String file_format;
+    String location;
 private:
-    String partition_id;
-    HivePartitionInfo info;
+    void load(ReadBuffer & buf, const KeyDescription & description);
 };
 
+using HivePartitionPtr = std::shared_ptr<HivePartition>;
+using HivePartitons = std::vector<HivePartitionPtr>;
 }
+
+#endif

@@ -29,7 +29,11 @@
 
 namespace parquet::arrow { class FileReader; }
 
-namespace arrow { class Buffer; }
+namespace arrow
+{
+    class Buffer;
+    class Schema;
+}
 
 namespace DB
 {
@@ -42,15 +46,13 @@ public:
     ParquetBlockInputFormat(
         ReadBuffer & in_,
         Block header_,
-        const FormatSettings & format_settings_,
-        const std::map<String, String> & partition_kv_ = {},
-        const std::unordered_set<Int64> & skip_row_groups_ = {},
-        const size_t row_group_index_ = 0,
-        bool read_one_group_ = false);
+        const FormatSettings & format_settings_);
 
     void resetParser() override;
 
     String getName() const override { return "ParquetBlockInputFormat"; }
+
+    static std::vector<int> getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header);
 
 protected:
     Chunk generate() override;
@@ -58,7 +60,6 @@ protected:
 private:
     void prepareReader();
 
-private:
     const FormatSettings format_settings;
     std::unique_ptr<parquet::arrow::FileReader> file_reader;
     int row_group_total = 0;
@@ -66,12 +67,6 @@ private:
     std::vector<int> column_indices;
     std::unique_ptr<ArrowColumnToCHColumn> arrow_column_to_ch_column;
     int row_group_current = 0;
-
-    std::map<String, String> partition_kv;
-
-    const std::unordered_set<Int64> skip_row_groups;
-
-    bool read_one_group;
 };
 
 }

@@ -3,6 +3,7 @@ protobuf_generate_cpp(dbms_proto_srcs dbms_proto_headers
     cnch_server_rpc.proto
     cnch_worker_rpc.proto
     data_models.proto
+    hive_models.proto
     data_part.proto
     plan_segment_manager.proto
     registry.proto

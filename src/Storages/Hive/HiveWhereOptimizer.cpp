@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /*
  * Copyright (2022) Bytedance Ltd. and/or its affiliates
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,11 +27,27 @@
 #include <Storages/extractKeyExpressionList.h>
 #include <Common/typeid_cast.h>
 
+=======
+#include "Storages/Hive/HiveWhereOptimizer.h"
+#if USE_HIVE
+
+#include "Interpreters/IdentifierSemantic.h"
+#include "Interpreters/predicateExpressionsUtils.h"
+#include "Parsers/ASTExpressionList.h"
+#include "Parsers/ASTFunction.h"
+#include "Parsers/ASTIdentifier.h"
+#include "Parsers/ASTLiteral.h"
+#include "Parsers/ASTSelectQuery.h"
+#include "Parsers/queryToString.h"
+#include "Storages/StorageInMemoryMetadata.h"
+#include "Storages/SelectQueryInfo.h"
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 
 namespace DB
 {
 namespace ErrorCodes
 {
+<<<<<<< HEAD
     extern const int LOGICAL_ERROR;
     extern const int BAD_ARGUMENTS;
 }
@@ -94,86 +111,39 @@ HiveWhereOptimizer::HiveWhereOptimizer(const SelectQueryInfo & query_info_, Cont
 /// for example:  app_name is partition key.
 /// app_name IN ('test', 'test2') will be convert to ((app_name = 'test') or (app_name = 'test2'))
 bool HiveWhereOptimizer::convertWhereToUsefullFilter(ASTs & conditions, String & filter)
-{
-    if (conditions.empty())
-        return false;
-
-    ASTs ret_conditions;
-
-    for (const auto & condition : conditions)
-    {
-        bool flag = false;
-        if (const auto & func = typeid_cast<const ASTFunction *>(condition.get()))
-        {
-            if (func->name == "and")
-                return false;
-
-            if (func->name == "in")
-            {
-                const ASTPtr left_arg = func->arguments->children[0];
-                const ASTPtr right_arg = func->arguments->children[1];
-
-                LOG_TRACE(
-                    &Poco::Logger::get("HiveWhereOptimizer"),
-                    "right arg : {} left arg: {}",
-                    right_arg->getAliasOrColumnName(),
-                    left_arg->getAliasOrColumnName());
-
-                for (auto & child : partition_expr_ast->children)
-                {
-                    if (child->getAliasOrColumnName() == left_arg->getAliasOrColumnName())
-                        flag = true;
-                }
-
-                if (!flag)
-                    continue;
-
-                const auto * second_arg_func = typeid_cast<ASTFunction *>(right_arg.get());
-                if (!second_arg_func)
-                    continue;
-
-                ASTs new_right_args;
-                for (const auto & child : second_arg_func->arguments->children)
-                {
-                    ASTLiteral * literal = typeid_cast<ASTLiteral *>(child.get());
-                    if (!literal)
-                        throw Exception(
-                            "The conditions of IN function right arg Tuple element should be literal", ErrorCodes::LOGICAL_ERROR);
-
-                    new_right_args.push_back(child);
-                }
-
-                for (const auto & new_right_arg : new_right_args)
-                {
-                    const auto new_function = makeASTFunction("equals", ASTs{left_arg, new_right_arg});
-                    ret_conditions.push_back(new_function);
-                }
-            }
-        }
-    }
-
-    if (ret_conditions.size() < 2)
-        return false;
-
-    const auto function = std::make_shared<ASTFunction>();
-    function->name = "or";
-    function->arguments = std::make_shared<ASTExpressionList>();
-    function->children.push_back(function->arguments);
-
-    for (const auto & elem : ret_conditions)
-    {
-        function->arguments->children.push_back(elem);
-    }
-
-    String prefix(" ( ");
-    filter = prefix + queryToString(function) + " ) ";
-
-    return true;
+=======
 }
 
-/// If implicit where condition contains 'in' function, convert 'in' to 'equals'
-bool HiveWhereOptimizer::convertImplicitWhereToUsefullFilter(String & filter)
+HiveWhereOptimizer::HiveWhereOptimizer(
+    const StorageMetadataPtr & metadata_snapshot_, const SelectQueryInfo & query_info_, Poco::Logger * log_): log(log_)
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 {
+    ASTSelectQuery & select = query_info_.query->as<ASTSelectQuery &>();
+    if (!select.where())
+        return;
+
+    if (metadata_snapshot_->hasPartitionKey())
+    {
+        const auto & partition_key_cols = metadata_snapshot_->getPartitionKey().column_names;
+        partition_key_names = NameSet(partition_key_cols.begin(), partition_key_cols.end());
+    }
+
+    if (metadata_snapshot_->hasClusterByKey())
+    {
+        const auto & cluster_key_cols = metadata_snapshot_->getClusterByKey().column_names;
+        cluster_key_names = NameSet(cluster_key_cols.begin(), cluster_key_cols.end());
+    }
+
+    Data data;
+    extractKeyConditions(data, select.where());
+
+    partition_key_conds = reconstruct(data.partiton_key_conditions);
+    cluster_key_conds = reconstruct(data.cluster_key_conditions);
+}
+
+ASTPtr HiveWhereOptimizer::reconstruct(const HiveWhereOptimizer::Conditions & conditions)
+{
+<<<<<<< HEAD
     if (!select.implicitWhere())
         return false;
 
@@ -236,59 +206,42 @@ bool HiveWhereOptimizer::convertImplicitWhereToUsefullFilter(String & filter)
             filter = queryToString(new_function);
             return true;
         }
+=======
+    if (conditions.empty())
+        return {};
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 
-        return false;
-    }
+    if (conditions.size() == 1)
+        return conditions.front();
 
     const auto function = std::make_shared<ASTFunction>();
     function->name = "and";
     function->arguments = std::make_shared<ASTExpressionList>();
     function->children.push_back(function->arguments);
 
-    for (const auto & elem : ret_conditions)
+    for (const auto & elem : conditions)
     {
         function->arguments->children.push_back(elem);
     }
 
-    filter = queryToString(function);
-
-    return num_conditions == ret_conditions.size();
+    return function;
 }
 
-/// get implicit where conditions,
-/// if all of contitions is Comparison Function, it will be usefull filter,
-/// ThriftHiveMetastoreClient interface can directly use it to filter partitions.
-bool HiveWhereOptimizer::getUsefullFilter(String & filter)
+void HiveWhereOptimizer::extractKeyConditions(Data & res, const ASTPtr & node)
 {
-    if (!select.implicitWhere())
-        return false;
-
-    ASTs ret_conditions;
-    bool is_all_usefull = true;
-
-    if (const auto & function = typeid_cast<const ASTFunction *>(select.implicitWhere().get()))
+    if (const auto * func = node->as<ASTFunction>(); func)
     {
-        if (function->name == "and")
+        if (func->name == "and")
         {
-            auto & conditions = function->arguments->children;
-            for (const auto & condition : conditions)
-            {
-                if (const auto & func = typeid_cast<const ASTFunction *>(condition.get()))
-                {
-                    if (func->name == "and")
-                        throw Exception("The conditions of implicit_where should be linearized", ErrorCodes::LOGICAL_ERROR);
-
-                    if (!isComparisonFunctionName(func->name))
-                    {
-                        is_all_usefull = false;
-                        continue;
-                    }
-                }
-
-                ret_conditions.push_back(condition);
-            }
+            for (const auto & elem : func->arguments->children)
+                extractKeyConditions(res, elem);
+        }
+        else
+        {
+            extractKeyConditions(res, node, *func);
         }
     }
+<<<<<<< HEAD
 
     if (ret_conditions.empty())
     {
@@ -383,83 +336,64 @@ ASTPtr HiveWhereOptimizer::reconstruct(const Conditions & conditions) const
     }
 
     return function;
+=======
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 }
 
-bool HiveWhereOptimizer::isValidPartitionColumn(const IAST * condition) const
+/// check if a condition can be used by hive metastore
+void HiveWhereOptimizer::extractKeyConditions(Data & res, const ASTPtr & node, const ASTFunction & func)
 {
-    const auto * function = typeid_cast<const ASTFunction *>(condition);
-
-    if (!function || !partition_expr_ast)
-        return false;
-
-    if (function->arguments->children.size() == 1)
-        return false;
-
-    bool flag = false;
-    for (auto & arg_child : function->arguments->children)
+    if (isComparisonFunctionName(func.name))
     {
-        const auto & identifier = typeid_cast<const ASTIdentifier *>(arg_child.get());
-        const auto & func = typeid_cast<const ASTFunction *>(arg_child.get());
-        const auto & literal = typeid_cast<const ASTLiteral *>(arg_child.get());
+        auto left_arg = func.arguments->children.front();
+        auto right_arg = func.arguments->children.back();
 
-        if (!identifier && !func && !literal)
-            return false;
-        if ((func || identifier) && flag)
-            return false;
+        /// make left_arg always an identifier
+        if (!left_arg->as<ASTIdentifier>() && right_arg->as<ASTIdentifier>())
+            std::swap(left_arg, right_arg);
 
-        for (auto & child : partition_expr_ast->children)
+        auto * identifier = left_arg->as<ASTIdentifier>();
+        auto * literal = right_arg->as<ASTLiteral>();
+        if (identifier && literal)
         {
-            if (identifier || func)
+            auto opt_col_name = IdentifierSemantic::getColumnName(*identifier);
+            if (opt_col_name && isPartitionKey(*opt_col_name))
             {
-                /// if partition column name, set flag = true
-                if (child->getAliasOrColumnName() == arg_child->getAliasOrColumnName())
-                    flag = true;
+                auto cond = makeASTFunction(func.name, ASTs{left_arg, right_arg});
+                res.partiton_key_conditions.push_back(std::move(cond));
+            }
+
+            if (opt_col_name && isClusterKey(*opt_col_name))
+            {
+                auto cond = makeASTFunction(func.name, ASTs{left_arg, right_arg});
+                res.cluster_key_conditions.push_back(std::move(cond));
             }
         }
-        if (!flag && !literal)
-            return false;
     }
-
-    return flag;
-}
-
-static void collectIdentifiersNoSubqueries(const ASTPtr & ast, NameSet & set)
-{
-    if (auto opt_name = tryGetIdentifierName(ast))
-        return (void)set.insert(*opt_name);
-
-    if (ast->as<ASTSubquery>())
-        return;
-
-    for (const auto & child : ast->children)
-        collectIdentifiersNoSubqueries(child, set);
-}
-
-ASTs HiveWhereOptimizer::getWhereOptimizerConditions(const ASTPtr & ast) const
-{
-    if (!ast)
-        return {};
-
-    ASTs ret_conditions;
-
-    if (const auto & function = typeid_cast<const ASTFunction *>(ast.get()))
+    else if (func.name == "in")
     {
-        if (function->name == "and")
+        auto left_arg = func.arguments->children.front();
+        auto right_arg = func.arguments->children.back();
+
+        auto opt_col = IdentifierSemantic::getColumnName(left_arg);
+        if (opt_col && isPartitionKey(*opt_col))
         {
-            auto & conditions = function->arguments->children;
-            for (const auto & condition : conditions)
+            /// convert a in (1, 2) to (a = 1 or a = 2)
+            if (auto * in_func = right_arg->as<ASTFunction>())
             {
-                if (const auto & func = typeid_cast<const ASTFunction *>(condition.get()))
+                auto or_func = makeASTFunction("or", ASTs{});
+                for (const auto & child : in_func->children)
                 {
-                    if (func->name == "and")
+                    if (child->as<ASTLiteral>())
                     {
-                        return {};
+                        auto eq_func = makeASTFunction("equals", ASTs{left_arg, child});
+                        or_func->arguments->children.push_back(std::move(eq_func));
                     }
                 }
-
-                ret_conditions.push_back(condition);
+                res.partiton_key_conditions.push_back(std::move(or_func));
             }
         }
+<<<<<<< HEAD
     }
 
     if (ret_conditions.empty())
@@ -486,22 +420,23 @@ ASTs HiveWhereOptimizer::getConditions(const ASTPtr & ast) const
         return {};
 
     ASTs ret_conditions;
+=======
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 
-    if (const auto & function = typeid_cast<const ASTFunction *>(ast.get()))
-    {
-        if (function->name == "and")
+        if (opt_col && isClusterKey(*opt_col))
         {
-            auto & conditions = function->arguments->children;
-            for (const auto & condition : conditions)
+            if (auto * in_func = right_arg->as<ASTFunction>())
             {
-                if (const auto & func = typeid_cast<const ASTFunction *>(condition.get()))
-                    if (func->name == "and" || func->name == "or" || func->name == "in")
-                        return {};
-
-                ret_conditions.push_back(condition);
+                bool all_literals = std::all_of(in_func->children.begin(), in_func->children.end(), [] (const ASTPtr & child)
+                {
+                    return child->as<ASTLiteral>();
+                });
+                if (all_literals)
+                    res.cluster_key_conditions.push_back(node);
             }
         }
     }
+<<<<<<< HEAD
 
 
     if (ret_conditions.empty())
@@ -515,30 +450,19 @@ ASTs HiveWhereOptimizer::getConditions(const ASTPtr & ast) const
     }
 
     return ret_conditions;
+=======
+>>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 }
 
-void HiveWhereOptimizer::implicitAnalyzeImpl(Conditions & res, const ASTPtr & node) const
+bool HiveWhereOptimizer::isPartitionKey(const String & column_name) const
 {
-    if (const auto * func_and = node->as<ASTFunction>(); func_and && func_and->name == "and")
-    {
-        for (const auto & elem : func_and->arguments->children)
-            implicitAnalyzeImpl(res, elem);
-    }
-    else
-    {
-        Condition cond;
-        cond.node = node;
-        cond.viable = false;
+    return partition_key_names.count(column_name);
+}
 
-        collectIdentifiersNoSubqueries(node, cond.identifiers);
-
-        if (isSubsetOfTableColumns(cond.identifiers) && isValidPartitionColumn(node.get()))
-        {
-            cond.viable = true;
-            cond.good = true;
-        }
-        res.emplace_back(std::move(cond));
-    }
+bool HiveWhereOptimizer::isClusterKey(const String & column_name) const
+{
+    return cluster_key_names.count(column_name);
 }
 
 }
+#endif

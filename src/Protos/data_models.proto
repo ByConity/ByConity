@@ -111,20 +111,14 @@ message DataModelPart
     repeated string projections = 31; // record names of projections managed by the current part
 };
 
-message CnchHivePartInfo
+message CnchFilePartInfo
 {
     required string name = 1;
-    required string partition_id = 2;
 }
 
-message CnchHivePartModel
+message CnchFilePartModel
 {
-    required CnchHivePartInfo part_info = 1;
-    required string relative_path = 2;
-    required int64 skip_lists = 3;
-    repeated int64 skip_numbers = 4;
-    optional string hdfs_uri = 5;
-    required string format_name = 6;
+    required CnchFilePartInfo part_info = 1;
 }
 
 enum TransactionStatus
