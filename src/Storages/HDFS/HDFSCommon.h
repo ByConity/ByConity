@@ -315,11 +315,6 @@ String getNameNodeCluster(const String & hdfs_url);
 
 /// use default params or build from url
 /// build params from custom url
-<<<<<<< HEAD
-HDFSConnectionParams hdfsParamsFromUrl(const Poco::URI & uri);
-=======
 std::optional<HDFSConnectionParams> hdfsParamsFromUrl(const Poco::URI & uri);
->>>>>>> e22f20f6c2 (Merge branch 'pick-hive' into 'cnch-ce-merge')
-
 }
 // #endif
