@@ -21,7 +21,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
-#include <Storages/StorageCnchHive.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
