@@ -1,4 +1,4 @@
-#include <Interpreters/WorkerStatusManager.h>
+#include <Interpreters/Context_fwd.h>
 #include <Storages/Hive/StorageCloudHive.h>
 #if USE_HIVE
 

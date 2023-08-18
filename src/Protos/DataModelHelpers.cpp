@@ -29,7 +29,6 @@
 #include <Protos/data_models.pb.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
-#include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/Exception.h>
 #include <common/JSON.h>

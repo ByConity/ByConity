@@ -1,5 +1,5 @@
 #include "Storages/Hive/DirectoryLister.h"
-#include <Interpreters/WorkerStatusManager.h>
+#include <Interpreters/Context_fwd.h>
 #include <Poco/Util/MapConfiguration.h>
 #if USE_HIVE
 
