@@ -18,6 +18,7 @@
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/WorkerGroupHandle.h>
+#include <Storages/DataPart_fwd.h>
 #include <Storages/Hive/HiveDataPart_fwd.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
