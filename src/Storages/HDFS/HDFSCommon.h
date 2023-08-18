@@ -22,7 +22,7 @@
 #pragma once
 
 #if !defined(ARCADIA_BUILD)
-#include <Common/config.h>
+#    include <Common/config.h>
 #endif
 
 
@@ -31,16 +31,16 @@
 #include <type_traits>
 #include <vector>
 
-#include <hdfs/hdfs.h> // Y_IGNORE
-#include <common/types.h>
 #include <mutex>
 #include <unordered_map>
+#include <hdfs/hdfs.h> // Y_IGNORE
+#include <common/types.h>
 // #include <Interpreters/Context.h>
-#include <Poco/Util/AbstractConfiguration.h>
-#include <Poco/URI.h>
 #include <random>
-#include <Common/HostWithPorts.h>
 #include <Storages/HDFS/HDFSAuth.h>
+#include <Poco/URI.h>
+#include <Poco/Util/AbstractConfiguration.h>
+#include <Common/HostWithPorts.h>
 namespace DB
 {
 inline bool isHdfsScheme(const std::string & scheme)
@@ -80,21 +80,14 @@ inline void constructHDFSUri(const std::string & host, const std::string & defau
 }
 namespace detail
 {
-
     struct HDFSBuilderDeleter
     {
-        void operator()(hdfsBuilder * builder_ptr)
-        {
-            hdfsFreeBuilder(builder_ptr);
-        }
+        void operator()(hdfsBuilder * builder_ptr) { hdfsFreeBuilder(builder_ptr); }
     };
 
     struct HDFSFsDeleter
     {
-        void operator()(hdfsFS fs_ptr)
-        {
-            hdfsDisconnect(fs_ptr);
-        }
+        void operator()(hdfsFS fs_ptr) { hdfsDisconnect(fs_ptr); }
     };
 }
 
@@ -104,17 +97,14 @@ struct HDFSFileInfo
     hdfsFileInfo * file_info;
     int length;
 
-    HDFSFileInfo() : file_info(nullptr) , length(0) {}
+    HDFSFileInfo() : file_info(nullptr), length(0) { }
 
     HDFSFileInfo(const HDFSFileInfo & other) = delete;
     HDFSFileInfo(HDFSFileInfo && other) = default;
     HDFSFileInfo & operator=(const HDFSFileInfo & other) = delete;
     HDFSFileInfo & operator=(HDFSFileInfo && other) = default;
 
-    ~HDFSFileInfo()
-    {
-        hdfsFreeFileInfo(file_info, length);
-    }
+    ~HDFSFileInfo() { hdfsFreeFileInfo(file_info, length); }
 };
 
 
@@ -133,9 +123,9 @@ public:
         CONN_NNPROXY
     };
     using IpWithPort = std::pair<String, int>;
-    HDFSConnectionParams() ;
+    HDFSConnectionParams();
     HDFSConnectionParams(HDFSConnectionType t, const String & hdfs_user_, const String & hdfs_service_);
-    HDFSConnectionParams(HDFSConnectionType t, const String & hdfs_user_, const std::vector<IpWithPort>& addrs_);
+    HDFSConnectionParams(HDFSConnectionType t, const String & hdfs_user_, const std::vector<IpWithPort> & addrs_);
 
 
     HDFSConnectionType conn_type;
@@ -146,24 +136,22 @@ public:
 
     bool use_nnproxy_ha = false; // for whether to use ha config for nnproxies.
     bool inited = false;
-    size_t nnproxy_index = 0 ;
+    size_t nnproxy_index = 0;
 
-    HDFSBuilderPtr createBuilder(const Poco::URI & uri  ) const ;
+    HDFSBuilderPtr createBuilder(const Poco::URI & uri) const;
 
-    void setNNProxyHa(bool val ) {
-        use_nnproxy_ha = val ;
-    }
+    void setNNProxyHa(bool val) { use_nnproxy_ha = val; }
 
     void lookupOnNeed();
     void setNNProxyBroken();
 
-    Poco::URI formatPath([[maybe_unused]] const String & path) const ;
+    Poco::URI formatPath([[maybe_unused]] const String & path) const;
 
 
-    static HDFSConnectionParams parseHdfsFromConfig([[maybe_unused]]const  Poco::Util::AbstractConfiguration & config,
-        const String& config_prefix = "");
+    static HDFSConnectionParams
+    parseHdfsFromConfig([[maybe_unused]] const Poco::Util::AbstractConfiguration & config, const String & config_prefix = "");
 
-    static HDFSConnectionParams parseFromMisusedNNProxyStr(String hdfs_nnproxy, String hdfs_user="clickhouse");
+    static HDFSConnectionParams parseFromMisusedNNProxyStr(String hdfs_nnproxy, String hdfs_user = "clickhouse");
 
     static const HDFSConnectionParams & defaultNNProxy()
     {
@@ -178,23 +166,21 @@ public:
     }
 
     String toString() const;
-
 };
 
 class HDFSBuilderWrapper
 {
+    friend HDFSBuilderWrapper createHDFSBuilder(const String & uri_str, const Poco::Util::AbstractConfiguration &);
 
-friend HDFSBuilderWrapper createHDFSBuilder(const String & uri_str, const Poco::Util::AbstractConfiguration &);
-
-static const String CONFIG_PREFIX;
+    static const String CONFIG_PREFIX;
 
 public:
-    HDFSBuilderWrapper() : hdfs_builder(hdfsNewBuilder()) {}
+    HDFSBuilderWrapper() : hdfs_builder(hdfsNewBuilder()) { }
 
     // need_kinit is always false in this constructor.
-    HDFSBuilderWrapper(HDFSBuilderPtr builderPtr) : hdfs_builder(std::move(builderPtr)){}
+    HDFSBuilderWrapper(HDFSBuilderPtr builderPtr) : hdfs_builder(std::move(builderPtr)) { }
 
-    ~HDFSBuilderWrapper() {}
+    ~HDFSBuilderWrapper() { }
 
     HDFSBuilderWrapper(const HDFSBuilderWrapper &) = delete;
     HDFSBuilderWrapper(HDFSBuilderWrapper &&) = default;
@@ -208,13 +194,10 @@ private:
     void runKinit();
 
     // hdfs builder relies on an external config data storage
-    std::pair<String, String>& keep(const String & k, const String & v)
-    {
-        return config_stor.emplace_back(std::make_pair(k, v));
-    }
+    std::pair<String, String> & keep(const String & k, const String & v) { return config_stor.emplace_back(std::make_pair(k, v)); }
 
     // HDFSConnectionParams hdfs_params = HDFSConnectionParams::defaultNNProxy();
-    HDFSBuilderPtr  hdfs_builder;
+    HDFSBuilderPtr hdfs_builder;
     String hadoop_kerberos_keytab;
     String hadoop_kerberos_principal;
     String hadoop_kerberos_kinit_command = "kinit";
@@ -226,7 +209,7 @@ private:
 };
 
 
-template<typename T>
+template <typename T>
 using fs_ptr = std::shared_ptr<T>;
 
 /**
@@ -243,11 +226,11 @@ class TTLBrokenNameNodes
 public:
     using TTLNameNode = std::pair<std::string, time_t>;
     // default ttl is two hours
-    TTLBrokenNameNodes(size_t ttl_ = 7200):ttl(ttl_), generator(rd()){}
+    TTLBrokenNameNodes(size_t ttl_ = 7200) : ttl(ttl_), generator(rd()) { }
 
     std::mutex nnMutex;
 
-    void insert(const std::string& namenode)
+    void insert(const std::string & namenode)
     {
         std::unique_lock lock(nnMutex);
         time_t current_time = time(nullptr);
@@ -263,32 +246,40 @@ public:
         }
     }
 
-    bool isBrokenNN(const std::string& namenode)
+    bool isBrokenNN(const std::string & namenode)
     {
         std::unique_lock lock(nnMutex);
         time_t current_time = time(nullptr);
         return isBrokenNNInternal(namenode, current_time);
     }
 
-    size_t findOneGoodNN(const HostWithPortsVec& hosts) {
-        std::uniform_int_distribution<size_t> dist(0, hosts.size()-1);
+    size_t findOneGoodNN(const HostWithPortsVec & hosts)
+    {
+        std::uniform_int_distribution<size_t> dist(0, hosts.size() - 1);
         size_t start_point = dist(generator);
         size_t current_point = start_point;
         time_t current_time = time(nullptr);
         std::unique_lock lock(nnMutex);
-        while(current_point != start_point) {
-            if(isBrokenNNInternal(hosts[current_point].getHost(),current_time)) {
-                current_point = (current_point + 1 ) % hosts.size();
-            } else {
+        while (current_point != start_point)
+        {
+            if (isBrokenNNInternal(hosts[current_point].getHost(), current_time))
+            {
+                current_point = (current_point + 1) % hosts.size();
+            }
+            else
+            {
                 break;
             }
         }
         return current_point;
     }
+
 private:
-    bool isBrokenNNInternal(const std::string& namenode, const time_t & current_time) {
+    bool isBrokenNNInternal(const std::string & namenode, const time_t & current_time)
+    {
         auto it = nns.find(namenode);
-        if (it == nns.end()) return false;
+        if (it == nns.end())
+            return false;
         if (it->second + time_t(ttl) > current_time)
         {
             nns.erase(it);
@@ -298,7 +289,7 @@ private:
     }
 
     size_t ttl;
-    std::unordered_map<std::string, time_t>  nns;
+    std::unordered_map<std::string, time_t> nns;
     std::random_device rd;
     std::mt19937 generator;
 };
@@ -315,7 +306,7 @@ String getNameNodeCluster(const String & hdfs_url);
 
 /// use default params or build from url
 /// build params from custom url
-HDFSConnectionParams hdfsParamsFromUrl(const Poco::URI & uri);
+std::optional<HDFSConnectionParams> hdfsParamsFromUrl(const Poco::URI & uri);
 
 }
 // #endif

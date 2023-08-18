@@ -18,17 +18,16 @@
 #include <Interpreters/DistributedStages/PlanSegmentSplitter.h>
 #include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/PlanSegmentSourceStep.h>
+#include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
 #include <QueryPlan/TableScanStep.h>
 #include <QueryPlan/ValuesStep.h>
-#include <QueryPlan/ReadNothingStep.h>
-#include <Storages/StorageMemory.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageCnchHive.h>
+#include <Storages/StorageMemory.h>
 
 namespace DB
 {
-
 void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & plan_segment_context)
 {
     PlanSegmentVisitor visitor{plan_segment_context, query_plan.getCTENodes()};
@@ -77,7 +76,7 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
             {
                 auto child_node = plan_mapping[input->getPlanSegmentId()];
                 node.children.push_back(child_node);
-                
+
                 for (auto & output : child_node->plan_segment->getPlanSegmentOutputs())
                 {
                     if (output->getExchangeId() == input->getExchangeId())
@@ -144,7 +143,7 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
         input->setKeepOrder(step->needKeepOrder());
         inputs.push_back(input);
 
-        if (auto *output = dynamic_cast<PlanSegmentOutput *>(plan_segment->getPlanSegmentOutput().get()))
+        if (auto * output = dynamic_cast<PlanSegmentOutput *>(plan_segment->getPlanSegmentOutput().get()))
         {
             output->setKeepOrder(step->needKeepOrder());
         }
@@ -154,8 +153,7 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
     }
     QueryPlanStepPtr remote_step = std::make_unique<RemoteExchangeSourceStep>(inputs, step->getOutputStream());
     remote_step->setStepDescription(step->getStepDescription());
-    QueryPlan::Node remote_node{
-        .step = std::move(remote_step), .children = {}, .id = node->id};
+    QueryPlan::Node remote_node{.step = std::move(remote_step), .children = {}, .id = node->id};
     plan_segment_context.query_plan.addNode(std::move(remote_node));
     return plan_segment_context.query_plan.getLastNode();
 }
@@ -203,11 +201,7 @@ PlanSegmentResult PlanSegmentVisitor::visitCTERefNode(QueryPlan::Node * node, Pl
 
     QueryPlanStepPtr remote_step = std::make_unique<RemoteExchangeSourceStep>(PlanSegmentInputs{input}, step->getOutputStream());
     remote_step->setStepDescription(step->getStepDescription());
-    QueryPlan::Node remote_node{
-        .step = std::move(remote_step),
-        .children = {},
-        .id
-        = node->id};
+    QueryPlan::Node remote_node{.step = std::move(remote_step), .children = {}, .id = node->id};
     plan_segment_context.query_plan.addNode(std::move(remote_node));
 
     // add projection to rename symbol
@@ -296,8 +290,8 @@ PlanSegmentInputs PlanSegmentVisitor::findInputs(QueryPlan::Node * node)
             //            if (child->step->getType() == IQueryPlanStep::Type::RemoteExchangeSource)
             //            {
             auto child_input = findInputs(child);
-//            if (child_input.size() != 1)
-//                throw Exception("Join step should contain one input in each child", ErrorCodes::LOGICAL_ERROR);
+            //            if (child_input.size() != 1)
+            //                throw Exception("Join step should contain one input in each child", ErrorCodes::LOGICAL_ERROR);
             inputs.insert(inputs.end(), child_input.begin(), child_input.end());
             //            }
         }
@@ -383,7 +377,7 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
             /// if all input are not table type, parallel size should respect distributed_max_parallel_size setting
             if (!input_has_table && !split_context.inputs.empty())
             {
-                size_t max_parallel_size = plan_segment_context.context->getSettingsRef().distributed_max_parallel_size; 
+                size_t max_parallel_size = plan_segment_context.context->getSettingsRef().distributed_max_parallel_size;
                 size_t ret = plan_segment_context.shard_number;
                 if (max_parallel_size > 0 || plan_segment_context.health_parallel)
                 {

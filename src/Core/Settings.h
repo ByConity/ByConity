@@ -1622,6 +1622,12 @@ enum PreloadLevelSettings : UInt64
     M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
     M(Bool, enable_vw_customized_setting, false, "Allow vw customized overwrite profile settings", 0) \
     M(Bool, enable_async_execution, false, "Whether to enable async execution", 0) \
+    /** Settings for hive */ \
+    M(Bool, use_hive_metastore_filter, true, "", 0) \
+    M(Bool, use_hive_cluster_key_filter, true, "", 0) \
+    M(Bool, use_hive_partition_filter, true, "", 0) \
+    M(Bool, use_hive_file_level_filter, false, "", 0) \
+    M(Bool, use_hive_split_level_filter, false, "", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     M(Milliseconds, dedup_worker_heartbeat_ms, 3000, "Dedup worker heartbeat interval time", 0) \

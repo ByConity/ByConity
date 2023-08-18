@@ -15,54 +15,50 @@
 
 #pragma once
 
-#include <Core/Types.h>
-#include <hivemetastore/hive_metastore_types.h>
+#include "Common/config.h"
+#if USE_HIVE
+
+#    include "Core/Field.h"
+
+namespace Apache::Hadoop::Hive
+{
+class Partition;
+class StorageDescriptor;
+}
 
 namespace DB
 {
-using namespace Apache::Hadoop::Hive;
-
-struct HivePartitionInfo
+namespace Protos
 {
-    String db_name;
-    String table_name;
-    String hdfs_uri;
-    String partition_path;
-    String table_path;
-    int32_t create_time;
-    int32_t last_access_time;
-    std::vector<String> values;
-    String input_format;
-    String output_format;
-    std::vector<FieldSchema> cols;
-    std::vector<String> parts_name;
+    class ProtoHiveFile;
+    class ProtoHiveFiles;
+}
 
-    const std::vector<String> & getPartsName() const { return parts_name; }
-    const String & getLocation() const { return partition_path; }
-};
+struct KeyDescription;
 
-class HivePartition
+struct HivePartition
 {
-public:
-    HivePartition(const String & partition_id, HivePartitionInfo & info_);
-    ~HivePartition();
+    Row value;
+    /// partition values in csv format
+    String partition_id;
 
-    const String & getID() const;
-    const String & getTablePath() const;
-    const String & getPartitionPath();
-    const String & getTableName() const;
-    const String & getDBName() const;
-    int32_t getCreateTime() const;
-    int32_t getLastAccessTime() const;
-    const std::vector<String> & getValues() const;
-    const String & getInputFormat() const;
-    const String & getOutputFromat() const;
-    const std::vector<String> & getPartsName() const;
-    const String & getHDFSUri() const;
+    /// deserialize from hive partition value
+    void load(const Apache::Hadoop::Hive::Partition & apache_partition, const KeyDescription & description);
+    void load(const String & partition_id_, const KeyDescription & description);
+
+    /// non partition case
+    void load(const Apache::Hadoop::Hive::StorageDescriptor & sd);
+
+    /// just for listing
+    String file_format;
+    String location;
 
 private:
-    String partition_id;
-    HivePartitionInfo info;
+    void load(ReadBuffer & buf, const KeyDescription & description);
 };
 
+using HivePartitionPtr = std::shared_ptr<HivePartition>;
+using HivePartitons = std::vector<HivePartitionPtr>;
 }
+
+#endif

@@ -22,9 +22,9 @@
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
-#include <Interpreters/WorkerStatusManager.h>
-#include <Storages/Hive/HiveDataPart.h>
-#include <Storages/StorageCnchHive.h>
+#include "Storages/Hive/HiveFile/IHiveFile.h"
+#include "Storages/Hive/StorageCnchHive.h"
+
 #include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
@@ -59,13 +59,13 @@ void AssignedResource::addDataParts(const ServerDataPartsVector & parts)
     }
 }
 
-void AssignedResource::addDataParts(const HiveDataPartsCNCHVector & parts)
+void AssignedResource::addDataParts(const HiveFiles & parts)
 {
     for (const auto & part : parts)
     {
-        if (!part_names.count(part->getName()))
+        if (!part_names.count(part->file_path))
         {
-            part_names.emplace(part->getName());
+            part_names.emplace(part->file_path);
             hive_parts.emplace_back(part);
         }
     }
@@ -87,8 +87,7 @@ CnchServerResource::~CnchServerResource()
         catch (...)
         {
             tryLogCurrentException(
-                log,
-                "Error occurs when remove WorkerResource{" + txn_id.toString() + "} in worker " + worker_client->getRPCAddress());
+                log, "Error occurs when remove WorkerResource{" + txn_id.toString() + "} in worker " + worker_client->getRPCAddress());
         }
     }
 }
@@ -164,7 +163,7 @@ void CnchServerResource::sendResources(const ContextPtr & context)
 
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
 
-    for (const auto & [host_ports, resources_to_send]: all_resources)
+    for (const auto & [host_ports, resources_to_send] : all_resources)
     {
         auto worker_client = worker_group->getWorkerClient(host_ports);
         auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), host_ports.id);
@@ -263,15 +262,13 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
             }
             else if (auto * cnchhive = dynamic_cast<StorageCnchHive *>(storage.get()))
             {
-                bool use_simple_hash = cnchhive->settings.use_simple_hash;
-                LOG_TRACE(log, "CnchSessionResource use_simple_hash is: {}", use_simple_hash);
                 assigned_hive_map = assignCnchHiveParts(worker_group, resource.hive_parts);
             }
 
             for (const auto & host_ports : host_ports_vec)
             {
                 ServerDataPartsVector assigned_parts;
-                HiveDataPartsCNCHVector assigned_hive_parts;
+                HiveFiles assigned_hive_parts;
                 if (auto it = assigned_map.find(host_ports.id); it != assigned_map.end())
                 {
                     assigned_parts = std::move(it->second);

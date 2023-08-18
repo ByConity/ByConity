@@ -15,31 +15,30 @@
 
 #pragma once
 
+#include <DataStreams/NullBlockOutputStream.h>
+#include <DataStreams/copyData.h>
+#include <Interpreters/ProcessList.h>
 #include <Interpreters/WorkerGroupHandle.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Transaction/Actions/DDLAlterAction.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
-#include <DataStreams/NullBlockOutputStream.h>
-#include <DataStreams/copyData.h>
-#include <MergeTreeCommon/CnchTopologyMaster.h>
-#include <Interpreters/ProcessList.h>
-#include "Core/NamesAndTypes.h"
-#include "Storages/StorageInMemoryMetadata.h"
+#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
 
 namespace DB
 {
-
 struct PrepareContextResult
 {
     String local_table_name;
     ServerDataPartsVector parts;
     HiveDataPartsCNCHVector hive_parts;
+    HiveFiles hive_files;
 };
 
 enum class WorkerGroupUsageType
 {
     NORMAL,
-    WRITE,    /// write group for INSERT SELECT and INSERT INFILE
+    WRITE, /// write group for INSERT SELECT and INSERT INFILE
     BUFFER,
 };
 
@@ -67,7 +66,7 @@ enum class CNCHStorageMediumType
 };
 
 String toStr(CNCHStorageMediumType tp);
-CNCHStorageMediumType fromStr(const String& type_str);
+CNCHStorageMediumType fromStr(const String & type_str);
 
 class CnchStorageCommonHelper
 {

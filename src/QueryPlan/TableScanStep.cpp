@@ -44,7 +44,7 @@
 #include <Storages/VirtualColumnUtils.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageCnchHive.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/VirtualColumnUtils.h>

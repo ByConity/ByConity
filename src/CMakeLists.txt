@@ -132,6 +132,12 @@ if (USE_HDFS)
     add_headers_and_sources(dbms Disks/HDFS)
 endif()
 
+if (USE_HIVE)
+    add_headers_and_sources(dbms Storages/Hive)
+    add_headers_and_sources(dbms Storages/Hive/HiveFile)
+    add_headers_and_sources(dbms Storages/Hive/Metastore)
+endif()
+
 add_headers_and_sources(dbms Protos)
 
 list (APPEND clickhouse_common_io_sources ${CONFIG_BUILD})
@@ -229,7 +235,6 @@ add_object_library(clickhouse_interpreters_cnch_query_metrics Interpreters/CnchQ
 add_object_library(clickhouse_columns Columns)
 add_object_library(clickhouse_storages Storages)
 add_object_library(clickhouse_disk_cache Storages/DiskCache)
-add_object_library(clickhouse_storages_hive Storages/Hive)
 add_object_library(clickhouse_storages_mysql Storages/MySQL)
 add_object_library(clickhouse_storages_distributed Storages/Distributed)
 add_object_library(clickhouse_storages_mergetree Storages/MergeTree)

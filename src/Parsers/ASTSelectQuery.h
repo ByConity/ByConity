@@ -43,7 +43,6 @@ public:
         SELECT,
         TABLES,
         PREWHERE,
-        IMPLICITWHERE,  /// only used in CnchHive
         WHERE,
         GROUP_BY,
         HAVING,
@@ -68,8 +67,6 @@ public:
                 return "SELECT";
             case Expression::TABLES:
                 return "TABLES";
-            case Expression::IMPLICITWHERE:
-                return "IMPLICIT WHERE";
             case Expression::PREWHERE:
                 return "PREWHERE";
             case Expression::WHERE:
@@ -120,7 +117,6 @@ public:
     ASTPtr & refSelect()    { return getExpression(Expression::SELECT); }
     ASTPtr & refTables()    { return getExpression(Expression::TABLES); }
     ASTPtr & refPrewhere()  { return getExpression(Expression::PREWHERE); }
-    ASTPtr & refImplicitWhere() { return getExpression(Expression::IMPLICITWHERE); }
     ASTPtr & refWhere()     { return getExpression(Expression::WHERE); }
     ASTPtr & refHaving()    { return getExpression(Expression::HAVING); }
     ASTPtr & refLimitLength()   { return getExpression(Expression::LIMIT_LENGTH); }
@@ -129,7 +125,6 @@ public:
     const ASTPtr select()         const { return getExpression(Expression::SELECT); }
     const ASTPtr tables()         const { return getExpression(Expression::TABLES); }
     const ASTPtr prewhere()       const { return getExpression(Expression::PREWHERE); }
-    const ASTPtr implicitWhere()  const { return getExpression(Expression::IMPLICITWHERE); }
     const ASTPtr where()          const { return getExpression(Expression::WHERE); }
     const ASTPtr groupBy()        const { return getExpression(Expression::GROUP_BY); }
     const ASTPtr having()         const { return getExpression(Expression::HAVING); }

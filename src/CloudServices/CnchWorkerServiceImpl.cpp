@@ -15,45 +15,44 @@
 
 #include <CloudServices/CnchWorkerServiceImpl.h>
 
-#include <CloudServices/CnchCreateQueryHelper.h>
-#include <CloudServices/CnchWorkerResource.h>
-#include <CloudServices/CnchPartsHelper.h>
-#include <IO/ReadBufferFromString.h>
-#include <CloudServices/DedupWorkerStatus.h>
 #include <CloudServices/CloudMergeTreeDedupWorker.h>
+#include <CloudServices/CnchCreateQueryHelper.h>
+#include <CloudServices/CnchPartsHelper.h>
+#include <CloudServices/CnchWorkerResource.h>
+#include <CloudServices/DedupWorkerStatus.h>
+#include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeQuery.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/NamedSession.h>
+#include <Interpreters/executeQuery.h>
 #include <Protos/DataModelHelpers.h>
 #include <Protos/RPCHelpers.h>
+#include <Storages/DiskCache/IDiskCache.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/StorageCloudMergeTree.h>
-#include <Storages/DiskCache/IDiskCache.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTask.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
 
+#include <condition_variable>
+#include <mutex>
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
 #include <brpc/stream.h>
 #include "Common/Configurations.h"
-#include <condition_variable>
-#include <mutex>
 
 #if USE_RDKAFKA
-#include <Storages/Kafka/StorageCloudKafka.h>
-#include <Storages/Kafka/KafkaTaskCommand.h>
+#    include <Storages/Kafka/KafkaTaskCommand.h>
+#    include <Storages/Kafka/StorageCloudKafka.h>
 #endif
 
-#include <Storages/StorageCloudHive.h>
+#include <Storages/Hive/StorageCloudHive.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
@@ -115,7 +114,8 @@ void CnchWorkerServiceImpl::submitManipulationTask(
             params.mutation_commands->readText(read_buf);
         }
 
-        auto remote_address = addBracketsIfIpv6(rpc_context->getClientInfo().current_address.host().toString()) + ':' + toString(params.rpc_port);
+        auto remote_address
+            = addBracketsIfIpv6(rpc_context->getClientInfo().current_address.host().toString()) + ':' + toString(params.rpc_port);
         auto all_parts = createPartVectorFromModelsForSend<IMutableMergeTreeDataPartPtr>(*data, request->source_parts());
 
         LOG_DEBUG(log, "Received manipulation from {} :{}", remote_address, params.toDebugString());
@@ -147,8 +147,7 @@ void CnchWorkerServiceImpl::shutdownManipulationTasks(
         auto uuid = RPCHelpers::createUUID(request->table_uuid());
         std::unordered_set<String> task_ids(request->task_ids().begin(), request->task_ids().end());
 
-        getContext()->getManipulationList().apply([&](std::list<ManipulationListElement> & container)
-        {
+        getContext()->getManipulationList().apply([&](std::list<ManipulationListElement> & container) {
             for (auto & e : container)
             {
                 if (uuid != e.storage_id.uuid)
@@ -181,8 +180,7 @@ void CnchWorkerServiceImpl::touchManipulationTasks(
         auto uuid = RPCHelpers::createUUID(request->table_uuid());
         std::unordered_set<String> request_tasks(request->tasks_id().begin(), request->tasks_id().end());
 
-        getContext()->getManipulationList().apply([&](std::list<ManipulationListElement> & container)
-        {
+        getContext()->getManipulationList().apply([&](std::list<ManipulationListElement> & container) {
             auto now = time(nullptr);
             for (auto & e : container)
             {
@@ -219,8 +217,7 @@ void CnchWorkerServiceImpl::getManipulationTasksStatus(
 
     try
     {
-        getContext()->getManipulationList().apply([&](std::list<ManipulationListElement> & container)
-        {
+        getContext()->getManipulationList().apply([&](std::list<ManipulationListElement> & container) {
             for (auto & e : container)
             {
                 auto * task_info = response->add_tasks();
@@ -277,7 +274,7 @@ void CnchWorkerServiceImpl::sendCreateQuery(
         /// executeQuery may change the settings, so we copy a new context.
         auto create_context = Context::createCopy(query_context);
         auto worker_resource = query_context->getCnchWorkerResource();
-        for (const auto & create_query: request->create_queries())
+        for (const auto & create_query : request->create_queries())
         {
             /// store cloud tables in cnch_session_resource.
             worker_resource->executeCreateQuery(create_context, create_query, true);
@@ -310,11 +307,14 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
         LOG_DEBUG(
             log,
             "Receiving {} parts for table {}(txn_id: {})",
-            request->parts_size(), cloud_merge_tree.getStorageID().getNameForLogs(), request->txn_id());
+            request->parts_size(),
+            cloud_merge_tree.getStorageID().getNameForLogs(),
+            request->txn_id());
 
         MergeTreeMutableDataPartsVector data_parts;
         if (cloud_merge_tree.getInMemoryMetadata().hasUniqueKey())
-            data_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(cloud_merge_tree, request->parts(), request->bitmaps());
+            data_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
+                cloud_merge_tree, request->parts(), request->bitmaps());
         else
             data_parts = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(cloud_merge_tree, request->parts());
 
@@ -333,7 +333,7 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
         LOG_DEBUG(log, "Received and loaded {} server parts.", data_parts.size());
 
         std::set<Int64> required_bucket_numbers;
-        for (const auto & bucket_number: request->bucket_numbers())
+        for (const auto & bucket_number : request->bucket_numbers())
             required_bucket_numbers.insert(bucket_number);
 
         cloud_merge_tree.setRequiredBucketNumbers(required_bucket_numbers);
@@ -351,35 +351,6 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
     }
 }
 
-void CnchWorkerServiceImpl::sendCnchHiveDataParts(
-    google::protobuf::RpcController *,
-    const Protos::SendCnchHiveDataPartsReq * request,
-    Protos::SendCnchHiveDataPartsResp * response,
-    google::protobuf::Closure * done)
-{
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
-        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
-        const auto & query_context = session->context;
-
-        auto storage = DatabaseCatalog::instance().getTable({request->database_name(), request->table_name()}, query_context);
-        auto & hive_table = dynamic_cast<StorageCloudHive &>(*storage);
-
-        LOG_DEBUG(log, "Receiving parts for table {}", hive_table.getStorageID().getNameForLogs());
-
-        auto data_parts = createCnchHiveDataParts(getContext(), request->parts());
-
-        hive_table.loadDataParts(data_parts);
-
-        LOG_DEBUG(log, "Received and loaded {} hive parts" , data_parts.size());
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
-}
 
 void CnchWorkerServiceImpl::checkDataParts(
     google::protobuf::RpcController * cntl,
@@ -458,7 +429,7 @@ void CnchWorkerServiceImpl::preloadDataParts(
         LOG_TRACE(log, "Receiving preload parts task level = {}, sync = {}", request->preload_level(), request->sync());
 
         std::unique_ptr<ThreadPool> pool;
-        ThreadPool *pool_ptr;
+        ThreadPool * pool_ptr;
         if (request->sync())
         {
             pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), 16UL));
@@ -475,7 +446,12 @@ void CnchWorkerServiceImpl::preloadDataParts(
         if (request->sync())
             pool->wait();
 
-        LOG_DEBUG(storage->getLogger(), "Finish preload tasks in {} ms, level: {}, sync: {}", watch.elapsedMilliseconds(), request->preload_level(), request->sync());
+        LOG_DEBUG(
+            storage->getLogger(),
+            "Finish preload tasks in {} ms, level: {}, sync: {}",
+            watch.elapsedMilliseconds(),
+            request->preload_level(),
+            request->sync());
     }
     catch (...)
     {
@@ -526,13 +502,13 @@ void CnchWorkerServiceImpl::sendResources(
         {
             /// create a copy of session_context to avoid modify settings in SessionResource
             auto context_for_create = Context::createCopy(query_context);
-            for (const auto & create_query: request->create_queries())
+            for (const auto & create_query : request->create_queries())
                 worker_resource->executeCreateQuery(context_for_create, create_query, true);
 
             LOG_DEBUG(log, "Successfully create {} queries for Session: {}", request->create_queries_size(), request->txn_id());
         }
 
-        for (const auto & data: request->data_parts())
+        for (const auto & data : request->data_parts())
         {
             auto storage = DatabaseCatalog::instance().getTable({data.database(), data.table()}, query_context);
 
@@ -542,9 +518,11 @@ void CnchWorkerServiceImpl::sendResources(
                 {
                     MergeTreeMutableDataPartsVector server_parts;
                     if (cloud_merge_tree->getInMemoryMetadata().hasUniqueKey())
-                        server_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(*cloud_merge_tree, data.server_parts(), data.server_part_bitmaps());
+                        server_parts = createBasePartAndDeleteBitmapFromModelsForSend<IMergeTreeMutableDataPartPtr>(
+                            *cloud_merge_tree, data.server_parts(), data.server_part_bitmaps());
                     else
-                        server_parts = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(*cloud_merge_tree, data.server_parts());
+                        server_parts
+                            = createPartVectorFromModelsForSend<IMergeTreeMutableDataPartPtr>(*cloud_merge_tree, data.server_parts());
 
                     if (request->has_disk_cache_mode())
                     {
@@ -561,21 +539,21 @@ void CnchWorkerServiceImpl::sendResources(
                     LOG_DEBUG(
                         log,
                         "Received and loaded  {} parts for table {}(txn_id: {})",
-                        data.server_parts_size(), cloud_merge_tree->getStorageID().getNameForLogs(), request->txn_id());
+                        data.server_parts_size(),
+                        cloud_merge_tree->getStorageID().getNameForLogs(),
+                        request->txn_id());
                 }
 
                 std::set<Int64> required_bucket_numbers;
-                for (const auto & bucket_number: data.bucket_numbers())
+                for (const auto & bucket_number : data.bucket_numbers())
                     required_bucket_numbers.insert(bucket_number);
 
                 cloud_merge_tree->setRequiredBucketNumbers(required_bucket_numbers);
             }
             else if (auto * hive_table = dynamic_cast<StorageCloudHive *>(storage.get()))
             {
-                auto hive_parts = createCnchHiveDataParts(getContext(), data.hive_parts());
-                hive_table->loadDataParts(hive_parts);
-
-                LOG_DEBUG(log, "Received and loaded {} hive parts for table {}" , hive_parts.size(), hive_table->getStorageID().getNameForLogs());
+                auto files = RPCHelpers::deserialize(data.hive_parts(), query_context, storage->getInMemoryMetadataPtr());
+                hive_table->loadHiveFiles(files);
             }
             else
                 throw Exception("Unknown table engine: " + storage->getName(), ErrorCodes::UNKNOWN_TABLE);
@@ -611,11 +589,11 @@ void CnchWorkerServiceImpl::removeWorkerResource(
 }
 
 #if defined(__clang__)
-    #pragma clang diagnostic push
-    #pragma clang diagnostic ignored "-Wunused-parameter"
+#    pragma clang diagnostic push
+#    pragma clang diagnostic ignored "-Wunused-parameter"
 #else
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wunused-parameter"
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 
 void CnchWorkerServiceImpl::executeSimpleQuery(
@@ -685,11 +663,7 @@ void CnchWorkerServiceImpl::createDedupWorker(
         rpc_context->setSessionContext(rpc_context);
         rpc_context->setCurrentQueryId(toString(UUIDHelpers::generateV4()));
 
-        ThreadFromGlobalPool([log=this->log,
-                              storage_id,
-                              query,
-                              host_ports = std::move(host_ports),
-                              context = std::move(rpc_context)] {
+        ThreadFromGlobalPool([log = this->log, storage_id, query, host_ports = std::move(host_ports), context = std::move(rpc_context)] {
             try
             {
                 // CurrentThread::attachQueryContext(*context);
@@ -699,9 +673,7 @@ void CnchWorkerServiceImpl::createDedupWorker(
 
                 auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
                 if (!storage)
-                    throw Exception(
-                        "Unique cloud table " + storage_id.getFullTableName() + " doesn't exist.",
-                        ErrorCodes::LOGICAL_ERROR);
+                    throw Exception("Unique cloud table " + storage_id.getFullTableName() + " doesn't exist.", ErrorCodes::LOGICAL_ERROR);
                 auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
                 if (!cloud_table)
                     throw Exception(
@@ -743,7 +715,7 @@ void CnchWorkerServiceImpl::dropDedupWorker(
         drop_query->table = storage_id.table_name;
         drop_query->uuid = storage_id.uuid;
 
-        ThreadFromGlobalPool([log=this->log, storage_id, q = std::move(query), c = std::move(rpc_context)] {
+        ThreadFromGlobalPool([log = this->log, storage_id, q = std::move(query), c = std::move(rpc_context)] {
             LOG_DEBUG(log, "Dropping table: {}", storage_id.getNameForLogs());
             // CurrentThread::attachQueryContext(*c);
             InterpreterDropQuery(q, c).execute();
@@ -772,7 +744,8 @@ void CnchWorkerServiceImpl::getDedupWorkerStatus(
             throw Exception("Unique cloud table " + storage_id.getFullTableName() + " doesn't exist.", ErrorCodes::LOGICAL_ERROR);
         auto * cloud_table = dynamic_cast<StorageCloudMergeTree *>(storage.get());
         if (!cloud_table)
-            throw Exception("convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "convert to StorageCloudMergeTree from table failed: " + storage_id.getFullTableName(), ErrorCodes::LOGICAL_ERROR);
 
         auto * deduper = cloud_table->getDedupWorker();
         DedupWorkerStatus status = deduper->getDedupWorkerStatus();
@@ -832,8 +805,10 @@ void CnchWorkerServiceImpl::submitKafkaConsumeTask(
             command->assigned_consumer = request->assigned_consumer();
 
             if (request->create_table_command_size() < 2)
-                throw Exception("The number of tables to be created should be larger than 2, but provided with "
-                                + toString(request->create_table_command_size()), ErrorCodes::BAD_ARGUMENTS);
+                throw Exception(
+                    "The number of tables to be created should be larger than 2, but provided with "
+                        + toString(request->create_table_command_size()),
+                    ErrorCodes::BAD_ARGUMENTS);
             for (const auto & cmd : request->create_table_command())
                 command->create_table_commands.push_back(cmd);
 
@@ -848,8 +823,7 @@ void CnchWorkerServiceImpl::submitKafkaConsumeTask(
         rpc_context->getClientInfo().rpc_port = static_cast<UInt16>(request->rpc_port());
         ///rpc_context->setQueryContext(*rpc_context);
 
-        LOG_TRACE(log, "Successfully to parse kafka-consumer command: {}"
-                      , KafkaTaskCommand::typeToString(command->type));
+        LOG_TRACE(log, "Successfully to parse kafka-consumer command: {}", KafkaTaskCommand::typeToString(command->type));
 
         /// create thread to execute kafka-consume-task
         ThreadFromGlobalPool([p = std::move(command), c = std::move(rpc_context)] {
@@ -862,10 +836,9 @@ void CnchWorkerServiceImpl::submitKafkaConsumeTask(
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
         RPCHelpers::handleException(response->mutable_exception());
     }
-
 }
 void CnchWorkerServiceImpl::getConsumerStatus(
-    google::protobuf::RpcController *  cntl,
+    google::protobuf::RpcController * cntl,
     const Protos::GetConsumerStatusReq * request,
     Protos::GetConsumerStatusResp * response,
     google::protobuf::Closure * done)
@@ -899,7 +872,6 @@ void CnchWorkerServiceImpl::getConsumerStatus(
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
         RPCHelpers::handleException(response->mutable_exception());
     }
-
 }
 #endif
 
@@ -920,9 +892,9 @@ void CnchWorkerServiceImpl::getCloudMergeTreeStatus(
 }
 
 #if defined(__clang__)
-    #pragma clang diagnostic pop
+#    pragma clang diagnostic pop
 #else
-    #pragma GCC diagnostic pop
+#    pragma GCC diagnostic pop
 #endif
 
 }

@@ -113,7 +113,7 @@
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
-#include <Storages/MergeTree/CnchHiveSettings.h>
+#include <Storages/Hive/CnchHiveSettings.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeData.h>

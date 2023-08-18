@@ -16,82 +16,58 @@
 
 #pragma once
 
-#include <memory>
-#include <set>
-#include <unordered_map>
-#include <Storages/IStorage.h>
-#include <Storages/SelectQueryInfo.h>
-#include <boost/noncopyable.hpp>
+#include "Common/config.h"
+#if USE_HIVE
+
+#    include <list>
+#    include <boost/noncopyable.hpp>
+#    include "common/types.h"
+#    include "Core/Names.h"
+#    include "Parsers/IAST_fwd.h"
+
+namespace Poco
+{
+class Logger;
+}
 
 namespace DB
 {
-class ASTSelectQuery;
-class StorageCnchHive;
-using StoragePtr = std::shared_ptr<IStorage>;
+class ASTFunction;
+struct SelectQueryInfo;
+struct StorageInMemoryMetadata;
+using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 
 class HiveWhereOptimizer : private boost::noncopyable
 {
 public:
-    HiveWhereOptimizer(const SelectQueryInfo & query_info_, ContextPtr & /*context_*/, const StoragePtr & storage_);
+    HiveWhereOptimizer(const StorageMetadataPtr & metadata_snapshot_, const SelectQueryInfo & query_info_, Poco::Logger * log_);
 
-    void implicitwhereOptimize() const;
+    using Conditions = ASTs;
 
-    struct Condition
-    {
-        ASTPtr node;
-        NameSet identifiers;
-        bool viable = false; //is partitionkey condition
-        bool good = false;
-
-        auto tuple() const { return std::make_tuple(!viable, !good); }
-
-        bool operator<(const Condition & rhs) const { return tuple() < rhs.tuple(); }
-
-        Condition clone() const
-        {
-            Condition condition;
-            condition.node = node->clone();
-            condition.identifiers = identifiers;
-            condition.viable = viable;
-            condition.good = good;
-            return condition;
-        }
-    };
-
-    using Conditions = std::list<Condition>;
-
-    ASTs getConditions(const ASTPtr & ast) const;
-
-    ASTs getWhereOptimizerConditions(const ASTPtr & ast) const;
-
-    void implicitAnalyzeImpl(Conditions & res, const ASTPtr & node) const;
-
-    /// Transform conjunctions chain in WHERE expression to Conditions list.
-    Conditions implicitAnalyze(const ASTPtr & expression) const;
-
-    /// Transform Conditions list to WHERE or PREWHERE expression.
-    ASTPtr reconstruct(const Conditions & conditions) const;
-
-    bool isValidPartitionColumn(const IAST * condition) const;
-
-    bool isSubsetOfTableColumns(const NameSet & identifiers) const;
-
-    // bool hasColumnOfTableColumns(const HiveWhereOptimizer::Conditions & conditions) const;
-    // bool hasColumnOfTableColumns() const;
-    // bool isInTableColumns(const ASTPtr & node) const;
-
-    bool getUsefullFilter(String & filter);
-    bool convertImplicitWhereToUsefullFilter(String & filter);
-    bool convertWhereToUsefullFilter(ASTs & conditions, String & filter);
+    /// results
+    ASTPtr partition_key_conds;
+    ASTPtr cluster_key_conds;
 
 private:
-    using StringSet = std::unordered_set<String>;
+    static ASTPtr reconstruct(const Conditions & conditions);
 
-    StringSet table_columns;
-    ASTPtr partition_expr_ast;
-    // const Context & context;
-    ASTSelectQuery & select;
-    const StoragePtr & storage;
+    struct Data
+    {
+        Conditions partiton_key_conditions;
+        Conditions cluster_key_conditions;
+    };
+
+    void extractKeyConditions(Data & res, const ASTPtr & node);
+    void extractKeyConditions(Data & res, const ASTPtr & node, const ASTFunction & func);
+
+    bool isPartitionKey(const String & column_name) const;
+    bool isClusterKey(const String & column_name) const;
+
+    NameSet partition_key_names;
+    NameSet cluster_key_names;
+    Poco::Logger * log;
 };
 
 }
+
+#endif
