@@ -16,20 +16,19 @@
 
 #include "Storages/Hive/HivePartition.h"
 #if USE_HIVE
->>>>>>> e22f20f6c25 (Merge branch 'pick-hive' into 'cnch-ce-merge')
 
-#include "Formats/FormatFactory.h"
-#include "IO/ReadBufferFromString.h"
-#include "IO/ReadHelpers.h"
-#include "IO/WriteBufferFromString.h"
-#include "IO/WriteHelpers.h"
-#include "Processors/Formats/Impl/CSVRowInputFormat.h"
-#include "Processors/Formats/InputStreamFromInputFormat.h"
-#include "Storages/KeyDescription.h"
+#    include "Formats/FormatFactory.h"
+#    include "IO/ReadBufferFromString.h"
+#    include "IO/ReadHelpers.h"
+#    include "IO/WriteBufferFromString.h"
+#    include "IO/WriteHelpers.h"
+#    include "Processors/Formats/Impl/CSVRowInputFormat.h"
+#    include "Processors/Formats/InputStreamFromInputFormat.h"
+#    include "Storages/KeyDescription.h"
 
-#include <hive_metastore_types.h>
+#    include <hive_metastore_types.h>
 
-    namespace DB
+namespace DB
 {
     namespace ErrorCodes
     {

@@ -1,4 +1,5 @@
 #include "Storages/Hive/DirectoryLister.h"
+#include <Interpreters/WorkerStatusManager.h>
 #include <Poco/Util/MapConfiguration.h>
 #if USE_HIVE
 
@@ -60,7 +61,7 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context)
         LOG_DEBUG(log, "get sd_url: {}", sd_url);
         uri.setScheme("s3"); /// to correctly parse uri
         S3::URI s3_uri(uri);
-        LOG_DEBUG(log, "s3 url: {}", s3_uri.toString());
+        // LOG_DEBUG(log, "s3 url: {}", s3_uri.toString());
 
         /// a bit hack
         Poco::AutoPtr<Poco::Util::MapConfiguration> configuration = new Poco::Util::MapConfiguration;
