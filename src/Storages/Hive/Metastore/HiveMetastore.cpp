@@ -1,4 +1,5 @@
 #include "Storages/Hive/Metastore/HiveMetastore.h"
+#include <ServiceDiscovery/ServiceDiscoveryHelper.h>
 #if USE_HIVE
 
 #include <thrift/protocol/TBinaryProtocol.h>

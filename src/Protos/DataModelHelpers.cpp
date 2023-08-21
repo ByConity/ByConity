@@ -27,12 +27,10 @@
 #include <Protos/RPCHelpers.h>
 #include <Protos/data_models.pb.h>
 #include <Storages/HDFS/HDFSCommon.h>
-#include <Storages/Hive/HiveDataPart.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/Exception.h>
 #include <common/JSON.h>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -436,27 +434,6 @@ IMergeTreeDataPartsVector createPartVectorFromServerParts(
         res.push_back(part->toCNCHDataPart(storage, relative_path));
     }
     return res;
-}
-
-
-void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model)
-{
-    for (const auto & part : parts)
-    {
-        auto & part_model = *parts_model.Add();
-        auto & info = *part_model.mutable_part_info();
-        auto skip_list = part->getSkipSplits();
-        auto size = skip_list.size();
-        *info.mutable_name() = part->getInfo().name;
-        *info.mutable_partition_id() = part->getInfo().partition_id;
-        *part_model.mutable_relative_path() = part->getRelativePath();
-        part_model.set_skip_lists(size);
-        part_model.set_hdfs_uri(part->getHDFSUri());
-        *part_model.mutable_format_name() = part->getFormatName();
-
-        for (auto & skip_num : skip_list)
-            *part_model.mutable_skip_numbers()->Add() = skip_num;
-    }
 }
 
 
