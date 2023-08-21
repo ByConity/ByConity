@@ -571,8 +571,8 @@ void SystemLog<LogElement>::prepareTable()
         auto ordinary_columns = LogElement::getNamesAndTypes();
         auto alias_columns = LogElement::getNamesAndAliases();
         auto query_context = Context::createCopy(context);
-        auto current_query = InterpreterCreateQuery::formatColumns(ordinary_columns, alias_columns,
-                                                                   ParserSettings::valueOf(query_context->getSettingsRef().dialect_type));
+        auto current_query = InterpreterCreateQuery::formatColumns(
+            ordinary_columns, alias_columns, ParserSettings::valueOf(query_context->getSettingsRef()));
 
         if (old_query->getTreeHash() != current_query->getTreeHash())
         {
@@ -619,7 +619,7 @@ void SystemLog<LogElement>::prepareTable()
         /// Create the table.
         LOG_DEBUG(log, "Creating new table {} for {}", description, LogElement::name());
         auto query_context = Context::createCopy(context);
-        auto create = getCreateTableQuery(ParserSettings::valueOf(query_context->getSettingsRef().dialect_type));
+        auto create = getCreateTableQuery(ParserSettings::valueOf(query_context->getSettingsRef()));
 
         query_context->makeQueryContext();
 
@@ -840,8 +840,8 @@ void CnchSystemLog<LogElement>::prepareTable()
 
         auto ordinary_columns = LogElement::getNamesAndTypes();
         auto alias_columns = LogElement::getNamesAndAliases();
-        auto current_query = InterpreterCreateQuery::formatColumns(ordinary_columns, alias_columns,
-                                                                   ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type));
+        auto current_query = InterpreterCreateQuery::formatColumns(
+            ordinary_columns, alias_columns, ParserSettings::valueOf(getContext()->getSettingsRef()));
 
         if (old_query->getTreeHash() != current_query->getTreeHash())
         {

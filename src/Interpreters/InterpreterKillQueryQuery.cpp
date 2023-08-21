@@ -297,7 +297,7 @@ BlockIO InterpreterKillQueryQuery::execute()
                     code = CancellationCode::NotFound;
                 else
                 {
-                    ParserAlterCommand parser(ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type));
+                    ParserAlterCommand parser(ParserSettings::valueOf(getContext()->getSettingsRef()));
                     auto command_ast
                         = parseQuery(parser, command_col.getDataAt(i).toString(), 0, getContext()->getSettingsRef().max_parser_depth);
                     required_access_rights = InterpreterAlterQuery::getRequiredAccessForCommand(

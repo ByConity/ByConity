@@ -923,6 +923,14 @@ private:
 
     bool processQueryText(const String & text)
     {
+<<<<<<< HEAD
+=======
+        OpentelemetrySpan span = telemetry::getTracer("tracer")->StartSpan("query");
+        context->opentelemetry_tracer = telemetry::getTracer("tracer");
+
+        auto scope = OpentelemetryScope {span};
+
+>>>>>>> df62b35b058 (Merge branch 'fix_ansi_parse_cnch_ce' into 'cnch-ce-merge')
         if (exit_strings.end() != exit_strings.find(trim(text, [](char c) { return isWhitespaceASCII(c) || c == ';'; })))
             return false;
 
@@ -1841,7 +1849,7 @@ private:
     ASTPtr parseQuery(const char *& pos, const char * end, bool allow_multi_statements)
     {
         const auto & settings = context->getSettingsRef();
-        ParserQuery parser(end, ParserSettings::valueOf(settings.dialect_type));
+        ParserQuery parser(end, ParserSettings::valueOf(settings));
         ASTPtr res;
 
         size_t max_length = 0;
@@ -2291,6 +2299,7 @@ private:
                     // We are writing to file, so default format is the same as in non-interactive mode.
                     if (is_interactive && is_default_format)
                         current_format = "TabSeparated";
+
                 }
                 if (query_with_output->format != nullptr)
                 {

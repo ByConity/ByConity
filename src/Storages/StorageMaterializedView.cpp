@@ -21,52 +21,51 @@
 
 #include <Storages/StorageMaterializedView.h>
 
+#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserPartition.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/queryToString.h>
 
+#include <Interpreters/AddDefaultDatabaseVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
-#include <Interpreters/getTableExpressions.h>
-#include <Interpreters/AddDefaultDatabaseVisitor.h>
-#include <Interpreters/getHeaderForProcessingStage.h>
 #include <Interpreters/QueryNormalizer.h>
-#include <Interpreters/predicateExpressionsUtils.h>
 #include <Interpreters/TreeRewriter.h>
+#include <Interpreters/getHeaderForProcessingStage.h>
+#include <Interpreters/getTableExpressions.h>
+#include <Interpreters/predicateExpressionsUtils.h>
 
 #include <Access/AccessFlags.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 
 #include <Storages/AlterCommands.h>
-#include <Storages/StorageFactory.h>
 #include <Storages/ReadInOrderOptimizer.h>
 #include <Storages/SelectQueryDescription.h>
+#include <Storages/StorageFactory.h>
 
-#include <Common/typeid_cast.h>
-#include <Common/checkStackSize.h>
 #include <Processors/Sources/SourceFromInputStream.h>
-#include <QueryPlan/SettingQuotaAndLimitsStep.h>
-#include <QueryPlan/ExpressionStep.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/ExpressionStep.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/SettingQuotaAndLimitsStep.h>
+#include <Common/checkStackSize.h>
+#include <Common/typeid_cast.h>
 
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
-#include <DataStreams/MaterializingBlockInputStream.h>
-#include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/ConvertingBlockInputStream.h>
+#include <DataStreams/MaterializingBlockInputStream.h>
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
+#include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/copyData.h>
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
@@ -95,11 +94,7 @@ static void removeNonCommonColumns(const Block & src_header, Block & target_head
 }
 
 StorageMaterializedView::StorageMaterializedView(
-    const StorageID & table_id_,
-    ContextPtr local_context,
-    const ASTCreateQuery & query,
-    const ColumnsDescription & columns_,
-    bool attach_)
+    const StorageID & table_id_, ContextPtr local_context, const ASTCreateQuery & query, const ColumnsDescription & columns_, bool attach_)
     : IStorage(table_id_), WithMutableContext(local_context->getGlobalContext())
 {
     StorageInMemoryMetadata storage_metadata;
@@ -122,10 +117,9 @@ StorageMaterializedView::StorageMaterializedView(
     storage_metadata.setSelectQuery(select);
     setInMemoryMetadata(storage_metadata);
 
-    bool point_to_itself_by_uuid = has_inner_table && query.to_inner_uuid != UUIDHelpers::Nil
-                                                   && query.to_inner_uuid == table_id_.uuid;
+    bool point_to_itself_by_uuid = has_inner_table && query.to_inner_uuid != UUIDHelpers::Nil && query.to_inner_uuid == table_id_.uuid;
     bool point_to_itself_by_name = !has_inner_table && query.to_table_id.database_name == table_id_.database_name
-                                                    && query.to_table_id.table_name == table_id_.table_name;
+        && query.to_table_id.table_name == table_id_.table_name;
     if (point_to_itself_by_uuid || point_to_itself_by_name)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Materialized view {} cannot point to itself", table_id_.getFullTableName());
 
@@ -153,11 +147,18 @@ StorageMaterializedView::StorageMaterializedView(
         manual_create_query->set(manual_create_query->columns_list, new_columns_list);
         manual_create_query->set(manual_create_query->storage, query.storage->ptr());
 
+<<<<<<< HEAD
         InterpreterCreateQuery create_interpreter(manual_create_query, create_context);
         create_interpreter.setInternal(true);
         create_interpreter.execute();
+=======
+        create_context->setCurrentTransaction(nullptr, false);
+        executeQuery(serializeAST(*manual_create_query), create_context, true);
+>>>>>>> df62b35b058 (Merge branch 'fix_ansi_parse_cnch_ce' into 'cnch-ce-merge')
 
-        target_table_id = DatabaseCatalog::instance().getTable({manual_create_query->database, manual_create_query->table}, getContext())->getStorageID();
+        target_table_id = DatabaseCatalog::instance()
+                              .getTable({manual_create_query->database, manual_create_query->table}, getContext())
+                              ->getStorageID();
     }
 
     if (!select.select_table_id.empty())
@@ -169,10 +170,7 @@ StorageMaterializedView::StorageMaterializedView(
 }
 
 QueryProcessingStage::Enum StorageMaterializedView::getQueryProcessingStage(
-    ContextPtr local_context,
-    QueryProcessingStage::Enum to_stage,
-    const StorageMetadataPtr &,
-    SelectQueryInfo & query_info) const
+    ContextPtr local_context, QueryProcessingStage::Enum to_stage, const StorageMetadataPtr &, SelectQueryInfo & query_info) const
 {
     return getTargetTable()->getQueryProcessingStage(local_context, to_stage, getTargetTable()->getInMemoryMetadataPtr(), query_info);
 }
@@ -189,8 +187,7 @@ Pipe StorageMaterializedView::read(
     QueryPlan plan;
     read(plan, column_names, metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
     return plan.convertToPipe(
-        QueryPlanOptimizationSettings::fromContext(local_context),
-        BuildQueryPipelineSettings::fromContext(local_context));
+        QueryPlanOptimizationSettings::fromContext(local_context), BuildQueryPipelineSettings::fromContext(local_context));
 }
 
 void StorageMaterializedView::read(
@@ -210,7 +207,8 @@ void StorageMaterializedView::read(
     if (query_info.order_optimizer)
         query_info.input_order_info = query_info.order_optimizer->getInputOrder(target_metadata_snapshot, local_context);
 
-    storage->read(query_plan, column_names, target_metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
+    storage->read(
+        query_plan, column_names, target_metadata_snapshot, query_info, local_context, processed_stage, max_block_size, num_streams);
 
     if (query_plan.isInitialized())
     {
@@ -229,9 +227,8 @@ void StorageMaterializedView::read(
 
         if (!blocksHaveEqualStructure(mv_header, target_header))
         {
-            auto converting_actions = ActionsDAG::makeConvertingActions(target_header.getColumnsWithTypeAndName(),
-                                                                        mv_header.getColumnsWithTypeAndName(),
-                                                                        ActionsDAG::MatchColumnsMode::Name);
+            auto converting_actions = ActionsDAG::makeConvertingActions(
+                target_header.getColumnsWithTypeAndName(), mv_header.getColumnsWithTypeAndName(), ActionsDAG::MatchColumnsMode::Name);
             auto converting_step = std::make_unique<ExpressionStep>(query_plan.getCurrentDataStream(), converting_actions);
             converting_step->setStepDescription("Convert target table structure to MaterializedView structure");
             query_plan.addStep(std::move(converting_step));
@@ -242,20 +239,15 @@ void StorageMaterializedView::read(
 
         /// Add table lock for destination table.
         auto adding_limits_and_quota = std::make_unique<SettingQuotaAndLimitsStep>(
-                query_plan.getCurrentDataStream(),
-                storage,
-                std::move(lock),
-                limits,
-                leaf_limits,
-                nullptr,
-                nullptr);
+            query_plan.getCurrentDataStream(), storage, std::move(lock), limits, leaf_limits, nullptr, nullptr);
 
         adding_limits_and_quota->setStepDescription("Lock destination table for MaterializedView");
         query_plan.addStep(std::move(adding_limits_and_quota));
     }
 }
 
-BlockOutputStreamPtr StorageMaterializedView::write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr local_context)
+BlockOutputStreamPtr
+StorageMaterializedView::write(const ASTPtr & query, const StorageMetadataPtr & /*metadata_snapshot*/, ContextPtr local_context)
 {
     auto storage = getTargetTable();
     auto lock = storage->lockForShare(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
@@ -305,8 +297,8 @@ void StorageMaterializedView::checkStatementCanBeForwarded() const
 {
     if (!has_inner_table)
         throw Exception(
-            "MATERIALIZED VIEW targets existing table " + target_table_id.getNameForLogs() + ". "
-            + "Execute the statement directly on it.", ErrorCodes::INCORRECT_QUERY);
+            "MATERIALIZED VIEW targets existing table " + target_table_id.getNameForLogs() + ". " + "Execute the statement directly on it.",
+            ErrorCodes::INCORRECT_QUERY);
 }
 
 bool StorageMaterializedView::optimize(
@@ -324,10 +316,7 @@ bool StorageMaterializedView::optimize(
     return getTargetTable()->optimize(query, metadata_snapshot, partition, final, deduplicate, deduplicate_by_columns, local_context);
 }
 
-void StorageMaterializedView::alter(
-    const AlterCommands & params,
-    ContextPtr local_context,
-    TableLockHolder &)
+void StorageMaterializedView::alter(const AlterCommands & params, ContextPtr local_context, TableLockHolder &)
 {
     auto table_id = getStorageID();
     StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
@@ -485,17 +474,15 @@ ActionLock StorageMaterializedView::getActionLock(StorageActionBlockType type)
 
 void registerStorageMaterializedView(StorageFactory & factory)
 {
-    factory.registerStorage("MaterializedView", [](const StorageFactory::Arguments & args)
-    {
+    factory.registerStorage("MaterializedView", [](const StorageFactory::Arguments & args) {
         /// Pass local_context here to convey setting for inner table
-        return StorageMaterializedView::create(
-            args.table_id, args.getLocalContext(), args.query,
-            args.columns, args.attach);
+        return StorageMaterializedView::create(args.table_id, args.getLocalContext(), args.query, args.columns, args.attach);
     });
 }
 
 
-static BlockInputStreamPtr generateInput(ASTPtr query, const Block & result_header, const String & column_name, const String & column_value, ContextPtr local_context)
+static BlockInputStreamPtr
+generateInput(ASTPtr query, const Block & result_header, const String & column_name, const String & column_value, ContextPtr local_context)
 {
     // construct partition or part predicate
     ASTPtr equals_identifier = std::make_shared<ASTIdentifier>(column_name);
@@ -575,7 +562,7 @@ bool StorageMaterializedView::isRefreshable(bool cascading) const
 
 /// TODO: Async mode is useless when atomic parameter refreshing ensure only one refresh task to execute.
 ///       Temporarily only support sync refresh mode later provide parallel solution.
-void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr local_context, bool async)
+void StorageMaterializedView::refresh(const ASTPtr & partition, ContextPtr local_context, bool async)
 {
     if (!partition)
     {
@@ -585,16 +572,19 @@ void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr loca
             {
                 bool old_val = false;
                 if (!refreshing.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
-                    throw Exception("only one ongoing refreshing task is accepted, please wait for the current task to complete.", ErrorCodes::LOGICAL_ERROR);
+                    throw Exception(
+                        "only one ongoing refreshing task is accepted, please wait for the current task to complete.",
+                        ErrorCodes::LOGICAL_ERROR);
                 refreshing_partition_id = "all";
 
                 /// Truncate target table
                 auto target_table = getTargetTable();
                 auto metadata_snapshot = target_table->getInMemoryMetadataPtr();
                 {
-                     auto table_lock = target_table->lockExclusively(local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
-                     ASTPtr invalid_ast;
-                     target_table->truncate(invalid_ast, metadata_snapshot, local_context, table_lock);
+                    auto table_lock = target_table->lockExclusively(
+                        local_context->getCurrentQueryId(), local_context->getSettingsRef().lock_acquire_timeout);
+                    ASTPtr invalid_ast;
+                    target_table->truncate(invalid_ast, metadata_snapshot, local_context, table_lock);
                 }
 
                 /// Refresh all table
@@ -609,7 +599,9 @@ void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr loca
                 InterpreterSelectQuery select(getInnerQuery(), local_context, SelectQueryOptions());
                 BlockInputStreamPtr in = std::make_shared<MaterializingBlockInputStream>(select.execute().in);
                 in = std::make_shared<SquashingBlockInputStream>(
-                    in, local_context->getSettingsRef().min_insert_block_size_rows, local_context->getSettingsRef().min_insert_block_size_bytes);
+                    in,
+                    local_context->getSettingsRef().min_insert_block_size_rows,
+                    local_context->getSettingsRef().min_insert_block_size_bytes);
                 in = std::make_shared<ConvertingBlockInputStream>(in, out->getHeader(), ConvertingBlockInputStream::MatchColumnsMode::Name);
                 out->writePrefix();
                 copyData(*in, *out);
@@ -644,7 +636,8 @@ void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr loca
                     IParser::Pos token_iterator(tokens, max_query_size);
                     ASTPtr part_ast;
                     Expected expected;
-                    bool parse_res = ParserPartition(ParserSettings::valueOf(local_context->getSettingsRef().dialect_type)).parse(token_iterator, part_ast, expected);
+                    bool parse_res = ParserPartition(ParserSettings::valueOf(local_context->getSettingsRef()))
+                                         .parse(token_iterator, part_ast, expected);
                     if (!parse_res)
                         continue;
                     refreshImpl(part_ast, local_context, async);
@@ -662,19 +655,24 @@ void StorageMaterializedView::refreshImpl(const ASTPtr & partition, ContextPtr l
     {
         bool old_val = false;
         if (!refreshing.compare_exchange_strong(old_val, true, std::memory_order_seq_cst, std::memory_order_relaxed))
-            throw Exception("only one ongoing refreshing task is accepted, please wait for the current task to complete.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "only one ongoing refreshing task is accepted, please wait for the current task to complete.", ErrorCodes::LOGICAL_ERROR);
 
         bool cascading = local_context->getSettingsRef().cascading_refresh_materialized_view;
         if (!isRefreshable(cascading))
-            throw Exception("Materialized view" + backQuoteIfNeed(getStorageID().getDatabaseName()) + "." + backQuoteIfNeed(getStorageID().getTableName()) +
-                                " is not refreshable.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Materialized view" + backQuoteIfNeed(getStorageID().getDatabaseName()) + "."
+                    + backQuoteIfNeed(getStorageID().getTableName()) + " is not refreshable.",
+                ErrorCodes::LOGICAL_ERROR);
 
         auto select_table = DatabaseCatalog::instance().getTable(getInMemoryMetadataPtr()->select.select_table_id, local_context);
 
         auto * merge_tree = dynamic_cast<MergeTreeData *>(select_table.get());
         if (!merge_tree)
-            throw Exception("Select table " + backQuoteIfNeed(select_table->getStorageID().getDatabaseName()) + "." + backQuoteIfNeed(select_table->getStorageID().getTableName()) +
-                                " is not merge tree engine.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "Select table " + backQuoteIfNeed(select_table->getStorageID().getDatabaseName()) + "."
+                    + backQuoteIfNeed(select_table->getStorageID().getTableName()) + " is not merge tree engine.",
+                ErrorCodes::LOGICAL_ERROR);
         refreshing_partition_id = merge_tree->getPartitionIDFromQuery(partition, local_context);
 
         MergeTreeData::DataPartsVector parts;
@@ -683,7 +681,9 @@ void StorageMaterializedView::refreshImpl(const ASTPtr & partition, ContextPtr l
         for (auto & part : parts)
             rows += part->rows_count;
         if (rows == 0)
-            throw Exception("There is no data of this partition in the base table. So no data can be used to refresh the view.", ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                "There is no data of this partition in the base table. So no data can be used to refresh the view.",
+                ErrorCodes::LOGICAL_ERROR);
 
         /// First drop the old partition
         PartitionCommand drop_command;
@@ -699,8 +699,9 @@ void StorageMaterializedView::refreshImpl(const ASTPtr & partition, ContextPtr l
         auto metadata_snapshot = target_table->getInMemoryMetadataPtr();
         // construct the alter query string
         std::stringstream alter_query_ss;
-        alter_query_ss << "ALTER TABLE " << backQuoteIfNeed(target_table->getStorageID().getDatabaseName()) << "." << backQuoteIfNeed(target_table->getStorageID().getTableName())
-                       << (cascading ? " CASCADING " : " ") << "DROP " << "PARTITION " << serializeAST(*partition, true);
+        alter_query_ss << "ALTER TABLE " << backQuoteIfNeed(target_table->getStorageID().getDatabaseName()) << "."
+                       << backQuoteIfNeed(target_table->getStorageID().getTableName()) << (cascading ? " CASCADING " : " ") << "DROP "
+                       << "PARTITION " << serializeAST(*partition, true);
 
         const String alter_query_str = alter_query_ss.str();
 
@@ -733,7 +734,11 @@ void StorageMaterializedView::refreshImpl(const ASTPtr & partition, ContextPtr l
             out->writePrefix();
             copyData(*in, *out);
             out->writeSuffix();
-            LOG_DEBUG(&Poco::Logger::get("refreshImpl"), "write view table from original table partition-{}, with rows-{}" , refreshing_partition_id,  std::to_string(rows));
+            LOG_DEBUG(
+                &Poco::Logger::get("refreshImpl"),
+                "write view table from original table partition-{}, with rows-{}",
+                refreshing_partition_id,
+                std::to_string(rows));
         }
         else
         {
@@ -743,8 +748,12 @@ void StorageMaterializedView::refreshImpl(const ASTPtr & partition, ContextPtr l
             {
                 auto in = generateInput(getInnerQuery(), out->getHeader(), "_part", part->name, local_context);
                 copyData(*in, *out);
-                LOG_DEBUG(&Poco::Logger::get("refreshImpl"), "write view table from original table partition-{} with max_rows_to_refresh_by_partition-{} < {} rows" ,
-                          part->name, std::to_string(local_context->getSettingsRef().max_rows_to_refresh_by_partition), std::to_string(rows));
+                LOG_DEBUG(
+                    &Poco::Logger::get("refreshImpl"),
+                    "write view table from original table partition-{} with max_rows_to_refresh_by_partition-{} < {} rows",
+                    part->name,
+                    std::to_string(local_context->getSettingsRef().max_rows_to_refresh_by_partition),
+                    std::to_string(rows));
             }
 
             out->writeSuffix();
@@ -780,14 +789,13 @@ ASTPtr StorageMaterializedView::normalizeInnerQuery()
         return normalized_inner_query;
     normalized_inner_query = getInMemoryMetadataPtr()->select.inner_query->clone();
     StoragePtr select_storage_ptr = DatabaseCatalog::instance().getTable(getInMemoryMetadataPtr()->select.select_table_id, getContext());
-    TreeRewriter(getContext()).analyzeSelect(normalized_inner_query,
-                                              TreeRewriterResult({}, select_storage_ptr,
-                                              select_storage_ptr->getInMemoryMetadataPtr()),
-                                              SelectQueryOptions().analyze());
+    TreeRewriter(getContext())
+        .analyzeSelect(
+            normalized_inner_query,
+            TreeRewriterResult({}, select_storage_ptr, select_storage_ptr->getInMemoryMetadataPtr()),
+            SelectQueryOptions().analyze());
     LOG_DEBUG(&Poco::Logger::get("normalizeInnerQuery"), "normalize query-{}", queryToString(normalized_inner_query));
     return normalized_inner_query;
 }
 
 }
-
-
