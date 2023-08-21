@@ -1,5 +1,4 @@
 #include "Storages/Hive/DirectoryLister.h"
-#include <Interpreters/Context_fwd.h>
 #include <Poco/Util/MapConfiguration.h>
 #if USE_HIVE
 
@@ -9,6 +8,9 @@
 #include "Poco/URI.h"
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Storages/Hive/HivePartition.h"
+
+
+using DB::Context;
 
 namespace DB
 {

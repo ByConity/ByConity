@@ -1,4 +1,3 @@
-#include <Interpreters/Context_fwd.h>
 #include <Storages/Hive/StorageCloudHive.h>
 #if USE_HIVE
 
@@ -14,6 +13,8 @@
 #include "common/logger_useful.h"
 #include "common/scope_guard_safe.h"
 
+using DB::Context;
+
 namespace DB
 {
 namespace ErrorCodes
@@ -21,13 +22,8 @@ namespace ErrorCodes
 }
 
 StorageCloudHive::StorageCloudHive(
-    StorageID table_id_,
-    const StorageInMemoryMetadata & metadata,
-    ContextPtr context_,
-    const std::shared_ptr<CnchHiveSettings> & settings_)
-    : IStorage(table_id_)
-    , WithContext(context_->getGlobalContext())
-    , storage_settings(settings_)
+    StorageID table_id_, const StorageInMemoryMetadata & metadata, ContextPtr context_, const std::shared_ptr<CnchHiveSettings> & settings_)
+    : IStorage(table_id_), WithContext(context_->getGlobalContext()), storage_settings(settings_)
 {
     setInMemoryMetadata(metadata);
 }

@@ -3,8 +3,9 @@
 #include "Common/config.h"
 #if USE_HIVE
 
-#include <Processors/Sources/SourceWithProgress.h>
-#include "Storages/Hive/HiveFile/IHiveFile.h"
+#    include <Processors/Sources/SourceWithProgress.h>
+#    include "Processors/QueryPipeline.h"
+#    include "Storages/Hive/HiveFile/IHiveFile.h"
 
 namespace DB
 {

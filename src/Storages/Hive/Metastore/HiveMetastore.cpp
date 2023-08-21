@@ -5,8 +5,7 @@
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
 
-#include <random>
-#include <consul/bridge.h>
+#    include <random>
 
 namespace DB
 {

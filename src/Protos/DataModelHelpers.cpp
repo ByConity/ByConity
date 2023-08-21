@@ -14,8 +14,6 @@
  */
 
 #include <memory>
-#include <Protos/DataModelHelpers.h>
-
 #include <Catalog/DataModelPartWrapper.h>
 #include <Disks/DiskHelpers.h>
 #include <Disks/HDFS/DiskByteHDFS.h>
@@ -25,9 +23,11 @@
 #include <IO/WriteBufferFromString.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Protos/DataModelHelpers.h>
 #include <Protos/RPCHelpers.h>
 #include <Protos/data_models.pb.h>
 #include <Storages/HDFS/HDFSCommon.h>
+#include <Storages/Hive/HiveDataPart.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/Exception.h>

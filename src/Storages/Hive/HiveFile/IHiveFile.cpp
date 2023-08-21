@@ -2,16 +2,17 @@
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #if USE_HIVE
 
-#include "Disks/DiskFactory.h"
-#include "IO/ReadHelpers.h"
-#include "IO/WriteHelpers.h"
-#include "Storages/Hive/DirectoryLister.h"
-#include "Storages/Hive/HiveFile/HiveORCFile.h"
-#include "Storages/Hive/HiveFile/HiveParquetFile.h"
-#include "Storages/Hive/HivePartition.h"
-#include "Storages/StorageInMemoryMetadata.h"
-#include "Processors/Formats/IInputFormat.h"
-#include "Protos/hive_models.pb.h"
+#    include <Formats/FormatFactory.h>
+#    include "Disks/DiskFactory.h"
+#    include "IO/ReadHelpers.h"
+#    include "IO/WriteHelpers.h"
+#    include "Processors/Formats/IInputFormat.h"
+#    include "Protos/hive_models.pb.h"
+#    include "Storages/Hive/DirectoryLister.h"
+#    include "Storages/Hive/HiveFile/HiveORCFile.h"
+#    include "Storages/Hive/HiveFile/HiveParquetFile.h"
+#    include "Storages/Hive/HivePartition.h"
+#    include "Storages/StorageInMemoryMetadata.h"
 
 namespace DB
 {
