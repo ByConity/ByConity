@@ -844,7 +844,7 @@ void InterpreterExplainQuery::elementGroupBy(const ASTPtr & group_by, WriteBuffe
 void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuffer & buffer, bool & single_line)
 {
     const auto & explain = ast->as<ASTExplainQuery &>();
-    auto context = Context::createCopy(getContext());
+    auto context = getContext();
 
     if (explain.getKind() == ASTExplainQuery::AnalyzedSyntax)
     {

@@ -588,82 +588,6 @@ PlanNodePtr CorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void &
     const auto & in_fun = in_assignment.second->as<ASTFunction &>();
     ASTIdentifier & fun_left = in_fun.arguments->children[0]->as<ASTIdentifier &>();
     ASTIdentifier & fun_right = in_fun.arguments->children[1]->as<ASTIdentifier &>();
-
-    
-    // apply_assignment : _in_subquery = d_year IN (s_store_sk)
-    // apply_assignment.first : _in_subquery
-    // apply_assignment.second : d_year IN (s_store_sk)
-    // in_fun_left : d_year
-    // in_fun_right : s_store_sk
-    if (context->getSettingsRef().enable_execute_uncorrelated_subquery)
-    {
-        std::optional<PlanNodeStatisticsPtr> stats = CardinalityEstimator::estimate(*subquery_ptr, cte_helper.getCTEInfo(), context, true);
-        
-        // For large in subquery, execution performance is slow !!!
-        if (stats.has_value() && stats.value()->getRowCount() <= context->getSettingsRef().execute_uncorrelated_in_subquery_size) {
-            const Assignment & apply_assignment = apply_step.getAssignment();
-            String sub_query_column_name = apply_assignment.first;
-            DataTypePtr sub_query_column_type = apply_step.getAssignmentDataType();
-
-            int rule_id = context->getRuleId();
-            String sub_query_id = std::to_string(context->incAndGetSubQueryId());
-            String subquery_name_prefix = std::to_string(rule_id) + "_RemoveUnCorrelatedInSubquery_ExecuteSubQuery_" + sub_query_id + "_";
-        
-            context->setExecuteSubQueryPath(subquery_name_prefix);
-        
-            // set a different query id for sub query.
-            String query_id = context->getCurrentQueryId();
-            context->setCurrentQueryId(query_id + "_sub_query_" + sub_query_id);
-        
-            SelectQueryOptions sub_query_options;
-            InterpreterSelectQueryUseOptimizer interpreter{subquery_ptr, cte_helper.getCTEInfo(), context, sub_query_options};
-            BlockIO sub_query_result = interpreter.execute();
-        
-            context->removeExecuteSubQueryPath();
-            context->setCurrentQueryId(query_id);
-            context->setRuleId(rule_id);
-            
-            BlockInputStreamPtr sub_query_block_stream = sub_query_result.getInputStream();
-        
-            ASTs sub_query_column_values;
-            while (Block block = sub_query_block_stream->read())
-            {
-                for (size_t i = 0; i < block.rows(); ++i)
-                {
-                    const auto & sub_query_column = *(block.getByName(in_fun.arguments->children[1]->getColumnName()).column);
-                    ASTPtr sub_query_column_value = std::make_shared<ASTLiteral>(sub_query_column[i]);
-                    sub_query_column_values.emplace_back(sub_query_column_value);
-                }
-            }
-            
-            // create a new projection step, include scalar sub query result.
-            Assignments assignments_in;
-            NameToType types;
-
-            // add input columns
-            for (const auto & column : input_ptr->getStep()->getOutputStream().header)
-            {
-                assignments_in.emplace_back(column.name, std::make_shared<ASTIdentifier>(column.name));
-                types[column.name] = column.type;
-            }
-
-            /// Function tuple requires at least one argument,
-            /// insert a Null element when sub query result is empty.
-            if (sub_query_column_values.empty())
-            {
-                sub_query_column_values.emplace_back(std::make_shared<ASTLiteral>(DB::Field()));
-            }
-            ASTPtr value_tuple = makeASTFunction("tuple", sub_query_column_values);
-            
-            // add sub query column
-            assignments_in.emplace_back(sub_query_column_name, makeASTFunction(in_fun.name, ASTs{in_fun.arguments->children[0], value_tuple}));
-            types[sub_query_column_name] = sub_query_column_type;
-
-            auto in_step = std::make_shared<ProjectionStep>(input_ptr->getStep()->getOutputStream(), assignments_in, types);
-            return PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(in_step), PlanNodes{input_ptr});
-        }
-    }
-
     Names in_left{fun_left.name()};
     Names in_right{fun_right.name()};
 
@@ -843,6 +767,81 @@ PlanNodePtr UnCorrelatedInSubqueryVisitor::visitApplyNode(ApplyNode & node, Void
     const auto & in_fun = in_assignment.second->as<ASTFunction &>();
     ASTIdentifier & fun_left = in_fun.arguments->children[0]->as<ASTIdentifier &>();
     ASTIdentifier & fun_right = in_fun.arguments->children[1]->as<ASTIdentifier &>();
+
+    // apply_assignment : _in_subquery = d_year IN (s_store_sk)
+    // apply_assignment.first : _in_subquery
+    // apply_assignment.second : d_year IN (s_store_sk)
+    // in_fun_left : d_year
+    // in_fun_right : s_store_sk
+    if (context->getSettingsRef().enable_execute_uncorrelated_subquery)
+    {
+        std::optional<PlanNodeStatisticsPtr> stats = CardinalityEstimator::estimate(*subquery_ptr, cte_helper.getCTEInfo(), context, true);
+        
+        // For large in subquery, execution performance is slow !!!
+        if (stats.has_value() && stats.value()->getRowCount() <= context->getSettingsRef().execute_uncorrelated_in_subquery_size) {
+            const Assignment & apply_assignment = apply_step.getAssignment();
+            String sub_query_column_name = apply_assignment.first;
+            DataTypePtr sub_query_column_type = apply_step.getAssignmentDataType();
+
+            int rule_id = context->getRuleId();
+            String sub_query_id = std::to_string(context->incAndGetSubQueryId());
+            String subquery_name_prefix = std::to_string(rule_id) + "_RemoveUnCorrelatedInSubquery_ExecuteSubQuery_" + sub_query_id + "_";
+        
+            context->setExecuteSubQueryPath(subquery_name_prefix);
+        
+            // set a different query id for sub query.
+            String query_id = context->getCurrentQueryId();
+            context->setCurrentQueryId(query_id + "_sub_query_" + sub_query_id);
+        
+            SelectQueryOptions sub_query_options;
+            InterpreterSelectQueryUseOptimizer interpreter{subquery_ptr, cte_helper.getCTEInfo(), context, sub_query_options};
+            BlockIO sub_query_result = interpreter.execute();
+        
+            context->removeExecuteSubQueryPath();
+            context->setCurrentQueryId(query_id);
+            context->setRuleId(rule_id);
+            
+            BlockInputStreamPtr sub_query_block_stream = sub_query_result.getInputStream();
+        
+            ASTs sub_query_column_values;
+            while (Block block = sub_query_block_stream->read())
+            {
+                for (size_t i = 0; i < block.rows(); ++i)
+                {
+                    const auto & sub_query_column = *(block.getByName(in_fun.arguments->children[1]->getColumnName()).column);
+                    ASTPtr sub_query_column_value = std::make_shared<ASTLiteral>(sub_query_column[i]);
+                    sub_query_column_values.emplace_back(sub_query_column_value);
+                }
+            }
+            
+            // create a new projection step, include scalar sub query result.
+            Assignments assignments_in;
+            NameToType types;
+
+            // add input columns
+            for (const auto & column : input_ptr->getStep()->getOutputStream().header)
+            {
+                assignments_in.emplace_back(column.name, std::make_shared<ASTIdentifier>(column.name));
+                types[column.name] = column.type;
+            }
+
+            /// Function tuple requires at least one argument,
+            /// insert a Null element when sub query result is empty.
+            if (sub_query_column_values.empty())
+            {
+                sub_query_column_values.emplace_back(std::make_shared<ASTLiteral>(DB::Field()));
+            }
+            ASTPtr value_tuple = makeASTFunction("tuple", sub_query_column_values);
+            
+            // add sub query column
+            assignments_in.emplace_back(sub_query_column_name, makeASTFunction(in_fun.name, ASTs{in_fun.arguments->children[0], value_tuple}));
+            types[sub_query_column_name] = sub_query_column_type;
+
+            auto in_step = std::make_shared<ProjectionStep>(input_ptr->getStep()->getOutputStream(), assignments_in, types);
+            return PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(in_step), PlanNodes{input_ptr});
+        }
+    }
+
     Names in_left{fun_left.name()};
     Names in_right{fun_right.name()};
 
