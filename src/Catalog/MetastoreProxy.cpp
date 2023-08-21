@@ -146,12 +146,12 @@ void MetastoreProxy::dropDatabase(const String & name_space, const Protos::DataM
     /// get all trashed dictionaries of current db and remove them with db metadata
     auto dic_ptrs = getDictionariesFromTrash(name_space, name + "_" + toString(ts));
     for (auto & dic_ptr : dic_ptrs)
-        batch_write.AddDelete(SingleDeleteRequest(dictionaryTrashKey(name_space, dic_ptr->database(), dic_ptr->name())));
+        batch_write.AddDelete(dictionaryTrashKey(name_space, dic_ptr->database(), dic_ptr->name()));
 
-    batch_write.AddDelete(SingleDeleteRequest(dbKey(name_space, name, ts)));
-    batch_write.AddDelete(SingleDeleteRequest(dbTrashKey(name_space, name, ts)));
+    batch_write.AddDelete(dbKey(name_space, name, ts));
+    batch_write.AddDelete(dbTrashKey(name_space, name, ts));
     if (db_model.has_uuid())
-        batch_write.AddDelete(SingleDeleteRequest(dbUUIDUniqueKey(name_space, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid())))));
+        batch_write.AddDelete(dbUUIDUniqueKey(name_space, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid()))));
 
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
@@ -470,7 +470,7 @@ void MetastoreProxy::clearTableMeta(const String & name_space, const String & da
     auto it_t = metastore_ptr->getByPrefix(tableStorePrefix(name_space, uuid));
     while(it_t->next())
     {
-        batch_write.AddDelete(SingleDeleteRequest(it_t->key()));
+        batch_write.AddDelete(it_t->key());
     }
 
     /// remove table partition list;
@@ -478,41 +478,41 @@ void MetastoreProxy::clearTableMeta(const String & name_space, const String & da
     auto it_p = metastore_ptr->getByPrefix(partition_list_prefix);
     while(it_p->next())
     {
-        batch_write.AddDelete(SingleDeleteRequest(it_p->key()));
+        batch_write.AddDelete(it_p->key());
     }
     /// remove dependency
     for (const String & dependency : dependencies)
-        batch_write.AddDelete(SingleDeleteRequest(viewDependencyKey(name_space, dependency, uuid)));
+        batch_write.AddDelete(viewDependencyKey(name_space, dependency, uuid));
 
     /// remove trash record if the table marked as deleted before be cleared
-    batch_write.AddDelete(SingleDeleteRequest(tableTrashKey(name_space, database, table, ts)));
+    batch_write.AddDelete(tableTrashKey(name_space, database, table, ts));
 
     /// remove MergeMutateThread meta
-    batch_write.AddDelete(SingleDeleteRequest(mergeMutateThreadStartTimeKey(name_space, uuid)));
+    batch_write.AddDelete(mergeMutateThreadStartTimeKey(name_space, uuid));
     /// remove table uuid unique key
-    batch_write.AddDelete(SingleDeleteRequest(tableUUIDUniqueKey(name_space, uuid)));
-    batch_write.AddDelete(SingleDeleteRequest(nonHostUpdateKey(name_space, uuid)));
+    batch_write.AddDelete(tableUUIDUniqueKey(name_space, uuid));
+    batch_write.AddDelete(nonHostUpdateKey(name_space, uuid));
 
     /// remove all statistics
     auto table_statistics_prefix = tableStatisticPrefix(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(table_statistics_prefix); it->next(); )
     {
-        batch_write.AddDelete(SingleDeleteRequest(it->key()));
+        batch_write.AddDelete(it->key());
     }
     auto table_statistics_tag_prefix = tableStatisticTagPrefix(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(table_statistics_tag_prefix); it->next(); )
     {
-        batch_write.AddDelete(SingleDeleteRequest(it->key()));
+        batch_write.AddDelete(it->key());
     }
     auto column_statistics_prefix = columnStatisticPrefix(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(column_statistics_prefix); it->next(); )
     {
-        batch_write.AddDelete(SingleDeleteRequest(it->key()));
+        batch_write.AddDelete(it->key());
     }
     auto column_statistics_tag_prefix = columnStatisticTagPrefixWithoutColumn(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(column_statistics_tag_prefix); it->next(); )
     {
-        batch_write.AddDelete(SingleDeleteRequest(it->key()));
+        batch_write.AddDelete(it->key());
     }
 
     BatchCommitResponse resp;
@@ -575,7 +575,7 @@ void MetastoreProxy::renameTable(const String & name_space,
                                  BatchCommitRequest & batch_write)
 {
     /// update `table`->`uuid` mapping.
-    batch_write.AddDelete(SingleDeleteRequest(tableUUIDMappingKey(name_space, old_db_name, old_table_name)));
+    batch_write.AddDelete(tableUUIDMappingKey(name_space, old_db_name, old_table_name));
     Protos::TableIdentifier identifier;
     identifier.set_database(table.database());
     identifier.set_name(table.name());
@@ -604,7 +604,7 @@ bool MetastoreProxy::alterTable(const String & name_space, const Protos::DataMod
     batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, table.database(), table.name()), identifier.SerializeAsString()));
 
     for (const auto & name : masks_to_remove)
-        batch_write.AddDelete(SingleDeleteRequest(maskingPolicyTableMappingKey(name_space, name, table_uuid)));
+        batch_write.AddDelete(maskingPolicyTableMappingKey(name_space, name, table_uuid));
 
     for (const auto & name : masks_to_add)
         batch_write.AddPut(SinglePutRequest(maskingPolicyTableMappingKey(name_space, name, table_uuid), table_uuid));
@@ -807,8 +807,8 @@ void MetastoreProxy::deleteRootPath(const String & root_path)
     {
         BatchCommitRequest batch_write;
         BatchCommitResponse resp;
-        batch_write.AddDelete(SingleDeleteRequest(ROOT_PATH_PREFIX + root_path));
-        batch_write.AddDelete(SingleDeleteRequest(ROOT_PATH_ID_UNIQUE_PREFIX + path_id));
+        batch_write.AddDelete(ROOT_PATH_PREFIX + root_path);
+        batch_write.AddDelete(ROOT_PATH_ID_UNIQUE_PREFIX + path_id);
         metastore_ptr->batchWrite(batch_write, resp);
     }
 }
@@ -863,7 +863,7 @@ void MetastoreProxy::removeTransactionRecords(const String & name_space, const s
     BatchCommitResponse resp;
 
     for (const auto & txn_id : txn_ids)
-        batch_write.AddDelete(SingleDeleteRequest(transactionRecordKey(name_space, txn_id.toUInt64())));
+        batch_write.AddDelete(transactionRecordKey(name_space, txn_id.toUInt64()));
 
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -1042,7 +1042,7 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
     /// CAS delete is needed becuase the intent could be overwrite by other transactions
     for (auto idx : matched_intent_index)
     {
-        batch_write.AddDelete(SingleDeleteRequest(intent_names[idx], {}, intents[idx].serialize()));
+        batch_write.AddDelete(intent_names[idx], intents[idx].serialize());
     }
 
     bool cas_success = metastore_ptr->batchWrite(batch_write, resp);
@@ -1080,7 +1080,7 @@ void MetastoreProxy::clearZombieIntent(const String & name_space, const UInt64 &
         intent_model.ParseFromString(it->value());
         if (intent_model.txn_id() == txn_id)
         {
-            batch_write.AddDelete(SingleDeleteRequest(it->value()));
+            batch_write.AddDelete(it->value());
         }
     }
 
@@ -1170,7 +1170,7 @@ void MetastoreProxy::multiDrop(const Strings & keys)
     BatchCommitResponse resp;
     for (const auto & key : keys)
     {
-        batch_write.AddDelete(SingleDeleteRequest(key));
+        batch_write.AddDelete(key);
     }
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -1251,7 +1251,7 @@ void MetastoreProxy::clearSyncList(const String & name_space, const String & uui
     BatchCommitRequest batch_write;
     BatchCommitResponse resp;
     for (auto & ts : sync_list)
-        batch_write.AddDelete(SingleDeleteRequest(syncListKey(name_space, uuid, ts)));
+        batch_write.AddDelete(syncListKey(name_space, uuid, ts));
 
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -1565,7 +1565,7 @@ void MetastoreProxy::removeInsertionLabels(const String & name_space, const std:
     BatchCommitRequest batch_write;
     BatchCommitResponse resp;
     for (auto & label : labels)
-        batch_write.AddDelete(SingleDeleteRequest(insertionLabelKey(name_space, toString(label.table_uuid), label.name)));
+        batch_write.AddDelete(insertionLabelKey(name_space, toString(label.table_uuid), label.name));
     metastore_ptr->batchWrite(batch_write, resp);
 }
 
@@ -1641,8 +1641,8 @@ void MetastoreProxy::removeTableStatistics(const String & name_space, const Stri
     BatchCommitRequest batch_write;
     for (const auto & tag : tags)
     {
-        batch_write.AddDelete(SingleDeleteRequest(tableStatisticKey(name_space, uuid, tag)));
-        batch_write.AddDelete(SingleDeleteRequest(tableStatisticTagKey(name_space, uuid, tag)));
+        batch_write.AddDelete(tableStatisticKey(name_space, uuid, tag));
+        batch_write.AddDelete(tableStatisticTagKey(name_space, uuid, tag));
     }
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
@@ -1715,8 +1715,8 @@ void MetastoreProxy::removeColumnStatistics(
     BatchCommitRequest batch_write;
     for (const auto & tag : tags)
     {
-        batch_write.AddDelete(SingleDeleteRequest(columnStatisticKey(name_space, uuid, column, tag)));
-        batch_write.AddDelete(SingleDeleteRequest(columnStatisticTagKey(name_space, uuid, column, tag)));
+        batch_write.AddDelete(columnStatisticKey(name_space, uuid, column, tag));
+        batch_write.AddDelete(columnStatisticTagKey(name_space, uuid, column, tag));
     }
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
@@ -1860,18 +1860,16 @@ public:
     {
     }
 
-    void addDelete(const String& key)
+    void addDelete(const String & key)
     {
-        const String& delete_reuqest(key);
-        
-        batch_commit_request.AddDelete(delete_reuqest);
+        batch_commit_request.AddDelete(key);
 
         ++current_batch_size;
         flushIfNecessary();
     }
 
     void addPut(const String& key, const String& value)
-    {   
+    {
 
         SinglePutRequest put_request(key, value);
         batch_commit_request.AddPut(put_request);
@@ -1881,7 +1879,7 @@ public:
     }
 
     void finalize()
-    {   
+    {
         BatchCommitResponse batch_commit_response;
         if (current_batch_size != 0)
         {
@@ -1899,7 +1897,7 @@ public:
 
 private:
     void flushIfNecessary()
-    {   
+    {
         BatchCommitResponse batch_commit_response;
         if (current_batch_size >= max_batch_size)
         {
