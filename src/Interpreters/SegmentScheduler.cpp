@@ -32,15 +32,15 @@
 #include <Protos/plan_segment_manager.pb.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <butil/endpoint.h>
-#include <Common/HostWithPorts.h>
 #include <Common/Exception.h>
+#include <Common/HostWithPorts.h>
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
 #include <common/getFQDNOrHostName.h>
 
 namespace ProfileEvents
 {
-    extern const Event ScheduleTimeMilliseconds;
+extern const Event ScheduleTimeMilliseconds;
 }
 namespace DB
 {
@@ -80,7 +80,7 @@ void DAGGraph::joinAsyncRpcAtLast()
         joinAsyncRpcWithThrow();
 }
 
-std::vector<size_t> AdaptiveScheduler::getRandomWorkerRank() 
+std::vector<size_t> AdaptiveScheduler::getRandomWorkerRank()
 {
     std::vector<size_t> rank_worker_ids;
     auto worker_group = query_context->tryGetCurrentWorkerGroup();
@@ -95,7 +95,7 @@ std::vector<size_t> AdaptiveScheduler::getRandomWorkerRank()
     return rank_worker_ids;
 }
 
-std::vector<size_t> AdaptiveScheduler::getHealthWorkerRank() 
+std::vector<size_t> AdaptiveScheduler::getHealthWorkerRank()
 {
     std::vector<size_t> rank_worker_ids;
     auto worker_group = query_context->tryGetCurrentWorkerGroup();
@@ -121,7 +121,7 @@ std::vector<size_t> AdaptiveScheduler::getHealthWorkerRank()
         return liter->second->compare(*riter->second);
     });
 
-    if (log->trace()) 
+    if (log->trace())
     {
         for (auto & idx : rank_worker_ids)
         {
@@ -150,7 +150,12 @@ AddressInfo getRemoteAddress(HostWithPorts host_with_ports, ContextPtr & query_c
 {
     const ClientInfo & info = query_context->getClientInfo();
     return AddressInfo(
-        host_with_ports.getHost(), host_with_ports.tcp_port, info.current_user, info.current_password, host_with_ports.exchange_port, host_with_ports.exchange_status_port);
+        host_with_ports.getHost(),
+        host_with_ports.tcp_port,
+        info.current_user,
+        info.current_password,
+        host_with_ports.exchange_port,
+        host_with_ports.exchange_status_port);
 }
 
 PlanSegmentsStatusPtr
@@ -167,7 +172,9 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
             if (query_context->getSettingsRef().replace_running_query)
             {
                 //TODO support replace running query
-                throw Exception("Query with id = " + query_id + " is already running and replace_running_query is not supported now.", ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
+                throw Exception(
+                    "Query with id = " + query_id + " is already running and replace_running_query is not supported now.",
+                    ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
             }
             else
                 throw Exception("Query with id = " + query_id + " is already running.", ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
@@ -184,7 +191,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
     }
 
     if (!dag_ptr->plan_segment_status_ptr->is_final_stage_start)
-        scheduler(query_id, query_context, dag_ptr);
+        schedule(query_id, query_context, dag_ptr);
 #if defined(TASK_ASSIGN_DEBUG)
     String res;
     res += "dump statics:" + std::to_string(dag_ptr->exchange_data_assign_node_mappings.size()) + "\n";
@@ -213,7 +220,11 @@ SegmentScheduler::cancelPlanSegmentsFromCoordinator(const String query_id, const
 }
 
 CancellationCode SegmentScheduler::cancelPlanSegments(
-    const String & query_id, const String & exception, const String & origin_host_name, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
+    const String & query_id,
+    const String & exception,
+    const String & origin_host_name,
+    ContextPtr query_context,
+    std::shared_ptr<DAGGraph> dag_graph_ptr)
 {
     std::shared_ptr<DAGGraph> dag_ptr;
 
@@ -258,7 +269,8 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
     for (const auto & addr : dag_ptr->plan_send_addresses)
     {
         auto address = extractExchangeStatusHostPort(addr);
-        std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+        std::shared_ptr<RpcClient> rpc_client
+            = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
         brpc::Controller cntl;
         Protos::CancelQueryRequest request;
@@ -398,8 +410,9 @@ void SegmentScheduler::checkQueryCpuTime(const String & query_id)
     if (dag_ptr == nullptr)
         return;
     ContextPtr final_segment_context = dag_ptr->query_context;
-    if (final_segment_context) {
-        auto& settings = final_segment_context->getSettingsRef();
+    if (final_segment_context)
+    {
+        auto & settings = final_segment_context->getSettingsRef();
         max_cpu_seconds = settings.max_distributed_query_cpu_seconds;
         overflow_mode = settings.timeout_overflow_mode;
     }
@@ -422,8 +435,10 @@ void SegmentScheduler::checkQueryCpuTime(const String & query_id)
         switch (overflow_mode)
         {
             case OverflowMode::THROW:
-                throw Exception("Timeout exceeded: distribute cpu time " + toString(static_cast<double>(total_cpu_micros * 1.0 / 1000000))
-                                + " seconds, maximum: " + toString(static_cast<double>(max_cpu_seconds)), ErrorCodes::TIMEOUT_EXCEEDED);
+                throw Exception(
+                    "Timeout exceeded: distribute cpu time " + toString(static_cast<double>(total_cpu_micros * 1.0 / 1000000))
+                        + " seconds, maximum: " + toString(static_cast<double>(max_cpu_seconds)),
+                    ErrorCodes::TIMEOUT_EXCEEDED);
             case OverflowMode::BREAK:
                 break;
             default:
@@ -482,7 +497,7 @@ bool SegmentScheduler::alreadyReceivedAllSegmentStatus(const String & query_id) 
     {
         if (parallel.first == 0)
             continue;
-            
+
         if (received_status_segments_counter[parallel.first] < parallel.second)
             return false;
     }
@@ -642,7 +657,7 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
     }
 }
 
-bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
+bool SegmentScheduler::schedule(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
 {
     Stopwatch sw;
     try
@@ -651,8 +666,9 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
         Stopwatch watch;
         /// random pick workers
         AdaptiveScheduler adaptive_scheduler(query_context);
-        std::vector<size_t> rank_worker_ids = query_context->getSettingsRef().enable_adaptive_scheduler ? 
-            adaptive_scheduler.getHealthWorkerRank() : adaptive_scheduler.getRandomWorkerRank();
+        std::vector<size_t> rank_worker_ids = query_context->getSettingsRef().enable_adaptive_scheduler
+            ? adaptive_scheduler.getHealthWorkerRank()
+            : adaptive_scheduler.getRandomWorkerRank();
 
         // scheduler source
         for (auto segment_id : dag_graph_ptr->sources)
@@ -765,7 +781,8 @@ bool SegmentScheduler::scheduler(const String & query_id, ContextPtr query_conte
     }
     catch (const Exception & e)
     {
-        this->cancelPlanSegments(query_id, "receive exception during scheduler:" + e.message(), "coordinator", query_context, dag_graph_ptr);
+        this->cancelPlanSegments(
+            query_id, "receive exception during scheduler:" + e.message(), "coordinator", query_context, dag_graph_ptr);
         e.rethrow();
     }
     catch (...)
@@ -812,7 +829,7 @@ void sendPlanSegmentToRemote(
 
 AddressInfos SegmentScheduler::sendPlanSegment(
     PlanSegment * plan_segment_ptr,
-    bool  /*is_source*/,
+    bool /*is_source*/,
     ContextPtr query_context,
     std::shared_ptr<DAGGraph> dag_graph_ptr,
     std::vector<size_t> rank_worker_ids)
@@ -865,7 +882,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
             if (parallel_index_id_index > plan_segment_ptr->getParallelSize())
                 break;
             const auto & worker_endpoint = worker_endpoints[i];
-            for (const auto& plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
+            for (const auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
             {
                 if (plan_segment_input->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
                     continue;
@@ -888,7 +905,11 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                 }
             }
             auto worker_address = getRemoteAddress(worker_endpoint, query_context);
-            sendPlanSegmentToRemote(worker_address, query_context, plan_segment_ptr, dag_graph_ptr,
+            sendPlanSegmentToRemote(
+                worker_address,
+                query_context,
+                plan_segment_ptr,
+                dag_graph_ptr,
                 WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker_endpoint.id));
             addresses.emplace_back(std::move(worker_address));
 
@@ -912,7 +933,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
 
 #if defined(TASK_ASSIGN_DEBUG)
     String res_log = "segment id:" + std::to_string(plan_segment_ptr->getPlanSegmentId()) + " send planSegment address information:\n";
-    for (const auto& address_inf : addresses)
+    for (const auto & address_inf : addresses)
     {
         res_log += "  " + address_inf.toString() + "\n";
     }

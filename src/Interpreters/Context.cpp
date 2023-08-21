@@ -736,6 +736,7 @@ const ReplicatedFetchList & Context::getReplicatedFetchList() const
 
 SegmentSchedulerPtr Context::getSegmentScheduler()
 {
+    auto lock = getLock();
     if (!shared->segment_scheduler)
         shared->segment_scheduler = std::make_shared<SegmentScheduler>();
     return shared->segment_scheduler;
@@ -743,6 +744,7 @@ SegmentSchedulerPtr Context::getSegmentScheduler()
 
 SegmentSchedulerPtr Context::getSegmentScheduler() const
 {
+    auto lock = getLock();
     if (!shared->segment_scheduler)
         shared->segment_scheduler = std::make_shared<SegmentScheduler>();
     return shared->segment_scheduler;
