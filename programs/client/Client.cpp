@@ -923,14 +923,6 @@ private:
 
     bool processQueryText(const String & text)
     {
-<<<<<<< HEAD
-=======
-        OpentelemetrySpan span = telemetry::getTracer("tracer")->StartSpan("query");
-        context->opentelemetry_tracer = telemetry::getTracer("tracer");
-
-        auto scope = OpentelemetryScope {span};
-
->>>>>>> df62b35b058 (Merge branch 'fix_ansi_parse_cnch_ce' into 'cnch-ce-merge')
         if (exit_strings.end() != exit_strings.find(trim(text, [](char c) { return isWhitespaceASCII(c) || c == ';'; })))
             return false;
 
