@@ -18,10 +18,12 @@
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/VirtualWarehousePool.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTRefreshQuery.h>
+#include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTUpdateQuery.h>
 #include <Parsers/queryToString.h>
