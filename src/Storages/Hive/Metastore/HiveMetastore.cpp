@@ -131,25 +131,6 @@ std::shared_ptr<Apache::Hadoop::Hive::ThriftHiveMetastoreClient> HiveMetastoreCl
     auto host = hive_metastore_url.getHost();
     auto port = hive_metastore_url.getPort();
 
-    {
-        if (host.empty() || port == 0)
-        {
-            std::vector<cpputil::consul::ServiceEndpoint> hms_endpoints;
-            int retry = 0;
-            do
-            {
-                if (retry++ > 2)
-                    throw Exception("No available hivemetatsore psm " + name, ErrorCodes::NETWORK_ERROR);
-                hms_endpoints = cpputil::consul::lookup_name(name);
-            } while (hms_endpoints.empty());
-
-            std::vector<cpputil::consul::ServiceEndpoint> sample;
-            std::sample(hms_endpoints.begin(), hms_endpoints.end(), std::back_inserter(sample), 1, std::mt19937{std::random_device{}()});
-            host = sample.at(0).host;
-            port = sample.at(0).port;
-        }
-    }
-
     std::shared_ptr<TSocket> socket = std::make_shared<TSocket>(host, port);
     socket->setKeepAlive(true);
     socket->setConnTimeout(hive_metastore_client_conn_timeout_ms);
