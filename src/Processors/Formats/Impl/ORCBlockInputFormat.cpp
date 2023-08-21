@@ -18,8 +18,8 @@ namespace ErrorCodes
     extern const int CANNOT_READ_ALL_DATA;
 }
 
-// #define THROW_ARROW_NOT_OK(status)                                     \
-    // do                                                                 \
+#    define THROW_ARROW_NOT_OK(status) \
+        // do                                                                 \
     // {                                                                  \
     //     if (::arrow::Status _s = (status); !_s.ok())                   \
     //         throw Exception(_s.ToString(), ErrorCodes::BAD_ARGUMENTS); \
@@ -120,10 +120,7 @@ void ORCBlockInputFormat::prepareReader()
         throw Exception(reader_status.ToString(), ErrorCodes::BAD_ARGUMENTS);
     }
     stripe_total = file_reader->NumberOfStripes();
-    if (read_stripe)
-        stripe_current = format_settings.orc.current_stripe;
-    else
-        stripe_current = 0;
+    stripe_current = 0;
 
     auto schema_status = file_reader->ReadSchema();
     if (!schema_status.ok())
@@ -131,7 +128,6 @@ void ORCBlockInputFormat::prepareReader()
         throw Exception(schema_status.status().ToString(), ErrorCodes::BAD_ARGUMENTS);
     }
 
-    auto schema_status = file_reader->ReadSchema();
     if (!schema_status.ok())
     {
         throw Exception(schema_status.status().ToString(), ErrorCodes::BAD_ARGUMENTS);
