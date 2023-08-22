@@ -147,14 +147,9 @@ StorageMaterializedView::StorageMaterializedView(
         manual_create_query->set(manual_create_query->columns_list, new_columns_list);
         manual_create_query->set(manual_create_query->storage, query.storage->ptr());
 
-<<<<<<< HEAD
         InterpreterCreateQuery create_interpreter(manual_create_query, create_context);
         create_interpreter.setInternal(true);
         create_interpreter.execute();
-=======
-        create_context->setCurrentTransaction(nullptr, false);
-        executeQuery(serializeAST(*manual_create_query), create_context, true);
->>>>>>> df62b35b058 (Merge branch 'fix_ansi_parse_cnch_ce' into 'cnch-ce-merge')
 
         target_table_id = DatabaseCatalog::instance()
                               .getTable({manual_create_query->database, manual_create_query->table}, getContext())
