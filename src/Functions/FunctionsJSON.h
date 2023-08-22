@@ -86,8 +86,9 @@ public:
             const ColumnString::Chars & chars = col_json_string->getChars();
             const ColumnString::Offsets & offsets = col_json_string->getOffsets();
 
-            size_t num_index_arguments = Impl<JSONParser>::getNumberOfIndexArguments(arguments);
-            std::vector<Move> moves = prepareMoves(Name::name, arguments, 1, num_index_arguments);
+            auto new_arguments = resolveArguments<Impl, JSONParser>(arguments);
+            size_t num_index_arguments = Impl<JSONParser>::getNumberOfIndexArguments(new_arguments);
+            std::vector<Move> moves = prepareMoves(Name::name, new_arguments, 1, num_index_arguments);
 
             /// Preallocate memory in parser if necessary.
             JSONParser parser;
@@ -102,7 +103,7 @@ public:
 
             /// prepare() does Impl-specific preparation before handling each row.
             if constexpr (has_member_function_prepare<void (Impl<JSONParser>::*)(const char *, const ColumnsWithTypeAndName &, const DataTypePtr &)>::value)
-                impl.prepare(Name::name, arguments, result_type);
+                impl.prepare(Name::name, new_arguments, result_type);
 
             using Element = typename JSONParser::Element;
 
@@ -128,7 +129,7 @@ public:
                     /// Perform moves.
                     Element element;
                     std::string_view last_key;
-                    bool moves_ok = performMoves<JSONParser>(arguments, i, document, moves, element, last_key);
+                    bool moves_ok = performMoves<JSONParser>(new_arguments, i, document, moves, element, last_key);
 
                     if (moves_ok)
                         added_to_column = impl.insertResultToColumn(*to, element, last_key);
@@ -173,7 +174,21 @@ private:
         String key;
     };
 
+    static ColumnsWithTypeAndName parserArguments(const ColumnsWithTypeAndName & columns, size_t column_index);
     static std::vector<Move> prepareMoves(const char * function_name, const ColumnsWithTypeAndName & columns, size_t first_index_argument, size_t num_index_arguments);
+
+    template <template<typename> typename Impl, class JSONParser, bool resolve = Impl<JSONParser>::should_resolve_arguments>
+    static ColumnsWithTypeAndName resolveArguments(const ColumnsWithTypeAndName & columns)
+    {
+        auto index = Impl<JSONParser>::getResolveArgumentIndex(columns);
+        return parserArguments(columns, index);
+    }
+
+    template <template<typename> typename Impl, class JSONParser, typename ...Args>
+    static ColumnsWithTypeAndName resolveArguments(const ColumnsWithTypeAndName & columns, Args &&...)
+    {
+        return columns;
+    }
 
     /// Performs moves of types MoveType::Index and MoveType::ConstIndex.
     template <typename JSONParser>
@@ -325,6 +340,7 @@ struct NameJSONExtractKeysAndValues { static constexpr auto name{"JSONExtractKey
 struct NameJSONExtractRaw { static constexpr auto name{"JSONExtractRaw"}; };
 struct NameJSONExtractArrayRaw { static constexpr auto name{"JSONExtractArrayRaw"}; };
 struct NameJSONExtractKeysAndValuesRaw { static constexpr auto name{"JSONExtractKeysAndValuesRaw"}; };
+struct NameGetJSONObject { static constexpr auto name{"get_json_object"}; };
 
 
 template <typename JSONParser>
@@ -1021,7 +1037,7 @@ public:
             throw Exception{"Function " + String(function_name) + " requires at least two arguments", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH};
 
         const auto & col = arguments.back();
-        auto col_type_const = typeid_cast<const ColumnConst *>(col.column.get());
+        const auto * col_type_const = typeid_cast<const ColumnConst *>(col.column.get());
         if (!col_type_const || !isString(col.type))
             throw Exception{"The last argument of function " + String(function_name)
                                 + " should be a constant string specifying the values' data type, illegal value: " + col.name,
@@ -1072,34 +1088,33 @@ private:
     std::unique_ptr<typename JSONExtractTree<JSONParser>::Node> extract_tree;
 };
 
-
-template <typename JSONParser>
-class JSONExtractRawImpl
+namespace Traverse
 {
-public:
-    using Element = typename JSONParser::Element;
-
-    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &)
+    static const FormatSettings & format_settings()
     {
-        return std::make_shared<DataTypeString>();
+        static const FormatSettings the_instance = []
+        {
+            FormatSettings settings;
+            settings.json.escape_forward_slashes = false;
+            return settings;
+        }();
+        return the_instance;
     }
 
-    static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
-
-    static bool insertResultToColumn(IColumn & dest, const Element & element, const std::string_view &)
+    static const FormatSettings & format_string_settings()
     {
-        ColumnString & col_str = assert_cast<ColumnString &>(dest);
-        auto & chars = col_str.getChars();
-        WriteBufferFromVector<ColumnString::Chars> buf(chars, WriteBufferFromVector<ColumnString::Chars>::AppendModeTag());
-        traverse(element, buf);
-        buf.finalize();
-        chars.push_back(0);
-        col_str.getOffsets().push_back(chars.size());
-        return true;
+        static const FormatSettings the_instance = [&]
+        {
+            FormatSettings settings;
+            settings.json.escape_forward_slashes = false;
+            settings.json.quota_json_string = false;
+            return settings;
+        }();
+        return the_instance;
     }
 
-private:
-    static void traverse(const Element & element, WriteBuffer & buf)
+    template<typename Element>
+    static void traverse(const Element & element, WriteBuffer & buf, bool quota_json_string = false)
     {
         if (element.isInt64())
         {
@@ -1126,7 +1141,10 @@ private:
         }
         if (element.isString())
         {
-            writeJSONString(element.getString(), buf, format_settings());
+            if (quota_json_string)
+                writeJSONString(element.getString(), buf, format_string_settings());
+            else
+                writeJSONString(element.getString(), buf, format_settings());
             return;
         }
         if (element.isArray())
@@ -1163,16 +1181,59 @@ private:
             return;
         }
     }
+}
 
-    static const FormatSettings & format_settings()
+template <typename JSONParser>
+class JSONExtractRawImpl
+{
+public:
+    using Element = typename JSONParser::Element;
+
+    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &)
     {
-        static const FormatSettings the_instance = []
-        {
-            FormatSettings settings;
-            settings.json.escape_forward_slashes = false;
-            return settings;
-        }();
-        return the_instance;
+        return std::make_shared<DataTypeString>();
+    }
+
+    static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
+
+    static bool insertResultToColumn(IColumn & dest, const Element & element, const std::string_view &)
+    {
+        ColumnString & col_str = assert_cast<ColumnString &>(dest);
+        auto & chars = col_str.getChars();
+        WriteBufferFromVector<ColumnString::Chars> buf(chars, WriteBufferFromVector<ColumnString::Chars>::AppendModeTag());
+        Traverse::traverse(element, buf);
+        buf.finalize();
+        chars.push_back(0);
+        col_str.getOffsets().push_back(chars.size());
+        return true;
+    }
+};
+
+template<typename JSONParser>
+class GetJsonObjectImpl
+{
+public:
+    using Element = typename JSONParser::Element;
+    constexpr static bool should_resolve_arguments = true;
+
+    static DataTypePtr getReturnType(const char *, const ColumnsWithTypeAndName &)
+    {
+        return std::make_shared<DataTypeString>();
+    }
+
+    static size_t getResolveArgumentIndex(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
+    static size_t getNumberOfIndexArguments(const ColumnsWithTypeAndName & arguments) { return arguments.size() - 1; }
+
+    static bool insertResultToColumn(IColumn & dest, const Element & element, const std::string_view &)
+    {
+        ColumnString & col_str = assert_cast<ColumnString &>(dest);
+        auto & chars = col_str.getChars();
+        WriteBufferFromVector<ColumnString::Chars> buf(chars, WriteBufferFromVector<ColumnString::Chars>::AppendModeTag());
+        Traverse::traverse(element, buf, true);
+        buf.finalize();
+        chars.push_back(0);
+        col_str.getOffsets().push_back(chars.size());
+        return true;
     }
 };
 
