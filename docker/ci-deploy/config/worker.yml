@@ -46,12 +46,14 @@ storage_configuration:
   policies:
     default:
       volumes:
-        hdfs:
-          default: hdfs_disk
-          disk: hdfs_disk
         local:
           default: local_disk
           disk: local_disk
+    cnch_default_hdfs:
+      volumes:
+        hdfs:
+          default: hdfs_disk
+          disk: hdfs_disk
 cnch_kafka_log:
   database: cnch_system
   table: cnch_kafka_log
