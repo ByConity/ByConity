@@ -644,7 +644,8 @@ void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr loca
                     IParser::Pos token_iterator(tokens, max_query_size);
                     ASTPtr part_ast;
                     Expected expected;
-                    bool parse_res = ParserPartition(ParserSettings::valueOf(local_context->getSettingsRef().dialect_type)).parse(token_iterator, part_ast, expected);
+                    bool parse_res = ParserPartition(ParserSettings::valueOf(local_context->getSettingsRef()))
+                                         .parse(token_iterator, part_ast, expected);
                     if (!parse_res)
                         continue;
                     refreshImpl(part_ast, local_context, async);

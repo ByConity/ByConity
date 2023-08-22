@@ -670,7 +670,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     {
         if (input_ast == nullptr)
         {
-            ParserQuery parser(end, ParserSettings::valueOf(context->getSettings().dialect_type));
+            ParserQuery parser(end, ParserSettings::valueOf(context->getSettings()));
             parser.setContext(context.get());
 
             /// TODO: parser should fail early when max_query_size limit is reached.
@@ -1621,7 +1621,7 @@ void executeQuery(
     ASTPtr ast;
     BlockIO streams;
 
-    ParserQuery parser(end, ParserSettings::valueOf(context->getSettings().dialect_type));
+    ParserQuery parser(end, ParserSettings::valueOf(context->getSettings()));
     parser.setContext(context.get());
 
     /// TODO: parser should fail early when max_query_size limit is reached.

@@ -291,7 +291,8 @@ void PostgreSQLHandler::processQuery()
 
         const auto & settings = connection_context->getSettingsRef();
         std::vector<String> queries;
-        auto parse_res = splitMultipartQuery(query->query, queries, settings.max_query_size, settings.max_parser_depth, ParserSettings::valueOf(settings.dialect_type));
+        auto parse_res = splitMultipartQuery(
+            query->query, queries, settings.max_query_size, settings.max_parser_depth, ParserSettings::valueOf(settings));
         if (!parse_res.second)
             throw Exception("Cannot parse and execute the following part of query: " + String(parse_res.first), ErrorCodes::SYNTAX_ERROR);
 
