@@ -73,7 +73,7 @@ void PlanBuilder::appendProjection(ASTs & expressions)
     NameToType types;
     putIdentities(getOutputNamesAndTypes(), assignments, types);
     bool has_new_projection = false;
-    AstToSymbol expression_to_symbols = createScopeAwaredASTMap<String>(analysis);
+    AstToSymbol expression_to_symbols = createScopeAwaredASTMap<String>(analysis, translation->scope);
 
     for (auto & expr : expressions)
     {
