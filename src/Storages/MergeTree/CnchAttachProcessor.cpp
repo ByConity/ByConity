@@ -32,6 +32,8 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/PartitionCommands.h>
+#include <Parsers/ParserPartition.h>
+#include <Parsers/parseQuery.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
 #include <Storages/MergeTree/S3PartsAttachMeta.h>
@@ -331,8 +333,11 @@ void CnchAttachProcessor::exec()
     AttachContext attach_ctx(*query_ctx, 8,
         query_ctx->getSettingsRef().cnch_part_attach_max_threads, logger);
 
+
     NameSet staged_part_names;
     NameSet partitions_filter;
+    std::vector<ASTPtr> attached_partitions;
+
     AttachFilter filter;
     try
     {
@@ -361,7 +366,7 @@ void CnchAttachProcessor::exec()
             {
                 for (const auto & part : prepared_parts.second)
                     partitions_filter.emplace(part->info.partition_id);
-                commitParts(prepared_parts.second, staged_part_names);
+                commitParts(prepared_parts.second, staged_part_names, attached_partitions);   
             }
         }
     }
@@ -389,7 +394,7 @@ void CnchAttachProcessor::exec()
         if (is_unique_tbl && query_ctx->getSettingsRef().enable_wait_attached_staged_parts_to_visible && !staged_part_names.empty())
             waitingForDedup(partitions_filter, staged_part_names);
 
-        refreshView();
+        refreshView(attached_partitions, attach_ctx);
     }
     catch(...)
     {
@@ -836,12 +841,31 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Tas
     return parts_from_sources;
 }
 
-void CnchAttachProcessor::commitParts(MutableMergeTreeDataPartsCNCHVector & prepared_parts, NameSet & staged_parts_name)
+void CnchAttachProcessor::commitParts(MutableMergeTreeDataPartsCNCHVector & prepared_parts, 
+                     NameSet & staged_parts_name, std::vector<ASTPtr> & attached_partitions)
 {
     injectFailure(AttachFailurePoint::BEFORE_COMMIT_FAIL);
 
     TxnTimestamp commit_time;
     CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
+
+    std::set<String> attached_partition_ids;
+    ParserPartition parser;
+    FormatSettings format_settings;
+    for (const auto & part : prepared_parts)
+    {
+        if (!attached_partition_ids.contains(part->info.partition_id))
+        {
+            attached_partition_ids.insert(part->info.partition_id);
+            WriteBufferFromOwnString writer;
+            part->partition.serializeText(target_tbl, writer, format_settings);
+            LOG_TRACE(logger, fmt::format("Attached partition {}", writer.str()));
+            String formated_partition = writer.str();
+            ASTPtr partition_ast = parseQuery(parser, formated_partition, query_ctx->getSettingsRef().max_query_size,
+                 query_ctx->getSettingsRef().max_parser_depth);
+            attached_partitions.push_back(partition_ast);
+        }
+    }
     if (is_unique_tbl)
     {
         DeleteBitmapMetaPtrVector bitmap_metas;
@@ -1492,25 +1516,37 @@ void CnchAttachProcessor::waitingForDedup(const NameSet & partitions_filter, con
     LOG_INFO(logger, "Attach partition dedup {} parts finished, costs {} ms", staged_parts_name.size(), timer.elapsedMilliseconds());
 }
 
-void CnchAttachProcessor::refreshView()
+void CnchAttachProcessor::refreshView(const std::vector<ASTPtr>& attached_partitions, AttachContext& attach_ctx)
 {
-    /// When target table have some dependencies pushing data to views with refresh actions.
-    try
-    {
-        ContextMutablePtr refresh_context = Context::createCopy(query_ctx);
-        auto worker_group = getWorkerGroupForTable(target_tbl, refresh_context);
-        refresh_context->setCurrentWorkerGroup(worker_group);
-        std::vector<StoragePtr> views = getViews(target_tbl.getStorageID(), refresh_context);
-        for (auto & view : views)
-        {
-            if (auto mv = dynamic_cast<StorageMaterializedView*>(view.get()))
-                mv->refresh(command.partition, refresh_context, true);
-        }
-    }
-    catch(...)
-    {
-        tryLogCurrentException(logger);
-    }
+   try
+   {
+       ExceptionHandler except_handler;
+       ThreadPool& worker_pool = attach_ctx.getWorkerPool(attached_partitions.size());
+       for (const auto& partition_ast : attached_partitions)
+       {
+           worker_pool.scheduleOrThrowOnError(createExceptionHandledJob([this, ast = partition_ast]() {
+               auto refresh_context = Context::createCopy(query_ctx);
+               auto worker_group = getWorkerGroupForTable(target_tbl, refresh_context);
+               refresh_context->setCurrentWorkerGroup(worker_group);
+               std::vector<StoragePtr> views = getViews(target_tbl.getStorageID(), refresh_context);
+
+               for (auto& view : views)
+               {
+                   if (auto * mv = dynamic_cast<StorageMaterializedView*>(view.get()))
+                   {
+                       mv->refresh(ast, refresh_context, true);
+                   }
+               }
+           }, except_handler));
+       }
+
+       worker_pool.wait();
+       except_handler.throwIfException();
+   }
+   catch(...)
+   {
+       tryLogCurrentException(logger);
+   }
 }
 
 void CnchAttachProcessor::verifyPartsNum(size_t parts_num) const

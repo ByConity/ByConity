@@ -256,6 +256,8 @@ void StorageCnchMergeTree::read(
     LOG_TRACE(log, "Original query before rewrite: {}", queryToString(query_info.query));
     auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), prepare_result.local_table_name);
 
+    LOG_TRACE(log, "After query rewrite: {}", queryToString(modified_query_ast));
+
     const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};
 
     ClusterProxy::SelectStreamFactory select_stream_factory = ClusterProxy::SelectStreamFactory(
@@ -633,15 +635,30 @@ static void touchActiveTimestampForInsertSelectQuery(const ASTInsertQuery & inse
     }
 }
 
+static String extractTableSuffix(const String & gen_table_name)
+{
+    return gen_table_name.substr(gen_table_name.find_last_of('_') + 1);
+}
+
 static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const String & table_suffix)
 {
     auto query = mv->getCreateTableSql();
 
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+    
 
     auto & create_query = ast->as<ASTCreateQuery &>();
+    create_query.to_inner_uuid = UUIDHelpers::Nil;
     create_query.table += "_" + table_suffix;
+    /// If creating MV is `CREATE MATERIALIZED VIEW AS SELECT ... ENGINE = CnchMergeTree()...`
+    /// Then we change the query to CREATE MATERIALIZED VIEW TO `mv_db.`.inner.mv_name`` AS SELECT ...
+    if (create_query.to_table_id.empty())
+    {
+        create_query.to_table_id.table_name = generateInnerTableName(mv->getStorageID());
+        create_query.to_table_id.database_name = mv->getDatabaseName();
+        create_query.storage = nullptr;
+    }
     create_query.to_table_id.table_name += "_" + table_suffix;
 
     auto & inner_query = create_query.select->list_of_selects->children.at(0);
@@ -653,13 +670,7 @@ static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const S
         mv->getInMemoryMetadataPtr()->select.select_table_id.database_name,
         mv->getInMemoryMetadataPtr()->select.select_table_id.table_name + "_" + table_suffix);
 
-    /// Remark: this `getObjectDefinitionFromCreateQuery` may cause issue, refer to `getTableDefinitionFromCreateQuery` in cnch-dev branch if issue happens
-    return getObjectDefinitionFromCreateQuery(ast, false);
-}
-
-String StorageCnchMergeTree::extractTableSuffix(const String & gen_table_name)
-{
-    return gen_table_name.substr(gen_table_name.find_last_of('_') + 1);
+    return getTableDefinitionFromCreateQuery(ast, false);
 }
 
 Names StorageCnchMergeTree::genViewDependencyCreateQueries(

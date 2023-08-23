@@ -784,52 +784,6 @@ Dependencies DatabaseCatalog::getDependencies(const StorageID & from) const
     return Dependencies(iter->second.begin(), iter->second.end());
 }
 
-void DatabaseCatalog::addMemoryTableDependency(const StorageID & local_table_id, const StorageID & memory_table_id)
-{
-    String from_tenant_db = formatTenantDatabaseName(local_table_id.database_name);
-
-    std::lock_guard lock{databases_mutex};
-    memory_table_dependencies[{from_tenant_db, local_table_id.getTableName()}].insert(memory_table_id);
-}
-
-void DatabaseCatalog::removeMemoryTableDependency(const StorageID & local_table_id)
-{
-    String from_tenant_db = formatTenantDatabaseName(local_table_id.database_name);
-
-    std::lock_guard lock{databases_mutex};
-    memory_table_dependencies.erase({from_tenant_db, local_table_id.getTableName()});
-}
-
-std::optional<MemoryTableInfo> DatabaseCatalog::tryGetDependencyMemoryTable(const StorageID & local_table_id, ContextPtr local_context) const
-{
-    String source_db;
-    String source_table;
-    {
-        StorageID tenant_storage = StorageID {formatTenantDatabaseName(local_table_id.database_name), local_table_id.table_name, local_table_id.uuid};
-
-        std::lock_guard lock{databases_mutex};
-        auto iter = memory_table_dependencies.find(tenant_storage);
-        if (iter == memory_table_dependencies.end()) return {};
-        if (iter->second.size() != 1 || iter->second.empty()) return {};
-        source_db = iter->second.begin()->getDatabaseName();
-        source_table = iter->second.begin()->getTableName();
-    }
-    auto source_table_ptr = tryGetTable({source_db, source_table}, local_context);
-    if (source_table_ptr)
-    {
-#if USE_RDKAFKA
-        /// Do nothing for CnchKafka now
-#endif
-        {
-            return {};
-        }
-    }
-    else
-    {
-        return {};
-    }
-}
-
 void DatabaseCatalog::updateDependency(const StorageID & old_from, const StorageID & old_where, const StorageID & new_from,
                                   const StorageID & new_where)
 {
