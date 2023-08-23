@@ -55,9 +55,9 @@ void append(Container1 & v1, Container2 && v2, F && transformer)
 }
 
 template <typename Container, typename F>
-Container deduplicateByAst(Container container, Analysis & analysis, F && extractor)
+Container deduplicateByAst(Container container, ScopePtr scope, Analysis & analysis, F && extractor)
 {
-    auto existing = createScopeAwaredASTSet(analysis);
+    auto existing = createScopeAwaredASTSet(analysis, scope);
     container.erase(
         std::remove_if(container.begin(), container.end(), [&] (auto & elem) -> bool
                        {

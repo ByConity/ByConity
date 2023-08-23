@@ -25,17 +25,14 @@
 namespace DB
 {
 
-TranslationMap::TranslationMap(TranslationMapPtr outer_context_,
-                               ScopePtr scope_,
-                               FieldSymbolInfos field_symbol_infos_,
-                               Analysis & analysis_,
-                               ContextPtr context_) :
-    analysis(analysis_),
-    context(std::move(context_)),
-    outer_context(std::move(outer_context_)),
-    scope(scope_),
-    field_symbol_infos(std::move(field_symbol_infos_)),
-    expression_symbols(createScopeAwaredASTMap<String>(analysis))
+TranslationMap::TranslationMap(
+    TranslationMapPtr outer_context_, ScopePtr scope_, FieldSymbolInfos field_symbol_infos_, Analysis & analysis_, ContextPtr context_)
+    : analysis(analysis_)
+    , context(std::move(context_))
+    , outer_context(std::move(outer_context_))
+    , scope(scope_)
+    , field_symbol_infos(std::move(field_symbol_infos_))
+    , expression_symbols(createScopeAwaredASTMap<String>(analysis, scope))
 {
     checkSymbols();
 }
@@ -49,6 +46,10 @@ TranslationMap & TranslationMap::withScope(ScopePtr scope_, FieldSymbolInfos fie
 
     if (remove_mappings)
         expression_symbols.clear();
+
+    auto new_expression_symbols = createScopeAwaredASTMapVariadic<String>(
+        analysis, scope, expression_symbols.begin(), expression_symbols.end(), expression_symbols.bucket_count());
+    new_expression_symbols.swap(expression_symbols);
 
     return *this;
 }
