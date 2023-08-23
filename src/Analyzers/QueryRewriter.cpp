@@ -405,13 +405,7 @@ namespace
         JoinToSubqueryTransformVisitor(join_to_subs_data).visit(query);
     }
 
-    struct SelectQueryRewriteContext
-    {
-        TablesWithColumns tables_with_columns;
-        std::optional<TreeRewriterResult> result;
-    };
-
-    void rewriteSelectQuery(ASTPtr & node, SelectQueryRewriteContext & rewrite_context, ContextMutablePtr context, int & graphviz_index)
+    void rewriteSelectQuery(ASTPtr & node, ContextMutablePtr context, int & graphviz_index)
     {
         /// InterpreterSelectQuery logics:
         JoinedTables joined_tables(context, node->as<ASTSelectQuery &>(), false);
@@ -432,8 +426,7 @@ namespace
         auto & select_query = node->as<ASTSelectQuery &>();
         const auto & settings = context->getSettingsRef();
 
-        auto & tables_with_columns = rewrite_context.tables_with_columns;
-        tables_with_columns = joined_tables.tablesWithColumns();
+        TablesWithColumns tables_with_columns = joined_tables.tablesWithColumns();
         NamesAndTypesList source_columns;
 
         if (!tables_with_columns.empty())
@@ -446,8 +439,7 @@ namespace
         }
 
         StoragePtr storage = joined_tables.getLeftTableStorage();
-        rewrite_context.result.emplace(source_columns, storage, storage ? storage->getInMemoryMetadataPtr() : nullptr);
-        auto & result = *(rewrite_context.result);
+        TreeRewriterResult result {source_columns, storage, storage ? storage->getInMemoryMetadataPtr() : nullptr};
 
         if (tables_with_columns.size() > 1)
         {
@@ -473,21 +465,6 @@ namespace
         // 3. Optimizes logical expressions.
         LogicalExpressionsOptimizer(&select_query, settings.optimize_min_equality_disjunction_chain_length.value).perform();
 
-        // 6. Execute subquery in prewhere
-        if (select_query.prewhere())
-        {
-            ExecutePrewhereSubquery execute_prewhere_subquery(context);
-            ExecutePrewhereSubqueryVisitor(execute_prewhere_subquery).visit(select_query.refPrewhere());
-        }
-    }
-
-    void postRewriteSelectQuery(ASTPtr & node, SelectQueryRewriteContext & rewrite_context, ContextMutablePtr context, int & graphviz_index)
-    {
-        // auto & select_query = node->as<ASTSelectQuery &>();
-        const auto & settings = context->getSettingsRef();
-        auto & tables_with_columns = rewrite_context.tables_with_columns;
-        auto & result = *(rewrite_context.result);
-
         // 4. Normalize
         {
             normalizeFunctions(node, context, graphviz_index);
@@ -505,7 +482,12 @@ namespace
         // 5. Call `TreeOptimizer` since some optimizations will change the query result
         TreeOptimizer::apply(node, result, tables_with_columns, context, false);
 
-        result.collectUsedColumns(context, node, true);
+        // 6. Execute subquery in prewhere
+        if (select_query.prewhere())
+        {
+            ExecutePrewhereSubquery execute_prewhere_subquery(context);
+            ExecutePrewhereSubqueryVisitor(execute_prewhere_subquery).visit(select_query.refPrewhere());
+        }
     }
 
     class MarkTupleLiteralsAsLegacyData
@@ -568,23 +550,15 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
 
         // select query level rewriter, top down rewrite each subquery.
         std::function<void(ASTPtr &)> rewrite_query = [&](ASTPtr & ast) {
-            SelectQueryRewriteContext rewrite_context;
             if (ast->as<ASTSelectQuery>())
             {
-                rewriteSelectQuery(ast, rewrite_context, context, graphviz_index);
+                rewriteSelectQuery(ast, context, graphviz_index);
                 GraphvizPrinter::printAST(ast, context, std::to_string(graphviz_index++) + "-AST");
             }
 
             // top down rewrite
             for (ASTPtr item : ast->children)
                 rewrite_query(item);
-
-            // do some bottom-up rewrite
-            if (ast->as<ASTSelectQuery>())
-            {
-                postRewriteSelectQuery(ast, rewrite_context, context, graphviz_index);
-                GraphvizPrinter::printAST(ast, context, std::to_string(graphviz_index++) + "-AST-post");
-            }
         };
 
         rewrite_query(query);
