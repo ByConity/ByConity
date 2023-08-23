@@ -104,11 +104,11 @@ message DataModelPart
     optional uint64 covered_parts_size = 23;     /// record deleted part size. Used by deleted part as well as drop range.
     optional uint64 covered_parts_rows = 24;     /// record deleted rows. Used by deleted part as well as drop range.
     optional bytes data_footer = 25;
-    optional UUID part_id = 26;                  /// added by ByConity
     optional bool delete_flag = 27;              /// Whether to take delete bitmap as delete flag info
     optional bool low_priority = 28;             /// Whether the part belongs to unique table engine and from dumper tool
     repeated uint64 index_granularities = 30;
     repeated string projections = 31; // record names of projections managed by the current part
+    optional UUID part_id = 35;
 };
 
 message CnchHivePartInfo
@@ -353,7 +353,7 @@ message VirtualWarehouseSettings
     // {READ, WRITE, TASK}
     required uint32 type = 1;
     reserved 2;
-    reserved "size"; // replace by num_workers. 
+    reserved "size"; // replace by num_workers.
     optional uint32 min_worker_groups = 3; // include shared groups
     optional uint32 max_worker_groups = 4; // include shared groups
     required uint32 num_workers = 5; // #worker per group
@@ -603,3 +603,39 @@ message DataModelUDF
     optional int64 udf_flags = 8; // bitmap of enum UDFFlags
     optional uint64 version = 9;
 }
+
+message S3SanitizerDataModelPart
+{
+    required DataModelPartInfo part_info = 1;  // part info
+    required uint64 size = 2;  // part size in bytes
+    required uint64 rows_count = 3;  // rows count in the part
+    required bytes partition_minmax = 4; // partition and minmax index info
+    optional uint64 marks_count = 5;
+    optional string columns = 6;  // columns definition; same as columns.txt
+    optional uint64 txnID = 7;
+    optional bool deleted = 8;
+    optional uint64 columns_commit_time = 9; // columns definition version, could get from storage
+    optional uint64 mutation_commit_time = 10; // used for async alter query
+    optional uint64 commit_time = 11;
+    optional uint32 data_path_id = 12; // Id of hdfs name node
+    optional uint32 meta_version = 13;
+    optional bytes min_unique_key = 14;
+    optional bytes max_unique_key = 15;
+    optional int64 bucket_number = 16; // bucket_number > 0 if the part is assigned to bucket
+    optional uint64 table_definition_hash = 17;  // hash code for key columns like partition by, order by and cluster by
+    optional uint64 secondary_txn_id = 18;
+    // if the part is originally created in the staging area, store the txn id of the staged part so that
+    // the correct relative path can be constructed.
+    optional uint64 staging_txn_id = 19;
+    optional uint64 virtual_part_size = 20;
+    optional uint32 covered_parts_count = 22;    /// record how many parts the current part covers. Used by drop range.
+    optional uint64 covered_parts_size = 23;     /// record deleted part size. Used by deleted part as well as drop range.
+    optional uint64 covered_parts_rows = 24;     /// record deleted rows. Used by deleted part as well as drop range.
+    optional bytes data_footer = 25;
+    optional UUID part_id = 26;                  /// added by ByConity
+    optional bool delete_flag = 27;              /// Whether to take delete bitmap as delete flag info
+    optional bool low_priority = 28;             /// Whether the part belongs to unique table engine and from dumper tool
+    repeated uint64 index_granularities = 30;
+    repeated string projections = 31; // record names of projections managed by the current part
+    optional UUID new_part_id = 35; // To make this compatabile with new version of meta
+};

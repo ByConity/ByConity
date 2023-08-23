@@ -252,7 +252,7 @@ void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, 
     });
 
     query_context->setCurrentTransaction(txn, false);
-    query_context->getHdfsConnectionParams().lookupOnNeed();
+    // query_context->getHdfsConnectionParams().lookupOnNeed();
     query_context->setQueryContext(query_context);
 
     auto drop_ranges = storage.createDropRangesFromPartitions(partition_infos, txn);
