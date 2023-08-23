@@ -57,8 +57,6 @@
 
 namespace DB
 {
->>>>>>> 65e65da4a08 (Merge branch 'mv_ce_cnch_dev' into 'cnch-ce-merge')
-
 namespace ErrorCodes
 {
     extern const int INCORRECT_QUERY;
