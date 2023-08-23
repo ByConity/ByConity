@@ -100,7 +100,7 @@ public:
 
     virtual void removeFileIfExists(const String& path) override;
 
-    virtual void removeDirectory(const String& ) override { throw Exception("RemoveDirectory is not implemnted in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED);}
+    virtual void removeDirectory(const String& path) override { removeRecursive(path); }
 
     virtual void removeRecursive(const String & path) override;
 
@@ -113,6 +113,10 @@ public:
     virtual void createHardLink(const String & , const String & ) override { throw Exception("createHarLink is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
 
     virtual DiskType::Type getType() const override { return DiskType::Type::ByteS3; }
+
+    virtual bool supportRenameTo() override { return false; }
+
+    virtual String getTableRelativePathOnDisk(const String &) override {return "";}
 
     // Non virtual functions
     const String& getS3Bucket() const { return s3_util.getBucket(); }

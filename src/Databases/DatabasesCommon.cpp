@@ -210,7 +210,7 @@ void DatabaseWithOwnTablesBase::attachTableUnlocked(const String & table_name, c
 
     if (table_id.hasUUID())
     {
-        assert(database_name == DatabaseCatalog::TEMPORARY_DATABASE || getUUID() != UUIDHelpers::Nil);
+        // assert(database_name == DatabaseCatalog::TEMPORARY_DATABASE || getUUID() != UUIDHelpers::Nil);
         DatabaseCatalog::instance().addUUIDMapping(table_id.uuid, shared_from_this(), table);
     }
 

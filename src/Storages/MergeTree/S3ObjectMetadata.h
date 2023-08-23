@@ -40,7 +40,7 @@ public:
     };
 
     PartGeneratorID(Type type_, const String& id_);
-    PartGeneratorID(const String& meta_);
+    explicit PartGeneratorID(const String& meta_);
 
     bool verify(const String& meta_) const;
 

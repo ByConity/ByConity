@@ -2826,7 +2826,7 @@ void MergeTreeData::movePartitionToVolume(const ASTPtr & partition, const String
     else
         parts = getDataPartsVectorInPartition(MergeTreeDataPartState::Committed, partition_id);
 
-    auto volume = getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolumeByName(name);
+    auto volume = getStoragePolicy(IStorage::StorageLocation::MAIN)->getVolumeByName(name, true);
     if (!volume)
         throw Exception("Volume " + name + " does not exists on policy " + getStoragePolicy(IStorage::StorageLocation::MAIN)->getName(), ErrorCodes::UNKNOWN_DISK);
 
