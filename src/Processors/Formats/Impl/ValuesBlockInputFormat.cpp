@@ -339,7 +339,7 @@ bool ValuesBlockInputFormat::parseExpression(IColumn & column, size_t column_idx
     Tokens tokens(buf.position(), buf.buffer().end());
     IParser::Pos token_iterator(tokens, settings.max_parser_depth);
     ASTPtr ast;
-    ParserExpression parser(ParserSettings::valueOf(settings.dialect_type));
+    ParserExpression parser(ParserSettings::valueOf(settings));
 
     bool parsed = parser.parse(token_iterator, ast, expected);
 

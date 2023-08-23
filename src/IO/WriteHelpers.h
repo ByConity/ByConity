@@ -231,7 +231,9 @@ inline void writeString(const StringRef & ref, WriteBuffer & buf)
  */
 inline void writeJSONString(const char * begin, const char * end, WriteBuffer & buf, const FormatSettings & settings)
 {
-    writeChar('"', buf);
+    if (settings.json.quota_json_string)
+        writeChar('"', buf);
+
     for (const char * it = begin; it != end; ++it)
     {
         switch (*it)
@@ -303,7 +305,9 @@ inline void writeJSONString(const char * begin, const char * end, WriteBuffer & 
                     writeChar(*it, buf);
         }
     }
-    writeChar('"', buf);
+
+    if (settings.json.quota_json_string)
+        writeChar('"', buf);
 }
 
 

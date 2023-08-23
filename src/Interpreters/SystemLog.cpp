@@ -67,7 +67,7 @@ std::shared_ptr<TSystemLog> createSystemLog(
 {
     if (!config.has(config_prefix) && !enable_by_default)
         return {};
-    
+
     if (config.has(config_prefix) && !config.getBool(config_prefix + ".enable", true))
         return {};
 
@@ -107,7 +107,7 @@ std::shared_ptr<TSystemLog> createSystemLog(
         engine += " ORDER BY (event_date, event_time)";
     }
     // Validate engine definition grammatically to prevent some configuration errors
-    ParserStorage storage_parser(ParserSettings::valueOf(context->getSettingsRef().dialect_type));
+    ParserStorage storage_parser(ParserSettings::valueOf(context->getSettingsRef()));
     parseQuery(storage_parser, engine.data(), engine.data() + engine.size(),
             "Storage to create table for " + config_prefix, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 

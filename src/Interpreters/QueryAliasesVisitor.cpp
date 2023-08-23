@@ -99,7 +99,7 @@ void QueryAliasesMatcher<T>::visit(const ASTSubquery & const_subquery, const AST
     auto & aliases = data;
     ASTSubquery & subquery = const_cast<ASTSubquery &>(const_subquery);
 
-    static std::atomic_uint64_t subquery_index = 0;
+    UInt64 subquery_index = 0;
 
     if (subquery.alias.empty())
     {

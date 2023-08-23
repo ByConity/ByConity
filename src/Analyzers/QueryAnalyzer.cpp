@@ -1695,7 +1695,7 @@ void QueryAnalyzerVisitor::verifyAggregate(ASTSelectQuery & select_query, ScopeP
         return;
     }
 
-    ScopeAwaredASTSet grouping_expressions = createScopeAwaredASTSet(analysis);
+    ScopeAwaredASTSet grouping_expressions = createScopeAwaredASTSet(analysis, source_scope);
     std::unordered_set<size_t> grouping_field_indices;
     auto & group_by_analysis = analysis.getGroupByAnalysis(select_query);
 

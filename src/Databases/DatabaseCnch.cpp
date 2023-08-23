@@ -242,7 +242,7 @@ ASTPtr DatabaseCnch::getCreateDatabaseQuery() const
     auto settings = getContext()->getSettingsRef();
     String query = "CREATE DATABASE " + backQuoteIfNeed(getDatabaseName())
         + (db_uuid != UUIDHelpers::Nil ? (" UUID " + quoteString(UUIDHelpers::UUIDToString(db_uuid))) : "") + " ENGINE = Cnch";
-    ParserCreateQuery parser(ParserSettings::valueOf(settings.dialect_type));
+    ParserCreateQuery parser(ParserSettings::valueOf(settings));
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, settings.max_parser_depth);
     return ast;
 }
