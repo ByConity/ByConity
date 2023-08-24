@@ -46,7 +46,7 @@ using StringSet = std::set<String>;
 
     void start();
     void wakeup();
-    void stop();
+    virtual void stop();
     virtual void drop() { thread_status = CnchBGThread::Stopped; } /// FIXME: not used?
 
     bool error() { return failed_storage.load(std::memory_order_relaxed) >= 3; }

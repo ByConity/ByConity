@@ -23,6 +23,35 @@
 
 namespace DB
 {
+    void collectWhereClausePredicate(const ASTPtr & ast, std::map<String,String> & columnToValue)
+    {
+        static String column_name;
+        if (!ast)
+            return;
+
+        if (ASTFunction * func = ast->as<ASTFunction>())
+        {
+            if (func->name == "equals" || func->name == "and")
+            {
+                for (auto & arg : func->arguments->children)
+                {
+                    collectWhereClausePredicate(arg, columnToValue); // recurse in a depth first fashion
+                }
+            }
+        }
+        else if (ASTIdentifier * identifier = ast->as<ASTIdentifier>())
+        {
+            column_name = identifier->name();
+        }
+        else if (ASTLiteral * literal = ast->as<ASTLiteral>())
+        {
+            if (literal->value.getType() == Field::Types::String)
+            {
+                columnToValue.emplace(column_name,literal->value.get<String>());
+            }
+        }
+    }
+
     std::pair<String,Field> collectWhereEqualClausePredicate(const ASTPtr & ast, const ContextPtr & context)
     {
         std::pair<String,Field> res;

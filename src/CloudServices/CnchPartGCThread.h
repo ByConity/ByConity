@@ -40,6 +40,7 @@ public:
     CnchPartGCThread(ContextPtr context_, const StorageID & id);
 
 private:
+    void stop() override;
     CnchBGThreadPtr getMergeThread();
 
     void runImpl() override;
@@ -47,6 +48,22 @@ private:
 
     void clearOldPartsByPartition(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp);
     void clearOldInsertionLabels(const StoragePtr & istorage, StorageCnchMergeTree & storage);
+
+    /**
+     * @brief Task to remove data in the trash. Executed by `data_remover`.
+     *
+     * If there are no parts to remove, the pace will be adaptively slowed down.
+     */
+    void runDataRemoveTask();
+
+    /**
+     * @brief Remove all trashed data file in specified table.
+     *
+     * @param istorage table
+     * @param storage The CNCH table of `istorage`.
+     * @return Number of removed data files.
+     */
+    size_t clearDataFileInTrash(const StoragePtr & istorage, StorageCnchMergeTree & storage);
 
     TxnTimestamp calculateGCTimestamp(UInt64 delay_second, bool in_wakeup);
     Strings selectPartitions(const StoragePtr & istorage);
@@ -85,6 +102,12 @@ private:
     //     if (auto merge = getMergeThread())
     //         merge->updatePartCache(partition_id, -1 * part_num);
     // }
+
+    /// Remove parts/delete bitmaps from remote storage and clear trash.
+    size_t round_removing_no_data = 0;
+
+    /// Delete data files in the trash state in background.
+    BackgroundSchedulePool::TaskHolder data_remover;
 
     PartitionSelectorPtr partition_selector;
     BackgroundSchedulePool::TaskHolder checkpoint_task;
