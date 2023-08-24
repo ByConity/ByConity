@@ -57,6 +57,7 @@
 
 namespace DB
 {
+
 namespace ErrorCodes
 {
     extern const int INCORRECT_QUERY;
