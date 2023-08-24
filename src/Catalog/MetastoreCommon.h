@@ -74,7 +74,7 @@ using SingleDeleteRequest = SingleRequest<RequestType::DELETE>;
 
 struct BatchCommitRequest
 {
-    explicit BatchCommitRequest(const bool with_cas_ = true, const bool allow_cas_fail_ = false)
+    BatchCommitRequest(const bool with_cas_ = true, const bool allow_cas_fail_ = false)
         : with_cas(with_cas_), allow_cas_fail(allow_cas_fail_)
     {
     }

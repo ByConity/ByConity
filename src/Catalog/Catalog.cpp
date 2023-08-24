@@ -3575,7 +3575,7 @@ namespace Catalog
                 // Drop part metadata and add new one in trash;
                 const auto & server_part = items.data_parts[parts_index];
                 batch_writes.AddDelete(part_meta_prefix + server_part->info().getPartName());
-                batch_writes.AddPut(SingleRequest(
+                batch_writes.AddPut(SinglePutRequest(
                     MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, server_part->name()),
                     server_part->part_model_wrapper->part_model->SerializeAsString()));
                 parts_index++;
@@ -3586,7 +3586,7 @@ namespace Catalog
                 const auto & model = *(items.delete_bitmaps[delete_bitmaps_index]->getModel());
                 batch_writes.AddDelete(MetastoreProxy::deleteBitmapKey(name_space, table_uuid, model));
                 batch_writes.AddPut(
-                    SingleRequest(MetastoreProxy::deleteBitmapKeyInTrash(name_space, table_uuid, model), model.SerializeAsString()));
+                    SinglePutRequest(MetastoreProxy::deleteBitmapKeyInTrash(name_space, table_uuid, model), model.SerializeAsString()));
                 delete_bitmaps_index++;
             }
             else if (staged_parts_index < items.staged_parts.size())
@@ -3608,7 +3608,7 @@ namespace Catalog
                 meta_proxy->batchWrite(batch_writes, resp);
 
                 /// Reset BatchCommitRequest.
-                batch_writes{};
+                batch_writes = {};
                 drop_items_count = 0;
             }
         }
