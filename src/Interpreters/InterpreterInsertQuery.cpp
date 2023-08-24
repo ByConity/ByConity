@@ -182,6 +182,7 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
 
     if (getContext()->getServerType() == ServerType::cnch_worker && !query.select)
     {
+        query.table_id = getContext()->resolveStorageID(query.table_id);
         auto storage = DatabaseCatalog::instance().tryGetTable(query.table_id, getContext());
         if (storage)
             return storage;
