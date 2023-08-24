@@ -159,6 +159,7 @@ void registerFunctionModulo(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionModulo>();
     factory.registerAlias("mod", "modulo", FunctionFactory::CaseInsensitive);
+    factory.registerAlias("pmod", "modulo", FunctionFactory::CaseInsensitive);
 }
 
 struct NameModuloLegacy { static constexpr auto name = "moduloLegacy"; };

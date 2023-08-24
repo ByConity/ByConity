@@ -254,6 +254,7 @@ struct Settings;
     /** uuid of CnchMergeTree, as we won't use uuid in CloudMergeTree */ \
     M(String, cnch_table_uuid, "", "Used for CloudMergeTree to get uuid of Cnch Table for ingestion task, like Kafka", 0) \
     \
+    M(String, remote_storage_type, "hdfs", "Table's storage type[deprcated]", 0) \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
     M(index_granularity)

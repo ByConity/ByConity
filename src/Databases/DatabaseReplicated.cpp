@@ -451,7 +451,7 @@ static UUID getTableUUIDIfReplicated(const String & metadata, ContextPtr context
     if (!looks_like_replicated)
         return UUIDHelpers::Nil;
 
-    ParserCreateQuery parser(ParserSettings::valueOf(context->getSettingsRef().dialect_type));
+    ParserCreateQuery parser(ParserSettings::valueOf(context->getSettingsRef()));
     auto size = context->getSettingsRef().max_query_size;
     auto depth = context->getSettingsRef().max_parser_depth;
     ASTPtr query = parseQuery(parser, metadata, size, depth);
@@ -619,8 +619,8 @@ void DatabaseReplicated::recoverLostReplica(const ZooKeeperPtr & current_zookeep
         }
 
         auto create_query_context = make_query_context();
-        auto query_ast = parseQueryFromMetadataInZooKeeper(name_and_meta.first, name_and_meta.second,
-                                                           ParserSettings::valueOf(create_query_context->getSettingsRef().dialect_type));
+        auto query_ast = parseQueryFromMetadataInZooKeeper(
+            name_and_meta.first, name_and_meta.second, ParserSettings::valueOf(create_query_context->getSettingsRef()));
 
         LOG_INFO(log, "Executing {}", serializeAST(*query_ast));
         InterpreterCreateQuery(query_ast, create_query_context).execute();

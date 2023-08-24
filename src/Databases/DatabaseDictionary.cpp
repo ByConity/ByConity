@@ -129,7 +129,7 @@ ASTPtr DatabaseDictionary::getCreateTableQueryImpl(const String & table_name, Co
     }
 
     auto settings = getContext()->getSettingsRef();
-    ParserCreateQuery parser(ParserSettings::valueOf(settings.dialect_type));
+    ParserCreateQuery parser(ParserSettings::valueOf(settings));
     const char * pos = query.data();
     std::string error_message;
     auto ast = tryParseQuery(parser, pos, pos + query.size(), error_message,
@@ -149,7 +149,7 @@ ASTPtr DatabaseDictionary::getCreateDatabaseQuery() const
         buffer << "CREATE DATABASE " << backQuoteIfNeed(getDatabaseName()) << " ENGINE = Dictionary";
     }
     auto settings = getContext()->getSettingsRef();
-    ParserCreateQuery parser(ParserSettings::valueOf(settings.dialect_type));
+    ParserCreateQuery parser(ParserSettings::valueOf(settings));
     return parseQuery(parser, query.data(), query.data() + query.size(), "", 0, settings.max_parser_depth);
 }
 

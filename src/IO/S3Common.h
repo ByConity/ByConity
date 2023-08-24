@@ -7,6 +7,7 @@
 #if USE_AWS_S3
 
 #include <common/types.h>
+#include <Common/ThreadPool.h>
 #include <aws/core/Aws.h>  // Y_IGNORE
 #include <aws/core/client/ClientConfiguration.h> // Y_IGNORE
 #include <aws/s3/S3Errors.h>
@@ -74,7 +75,6 @@ public:
 private:
     ClientFactory();
 
-private:
     Aws::SDKOptions aws_options;
 };
 
@@ -185,6 +185,35 @@ private:
 
     std::shared_ptr<Aws::S3::S3Client> client;
     const String bucket;
+};
+
+constexpr auto S3_DEFAULT_BATCH_CLEAN_SIZE = 1000;
+
+class S3LazyCleaner
+{
+public:
+    S3LazyCleaner(const S3::S3Util& s3_util_,
+        const std::function<bool(const S3::S3Util&, const String&)>& filter_,
+        size_t max_threads_, size_t batch_clean_size_ = S3_DEFAULT_BATCH_CLEAN_SIZE);
+    ~S3LazyCleaner();
+
+    void push(const String& key_);
+    void finalize();
+
+private:
+    void lazyRemove(const std::optional<String>& key_);
+
+    Poco::Logger* logger;
+
+    size_t batch_clean_size;
+    std::function<bool(const S3::S3Util&, const String&)> filter;
+    S3::S3Util s3_util;
+
+    ExceptionHandler except_hdl;
+    std::unique_ptr<ThreadPool> clean_pool;
+
+    std::mutex remove_keys_mu;
+    std::vector<String> keys_to_remove;
 };
 
 }

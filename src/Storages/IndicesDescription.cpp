@@ -172,7 +172,7 @@ IndicesDescription IndicesDescription::parse(const String & str, const ColumnsDe
     if (str.empty())
         return result;
 
-    ParserIndexDeclarationList parser(ParserSettings::valueOf(context->getSettingsRef().dialect_type));
+    ParserIndexDeclarationList parser(ParserSettings::valueOf(context->getSettingsRef()));
     ASTPtr list = parseQuery(parser, str, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
 
     for (const auto & index : list->children)

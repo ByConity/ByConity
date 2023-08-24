@@ -87,6 +87,7 @@ int mainEntryClickHouseKeeperConverter(int argc, char ** argv);
 int mainEntryClickhousePartToolkit(int argc, char ** argv);
 int mainEntryClickhousePartMerger(int argc, char ** argv);
 int mainEntryClickhouseS3RenameTool(int argc, char ** argv);
+int mainEntryClickhouseS3MetaSanitizer(int argc, char ** argv);
 #endif
 #if ENABLE_CLICKHOUSE_META_INSPECTOR
 int mainEntryClickhouseMetaInspector(int argc, char ** argv);
@@ -169,6 +170,7 @@ std::pair<const char *, MainFunc> clickhouse_applications[] =
     {"part-converter", mainEntryClickhousePartToolkit},
     {"part-merger", mainEntryClickhousePartMerger},
     {"s3-rename", mainEntryClickhouseS3RenameTool},
+    {"s3-meta-sanitizer", mainEntryClickhouseS3MetaSanitizer},
 #endif
 #if ENABLE_CLICKHOUSE_META_INSPECTOR
     {"meta-inspector", mainEntryClickhouseMetaInspector},

@@ -61,7 +61,7 @@ static void executeCreateQuery(
     const String & file_name,
     bool has_force_restore_data_flag)
 {
-    ParserCreateQuery parser(ParserSettings::valueOf(context->getSettingsRef().dialect_type));
+    ParserCreateQuery parser(ParserSettings::valueOf(context->getSettingsRef()));
     ASTPtr ast = parseQuery(
         parser, query.data(), query.data() + query.size(), "in file " + file_name, 0, context->getSettingsRef().max_parser_depth);
 

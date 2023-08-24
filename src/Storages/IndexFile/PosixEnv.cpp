@@ -11,6 +11,8 @@
 #include <Storages/IndexFile/Env.h>
 #include <Common/Exception.h>
 #include <Common/Slice.h>
+#include "IO/ReadBufferFromFileBase.h"
+#include "IO/ReadSettings.h"
 
 #include <assert.h>
 #include <limits>
@@ -93,35 +95,29 @@ namespace
                 /// fallback to remote read
                 try
                 {
-                    ReadBufferFromByteHDFS buffer(
-                        file.path,
-                        /*pread=*/true,
-                        file.hdfs_params,
-                        /*buf_size=*/n,
-                        /*existing_memory=*/scratch,
-                        /*alignment=*/0,
-                        /*read_all_once=*/true);
+                    std::unique_ptr<ReadBufferFromFileBase> buffer = file.disk->readFile(
+                        file.rel_path, ReadSettings {
+                            .buffer_size = n,
+                            .byte_hdfs_pread = true,
+                        }
+                    );
 
                     auto seek_off = static_cast<off_t>(file.start_offset + offset);
-                    auto res_off = buffer.seek(seek_off);
+                    auto res_off = buffer->seek(seek_off);
                     if (res_off != seek_off)
                         throw Exception(
-                            "Seek to " + file.path + " should return " + toString(seek_off) + " but got " + toString(res_off),
+                            "Seek to " + String(std::filesystem::path(file.disk->getPath()) / file.rel_path) + " should return " + toString(seek_off) + " but got " + toString(res_off),
                             ErrorCodes::LOGICAL_ERROR);
 
-                    auto is_eof = buffer.eof(); /// will trigger reading into scratch
-                    if (is_eof)
-                        throw Exception(
-                            "Unexpected EOF when reading " + file.path + ", off=" + toString(seek_off) + ", size=" + toString(n),
-                            ErrorCodes::LOGICAL_ERROR);
-                    assert(buffer.buffer().size() == n);
+                    buffer->readStrict(scratch, n);
 
                     *result = Slice(scratch, n);
                 }
                 catch (...)
                 {
                     *result = Slice(scratch, 0);
-                    s = Status::IOError(file.path, getCurrentExceptionMessage(false));
+                    s = Status::IOError(String(std::filesystem::path(file.disk->getPath()) / file.rel_path),
+                        getCurrentExceptionMessage(false));
                 }
             }
             else

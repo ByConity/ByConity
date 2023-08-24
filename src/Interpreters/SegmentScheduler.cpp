@@ -265,35 +265,41 @@ CancellationCode SegmentScheduler::cancelPlanSegments(
 void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const DAGGraphPtr dag_ptr, ContextPtr query_context)
 {
     String coordinator_addr = query_context->getHostWithPorts().getExchangeAddress();
-    //TODO: cancel worker in parallel
+    std::vector<brpc::CallId> call_ids;
+    call_ids.reserve(dag_ptr->plan_send_addresses.size());
+    auto handler = std::make_shared<ExceptionHandler>();
+    Protos::CancelQueryRequest request;
+    request.set_query_id(query_id);
+    request.set_coordinator_address(coordinator_addr);
+
     for (const auto & addr : dag_ptr->plan_send_addresses)
     {
         auto address = extractExchangeStatusHostPort(addr);
         std::shared_ptr<RpcClient> rpc_client
             = RpcChannelPool::getInstance().getClient(address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
         Protos::PlanSegmentManagerService_Stub manager(&rpc_client->getChannel());
-        brpc::Controller cntl;
-        Protos::CancelQueryRequest request;
-        Protos::CancelQueryResponse response;
+        brpc::Controller * cntl = new brpc::Controller;
+        call_ids.emplace_back(cntl->call_id());
+        Protos::CancelQueryResponse * response = new Protos::CancelQueryResponse();
         request.set_query_id(query_id);
         request.set_coordinator_address(coordinator_addr);
-        //TODO: parallel cancel
-        manager.cancelQuery(&cntl, &request, &response, nullptr);
-        //FIXME
-        try
-        {
-            rpc_client->assertController(cntl);
-            LOG_INFO(
-                log,
-                "Cancel plan segment query_id-{} on host-{}, ret_code-{}",
-                query_id,
-                extractExchangeHostPort(addr),
-                response.ret_code());
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "cancelWorkerPlanSegments");
-        }
+        manager.cancelQuery(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
+        LOG_INFO(
+            log,
+            "Cancel plan segment query_id-{} on host-{}",
+            query_id,
+            extractExchangeHostPort(addr));
+    }
+    for (auto & call_id : call_ids)
+        brpc::Join(call_id);
+
+    try
+    {
+        handler->throwIfException();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, "cancelWorkerPlanSegments");
     }
 }
 
