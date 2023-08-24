@@ -2013,11 +2013,11 @@ void executeHttpQueryInAsyncMode(
         [f, has_query_tail](String & query, ASTPtr ast, ContextMutablePtr context, ReadBuffer * istr) {
             ASTPtr ast_output;
             BlockIO streams;
-            std::tie(ast_output, streams) = executeQueryImpl(
-                query.data(), query.data() + query.size(), ast, context, false, QueryProcessingStage::Complete, has_query_tail, istr);
-            auto & pipeline = streams.pipeline;
             try
             {
+                std::tie(ast_output, streams) = executeQueryImpl(
+                    query.data(), query.data() + query.size(), ast, context, false, QueryProcessingStage::Complete, has_query_tail, istr);
+                auto & pipeline = streams.pipeline;
                 if (streams.in)
                 {
                     const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
@@ -2104,6 +2104,13 @@ void executeHttpQueryInAsyncMode(
             catch (...)
             {
                 streams.onException();
+                if (!streams.exception_callback)
+                    updateAsyncQueryStatus(
+                        context,
+                        context->getAsyncQueryId(),
+                        context->getCurrentQueryId(),
+                        AsyncQueryStatus::Failed,
+                        getCurrentExceptionMessage(false));
                 throw;
             }
 

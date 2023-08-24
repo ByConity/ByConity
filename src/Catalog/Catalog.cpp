@@ -5072,9 +5072,19 @@ namespace Catalog
         meta_proxy->setAsyncQueryStatus(name_space, id, status, context.getRootConfig().async_query_status_ttl);
     }
 
+    void Catalog::markBatchAsyncQueryStatusFailed(std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason) const
+    {
+        meta_proxy->markBatchAsyncQueryStatusFailed(name_space, statuses, reason);
+    }
+
     bool Catalog::tryGetAsyncQueryStatus(const String & id, Protos::AsyncQueryStatus & status) const
     {
         return meta_proxy->tryGetAsyncQueryStatus(name_space, id, status);
+    }
+
+    std::vector<Protos::AsyncQueryStatus> Catalog::getIntermidiateAsyncQueryStatuses() const
+    {
+        return meta_proxy->getIntermidiateAsyncQueryStatuses(name_space);
     }
 
     /// APIs for attach parts from s3

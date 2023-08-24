@@ -2,16 +2,19 @@
 #include <memory>
 #include <optional>
 #include <thread>
-
+#include <ucontext.h>
 #include <Catalog/Catalog.h>
 #include <Core/UUID.h>
+#include <Formats/FormatSettings.h>
+#include <IO/WriteBuffer.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
+#include <MergeTreeCommon/CnchServerManager.h>
 #include <Protos/cnch_common.pb.h>
-#include "Common/Configurations.h"
+#include <Common/Configurations.h>
 #include <Common/setThreadName.h>
 #include <common/logger_useful.h>
-#include "Formats/FormatSettings.h"
-#include "IO/WriteBuffer.h"
+#include <common/types.h>
 
 using DB::Context;
 using DB::RootConfiguration;
@@ -24,6 +27,14 @@ AsyncQueryManager::AsyncQueryManager(ContextWeakMutablePtr context_) : WithConte
 {
     size_t max_threads = getContext()->getRootConfig().max_async_query_threads;
     pool = std::make_unique<ThreadPool>(max_threads, max_threads, max_threads, false);
+}
+
+AsyncQueryManager::~AsyncQueryManager()
+{
+    if (pool)
+    {
+        pool->wait();
+    }
 }
 
 void AsyncQueryManager::insertAndRun(
@@ -42,7 +53,10 @@ void AsyncQueryManager::insertAndRun(
         status.set_id(id);
         status.set_query_id(context->getClientInfo().current_query_id);
         status.set_status(AsyncQueryStatus::NotStarted);
-        status.set_update_time(time(nullptr));
+        auto c_time = time(nullptr);
+        status.set_start_time(c_time);
+        status.set_update_time(c_time);
+        status.set_max_execution_time(context->getSettingsRef().max_execution_time.totalSeconds());
         context->getCnchCatalog()->setAsyncQueryStatus(id, status);
 
         send_async_query_id(id);

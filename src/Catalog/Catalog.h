@@ -542,8 +542,12 @@ public:
 
     void setAsyncQueryStatus(const String & id, const Protos::AsyncQueryStatus & status) const;
 
+    void markBatchAsyncQueryStatusFailed(std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason) const;
+
     /// TODO(WangTao): consider add some scan/delete interfaces for ops.
     bool tryGetAsyncQueryStatus(const String & id, Protos::AsyncQueryStatus & status) const;
+
+    std::vector<Protos::AsyncQueryStatus> getIntermidiateAsyncQueryStatuses() const;
 
     // Interfaces to support s3 storage
     // Delete detached parts from 'from_tbl' with `detached_part_names`,

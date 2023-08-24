@@ -570,10 +570,16 @@ public:
     }
 
     inline static String AYSNC_QUERY_STATUS_PREFIX = "ASYNC_QUERY_STATUS_";
+    inline static String FINAL_AYSNC_QUERY_STATUS_PREFIX = "F_ASYNC_QUERY_STATUS_";
 
     static String asyncQueryStatusKey(const String & name_space, const String & id)
     {
         return escapeString(name_space) + '_' + AYSNC_QUERY_STATUS_PREFIX + id;
+    }
+
+    static String finalAsyncQueryStatusKey(const String & name_space, const String & id)
+    {
+        return escapeString(name_space) + '_' + FINAL_AYSNC_QUERY_STATUS_PREFIX + id;
     }
 
     static String detachedPartPrefix(const String& name_space, const String& uuid)
@@ -815,7 +821,13 @@ public:
 
     void setAsyncQueryStatus(
         const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl /* 1 day */ = 86400) const;
+    void markBatchAsyncQueryStatusFailed(
+        const String & name_space,
+        std::vector<Protos::AsyncQueryStatus> & statuses,
+        const String & reason,
+        UInt64 ttl /* 1 day */ = 86400) const;
     bool tryGetAsyncQueryStatus(const String & name_space, const String & id, Protos::AsyncQueryStatus & status) const;
+    std::vector<Protos::AsyncQueryStatus> getIntermidiateAsyncQueryStatuses(const String & name_space) const;
 
     void attachDetachedParts(const String& name_space, const String& from_uuid,
         const String& to_uuid, const std::vector<String>& detached_part_names,

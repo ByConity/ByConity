@@ -20,13 +20,15 @@
 #include <sstream>
 #include <vector>
 #include <string.h>
+#include <Catalog/MetastoreCommon.h>
+#include <Catalog/MetastoreProxy.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
 #include <IO/ReadHelpers.h>
 #include <Protos/DataModelHelpers.h>
 #include "common/types.h"
-#include "Catalog/MetastoreByteKVImpl.h"
 #include <common/logger_useful.h>
-#include <Catalog/MetastoreCommon.h>
+#include "Catalog/MetastoreByteKVImpl.h"
+#include "Interpreters/executeQuery.h"
 
 namespace DB::ErrorCodes
 {
@@ -1871,12 +1873,59 @@ UInt64 MetastoreProxy::getMergeMutateThreadStartTime(const String & name_space, 
 void MetastoreProxy::setAsyncQueryStatus(
     const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl) const
 {
-    // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
-    // {
-    //     bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
-    //     return;
-    // }
+    if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
+    {
+        if (status.status() == AsyncQueryStatus::NotStarted || status.status() == AsyncQueryStatus::Running)
+        {
+            bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
+        }
+        else
+        {
+            DB::Catalog::BatchCommitRequest update_request;
+            DB::Catalog::BatchCommitResponse update_response;
+            update_request.AddDelete(asyncQueryStatusKey(name_space, id));
+            update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl));
+            if (!bytekv->batchWrite(update_request, update_response))
+            {
+                throw Exception(
+                    fmt::format("Update async query status fail with ns {} and id {}.", name_space, id), ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+        return;
+    }
     metastore_ptr->put(asyncQueryStatusKey(name_space, id), status.SerializeAsString());
+}
+
+void MetastoreProxy::markBatchAsyncQueryStatusFailed(
+    const String & name_space, std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason, UInt64 ttl) const
+{
+    if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
+    {
+        DB::Catalog::BatchCommitRequest update_request;
+        DB::Catalog::BatchCommitResponse update_response;
+        for (auto & status : statuses)
+        {
+            status.set_status(Protos::AsyncQueryStatus::Failed);
+            status.set_error_msg(reason);
+            status.set_update_time(time(nullptr));
+            update_request.AddDelete(asyncQueryStatusKey(name_space, status.id()));
+            update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, status.id()), status.SerializeAsString(), ttl));
+        }
+        if (!bytekv->batchWrite(update_request, update_response))
+        {
+            throw Exception(
+                fmt::format("Mark batch async query status fail with ns {} and size {}.", name_space, statuses.size()),
+                ErrorCodes::LOGICAL_ERROR);
+        }
+        return;
+    }
+    for (auto & status : statuses)
+    {
+        status.set_status(Protos::AsyncQueryStatus::Failed);
+        status.set_error_msg(reason);
+        status.set_update_time(time(nullptr));
+        setAsyncQueryStatus(name_space, status.id(), status);
+    }
 }
 
 bool MetastoreProxy::tryGetAsyncQueryStatus(const String & name_space, const String & id, Protos::AsyncQueryStatus & status) const
@@ -1884,9 +1933,25 @@ bool MetastoreProxy::tryGetAsyncQueryStatus(const String & name_space, const Str
     String value;
     metastore_ptr->get(asyncQueryStatusKey(name_space, id), value);
     if (value.empty())
+        metastore_ptr->get(finalAsyncQueryStatusKey(name_space, id), value);
+    if (value.empty())
         return false;
     status.ParseFromString(value);
     return true;
+}
+
+std::vector<Protos::AsyncQueryStatus> MetastoreProxy::getIntermidiateAsyncQueryStatuses(const String & name_space) const
+{
+    std::vector<Protos::AsyncQueryStatus> res;
+
+    auto status_prefix = asyncQueryStatusKey(name_space, String{});
+    auto it = metastore_ptr->getByPrefix(status_prefix);
+    while (it->next())
+    {
+        res.emplace_back();
+        res.back().ParseFromString(it->value());
+    }
+    return res;
 }
 
 class MetastoreMultiWriteInBatch

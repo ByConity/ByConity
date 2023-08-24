@@ -115,5 +115,7 @@ message AsyncQueryStatus {
   optional string query_id = 2;
   required Status status = 3;
   optional string error_msg = 4;
-  required uint64 update_time = 5;
+  required uint64 start_time = 5;
+  required uint64 update_time = 6;
+  required uint64 max_execution_time = 7;
 }

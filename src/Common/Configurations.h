@@ -80,6 +80,13 @@ struct SDConfiguration final : public SDConfigurationData
     M(Float32, vw_ratio_of_busy_worker, "", 1.2, ConfigFlag::Default, "The ratio for detecting busy worker in the VW.") \
     M(UInt64, max_async_query_threads, "", 5000, ConfigFlag::Default, "Maximum threads that async queries use.") \
     M(UInt64, async_query_status_ttl, "", 86400, ConfigFlag::Default, "TTL for async query status stored in catalog, in seconds.") \
+    M(UInt64, async_query_expire_time, "", 3600, ConfigFlag::Default, "Expire time for async query, in seconds.") \
+    M(UInt64, \
+      async_query_status_check_period, \
+      "", \
+      15 * 60, \
+      ConfigFlag::Default, \
+      "Cycle for checking expired async query status stored in catalog, in seconds.") \
     /**
      * Mutable */ \
     M(MutableUInt64, max_server_memory_usage, "", 0, ConfigFlag::Default, "") \
