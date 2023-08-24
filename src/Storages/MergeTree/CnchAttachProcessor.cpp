@@ -456,7 +456,7 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
     {
         String database = command.from_database.empty() ? query_ctx->getCurrentDatabase() : command.from_database;
         from_storage = DatabaseCatalog::instance().getTable(StorageID(database, command.from_table), query_ctx);
-        auto * from_cnch_table = target_tbl.checkStructureAndGetCnchMergeTree(from_storage);
+        auto * from_cnch_table = target_tbl.checkStructureAndGetCnchMergeTree(from_storage, query_ctx);
 
         if (command.attach_from_detached)
         {
@@ -530,36 +530,6 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
     injectFailure(AttachFailurePoint::CHECK_FILTER_RESULT);
 
     filter.checkFilterResult(chained_parts_from_sources, query_ctx->getSettingsRef().cnch_part_attach_limit);
-
-    // Check part's hash def against table's
-    if (target_tbl.isBucketTable() && !query_ctx->getSettingsRef().skip_table_definition_hash_check)
-    {
-        UInt64 table_def_hash = target_tbl.getTableHashForClusterBy();
-        auto check_part_chain_hash = [this, table_def_hash](
-                const IMergeTreeDataPartPtr& part) {
-            for (IMergeTreeDataPartPtr current = part; current != nullptr;
-                current = current->tryGetPreviousPart())
-            {
-                if (current->bucket_number < 0 || table_def_hash != part->table_definition_hash)
-                {
-                    LOG_INFO(logger, fmt::format("Part's table_definition_hash [{}] "
-                        "is different from target table's table_definition_hash [{}]. "
-                        "Part file path: {}, Part bucket number: {}", part->table_definition_hash,
-                        table_def_hash, part->getFullPath(), part->bucket_number));
-                    throw Exception("Source parts are not bucket parts or have different CLUSTER BY "
-                        "definition from the target table. ", ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
-                }
-            }
-        };
-
-        for (const auto& parts : chained_parts_from_sources)
-        {
-            for (const auto& part : parts)
-            {
-                check_part_chain_hash(part);
-            }
-        }
-    }
 
     return {std::move(filter), std::move(chained_parts_from_sources)};
 }
@@ -1364,7 +1334,8 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                             part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
                             parts_with_history.first[offset] = part;
                             parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_name);
-                            parts_with_history.second[offset]->table_definition_hash = table_def_hash;
+                            if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash)
+                                parts_with_history.second[offset]->table_definition_hash = table_def_hash;
 
                             if (is_unique_tbl && attach_meta)
                             {
@@ -1426,7 +1397,8 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                     part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
                     parts_with_history.first[offset] = part;
                     parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_info.getPartNameWithHintMutation());
-                    parts_with_history.second[offset]->table_definition_hash = table_def_hash;
+                    if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash)
+                        parts_with_history.second[offset]->table_definition_hash = table_def_hash;
                     ++offset;
                 }
             }
