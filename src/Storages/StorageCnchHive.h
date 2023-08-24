@@ -17,7 +17,7 @@
 
 #include <MergeTreeCommon/CnchStorageCommon.h>
 #include <Storages/ColumnsDescription.h>
-#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/DataPart_fwd.h>
 #include <Storages/Hive/HiveMetastore.h>
 #include <Storages/MergeTree/CnchHiveSettings.h>
 #include <Storages/StorageFactory.h>

@@ -154,6 +154,7 @@ class ProfileElementConsumer;
 struct MergeTreeSettings;
 class StorageS3Settings;
 struct CnchHiveSettings;
+struct CnchFileSettings;
 class IDatabase;
 class DDLWorker;
 class ITableFunction;
@@ -1167,6 +1168,7 @@ public:
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;
     const StorageS3Settings & getStorageS3Settings() const;
     const CnchHiveSettings & getCnchHiveSettings() const;
+    const CnchFileSettings & getCnchFileSettings() const;
 
     /// Prevents DROP TABLE if its size is greater than max_size (50GB by default, max_size=0 turn off this check)
     void setMaxTableSizeToDrop(size_t max_size);

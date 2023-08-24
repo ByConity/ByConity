@@ -33,6 +33,7 @@
 #include <common/JSON.h>
 #include <Disks/HDFS/DiskByteHDFS.h>
 #include <Storages/HDFS/HDFSCommon.h>
+#include <Storages/RemoteFile/CnchFileCommon.h>
 
 namespace DB
 {
@@ -456,6 +457,18 @@ void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedP
     }
 }
 
+size_t fillCnchFilePartsModel(const FileDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model)
+{
+    for (const auto & part: parts)
+    {
+        auto & part_model = *parts_model.Add();
+        auto & info = *part_model.mutable_part_info();
+        *info.mutable_name() = part->info.name;
+    }
+
+    return parts.size();
+}
+
 HiveDataPartsCNCHVector
 createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model)
 {
@@ -509,6 +522,17 @@ createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<P
                 required_skip_lists));
     }
 
+    return res;
+}
+
+FileDataPartsCNCHVector createCnchFileDataParts(const ContextPtr & /*context*/, const pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model)
+{
+    FileDataPartsCNCHVector res;
+    res.reserve(parts_model.size());
+    for (const auto & part: parts_model)
+    {
+        res.emplace_back(std::make_shared<FileDataPart>(part.part_info().name()));
+    }
     return res;
 }
 

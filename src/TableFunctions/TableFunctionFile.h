@@ -1,12 +1,14 @@
 #pragma once
 
 #include <TableFunctions/ITableFunctionFileLike.h>
+#include <Interpreters/Context.h>
+#include <Core/Block.h>
 
 
 namespace DB
 {
-
 /* file(path, format, structure) - creates a temporary storage from file
+ *
  *
  * The file must be in the clickhouse data directory.
  * The relative path begins with the clickhouse data directory.
@@ -21,8 +23,7 @@ public:
     }
 
 private:
-    StoragePtr getStorage(
-        const String & source, const String & format_, const ColumnsDescription & columns, ContextPtr global_context,
-        const std::string & table_name, const std::string & compression_method_) const override;
+    StoragePtr getStorage(const ColumnsDescription & columns, ContextPtr global_context, const std::string & table_name) const override;
     const char * getStorageTypeName() const override { return "File"; }
-};}
+};
+}

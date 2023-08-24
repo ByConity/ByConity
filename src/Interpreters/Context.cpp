@@ -165,6 +165,9 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
 #include <Interpreters/TemporaryDataOnDisk.h>
+#include <Storages/RemoteFile/CnchFileCommon.h>
+#include <Storages/RemoteFile/CnchFileSettings.h>
+#include <Storages/StorageS3Settings.h>
 
 namespace fs = std::filesystem;
 
@@ -382,6 +385,7 @@ struct ContextSharedPart
 
     std::optional<CnchHiveSettings> cnchhive_settings;
     std::optional<MergeTreeSettings> merge_tree_settings; /// Settings of MergeTree* engines.
+    std::optional<CnchFileSettings> cnch_file_settings;   /// Settings of CnchFile engines.
     std::optional<MergeTreeSettings> replicated_merge_tree_settings; /// Settings of ReplicatedMergeTree* engines.
     std::atomic_size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     std::atomic_size_t max_partition_size_to_drop = 50000000000lu; /// Protects MergeTree partitions from accidental DROP (50GB by default)
@@ -3459,7 +3463,7 @@ void Context::updateStorageConfiguration(Poco::Util::AbstractConfiguration & con
 #if !defined(ARCADIA_BUILD)
     if (shared->storage_s3_settings)
     {
-        shared->storage_s3_settings->loadFromConfig("s3", config);
+        shared->storage_s3_settings->loadFromConfig("s3", config, getSettingsRef());
     }
 #endif
 }
@@ -3494,6 +3498,20 @@ const MergeTreeSettings & Context::getMergeTreeSettings() const
     return *shared->merge_tree_settings;
 }
 
+const CnchFileSettings & Context::getCnchFileSettings() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnch_file_settings)
+    {
+        auto & config = getConfigRef();
+        shared->cnch_file_settings.emplace();
+        shared->cnch_file_settings->loadFromConfig("cnch_file", config);
+    }
+
+    return *shared->cnch_file_settings;
+}
+
 const MergeTreeSettings & Context::getReplicatedMergeTreeSettings() const
 {
     auto lock = getLock();
@@ -3518,7 +3536,7 @@ const StorageS3Settings & Context::getStorageS3Settings() const
     if (!shared->storage_s3_settings)
     {
         const auto & config = getConfigRef();
-        shared->storage_s3_settings.emplace().loadFromConfig("s3", config);
+        shared->storage_s3_settings.emplace().loadFromConfig("s3", config, getSettingsRef());
     }
 
     return *shared->storage_s3_settings;

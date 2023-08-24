@@ -20,6 +20,8 @@ public:
     ~ReadBufferFromFileBase() override;
     virtual std::string getFileName() const = 0;
 
+    virtual size_t getFileSize() { return 0; }
+
     /// It is possible to get information about the time of each reading.
     struct ProfileInfo
     {

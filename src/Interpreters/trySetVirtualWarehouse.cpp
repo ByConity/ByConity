@@ -34,6 +34,7 @@
 #include "Interpreters/DatabaseCatalog.h"
 #include "Interpreters/StorageID.h"
 #include "Storages/StorageCnchMergeTree.h"
+#include <Storages/RemoteFile/IStorageCnchFile.h>
 
 
 namespace DB
@@ -82,6 +83,18 @@ static bool trySetVirtualWarehouseFromTable(const String & database, const Strin
             "CnchHive Set virtual warehouse {} from {}", context->getCurrentVW()->getName(), storage->getStorageID().getNameForLogs());
         return true;
     }
+    else if (auto * cnchfile = dynamic_cast<IStorageCnchFile *>(storage.get()))
+    {
+        String vw_name = vw_type == VirtualWarehouseType::Write
+                         ? cnchfile->settings.cnch_vw_write
+                         : cnchfile->settings.cnch_vw_default;
+
+        setVirtualWarehouseByName(vw_name, context);
+        LOG_DEBUG(
+            &Poco::Logger::get("VirtualWarehouse"),
+            "CnchHDFS/CnchS3 Set virtual warehouse {} from {}", context->getCurrentVW()->getName(), storage->getStorageID().getNameForLogs());
+        return true;
+    }
     else if (auto * view_table = dynamic_cast<StorageView *>(storage.get()))
     {
         if (trySetVirtualWarehouseFromAST(view_table->getInnerQuery(), context))
@@ -116,6 +129,10 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
         }
         else if (auto * insert = ast->as<ASTInsertQuery>())
         {
+            //this means the query is function insert, for example `insert into function CnchS3(...) 
+            if (insert->table_id.empty())
+                break;
+
             auto table_id = insert->table_id;
             if (table_id.database_name.empty())
                 table_id.database_name = context->getCurrentDatabase();
@@ -198,6 +215,12 @@ static String tryGetVirtualWarehouseNameFromTable(
 
         return vw_name;
     }
+    else if (auto * cnhfile = dynamic_cast<IStorageCnchFile *>(storage.get()))
+    {
+        String vw_name = vw_type == VirtualWarehouseType::Write ? cnhfile->settings.cnch_vw_write : cnhfile->settings.cnch_vw_default;
+
+        return vw_name;
+    }
     else if (auto * view_table = dynamic_cast<StorageView *>(storage.get()))
     {
         return tryGetVirtualWarehouseNameFromAST(view_table->getInnerQuery(), context);
@@ -231,6 +254,9 @@ static String tryGetVirtualWarehouseNameFromAST(const ASTPtr & ast, ContextMutab
         }
         else if (auto * insert = ast->as<ASTInsertQuery>())
         {
+            //this means the query is function insert, for example `insert into function CnchS3(...) 
+            if (insert->table_id.empty())
+                break; 
             auto table_id = insert->table_id;
             if (table_id.database_name.empty())
                 table_id.database_name = context->getCurrentDatabase();

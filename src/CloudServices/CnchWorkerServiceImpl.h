@@ -180,6 +180,12 @@ public:
         Protos::SendCnchHiveDataPartsResp * response,
         google::protobuf::Closure * done) override;
 
+    void sendCnchFileDataParts(
+        google::protobuf::RpcController * cntl,
+        const Protos::SendCnchFileDataPartsReq * request,
+        Protos::SendCnchFileDataPartsResp * response,
+        google::protobuf::Closure * done) override;
+
     void checkDataParts(
         google::protobuf::RpcController * cntl,
         const Protos::CheckDataPartsReq * request,

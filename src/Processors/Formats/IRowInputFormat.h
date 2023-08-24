@@ -94,6 +94,7 @@ protected:
     /// By default - throws not implemented exception.
     virtual bool allowSyncAfterError() const { return false; }
     virtual void syncAfterError();
+    virtual std::string getName() const override { return {}; }
 
     /// In case of parse error, try to roll back and parse last one or two rows very carefully
     ///  and collect as much as possible diagnostic information about error.

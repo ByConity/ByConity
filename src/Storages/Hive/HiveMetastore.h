@@ -25,7 +25,7 @@
 
 #include <Storages/ColumnsDescription.h>
 #include <Storages/Hive/HiveDataPart.h>
-#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/DataPart_fwd.h>
 #include <Storages/Hive/HivePartition.h>
 #include <Storages/MergeTree/CnchHiveSettings.h>
 #include <hivemetastore/ThriftHiveMetastore.h>

@@ -168,6 +168,7 @@ public:
         APPLY_STEP_TYPES(ENUM_DEF) UNDEFINED,
         ReadFromMergeTree,
         ReadFromCnchHive,
+        ReadFromCnchFile,
         ReadFromPreparedSource,
         NullSource,
         Tree,
