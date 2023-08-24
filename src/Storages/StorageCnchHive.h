@@ -36,12 +36,17 @@ public:
     ~StorageCnchHive() override;
 
     std::string getName() const override { return "CnchHive"; }
+
     void shutdown() override;
+
     bool isRemote() const override { return true; }
+
     bool isBucketTable() const override;
 
     const ColumnsDescription & getColumns() const { return getInMemoryMetadata().getColumns(); }
-    ASTPtr getPartitionKey() const { return getInMemoryMetadata().getPartitionKeyAST(); }
+
+    ASTPtr getPartitionKeyList() const { return extractKeyExpressionList(partition_by_ast); }
+    static ASTPtr extractKeyExpressionList(const ASTPtr & node);
 
     QueryProcessingStage::Enum
     getQueryProcessingStage(ContextPtr, QueryProcessingStage::Enum, const StorageMetadataPtr &, SelectQueryInfo &) const override;
@@ -95,6 +100,11 @@ public:
 private:
     void setProperties();
 
+    void checkSortByKey();
+    void checkClusterByKey();
+    void checkStorageFormat();
+    void checkPartitionByKey();
+
     std::set<Int64> getSelectedBucketNumbers(const SelectQueryInfo & query_info, ContextPtr & context);
 
     HiveDataPartsCNCHVector selectPartsToRead(
@@ -129,10 +139,28 @@ private:
 
     String remote_psm;
 
+    ASTPtr partition_by_ast;
+    NamesAndTypesList partition_name_and_types;
+    ExpressionActionsPtr partition_key_expr;
+    ASTPtr partition_key_expr_list;
+
+    ASTPtr cluster_by_ast;
+    Names cluster_by_columns;
+    ExpressionActionsPtr cluster_by_key_expr;
+    Int64 cluster_by_total_bucket_number = 0;
+    ASTPtr cluster_by_expr_list;
+
+    ASTPtr order_by_ast;
+    Names sorting_key_columns;
+    ASTPtr sorting_key_expr_list;
+    ExpressionActionsPtr sorting_key_expr;
+    NamesAndTypesList sorting_name_and_types;
+
     ExpressionActionsPtr minmax_idx_expr;
     Names minmax_idx_columns;
     DataTypes minmax_idx_column_types;
 
+    bool is_create;
     // ContextMutablePtr global_context;
     Poco::Logger * log;
 

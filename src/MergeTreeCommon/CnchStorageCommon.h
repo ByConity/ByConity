@@ -23,8 +23,6 @@
 #include <DataStreams/copyData.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Interpreters/ProcessList.h>
-#include "Core/NamesAndTypes.h"
-#include "Storages/StorageInMemoryMetadata.h"
 
 namespace DB
 {
@@ -109,8 +107,7 @@ public:
         const String & local_table_name,
         const ContextPtr & context = nullptr,
         bool enable_staging_area = false,
-        const std::optional<StorageID> & cnch_storage_id = std::nullopt,
-        const StorageMetadataPtr & metadata = {}) const; /// bad
+        const std::optional<StorageID> & cnch_storage_id = std::nullopt) const;
 
     String getCreateQueryForCloudTable(
         const String & query,
