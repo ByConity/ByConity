@@ -3,6 +3,7 @@
 #include <Processors/Pipe.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/Context.h>
+#include <Catalog/Catalog.h>
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <CloudServices/CnchServerClientPool.h>
@@ -542,6 +543,12 @@ TxnTimestamp getMaxUpdateTime(const std::set<StorageID> & storage_ids, ContextPt
         UInt64 ts = context->getTimestamp();
         for (const StorageID & storage_id : storage_ids)
         {
+            /// get commit timestamp of table schema
+            StoragePtr storage_ptr = context->getCnchCatalog()->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(storage_id.uuid), ts);
+            UInt64 table_commit_ts = storage_ptr->commit_time.toUInt64();
+            if (table_commit_ts > max_last_modification_time)
+                max_last_modification_time = table_commit_ts;
+
             auto host_ports = context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage_id.uuid), storage_id.server_vw_name, ts, true);
             if (host_ports.empty())
             {
