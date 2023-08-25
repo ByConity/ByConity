@@ -65,6 +65,24 @@ ScopePtr Scope::getLocalParent() const
     return query_boundary ? nullptr : parent;
 }
 
+ScopePtr Scope::getQueryBoundaryScope() const
+{
+    return query_boundary ? this : parent->getQueryBoundaryScope();
+}
+
+ScopePtr Scope::getOuterQueryScope() const
+{
+    return getQueryBoundaryScope()->parent;
+}
+
+bool Scope::hasOuterQueryScope(ScopePtr other) const
+{
+    if (auto outer_query_scope = getOuterQueryScope())
+        return outer_query_scope->isLocalScope(other) || outer_query_scope->hasOuterQueryScope(other);
+
+    return false;
+}
+
 bool Scope::isLocalScope(ScopePtr other) const
 {
     return this == other || (getLocalParent() != nullptr && getLocalParent()->isLocalScope(other));

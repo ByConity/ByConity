@@ -39,6 +39,7 @@ void onSettingChanged(Settings *s)
     s->decimal_division_use_extended_scale = ansi;
     s->decimal_arithmetic_promote_storage = ansi;
     s->allow_extended_type_conversion = ansi;
+    s->parse_literal_as_decimal = ansi;
 }
 
 }

@@ -38,7 +38,7 @@ namespace ErrorCodes
 ColumnsDescription parseColumnsListFromString(const std::string & structure, ContextPtr context)
 {
     const Settings & settings = context->getSettingsRef();
-    ParserColumnDeclarationList parser(ParserSettings::valueOf(settings.dialect_type));
+    ParserColumnDeclarationList parser(ParserSettings::valueOf(settings));
 
     ASTPtr columns_list_raw = parseQuery(parser, structure, "columns declaration list", settings.max_query_size, settings.max_parser_depth);
 

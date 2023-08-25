@@ -514,8 +514,8 @@ bool ConstantExpressionTemplate::parseLiteralAndAssertType(ReadBuffer & istr, co
     if (type_info.is_array || type_info.is_tuple || type_info.is_map)
     {
         /// TODO faster way to check types without using Parsers
-        ParserArrayOfLiterals parser_array(ParserSettings::valueOf(settings.dialect_type));
-        ParserTupleOfLiterals parser_tuple(ParserSettings::valueOf(settings.dialect_type));
+        ParserArrayOfLiterals parser_array(ParserSettings::valueOf(settings));
+        ParserTupleOfLiterals parser_tuple(ParserSettings::valueOf(settings));
 
         Tokens tokens_number(istr.position(), istr.buffer().end());
         IParser::Pos iterator(tokens_number, settings.max_parser_depth);

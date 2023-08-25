@@ -373,7 +373,7 @@ void TCPHandler::runImpl()
             {
                 const char * begin = state.query.data();
                 const char * end = state.query.data() + state.query.size();
-                ParserQuery parser(end, ParserSettings::valueOf(query_context->getSettings().dialect_type));
+                ParserQuery parser(end, ParserSettings::valueOf(query_context->getSettings()));
                 parser.setContext(query_context.get());
 
                 /// TODO: parser should fail early when max_query_size limit is reached.

@@ -1175,6 +1175,91 @@ namespace S3
             throw S3Exception(outcome.GetError());
         }
     }
+
+    S3LazyCleaner::S3LazyCleaner(
+        const S3::S3Util & s3_util_,
+        const std::function<bool(const S3::S3Util &, const String &)> & filter_,
+        size_t max_threads_,
+        size_t batch_clean_size_)
+        : logger(&Poco::Logger::get("S3LazyCleaner"))
+        , batch_clean_size(batch_clean_size_)
+        , filter(filter_)
+        , s3_util(s3_util_)
+        , clean_pool(max_threads_ > 1 ? std::make_unique<ThreadPool>(max_threads_) : nullptr)
+    {
+    }
+
+    S3LazyCleaner::~S3LazyCleaner()
+    {
+        if (clean_pool != nullptr)
+            clean_pool->wait();
+    }
+
+    void S3LazyCleaner::push(const String & key_)
+    {
+        auto task = createExceptionHandledJob(
+            [this, key_]() {
+                if (filter(s3_util, key_))
+                {
+                    lazyRemove(key_);
+                }
+                else
+                {
+                    LOG_TRACE(logger, fmt::format("Skip clean object {} since it's filter out by filter", key_));
+                }
+            },
+            except_hdl);
+
+        if (clean_pool == nullptr)
+        {
+            task();
+        }
+        else
+        {
+            clean_pool->scheduleOrThrow(std::move(task));
+        }
+    }
+
+    void S3LazyCleaner::finalize()
+    {
+        if (clean_pool == nullptr)
+        {
+            lazyRemove(std::nullopt);
+        }
+        else
+        {
+            clean_pool->scheduleOrThrow(createExceptionHandledJob([this]() { lazyRemove(std::nullopt); }, except_hdl));
+            clean_pool->wait();
+        }
+
+        except_hdl.throwIfException();
+    }
+
+    void S3LazyCleaner::lazyRemove(const std::optional<String> & key_)
+    {
+        LOG_TRACE(logger, fmt::format("Lazy remove {}", key_.value_or("NULL")));
+
+        std::vector<String> keys_to_remove_this_round;
+
+        {
+            std::lock_guard<std::mutex> lock(remove_keys_mu);
+
+            if (key_.has_value())
+            {
+                keys_to_remove.push_back(key_.value());
+            }
+
+            if (!key_.has_value() || (keys_to_remove.size() >= batch_clean_size))
+            {
+                keys_to_remove.swap(keys_to_remove_this_round);
+            }
+        }
+
+        if (!keys_to_remove_this_round.empty())
+        {
+            s3_util.deleteObjectsInBatch(keys_to_remove_this_round);
+        }
+    }
 }
 
 }

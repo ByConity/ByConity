@@ -127,7 +127,11 @@ public:
 
     void invalidPartCacheWithoutLock(const UUID & uuid, std::unique_lock<std::mutex> & lock);
 
+    void invalidPartCache(const UUID & uuid, const TableMetaEntryPtr & meta_ptr, const std::unordered_map<String, Strings> & partition_to_parts);
+
     void invalidPartCache(const UUID & uuid, const DataPartsVector & parts);
+
+    void invalidPartCache(const UUID & uuid, const Strings & part_names, MergeTreeDataFormatVersion version);
 
     void insertDataPartsIntoCache(const IStorage & table, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model, const bool is_merged_parts, const bool should_update_metrics);
 

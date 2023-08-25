@@ -79,7 +79,7 @@ struct PlanBuilder
     }
     TranslationMap & withNewMappings(const FieldSymbolInfos & field_symbol_infos)
     {
-        return translation->withNewMappings(field_symbol_infos, createScopeAwaredASTMap<String>(analysis));
+        return translation->withNewMappings(field_symbol_infos, createScopeAwaredASTMap<String>(analysis, translation->scope));
     }
     TranslationMap & removeMappings() { return translation->removeMappings(); } // NOLINT(readability-make-member-function-const)
     TranslationMap & withAdditionalMapping(const ASTPtr & expression, const String & symbol) // NOLINT(readability-make-member-function-const)

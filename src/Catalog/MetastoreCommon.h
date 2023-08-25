@@ -78,9 +78,10 @@ struct BatchCommitRequest
         : with_cas(with_cas_), allow_cas_fail(allow_cas_fail_)
     {
     }
-    
+
     void AddPut(const SinglePutRequest & put) { puts.emplace_back(put); }
-    void AddDelete(const SingleDeleteRequest & del) { deletes.emplace_back(del); }
+    void AddDelete(const String & delkey) { deletes.emplace_back(delkey); }
+    void AddDelete(const String & delkey, const String & expected) { deletes.emplace_back(delkey, "", expected); }
     void SetTimeout(uint32_t time_out) { commit_timeout_ms = time_out; }
     bool isEmpty() { return puts.empty() && deletes.empty(); }
 

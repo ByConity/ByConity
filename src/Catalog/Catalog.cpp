@@ -37,12 +37,14 @@
 // #include <Access/MaskingPolicyDataModel.h>
 // #include <Access/MaskingPolicyCommon.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/MergeTree/CnchAttachProcessor.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Transaction/getCommitted.h>
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Protos/RPCHelpers.h>
+#include <Protos/data_models.pb.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/CnchStorageCache.h>
@@ -582,7 +584,7 @@ namespace Catalog
                     {
                         batch_writes.AddPut(
                             SinglePutRequest(MetastoreProxy::dictionaryTrashKey(name_space, trashBD_name, dic_ptr->name()), dic_ptr->SerializeAsString()));
-                        batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::dictionaryStoreKey(name_space, database, dic_ptr->name())));
+                        batch_writes.AddDelete(MetastoreProxy::dictionaryStoreKey(name_space, database, dic_ptr->name()));
                     }
 
                     BatchCommitResponse resp;
@@ -630,7 +632,7 @@ namespace Catalog
                     }
 
                     /// remove old database record;
-                    batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::dbKey(name_space, from_database, database->commit_time())));
+                    batch_writes.AddDelete(MetastoreProxy::dbKey(name_space, from_database, database->commit_time()));
                     /// create new database record;
                     database->set_name(to_database);
                     database->set_previous_version(0);
@@ -2216,7 +2218,7 @@ namespace Catalog
                     res = true;
                     return;
                 }
-                
+
                 if (txn_data.empty())
                 {
                     LOG_DEBUG(log, "UpdateTransactionRecord fails. Expected record {} not exist.", expected_record.toString());
@@ -3892,8 +3894,8 @@ namespace Catalog
 
                 // delete the record from db trash as well as the corresponding version of db meta.
                 BatchCommitRequest batch_writes;
-                batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::dbTrashKey(name_space, database, ts)));
-                batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::dbKey(name_space, database, ts)));
+                batch_writes.AddDelete(MetastoreProxy::dbTrashKey(name_space, database, ts));
+                batch_writes.AddDelete(MetastoreProxy::dbKey(name_space, database, ts));
 
                 // restore table and dictionary
                 String trashDBName = database + "_" + toString(ts);
@@ -3903,13 +3905,13 @@ namespace Catalog
                 for (auto & table_id_ptr : table_id_ptrs)
                 {
                     table_id_ptr->set_database(database);
-                    batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::tableTrashKey(name_space, trashDBName, table_id_ptr->name(), ts)));
+                    batch_writes.AddDelete(MetastoreProxy::tableTrashKey(name_space, trashDBName, table_id_ptr->name(), ts));
                     restoreTableFromTrash(table_id_ptr, ts, batch_writes);
                 }
 
                 for (auto & dic_ptr : dic_ptrs)
                 {
-                    batch_writes.AddDelete(SingleDeleteRequest(MetastoreProxy::dictionaryTrashKey(name_space, trashDBName, dic_ptr->name())));
+                    batch_writes.AddDelete(MetastoreProxy::dictionaryTrashKey(name_space, trashDBName, dic_ptr->name()));
                     batch_writes.AddPut(SinglePutRequest(
                         MetastoreProxy::dictionaryStoreKey(name_space, database, dic_ptr->name()), dic_ptr->SerializeAsString()));
                 }
@@ -4536,13 +4538,13 @@ namespace Catalog
 
         /// remove dependency
         for (const String & dependency : dependencies)
-            batch_write.AddDelete(SingleDeleteRequest(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id.uuid())));
+            batch_write.AddDelete(MetastoreProxy::viewDependencyKey(name_space, dependency, table_id.uuid()));
 
         batch_write.AddPut(SinglePutRequest(MetastoreProxy::tableStoreKey(name_space, table_id.uuid(), ts.toUInt64()), table.SerializeAsString()));
         // use database name and table name in table_id is required because it may different with that in table data model.
         batch_write.AddPut(SinglePutRequest(
             MetastoreProxy::tableTrashKey(name_space, table_id.database(), table_id.name(), ts.toUInt64()), table_id.SerializeAsString()));
-        batch_write.AddDelete(SingleDeleteRequest(MetastoreProxy::tableUUIDMappingKey(name_space, table.database(), table.name())));
+        batch_write.AddDelete(MetastoreProxy::tableUUIDMappingKey(name_space, table.database(), table.name()));
     }
 
     void Catalog::restoreTableFromTrash(
@@ -4557,8 +4559,8 @@ namespace Catalog
         /// 2.add table->uuid mapping;
         /// 3. remove last version of table meta(which is marked as delete);
         /// 4. try rebuild dependencies if any
-        batch_write.AddDelete(SingleDeleteRequest(MetastoreProxy::tableTrashKey(name_space, table_id->database(), table_id->name(), ts)));
-        batch_write.AddDelete(SingleDeleteRequest(MetastoreProxy::tableStoreKey(name_space, table_id->uuid(), table_model->commit_time())));
+        batch_write.AddDelete(MetastoreProxy::tableTrashKey(name_space, table_id->database(), table_id->name(), ts));
+        batch_write.AddDelete(MetastoreProxy::tableStoreKey(name_space, table_id->uuid(), table_model->commit_time()));
         batch_write.AddPut(SinglePutRequest(
             MetastoreProxy::tableUUIDMappingKey(name_space, table_id->database(), table_id->name()),
             table_id->SerializeAsString(), true));
@@ -4896,6 +4898,186 @@ namespace Catalog
     bool Catalog::tryGetAsyncQueryStatus(const String & id, Protos::AsyncQueryStatus & status) const
     {
         return meta_proxy->tryGetAsyncQueryStatus(name_space, id, status);
+    }
+
+    /// APIs for attach parts from s3
+    void Catalog::attachDetachedParts(const StoragePtr& from_tbl, const StoragePtr& to_tbl,
+        const std::vector<String>& detached_part_names, const IMergeTreeDataPartsVector& parts)
+    {
+        if (detached_part_names.size() != parts.size())
+        {
+            throw Exception(fmt::format("Detached part names {} and parts count {} mismatch",
+                detached_part_names.size(), parts.size()), ErrorCodes::LOGICAL_ERROR);
+        }
+        if (parts.empty())
+        {
+            return;
+        }
+
+        Protos::DataModelPartVector commit_parts;
+        fillPartsModel(*to_tbl, parts, *commit_parts.mutable_parts());
+
+        meta_proxy->attachDetachedParts(name_space,
+            UUIDHelpers::UUIDToString(from_tbl->getStorageUUID()),
+            UUIDHelpers::UUIDToString(to_tbl->getStorageUUID()), detached_part_names,
+            commit_parts, getPartitionIDs(to_tbl, nullptr), max_commit_size_one_batch,
+            max_drop_size_one_batch);
+
+        if (context.getPartCacheManager())
+            context.getPartCacheManager()->insertDataPartsIntoCache(*to_tbl,
+                commit_parts.parts(), false, true);
+    }
+
+    void Catalog::detachAttachedParts(const StoragePtr& from_tbl, const StoragePtr& to_tbl,
+        const IMergeTreeDataPartsVector& attached_parts, const IMergeTreeDataPartsVector& parts)
+    {
+        if (attached_parts.size() != parts.size())
+        {
+            throw Exception(fmt::format("Attached part's size {} and part size {} mismatch",
+                attached_parts.size(), parts.size()), ErrorCodes::LOGICAL_ERROR);
+        }
+        if (parts.empty())
+        {
+            return;
+        }
+
+        std::vector<std::optional<Protos::DataModelPart>> commit_parts;
+        commit_parts.reserve(parts.size());
+        for (const auto& part : parts)
+        {
+            if (part != nullptr)
+            {
+                commit_parts.emplace_back(Protos::DataModelPart());
+                fillPartModel(*to_tbl, *part, commit_parts.back().value());
+            }
+            else
+            {
+                commit_parts.emplace_back(std::nullopt);
+            }
+        }
+
+        std::vector<String> attached_part_names;
+        attached_part_names.reserve(attached_parts.size());
+        for (const auto& part : attached_parts)
+        {
+            attached_part_names.push_back(part->info.getPartName());
+        }
+
+        meta_proxy->detachAttachedParts(name_space,
+            UUIDHelpers::UUIDToString(from_tbl->getStorageUUID()),
+            UUIDHelpers::UUIDToString(to_tbl->getStorageUUID()), attached_part_names,
+            commit_parts, max_commit_size_one_batch, max_drop_size_one_batch);
+
+        if (context.getPartCacheManager())
+        {
+            if (std::shared_ptr<MergeTreeMetaBase> storage = std::dynamic_pointer_cast<MergeTreeMetaBase>(from_tbl);
+                storage != nullptr)
+            {
+                context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(),
+                    attached_part_names, storage->format_version);
+            }
+            else
+            {
+                throw Exception("Expected MergeTreeMetaBase when detachAttachedParts",
+                    ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+    }
+
+    void Catalog::attachDetachedPartsRaw(const StoragePtr& tbl, const std::vector<String>& part_names)
+    {
+        if (part_names.empty())
+        {
+            return;
+        }
+
+        std::vector<std::pair<String, UInt64>> attached_metas = meta_proxy->attachDetachedPartsRaw(
+            name_space, UUIDHelpers::UUIDToString(tbl->getStorageUUID()), part_names,
+            max_commit_size_one_batch, max_drop_size_one_batch);
+
+        Protos::DataModelPartVector attached_parts;
+        for (const auto& [meta, version] : attached_metas)
+        {
+            if (!meta.empty())
+            {
+                attached_parts.add_parts()->ParseFromString(meta);
+            }
+        }
+
+        if (context.getPartCacheManager())
+            context.getPartCacheManager()->insertDataPartsIntoCache(*tbl,
+                attached_parts.parts(), false, true);
+    }
+
+    void Catalog::detachAttachedPartsRaw(const StoragePtr& from_tbl, const String& to_uuid,
+        const std::vector<String>& attached_part_names, const std::vector<std::pair<String, String>>& detached_part_metas)
+    {
+        if (attached_part_names.empty() && detached_part_metas.empty())
+        {
+            return;
+        }
+
+        MergeTreeDataFormatVersion format_version;
+        if (std::shared_ptr<MergeTreeMetaBase> storage = std::dynamic_pointer_cast<MergeTreeMetaBase>(from_tbl);
+            storage != nullptr)
+        {
+            format_version = storage->format_version;
+        }
+        else
+        {
+            throw Exception("Expect MergeTreeMetaBase when detachAttachedPartsRaw",
+                ErrorCodes::LOGICAL_ERROR);
+        }
+
+        meta_proxy->detachAttachedPartsRaw(name_space, UUIDHelpers::UUIDToString(from_tbl->getStorageUUID()),
+            to_uuid, attached_part_names, detached_part_metas, max_commit_size_one_batch,
+            max_drop_size_one_batch);
+
+        if (context.getPartCacheManager())
+        {
+            context.getPartCacheManager()->invalidPartCache(from_tbl->getStorageUUID(),
+                attached_part_names, format_version);
+        }
+    }
+
+    ServerDataPartsVector Catalog::listDetachedParts(const MergeTreeMetaBase& storage,
+        const AttachFilter& filter)
+    {
+        IMetaStore::IteratorPtr iter = nullptr;
+        switch (filter.mode)
+        {
+            case AttachFilter::Mode::PARTS:
+            {
+                iter = meta_proxy->getDetachedPartsInRange(name_space,
+                    UUIDHelpers::UUIDToString(storage.getStorageID().uuid),
+                    "", "", true, true);
+                break;
+            }
+            case AttachFilter::Mode::PART:
+            {
+                iter = meta_proxy->getDetachedPartsInRange(name_space,
+                    UUIDHelpers::UUIDToString(storage.getStorageID().uuid),
+                    filter.object_id, filter.object_id, true, true);
+                break;
+            }
+            case AttachFilter::Mode::PARTITION:
+            {
+                iter = meta_proxy->getDetachedPartsInRange(name_space,
+                    UUIDHelpers::UUIDToString(storage.getStorageID().uuid),
+                    filter.object_id + "_", filter.object_id + "_", true, true);
+                break;
+            }
+        }
+
+        ServerDataPartsVector parts_vec;
+        while (iter->next())
+        {
+            Protos::DataModelPart part_model;
+            part_model.ParseFromString(iter->value());
+            parts_vec.push_back(std::make_shared<ServerDataPart>(
+                createPartWrapperFromModel(storage, part_model)));
+        }
+        return parts_vec;
     }
 
     void fillUUIDForDictionary(DB::Protos::DataModelDictionary & d)

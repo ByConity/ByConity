@@ -1543,6 +1543,7 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
     M(Bool, adaptive_type_cast, false, "Performs type cast operations adaptively, according to the value", 0) \
+    M(Bool, parse_literal_as_decimal, false, "Parse numeric literal as decimal instead of float", 0) \
     M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
     M(Bool, formatdatetime_parsedatetime_m_is_month_name, true, "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
@@ -1896,7 +1897,11 @@ enum PreloadLevelSettings : UInt64
     M(String, utc_time_interval_allow_clone, "", "A list of UTC time, every two elements consist an interval which can execute clone", 0) \
     M(String, utc_time_interval_stop_clone, "", "A list of UTC time, every two elements consist an interval which stop clone", 0) \
     M(Bool, remote_query_memory_table, false, "Query remote memory table", 0) \
-\
+    \
+    /** S3 Storage settings*/\
+    M(UInt64, s3_gc_inter_partition_parallelism, 4, "Partition level concurrency when gc s3 table", 0) \
+    M(UInt64, s3_gc_intra_partition_parallelism, 16, "Part level concurrency when gc s3 table", 0) \
+    \
     /* Transaction and catalog */ \
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
     M(Bool, bypass_ddl_db_lock, true, "Bypass locking database while creating tables", 0) \
@@ -1924,6 +1929,7 @@ enum PreloadLevelSettings : UInt64
     M(String, lasfs_overwrite, "false" ,"pass true if user want to overwrite when the file exists", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0)
+
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.

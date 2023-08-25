@@ -150,7 +150,7 @@ String InterpreterSelectQuery::generateFilterActions(ActionsDAGPtr & actions, co
     /// Keep columns that are required after the filter actions.
     for (const auto & column_str : prerequisite_columns)
     {
-        ParserExpression expr_parser(ParserSettings::valueOf(context->getSettingsRef().dialect_type));
+        ParserExpression expr_parser(ParserSettings::valueOf(context->getSettingsRef()));
         expr_list->children.push_back(parseQuery(expr_parser, column_str, 0, context->getSettingsRef().max_parser_depth));
     }
 
@@ -645,8 +645,8 @@ void InterpreterSelectQuery::rewriteQueryBaseOnView()
 
 void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
 {
-    std::shared_ptr<InterpreterPerfectShard> interpreter_perfect_shard =
-        context->getSettingsRef().distributed_perfect_shard ? std::make_shared<InterpreterPerfectShard>(*this) : nullptr;
+    std::shared_ptr<InterpreterPerfectShard> interpreter_perfect_shard
+        = context->getSettingsRef().distributed_perfect_shard ? std::make_shared<InterpreterPerfectShard>(*this) : nullptr;
 
     if (interpreter_perfect_shard && interpreter_perfect_shard->checkPerfectShardable())
     {
@@ -873,7 +873,7 @@ FillColumnDescription InterpreterSelectQuery::getWithFillDescription(const ASTOr
                 ErrorCodes::INVALID_WITH_FILL_EXPRESSION);
         }
     }
-    
+
     // one of fill_from, fill_step and fill_to is initialized
     // coverity[unit_use]
     return descr;

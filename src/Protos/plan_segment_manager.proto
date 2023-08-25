@@ -13,6 +13,7 @@ message CancelQueryRequest {
 message CancelQueryResponse {
   required string ret_code = 1;
   optional string message = 2;
+  optional string exception = 3;
 };
 
 message RuntimeSegmentsMetrics {

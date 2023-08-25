@@ -1153,7 +1153,7 @@ SpacePtr MergeTreeMetaBase::getDestinationForMoveTTL(const TTLDescription & move
     auto policy = getStoragePolicy(location);
     if (move_ttl.destination_type == DataDestinationType::VOLUME)
     {
-        auto volume = policy->getVolumeByName(move_ttl.destination_name);
+        auto volume = policy->getVolumeByName(move_ttl.destination_name, true);
 
         if (!volume)
             return {};
@@ -1187,7 +1187,7 @@ bool MergeTreeMetaBase::isPartInTTLDestination(const TTLDescription & ttl, const
     auto policy = getStoragePolicy(IStorage::StorageLocation::MAIN);
     if (ttl.destination_type == DataDestinationType::VOLUME)
     {
-        for (const auto & disk : policy->getVolumeByName(ttl.destination_name)->getDisks())
+        for (const auto & disk : policy->getVolumeByName(ttl.destination_name, true)->getDisks())
             if (disk->getName() == part.volume->getDisk()->getName())
                 return true;
     }
