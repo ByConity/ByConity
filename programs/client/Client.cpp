@@ -2257,13 +2257,20 @@ private:
 
             /// The query can specify output format or output file.
             /// FIXME: try to prettify this cast using `as<>()`
-            if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(parsed_query.get()))
+            if (const auto * query_with_output = dynamic_cast<const ASTQueryWithOutput *>(parsed_query.get());
+                query_with_output && !context->getSettingsRef().outfile_in_server_with_tcp)
             {
                 if (query_with_output->out_file)
                 {
                     // const auto & out_file_node = query_with_output->out_file->as<ASTLiteral &>();
                     // const auto & out_file = out_file_node.value.safeGet<std::string>();
-
+                    if (context->getSettingsRef().enable_async_execution)
+                    {
+                        throw Exception(
+                            "If you enable async execution on select query, please set outfile_in_server_with_tcp to 1 and make sure the "
+                            "outfile path is not local",
+                            ErrorCodes::BAD_ARGUMENTS);
+                    }
                     out_path.emplace(typeid_cast<const ASTLiteral &>(*query_with_output->out_file).value.safeGet<std::string>());
                     const Poco::URI out_uri(*out_path);
                     const String & scheme = out_uri.getScheme();
