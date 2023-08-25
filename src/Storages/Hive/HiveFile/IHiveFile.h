@@ -80,6 +80,7 @@ public:
         FormatSettings format_settings;
         ContextPtr context;
         std::optional<size_t> slice;
+        ReadSettings read_settings;
     };
     virtual SourcePtr getReader(const Block & block, const std::shared_ptr<ReadParams> & params);
 

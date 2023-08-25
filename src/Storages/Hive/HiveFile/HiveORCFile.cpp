@@ -195,7 +195,7 @@ SourcePtr HiveORCFile::getReader(const Block & block, const std::shared_ptr<IHiv
         params->format_settings.null_as_default);
 
     std::vector<int> column_indices = ORCBlockInputFormat::getColumnIndices(schema, block);
-    auto in = readFile(ReadSettings{});
+    auto in = readFile(params->read_settings);
     std::unique_ptr<arrow::adapters::orc::ORCFileReader> reader;
     THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(
         asArrowFile(*in, file_size),

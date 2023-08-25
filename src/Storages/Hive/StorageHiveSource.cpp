@@ -1,4 +1,6 @@
 #include "Storages/Hive/StorageHiveSource.h"
+#include "Core/Defines.h"
+#include "IO/ReadSettings.h"
 #if USE_HIVE
 
 #include "DataTypes/DataTypeString.h"
@@ -93,6 +95,9 @@ StorageHiveSource::StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, Al
             .max_block_size = DEFAULT_BLOCK_SIZE,
             .format_settings = std::move(format_settings),
             .context = getContext(),
+            .read_settings = ReadSettings{
+                .buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
+                .disk_cache_mode = context_->getSettingsRef().disk_cache_mode.value}
         });
 }
 

@@ -62,7 +62,7 @@ Pipe StorageCloudHive::read(
     if (block_info->to_read.columns() == 0)
         allocator->allow_allocate_by_slice = false;
 
-    LOG_DEBUG(log, "read with {} streams", num_streams);
+    LOG_DEBUG(log, "read with {} streams, disk_cache mode {}", num_streams, local_context->getSettingsRef().disk_cache_mode.toString());
     for (size_t i = 0; i < num_streams; ++i)
     {
         pipes.emplace_back(std::make_shared<StorageHiveSource>(

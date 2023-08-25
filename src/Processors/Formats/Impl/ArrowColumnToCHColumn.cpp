@@ -32,6 +32,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeFixedString.h>
 #include <common/DateLUTImpl.h>
 #include <common/types.h>
 #include <Core/Block.h>
@@ -153,6 +154,22 @@ namespace DB
             }
         }
     }
+
+    static void fillColumnWithFixedStringData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+    {
+        const auto * fixed_type = assert_cast<arrow::FixedSizeBinaryType *>(arrow_column->type().get());
+        auto fixed_len = fixed_type->byte_width();
+        PaddedPODArray<UInt8> & column_chars_t = assert_cast<ColumnFixedString &>(internal_column).getChars();
+        column_chars_t.reserve(arrow_column->length() * fixed_len);
+
+        for (int chunk_i = 0, num_chunks = arrow_column->num_chunks(); chunk_i < num_chunks; ++chunk_i)
+        {
+            arrow::FixedSizeBinaryArray & chunk = dynamic_cast<arrow::FixedSizeBinaryArray &>(*(arrow_column->chunk(chunk_i)));
+            const uint8_t * raw_data = chunk.raw_values();
+            column_chars_t.insert_assume_reserved(raw_data, raw_data + fixed_len * chunk.length());
+        }
+    }
+
 
     static void fillColumnWithBooleanData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column, const bool replace_null_with_default = false)
     {
@@ -409,6 +426,9 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                 //case arrow::Type::FIXED_SIZE_BINARY:
                 fillColumnWithStringData(arrow_column, internal_column);
                 break;
+            case arrow::Type::FIXED_SIZE_BINARY:
+                fillColumnWithFixedStringData(arrow_column, internal_column);
+                break;
             case arrow::Type::BOOL:
                 fillColumnWithBooleanData(arrow_column, internal_column, replace_null_with_default);
                 break;
@@ -640,6 +660,12 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                 );
         }
 #endif
+        if (arrow_type->id() == arrow::Type::FIXED_SIZE_BINARY)
+        {
+            const auto * arrow_fixed_size_binary_type = typeid_cast<arrow::FixedSizeBinaryType *>(arrow_type.get());
+            auto byte_width = arrow_fixed_size_binary_type->byte_width();
+            return std::make_shared<DataTypeFixedString>(byte_width);
+        }
 
         auto filter = [=](auto && elem)
         {

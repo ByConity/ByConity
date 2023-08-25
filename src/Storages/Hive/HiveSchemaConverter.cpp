@@ -6,6 +6,7 @@
 #include "DataTypes/DataTypeArray.h"
 #include "DataTypes/DataTypeByteMap.h"
 #include "DataTypes/DataTypeDate.h"
+#include "DataTypes/DataTypeDate32.h"
 #include "DataTypes/DataTypeDateTime.h"
 #include "DataTypes/DataTypeDecimalBase.h"
 #include "DataTypes/DataTypeFixedString.h"
@@ -54,19 +55,21 @@ static std::pair<String, String> getKeywordWithInnerType(const String & hive_typ
 
 DataTypePtr HiveSchemaConverter::hiveTypeToCHType(const String & hive_type, bool make_columns_nullable)
 {
-    static const std::unordered_map<String, std::shared_ptr<IDataType>> base_type_mapping
-        = {{"tinyint", std::make_shared<DataTypeInt8>()},
-           {"smallint", std::make_shared<DataTypeInt16>()},
-           {"bigint", std::make_shared<DataTypeInt64>()},
-           {"int", std::make_shared<DataTypeInt32>()},
-           {"integer", std::make_shared<DataTypeInt32>()},
-           {"float", std::make_shared<DataTypeFloat32>()},
-           {"double", std::make_shared<DataTypeFloat64>()},
-           {"string", std::make_shared<DataTypeString>()},
-           {"boolean", std::make_shared<DataTypeUInt8>()},
-           {"binary", std::make_shared<DataTypeString>()},
-           {"date", std::make_shared<DataTypeDate>()},
-           {"timestamp", std::make_shared<DataTypeDateTime>()}};
+    static const std::unordered_map<String, std::shared_ptr<IDataType>> base_type_mapping = {
+        {"tinyint", std::make_shared<DataTypeInt8>()},
+        {"smallint", std::make_shared<DataTypeInt16>()},
+        {"bigint", std::make_shared<DataTypeInt64>()},
+        {"int", std::make_shared<DataTypeInt32>()},
+        {"integer", std::make_shared<DataTypeInt32>()},
+        {"float", std::make_shared<DataTypeFloat32>()},
+        {"double", std::make_shared<DataTypeFloat64>()},
+        {"string", std::make_shared<DataTypeString>()},
+        {"varchar",
+         std::make_shared<DataTypeString>()}, // varchar and string are both treated as string, while char will be treated as fixed string.
+        {"boolean", std::make_shared<DataTypeUInt8>()},
+        {"binary", std::make_shared<DataTypeString>()},
+        {"date", std::make_shared<DataTypeDate32>()},
+        {"timestamp", std::make_shared<DataTypeDateTime>()}};
 
     DataTypePtr data_type;
 
@@ -83,12 +86,16 @@ DataTypePtr HiveSchemaConverter::hiveTypeToCHType(const String & hive_type, bool
         if (inner_type)
             data_type = std::make_shared<DataTypeArray>(inner_type);
     }
-    else if (type_keyword == "char" || type_keyword == "varchar")
+    else if (type_keyword == "char")
     {
         auto n = std::stoi(inner);
         if (n > 0 && n < MAX_FIXEDSTRING_SIZE)
         {
             data_type = std::make_shared<DataTypeFixedString>(n);
+        }
+        else
+        {
+            throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "Unable to create fixed string type with length {}", n);
         }
     }
     else if (type_keyword == "map")
