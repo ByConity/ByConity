@@ -1873,26 +1873,26 @@ UInt64 MetastoreProxy::getMergeMutateThreadStartTime(const String & name_space, 
 void MetastoreProxy::setAsyncQueryStatus(
     const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl) const
 {
-    if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
-    {
-        if (status.status() == AsyncQueryStatus::NotStarted || status.status() == AsyncQueryStatus::Running)
-        {
-            bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
-        }
-        else
-        {
-            DB::Catalog::BatchCommitRequest update_request;
-            DB::Catalog::BatchCommitResponse update_response;
-            update_request.AddDelete(asyncQueryStatusKey(name_space, id));
-            update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl));
-            if (!bytekv->batchWrite(update_request, update_response))
-            {
-                throw Exception(
-                    fmt::format("Update async query status fail with ns {} and id {}.", name_space, id), ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-        return;
-    }
+    // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
+    // {
+    //     if (status.status() == AsyncQueryStatus::NotStarted || status.status() == AsyncQueryStatus::Running)
+    //     {
+    //         bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
+    //     }
+    //     else
+    //     {
+    //         DB::Catalog::BatchCommitRequest update_request;
+    //         DB::Catalog::BatchCommitResponse update_response;
+    //         update_request.AddDelete(asyncQueryStatusKey(name_space, id));
+    //         update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl));
+    //         if (!bytekv->batchWrite(update_request, update_response))
+    //         {
+    //             throw Exception(
+    //                 fmt::format("Update async query status fail with ns {} and id {}.", name_space, id), ErrorCodes::LOGICAL_ERROR);
+    //         }
+    //     }
+    //     return;
+    // }
     metastore_ptr->put(asyncQueryStatusKey(name_space, id), status.SerializeAsString());
 }
 
