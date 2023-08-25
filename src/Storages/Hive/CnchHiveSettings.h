@@ -49,10 +49,10 @@ struct Settings;
     M(String, hive_metastore_client_keytab_path, "/etc/krb5.keytab", "The path of Kerberos keytab for hms auth", 0) \
     M(String, hive_metastore_client_principal, "hive", "The Kerberos principal for hms auth", 0) \
     M(Bool, enable_local_disk_cache, false, "", 0) \
-    M(String, fs, "", "", 0)
+    M(String, fs, "", "", 0) \
     M(String, ak_id, "", "S3 access key", 0) \
     M(String, ak_secret, "", "S3 secrete key", 0) \
-    M(String, endpoint, "", "S3 endpoint", 0) \
+    M(String, endpoint, "", "S3 endpoint", 0)
 
 /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_CNCH_HIVE_SETTINGS(M) M(index_granularity)
