@@ -15,11 +15,10 @@
 
 #include <MergeTreeCommon/assignCnchParts.h>
 
-#include <Storages/Hive/HiveFile/IHiveFile.h>
-#include <Storages/RemoteFile/CnchFileCommon.h>
-#include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
+#include <Storages/Hive/HiveFile/IHiveFile.h>
+#include <Storages/RemoteFile/CnchFileSettings.h>
 #include <common/logger_useful.h>
 
 #include <sstream>
