@@ -1881,9 +1881,6 @@ Pipe StorageCnchMergeTree::alterPartition(
     if (unlikely(!query_context->getCurrentTransaction()))
         throw Exception("Transaction is not set", ErrorCodes::LOGICAL_ERROR);
 
-    if (query_context->getSettingsRef().enable_sql_forwarding && forwardQueryToServerIfNeeded(query_context, getStorageID()))
-        return {};
-
     auto current_query_context = Context::createCopy(query_context);
 
     for (auto & command : commands)
