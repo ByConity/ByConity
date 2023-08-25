@@ -163,11 +163,12 @@ void HiveORCFile::openFile() const
     if (file_reader)
         return;
 
-    buf = readFile(ReadSettings{});
+    auto seekable_buffer = readFile(ReadSettings{});
     THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(
-        asArrowFile(*buf),
+        asArrowFile(*seekable_buffer, file_size),
         arrow::default_memory_pool())
     .Value(&file_reader));
+    buf = std::move(seekable_buffer);
 
     THROW_ARROW_NOT_OK(file_reader->ReadSchema().Value(&schema));
 
@@ -194,10 +195,10 @@ SourcePtr HiveORCFile::getReader(const Block & block, const std::shared_ptr<IHiv
         params->format_settings.null_as_default);
 
     std::vector<int> column_indices = ORCBlockInputFormat::getColumnIndices(schema, block);
-    std::unique_ptr<ReadBuffer> in = readFile(ReadSettings{});
+    auto in = readFile(ReadSettings{});
     std::unique_ptr<arrow::adapters::orc::ORCFileReader> reader;
     THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(
-        asArrowFile(*in),
+        asArrowFile(*in, file_size),
         arrow::default_memory_pool())
     .Value(&reader));
 

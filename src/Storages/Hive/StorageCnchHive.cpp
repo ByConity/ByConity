@@ -44,7 +44,7 @@ StorageCnchHive::StorageCnchHive(
         const String & hive_metastore_url_,
         const String & hive_db_name_,
         const String & hive_table_name_,
-        const StorageInMemoryMetadata & metadata_,
+        StorageInMemoryMetadata metadata_,
         ContextMutablePtr context_,
         std::shared_ptr<CnchHiveSettings> settings_)
     : IStorage(table_id_)
@@ -60,8 +60,8 @@ StorageCnchHive::StorageCnchHive(
     HiveSchemaConverter converter(context_, hive_table);
     if (metadata_.columns.empty())
     {
-        auto metadata = converter.convert();
-        setInMemoryMetadata(metadata);
+        converter.convert(metadata_);
+        setInMemoryMetadata(metadata_);
     }
     else
     {
@@ -145,14 +145,7 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
 
     HivePartitions partitions = selectPartitions(local_context, metadata_snapshot, query_info, optimizer);
 
-    if (storage_settings && !storage_settings->fs.value.empty())
-    {
-        Poco::URI uri(storage_settings->fs.value);
-        uri.setPath(Poco::URI(hive_table->sd.location).getPath());
-        hive_table->sd.location = uri.toString();
-    }
-
-    auto disk = getDiskFromURI(hive_table->sd.location, local_context);
+    auto disk = getDiskFromURI(hive_table->sd.location, local_context, *storage_settings);
 
     ThreadPool thread_pool(std::min(static_cast<size_t>(num_streams), partitions.size()));
     HiveFiles hive_files;
@@ -314,11 +307,14 @@ void registerStorageCnchHive(StorageFactory & factory)
         String hive_database = engine_args[1]->as<ASTLiteral &>().value.safeGet<String>();
         String hive_table = engine_args[2]->as<ASTLiteral &>().value.safeGet<String>();
 
+        StorageInMemoryMetadata metadata;
         std::shared_ptr<CnchHiveSettings> hive_settings = std::make_shared<CnchHiveSettings>();
         if (args.storage_def->settings)
+        {
             hive_settings->loadFromQuery(*args.storage_def);
+            metadata.settings_changes = args.storage_def->settings->ptr();
+        }
 
-        StorageInMemoryMetadata metadata;
         if (!args.columns.empty())
             metadata.setColumns(args.columns);
 
@@ -343,7 +339,7 @@ void registerStorageCnchHive(StorageFactory & factory)
             hive_metastore_url,
             hive_database,
             hive_table,
-            metadata,
+            std::move(metadata),
             args.getContext(),
             hive_settings);
     },

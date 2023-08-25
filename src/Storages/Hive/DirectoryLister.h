@@ -30,8 +30,9 @@ private:
     DiskPtr disk;
 };
 
-/// Support HDFS now
-DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context);
+struct CnchHiveSettings;
+/// Support HDFS/S3 now
+DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const CnchHiveSettings & settings);
 
 }
 

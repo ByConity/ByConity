@@ -91,7 +91,6 @@ static size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
 std::vector<int> ORCBlockInputFormat::getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header)
 {
     std::vector<int> include_indices;
-    int index = 0;
     for (int i = 0; i < schema->num_fields(); ++i)
     {
         // /// LIST type require 2 indices, STRUCT - the number of elements + 1,

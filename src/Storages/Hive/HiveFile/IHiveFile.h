@@ -104,7 +104,11 @@ using HiveFiles = std::vector<HiveFilePtr>;
 namespace RPCHelpers
 {
     void serialize(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files);
-    HiveFiles deserialize(const Protos::ProtoHiveFiles & proto, const ContextPtr & context, const StorageMetadataPtr & metadata);
+    HiveFiles deserialize(
+        const Protos::ProtoHiveFiles & proto,
+        const ContextPtr & context,
+        const StorageMetadataPtr & metadata,
+        const CnchHiveSettings & settings);
 }
 
 }

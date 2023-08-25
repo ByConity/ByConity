@@ -34,20 +34,10 @@ struct Settings;
 #define APPLY_FOR_CNCHHIVE_SETTINGS(M) \
     /** How many rows correspond to one primary key value. */ \
     M(UInt64, index_granularity, 8192, "", 0) \
-    M(String, cnch_vw_default, "vw_default", "", 0) \
-    M(String, cnch_vw_read, "vw_read", "", 0) \
-    M(String, cnch_vw_write, "vw_write", "", 0) \
-    M(String, cnch_vw_task, "vw_task", "", 0) \
+    M(String, cnch_vw_default, "vw_default", "read vw", 0) \
+    M(String, cnch_vw_write, "vw_write", "Not used for hive", 0) \
     /** Parquet skip useless row group */ \
     M(Bool, enable_skip_row_group, false, "", 0) \
-    /** DBMS_DEFAULT_CONNECT_TIMEOUT_SEC 10 **/ \
-    M(UInt64, hive_metastore_client_conn_timeout, DBMS_DEFAULT_CONNECT_TIMEOUT_SEC * 1000, "", 0) \
-    /** DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC 300 **/ \
-    M(UInt64, hive_metastore_client_recv_timeout, DBMS_DEFAULT_RECEIVE_TIMEOUT_SEC * 100, "", 0) \
-    M(UInt64, hive_metastore_client_send_timeout, DBMS_DEFAULT_SEND_TIMEOUT_SEC * 100, "", 0) \
-    M(UInt64, max_hive_metastore_client_retry, 3, "", 0) \
-    M(UInt64, get_hive_metastore_client_timeout, DBMS_DEFAULT_CONNECT_TIMEOUT_SEC * 1000, "", 0) \
-    M(UInt64, max_hive_metastore_client_connections, 64, "", 0) \
     /** allocate part policy**/ \
     M(Bool, use_simple_hash, true, "", 0) \
     /** parallel read parquet max threads **/ \
@@ -60,6 +50,9 @@ struct Settings;
     M(String, hive_metastore_client_principal, "hive", "The Kerberos principal for hms auth", 0) \
     M(Bool, enable_local_disk_cache, false, "", 0) \
     M(String, fs, "", "", 0)
+    M(String, ak_id, "", "S3 access key", 0) \
+    M(String, ak_secret, "", "S3 secrete key", 0) \
+    M(String, endpoint, "", "S3 endpoint", 0) \
 
 /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_CNCH_HIVE_SETTINGS(M) M(index_granularity)

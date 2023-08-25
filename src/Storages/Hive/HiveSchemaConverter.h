@@ -21,7 +21,7 @@ public:
     explicit HiveSchemaConverter(ContextPtr context_, std::shared_ptr<Apache::Hadoop::Hive::Table> hive_table_);
 
     /// schema inference
-    StorageInMemoryMetadata convert() const;
+    void convert(StorageInMemoryMetadata & metadata) const;
 
     /// check schema
     void check(const StorageInMemoryMetadata & metadata) const;

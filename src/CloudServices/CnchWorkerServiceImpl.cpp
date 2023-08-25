@@ -552,7 +552,8 @@ void CnchWorkerServiceImpl::sendResources(
             }
             else if (auto * hive_table = dynamic_cast<StorageCloudHive *>(storage.get()))
             {
-                auto files = RPCHelpers::deserialize(data.hive_parts(), query_context, storage->getInMemoryMetadataPtr());
+                auto settings = hive_table->getSettings();
+                auto files = RPCHelpers::deserialize(data.hive_parts(), query_context, storage->getInMemoryMetadataPtr(), *settings);
                 hive_table->loadHiveFiles(files);
             }
             else

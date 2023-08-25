@@ -47,7 +47,7 @@ public:
     {
         base_path = std::filesystem::path(disk_path) / dir_path;
 
-        hdfs_fs.list(base_path, file_names);
+        hdfs_fs.list(base_path, file_names, file_sizes);
     }
 
     virtual void next() override { ++idx; }
@@ -65,12 +65,15 @@ public:
         return file_names[idx];
     }
 
+    size_t size() const override { return file_sizes.at(idx); }
+
 private:
     HDFSFileSystem & hdfs_fs;
 
     std::filesystem::path base_path;
     size_t idx;
     std::vector<String> file_names;
+    std::vector<size_t> file_sizes;
 };
 
 /// TODO: use HDFSCommon replace HDFSFileSystem
@@ -127,7 +130,8 @@ void DiskByteHDFS::createDirectories(const String & path)
 void DiskByteHDFS::clearDirectory(const String & path)
 {
     std::vector<String> file_names;
-    hdfs_fs.list(absolutePath(path), file_names);
+    std::vector<size_t> file_sizes;
+    hdfs_fs.list(absolutePath(path), file_names, file_sizes);
     for (const String & file_name : file_names)
     {
         hdfs_fs.remove(fs::path(disk_path) / path / file_name);
@@ -168,7 +172,8 @@ void DiskByteHDFS::replaceFile(const String & from_path, const String & to_path)
 
 void DiskByteHDFS::listFiles(const String & path, std::vector<String> & file_names)
 {
-    hdfs_fs.list(absolutePath(path), file_names);
+    std::vector<size_t> file_sizes;
+    hdfs_fs.list(absolutePath(path), file_names, file_sizes);
 }
 
 std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & path, const ReadSettings & settings) const

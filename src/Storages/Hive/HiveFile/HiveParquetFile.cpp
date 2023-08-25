@@ -62,8 +62,9 @@ void HiveParquetFile::openFile() const
     if (schema)
         return;
 
-    buf = readFile(ReadSettings{});
-    THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(*buf), arrow::default_memory_pool(), &file_reader));
+    auto seekable_buffer = readFile(ReadSettings{});
+    THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(*seekable_buffer, file_size), arrow::default_memory_pool(), &file_reader));
+    buf = std::move(seekable_buffer);
     metadata = file_reader->parquet_reader()->metadata();
     THROW_ARROW_NOT_OK(file_reader->GetSchema(&schema));
 }
@@ -152,9 +153,9 @@ SourcePtr HiveParquetFile::getReader(const Block & block, const std::shared_ptr<
         params->format_settings.null_as_default);
 
     std::vector<int> column_indices = ParquetBlockInputFormat::getColumnIndices(schema, block);
-    std::unique_ptr<ReadBuffer> in = readFile(ReadSettings{});
+    auto in = readFile(ReadSettings{});
     std::unique_ptr<parquet::arrow::FileReader> reader;
-    THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(*in), arrow::default_memory_pool(), &reader));
+    THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(*in, file_size), arrow::default_memory_pool(), &reader));
     return std::make_shared<ParquetSliceSource>(std::move(in), std::move(reader), std::move(column_indices), params, std::move(arrow_column_to_ch_column));
 }
 

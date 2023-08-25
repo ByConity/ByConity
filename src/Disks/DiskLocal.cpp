@@ -100,6 +100,8 @@ public:
 
     String name() const override { return entry->path().filename(); }
 
+    size_t size() const override { return entry->file_size(); }
+
 private:
     fs::path dir_path;
     fs::directory_iterator entry;

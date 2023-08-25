@@ -6,6 +6,7 @@
 #include <IO/WriteBufferFromString.h>
 #include <IO/copyData.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+
 #include <arrow/buffer.h>
 #include <arrow/io/api.h>
 #include <arrow/result.h>
@@ -143,6 +144,11 @@ std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(ReadBuffer & in)
     }
 
     return std::make_shared<arrow::io::BufferReader>(arrow::Buffer::FromString(std::move(file_data)));
+}
+
+std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(SeekableReadBuffer & in, size_t file_size)
+{
+    return std::make_shared<RandomAccessFileFromSeekableReadBuffer>(in, file_size);
 }
 
 }

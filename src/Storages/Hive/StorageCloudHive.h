@@ -38,6 +38,7 @@ public:
 
     void loadHiveFiles(const HiveFiles & files);
     HiveFiles getHiveFiles() const { return files; }
+    std::shared_ptr<CnchHiveSettings> getSettings() const { return storage_settings; }
 
 private:
     struct MinMaxDescription

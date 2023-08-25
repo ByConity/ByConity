@@ -31,7 +31,7 @@ public:
         const String & hive_metastore_url_,
         const String & hive_db_name_,
         const String & hive_table_name_,
-        const StorageInMemoryMetadata & metadata_,
+        StorageInMemoryMetadata metadata_,
         ContextMutablePtr context_,
         std::shared_ptr<CnchHiveSettings> settings_);
 

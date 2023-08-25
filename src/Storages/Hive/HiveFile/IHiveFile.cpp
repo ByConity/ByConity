@@ -149,10 +149,14 @@ void serialize(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files)
     std::cout << proto.DebugString() << std::endl;
 }
 
-HiveFiles deserialize(const Protos::ProtoHiveFiles & proto, const ContextPtr & context, const StorageMetadataPtr & metadata)
+HiveFiles deserialize(
+    const Protos::ProtoHiveFiles & proto,
+    const ContextPtr & context,
+    const StorageMetadataPtr & metadata,
+    const CnchHiveSettings & settings)
 {
     HiveFiles files;
-    DiskPtr disk = getDiskFromURI(proto.sd_url(), context);
+    DiskPtr disk = getDiskFromURI(proto.sd_url(), context, settings);
     std::unordered_map<String, HivePartitionPtr> partition_map;
 
     for (const auto & file : proto.files())

@@ -124,7 +124,7 @@ HiveSchemaConverter::HiveSchemaConverter(ContextPtr context_, std::shared_ptr<Ap
 {
 }
 
-StorageInMemoryMetadata HiveSchemaConverter::convert() const
+void HiveSchemaConverter::convert(StorageInMemoryMetadata & metadata) const
 {
     ColumnsDescription columns;
     auto addColumn = [&](const Apache::Hadoop::Hive::FieldSchema & hive_field, bool make_column_nullable) {
@@ -156,10 +156,8 @@ StorageInMemoryMetadata HiveSchemaConverter::convert() const
     partition_def->children.push_back(partition_def->arguments);
     KeyDescription partition_key = KeyDescription::getKeyFromAST(partition_def, columns, getContext());
 
-    StorageInMemoryMetadata metadata;
     metadata.setColumns(columns);
     metadata.partition_key = partition_key;
-    return metadata;
 }
 
 void HiveSchemaConverter::check(const StorageInMemoryMetadata & metadata) const
@@ -206,15 +204,17 @@ CloudTableBuilder & CloudTableBuilder::setMetadata(const StorageMetadataPtr & me
     ASTPtr new_columns = InterpreterCreateQuery::formatColumns(metadata->getColumns());
     create_query->set(create_query->columns_list, std::make_shared<ASTColumns>());
     create_query->set(create_query->columns_list->columns, new_columns);
+    create_query->set(create_query->storage, std::make_shared<ASTStorage>());
 
     if (metadata->hasPartitionKey())
     {
-        if (!create_query->storage)
-            create_query->set(create_query->storage, std::make_shared<ASTStorage>());
-
         create_query->storage->set(create_query->storage->partition_by, metadata->getPartitionKeyAST());
     }
-    /// TODO: Storage Settings
+
+    if (metadata->hasSettingsChanges())
+    {
+        create_query->storage->set(create_query->storage->settings, metadata->getSettingsChanges());
+    }
 
     return *this;
 }

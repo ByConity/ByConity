@@ -35,7 +35,7 @@ Pipe StorageCloudHive::read(
     SelectQueryInfo &  query_info,
     ContextPtr local_context,
     QueryProcessingStage::Enum  /*processed_stage*/,
-    size_t max_block_size,
+    [[maybe_unused]] size_t max_block_size,
     unsigned num_streams)
 {
     bool need_path_colum = false;
@@ -195,11 +195,14 @@ void registerStorageCloudHive(StorageFactory & factory)
 
     factory.registerStorage("CloudHive", [](const StorageFactory::Arguments & args)
     {
+        StorageInMemoryMetadata metadata;
         std::shared_ptr<CnchHiveSettings> settings = std::make_shared<CnchHiveSettings>();
         if (args.storage_def->settings)
+        {
             settings->loadFromQuery(*args.storage_def);
+            metadata.settings_changes = args.storage_def->settings->ptr();
+        }
 
-        StorageInMemoryMetadata metadata;
         metadata.setColumns(args.columns);
 
         if (args.storage_def->partition_by)
