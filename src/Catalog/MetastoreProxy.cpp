@@ -1899,26 +1899,26 @@ void MetastoreProxy::setAsyncQueryStatus(
 void MetastoreProxy::markBatchAsyncQueryStatusFailed(
     const String & name_space, std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason, UInt64 ttl) const
 {
-    if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
-    {
-        DB::Catalog::BatchCommitRequest update_request;
-        DB::Catalog::BatchCommitResponse update_response;
-        for (auto & status : statuses)
-        {
-            status.set_status(Protos::AsyncQueryStatus::Failed);
-            status.set_error_msg(reason);
-            status.set_update_time(time(nullptr));
-            update_request.AddDelete(asyncQueryStatusKey(name_space, status.id()));
-            update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, status.id()), status.SerializeAsString(), ttl));
-        }
-        if (!bytekv->batchWrite(update_request, update_response))
-        {
-            throw Exception(
-                fmt::format("Mark batch async query status fail with ns {} and size {}.", name_space, statuses.size()),
-                ErrorCodes::LOGICAL_ERROR);
-        }
-        return;
-    }
+    // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
+    // {
+    //     DB::Catalog::BatchCommitRequest update_request;
+    //     DB::Catalog::BatchCommitResponse update_response;
+    //     for (auto & status : statuses)
+    //     {
+    //         status.set_status(Protos::AsyncQueryStatus::Failed);
+    //         status.set_error_msg(reason);
+    //         status.set_update_time(time(nullptr));
+    //         update_request.AddDelete(asyncQueryStatusKey(name_space, status.id()));
+    //         update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, status.id()), status.SerializeAsString(), ttl));
+    //     }
+    //     if (!bytekv->batchWrite(update_request, update_response))
+    //     {
+    //         throw Exception(
+    //             fmt::format("Mark batch async query status fail with ns {} and size {}.", name_space, statuses.size()),
+    //             ErrorCodes::LOGICAL_ERROR);
+    //     }
+    //     return;
+    // }
     for (auto & status : statuses)
     {
         status.set_status(Protos::AsyncQueryStatus::Failed);
