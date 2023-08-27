@@ -277,7 +277,7 @@ endif()
 
 set (DBMS_COMMON_LIBRARIES)
 # libgcc_s does not provide an implementation of an atomics library. Instead,
-# GCC’s libatomic library can be used to supply these when using libgcc_s.
+# GCC's libatomic library can be used to supply these when using libgcc_s.
 if ((NOT USE_LIBCXX) AND COMPILER_CLANG AND OS_LINUX)
     list (APPEND DBMS_COMMON_LIBRARIES atomic)
 endif()
