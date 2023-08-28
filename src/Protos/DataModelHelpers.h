@@ -26,7 +26,6 @@
 #include <Catalog/DataModelPartWrapper.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Protos/data_models.pb.h>
-#include <Storages/Hive/HiveDataPart_fwd.h>
 #include <Storages/DataPart_fwd.h>
 #include <Transaction/LockRequest.h>
 #include <Transaction/TxnTimestamp.h>

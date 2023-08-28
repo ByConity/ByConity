@@ -18,11 +18,9 @@
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/WorkerGroupHandle.h>
-#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/DataPart_fwd.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
-#include <Storages/DataPart_fwd.h>
-#include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Common/ConsistentHashUtils/ConsistentHashRing.h>
 #include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
 

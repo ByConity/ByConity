@@ -19,10 +19,9 @@
 #include <Core/Types.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/WorkerGroupHandle.h>
-#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/DataPart_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
-#include <Storages/DataPart_fwd.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Poco/Logger.h>
 #include <Common/HostWithPorts.h>
