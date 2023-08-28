@@ -6466,7 +6466,7 @@ RQ_SRS_006_RBAC_Privileges_AlterSettings = Requirement(
         'return an error, unless the user has the **alter settings** privilege for\n'
         'the destination table either because of the explicit grant or through one of\n'
         'the roles assigned to the user. The **alter settings** privilege allows\n'
-        'modifying table engine settings. It doesn’t affect settings or server configuration parameters.\n'
+        'modifying table engine settings. It doesn't affect settings or server configuration parameters.\n'
         '\n'
         ),
     link=None,
@@ -13469,7 +13469,7 @@ Any `ALTER TABLE ... MODIFY SETTING setting` statements SHALL
 return an error, unless the user has the **alter settings** privilege for
 the destination table either because of the explicit grant or through one of
 the roles assigned to the user. The **alter settings** privilege allows
-modifying table engine settings. It doesn’t affect settings or server configuration parameters.
+modifying table engine settings. It doesn't affect settings or server configuration parameters.
 
 ##### RQ.SRS-006.RBAC.Privileges.AlterSettings.Grant
 version: 1.0

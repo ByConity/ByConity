@@ -3489,7 +3489,7 @@ Any `ALTER TABLE ... MODIFY SETTING setting` statements SHALL
 return an error, unless the user has the **alter settings** privilege for
 the destination table either because of the explicit grant or through one of
 the roles assigned to the user. The **alter settings** privilege allows
-modifying table engine settings. It doesn’t affect settings or server configuration parameters.
+modifying table engine settings. It doesn't affect settings or server configuration parameters.
 
 ##### RQ.SRS-006.RBAC.Privileges.AlterSettings.Grant
 version: 1.0
