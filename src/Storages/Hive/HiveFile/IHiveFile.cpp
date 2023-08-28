@@ -176,7 +176,8 @@ namespace RPCHelpers
         std::cout << proto.DebugString() << std::endl;
     }
 
-    LOG_TRACE(&Poco::Logger::get(__func__), "Proto files {}", proto.DebugString());
+    // LOG_TRACE(&Poco::Logger::get(__func__), "Proto files {}", proto.DebugString());
+    std::cout << proto.DebugString() << std::endl;
 }
 
 
