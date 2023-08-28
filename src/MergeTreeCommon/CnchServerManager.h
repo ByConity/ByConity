@@ -15,10 +15,10 @@
 
 #pragma once
 
-#include <Interpreters/Context_fwd.h>
-#include <Core/BackgroundSchedulePool.h>
-#include <MergeTreeCommon/CnchServerTopology.h>
 #include <Coordination/LeaderElectionBase.h>
+#include <Core/BackgroundSchedulePool.h>
+#include <Interpreters/Context_fwd.h>
+#include <MergeTreeCommon/CnchServerTopology.h>
 
 namespace zkutil
 {
@@ -60,6 +60,7 @@ private:
 
     void refreshTopology();
     void renewLease();
+    void checkAsyncQueryStatus();
 
     /// set topology status when becoming leader. may runs in background tasks.
     void setLeaderStatus();
@@ -68,6 +69,7 @@ private:
 
     BackgroundSchedulePool::TaskHolder topology_refresh_task;
     BackgroundSchedulePool::TaskHolder lease_renew_task;
+    BackgroundSchedulePool::TaskHolder async_query_status_check_task;
 
     std::optional<Topology> next_version_topology;
     std::list<Topology> cached_topologies;

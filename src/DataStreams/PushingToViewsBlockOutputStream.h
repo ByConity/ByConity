@@ -72,12 +72,12 @@ private:
         BlockOutputStreamPtr out;
         std::exception_ptr exception;
         UInt64 elapsed_ms = 0;
-        String implicit_column;
     };
 
     std::vector<ViewInfo> views;
     ContextMutablePtr select_context;
     ContextMutablePtr insert_context;
+    bool explicit_commit_txn {false};
 
     void process(const Block & block, ViewInfo & view);
 };

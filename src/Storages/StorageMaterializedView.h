@@ -123,21 +123,14 @@ public:
     ASTPtr getInnerQuery() const { return getInMemoryMetadataPtr()->select.inner_query->clone(); }
     bool isRefreshable(bool cascading) const;
     void refresh(const ASTPtr & partition, ContextPtr local_context, bool async);
-    bool isRefreshing() const { return refreshing; }
-    const String & getRefreshingPartition() const { return refreshing_partition_id; }
-    ASTPtr normalizeInnerQuery();
+    
 private:
-    void refreshImpl(const ASTPtr & partition, ContextPtr local_context, bool async);
+    void refreshImpl(const ASTPtr & partition, ContextPtr local_context);
+    void refreshCnchImpl(const ASTPtr & partition, ContextPtr local_context);
 
     /// Will be initialized in constructor
     StorageID target_table_id = StorageID::createEmpty();
-
     bool has_inner_table = false;
-
-    std::atomic<bool> refreshing{false};
-    String refreshing_partition_id;
-    std::mutex inner_query_mutex;
-    ASTPtr normalized_inner_query;
     void checkStatementCanBeForwarded() const;
 
 protected:

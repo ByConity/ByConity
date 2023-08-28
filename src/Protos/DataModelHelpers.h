@@ -22,7 +22,7 @@
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 // #include <Transaction/ICnchTransaction.h>
-#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/DataPart_fwd.h>
 #include <Transaction/LockRequest.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
@@ -270,6 +270,9 @@ IMergeTreeDataPartsVector createPartVectorFromServerParts(
 
 void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
 HiveDataPartsCNCHVector createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
+
+size_t fillCnchFilePartsModel(const FileDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model);
+FileDataPartsCNCHVector createCnchFileDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model);
 
 String getServerVwNameFrom(const Protos::DataModelTable & model);
 String getServerVwNameFrom(const Protos::TableIdentifier & model);

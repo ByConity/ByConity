@@ -145,7 +145,7 @@ namespace ErrorCodes
                 return fuzzy_hdfs_uri;
             }
 
-            size_t getFileSize();
+            size_t getFileSize() override;
 
             int getFD() const
             {

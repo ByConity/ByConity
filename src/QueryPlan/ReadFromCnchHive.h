@@ -16,7 +16,7 @@
 #pragma once
 
 #include <QueryPlan/ISourceStep.h>
-#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/DataPart_fwd.h>
 #include <Storages/MergeTree/RowGroupsInDataPart.h>
 #include <Storages/StorageCloudHive.h>
 
@@ -24,7 +24,8 @@ namespace DB
 {
 class Pipe;
 
-class ReadFromCnchHive final : public ISourceStep
+class 
+ReadFromCnchHive final : public ISourceStep
 {
 public:
     ReadFromCnchHive(

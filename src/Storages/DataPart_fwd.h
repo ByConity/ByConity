@@ -14,25 +14,21 @@
  */
 
 #pragma once
-#include <Processors/ISimpleTransform.h>
+
+#include <memory>
+#include <vector>
+#include <roaring.hh>
 
 namespace DB
 {
+class HiveDataPart;
+class FileDataPart;
 
-class SubstitutionTransform : public ISimpleTransform
-{
-public:
-    SubstitutionTransform(const Block & header_, const std::unordered_map<String, String> & name_substitution_info_);
+using HiveDataPartCNCHPtr = std::shared_ptr<const HiveDataPart>;
+using HiveDataPartsCNCHVector = std::vector<HiveDataPartCNCHPtr>;
+using MutableHiveDataPartCNCHPtr = std::shared_ptr<HiveDataPart>;
+using MutableHiveDataPartsCNCHVector = std::vector<MutableHiveDataPartCNCHPtr>;
 
-    String getName() const override { return "SubstitutionTransform"; }
-
-    static Block transformHeader(Block header, const std::unordered_map<String, String> & name_substitution_info_);
-
-protected:
-    void transform(Chunk & chunk) override;
-
-private:
-    std::unordered_map<String, String> name_substitution_info;
-};
-
+using FileDataPartsCNCHPtr = std::shared_ptr<const FileDataPart>;
+using FileDataPartsCNCHVector = std::vector<FileDataPartsCNCHPtr>;
 }

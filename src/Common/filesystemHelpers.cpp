@@ -196,6 +196,20 @@ String joinPaths(const std::vector<String>& components, bool add_post_slash)
     return result;
 }
 
+size_t getSizeFromFileDescriptor(int fd, const String & file_name)
+{
+    struct stat buf;
+    int res = fstat(fd, &buf);
+    if (-1 == res)
+    {
+        throwFromErrnoWithPath(
+            "Cannot execute fstat" + (file_name.empty() ? "" : " file: " + file_name),
+            file_name,
+            ErrorCodes::CANNOT_STATVFS);
+    }
+    return buf.st_size;
+}
+
 }
 
 

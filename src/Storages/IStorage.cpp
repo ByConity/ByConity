@@ -49,6 +49,7 @@ namespace ErrorCodes
     extern const int PART_COLUMNS_NOT_FOUND_IN_TABLE_VERSIONS;
 }
 
+
 bool IStorage::isVirtualColumn(const String & column_name, const StorageMetadataPtr & metadata_snapshot) const
 {
     /// Virtual column maybe overridden by real column

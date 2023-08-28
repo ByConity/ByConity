@@ -1028,7 +1028,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         options.ignoreProjections();
 
     stage_watch.start();
-    auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, build_context.context, options);
+    auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, build_context.context, storage, storage->getInMemoryMetadataPtr(), options);
     interpreter->execute();
     query_info = interpreter->getQueryInfo();
     query_info = fillQueryInfo(build_context.context);

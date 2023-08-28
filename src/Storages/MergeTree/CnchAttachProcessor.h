@@ -223,12 +223,13 @@ private:
     void commitPartsFromS3(const PartsWithHistory & prepared_parts);
     void genPartsDeleteMark(PartsWithHistory & prepared_parts);
 
-    void refreshView();
+    void genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector& parts_to_write);
+    void refreshView(const std::vector<ASTPtr>& attached_partitions, AttachContext& attach_ctx);
 
     void verifyPartsNum(size_t total_parts_num) const;
     inline void injectFailure(AttachFailurePoint point) const;
 
-    void commitParts(MutableMergeTreeDataPartsCNCHVector & prepared_parts, NameSet & staged_parts_name);
+    void commitParts(MutableMergeTreeDataPartsCNCHVector & prepared_parts, NameSet & staged_parts_name, std::vector<ASTPtr> & attached_partitions);
     void loadUniqueDeleteMeta(IMergeTreeDataPartPtr & part, const MergeTreePartInfo & info);
     void waitingForDedup(const NameSet & partitions_filter, const NameSet & staged_parts_name);
 

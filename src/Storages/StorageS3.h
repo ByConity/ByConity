@@ -169,7 +169,7 @@ private:
         const String secret_access_key;
         const UInt64 max_connections;
         std::shared_ptr<Aws::S3::S3Client> client;
-        S3AuthSettings auth_settings;
+        S3::AuthSettings auth_settings;
     };
 
     ClientAuthentication client_auth;

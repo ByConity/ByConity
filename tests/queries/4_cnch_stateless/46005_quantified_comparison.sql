@@ -1,4 +1,8 @@
+set dialect_type='ANSI';
 set enable_optimizer=1;
+
+create database if not exists test;
+use test;
 
 DROP TABLE IF EXISTS nation_league;
 DROP TABLE IF EXISTS all_nation;

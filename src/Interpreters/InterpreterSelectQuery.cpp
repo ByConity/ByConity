@@ -86,7 +86,6 @@
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/RollupStep.h>
 #include <QueryPlan/SettingQuotaAndLimitsStep.h>
-#include <QueryPlan/SubstitutionStep.h>
 #include <QueryPlan/TotalsHavingStep.h>
 #include <QueryPlan/WindowStep.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
@@ -547,9 +546,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     };
 
     analyze(shouldMoveToPrewhere());
-    rewriteQueryBaseOnView();
-    if (mv_optimizer_result->rewrite_by_view)
-        analyze(shouldMoveToPrewhere());
 
     bool need_analyze_again = false;
     if (analysis_result.prewhere_constant_filter_description.always_false || analysis_result.prewhere_constant_filter_description.always_true)
@@ -618,29 +614,6 @@ InterpreterSelectQuery::InterpreterSelectQuery(
     ///  null non-const columns to avoid useless memory allocations. However, a valid block sample
     ///  requires all columns to be of size 0, thus we need to sanitize the block here.
     sanitizeBlock(result_header, true);
-}
-
-/// Rewrite query based on view substitution
-void InterpreterSelectQuery::rewriteQueryBaseOnView()
-{
-    SelectQueryInfo current_info;
-    current_info.query = query_ptr;
-    current_info.sets = query_analyzer->getPreparedSets();
-    current_info.syntax_analyzer_result = query_info.syntax_analyzer_result;
-    mv_optimizer_result = MaterializedViewSubstitutionOptimizer(context, options).optimize(current_info);
-    if (mv_optimizer_result->rewrite_by_view)
-    {
-        QueryStatus * process_list_elem = context->getProcessListElement();
-        if (process_list_elem)
-            process_list_elem->setQueryRewriteByView(queryToString(query_ptr));
-        if (storage)
-        {
-            storage = mv_optimizer_result->storage;
-            table_lock = storage->lockForShare(context->getInitialQueryId(), context->getSettingsRef().lock_acquire_timeout);
-            table_id = storage->getStorageID();
-            metadata_snapshot = storage->getInMemoryMetadataPtr();
-        }
-    }
 }
 
 void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
@@ -801,11 +774,6 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
 
             res.insert({nullptr, type, aggregate.column_name});
         }
-
-        /// Achieve consistency with result header and pipe header when column substitution happen
-        if (mv_optimizer_result && mv_optimizer_result->rewrite_by_view)
-            substituteBlock(res, mv_optimizer_result->name_substitution_info);
-
         return res;
     }
 
@@ -1338,18 +1306,6 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
             // If there is no global subqueries, we can run subqueries only when receive them on server.
             if (!query_analyzer->hasGlobalSubqueries() && !subqueries_for_sets.empty())
                 executeSubqueriesInSetsAndJoins(query_plan, subqueries_for_sets);
-
-            /**
-             * For distributed query processing,
-             * if the query that sends to remote servers have been rewrite by materialized views,
-             * then the streams return from remote servers might have different headers, we must handle this.
-            */
-            if (!expressions.second_stage && mv_optimizer_result && mv_optimizer_result->rewrite_by_view)
-            {
-                auto substitution_step
-                    = std::make_unique<SubstitutionStep>(query_plan.getCurrentDataStream(), mv_optimizer_result->name_substitution_info);
-                query_plan.addStep(std::move(substitution_step));
-            }
         }
 
         if (expressions.second_stage || from_aggregation_stage)

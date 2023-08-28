@@ -1,0 +1,106 @@
+#pragma once
+
+#include <MergeTreeCommon/CnchStorageCommon.h>
+#include <Storages/RemoteFile/CnchFileCommon.h>
+#include <Storages/RemoteFile/CnchFileSettings.h>
+#include <common/shared_ptr_helper.h>
+
+namespace DB
+{
+struct PrepareContextResult;
+
+class IStorageCnchFile : public IStorage,
+                         public WithMutableContext,
+                         public CnchStorageCommonHelper
+{
+public:
+    IStorageCnchFile(
+        ContextMutablePtr context_,
+        const StorageID & table_id_,
+        const ColumnsDescription & required_columns_,
+        const ConstraintsDescription & constraints_,
+        const ASTPtr & setting_changes_,
+        const CnchFileArguments & arguments_,
+        const CnchFileSettings & settings_);
+
+    ~IStorageCnchFile() override = default;
+
+    virtual Pipe read(
+        const Names & column_names,
+        const StorageMetadataPtr & metadata_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr query_context,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        unsigned num_streams) override;
+
+    virtual void read(
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageMetadataPtr & metadata_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr query_context,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        unsigned num_streams) override;
+
+    virtual Strings readFileList() = 0;
+
+    /// read remote file parts by server local, not send resource to worker
+    virtual void readByLocal(
+        FileDataPartsCNCHVector parts,
+        QueryPlan & query_plan,
+        const Names & column_names,
+        const StorageMetadataPtr & metadata_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr query_context,
+        QueryProcessingStage::Enum processed_stage,
+        size_t max_block_size,
+        unsigned num_streams)
+        = 0;
+
+    PrepareContextResult prepareReadContext(
+        const Names & column_names,
+        const StorageMetadataPtr & metadata_snapshot,
+        SelectQueryInfo & query_info,
+        ContextPtr query_context,
+        unsigned /*num_streams*/);
+
+    virtual BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) override;
+
+    virtual BlockOutputStreamPtr writeByLocal(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context);
+
+    void checkAlterIsPossible(const AlterCommands & commands, ContextPtr) const override;
+
+    void alter(const AlterCommands & commands, ContextPtr query_context, TableLockHolder & /*table_lock_holder*/) override;
+
+    virtual String getName() const override { return "CnchFile"; }
+
+    virtual bool isRemote() const override { return true; }
+
+    virtual NamesAndTypesList getVirtuals() const override;
+
+    virtual void tryUpdateFSClient(const ContextPtr & /*query_context*/) { }
+
+    QueryProcessingStage::Enum
+    getQueryProcessingStage(ContextPtr query_context, QueryProcessingStage::Enum stage, const StorageMetadataPtr & storage_metadata, SelectQueryInfo & query_info) const override;
+private:
+    Strings getPrunedFiles(const ContextPtr & query_context, const ASTPtr & query);
+
+    void collectResource(const ContextPtr & query_context, const FileDataPartsCNCHVector & parts, const String & local_table_name);
+
+    void checkAlterSettings(const AlterCommands & commands) const;
+
+public:
+    CnchFileArguments arguments;
+    CnchFileSettings settings;
+
+    Strings file_list;
+    NamesAndTypesList virtual_columns;
+    Block virtual_header;
+
+private:
+    Poco::Logger * log = &Poco::Logger::get("StorageCnchFile");
+};
+
+}

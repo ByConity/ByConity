@@ -23,8 +23,6 @@
 #include <DataStreams/copyData.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Interpreters/ProcessList.h>
-#include "Core/NamesAndTypes.h"
-#include "Storages/StorageInMemoryMetadata.h"
 
 namespace DB
 {
@@ -34,6 +32,7 @@ struct PrepareContextResult
     String local_table_name;
     ServerDataPartsVector parts;
     HiveDataPartsCNCHVector hive_parts;
+    FileDataPartsCNCHVector file_parts;
 };
 
 enum class WorkerGroupUsageType
@@ -110,7 +109,7 @@ public:
         const ContextPtr & context = nullptr,
         bool enable_staging_area = false,
         const std::optional<StorageID> & cnch_storage_id = std::nullopt,
-        const StorageMetadataPtr & metadata = {}) const; /// bad
+        const Strings & engine_args = {}) const;
 
     String getCreateQueryForCloudTable(
         const String & query,
@@ -118,7 +117,8 @@ public:
         const String & local_database_name,
         const ContextPtr & context = nullptr,
         bool enable_staging_area = false,
-        const std::optional<StorageID> & cnch_storage_id = std::nullopt) const;
+        const std::optional<StorageID> & cnch_storage_id = std::nullopt,
+        const Strings & engine_args = {}) const;
 
     static void rewritePlanSegmentQueryImpl(ASTPtr & query, const std::string & database, const std::string & table);
 

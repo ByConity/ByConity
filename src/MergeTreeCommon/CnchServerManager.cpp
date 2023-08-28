@@ -29,8 +29,9 @@ namespace DB
 CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::AbstractConfiguration & config)
     : WithContext(context_)
     , LeaderElectionBase(getContext()->getConfigRef().getUInt64("server_master.election_check_ms", 100))
-    , topology_refresh_task(getContext()->getTopologySchedulePool().createTask("TopologyRefresher", [&]() { refreshTopology(); } ))
+    , topology_refresh_task(getContext()->getTopologySchedulePool().createTask("TopologyRefresher", [&]() { refreshTopology(); }))
     , lease_renew_task(getContext()->getTopologySchedulePool().createTask("LeaseRenewer", [&]() { renewLease(); }))
+    , async_query_status_check_task(getContext()->getTopologySchedulePool().createTask("AsyncQueryStatusChecker", [&]() { renewLease(); }))
 {
     updateServerVirtualWarehouses(config);
     if (!getContext()->hasZooKeeper())
@@ -63,6 +64,7 @@ void CnchServerManager::onLeader()
         setLeaderStatus();
         lease_renew_task->activateAndSchedule();
         topology_refresh_task->activateAndSchedule();
+        async_query_status_check_task->activateAndSchedule();
     }
     catch (...)
     {
@@ -233,6 +235,40 @@ void CnchServerManager::renewLease()
     lease_renew_task->scheduleAfter(getContext()->getSettings().topology_lease_renew_interval_ms.totalMilliseconds());
 }
 
+void CnchServerManager::checkAsyncQueryStatus()
+{
+    /// Mark inactive jobs to failed.
+    try
+    {
+        auto statuses = getContext()->getCnchCatalog()->getIntermidiateAsyncQueryStatuses();
+        std::vector<Protos::AsyncQueryStatus> to_expire;
+        for (const auto & status : statuses)
+        {
+            /// Find the expired statuses.
+            UInt64 start_time = static_cast<UInt64>(status.start_time());
+            UInt64 execution_time = static_cast<UInt64>(status.max_execution_time());
+            /// TODO(WangTao): We could have more accurate ways to expire status whose execution time is unlimited, like check its real status from host server.
+            if (execution_time == 0)
+                execution_time = getContext()->getRootConfig().async_query_expire_time;
+            if (time(nullptr) - start_time > execution_time)
+            {
+                to_expire.push_back(std::move(status));
+            }
+        }
+
+        if (!to_expire.empty())
+        {
+            getContext()->getCnchCatalog()->markBatchAsyncQueryStatusFailed(to_expire, "Status expired");
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+
+    async_query_status_check_task->scheduleAfter(getContext()->getRootConfig().async_query_status_check_period * 1000);
+}
+
 void CnchServerManager::setLeaderStatus()
 {
     std::unique_lock<std::mutex> lock(topology_mutex);
@@ -248,6 +284,7 @@ void CnchServerManager::shutDown()
         need_stop = true;
         lease_renew_task->deactivate();
         topology_refresh_task->deactivate();
+        async_query_status_check_task->deactivate();
         leader_election.reset();
     }
     catch (...)
@@ -267,6 +304,7 @@ void CnchServerManager::partialShutdown()
         leader_election.reset();
         lease_renew_task->deactivate();
         topology_refresh_task->deactivate();
+        async_query_status_check_task->deactivate();
     }
     catch (...)
     {

@@ -32,6 +32,7 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
 #include <Common/typeid_cast.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
 
 
 namespace DB
@@ -285,11 +286,11 @@ bool InJoinSubqueriesPreprocessor::CheckShardsAndTables::hasAtLeastTwoShards(con
     const StorageDistributed * distributed = dynamic_cast<const StorageDistributed *>(&table);
     const StorageCnchMergeTree * cnch_merge_tree = dynamic_cast<const StorageCnchMergeTree *>(&table);
     const StorageCnchHive * cnch_hive = dynamic_cast<const StorageCnchHive *>(&table);
-
-    if (!distributed && !cnch_merge_tree && !cnch_hive)
+    const IStorageCnchFile* cnch_file = dynamic_cast<const IStorageCnchFile *>(&table);
+    if (!distributed && !cnch_merge_tree && !cnch_hive && !cnch_file)
         return false;
 
-    return cnch_merge_tree || cnch_hive || distributed->getShardCount() >= 2;
+    return cnch_merge_tree || cnch_hive || cnch_file || distributed->getShardCount() >= 2;
 }
 
 

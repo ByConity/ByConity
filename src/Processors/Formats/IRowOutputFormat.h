@@ -62,6 +62,8 @@ public:
     virtual void writeBeforeExtremes() {}
     virtual void writeAfterExtremes() {}
     virtual void writeLastSuffix() {}  /// Write something after resultset, totals end extremes.
+    
+    virtual String getName() const { return {}; }
 
 private:
     bool prefix_written = false;

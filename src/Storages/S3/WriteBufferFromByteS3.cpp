@@ -67,11 +67,11 @@ WriteBufferFromByteS3::WriteBufferFromByteS3(
     const String& key_,
     UInt64 max_single_put_threshold_,
     UInt64 min_segment_size_,
+    bool allow_overwrite_,
     std::optional<std::map<String, String>> object_metadata_,
     size_t buf_size_,
     char* mem_,
-    size_t alignment_,
-    bool allow_overwrite_)
+    size_t alignment_)
     : WriteBufferFromFileBase(buf_size_, mem_, alignment_)
     , key(key_)
     , object_metadata(object_metadata_)
