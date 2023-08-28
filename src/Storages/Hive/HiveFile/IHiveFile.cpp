@@ -1,5 +1,6 @@
 
 #include "Storages/Hive/HiveFile/IHiveFile.h"
+#include <common/logger_useful.h>
 #if USE_HIVE
 
 #    include <Formats/FormatFactory.h>
