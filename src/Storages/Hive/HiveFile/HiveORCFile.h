@@ -49,7 +49,6 @@ class ORCSliceSource : public ISource
 {
 public:
     ORCSliceSource(
-        std::unique_ptr<ReadBuffer> in_,
         std::shared_ptr<arrow::adapters::orc::ORCFileReader> reader_,
         std::vector<int> column_indices_,
         std::shared_ptr<IHiveFile::ReadParams> read_params_,
@@ -60,7 +59,6 @@ public:
     Chunk generate() override;
 
 private:
-    std::unique_ptr<ReadBuffer> in;
     std::shared_ptr<arrow::adapters::orc::ORCFileReader> reader;
     std::vector<int> column_indices;
     std::shared_ptr<IHiveFile::ReadParams> read_params;

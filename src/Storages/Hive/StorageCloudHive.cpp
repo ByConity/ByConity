@@ -5,6 +5,7 @@
 #include "DataTypes/DataTypeString.h"
 #include "DataStreams/narrowBlockInputStreams.h"
 #include "Interpreters/ActionsDAG.h"
+#include "Interpreters/Context.h"
 #include "Interpreters/ExpressionActionsSettings.h"
 #include "Parsers/ASTCreateQuery.h"
 #include "Storages/Hive/CnchHiveSettings.h"
@@ -112,6 +113,17 @@ void StorageCloudHive::selectFiles(
         condition.emplace(query_info, local_context, description.columns.getNames(), description.expression);
     }
 
+    struct HiveFileStats
+    {
+        std::atomic_size_t total_files {0};
+        std::atomic_size_t total_slices {0};
+        std::atomic_size_t skipped_files {0};
+        std::atomic_size_t skipped_slices {0};
+        Stopwatch watch;
+    };
+
+    HiveFileStats stats;
+
     if (!(condition && !condition->alwaysUnknownOrTrue()))
     {
         /// minmax index is not useful
@@ -120,6 +132,8 @@ void StorageCloudHive::selectFiles(
 
     auto process_hive_file = [&] (IHiveFile & hive_file)
     {
+        stats.total_files.fetch_add(1, std::memory_order_relaxed);
+
         auto supported_features = hive_file.getFeatures();
 
         if (supported_features.support_file_minmax_index && condition)
@@ -130,20 +144,21 @@ void StorageCloudHive::selectFiles(
 
         if (supported_features.support_file_splits && condition)
         {
-            std::vector<bool> skip_splits;
+            std::vector<bool> skip_splits(hive_file.numSlices(), false);
             hive_file.loadSplitMinMaxIndex(description.columns);
             const auto & minmax_idxes = hive_file.getSplitMinMaxIndex();
+            stats.total_slices.fetch_add(hive_file.numSlices(), std::memory_order_relaxed);
             auto types = description.columns.getTypes();
             for (size_t i = 0; i < minmax_idxes.size(); ++i)
             {
                 if (!condition->checkInHyperrectangle(minmax_idxes[i]->hyperrectangle, types).can_be_true)
                 {
                     skip_splits[i] = true;
-                    LOG_TRACE(log, "Skip hive file {} by minmax index {}",
-                        hive_file.file_path, hive_file.describeMinMaxIndex(description.columns));
+                    stats.skipped_slices.fetch_add(1, std::memory_order_relaxed);
                 }
             }
             hive_file.setSkipSplits(std::move(skip_splits));
+            // LOG_TRACE(log, "hive file {}, minmax index \n{}", hive_file.file_path, hive_file.describeMinMaxIndex(description.columns));
         }
     };
 
@@ -169,6 +184,13 @@ void StorageCloudHive::selectFiles(
         }
         pool.wait();
     }
+
+    LOG_DEBUG(log, "Selected {}/{} hive files, {}/{} slices, elapsed {} ms",
+        stats.total_files - stats.skipped_files,
+        stats.total_files,
+        stats.total_slices - stats.skipped_slices,
+        stats.total_slices,
+        stats.watch.elapsedMilliseconds());
 }
 
 NamesAndTypesList StorageCloudHive::getVirtuals() const

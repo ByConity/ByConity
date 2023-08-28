@@ -29,6 +29,7 @@
 
 #    include <aws/s3/S3Client.h>
 #    include <aws/s3/model/GetObjectRequest.h>
+#    include <aws/s3/model/HeadObjectRequest.h>
 #    include <common/logger_useful.h>
 
 #    include <utility>
@@ -52,13 +53,19 @@ namespace ErrorCodes
 
 
 ReadBufferFromS3::ReadBufferFromS3(
-    std::shared_ptr<Aws::S3::S3Client> client_ptr_, const String & bucket_, const String & key_, UInt64 max_single_read_retries_, size_t buffer_size_)
-    : SeekableReadBuffer(nullptr, 0)
+    std::shared_ptr<Aws::S3::S3Client> client_ptr_,
+    const String & bucket_,
+    const String & key_,
+    const ReadSettings & read_settings_,
+    UInt64 max_single_read_retries_,
+    bool restricted_seek_)
+    : ReadBufferFromFileBase()
     , client_ptr(std::move(client_ptr_))
     , bucket(bucket_)
     , key(key_)
     , max_single_read_retries(max_single_read_retries_)
-    , buffer_size(buffer_size_)
+    , read_settings(read_settings_)
+    , restricted_seek(restricted_seek_)
 {
 }
 
@@ -118,7 +125,7 @@ bool ReadBufferFromS3::nextImpl()
 
 off_t ReadBufferFromS3::seek(off_t offset_, int whence)
 {
-    if (impl)
+    if (impl && restricted_seek)
         throw Exception("Seek is allowed only before first read attempt from the buffer.", ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
 
     if (whence != SEEK_SET)
@@ -127,8 +134,37 @@ off_t ReadBufferFromS3::seek(off_t offset_, int whence)
     if (offset_ < 0)
         throw Exception("Seek position is out of bounds. Offset: " + std::to_string(offset_), ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
 
-    offset = offset_;
+    if (!restricted_seek)
+    {
+        if (!working_buffer.empty()
+            && static_cast<size_t>(offset_) >= offset - working_buffer.size()
+            && offset_ < offset)
+        {
+            pos = working_buffer.end() - (offset - offset_);
+            assert(pos >= working_buffer.begin());
+            assert(pos < working_buffer.end());
 
+            return getPosition();
+        }
+
+        off_t position = getPosition();
+        if (impl && offset_ > position)
+        {
+            size_t diff = offset_ - position;
+            if (diff < read_settings.remote_read_min_bytes_for_seek)
+            {
+                ignore(diff);
+                return offset_;
+            }
+        }
+
+        resetWorkingBuffer();
+        if (impl)
+        {
+            impl.reset();
+        }
+    }
+    offset = offset_;
     return offset;
 }
 
@@ -151,10 +187,30 @@ std::unique_ptr<ReadBuffer> ReadBufferFromS3::initialize()
     if (outcome.IsSuccess())
     {
         read_result = outcome.GetResultWithOwnership();
-        return std::make_unique<ReadBufferFromIStream>(read_result.GetBody(), buffer_size);
+        return std::make_unique<ReadBufferFromIStream>(read_result.GetBody(), read_settings.buffer_size);
     }
     else
         throw Exception(outcome.GetError().GetMessage(), ErrorCodes::S3_ERROR);
+}
+
+size_t ReadBufferFromS3::getFileSize()
+{
+    if (file_size)
+        return *file_size;
+    Aws::S3::Model::HeadObjectRequest request;
+    request.SetBucket(bucket);
+    request.SetKey(key);
+
+    Aws::S3::Model::HeadObjectOutcome outcome = client_ptr->HeadObject(request);
+    if (outcome.IsSuccess())
+    {
+        file_size = outcome.GetResultWithOwnership().GetContentLength();
+        return *file_size;
+    }
+    else
+    {
+        throw Exception(outcome.GetError().GetMessage(), ErrorCodes::S3_ERROR);
+    }
 }
 
 }

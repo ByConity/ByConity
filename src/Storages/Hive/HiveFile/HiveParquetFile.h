@@ -50,7 +50,6 @@ class ParquetSliceSource : public ISource
 {
 public:
     ParquetSliceSource(
-        std::unique_ptr<ReadBuffer> in_,
         std::unique_ptr<parquet::arrow::FileReader> reader_,
         std::vector<int> column_indices_,
         std::shared_ptr<IHiveFile::ReadParams> read_params_,
@@ -61,7 +60,6 @@ public:
     Chunk generate() override;
 
 private:
-    std::unique_ptr<ReadBuffer> in;
     std::unique_ptr<parquet::arrow::FileReader> reader;
     std::vector<int> column_indices;
     std::shared_ptr<IHiveFile::ReadParams> read_params;

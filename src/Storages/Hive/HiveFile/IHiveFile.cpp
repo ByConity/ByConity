@@ -98,17 +98,17 @@ String IHiveFile::getFormatName() const
 
 std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings & settings) const
 {
+    auto * log = &Poco::Logger::get(__func__);
     if (settings.disk_cache_mode < DiskCacheMode::SKIP_DISK_CACHE)
     {
         /// use local cache
-        auto * log = &Poco::Logger::get(__func__);
         try
         {
             auto cache = DiskCacheFactory::instance().get(DiskCacheType::Hive);
             auto [cache_disk, segment_path] = cache->get(file_path);
             if (cache_disk && cache_disk->exists(segment_path))
             {
-                LOG_DEBUG(log, "Read from local cache {}/{}", cache_disk->getPath(), segment_path);
+                LOG_TRACE(log, "Read from local cache {}/{}", cache_disk->getPath(), segment_path);
                 return cache_disk->readFile(segment_path);
             }
             cache->cacheSegmentsToLocalDisk({std::make_shared<FileDiskCacheSegment>(disk, file_path, settings)});
@@ -122,9 +122,8 @@ std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings &
         {
             throw Exception(ErrorCodes::DISK_CACHE_NOT_USED, "Hive file {}/{} has no disk cache", disk->getPath(), file_path);
         }
-        LOG_DEBUG(log, "Read from remote {}/{}, disk_cache_mode {}", disk->getPath(), file_path, settings.disk_cache_mode);
     }
-
+    LOG_TRACE(log, "Read from remote {}/{}, disk_cache_mode {}", disk->getPath(), file_path, settings.disk_cache_mode);
     return disk->readFile(file_path, settings);
 }
 
@@ -167,6 +166,7 @@ namespace RPCHelpers
             proto.set_sd_url(hive_files.front()->partition->location);
         }
 
+<<<<<<< HEAD
         for (const auto & hive_file : hive_files)
         {
             auto * proto_file = proto.add_files();
@@ -175,6 +175,20 @@ namespace RPCHelpers
 
         std::cout << proto.DebugString() << std::endl;
     }
+=======
+    LOG_TRACE(&Poco::Logger::get(__func__), "Proto files {}", proto.DebugString());
+}
+
+HiveFiles deserialize(
+    const Protos::ProtoHiveFiles & proto,
+    const ContextPtr & context,
+    const StorageMetadataPtr & metadata,
+    const CnchHiveSettings & settings)
+{
+    HiveFiles files;
+    DiskPtr disk;
+    std::unordered_map<String, HivePartitionPtr> partition_map;
+>>>>>>> ca9ec0d4e93 (Merge branch 'hive-s3' into 'cnch-ce-merge')
 
     HiveFiles deserialize(
         const Protos::ProtoHiveFiles & proto,
@@ -182,11 +196,21 @@ namespace RPCHelpers
         const StorageMetadataPtr & metadata,
         const CnchHiveSettings & settings)
     {
+<<<<<<< HEAD
         HiveFiles files;
         DiskPtr disk = getDiskFromURI(proto.sd_url(), context, settings);
         std::unordered_map<String, HivePartitionPtr> partition_map;
 
         for (const auto & file : proto.files())
+=======
+        if (!disk)
+            disk = HiveUtil::getDiskFromURI(proto.sd_url(), context, settings);
+
+        HivePartitionPtr partition;
+        if (auto it = partition_map.find(file.partition_id()); it != partition_map.end())
+            partition = it->second;
+        else if (metadata->hasPartitionKey())
+>>>>>>> ca9ec0d4e93 (Merge branch 'hive-s3' into 'cnch-ce-merge')
         {
             HivePartitionPtr partition;
             if (auto it = partition_map.find(file.partition_id()); it != partition_map.end())

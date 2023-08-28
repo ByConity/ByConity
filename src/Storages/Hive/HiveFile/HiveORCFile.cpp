@@ -195,24 +195,24 @@ SourcePtr HiveORCFile::getReader(const Block & block, const std::shared_ptr<IHiv
         params->format_settings.null_as_default);
 
     std::vector<int> column_indices = ORCBlockInputFormat::getColumnIndices(schema, block);
-    auto in = readFile(params->read_settings);
+    if (!params->read_buf)
+        params->read_buf = readFile(params->read_settings);
+
     std::unique_ptr<arrow::adapters::orc::ORCFileReader> reader;
     THROW_ARROW_NOT_OK(arrow::adapters::orc::ORCFileReader::Open(
-        asArrowFile(*in, file_size),
+        asArrowFile(*params->read_buf, file_size),
         arrow::default_memory_pool())
     .Value(&reader));
 
-    return std::make_shared<ORCSliceSource>(std::move(in), std::move(reader), std::move(column_indices), params, std::move(arrow_column_to_ch_column));
+    return std::make_shared<ORCSliceSource>(std::move(reader), std::move(column_indices), params, std::move(arrow_column_to_ch_column));
 }
 
 ORCSliceSource::ORCSliceSource(
-    std::unique_ptr<ReadBuffer> in_,
     std::shared_ptr<arrow::adapters::orc::ORCFileReader> reader_,
     std::vector<int> column_indices_,
     std::shared_ptr<IHiveFile::ReadParams> read_params_,
     std::shared_ptr<ArrowColumnToCHColumn> arrow_column_to_ch_column_)
     : ISource({})
-    , in(std::move(in_))
     , reader(std::move(reader_))
     , column_indices(std::move(column_indices_))
     , read_params(std::move(read_params_))

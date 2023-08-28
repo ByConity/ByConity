@@ -686,6 +686,19 @@ InterserverIOHandler & Context::getInterserverIOHandler()
     return shared->interserver_io_handler;
 }
 
+ReadSettings Context::getReadSettings() const
+{
+    ReadSettings res;
+    res.buffer_size = settings.max_read_buffer_size;
+    res.aio_threshold = settings.min_bytes_to_use_direct_io;
+    res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
+    res.remote_read_min_bytes_for_seek = settings.remote_read_min_bytes_for_seek;
+    res.disk_cache_mode = settings.disk_cache_mode;
+    res.skip_download_if_exceeds_query_cache = settings.skip_download_if_exceeds_query_cache;
+    res.s3_use_read_ahead = settings.s3_use_read_ahead;
+    return res;
+}
+
 std::unique_lock<std::recursive_mutex> Context::getLock() const
 {
     ProfileEvents::increment(ProfileEvents::ContextLock);

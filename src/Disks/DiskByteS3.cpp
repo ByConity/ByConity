@@ -19,6 +19,7 @@
 #include <Common/filesystemHelpers.h>
 #include <Common/quoteString.h>
 #include <Common/formatReadable.h>
+#include "IO/ReadBufferFromS3.h"
 #include "IO/S3Common.h"
 #include <Disks/DiskFactory.h>
 #include <Storages/S3/RAReadBufferFromS3.h>
@@ -44,7 +45,7 @@ public:
     DiskByteS3DirectoryIterator(S3::S3Util * s3_util_, const String & root_prefix, const String & path)
         : s3_util(s3_util_), prefix(std::filesystem::path(root_prefix) / path)
     {
-        LOG_TRACE(log, "list s3 prefix {}", prefix.string());
+        LOG_TRACE(log, "list s3 bucket {} prefix {}", s3_util->getBucket(), prefix.string());
         res.has_more = true;
         next();
     }
@@ -171,12 +172,16 @@ void DiskByteS3::listFiles(const String& path, std::vector<String>& file_names)
     } while(res.has_more);
 }
 
-std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String& path,
-    const ReadSettings& settings) const
+std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path, const ReadSettings & settings) const
 {
-    return std::make_unique<RAReadBufferFromS3>(s3_util.getClient(),
-        s3_util.getBucket(), std::filesystem::path(root_prefix) / path, 3,
-        settings.buffer_size);
+    if (settings.s3_use_read_ahead)
+    {
+        return std::make_unique<RAReadBufferFromS3>(
+            s3_util.getClient(), s3_util.getBucket(), std::filesystem::path(root_prefix) / path, 3, settings.buffer_size);
+    }
+
+    return std::make_unique<ReadBufferFromS3>(
+        s3_util.getClient(), s3_util.getBucket(), std::filesystem::path(root_prefix) / path, settings, 3, false);
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String& path,

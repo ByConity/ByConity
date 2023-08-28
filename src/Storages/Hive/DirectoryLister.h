@@ -31,8 +31,15 @@ private:
 };
 
 struct CnchHiveSettings;
+
+namespace HiveUtil
+{
 /// Support HDFS/S3 now
 DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const CnchHiveSettings & settings);
+
+String getPath(const String & path);
+String getPathForListing(const String & path);
+}
 
 }
 

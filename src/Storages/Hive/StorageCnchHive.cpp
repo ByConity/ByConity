@@ -52,10 +52,23 @@ StorageCnchHive::StorageCnchHive(
     , hive_metastore_url(hive_metastore_url_)
     , hive_db_name(hive_db_name_)
     , hive_table_name(hive_table_name_)
-    , hive_client(HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url))
     , storage_settings(settings_)
 {
-    hive_table = hive_client->getTable(hive_db_name, hive_table_name);
+    try
+    {
+        hive_client = HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url);
+        hive_table = hive_client->getTable(hive_db_name, hive_table_name);
+    }
+    catch (Exception & e)
+    {
+        e.addMessage(
+            "Error getting hive metastore client for cnch table {}, hive table {}.{} from metastore {}",
+            getStorageID().getFullTableName(),
+            hive_db_name,
+            hive_table_name,
+            hive_metastore_url);
+        throw;
+    }
 
     HiveSchemaConverter converter(context_, hive_table);
     if (metadata_.columns.empty())
@@ -145,7 +158,7 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
 
     HivePartitions partitions = selectPartitions(local_context, metadata_snapshot, query_info, optimizer);
 
-    auto disk = getDiskFromURI(hive_table->sd.location, local_context, *storage_settings);
+    auto disk = HiveUtil::getDiskFromURI(hive_table->sd.location, local_context, *storage_settings);
 
     ThreadPool thread_pool(std::min(static_cast<size_t>(num_streams), partitions.size()));
     HiveFiles hive_files;
