@@ -169,6 +169,15 @@ const config = {
       colorMode: {
         disableSwitch: true,
       },
+      algolia: {
+        // The application ID provided by Algolia
+        appId: 'Y8UJSN6KEB',
+        // Public API key: it is safe to commit it
+        apiKey: 'c31c7c3457fc1ef352e35f7cb171be33',
+        indexName: 'byconityio',
+        contextualSearch: true,
+        searchPagePath: 'search',
+      },
     }),
 };
 
