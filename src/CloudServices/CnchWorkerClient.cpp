@@ -181,32 +181,6 @@ void CnchWorkerClient::sendCreateQueries(const ContextPtr & context, const std::
 }
 
 
-brpc::CallId CnchWorkerClient::sendCnchHiveDataParts(
-    const ContextPtr & context,
-    const StoragePtr & storage,
-    const String & local_table_name,
-    const HiveDataPartsCNCHVector & parts,
-    const ExceptionHandlerPtr & handler)
-{
-    Protos::SendCnchHiveDataPartsReq request;
-
-    request.set_txn_id(context->getCurrentTransactionID());
-    request.set_database_name(storage->getDatabaseName());
-    request.set_table_name(local_table_name);
-    fillCnchHivePartsModel(parts, *request.mutable_parts());
-
-    auto * cntl = new brpc::Controller();
-    Protos::SendCnchHiveDataPartsResp * response = new Protos::SendCnchHiveDataPartsResp();
-    const auto & settings = context->getSettingsRef();
-    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
-    cntl->set_timeout_ms(send_timeout);
-
-    auto call_id = cntl->call_id();
-    stub->sendCnchHiveDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
-
-    return call_id;
-}
-
 brpc::CallId CnchWorkerClient::sendCnchFileDataParts(
     const ContextPtr & context,
     const StoragePtr & storage,

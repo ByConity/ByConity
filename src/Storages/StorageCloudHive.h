@@ -23,7 +23,6 @@
 #include <Storages/SelectQueryInfo.h>
 // #include <Disks/IDisk.h>
 #include <Storages/DataPart_fwd.h>
-#include <Storages/MergeTree/CnchHiveSettings.h>
 #include <common/shared_ptr_helper.h>
 
 namespace DB

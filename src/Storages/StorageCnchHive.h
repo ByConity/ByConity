@@ -19,7 +19,6 @@
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DataPart_fwd.h>
 #include <Storages/Hive/HiveMetastore.h>
-#include <Storages/MergeTree/CnchHiveSettings.h>
 #include <Storages/StorageFactory.h>
 #include <hivemetastore/ThriftHiveMetastore.h>
 #include <common/shared_ptr_helper.h>
