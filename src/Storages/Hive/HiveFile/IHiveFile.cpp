@@ -210,6 +210,5 @@ HiveFiles deserialize(
     return files;
 }
 }
-}
 
 #endif
