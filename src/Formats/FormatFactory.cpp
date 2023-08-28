@@ -17,6 +17,8 @@
 #include <Processors/Formats/Impl/ParallelParsingInputFormat.h>
 #include <Processors/Formats/Impl/ParallelFormattingOutputFormat.h>
 #include <Poco/URI.h>
+#include <IO/CompressionMethod.h>
+#include <boost/algorithm/string/case_conv.hpp>
 
 #include <IO/ReadHelpers.h>
 
@@ -34,6 +36,7 @@ namespace ErrorCodes
     extern const int FORMAT_IS_NOT_SUITABLE_FOR_INPUT;
     extern const int FORMAT_IS_NOT_SUITABLE_FOR_OUTPUT;
     extern const int UNSUPPORTED_METHOD;
+    extern const int BAD_ARGUMENTS;
 }
 
 const FormatFactory::Creators & FormatFactory::getCreators(const String & name) const
@@ -387,6 +390,7 @@ void FormatFactory::registerInputFormat(const String & name, InputCreator input_
     if (target)
         throw Exception("FormatFactory: Input format " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
     target = std::move(input_creator);
+    registerFileExtension(name, name);
 }
 
 void FormatFactory::registerOutputFormat(const String & name, OutputCreator output_creator)
@@ -395,7 +399,76 @@ void FormatFactory::registerOutputFormat(const String & name, OutputCreator outp
     if (target)
         throw Exception("FormatFactory: Output format " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
     target = std::move(output_creator);
+    registerFileExtension(name, name);
 }
+
+void FormatFactory::registerFileExtension(const String & extension, const String & format_name)
+{
+    file_extension_formats[boost::to_lower_copy(extension)] = format_name;
+}
+
+String FormatFactory::getFormatFromFileName(String file_name, bool throw_if_not_found, String format_name)
+{
+    if (!format_name.empty() && format_name != "auto")
+        return format_name;
+
+    if (file_name == "stdin")
+        return getFormatFromFileDescriptor(STDIN_FILENO);
+
+    CompressionMethod compression_method = chooseCompressionMethod(file_name, "");
+    if (CompressionMethod::None != compression_method)
+    {
+        auto pos = file_name.find_last_of('.');
+        if (pos != String::npos)
+            file_name = file_name.substr(0, pos);
+    }
+
+    auto pos = file_name.find_last_of('.');
+    if (pos == String::npos)
+    {
+        if (throw_if_not_found)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot determine the file format by it's extension");
+        return "";
+    }
+
+    String file_extension = file_name.substr(pos + 1, String::npos);
+    boost::algorithm::to_lower(file_extension);
+    auto it = file_extension_formats.find(file_extension);
+    if (it == file_extension_formats.end())
+    {
+        if (throw_if_not_found)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Cannot determine the file format by it's extension");
+        return "";
+    }
+    return it->second;
+}
+
+String FormatFactory::getFormatFromFileDescriptor(int fd)
+{
+#ifdef OS_LINUX
+    std::string proc_path = fmt::format("/proc/self/fd/{}", fd);
+    char file_path[PATH_MAX] = {'\0'};
+    if (readlink(proc_path.c_str(), file_path, sizeof(file_path) - 1) != -1)
+        return getFormatFromFileName(file_path, false);
+    return "";
+#elif defined(OS_DARWIN)
+    char file_path[PATH_MAX] = {'\0'};
+    if (fcntl(fd, F_GETPATH, file_path) != -1)
+        return getFormatFromFileName(file_path, false);
+    return "";
+#else
+    (void)fd;
+    return "";
+#endif
+}
+
+void FormatFactory::checkFormatName(const String & name) const
+{
+    auto it = dict.find(name);
+    if (it == dict.end())
+        throw Exception("Unknown format " + name, ErrorCodes::UNKNOWN_FORMAT);
+}
+
 
 void FormatFactory::registerInputFormatProcessor(const String & name, InputProcessorCreator input_creator)
 {
@@ -403,6 +476,7 @@ void FormatFactory::registerInputFormatProcessor(const String & name, InputProce
     if (target)
         throw Exception("FormatFactory: Input format " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
     target = std::move(input_creator);
+    registerFileExtension(name, name);
 }
 
 void FormatFactory::registerOutputFormatProcessor(const String & name, OutputProcessorCreator output_creator)
@@ -411,6 +485,7 @@ void FormatFactory::registerOutputFormatProcessor(const String & name, OutputPro
     if (target)
         throw Exception("FormatFactory: Output format " + name + " is already registered", ErrorCodes::LOGICAL_ERROR);
     target = std::move(output_creator);
+    registerFileExtension(name, name);
 }
 
 void FormatFactory::registerFileSegmentationEngine(const String & name, FileSegmentationEngine file_segmentation_engine)

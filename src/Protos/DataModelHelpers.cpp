@@ -31,6 +31,10 @@
 #include <Transaction/TxnTimestamp.h>
 #include <Common/Exception.h>
 #include <common/JSON.h>
+#include <Disks/HDFS/DiskByteHDFS.h>
+#include <Storages/HDFS/HDFSCommon.h>
+#include <Storages/RemoteFile/CnchFileCommon.h>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -436,6 +440,104 @@ IMergeTreeDataPartsVector createPartVectorFromServerParts(
     return res;
 }
 
+void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model)
+{
+    for (const auto & part : parts)
+    {
+        auto & part_model = *parts_model.Add();
+        auto & info = *part_model.mutable_part_info();
+        auto skip_list = part->getSkipSplits();
+        auto size = skip_list.size();
+        *info.mutable_name() = part->getInfo().name;
+        *info.mutable_partition_id() = part->getInfo().partition_id;
+        *part_model.mutable_relative_path() = part->getRelativePath();
+        part_model.set_skip_lists(size);
+        part_model.set_hdfs_uri(part->getHDFSUri());
+        *part_model.mutable_format_name() = part->getFormatName();
+
+        for (auto & skip_num : skip_list)
+            *part_model.mutable_skip_numbers()->Add() = skip_num;
+    }
+}
+
+size_t fillCnchFilePartsModel(const FileDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model)
+{
+    for (const auto & part: parts)
+    {
+        auto & part_model = *parts_model.Add();
+        auto & info = *part_model.mutable_part_info();
+        *info.mutable_name() = part->info.name;
+    }
+
+    return parts.size();
+}
+
+HiveDataPartsCNCHVector
+createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model)
+{
+    HiveDataPartsCNCHVector res;
+    res.reserve(parts_model.size());
+
+    /// share the disk configuration
+    DiskPtr disk;
+
+    for (const auto & part : parts_model)
+    {
+        const auto & part_name = part.part_info().name();
+        const auto & partition_id = part.part_info().partition_id();
+        const auto & format_name = part.format_name();
+
+        std::unordered_set<Int64> required_skip_lists;
+        for (const auto & skip_number : part.skip_numbers())
+            required_skip_lists.insert(skip_number);
+
+        if (!disk)
+        {
+            HDFSConnectionParams params = context->getHdfsConnectionParams();
+            if (part.has_hdfs_uri())
+            {
+                Poco::URI uri(part.hdfs_uri());
+                params = hdfsParamsFromUrl(uri);
+            }
+            disk = std::make_shared<DiskByteHDFS>(part.hdfs_uri(), "", params);
+        }
+
+        LOG_TRACE(&Poco::Logger::get("createCnchHiveDataParts"), " createCnchHiveDataParts format_name = {}", format_name);
+
+
+        if (format_name.find("Orc") != String::npos)
+            res.emplace_back(std::make_shared<const HiveORCFile>(
+                part_name,
+                part.relative_path(),
+                part.has_hdfs_uri() ? part.hdfs_uri() : context->getHdfsNNProxy(),
+                format_name,
+                disk,
+                HivePartInfo(part_name, partition_id),
+                required_skip_lists));
+        else if (format_name.find("Parquet") != String::npos)
+            res.emplace_back(std::make_shared<const HiveParquetFile>(
+                part_name,
+                part.relative_path(),
+                part.has_hdfs_uri() ? part.hdfs_uri() : context->getHdfsNNProxy(),
+                format_name,
+                disk,
+                HivePartInfo(part_name, partition_id),
+                required_skip_lists));
+    }
+
+    return res;
+}
+
+FileDataPartsCNCHVector createCnchFileDataParts(const ContextPtr & /*context*/, const pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model)
+{
+    FileDataPartsCNCHVector res;
+    res.reserve(parts_model.size());
+    for (const auto & part: parts_model)
+    {
+        res.emplace_back(std::make_shared<FileDataPart>(part.part_info().name()));
+    }
+    return res;
+}
 
 String getServerVwNameFrom(const Protos::DataModelTable & model)
 {

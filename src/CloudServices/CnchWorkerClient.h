@@ -25,6 +25,7 @@
 #include <brpc/controller.h>
 #include <Common/Exception.h>
 #include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
+#include <Storages/DataPart_fwd.h>
 
 #include <unordered_set>
 
@@ -76,6 +77,19 @@ public:
         const ExceptionHandlerWithFailedInfoPtr & handler,
         const WorkerId & worker_id = WorkerId{});
 
+    brpc::CallId sendCnchHiveDataParts(
+        const ContextPtr & context,
+        const StoragePtr & storage,
+        const String & local_table_name,
+        const HiveDataPartsCNCHVector & parts,
+        const ExceptionHandlerPtr & handler);
+    
+    brpc::CallId sendCnchFileDataParts(
+        const ContextPtr & context,
+        const StoragePtr & storage,
+        const String & local_table_name,
+        const FileDataPartsCNCHVector & parts,
+        const ExceptionHandlerPtr & handler);
 
     brpc::CallId preloadDataParts(
         const ContextPtr & context,

@@ -165,6 +165,9 @@
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
 #include <Interpreters/TemporaryDataOnDisk.h>
+#include <Storages/RemoteFile/CnchFileCommon.h>
+#include <Storages/RemoteFile/CnchFileSettings.h>
+#include <Storages/StorageS3Settings.h>
 
 namespace fs = std::filesystem;
 
@@ -382,6 +385,7 @@ struct ContextSharedPart
 
     std::optional<CnchHiveSettings> cnchhive_settings;
     std::optional<MergeTreeSettings> merge_tree_settings; /// Settings of MergeTree* engines.
+    std::optional<CnchFileSettings> cnch_file_settings;   /// Settings of CnchFile engines.
     std::optional<MergeTreeSettings> replicated_merge_tree_settings; /// Settings of ReplicatedMergeTree* engines.
     std::atomic_size_t max_table_size_to_drop = 50000000000lu; /// Protects MergeTree tables from accidental DROP (50GB by default)
     std::atomic_size_t max_partition_size_to_drop = 50000000000lu; /// Protects MergeTree partitions from accidental DROP (50GB by default)
@@ -603,6 +607,29 @@ void Context::initGlobal()
 SharedContextHolder Context::createShared()
 {
     return SharedContextHolder(std::make_unique<ContextSharedPart>());
+}
+
+void Context::addSessionView(StorageID view_table_id, StoragePtr view_storage)
+{
+    auto lock = getLock();
+    if (session_views_cache.find(view_table_id) != session_views_cache.end())
+       return;
+    session_views_cache.emplace(view_table_id, view_storage);
+}
+
+StoragePtr Context::getSessionView(StorageID view_table_id)
+{
+    auto lock = getLock();
+    auto it = session_views_cache.find(view_table_id);
+    if (it != session_views_cache.end())
+       return it->second;
+    else
+    {
+        StoragePtr view_storage =  DatabaseCatalog::instance().tryGetTable(view_table_id, shared_from_this());
+        if (view_storage)
+           session_views_cache.emplace(view_table_id, view_storage);
+        return view_storage;
+    }
 }
 
 ContextMutablePtr Context::createCopy(const ContextPtr & other)
@@ -849,6 +876,11 @@ CnchWorkerResourcePtr Context::getCnchWorkerResource() const
 CnchWorkerResourcePtr Context::tryGetCnchWorkerResource() const
 {
     return worker_resource;
+}
+
+void Context::initCnchWorkerResource()
+{
+    worker_resource = std::make_shared<CnchWorkerResource>();
 }
 
 void Context::setExtendedProfileInfo(const ExtendedProfileInfo & source) const
@@ -3444,7 +3476,7 @@ void Context::updateStorageConfiguration(Poco::Util::AbstractConfiguration & con
 #if !defined(ARCADIA_BUILD)
     if (shared->storage_s3_settings)
     {
-        shared->storage_s3_settings->loadFromConfig("s3", config);
+        shared->storage_s3_settings->loadFromConfig("s3", config, getSettingsRef());
     }
 #endif
 }
@@ -3479,6 +3511,20 @@ const MergeTreeSettings & Context::getMergeTreeSettings() const
     return *shared->merge_tree_settings;
 }
 
+const CnchFileSettings & Context::getCnchFileSettings() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnch_file_settings)
+    {
+        auto & config = getConfigRef();
+        shared->cnch_file_settings.emplace();
+        shared->cnch_file_settings->loadFromConfig("cnch_file", config);
+    }
+
+    return *shared->cnch_file_settings;
+}
+
 const MergeTreeSettings & Context::getReplicatedMergeTreeSettings() const
 {
     auto lock = getLock();
@@ -3503,7 +3549,7 @@ const StorageS3Settings & Context::getStorageS3Settings() const
     if (!shared->storage_s3_settings)
     {
         const auto & config = getConfigRef();
-        shared->storage_s3_settings.emplace().loadFromConfig("s3", config);
+        shared->storage_s3_settings.emplace().loadFromConfig("s3", config, getSettingsRef());
     }
 
     return *shared->storage_s3_settings;

@@ -22,6 +22,7 @@
 #include <Storages/Hive/HiveDataPart_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/DataPart_fwd.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Poco/Logger.h>
 #include <Common/HostWithPorts.h>
@@ -78,13 +79,15 @@ struct AssignedResource
 
     /// parts info
     ServerDataPartsVector server_parts;
-    HiveFiles hive_parts;
+    HiveDataPartsCNCHVector hive_parts;
+    FileDataPartsCNCHVector file_parts;
     std::set<Int64> bucket_numbers;
 
     std::unordered_set<String> part_names;
 
     void addDataParts(const ServerDataPartsVector & parts);
-    void addDataParts(const HiveFiles & parts);
+    void addDataParts(const HiveDataPartsCNCHVector & parts);
+    void addDataParts(const FileDataPartsCNCHVector & parts);
 
     bool empty() const { return sent_create_query && server_parts.empty(); }
 };

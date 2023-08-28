@@ -305,6 +305,7 @@ void registerInputFormatProcessorCapnProto(FormatFactory & factory)
                        FormatSchemaInfo(settings.schema.format_schema, "CapnProto", true,
                                         settings.schema.is_server, settings.schema.format_schema_path));
         });
+    factory.registerFileExtension("capnp", "CapnProto");
 }
 
 }

@@ -40,6 +40,8 @@ FormatSettings getFormatSettings(ContextPtr context);
 template <typename T>
 FormatSettings getFormatSettings(ContextPtr context, const T & settings);
 
+using FileExtensionFormats = std::unordered_map<String, String>;
+
 /** Allows to create an IBlockInputStream or IBlockOutputStream by the name of the format.
   * Note: format and compression are independent things.
   */
@@ -174,6 +176,12 @@ public:
 
     bool checkIfFormatIsColumnOriented(const String & name);
 
+    /// Register file extension for format
+    void registerFileExtension(const String & extension, const String & format_name);
+    String getFormatFromFileName(String file_name, bool throw_if_not_found = false, String format_name = "");
+    String getFormatFromFileDescriptor(int fd);
+    void checkFormatName(const String & name) const;
+
     const FormatsDictionary & getAllFormats() const
     {
         return dict;
@@ -181,6 +189,7 @@ public:
 
 private:
     FormatsDictionary dict;
+    FileExtensionFormats file_extension_formats;
 
     const Creators & getCreators(const String & name) const;
 };

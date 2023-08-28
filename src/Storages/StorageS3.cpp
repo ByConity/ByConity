@@ -488,7 +488,7 @@ void StorageS3::truncate(const ASTPtr & /* query */, const StorageMetadataPtr &,
 
 void StorageS3::updateClientAndAuthSettings(ContextPtr ctx, StorageS3::ClientAuthentication & upd)
 {
-    auto settings = ctx->getStorageS3Settings().getSettings(upd.uri.uri.toString());
+    auto settings = ctx->getStorageS3Settings().getSettings(upd.uri.uri.toString()).auth_settings;
     if (upd.client && (!upd.access_key_id.empty() || settings == upd.auth_settings))
         return;
 
@@ -496,7 +496,7 @@ void StorageS3::updateClientAndAuthSettings(ContextPtr ctx, StorageS3::ClientAut
     HeaderCollection headers;
     if (upd.access_key_id.empty())
     {
-        credentials = Aws::Auth::AWSCredentials(settings.access_key_id, settings.secret_access_key);
+        credentials = Aws::Auth::AWSCredentials(settings.access_key_id, settings.access_key_secret);
         headers = settings.headers;
     }
 

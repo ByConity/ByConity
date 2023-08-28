@@ -14,25 +14,27 @@
  */
 
 #pragma once
-#include <Processors/ISimpleTransform.h>
+#include <Storages/DataPart_fwd.h>
 
 namespace DB
 {
-
-class SubstitutionTransform : public ISimpleTransform
+///
+/// Parquet: block means row group
+/// Orc: block means stripes
+struct BlocksInDataPart
 {
-public:
-    SubstitutionTransform(const Block & header_, const std::unordered_map<String, String> & name_substitution_info_);
+    HiveDataPartCNCHPtr data_part;
+    size_t total_blocks;
 
-    String getName() const override { return "SubstitutionTransform"; }
+    BlocksInDataPart() = default;
 
-    static Block transformHeader(Block header, const std::unordered_map<String, String> & name_substitution_info_);
+    BlocksInDataPart(const HiveDataPartCNCHPtr & data_part_, size_t total_blocks_ = 0) : data_part(data_part_), total_blocks(total_blocks_)
+    {
+    }
 
-protected:
-    void transform(Chunk & chunk) override;
-
-private:
-    std::unordered_map<String, String> name_substitution_info;
+    size_t getBlocksNumber() const { return total_blocks; }
 };
 
+using BlocksInDataParts = std::vector<BlocksInDataPart>;
 }
+

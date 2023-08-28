@@ -862,4 +862,5 @@ bool StorageInMemoryMetadata::hasMapColumn() const
     return false;
 }
 
+
 }

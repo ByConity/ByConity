@@ -20,13 +20,15 @@
 #include <sstream>
 #include <vector>
 #include <string.h>
+#include <Catalog/MetastoreCommon.h>
+#include <Catalog/MetastoreProxy.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
 #include <IO/ReadHelpers.h>
 #include <Protos/DataModelHelpers.h>
 #include "common/types.h"
-#include "Catalog/MetastoreByteKVImpl.h"
 #include <common/logger_useful.h>
-#include <Catalog/MetastoreCommon.h>
+#include "Catalog/MetastoreByteKVImpl.h"
+#include "Interpreters/executeQuery.h"
 
 namespace DB::ErrorCodes
 {
@@ -39,6 +41,7 @@ extern const int METASTORE_CLEAR_INTENT_CAS_FAILURE;
 extern const int VIRTUAL_WAREHOUSE_NOT_FOUND;
 extern const int FUNCTION_ALREADY_EXISTS;
 extern const int METASTORE_COMMIT_CAS_FAILURE;
+extern const int METASTORE_TABLE_TDH_CAS_ERROR;
 }
 
 namespace DB::Catalog
@@ -1336,9 +1339,45 @@ void MetastoreProxy::clearKafkaTransactions(const String & name_space, const Str
     metastore_ptr->clean(prefix);
 }
 
-void MetastoreProxy::setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered)
+void MetastoreProxy::setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered, const UInt64 & table_definition_hash)
 {
-    metastore_ptr->put(clusterStatusKey(name_space, uuid), already_clustered ? "true" : "false");
+    // TDH key may not exist in KV either because the table does not exist or there is an upgrade of CNCH version
+    String table_definition_hash_meta;
+    metastore_ptr->get(tableDefinitionHashKey(name_space, uuid), table_definition_hash_meta);
+    String expected_table_definition_hash = toString(table_definition_hash);
+    bool if_not_exists = false;
+    if (table_definition_hash_meta.empty())
+    {
+        expected_table_definition_hash = "";
+        if_not_exists = true;
+    }
+
+    auto table_definition_hash_put_request = SinglePutRequest(tableDefinitionHashKey(name_space, uuid), toString(table_definition_hash), expected_table_definition_hash);
+    table_definition_hash_put_request.if_not_exists = if_not_exists;
+
+    BatchCommitRequest batch_write;
+    batch_write.AddPut(SinglePutRequest(clusterStatusKey(name_space, uuid), already_clustered ? "true" : "false"));
+    batch_write.AddPut(table_definition_hash_put_request);
+    
+    BatchCommitResponse resp;
+    try
+    {
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
+        {
+            String error_message;
+            if (resp.puts.count(1) && if_not_exists)
+                error_message = "table_definition_hash of Table with uuid(" + uuid + ") already exists.";
+            else if (resp.puts.count(1))
+                error_message = "table_definition_hash of Table with uuid(" + uuid + ") has recently been changed in catalog. Please try the request again.";
+            throw Exception(error_message, ErrorCodes::METASTORE_TABLE_TDH_CAS_ERROR);
+        }
+        else
+            throw e;
+    }
 }
 
 void MetastoreProxy::getTableClusterStatus(const String & name_space, const String & uuid, bool & is_clustered)
@@ -1836,10 +1875,57 @@ void MetastoreProxy::setAsyncQueryStatus(
 {
     // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
     // {
-    //     bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
+    //     if (status.status() == AsyncQueryStatus::NotStarted || status.status() == AsyncQueryStatus::Running)
+    //     {
+    //         bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
+    //     }
+    //     else
+    //     {
+    //         DB::Catalog::BatchCommitRequest update_request;
+    //         DB::Catalog::BatchCommitResponse update_response;
+    //         update_request.AddDelete(asyncQueryStatusKey(name_space, id));
+    //         update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl));
+    //         if (!bytekv->batchWrite(update_request, update_response))
+    //         {
+    //             throw Exception(
+    //                 fmt::format("Update async query status fail with ns {} and id {}.", name_space, id), ErrorCodes::LOGICAL_ERROR);
+    //         }
+    //     }
     //     return;
     // }
     metastore_ptr->put(asyncQueryStatusKey(name_space, id), status.SerializeAsString());
+}
+
+void MetastoreProxy::markBatchAsyncQueryStatusFailed(
+    const String & name_space, std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason, UInt64 ttl) const
+{
+    // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
+    // {
+    //     DB::Catalog::BatchCommitRequest update_request;
+    //     DB::Catalog::BatchCommitResponse update_response;
+    //     for (auto & status : statuses)
+    //     {
+    //         status.set_status(Protos::AsyncQueryStatus::Failed);
+    //         status.set_error_msg(reason);
+    //         status.set_update_time(time(nullptr));
+    //         update_request.AddDelete(asyncQueryStatusKey(name_space, status.id()));
+    //         update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, status.id()), status.SerializeAsString(), ttl));
+    //     }
+    //     if (!bytekv->batchWrite(update_request, update_response))
+    //     {
+    //         throw Exception(
+    //             fmt::format("Mark batch async query status fail with ns {} and size {}.", name_space, statuses.size()),
+    //             ErrorCodes::LOGICAL_ERROR);
+    //     }
+    //     return;
+    // }
+    for (auto & status : statuses)
+    {
+        status.set_status(Protos::AsyncQueryStatus::Failed);
+        status.set_error_msg(reason);
+        status.set_update_time(time(nullptr));
+        setAsyncQueryStatus(name_space, status.id(), status);
+    }
 }
 
 bool MetastoreProxy::tryGetAsyncQueryStatus(const String & name_space, const String & id, Protos::AsyncQueryStatus & status) const
@@ -1847,9 +1933,25 @@ bool MetastoreProxy::tryGetAsyncQueryStatus(const String & name_space, const Str
     String value;
     metastore_ptr->get(asyncQueryStatusKey(name_space, id), value);
     if (value.empty())
+        metastore_ptr->get(finalAsyncQueryStatusKey(name_space, id), value);
+    if (value.empty())
         return false;
     status.ParseFromString(value);
     return true;
+}
+
+std::vector<Protos::AsyncQueryStatus> MetastoreProxy::getIntermidiateAsyncQueryStatuses(const String & name_space) const
+{
+    std::vector<Protos::AsyncQueryStatus> res;
+
+    auto status_prefix = asyncQueryStatusKey(name_space, String{});
+    auto it = metastore_ptr->getByPrefix(status_prefix);
+    while (it->next())
+    {
+        res.emplace_back();
+        res.back().ParseFromString(it->value());
+    }
+    return res;
 }
 
 class MetastoreMultiWriteInBatch
@@ -2137,6 +2239,11 @@ IMetaStore::IteratorPtr MetastoreProxy::getDetachedPartsInRange(
     String prefix = detachedPartPrefix(name_space, tbl_uuid);
     return metastore_ptr->getByRange(prefix + range_start, prefix + range_end,
         include_start, include_end);
+}
+
+IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit)
+{
+    return metastore_ptr->getByPrefix(trashItemsPrefix(name_space, table_uuid), limit);
 }
 
 } /// end of namespace DB::Catalog

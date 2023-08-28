@@ -26,6 +26,12 @@
 #include <Common/Exception.h>
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Storages/Hive/StorageCnchHive.h"
+#include <Interpreters/WorkerStatusManager.h>
+#include <Storages/Hive/HiveDataPart.h>
+#include <Storages/StorageCnchHive.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Storages/RemoteFile/StorageCnchHDFS.h>
+#include <Storages/RemoteFile/StorageCnchS3.h>
 
 namespace DB
 {
@@ -42,6 +48,7 @@ AssignedResource::AssignedResource(AssignedResource && resource)
 
     server_parts = std::move(resource.server_parts);
     hive_parts = std::move(resource.hive_parts);
+    file_parts = std::move(resource.file_parts);
     part_names = resource.part_names; // don't call move here
 
     resource.sent_create_query = true;
@@ -67,6 +74,18 @@ void AssignedResource::addDataParts(const HiveFiles & parts)
         {
             part_names.emplace(part->file_path);
             hive_parts.emplace_back(part);
+        }
+    }
+}
+
+void AssignedResource::addDataParts(const FileDataPartsCNCHVector & parts)
+{
+    for (const auto & file : parts)
+    {
+        if (!part_names.count(file->info.getBasicPartName()))
+        {
+            part_names.emplace(file->info.getBasicPartName());
+            file_parts.emplace_back(file);
         }
     }
 }
@@ -248,6 +267,7 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
             const auto & required_bucket_numbers = resource.bucket_numbers;
             ServerAssignmentMap assigned_map;
             HivePartsAssignMap assigned_hive_map;
+            FilePartsAssignMap assigned_file_map;
             BucketNumbersAssignmentMap assigned_bucket_numbers_map;
             if (dynamic_cast<StorageCnchMergeTree *>(storage.get()))
             {
@@ -264,11 +284,28 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
             {
                 assigned_hive_map = assignCnchHiveParts(worker_group, resource.hive_parts);
             }
+            else if (auto * cnch_file = dynamic_cast<IStorageCnchFile *>(storage.get()))
+            {
+                String file_storage = "unknown";
+                if (auto * cnch_hdfs = dynamic_cast<StorageCnchHDFS *>(storage.get()))
+                    file_storage = cnch_hdfs->getName();
+                else if (auto * cnch_s3 = dynamic_cast<StorageCnchS3 *>(storage.get()))
+                    file_storage = cnch_s3->getName();
+
+                if (cnch_file->settings.resourcesAssignType() == StorageResourcesAssignType::SERVER_PUSH){
+                    bool use_simple_hash = cnch_file->settings.simple_hash_resources;
+                    LOG_TRACE(log,"{} assignCnchFileParts use server push and use_simple_hash =  {}",  file_storage, use_simple_hash);
+                    assigned_file_map = assignCnchFileParts(worker_group, resource.file_parts);
+                } else {
+                    LOG_TRACE(log, "{} assignCnchFileParts use server local", file_storage);
+                }
+            }
 
             for (const auto & host_ports : host_ports_vec)
             {
                 ServerDataPartsVector assigned_parts;
-                HiveFiles assigned_hive_parts;
+                HiveDataPartsCNCHVector assigned_hive_parts;
+                FileDataPartsCNCHVector assigned_file_parts;
                 if (auto it = assigned_map.find(host_ports.id); it != assigned_map.end())
                 {
                     assigned_parts = std::move(it->second);
@@ -278,6 +315,13 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
                 if (auto it = assigned_hive_map.find(host_ports.id); it != assigned_hive_map.end())
                 {
                     assigned_hive_parts = std::move(it->second);
+                }
+
+                
+                if (auto it = assigned_file_map.find(host_ports.id); it != assigned_file_map.end())
+                {
+                    assigned_file_parts = std::move(it->second);
+                    LOG_TRACE(log, "assign {}.{} file data parts to works {}, size = {}", storage->getDatabaseName(), storage->getTableName(), host_ports.toDebugString(), assigned_file_parts.size());
                 }
 
                 std::set<Int64> assigned_bucket_numbers;
@@ -297,6 +341,7 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
 
                 worker_resource.addDataParts(assigned_parts);
                 worker_resource.addDataParts(assigned_hive_parts);
+                worker_resource.addDataParts(assigned_file_parts);
                 worker_resource.sent_create_query = resource.sent_create_query;
                 worker_resource.create_table_query = resource.create_table_query;
                 worker_resource.worker_table_name = resource.worker_table_name;

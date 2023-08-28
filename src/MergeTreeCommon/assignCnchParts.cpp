@@ -14,7 +14,8 @@
  */
 
 #include <MergeTreeCommon/assignCnchParts.h>
-
+#include <Storages/RemoteFile/CnchFileCommon.h>
+#include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Storages/Hive/HiveFile/IHiveFile.h>
@@ -179,6 +180,20 @@ HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, c
 
     return ret;
 }
+
+FilePartsAssignMap assignCnchFileParts(const WorkerGroupHandle & worker_group, const FileDataPartsCNCHVector & parts)
+{
+    auto workers = worker_group->getWorkerIDVec();
+    auto num_workers = workers.size();
+    FilePartsAssignMap ret;
+    for (size_t i = 0 ; i < parts.size(); i++)
+    {
+        auto index = i % num_workers;
+        ret[workers[index]].emplace_back(parts[i]);
+    }
+    return ret;
+}
+
 
 
 bool isCnchBucketTable(const ContextPtr & context, const IStorage & storage, const ServerDataPartsVector & parts)

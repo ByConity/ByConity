@@ -639,7 +639,9 @@ namespace S3
         /// Case when bucket name represented in domain name of S3 URL.
         /// E.g. (https://bucket-name.s3.Region.amazonaws.com/key)
         /// https://docs.aws.amazon.com/AmazonS3/latest/dev/VirtualHosting.html#virtual-hosted-style-access
-        static const RE2 virtual_hosted_style_pattern(R"((.+)\.(s3|cos)([.\-][a-z0-9\-.:]+))");
+
+        static const RE2 virtual_hosted_style_pattern(R"((.+)\.(s3|cos|tos)([.\-][a-z0-9\-.:]+))");
+
 
         /// Case when bucket name and key represented in path of S3 URL.
         /// E.g. (https://s3.Region.amazonaws.com/bucket-name/key)
@@ -649,12 +651,27 @@ namespace S3
         static constexpr auto S3 = "S3";
         static constexpr auto COSN = "COSN";
         static constexpr auto COS = "COS";
+        static constexpr auto TOS = "TOS";
+
 
         uri = uri_;
         storage_name = S3;
 
         if (uri.getHost().empty())
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Host is empty in S3 URI: {}", uri.toString());
+            throw Exception("Host is empty in S3 URI: " + uri.toString(), ErrorCodes::BAD_ARGUMENTS);
+
+        if (isS3Scheme(uri.getScheme()))
+        {
+            // URI has format s3://bucket/key
+            endpoint = "";
+            bucket = uri.getAuthority();
+            validateBucket(bucket, uri);
+            if (uri.getPath().length() <= 1)
+                throw Exception ("Invalid S3 URI: no key: " + uri.toString(), ErrorCodes::BAD_ARGUMENTS);
+            key = uri.getPath().substr(1);
+            is_virtual_hosted_style = false;
+            return;
+        }
 
         String name;
         String endpoint_authority_from_uri;
@@ -667,11 +684,8 @@ namespace S3
             /// S3 specification requires at least 3 and at most 63 characters in bucket name.
             /// https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html
             if (bucket.length() < 3 || bucket.length() > 63)
-                throw Exception(
-                    ErrorCodes::BAD_ARGUMENTS,
-                    "Bucket name length is out of bounds in virtual hosted style S3 URI: {} ({})",
-                    quoteString(bucket),
-                    uri.toString());
+                throw Exception("Bucket name length is out of bounds in virtual hosted style S3 URI: "
+                    + quoteString(bucket) + "(" + uri.toString() + ")", ErrorCodes::BAD_ARGUMENTS);
 
             if (!uri.getPath().empty())
             {
@@ -680,17 +694,20 @@ namespace S3
             }
 
             boost::to_upper(name);
-            if (name != S3 && name != COS)
+
+            if (name != S3 && name != COS && name != TOS)
             {
-                throw Exception(
-                    ErrorCodes::BAD_ARGUMENTS,
-                    "Object storage system name is unrecognized in virtual hosted style S3 URI: {} ({})",
-                    quoteString(name),
-                    uri.toString());
+                throw Exception("Object storage system name is unrecognized in virtual hosted style S3 URI: "
+                    + quoteString(name) + "(" + uri.toString() + ")",
+                    ErrorCodes::BAD_ARGUMENTS);
             }
             if (name == S3)
             {
                 storage_name = name;
+            }
+            else if (name == TOS)
+            {
+                storage_name = TOS;
             }
             else
             {
@@ -702,14 +719,19 @@ namespace S3
             is_virtual_hosted_style = false;
             endpoint = uri.getScheme() + "://" + uri.getAuthority();
 
-            /// S3 specification requires at least 3 and at most 63 characters in bucket name.
-            /// https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html
-            if (bucket.length() < 3 || bucket.length() > 63)
-                throw Exception(
-                    ErrorCodes::BAD_ARGUMENTS, "Key name is empty in path style S3 URI: {} ({})", quoteString(key), uri.toString());
+            validateBucket(bucket, uri);
         }
         else
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "Bucket or key name are invalid in S3 URI: {}", uri.toString());
+            throw Exception("Bucket or key name are invalid in S3 URI: " + uri.toString(), ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    void URI::validateBucket(const String & bucket, const Poco::URI & uri)
+    {
+        /// S3 specification requires at least 3 and at most 63 characters in bucket name.
+        /// https://docs.aws.amazon.com/awscloudtrail/latest/userguide/cloudtrail-s3-bucket-naming-requirements.html
+        if (bucket.length() < 3 || bucket.length() > 63)
+            throw Exception("Bucket name length is out of bounds in virtual hosted style S3 URI:" + quoteString(bucket)
+                + (!uri.empty() ? " (" + uri.toString() + ")" : ""), ErrorCodes::BAD_ARGUMENTS);
     }
 
     S3Config::S3Config(const String & ini_file_path)
@@ -1260,6 +1282,66 @@ namespace S3
             s3_util.deleteObjectsInBatch(keys_to_remove_this_round);
         }
     }
+
+    AuthSettings AuthSettings::loadFromConfig(const std::string & config_elem, const Poco::Util::AbstractConfiguration & config)
+    {
+        auto access_key_id = config.getString(config_elem + ".access_key_id", "");
+        auto secret_access_key = config.getString(config_elem + ".secret_access_key", "");
+        auto region = config.getString(config_elem + ".region", "");
+        auto server_side_encryption_customer_key_base64 = config.getString(config_elem + ".server_side_encryption_customer_key_base64", "");
+
+        std::optional<bool> use_environment_credentials;
+        if (config.has(config_elem + ".use_environment_credentials"))
+            use_environment_credentials = config.getBool(config_elem + ".use_environment_credentials");
+
+        std::optional<bool> use_insecure_imds_request;
+        if (config.has(config_elem + ".use_insecure_imds_request"))
+            use_insecure_imds_request = config.getBool(config_elem + ".use_insecure_imds_request");
+
+        HeaderCollection headers;
+        Poco::Util::AbstractConfiguration::Keys subconfig_keys;
+        config.keys(config_elem, subconfig_keys);
+        for (const std::string & subkey : subconfig_keys)
+        {
+            if (subkey.starts_with("header"))
+            {
+                auto header_str = config.getString(config_elem + "." + subkey);
+                auto delimiter = header_str.find(':');
+                if (delimiter == std::string::npos)
+                    throw Exception("Malformed s3 header value", ErrorCodes::BAD_ARGUMENTS);
+                headers.emplace_back(HttpHeader{header_str.substr(0, delimiter), header_str.substr(delimiter + 1, String::npos)});
+            }
+        }
+
+        return AuthSettings
+            {
+                std::move(access_key_id), std::move(secret_access_key),
+                std::move(region),
+                std::move(server_side_encryption_customer_key_base64),
+                std::move(headers),
+                use_environment_credentials,
+                use_insecure_imds_request
+            };
+    }
+
+
+    void AuthSettings::updateFrom(const AuthSettings & from)
+    {
+        /// Update with check for emptyness only parameters which
+        /// can be passed not only from config, but via ast.
+
+        if (!from.access_key_id.empty())
+            access_key_id = from.access_key_id;
+        if (!from.access_key_secret.empty())
+            access_key_secret = from.access_key_secret;
+
+        headers = from.headers;
+        region = from.region;
+        server_side_encryption_customer_key_base64 = from.server_side_encryption_customer_key_base64;
+        use_environment_credentials = from.use_environment_credentials;
+        use_insecure_imds_request = from.use_insecure_imds_request;
+    }
+
 }
 
 }

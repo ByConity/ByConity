@@ -236,6 +236,7 @@ add_object_library(clickhouse_columns Columns)
 add_object_library(clickhouse_storages Storages)
 add_object_library(clickhouse_disk_cache Storages/DiskCache)
 add_object_library(clickhouse_storages_mysql Storages/MySQL)
+add_object_library(clickhouse_storages_remote_file Storages/RemoteFile)
 add_object_library(clickhouse_storages_distributed Storages/Distributed)
 add_object_library(clickhouse_storages_mergetree Storages/MergeTree)
 add_object_library(clickhouse_storages_liveview Storages/LiveView)
@@ -282,7 +283,7 @@ endif()
 
 set (DBMS_COMMON_LIBRARIES)
 # libgcc_s does not provide an implementation of an atomics library. Instead,
-# GCC’s libatomic library can be used to supply these when using libgcc_s.
+# GCC's libatomic library can be used to supply these when using libgcc_s.
 if ((NOT USE_LIBCXX) AND COMPILER_CLANG AND OS_LINUX)
     list (APPEND DBMS_COMMON_LIBRARIES atomic)
 endif()

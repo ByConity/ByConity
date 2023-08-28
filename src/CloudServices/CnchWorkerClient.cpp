@@ -180,6 +180,54 @@ void CnchWorkerClient::sendCreateQueries(const ContextPtr & context, const std::
     RPCHelpers::checkResponse(response);
 }
 
+
+brpc::CallId CnchWorkerClient::sendCnchHiveDataParts(
+    const ContextPtr & context,
+    const StoragePtr & storage,
+    const String & local_table_name,
+    const HiveDataPartsCNCHVector & parts,
+    const ExceptionHandlerPtr & handler)
+{
+    Protos::SendCnchHiveDataPartsReq request;
+
+    request.set_txn_id(context->getCurrentTransactionID());
+    request.set_database_name(storage->getDatabaseName());
+    request.set_table_name(local_table_name);
+    fillCnchHivePartsModel(parts, *request.mutable_parts());
+
+    auto * cntl = new brpc::Controller();
+    Protos::SendCnchHiveDataPartsResp * response = new Protos::SendCnchHiveDataPartsResp();
+    const auto & settings = context->getSettingsRef();
+    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
+    cntl->set_timeout_ms(send_timeout);
+
+    auto call_id = cntl->call_id();
+    stub->sendCnchHiveDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
+
+    return call_id;
+}
+
+brpc::CallId CnchWorkerClient::sendCnchFileDataParts(
+    const ContextPtr & context,
+    const StoragePtr & storage,
+    const String & local_table_name,
+    const DB::FileDataPartsCNCHVector & parts,
+    const ExceptionHandlerPtr & handler)
+{
+    Protos::SendCnchFileDataPartsReq request;
+    request.set_txn_id(context->getCurrentTransactionID());
+    request.set_database_name(storage->getDatabaseName());
+    request.set_table_name(local_table_name);
+    fillCnchFilePartsModel(parts, *request.mutable_parts());
+
+    auto * cntl = new brpc::Controller;
+    const auto call_id = cntl->call_id();
+    auto * response = new Protos::SendCnchFileDataPartsResp;
+    stub->sendCnchFileDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
+    return call_id;
+}
+
+
 brpc::CallId CnchWorkerClient::preloadDataParts(
     const ContextPtr & context,
     const TxnTimestamp & txn_id,
@@ -305,6 +353,11 @@ brpc::CallId CnchWorkerClient::sendResources(
         {
             auto * mutable_hive_parts = table_data_parts.mutable_hive_parts();
             RPCHelpers::serialize(*mutable_hive_parts, resource.hive_parts);
+        }
+
+        if (!resource.file_parts.empty())
+        {
+            fillCnchFilePartsModel(resource.file_parts, *table_data_parts.mutable_file_parts());
         }
 
         /// bucket numbers

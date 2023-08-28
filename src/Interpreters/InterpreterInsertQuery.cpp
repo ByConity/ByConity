@@ -51,6 +51,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ParserQuery.h>
 #include <Processors/Sources/SinkToOutputStream.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Processors/Transforms/ExpressionTransform.h>
@@ -62,6 +63,10 @@
 #include <Storages/StorageMaterializedView.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/checkStackSize.h>
+#include "Interpreters/Context_fwd.h"
+#include <Databases/DatabasesCommon.h>
+#include <CloudServices/CnchWorkerResource.h>
+#include <CloudServices/CnchCreateQueryHelper.h>
 
 
 namespace DB
@@ -71,6 +76,7 @@ namespace ErrorCodes
     extern const int NO_SUCH_COLUMN_IN_TABLE;
     extern const int ILLEGAL_COLUMN;
     extern const int DUPLICATE_COLUMN;
+    extern const int SUPPORT_IS_DISABLED;
 }
 
 InterpreterInsertQuery::InterpreterInsertQuery(
@@ -85,6 +91,86 @@ InterpreterInsertQuery::InterpreterInsertQuery(
 }
 
 
+static String replaceMatierializedViewQuery(StorageMaterializedView * mv)
+{
+    auto query = mv->getCreateTableSql();
+
+    ParserCreateQuery parser;
+    ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, 0);
+
+    auto & create_query = ast->as<ASTCreateQuery &>();
+    create_query.to_inner_uuid = UUIDHelpers::Nil;
+    if (create_query.to_table_id.empty())
+    {
+        create_query.to_table_id.table_name = generateInnerTableName(mv->getStorageID());
+        create_query.to_table_id.database_name = mv->getDatabaseName();
+        create_query.storage = nullptr;
+    }
+
+    auto & inner_query = create_query.select->list_of_selects->children.at(0);
+    if (!inner_query)
+        throw Exception("select query is necessary for mv table", ErrorCodes::LOGICAL_ERROR);
+
+    auto & select_query = inner_query->as<ASTSelectQuery &>();
+    select_query.replaceDatabaseAndTable(mv->getStorageID().database_name, mv->getStorageID().table_name);
+
+    return getTableDefinitionFromCreateQuery(ast, false);
+}
+
+static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local_context)
+{
+    Names create_view_sqls;
+    std::set<StorageID> view_dependencies;
+    auto start_time = local_context->getTimestamp();
+
+    auto catalog_client = local_context->getCnchCatalog();
+    if (!catalog_client)
+        throw Exception("get catalog client failed", ErrorCodes::LOGICAL_ERROR);
+
+    auto all_views_from_catalog = catalog_client->getAllViewsOn(*local_context, storage, start_time);
+    if (all_views_from_catalog.empty())
+        return create_view_sqls;
+
+    for (auto & view : all_views_from_catalog)
+        view_dependencies.emplace(view->getStorageID());
+
+    for (const auto & dependence : view_dependencies)
+    {
+        auto table = DatabaseCatalog::instance().tryGetTable(dependence, local_context);
+        if (!table)
+        {
+            LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table {} not found", dependence.getNameForLogs());
+            continue;
+        }
+
+        if (auto * mv = dynamic_cast<StorageMaterializedView*>(table.get()))
+        {
+            auto target_table = DatabaseCatalog::instance().tryGetTable(mv->getStorageID(), local_context);
+            if (!target_table)
+            {
+                LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "target table for {} not exist", mv->getStorageID().getNameForLogs());
+                continue;
+            }
+
+            /// target table should be CnchMergeTree
+            auto * target_cnch_merge = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
+            if (!target_cnch_merge)
+            {
+                LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table type not matched for {}, CnchMergeTree is expected", 
+                            target_table->getStorageID().getNameForLogs());
+                continue;
+            }
+            auto create_target_query = target_table->getCreateTableSql();
+            auto create_local_target_query = target_cnch_merge->getCreateQueryForCloudTable(create_target_query, target_cnch_merge->getTableName());
+            create_view_sqls.emplace_back(create_local_target_query);
+            create_view_sqls.emplace_back(replaceMatierializedViewQuery(mv));
+        }
+    }
+
+    return create_view_sqls;
+}
+
+
 StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
 {
     if (query.table_function)
@@ -94,8 +180,52 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
         return table_function_ptr->execute(query.table_function, getContext(), table_function_ptr->getName());
     }
 
-    query.table_id = getContext()->resolveStorageID(query.table_id);
-    return DatabaseCatalog::instance().getTable(query.table_id, getContext());
+    if (getContext()->getServerType() == ServerType::cnch_worker && !query.select)
+    {
+        query.table_id = getContext()->resolveStorageID(query.table_id);
+        auto storage = DatabaseCatalog::instance().tryGetTable(query.table_id, getContext());
+        if (storage)
+            return storage;
+
+        auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+        if (!cnch_table)
+            throw Exception("Engine " + storage->getStorageID().getNameForLogs() + " doesn't support direct insertion", ErrorCodes::SUPPORT_IS_DISABLED);
+
+        auto create_query = cnch_table->getCreateQueryForCloudTable(cnch_table->getCreateTableSql(), query.table_id.database_name, query.table_id.table_name);
+        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Worker side create query: {}" , create_query);
+
+        Names view_create_sqls = genViewDependencyCreateQueries(storage, getContext());
+        if (!view_create_sqls.empty())
+        {
+            ContextMutablePtr mutable_context = Context::createCopy(getContext());
+            if (!mutable_context->tryGetCnchWorkerResource())
+                mutable_context->initCnchWorkerResource();
+            view_create_sqls.emplace_back(create_query);
+            for(const auto & create_sql : view_create_sqls)
+                mutable_context->getCnchWorkerResource()->executeCreateQuery(mutable_context, create_sql);
+            if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(mutable_context->getCurrentTransaction()); worker_txn)
+            {
+                if (view_create_sqls.size() > 1)
+                {
+                    worker_txn->enableExplicitCommit();
+                    worker_txn->setExplicitCommitStorageID(storage->getStorageID());
+                }
+
+                mutable_context->setCurrentTransaction(worker_txn);
+            }
+            return mutable_context->getCnchWorkerResource()->getTable(query.table_id);
+        }
+        else
+        {
+            query.table_id = getContext()->resolveStorageID(query.table_id);
+            return DatabaseCatalog::instance().getTable(query.table_id, getContext());
+        }
+    }
+    else
+    {
+        query.table_id = getContext()->resolveStorageID(query.table_id);
+        return DatabaseCatalog::instance().getTable(query.table_id, getContext());
+    }
 }
 
 Block InterpreterInsertQuery::getSampleBlock(

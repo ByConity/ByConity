@@ -33,6 +33,7 @@
 #include "QueryPlan/QueryPlan.h"
 
 #include <Storages/Hive/StorageCnchHive.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
 
 namespace DB
 {
@@ -230,8 +231,9 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableSca
     auto source_step = node.getStep();
     const auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(source_step->getStorage().get());
     const auto * cnch_hive = dynamic_cast<StorageCnchHive *>(source_step->getStorage().get());
+    const auto * cnch_file = dynamic_cast<IStorageCnchFile *>(source_step->getStorage().get());
 
-    if (cnch_table || cnch_hive)
+    if (cnch_table || cnch_hive || cnch_file)
     {
         const auto & worker_group = cluster_info_context.context->getCurrentWorkerGroup();
         auto worker_group_status_ptr = cluster_info_context.context->getWorkerGroupStatusPtr();

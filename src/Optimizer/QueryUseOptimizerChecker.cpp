@@ -33,6 +33,7 @@
 #include "Storages/Hive/StorageCnchHive.h"
 #include "Storages/StorageCnchMergeTree.h"
 #include "Storages/StorageMaterializedView.h"
+#include "Storages/RemoteFile/IStorageCnchFile.h"
 //#include <Common/TestLog.h>
 
 namespace DB

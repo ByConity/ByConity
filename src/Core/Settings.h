@@ -216,6 +216,15 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, s3_max_single_read_retries, 4, "The maximum number of retries during single S3 read.", 0) \
     M(UInt64, s3_max_redirects, 10, "Max number of S3 redirects hops allowed.", 0) \
     M(UInt64, s3_max_connections, 1024, "The maximum number of connections per server.", 0) \
+    M(Bool, s3_check_objects_after_upload, false, "Check each uploaded object to s3 with head request to be sure that upload was successful",0) \
+    M(UInt64, s3_max_unexpected_write_error_retries, 4, "The maximum number of retries in case of unexpected errors during S3 write.", 0) \
+    M(UInt64, s3_upload_part_size_multiply_factor, 2, "Multiply s3_min_upload_part_size by this factor each time s3_multiply_parts_count_threshold parts were uploaded from a single write to S3.", 0) \
+    M(UInt64, s3_upload_part_size_multiply_parts_count_threshold, 500, "Each time this number of parts was uploaded to S3 s3_min_upload_part_size multiplied by s3_upload_part_size_multiply_factor.", 0) \
+    M(String, s3_access_key_id, "", "S3 table access key id", 0) \
+    M(String, s3_access_key_secret, "", "S3 table access key secret", 0) \
+    M(Bool, s3_use_read_ahead, true, "Enable read ahead buffer when read s3, now it is just for CnchS3", 0) \
+    M(Bool, overwrite_current_file, false, "Enable overwrite current file, nou it is just for CnchS3/CnchHDFS", 0) \
+    M(Bool, insert_new_file, true, "Create new file when write data into the file, nou it is just for CnchS3/CnchHDFS", 0) \
     M(Bool, extremes, false, "Calculate minimums and maximums of the result columns. They can be output in JSON-formats.", IMPORTANT) \
     M(Bool, use_uncompressed_cache, false, "Whether to use the cache of uncompressed blocks.", 0) \
     M(Bool, replace_running_query, false, "Whether the running request should be canceled with the same id as the new one.", 0) \
@@ -1484,36 +1493,19 @@ enum PreloadLevelSettings : UInt64
       "A blacklist for merge task, to prevent the generation of MergeTasks for some tables.", \
       0) \
     M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
-    M(Bool, enable_view_based_query_rewrite, false, "Whether to enable view-based query rewriting.", 0) \
-    M(Bool, enable_mv_estimate_read_cost, false, "Enable materialized view estimate with read cost", 0) \
     M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \
-    M(UInt64, \
-      max_rows_to_refresh_by_partition, \
-      100000000, \
-      "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", \
-      0) \
-    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0) \
-    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0) \
-    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0) \
-    M(UInt64, \
-      expired_start_hour_to_merge, \
-      12, \
-      "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", \
-      0) \
-    M(UInt64, \
-      expired_end_hour_to_merge, \
-      12, \
-      "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", \
-      0) \
-    M(UInt64, \
-      strict_rows_to_schedule_merge, \
-      50000000, \
-      "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", \
-      0) \
-    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0) \
-    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0) \
-    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0) \
-    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0) \
+    M(Bool, enable_element_mv_rows, false, "Whether enable element query calculate base rows and view rows", 0) \
+    M(UInt64, max_rows_to_refresh_by_partition, 100000000, "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", 0) \
+    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0)\
+    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0)\
+    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0)\
+    M(UInt64, expired_start_hour_to_merge, 12, "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", 0)\
+    M(UInt64, expired_end_hour_to_merge, 12, "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", 0)\
+    M(UInt64, strict_rows_to_schedule_merge, 50000000, "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", 0)\
+    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0)\
+    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0)\
+    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
+    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
     M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
     M(String, virtual_warehouse_write, "", "The write vw name set by user on which the query run", 0) \
@@ -2097,6 +2089,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
     M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
     M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0) \
+    M(Bool, allow_attach_parts_with_different_table_definition_hash, true, "Whether to allow attaching of parts with different table definition hash to target table.", 0)  \
     M(String, tenant_id, "", "tenant_id of cnch user", 0) \
     M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
     M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \

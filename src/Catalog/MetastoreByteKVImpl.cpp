@@ -149,6 +149,7 @@ bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommit
         put_req.key = Slice(single_put.key);
         put_req.value = Slice(single_put.value);
         put_req.if_not_exists = single_put.if_not_exists;
+        put_req.ttl = single_put.ttl;
 
         if (single_put.expected_value)
         {

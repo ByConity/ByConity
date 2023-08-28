@@ -2,17 +2,17 @@
 
 #include <memory>
 #include <unordered_map>
+#include <Core/BackgroundSchedulePool.h>
 #include <Core/QueryProcessingStage.h>
+#include <DataStreams/BlockIO.h>
+#include <DataStreams/IBlockStream_fwd.h>
 #include <Formats/FormatFactory.h>
+#include <IO/ReadBuffer.h>
+#include <Interpreters/Context_fwd.h>
+#include <Parsers/IAST_fwd.h>
 #include <Processors/Formats/IOutputFormat.h>
-
-#include "Common/ThreadPool.h"
-#include "common/types.h"
-#include "DataStreams/BlockIO.h"
-#include "DataStreams/IBlockStream_fwd.h"
-#include "IO/ReadBuffer.h"
-#include "Interpreters/Context_fwd.h"
-#include "Parsers/IAST_fwd.h"
+#include <Common/ThreadPool.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -23,6 +23,7 @@ class AsyncQueryManager : public WithContext
 {
 public:
     explicit AsyncQueryManager(ContextWeakMutablePtr context_);
+    ~AsyncQueryManager();
 
     void insertAndRun(
         String & query,

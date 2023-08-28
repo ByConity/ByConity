@@ -13,6 +13,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <Interpreters/CnchQueryMetrics/QueryMetricLogHelper.h>
 #include <Interpreters/CnchSystemLog.h>
 #include <Common/config_version.h>

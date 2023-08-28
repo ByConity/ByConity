@@ -59,11 +59,19 @@ struct SingleRequest
         if (!expected_.empty())
             expected_value = expected_;
     }
+
+    explicit SingleRequest(const std::string & key_, const std::string & value_, uint64_t ttl_) : key(key_), value(value_), ttl(ttl_)
+    {
+    }
+
     RequestType type;
     std::string key;
     std::string value;
     bool if_not_exists = false;
     std::optional<std::string> expected_value;
+    // the inserted key will be expired after n seconds.
+    // no effect when set to 0
+    uint64_t ttl{0};
     /// custom callback when conflict happens. Pass the error code and error message as parameter
     std::function<void(int, const std::string &)> callback;
 };
@@ -74,7 +82,7 @@ using SingleDeleteRequest = SingleRequest<RequestType::DELETE>;
 
 struct BatchCommitRequest
 {
-    explicit BatchCommitRequest(const bool with_cas_ = true, const bool allow_cas_fail_ = false)
+    BatchCommitRequest(const bool with_cas_ = true, const bool allow_cas_fail_ = false)
         : with_cas(with_cas_), allow_cas_fail(allow_cas_fail_)
     {
     }

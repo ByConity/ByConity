@@ -406,6 +406,29 @@ public:
     void clearStagePartsMeta(const StoragePtr & table, const DataPartsVector & parts);
     void clearDataPartsMetaForTable(const StoragePtr & table);
 
+    /**
+     * @brief Move specified items into trash.
+     *
+     * @param skip_part_cache Evict parts caches if set to `false`.
+     */
+    void moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, bool skip_part_cache = false);
+
+    /**
+     * @brief Delete specified trashed items from catalog.
+     */
+    void clearTrashItems(const StoragePtr & table, const TrashItems & items);
+
+    /**
+     * @brief Get all trashed parts in given table.
+     *
+     * Trashed items including data parts, staged parts, and deleted bitmaps.
+     *
+     * @param limit Limit the result retured. Disabled with value `0`.
+     * @return Trashed parts.
+     */
+    TrashItems getDataItemsInTrash(const StoragePtr & storage, const size_t & limit = 0);
+
+
     /// APIs to sync data parts for preallocate mode
     std::vector<TxnTimestamp> getSyncList(const StoragePtr & table);
     void clearSyncList(const StoragePtr & table, std::vector<TxnTimestamp> & sync_list);
@@ -432,7 +455,7 @@ public:
     /// TODO:
     DataPartsVector getAllDataPartsBetween(const StoragePtr &, const TxnTimestamp &, const TxnTimestamp &) { return {}; }
 
-    void setTableClusterStatus(const UUID & table_uuid, const bool clustered);
+    void setTableClusterStatus(const UUID & table_uuid, const bool clustered, const UInt64 & table_definition_hash);
     void getTableClusterStatus(const UUID & table_uuid, bool & clustered);
     bool isTableClustered(const UUID & table_uuid);
 
@@ -519,8 +542,12 @@ public:
 
     void setAsyncQueryStatus(const String & id, const Protos::AsyncQueryStatus & status) const;
 
+    void markBatchAsyncQueryStatusFailed(std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason) const;
+
     /// TODO(WangTao): consider add some scan/delete interfaces for ops.
     bool tryGetAsyncQueryStatus(const String & id, Protos::AsyncQueryStatus & status) const;
+
+    std::vector<Protos::AsyncQueryStatus> getIntermidiateAsyncQueryStatuses() const;
 
     // Interfaces to support s3 storage
     // Delete detached parts from 'from_tbl' with `detached_part_names`,

@@ -1,4 +1,5 @@
 #include <IO/ReadBufferFromFileDecorator.h>
+#include <Common/filesystemHelpers.h>
 
 
 namespace DB

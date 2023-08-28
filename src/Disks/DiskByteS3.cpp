@@ -189,7 +189,7 @@ std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String& pat
 {
     return std::make_unique<WriteBufferFromByteS3>(s3_util.getClient(), s3_util.getBucket(),
         std::filesystem::path(root_prefix) / path, 16 * 1024 * 1024,
-        16 * 1024 * 1024, settings.file_meta, settings.buffer_size);
+        16 * 1024 * 1024, false, settings.file_meta, settings.buffer_size);
 }
 
 void DiskByteS3::removeFile(const String& path)

@@ -687,7 +687,7 @@ namespace Catalog
                 // Strings masking_policy_names = getMaskingPolicyNames(ast);
                 Strings masking_policy_names = {};
                 meta_proxy->createTable(name_space, tb_data, dependencies, masking_policy_names);
-                meta_proxy->setTableClusterStatus(name_space, uuid_str, true);
+                meta_proxy->setTableClusterStatus(name_space, uuid_str, true, createTableFromDataModel(context, tb_data)->getTableHashForClusterBy());
 
                 LOG_INFO(log, "finish createTable namespace {} table_name {}, uuid {}", name_space, storage_id.getFullTableName(), uuid_str);
             },
@@ -867,7 +867,7 @@ namespace Catalog
 
                 // Set cluster status after Alter table is successful to update PartCacheManager with new table metadata
                 if (is_recluster)
-                    setTableClusterStatus(storage->getStorageUUID(), false);
+                    setTableClusterStatus(storage->getStorageUUID(), false, new_table->getTableHashForClusterBy());
 
                 if (context.getCnchStorageCache())
                 {
@@ -1529,7 +1529,7 @@ namespace Catalog
                 // If target table is a bucket table, ensure that the source part is not a bucket part or if the source part is a bucket part
                 // ensure that the table_definition_hash is the same before committing
                 // TODO: Implement rollback for this to work properly
-                if (storage->isBucketTable())
+                if (storage->isBucketTable() && !context.getSettings().allow_attach_parts_with_different_table_definition_hash)
                 {
                     for (auto & part : parts)
                     {
@@ -1546,6 +1546,22 @@ namespace Catalog
                                 "Source table is not a bucket table or has a different CLUSTER BY definition from the target table. ",
                                 ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
                         }
+                    }
+                }
+
+                // If target table is a bucket table, table_definition_hash check was skipped and is initially fully clustered
+                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false 
+                if (storage->isBucketTable()
+                    && context.getSettings().allow_attach_parts_with_different_table_definition_hash
+                    && isTableClustered(storage->getStorageUUID()))
+                {
+                    for (auto & part : parts)
+                    {
+                        if (!part->deleted && (storage->getTableHashForClusterBy() != part->table_definition_hash))
+                        {
+                            setTableClusterStatus(storage->getStorageUUID(), false, storage->getTableHashForClusterBy());
+                            break;
+                        }       
                     }
                 }
 
@@ -2429,7 +2445,7 @@ namespace Catalog
                 // If target table is a bucket table, ensure that the source part is not a bucket part or if the source part is a bucket part
                 // ensure that the table_definition_hash is the same before committing
                 // TODO: Implement rollback for this to work properly
-                if (table->isBucketTable())
+                if (table->isBucketTable() && !context.getSettings().allow_attach_parts_with_different_table_definition_hash)
                 {
                     for (auto & part : commit_data.data_parts)
                     {
@@ -2439,6 +2455,22 @@ namespace Catalog
                                     + "] is different from target table's table_definition_hash  ["
                                     + std::to_string(table->getTableHashForClusterBy()) + "]",
                                 ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
+                    }
+                }
+
+                // If target table is a bucket table, table_definition_hash check was skipped and is initially fully clustered
+                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false 
+                if (table->isBucketTable()
+                    && context.getSettings().allow_attach_parts_with_different_table_definition_hash
+                    && isTableClustered(table->getStorageUUID()))
+                {
+                    for (auto & part : commit_data.data_parts)
+                    {
+                        if (!part->deleted && (table->getTableHashForClusterBy() != part->table_definition_hash))
+                        {
+                            setTableClusterStatus(table->getStorageUUID(), false, table->getTableHashForClusterBy());
+                            break;
+                        }       
                     }
                 }
 
@@ -3480,6 +3512,151 @@ namespace Catalog
             ProfileEvents::ClearDataPartsMetaForTableFailed);
     }
 
+    TrashItems Catalog::getDataItemsInTrash(const StoragePtr & storage, const size_t & limit)
+    {
+        TrashItems res;
+        auto & merge_tree_storage = dynamic_cast<MergeTreeMetaBase &>(*storage);
+        String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+        size_t prefix_length = MetastoreProxy::trashItemsPrefix(name_space, uuid).length();
+
+        auto it = meta_proxy->getItemsInTrash(name_space, uuid, limit);
+        while (it->next())
+        {
+            const auto & key = it->key();
+            String meta_key = key.substr(prefix_length, String::npos);
+            if (startsWith(meta_key, PART_STORE_PREFIX))
+            {
+                Protos::DataModelPart part_model;
+                part_model.ParseFromString(it->value());
+                auto part_model_wrapper = createPartWrapperFromModel(merge_tree_storage, part_model);
+                res.data_parts.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
+
+            }
+            else if (startsWith(meta_key, DELETE_BITMAP_PREFIX))
+            {
+                DataModelDeleteBitmapPtr model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();
+                model_ptr->ParseFromString(it->value());
+                res.delete_bitmaps.push_back(std::make_shared<DeleteBitmapMeta>(merge_tree_storage, model_ptr));
+            }
+        }
+
+        return res;
+    }
+
+    void Catalog::moveDataItemsToTrash(const StoragePtr & table, const TrashItems & items, const bool skip_part_cache)
+    {
+        if (items.empty())
+            return;
+
+        LOG_DEBUG(
+            log,
+            "Start drop metadata of {} parts, {} delete bitmaps, {} staged parts of table {}",
+            items.data_parts.size(),
+            items.delete_bitmaps.size(),
+            items.staged_parts.size(),
+            table->getStorageID().getNameForLogs());
+
+        String table_uuid = UUIDHelpers::UUIDToString(table->getStorageUUID());
+        String part_meta_prefix = MetastoreProxy::dataPartPrefix(name_space, table_uuid);
+        String trash_item_prefix = MetastoreProxy::trashItemsPrefix(name_space, table_uuid);
+
+        bool need_invalid_cache = context.getPartCacheManager() && !skip_part_cache;
+
+        size_t batch_size = 2000;
+        size_t parts_index{0}, delete_bitmaps_index{0}, staged_parts_index{0};
+        size_t drop_items_count = 0;
+
+        BatchCommitRequest batch_writes;
+
+        while (true)
+        {
+            if (parts_index < items.data_parts.size())
+            {
+                // Drop part metadata and add new one in trash;
+                const auto & server_part = items.data_parts[parts_index];
+                batch_writes.AddDelete(part_meta_prefix + server_part->info().getPartName());
+                batch_writes.AddPut(SinglePutRequest(
+                    MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, server_part->name()),
+                    server_part->part_model_wrapper->part_model->SerializeAsString()));
+                parts_index++;
+            }
+            else if (delete_bitmaps_index < items.delete_bitmaps.size())
+            {
+                // Drop delete bitmap metadata and add new one in trash;
+                const auto & model = *(items.delete_bitmaps[delete_bitmaps_index]->getModel());
+                batch_writes.AddDelete(MetastoreProxy::deleteBitmapKey(name_space, table_uuid, model));
+                batch_writes.AddPut(
+                    SinglePutRequest(MetastoreProxy::deleteBitmapKeyInTrash(name_space, table_uuid, model), model.SerializeAsString()));
+                delete_bitmaps_index++;
+            }
+            else if (staged_parts_index < items.staged_parts.size())
+            {
+                // Drop staged part metadata;
+                batch_writes.AddDelete(part_meta_prefix + items.staged_parts[staged_parts_index]->info().getPartName());
+                staged_parts_index++;
+            }
+            else
+                // Stop loop if no more drop item.
+                break;
+
+            drop_items_count++;
+
+            if (drop_items_count >= batch_size)
+            {
+                /// Commit the current batch.
+                BatchCommitResponse resp;
+                meta_proxy->batchWrite(batch_writes, resp);
+
+                /// Reset BatchCommitRequest.
+                batch_writes = {};
+                drop_items_count = 0;
+            }
+        }
+
+        if (drop_items_count)
+        {
+            /// Commit the current batch.
+            BatchCommitResponse resp;
+            meta_proxy->batchWrite(batch_writes, resp);
+        }
+
+        if (need_invalid_cache)
+            context.getPartCacheManager()->invalidPartCache(table->getStorageUUID(), items.data_parts);
+
+        LOG_DEBUG(
+            log,
+            "Finish clear metadata of {} parts, {} delete bitmaps, {} staged parts of table {}",
+            items.data_parts.size(),
+            items.delete_bitmaps.size(),
+            items.staged_parts.size(),
+            table->getStorageID().getNameForLogs());
+    }
+
+    void Catalog::clearTrashItems(const StoragePtr & table, const TrashItems & items)
+    {
+        if (items.empty())
+            return;
+
+        Strings drop_keys;
+        drop_keys.reserve(items.data_parts.size() + items.delete_bitmaps.size());
+        String table_uuid = UUIDHelpers::UUIDToString(table->getStorageUUID());
+
+        // Clear part meta record from trash
+        for (const auto & part : items.data_parts)
+            drop_keys.emplace_back(MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, part->name()));
+
+        // Clear bitmap meta record from trash
+        for (const auto & bitmap : items.delete_bitmaps)
+        {
+            const auto & model = *(bitmap->getModel());
+            drop_keys.emplace_back(MetastoreProxy::deleteBitmapKeyInTrash(name_space, table_uuid, model));
+        }
+
+        meta_proxy->multiDrop(drop_keys);
+
+        LOG_DEBUG(log, "Removed trash record of {} parts and {} delete bitmaps.", items.data_parts.size(), items.delete_bitmaps.size());
+    }
+
     std::vector<TxnTimestamp> Catalog::getSyncList(const StoragePtr & storage)
     {
         std::vector<TxnTimestamp> res;
@@ -3600,11 +3777,11 @@ namespace Catalog
         return res;
     }
 
-    void Catalog::setTableClusterStatus(const UUID & table_uuid, const bool clustered)
+    void Catalog::setTableClusterStatus(const UUID & table_uuid, const bool clustered, const UInt64 & table_definition_hash)
     {
         runWithMetricSupport(
             [&] {
-                meta_proxy->setTableClusterStatus(name_space, UUIDHelpers::UUIDToString(table_uuid), clustered);
+                meta_proxy->setTableClusterStatus(name_space, UUIDHelpers::UUIDToString(table_uuid), clustered, table_definition_hash);
                 /// keep the cache status up to date.
                 if (context.getPartCacheManager())
                     context.getPartCacheManager()->setTableClusterStatus(table_uuid, clustered);
@@ -4895,9 +5072,19 @@ namespace Catalog
         meta_proxy->setAsyncQueryStatus(name_space, id, status, context.getRootConfig().async_query_status_ttl);
     }
 
+    void Catalog::markBatchAsyncQueryStatusFailed(std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason) const
+    {
+        meta_proxy->markBatchAsyncQueryStatusFailed(name_space, statuses, reason);
+    }
+
     bool Catalog::tryGetAsyncQueryStatus(const String & id, Protos::AsyncQueryStatus & status) const
     {
         return meta_proxy->tryGetAsyncQueryStatus(name_space, id, status);
+    }
+
+    std::vector<Protos::AsyncQueryStatus> Catalog::getIntermidiateAsyncQueryStatuses() const
+    {
+        return meta_proxy->getIntermidiateAsyncQueryStatuses(name_space);
     }
 
     /// APIs for attach parts from s3

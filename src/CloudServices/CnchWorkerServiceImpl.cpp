@@ -50,6 +50,8 @@
 #endif
 
 #include <Storages/Hive/StorageCloudHive.h>
+#include <Storages/StorageCloudHive.h>
+#include <Storages/RemoteFile/IStorageCloudFile.h>
 
 namespace DB
 {
@@ -352,6 +354,37 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
 }
 
 
+void CnchWorkerServiceImpl::sendCnchFileDataParts(
+    google::protobuf::RpcController *,
+    const Protos::SendCnchFileDataPartsReq * request,
+    Protos::SendCnchFileDataPartsResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try 
+    {
+        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
+        const auto & query_context = session->context;
+
+        auto storage = DatabaseCatalog::instance().getTable({request->database_name(), request->table_name()}, query_context);
+        auto & cnchfile_table = dynamic_cast<IStorageCloudFile &>(*storage);
+
+        LOG_DEBUG(log, "Receiving parts for table {}", cnchfile_table.getStorageID().getNameForLogs());
+
+        auto data_parts = createCnchFileDataParts(getContext(), request->parts());
+
+        cnchfile_table.loadDataParts(data_parts);
+
+        LOG_DEBUG(log, "Received and loaded {} file parts.", data_parts.size());
+    } 
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+
+}
+
 void CnchWorkerServiceImpl::checkDataParts(
     google::protobuf::RpcController * cntl,
     const Protos::CheckDataPartsReq * request,
@@ -555,6 +588,13 @@ void CnchWorkerServiceImpl::sendResources(
                 auto settings = hive_table->getSettings();
                 auto files = RPCHelpers::deserialize(data.hive_parts(), query_context, storage->getInMemoryMetadataPtr(), *settings);
                 hive_table->loadHiveFiles(files);
+            }
+            else if (auto * cloud_file_table = dynamic_cast<IStorageCloudFile *>(storage.get()))
+            {
+                auto data_parts = createCnchFileDataParts(getContext(), data.file_parts());
+                cloud_file_table->loadDataParts(data_parts);
+
+                LOG_DEBUG(log, "Received and loaded {}  cloud file parts for table {}", data_parts.size(), cloud_file_table->getStorageID().getNameForLogs());
             }
             else
                 throw Exception("Unknown table engine: " + storage->getName(), ErrorCodes::UNKNOWN_TABLE);

@@ -32,6 +32,8 @@
 #include <Interpreters/executeQuery.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/PartitionCommands.h>
+#include <Parsers/ParserPartition.h>
+#include <Parsers/parseQuery.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
 #include <Storages/MergeTree/S3PartsAttachMeta.h>
@@ -331,8 +333,11 @@ void CnchAttachProcessor::exec()
     AttachContext attach_ctx(*query_ctx, 8,
         query_ctx->getSettingsRef().cnch_part_attach_max_threads, logger);
 
+
     NameSet staged_part_names;
     NameSet partitions_filter;
+    std::vector<ASTPtr> attached_partitions;
+
     AttachFilter filter;
     try
     {
@@ -361,7 +366,7 @@ void CnchAttachProcessor::exec()
             {
                 for (const auto & part : prepared_parts.second)
                     partitions_filter.emplace(part->info.partition_id);
-                commitParts(prepared_parts.second, staged_part_names);
+                commitParts(prepared_parts.second, staged_part_names, attached_partitions);   
             }
         }
     }
@@ -389,7 +394,7 @@ void CnchAttachProcessor::exec()
         if (is_unique_tbl && query_ctx->getSettingsRef().enable_wait_attached_staged_parts_to_visible && !staged_part_names.empty())
             waitingForDedup(partitions_filter, staged_part_names);
 
-        refreshView();
+        refreshView(attached_partitions, attach_ctx);
     }
     catch(...)
     {
@@ -451,7 +456,7 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
     {
         String database = command.from_database.empty() ? query_ctx->getCurrentDatabase() : command.from_database;
         from_storage = DatabaseCatalog::instance().getTable(StorageID(database, command.from_table), query_ctx);
-        auto * from_cnch_table = target_tbl.checkStructureAndGetCnchMergeTree(from_storage);
+        auto * from_cnch_table = target_tbl.checkStructureAndGetCnchMergeTree(from_storage, query_ctx);
 
         if (command.attach_from_detached)
         {
@@ -525,36 +530,6 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
     injectFailure(AttachFailurePoint::CHECK_FILTER_RESULT);
 
     filter.checkFilterResult(chained_parts_from_sources, query_ctx->getSettingsRef().cnch_part_attach_limit);
-
-    // Check part's hash def against table's
-    if (target_tbl.isBucketTable() && !query_ctx->getSettingsRef().skip_table_definition_hash_check)
-    {
-        UInt64 table_def_hash = target_tbl.getTableHashForClusterBy();
-        auto check_part_chain_hash = [this, table_def_hash](
-                const IMergeTreeDataPartPtr& part) {
-            for (IMergeTreeDataPartPtr current = part; current != nullptr;
-                current = current->tryGetPreviousPart())
-            {
-                if (current->bucket_number < 0 || table_def_hash != part->table_definition_hash)
-                {
-                    LOG_INFO(logger, fmt::format("Part's table_definition_hash [{}] "
-                        "is different from target table's table_definition_hash [{}]. "
-                        "Part file path: {}, Part bucket number: {}", part->table_definition_hash,
-                        table_def_hash, part->getFullPath(), part->bucket_number));
-                    throw Exception("Source parts are not bucket parts or have different CLUSTER BY "
-                        "definition from the target table. ", ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
-                }
-            }
-        };
-
-        for (const auto& parts : chained_parts_from_sources)
-        {
-            for (const auto& part : parts)
-            {
-                check_part_chain_hash(part);
-            }
-        }
-    }
 
     return {std::move(filter), std::move(chained_parts_from_sources)};
 }
@@ -836,12 +811,31 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Tas
     return parts_from_sources;
 }
 
-void CnchAttachProcessor::commitParts(MutableMergeTreeDataPartsCNCHVector & prepared_parts, NameSet & staged_parts_name)
+void CnchAttachProcessor::commitParts(MutableMergeTreeDataPartsCNCHVector & prepared_parts, 
+                     NameSet & staged_parts_name, std::vector<ASTPtr> & attached_partitions)
 {
     injectFailure(AttachFailurePoint::BEFORE_COMMIT_FAIL);
 
     TxnTimestamp commit_time;
     CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
+
+    std::set<String> attached_partition_ids;
+    ParserPartition parser;
+    FormatSettings format_settings;
+    for (const auto & part : prepared_parts)
+    {
+        if (!attached_partition_ids.contains(part->info.partition_id))
+        {
+            attached_partition_ids.insert(part->info.partition_id);
+            WriteBufferFromOwnString writer;
+            part->partition.serializeText(target_tbl, writer, format_settings);
+            LOG_TRACE(logger, fmt::format("Attached partition {}", writer.str()));
+            String formated_partition = writer.str();
+            ASTPtr partition_ast = parseQuery(parser, formated_partition, query_ctx->getSettingsRef().max_query_size,
+                 query_ctx->getSettingsRef().max_parser_depth);
+            attached_partitions.push_back(partition_ast);
+        }
+    }
     if (is_unique_tbl)
     {
         DeleteBitmapMetaPtrVector bitmap_metas;
@@ -1340,7 +1334,8 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                             part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
                             parts_with_history.first[offset] = part;
                             parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_name);
-                            parts_with_history.second[offset]->table_definition_hash = table_def_hash;
+                            if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash)
+                                parts_with_history.second[offset]->table_definition_hash = table_def_hash;
 
                             if (is_unique_tbl && attach_meta)
                             {
@@ -1402,7 +1397,8 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                     part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
                     parts_with_history.first[offset] = part;
                     parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_info.getPartNameWithHintMutation());
-                    parts_with_history.second[offset]->table_definition_hash = table_def_hash;
+                    if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash)
+                        parts_with_history.second[offset]->table_definition_hash = table_def_hash;
                     ++offset;
                 }
             }
@@ -1492,25 +1488,37 @@ void CnchAttachProcessor::waitingForDedup(const NameSet & partitions_filter, con
     LOG_INFO(logger, "Attach partition dedup {} parts finished, costs {} ms", staged_parts_name.size(), timer.elapsedMilliseconds());
 }
 
-void CnchAttachProcessor::refreshView()
+void CnchAttachProcessor::refreshView(const std::vector<ASTPtr>& attached_partitions, AttachContext& attach_ctx)
 {
-    /// When target table have some dependencies pushing data to views with refresh actions.
-    try
-    {
-        ContextMutablePtr refresh_context = Context::createCopy(query_ctx);
-        auto worker_group = getWorkerGroupForTable(target_tbl, refresh_context);
-        refresh_context->setCurrentWorkerGroup(worker_group);
-        std::vector<StoragePtr> views = getViews(target_tbl.getStorageID(), refresh_context);
-        for (auto & view : views)
-        {
-            if (auto mv = dynamic_cast<StorageMaterializedView*>(view.get()))
-                mv->refresh(command.partition, refresh_context, true);
-        }
-    }
-    catch(...)
-    {
-        tryLogCurrentException(logger);
-    }
+   try
+   {
+       ExceptionHandler except_handler;
+       ThreadPool& worker_pool = attach_ctx.getWorkerPool(attached_partitions.size());
+       for (const auto& partition_ast : attached_partitions)
+       {
+           worker_pool.scheduleOrThrowOnError(createExceptionHandledJob([this, ast = partition_ast]() {
+               auto refresh_context = Context::createCopy(query_ctx);
+               auto worker_group = getWorkerGroupForTable(target_tbl, refresh_context);
+               refresh_context->setCurrentWorkerGroup(worker_group);
+               std::vector<StoragePtr> views = getViews(target_tbl.getStorageID(), refresh_context);
+
+               for (auto& view : views)
+               {
+                   if (auto * mv = dynamic_cast<StorageMaterializedView*>(view.get()))
+                   {
+                       mv->refresh(ast, refresh_context, true);
+                   }
+               }
+           }, except_handler));
+       }
+
+       worker_pool.wait();
+       except_handler.throwIfException();
+   }
+   catch(...)
+   {
+       tryLogCurrentException(logger);
+   }
 }
 
 void CnchAttachProcessor::verifyPartsNum(size_t parts_num) const

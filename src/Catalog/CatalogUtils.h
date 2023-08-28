@@ -18,6 +18,7 @@
 #include <Storages/CnchPartitionInfo.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
+#include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Common/Exception.h>
 
 namespace DB
@@ -39,6 +40,22 @@ struct CommitItems
     DataPartsVector data_parts;
     DeleteBitmapMetaPtrVector delete_bitmaps;
     DataPartsVector staged_parts;
+
+    bool empty() const
+    {
+        return data_parts.empty() && delete_bitmaps.empty() && staged_parts.empty();
+    }
+};
+
+/**
+ * @class TrashItems
+ * @brief Contains all types of trashed data.
+ */
+struct TrashItems
+{
+    ServerDataPartsVector data_parts;
+    DeleteBitmapMetaPtrVector delete_bitmaps;
+    ServerDataPartsVector staged_parts;
 
     bool empty() const
     {

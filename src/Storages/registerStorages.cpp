@@ -52,10 +52,14 @@ void registerStorageGenerateRandom(StorageFactory & factory);
 #if USE_AWS_S3
 void registerStorageS3(StorageFactory & factory);
 void registerStorageCOS(StorageFactory & factory);
+void registerStorageCnchS3(StorageFactory & factory);
+void registerStorageCloudS3(StorageFactory & factory);
 #endif
 
 #if USE_HDFS
 void registerStorageHDFS(StorageFactory & factory);
+void registerStorageCnchHDFS(StorageFactory & factory);
+void registerStorageCloudHDFS(StorageFactory & factory);
 #endif
 
 void registerStorageODBC(StorageFactory & factory);
@@ -118,10 +122,14 @@ void registerStorages()
     #if USE_AWS_S3
     registerStorageS3(factory);
     registerStorageCOS(factory);
+    registerStorageCnchS3(factory);
+    registerStorageCloudS3(factory);
     #endif
 
     #if USE_HDFS
     registerStorageHDFS(factory);
+    registerStorageCnchHDFS(factory);
+    registerStorageCloudHDFS(factory);
     #endif
 
     registerStorageODBC(factory);
