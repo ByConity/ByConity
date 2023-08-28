@@ -173,43 +173,39 @@ namespace RPCHelpers
             hive_file->serialize(*proto_file);
         }
 
-        std::cout << proto.DebugString() << std::endl;
+        LOG_TRACE(&Poco::Logger::get(__func__), "Proto files {}", proto.DebugString());
     }
 
-    // LOG_TRACE(&Poco::Logger::get(__func__), "Proto files {}", proto.DebugString());
-    std::cout << proto.DebugString() << std::endl;
-}
-
-
-HiveFiles deserialize(
-    const Protos::ProtoHiveFiles & proto,
-    const ContextPtr & context,
-    const StorageMetadataPtr & metadata,
-    const CnchHiveSettings & settings)
-{
-    HiveFiles files;
-    DiskPtr disk;
-    std::unordered_map<String, HivePartitionPtr> partition_map;
-
-    for (const auto & file : proto.files())
+    HiveFiles deserialize(
+        const Protos::ProtoHiveFiles & proto,
+        const ContextPtr & context,
+        const StorageMetadataPtr & metadata,
+        const CnchHiveSettings & settings)
     {
-        if (!disk)
-            disk = HiveUtil::getDiskFromURI(proto.sd_url(), context, settings);
+        HiveFiles files;
+        DiskPtr disk;
+        std::unordered_map<String, HivePartitionPtr> partition_map;
 
-        HivePartitionPtr partition;
-        if (auto it = partition_map.find(file.partition_id()); it != partition_map.end())
-            partition = it->second;
-        else if (metadata->hasPartitionKey())
+        for (const auto & file : proto.files())
         {
-            partition = std::make_shared<HivePartition>();
-            partition->load(file.partition_id(), metadata->getPartitionKey());
-            partition_map.emplace(file.partition_id(), partition);
-        }
+            if (!disk)
+                disk = HiveUtil::getDiskFromURI(proto.sd_url(), context, settings);
 
-        files.emplace_back(
-            IHiveFile::create(static_cast<IHiveFile::FileFormat>(file.format()), file.file_path(), file.file_size(), disk, partition));
+            HivePartitionPtr partition;
+            if (auto it = partition_map.find(file.partition_id()); it != partition_map.end())
+                partition = it->second;
+            else if (metadata->hasPartitionKey())
+            {
+                partition = std::make_shared<HivePartition>();
+                partition->load(file.partition_id(), metadata->getPartitionKey());
+                partition_map.emplace(file.partition_id(), partition);
+            }
+
+            files.emplace_back(
+                IHiveFile::create(static_cast<IHiveFile::FileFormat>(file.format()), file.file_path(), file.file_size(), disk, partition));
+        }
+        return files;
     }
-    return files;
 }
 }
 
