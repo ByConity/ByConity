@@ -42,7 +42,6 @@ public:
         const String & bucket_,
         const String & key_,
         UInt64 max_single_read_retries_,
-        size_t buffer_size_ = DBMS_DEFAULT_BUFFER_SIZE);
         const ReadSettings & read_settings,
         bool restricted_seek_ = true);
 
@@ -52,7 +51,7 @@ public:
     off_t getPosition() override;
 
     std::string getFileName() const override { return bucket + "/" + key; }
-    size_t getFileSize() override;
+    size_t getFileSize();
 
 private:
     std::unique_ptr<ReadBuffer> initialize();
