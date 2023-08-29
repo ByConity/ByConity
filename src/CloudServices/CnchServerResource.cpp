@@ -21,11 +21,11 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
+#include <Storages/RemoteFile/StorageCnchHDFS.h>
+#include <Storages/RemoteFile/StorageCnchS3.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
-#include <Interpreters/WorkerStatusManager.h>
-#include <Storages/RemoteFile/StorageCnchS3.h>
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Storages/Hive/StorageCnchHive.h"
 
