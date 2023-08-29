@@ -15,21 +15,22 @@
 
 #pragma once
 
-#include <Common/HostWithPorts.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Protos/RPCHelpers.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Common/HostWithPorts.h>
 // #include <Transaction/ICnchTransaction.h>
 #include <Storages/DataPart_fwd.h>
+#include <memory>
+#include <Catalog/DataModelPartWrapper.h>
+#include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Protos/data_models.pb.h>
+#include <Storages/Hive/HiveDataPart_fwd.h>
 #include <Transaction/LockRequest.h>
 #include <Transaction/TxnTimestamp.h>
-#include <Catalog/DataModelPartWrapper_fwd.h>
-#include <Catalog/DataModelPartWrapper.h>
-#include <Protos/data_models.pb.h>
 #include <google/protobuf/repeated_field.h>
-#include <memory>
 
 namespace DB
 {
@@ -43,9 +44,7 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModelCommon(
     const MergeTreeMetaBase & storage, const Protos::DataModelPart & part_model, std::optional<std::string> relative_path = std::nullopt);
 
 MutableMergeTreeDataPartCNCHPtr createPartFromModel(
-    const MergeTreeMetaBase & storage,
-    const Protos::DataModelPart & part_model,
-    std::optional<std::string> relative_path = std::nullopt);
+    const MergeTreeMetaBase & storage, const Protos::DataModelPart & part_model, std::optional<std::string> relative_path = std::nullopt);
 
 DataPartInfoPtr createPartInfoFromModel(const Protos::DataModelPartInfo & part_info_model);
 
@@ -64,36 +63,33 @@ inline std::vector<T> createPartVectorFromModels(
     return res;
 }
 
-void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time = false);
+void fillPartModel(
+    const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time = false);
 
 void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInfo & part_info_model);
 
 template <class T>
-inline void fillPartsModel(const IStorage & storage, const std::vector<T> & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model)
+inline void
+fillPartsModel(const IStorage & storage, const std::vector<T> & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model)
 {
-    std::for_each(parts.begin(), parts.end(), [&](const T & part)
-    {
-        fillPartModel(storage, *part, *parts_model.Add());
-    });
+    std::for_each(parts.begin(), parts.end(), [&](const T & part) { fillPartModel(storage, *part, *parts_model.Add()); });
 }
 
 template <class T>
 inline void fillPartsInfoModel(const std::vector<T> & parts, pb::RepeatedPtrField<Protos::DataModelPartInfo> & part_infos_model)
 {
-    std::for_each(parts.begin(), parts.end(), [&](const T & part)
-    {
-        fillPartInfoModel(*part, *part_infos_model.Add());
-    });
+    std::for_each(parts.begin(), parts.end(), [&](const T & part) { fillPartInfoModel(*part, *part_infos_model.Add()); });
 }
 
-void fillPartsModelForSend(const IStorage & storage, const ServerDataPartsVector & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model);
+void fillPartsModelForSend(
+    const IStorage & storage, const ServerDataPartsVector & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model);
 
 template <class T>
-inline void fillPartsModelForSend(const IStorage & storage, const std::vector<T> & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model)
+inline void
+fillPartsModelForSend(const IStorage & storage, const std::vector<T> & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model)
 {
     std::set<UInt64> sent_columns_commit_time;
-    std::for_each(parts.begin(), parts.end(), [&](const T & part)
-    {
+    std::for_each(parts.begin(), parts.end(), [&](const T & part) {
         auto & part_model = *parts_model.Add();
         fillPartModel(storage, *part, part_model);
         if (part_model.has_columns_commit_time() && sent_columns_commit_time.count(part_model.columns_commit_time()) == 0)
@@ -121,13 +117,13 @@ inline void fillBasePartAndDeleteBitmapModels(
     }
 }
 
-inline void fillTopologyVersions(const std::list<CnchServerTopology> & topologies, pb::RepeatedPtrField<Protos::DataModelTopology> & topology_versions)
+inline void
+fillTopologyVersions(const std::list<CnchServerTopology> & topologies, pb::RepeatedPtrField<Protos::DataModelTopology> & topology_versions)
 {
-    std::for_each(topologies.begin(), topologies.end(), [&](const auto & topology)
-    {
+    std::for_each(topologies.begin(), topologies.end(), [&](const auto & topology) {
         auto & topology_version = *topology_versions.Add();
         topology_version.set_expiration(topology.getExpiration());
-        for (const auto & [k,v] : topology.getVwTopologies())
+        for (const auto & [k, v] : topology.getVwTopologies())
         {
             auto & vw_topology = *topology_version.add_vw_topologies();
             vw_topology.set_server_vw_name(k);
@@ -144,11 +140,11 @@ inline void fillTopologyVersions(const std::list<CnchServerTopology> & topologie
     });
 }
 
-inline std::list<CnchServerTopology> createTopologyVersionsFromModel(const pb::RepeatedPtrField<Protos::DataModelTopology> & topology_versions)
+inline std::list<CnchServerTopology>
+createTopologyVersionsFromModel(const pb::RepeatedPtrField<Protos::DataModelTopology> & topology_versions)
 {
     std::list<CnchServerTopology> res;
-    std::for_each(topology_versions.begin(), topology_versions.end(), [&](const auto & model)
-    {
+    std::for_each(topology_versions.begin(), topology_versions.end(), [&](const auto & model) {
         UInt64 expiration = model.expiration();
         auto topology = CnchServerTopology();
         topology.setExpiration(expiration);
@@ -211,11 +207,9 @@ inline std::vector<T> createBasePartAndDeleteBitmapFromModelsForSend(
     std::vector<T> res = createPartVectorFromModelsForSend<T>(storage, parts_model, paths);
 
     auto bitmap_it = bitmaps_model.begin();
-    auto same_block = [](const Protos::DataModelDeleteBitmap & bitmap, const T & part)
-    {
-        return bitmap.partition_id() == part->info.partition_id
-               && bitmap.part_min_block() == part->info.min_block
-               && bitmap.part_max_block() == part->info.max_block;
+    auto same_block = [](const Protos::DataModelDeleteBitmap & bitmap, const T & part) {
+        return bitmap.partition_id() == part->info.partition_id && bitmap.part_min_block() == part->info.min_block
+            && bitmap.part_max_block() == part->info.max_block;
     };
     /// fill in bitmap metas for each part
     for (auto & part : res)
@@ -229,8 +223,7 @@ inline std::vector<T> createBasePartAndDeleteBitmapFromModelsForSend(
         {
             list_it = part->delete_bitmap_metas.insert_after(list_it, std::make_shared<Protos::DataModelDeleteBitmap>(*bitmap_it));
             bitmap_it++;
-        }
-        while (bitmap_it != bitmaps_model.end() && same_block(*bitmap_it, part));
+        } while (bitmap_it != bitmaps_model.end() && same_block(*bitmap_it, part));
     }
     return res;
 }
@@ -259,7 +252,8 @@ DataModelPartWrapperPtr createPartWrapperFromModelBasic(const Protos::DataModelP
 
 ServerDataPartPtr createServerPartFromDataPart(const MergeTreeMetaBase & storage, const IMergeTreeDataPartPtr & part);
 
-ServerDataPartsVector createServerPartsFromModels(const MergeTreeMetaBase & storage, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model);
+ServerDataPartsVector
+createServerPartsFromModels(const MergeTreeMetaBase & storage, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model);
 
 ServerDataPartsVector createServerPartsFromDataParts(const MergeTreeMetaBase & storage, const MergeTreeDataPartsCNCHVector & parts);
 
@@ -267,9 +261,6 @@ IMergeTreeDataPartsVector createPartVectorFromServerParts(
     const MergeTreeMetaBase & storage,
     const ServerDataPartsVector & parts,
     const std::optional<std::string> & relative_path = std::nullopt);
-
-void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
-HiveDataPartsCNCHVector createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model);
 
 size_t fillCnchFilePartsModel(const FileDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model);
 FileDataPartsCNCHVector createCnchFileDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model);

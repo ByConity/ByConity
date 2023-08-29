@@ -167,7 +167,14 @@ public:
     // Read object
     bool read(const String& key, size_t offset, size_t size, BufferBase::Buffer& buffer) const;
 
-    std::tuple<bool, String, std::vector<String>> listObjectsWithPrefix(
+    struct S3ListResult
+    {
+        bool has_more {true};
+        std::optional<String> token;
+        Strings object_names;
+        std::vector<size_t> object_sizes;
+    };
+    S3ListResult listObjectsWithPrefix(
         const String& prefix, const std::optional<String>& token, int limit = 1000) const;
 
     // Write object

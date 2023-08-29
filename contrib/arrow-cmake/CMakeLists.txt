@@ -98,14 +98,14 @@ set(thriftcpp_threads_SOURCES
         "${LIBRARY_DIR}/src/thrift/concurrency/Mutex.cpp"
         )
 
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/build/cmake/config.h.in" "${CMAKE_CURRENT_BINARY_DIR}/thrift/config.h")
+configure_file("${ClickHouse_SOURCE_DIR}/contrib/thrift/build/cmake/config.h.in" "${ClickHouse_SOURCE_DIR}/contrib/thrift/lib/cpp/src/thrift/config.h")
 
 include_directories("${CMAKE_CURRENT_BINARY_DIR}")
 
 add_library(${THRIFT_LIBRARY} ${thriftcpp_SOURCES} ${thriftcpp_threads_SOURCES})
 set_target_properties(${THRIFT_LIBRARY} PROPERTIES CXX_STANDARD 14) # REMOVE after https://github.com/apache/thrift/pull/1641
 target_include_directories(${THRIFT_LIBRARY} SYSTEM PUBLIC "${ClickHouse_SOURCE_DIR}/contrib/thrift/lib/cpp/src")
-target_link_libraries (${THRIFT_LIBRARY} PRIVATE boost::headers_only)
+target_link_libraries (${THRIFT_LIBRARY} PUBLIC boost::headers_only)
 
 
 # === orc

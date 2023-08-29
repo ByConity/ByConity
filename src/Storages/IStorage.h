@@ -41,6 +41,7 @@
 #include <Common/RWLock.h>
 #include <Common/TypePromotion.h>
 #include <Common/HostWithPorts.h>
+#include "ResourceManagement/CommonData.h"
 #include <Transaction/TxnTimestamp.h>
 
 #include <optional>
@@ -243,6 +244,8 @@ public:
 
     /// Return true if storage can execute lightweight delete.
     virtual bool supportsLightweightDelete() const { return false; }
+
+    virtual std::optional<String> getVirtualWarehouseName(VirtualWarehouseType /*vw_type*/) const { return {}; }
 
 protected:
     /// Returns whether the column is virtual - by default all columns are real.

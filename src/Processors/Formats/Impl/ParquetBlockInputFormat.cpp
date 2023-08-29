@@ -54,19 +54,10 @@ namespace ErrorCodes
 ParquetBlockInputFormat::ParquetBlockInputFormat(
     ReadBuffer & in_,
     Block header_,
-    const FormatSettings & format_settings_,
-    const std::map<String, String> & partition_kv_,
-    const std::unordered_set<Int64> & skip_row_groups_,
-    const size_t row_group_index_,
-    bool read_one_group_)
+    const FormatSettings & format_settings_)
     : IInputFormat(std::move(header_), in_)
     , format_settings(format_settings_)
-    , partition_kv{partition_kv_}
-    , skip_row_groups{skip_row_groups_}
-    , read_one_group(read_one_group_)
 {
-    if(read_one_group)
-        row_group_current = row_group_index_;
 }
 
 // ParquetBlockInputFormat::ParquetBlockInputFormat(ReadBuffer & in_, Block header_)
@@ -81,8 +72,9 @@ Chunk ParquetBlockInputFormat::generate()
     if (!file_reader)
         prepareReader();
 
-    LOG_TRACE(&Poco::Logger::get("ParquetBlockInputStream"), "readimpl skip_row_groups size: {}", skip_row_groups.size());
-    for(; row_group_current < row_group_total && skip_row_groups.contains(row_group_current); ++row_group_current);
+    const auto & skip_stripes = format_settings.parquet.skip_row_groups;
+    while (!skip_stripes.empty() && row_group_current < row_group_total && skip_stripes.at(row_group_current))
+        ++row_group_current;
 
     if (row_group_current >= row_group_total)
         return res;
@@ -109,7 +101,7 @@ void ParquetBlockInputFormat::resetParser()
     row_group_current = 0;
 }
 
-static size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
+size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
 {
     if (type->id() == arrow::Type::LIST)
         return countIndicesForType(static_cast<arrow::ListType *>(type.get())->value_type());
@@ -132,6 +124,26 @@ static size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
     return 1;
 }
 
+std::vector<int> ParquetBlockInputFormat::getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header)
+{
+    std::vector<int> column_indices;
+    int index = 0;
+    for (int i = 0; i < schema->num_fields(); ++i)
+    {
+        /// STRUCT type require the number of indexes equal to the number of
+        /// nested elements, so we should recursively
+        /// count the number of indices we need for this type.
+        int indexes_count = countIndicesForType(schema->field(i)->type());
+        if (header.has(schema->field(i)->name()))
+        {
+            for (int j = 0; j != indexes_count; ++j)
+                column_indices.push_back(index + j);
+        }
+        index += indexes_count;
+    }
+    return column_indices;
+}
+
 void ParquetBlockInputFormat::prepareReader()
 {
     THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(in), arrow::default_memory_pool(), &file_reader));
@@ -146,23 +158,9 @@ void ParquetBlockInputFormat::prepareReader()
         schema,
         "Parquet",
         format_settings.parquet.allow_missing_columns,
-        format_settings.null_as_default,
-        partition_kv);
+        format_settings.null_as_default);
 
-    int index = 0;
-    for (int i = 0; i < schema->num_fields(); ++i)
-    {
-        /// STRUCT type require the number of indexes equal to the number of
-        /// nested elements, so we should recursively
-        /// count the number of indices we need for this type.
-        int indexes_count = countIndicesForType(schema->field(i)->type());
-        if (getPort().getHeader().has(schema->field(i)->name()))
-        {
-            for (int j = 0; j != indexes_count; ++j)
-                column_indices.push_back(index + j);
-        }
-        index += indexes_count;
-    }
+    column_indices = getColumnIndices(schema, getPort().getHeader());
 }
 
 void registerInputFormatProcessorParquet(FormatFactory &factory)
@@ -177,11 +175,7 @@ void registerInputFormatProcessorParquet(FormatFactory &factory)
                 return std::make_shared<ParquetBlockInputFormat>(
                     buf,
                     sample,
-                    settings,
-                    settings.parquet.partition_kv,
-                    settings.parquet.skip_row_groups,
-                    settings.parquet.current_row_group,
-                    settings.parquet.read_one_group);
+                    settings);
             });
     factory.markFormatAsColumnOriented("Parquet");
 }

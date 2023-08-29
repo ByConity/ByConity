@@ -21,13 +21,13 @@
 
 #pragma once
 
-#include <common/types.h>
-#include <unordered_set>
 #include <map>
+#include <unordered_set>
+#include <vector>
+#include <common/types.h>
 
 namespace DB
 {
-
 /**
   * Various tweaks for input/output formats. Text serialization/deserialization
   * of data types also depend on some of these settings. It is different from
@@ -53,8 +53,8 @@ struct FormatSettings
 
     enum class DateTimeInputFormat
     {
-        Basic,      /// Default format for fast parsing: YYYY-MM-DD hh:mm:ss (ISO-8601 without fractional part and timezone) or NNNNNNNNNN unix timestamp.
-        BestEffort  /// Use sophisticated rules to parse whatever possible.
+        Basic, /// Default format for fast parsing: YYYY-MM-DD hh:mm:ss (ISO-8601 without fractional part and timezone) or NNNNNNNNNN unix timestamp.
+        BestEffort /// Use sophisticated rules to parse whatever possible.
     };
 
     DateTimeInputFormat date_time_input_format = DateTimeInputFormat::Basic;
@@ -128,19 +128,13 @@ struct FormatSettings
     {
         UInt64 row_group_size = 1000000;
         bool allow_missing_columns = false;
-        std::map<String, String> partition_kv = {};
-        std::unordered_set<Int64> skip_row_groups = {};
-        UInt64 current_row_group = 0;
-        bool read_one_group = false;
+        std::vector<bool> skip_row_groups;
     } parquet;
 
     struct Orc
     {
         bool allow_missing_columns = false;
-        std::map<String, String> partition_kv = {};
-        std::unordered_set<Int64> skip_stripes = {};
-        UInt64 current_stripe = 0;
-        bool read_stripe = false;
+        std::vector<bool> skip_stripes;
     } orc;
 
     struct Pretty

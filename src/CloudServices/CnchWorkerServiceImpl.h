@@ -15,17 +15,16 @@
 
 #pragma once
 
-#include <Common/config.h>
 #include <Interpreters/Context_fwd.h>
 #include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Common/config.h>
 
-#include <common/logger_useful.h>
 #include <Common/Brpc/BrpcServiceDefines.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
-
 class CnchWorkerServiceImpl : protected WithMutableContext, public DB::Protos::CnchWorkerService
 {
 public:
@@ -174,11 +173,6 @@ public:
         google::protobuf::Closure * done) override {}
         */
 
-    void sendCnchHiveDataParts(
-        google::protobuf::RpcController * cntl,
-        const Protos::SendCnchHiveDataPartsReq * request,
-        Protos::SendCnchHiveDataPartsResp * response,
-        google::protobuf::Closure * done) override;
 
     void sendCnchFileDataParts(
         google::protobuf::RpcController * cntl,

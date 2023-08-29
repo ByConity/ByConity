@@ -58,6 +58,8 @@ public:
 
     bool canBePruned(const ServerDataPart & part);
 
+    bool canBePruned(const String & partition_id, const Row & value);
+
     bool isUseless() const { return useless; }
 
     const KeyCondition & getKeyCondition() const { return partition_condition; }

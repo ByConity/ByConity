@@ -80,6 +80,7 @@ private:
 };
 
 std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(ReadBuffer & in);
+std::shared_ptr<arrow::io::RandomAccessFile> asArrowFile(SeekableReadBuffer & in, size_t file_size);
 
 }
 

@@ -18,12 +18,13 @@
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <CloudServices/RpcClientBase.h>
 #include <Interpreters/Context_fwd.h>
+#include <Storages/DataPart_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/Kafka/KafkaTaskCommand.h>
 #include <Transaction/TxnTimestamp.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
-#include <Storages/DataPart_fwd.h>
+#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
 
 #include <unordered_set>
 
@@ -57,10 +58,7 @@ public:
     ~CnchWorkerClient() override;
 
     void submitManipulationTask(
-        const MergeTreeMetaBase & storage,
-        const ManipulationTaskParams & params,
-        TxnTimestamp txn_id,
-        TxnTimestamp begin_ts);
+        const MergeTreeMetaBase & storage, const ManipulationTaskParams & params, TxnTimestamp txn_id, TxnTimestamp begin_ts);
 
     void shutdownManipulationTasks(const UUID & table_uuid, const Strings & task_ids = Strings{});
     std::unordered_set<String> touchManipulationTasks(const UUID & table_uuid, const Strings & tasks_id);
@@ -77,20 +75,6 @@ public:
         const std::set<Int64> & required_bucket_numbers,
         const ExceptionHandlerWithFailedInfoPtr & handler,
         const WorkerId & worker_id = WorkerId{});
-
-    brpc::CallId sendCnchHiveDataParts(
-        const ContextPtr & context,
-        const StoragePtr & storage,
-        const String & local_table_name,
-        const HiveDataPartsCNCHVector & parts,
-        const ExceptionHandlerPtr & handler);
-    
-    brpc::CallId sendCnchFileDataParts(
-        const ContextPtr & context,
-        const StoragePtr & storage,
-        const String & local_table_name,
-        const FileDataPartsCNCHVector & parts,
-        const ExceptionHandlerPtr & handler);
 
     brpc::CallId preloadDataParts(
         const ContextPtr & context,

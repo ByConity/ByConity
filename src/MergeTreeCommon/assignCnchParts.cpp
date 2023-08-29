@@ -18,6 +18,7 @@
 #include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
+#include <Storages/Hive/HiveFile/IHiveFile.h>
 #include <common/logger_useful.h>
 
 #include <sstream>
@@ -165,16 +166,18 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrictBounded
     return ret;
 }
 
-HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveDataPartsCNCHVector & parts)
+HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveFiles & parts)
 {
     auto workers = worker_group->getWorkerIDVec();
     auto num_workers = workers.size();
     HivePartsAssignMap ret;
-    for (size_t i = 0 ; i < parts.size(); i++)
+
+    for (const auto & file : parts)
     {
-        auto index = i % num_workers;
-        ret[workers[index]].emplace_back(parts[i]);
+        auto idx = consistentHashForString(file->file_path, num_workers);
+        ret[workers[idx]].emplace_back(file);
     }
+
     return ret;
 }
 

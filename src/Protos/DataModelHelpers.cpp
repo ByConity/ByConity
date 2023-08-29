@@ -14,19 +14,19 @@
  */
 
 #include <memory>
-#include <Protos/DataModelHelpers.h>
-
 #include <Catalog/DataModelPartWrapper.h>
 #include <Disks/DiskHelpers.h>
+#include <Disks/HDFS/DiskByteHDFS.h>
 #include <Disks/SingleDiskVolume.h>
 #include <IO/Operators.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Protos/DataModelHelpers.h>
 #include <Protos/RPCHelpers.h>
 #include <Protos/data_models.pb.h>
-#include <Storages/Hive/HiveDataPart.h>
+#include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/Exception.h>
@@ -101,27 +101,25 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     DiskPtr remote_disk = getDiskForPathId(storage.getStoragePolicy(IStorage::StorageLocation::MAIN), path_id);
     auto mock_volume = std::make_shared<SingleDiskVolume>("volume_mock", remote_disk, 0);
     UUID part_id = UUIDHelpers::Nil;
-    switch(remote_disk->getType())
+    switch (remote_disk->getType())
     {
-        case DiskType::Type::ByteS3:
-        {
+        case DiskType::Type::ByteS3: {
             part_id = RPCHelpers::createUUID(part_model.part_id());
             if (!relative_path.has_value())
                 relative_path = UUIDHelpers::UUIDToString(part_id);
             break;
         }
-        case DiskType::Type::ByteHDFS:
-        {
+        case DiskType::Type::ByteHDFS: {
             if (!relative_path.has_value())
                 relative_path = info->getPartNameWithHintMutation();
             break;
         }
         default:
-            throw Exception(fmt::format("Unsupported disk type {} in createPartFromModelCommon",
-                DiskType::toString(remote_disk->getType())), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                fmt::format("Unsupported disk type {} in createPartFromModelCommon", DiskType::toString(remote_disk->getType())),
+                ErrorCodes::LOGICAL_ERROR);
     }
-    auto part = std::make_shared<MergeTreeDataPartCNCH>(storage, part_name, *info,
-        mock_volume, relative_path, nullptr, part_id);
+    auto part = std::make_shared<MergeTreeDataPartCNCH>(storage, part_name, *info, mock_volume, relative_path, nullptr, part_id);
 
     if (part_model.has_staging_txn_id())
     {
@@ -178,7 +176,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     part->covered_parts_count = part_model.has_covered_parts_count() ? part_model.covered_parts_count() : 0;
     part->covered_parts_size = part_model.has_covered_parts_size() ? part_model.covered_parts_size() : 0;
     part->covered_parts_rows = part_model.has_covered_parts_rows() ? part_model.covered_parts_rows() : 0;
-    
+
     std::unordered_set<std::string> projection_parts_names(part_model.projections().begin(), part_model.projections().end());
     part->setProjectionPartsNames(projection_parts_names);
 
@@ -227,7 +225,8 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModel(
     return part;
 }
 
-void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time)
+void fillPartModel(
+    const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time)
 {
     /// fill part info
     Protos::DataModelPartInfo * model_info = part_model.mutable_part_info();
@@ -317,7 +316,6 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
 
     for (const auto & projection : part.getProjectionPartsNames())
         part_model.add_projections(projection);
-
 }
 
 void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInfo & part_info_model)
@@ -386,7 +384,12 @@ LockInfoPtr createLockInfoFromModel(const Protos::DataModelLockInfo & model)
     const String & partition = field.has_partition() ? field.partition() : "";
 
     auto lock_info = std::make_shared<LockInfo>(model.txn_id());
-    lock_info->setLockID(model.lock_id()).setMode(mode).setTimeout(model.timeout()).setTablePrefix(field.table_prefix()).setBucket(bucket).setPartition(partition);
+    lock_info->setLockID(model.lock_id())
+        .setMode(mode)
+        .setTimeout(model.timeout())
+        .setTablePrefix(field.table_prefix())
+        .setBucket(bucket)
+        .setPartition(partition);
     return lock_info;
 }
 
@@ -434,94 +437,6 @@ IMergeTreeDataPartsVector createPartVectorFromServerParts(
         /// already deal with prev_part in ServerDataPart::toCNCHDataPart.
         res.push_back(part->toCNCHDataPart(storage, relative_path));
     }
-    return res;
-}
-
-void fillCnchHivePartsModel(const HiveDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model)
-{
-    for (const auto & part : parts)
-    {
-        auto & part_model = *parts_model.Add();
-        auto & info = *part_model.mutable_part_info();
-        auto skip_list = part->getSkipSplits();
-        auto size = skip_list.size();
-        *info.mutable_name() = part->getInfo().name;
-        *info.mutable_partition_id() = part->getInfo().partition_id;
-        *part_model.mutable_relative_path() = part->getRelativePath();
-        part_model.set_skip_lists(size);
-        part_model.set_hdfs_uri(part->getHDFSUri());
-        *part_model.mutable_format_name() = part->getFormatName();
-
-        for (auto & skip_num : skip_list)
-            *part_model.mutable_skip_numbers()->Add() = skip_num;
-    }
-}
-
-size_t fillCnchFilePartsModel(const FileDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model)
-{
-    for (const auto & part: parts)
-    {
-        auto & part_model = *parts_model.Add();
-        auto & info = *part_model.mutable_part_info();
-        *info.mutable_name() = part->info.name;
-    }
-
-    return parts.size();
-}
-
-HiveDataPartsCNCHVector
-createCnchHiveDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchHivePartModel> & parts_model)
-{
-    HiveDataPartsCNCHVector res;
-    res.reserve(parts_model.size());
-
-    /// share the disk configuration
-    DiskPtr disk;
-
-    for (const auto & part : parts_model)
-    {
-        const auto & part_name = part.part_info().name();
-        const auto & partition_id = part.part_info().partition_id();
-        const auto & format_name = part.format_name();
-
-        std::unordered_set<Int64> required_skip_lists;
-        for (const auto & skip_number : part.skip_numbers())
-            required_skip_lists.insert(skip_number);
-
-        if (!disk)
-        {
-            HDFSConnectionParams params = context->getHdfsConnectionParams();
-            if (part.has_hdfs_uri())
-            {
-                Poco::URI uri(part.hdfs_uri());
-                params = hdfsParamsFromUrl(uri);
-            }
-            disk = std::make_shared<DiskByteHDFS>(part.hdfs_uri(), "", params);
-        }
-
-        LOG_TRACE(&Poco::Logger::get("createCnchHiveDataParts"), " createCnchHiveDataParts format_name = {}", format_name);
-
-
-        if (format_name.find("Orc") != String::npos)
-            res.emplace_back(std::make_shared<const HiveORCFile>(
-                part_name,
-                part.relative_path(),
-                part.has_hdfs_uri() ? part.hdfs_uri() : context->getHdfsNNProxy(),
-                format_name,
-                disk,
-                HivePartInfo(part_name, partition_id),
-                required_skip_lists));
-        else if (format_name.find("Parquet") != String::npos)
-            res.emplace_back(std::make_shared<const HiveParquetFile>(
-                part_name,
-                part.relative_path(),
-                part.has_hdfs_uri() ? part.hdfs_uri() : context->getHdfsNNProxy(),
-                format_name,
-                disk,
-                HivePartInfo(part_name, partition_id),
-                required_skip_lists));
-    }
-
     return res;
 }
 

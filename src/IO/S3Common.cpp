@@ -778,14 +778,15 @@ namespace S3
         if (bucket.empty())
             throw Exception("Bucket can't be empty, config prefix " + cfg_prefix, ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
         root_prefix = cfg.getString(cfg_prefix + ".path", "");
-        if (root_prefix.empty() || root_prefix[0] == '/')
-            throw Exception("Root prefix can't be empty or start with '/'", ErrorCodes::BAD_ARGUMENTS);
+        // if (root_prefix.empty() || root_prefix[0] == '/')
+        //     throw Exception("Root prefix can't be empty or start with '/'", ErrorCodes::BAD_ARGUMENTS);
 
         // Not required, we can still obtain this from environment variable
         ak_id = cfg.getString(cfg_prefix + ".ak_id", "");
         ak_secret = cfg.getString(cfg_prefix + ".ak_secret", "");
 
-        collectCredentialsFromEnv();
+        if (ak_id.empty())
+            collectCredentialsFromEnv();
     }
 
     void S3Config::collectCredentialsFromEnv()
@@ -827,8 +828,8 @@ namespace S3
 
     bool S3Util::exists(const String & key) const
     {
-        auto [more, _, names] = listObjectsWithPrefix(key, std::nullopt, 1);
-        return !names.empty() && names.front() == key;
+        auto res = listObjectsWithPrefix(key, std::nullopt, 1);
+        return !res.object_names.empty() && res.object_names.front() == key;
     }
 
     bool S3Util::read(const String & key, size_t offset, size_t size, BufferBase::Buffer & buffer) const
@@ -879,8 +880,7 @@ namespace S3
         }
     }
 
-    std::tuple<bool, String, std::vector<String>>
-    S3Util::listObjectsWithPrefix(const String & prefix, const std::optional<String> & token, int limit) const
+    S3Util::S3ListResult S3Util::listObjectsWithPrefix(const String & prefix, const std::optional<String> & token, int limit) const
     {
         Aws::S3::Model::ListObjectsV2Request request;
         request.SetBucket(bucket);
@@ -895,20 +895,22 @@ namespace S3
 
         if (outcome.IsSuccess())
         {
-            std::tuple<bool, String, std::vector<String>> result;
+            S3Util::S3ListResult result;
             const Aws::Vector<Aws::S3::Model::Object> & contents = outcome.GetResult().GetContents();
-            std::get<0>(result) = outcome.GetResult().GetIsTruncated();
-            std::get<1>(result) = outcome.GetResult().GetNextContinuationToken();
-            std::get<2>(result).reserve(contents.size());
-            for (size_t i = 0; i < contents.size(); i++)
+            result.has_more = outcome.GetResult().GetIsTruncated();
+            result.token = outcome.GetResult().GetNextContinuationToken();
+            result.object_names.reserve(contents.size());
+            result.object_sizes.reserve(contents.size());
+            for (const auto & content : contents)
             {
-                std::get<2>(result).push_back(contents[i].GetKey());
+                result.object_names.push_back(content.GetKey());
+                result.object_sizes.push_back(content.GetSize());
             }
             return result;
         }
         else
         {
-            throw S3Exception(outcome.GetError());
+            throw S3Exception(outcome.GetError(), fmt::format("Could not list objects in bucket {} with prefix {}", bucket, prefix));
         }
     }
 
@@ -1121,18 +1123,16 @@ namespace S3
     void S3Util::deleteObjectsWithPrefix(
         const String & prefix, const std::function<bool(const S3Util &, const String &)> & filter, size_t batch_size) const
     {
-        bool more = false;
-        std::optional<String> token = std::nullopt;
-        std::vector<String> object_names;
+        S3Util::S3ListResult result;
         std::vector<String> objects_to_clean;
 
         do
         {
-            object_names.clear();
+            result.object_names.clear();
 
-            std::tie(more, token, object_names) = listObjectsWithPrefix(prefix, token, batch_size);
+            result = listObjectsWithPrefix(prefix, result.token, batch_size);
 
-            for (const String & name : object_names)
+            for (const String & name : result.object_names)
             {
                 if (filter(*this, name))
                 {
@@ -1145,7 +1145,7 @@ namespace S3
                     }
                 }
             }
-        } while (more);
+        } while (result.has_more);
 
         deleteObjects(objects_to_clean);
     }

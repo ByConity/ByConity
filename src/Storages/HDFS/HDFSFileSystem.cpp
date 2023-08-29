@@ -533,7 +533,7 @@ ssize_t HDFSFileSystem::getCapacity() const
 }
 
 void HDFSFileSystem::list(const std::string& path,
-    std::vector<std::string>& filenames) const
+    std::vector<std::string>& filenames, std::vector<size_t> & sizes) const
 {
     HDFSFSPtr fs_copy = getFS();
     int num = 0;
@@ -548,6 +548,7 @@ void HDFSFileSystem::list(const std::string& path,
     {
         Poco::Path filename(files[i].mName);
         filenames.push_back(filename.getFileName());
+        sizes.push_back(files[i].mSize);
     }
     hdfsFreeFileInfo(files, num);
 }
@@ -1184,7 +1185,8 @@ void setLastModified(const std::string& path, const Poco::Timestamp& ts)
 
 void list(const std::string& path, std::vector<std::string>& files)
 {
-    getDefaultHdfsFileSystem()->list(path, files);
+    std::vector<size_t> sizes;
+    getDefaultHdfsFileSystem()->list(path, files, sizes);
 }
 
 bool isFile(const std::string& path)

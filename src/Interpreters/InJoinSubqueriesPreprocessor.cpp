@@ -28,7 +28,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <Storages/StorageCnchHive.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
 #include <Common/typeid_cast.h>

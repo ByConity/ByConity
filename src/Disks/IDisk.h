@@ -253,7 +253,7 @@ public:
     // return ‘true’ if disk support renameTo.
     virtual bool supportRenameTo() { return true; }
 
-    // Get table relative_data_path from disk 
+    // Get table relative_data_path from disk
     virtual String getTableRelativePathOnDisk(const String & uuid){ return uuid;}
 
 protected:
@@ -286,6 +286,8 @@ public:
 
     /// Name of the file that the iterator currently points to.
     virtual String name() const = 0;
+
+    virtual size_t size() const = 0;
 
     virtual ~IDiskDirectoryIterator() = default;
 };
