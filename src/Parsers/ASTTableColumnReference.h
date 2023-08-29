@@ -27,11 +27,12 @@ class ASTTableColumnReference : public IAST
 {
 public:
     const IStorage * storage;
-    String column_name;
     // Used to identify different occurrence of a same table in self-join cases.
-    const TableScanStep * step = nullptr;
+    UInt32 unique_id;
+    String column_name;
 
-    ASTTableColumnReference(const IStorage * storage_, String column_name_) : storage(storage_), column_name(std::move(column_name_))
+    ASTTableColumnReference(const IStorage * storage_, UInt32 unique_id_, String column_name_)
+        : storage(storage_), unique_id(unique_id_), column_name(std::move(column_name_))
     {
     }
 
@@ -41,9 +42,8 @@ public:
 
     ASTType getType() const override { return ASTType::ASTTableColumnReference; }
 
-    ASTPtr clone() const override;
+    ASTPtr clone() const override { return std::make_shared<ASTTableColumnReference>(storage, unique_id, column_name); }
 
-    const TableScanStep * getStep() const { return step; }
-    void setStep(const TableScanStep * step_) { step = step_; }
+    void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 };
 }

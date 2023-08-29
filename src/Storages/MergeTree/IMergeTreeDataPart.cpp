@@ -1327,6 +1327,13 @@ void IMergeTreeDataPart::renameTo(const String & new_relative_path, bool remove_
 {
     assertOnDisk();
 
+    if (!volume->getDisk()->supportRenameTo())
+    {
+        throw Exception(
+            fmt::format("renameTo is not supported on {} Disk.", DiskType::toString(volume->getDisk()->getType())),
+            ErrorCodes::LOGICAL_ERROR);
+    }
+
     String from = getFullRelativePath();
     String to = fs::path(storage.getRelativeDataPath(location)) / (parent_part ? parent_part->relative_path : "") / new_relative_path / "";
 
@@ -1778,6 +1785,7 @@ void IMergeTreeDataPart::createDeleteBitmapForDetachedPart() const
             /// It's necessary to do next() and sync() here, otherwise it will omit the error in WriteBufferFromHDFS::WriteBufferFromHDFSImpl::~WriteBufferFromHDFSImpl() which case file incomplete.
             bitmap_writer->next();
             bitmap_writer->sync();
+            bitmap_writer->finalize();
         }
     }
     meta_writer->next();

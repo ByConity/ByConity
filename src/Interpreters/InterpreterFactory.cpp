@@ -123,6 +123,8 @@
 #include <Interpreters/InterpreterDropStatsQuery.h>
 #include <Interpreters/InterpreterShowStatsQuery.h>
 #include <Interpreters/PlanSegmentHelper.h>
+#include <Parsers/ASTAlterDiskCacheQuery.h>
+#include <Interpreters/InterpreterAlterDiskCacheQuery.h>
 
 #include <Parsers/ASTSystemQuery.h>
 
@@ -302,6 +304,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTCheckQuery>())
     {
         return std::make_unique<InterpreterCheckQuery>(query, context);
+    }
+    else if (query->as<ASTAlterDiskCacheQuery>())
+    {
+        return std::make_unique<InterpreterAlterDiskCacheQuery>(query, context);
     }
     else if (query->as<ASTKillQueryQuery>())
     {

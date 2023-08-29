@@ -133,11 +133,10 @@ void WorkerStatusManager::heartbeat()
     {
         tryLogDebugCurrentException(__PRETTY_FUNCTION__);
     }
-    task->scheduleAfter(interval);
+    task->scheduleAfter(heartbeat_interval.load());
 }
 
-void WorkerStatusManager::updateWorkerNode(
-    const Protos::WorkerNodeResourceData & resource_info, UpdateSource source, WorkerSchedulerStatus update_for_status)
+void WorkerStatusManager::updateWorkerNode(const Protos::WorkerNodeResourceData & resource_info, UpdateSource source)
 {
     auto worker_status = std::make_shared<WorkerStatus>(resource_info);
     worker_status->setSchedulerInfo(adaptive_scheduler_config);
@@ -148,7 +147,7 @@ void WorkerStatusManager::updateWorkerNode(
     bool need_callback = true;
     global_extra_workers_status.updateEmplaceIfNotExist(
         id,
-        [new_status, &old_status, id, update_for_status, this, &now, &worker_status, &need_callback](WorkerStatusExtra & val) {
+        [new_status, &old_status, id, this, &now, &worker_status, &need_callback](WorkerStatusExtra & val) {
             if (val.worker_status->last_status_create_time < worker_status->last_status_create_time)
             {
                 old_status = val.worker_status->getStatus();
@@ -156,8 +155,7 @@ void WorkerStatusManager::updateWorkerNode(
                 val.server_last_update_time = now;
 
                 LOG_TRACE(log, "worker {} status changed : {}", worker_status->toDebugString(), (old_status != new_status));
-                if (update_for_status == WorkerSchedulerStatus::NotConnected
-                    || val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::Open)
+                if (val.circuit_break.breaker_status == WorkerCircuitBreakerStatus::Open)
                 {
                     LOG_TRACE(log, "worker: {} is back, set circuit breaker to half open.", id.ToString());
                     val.circuit_break.breaker_status = WorkerCircuitBreakerStatus::HalfOpen;
@@ -276,52 +274,19 @@ std::shared_ptr<WorkerGroupStatus> WorkerStatusManager::getWorkerGroupStatus(con
 }
 
 
-void WorkerStatusManager::updateConfig(const Poco::Util::AbstractConfiguration & config)
+void WorkerStatusManager::updateConfig(const ASConfiguration & as_config)
 {
-    configReload(
-        config, "adaptive_scheduler.mem_weight", &Poco::Util::AbstractConfiguration::getUInt64, adaptive_scheduler_config.MEM_WEIGHT);
-    configReload(
-        config,
-        "adaptive_scheduler.query_num_weight",
-        &Poco::Util::AbstractConfiguration::getUInt64,
-        adaptive_scheduler_config.QUERY_NUM_WEIGHT);
-    configReload(
-        config,
-        "adaptive_scheduler.max_plan_segment_size",
-        &Poco::Util::AbstractConfiguration::getUInt64,
-        adaptive_scheduler_config.MAX_PLAN_SEGMENT_SIZE);
-    configReload(
-        config,
-        "adaptive_scheduler.unhealth_segment_size",
-        &Poco::Util::AbstractConfiguration::getUInt64,
-        adaptive_scheduler_config.UNHEALTH_SEGMENT_SIZE);
-
-    configReload(
-        config,
-        "adaptive_scheduler.heavy_load_threshold",
-        &Poco::Util::AbstractConfiguration::getDouble,
-        adaptive_scheduler_config.HEAVY_LOAD_THRESHOLD);
-    configReload(
-        config,
-        "adaptive_scheduler.only_source_threshold",
-        &Poco::Util::AbstractConfiguration::getDouble,
-        adaptive_scheduler_config.ONLY_SOURCE_THRESHOLD);
-    configReload(
-        config,
-        "adaptive_scheduler.unhealth_threshold",
-        &Poco::Util::AbstractConfiguration::getDouble,
-        adaptive_scheduler_config.UNHEALTH_THRESHOLD);
-
-    configReload(
-        config,
-        "adaptive_scheduler.need_reset_seconds",
-        &Poco::Util::AbstractConfiguration::getInt64,
-        adaptive_scheduler_config.NEED_RESET_SECONDS);
-    configReload(
-        config,
-        "adaptive_scheduler.unhealth_recheck_seconds",
-        &Poco::Util::AbstractConfiguration::getInt64,
-        adaptive_scheduler_config.UNHEALTH_RECHECK_SECONDS);
+    LOG_DEBUG(log, "update WorkerStatusManager config.");
+    adaptive_scheduler_config.MEM_WEIGHT = as_config.mem_weight.safeGet();
+    adaptive_scheduler_config.QUERY_NUM_WEIGHT = as_config.query_num_weight.safeGet();
+    adaptive_scheduler_config.MAX_PLAN_SEGMENT_SIZE = as_config.max_plan_segment_size.safeGet();
+    adaptive_scheduler_config.UNHEALTH_SEGMENT_SIZE = as_config.unhealth_segment_size.safeGet();
+    adaptive_scheduler_config.HEAVY_LOAD_THRESHOLD = as_config.heavy_load_threshold.safeGet();
+    adaptive_scheduler_config.ONLY_SOURCE_THRESHOLD = as_config.only_source_threshold.safeGet();
+    adaptive_scheduler_config.UNHEALTH_THRESHOLD = as_config.unhealth_threshold.safeGet();
+    adaptive_scheduler_config.NEED_RESET_SECONDS = as_config.need_reset_seconds.safeGet();
+    adaptive_scheduler_config.UNHEALTH_RECHECK_SECONDS = as_config.unhealth_recheck_seconds.safeGet();
+    heartbeat_interval = as_config.heartbeat_interval.safeGet();
 }
 
 }

@@ -14,7 +14,7 @@
  */
 
 #pragma once
-#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/DataPart_fwd.h>
 
 namespace DB
 {

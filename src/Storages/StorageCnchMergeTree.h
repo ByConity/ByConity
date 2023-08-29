@@ -30,6 +30,7 @@ struct PrepareContextResult;
 class StorageCnchMergeTree final : public shared_ptr_helper<StorageCnchMergeTree>, public MergeTreeMetaBase, public CnchStorageCommonHelper
 {
     friend struct shared_ptr_helper<StorageCnchMergeTree>;
+    friend class InterpreterAlterDiskCacheQuery;
 
 public:
     ~StorageCnchMergeTree() override;
@@ -177,7 +178,7 @@ public:
     MutableDataPartsVector createDropRangesFromParts(ContextPtr query_context, const ServerDataPartsVector & parts_to_drop, const TransactionCnchPtr & txn);
     LocalDeleteBitmaps createDeleteBitmapTombstones(const IMutableMergeTreeDataPartsVector & drop_range_parts, UInt64 txnID);
 
-    StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const;
+    StorageCnchMergeTree * checkStructureAndGetCnchMergeTree(const StoragePtr & source_table, ContextPtr local_context) const;
 
     const String & getLocalStorePath() const;
 
@@ -188,8 +189,9 @@ public:
     ServerDataPartsVector
     getServerPartsByPredicate(const ASTPtr & predicate, const std::function<ServerDataPartsVector()> & get_parts, ContextPtr local_context);
 
+    void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload = true, UInt64 parts_preload_level = 0);
 
-    void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool sync = true);
+    Strings getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context);
 
 protected:
     StorageCnchMergeTree(
@@ -208,6 +210,7 @@ private:
 
     CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts) const;
 
+    // get all Visible Parts
     ServerDataPartsVector getAllParts(ContextPtr local_context) const;
 
     ServerDataPartsVector
@@ -241,7 +244,6 @@ private:
 
     /// Generate view dependency create queries for materialized view writing
     Names genViewDependencyCreateQueries(const StorageID & storage_id, ContextPtr local_context, const String & table_suffix);
-    String extractTableSuffix(const String & gen_table_name);
     std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
     Pipe ingestPartition(const struct PartitionCommand & command, const ContextPtr local_context);

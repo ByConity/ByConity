@@ -132,10 +132,26 @@ fdb_error_t FDBClient::Put(FDBTransactionPtr tr, const PutRequest & put)
             return FDBError::FDB_not_committed;
     }
 
-    fdb_transaction_set(tr->transaction, reinterpret_cast<const uint8_t*>(put.key.data), put.key.size, reinterpret_cast<const uint8_t*>(put.value.data), put.value.size);
-    FDBFuturePtr f = std::make_shared<FDBFutureRAII>(fdb_transaction_commit(tr->transaction));
-    RETURN_ON_ERROR(fdb_future_block_until_ready(f->future));
-    RETURN_ON_ERROR(fdb_future_get_error(f->future));
+    unsigned int retry = 3;
+    while (retry)
+    {
+        fdb_transaction_set(tr->transaction, reinterpret_cast<const uint8_t*>(put.key.data), put.key.size, reinterpret_cast<const uint8_t*>(put.value.data), put.value.size);
+        FDBFuturePtr f = std::make_shared<FDBFutureRAII>(fdb_transaction_commit(tr->transaction));
+        RETURN_ON_ERROR(fdb_future_block_until_ready(f->future));
+
+        fdb_error_t code = fdb_future_get_error(f->future);
+        if (code == 0)
+            break;
+        else if (code == FDBError::FDB_transaction_too_old)
+        {
+            LOG_DEBUG(&Poco::Logger::get("FDBClient::Put"), "Transaction too old, create new transaction");
+            tr = std::make_shared<FDB::FDBTransactionRAII>();
+            Catalog::MetastoreFDBImpl::check_fdb_op(CreateTransaction(tr));
+            --retry;
+        }
+        else
+            return code;
+    }
 
     return 0;
 }

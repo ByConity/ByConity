@@ -75,6 +75,8 @@ void registerInputFormatProcessorRowBinary(FormatFactory & factory)
     {
         return std::make_shared<BinaryRowInputFormat>(buf, sample, params, true, true);
     });
+
+    factory.registerFileExtension("bin", "RowBinary");
 }
 
 }

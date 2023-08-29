@@ -14,6 +14,7 @@
  */
 
 #include <Processors/Transforms/EnforceSingleRowTransform.h>
+#include <Interpreters/join_common.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -94,15 +95,15 @@ Port::Data EnforceSingleRowTransform::createNullSingleRow() const
     Block null_block;
     for (const auto & col : input.getHeader().getColumnsWithTypeAndName())
     {
-        if (!col.type->isNullable())
+        if (!col.type->isNullable() && !JoinCommon::canBecomeNullable(col.type))
         {
             data.exception = std::make_exception_ptr(
-                Exception("Non-nullable type scalar sub-query return empty", ErrorCodes::INCORRECT_RESULT_OF_SCALAR_SUBQUERY));
+                Exception(" Scalar subquery returned empty result of type " + col.type->getName() + " which cannot be Nullable", ErrorCodes::INCORRECT_RESULT_OF_SCALAR_SUBQUERY));
             return data;
         }
-        auto column = col.type->createColumn();
+        auto column = JoinCommon::convertTypeToNullable(col.type)->createColumn();
         column->insertDefault();
-        null_block.insert({std::move(column), col.type, col.name});
+        null_block.insert({std::move(column), JoinCommon::convertTypeToNullable(col.type), col.name});
     }
     data.chunk.setColumns(null_block.getColumns(), 1);
     return data;

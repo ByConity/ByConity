@@ -19,7 +19,7 @@
 #include <Interpreters/WorkerGroupHandle.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
-#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/DataPart_fwd.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Common/ConsistentHashUtils/ConsistentHashRing.h>
 
@@ -29,6 +29,7 @@ namespace DB
 using WorkerList = std::vector<String>;
 using ServerAssignmentMap = std::unordered_map<String, ServerDataPartsVector>;
 using HivePartsAssignMap = std::unordered_map<String, HiveDataPartsCNCHVector>;
+using FilePartsAssignMap = std::unordered_map<String, FileDataPartsCNCHVector>;
 using AssignmentMap = std::unordered_map<String, MergeTreeDataPartsCNCHVector>;
 using BucketNumbersAssignmentMap = std::unordered_map<String, std::set<Int64>>;
 
@@ -40,6 +41,7 @@ struct BucketNumberAndServerPartsAssignment
 
 // the hive has different allocate logic, thus separate it.
 HivePartsAssignMap assignCnchHiveParts(const WorkerGroupHandle & worker_group, const HiveDataPartsCNCHVector & parts);
+FilePartsAssignMap assignCnchFileParts(const WorkerGroupHandle & worker_group, const FileDataPartsCNCHVector & parts);
 
 template <typename DataPartsCnchVector>
 std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGroupHandle & worker_group, const DataPartsCnchVector & parts);

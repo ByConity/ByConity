@@ -27,13 +27,16 @@ namespace DB
 namespace ASTEquality
 {
     // Equals & hash for semantic comparison. Difference from syntactic comparison:
-    //   1. when comparing ASTIdentifiers which represent column references, check if they are from a same column
+    //   1. when comparing ASTIdentifiers, check if they refer to a same column
+    //   2. when comparing ASTIdentifiers comes from subquery, check them by syntax
     struct ScopeAwareEquals
     {
         Analysis * analysis;
+        ScopePtr query_scope;
 
-        ScopeAwareEquals(Analysis * analysis_) : analysis(analysis_)
-        {}
+        ScopeAwareEquals(Analysis * analysis_, ScopePtr query_scope_) : analysis(analysis_), query_scope(query_scope_)
+        {
+        }
 
         std::optional<bool> equals(const ASTPtr & left, const ASTPtr & right) const;
 
@@ -51,9 +54,11 @@ namespace ASTEquality
     struct ScopeAwareHash
     {
         Analysis * analysis;
+        ScopePtr query_scope;
 
-        ScopeAwareHash(Analysis * analysis_) : analysis(analysis_)
-        {}
+        ScopeAwareHash(Analysis * analysis_, ScopePtr query_scope_) : analysis(analysis_), query_scope(query_scope_)
+        {
+        }
 
         std::optional<size_t> hash(const ASTPtr & ast) const;
 
@@ -74,15 +79,32 @@ using ScopeAwaredASTSet = std::unordered_set<ASTPtr, ASTEquality::ScopeAwareHash
 template <typename T>
 using ScopeAwaredASTMap = std::unordered_map<ASTPtr, T, ASTEquality::ScopeAwareHash, ASTEquality::ScopeAwareEquals>;
 
-inline ScopeAwaredASTSet createScopeAwaredASTSet(Analysis & analysis)
+template <typename... Arg>
+ScopeAwaredASTSet createScopeAwaredASTSetVariadic(Analysis & analysis, ScopePtr query_scope, Arg &&... arg)
 {
-    return ScopeAwaredASTSet {10, ASTEquality::ScopeAwareHash(&analysis), ASTEquality::ScopeAwareEquals(&analysis)};
+    return ScopeAwaredASTSet(
+        std::forward<Arg>(arg)...,
+        ASTEquality::ScopeAwareHash(&analysis, query_scope),
+        ASTEquality::ScopeAwareEquals(&analysis, query_scope));
 }
 
-template<typename T>
-inline ScopeAwaredASTMap<T> createScopeAwaredASTMap(Analysis & analysis)
+template <typename T, typename... Arg>
+ScopeAwaredASTMap<T> createScopeAwaredASTMapVariadic(Analysis & analysis, ScopePtr query_scope, Arg &&... arg)
 {
-    return ScopeAwaredASTMap<T> {10, ASTEquality::ScopeAwareHash(&analysis), ASTEquality::ScopeAwareEquals(&analysis)};
+    return ScopeAwaredASTMap<T>(
+        std::forward<Arg>(arg)...,
+        ASTEquality::ScopeAwareHash(&analysis, query_scope),
+        ASTEquality::ScopeAwareEquals(&analysis, query_scope));
 }
 
+inline ScopeAwaredASTSet createScopeAwaredASTSet(Analysis & analysis, ScopePtr query_scope)
+{
+    return createScopeAwaredASTSetVariadic<size_t>(analysis, query_scope, 10);
+}
+
+template <typename T>
+ScopeAwaredASTMap<T> createScopeAwaredASTMap(Analysis & analysis, ScopePtr query_scope)
+{
+    return createScopeAwaredASTMapVariadic<T, size_t>(analysis, query_scope, 10);
+}
 }

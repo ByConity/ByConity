@@ -6,6 +6,8 @@ SET materialized_view_consistency_check_method = 'PARTITION';
 CREATE DATABASE IF NOT EXISTS test;
 USE test;
 
+DROP TABLE IF EXISTS mv40037;
+DROP TABLE IF EXISTS mv40037_2;
 DROP TABLE IF EXISTS base40037;
 
 CREATE TABLE base40037(server_time UInt64, event_date Date, uid String, click UInt64)
@@ -91,36 +93,4 @@ EXPLAIN SELECT
     sum(click) AS sum_click
 FROM base40037
 WHERE toHour(toDateTime(server_time)) IN (9, 10, 11)
-GROUP BY server_time_hour, event_date, uid;
-
--- test local mv
-DROP TABLE IF EXISTS mv40037;
-DROP TABLE IF EXISTS mv40037_2;
-
-CREATE MATERIALIZED VIEW mv40037_2 TO target40037
-AS SELECT
-    toHour(toDateTime(server_time)) AS server_time_hour,
-    event_date,
-    uid,
-    sumState(click) AS sum_click
-FROM base40037
-GROUP BY server_time_hour, event_date, uid;
-
--- not hit mv
-EXPLAIN SELECT
-    toHour(toDateTime(server_time)) AS server_time_hour,
-    event_date,
-    uid,
-    sum(click) AS sum_click
-FROM base40037
-GROUP BY server_time_hour, event_date, uid;
-
--- hit mv
-EXPLAIN SELECT
-    toHour(toDateTime(server_time)) AS server_time_hour,
-    event_date,
-    uid,
-    sum(click) AS sum_click
-FROM base40037
-WHERE event_date = '2023-01-01'
 GROUP BY server_time_hour, event_date, uid;

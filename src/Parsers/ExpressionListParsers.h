@@ -309,14 +309,40 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
-/// DATE operator. "DATE '2001-01-01'" would be parsed as "toDate('2001-01-01')".
-class ParserDateOperatorExpression : public IParserDialectBase
+/// DATE32 operator. "DATE32 '2001-01-01'" would be parsed as "toDate32('2001-01-01')".
+class ParserDate32OperatorExpression : public IParserDialectBase
 {
 protected:
     ParserMultiplicativeExpression next_parser{dt};
 
+    const char * getName() const  override { return "DATE32 operator expression"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+/// DATE operator. "DATE '2001-01-01'" would be parsed as "toDate('2001-01-01')".
+class ParserDateOperatorExpression : public IParserDialectBase
+{
+protected:
+    ParserDate32OperatorExpression next_parser{dt};
+
     const char * getName() const  override { return "DATE operator expression"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+/// TIMESTAMP64/DATETIME64 operator. "TIMESTAMP64/DATETIME64 '2001-01-01 12:34:56'" would be parsed as "toDateTime64('2001-01-01 12:34:56')".
+class ParserTimestampDatetime64OperatorExpression : public IParserDialectBase
+{
+protected:
+    ParserDateOperatorExpression next_parser{dt};
+
+    const char * getName() const override { return "TIMESTAMP64/DATETIME64 operator expression"; }
+
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+
 public:
     using IParserDialectBase::IParserDialectBase;
 };
@@ -325,7 +351,7 @@ public:
 class ParserTimestampDatetimeOperatorExpression : public IParserDialectBase
 {
 protected:
-    ParserDateOperatorExpression next_parser{dt};
+    ParserTimestampDatetime64OperatorExpression next_parser{dt};
 
     const char * getName() const override { return "TIMESTAMP/DATETIME operator expression"; }
 
@@ -335,7 +361,7 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
-/// TIME operator. "TIME '12:34:56'" would be parsed as "toTimeType('12:34:56', 0)".
+/// TIME operator. "TIME '12:34:56'" would be parsed as "toTimeType('12:34:56', 3)".
 class ParserTimeOperatorExpression : public IParserDialectBase
 {
 protected:

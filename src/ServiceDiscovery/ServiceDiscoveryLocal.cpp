@@ -69,13 +69,13 @@ HostWithPortsVec ServiceDiscoveryLocal::lookup(const String & psm_name, Componen
             if (ep.ports.count("PORT0"))
                 host_with_ports.tcp_port = parse<UInt16>(ep.ports["PORT0"]);
             if (ep.ports.count("PORT1"))
+            {
                 host_with_ports.rpc_port = parse<UInt16>(ep.ports["PORT1"]);
+                host_with_ports.exchange_port = host_with_ports.rpc_port;
+                host_with_ports.exchange_status_port = host_with_ports.rpc_port;
+            }
             if (ep.ports.count("PORT2"))
                 host_with_ports.http_port = parse<UInt16>(ep.ports["PORT2"]);
-            if (ep.ports.count("PORT5"))
-                host_with_ports.exchange_port = parse<UInt16>(ep.ports["PORT5"]);
-            if (ep.ports.count("PORT6"))
-                host_with_ports.exchange_status_port = parse<UInt16>(ep.ports["PORT6"]);
             res.push_back(std::move(host_with_ports));
         }
     }
@@ -134,13 +134,13 @@ IServiceDiscovery::WorkerGroupMap ServiceDiscoveryLocal::lookupWorkerGroupsInVW(
         if (ep.ports.count("PORT0"))
             host_with_ports.tcp_port = parse<UInt16>(ep.ports["PORT0"]);
         if (ep.ports.count("PORT1"))
+        {
             host_with_ports.rpc_port = parse<UInt16>(ep.ports["PORT1"]);
+            host_with_ports.exchange_port = host_with_ports.rpc_port;
+            host_with_ports.exchange_status_port = host_with_ports.rpc_port;
+        }
         if (ep.ports.count("PORT2"))
             host_with_ports.http_port = parse<UInt16>(ep.ports["PORT2"]);
-        if (ep.ports.count("PORT5"))
-            host_with_ports.exchange_port = parse<UInt16>(ep.ports["PORT5"]);
-        if (ep.ports.count("PORT6"))
-            host_with_ports.exchange_status_port = parse<UInt16>(ep.ports["PORT6"]);
 
         group.push_back(host_with_ports);
     }

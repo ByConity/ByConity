@@ -24,16 +24,25 @@
 #include <Interpreters/PartLog.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/MergeTree/MergeTreeCNCHDataDumper.h>
+#include <Storages/MergeTree/S3PartsAttachMeta.h>
 #include <Transaction/Actions/DDLAlterAction.h>
 #include <Transaction/Actions/DropRangeAction.h>
 #include <Transaction/Actions/InsertAction.h>
 #include <Transaction/Actions/MergeMutateAction.h>
+#include <Transaction/Actions/S3AttachMetaAction.h>
+#include <Transaction/Actions/S3DetachMetaAction.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
 #include <common/strong_typedef.h>
-#include "Disks/IDisk.h"
+#include <Core/Types.h>
+#include <Disks/DiskType.h>
+#include <Disks/IDisk.h>
+#include <Disks/IVolume.h>
+#include <WorkerTasks/ManipulationType.h>
+#include <Core/Types.h>
+#include <Core/UUID.h>
 
 namespace ProfileEvents
 {
@@ -481,7 +490,7 @@ void CnchDataWriter::finalize()
     handler.throwIfException();
 }
 
-TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data)
+TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, const std::unique_ptr<S3AttachPartsInfo> & s3_parts_info)
 {
     Stopwatch watch;
 
@@ -513,26 +522,31 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             if (!tpl.empty() && !consumer_group.empty())
                 txn->setKafkaTpl(consumer_group, tpl);
 
-            /// check the part is already correctly clustered for bucket table. All new inserted parts should be clustered.
-            // if (storage->isBucketTable())
-            // {
-            //     auto table_definition_hash = storage->getTableHashForClusterBy();
-            //     for (auto & part : prepared_parts)
-            //     {
-            //         if (context->getSettings().skip_table_definition_hash_check)
-            //             part->table_definition_hash = table_definition_hash;
+            // check the part is already correctly clustered for bucket table. All new inserted parts should be clustered.
+            if (storage_ptr->isBucketTable())
+            {
+                auto table_definition_hash = storage_ptr->getTableHashForClusterBy();
+                for (auto & part : dumped_data.parts)
+                {
+                    // NOTE: set allow_attach_parts_with_different_table_definition_hash to false and
+                    // skip_table_definition_hash_check to true if you want to force set part's TDH to table's TDH
+                    if (context->getSettings().skip_table_definition_hash_check)
+                        part->table_definition_hash = table_definition_hash;
 
-            //         if (!part->deleted &&
-            //             (part->bucket_number < 0 || table_definition_hash != part->table_definition_hash))
-            //         {
-            //             throw Exception(
-            //                 "Part " + part->name + " is not clustered or it has different table definition with storage. Part bucket number : "
-            //                 + std::to_string(part->bucket_number) + ", part table_definition_hash : [" + std::to_string(part->table_definition_hash)
-            //                 + "], table's table_definition_hash : [" + std::to_string(table_definition_hash) + "]",
-            //                 ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
-            //         }
-            //     }
-            // }
+                    if (context->getSettings().allow_attach_parts_with_different_table_definition_hash)
+                        continue;
+
+                    if (!part->deleted &&
+                        (part->bucket_number < 0 || table_definition_hash != part->table_definition_hash))
+                    {
+                        throw Exception(
+                            "Part " + part->name + " is not clustered or it has different table definition with storage. Part bucket number : "
+                            + std::to_string(part->bucket_number) + ", part table_definition_hash : [" + std::to_string(part->table_definition_hash)
+                            + "], table's table_definition_hash : [" + std::to_string(table_definition_hash) + "]",
+                            ErrorCodes::BUCKET_TABLE_ENGINE_MISMATCH);
+                    }
+                }
+            }
 
             // Precommit stage. Write intermediate parts to KV
             auto action = txn->createAction<InsertAction>(storage_ptr, dumped_data.parts, dumped_data.bitmaps, dumped_data.staged_parts);
@@ -592,6 +606,18 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
                         watch.elapsedMilliseconds());
                 });
             }
+        }
+        else if (type == ManipulationType::Attach)
+        {
+            if (s3_parts_info == nullptr || s3_parts_info->parts.empty())
+            {
+                LOG_INFO(storage.getLogger(), "Nothing to commit, skip");
+                return commit_time;
+            }
+
+            auto action = txn->createAction<S3AttachMetaAction>(storage_ptr, *s3_parts_info);
+            txn->appendAction(action);
+            action->executeV2();
         }
         else
         {
@@ -668,10 +694,10 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
 
 void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts)
 {
-    auto & settings = context->getSettingsRef();
-    if (settings.enable_preload_parts || storage.getSettings()->enable_preload_parts)
+    const auto & settings = context->getSettingsRef();
+    // storage.getSettings()->enable_preload_parts is old setting, use it for compitablity
+    if (settings.parts_preload_level && storage.getSettings()->enable_local_disk_cache && (storage.getSettings()->enable_preload_parts || storage.getSettings()->parts_preload_level))
     {
-        bool sync_preload = !settings.enable_async_preload_parts;
 
         try
         {
@@ -685,7 +711,7 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
             if (!preload_parts.empty())
             {
                 auto max_timeout = std::max(30 * 1000L, settings.max_execution_time.totalMilliseconds());
-                server_client->submitPreloadTask(storage, preload_parts, sync_preload, max_timeout);
+                server_client->submitPreloadTask(storage, preload_parts, max_timeout);
                 LOG_DEBUG(
                     storage.getLogger(),
                     "Finish submit preload task for {} parts to server {}, elapsed {} ms",
@@ -698,7 +724,7 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
         catch (...)
         {
             tryLogCurrentException(__PRETTY_FUNCTION__, "Fail to preload");
-            if (sync_preload)
+            if (storage.getSettings()->enable_parts_sync_preload)
                 throw;
         }
     }

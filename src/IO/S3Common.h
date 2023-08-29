@@ -7,6 +7,7 @@
 #if USE_AWS_S3
 
 #include <common/types.h>
+#include <Common/ThreadPool.h>
 #include <aws/core/Aws.h>  // Y_IGNORE
 #include <aws/core/client/ClientConfiguration.h> // Y_IGNORE
 #include <aws/s3/S3Errors.h>
@@ -15,6 +16,7 @@
 #include <IO/S3/PocoHTTPClient.h>
 #include <IO/BufferBase.h>
 #include <Poco/URI.h>
+#include <Common/HeaderCollection.h>
 
 namespace Aws::S3
 {
@@ -24,8 +26,11 @@ namespace Aws::S3
 namespace DB
 {
     class RemoteHostFilter;
-    struct HttpHeader;
-    using HeaderCollection = std::vector<HttpHeader>;
+
+    inline bool isS3Scheme(const std::string & scheme)
+    {
+        return strcasecmp(scheme.c_str(), "s3") == 0;
+    }
 }
 
 namespace DB::S3
@@ -74,7 +79,6 @@ public:
 private:
     ClientFactory();
 
-private:
     Aws::SDKOptions aws_options;
 };
 
@@ -97,6 +101,21 @@ struct URI
     bool is_virtual_hosted_style;
 
     explicit URI(const Poco::URI & uri_);
+    explicit URI(const std::string & uri_) : URI(Poco::URI(uri_)) {}
+
+    String toString() const
+    {
+        return fmt::format(
+            "storage_name = {}, url = {}/{}/{}, is_virtual_hosted_style = {}",
+            storage_name,
+            endpoint,
+            bucket,
+            key,
+            is_virtual_hosted_style);
+    }
+
+    static void validateBucket(const String & bucket, const Poco::URI & uri);
+
 };
 
 class S3Config
@@ -185,6 +204,60 @@ private:
 
     std::shared_ptr<Aws::S3::S3Client> client;
     const String bucket;
+};
+
+constexpr auto S3_DEFAULT_BATCH_CLEAN_SIZE = 1000;
+
+class S3LazyCleaner
+{
+public:
+    S3LazyCleaner(const S3::S3Util& s3_util_,
+        const std::function<bool(const S3::S3Util&, const String&)>& filter_,
+        size_t max_threads_, size_t batch_clean_size_ = S3_DEFAULT_BATCH_CLEAN_SIZE);
+    ~S3LazyCleaner();
+
+    void push(const String& key_);
+    void finalize();
+
+private:
+    void lazyRemove(const std::optional<String>& key_);
+
+    Poco::Logger* logger;
+
+    size_t batch_clean_size;
+    std::function<bool(const S3::S3Util&, const String&)> filter;
+    S3::S3Util s3_util;
+
+    ExceptionHandler except_hdl;
+    std::unique_ptr<ThreadPool> clean_pool;
+
+    std::mutex remove_keys_mu;
+    std::vector<String> keys_to_remove;
+};
+
+struct AuthSettings
+{
+    static AuthSettings loadFromConfig(const std::string & config_elem, const Poco::Util::AbstractConfiguration & config);
+
+    std::string access_key_id;
+    std::string access_key_secret;
+    std::string region;
+    std::string server_side_encryption_customer_key_base64;
+
+    HeaderCollection headers;
+
+    std::optional<bool> use_environment_credentials;
+    std::optional<bool> use_insecure_imds_request;
+
+    bool operator==(const AuthSettings & other) const
+    {
+        return access_key_id == other.access_key_id && access_key_secret == other.access_key_secret
+        && region == other.region && server_side_encryption_customer_key_base64 == other.server_side_encryption_customer_key_base64
+        && headers == other.headers && use_environment_credentials == other.use_environment_credentials
+        && use_insecure_imds_request == other.use_insecure_imds_request;
+    }
+
+    void updateFrom(const AuthSettings & from);
 };
 
 }

@@ -161,7 +161,7 @@ namespace _scan_execute_impl
             if (rewritten_projection_step)
             {
                 os << "Column Mapping: " << std::endl;
-                auto assignment_dump = dynamic_cast<ProjectionStep &>(*rewritten_projection_step).getAssignments().dump();
+                auto assignment_dump = dynamic_cast<ProjectionStep &>(*rewritten_projection_step).getAssignments().toString();
                 os << assignment_dump;
             }
         }
@@ -1028,7 +1028,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         options.ignoreProjections();
 
     stage_watch.start();
-    auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, build_context.context, options);
+    auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, build_context.context, storage, storage->getInMemoryMetadataPtr(), options);
     interpreter->execute();
     query_info = interpreter->getQueryInfo();
     query_info = fillQueryInfo(build_context.context);
@@ -1617,7 +1617,6 @@ void TableScanStep::allocate(ContextPtr context)
             }
         }
     }
-
 }
 
 bool TableScanStep::setQueryInfoFilter(const std::vector<ConstASTPtr> & filters) const

@@ -101,8 +101,8 @@ struct DAGGraph {
         async_context = std::move(other.async_context);
     }
     void joinAsyncRpcWithThrow();
-    void joinAsyncRpcPerStage(const Context * query_context);
-    void joinAsyncRpcAtLast(const Context * query_context);
+    void joinAsyncRpcPerStage();
+    void joinAsyncRpcAtLast();
 
     Source sources;
     size_t final = std::numeric_limits<size_t>::max();
@@ -166,7 +166,7 @@ private:
     std::unordered_map<String, RuntimeSegmentsStatusCounter> query_status_received_counter_map;
 
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);
-    bool scheduler(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);
+    bool schedule(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);
 
 protected:
     virtual AddressInfos sendPlanSegment(PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph, std::vector<size_t> rank_worker_ids);

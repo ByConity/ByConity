@@ -684,11 +684,7 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
     {
         return {};
     }
-    else if (!create.storage || !create.storage->engine)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected application state. CREATE query is missing either its storage or engine.");
-    /// We can have queries like "CREATE TABLE <table> ENGINE=<engine>" if <engine>
-    /// supports schema inference (will determine table structure in it's constructor).
-    else if (!StorageFactory::instance().checkIfStorageSupportsSchemaInference(create.storage->engine->name))
+    else
         throw Exception("Incorrect CREATE query: required list of column descriptions or AS section or SELECT.", ErrorCodes::INCORRECT_QUERY);
 
     /// Even if query has list of columns, canonicalize it (unfold Nested columns).
@@ -953,8 +949,6 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         throw Exception("Temporary tables cannot be inside a database. You should not specify a database for a temporary table.",
             ErrorCodes::BAD_DATABASE_FOR_TEMPORARY_TABLE);
 
-    if (create.storage && create.storage->unique_key && create.storage->cluster_by)
-        throw Exception("`CLUSTER BY` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
     if (create.storage && create.storage->unique_key && create.columns_list->projections)
         throw Exception("`Projection` cannot be used together with `UNIQUE KEY`", ErrorCodes::BAD_ARGUMENTS);
 

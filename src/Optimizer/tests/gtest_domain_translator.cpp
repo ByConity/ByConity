@@ -27,7 +27,7 @@
 #include <Optimizer/LiteralEncoder.h>
 #include <Common/tests/gtest_global_register.h>
 #include <Common/tests/gtest_global_context.h>
-namespace DB::Predicate
+namespace DB
 {
 
 static bool flag = false;
@@ -49,6 +49,16 @@ auto typeFromString(const std::string & str)
     auto & data_type_factory = DataTypeFactory::instance();
     return data_type_factory.get(str);
 };
+
+using Predicate::createAll;
+using Predicate::createNone;
+using Predicate::createValueSet;
+using PredicateRange = Predicate::Range;
+using Domain = Predicate::Domain;
+using TupleDomain = Predicate::TupleDomain<String>;
+using DomainMap = typename Predicate::TupleDomain<String>::DomainMap;
+using DomainTranslator = Predicate::DomainTranslator<String>;
+using ExtractionResult = Predicate::ExtractionResult<String>;
 
 class DomainTranslatorTest : public testing::Test
 {
@@ -232,13 +242,15 @@ TEST_F(DomainTranslatorTest, testRoundTrip)
         {float64_sym_1,
          Domain(
              createValueSet(
-                 {Range::lessThanOrEqualRange(float64_type, Float64(1.1)),
-                  Range::equalRange(float64_type, Float64(2.0)),
-                  Range(float64_type, false, Float64(3.0), true, Float64(3.5))}),
+                 {PredicateRange::lessThanOrEqualRange(float64_type, Float64(1.1)),
+                  PredicateRange::equalRange(float64_type, Float64(2.0)),
+                  PredicateRange(float64_type, false, Float64(3.0), true, Float64(3.5))}),
              true)},
         {string_sym_1,
          Domain(
-             createValueSet({Range::lessThanOrEqualRange(string_type, "2013-01-01"), Range::greaterThanRange(string_type, "2013-10-01")}),
+             createValueSet(
+                 {PredicateRange::lessThanOrEqualRange(string_type, "2013-01-01"),
+                  PredicateRange::greaterThanRange(string_type, "2013-10-01")}),
              false)},
         //TODO: datetime
     });
@@ -257,7 +269,9 @@ TEST_F(DomainTranslatorTest, testInOptimization)
         subtractValueSet(
             createAll(int64_type),
             createValueSet(
-                {Range::equalRange(int64_type, field_1), Range::equalRange(int64_type, field_2), Range::equalRange(int64_type, field_3)})),
+                {PredicateRange::equalRange(int64_type, field_1),
+                 PredicateRange::equalRange(int64_type, field_2),
+                 PredicateRange::equalRange(int64_type, field_3)})),
         false);
 
     TupleDomain tuple_domain = TupleDomain(DomainMap{{int64_sym, test_domain}});
@@ -267,9 +281,9 @@ TEST_F(DomainTranslatorTest, testInOptimization)
     //test2
     test_domain = Domain(
         createValueSet(
-            {Range(int64_type, true, field_1, true, field_3),
-             Range(int64_type, true, field_5, true, field_7),
-             Range(int64_type, true, field_9, true, field_11)}),
+            {PredicateRange(int64_type, true, field_1, true, field_3),
+             PredicateRange(int64_type, true, field_5, true, field_7),
+             PredicateRange(int64_type, true, field_9, true, field_11)}),
         false);
 
     tuple_domain = TupleDomain(DomainMap{{int64_sym, test_domain}});
@@ -282,14 +296,14 @@ TEST_F(DomainTranslatorTest, testInOptimization)
     test_domain = Domain(
         unionValueSet(
             intersectValueSet(
-                createValueSet({Range::lessThanRange(int64_type, field_4)}),
+                createValueSet({PredicateRange::lessThanRange(int64_type, field_4)}),
                 subtractValueSet(
                     createAll(int64_type),
                     createValueSet(
-                        {Range::equalRange(int64_type, field_1),
-                         Range::equalRange(int64_type, field_2),
-                         Range::equalRange(int64_type, field_3)}))),
-            createValueSet({Range(int64_type, true, field_7, true, field_9)})),
+                        {PredicateRange::equalRange(int64_type, field_1),
+                         PredicateRange::equalRange(int64_type, field_2),
+                         PredicateRange::equalRange(int64_type, field_3)}))),
+            createValueSet({PredicateRange(int64_type, true, field_7, true, field_9)})),
         false);
 
     tuple_domain = TupleDomain(DomainMap{{int64_sym, test_domain}});
@@ -302,14 +316,16 @@ TEST_F(DomainTranslatorTest, testInOptimization)
     test_domain = Domain(
         unionValueSet(
             intersectValueSet(
-                createValueSet({Range::lessThanRange(int64_type, field_4)}),
+                createValueSet({PredicateRange::lessThanRange(int64_type, field_4)}),
                 subtractValueSet(
                     createAll(int64_type),
                     createValueSet(
-                        {Range::equalRange(int64_type, field_1),
-                         Range::equalRange(int64_type, field_2),
-                         Range::equalRange(int64_type, field_3)}))),
-            createValueSet({Range(int64_type, false, field_7, false, field_9), Range(int64_type, false, field_11, false, field_13)})),
+                        {PredicateRange::equalRange(int64_type, field_1),
+                         PredicateRange::equalRange(int64_type, field_2),
+                         PredicateRange::equalRange(int64_type, field_3)}))),
+            createValueSet(
+                {PredicateRange(int64_type, false, field_7, false, field_9),
+                 PredicateRange(int64_type, false, field_11, false, field_13)})),
         false);
     //Note: the order of asts in 'predicate compression' should be consistent
     tuple_domain = TupleDomain(DomainMap{{int64_sym, test_domain}});
@@ -378,21 +394,24 @@ TEST_F(DomainTranslatorTest, testToPredicate)
     tuple_domain = TupleDomain(DomainMap{{int64_sym, Domain::all(int64_type)}});
     ASSERT_TRUE(isEqual(toPredicate(tuple_domain, domain_translator), PredicateConst::TRUE_VALUE));
 
-    tuple_domain = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::greaterThanRange(int64_type, field_1)}), false)}});
+    tuple_domain
+        = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::greaterThanRange(int64_type, field_1)}), false)}});
     ASSERT_TRUE(isEqual(toPredicate(tuple_domain, domain_translator), greaterF(int64_sym, liter_1)));
 
-    tuple_domain
-        = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::greaterThanOrEqualRange(int64_type, field_1)}), false)}});
+    tuple_domain = TupleDomain(
+        DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::greaterThanOrEqualRange(int64_type, field_1)}), false)}});
     ASSERT_TRUE(isEqual(toPredicate(tuple_domain, domain_translator), greaterOrEqualsF(int64_sym, liter_1)));
 
-    tuple_domain = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::lessThanRange(int64_type, field_1)}), false)}});
+    tuple_domain = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::lessThanRange(int64_type, field_1)}), false)}});
     ASSERT_TRUE(isEqual(toPredicate(tuple_domain, domain_translator), lessF(int64_sym, liter_1)));
 
-    tuple_domain = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range(int64_type, false, field_0, true, field_1)}), false)}});
+    tuple_domain
+        = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange(int64_type, false, field_0, true, field_1)}), false)}});
     ASSERT_TRUE(
         isEqual(toPredicate(tuple_domain, domain_translator), andF({greaterF(int64_sym, liter_0), lessOrEqualsF(int64_sym, liter_1)})));
 
-    tuple_domain = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::lessThanOrEqualRange(int64_type, field_1)}), false)}});
+    tuple_domain
+        = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::lessThanOrEqualRange(int64_type, field_1)}), false)}});
     ASSERT_TRUE(isEqual(toPredicate(tuple_domain, domain_translator), lessOrEqualsF(int64_sym, liter_1)));
 
     tuple_domain = TupleDomain(DomainMap{{int64_sym, Domain::singleValue(int64_type, field_1)}});
@@ -400,10 +419,12 @@ TEST_F(DomainTranslatorTest, testToPredicate)
 
     ASTs temp = {liter_1, liter_2};
     tuple_domain = TupleDomain(DomainMap{
-        {int64_sym, Domain(createValueSet({Range::equalRange(int64_type, field_1), Range::equalRange(int64_type, field_2)}), false)}});
+        {int64_sym,
+         Domain(
+             createValueSet({PredicateRange::equalRange(int64_type, field_1), PredicateRange::equalRange(int64_type, field_2)}), false)}});
     ASSERT_TRUE(isEqual(toPredicate(tuple_domain, domain_translator), inF(int64_sym, makeASTFunction("tuple", temp))));
 
-    tuple_domain = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::lessThanRange(int64_type, field_1)}), true)}});
+    tuple_domain = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::lessThanRange(int64_type, field_1)}), true)}});
     ASSERT_TRUE(isEqual(toPredicate(tuple_domain, domain_translator), orF({lessF(int64_sym, liter_1), isNullF(int64_sym)})));
 }
 
@@ -421,7 +442,9 @@ TEST_F(DomainTranslatorTest, testToPredicateWithRangeOptimisation)
     //test1
     TupleDomain tuple_domain = TupleDomain(DomainMap{
         {int64_sym,
-         Domain(createValueSet({Range::greaterThanRange(int64_type, field_1), Range::lessThanRange(int64_type, field_1)}), false)}});
+         Domain(
+             createValueSet({PredicateRange::greaterThanRange(int64_type, field_1), PredicateRange::lessThanRange(int64_type, field_1)}),
+             false)}});
     ASSERT_TRUE(isEqual(toPredicate(tuple_domain, domain_translator), notEqualsF(int64_sym, liter_1)));
 
     //test2
@@ -429,9 +452,9 @@ TEST_F(DomainTranslatorTest, testToPredicateWithRangeOptimisation)
         {int64_sym,
          Domain(
              createValueSet(
-                 {Range::lessThanRange(int64_type, field_0),
-                  Range(int64_type, false, field_0, false, field_1),
-                  Range::greaterThanRange(int64_type, field_1)}),
+                 {PredicateRange::lessThanRange(int64_type, field_0),
+                  PredicateRange(int64_type, false, field_0, false, field_1),
+                  PredicateRange::greaterThanRange(int64_type, field_1)}),
              false)}});
     ASSERT_TRUE(isEqual(toPredicate(tuple_domain, domain_translator), notInF(int64_sym, makeASTFunction("tuple", ASTs{liter_0, liter_1}))));
 
@@ -440,9 +463,9 @@ TEST_F(DomainTranslatorTest, testToPredicateWithRangeOptimisation)
         {int64_sym,
          Domain(
              createValueSet(
-                 {Range::lessThanRange(int64_type, field_0),
-                  Range(int64_type, false, field_0, false, field_1),
-                  Range::greaterThanRange(int64_type, field_2)}),
+                 {PredicateRange::lessThanRange(int64_type, field_0),
+                  PredicateRange(int64_type, false, field_0, false, field_1),
+                  PredicateRange::greaterThanRange(int64_type, field_2)}),
              false)}});
     ASSERT_TRUE(isEqual(
         toPredicate(tuple_domain, domain_translator),
@@ -450,7 +473,7 @@ TEST_F(DomainTranslatorTest, testToPredicateWithRangeOptimisation)
 
     /*
     test4 todo: not support
-        // floating point types: do not coalesce ranges when range "all" would be introduced
+        // floating point types: do not coalesce ranges when PredicateRange "all" would be introduced
         ASTPtr liter_0_float32 = std::make_shared<ASTLiteral>(Float32(0.0));
         ASTPtr liter_1_float32 = std::make_shared<ASTLiteral>(Float32(1.0));
         ASTPtr liter_2_float32 = std::make_shared<ASTLiteral>(Float32(2.0));
@@ -459,8 +482,8 @@ TEST_F(DomainTranslatorTest, testToPredicateWithRangeOptimisation)
             float32_sym,
             Domain(
                 createValueSet({
-                    Range::greaterThanRange(float32_type, field_0_float32),
-                    Range::lessThanRange(float32_type, field_0_float32)}),
+                    PredicateRange::greaterThanRange(float32_type, field_0_float32),
+                    PredicateRange::lessThanRange(float32_type, field_0_float32)}),
                 false)}});
 
         ASSERT_TRUE(isEqual(
@@ -471,9 +494,9 @@ TEST_F(DomainTranslatorTest, testToPredicateWithRangeOptimisation)
             float32_sym,
             Domain(
                 createValueSet({
-                    Range::lessThanRange(float32_type, field_0_float32),
-                    Range(float32_type, false, field_0_float32, false, field_1_float32),
-                    Range::greaterThanRange(float32_type, field_1_float32)}),
+                    PredicateRange::lessThanRange(float32_type, field_0_float32),
+                    PredicateRange(float32_type, false, field_0_float32, false, field_1_float32),
+                    PredicateRange::greaterThanRange(float32_type, field_1_float32)}),
                 false)}});
 
         ASSERT_TRUE(isEqual(
@@ -487,9 +510,9 @@ TEST_F(DomainTranslatorTest, testToPredicateWithRangeOptimisation)
             float32_sym,
             Domain(
                 createValueSet({
-                    Range::lessThanRange(float32_type, field_0_float32),
-                    Range(float32_type, false, field_0_float32, false, field_1_float32),
-                    Range::greaterThanRange(float32_type, field_2_float32)}),
+                    PredicateRange::lessThanRange(float32_type, field_0_float32),
+                    PredicateRange(float32_type, false, field_0_float32, false, field_1_float32),
+                    PredicateRange::greaterThanRange(float32_type, field_2_float32)}),
                 false)}});
 
         ASSERT_TRUE(isEqual(
@@ -502,10 +525,10 @@ TEST_F(DomainTranslatorTest, testToPredicateWithRangeOptimisation)
             float64_sym,
             Domain(
                 createValueSet(
-                    {Range::lessThanRange(float64_type, field_0_float64),
-                     Range(float64_type, false, field_0_float64, false, field_1_float64),
-                     Range(float64_type, false, field_2_float64, false, field_3_float64),
-                     Range::greaterThanRange(float64_type, field_3_float64)}),
+                    {PredicateRange::lessThanRange(float64_type, field_0_float64),
+                     PredicateRange(float64_type, false, field_0_float64, false, field_1_float64),
+                     PredicateRange(float64_type, false, field_2_float64, false, field_3_float64),
+                     PredicateRange::greaterThanRange(float64_type, field_3_float64)}),
                 false)}});
 
         ASSERT_TRUE(isEqual(
@@ -537,7 +560,7 @@ TEST_F(DomainTranslatorTest, testFromAndPredicate)
          andF({lessF(int64_sym, liter_5_int64), getUnProcessableExpression2(int64_sym)})});
     ASTPtr expect_remaining_expression = andF({getUnProcessableExpression1(int64_sym), getUnProcessableExpression2(int64_sym)});
     TupleDomain expect_tuple_domain
-        = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range(int64_type, false, field_1, false, field_5)}), false)}});
+        = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange(int64_type, false, field_1, false, field_5)}), false)}});
     assertPredicateTranslates(original_predicate, expect_tuple_domain, expect_remaining_expression, context);
 
     // Test complements
@@ -586,14 +609,17 @@ TEST_F(DomainTranslatorTest, testFromOrPredicate)
         {andF({equalsF(string_sym, std::make_shared<ASTLiteral>("abc"))}),
          andF({equalsF(string_sym, std::make_shared<ASTLiteral>("def"))})});
     expect_tuple_domain = TupleDomain(DomainMap{
-        {string_sym, Domain(createValueSet({Range::equalRange(string_type, "abc"), Range::equalRange(string_type, "def")}), false)}});
+        {string_sym,
+         Domain(createValueSet({PredicateRange::equalRange(string_type, "abc"), PredicateRange::equalRange(string_type, "def")}), false)}});
     assertPredicateTranslates(original_predicate, expect_tuple_domain, PredicateConst::TRUE_VALUE, context);
 
     original_predicate = orF(
         {andF({equalsF(int64_sym, liter_1_int64), getUnProcessableExpression1(int64_sym)}),
          andF({equalsF(int64_sym, liter_2_int64), getUnProcessableExpression2(int64_sym)})});
     expect_tuple_domain = TupleDomain(DomainMap{
-        {int64_sym, Domain(createValueSet({Range::equalRange(int64_type, field_1), Range::equalRange(int64_type, field_2)}), false)}});
+        {int64_sym,
+         Domain(
+             createValueSet({PredicateRange::equalRange(int64_type, field_1), PredicateRange::equalRange(int64_type, field_2)}), false)}});
     assertPredicateTranslates(original_predicate, expect_tuple_domain, original_predicate, context);
 
     original_predicate = orF(
@@ -608,7 +634,9 @@ TEST_F(DomainTranslatorTest, testFromOrPredicate)
         {andF({equalsF(int64_sym, liter_1_int64), getUnProcessableExpression1(int64_sym)}),
          andF({equalsF(int64_sym, liter_2_int64), getUnProcessableExpression1(int64_sym)})});
     expect_tuple_domain = TupleDomain(DomainMap{
-        {int64_sym, Domain(createValueSet({Range::equalRange(int64_type, field_1), Range::equalRange(int64_type, field_2)}), false)}});
+        {int64_sym,
+         Domain(
+             createValueSet({PredicateRange::equalRange(int64_type, field_1), PredicateRange::equalRange(int64_type, field_2)}), false)}});
     assertPredicateTranslates(original_predicate, expect_tuple_domain, getUnProcessableExpression1(int64_sym), context);
 
     // And notF if they have different symbols
@@ -665,8 +693,8 @@ TEST_F(DomainTranslatorTest, testFromOrPredicate)
         {andF({greaterF(int64_sym, liter_1_int64), greaterF(float64_sym, liter_1_float64), getUnProcessableExpression1(int64_sym)}),
          andF({greaterF(int64_sym, liter_2_int64), greaterF(float64_sym, liter_2_float64), getUnProcessableExpression1(int64_sym)})});
     expect_tuple_domain = TupleDomain(DomainMap{
-        {int64_sym, Domain(createValueSet({Range::greaterThanRange(int64_type, field_1)}), false)},
-        {float64_sym, Domain(createValueSet({Range::greaterThanRange(float64_type, field_1_float64)}), false)}});
+        {int64_sym, Domain(createValueSet({PredicateRange::greaterThanRange(int64_type, field_1)}), false)},
+        {float64_sym, Domain(createValueSet({PredicateRange::greaterThanRange(float64_type, field_1_float64)}), false)}});
     assertPredicateTranslates(original_predicate, expect_tuple_domain, getUnProcessableExpression1(int64_sym), context);
 
     // We can't make those inferences if the unprocessableExpressions are non-deterministic
@@ -676,7 +704,7 @@ TEST_F(DomainTranslatorTest, testFromOrPredicate)
         andF({equalsF(int64_sym, liter_2_int64), randPredicate(int64_sym, int64_type)})});
     result = fromPredicate(original_predicate, context);
     ASSERT_TRUE(isEqual(result.remaining_expression, original_predicate));
-    ASSERT_EQ(result.tuple_domain, TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::equalRange(int64_type, field_1), Range::equalRange(int64_type, field_2)}), false)}}));*/
+    ASSERT_EQ(result.tuple_domain, TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::equalRange(int64_type, field_1), PredicateRange::equalRange(int64_type, field_2)}), false)}}));*/
 
     // Test complements
     original_predicate = notF(orF(
@@ -692,22 +720,22 @@ TEST_F(DomainTranslatorTest, testFromOrPredicate)
         {notF(andF({greaterF(int64_sym, liter_1_int64), getUnProcessableExpression1(int64_sym)})),
          notF(andF({lessF(int64_sym, liter_5_int64), getUnProcessableExpression2(int64_sym)}))}));
     expect_tuple_domain
-        = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range(int64_type, false, field_1, false, field_5)}), false)}});
+        = TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange(int64_type, false, field_1, false, field_5)}), false)}});
     expect_remaining_expression = andF({getUnProcessableExpression1(int64_sym), getUnProcessableExpression2(int64_sym)});
     assertPredicateTranslates(original_predicate, expect_tuple_domain, expect_remaining_expression, context);
 
     original_predicate
         = andF({greaterF(float64_sym, std::make_shared<ASTLiteral>(0)), greaterF(float64_sym, std::make_shared<ASTLiteral>(1.5))});
-    expect_tuple_domain
-        = TupleDomain(DomainMap{{float64_sym, Domain(createValueSet({Range(float64_type, false, Float64(1.5), false, Field())}), false)}});
+    expect_tuple_domain = TupleDomain(
+        DomainMap{{float64_sym, Domain(createValueSet({PredicateRange(float64_type, false, Float64(1.5), false, Field())}), false)}});
     expect_remaining_expression = andF({getUnProcessableExpression1(int64_sym), getUnProcessableExpression2(int64_sym)});
     assertPredicateTranslates(original_predicate, expect_tuple_domain, PredicateConst::TRUE_VALUE, context);
 
 
     original_predicate
         = andF({greaterF(float64_sym, std::make_shared<ASTLiteral>(3)), greaterF(float64_sym, std::make_shared<ASTLiteral>(0.5))});
-    expect_tuple_domain
-        = TupleDomain(DomainMap{{float64_sym, Domain(createValueSet({Range(float64_type, false, Float64(3.0), false, Field())}), false)}});
+    expect_tuple_domain = TupleDomain(
+        DomainMap{{float64_sym, Domain(createValueSet({PredicateRange(float64_type, false, Float64(3.0), false, Field())}), false)}});
     expect_remaining_expression = andF({getUnProcessableExpression1(int64_sym), getUnProcessableExpression2(int64_sym)});
     assertPredicateTranslates(original_predicate, expect_tuple_domain, PredicateConst::TRUE_VALUE, context);
 }
@@ -730,7 +758,10 @@ TEST_F(DomainTranslatorTest, testFromNotPredicate)
         notF(equalsF(int64_sym, liter_1_int64)),
         TupleDomain(DomainMap{
             {int64_sym,
-             Domain(createValueSet({Range::lessThanRange(int64_type, field_1), Range::greaterThanRange(int64_type, field_1)}), false)}}),
+             Domain(
+                 createValueSet(
+                     {PredicateRange::lessThanRange(int64_type, field_1), PredicateRange::greaterThanRange(int64_type, field_1)}),
+                 false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 }
@@ -757,31 +788,31 @@ TEST_F(DomainTranslatorTest, testFromBasicComparisons)
     // Test out the extraction of all basic comparisons
     assertPredicateTranslates(
         greaterF(int64_sym, liter_2_int64),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::greaterThanRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::greaterThanRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
     assertPredicateTranslates(
         greaterOrEqualsF(int64_sym, liter_2_int64),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::greaterThanOrEqualRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::greaterThanOrEqualRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
     assertPredicateTranslates(
         lessF(int64_sym, liter_2_int64),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::lessThanRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::lessThanRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
     assertPredicateTranslates(
         lessOrEqualsF(int64_sym, liter_2_int64),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::lessThanOrEqualRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::lessThanOrEqualRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
     assertPredicateTranslates(
         equalsF(int64_sym, liter_2_int64),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::equalRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::equalRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
@@ -789,7 +820,10 @@ TEST_F(DomainTranslatorTest, testFromBasicComparisons)
         notEqualsF(int64_sym, liter_2_int64),
         TupleDomain(DomainMap{
             {int64_sym,
-             Domain(createValueSet({Range::lessThanRange(int64_type, field_2), Range::greaterThanRange(int64_type, field_2)}), false)}}),
+             Domain(
+                 createValueSet(
+                     {PredicateRange::lessThanRange(int64_type, field_2), PredicateRange::greaterThanRange(int64_type, field_2)}),
+                 false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
@@ -798,27 +832,27 @@ TEST_F(DomainTranslatorTest, testFromBasicComparisons)
     // Test complement
     assertPredicateTranslates(
         notF(greaterF(int64_sym, liter_2_int64)),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::lessThanOrEqualRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::lessThanOrEqualRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
 
     assertPredicateTranslates(
         notF(greaterOrEqualsF(int64_sym, liter_2_int64)),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::lessThanRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::lessThanRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
 
     assertPredicateTranslates(
         notF(lessF(int64_sym, liter_2_int64)),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::greaterThanOrEqualRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::greaterThanOrEqualRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
     assertPredicateTranslates(
         notF(lessOrEqualsF(int64_sym, liter_2_int64)),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::greaterThanRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::greaterThanRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
@@ -826,13 +860,16 @@ TEST_F(DomainTranslatorTest, testFromBasicComparisons)
         notF(equalsF(int64_sym, liter_2_int64)),
         TupleDomain(DomainMap{
             {int64_sym,
-             Domain(createValueSet({Range::lessThanRange(int64_type, field_2), Range::greaterThanRange(int64_type, field_2)}), false)}}),
+             Domain(
+                 createValueSet(
+                     {PredicateRange::lessThanRange(int64_type, field_2), PredicateRange::greaterThanRange(int64_type, field_2)}),
+                 false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
     assertPredicateTranslates(
         notF(notEqualsF(int64_sym, liter_2_int64)),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::equalRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::equalRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
@@ -851,32 +888,32 @@ TEST_F(DomainTranslatorTest, testFromFlippedBasicComparisons)
     // Test out the extraction of all basic comparisons where the reference literal ordering is flipped
     assertPredicateTranslates(
         makeASTFunction("greater", liter_2_int64, int64_sym_ident),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::lessThanRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::lessThanRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
     assertPredicateTranslates(
         makeASTFunction("greaterOrEquals", liter_2_int64, int64_sym_ident),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::lessThanOrEqualRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::lessThanOrEqualRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
     assertPredicateTranslates(
         makeASTFunction("less", liter_2_int64, int64_sym_ident),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::greaterThanRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::greaterThanRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
     assertPredicateTranslates(
         makeASTFunction("lessOrEquals", liter_2_int64, int64_sym_ident),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::greaterThanOrEqualRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::greaterThanOrEqualRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
 
     assertPredicateTranslates(
         makeASTFunction("equals", liter_2_int64, int64_sym_ident),
-        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({Range::equalRange(int64_type, field_2)}), false)}}),
+        TupleDomain(DomainMap{{int64_sym, Domain(createValueSet({PredicateRange::equalRange(int64_type, field_2)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
@@ -885,7 +922,10 @@ TEST_F(DomainTranslatorTest, testFromFlippedBasicComparisons)
         makeASTFunction("notEquals", liter_2_int64, int64_sym_ident),
         TupleDomain(DomainMap{
             {int64_sym,
-             Domain(createValueSet({Range::lessThanRange(int64_type, field_2), Range::greaterThanRange(int64_type, field_2)}), false)}}),
+             Domain(
+                 createValueSet(
+                     {PredicateRange::lessThanRange(int64_type, field_2), PredicateRange::greaterThanRange(int64_type, field_2)}),
+                 false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 }
@@ -1039,7 +1079,7 @@ TEST_F(DomainTranslatorTest, testNarrowTypeCompareWithWideType)
     ast_fun = greaterF(int32_sym, std::make_shared<ASTLiteral>(Int8(1)));
     assertPredicateTranslates(
         ast_fun,
-        TupleDomain(DomainMap{{int32_sym, Domain(createValueSet({Range::greaterThanRange(int32_type, Int64(1))}), false)}}),
+        TupleDomain(DomainMap{{int32_sym, Domain(createValueSet({PredicateRange::greaterThanRange(int32_type, Int64(1))}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 }
@@ -1112,8 +1152,8 @@ TEST_F(DomainTranslatorTest, testConjunctExpression)
     assertPredicateTranslates(
         expression,
         TupleDomain(DomainMap{
-            {float64_sym, Domain(createValueSet({Range::greaterThanRange(float64_type, field_0_float64)}), false)},
-            {int64_sym, Domain(createValueSet({Range::greaterThanRange(int64_type, field_0)}), false)}}),
+            {float64_sym, Domain(createValueSet({PredicateRange::greaterThanRange(float64_type, field_0_float64)}), false)},
+            {int64_sym, Domain(createValueSet({PredicateRange::greaterThanRange(int64_type, field_0)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
@@ -1185,14 +1225,16 @@ TEST_F(DomainTranslatorTest, testImplicitCastOnValueSide)
     // symbol(float64) compare with value(int64)
     assertPredicateTranslates(
         betweenF(float64_sym, liter_1, liter_2),
-        TupleDomain(DomainMap{{float64_sym, Domain(createValueSet({Range(float64_type, true, Float64(1.0), true, Float64(2.0))}), false)}}),
+        TupleDomain(DomainMap{
+            {float64_sym, Domain(createValueSet({PredicateRange(float64_type, true, Float64(1.0), true, Float64(2.0))}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
     // symbol(float64) compare with value(uint64)
     assertPredicateTranslates(
         betweenF(float64_sym, liter_1_uint64, liter_2_uint64),
-        TupleDomain(DomainMap{{float64_sym, Domain(createValueSet({Range(float64_type, true, Float64(1.0), true, Float64(2.0))}), false)}}),
+        TupleDomain(DomainMap{
+            {float64_sym, Domain(createValueSet({PredicateRange(float64_type, true, Float64(1.0), true, Float64(2.0))}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
@@ -1202,7 +1244,7 @@ TEST_F(DomainTranslatorTest, testImplicitCastOnValueSide)
         TupleDomain(DomainMap{
             {date_sym,
              Domain(
-                 createValueSet({Range(
+                 createValueSet({PredicateRange(
                      date_type,
                      true,
                      convertFieldToType(Field("2022-10-20"), *date_type),
@@ -1341,7 +1383,7 @@ TEST_F(DomainTranslatorTest, testNonImplicitCastOnSymbolSide)
         new InPredicate(
             C_BIGINT.toSymbolReference(),
             new InListExpression(ImmutableList.of(cast(toExpression(null, SMALLINT), BIGINT), toExpression(1L, BIGINT)))),
-        tupleDomain(C_BIGINT, Domain.create(ValueSet.ofRanges(Range.equal(BIGINT, 1L)), false)));
+        tupleDomain(C_BIGINT, Domain.create(ValueSet.ofRanges(PredicateRange.equal(BIGINT, 1L)), false)));
 
     assertPredicateIsAlwaysFalse(not(new InPredicate(
         C_BIGINT.toSymbolReference(),
@@ -1353,26 +1395,26 @@ TEST_F(DomainTranslatorTest, testNonImplicitCastOnSymbolSide)
 {
     assertPredicateTranslates(
         between(C_BIGINT, bigintLiteral(1L), bigintLiteral(2L)),
-        tupleDomain(C_BIGINT, Domain.create(ValueSet.ofRanges(Range.range(BIGINT, 1L, true, 2L, true)), false)));
+        tupleDomain(C_BIGINT, Domain.create(ValueSet.ofRanges(PredicateRange.PredicateRange(BIGINT, 1L, true, 2L, true)), false)));
 
     assertPredicateTranslates(
         between(cast(C_INTEGER, DOUBLE), cast(bigintLiteral(1L), DOUBLE), doubleLiteral(2.1)),
-        tupleDomain(C_INTEGER, Domain.create(ValueSet.ofRanges(Range.range(INTEGER, 1L, true, 2L, true)), false)));
+        tupleDomain(C_INTEGER, Domain.create(ValueSet.ofRanges(PredicateRange.PredicateRange(INTEGER, 1L, true, 2L, true)), false)));
 
     assertPredicateIsAlwaysFalse(between(C_BIGINT, bigintLiteral(1L), nullLiteral(BIGINT)));
 
     // Test complements
     assertPredicateTranslates(
         not(between(C_BIGINT, bigintLiteral(1L), bigintLiteral(2L))),
-        tupleDomain(C_BIGINT, Domain.create(ValueSet.ofRanges(Range.lessThan(BIGINT, 1L), Range.greaterThan(BIGINT, 2L)), false)));
+        tupleDomain(C_BIGINT, Domain.create(ValueSet.ofRanges(PredicateRange.lessThan(BIGINT, 1L), PredicateRange.greaterThan(BIGINT, 2L)), false)));
 
     assertPredicateTranslates(
         not(between(cast(C_INTEGER, DOUBLE), cast(bigintLiteral(1L), DOUBLE), doubleLiteral(2.1))),
-        tupleDomain(C_INTEGER, Domain.create(ValueSet.ofRanges(Range.lessThan(INTEGER, 1L), Range.greaterThan(INTEGER, 2L)), false)));
+        tupleDomain(C_INTEGER, Domain.create(ValueSet.ofRanges(PredicateRange.lessThan(INTEGER, 1L), PredicateRange.greaterThan(INTEGER, 2L)), false)));
 
     assertPredicateTranslates(
         not(between(C_BIGINT, bigintLiteral(1L), nullLiteral(BIGINT))),
-        tupleDomain(C_BIGINT, Domain.create(ValueSet.ofRanges(Range.lessThan(BIGINT, 1L)), false)));
+        tupleDomain(C_BIGINT, Domain.create(ValueSet.ofRanges(PredicateRange.lessThan(BIGINT, 1L)), false)));
 }
 */
 
@@ -1428,7 +1470,7 @@ private void testNumericTypeTranslation(NumericValues<?> columnValues, NumericVa
 //        likeF(string_sym, "abc_def"),
 //        string_sym,
 //        likeF(string_sym, "abc_def"),
-//        Domain(createValueSet({Range(string_type, true, "abc", false, "abd")}), false),
+//        Domain(createValueSet({PredicateRange(string_type, true, "abc", false, "abd")}), false),
 //        context);
 //
 //    testSimpleComparison(
@@ -1442,7 +1484,7 @@ private void testNumericTypeTranslation(NumericValues<?> columnValues, NumericVa
 //        likeF(string_sym, "abc\\_def_"),
 //        string_sym,
 //        likeF(string_sym, "abc\\_def_"),
-//        Domain(createValueSet({Range(string_type, true, "abc_def", false, "abc_deg")}), false),
+//        Domain(createValueSet({PredicateRange(string_type, true, "abc_def", false, "abc_deg")}), false),
 //        context);
 //
 //    testSimpleComparison(
@@ -1465,7 +1507,7 @@ private void testNumericTypeTranslation(NumericValues<?> columnValues, NumericVa
 //        string_sym,
 //        likeF(string_sym, "abc\u0123def\u007e\u007f\u00ff\u0123\uccf0%"),
 //        Domain(createValueSet({
-//            Range(string_type, true, "abc\u0123def\u007e\u007f\u00ff\u0123\uccf0", false, "abc\u0123def\u007f")}), false),
+//            PredicateRange(string_type, true, "abc\u0123def\u007e\u007f\u00ff\u0123\uccf0", false, "abc\u0123def\u007f")}), false),
 //        context);
 //
 //    // negation with literal
@@ -1474,8 +1516,8 @@ private void testNumericTypeTranslation(NumericValues<?> columnValues, NumericVa
 //        string_sym,
 //        PredicateConst::TRUE_VALUE,
 //        Domain(createValueSet({
-//                   Range::lessThanRange(string_type, "abcdef"),
-//                   Range::greaterThanRange(string_type, "abcdef")}),false),
+//                   PredicateRange::lessThanRange(string_type, "abcdef"),
+//                   PredicateRange::greaterThanRange(string_type, "abcdef")}),false),
 //        context);
 //
 //    testSimpleComparison(
@@ -1483,8 +1525,8 @@ private void testNumericTypeTranslation(NumericValues<?> columnValues, NumericVa
 //        string_sym,
 //        PredicateConst::TRUE_VALUE,
 //        Domain(createValueSet({
-//                   Range::lessThanRange(string_type, "abc_def"),
-//                   Range::greaterThanRange(string_type, "abc_def")}), false),
+//                   PredicateRange::lessThanRange(string_type, "abc_def"),
+//                   PredicateRange::greaterThanRange(string_type, "abc_def")}), false),
 //        context);
 //
 //    // negation with pattern
@@ -1503,14 +1545,14 @@ private void testNumericTypeTranslation(NumericValues<?> columnValues, NumericVa
 //        startsWithF(string_sym, "abc"),
 //        string_sym,
 //        startsWithF(string_sym, "abc"),
-//        Domain(createValueSet({Range(string_type, true, "abc", false, "abd")}), false),
+//        Domain(createValueSet({PredicateRange(string_type, true, "abc", false, "abd")}), false),
 //        context);
 //
 //    testSimpleComparison(
 //        startsWithF(string_sym, "_abc"),
 //        string_sym,
 //        startsWithF(string_sym, "_abc"),
-//        Domain(createValueSet({Range(string_type, true, "_abc", false, "_abd")}), false),
+//        Domain(createValueSet({PredicateRange(string_type, true, "_abc", false, "_abd")}), false),
 //        context);
 //
 //    // empty
@@ -1525,7 +1567,7 @@ private void testNumericTypeTranslation(NumericValues<?> columnValues, NumericVa
 //        string_sym,
 //        startsWithF(string_sym, "abc\u0123def\u007e\u007f\u00ff\u0123\uccf0"),
 //        Domain(
-//            createValueSet({Range(string_type,true, "abc\u0123def\u007e\u007f\u00ff\u0123\uccf0",false, "abc\u0123def\u007f")}),
+//            createValueSet({PredicateRange(string_type,true, "abc\u0123def\u007e\u007f\u00ff\u0123\uccf0",false, "abc\u0123def\u007f")}),
 //            false),
 //        context);
 //}
@@ -1724,8 +1766,9 @@ void DomainTranslatorTest::testInPredicate(
     // NOT IN, single value
     assertPredicateTranslates(
         notF(inF(sym1_ident, {one_expression})),
-        TupleDomain(
-            DomainMap{{symbol_1, Domain(createValueSet({Range::lessThanRange(type, one), Range::greaterThanRange(type, one)}), false)}}),
+        TupleDomain(DomainMap{
+            {symbol_1,
+             Domain(createValueSet({PredicateRange::lessThanRange(type, one), PredicateRange::greaterThanRange(type, one)}), false)}}),
         PredicateConst::TRUE_VALUE,
         context);
 
@@ -1735,7 +1778,10 @@ void DomainTranslatorTest::testInPredicate(
         TupleDomain(DomainMap{
             {symbol_1,
              Domain(
-                 createValueSet({Range::lessThanRange(type, one), Range(type, false, one, false, two), Range::greaterThanRange(type, two)}),
+                 createValueSet(
+                     {PredicateRange::lessThanRange(type, one),
+                      PredicateRange(type, false, one, false, two),
+                      PredicateRange::greaterThanRange(type, two)}),
                  false)}}),
         PredicateConst::TRUE_VALUE,
         context);
@@ -1751,7 +1797,10 @@ void DomainTranslatorTest::testInPredicate(
         TupleDomain(DomainMap{
             {symbol_1,
              Domain(
-                 createValueSet({Range::lessThanRange(type, one), Range(type, false, one, false, two), Range::greaterThanRange(type, two)}),
+                 createValueSet(
+                     {PredicateRange::lessThanRange(type, one),
+                      PredicateRange(type, false, one, false, two),
+                      PredicateRange::greaterThanRange(type, two)}),
                  false)}}),
         PredicateConst::TRUE_VALUE,
         context);

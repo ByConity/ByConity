@@ -38,8 +38,6 @@
 
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/CountingBlockOutputStream.h>
-#include <DataStreams/RemoteBlockOutputStream.h>
-#include <DataStreams/RemoteBlockInputStream.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/RemoteBlockInputStream.h>
 #include <DataStreams/RemoteBlockOutputStream.h>
@@ -73,6 +71,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterFactory.h>
 #include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/InterpreterSetQuery.h>
 #include <Interpreters/NormalizeSelectWithUnionQueryVisitor.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -83,25 +82,16 @@
 #include <Interpreters/ReplaceQueryParameterVisitor.h>
 #include <Interpreters/SelectIntersectExceptQueryVisitor.h>
 #include <Interpreters/SelectQueryOptions.h>
+#include <Interpreters/VirtualWarehouseHandle.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <QueryPlan/QueryCacheStep.h>
 #include <Common/ProfileEvents.h>
 #include <Common/RpcClientPool.h>
 
-#include <DataStreams/RemoteQueryExecutor.h>
-#include <Interpreters/InterpreterSelectWithUnionQuery.h>
-#include <Interpreters/NamedSession.h>
-#include <Processors/QueryPipeline.h>
-#include <Interpreters/StorageID.h>
-#include <Interpreters/VirtualWarehouseHandle.h>
-#include <MergeTreeCommon/CnchTopologyMaster.h>
-#include <Transaction/CnchWorkerTransaction.h>
-#include <Transaction/TransactionCoordinatorRcCnch.h>
-#include <Transaction/TxnTimestamp.h>
-#include <Common/SensitiveDataMasker.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <DataStreams/NullBlockOutputStream.h>
+#include <DataStreams/RemoteQueryExecutor.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
@@ -109,9 +99,19 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/InterpreterCommitQuery.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/NamedSession.h>
 #include <Interpreters/Set.h>
+#include <Interpreters/StorageID.h>
+#include <Interpreters/VirtualWarehouseHandle.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/IAST_fwd.h>
+#include <Processors/QueryPipeline.h>
 #include <Storages/StorageCloudMergeTree.h>
+#include <Transaction/CnchWorkerTransaction.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Transaction/TxnTimestamp.h>
+#include <Common/SensitiveDataMasker.h>
 
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
@@ -134,7 +134,10 @@
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 
+#include <Optimizer/OptimizerMetrics.h>
+#include <Optimizer/QueryUseOptimizerChecker.h>
 #include <Protos/cnch_common.pb.h>
+#include <Optimizer/OptimizerMetrics.h>
 
 using AsyncQueryStatus = DB::Protos::AsyncQueryStatus;
 
@@ -512,7 +515,9 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
     if (server_type == ServerType::cnch_server)
     {
         bool read_only = isReadOnlyTransaction(ast.get());
-        auto session_txn = isQueryInInteractiveSession(context,ast) ? context->getSessionContext()->getCurrentTransaction()->as<CnchExplicitTransaction>() : nullptr;
+        auto session_txn = isQueryInInteractiveSession(context, ast)
+            ? context->getSessionContext()->getCurrentTransaction()->as<CnchExplicitTransaction>()
+            : nullptr;
         TxnTimestamp primary_txn_id = session_txn ? session_txn->getTransactionID() : TxnTimestamp{0};
         auto txn = context->getCnchTransactionCoordinator().createTransaction(
             CreateTransactionOption()
@@ -522,7 +527,8 @@ static TransactionCnchPtr prepareCnchTransaction(ContextMutablePtr context, [[ma
                 .setAsyncPostCommit(context->getSettingsRef().async_post_commit)
                 .setPrimaryTransactionId(primary_txn_id));
         context->setCurrentTransaction(txn);
-        if (session_txn && !read_only) session_txn->addStatement(queryToString(ast));
+        if (session_txn && !read_only)
+            session_txn->addStatement(queryToString(ast));
         return txn;
     }
     else if (server_type == ServerType::cnch_worker)
@@ -665,7 +671,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     {
         if (input_ast == nullptr)
         {
-            ParserQuery parser(end, ParserSettings::valueOf(context->getSettings().dialect_type));
+            ParserQuery parser(end, ParserSettings::valueOf(context->getSettings()));
             parser.setContext(context.get());
 
             /// TODO: parser should fail early when max_query_size limit is reached.
@@ -754,7 +760,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         if (isDDLQuery(context, ast))
         {
             /// Commit the current explicit transaction
-            LOG_WARNING(&Poco::Logger::get("executeQuery"), "Receive DDL in interactive transaction session, will commit the session implicitly");
+            LOG_WARNING(
+                &Poco::Logger::get("executeQuery"), "Receive DDL in interactive transaction session, will commit the session implicitly");
             InterpreterCommitQuery(nullptr, context).execute();
         }
         else
@@ -762,7 +769,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             auto host_ports = getTargetServer(context, ast);
             if (!host_ports.empty() && !isLocalServer(host_ports.getRPCAddress(), std::to_string(context->getRPCPort())))
             {
-                LOG_INFO(&Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.getTCPAddress());
+                LOG_INFO(
+                    &Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.getTCPAddress());
                 /// TODO: currently, this called only for compability with formal query flow, may need more shophisticated logic
                 /// in the future
                 context->initializeExternalTablesIfSet();
@@ -907,7 +915,27 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
             catch (...)
             {
-                if (!context->getSettingsRef().enable_optimizer && context->getSettingsRef().distributed_perfect_shard
+                if (typeid_cast<const InterpreterSelectQueryUseOptimizer *>(&*interpreter))
+                {
+                    // fallback to simple query process
+                    if (context->getSettingsRef().enable_optimizer_fallback)
+                    {
+                        LOG_INFO(&Poco::Logger::get("executeQuery"), "Query failed in optimizer enabled, try to fallback to simple query.");
+                        turnOffOptimizer(context, ast);
+                        auto retry_interpreter = InterpreterFactory::get(ast, context, stage);
+                        res = retry_interpreter->execute();
+
+                        // Used to identify 'fallback' queries in query_log
+                        context->setSetting("operator_profile_receive_timeout", 3001);
+                    }
+                    else
+                    {
+                        LOG_INFO(&Poco::Logger::get("executeQuery"), "Query failed in optimizer enabled, throw exception.");
+                        throw;
+                    }
+                }
+                else if (
+                    !context->getSettingsRef().enable_optimizer && context->getSettingsRef().distributed_perfect_shard
                     && context->getSettingsRef().fallback_perfect_shard)
                 {
                     LOG_INFO(&Poco::Logger::get("executeQuery"), "Query failed in perfect-shard enabled, try to fallback to normal mode.");
@@ -1036,6 +1064,14 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     elem.query_tables = info.tables;
                     elem.query_columns = info.columns;
                     elem.query_projections = info.projections;
+                    /// Optimizer match materialized views
+                    if (context->getOptimizerMetrics())
+                    {
+                        for (const auto & view_id : context->getOptimizerMetrics()->getUsedMaterializedViews())
+                        {
+                            elem.query_materialized_views.emplace(view_id.getFullNameNotQuoted());
+                        }
+                    }
                 }
 
                 interpreter->extendQueryLogElem(elem, ast, context, query_database, query_table);
@@ -1107,27 +1143,25 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             auto query_id = context->getCurrentQueryId();
             /// Also make possible for caller to log successful query finish and exception during execution.
-            auto finish_callback
-                =
-                    [elem,
-                     context,
-                     query,
-                     ast,
-                     log_queries,
-                     log_queries_min_type = settings.log_queries_min_type,
-                     log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
-                     log_processors_profiles = settings.log_processors_profiles,
-                     status_info_to_query_log,
-                     query_id,
-                     finish_current_transaction,
-                     complex_query,
-                     init_time](
-                        IBlockInputStream * stream_in,
-                        IBlockOutputStream * stream_out,
-                        QueryPipeline * query_pipeline,
-                        UInt64 runtime_latency) mutable {
-                        finish_current_transaction(context);
-                        QueryStatus * process_list_elem = context->getProcessListElement();
+            auto finish_callback = [elem,
+                                    context,
+                                    query,
+                                    ast,
+                                    log_queries,
+                                    log_queries_min_type = settings.log_queries_min_type,
+                                    log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
+                                    log_processors_profiles = settings.log_processors_profiles,
+                                    status_info_to_query_log,
+                                    query_id,
+                                    finish_current_transaction,
+                                    complex_query,
+                                    init_time](
+                                       IBlockInputStream * stream_in,
+                                       IBlockOutputStream * stream_out,
+                                       QueryPipeline * query_pipeline,
+                                       UInt64 runtime_latency) mutable {
+                finish_current_transaction(context);
+                QueryStatus * process_list_elem = context->getProcessListElement();
 
                 if (!process_list_elem)
                     return;
@@ -1286,51 +1320,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 elem.used_table_functions = factories_info.table_functions;
                 elem.partition_ids = context->getPartitionIds();
 
+
                 if (log_processors_profiles)
                 {
                     auto processors_profile_log = context->getProcessorsProfileLog();
                     if (query_pipeline && processors_profile_log)
-                    {
-                        ProcessorProfileLogElement processor_elem;
-                        processor_elem.event_time = time_in_seconds(finish_time);
-                        processor_elem.event_time_microseconds = time_in_microseconds(finish_time);
-                        processor_elem.query_id = elem.client_info.current_query_id;
-
-                        auto get_proc_id = [](const IProcessor & proc) -> UInt64 { return reinterpret_cast<std::uintptr_t>(&proc); };
-                        for (const auto & processor : query_pipeline->getProcessors())
-                        {
-                            std::vector<UInt64> parents;
-                            for (const auto & port : processor->getOutputs())
-                            {
-                                if (!port.isConnected())
-                                    continue;
-                                const IProcessor & next = port.getInputPort().getProcessor();
-                                parents.push_back(get_proc_id(next));
-                            }
-
-                            processor_elem.id = get_proc_id(*processor);
-                            processor_elem.parent_ids = std::move(parents);
-                            processor_elem.plan_step = reinterpret_cast<std::uintptr_t>(processor->getQueryPlanStep());
-                            /// plan_group is set differently to community CH,
-                            /// which is processor->getQueryPlanStepGroup();
-                            /// here, it is combined with the segment_id
-                            /// for visualizing processors in the profiling website
-                            processor_elem.plan_group = processor->getQueryPlanStepGroup();
-
-                            processor_elem.processor_name = processor->getName();
-
-                            processor_elem.elapsed_us = processor->getElapsedUs();
-                            processor_elem.input_wait_elapsed_us = processor->getInputWaitElapsedUs();
-                            processor_elem.output_wait_elapsed_us = processor->getOutputWaitElapsedUs();
-                            auto stats = processor->getProcessorDataStats();
-                            processor_elem.input_rows = stats.input_rows;
-                            processor_elem.input_bytes = stats.input_bytes;
-                            processor_elem.output_rows = stats.output_rows;
-                            processor_elem.output_bytes = stats.output_bytes;
-
-                            processors_profile_log->add(processor_elem);
-                        }
-                    }
+                        processors_profile_log->addLogs(query_pipeline, elem.client_info.current_query_id, finish_time);
                 }
 
 
@@ -1532,11 +1527,13 @@ executeQuery(const String & query, ContextMutablePtr context, bool internal, Que
 {
     ASTPtr ast;
     BlockIO streams;
+
     std::tie(ast, streams)
         = executeQueryImpl(query.data(), query.data() + query.size(), nullptr, context, internal, stage, !may_have_embedded_data, nullptr);
 
     if (const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
     {
+
         String format_name = ast_query_with_output->format ? getIdentifierName(ast_query_with_output->format) : context->getDefaultFormat();
 
         if (format_name == "Null")
@@ -1633,7 +1630,7 @@ void executeQuery(
     ASTPtr ast;
     BlockIO streams;
 
-    ParserQuery parser(end, ParserSettings::valueOf(context->getSettings().dialect_type));
+    ParserQuery parser(end, ParserSettings::valueOf(context->getSettings()));
     parser.setContext(context.get());
 
     /// TODO: parser should fail early when max_query_size limit is reached.
@@ -1694,7 +1691,7 @@ void executeQuery(
                     out_file_buf.emplace(*out_path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
                     out_buf = &*out_file_buf;
                 }
-#if USE_HDFS
+#    if USE_HDFS
                 else if (DB::isHdfsOrCfsScheme(scheme))
                 {
                     out_hdfs_raw = std::make_unique<WriteBufferFromHDFS>(
@@ -1703,7 +1700,7 @@ void executeQuery(
                     out_hdfs_buf.emplace(std::move(out_hdfs_raw), CompressionMethod::Gzip, compression_level);
                     out_buf = &*out_hdfs_buf;
                 }
-#endif
+#    endif
                 else
                 {
                     throw Exception(
@@ -1818,7 +1815,7 @@ bool isQueryInInteractiveSession(const ContextPtr & context, [[maybe_unused]] co
         && context->getSessionContext()->getCurrentTransaction() != nullptr;
 }
 
-bool isDDLQuery( [[maybe_unused]] const ContextPtr & context, const ASTPtr & query)
+bool isDDLQuery([[maybe_unused]] const ContextPtr & context, const ASTPtr & query)
 {
     auto * alter = query->as<ASTAlterQuery>();
     if (alter)
@@ -1826,7 +1823,8 @@ bool isDDLQuery( [[maybe_unused]] const ContextPtr & context, const ASTPtr & que
         auto * command_list = alter->command_list;
         /// ATTACH PARTS FROM `dir` and ATTACH DETACHED PARTITION can be considered as DML
         if (command_list && command_list->children.size() == 1
-            && (command_list->children[0]->as<ASTAlterCommand>()->attach_from_detached || command_list->children[0]->as<ASTAlterCommand>()->parts))
+            && (command_list->children[0]->as<ASTAlterCommand>()->attach_from_detached
+                || command_list->children[0]->as<ASTAlterCommand>()->parts))
             return false;
 
         /// DROP PARTITION and DROP PARTITION WHERE without DETACH can be considered as DML
@@ -1847,7 +1845,7 @@ bool isDDLQuery( [[maybe_unused]] const ContextPtr & context, const ASTPtr & que
     return create || (drop && drop->kind != ASTDropQuery::Kind::Truncate) || rename;
 }
 
-HostWithPorts getTargetServer(const ContextPtr & context, ASTPtr &ast)
+HostWithPorts getTargetServer(const ContextPtr & context, ASTPtr & ast)
 {
     /// Only get target server for main table
     StorageID table_id = StorageID::createEmpty();
@@ -1878,7 +1876,8 @@ HostWithPorts getTargetServer(const ContextPtr & context, ASTPtr &ast)
 
     auto table = DatabaseCatalog::instance().getTable(table_id, context);
 
-    if (table_id.database_name == "system") return {};
+    if (table_id.database_name == "system")
+        return {};
 
     auto topology_master = context->getCnchTopologyMaster();
 
@@ -1894,13 +1893,11 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     context->setCurrentTransaction(proxy_txn);
     context->getSessionContext()->getCurrentTransaction()->as<CnchExplicitTransaction>()->addStatement(queryToString(ast));
     /// Anyway, on finish and exception, we need to finish the proxy transaction
-    res.finish_callback = [proxy_txn](IBlockInputStream * , IBlockOutputStream *, QueryPipeline *, UInt64)
-    {
+    res.finish_callback = [proxy_txn](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *, UInt64) {
         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
         proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
     };
-    res.exception_callback = [proxy_txn](int)
-    {
+    res.exception_callback = [proxy_txn](int) {
         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server");
         proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
     };
@@ -1909,9 +1906,11 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     query_client_info.client_type = ClientInfo::ClientType::CNCH_SERVER;
     auto settings = context->getSettingsRef();
     res.remote_execution_conn = std::make_shared<Connection>(
-        server.getHost(), server.tcp_port,
+        server.getHost(),
+        server.tcp_port,
         context->getCurrentDatabase(), /*default_database_*/
-        query_client_info.current_user, query_client_info.current_password,
+        query_client_info.current_user,
+        query_client_info.current_password,
         "", /*cluster_*/
         "", /*cluster_secret*/
         "server", /*client_name_*/
@@ -1927,7 +1926,8 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     if (wait_insert_data)
     {
         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as INSERT VALUES query");
-        res.out = std::make_shared<DB::RemoteBlockOutputStream>(*res.remote_execution_conn, timeouts, query, settings, query_client_info, context);
+        res.out = std::make_shared<DB::RemoteBlockOutputStream>(
+            *res.remote_execution_conn, timeouts, query, settings, query_client_info, context);
     }
     else
     {
@@ -1935,7 +1935,8 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
         auto remote_stream = std::make_shared<DB::RemoteBlockInputStream>(*res.remote_execution_conn, query, Block(), context);
         remote_stream->setPoolMode(PoolMode::GET_ONE);
         remote_stream->readPrefix();
-        while (Block block = remote_stream->read());
+        while (Block block = remote_stream->read())
+            ;
         remote_stream->readSuffix();
         /// Get the extended profile info which is mainly for INSERT SELECT/INFILE
         context->setExtendedProfileInfo(remote_stream->getExtendedProfileInfo());
@@ -1976,35 +1977,35 @@ void updateAsyncQueryStatus(
 }
 
 void executeHttpQueryInAsyncMode(
-    String & query,
-    ASTPtr ast,
+    String & query1,
+    ASTPtr ast1,
     ContextMutablePtr c,
-    WriteBuffer & ostr,
-    ReadBuffer * istr,
+    WriteBuffer & ostr1,
+    ReadBuffer * istr1,
     bool has_query_tail,
     const std::optional<FormatSettings> & f,
     std::function<void(const String &, const String &, const String &, const String &)> set_result_details)
 {
-    const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
-    String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
-        ? getIdentifierName(ast_query_with_output->format)
+    const auto * ast_query_with_output1 = dynamic_cast<const ASTQueryWithOutput *>(ast1.get());
+    String format_name1 = ast_query_with_output1 && (ast_query_with_output1->format != nullptr)
+        ? getIdentifierName(ast_query_with_output1->format)
         : c->getDefaultFormat();
     if (set_result_details)
         set_result_details(
-            c->getClientInfo().current_query_id, "text/plain; charset=UTF-8", format_name, DateLUT::instance().getTimeZone());
+            c->getClientInfo().current_query_id, "text/plain; charset=UTF-8", format_name1, DateLUT::instance().getTimeZone());
 
     c->getAsyncQueryManager()->insertAndRun(
-        query,
-        ast,
+        query1,
+        ast1,
         c,
-        istr,
-        [c, &ostr, &f](const String & id) {
+        istr1,
+        [c, &ostr1, &f](const String & id) {
             MutableColumnPtr table_column_mut = ColumnString::create();
             table_column_mut->insert(id);
             Block res;
             res.insert(ColumnWithTypeAndName(std::move(table_column_mut), std::make_shared<DataTypeString>(), "async_query_id"));
 
-            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(c->getDefaultFormat(), ostr, res, c, {}, f);
+            auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(c->getDefaultFormat(), ostr1, res, c, {}, f);
 
             out->write(res);
             out->flush();
@@ -2012,11 +2013,11 @@ void executeHttpQueryInAsyncMode(
         [f, has_query_tail](String & query, ASTPtr ast, ContextMutablePtr context, ReadBuffer * istr) {
             ASTPtr ast_output;
             BlockIO streams;
-            std::tie(ast_output, streams) = executeQueryImpl(
-                query.data(), query.data() + query.size(), ast, context, false, QueryProcessingStage::Complete, has_query_tail, istr);
-            auto & pipeline = streams.pipeline;
             try
             {
+                std::tie(ast_output, streams) = executeQueryImpl(
+                    query.data(), query.data() + query.size(), ast, context, false, QueryProcessingStage::Complete, has_query_tail, istr);
+                auto & pipeline = streams.pipeline;
                 if (streams.in)
                 {
                     const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
@@ -2103,6 +2104,13 @@ void executeHttpQueryInAsyncMode(
             catch (...)
             {
                 streams.onException();
+                if (!streams.exception_callback)
+                    updateAsyncQueryStatus(
+                        context,
+                        context->getAsyncQueryId(),
+                        context->getCurrentQueryId(),
+                        AsyncQueryStatus::Failed,
+                        getCurrentExceptionMessage(false));
                 throw;
             }
 

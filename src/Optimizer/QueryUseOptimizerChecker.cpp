@@ -30,6 +30,11 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
 #include <Storages/StorageCnchHive.h>
+#include <common/logger_useful.h>
+#include "Storages/StorageCnchHive.h"
+#include "Storages/StorageCnchMergeTree.h"
+#include "Storages/StorageMaterializedView.h"
+#include "Storages/RemoteFile/IStorageCnchFile.h"
 //#include <Common/TestLog.h>
 
 namespace DB

@@ -373,7 +373,7 @@ void TCPHandler::runImpl()
             {
                 const char * begin = state.query.data();
                 const char * end = state.query.data() + state.query.size();
-                ParserQuery parser(end, ParserSettings::valueOf(query_context->getSettings().dialect_type));
+                ParserQuery parser(end, ParserSettings::valueOf(query_context->getSettings()));
                 parser.setContext(query_context.get());
 
                 /// TODO: parser should fail early when max_query_size limit is reached.
@@ -400,9 +400,10 @@ void TCPHandler::runImpl()
                     },
                     [need_receive_data_for_input = state.need_receive_data_for_input,
                      may_have_embedded_data](String query, ASTPtr ast, ContextMutablePtr context, ReadBuffer * istr) {
-                        BlockIO io = executeQuery(query, ast, context, false, QueryProcessingStage::Complete, may_have_embedded_data);
+                        BlockIO io;
                         try
                         {
+                            io = executeQuery(query, ast, context, false, QueryProcessingStage::Complete, may_have_embedded_data);
                             if (need_receive_data_for_input) // It implies pipeline execution
                             {
                                 /// It is special case for input(), all works for reading data from client will be done in callbacks.
@@ -455,6 +456,13 @@ void TCPHandler::runImpl()
                         catch (...)
                         {
                             io.onException();
+                            if (!io.exception_callback)
+                                updateAsyncQueryStatus(
+                                    context,
+                                    context->getAsyncQueryId(),
+                                    context->getCurrentQueryId(),
+                                    AsyncQueryStatus::Failed,
+                                    getCurrentExceptionMessage(false));
                         }
                         io.onFinish();
                     });
@@ -1518,7 +1526,7 @@ void TCPHandler::receiveCnchQuery()
     {
         auto named_session = query_context->acquireNamedCnchSession(txn_id, {}, false);
         query_context = Context::createCopy(named_session->context);
-        query_context->setSessionContext(named_session->context);
+        query_context->setSessionContext(query_context);
         query_context->setTemporaryTransaction(txn_id, primary_txn_id);
         query_context->setProgressCallback([this] (const Progress & value) { return this->updateProgress(value); });
     }

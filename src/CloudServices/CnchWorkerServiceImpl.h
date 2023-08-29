@@ -21,6 +21,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 
 #include <common/logger_useful.h>
+#include <Common/Brpc/BrpcServiceDefines.h>
 
 namespace DB
 {
@@ -28,7 +29,7 @@ namespace DB
 class CnchWorkerServiceImpl : protected WithMutableContext, public DB::Protos::CnchWorkerService
 {
 public:
-    explicit CnchWorkerServiceImpl(ContextPtr context_);
+    explicit CnchWorkerServiceImpl(ContextMutablePtr context_);
     ~CnchWorkerServiceImpl() override;
 
     void executeSimpleQuery(
@@ -179,6 +180,12 @@ public:
         Protos::SendCnchHiveDataPartsResp * response,
         google::protobuf::Closure * done) override;
 
+    void sendCnchFileDataParts(
+        google::protobuf::RpcController * cntl,
+        const Protos::SendCnchFileDataPartsReq * request,
+        Protos::SendCnchFileDataPartsResp * response,
+        google::protobuf::Closure * done) override;
+
     void checkDataParts(
         google::protobuf::RpcController * cntl,
         const Protos::CheckDataPartsReq * request,
@@ -203,5 +210,7 @@ private:
     // class PreloadHandler;
     // std::shared_ptr<PreloadHandler> preload_handler;
 };
+
+REGISTER_SERVICE_IMPL(CnchWorkerServiceImpl);
 
 }

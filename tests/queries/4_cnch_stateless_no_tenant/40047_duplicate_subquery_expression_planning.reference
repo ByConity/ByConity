@@ -1,0 +1,160 @@
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: _subquery1:=`expr#max(c)`, plus(_subquery2, 1):=`expr#max(c)` + 1
+   └─ Cross Join Est. ? rows
+      │     Condition: 
+      ├─ TableScan test.t40047_x Est. ? rows
+      │        Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Projection Est. ? rows
+            │     Expressions: expr#max(c):=cast(`expr#max(c)`, \'Nullable(Int32)\')
+            └─ MergingAggregated Est. ? rows
+               └─ Gather Exchange Est. ? rows
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {}
+                     │     Aggregates: expr#max(c):=AggNull(max)(c)
+                     └─ TableScan test.t40047_y Est. ? rows
+                              Outputs: [c]
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: _subquery1:=`expr#max(c)`, plus(_subquery2, 1):=`expr#max(c)` + 1
+   └─ Cross Join Est. ? rows
+      │     Condition: 
+      ├─ TableScan test.t40047_x Est. ? rows
+      │        Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Projection Est. ? rows
+            │     Expressions: expr#max(c):=cast(`expr#max(c)`, \'Nullable(Int32)\')
+            └─ MergingAggregated Est. ? rows
+               └─ Gather Exchange Est. ? rows
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {}
+                     │     Aggregates: expr#max(c):=AggNull(max)(c)
+                     └─ TableScan test.t40047_y Est. ? rows
+                              Outputs: [c]
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: _subquery1:=`expr#max(_subquery1)`, plus(_subquery2, 1):=`expr#max(_subquery1)` + 1
+   └─ Cross Join Est. ? rows
+      │     Condition: 
+      ├─ TableScan test.t40047_x Est. ? rows
+      │        Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ MergingAggregated Est. ? rows
+            └─ Gather Exchange Est. ? rows
+               └─ Aggregating Est. ? rows
+                  │     Group by: {}
+                  │     Aggregates: expr#max(_subquery1):=AggNull(max)(expr#max(a))
+                  └─ Cross Join Est. ? rows
+                     │     Condition: 
+                     ├─ TableScan test.t40047_y Est. ? rows
+                     │        Outputs: a_1:=a
+                     └─ Broadcast Exchange Est. ? rows
+                        └─ Projection Est. ? rows
+                           │     Expressions: expr#max(a):=cast(`expr#max(a)`, \'Nullable(Int32)\')
+                           └─ MergingAggregated Est. ? rows
+                              └─ Gather Exchange Est. ? rows
+                                 └─ Aggregating Est. ? rows
+                                    │     Group by: {}
+                                    │     Aggregates: expr#max(a):=AggNull(max)(a_2)
+                                    └─ TableScan test.t40047_x Est. ? rows
+                                             Outputs: a_2:=a
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: _subquery1:=`expr#max(c)`, plus(_subquery2, 1):=`expr#max(c)` + 1
+   └─ Cross Join Est. ? rows
+      │     Condition: 
+      ├─ TableScan test.t40047_x Est. ? rows
+      │        Outputs: [a]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Projection Est. ? rows
+            │     Expressions: expr#max(c):=cast(`expr#max(c)`, \'Nullable(Int32)\')
+            └─ MergingAggregated Est. ? rows
+               └─ Gather Exchange Est. ? rows
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {}
+                     │     Aggregates: expr#max(c):=AggNull(max)(c)
+                     └─ TableScan test.t40047_y Est. ? rows
+                              Outputs: [c]
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: _subquery1:=`expr#max(c)`, plus(_subquery2, 1):=`expr#max(y2.c)` + 1
+   └─ Cross Join Est. ? rows
+      │     Condition: 
+      ├─ Cross Join Est. ? rows
+      │  │     Condition: 
+      │  ├─ TableScan test.t40047_x Est. ? rows
+      │  │        Outputs: [a]
+      │  └─ Broadcast Exchange Est. ? rows
+      │     └─ Projection Est. ? rows
+      │        │     Expressions: expr#max(c):=cast(`expr#max(c)`, \'Nullable(Int32)\')
+      │        └─ MergingAggregated Est. ? rows
+      │           └─ Gather Exchange Est. ? rows
+      │              └─ Aggregating Est. ? rows
+      │                 │     Group by: {}
+      │                 │     Aggregates: expr#max(c):=AggNull(max)(c)
+      │                 └─ TableScan test.t40047_y Est. ? rows
+      │                          Outputs: [c]
+      └─ Broadcast Exchange Est. ? rows
+         └─ Projection Est. ? rows
+            │     Expressions: expr#max(y2.c):=cast(`expr#max(y2.c)`, \'Nullable(Int32)\')
+            └─ MergingAggregated Est. ? rows
+               └─ Gather Exchange Est. ? rows
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {}
+                     │     Aggregates: expr#max(y2.c):=AggNull(max)(c_1)
+                     └─ TableScan test.t40047_y Est. ? rows
+                              Outputs: c_1:=c
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: _subquery1:=`expr#max(c)`, plus(_subquery2, 1):=`expr#max(c)` + 1
+   └─ Left Join Est. ? rows
+      │     Condition: b == c
+      ├─ Repartition Exchange Est. ? rows
+      │  │     Partition by: {b}
+      │  └─ TableScan test.t40047_x Est. ? rows
+      │           Outputs: [b]
+      └─ MergingAggregated Est. ? rows
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {c}
+            └─ Aggregating Est. ? rows
+               │     Group by: {c}
+               │     Aggregates: expr#max(c):=AggNull(maxIf)(c,build_side_non_null_symbol)
+               └─ Projection Est. ? rows
+                  │     Expressions: [c], build_side_non_null_symbol:=1
+                  └─ TableScan test.t40047_y Est. ? rows
+                           Outputs: [c]
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: _subquery1:=`expr#max(c)`, plus(_subquery2, 1):=`expr#max(c)_1` + 1
+   └─ Left Join Est. ? rows
+      │     Condition: a == c_1
+      ├─ Repartition Exchange Est. ? rows
+      │  │     Partition by: {a}
+      │  └─ Cross Join Est. ? rows
+      │     │     Condition: 
+      │     ├─ TableScan test.t40047_x Est. ? rows
+      │     │        Outputs: [a]
+      │     └─ Broadcast Exchange Est. ? rows
+      │        └─ Projection Est. ? rows
+      │           │     Expressions: expr#max(c):=cast(`expr#max(c)`, \'Nullable(Int32)\')
+      │           └─ MergingAggregated Est. ? rows
+      │              └─ Gather Exchange Est. ? rows
+      │                 └─ Aggregating Est. ? rows
+      │                    │     Group by: {}
+      │                    │     Aggregates: expr#max(c):=AggNull(max)(c)
+      │                    └─ Filter Est. ? rows
+      │                       │     Condition: c = a_1
+      │                       └─ TableScan test.t40047_y Est. ? rows
+      │                                Condition : c = a.
+      │                                Outputs: [c], a_1:=a
+      └─ MergingAggregated Est. ? rows
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {c_1}
+            └─ Aggregating Est. ? rows
+               │     Group by: {c_1}
+               │     Aggregates: expr#max(c)_1:=AggNull(maxIf)(c_1,build_side_non_null_symbol)
+               └─ Projection Est. ? rows
+                  │     Expressions: [c_1], build_side_non_null_symbol:=1
+                  └─ TableScan test.t40047_y Est. ? rows
+                           Outputs: c_1:=c

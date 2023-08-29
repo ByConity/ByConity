@@ -16,6 +16,7 @@ struct PartLogElement
         REMOVE_PART = 4,
         MUTATE_PART = 5,
         MOVE_PART = 6,
+        PRELOAD_PART = 7,
     };
 
     String query_id;
@@ -74,6 +75,8 @@ public:
                            const ExecutionStatus & execution_status = {});
     static bool addNewParts(ContextPtr context, const MutableDataPartsVector & parts, UInt64 elapsed_ns,
                             const ExecutionStatus & execution_status = {});
+    static PartLogElement createElement(PartLogElement::Type event_type, const IMergeTreeDataPartPtr & part, 
+                            UInt64 elapsed_ns, const String & exception = "");
 };
 
 }

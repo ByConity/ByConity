@@ -52,6 +52,30 @@ public:
 
     LocalDeleteBitmaps repairParts(TxnTimestamp txn_id, IMergeTreeDataPartsVector visible_parts);
 
+    struct DedupTask
+    {
+        String partition_id;
+        bool bucket_valid;
+        Int64 bucket_number;
+        IMergeTreeDataPartsVector visible_parts;
+        IMergeTreeDataPartsVector new_parts;
+
+        DedupTask(
+            String partition_id_,
+            bool bucket_valid_,
+            Int64 bucket_number_,
+            const IMergeTreeDataPartsVector & visible_parts_,
+            const IMergeTreeDataPartsVector & new_parts_)
+            : partition_id(partition_id_)
+            , bucket_valid(bucket_valid_)
+            , bucket_number(bucket_number_)
+            , visible_parts(visible_parts_)
+            , new_parts(new_parts_)
+        {
+        }
+    };
+    using DedupTasks = std::vector<DedupTask>;
+
 private:
     /// Low-level interface to dedup `new_parts` with `visible_parts`.
     /// Return delete bitmaps of input parts to remove duplicate keys.
@@ -61,6 +85,12 @@ private:
     DeleteBitmapVector dedupImpl(const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts);
 
     DeleteBitmapVector repairImpl(const IMergeTreeDataPartsVector & parts);
+
+    /// Convert dedup task into multiple sub dedup tasks. If valid_bucket_table is true, it will split dedup task into bucket granule.
+    DedupTasks convertIntoSubDedupTasks(
+        const IMergeTreeDataPartsVector & all_visible_parts,
+        const IMergeTreeDataPartsVector & all_staged_parts,
+        const IMergeTreeDataPartsVector & all_uncommitted_parts);
 
     const MergeTreeMetaBase & data;
     ContextPtr context;

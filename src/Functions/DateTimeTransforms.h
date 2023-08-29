@@ -1534,7 +1534,7 @@ struct DateTimeTransformImpl
             auto function_overload = FunctionFactory::instance().tryGet("toDateTime64", nullptr);
 
             if (!function_overload)
-                throw Exception("Couldn't convert ColumnString to ColumnData since can't get function toDate", ErrorCodes::BAD_ARGUMENTS);
+                throw Exception("Couldn't convert ColumnString to ColumnData since can't get function toDateTime64", ErrorCodes::BAD_ARGUMENTS);
 
             const auto scale_type = std::make_shared<DataTypeUInt8>();
             const auto scale_col = scale_type->createColumnConst(1, Field(0));
@@ -1558,7 +1558,7 @@ struct DateTimeTransformImpl
             else
             {
                 size_t time_zone_argument_position = 1;
-                if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64>)
+                if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64> || std::is_same_v<ToDataType, DataTypeTime>)
                     time_zone_argument_position = 2;
 
                 const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, time_zone_argument_position, 0);

@@ -52,6 +52,15 @@ class IColumn;
   * A setting is "IMPORTANT" if it affects the results of queries and can't be ignored by older versions.
   */
 
+// The variable need be same with `parts_preload_level`
+enum PreloadLevelSettings : UInt64
+{
+    ClosePreload = 0,
+    MetaPreload = 1,
+    DataPreload = 2,
+    AllPreload = 3
+};
+
 #define COMMON_SETTINGS(M) \
     M(UInt64, \
       TEST_KNOB, \
@@ -207,6 +216,15 @@ class IColumn;
     M(UInt64, s3_max_single_read_retries, 4, "The maximum number of retries during single S3 read.", 0) \
     M(UInt64, s3_max_redirects, 10, "Max number of S3 redirects hops allowed.", 0) \
     M(UInt64, s3_max_connections, 1024, "The maximum number of connections per server.", 0) \
+    M(Bool, s3_check_objects_after_upload, false, "Check each uploaded object to s3 with head request to be sure that upload was successful",0) \
+    M(UInt64, s3_max_unexpected_write_error_retries, 4, "The maximum number of retries in case of unexpected errors during S3 write.", 0) \
+    M(UInt64, s3_upload_part_size_multiply_factor, 2, "Multiply s3_min_upload_part_size by this factor each time s3_multiply_parts_count_threshold parts were uploaded from a single write to S3.", 0) \
+    M(UInt64, s3_upload_part_size_multiply_parts_count_threshold, 500, "Each time this number of parts was uploaded to S3 s3_min_upload_part_size multiplied by s3_upload_part_size_multiply_factor.", 0) \
+    M(String, s3_access_key_id, "", "S3 table access key id", 0) \
+    M(String, s3_access_key_secret, "", "S3 table access key secret", 0) \
+    M(Bool, s3_use_read_ahead, true, "Enable read ahead buffer when read s3, now it is just for CnchS3", 0) \
+    M(Bool, overwrite_current_file, false, "Enable overwrite current file, nou it is just for CnchS3/CnchHDFS", 0) \
+    M(Bool, insert_new_file, true, "Create new file when write data into the file, nou it is just for CnchS3/CnchHDFS", 0) \
     M(Bool, extremes, false, "Calculate minimums and maximums of the result columns. They can be output in JSON-formats.", IMPORTANT) \
     M(Bool, use_uncompressed_cache, false, "Whether to use the cache of uncompressed blocks.", 0) \
     M(Bool, replace_running_query, false, "Whether the running request should be canceled with the same id as the new one.", 0) \
@@ -1492,36 +1510,19 @@ class IColumn;
       "A blacklist for merge task, to prevent the generation of MergeTasks for some tables.", \
       0) \
     M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
-    M(Bool, enable_view_based_query_rewrite, false, "Whether to enable view-based query rewriting.", 0) \
-    M(Bool, enable_mv_estimate_read_cost, false, "Enable materialized view estimate with read cost", 0) \
     M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \
-    M(UInt64, \
-      max_rows_to_refresh_by_partition, \
-      100000000, \
-      "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", \
-      0) \
-    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0) \
-    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0) \
-    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0) \
-    M(UInt64, \
-      expired_start_hour_to_merge, \
-      12, \
-      "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", \
-      0) \
-    M(UInt64, \
-      expired_end_hour_to_merge, \
-      12, \
-      "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", \
-      0) \
-    M(UInt64, \
-      strict_rows_to_schedule_merge, \
-      50000000, \
-      "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", \
-      0) \
-    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0) \
-    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0) \
-    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0) \
-    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0) \
+    M(Bool, enable_element_mv_rows, false, "Whether enable element query calculate base rows and view rows", 0) \
+    M(UInt64, max_rows_to_refresh_by_partition, 100000000, "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", 0) \
+    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0)\
+    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0)\
+    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0)\
+    M(UInt64, expired_start_hour_to_merge, 12, "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", 0)\
+    M(UInt64, expired_end_hour_to_merge, 12, "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", 0)\
+    M(UInt64, strict_rows_to_schedule_merge, 50000000, "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", 0)\
+    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0)\
+    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0)\
+    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
+    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
     M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
     M(String, virtual_warehouse_write, "", "The write vw name set by user on which the query run", 0) \
@@ -1534,6 +1535,7 @@ class IColumn;
       0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
     M(Bool, adaptive_type_cast, false, "Performs type cast operations adaptively, according to the value", 0) \
+    M(Bool, parse_literal_as_decimal, false, "Parse numeric literal as decimal instead of float", 0) \
     M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
     M(Bool, formatdatetime_parsedatetime_m_is_month_name, true, "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", 0) \
     M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
@@ -1606,13 +1608,10 @@ class IColumn;
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
     M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
-    M(UInt64, \
-      cloud_task_auto_stop_timeout, \
-      60, \
-      "We will remove this task when heartbeat can't find this task more than retries_count times.", \
-      0) \
     M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
     M(Bool, enable_async_preload_parts, true, "Allow to preload data parts asynchronously", 0) \
+    M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
+    M(UInt64, parts_preload_level, 1, "used for global preload(manual alter&table auto), 0=close preload;1=preload meta;2=preload data;3=preload meta&data, Note: for table auto preload, 0 will disable all table preload, > 0 will use table preload setting", 0) \
     M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
     M(Bool, enable_vw_customized_setting, false, "Allow vw customized overwrite profile settings", 0) \
     M(Bool, enable_async_execution, false, "Whether to enable async execution", 0) \
@@ -1681,6 +1680,7 @@ class IColumn;
       0) \
     M(Bool, enable_rewrite_alias_in_select, true, "Whether rewrite alias in select (Obsolete setting).", 0) \
     /** Ingestion */ \
+    M(Seconds, ingest_column_memory_lock_timeout, 5, "The time that spend on wait for memory lock", 0) \
     M(UInt64, max_ingest_columns_size, 10, "The maximum number of columns that can be ingested.", 0) \
     M(UInt64, \
       memory_efficient_ingest_partition_max_key_count_in_memory, \
@@ -1760,6 +1760,7 @@ class IColumn;
     M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
     M(Bool, eliminate_cross_joins, true, "Whether eliminate cross joins", 0) \
     M(UInt64, iterative_optimizer_timeout, 10000, "Max running time of a single iterative optimizer in ms", 0) \
+    M(Bool, debug_iterative_optimizer, false, "If enabled, iterative optimizer will print plan after each rule application", 0) \
     M(UInt64, cascades_optimizer_timeout, 10000, "Max running time of a single cascades optimizer in ms", 0) \
     M(UInt64, operator_profile_receive_timeout, 3000, "Max waiting time for operator profile in ms", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
@@ -1808,17 +1809,11 @@ class IColumn;
     M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
     M(Bool, enable_materialized_view_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
-    M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
-    M(Bool, \
-      enable_materialized_view_join_rewriting, \
-      false, \
-      "Whether enable materialized view based rewriter for query using join materialized views", \
-      0) \
-    M(MaterializedViewConsistencyCheckMethod, \
-      materialized_view_consistency_check_method, \
-      MaterializedViewConsistencyCheckMethod::NONE, \
-      "The method to check whether a materialized view is consistent with the base table for a query", \
-      0) \
+    M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0)               \
+    M(Bool, enable_materialized_view_empty_grouping_rewriting, true, "Whether enable materialized view based rewriter for query", 0) \
+    M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
+    M(Bool, enable_materialized_view_rewrite_match_range_filter, false, "Whether enable materialized view based rewriter matching range filter by its allowable value Domain", 0) \
+    M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::NONE, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
     M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \
@@ -1888,7 +1883,11 @@ class IColumn;
     M(String, utc_time_interval_allow_clone, "", "A list of UTC time, every two elements consist an interval which can execute clone", 0) \
     M(String, utc_time_interval_stop_clone, "", "A list of UTC time, every two elements consist an interval which stop clone", 0) \
     M(Bool, remote_query_memory_table, false, "Query remote memory table", 0) \
-\
+    \
+    /** S3 Storage settings*/\
+    M(UInt64, s3_gc_inter_partition_parallelism, 4, "Partition level concurrency when gc s3 table", 0) \
+    M(UInt64, s3_gc_intra_partition_parallelism, 16, "Part level concurrency when gc s3 table", 0) \
+    \
     /* Transaction and catalog */ \
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
     M(Bool, bypass_ddl_db_lock, true, "Bypass locking database while creating tables", 0) \
@@ -1916,6 +1915,7 @@ class IColumn;
     M(String, lasfs_overwrite, "false" ,"pass true if user want to overwrite when the file exists", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0)
+
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
@@ -2100,6 +2100,7 @@ class IColumn;
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
     M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
     M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0) \
+    M(Bool, allow_attach_parts_with_different_table_definition_hash, true, "Whether to allow attaching of parts with different table definition hash to target table.", 0)  \
     M(String, tenant_id, "", "tenant_id of cnch user", 0) \
     M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
     M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \

@@ -80,6 +80,13 @@ struct SDConfiguration final : public SDConfigurationData
     M(Float32, vw_ratio_of_busy_worker, "", 1.2, ConfigFlag::Default, "The ratio for detecting busy worker in the VW.") \
     M(UInt64, max_async_query_threads, "", 5000, ConfigFlag::Default, "Maximum threads that async queries use.") \
     M(UInt64, async_query_status_ttl, "", 86400, ConfigFlag::Default, "TTL for async query status stored in catalog, in seconds.") \
+    M(UInt64, async_query_expire_time, "", 3600, ConfigFlag::Default, "Expire time for async query, in seconds.") \
+    M(UInt64, \
+      async_query_status_check_period, \
+      "", \
+      15 * 60, \
+      ConfigFlag::Default, \
+      "Cycle for checking expired async query status stored in catalog, in seconds.") \
     /**
      * Mutable */ \
     M(MutableUInt64, max_server_memory_usage, "", 0, ConfigFlag::Default, "") \
@@ -108,17 +115,38 @@ struct QMConfiguration final : public QMConfigurationData
 {
 };
 
+#define AS_CONFIG_FIELDS_LIST(M) \
+    M(MutableUInt64, mem_weight, "", 2, ConfigFlag::Default, "") \
+    M(MutableUInt64, query_num_weight, "", 4, ConfigFlag::Default, "") \
+    M(MutableUInt64, max_plan_segment_size, "", 500, ConfigFlag::Default, "") \
+    M(MutableUInt64, unhealth_segment_size, "", 480, ConfigFlag::Default, "") \
+    M(MutableFloat32, heavy_load_threshold, "", 0.75, ConfigFlag::Default, "") \
+    M(MutableFloat32, only_source_threshold, "", 0.85, ConfigFlag::Default, "") \
+    M(MutableFloat32, unhealth_threshold, "", 0.95, ConfigFlag::Default, "") \
+    M(MutableUInt64, need_reset_seconds, "", 300, ConfigFlag::Default, "") \
+    M(MutableUInt64, unhealth_recheck_seconds, "", 10, ConfigFlag::Default, "") \
+    M(MutableUInt64, heartbeat_interval, "", 10000, ConfigFlag::Default, "")
+
+
+DECLARE_CONFIG_DATA(ASConfigurationData, AS_CONFIG_FIELDS_LIST)
+struct ASConfiguration final : public ASConfigurationData
+{
+};
+
 struct RootConfiguration final : public RootConfigurationData
 {
     RMConfiguration resource_manager;
     SDConfiguration service_discovery;
     QMConfiguration queue_manager;
+    ASConfiguration adaptive_scheduler;
+
 
     RootConfiguration()
     {
         sub_configs.push_back(&resource_manager);
         sub_configs.push_back(&service_discovery);
         sub_configs.push_back(&queue_manager);
+        sub_configs.push_back(&adaptive_scheduler);
     }
 
     void loadFromPocoConfigImpl(const PocoAbstractConfig & config, const String & current_prefix) override;

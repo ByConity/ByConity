@@ -221,13 +221,17 @@ struct Settings;
     M(UInt64, staged_part_lifetime_threshold_ms_to_block_kafka_consume, 10000, "", 0) \
     M(Seconds, unique_acquire_write_lock_timeout, 300, "", 0) \
     M(MaxThreads, cnch_parallel_dumping_threads, 8, "", 0) \
+    M(MaxThreads, unique_table_dedup_threads, 8, "", 0) \
     \
     /* Metastore settings */\
     M(Bool, enable_metastore, true, "Use KV metastore to manage data parts.", 0) \
     M(Bool, enable_persistent_checksum, true, "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
     \
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
+    /*keep enable_preload_parts for compitable*/\
     M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
+    M(UInt64, parts_preload_level, 0, "0=close preload;1=preload meta;2=preload data;3=preload meta&data", 0) \
+    M(Bool, enable_parts_sync_preload, 0, "Enable sync preload parts", 0) \
     \
     /* Renamed settings - cannot be ignored */\
     M(Bool, enable_nullable_sorting_key, false, "Alias of `allow_nullable_key`", 0) \
@@ -245,11 +249,13 @@ struct Settings;
     M(UInt64, cnch_gc_round_robin_partitions_interval, 600, "", 0) \
     M(UInt64, cnch_gc_round_robin_partitions_number, 10, "", 0) \
     M(UInt64, gc_remove_part_thread_pool_size, 2, "Turn up the thread pool size to speed up GC processing of parts", 0) \
-    M(UInt64, gc_remove_part_batch_size, 5000, "", 0) \
+    M(UInt64, gc_trash_part_batch_size, 5000, "Batch size to remove stale parts to trash in background tasks", 0) \
+    M(UInt64, gc_remove_part_batch_size, 200, "Batch size to remove trash parts from storage in background tasks", 0) \
     \
     /** uuid of CnchMergeTree, as we won't use uuid in CloudMergeTree */ \
     M(String, cnch_table_uuid, "", "Used for CloudMergeTree to get uuid of Cnch Table for ingestion task, like Kafka", 0) \
     \
+    M(String, remote_storage_type, "hdfs", "Table's storage type[deprcated]", 0) \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
     M(index_granularity)

@@ -80,7 +80,7 @@ private:
 
     AccessRightsElements getRequiredAccessForDDLOnCluster() const;
     void startStopAction(StorageActionBlockType action_type, bool start);
-    void startOrStopConsume(ASTSystemQuery::Type type);
+    void controlConsume(ASTSystemQuery::Type type);
     void resetConsumeOffset(ASTSystemQuery & query, ContextMutablePtr & system_context);
 
     void executeMetastoreCmd(ASTSystemQuery & query) const;

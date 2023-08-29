@@ -50,6 +50,7 @@
 #endif
 
 #include <Storages/StorageCloudHive.h>
+#include <Storages/RemoteFile/IStorageCloudFile.h>
 
 namespace DB
 {
@@ -63,7 +64,7 @@ namespace ErrorCodes
     extern const int PREALLOCATE_QUERY_INTENT_NOT_FOUND;
 }
 
-CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextPtr context_)
+CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextMutablePtr context_)
     : WithMutableContext(context_->getGlobalContext()), log(&Poco::Logger::get("CnchWorkerService"))
 {
 }
@@ -381,6 +382,37 @@ void CnchWorkerServiceImpl::sendCnchHiveDataParts(
     }
 }
 
+void CnchWorkerServiceImpl::sendCnchFileDataParts(
+    google::protobuf::RpcController *,
+    const Protos::SendCnchFileDataPartsReq * request,
+    Protos::SendCnchFileDataPartsResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try 
+    {
+        auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
+        const auto & query_context = session->context;
+
+        auto storage = DatabaseCatalog::instance().getTable({request->database_name(), request->table_name()}, query_context);
+        auto & cnchfile_table = dynamic_cast<IStorageCloudFile &>(*storage);
+
+        LOG_DEBUG(log, "Receiving parts for table {}", cnchfile_table.getStorageID().getNameForLogs());
+
+        auto data_parts = createCnchFileDataParts(getContext(), request->parts());
+
+        cnchfile_table.loadDataParts(data_parts);
+
+        LOG_DEBUG(log, "Received and loaded {} file parts.", data_parts.size());
+    } 
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+
+}
+
 void CnchWorkerServiceImpl::checkDataParts(
     google::protobuf::RpcController * cntl,
     const Protos::CheckDataPartsReq * request,
@@ -455,6 +487,8 @@ void CnchWorkerServiceImpl::preloadDataParts(
         auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
         auto data_parts = createPartVectorFromModelsForSend<MutableMergeTreeDataPartCNCHPtr>(cloud_merge_tree, request->parts());
 
+        LOG_TRACE(log, "Receiving preload parts task level = {}, sync = {}", request->preload_level(), request->sync());
+
         std::unique_ptr<ThreadPool> pool;
         ThreadPool *pool_ptr;
         if (request->sync())
@@ -467,13 +501,13 @@ void CnchWorkerServiceImpl::preloadDataParts(
 
         for (const auto & part : data_parts)
         {
-            part->preload(*pool_ptr);
+            part->preload(request->preload_level(), *pool_ptr);
         }
 
         if (request->sync())
             pool->wait();
 
-        LOG_DEBUG(storage->getLogger(), "Finish preload tasks in {} ms, sync {}", watch.elapsedMilliseconds(), request->sync());
+        LOG_DEBUG(storage->getLogger(), "Finish preload tasks in {} ms, level: {}, sync: {}", watch.elapsedMilliseconds(), request->preload_level(), request->sync());
     }
     catch (...)
     {
@@ -574,6 +608,13 @@ void CnchWorkerServiceImpl::sendResources(
                 hive_table->loadDataParts(hive_parts);
 
                 LOG_DEBUG(log, "Received and loaded {} hive parts for table {}" , hive_parts.size(), hive_table->getStorageID().getNameForLogs());
+            }
+            else if (auto * cloud_file_table = dynamic_cast<IStorageCloudFile *>(storage.get()))
+            {
+                auto data_parts = createCnchFileDataParts(getContext(), data.file_parts());
+                cloud_file_table->loadDataParts(data_parts);
+
+                LOG_DEBUG(log, "Received and loaded {}  cloud file parts for table {}", data_parts.size(), cloud_file_table->getStorageID().getNameForLogs());
             }
             else
                 throw Exception("Unknown table engine: " + storage->getName(), ErrorCodes::UNKNOWN_TABLE);

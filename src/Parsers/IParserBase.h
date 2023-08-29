@@ -66,7 +66,7 @@ protected:
 
 struct ParserSettingsImpl
 {
-    bool parse_literal_as_decimal;
+    mutable bool parse_literal_as_decimal;
 
     /// parse syntax `WITH expr AS alias`
     bool parse_with_alias;
@@ -74,22 +74,41 @@ struct ParserSettingsImpl
     /// parse outer join with using
     bool parse_outer_join_with_using;
 
+    /// determine if apply the rewritings for adaptive type cast
+    mutable bool apply_adaptive_type_cast;
+
+    /// update mutable items with the settings of current context
+    void changeMutableSettings(const Settings & s) const
+    {
+        apply_adaptive_type_cast = s.adaptive_type_cast;
+        parse_literal_as_decimal = s.parse_literal_as_decimal;
+    }
+
+    /// update mutable items with other ParserSettingsImpl
+    void changeMutableSettings(const ParserSettingsImpl & s) const
+    {
+        apply_adaptive_type_cast = s.apply_adaptive_type_cast;
+        parse_literal_as_decimal = s.parse_literal_as_decimal;
+    }
 };
 
 struct ParserSettings
 {
-    const static inline ParserSettingsImpl CLICKHOUSE {
+    const static inline ParserSettingsImpl CLICKHOUSE{
         .parse_literal_as_decimal = false,
         .parse_with_alias = true,
         .parse_outer_join_with_using = true,
+        .apply_adaptive_type_cast = false,
     };
 
-    const static inline ParserSettingsImpl ANSI {
+    const static inline ParserSettingsImpl ANSI{
         .parse_literal_as_decimal = true,
         .parse_with_alias = false,
         .parse_outer_join_with_using = false,
+        .apply_adaptive_type_cast = false,
     };
 
+    // deprecated. use `valueOf(const Settings & s)` instead
     static ParserSettingsImpl valueOf(enum DialectType dt)
     {
         switch (dt)
@@ -101,6 +120,13 @@ struct ParserSettings
             case DialectType::MYSQL:
                 return ANSI;
         }
+    }
+
+    static ParserSettingsImpl valueOf(const Settings & s)
+    {
+        const auto setting_impl = (s.dialect_type != DialectType::CLICKHOUSE) ? ANSI : CLICKHOUSE;
+        setting_impl.changeMutableSettings(s);
+        return setting_impl;
     }
 };
 

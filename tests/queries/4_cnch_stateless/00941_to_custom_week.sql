@@ -3,7 +3,15 @@ SELECT toWeek(toDate('1998-01-01')), toWeek(toDate('1997-01-01')), toWeek(toDate
 SELECT toWeek(toDate('1998-12-31')), toWeek(toDate('1997-12-31')), toWeek(toDate('1998-12-31'), 1), toWeek(toDate('1997-12-31'), 1);
 SELECT toWeek(toDate('1995-01-01')), toWeek(toDate('1995-01-01'), 1);
 SELECT toYearWeek(toDate('1981-12-31'), 1), toYearWeek(toDate('1982-01-01'), 1), toYearWeek(toDate('1982-12-31'), 1), toYearWeek(toDate('1983-01-01'), 1);
-SELECT toYearWeek(toDate('1987-01-01'), 1), toYearWeek(toDate('1987-01-01'));
+SELECT toYearWeek(toDate('1987-01-01'), 1), toYearWeek(toDate('1987-01-01'));	
+	
+SET dialect_type='MYSQL';
+SELECT toWeek(toDate('1998-01-01')), toWeek(toDate('1997-01-01')), toWeek(toDate('1998-01-01'), 1),  toWeek(toDate('1997-01-01'), 1);
+SELECT toWeek(toDate('1998-12-31')), toWeek(toDate('1997-12-31')), toWeek(toDate('1998-12-31'), 1), toWeek(toDate('1997-12-31'), 1);
+SELECT toWeek(toDate('1995-01-01')), toWeek(toDate('1995-01-01'), 1);
+SELECT toYearWeek(toDate('1981-12-31'), 1), toYearWeek(toDate('1982-01-01'), 1), toYearWeek(toDate('1982-12-31'), 1), toYearWeek(toDate('1983-01-01'), 1);
+SELECT toYearWeek(toDate('1987-01-01'), 1), toYearWeek(toDate('1987-01-01'));	
+SET dialect_type='CLICKHOUSE';
 
 SELECT toWeek(toDate('2000-01-01'),0) AS w2000, toWeek(toDate('2001-01-01'),0) AS w2001, toWeek(toDate('2002-01-01'),0) AS w2002,toWeek(toDate('2003-01-01'),0) AS w2003, toWeek(toDate('2004-01-01'),0) AS w2004, toWeek(toDate('2005-01-01'),0) AS w2005, toWeek(toDate('2006-01-01'),0) AS w2006;
 SELECT toWeek(toDate('2000-01-06'),0) AS w2000, toWeek(toDate('2001-01-06'),0) AS w2001, toWeek(toDate('2002-01-06'),0) AS w2002,toWeek(toDate('2003-01-06'),0) AS w2003, toWeek(toDate('2004-01-06'),0) AS w2004, toWeek(toDate('2005-01-06'),0) AS w2005, toWeek(toDate('2006-01-06'),0) AS w2006;

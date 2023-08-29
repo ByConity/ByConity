@@ -23,6 +23,7 @@
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
+#include <Interpreters/ProcessorsProfileLog.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
@@ -294,6 +295,19 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 
     if (context->getSettingsRef().log_queries)
         collectSegmentQueryRuntimeMetric(query_status);
+
+    if (context->getSettingsRef().log_processors_profiles)
+    {
+        auto processors_profile_log = context->getProcessorsProfileLog();
+
+        if (!processors_profile_log)
+            return;
+
+        processors_profile_log->addLogs(pipeline.get(),
+                                        context->getClientInfo().initial_query_id,
+                                        std::chrono::system_clock::now(),
+                                        plan_segment->getPlanSegmentId());
+    }
 }
 
 QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
@@ -378,7 +392,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
                 size_t output_num = pipeline->getNumStreams();
                 size_t partition_num = current_exchange_senders.size();
                 bool need_resize =
-                    keep_order 
+                    keep_order
                     && context->getSettingsRef().exchange_enable_keep_order_parallel_shuffle
                     && partition_num > 1;
                 sink_num += (need_resize) ? output_num*partition_num : output_size;
@@ -423,7 +437,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
                  *            |                        _______________
                  *            \------ ports[2] -------| CopyTransform3| ------------- ports[0] for plan_segment_outputs[0]
                  *                                    |_______________|        \----- ports[1] for plan_segment_outputs[1]
-                 * 
+                 *
                  * Save the ports for plan_segment_outputs[0] in segs_output_ports[0],
                  * Save the ports for plan_segment_outputs[1] in segs_output_ports[1]...
                  */
@@ -475,7 +489,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
                      *  _______________                                                                              |
                      * | CopyTransform3| ------------- ports[0] for plan_segment_outputs[0] -------------------------/
                      * |_______________|        \----- ports[1] for plan_segment_outputs[1]->ResizeProcessor 2
-                     * 
+                     *
                      * If there is no CopyTransform, than pipeline will be:
                      *  _____     /------ ports[0] ------\
                      * |  T  | ---|------ ports[1] ------|-------ResizeProcessor 1, for seg 1
@@ -577,7 +591,7 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
             else
                 throw Exception("Unexpected SubReceiver Type: " + std::string(typeid(receiver_ptr).name()), ErrorCodes::LOGICAL_ERROR);
         }
-        
+
         for (auto * receiver_ptr : local_receivers)
             receiver_ptr->registerToSenders(register_timeout_ms);
         for (auto * receiver_ptr : multi_receivers)
@@ -710,7 +724,7 @@ Processors PlanSegmentExecutor::buildBroadcastExchangeSink(BroadcastSenderPtrs &
         auto exchange_sink =
             std::make_shared<BroadcastExchangeSink>(header, senders, options, name);
         connect(*port, exchange_sink->getInputs().front());
-        
+
         new_processors.emplace_back(std::move(exchange_sink));
     }
 

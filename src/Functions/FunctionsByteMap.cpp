@@ -407,10 +407,8 @@ public:
                 /// skip space
                 while (curr != end && *curr == ' ')
                     ++curr;
-                /// No matched value, discard this key
-                if (curr == end)
-                    break;
 
+                /// will parse empty value if curr == end
                 auto parsed_value = parseStringValue(curr, end, item_delimiter);
 
                 /// skip space

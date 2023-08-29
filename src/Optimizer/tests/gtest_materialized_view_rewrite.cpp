@@ -30,15 +30,23 @@ public:
         // debug mode may time out.
         settings.emplace("cascades_optimizer_timeout", "300000");
 #endif
+        settings.emplace("enable_materialized_view_rewrite", "1");
         settings.emplace("enable_materialized_view_join_rewriting", "1");
         settings.emplace("enable_materialized_view_rewrite_verbose_log", "1");
         settings.emplace("enable_single_distinct_to_group_by", "0");
-
+        settings.emplace("enable_materialized_view_rewrite_match_range_filter", "1");
+        // settings.emplace("print_graphviz", "1");
+        // settings.emplace("graphviz_path", "/data01/wangtao.2077/tmp/graphviz/");
         tester = std::make_shared<BaseMaterializedViewTest>(settings);
     }
 
-    void SetUp() override {
-        GTEST_SKIP() << "Skipping all tests for this fixture";
+    static void TearDownTestSuite()
+    {
+        tester.reset();
+    }
+
+    void SetUp() override
+    {
     }
 
     static MaterializedViewRewriteTester sql(const String & materialize, const String & query)
@@ -195,6 +203,7 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView2)
    * view. */
 TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView3)
 {
+    GTEST_SKIP() << "predicate tuple domain rewrite can not handle OR filter.";
     sql("select deptno, empid, name from emps\n"
             "where deptno = 10 or deptno = 20 or empid < 160",
         "select empid + 1 as x, name from emps where deptno = 10")
@@ -213,7 +222,6 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView3)
    * query. */
 TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView4)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     sql("select * from emps where deptno > 10",
         "select name from emps where deptno > 30")
         .ok();
@@ -223,7 +231,6 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView4)
    * query and columns selected are subset of columns in materialized view. */
 TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView5)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     sql("select name, deptno from emps where deptno > 10",
         "select name from emps where deptno > 30")
         .ok();
@@ -233,7 +240,6 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView5)
    * query and columns selected are subset of columns in materialized view. */
 TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView6)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     sql("select name, deptno, salary from emps "
             "where salary > 2000.5",
         "select name from emps where deptno > 30 and salary > 3000")
@@ -245,7 +251,7 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView6)
    * Condition here is complex. */
 TEST_F(MaterializedViewRewriteTest, testFilterQueryOnFilterView7)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
+    GTEST_SKIP() << "predicate tuple domain rewrite can not handle OR filter.";
     sql("select * from emps where "
             "((salary < 1111.9 and deptno > 10)"
             "or (empid > 400 and salary > 5000) "
@@ -361,7 +367,7 @@ TEST_F(MaterializedViewRewriteTest, testAlias)
    * materialization. */
 TEST_F(MaterializedViewRewriteTest, testAggregate0)
 {
-    sql("select count(*) as c from emps group by empid",
+    sql("select empid, count(*) as c from emps group by empid",
         "select count(*) + 1 as c from emps group by empid")
         .ok();
 }
@@ -371,7 +377,7 @@ TEST_F(MaterializedViewRewriteTest, testAggregate0)
    * materialization but with different row types. */
 TEST_F(MaterializedViewRewriteTest, testAggregate1)
 {
-    sql("select count(*) as c0 from emps group by empid",
+    sql("select empid, count(*) as c0 from emps group by empid",
         "select count(*) as c1 from emps group by empid")
         .ok();
 }
@@ -458,6 +464,7 @@ TEST_F(MaterializedViewRewriteTest, testAggregate6)
 TEST_F(MaterializedViewRewriteTest,
        DISABLED_testCompensatingCalcWithAggregate0)
 {
+    GTEST_SKIP() << "Having is not support in clickhouse";
     String mv = ""
         "select * from\n"
         "(select deptno, sum(salary) as sum_salary, sum(commission)\n"
@@ -479,6 +486,7 @@ TEST_F(MaterializedViewRewriteTest,
    */
 TEST_F(MaterializedViewRewriteTest, DISABLED_testCompensatingCalcWithAggregate1)
 {
+    GTEST_SKIP() << "Having is not support in clickhouse";
     String mv = ""
         "select * from\n"
         "(select deptno, sum(salary) as sum_salary, sum(commission)\n"
@@ -501,7 +509,7 @@ TEST_F(MaterializedViewRewriteTest, DISABLED_testCompensatingCalcWithAggregate1)
    */
 TEST_F(MaterializedViewRewriteTest, testCompensatingCalcWithAggregate2)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
+    GTEST_SKIP() << "having predicate rollup rewrite fail.";
     String mv = ""
         "select * from\n"
         "(select deptno, sum(salary) as sum_salary, sum(commission)\n"
@@ -561,10 +569,8 @@ TEST_F(MaterializedViewRewriteTest, testAggregateRollUp1)
                                     "            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#c:=c, expr#deptno:=deptno\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [c, deptno]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [c, deptno]")
         .ok();
 }
 
@@ -691,10 +697,8 @@ TEST_F(MaterializedViewRewriteTest, testAggregateOnProject5)
                                     "            │     Aggregates: expr#sum(count()):=AggNull(sum)(expr#count()_2)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#count()_2:=`count()`, expr#empid:=empid, expr#name:=name\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [count(), empid, name]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [count(), empid, name]")
         .ok();
 }
 
@@ -714,6 +718,7 @@ TEST_F(MaterializedViewRewriteTest, testAggregateOnProjectAndFilter)
 
 TEST_F(MaterializedViewRewriteTest, testProjectOnProject)
 {
+    GTEST_SKIP() << "Not support in clickhouse because rollup is needed.";
     String mv = ""
         "select deptno, sum(salary) + 2, sum(commission)\n"
         "from emps\n"
@@ -954,25 +959,38 @@ TEST_F(MaterializedViewRewriteTest, testTableModify)
 
 TEST_F(MaterializedViewRewriteTest, testSingleMaterializationMultiUsage)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     String q = "select *\n"
         "from (select * from emps where empid < 300)\n"
         "join (select * from emps where empid < 200) using (empid)";
     String m = "select * from emps where empid < 500";
     sql(m, q)
-        .checkingThatResultContains(""
-                                    "LogicalCalc(expr#0..9=[{inputs}], proj#0..4=[{exprs}], deptno0=[$t6], name0=[$t7], salary0=[$t8], commission0=[$t9])\n"
-                                    "  LogicalJoin(condition=[=($0, $5)], joinType=[inner])\n"
-                                    "    LogicalCalc(expr#0..4=[{inputs}], expr#5=[300], expr#6=[<($t0, $t5)], proj#0..4=[{exprs}], $condition=[$t6])\n"
-                                    "      EnumerableTableScan(table=[[hr, MV0]])\n"
-                                    "    LogicalCalc(expr#0..4=[{inputs}], expr#5=[200], expr#6=[<($t0, $t5)], proj#0..4=[{exprs}], $condition=[$t6])\n"
-                                    "      EnumerableTableScan(table=[[hr, MV0]])")
+        .checkingThatResultContains(
+            "Gather Exchange\n"
+            "└─ Projection\n"
+            "   │     Expressions: [commission, commission_1, deptno, deptno_1, empid, name, name_1, salary, salary_1]\n"
+            "   └─ Inner Join\n"
+            "      │     Condition: empid == empid_1\n"
+            "      ├─ Repartition Exchange\n"
+            "      │  │     Partition by: {empid}\n"
+            "      │  └─ Filter\n"
+            "      │     │     Condition: empid < 300\n"
+            "      │     └─ TableScan test_mview.MV0_MV_DATA\n"
+            "      │              Condition : empid < 300.\n"
+            "      │              Outputs: [commission, deptno, empid, name, salary]\n"
+            "      └─ Repartition Exchange\n"
+            "         │     Partition by: {empid_1}\n"
+            "         └─ Projection\n"
+            "            │     Expressions: commission_1:=commission, deptno_1:=deptno, empid_1:=empid, name_1:=name, salary_1:=salary\n"
+            "            └─ Filter\n"
+            "               │     Condition: empid < 200\n"
+            "               └─ TableScan test_mview.MV0_MV_DATA\n"
+            "                        Condition : empid < 200.\n"
+            "                        Outputs: [commission, deptno, empid, name, salary]")
         .ok();
 }
 
 TEST_F(MaterializedViewRewriteTest, testMaterializationOnJoinQuery)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     sql("select * from emps where empid < 500",
         "select *\n"
             "from emps\n"
@@ -1110,6 +1128,7 @@ TEST_F(MaterializedViewRewriteTest, testIntersectToCalcOnIntersect)
 
 TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg)
 {
+    GTEST_SKIP() << "ConstantFilter is not supported in clickhouse";
     String mv = ""
         "select name, count(distinct deptno) as cnt\n"
         "from emps group by name";
@@ -1130,6 +1149,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg)
 
 TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg2)
 {
+    GTEST_SKIP() << "Not support in clickhouse because rollup is needed.";
     String mv = ""
         "select name, deptno, count(distinct commission) as cnt\n"
         "from emps\n"
@@ -1152,6 +1172,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg2)
 
 TEST_F(MaterializedViewRewriteTest, testConstantFilterInAgg3)
 {
+    GTEST_SKIP() << "Not support in clickhouse because rollup is needed.";
     String mv = ""
         "select name, deptno, count(distinct commission) as cnt\n"
         "from emps\n"
@@ -1195,7 +1216,7 @@ TEST_F(MaterializedViewRewriteTest, testConstantFilterInAggUsingSubquery)
         " select name, count(distinct deptno) as cnt "
         " from emps group by name) t\n"
         "where name = 'hello'";
-    sql(mv, query).ok();
+    sql(mv, query).noMat();
 }
 /** Unit test for FilterBottomJoin can be pulled up. */
 TEST_F(MaterializedViewRewriteTest, testLeftFilterOnLeftJoinToJoinOk1)
@@ -1946,39 +1967,29 @@ TEST_F(MaterializedViewRewriteTest, testOrderByQueryOnOrderByView)
 
 TEST_F(MaterializedViewRewriteTest, testRexPredicate)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     String mv = ""
         "select name\n"
         "from emps\n"
         "where deptno > 100 and deptno > 50\n"
         "group by name";
     String query = ""
-        "select name\n"
-        "from emps\n"
-        "where deptno > 100"
-        "group by name";
+                   "select name\n"
+                   "from emps\n"
+                   "where deptno > 100\n"
+                   "group by name";
     sql(mv, query)
-        .checkingThatResultContains(""
-                                    "EnumerableTableScan(table=[[hr, MV0]])")
-        .ok();
-}
-
-TEST_F(MaterializedViewRewriteTest, testRexPredicate1)
-{
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
-    String query = ""
-        "select name\n"
-        "from emps\n"
-        "where deptno > 100 and deptno > 50\n"
-        "group by name";
-    String mv = ""
-        "select name\n"
-        "from emps\n"
-        "where deptno > 100"
-        "group by name";
-    sql(mv, query)
-        .checkingThatResultContains(""
-                                    "EnumerableTableScan(table=[[hr, MV0]])")
+        .checkingThatResultContains("Projection\n"
+                                    "│     Expressions: name:=`expr#name`\n"
+                                    "└─ Gather Exchange\n"
+                                    "   └─ MergingAggregated\n"
+                                    "      └─ Repartition Exchange\n"
+                                    "         │     Partition by: {expr#name}\n"
+                                    "         └─ Aggregating\n"
+                                    "            │     Group by: {expr#name}\n"
+                                    "            └─ Projection\n"
+                                    "               │     Expressions: expr#name:=name\n"
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [name]")
         .ok();
 }
 

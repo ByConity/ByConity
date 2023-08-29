@@ -51,8 +51,7 @@ public:
                               .where([](auto & node) { return node.getStep()->getType() == IQueryPlanStep::Type::TableScan; })
                               .findAll();
             bool contains_mv = std::any_of(tables.begin(), tables.end(), [&](auto & node) {
-                return dynamic_cast<const TableScanStep *>(node->getStep().get())->getStorage()->getName().find("MV_DATA")
-                    != std::string::npos;
+                return dynamic_cast<const TableScanStep *>(node->getStep().get())->getTable().find("MV_DATA") != std::string::npos;
             });
             ASSERT_FALSE(contains_mv) << "expect no matched materialized views";
         }).execution();
@@ -67,7 +66,8 @@ public:
 
             tester->execute("DROP TABLE IF EXISTS " + mv_name);
             tester->execute("DROP TABLE IF EXISTS " + target_table_name);
-            tester->execute("CREATE TABLE " + target_table_name + " ENGINE=Memory() AS " + materialized_views[i]);
+            // TODO: CREATE TABLE SELECT will throw exception: Context has expired. Use ATTACH TABLE as work around.
+            tester->execute("ATTACH TABLE " + target_table_name + " ENGINE=Memory() AS " + materialized_views[i]);
             auto create_mv = String("CREATE MATERIALIZED VIEW ")
                                  .append(mv_name)
                                  .append(" TO ")

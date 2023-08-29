@@ -279,6 +279,7 @@ protected:
             update_info->update();
     }
 
+    /// For processors_profile_log
     size_t rows = 0;
     size_t bytes = 0;
 };
@@ -431,9 +432,6 @@ public:
 
     void ALWAYS_INLINE pushData(Data data_)
     {
-        rows += data_.chunk.getNumRows();
-        bytes += data_.chunk.bytes();
-
         if (unlikely(!data_.exception && header.columns() && data_.chunk.getNumColumns() != header.columns()))
         {
             String msg = "Invalid number of columns in chunk pushed to OutputPort. Expected "
@@ -452,6 +450,10 @@ public:
 
         std::uintptr_t flags = 0;
         *data = std::move(data_);
+
+        rows += data->chunk.getNumRows();
+        bytes += data->chunk.bytes();
+
         state->push(data, flags);
     }
 

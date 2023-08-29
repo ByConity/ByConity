@@ -86,7 +86,6 @@ public:
         {
             converted = arguments;
         }
-        const auto & date_lut = DateLUT::instance();
 
         for (size_t i = 0; i < input_rows_count; ++i)
         {
@@ -154,13 +153,14 @@ public:
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
-        auto res_column = ColumnInt64::create(input_rows_count);
-        auto & result_data = res_column->getData();
-
         ColumnsWithTypeAndName converted_time;
 
         auto to_time = FunctionFactory::instance().get("toTimeType", context_);
-        auto col = to_time->build(arguments)->execute(arguments, std::make_shared<DataTypeTime>(0), input_rows_count);
+        const auto scale_type = std::make_shared<DataTypeUInt8>();
+        const auto scale_col = scale_type->createColumnConst(1, Field(0));
+        ColumnWithTypeAndName scale_arg {std::move(scale_col), std::move(scale_type), "scale"};
+        ColumnsWithTypeAndName args {arguments[0], std::move(scale_arg)};
+        auto col = to_time->build(args)->execute(args, std::make_shared<DataTypeTime>(0), input_rows_count);
         ColumnWithTypeAndName converted_time_col(col, std::make_shared<DataTypeTime>(0), "time");
         converted_time.emplace_back(converted_time_col);
 

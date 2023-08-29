@@ -12,6 +12,7 @@
 #include <boost/noncopyable.hpp>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
+#include <Common/Configurations.h>
 #include <Common/HostWithPorts.h>
 #include <Common/Stopwatch.h>
 namespace DB
@@ -305,10 +306,7 @@ public:
 
     ~WorkerStatusManager();
 
-    void updateWorkerNode(
-        const Protos::WorkerNodeResourceData & resource_info,
-        UpdateSource source,
-        WorkerSchedulerStatus update_for_status = WorkerSchedulerStatus::Unknown);
+    void updateWorkerNode(const Protos::WorkerNodeResourceData & resource_info, UpdateSource source);
 
     void setWorkerNodeDead(const WorkerId & key, int error_code);
 
@@ -329,7 +327,7 @@ public:
 
     std::shared_ptr<WorkerGroupStatus> getWorkerGroupStatus(const String & vw_name, const String & wg_name);
 
-    void updateConfig(const Poco::Util::AbstractConfiguration & config);
+    void updateConfig(const ASConfiguration & as_config);
 
     static WorkerId getWorkerId(const String & vw_name, const String & group_id, const String & id)
     {
@@ -375,7 +373,7 @@ private:
     Poco::Logger * log;
     // rm heartbeat
     mutable std::optional<BackgroundSchedulePool> schedule_pool;
-    UInt64 interval{10000}; /// in ms;
+    std::atomic<UInt64> heartbeat_interval{10000}; /// in ms;
     BackgroundSchedulePool::TaskHolder task;
 };
 

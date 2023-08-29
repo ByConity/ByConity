@@ -71,8 +71,10 @@ namespace DB::Catalog
 #define DICTIONARY_TRASH_PREFIX "DICTRASH_"
 #define CNCH_LOG_PREFIX "LG_"
 #define DATABASE_TRASH_PREFIX "DTRASH_"
+#define DATA_ITEM_TRASH_PREFIX "GCTRASH_"
 #define SERVERS_TOPOLOGY_KEY "SERVERS_TOPOLOGY"
 #define TABLE_CLUSTER_STATUS "TCS_"
+#define TABLE_DEFINITION_HASH "TDH_"
 #define CLUSTER_BG_JOB_STATUS "CLUSTER_BGJS_"
 #define MERGE_BG_JOB_STATUS "MERGE_BGJS_"
 #define PARTGC_BG_JOB_STATUS "PARTGC_BGJS_"
@@ -90,6 +92,7 @@ namespace DB::Catalog
 #define FILESYS_LOCK_PREFIX "FSLK_"
 #define UDF_STORE_PREFIX "UDF_"
 #define MERGEMUTATE_THREAD_START_TIME "MTST_"
+#define DETACHED_PART_PREFIX "DP_"
 
 class MetastoreProxy
 {
@@ -164,6 +167,15 @@ public:
         ss << deleteBitmapPrefix(name_space, uuid)
            << bitmap.partition_id() << "_" << bitmap.part_min_block() << "_" << bitmap.part_max_block() << "_"
            << bitmap.reserved() << "_" << bitmap.type() << "_" << bitmap.txn_id();
+        return ss.str();
+    }
+
+    static std::string
+    deleteBitmapKeyInTrash(const std::string & name_space, const std::string & uuid, const Protos::DataModelDeleteBitmap & bitmap)
+    {
+        std::stringstream ss;
+        ss << trashItemsPrefix(name_space, uuid) << DELETE_BITMAP_PREFIX << bitmap.partition_id() << "_" << bitmap.part_min_block() << "_"
+           << bitmap.part_max_block() << "_" << bitmap.reserved() << "_" << bitmap.type() << "_" << bitmap.txn_id();
         return ss.str();
     }
 
@@ -323,6 +335,11 @@ public:
         return dataPartPrefix(name_space, uuid) + part_name;
     }
 
+    static std::string dataPartKeyInTrash(const std::string & name_space, const std::string & uuid, const String & part_name)
+    {
+        return trashItemsPrefix(name_space, uuid) + PART_STORE_PREFIX + part_name;
+    }
+
     static std::string stagedDataPartKey(const std::string & name_space, const std::string & uuid, const String & part_name)
     {
         return stagedDataPartPrefix(name_space, uuid) + part_name;
@@ -393,6 +410,13 @@ public:
     {
         std::stringstream ss;
         ss << escapeString(name_space) << '_' << TABLE_CLUSTER_STATUS << uuid;
+        return ss.str();
+    }
+
+    static std::string tableDefinitionHashKey(const std::string & name_space, const std::string & uuid)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << '_' << TABLE_DEFINITION_HASH << uuid;
         return ss.str();
     }
 
@@ -546,10 +570,32 @@ public:
     }
 
     inline static String AYSNC_QUERY_STATUS_PREFIX = "ASYNC_QUERY_STATUS_";
+    inline static String FINAL_AYSNC_QUERY_STATUS_PREFIX = "F_ASYNC_QUERY_STATUS_";
 
     static String asyncQueryStatusKey(const String & name_space, const String & id)
     {
         return escapeString(name_space) + '_' + AYSNC_QUERY_STATUS_PREFIX + id;
+    }
+
+    static String finalAsyncQueryStatusKey(const String & name_space, const String & id)
+    {
+        return escapeString(name_space) + '_' + FINAL_AYSNC_QUERY_STATUS_PREFIX + id;
+    }
+
+    static String detachedPartPrefix(const String& name_space, const String& uuid)
+    {
+        return escapeString(name_space) + '_' + DETACHED_PART_PREFIX + uuid + '_';
+    }
+
+    static String detachedPartKey(const String& name_space, const String& uuid,
+        const String& part_name)
+    {
+        return escapeString(name_space) + '_' + DETACHED_PART_PREFIX + uuid + '_' + part_name;
+    }
+
+    static String trashItemsPrefix(const String & name_space, const String & uuid)
+    {
+        return escapeString(name_space) + "_" + DATA_ITEM_TRASH_PREFIX + uuid + "_";
     }
 
     /// end of Metastore Proxy keying schema
@@ -644,7 +690,7 @@ public:
 
     /// mvcc version drop part
     void dropDataPart(const String & name_space, const String & table_uuid, const String & part_name, const String & part_info);
-    Strings getPartsByName(const String & name_space, const String & uuid, RepeatedFields & parts_name);
+    Strings getPartsByName(const String & name_space, const String & uuid, const Strings & parts_name);
     IMetaStore::IteratorPtr getPartsInRange(const String & name_space, const String & uuid, const String & partition_id);
     IMetaStore::IteratorPtr getPartsInRange(const String & name_space, const String & table_uuid, const String & range_start, const String & range_end, bool include_start, bool include_end);
     void dropDataPart(const String & name_space, const String & uuid, const String & part_name);
@@ -707,7 +753,7 @@ public:
     TxnTimestamp getTransactionForKafkaConsumer(const String & name_space, const String & uuid, size_t consumer_index);
     void clearKafkaTransactions(const String & name_space, const String & uuid);
 
-    void setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered);
+    void setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered, const UInt64 & table_definition_hash);
     void getTableClusterStatus(const String & name_space, const String & uuid, bool & is_clustered);
 
     /// BackgroundJob related API
@@ -775,7 +821,39 @@ public:
 
     void setAsyncQueryStatus(
         const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl /* 1 day */ = 86400) const;
+    void markBatchAsyncQueryStatusFailed(
+        const String & name_space,
+        std::vector<Protos::AsyncQueryStatus> & statuses,
+        const String & reason,
+        UInt64 ttl /* 1 day */ = 86400) const;
     bool tryGetAsyncQueryStatus(const String & name_space, const String & id, Protos::AsyncQueryStatus & status) const;
+    std::vector<Protos::AsyncQueryStatus> getIntermidiateAsyncQueryStatuses(const String & name_space) const;
+
+    void attachDetachedParts(const String& name_space, const String& from_uuid,
+        const String& to_uuid, const std::vector<String>& detached_part_names,
+        const Protos::DataModelPartVector& parts, const Strings& current_partitions,
+        size_t batch_write_size, size_t batch_delete_size);
+    void detachAttachedParts(const String& name_space, const String& from_uuid,
+        const String& to_uuid, const std::vector<String>& attached_part_names,
+        const std::vector<std::optional<Protos::DataModelPart>>& parts,
+        size_t batch_write_size, size_t batch_delete_size);
+    std::vector<std::pair<String, UInt64>> attachDetachedPartsRaw(const String& name_space,
+        const String& tbl_uuid, const std::vector<String>& part_names,
+        size_t batch_write_size, size_t batch_delete_size);
+    void detachAttachedPartsRaw(const String& name_space, const String& from_uuid,
+        const String& to_uuid, const std::vector<String>& attached_part_names,
+        const std::vector<std::pair<String, String>>& detached_part_metas,
+        size_t batch_write_size, size_t batch_delete_size);
+    IMetaStore::IteratorPtr getDetachedPartsInRange(const String& name_space,
+        const String& tbl_uuid, const String& range_start, const String& range_end,
+        bool include_start = true, bool include_end = false);
+
+    /**
+     * @brief Get all items in the trash state. This is a GC related function.
+     *
+     * @param limit Limit the results, disabled by passing 0.
+     */
+    IMetaStore::IteratorPtr getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit);
 
 private:
 

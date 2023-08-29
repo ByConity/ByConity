@@ -41,8 +41,16 @@
 #include <random>
 #include <Common/HostWithPorts.h>
 #include <Storages/HDFS/HDFSAuth.h>
+#include <Common/config.h>
 namespace DB
 {
+
+namespace ErrorCodes
+{
+    extern const int PARAMETER_OUT_OF_BOUND;
+    extern const int ILLEGAL_TYPE_OF_ARGUMENT;
+}
+
 inline bool isHdfsScheme(const std::string & scheme)
 {
     return strcasecmp(scheme.c_str(), "hdfs") == 0;

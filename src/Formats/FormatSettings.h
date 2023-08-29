@@ -121,6 +121,7 @@ struct FormatSettings
         bool named_tuples_as_objects = false;
         bool serialize_as_strings = false;
         bool read_bools_as_numbers = true;
+        bool quota_json_string = true;
     } json;
 
     struct
@@ -217,4 +218,3 @@ struct FormatSettings
 };
 
 }
-

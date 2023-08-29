@@ -27,6 +27,7 @@ NamesAndTypesList PartLogElement::getNamesAndTypes()
             {"RemovePart",    static_cast<Int8>(REMOVE_PART)},
             {"MutatePart",    static_cast<Int8>(MUTATE_PART)},
             {"MovePart",      static_cast<Int8>(MOVE_PART)},
+            {"PreloadPart",   static_cast<Int8>(PRELOAD_PART)},
         }
     );
 
@@ -173,6 +174,27 @@ bool PartLog::addNewParts(
     }
 
     return true;
+}
+
+PartLogElement PartLog::createElement(PartLogElement::Type event_type, const IMergeTreeDataPartPtr & part, UInt64 elapsed_ns, const String & exception)
+{
+    PartLogElement elem;
+
+    elem.event_type = event_type;
+    elem.event_time = time(nullptr);
+    elem.duration_ms = elapsed_ns / 1000000;
+
+    elem.database_name = part->storage.getDatabaseName();
+    elem.table_name = part->storage.getTableName();
+    elem.partition_id = part->info.partition_id;
+    elem.part_name = part->name;
+
+    elem.rows = part->rows_count;
+    elem.bytes_compressed_on_disk = part->bytes_on_disk;
+    
+    elem.exception = exception;
+
+    return elem;
 }
 
 }

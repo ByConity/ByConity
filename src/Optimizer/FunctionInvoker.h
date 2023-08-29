@@ -27,7 +27,11 @@ struct FieldWithType
     Field value;
     bool operator==(const FieldWithType & other) const
     {
-        return type->getTypeId() == other.type->getTypeId() && value == other.value;
+        return type->equals(*other.type) && value == other.value;
+    }
+    bool operator!=(const FieldWithType & other) const
+    {
+        return !operator==(other);
     }
 };
 

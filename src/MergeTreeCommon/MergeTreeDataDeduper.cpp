@@ -528,9 +528,6 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
         return num_bitmaps;
     };
 
-    /// prepare all new parts (staged + uncommitted) that need to be dedupped with visible parts.
-    /// NOTE: the order of new parts is significant because it reflects the write order of the same key.
-    IMergeTreeDataPartsVector all_new_parts = all_staged_parts;
     auto log_dedup_detail = [&](const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts) {
         WriteBufferFromOwnString msg;
         msg << "Start to dedup in txn_id: " << txn_id.toUInt64() << ", visible_parts: [";
@@ -551,9 +548,76 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
         LOG_DEBUG(log, msg.str());
     };
 
+    Stopwatch watch;
+    DedupTasks dedup_tasks = convertIntoSubDedupTasks(all_visible_parts, all_staged_parts, all_uncommitted_parts);
+
+    size_t dedup_pool_size = std::min(static_cast<size_t>(data.getSettings()->unique_table_dedup_threads), dedup_tasks.size());
+    ThreadPool dedup_pool(dedup_pool_size);
+    std::mutex mutex;
+    for (size_t i = 0; i < dedup_tasks.size(); ++i)
+    {
+        dedup_pool.scheduleOrThrowOnError([&, i]() {
+            Stopwatch sub_task_watch;
+            auto & visible_parts = dedup_tasks[i].visible_parts;
+            auto & new_parts = dedup_tasks[i].new_parts;
+            log_dedup_detail(visible_parts, new_parts);
+            DeleteBitmapVector bitmaps = dedupImpl(visible_parts, new_parts);
+
+            std::lock_guard lock(mutex);
+            size_t num_bitmaps_to_dump = prepare_bitmaps_to_dump(visible_parts, new_parts, bitmaps);
+            LOG_DEBUG(
+                log,
+                "Dedup {}{} in {} ms, visible parts={}, new parts={}, result bitmaps={}",
+                dedup_tasks[i].partition_id.empty() ? "table" : "partition " + dedup_tasks[i].partition_id,
+                dedup_tasks[i].bucket_valid ? ("(bucket " + toString(dedup_tasks[i].bucket_number) + ")") : "",
+                sub_task_watch.elapsedMilliseconds(),
+                visible_parts.size(),
+                new_parts.size(),
+                num_bitmaps_to_dump);
+        });
+    }
+    dedup_pool.wait();
+
+    LOG_DEBUG(
+        log,
+        "Dedup {} tasks in {} ms, thread pool={}, visible parts={}, staged parts={}, uncommitted_parts = {}, result bitmaps={}",
+        dedup_tasks.size(),
+        watch.elapsedMilliseconds(),
+        dedup_pool_size,
+        all_visible_parts.size(),
+        all_staged_parts.size(),
+        all_uncommitted_parts.size(),
+        res.size());
+    return res;
+}
+
+MergeTreeDataDeduper::DedupTasks MergeTreeDataDeduper::convertIntoSubDedupTasks(
+    const IMergeTreeDataPartsVector & all_visible_parts,
+    const IMergeTreeDataPartsVector & all_staged_parts,
+    const IMergeTreeDataPartsVector & all_uncommitted_parts)
+{
+    /// Mark whether we can split dedup tasks into bucket granule.
+    bool table_level_valid_bucket = data.getInMemoryMetadataPtr()->checkIfClusterByKeySameWithUniqueKey();
+    auto table_definition_hash = data.getTableHashForClusterBy();
+    /// Check whether all parts has same table_definition_hash.
+    /// Otherwise, we can not split dedup task to bucket granule.
+    auto checkBucketTable = [&table_definition_hash](const IMergeTreeDataPartsVector & all_parts, bool & valid_bucket) {
+        if (!valid_bucket)
+            return;
+        auto it = std::find_if(all_parts.begin(), all_parts.end(), [&](const auto & part) {
+            return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
+        });
+        if (it != all_parts.end())
+            valid_bucket = false;
+    };
+
+    DedupTasks res;
+    /// Prepare all new parts (staged + uncommitted) that need to be dedupped with visible parts.
+    /// NOTE: the order of new parts is significant because it reflects the write order of the same key.
+    IMergeTreeDataPartsVector all_new_parts = all_staged_parts;
     if (data.getSettings()->partition_level_unique_keys)
     {
-        /// new parts are first sorted by partition, and then within each partition sorted by part's written time
+        /// New parts are first sorted by partition, and then within each partition sorted by part's written time
         std::sort(all_new_parts.begin(), all_new_parts.end(), [](auto & lhs, auto & rhs) {
             return std::forward_as_tuple(lhs->info.partition_id, lhs->commit_time)
                 < std::forward_as_tuple(rhs->info.partition_id, rhs->commit_time);
@@ -566,50 +630,88 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
             });
         }
 
-        size_t i = 0;
-        size_t j = 0;
+        size_t i = 0, j = 0;
         while (j < all_new_parts.size())
         {
-            Stopwatch watch;
             String partition_id = all_new_parts[j]->info.partition_id;
             IMergeTreeDataPartsVector visible_parts;
             IMergeTreeDataPartsVector new_parts;
-            /// TODO(optimize): use binary search to speed up
             while (i < all_visible_parts.size() && all_visible_parts[i]->info.partition_id == partition_id)
                 visible_parts.push_back(all_visible_parts[i++]);
             while (j < all_new_parts.size() && all_new_parts[j]->info.partition_id == partition_id)
                 new_parts.push_back(all_new_parts[j++]);
 
-            log_dedup_detail(visible_parts, new_parts);
-            DeleteBitmapVector bitmaps = dedupImpl(visible_parts, new_parts);
-            size_t num_bitmaps_to_dump = prepare_bitmaps_to_dump(visible_parts, new_parts, bitmaps);
-            LOG_DEBUG(
-                log,
-                "Dedup partition {} in {} ms, visible parts={}, new parts={}, result bitmaps={}",
-                partition_id,
-                watch.elapsedMilliseconds(),
-                visible_parts.size(),
-                new_parts.size(),
-                num_bitmaps_to_dump);
+            bool partition_level_valid_bucket = table_level_valid_bucket;
+            checkBucketTable(visible_parts, partition_level_valid_bucket);
+            checkBucketTable(new_parts, partition_level_valid_bucket);
+            if (!partition_level_valid_bucket)
+                res.emplace_back(partition_id, /*valid_bucket=*/false, -1, visible_parts, new_parts);
+            else
+            {
+                /// There is no need to use stable sort for visible parts because there has no duplicated key in these parts.
+                std::sort(visible_parts.begin(), visible_parts.end(), [](auto & lhs, auto & rhs) {
+                    return lhs->bucket_number < rhs->bucket_number;
+                });
+                /// We must use stable sort here, because we can not change the order when bucket number is the same which is represented as commit order.
+                std::stable_sort(
+                    new_parts.begin(), new_parts.end(), [](auto & lhs, auto & rhs) { return lhs->bucket_number < rhs->bucket_number; });
+                size_t p = 0, q = 0;
+                while (q < new_parts.size())
+                {
+                    Int64 bucket_number = new_parts[q]->bucket_number;
+                    IMergeTreeDataPartsVector bucket_visible_parts;
+                    IMergeTreeDataPartsVector bucket_new_parts;
+                    /// Skip all parts which bucket number is smaller.
+                    while (p < visible_parts.size() && visible_parts[p]->bucket_number < bucket_number)
+                        p++;
+                    while (p < visible_parts.size() && visible_parts[p]->bucket_number == bucket_number)
+                        bucket_visible_parts.push_back(visible_parts[p++]);
+                    while (q < new_parts.size() && new_parts[q]->bucket_number == bucket_number)
+                        bucket_new_parts.push_back(new_parts[q++]);
+
+                    res.emplace_back(partition_id, /*valid_bucket=*/true, bucket_number, bucket_visible_parts, bucket_new_parts);
+                }
+            }
         }
     }
     else
     {
-        /// new parts are sorted by part's written time
+        /// New parts are sorted by part's written time
         std::sort(all_new_parts.begin(), all_new_parts.end(), [](auto & lhs, auto & rhs) { return lhs->commit_time < rhs->commit_time; });
         all_new_parts.insert(all_new_parts.end(), all_uncommitted_parts.begin(), all_uncommitted_parts.end());
+        checkBucketTable(all_visible_parts, table_level_valid_bucket);
+        checkBucketTable(all_new_parts, table_level_valid_bucket);
+        if (!table_level_valid_bucket)
+            res.emplace_back(/*partition_id=*/"", /*valid_bucket=*/false, -1, all_visible_parts, all_new_parts);
+        else
+        {
+            IMergeTreeDataPartsVector sorted_visible_parts = all_visible_parts;
+            /// There is no need to use stable sort for visible parts because there has no duplicated key in these parts.
+            std::sort(sorted_visible_parts.begin(), sorted_visible_parts.end(), [](auto & lhs, auto & rhs) {
+                return lhs->bucket_number < rhs->bucket_number;
+            });
+            /// We must use stable sort here, because we can not change the order when bucket number is the same which is represented as commit order.
+            std::stable_sort(
+                all_new_parts.begin(), all_new_parts.end(), [](auto & lhs, auto & rhs) { return lhs->bucket_number < rhs->bucket_number; });
 
-        log_dedup_detail(all_visible_parts, all_new_parts);
-        Stopwatch watch;
-        DeleteBitmapVector bitmaps = dedupImpl(all_visible_parts, all_new_parts);
-        size_t num_bitmaps_to_dump = prepare_bitmaps_to_dump(all_visible_parts, all_new_parts, bitmaps);
-        LOG_DEBUG(
-            log,
-            "Dedup table in {} ms, visible parts={}, new parts={}, result bitmaps={}",
-            watch.elapsedMilliseconds(),
-            all_visible_parts.size(),
-            all_new_parts.size(),
-            num_bitmaps_to_dump);
+            size_t i = 0;
+            size_t j = 0;
+            while (j < all_new_parts.size())
+            {
+                Int64 bucket_number = all_new_parts[j]->bucket_number;
+                IMergeTreeDataPartsVector visible_parts;
+                IMergeTreeDataPartsVector new_parts;
+                /// Skip all parts which bucket number is smaller.
+                while (i < sorted_visible_parts.size() && sorted_visible_parts[i]->bucket_number < bucket_number)
+                    i++;
+                while (i < sorted_visible_parts.size() && sorted_visible_parts[i]->bucket_number == bucket_number)
+                    visible_parts.push_back(sorted_visible_parts[i++]);
+                while (j < all_new_parts.size() && all_new_parts[j]->bucket_number == bucket_number)
+                    new_parts.push_back(all_new_parts[j++]);
+
+                res.emplace_back(/*partition_id=*/"", /*valid_bucket=*/true, bucket_number, visible_parts, new_parts);
+            }
+        }
     }
     return res;
 }
@@ -628,7 +730,7 @@ LocalDeleteBitmaps MergeTreeDataDeduper::repairParts(TxnTimestamp txn_id, IMerge
             if (!delta_bitmaps[i])
                 continue;
             res.push_back(LocalDeleteBitmap::createBaseOrDelta(
-                visible_parts[i]->info, visible_parts[i]->getDeleteBitmap(), delta_bitmaps[i], txn_id.toUInt64()));
+                visible_parts[i]->info, visible_parts[i]->getDeleteBitmap(/*allow_null*/ true), delta_bitmaps[i], txn_id.toUInt64()));
             num_bitmaps++;
         }
         return num_bitmaps;

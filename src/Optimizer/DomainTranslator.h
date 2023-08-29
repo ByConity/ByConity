@@ -14,25 +14,30 @@
  */
 
 #pragma once
-#include <Interpreters/Context.h>
-#include <Analyzers/TypeAnalyzer.h>
-#include <Parsers/ASTVisitor.h>
-#include <Optimizer/domain.h>
-#include <Optimizer/PredicateUtils.h>
-#include <Optimizer/LiteralEncoder.h>
-#include <Parsers/IAST_fwd.h>
-#include <assert.h>
-#include <Columns/ColumnSet.h>
-#include <Analyzers/TypeAnalyzer.h>
-#include <Optimizer/ExpressionDeterminism.h>
+
 #include <Analyzers/ASTEquals.h>
-#include <Optimizer/ExpressionInterpreter.h>
-#include <Common/UTF8Helpers.h>
-#include <Optimizer/FunctionInvoker.h>
-#include <Interpreters/convertFieldToType.h>
-#include <utility>
+#include <Analyzers/TypeAnalyzer.h>
+#include <Columns/ColumnSet.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/convertFieldToType.h>
+#include <Optimizer/ExpressionDeterminism.h>
+#include <Optimizer/ExpressionInterpreter.h>
+#include <Optimizer/FunctionInvoker.h>
+#include <Optimizer/LiteralEncoder.h>
+#include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Utils.h>
+#include <Optimizer/domain.h>
+#include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTVisitor.h>
+#include <Parsers/IAST_fwd.h>
+#include <Common/UTF8Helpers.h>
+
+#include <optional>
+#include <type_traits>
+#include <utility>
+#include <assert.h>
+
 namespace DB::Predicate
 {
 
@@ -45,67 +50,96 @@ struct NormalizedSimpleComparison
         symbol_expression(symbol_expression_), operator_name(operator_name_), value_with_type(value_with_type_){}
 };
 
+template <typename T>
 struct ExtractionResult
 {
-    TupleDomain tuple_domain;
+    TupleDomain<T> tuple_domain;
     ASTPtr remaining_expression;
-    ExtractionResult(TupleDomain tuple_domain_, ASTPtr remaining_expression_) : tuple_domain(std::move(tuple_domain_)), remaining_expression(std::move(remaining_expression_)) {}
+    ExtractionResult(TupleDomain<T> tuple_domain_, ASTPtr remaining_expression_)
+        : tuple_domain(std::move(tuple_domain_)), remaining_expression(std::move(remaining_expression_))
+    {
+    }
 };
 
 //TODO: ConstASTVisitor
-class DomainVisitor : public ASTVisitor<ExtractionResult, const bool>
+template <typename T>
+class DomainVisitor : public ASTVisitor<ExtractionResult<T>, const bool>
 {
 public:
     DomainVisitor(ContextMutablePtr context_, TypeAnalyzer & type_analyzer_, NameToType column_types_, bool & is_ignored_) : context(context_), type_analyzer(type_analyzer_), column_types(std::move(column_types_)), is_ignored(is_ignored_){}
-    ExtractionResult process(ASTPtr & node, const bool & complement);
-    ExtractionResult visitASTFunction(ASTPtr & node, const bool & complement) override;
-    ExtractionResult visitNode(ASTPtr & node, const bool & complement) override;
-    ExtractionResult visitASTLiteral(ASTPtr & node, const bool & complement) override;
-    ExtractionResult visitLogicalFunction(ASTPtr & node, const bool & complement, const String & fun_name);
-    ExtractionResult visitNotFunction(ASTPtr & node, const bool & complement);
-    ExtractionResult visitComparisonFunction(ASTPtr & node, const bool & complement);
-    ExtractionResult visitInFunction(ASTPtr & node, const bool & complement);
-    ExtractionResult visitLikeFunction(ASTPtr & node, const bool & complement);
-    ExtractionResult visitStartsWithFunction(ASTPtr & node, const bool & complement);
-    ExtractionResult visitIsNullFunction(ASTPtr & node, const bool & complement);
-    ExtractionResult visitIsNotNullFunction(ASTPtr & node, const bool & complement);
+    ExtractionResult<T> process(ASTPtr & node, const bool & complement);
+    ExtractionResult<T> visitASTFunction(ASTPtr & node, const bool & complement) override;
+    ExtractionResult<T> visitNode(ASTPtr & node, const bool & complement) override;
+    ExtractionResult<T> visitASTLiteral(ASTPtr & node, const bool & complement) override;
+    ExtractionResult<T> visitLogicalFunction(ASTPtr & node, const bool & complement, const String & fun_name);
+    ExtractionResult<T> visitNotFunction(ASTPtr & node, const bool & complement);
+    ExtractionResult<T> visitComparisonFunction(ASTPtr & node, const bool & complement);
+    ExtractionResult<T> visitInFunction(ASTPtr & node, const bool & complement);
+    ExtractionResult<T> visitLikeFunction(ASTPtr & node, const bool & complement);
+    ExtractionResult<T> visitStartsWithFunction(ASTPtr & node, const bool & complement);
+    ExtractionResult<T> visitIsNullFunction(ASTPtr & node, const bool & complement);
+    ExtractionResult<T> visitIsNotNullFunction(ASTPtr & node, const bool & complement);
 
 private:
     ContextMutablePtr context;
     TypeAnalyzer & type_analyzer;
     NameToType column_types;
     bool & is_ignored;
-    DataTypePtr checkedTypeLookup(const String & symbol) const;
+    DataTypePtr checkedTypeLookup(const T & symbol) const;
     ASTPtr complementIfNecessary(const ASTPtr & ast, bool complement) const;
-    std::vector<TupleDomain> extractTupleDomains(const std::vector<ExtractionResult> & results) const;
-    ConstASTs extractRemainingExpressions(const std::vector<ExtractionResult> & results) const;
+    std::vector<TupleDomain<T>> extractTupleDomains(const std::vector<ExtractionResult<T>> & results) const;
+    ConstASTs extractRemainingExpressions(const std::vector<ExtractionResult<T>> & results) const;
 
     std::optional<NormalizedSimpleComparison> toNormalizedSimpleComparison(ASTPtr & comparison) const;
-    std::optional<ExtractionResult> processSimpleInPredicate(ASTPtr & node, const bool & complement);
+    std::optional<ExtractionResult<T>> processSimpleInPredicate(ASTPtr & node, const bool & complement);
     std::optional<Domain> createRangeDomain(const DataTypePtr & type, const String & constant_prefix);
 
-    std::optional<ExtractionResult> createComparisonExtractionResult(ASTPtr & node, const String & operator_name, String column,
-                                                                     const DataTypePtr & type, const Field & field, const bool & complement);
+    std::optional<ExtractionResult<T>> createComparisonExtractionResult(
+        ASTPtr & node,
+        const String & operator_name,
+        const T & column,
+        const DataTypePtr & type,
+        const Field & field,
+        const bool & complement);
     static std::optional<Domain> extractOrderableDomain(const String & operator_name, const DataTypePtr & type, const Field & value, const bool & complement);
     static Domain extractDiscreteDomain(const String & operator_name, const DataTypePtr & type, const Field & value, const bool & complement);
     static bool isFloatingPointNaN(const DataTypePtr & type, const Field & value);
     static bool isValidOperatorForComparison(const String & operator_name);
 
-    bool allTupleDomainsAreSameSingleColumn(const std::vector<TupleDomain> & tuple_domains) const;
-    bool allTupleDomainsAreNotAll(const std::vector<TupleDomain> & tuple_domains) const;
+    bool allTupleDomainsAreSameSingleColumn(const std::vector<TupleDomain<T>> & tuple_domains) const;
+    bool allTupleDomainsAreNotAll(const std::vector<TupleDomain<T>> & tuple_domains) const;
 
     std::optional<Field> canImplicitCoerceValue(Field & value, DataTypePtr & from_type, DataTypePtr & to_type) const;
     std::optional<Field> getConvertFieldToType(Field & value, DataTypePtr & from_type, DataTypePtr & to_type) const;
+
+    std::optional<T> checkAndGetSymbol(const ASTPtr & ast) const
+    {
+        if constexpr (std::is_same_v<T, String>)
+        {
+            if (const auto * iden = ast->as<ASTIdentifier>())
+                return iden->name();
+
+            return std::nullopt;
+        }
+        else
+        {
+            if (ExpressionDeterminism::isDeterministic(ast, context))
+                return ast;
+
+            return std::nullopt;
+        }
+    }
 };
 
+template <typename T>
 class DomainTranslator
 {
 public:
     DomainTranslator(ContextMutablePtr context_): context(context_), is_ignored(false) {}
-    ASTPtr toPredicate(const TupleDomain & tuple_domain);
+    ASTPtr toPredicate(const TupleDomain<T> & tuple_domain);
     ASTPtr toPredicate(const ASTPtr & symbol, const Domain & domain);
-    ExtractionResult getExtractionResult(ASTPtr predicate, NamesAndTypes types);
-    ExtractionResult getExtractionResult(ASTPtr predicate, NameToType types);
+    ExtractionResult<T> getExtractionResult(ASTPtr predicate, NamesAndTypes types);
+    ExtractionResult<T> getExtractionResult(ASTPtr predicate, NameToType types);
     bool isIgnored() { return is_ignored; }
 private:
     ContextMutablePtr context;

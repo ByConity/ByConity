@@ -93,6 +93,7 @@ public:
     std::optional<Partitioning::Handle> visitValuesNode(QueryPlan::Node * node, const Context & context) override;
     std::optional<Partitioning::Handle> visitReadNothingNode(QueryPlan::Node *node, const Context & context) override;
     std::optional<Partitioning::Handle> visitTableScanNode(QueryPlan::Node * node, const Context & context) override;
+    std::optional<Partitioning::Handle> visitReadStorageRowCountNode(QueryPlan::Node * node, const Context & context) override;
     std::optional<Partitioning::Handle> visitRemoteExchangeSourceNode(QueryPlan::Node * node, const Context & context) override;
 };
 

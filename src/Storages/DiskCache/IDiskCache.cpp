@@ -96,7 +96,7 @@ void IDiskCache::shutdown()
         sync_task->deactivate();
 }
 
-void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments)
+void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments, CacheSegmentsCallback callback)
 {
     if (hit_segments.empty())
         return;
@@ -105,7 +105,8 @@ void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments)
     SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::DiskCacheScheduleCacheTaskMicroSeconds, watch.elapsedMicroseconds()); });
 
     // Notes: split to more tasks?
-    scheduleCacheTask([this, segments = std::move(hit_segments)] {
+    scheduleCacheTask([this, segments = std::move(hit_segments), cb = callback] {
+        String last_exception{};
         for (const auto & hit_segment : segments)
         {
             try
@@ -116,11 +117,15 @@ void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments)
                     hit_segment->cacheToDisk(*this);
                 }
             }
-            catch (...)
+            catch (const Exception & e)
             {
+                last_exception = e.message();
                 tryLogCurrentException(log, __PRETTY_FUNCTION__);
             }
         }
+
+        if (cb)
+            cb(last_exception);
     });
 }
 
@@ -153,7 +158,7 @@ bool IDiskCache::scheduleCacheTask(const std::function<void()> & task)
         std::uniform_int_distribution<size_t> dist(1, 100);
         if (dist(random_generator) <= drop_possibility)
         {
-            LOG_DEBUG(log, "Drop disk cache since queue is almost full, Queue length: {}, Max: {}", active_task_size, max_queue_size);
+            LOG_DEBUG(log, "Drop disk cache since queue is almost full, Queue length: {}, Max: {}, curren_ratio: {} ", active_task_size, max_queue_size, current_ratio);
             return false;
         }
         else

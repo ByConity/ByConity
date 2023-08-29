@@ -1,35 +1,35 @@
 #include <Common/config.h>
-#include "registerTableFunctions.h"
 
 #if USE_HDFS
-#include <Storages/HDFS/StorageHDFS.h>
-#include <Storages/ColumnsDescription.h>
-#include <TableFunctions/TableFunctionFactory.h>
-#include <TableFunctions/TableFunctionHDFS.h>
+#    include <Storages/RemoteFile/CnchFileCommon.h>
+#    include <TableFunctions/TableFunctionFactory.h>
+#    include <TableFunctions/TableFunctionHDFS.h>
+#    include <Storages/RemoteFile/StorageCnchHDFS.h>
+#    include <TableFunctions/parseColumnsListForTableFunction.h>
 
 namespace DB
 {
-StoragePtr TableFunctionHDFS::getStorage(
-    const String & source, const String & format_, const ColumnsDescription & columns, ContextPtr global_context,
-    const std::string & table_name, const String & compression_method_) const
+StoragePtr TableFunctionHDFS::getStorage(const ColumnsDescription & columns, ContextPtr global_context, const std::string & table_name) const
 {
-    return StorageHDFS::create(
-        source,
-        StorageID(getDatabaseName(), table_name),
-        format_,
+    return StorageCnchHDFS::create(
+        std::const_pointer_cast<Context>(global_context),
+        StorageID(global_context->getCurrentDatabase(), table_name),
         columns,
         ConstraintsDescription{},
-        String{},
-        global_context,
-        compression_method_);
+        nullptr,
+        arguments,
+        global_context->getCnchFileSettings());
+}
+
+ColumnsDescription TableFunctionHDFS::getActualTableStructure(ContextPtr context) const
+{
+    return parseColumnsListFromString(arguments.structure, context);
 }
 
 
-#if USE_HDFS
 void registerTableFunctionHDFS(TableFunctionFactory & factory)
 {
     factory.registerFunction<TableFunctionHDFS>();
 }
-#endif
 }
 #endif

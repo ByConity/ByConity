@@ -70,7 +70,7 @@ PlanNodePtr PredicateVisitor::visitPlanNode(PlanNodeBase & node, PredicateContex
         // we cannot push our predicate down any further
         auto name_and_types = rewritten->getStep()->getOutputStream().getNamesToTypes();
         auto remaining_filter = ExpressionInterpreter::optimizePredicate(predicate_context.predicate, name_and_types, context);
-        Predicate::DomainTranslator domain_translator{context};
+        Predicate::DomainTranslator<String> domain_translator{context};
         auto extract_result = domain_translator.getExtractionResult(remaining_filter, name_and_types);
 
         if (!domain_translator.isIgnored() && remaining_filter->getColumnName() != extract_result.remaining_expression->getColumnName())
@@ -600,7 +600,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
         post_join_predicate = PredicateUtils::combineConjuncts(join_conj);
         new_join_filter = PredicateConst::TRUE_VALUE;
     }
-    
+
     std::shared_ptr<JoinStep> join_step;
     if (kind == ASTTableJoin::Kind::Cross)
     {

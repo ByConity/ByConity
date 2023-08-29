@@ -74,6 +74,7 @@
 #include <Storages/MergeTree/MergeTreePartition.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Transaction/Actions/DDLAlterAction.h>
+#include <Transaction/Actions/S3DetachMetaAction.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
 #include <Common/parseAddress.h>
@@ -152,7 +153,7 @@ StorageCnchMergeTree::StorageCnchMergeTree(
     std::unique_ptr<MergeTreeSettings> settings_)
     : MergeTreeMetaBase(
         table_id_,
-        relative_data_path_.empty() ? UUIDHelpers::UUIDToString(table_id_.uuid) : relative_data_path_,
+        relative_data_path_,
         metadata_,
         context_,
         date_column_name_,
@@ -163,7 +164,15 @@ StorageCnchMergeTree::StorageCnchMergeTree(
         [](const String &) {})
     , CnchStorageCommonHelper(table_id_, getDatabaseName(), getTableName())
 {
-    relative_auxility_storage_path = fs::path("auxility_store") / UUIDHelpers::UUIDToString(table_id_.uuid) / "";
+    String relative_table_path = getStoragePolicy(IStorage::StorageLocation::MAIN)
+                                     ->getAnyDisk()
+                                     ->getTableRelativePathOnDisk(UUIDHelpers::UUIDToString(table_id_.uuid));
+
+    if (relative_data_path_.empty() || relative_table_path.empty())
+    {
+        MergeTreeMetaBase::setRelativeDataPath(IStorage::StorageLocation::MAIN, relative_table_path);
+    }
+    relative_auxility_storage_path = fs::path("auxility_store") / relative_table_path / "";
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
 }
 
@@ -246,6 +255,8 @@ void StorageCnchMergeTree::read(
 
     LOG_TRACE(log, "Original query before rewrite: {}", queryToString(query_info.query));
     auto modified_query_ast = rewriteSelectQuery(query_info.query, getDatabaseName(), prepare_result.local_table_name);
+
+    LOG_TRACE(log, "After query rewrite: {}", queryToString(modified_query_ast));
 
     const Scalars & scalars = local_context->hasQueryContext() ? local_context->getQueryContext()->getScalars() : Scalars{};
 
@@ -624,15 +635,30 @@ static void touchActiveTimestampForInsertSelectQuery(const ASTInsertQuery & inse
     }
 }
 
+static String extractTableSuffix(const String & gen_table_name)
+{
+    return gen_table_name.substr(gen_table_name.find_last_of('_') + 1);
+}
+
 static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const String & table_suffix)
 {
     auto query = mv->getCreateTableSql();
 
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+    
 
     auto & create_query = ast->as<ASTCreateQuery &>();
+    create_query.to_inner_uuid = UUIDHelpers::Nil;
     create_query.table += "_" + table_suffix;
+    /// If creating MV is `CREATE MATERIALIZED VIEW AS SELECT ... ENGINE = CnchMergeTree()...`
+    /// Then we change the query to CREATE MATERIALIZED VIEW TO `mv_db.`.inner.mv_name`` AS SELECT ...
+    if (create_query.to_table_id.empty())
+    {
+        create_query.to_table_id.table_name = generateInnerTableName(mv->getStorageID());
+        create_query.to_table_id.database_name = mv->getDatabaseName();
+        create_query.storage = nullptr;
+    }
     create_query.to_table_id.table_name += "_" + table_suffix;
 
     auto & inner_query = create_query.select->list_of_selects->children.at(0);
@@ -644,13 +670,7 @@ static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const S
         mv->getInMemoryMetadataPtr()->select.select_table_id.database_name,
         mv->getInMemoryMetadataPtr()->select.select_table_id.table_name + "_" + table_suffix);
 
-    /// Remark: this `getObjectDefinitionFromCreateQuery` may cause issue, refer to `getTableDefinitionFromCreateQuery` in cnch-dev branch if issue happens
-    return getObjectDefinitionFromCreateQuery(ast, false);
-}
-
-String StorageCnchMergeTree::extractTableSuffix(const String & gen_table_name)
-{
-    return gen_table_name.substr(gen_table_name.find_last_of('_') + 1);
+    return getTableDefinitionFromCreateQuery(ast, false);
 }
 
 Names StorageCnchMergeTree::genViewDependencyCreateQueries(
@@ -1112,7 +1132,7 @@ void StorageCnchMergeTree::getDeleteBitmapMetaForParts(
     DeleteBitmapMetaPtrVector bitmaps;
     CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, bitmaps);
 
-    /// Both the parts and bitmaps are sorted in (partitioin_id, min_block, max_block, commit_time) order
+    /// Both the parts and bitmaps are sorted in (partition_id, min_block, max_block, commit_time) order
     auto bitmap_it = bitmaps.begin();
     for (auto & part : parts)
     {
@@ -1352,7 +1372,7 @@ void StorageCnchMergeTree::removeCheckpoint(const Protos::Checkpoint & checkpoin
     // getContext()->getCnchCatalog()->markCheckpoint(shared_from_this(), new_checkpoint);
 }
 
-void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool sync)
+void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload, UInt64 parts_preload_level)
 {
     auto worker_group = getWorkerGroupForTable(*this, local_context);
     local_context->setCurrentWorkerGroup(worker_group);
@@ -1374,18 +1394,29 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
     }
     server_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, "");
     server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
-    /// TODO: async rpc?
-    server_resource->sendResources(
-        local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
-            std::vector<brpc::CallId> ids;
-            for (const auto & resource : resources)
-            {
-                brpc::CallId id
-                    = client->preloadDataParts(local_context, txn_id, *this, create_table_query, resource.server_parts, sync, handler);
-                ids.emplace_back(id);
-            }
-            return ids;
-        });
+
+    server_resource->sendResources(local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
+        std::vector<brpc::CallId> ids;
+        for (const auto & resource : resources)
+        {
+            brpc::CallId id = client->preloadDataParts(local_context, txn_id, *this, create_table_query, resource.server_parts, handler, enable_parts_sync_preload, parts_preload_level);
+            ids.emplace_back(id);
+            LOG_TRACE(log, "send preload data parts size = {}, enable_parts_sync_preload = {}, enable_parts_sync_preload = {}", resource.server_parts.size(), enable_parts_sync_preload, parts_preload_level);
+        }
+        return ids;
+    });
+}
+
+Strings StorageCnchMergeTree::getPrunedPartitions(
+    const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context)
+{
+    Strings pruned_partitions;
+    if (local_context->getCnchCatalog())
+    {
+        auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
+        pruned_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names_to_return, local_context);
+    }
+    return pruned_partitions;
 }
 
 ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
@@ -1879,6 +1910,9 @@ Pipe StorageCnchMergeTree::alterPartition(
 
 void StorageCnchMergeTree::reclusterPartition(const PartitionCommand & command, ContextPtr query_context)
 {
+    if (getInMemoryMetadataPtr()->hasUniqueKey())
+        throw Exception("Table with UNIQUE KEY doesn't support recluster partition commands.", ErrorCodes::SUPPORT_IS_DISABLED);
+
     // create mutation command with partition or predicate attribute
     MutationCommand mutation_command;
     mutation_command.type = MutationCommand::Type::RECLUSTER;
@@ -1979,6 +2013,8 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "insertion_label_ttl",
         "enable_local_disk_cache",
         "enable_preload_parts",
+        "enable_parts_sync_preload",
+        "parts_preload_level",
 
         "enable_addition_bg_task",
         "max_addition_bg_task_num",
@@ -2080,55 +2116,94 @@ void StorageCnchMergeTree::dropPartsImpl(
     {
         auto metadata_snapshot = getInMemoryMetadataPtr();
 
-        /// XXX: Detach parts will break MVCC: queries and tasks which reference those parts will fail.
-        // VolumePtr hdfs_volume = getStoragePolicy(IStorage::StorageLocation::MAIN)->local_store_volume();
+        DiskType::Type remote_storage_type = getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
 
-        // Create detached directory first
-        Disks disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
-        for (DiskPtr & disk : disks)
+        switch (remote_storage_type)
         {
-            String detached_rel_path = fs::path(getRelativeDataPath(IStorage::StorageLocation::MAIN)) / "detached";
-            if (metadata_snapshot->hasUniqueKey())
-                detached_rel_path = fs::path(detached_rel_path) / DeleteBitmapMeta::delete_files_dir;
-            disk->createDirectories(detached_rel_path);
-        }
+            case DiskType::Type::ByteHDFS: {
+                /// XXX: Detach parts will break MVCC: queries and tasks which reference those parts will fail.
+                // VolumePtr hdfs_volume = getStoragePolicy(IStorage::StorageLocation::MAIN)->local_store_volume();
 
-        UndoResources undo_resources;
-        auto write_undo_callback = [&](const DataPartPtr & part) {
-            UndoResource ub(
-                txn->getTransactionID(),
-                UndoResourceType::FileSystem,
-                part->getFullRelativePath(),
-                part->getRelativePathForDetachedPart(""));
-            ub.setDiskName(part->volume->getDisk()->getName());
-            undo_resources.push_back(ub);
-        };
-        for (const auto & data_part : parts_to_drop)
-        {
-            data_part->enumeratePreviousParts(write_undo_callback);
-        }
-        local_context->getCnchCatalog()->writeUndoBuffer(
-            UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), undo_resources);
+                // Create detached directory first
+                Disks disks = getStoragePolicy(IStorage::StorageLocation::MAIN)->getDisks();
+                for (DiskPtr & disk : disks)
+                {
+                    String detached_rel_path = fs::path(getRelativeDataPath(IStorage::StorageLocation::MAIN)) / "detached";
+                    if (metadata_snapshot->hasUniqueKey())
+                        detached_rel_path = fs::path(detached_rel_path) / DeleteBitmapMeta::delete_files_dir;
+                    disk->createDirectories(detached_rel_path);
+                }
 
-        if (metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap)
-            getDeleteBitmapMetaForParts(parts_to_drop, local_context, local_context->getCurrentCnchStartTime(), /*force_found*/ false);
+                UndoResources undo_resources;
+                auto write_undo_callback = [&](const DataPartPtr & part) {
+                    UndoResource ub(
+                        txn->getTransactionID(),
+                        UndoResourceType::FileSystem,
+                        part->getFullRelativePath(),
+                        part->getRelativePathForDetachedPart(""));
+                    ub.setDiskName(part->volume->getDisk()->getName());
+                    undo_resources.push_back(ub);
+                };
+                for (const auto & data_part : parts_to_drop)
+                {
+                    data_part->enumeratePreviousParts(write_undo_callback);
+                }
+                local_context->getCnchCatalog()->writeUndoBuffer(
+                    UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), undo_resources);
 
-        ThreadPool pool(std::min(parts_to_drop.size(), max_threads));
-        auto callback = [&pool, &metadata_snapshot, &local_context](const DataPartPtr & part) {
-            bool create_delete_bitmap
-                = metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap;
-            pool.scheduleOrThrowOnError([part, create_delete_bitmap]() {
-                part->renameToDetached("");
-                if (create_delete_bitmap)
-                    part->createDeleteBitmapForDetachedPart();
-            });
-        };
-        for (const auto & part : parts_to_drop)
-        {
-            part->enumeratePreviousParts(callback);
+                if (metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap)
+                    getDeleteBitmapMetaForParts(
+                        parts_to_drop, local_context, local_context->getCurrentCnchStartTime(), /*force_found*/ false);
+
+                ThreadPool pool(std::min(parts_to_drop.size(), max_threads));
+                auto callback = [&pool, &metadata_snapshot, &local_context](const DataPartPtr & part) {
+                    bool create_delete_bitmap = metadata_snapshot->hasUniqueKey()
+                        && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap;
+                    pool.scheduleOrThrowOnError([part, create_delete_bitmap]() {
+                        part->renameToDetached("");
+                        if (create_delete_bitmap)
+                            part->createDeleteBitmapForDetachedPart();
+                    });
+                };
+                for (const auto & part : parts_to_drop)
+                {
+                    part->enumeratePreviousParts(callback);
+                }
+                pool.wait();
+                /// NOTE: we still need create DROP_RANGE part for detached parts,
+                break;
+            }
+            case DiskType::Type::ByteS3: {
+                MergeTreeDataPartsCNCHVector parts;
+                UndoResources resources;
+                for (const auto & part_to_drop : parts_to_drop)
+                {
+                    for (IMergeTreeDataPartPtr curr_part = part_to_drop; curr_part != nullptr; curr_part = curr_part->tryGetPreviousPart())
+                    {
+                        auto part = dynamic_pointer_cast<const MergeTreeDataPartCNCH>(curr_part);
+                        if (part == nullptr)
+                        {
+                            throw Exception("Unexpected part type when detach", ErrorCodes::LOGICAL_ERROR);
+                        }
+                        UndoResource ub(txn->getTransactionID(), UndoResourceType::S3DetachPart, part->info.getPartName());
+                        resources.push_back(ub);
+
+                        parts.push_back(part);
+                    }
+                }
+
+                // Write undo buffer first
+                local_context->getCnchCatalog()->writeUndoBuffer(
+                    UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), resources);
+
+                auto action = txn->createAction<S3DetachMetaAction>(shared_from_this(), parts);
+                txn->appendAction(action);
+                break;
+            }
+            default:
+                throw Exception(
+                    fmt::format("Unknown storage type {} when detach", DiskType::toString(remote_storage_type)), ErrorCodes::LOGICAL_ERROR);
         }
-        pool.wait();
-        /// NOTE: we still need create DROP_RANGE part for detached parts,
     }
 
     MutableDataPartsVector drop_ranges;
@@ -2418,7 +2493,7 @@ std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQuery
     }
     return bucket_numbers;
 }
-StorageCnchMergeTree * StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & source_table) const
+StorageCnchMergeTree * StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & source_table, ContextPtr local_context) const
 {
     StorageCnchMergeTree * src_data = dynamic_cast<StorageCnchMergeTree *>(source_table.get());
     if (!src_data)
@@ -2476,7 +2551,8 @@ StorageCnchMergeTree * StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(c
     // If target table is a bucket table, ensure that source table is a bucket table
     // or if the source table is a bucket table, ensure the table_definition_hash is the same before proceeding to drop parts
     // Can remove this check if rollback has been implemented
-    if (isBucketTable() && (!src_data->isBucketTable() || getTableHashForClusterBy() != src_data->getTableHashForClusterBy()))
+    if (isBucketTable() && !local_context->getSettingsRef().allow_attach_parts_with_different_table_definition_hash 
+        && (!src_data->isBucketTable() || getTableHashForClusterBy() != src_data->getTableHashForClusterBy()))
     {
         LOG_DEBUG(
             log,
@@ -2595,13 +2671,10 @@ std::optional<UInt64> StorageCnchMergeTree::totalRows(const ContextPtr & query_c
     size_t rows = 0;
     for (const auto & part : parts)
     {
-        if (!part->isPartial())
-        {
-            if (const auto & delete_bitmap = part->getDeleteBitmap(*this, false))
-                rows += part->rowsCount() - delete_bitmap->cardinality();
-            else
-                rows += part->rowsCount();
-        }
+        if (const auto & delete_bitmap = part->getDeleteBitmap(*this, false))
+            rows += part->rowsCount() - delete_bitmap->cardinality();
+        else
+            rows += part->rowsCount();
     }
     return rows;
 }

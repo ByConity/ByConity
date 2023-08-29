@@ -143,13 +143,13 @@ class HostWithPorts
 {
 public:
     HostWithPorts() = default;
-    HostWithPorts(const std::string & host_, uint16_t rpc_port_ = 0, uint16_t tcp_port_ = 0, uint16_t http_port_ = 0, uint16_t exchange_port_ = 0, uint16_t exchange_status_port_ = 0, std::string id_ = {})
+    HostWithPorts(const std::string & host_, uint16_t rpc_port_ = 0, uint16_t tcp_port_ = 0, uint16_t http_port_ = 0, [[maybe_unused]] uint16_t exchange_port_ = 0, [[maybe_unused]] uint16_t exchange_status_port_ = 0, std::string id_ = {})
         : id{std::move(id_)},
           rpc_port{rpc_port_},
           tcp_port{tcp_port_},
           http_port{http_port_},
-          exchange_port{exchange_port_},
-          exchange_status_port{exchange_status_port_},
+          exchange_port{rpc_port_},
+          exchange_status_port{rpc_port_},
           host{removeBracketsIfIpv6(host_)}
     {}
 
@@ -168,8 +168,8 @@ public:
     std::string getRPCAddress() const { return fmt::format("{}:{}", addBracketsIfIpv6(host), std::to_string(rpc_port)); }
     std::string getTCPAddress() const { return fmt::format("{}:{}", addBracketsIfIpv6(host), std::to_string(tcp_port)); }
     std::string getHTTPAddress() const { return fmt::format("{}:{}", addBracketsIfIpv6(host), std::to_string(http_port)); }
-    std::string getExchangeAddress() const { return fmt::format("{}:{}", addBracketsIfIpv6(host), std::to_string(exchange_port)); }
-    std::string getExchangeStatusAddress() const { return fmt::format("{}:{}", addBracketsIfIpv6(host), std::to_string(exchange_status_port)); }
+    std::string getExchangeAddress() const { return getRPCAddress(); }
+    std::string getExchangeStatusAddress() const { return getRPCAddress(); }
 
     const std::string & getHost() const { return host; }
     uint16_t getTCPPort() const { return tcp_port; }

@@ -162,7 +162,7 @@ void DDLTaskBase::parseQueryFromEntry(ContextPtr context)
     const char * begin = entry.query.data();
     const char * end = begin + entry.query.size();
 
-    ParserQuery parser_query(end, ParserSettings::valueOf(context->getSettingsRef().dialect_type));
+    ParserQuery parser_query(end, ParserSettings::valueOf(context->getSettingsRef()));
     String description;
     query = parseQuery(parser_query, begin, end, description, 0, context->getSettingsRef().max_parser_depth);
 }

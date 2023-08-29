@@ -94,7 +94,6 @@ void registerFunctionSubtractDays(FunctionFactory &);
 void registerFunctionSubtractWeeks(FunctionFactory &);
 void registerFunctionSubtractMonths(FunctionFactory &);
 void registerFunctionSubtractQuarters(FunctionFactory &);
-void registerFunctionSubtractTime(FunctionFactory &);
 void registerFunctionSubtractYears(FunctionFactory &);
 void registerFunctionDateDiff(FunctionFactory &);
 void registerFunctionDateName(FunctionFactory &);
@@ -190,7 +189,6 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionSubtractWeeks(factory);
     registerFunctionSubtractMonths(factory);
     registerFunctionSubtractQuarters(factory);
-    registerFunctionSubtractTime(factory);
     registerFunctionSubtractYears(factory);
     registerFunctionDateDiff(factory);
     registerFunctionDateName(factory);

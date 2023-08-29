@@ -1,0 +1,5 @@
+Projection Est. ? rows
+│     Expressions: [database]
+└─ Gather Exchange Est. ? rows
+   └─ TableScan cnch_system.cnch_kafka_log Est. ? rows
+            Outputs: [database]

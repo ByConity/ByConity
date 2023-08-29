@@ -23,7 +23,7 @@
 #include <Transaction/TxnTimestamp.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
-#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/DataPart_fwd.h>
 
 #include <unordered_set>
 
@@ -84,6 +84,13 @@ public:
         const String & local_table_name,
         const HiveDataPartsCNCHVector & parts,
         const ExceptionHandlerPtr & handler);
+    
+    brpc::CallId sendCnchFileDataParts(
+        const ContextPtr & context,
+        const StoragePtr & storage,
+        const String & local_table_name,
+        const FileDataPartsCNCHVector & parts,
+        const ExceptionHandlerPtr & handler);
 
     brpc::CallId preloadDataParts(
         const ContextPtr & context,
@@ -91,8 +98,9 @@ public:
         const IStorage & storage,
         const String & create_local_table_query,
         const ServerDataPartsVector & parts,
-        bool sync,
-        const ExceptionHandlerPtr & handler);
+        const ExceptionHandlerPtr & handler,
+        bool enable_parts_sync_preload,
+        UInt64 parts_preload_level);
 
     brpc::CallId sendOffloadingInfo(
         const ContextPtr & context,

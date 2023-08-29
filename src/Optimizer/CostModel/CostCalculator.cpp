@@ -94,6 +94,11 @@ PlanNodeCost CostVisitor::visitAggregatingStep(const AggregatingStep & step, Cos
     return AggregatingCost::calculate(step, context);
 }
 
+PlanNodeCost CostVisitor::visitReadStorageRowCountStep(const ReadStorageRowCountStep & step, CostContext & context)
+{
+    return visitStep(step, context);
+}
+
 PlanNodeCost CostVisitor::visitWindowStep(const WindowStep & step, CostContext & context)
 {
     return visitStep(step, context);

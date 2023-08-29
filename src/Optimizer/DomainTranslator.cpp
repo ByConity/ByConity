@@ -20,7 +20,8 @@
 namespace DB::Predicate
 {
 
-ASTPtr DomainTranslator::toPredicate(const TupleDomain & tuple_domain)
+template <typename T>
+ASTPtr DomainTranslator<T>::toPredicate(const TupleDomain<T> & tuple_domain)
 {
     if (tuple_domain.isNone())
         return PredicateConst::FALSE_VALUE;
@@ -28,12 +29,18 @@ ASTPtr DomainTranslator::toPredicate(const TupleDomain & tuple_domain)
     ConstASTs combine_predicates;
 
     for (const auto & domain : tuple_domain.getDomains())
-        combine_predicates.emplace_back(toPredicate(std::make_shared<ASTIdentifier>(domain.first), domain.second));
+    {
+        if constexpr (std::is_same_v<T, String>)
+            combine_predicates.emplace_back(toPredicate(std::make_shared<ASTIdentifier>(domain.first), domain.second));
+        else
+            combine_predicates.emplace_back(toPredicate(domain.first, domain.second));
+    }
 
     return PredicateUtils::combineConjuncts(combine_predicates);
 }
 
-ASTPtr DomainTranslator::toPredicate(const ASTPtr & symbol, const Domain & domain)
+template <typename T>
+ASTPtr DomainTranslator<T>::toPredicate(const ASTPtr & symbol, const Domain & domain)
 {
     if (domain.valueSetIsNone())
         return domain.isNullAllowed() ? makeASTFunction("isNull", symbol) : PredicateConst::FALSE_VALUE;
@@ -63,25 +70,28 @@ ASTPtr DomainTranslator::toPredicate(const ASTPtr & symbol, const Domain & domai
  * 2) An Expression fragment which represents the part of the original Expression that will need to be re-evaluated
  * after filtering with the TupleDomain.
  */
-ExtractionResult DomainTranslator::getExtractionResult(ASTPtr predicate, NamesAndTypes types)
+template <typename T>
+ExtractionResult<T> DomainTranslator<T>::getExtractionResult(ASTPtr predicate, NamesAndTypes types)
 {
     TypeAnalyzer type_analyzer = TypeAnalyzer::create(context, types);
     NameToType column_types;
     for (const auto & type : types)
         column_types.emplace(type.name, type.type);
 
-    return DomainVisitor(context, type_analyzer, std::move(column_types), is_ignored).process(predicate, false);
+    return DomainVisitor<T>(context, type_analyzer, std::move(column_types), is_ignored).process(predicate, false);
 }
 
-ExtractionResult DomainTranslator::getExtractionResult(ASTPtr predicate, NameToType types)
+template <typename T>
+ExtractionResult<T> DomainTranslator<T>::getExtractionResult(ASTPtr predicate, NameToType types)
 {
     TypeAnalyzer type_analyzer = TypeAnalyzer::create(context, types);
 
-    return DomainVisitor(context, type_analyzer, std::move(types), is_ignored).process(predicate, false);
+    return DomainVisitor<T>(context, type_analyzer, std::move(types), is_ignored).process(predicate, false);
 }
 
 //Note: ranges should be sorted before!
-ConstASTs DomainTranslator::extractDisjuncts(const DataTypePtr & type, const Ranges & ordered_ranges, ASTPtr symbol)
+template <typename T>
+ConstASTs DomainTranslator<T>::extractDisjuncts(const DataTypePtr & type, const Ranges & ordered_ranges, ASTPtr symbol)
 {
     ConstASTs disjuncts;
     ASTs single_values;
@@ -151,7 +161,8 @@ ConstASTs DomainTranslator::extractDisjuncts(const DataTypePtr & type, const Ran
     return disjuncts;
 }
 
-ConstASTs DomainTranslator::extractDisjuncts(const DataTypePtr & type, const DiscreteValueSet & discrete_value_set, ASTPtr symbol)
+template <typename T>
+ConstASTs DomainTranslator<T>::extractDisjuncts(const DataTypePtr & type, const DiscreteValueSet & discrete_value_set, ASTPtr symbol)
 {
     ASTs values;
     for (const auto & temp : discrete_value_set.getValues())
@@ -174,7 +185,8 @@ ConstASTs DomainTranslator::extractDisjuncts(const DataTypePtr & type, const Dis
     return ConstASTs{predicate};
 }
 
-ASTPtr DomainTranslator::processRange(const DataTypePtr & type, const Range & range, ASTPtr & symbol)
+template <typename T>
+ASTPtr DomainTranslator<T>::processRange(const DataTypePtr & type, const Range & range, ASTPtr & symbol)
 {
     if (range.isAll())
         return PredicateConst::TRUE_VALUE;
@@ -199,8 +211,9 @@ ASTPtr DomainTranslator::processRange(const DataTypePtr & type, const Range & ra
     return PredicateUtils::combineConjuncts(range_conjuncts);
 }
 
+template <typename T>
 ASTPtr
-DomainTranslator::combineRangeWithExcludedPoints(const DataTypePtr & type, ASTPtr & symbol, const Range & range, ASTs & excluded_points)
+DomainTranslator<T>::combineRangeWithExcludedPoints(const DataTypePtr & type, ASTPtr & symbol, const Range & range, ASTs & excluded_points)
 {
     if (excluded_points.empty())
         return processRange(type, range, symbol);
@@ -215,7 +228,8 @@ DomainTranslator::combineRangeWithExcludedPoints(const DataTypePtr & type, ASTPt
     return PredicateUtils::combineConjuncts(ASTs{processRange(type, range, symbol), excluded_points_ast});
 }
 
-bool DomainTranslator::anyRangeIsAll(const Ranges & ranges)
+template <typename T>
+bool DomainTranslator<T>::anyRangeIsAll(const Ranges & ranges)
 {
     for (const auto & range : ranges)
     {
@@ -224,13 +238,15 @@ bool DomainTranslator::anyRangeIsAll(const Ranges & ranges)
     }
     return false;
 }
-//todo update name
-ASTPtr DomainTranslator::literalEncodeWithType(const DataTypePtr & type, const Field & field)
+
+template <typename T>
+ASTPtr DomainTranslator<T>::literalEncodeWithType(const DataTypePtr & type, const Field & field)
 {
     return LiteralEncoder::encodeForComparisonExpr(field, type, context);
 }
 
-Ranges DomainTranslator::pickOutSingleValueRanges(const SortedRangeSet & sorted_range_set)
+template <typename T>
+Ranges DomainTranslator<T>::pickOutSingleValueRanges(const SortedRangeSet & sorted_range_set)
 {
     Ranges single_exclusive_values;
 
@@ -243,25 +259,33 @@ Ranges DomainTranslator::pickOutSingleValueRanges(const SortedRangeSet & sorted_
     return single_exclusive_values;
 }
 
-DataTypePtr DomainVisitor::checkedTypeLookup(const String & symbol) const
+template <typename T>
+DataTypePtr DomainVisitor<T>::checkedTypeLookup(const T & symbol) const
 {
-    DataTypePtr type = column_types.at(symbol); //TODO:need to be confirm
+    DataTypePtr type;
+    if constexpr (std::is_same_v<T, String>)
+        type = column_types.at(symbol);
+    else
+        type = type_analyzer.getType(symbol);
     if (!type)
         throw Exception("Types is missing info for symbol", DB::ErrorCodes::LOGICAL_ERROR);
     return type;
 }
 
-ASTPtr DomainVisitor::complementIfNecessary(const ASTPtr & ast, bool complement) const
+template <typename T>
+ASTPtr DomainVisitor<T>::complementIfNecessary(const ASTPtr & ast, bool complement) const
 {
     return complement ? makeASTFunction("not", ast) : ast;
 }
 
-ExtractionResult DomainVisitor::process(ASTPtr & node, const bool & complement)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::process(ASTPtr & node, const bool & complement)
 {
     return ASTVisitorUtil::accept(node, *this, complement);
 }
 
-ExtractionResult DomainVisitor::visitASTFunction(ASTPtr & node, const bool & complement)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitASTFunction(ASTPtr & node, const bool & complement)
 {
     auto & ast_fun = node->as<ASTFunction &>();
     const String & fun_name = ast_fun.name;
@@ -291,49 +315,52 @@ ExtractionResult DomainVisitor::visitASTFunction(ASTPtr & node, const bool & com
     return visitNode(node, complement);
 }
 
-ExtractionResult DomainVisitor::visitASTLiteral(ASTPtr & node, const bool & complement)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitASTLiteral(ASTPtr & node, const bool & complement)
 {
     auto literal = node->as<const ASTLiteral>();
 
     if (literal->value == 1u || literal->value == 1)
-        return ExtractionResult(complement ? TupleDomain::none() : TupleDomain::all(), PredicateConst::TRUE_VALUE);
+        return ExtractionResult<T>(complement ? TupleDomain<T>::none() : TupleDomain<T>::all(), PredicateConst::TRUE_VALUE);
     else if (literal->value == 0u || literal->value == 0)
-        return ExtractionResult(complement ? TupleDomain::all() : TupleDomain::none(), PredicateConst::TRUE_VALUE);
+        return ExtractionResult<T>(complement ? TupleDomain<T>::all() : TupleDomain<T>::none(), PredicateConst::TRUE_VALUE);
     else if (literal->value.isNull())
-        return ExtractionResult(TupleDomain::none(), PredicateConst::TRUE_VALUE);
+        return ExtractionResult<T>(TupleDomain<T>::none(), PredicateConst::TRUE_VALUE);
 
     return visitNode(node, complement);
 }
 
-ExtractionResult DomainVisitor::visitNode(ASTPtr & node, const bool & complement)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitNode(ASTPtr & node, const bool & complement)
 {
     // If we don't know how to process this node, the default response is to say that the TupleDomain is "all"
-    return ExtractionResult(TupleDomain::all(), complementIfNecessary(node, complement));
+    return ExtractionResult<T>(TupleDomain<T>::all(), complementIfNecessary(node, complement));
 }
 
-ExtractionResult DomainVisitor::visitLogicalFunction(ASTPtr & node, const bool & complement, const String & fun_name)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitLogicalFunction(ASTPtr & node, const bool & complement, const String & fun_name)
 {
-    std::vector<ExtractionResult> results;
+    std::vector<ExtractionResult<T>> results;
     auto * ast_fun = node->as<ASTFunction>();
 
     for (auto & child : ast_fun->arguments->children)
         results.emplace_back(process(child, complement));
 
-    TupleDomains tuple_domains = extractTupleDomains(results);
+    auto tuple_domains = extractTupleDomains(results);
     ConstASTs residuals = extractRemainingExpressions(results);
 
     //when the function_name is "and"
     if ((complement && fun_name == "or") || (!complement && fun_name == "and"))
     {
-        TupleDomain temp = TupleDomain::intersect(tuple_domains);
-        return ExtractionResult(temp, PredicateUtils::combineConjuncts(residuals));
+        TupleDomain<T> temp = TupleDomain<T>::intersect(tuple_domains);
+        return ExtractionResult<T>(temp, PredicateUtils::combineConjuncts(residuals));
     }
     else
     {
         bool use_origin_for_expression = true;
 
         //case:or
-        TupleDomain column_unioned_tuple_domain = TupleDomain::columnWiseUnion(tuple_domains);
+        TupleDomain<T> column_unioned_tuple_domain = TupleDomain<T>::columnWiseUnion(tuple_domains);
 
         // In most cases, the column_unioned_tuple_domain is only a superset of the actual strict union
         // and so we can return the current node as the remainingExpression so that all bounds will be double-checked again at execution time.
@@ -347,7 +374,7 @@ ExtractionResult DomainVisitor::visitLogicalFunction(ASTPtr & node, const bool &
             && ExpressionDeterminism::isDeterministic(residuals[0], context))
         {
             // NONE are no-op for the purpose of OR
-            std::vector<TupleDomain>::iterator it = tuple_domains.begin();
+            typename std::vector<TupleDomain<T>>::iterator it = tuple_domains.begin();
             while (it != tuple_domains.end())
             {
                 if (it->isNone())
@@ -360,7 +387,7 @@ ExtractionResult DomainVisitor::visitLogicalFunction(ASTPtr & node, const bool &
             // 1) If all TupleDomains consist of the same exact single column (e.g. one TupleDomain => (a > 0), another TupleDomain => (a < 10))
             // 2) If one TupleDomain is a superset of the others (e.g. TupleDomain => (a > 0, b > 0 && b < 10) vs TupleDomain => (a > 5, b = 5))
             bool matching_single_symbol_domains = allTupleDomainsAreSameSingleColumn(tuple_domains);
-            bool one_term_is_super_set = TupleDomain::maximal(tuple_domains).has_value();
+            bool one_term_is_super_set = TupleDomain<T>::maximal(tuple_domains).has_value();
 
             if (one_term_is_super_set)
             {
@@ -405,16 +432,18 @@ ExtractionResult DomainVisitor::visitLogicalFunction(ASTPtr & node, const bool &
         if (use_origin_for_expression)
             is_ignored = true;
 
-        return ExtractionResult(column_unioned_tuple_domain, remaining_expression);
+        return ExtractionResult<T>(column_unioned_tuple_domain, remaining_expression);
     }
 }
 
-ExtractionResult DomainVisitor::visitNotFunction(ASTPtr & node, const bool & complement)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitNotFunction(ASTPtr & node, const bool & complement)
 {
     return process(node->as<ASTFunction>()->arguments->children[0], !complement);
 }
 
-ExtractionResult DomainVisitor::visitComparisonFunction(ASTPtr & node, const bool & complement)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitComparisonFunction(ASTPtr & node, const bool & complement)
 {
     std::optional<NormalizedSimpleComparison> optional_normalized = toNormalizedSimpleComparison(node);
 
@@ -423,23 +452,22 @@ ExtractionResult DomainVisitor::visitComparisonFunction(ASTPtr & node, const boo
 
     NormalizedSimpleComparison normalized = optional_normalized.value();
 
-    auto * identifier_if_exit = normalized.symbol_expression->as<ASTIdentifier>();
-    if (identifier_if_exit)
+    auto symbol = checkAndGetSymbol(normalized.symbol_expression);
+    if (symbol)
     {
-        String symbol = identifier_if_exit->name();
         const DataTypePtr & type = normalized.value_with_type.type;
         const Field & value = normalized.value_with_type.value;
-        auto extraction_result = createComparisonExtractionResult(node, normalized.operator_name, symbol, type, value, complement);
+        auto extraction_result = createComparisonExtractionResult(node, normalized.operator_name, *symbol, type, value, complement);
         if (extraction_result.has_value())
             return extraction_result.value();
-        return visitNode(node, complement);
     }
     //TODO: have not implement, Reference presto
     return visitNode(node, complement);
 }
 
 //Extract a normalized simple comparison between a QualifiedNameReference and a native value if possible.
-std::optional<NormalizedSimpleComparison> DomainVisitor::toNormalizedSimpleComparison(ASTPtr & comparison) const
+template <typename T>
+std::optional<NormalizedSimpleComparison> DomainVisitor<T>::toNormalizedSimpleComparison(ASTPtr & comparison) const
 {
     auto * ast_fun = comparison->as<ASTFunction>();
 
@@ -490,9 +518,10 @@ std::optional<NormalizedSimpleComparison> DomainVisitor::toNormalizedSimpleCompa
     return NormalizedSimpleComparison(symbol_ast, operator_name, value_with_type);
 }
 
-std::vector<TupleDomain> DomainVisitor::extractTupleDomains(const std::vector<ExtractionResult> & results) const
+template <typename T>
+std::vector<TupleDomain<T>> DomainVisitor<T>::extractTupleDomains(const std::vector<ExtractionResult<T>> & results) const
 {
-    std::vector<TupleDomain> res;
+    std::vector<TupleDomain<T>> res;
 
     for (const auto & temp : results)
         res.emplace_back(temp.tuple_domain);
@@ -500,7 +529,8 @@ std::vector<TupleDomain> DomainVisitor::extractTupleDomains(const std::vector<Ex
     return res;
 }
 
-ConstASTs DomainVisitor::extractRemainingExpressions(const std::vector<ExtractionResult> & results) const
+template <typename T>
+ConstASTs DomainVisitor<T>::extractRemainingExpressions(const std::vector<ExtractionResult<T>> & results) const
 {
     ConstASTs res;
 
@@ -510,7 +540,8 @@ ConstASTs DomainVisitor::extractRemainingExpressions(const std::vector<Extractio
     return res;
 }
 
-bool DomainVisitor::allTupleDomainsAreSameSingleColumn(const std::vector<TupleDomain> & tuple_domains) const
+template <typename T>
+bool DomainVisitor<T>::allTupleDomainsAreSameSingleColumn(const std::vector<TupleDomain<T>> & tuple_domains) const
 {
     if (tuple_domains.size() == 0)
         return false;
@@ -519,11 +550,11 @@ bool DomainVisitor::allTupleDomainsAreSameSingleColumn(const std::vector<TupleDo
     if (tuple_domains[0].getDomains().size() != 1)
         return false;
 
-    String str = tuple_domains[0].getDomains().begin()->first;
+    auto column = tuple_domains[0].getDomains().begin()->first;
 
     for (size_t i = 1; i < tuple_domains.size(); i++)
     {
-        if (tuple_domains[i].getDomainCount() == 1 && str.compare(tuple_domains[i].getDomains().begin()->first) == 0)
+        if (tuple_domains[i].getDomainCount() == 1 && tuple_domains[i].haveSpecificDomain(column))
             continue;
         else
             return false;
@@ -531,7 +562,9 @@ bool DomainVisitor::allTupleDomainsAreSameSingleColumn(const std::vector<TupleDo
     return true;
 }
 
-std::optional<Field> DomainVisitor::canImplicitCoerceValue(Field & value, DataTypePtr & from_type_origin, DataTypePtr & to_type_origin) const
+template <typename T>
+std::optional<Field>
+DomainVisitor<T>::canImplicitCoerceValue(Field & value, DataTypePtr & from_type_origin, DataTypePtr & to_type_origin) const
 {
     auto from_type = removeNullable(recursiveRemoveLowCardinality(from_type_origin));
     auto to_type = removeNullable(recursiveRemoveLowCardinality(to_type_origin));
@@ -581,7 +614,8 @@ std::optional<Field> DomainVisitor::canImplicitCoerceValue(Field & value, DataTy
     return std::nullopt;
 }
 
-std::optional<Field> DomainVisitor::getConvertFieldToType(Field & value, DataTypePtr & from_type, DataTypePtr & to_type) const
+template <typename T>
+std::optional<Field> DomainVisitor<T>::getConvertFieldToType(Field & value, DataTypePtr & from_type, DataTypePtr & to_type) const
 {
     Field to_value = Null{};
     try {
@@ -597,7 +631,8 @@ std::optional<Field> DomainVisitor::getConvertFieldToType(Field & value, DataTyp
 }
 
 //Returns true if all tupleDomains are not "all" , false otherwise
-bool DomainVisitor::allTupleDomainsAreNotAll(const std::vector<TupleDomain> & tuple_domains) const
+template <typename T>
+bool DomainVisitor<T>::allTupleDomainsAreNotAll(const std::vector<TupleDomain<T>> & tuple_domains) const
 {
     if (tuple_domains.size() == 0)
         return true;
@@ -611,13 +646,14 @@ bool DomainVisitor::allTupleDomainsAreNotAll(const std::vector<TupleDomain> & tu
     return true;
 }
 
-std::optional<ExtractionResult> DomainVisitor::createComparisonExtractionResult(
-    ASTPtr & node, const String & operator_name, String symbol, const DataTypePtr & type, const Field & value, const bool & complement)
+template <typename T>
+std::optional<ExtractionResult<T>> DomainVisitor<T>::createComparisonExtractionResult(
+    ASTPtr & node, const String & operator_name, const T & symbol, const DataTypePtr & type, const Field & value, const bool & complement)
 {
     if (value.isNull())
     {
         if (isValidOperatorForComparison(operator_name))
-            return ExtractionResult(TupleDomain::none(), PredicateConst::TRUE_VALUE);
+            return ExtractionResult<T>(TupleDomain<T>::none(), PredicateConst::TRUE_VALUE);
         else
             throw Exception("Unhandled operator" + operator_name, DB::ErrorCodes::LOGICAL_ERROR);
     }
@@ -629,21 +665,22 @@ std::optional<ExtractionResult> DomainVisitor::createComparisonExtractionResult(
         if (!temp.has_value())
             return std::nullopt;
 
-        return ExtractionResult(TupleDomain(DomainMap{{symbol, temp.value()}}), PredicateConst::TRUE_VALUE);
+        return ExtractionResult<T>(TupleDomain<T>{{symbol, temp.value()}}, PredicateConst::TRUE_VALUE);
     }
 
     if (isTypeComparable(type))
     {
         Domain domain = extractDiscreteDomain(operator_name, type, value, complement);
-        return ExtractionResult(TupleDomain(DomainMap{{symbol, domain}}), PredicateConst::TRUE_VALUE);
+        return ExtractionResult<T>(TupleDomain<T>{{symbol, domain}}, PredicateConst::TRUE_VALUE);
     }
 
     return visitNode(node, complement);
     //throw Exception("Type cannot be used in a comparison expression (should have been caught in analysis)", DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-std::optional<Domain>
-DomainVisitor::extractOrderableDomain(const String & operator_name, const DataTypePtr & type, const Field & value, const bool & complement)
+template <typename T>
+std::optional<Domain> DomainVisitor<T>::extractOrderableDomain(
+    const String & operator_name, const DataTypePtr & type, const Field & value, const bool & complement)
 {
     if (value.isNull())
         throw Exception("Value is not null!", DB::ErrorCodes::LOGICAL_ERROR);
@@ -740,8 +777,9 @@ DomainVisitor::extractOrderableDomain(const String & operator_name, const DataTy
     throw Exception("Unhandled operator" + operator_name, DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-Domain
-DomainVisitor::extractDiscreteDomain(const String & operator_name, const DataTypePtr & type, const Field & value, const bool & complement)
+template <typename T>
+Domain DomainVisitor<T>::extractDiscreteDomain(
+    const String & operator_name, const DataTypePtr & type, const Field & value, const bool & complement)
 {
     if (value.isNull())
         throw Exception("Value is not null!", DB::ErrorCodes::LOGICAL_ERROR);
@@ -755,7 +793,8 @@ DomainVisitor::extractDiscreteDomain(const String & operator_name, const DataTyp
     throw Exception("Unhandled operator" + operator_name, DB::ErrorCodes::LOGICAL_ERROR);
 }
 
-bool DomainVisitor::isValidOperatorForComparison(const String & operator_name)
+template <typename T>
+bool DomainVisitor<T>::isValidOperatorForComparison(const String & operator_name)
 {
     if (operator_name == "equals" || operator_name == "notEquals" || operator_name == "less" || operator_name == "lessOrEquals"
         || operator_name == "greater" || operator_name == "greaterOrEquals")
@@ -764,7 +803,8 @@ bool DomainVisitor::isValidOperatorForComparison(const String & operator_name)
     return false;
 }
 
-ExtractionResult DomainVisitor::visitInFunction(ASTPtr & node, const bool & complement)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitInFunction(ASTPtr & node, const bool & complement)
 {
     auto * in_fun = node->as<ASTFunction>();
     auto * fun_right = in_fun->arguments->children[1]->as<ASTFunction>();
@@ -786,7 +826,7 @@ ExtractionResult DomainVisitor::visitInFunction(ASTPtr & node, const bool & comp
         disjuncts.emplace_back(makeASTFunction("equals", in_fun->arguments->children[0], ast));
 
     ASTPtr ast_disjuncts = PredicateUtils::combineDisjuncts(disjuncts);
-    ExtractionResult extraction_result = process(ast_disjuncts, complement);
+    ExtractionResult<T> extraction_result = process(ast_disjuncts, complement);
 
     // preserve original IN predicate as remaining predicate
     if (extraction_result.tuple_domain.isAll())
@@ -794,21 +834,21 @@ ExtractionResult DomainVisitor::visitInFunction(ASTPtr & node, const bool & comp
         ASTPtr origin_predicate = node;
         if (complement)
             origin_predicate = makeASTFunction("not", origin_predicate);
-        return ExtractionResult(extraction_result.tuple_domain, origin_predicate);
+        return ExtractionResult<T>(extraction_result.tuple_domain, origin_predicate);
     }
     return extraction_result;
 }
 
-std::optional<ExtractionResult> DomainVisitor::processSimpleInPredicate(ASTPtr & node, const bool & complement)
+template <typename T>
+std::optional<ExtractionResult<T>> DomainVisitor<T>::processSimpleInPredicate(ASTPtr & node, const bool & complement)
 {
     auto * in_fun = node->as<ASTFunction>();
-    auto * fun_left = in_fun->arguments->children[0]->as<ASTIdentifier>();
     auto * fun_right = in_fun->arguments->children[1]->as<ASTFunction>();
+    auto symbol = checkAndGetSymbol(in_fun->arguments->children[0]);
 
-    if (!fun_left)
+    if (!symbol)
         return std::nullopt;
 
-    String symbol = fun_left->name();
     DataTypePtr sym_type = type_analyzer.getType(in_fun->arguments->children[0]);
 
     if (!isTypeOrderable(sym_type) && !isTypeComparable(sym_type))
@@ -848,7 +888,7 @@ std::optional<ExtractionResult> DomainVisitor::processSimpleInPredicate(ASTPtr &
             }
             // NOT IN is equivalent to NOT(s eq v1) AND NOT(s eq v2). When any right value is NULL, the comparison result is NULL, so AND's result can be at most
             // NULL (effectively false in predicate context)
-            return ExtractionResult(TupleDomain::none(), PredicateConst::TRUE_VALUE);
+            return ExtractionResult<T>(TupleDomain<T>::none(), PredicateConst::TRUE_VALUE);
         }
 
         // NaN can be ignored: it always compares to false, as if it was not among IN's values
@@ -868,7 +908,7 @@ std::optional<ExtractionResult> DomainVisitor::processSimpleInPredicate(ASTPtr &
     if (complement)
         value_set = complementValueSet(value_set);
 
-    TupleDomain tuple_domain = TupleDomain(DomainMap{{symbol, Domain(value_set, false)}});
+    TupleDomain<T> tuple_domain = TupleDomain<T>{{*symbol, Domain(value_set, false)}};
     ASTPtr remaining_expression;
 
     if (excluded_expressions.empty())
@@ -878,17 +918,20 @@ std::optional<ExtractionResult> DomainVisitor::processSimpleInPredicate(ASTPtr &
     else
         remaining_expression = makeASTFunction("notIn", in_fun->arguments->children[0], makeASTFunction("tuple", excluded_expressions));
 
-    return ExtractionResult(tuple_domain, remaining_expression);
+    return ExtractionResult<T>(tuple_domain, remaining_expression);
 }
 
-ExtractionResult DomainVisitor::visitLikeFunction(ASTPtr & node, const bool & complement)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitLikeFunction(ASTPtr & node, const bool & complement)
 {
     auto * ast_fun = node->as<ASTFunction>();
     auto left = ast_fun->arguments->children[0];
     auto right = ast_fun->arguments->children[1];
 
+    auto symbol = checkAndGetSymbol(left);
+
     // LIKE not on a symbol
-    if (!(left->as<ASTIdentifier>()) || !(right->as<ASTLiteral>()))
+    if (!symbol || !(right->as<ASTLiteral>()))
         return visitNode(node, complement);
 
     //TODO: support FixedString, why?
@@ -896,7 +939,6 @@ ExtractionResult DomainVisitor::visitLikeFunction(ASTPtr & node, const bool & co
     if (type->getTypeId() != TypeIndex::String)
         return visitNode(node, complement);
 
-    String symbol = left->as<ASTIdentifier>()->name();
     String pattern = right->as<ASTLiteral>()->value.safeGet<String>();
     size_t pattern_constant_prefix_bytes = patternConstantPrefixBytes(pattern);
 
@@ -906,7 +948,7 @@ ExtractionResult DomainVisitor::visitLikeFunction(ASTPtr & node, const bool & co
         String fixed_pattern = extractFixedStringFromLikePattern(pattern);
         ValueSet value_set = createSingleValueSet(type, convertFieldToType(Field(fixed_pattern.c_str(), fixed_pattern.size()), *type));
         Domain domain = Domain(complement ? complementValueSet(value_set) : value_set, false);
-        return ExtractionResult(TupleDomain(DomainMap{{symbol, domain}}), PredicateConst::TRUE_VALUE);
+        return ExtractionResult<T>(TupleDomain<T>{{*symbol, domain}}, PredicateConst::TRUE_VALUE);
     }
 
     if (complement || pattern_constant_prefix_bytes == 0)
@@ -916,64 +958,68 @@ ExtractionResult DomainVisitor::visitLikeFunction(ASTPtr & node, const bool & co
     auto domain = createRangeDomain(type, constant_prefix);
 
     if (domain.has_value())
-        return ExtractionResult(TupleDomain(DomainMap{{symbol, domain.value()}}), node);
+        return ExtractionResult<T>(TupleDomain<T>{{*symbol, domain.value()}}, node);
 
     return visitNode(node, complement);
 }
 
-ExtractionResult DomainVisitor::visitStartsWithFunction(ASTPtr & node, const bool & complement)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitStartsWithFunction(ASTPtr & node, const bool & complement)
 {
     auto * ast_fun = node->as<ASTFunction>();
     ASTPtr & target = ast_fun->arguments->children[0];
     ASTPtr & prefix = ast_fun->arguments->children[1];
     DataTypePtr type = type_analyzer.getType(target);
 
-    if (!target->as<ASTIdentifier>() || !prefix->as<ASTLiteral>())
+    auto symbol = checkAndGetSymbol(target);
+
+    if (!symbol || !prefix->as<ASTLiteral>())
         return visitNode(node, complement);
 
     //TODO: support FixedString, why?
     if (type->getTypeId() != TypeIndex::String || complement)
         return visitNode(node, complement);
 
-    String symbol = target->as<ASTIdentifier>()->name();
     String constant_prefix = prefix->as<ASTLiteral>()->value.get<String>();
     auto domain = createRangeDomain(type, constant_prefix);
 
     if (domain.has_value())
-        return ExtractionResult(TupleDomain(DomainMap{{symbol, domain.value()}}), node);
+        return ExtractionResult<T>(TupleDomain<T>{{*symbol, domain.value()}}, node);
 
     return visitNode(node, complement);
 }
 
-ExtractionResult DomainVisitor::visitIsNullFunction(ASTPtr & node, const bool & complement)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitIsNullFunction(ASTPtr & node, const bool & complement)
 {
     auto * ast_fun = node->as<ASTFunction>();
     auto left = ast_fun->arguments->children[0];
+    auto symbol = checkAndGetSymbol(left);
 
-    if (!(left->as<ASTIdentifier>()))
+    if (!symbol)
         return visitNode(node, complement);
 
-    String symbol = left->as<ASTIdentifier>()->name();
-    DataTypePtr column_type = checkedTypeLookup(symbol);
+    DataTypePtr column_type = checkedTypeLookup(*symbol);
     Domain domain = complement ? Domain::onlyNull(column_type).complement() : Domain::onlyNull(column_type);
-    return ExtractionResult(TupleDomain(DomainMap{{symbol, domain}}), PredicateConst::TRUE_VALUE);
+    return ExtractionResult<T>(TupleDomain<T>{{*symbol, domain}}, PredicateConst::TRUE_VALUE);
 }
 
-ExtractionResult DomainVisitor::visitIsNotNullFunction(ASTPtr & node, const bool & complement)
+template <typename T>
+ExtractionResult<T> DomainVisitor<T>::visitIsNotNullFunction(ASTPtr & node, const bool & complement)
 {
     auto * ast_fun = node->as<ASTFunction>();
     auto left = ast_fun->arguments->children[0];
-    if (!(left->as<ASTIdentifier>()))
+    auto symbol = checkAndGetSymbol(left);
+    if (!symbol)
         return visitNode(node, complement);
 
-    String symbol = left->as<ASTIdentifier>()->name();
-    DataTypePtr column_type = checkedTypeLookup(symbol);
+    DataTypePtr column_type = checkedTypeLookup(*symbol);
     Domain domain = complement ? Domain::notNull(column_type).complement() : Domain::notNull(column_type);
-    return ExtractionResult(TupleDomain(DomainMap{{symbol, domain}}), PredicateConst::TRUE_VALUE);
+    return ExtractionResult<T>(TupleDomain<T>{{*symbol, domain}}, PredicateConst::TRUE_VALUE);
 }
 
-
-std::optional<Domain> DomainVisitor::createRangeDomain(const DataTypePtr & type, const String & constant_prefix)
+template <typename T>
+std::optional<Domain> DomainVisitor<T>::createRangeDomain(const DataTypePtr & type, const String & constant_prefix)
 {
     int last_asc2_index = -1;
     size_t code_point_length = 0;
@@ -1059,4 +1105,8 @@ String extractFixedStringFromLikePattern(const String & like_pattern)
     return fixed_prefix;
 }
 
+template class DomainVisitor<String>;
+template class DomainVisitor<ASTPtr>;
+template class DomainTranslator<String>;
+template class DomainTranslator<ASTPtr>;
 }

@@ -25,6 +25,7 @@
 #include <Storages/StorageMemory.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageCnchHive.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
 
 namespace DB
 {
@@ -329,6 +330,11 @@ PlanSegmentInputs PlanSegmentVisitor::findInputs(QueryPlan::Node * node)
         auto input = std::make_shared<PlanSegmentInput>(values->getOutputStream().header, PlanSegmentType::SOURCE);
         return {input};
     }
+    else if (auto * read_row_count_step = dynamic_cast<ReadStorageRowCountStep *>(node->step.get()))
+    {
+        auto input = std::make_shared<PlanSegmentInput>(read_row_count_step->getOutputStream().header, PlanSegmentType::SOURCE);
+        return {input};
+    }
     else
     {
         PlanSegmentInputs inputs;
@@ -423,12 +429,18 @@ std::optional<Partitioning::Handle> SourceNodeFinder::visitReadNothingNode(Query
     return Partitioning::Handle::SINGLE;
 }
 
+std::optional<Partitioning::Handle> SourceNodeFinder::visitReadStorageRowCountNode(QueryPlan::Node *, const Context &)
+{
+    return Partitioning::Handle::COORDINATOR;
+}
+
 std::optional<Partitioning::Handle> SourceNodeFinder::visitTableScanNode(QueryPlan::Node * node, const Context & context)
 {
     auto * source_step = dynamic_cast<TableScanStep *>(node->step.get());
     // check is bucket table instead of cnch table?
     if (dynamic_pointer_cast<StorageCnchMergeTree>(source_step->getStorage())
-        || dynamic_pointer_cast<StorageCnchHive>(source_step->getStorage()))
+        || dynamic_pointer_cast<StorageCnchHive>(source_step->getStorage())
+        || dynamic_pointer_cast<IStorageCnchFile>(source_step->getStorage()))
         return Partitioning::Handle::FIXED_HASH;
 
     // hack for unittest

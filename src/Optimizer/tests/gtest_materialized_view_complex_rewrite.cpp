@@ -33,14 +33,21 @@ public:
         // debug mode may time out.
         settings.emplace("cascades_optimizer_timeout", "300000");
 #endif
+        settings.emplace("enable_materialized_view_rewrite", "1");
         settings.emplace("enable_materialized_view_join_rewriting", "1");
         settings.emplace("enable_materialized_view_rewrite_verbose_log", "1");
         settings.emplace("enable_single_distinct_to_group_by", "0");
+        settings.emplace("enable_materialized_view_rewrite_match_range_filter", "1");
         tester = std::make_shared<BaseMaterializedViewTest>(settings);
     }
 
-    void SetUp() override {
-        GTEST_SKIP() << "Skipping all tests for this fixture";
+    static void TearDownTestSuite()
+    {
+        tester.reset();
+    }
+
+    void SetUp() override
+    {
     }
 
     static MaterializedViewRewriteTester sql(const String & materialize, const String & query)
@@ -83,10 +90,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateProject)
                                     "            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#c:=c, expr#deptno:=deptno\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [c, deptno]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [c, deptno]")
         .ok();
 }
 
@@ -110,10 +115,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
                                     "            │     Group by: {expr#deptno}\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#deptno:=deptno\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [deptno]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [deptno]")
         .ok();
 }
 
@@ -139,10 +142,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
                                     "            │     Group by: {expr#deptno}\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#deptno:=deptno\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [deptno]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [deptno]")
         .ok();
 }
 
@@ -156,14 +157,24 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
 
 TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggregateFuncs6)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     sql("select empid, deptno\n"
-            "from emps where deptno > 5 group by empid, deptno",
+        "from emps where deptno > 5 group by empid, deptno",
         "select deptno from emps where deptno > 10 group by deptno")
-        .checkingThatResultContains(""
-                                    "EnumerableAggregate(group=[{1}])\n"
-                                    "  EnumerableCalc(expr#0..1=[{inputs}], expr#2=[10], expr#3=[<($t2, $t1)], proj#0..1=[{exprs}], $condition=[$t3])\n"
-                                    "    EnumerableTableScan(table=[[hr, MV0]])")
+        .checkingThatResultContains("Projection\n"
+                                    "│     Expressions: deptno:=`expr#deptno`\n"
+                                    "└─ Gather Exchange\n"
+                                    "   └─ MergingAggregated\n"
+                                    "      └─ Repartition Exchange\n"
+                                    "         │     Partition by: {expr#deptno}\n"
+                                    "         └─ Aggregating\n"
+                                    "            │     Group by: {expr#deptno}\n"
+                                    "            └─ Projection\n"
+                                    "               │     Expressions: expr#deptno:=deptno\n"
+                                    "               └─ Filter\n"
+                                    "                  │     Condition: deptno > 10\n"
+                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                           Condition : deptno > 10.\n"
+                                    "                           Outputs: [deptno]")
         .ok();
 }
 
@@ -184,7 +195,6 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
 
 TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggregateFuncs9)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     sql("select empid, deptno from emps\n"
             "where salary > 1000 group by name, empid, deptno",
         "select empid from emps\n"
@@ -207,10 +217,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
                                     "            │     Group by: {expr#deptno}\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#deptno:=deptno\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [deptno]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [deptno]")
         .ok();
 }
 
@@ -231,58 +239,82 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
                                     "            │     Aggregates: expr#sum(c):=AggNull(sum)(expr#c), expr#sum(s):=AggNull(sum)(expr#s)\n"
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#c:=c, expr#deptno:=deptno, expr#s:=s\n"
-                                    "               └─ Filter\n"
-                                    "                  │     Condition: 1\n"
-                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Outputs: [c, deptno, s]")
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [c, deptno, s]")
         .ok();
 }
 
 TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregateFuncs3)
 {
     sql("select empid, deptno, count(*) as c, sum(empid) as s\n"
-            "from emps group by empid, deptno",
+        "from emps group by empid, deptno",
         "select deptno, empid, sum(empid) as s, count(*) as c\n"
-            "from emps group by empid, deptno")
+        "from emps group by empid, deptno")
         .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: [c, deptno, empid, s]\n"
+                                    "│     Expressions: c:=`expr#sum(c)`, deptno:=`expr#deptno`, empid:=`expr#empid`, s:=`expr#sum(s)`\n"
                                     "└─ Gather Exchange\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: 1\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Outputs: [c, deptno, empid, s]")
+                                    "   └─ MergingAggregated\n"
+                                    "      └─ Repartition Exchange\n"
+                                    "         │     Partition by: {expr#deptno, expr#empid}\n"
+                                    "         └─ Aggregating\n"
+                                    "            │     Group by: {expr#deptno, expr#empid}\n"
+                                    "            │     Aggregates: expr#sum(s):=AggNull(sum)(expr#s), expr#sum(c):=AggNull(sum)(expr#c)\n"
+                                    "            └─ Projection\n"
+                                    "               │     Expressions: expr#c:=c, expr#deptno:=deptno, expr#empid:=empid, expr#s:=s\n"
+                                    "               └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                        Outputs: [c, deptno, empid, s]")
         .ok();
 }
 
 TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregateFuncs4)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     sql("select empid, deptno, count(*) as c, sum(empid) as s\n"
-            "from emps where deptno >= 10 group by empid, deptno",
+        "from emps where deptno >= 10 group by empid, deptno",
         "select deptno, sum(empid) as s\n"
-            "from emps where deptno > 10 group by deptno")
-        .checkingThatResultContains(""
-                                    "EnumerableAggregate(group=[{1}], S=[$SUM0($3)])\n"
-                                    "  EnumerableCalc(expr#0..3=[{inputs}], expr#4=[10], expr#5=[<($t4, $t1)], "
-                                    "proj#0..3=[{exprs}], $condition=[$t5])\n"
-                                    "    EnumerableTableScan(table=[[hr, MV0]])")
+        "from emps where deptno > 10 group by deptno")
+        .checkingThatResultContains("Projection\n"
+                                    "│     Expressions: deptno:=`expr#deptno`, s:=`expr#sum(s)`\n"
+                                    "└─ Gather Exchange\n"
+                                    "   └─ MergingAggregated\n"
+                                    "      └─ Repartition Exchange\n"
+                                    "         │     Partition by: {expr#deptno}\n"
+                                    "         └─ Aggregating\n"
+                                    "            │     Group by: {expr#deptno}\n"
+                                    "            │     Aggregates: expr#sum(s):=AggNull(sum)(expr#s)\n"
+                                    "            └─ Projection\n"
+                                    "               │     Expressions: expr#deptno:=deptno, expr#s:=s\n"
+                                    "               └─ Filter\n"
+                                    "                  │     Condition: deptno > 10\n"
+                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                           Condition : deptno > 10.\n"
+                                    "                           Outputs: [deptno, s]")
         .ok();
 }
 
 TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregateFuncs5)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     sql("select empid, deptno, count(*) + 1 as c, sum(empid) as s\n"
-            "from emps where deptno >= 10 group by empid, deptno",
+        "from emps where deptno >= 10 group by empid, deptno",
         "select deptno, sum(empid) + 1 as s\n"
-            "from emps where deptno > 10 group by deptno")
-        .checkingThatResultContains(""
-                                    "EnumerableCalc(expr#0..1=[{inputs}], expr#2=[1], expr#3=[+($t1, $t2)],"
-                                    " deptno=[$t0], S=[$t3])\n"
-                                    "  EnumerableAggregate(group=[{1}], agg#0=[$SUM0($3)])\n"
-                                    "    EnumerableCalc(expr#0..3=[{inputs}], expr#4=[10], expr#5=[<($t4, $t1)], "
-                                    "proj#0..3=[{exprs}], $condition=[$t5])\n"
-                                    "      EnumerableTableScan(table=[[hr, MV0]])")
+        "from emps where deptno > 10 group by deptno")
+        .checkingThatResultContains(
+
+            "Projection\n"
+            "│     Expressions: deptno:=`expr#deptno`, s:=`expr#sum(s)` + 1\n"
+            "└─ Gather Exchange\n"
+            "   └─ MergingAggregated\n"
+            "      └─ Repartition Exchange\n"
+            "         │     Partition by: {expr#deptno}\n"
+            "         └─ Aggregating\n"
+            "            │     Group by: {expr#deptno}\n"
+            "            │     Aggregates: expr#sum(s):=AggNull(sum)(expr#s)\n"
+            "            └─ Projection\n"
+            "               │     Expressions: expr#deptno:=deptno, expr#s:=s\n"
+            "               └─ Filter\n"
+            "                  │     Condition: deptno > 10\n"
+            "                  └─ TableScan test_mview.MV0_MV_DATA\n"
+            "                           Condition : deptno > 10.\n"
+            "                           Outputs: [deptno, s]")
         .ok();
 }
 
@@ -297,18 +329,26 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
 
 TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregateFuncs7)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     sql("select empid, deptno, count(*) + 1 as c, sum(empid) as s\n"
-            "from emps where deptno >= 10 group by empid, deptno",
+        "from emps where deptno >= 10 group by empid, deptno",
         "select deptno + 1, sum(empid) + 1 as s\n"
-            "from emps where deptno > 10 group by deptno")
-        .checkingThatResultContains(""
-                                    "EnumerableCalc(expr#0..1=[{inputs}], expr#2=[1], expr#3=[+($t0, $t2)], "
-                                    "expr#4=[+($t1, $t2)], EXPR$0=[$t3], S=[$t4])\n"
-                                    "  EnumerableAggregate(group=[{1}], agg#0=[$SUM0($3)])\n"
-                                    "    EnumerableCalc(expr#0..3=[{inputs}], expr#4=[10], expr#5=[<($t4, $t1)], "
-                                    "proj#0..3=[{exprs}], $condition=[$t5])\n"
-                                    "      EnumerableTableScan(table=[[hr, MV0]])")
+        "from emps where deptno > 10 group by deptno")
+        .checkingThatResultContains("Projection\n"
+                                    "│     Expressions: plus(deptno, 1):=`expr#deptno` + 1, s:=`expr#sum(s)` + 1\n"
+                                    "└─ Gather Exchange\n"
+                                    "   └─ MergingAggregated\n"
+                                    "      └─ Repartition Exchange\n"
+                                    "         │     Partition by: {expr#deptno}\n"
+                                    "         └─ Aggregating\n"
+                                    "            │     Group by: {expr#deptno}\n"
+                                    "            │     Aggregates: expr#sum(s):=AggNull(sum)(expr#s)\n"
+                                    "            └─ Projection\n"
+                                    "               │     Expressions: expr#deptno:=deptno, expr#s:=s\n"
+                                    "               └─ Filter\n"
+                                    "                  │     Condition: deptno > 10\n"
+                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                           Condition : deptno > 10.\n"
+                                    "                           Outputs: [deptno, s]")
         .ok();
 }
 
@@ -939,7 +979,6 @@ TEST_F(MaterializedViewRewriteComplexTest, testJoinAggregateMaterializationAggre
 
 TEST_F(MaterializedViewRewriteComplexTest, testJoinMaterialization1)
 {
-    GTEST_SKIP() << "predicate tuple domain rewrite is not implemented.";
     String q = "select *\n"
         "from (select * from emps where empid < 300)\n"
         "join depts using (deptno)";
@@ -1245,10 +1284,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testQueryProjectWithBetween)
         .checkingThatResultContains("Projection\n"
                                     "│     Expressions: and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3)):=(time_id >= 1) AND (time_id <= 3)\n"
                                     "└─ Gather Exchange\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: 1\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Outputs: [time_id]")
+                                    "   └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "            Outputs: [time_id]")
         .ok();
 }
 
@@ -1281,10 +1318,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testViewProjectWithBetween)
         .checkingThatResultContains("Projection\n"
                                     "│     Expressions: [time_id]\n"
                                     "└─ Gather Exchange\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: 1\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Outputs: [time_id]")
+                                    "   └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "            Outputs: [time_id]")
         .ok();
 }
 
@@ -1299,10 +1334,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testQueryAndViewProjectWithBetween)
         .checkingThatResultContains("Projection\n"
                                     "│     Expressions: [and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3))]\n"
                                     "└─ Gather Exchange\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: 1\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Outputs: and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3)):=and(greaterOrEquals(time_id, 1), lessOrEquals(time_id, 3))")
+                                    "   └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "            Outputs: and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3)):=and(greaterOrEquals(time_id, 1), lessOrEquals(time_id, 3))")
         .ok();
 }
 
@@ -1320,10 +1353,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testViewProjectWithMultifieldExpressi
         .checkingThatResultContains("Projection\n"
                                     "│     Expressions: [time_id]\n"
                                     "└─ Gather Exchange\n"
-                                    "   └─ Filter\n"
-                                    "      │     Condition: 1\n"
-                                    "      └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "               Outputs: [time_id]")
+                                    "   └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "            Outputs: [time_id]")
         .ok();
 }
 
@@ -1368,13 +1399,13 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
     // The column empid is already unique, thus DISTINCT is not
     // in the COUNT of the resulting rewriting
     sql("select deptno, empid, salary\n"
-            "from emps\n"
-            "group by deptno, empid, salary",
+        "from emps\n"
+        "group by deptno, empid, salary",
         "select deptno, count(distinct empid) as c from (\n"
-            "select deptno, empid\n"
-            "from emps\n"
-            "group by deptno, empid)\n"
-            "group by deptno")
+        "select deptno, empid\n"
+        "from emps\n"
+        "group by deptno, empid)\n"
+        "group by deptno")
         .checkingThatResultContains("Projection\n"
                                     "│     Expressions: [deptno], c:=`expr#uniqExact(empid)`\n"
                                     "└─ Gather Exchange\n"
@@ -1393,10 +1424,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "                        │     Group by: {expr#deptno, expr#empid}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#empid:=empid\n"
-                                    "                           └─ Filter\n"
-                                    "                              │     Condition: 1\n"
-                                    "                              └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                       Outputs: [deptno, empid]")
+                                    "                           └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                                    Outputs: [deptno, empid]")
         .ok();
 }
 
@@ -1405,13 +1434,13 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
     // The column empid is already unique, thus DISTINCT is not
     // in the COUNT of the resulting rewriting
     sql("select deptno, salary, empid\n"
-            "from emps\n"
-            "group by deptno, salary, empid",
+        "from emps\n"
+        "group by deptno, salary, empid",
         "select deptno, count(distinct empid) as c from (\n"
-            "select deptno, empid\n"
-            "from emps\n"
-            "group by deptno, empid)\n"
-            "group by deptno")
+        "select deptno, empid\n"
+        "from emps\n"
+        "group by deptno, empid)\n"
+        "group by deptno")
         .checkingThatResultContains("Projection\n"
                                     "│     Expressions: [deptno], c:=`expr#uniqExact(empid)`\n"
                                     "└─ Gather Exchange\n"
@@ -1430,10 +1459,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "                        │     Group by: {expr#deptno, expr#empid}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#empid:=empid\n"
-                                    "                           └─ Filter\n"
-                                    "                              │     Condition: 1\n"
-                                    "                              └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                       Outputs: [deptno, empid]")
+                                    "                           └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                                    Outputs: [deptno, empid]")
         .ok();
 }
 
@@ -1442,13 +1469,13 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
     // The column salary is not unique, thus we end up with
     // a different rewriting
     sql("select deptno, empid, salary\n"
-            "from emps\n"
-            "group by deptno, empid, salary",
+        "from emps\n"
+        "group by deptno, empid, salary",
         "select deptno, count(distinct salary) from (\n"
-            "select deptno, salary\n"
-            "from emps\n"
-            "group by deptno, salary)\n"
-            "group by deptno")
+        "select deptno, salary\n"
+        "from emps\n"
+        "group by deptno, salary)\n"
+        "group by deptno")
         .checkingThatResultContains("Projection\n"
                                     "│     Expressions: [deptno], uniqExact(salary):=`expr#uniqExact(salary)`\n"
                                     "└─ Gather Exchange\n"
@@ -1467,10 +1494,8 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "                        │     Group by: {expr#deptno, expr#salary}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#salary:=salary\n"
-                                    "                           └─ Filter\n"
-                                    "                              │     Condition: 1\n"
-                                    "                              └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                       Outputs: [deptno, salary]")
+                                    "                           └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                                    Outputs: [deptno, salary]")
         .ok();
 }
 
@@ -1504,9 +1529,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "                        │     Group by: {expr#deptno, expr#salary}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#salary:=salary\n"
-                                    "                           └─ Filter\n"
-                                    "                              │     Condition: 1\n"
-                                    "                              └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                       Outputs: [deptno, salary]")
+                                    "                           └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                                    Outputs: [deptno, salary]")
         .ok();
 }

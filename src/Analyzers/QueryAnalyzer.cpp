@@ -53,6 +53,7 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <unordered_map>
 #include <sstream>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
 
 using namespace std::string_literals;
 
@@ -432,7 +433,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, c
         if (storage_id.getDatabaseName() != "system" &&
             !(dynamic_cast<const MergeTreeMetaBase *>(storage.get())
               || dynamic_cast<const StorageMemory *>(storage.get())
-              || dynamic_cast<const StorageCnchHive *>(storage.get())))
+              || dynamic_cast<const StorageCnchHive *>(storage.get())
+              || dynamic_cast<const IStorageCnchFile *>(storage.get())))
             throw Exception("Only cnch tables & system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
 
         analysis.storage_results[&db_and_table] = StorageAnalysis { storage_id.getDatabaseName(), storage_id.getTableName(), storage};
@@ -1695,7 +1697,7 @@ void QueryAnalyzerVisitor::verifyAggregate(ASTSelectQuery & select_query, ScopeP
         return;
     }
 
-    ScopeAwaredASTSet grouping_expressions = createScopeAwaredASTSet(analysis);
+    ScopeAwaredASTSet grouping_expressions = createScopeAwaredASTSet(analysis, source_scope);
     std::unordered_set<size_t> grouping_field_indices;
     auto & group_by_analysis = analysis.getGroupByAnalysis(select_query);
 
@@ -1804,7 +1806,7 @@ UInt64 QueryAnalyzerVisitor::analyzeUIntConstExpression(const ASTPtr & expressio
 
 void QueryAnalyzerVisitor::countLeadingHint(const IAST & ast)
 {
-    for (auto hint : ast.hints)
+    for (auto & hint : ast.hints)
     {
         if (Poco::toLower(hint.getName()) == "leading")
             ++analysis.hint_analysis.leading_hint_count;

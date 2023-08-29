@@ -21,6 +21,8 @@
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
 #include <Common/Coding.h>
 #include <Common/ThreadPool.h>
+#include "IO/ReadBufferFromFileBase.h"
+#include "IO/ReadSettings.h"
 
 namespace DB::ErrorCodes
 {
@@ -43,8 +45,12 @@ std::shared_ptr<LocalDeleteBitmap> LocalDeleteBitmap::createBaseOrDelta(
     const DeleteBitmapPtr & delta_bitmap,
     UInt64 txn_id)
 {
-    if (!base_bitmap || !delta_bitmap)
+    if (!delta_bitmap)
         throw Exception("base_bitmap and delta_bitmap cannot be null", ErrorCodes::LOGICAL_ERROR);
+
+    /// In repair mode, base delete bitmap may not exists due to some bugs, just return delta bitmap.
+    if (!base_bitmap)
+        return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Base, txn_id, delta_bitmap);
 
     if (delta_bitmap->cardinality() <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
     {
@@ -110,14 +116,12 @@ DeleteBitmapMetaPtr LocalDeleteBitmap::dump(const MergeTreeMetaBase & storage) c
 
                 String file_rel_path = fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*model);
                 auto out = disk->writeFile(file_rel_path);
-                auto * data_out = dynamic_cast<WriteBufferFromHDFS *>(out.get());
-                if (!data_out)
-                    throw Exception(ErrorCodes::LOGICAL_ERROR, "Writing part to hdfs but write buffer is not hdfs");
 
-                data_out->write(buf.data(), size);
+                out->write(buf.data(), size);
                 /// It's necessary to do next() and sync() here, otherwise it will omit the error in WriteBufferFromHDFS::WriteBufferFromHDFSImpl::~WriteBufferFromHDFSImpl() which case file incomplete.
                 out->next();
                 out->sync();
+                out->finalize();
             }
             model->set_file_size(size);
             LOG_TRACE(storage.getLogger(), "Dumped delete bitmap {}", dataModelName(model));
@@ -252,19 +256,12 @@ void deserializeDeleteBitmapInfo(const MergeTreeMetaBase & storage, const DataMo
         Roaring bitmap;
         {
             PODArray<char> buf(meta->file_size());
-            String path = fs::path(storage.getFullPathOnDisk(IStorage::StorageLocation::MAIN, storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk())) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*meta);
-            ReadBufferFromByteHDFS in(
-                path,
-                /*pread=*/false,
-                storage.getContext()->getHdfsConnectionParams(),
-                /*buf_size=*/meta->file_size(),
-                /*existing_memory=*/buf.data(),
-                /*alignment=*/0,
-                /*read_all_once=*/true);
-            auto is_eof = in.eof(); /// will trigger reading into buf
-            if (is_eof)
-                throw Exception(
-                    "Unexpected EOF when reading " + path + ",  size=" + toString(meta->file_size()), ErrorCodes::LOGICAL_ERROR);
+            DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+            String rel_path = std::filesystem::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*meta);
+            std::unique_ptr<ReadBufferFromFileBase> in = disk->readFile(rel_path, ReadSettings {
+                .buffer_size = meta->file_size(),
+            });
+            in->readStrict(buf.data(), meta->file_size());
 
             bitmap = Roaring::read(buf.data());
             assert(bitmap.cardinality() == cardinality);

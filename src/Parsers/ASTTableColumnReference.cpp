@@ -21,15 +21,15 @@
 namespace DB
 {
 
-static inline String formatStorageName(const IStorage * storage, const String & column_name, char delim = '.')
+static inline String formatStorageName(const IStorage * storage, size_t unique_id, const String & column_name, char delim = '.')
 {
-    return storage->getStorageID().getFullTableName() + delim + std::to_string(reinterpret_cast<size_t>(storage))
+    return storage->getStorageID().getFullTableName() + "#" + std::to_string(unique_id)
         + delim + column_name;
 }
 
 String ASTTableColumnReference::getID(char delim) const
 {
-    return std::string("TableColumnRef") + delim + formatStorageName(storage, column_name, delim);
+    return std::string("TableColumnRef") + delim + formatStorageName(storage, unique_id, column_name, delim);
 }
 
 void ASTTableColumnReference::appendColumnName(WriteBuffer & buffer) const
@@ -37,10 +37,8 @@ void ASTTableColumnReference::appendColumnName(WriteBuffer & buffer) const
     writeString(getID('.'), buffer);
 }
 
-ASTPtr ASTTableColumnReference::clone() const
-{
-    auto res = std::make_shared<ASTTableColumnReference>(storage, column_name);
-    res->setStep(this->getStep());
-    return res;
+void ASTTableColumnReference::formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const {
+    settings.ostr << getID('.');
 }
+
 }

@@ -19,6 +19,7 @@
 #include <brpc/stream.h>
 #include <brpc/server.h>
 #include <Interpreters/Context.h>
+#include <Common/Brpc/BrpcServiceDefines.h>
 
 namespace DB
 {
@@ -45,4 +46,7 @@ private:
     ContextMutablePtr context;
     Poco::Logger * log;
 };
+
+REGISTER_SERVICE_IMPL(RuntimeFilterService);
+
 }

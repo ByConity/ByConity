@@ -24,3 +24,8 @@ after update key 10~19
 100000
 100000
 0
+after alter table drop column c2
+100000
+100000
+100000
+0

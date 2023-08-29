@@ -1,3 +1,4 @@
+set dialect_type='ANSI';
 set enable_optimizer=1;
 
 CREATE DATABASE IF NOT EXISTS test;

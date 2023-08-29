@@ -121,18 +121,18 @@
 #include <Storages/System/StorageSystemCnchPartsColumns.h>
 #include <Storages/System/StorageSystemCnchPartsInfo.h>
 #include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
+#include <Storages/System/StorageSystemCnchTableHost.h>
 #include <Storages/System/StorageSystemCnchTableInfo.h>
 #include <Storages/System/StorageSystemCnchTables.h>
 #include <Storages/System/StorageSystemCnchTablesHistory.h>
+#include <Storages/System/StorageSystemCnchTrashItems.h>
 #include <Storages/System/StorageSystemDMBGJobs.h>
 #include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemLockMap.h>
 #include <Storages/System/StorageSystemPersistentBGJobStatus.h>
-
-#include <Storages/System/StorageSystemWorkers.h>
-#include <Storages/System/StorageSystemWorkerGroups.h>
 #include <Storages/System/StorageSystemVirtualWarehouses.h>
-#include <Storages/System/StorageSystemCnchTableHost.h>
+#include <Storages/System/StorageSystemWorkerGroups.h>
+#include <Storages/System/StorageSystemWorkers.h>
 
 namespace DB
 {
@@ -251,6 +251,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchTableHost>(system_database, "cnch_table_host");
     attach<StorageSystemCnchDedupWorkers>(system_database, "cnch_dedup_workers");
     attach<StorageSystemCnchAsyncQueries>(system_database, "cnch_async_queries");
+    attach<StorageSystemCnchTrashItems>(system_database, "cnch_trash_items");
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

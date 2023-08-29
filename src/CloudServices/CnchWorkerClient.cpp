@@ -210,19 +210,43 @@ brpc::CallId CnchWorkerClient::sendCnchHiveDataParts(
     return call_id;
 }
 
+brpc::CallId CnchWorkerClient::sendCnchFileDataParts(
+    const ContextPtr & context,
+    const StoragePtr & storage,
+    const String & local_table_name,
+    const DB::FileDataPartsCNCHVector & parts,
+    const ExceptionHandlerPtr & handler)
+{
+    Protos::SendCnchFileDataPartsReq request;
+    request.set_txn_id(context->getCurrentTransactionID());
+    request.set_database_name(storage->getDatabaseName());
+    request.set_table_name(local_table_name);
+    fillCnchFilePartsModel(parts, *request.mutable_parts());
+
+    auto * cntl = new brpc::Controller;
+    const auto call_id = cntl->call_id();
+    auto * response = new Protos::SendCnchFileDataPartsResp;
+    stub->sendCnchFileDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
+    return call_id;
+}
+
+
 brpc::CallId CnchWorkerClient::preloadDataParts(
     const ContextPtr & context,
     const TxnTimestamp & txn_id,
     const IStorage & storage,
     const String & create_local_table_query,
     const ServerDataPartsVector & parts,
-    bool sync,
-    const ExceptionHandlerPtr & handler)
+    const ExceptionHandlerPtr & handler,
+    bool enable_parts_sync_preload,
+    UInt64 parts_preload_level
+   )
 {
     Protos::PreloadDataPartsReq request;
     request.set_txn_id(txn_id);
     request.set_create_table_query(create_local_table_query);
-    request.set_sync(sync);
+    request.set_sync(enable_parts_sync_preload);
+    request.set_preload_level(parts_preload_level);
     fillPartsModelForSend(storage, parts, *request.mutable_parts());
 
     auto * cntl = new brpc::Controller();
@@ -328,6 +352,11 @@ brpc::CallId CnchWorkerClient::sendOffloadingInfo( // NOLINT
         if (!resource.hive_parts.empty())
         {
             fillCnchHivePartsModel(resource.hive_parts, *table_data_parts.mutable_hive_parts());
+        }
+
+        if (!resource.file_parts.empty())
+        {
+            fillCnchFilePartsModel(resource.file_parts, *table_data_parts.mutable_file_parts());
         }
 
         /// bucket numbers

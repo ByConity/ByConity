@@ -160,7 +160,7 @@ struct Scope
     }
 private:
     ScopeType type;
-    ScopePtr parent;
+    ScopePtr parent = nullptr;
     bool query_boundary;
     FieldDescriptions field_descriptions;
 public:
@@ -199,7 +199,10 @@ public:
         return field_descriptions.size();
     }
 
-    ScopePtr getLocalParent() const;
+    ScopePtr getLocalParent() const; // parent scope of current query, null if `this` is a root scope
+    ScopePtr getQueryBoundaryScope() const; // root scope of current query, nonnull
+    ScopePtr getOuterQueryScope() const; // first scope of outer query, null if outer query not exists
+    bool hasOuterQueryScope(ScopePtr other) const;
     bool isLocalScope(ScopePtr other) const;
     size_t getHierarchyOffset() const;
     size_t getHierarchySize() const;

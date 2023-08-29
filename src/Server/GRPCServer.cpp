@@ -777,7 +777,7 @@ namespace
         query_text = std::move(*(query_info.mutable_query()));
         const char * begin = query_text.data();
         const char * end = begin + query_text.size();
-        ParserQuery parser(end, ParserSettings::valueOf(settings.dialect_type));
+        ParserQuery parser(end, ParserSettings::valueOf(settings));
         ast = parseQuery(parser, begin, end, "", settings.max_query_size, settings.max_parser_depth);
 
         /// Choose input format.

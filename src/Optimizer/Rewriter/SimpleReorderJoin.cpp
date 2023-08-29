@@ -107,17 +107,21 @@ PlanNodePtr SimpleReorderJoinVisitor::getJoinOrder(JoinGraph & graph)
             Names right_keys = {edge.getTargetSymbol()};
             if (left_id < right_id)
             {
-                size_t join_card = JoinEstimator::computeCardinality(
-                                       *left_stats.value(),
-                                       *right_stats.value(),
-                                       left_keys,
-                                       right_keys,
-                                       ASTTableJoin::Kind::Inner,
-                                       *context,
-                                       // todo is base table
-                                       left_base_table,
-                                       right_base_table)
-                                       ->getRowCount();
+                auto join_stats = JoinEstimator::computeCardinality(
+                    *left_stats.value(),
+                    *right_stats.value(),
+                    left_keys,
+                    right_keys,
+                    ASTTableJoin::Kind::Inner,
+                    *context,
+                    // todo is base table
+                    left_base_table,
+                    right_base_table);
+
+                if (!join_stats)
+                    return {};
+
+                size_t join_card = join_stats->getRowCount();
 
                 selectivities.push(EdgeSelectivity{
                     left_id,
@@ -273,16 +277,19 @@ PlanNodePtr SimpleReorderJoinVisitor::getJoinOrder(JoinGraph & graph)
                         new_left_keys.emplace_back(edge.getSourceSymbol());
                         new_right_keys.emplace_back(edge.getTargetSymbol());
                     }
-                    size_t join_card = JoinEstimator::computeCardinality(
-                                           *left_stats.value(),
-                                           *right_stats.value(),
-                                           new_left_keys,
-                                           new_right_keys,
-                                           ASTTableJoin::Kind::Inner,
-                                           *context,
-                                           left_base_table,
-                                           right_base_table)
-                                           ->getRowCount();
+                    auto join_stats = JoinEstimator::computeCardinality(
+                        *left_stats.value(),
+                        *right_stats.value(),
+                        new_left_keys,
+                        new_right_keys,
+                        ASTTableJoin::Kind::Inner,
+                        *context,
+                        left_base_table,
+                        right_base_table);
+                    if (!join_stats)
+                        return {};
+
+                    size_t join_card = join_stats->getRowCount();
 
                     selectivities.push(EdgeSelectivity{
                         left_id,

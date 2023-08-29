@@ -795,7 +795,7 @@ ZooKeeperPtr ZooKeeper::startNewSession(const DB::ServiceEndpoints & endpoints) 
     {
         if (!endpoint.tags.count("PORT2"))
             throw DB::Exception(DB::ErrorCodes::BAD_ARGUMENTS, "Can't find `PORT2`(Keeper TCP port) from service_discovery");
-        new_hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + endpoint.host + ":" + endpoint.tags.at("PORT2"));
+        new_hosts.push_back(endpoint.tags.count("secure") ? "secure://" : "" + DB::createHostPortString(endpoint.host, endpoint.tags.at("PORT2")));
     }
 
     /// startNewSession from old endpoints if new endpoints are empty

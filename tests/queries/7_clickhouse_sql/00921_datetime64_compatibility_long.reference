@@ -34,17 +34,17 @@ SELECT toDayOfWeek(N)
 "UInt8",1
 ------------------------------------------
 SELECT toHour(N, \'Asia/Istanbul\')
-Code: 43
+"UInt8",0
 "UInt8",19
 "UInt8",19
 ------------------------------------------
 SELECT toMinute(N, \'Asia/Istanbul\')
-Code: 43
+"UInt8",0
 "UInt8",20
 "UInt8",20
 ------------------------------------------
 SELECT toSecond(N, \'Asia/Istanbul\')
-Code: 43
+"UInt8",0
 "UInt8",11
 "UInt8",11
 ------------------------------------------

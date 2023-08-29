@@ -49,6 +49,7 @@
 #include <Parsers/ParserDumpInfoQuery.h>
 #include <Parsers/ParserReproduceQuery.h>
 #include <Parsers/ParserUndropQuery.h>
+#include <Parsers/ParserAlterDiskCacheQuery.h>
 #include <Parsers/ParserTransaction.h>
 
 namespace DB
@@ -67,6 +68,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserDropQuery drop_p;
     ParserUndropQuery undrop_p;
     ParserCheckQuery check_p(dt);
+    ParserAlterDiskCacheQuery alter_disk_cache_p;
     ParserOptimizeQuery optimize_p(dt);
     ParserKillQueryQuery kill_query_p(dt);
     ParserWatchQuery watch_p;
@@ -106,6 +108,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         || drop_p.parse(pos, query, expected)
         || undrop_p.parse(pos, query, expected)
         || check_p.parse(pos, query, expected)
+        || alter_disk_cache_p.parse(pos, query, expected)
         || kill_query_p.parse(pos, query, expected)
         || optimize_p.parse(pos, query, expected)
         || watch_p.parse(pos, query, expected)

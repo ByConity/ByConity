@@ -89,6 +89,8 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
             std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
         {"projections", std::make_shared<DataTypeArray>(
             std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
+        {"materialized_views", std::make_shared<DataTypeArray>(
+            std::make_shared<DataTypeLowCardinality>(std::make_shared<DataTypeString>()))},
         {"exception_code", std::make_shared<DataTypeInt32>()},
         {"exception", std::make_shared<DataTypeString>()},
         {"stack_trace", std::make_shared<DataTypeString>()},
@@ -195,7 +197,7 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
         auto & column_tables = typeid_cast<ColumnArray &>(*columns[i++]);
         auto & column_columns = typeid_cast<ColumnArray &>(*columns[i++]);
         auto & column_projections = typeid_cast<ColumnArray &>(*columns[i++]);
-
+        auto & column_materialized_views = typeid_cast<ColumnArray &>(*columns[i++]);
         auto fill_column = [](const std::set<String> & data, ColumnArray & column)
         {
             size_t size = 0;
@@ -212,6 +214,7 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
         fill_column(query_tables, column_tables);
         fill_column(query_columns, column_columns);
         fill_column(query_projections, column_projections);
+        fill_column(query_materialized_views, column_materialized_views);
     }
 
     columns[i++]->insert(exception_code);

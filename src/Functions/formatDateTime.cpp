@@ -979,8 +979,11 @@ namespace
                     if (!isTime(arguments[0].type))
                     {
                         // TODO: handle scale for datetime
-                        ColumnsWithTypeAndName temp{arguments[0]};
                         auto to_int = FunctionFactory::instance().get("toTimeType", context_ptr);
+                        const auto scale_type = std::make_shared<DataTypeUInt8>();
+                        const auto scale_col = scale_type->createColumnConst(1, Field(0));
+                        ColumnWithTypeAndName scale_arg {std::move(scale_col), std::move(scale_type), "scale"};
+                        ColumnsWithTypeAndName temp {arguments[0], std::move(scale_arg)};
                         auto col = to_int->build(temp)->execute(temp, std::make_shared<DataTypeTime>(0), input_rows_count);
                         ColumnWithTypeAndName converted_col(col, std::make_shared<DataTypeTime>(0), "unixtime");
                         converted.emplace_back(converted_col);

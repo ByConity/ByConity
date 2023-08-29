@@ -16,13 +16,14 @@
 #pragma once
 
 #include <Analyzers/ASTEquals.h>
+#include <Core/NameToType.h>
+#include <Optimizer/EqualityASTMap.h>
 #include <Optimizer/JoinGraph.h>
 #include <Optimizer/SymbolTransformMap.h>
 #include <Optimizer/Utils.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/QueryPlan.h>
 #include <Storages/StorageMaterializedView.h>
-#include <Optimizer/EqualityASTMap.h>
 
 namespace DB
 {
@@ -58,6 +59,7 @@ struct MaterializedViewStructure
     const std::unordered_map<String, String> output_columns_to_table_columns_map;
     const ExpressionEquivalences expression_equivalences;
     const std::shared_ptr<const AggregatingStep> top_aggregating_step;
+    const NameToType symbol_types;
 
     MaterializedViewStructure(
         StorageID view_storage_id_,
@@ -68,7 +70,8 @@ struct MaterializedViewStructure
         std::unordered_set<String> output_columns_,
         std::unordered_map<String, String> output_columns_to_table_columns_map_,
         ExpressionEquivalences expression_equivalences_,
-        std::shared_ptr<const AggregatingStep> top_aggregating_step_)
+        std::shared_ptr<const AggregatingStep> top_aggregating_step_,
+        NameToType symbol_types_)
         : view_storage_id(std::move(view_storage_id_))
         , target_storage_id(std::move(target_storage_id_))
         , join_graph(std::move(join_graph_))
@@ -78,6 +81,7 @@ struct MaterializedViewStructure
         , output_columns_to_table_columns_map(std::move(output_columns_to_table_columns_map_))
         , expression_equivalences(std::move(expression_equivalences_))
         , top_aggregating_step(std::move(top_aggregating_step_))
+        , symbol_types(std::move(symbol_types_))
     {
     }
 };

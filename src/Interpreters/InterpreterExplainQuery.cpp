@@ -21,63 +21,42 @@
 
 #include <Interpreters/InterpreterExplainQuery.h>
 
+#include <Analyzers/QueryRewriter.h>
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeString.h>
+#include <Formats/FormatFactory.h>
+#include <IO/WriteBufferFromString.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
 #include <Interpreters/InDepthNodeVisitor.h>
-#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
-#include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
-#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
+#include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/predicateExpressionsUtils.h>
-#include <Formats/FormatFactory.h>
-#include <Optimizer/QueryUseOptimizerChecker.h>
 #include <Optimizer/CardinalityEstimate/CardinalityEstimator.h>
 #include <Optimizer/CostModel/CostCalculator.h>
-#include <Parsers/DumpASTNode.h>
-#include <Parsers/queryToString.h>
+#include <Optimizer/QueryUseOptimizerChecker.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/DumpASTNode.h>
 #include <Parsers/ParserQuery.h>
-#include <Storages/StorageDistributed.h>
-#include <Storages/StorageView.h>
-#include <QueryPlan/QueryPlan.h>
-#include <QueryPlan/PlanPrinter.h>
-#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
-#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <Parsers/queryToString.h>
 #include <Processors/printPipeline.h>
-#include <Storages/StorageMaterializedView.h>
-#include <Common/JSONBuilder.h>
-#include <IO/WriteBufferFromString.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/GraphvizPrinter.h>
-#include <Interpreters/SegmentScheduler.h>
-#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
-#include <Analyzers/QueryRewriter.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/PlanPrinter.h>
+#include <QueryPlan/QueryPlan.h>
+#include <Storages/StorageDistributed.h>
+#include <Storages/StorageMaterializedView.h>
+#include <Storages/StorageView.h>
+#include <Common/JSONBuilder.h>
+#include <Interpreters/GetAggregatesVisitor.h>
 
 namespace DB
 {
-
-static int fls(int x)
-{
-    int position;
-    int i;
-    if(0 != x)
-    {
-        for (i = (x >> 1), position = 0; i != 0; ++position)
-            i >>= 1;
-    }
-    else
-        position = -1;
-    return position+1;
-}
-
-static unsigned int roundup_pow_of_two(unsigned int x)
-{
-    if (x <= 1)
-        return 2;
-    else
-        return 1UL << fls(x - 1);
-}
 
 namespace ErrorCodes
 {
@@ -93,13 +72,10 @@ namespace
     {
         struct Data : public WithContext
         {
-            explicit Data(ContextPtr context_) : WithContext(context_) {}
+            explicit Data(ContextPtr context_) : WithContext(context_) { }
         };
 
-        static bool needChildVisit(ASTPtr & node, ASTPtr &)
-        {
-            return !node->as<ASTSelectQuery>();
-        }
+        static bool needChildVisit(ASTPtr & node, ASTPtr &) { return !node->as<ASTSelectQuery>(); }
 
         static void visit(ASTPtr & ast, Data & data)
         {
@@ -216,111 +192,111 @@ void InterpreterExplainQuery::fillColumn(IColumn & column, const std::string & s
 
 namespace
 {
+    /// Settings. Different for each explain type.
 
-/// Settings. Different for each explain type.
-
-struct QueryPlanSettings
-{
-    QueryPlan::ExplainPlanOptions query_plan_options;
-
-    /// Apply query plan optimizations.
-    bool optimize = true;
-    bool json = false;
-    bool stats = true;
-
-    constexpr static char name[] = "PLAN";
-
-    std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings =
+    struct QueryPlanSettings
     {
-            {"header", query_plan_options.header},
-            {"description", query_plan_options.description},
-            {"actions", query_plan_options.actions},
-            {"indexes", query_plan_options.indexes},
-            {"optimize", optimize},
-            {"json", json},
-            {"stats", stats}
+        QueryPlan::ExplainPlanOptions query_plan_options;
+
+        /// Apply query plan optimizations.
+        bool optimize = true;
+        bool json = false;
+        bool stats = true;
+
+        constexpr static char name[] = "PLAN";
+
+        std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings
+            = {{"header", query_plan_options.header},
+               {"description", query_plan_options.description},
+               {"actions", query_plan_options.actions},
+               {"indexes", query_plan_options.indexes},
+               {"optimize", optimize},
+               {"json", json},
+               {"stats", stats}};
     };
-};
 
-struct QueryPipelineSettings
-{
-    QueryPlan::ExplainPipelineOptions query_pipeline_options;
-    bool graph = false;
-    bool compact = true;
-
-    constexpr static char name[] = "PIPELINE";
-
-    std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings =
+    struct QueryPipelineSettings
     {
+        QueryPlan::ExplainPipelineOptions query_pipeline_options;
+        bool graph = false;
+        bool compact = true;
+
+        constexpr static char name[] = "PIPELINE";
+
+        std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings = {
             {"header", query_pipeline_options.header},
             {"graph", graph},
             {"compact", compact},
+        };
     };
-};
 
-template <typename Settings>
-struct ExplainSettings : public Settings
-{
-    using Settings::boolean_settings;
-
-    bool has(const std::string & name_) const
+    template <typename Settings>
+    struct ExplainSettings : public Settings
     {
-        return boolean_settings.count(name_) > 0;
-    }
+        using Settings::boolean_settings;
 
-    void setBooleanSetting(const std::string & name_, bool value)
-    {
-        auto it = boolean_settings.find(name_);
-        if (it == boolean_settings.end())
-            throw Exception("Unknown setting for ExplainSettings: " + name_, ErrorCodes::LOGICAL_ERROR);
+        bool has(const std::string & name_) const { return boolean_settings.count(name_) > 0; }
 
-        it->second.get() = value;
-    }
-
-    std::string getSettingsList() const
-    {
-        std::string res;
-        for (const auto & setting : boolean_settings)
+        void setBooleanSetting(const std::string & name_, bool value)
         {
-            if (!res.empty())
-                res += ", ";
+            auto it = boolean_settings.find(name_);
+            if (it == boolean_settings.end())
+                throw Exception("Unknown setting for ExplainSettings: " + name_, ErrorCodes::LOGICAL_ERROR);
 
-            res += setting.first;
+            it->second.get() = value;
         }
 
-        return res;
-    }
-};
+        std::string getSettingsList() const
+        {
+            std::string res;
+            for (const auto & setting : boolean_settings)
+            {
+                if (!res.empty())
+                    res += ", ";
 
-template <typename Settings>
-ExplainSettings<Settings> checkAndGetSettings(const ASTPtr & ast_settings)
-{
-    if (!ast_settings)
-        return {};
+                res += setting.first;
+            }
 
-    ExplainSettings<Settings> settings;
-    const auto & set_query = ast_settings->as<ASTSetQuery &>();
+            return res;
+        }
+    };
 
-    for (const auto & change : set_query.changes)
+    template <typename Settings>
+    ExplainSettings<Settings> checkAndGetSettings(const ASTPtr & ast_settings)
     {
-        if (!settings.has(change.name))
-            throw Exception("Unknown setting \"" + change.name + "\" for EXPLAIN " + Settings::name + " query. "
-                            "Supported settings: " + settings.getSettingsList(), ErrorCodes::UNKNOWN_SETTING);
+        if (!ast_settings)
+            return {};
 
-        if (change.value.getType() != Field::Types::UInt64)
-            throw Exception("Invalid type " + std::string(change.value.getTypeName()) + " for setting \"" + change.name +
-                            "\" only boolean settings are supported", ErrorCodes::INVALID_SETTING_VALUE);
+        ExplainSettings<Settings> settings;
+        const auto & set_query = ast_settings->as<ASTSetQuery &>();
 
-        auto value = change.value.get<UInt64>();
-        if (value > 1)
-            throw Exception("Invalid value " + std::to_string(value) + " for setting \"" + change.name +
-                            "\". Only boolean settings are supported", ErrorCodes::INVALID_SETTING_VALUE);
+        for (const auto & change : set_query.changes)
+        {
+            if (!settings.has(change.name))
+                throw Exception(
+                    "Unknown setting \"" + change.name + "\" for EXPLAIN " + Settings::name
+                        + " query. "
+                          "Supported settings: "
+                        + settings.getSettingsList(),
+                    ErrorCodes::UNKNOWN_SETTING);
 
-        settings.setBooleanSetting(change.name, value);
+            if (change.value.getType() != Field::Types::UInt64)
+                throw Exception(
+                    "Invalid type " + std::string(change.value.getTypeName()) + " for setting \"" + change.name
+                        + "\" only boolean settings are supported",
+                    ErrorCodes::INVALID_SETTING_VALUE);
+
+            auto value = change.value.get<UInt64>();
+            if (value > 1)
+                throw Exception(
+                    "Invalid value " + std::to_string(value) + " for setting \"" + change.name + "\". Only boolean settings are supported",
+                    ErrorCodes::INVALID_SETTING_VALUE);
+
+            settings.setBooleanSetting(change.name, value);
+        }
+
+        return settings;
     }
-
-    return settings;
-}
 
 }
 
@@ -349,7 +325,8 @@ void InterpreterExplainQuery::rewriteDistributedToLocal(ASTPtr & ast)
 
             String table_alias = table->database_and_table_name->tryGetAlias();
             auto old_table_ast = std::find(table->children.begin(), table->children.end(), table->database_and_table_name);
-            table->database_and_table_name = std::make_shared<ASTTableIdentifier>(distributed->getRemoteDatabaseName(), distributed->getRemoteTableName());
+            table->database_and_table_name
+                = std::make_shared<ASTTableIdentifier>(distributed->getRemoteDatabaseName(), distributed->getRemoteTableName());
             *old_table_ast = table->database_and_table_name;
 
             if (!table_alias.empty())
@@ -442,8 +419,7 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
         InterpreterSelectWithUnionQuery interpreter(ast.getExplainedQuery(), getContext(), SelectQueryOptions());
         interpreter.buildQueryPlan(plan);
         auto pipeline = plan.buildQueryPipeline(
-            QueryPlanOptimizationSettings::fromContext(getContext()),
-            BuildQueryPipelineSettings::fromContext(getContext()));
+            QueryPlanOptimizationSettings::fromContext(getContext()), BuildQueryPipelineSettings::fromContext(getContext()));
 
         if (settings.graph)
         {
@@ -461,98 +437,19 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
             plan.explainPipeline(buf, settings.query_pipeline_options);
         }
     }
-    else if (ast.getKind() == ASTExplainQuery::MaterializedView)
-    {
-        /// rewrite distributed table to local table
-        ASTPtr explain_query = ast.getExplainedQuery()->clone();
-        rewriteDistributedToLocal(explain_query);
-        ASTSelectWithUnionQuery * select_union_query = explain_query->as<ASTSelectWithUnionQuery>();
-        if (select_union_query && !select_union_query->list_of_selects->children.empty())
-        {
-            Block block;
-            auto view_table_column = ColumnString::create();
-            auto hit_view = ColumnUInt8::create();
-            auto match_cost = ColumnInt64::create();
-            auto read_cost = ColumnUInt64::create();
-            auto view_inner_query = ColumnString::create();
-            auto miss_match_reason = ColumnString::create();
-
-            /// Enable enable_view_based_query_rewrite setting to get view match result
-            ContextMutablePtr context = Context::createCopy(getContext());
-            context->setSetting("enable_view_based_query_rewrite", 1);
-            for (const auto & element : select_union_query->list_of_selects->children)
-            {
-                InterpreterSelectQuery interpreter{element, context, SelectQueryOptions(QueryProcessingStage::FetchColumns)};
-                std::shared_ptr<const MaterializedViewOptimizerResult> mv_optimizer_result = interpreter.getMaterializeViewMatchResult();
-                int MAX = std::numeric_limits<int>::max();
-                if (!mv_optimizer_result->validate_info.empty())
-                {
-                    view_table_column->insertDefault();
-                    hit_view->insert(0);
-                    match_cost->insertDefault();
-                    read_cost->insert(0);
-                    view_inner_query->insertDefault();
-                    miss_match_reason->insert(mv_optimizer_result->validate_info);
-                }
-                else
-                {
-                    for (auto iter = mv_optimizer_result->views_match_info.begin(); iter != mv_optimizer_result->views_match_info.end();
-                         iter++)
-                    {
-                        MatchResult::ResultPtr result = *iter;
-                        if (!result->view_table)
-                            continue;
-
-                        /// insert view name
-                        view_table_column->insert(result->view_table->getStorageID().getFullNameNotQuoted());
-
-                        /// insert view match result
-                        if (result->cost != MAX && iter == mv_optimizer_result->views_match_info.begin())
-                            hit_view->insert(1);
-                        else
-                            hit_view->insert(0);
-
-                        /// insert cost value
-                        match_cost->insert(result->cost);
-
-                        /// insert read cost
-                        read_cost->insert(result->read_cost);
-
-                        /// insert view inner query
-                        auto * materialized_view = dynamic_cast<StorageMaterializedView *>(result->view_table.get());
-                        if (materialized_view)
-                        {
-                            ASTPtr view_query = materialized_view->getInnerQuery();
-                            view_inner_query->insert(queryToString(view_query));
-                        }
-                        else
-                            view_inner_query->insertDefault();
-
-                        miss_match_reason->insert(result->view_match_info);
-                    }
-                }
-            }
-            block.insert({std::move(view_table_column), std::make_shared<DataTypeString>(), "view_table"});
-            block.insert({std::move(hit_view), std::make_shared<DataTypeUInt8>(), "match_result"});
-            block.insert({std::move(match_cost), std::make_shared<DataTypeInt64>(), "match_cost"});
-            block.insert({std::move(read_cost), std::make_shared<DataTypeUInt64>(), "read_cost"});
-            block.insert({std::move(view_inner_query), std::make_shared<DataTypeString>(), "view_query"});
-            block.insert({std::move(miss_match_reason), std::make_shared<DataTypeString>(), "miss_reason"});
-            return std::make_shared<OneBlockInputStream>(block);
-        }
-    }
     else if (ast.getKind() == ASTExplainQuery::ExplainKind::QueryElement)
     {
         ASTPtr explain_query = ast.getExplainedQuery()->clone();
         rewriteDistributedToLocal(explain_query);
-        InterpreterSelectWithUnionQuery interpreter(explain_query, getContext(),
-                                                    SelectQueryOptions(QueryProcessingStage::FetchColumns).analyze().modify());
+        InterpreterSelectWithUnionQuery interpreter(
+            explain_query, getContext(), SelectQueryOptions(QueryProcessingStage::FetchColumns).analyze().modify());
         const auto & ast_ptr = interpreter.getQuery()->children.at(0)->as<ASTExpressionList &>();
         if (ast_ptr.children.size() != 1)
             throw Exception("Element query not support multiple select query", ErrorCodes::LOGICAL_ERROR);
         const auto & select_query = ast_ptr.children.at(0)->as<ASTSelectQuery &>();
         ASTs where_expressions = {select_query.prewhere(), select_query.where()};
-        where_expressions.erase(std::remove_if(where_expressions.begin(), where_expressions.end(), [](const auto & q) { return !q;} ), where_expressions.end());
+        where_expressions.erase(
+            std::remove_if(where_expressions.begin(), where_expressions.end(), [](const auto & q) { return !q; }), where_expressions.end());
         ASTPtr where = composeAnd(where_expressions);
 
         buf << "{";
@@ -565,13 +462,13 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
     }
     else if (ast.getKind() == ASTExplainQuery::PlanSegment)
     {
-         if (!dynamic_cast<const ASTSelectWithUnionQuery *>(ast.getExplainedQuery().get()))
+        if (!dynamic_cast<const ASTSelectWithUnionQuery *>(ast.getExplainedQuery().get()))
             throw Exception("Only SELECT is supported for EXPLAIN query", ErrorCodes::INCORRECT_QUERY);
 
         auto interpreter = std::make_unique<InterpreterDistributedStages>(ast.getExplainedQuery(), Context::createCopy(getContext()));
         auto * plan_segment_tree = interpreter->getPlanSegmentTree();
         if (plan_segment_tree)
-             buf << plan_segment_tree->toString();
+            buf << plan_segment_tree->toString();
     }
 
     if (single_line)
@@ -588,7 +485,7 @@ void InterpreterExplainQuery::elementDatabaseAndTable(const ASTSelectQuery & sel
     if (!select_query.tables())
         throw Exception("Can not get database and table in element query", ErrorCodes::LOGICAL_ERROR);
 
-    if(select_query.tables()->children.size() != 1)
+    if (select_query.tables()->children.size() != 1)
         throw Exception("Element query not support multiple table query, such as join, etc", ErrorCodes::LOGICAL_ERROR);
 
     auto database_and_table = getDatabaseAndTable(select_query, 0);
@@ -600,7 +497,8 @@ void InterpreterExplainQuery::elementDatabaseAndTable(const ASTSelectQuery & sel
         auto dependencies = DatabaseCatalog::instance().getDependencies(storage->getStorageID());
         buffer << "\"dependencies\": [";
         for (size_t i = 0, size = dependencies.size(); i < size; ++i)
-            buffer << "\"" << dependencies[i].getDatabaseName() << "." << dependencies[i].getTableName() << "\"" << (i + 1 != size ? ", " : "");
+            buffer << "\"" << dependencies[i].getDatabaseName() << "." << dependencies[i].getTableName() << "\""
+                   << (i + 1 != size ? ", " : "");
         buffer << "], ";
 
         listPartitionKeys(storage, buffer);
@@ -630,105 +528,103 @@ void InterpreterExplainQuery::listPartitionKeys(StoragePtr & storage, WriteBuffe
 /**
  * Select one partition to estimate view table definition is suitable with ratio of view rows and base table rows.
  */
-void InterpreterExplainQuery::listRowsOfOnePartition(StoragePtr & storage, const ASTPtr & group_by, const ASTPtr & where, WriteBuffer & buffer)
+void InterpreterExplainQuery::listRowsOfOnePartition(
+    StoragePtr & storage, const ASTPtr & group_by, const ASTPtr & where, WriteBuffer & buffer)
 {
-    auto partition_condition = getActivePartCondition(storage);
-    if (partition_condition)
+    UInt64 base_rows = 0;
+    UInt64 view_rows = 0;
+    if (getContext()->getSettingsRef().enable_element_mv_rows)
     {
-        UInt64 base_rows = 0;
+        auto partition_condition = getActivePartCondition(storage);
+        if (partition_condition)
         {
-            WriteBufferFromOwnString query_buffer;
-            query_buffer << "select count() as count from " << backQuoteIfNeed(storage->getStorageID().getDatabaseName()) << "."
-                     << backQuoteIfNeed(storage->getStorageID().getTableName()) << " where " << *partition_condition;
-
-            const String query_str = query_buffer.str();
-            const char * begin = query_str.data();
-            const char * end = query_str.data() + query_str.size();
-
-            ParserQuery parser(end, ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type));
-            auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
-
-            InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
-            BlockInputStreamPtr in = select.execute().getInputStream();
-
-            in->readPrefix();
-            Block block = in->read();
-            in->readSuffix();
-
-            auto & column = block.getByName("count").column;
-            if (column->size() == 1)
-                base_rows = column->getUInt(0);
-        }
-
-        UInt64 view_rows = 0;
-        {
-            WriteBufferFromOwnString query_ss;
-            query_ss << "select";
-            if(group_by)
             {
-                query_ss << " uniq(";
-                auto & expression_list = group_by->as<ASTExpressionList &>();
-                for (size_t i = 0, size = expression_list.children.size(); i < size; ++i)
+                WriteBufferFromOwnString query_buffer;
+                query_buffer << "select count() as count from " << storage->getStorageID().getFullTableName() << " where " << *partition_condition;
+
+                const String query_str = query_buffer.str();
+                const char * begin = query_str.data();
+                const char * end = query_str.data() + query_str.size();
+
+                ParserQuery parser(end, ParserSettings::valueOf(getContext()->getSettingsRef()));
+                auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
+
+                InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
+                BlockInputStreamPtr in = select.execute().getInputStream();
+
+                in->readPrefix();
+                Block block = in->read();
+                in->readSuffix();
+
+                auto & column = block.getByName("count").column;
+                if (column->size() == 1)
+                    base_rows = column->getUInt(0);
+            }
+            
+            {
+                WriteBufferFromOwnString query_ss;
+                query_ss << "select";
+                if(group_by)
                 {
-                    expression_list.children[i]->format(IAST::FormatSettings(query_ss, true, true));
-                    query_ss << (i + 1 != size ? ", " : ")");
-                }
-                query_ss << " as count";
-            }
-            else
-            {
-                query_ss << " count() as count";
-            }
-
-            query_ss << " from " << backQuoteIfNeed(storage->getStorageID().getDatabaseName()) << "."
-                     << backQuoteIfNeed(storage->getStorageID().getTableName()) << " where " << *partition_condition;
-
-            if (where)
-            {
-                query_ss << " and (";
-                where->format(IAST::FormatSettings(query_ss, true));
-                query_ss << ")";
-            }
-
-            String query_str = query_ss.str();
-
-            LOG_DEBUG(log, "element view rows query-{}",  query_str);
-            const char * begin = query_str.data();
-            const char * end = query_str.data() + query_str.size();
-
-            ParserQuery parser(end, ParserSettings::valueOf(getContext()->getSettingsRef().dialect_type));
-            auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
-
-            InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
-            BlockInputStreamPtr in = select.execute().getInputStream();
-
-            in->readPrefix();
-            Block block = in->read();
-            in->readSuffix();
-
-            auto & column = block.getByName("count").column;
-            if (column->size() == 1)
-            {
-                if (isColumnNullable(*column))
-                {
-                    const auto * nullable_column = static_cast<const ColumnNullable *>(column.get());
-                    view_rows = nullable_column->isNullAt(0) ? 0 : nullable_column->getNestedColumnPtr()->getUInt(0);
+                    query_ss << " uniq(";
+                    auto & expression_list = group_by->as<ASTExpressionList &>();
+                    for (size_t i = 0, size = expression_list.children.size(); i < size; ++i)
+                    {
+                        expression_list.children[i]->format(IAST::FormatSettings(query_ss, true, true));
+                        query_ss << (i + 1 != size ? ", " : ")");
+                    }
+                    query_ss << " as count";
                 }
                 else
                 {
-                    view_rows = column->getUInt(0);
+                    query_ss << " count() as count";
                 }
-                LOG_DEBUG(log, "view query count column-{}, result-{}", column->dumpStructure(), view_rows);
+
+                query_ss << " from " << backQuoteIfNeed(storage->getStorageID().getDatabaseName()) << "."
+                         << backQuoteIfNeed(storage->getStorageID().getTableName()) << " where " << *partition_condition;
+
+                if (where)
+                {
+                    query_ss << " and (";
+                    where->format(IAST::FormatSettings(query_ss, true));
+                    query_ss << ")";
+                }
+
+                String query_str = query_ss.str();
+
+            LOG_DEBUG(log, "element view rows query-{}", query_str);
+            const char * begin = query_str.data();
+            const char * end = query_str.data() + query_str.size();
+
+            ParserQuery parser(end, ParserSettings::valueOf(getContext()->getSettingsRef()));
+            auto query_ast = parseQuery(parser, begin, end, "", 0, 0);
+
+
+                InterpreterSelectWithUnionQuery select(query_ast, getContext(), SelectQueryOptions());
+                BlockInputStreamPtr in = select.execute().getInputStream();
+
+                in->readPrefix();
+                Block block = in->read();
+                in->readSuffix();
+
+                auto & column = block.getByName("count").column;
+                if (column->size() == 1)
+                {
+                    if (isColumnNullable(*column))
+                    {
+                        const auto * nullable_column = static_cast<const ColumnNullable *>(column.get());
+                        view_rows = nullable_column->isNullAt(0) ? 0 : nullable_column->getNestedColumnPtr()->getUInt(0);
+                    }
+                    else
+                    {
+                        view_rows = column->getUInt(0);
+                    }
+                    LOG_DEBUG(log, "view query count column-{}, result-{}", column->dumpStructure(), view_rows);
+                }
             }
         }
-
-        buffer << "\"base_rows\": " << base_rows << ", " << "\"view_rows\": " << view_rows << ", ";
-        auto * merge_tree_data = dynamic_cast<MergeTreeData *>(storage.get());
-        size_t mv_index_granularity = merge_tree_data->getSettings()->index_granularity;
-        if (view_rows != 0 && base_rows != 0 && merge_tree_data->getSettings()->index_granularity!= 0)
-            mv_index_granularity = roundup_pow_of_two(static_cast<unsigned int>(merge_tree_data->getSettings()->index_granularity / (base_rows / view_rows)));
-        buffer << "\"base_rows\": " << base_rows << ", " << "\"view_rows\": " << view_rows << ", " << "\"recommend_mv_index_granularity\": " << mv_index_granularity << ", ";
     }
+    buffer << "\"base_rows\": " << base_rows << ", " << "\"view_rows\": " << view_rows << ", ";
 }
 
 
@@ -749,7 +645,8 @@ std::optional<String> InterpreterExplainQuery::getActivePartCondition(StoragePtr
 
 void InterpreterExplainQuery::elementWhere(const ASTPtr & where, WriteBuffer & buffer)
 {
-    buffer << "\"where\": " << "\"";
+    buffer << "\"where\": "
+           << "\"";
     if (where)
         where->format(IAST::FormatSettings(buffer, true));
     buffer << "\", ";
@@ -759,29 +656,33 @@ void InterpreterExplainQuery::elementMetrics(const ASTPtr & select, WriteBuffer 
 {
     buffer << "\"metrics\": [";
     std::vector<String> metric_aliases;
-    if(select)
+    if (select)
     {
         auto & expression_list = select->as<ASTExpressionList &>();
         bool first_metric = true;
         for (auto & child : expression_list.children)
         {
-            auto * func = child->as<ASTFunction>();
-            if (func && AggregateFunctionFactory::instance().isAggregateFunctionName(func->name))
+            if (child->as<ASTFunction>())
             {
-                if(!first_metric)
-                    buffer << ", ";
-                buffer << "\"";
-                child->format(IAST::FormatSettings(buffer, true, true));
-                buffer << "\"";
-                metric_aliases.push_back(child->tryGetAlias());
-                first_metric = false;
+                GetAggregatesVisitor::Data data = {};
+                GetAggregatesVisitor(data).visit(child);
+                if (!data.aggregates.empty())
+                {
+                    if(!first_metric)
+                        buffer << ", ";
+                    buffer << "\"";
+                    child->format(IAST::FormatSettings(buffer, true, true));
+                    buffer << "\"";
+                    metric_aliases.push_back(child->tryGetAlias());
+                    first_metric = false;
+                }
             }
         }
     }
 
     buffer << "], ";
     buffer << "\"metric_aliases\": [";
-    for(size_t i = 0, size = metric_aliases.size(); i < size; ++i)
+    for (size_t i = 0, size = metric_aliases.size(); i < size; ++i)
         buffer << "\"" << metric_aliases[i] << "\"" << (i + 1 != size ? ", " : "");
     buffer << "], ";
 }
@@ -790,15 +691,21 @@ void InterpreterExplainQuery::elementDimensions(const ASTPtr & select, WriteBuff
 {
     buffer << "\"dimensions\": [";
     std::vector<String> dimension_aliases;
-    if(select)
+    if (select)
     {
         auto & expression_list = select->as<ASTExpressionList &>();
         bool first_dimension = true;
         for (auto & child : expression_list.children)
         {
-            auto * func = child->as<ASTFunction>();
+            bool not_aggregate_func = false;
+            if (child->as<ASTFunction>())
+            {
+                GetAggregatesVisitor::Data data = {};
+                GetAggregatesVisitor(data).visit(child);
+                not_aggregate_func = data.aggregates.empty();
+            }
             auto * identifier = child->as<ASTIdentifier>();
-            if (identifier || (func && !AggregateFunctionFactory::instance().isAggregateFunctionName(func->name)))
+            if (identifier || not_aggregate_func)
             {
                 if (!first_dimension)
                     buffer << ", ";
@@ -813,7 +720,7 @@ void InterpreterExplainQuery::elementDimensions(const ASTPtr & select, WriteBuff
 
     buffer << "], ";
     buffer << "\"dimension_aliases\": [";
-    for(size_t i = 0, size = dimension_aliases.size(); i < size; ++i)
+    for (size_t i = 0, size = dimension_aliases.size(); i < size; ++i)
         buffer << "\"" << dimension_aliases[i] << "\"" << (i + 1 != size ? ", " : "");
     buffer << "], ";
 }
@@ -821,13 +728,13 @@ void InterpreterExplainQuery::elementDimensions(const ASTPtr & select, WriteBuff
 void InterpreterExplainQuery::elementGroupBy(const ASTPtr & group_by, WriteBuffer & buffer)
 {
     buffer << "\"group_by\": [";
-    if(group_by)
+    if (group_by)
     {
         auto & expression_list = group_by->as<ASTExpressionList &>();
         bool first_group_expression = true;
         for (auto & child : expression_list.children)
         {
-            if(child->as<ASTFunction>() || child->as<ASTIdentifier>())
+            if (child->as<ASTFunction>() || child->as<ASTIdentifier>())
             {
                 if (!first_group_expression)
                     buffer << ", ";
@@ -844,7 +751,7 @@ void InterpreterExplainQuery::elementGroupBy(const ASTPtr & group_by, WriteBuffe
 void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuffer & buffer, bool & single_line)
 {
     const auto & explain = ast->as<ASTExplainQuery &>();
-    auto context = Context::createCopy(getContext());
+    auto context = getContext();
 
     if (explain.getKind() == ASTExplainQuery::AnalyzedSyntax)
     {
@@ -883,7 +790,7 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
 
     InterpreterSelectQueryUseOptimizer interpreter(explain.getExplainedQuery(), context, SelectQueryOptions());
     auto query_plan = interpreter.buildQueryPlan();
-    if (explain.getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan || explain.getKind() == ASTExplainQuery::ExplainKind::QueryPlan )
+    if (explain.getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan || explain.getKind() == ASTExplainQuery::ExplainKind::QueryPlan)
     {
         explainPlanWithOptimizer(explain, *query_plan, buffer, context, single_line);
     }
@@ -904,7 +811,8 @@ BlockIO InterpreterExplainQuery::explainAnalyze()
     return interpreter->execute();
 }
 
-void InterpreterExplainQuery::explainPlanWithOptimizer(const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr, bool & single_line)
+void InterpreterExplainQuery::explainPlanWithOptimizer(
+    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr, bool & single_line)
 {
     auto settings = checkAndGetSettings<QueryPlanSettings>(explain_ast.getSettings());
     CardinalityEstimator::estimate(plan, contextptr);
@@ -918,7 +826,8 @@ void InterpreterExplainQuery::explainPlanWithOptimizer(const ASTExplainQuery & e
         buffer << PlanPrinter::textLogicalPlan(plan, contextptr, true, true, costs);
 }
 
-void InterpreterExplainQuery::explainDistributedWithOptimizer(const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr)
+void InterpreterExplainQuery::explainDistributedWithOptimizer(
+    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr)
 {
     auto settings = checkAndGetSettings<QueryPipelineSettings>(explain_ast.getSettings());
     QueryPlan query_plan = PlanNodeToNodeVisitor::convert(plan);
@@ -939,7 +848,8 @@ void InterpreterExplainQuery::explainDistributedWithOptimizer(const ASTExplainQu
     buffer << PlanPrinter::textDistributedPlan(plan_segment_descriptions, true, true, costs, {}, plan);
 }
 
-void InterpreterExplainQuery::explainPipelineWithOptimizer(const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr)
+void InterpreterExplainQuery::explainPipelineWithOptimizer(
+    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr)
 {
     auto settings = checkAndGetSettings<QueryPipelineSettings>(explain_ast.getSettings());
     QueryPlan query_plan = PlanNodeToNodeVisitor::convert(plan);
@@ -953,30 +863,29 @@ void InterpreterExplainQuery::explainPipelineWithOptimizer(const ASTExplainQuery
     auto & plan_segments = plan_segment_tree->getNodes();
     GraphvizPrinter::printPlanSegment(plan_segment_tree, contextptr);
 
-//    PlanSegmentsStatusPtr scheduler_status;
-//    if (plan_segment_tree->getNodes().size() > 1)
-//    {
-//        RuntimeFilterManager::getInstance().registerQuery(contextptr->getCurrentQueryId(), *plan_segment_tree);
-//        scheduler_status = contextptr->getSegmentScheduler()->insertPlanSegments(contextptr->getCurrentQueryId(), plan_segment_tree.get(), contextptr);
-//    }
-//    else
-//    {
-//        scheduler_status = contextptr->getSegmentScheduler()->insertPlanSegments(contextptr->getCurrentQueryId(), plan_segment_tree.get(), contextptr);
-//    }
-//    if (!scheduler_status)
-//    {
-//        RuntimeFilterManager::getInstance().removeQuery(contextptr->getCurrentQueryId());
-//        throw Exception("Cannot get scheduler status from segment scheduler", ErrorCodes::LOGICAL_ERROR);
-//    }
+    //    PlanSegmentsStatusPtr scheduler_status;
+    //    if (plan_segment_tree->getNodes().size() > 1)
+    //    {
+    //        RuntimeFilterManager::getInstance().registerQuery(contextptr->getCurrentQueryId(), *plan_segment_tree);
+    //        scheduler_status = contextptr->getSegmentScheduler()->insertPlanSegments(contextptr->getCurrentQueryId(), plan_segment_tree.get(), contextptr);
+    //    }
+    //    else
+    //    {
+    //        scheduler_status = contextptr->getSegmentScheduler()->insertPlanSegments(contextptr->getCurrentQueryId(), plan_segment_tree.get(), contextptr);
+    //    }
+    //    if (!scheduler_status)
+    //    {
+    //        RuntimeFilterManager::getInstance().removeQuery(contextptr->getCurrentQueryId());
+    //        throw Exception("Cannot get scheduler status from segment scheduler", ErrorCodes::LOGICAL_ERROR);
+    //    }
 
     for (auto it = plan_segments.begin(); it != plan_segments.end(); ++it)
     {
         auto * segment = it->getPlanSegment();
-        buffer << "\nSegment[ " << std::to_string(segment->getPlanSegmentId()) <<" ] :\n" ;
+        buffer << "\nSegment[ " << std::to_string(segment->getPlanSegmentId()) << " ] :\n";
         auto & segment_plan = segment->getQueryPlan();
         auto pipeline = segment_plan.buildQueryPipeline(
-            QueryPlanOptimizationSettings::fromContext(contextptr),
-            BuildQueryPipelineSettings::fromPlanSegment(segment, contextptr, true));
+            QueryPlanOptimizationSettings::fromContext(contextptr), BuildQueryPipelineSettings::fromPlanSegment(segment, contextptr, true));
         if (pipeline)
         {
             if (settings.graph)
@@ -993,7 +902,7 @@ void InterpreterExplainQuery::explainPipelineWithOptimizer(const ASTExplainQuery
             {
                 segment_plan.explainPipeline(buffer, settings.query_pipeline_options);
             }
-            buffer << "\n------------------------------------------\n" ;
+            buffer << "\n------------------------------------------\n";
         }
     }
 }

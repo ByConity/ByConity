@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Core/NameToType.h>
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTExpressionList.h>
@@ -25,6 +26,7 @@
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <QueryPlan/Assignment.h>
+#include <QueryPlan/PlanNode.h>
 
 #include <unordered_map>
 
@@ -47,6 +49,7 @@ namespace Utils
     NameToNameMap extractIdentities(const ProjectionStep & project);
     std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments);
     ASTPtr extractAggregateToFunction(const AggregateDescription & agg_descr);
+    bool containsAggregateFunction(const ASTPtr & ast);
 
     // this method is used to deal with function names which are case-insensitive or have an alias to.
     // should be called after `registerFunctions`
@@ -101,6 +104,9 @@ namespace Utils
 
     bool canChangeOutputRows(const Assignments & assignments, ContextPtr context);
     bool canChangeOutputRows(const ProjectionStep & project, ContextPtr context);
+
+    // return nullopt if ambiguous symbol exists(rarely)
+    std::optional<NameToType> extractNameToType(const PlanNodeBase & node);
 }
 
 }

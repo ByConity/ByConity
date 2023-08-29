@@ -437,9 +437,7 @@ PlanBuilder QueryPlannerVisitor::planTables(ASTTablesInSelectQuery & tables_in_s
         }
     }
 
-    auto step = builder.plan->getStep()->copy(context);
-    planHint(step, tables_in_select.hints);
-    builder.plan->setStep(step);
+    planHint(builder.plan->getStep(), tables_in_select.hints);
 
     return builder;
 }
@@ -510,9 +508,7 @@ PlanBuilder QueryPlannerVisitor::planTableSubquery(ASTSubquery & subquery, ASTPt
     auto builder = toPlanBuilder(plan, analysis.getScope(subquery));
 
     //set hints
-    auto step = builder.plan->getStep()->copy(context);
-    planHint(step, hints);
-    builder.plan->setStep(step);
+    planHint(builder.plan->getStep(), hints);
 
     PRINT_PLAN(builder.plan, plan_table_subquery);
     return builder;
@@ -1221,10 +1217,10 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
     }
 
     // build aggregation descriptions
-    AstToSymbol mappings_for_aggregate = createScopeAwaredASTMap<String>(analysis);
+    AstToSymbol mappings_for_aggregate = createScopeAwaredASTMap<String>(analysis, builder.getScope());
     AggregateDescriptions aggregate_descriptions;
 
-    auto uniq_aggs = deduplicateByAst(aggregate_analysis, analysis, std::mem_fn(&AggregateAnalysis::expression));
+    auto uniq_aggs = deduplicateByAst(aggregate_analysis, builder.getScope(), analysis, std::mem_fn(&AggregateAnalysis::expression));
     for (auto & agg_item : uniq_aggs)
     {
         AggregateDescription agg_desc;
@@ -1260,7 +1256,7 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
     NameSet key_set_for_all_group;
     GroupingSetsParamsList grouping_sets_params;
     FieldSymbolInfos visible_fields(builder.getFieldSymbolInfos().size());
-    AstToSymbol complex_expressions = createScopeAwaredASTMap<String>(analysis);
+    AstToSymbol complex_expressions = createScopeAwaredASTMap<String>(analysis, builder.getScope());
 
     auto process_grouping_set = [&](const ASTs & grouping_set) {
         Names keys_for_this_group;
@@ -1363,7 +1359,7 @@ void QueryPlannerVisitor::planWindow(PlanBuilder & builder, ASTSelectQuery & sel
 
     auto & window_analysis = analysis.getWindowAnalysisOfSelectQuery(select_query);
 
-    auto uniq_windows = deduplicateByAst(window_analysis, analysis, std::mem_fn(&WindowAnalysis::expression));
+    auto uniq_windows = deduplicateByAst(window_analysis, builder.getScope(), analysis, std::mem_fn(&WindowAnalysis::expression));
 
     // add projections for window function params, partition by keys, sorting keys
     {
@@ -1450,7 +1446,7 @@ void QueryPlannerVisitor::planWindow(PlanBuilder & builder, ASTSelectQuery & sel
     // add window steps
     for (const auto & [_, window_desc] : window_descriptions)
     {
-        AstToSymbol mappings = createScopeAwaredASTMap<String>(analysis);
+        AstToSymbol mappings = createScopeAwaredASTMap<String>(analysis, builder.getScope());
 
         for (const auto & window_func : window_desc.window_functions)
         {

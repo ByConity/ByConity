@@ -20,11 +20,15 @@
 #include <sstream>
 #include <vector>
 #include <string.h>
+#include <Catalog/MetastoreCommon.h>
+#include <Catalog/MetastoreProxy.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
 #include <IO/ReadHelpers.h>
 #include <Protos/DataModelHelpers.h>
 #include "common/types.h"
+#include <common/logger_useful.h>
 #include "Catalog/MetastoreByteKVImpl.h"
+#include "Interpreters/executeQuery.h"
 
 namespace DB::ErrorCodes
 {
@@ -37,6 +41,7 @@ extern const int METASTORE_CLEAR_INTENT_CAS_FAILURE;
 extern const int VIRTUAL_WAREHOUSE_NOT_FOUND;
 extern const int FUNCTION_ALREADY_EXISTS;
 extern const int METASTORE_COMMIT_CAS_FAILURE;
+extern const int METASTORE_TABLE_TDH_CAS_ERROR;
 }
 
 namespace DB::Catalog
@@ -144,12 +149,12 @@ void MetastoreProxy::dropDatabase(const String & name_space, const Protos::DataM
     /// get all trashed dictionaries of current db and remove them with db metadata
     auto dic_ptrs = getDictionariesFromTrash(name_space, name + "_" + toString(ts));
     for (auto & dic_ptr : dic_ptrs)
-        batch_write.AddDelete(SingleDeleteRequest(dictionaryTrashKey(name_space, dic_ptr->database(), dic_ptr->name())));
+        batch_write.AddDelete(dictionaryTrashKey(name_space, dic_ptr->database(), dic_ptr->name()));
 
-    batch_write.AddDelete(SingleDeleteRequest(dbKey(name_space, name, ts)));
-    batch_write.AddDelete(SingleDeleteRequest(dbTrashKey(name_space, name, ts)));
+    batch_write.AddDelete(dbKey(name_space, name, ts));
+    batch_write.AddDelete(dbTrashKey(name_space, name, ts));
     if (db_model.has_uuid())
-        batch_write.AddDelete(SingleDeleteRequest(dbUUIDUniqueKey(name_space, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid())))));
+        batch_write.AddDelete(dbUUIDUniqueKey(name_space, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid()))));
 
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
@@ -468,7 +473,7 @@ void MetastoreProxy::clearTableMeta(const String & name_space, const String & da
     auto it_t = metastore_ptr->getByPrefix(tableStorePrefix(name_space, uuid));
     while(it_t->next())
     {
-        batch_write.AddDelete(SingleDeleteRequest(it_t->key()));
+        batch_write.AddDelete(it_t->key());
     }
 
     /// remove table partition list;
@@ -476,41 +481,41 @@ void MetastoreProxy::clearTableMeta(const String & name_space, const String & da
     auto it_p = metastore_ptr->getByPrefix(partition_list_prefix);
     while(it_p->next())
     {
-        batch_write.AddDelete(SingleDeleteRequest(it_p->key()));
+        batch_write.AddDelete(it_p->key());
     }
     /// remove dependency
     for (const String & dependency : dependencies)
-        batch_write.AddDelete(SingleDeleteRequest(viewDependencyKey(name_space, dependency, uuid)));
+        batch_write.AddDelete(viewDependencyKey(name_space, dependency, uuid));
 
     /// remove trash record if the table marked as deleted before be cleared
-    batch_write.AddDelete(SingleDeleteRequest(tableTrashKey(name_space, database, table, ts)));
+    batch_write.AddDelete(tableTrashKey(name_space, database, table, ts));
 
     /// remove MergeMutateThread meta
-    batch_write.AddDelete(SingleDeleteRequest(mergeMutateThreadStartTimeKey(name_space, uuid)));
+    batch_write.AddDelete(mergeMutateThreadStartTimeKey(name_space, uuid));
     /// remove table uuid unique key
-    batch_write.AddDelete(SingleDeleteRequest(tableUUIDUniqueKey(name_space, uuid)));
-    batch_write.AddDelete(SingleDeleteRequest(nonHostUpdateKey(name_space, uuid)));
+    batch_write.AddDelete(tableUUIDUniqueKey(name_space, uuid));
+    batch_write.AddDelete(nonHostUpdateKey(name_space, uuid));
 
     /// remove all statistics
     auto table_statistics_prefix = tableStatisticPrefix(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(table_statistics_prefix); it->next(); )
     {
-        batch_write.AddDelete(SingleDeleteRequest(it->key()));
+        batch_write.AddDelete(it->key());
     }
     auto table_statistics_tag_prefix = tableStatisticTagPrefix(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(table_statistics_tag_prefix); it->next(); )
     {
-        batch_write.AddDelete(SingleDeleteRequest(it->key()));
+        batch_write.AddDelete(it->key());
     }
     auto column_statistics_prefix = columnStatisticPrefix(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(column_statistics_prefix); it->next(); )
     {
-        batch_write.AddDelete(SingleDeleteRequest(it->key()));
+        batch_write.AddDelete(it->key());
     }
     auto column_statistics_tag_prefix = columnStatisticTagPrefixWithoutColumn(name_space, uuid);
     for (auto it = metastore_ptr->getByPrefix(column_statistics_tag_prefix); it->next(); )
     {
-        batch_write.AddDelete(SingleDeleteRequest(it->key()));
+        batch_write.AddDelete(it->key());
     }
 
     BatchCommitResponse resp;
@@ -573,7 +578,7 @@ void MetastoreProxy::renameTable(const String & name_space,
                                  BatchCommitRequest & batch_write)
 {
     /// update `table`->`uuid` mapping.
-    batch_write.AddDelete(SingleDeleteRequest(tableUUIDMappingKey(name_space, old_db_name, old_table_name)));
+    batch_write.AddDelete(tableUUIDMappingKey(name_space, old_db_name, old_table_name));
     Protos::TableIdentifier identifier;
     identifier.set_database(table.database());
     identifier.set_name(table.name());
@@ -602,7 +607,7 @@ bool MetastoreProxy::alterTable(const String & name_space, const Protos::DataMod
     batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, table.database(), table.name()), identifier.SerializeAsString()));
 
     for (const auto & name : masks_to_remove)
-        batch_write.AddDelete(SingleDeleteRequest(maskingPolicyTableMappingKey(name_space, name, table_uuid)));
+        batch_write.AddDelete(maskingPolicyTableMappingKey(name_space, name, table_uuid));
 
     for (const auto & name : masks_to_add)
         batch_write.AddPut(SinglePutRequest(maskingPolicyTableMappingKey(name_space, name, table_uuid), table_uuid));
@@ -629,7 +634,7 @@ void MetastoreProxy::dropDataPart(const String & name_space, const String & uuid
     metastore_ptr->put(dataPartKey(name_space, uuid, part_name), part_info);
 }
 
-Strings MetastoreProxy::getPartsByName(const String & name_space, const String & uuid, RepeatedFields & parts_name)
+Strings MetastoreProxy::getPartsByName(const String & name_space, const String & uuid, const Strings & parts_name)
 {
     Strings keys;
     for (const auto & part_name : parts_name)
@@ -749,6 +754,7 @@ void MetastoreProxy::dropAllPartInTable(const String & name_space, const String 
     /// clear data parts metadata as well as partition metadata
     metastore_ptr->clean(dataPartPrefix(name_space, uuid));
     metastore_ptr->clean(tablePartitionInfoPrefix(name_space, uuid));
+    metastore_ptr->clean(detachedPartPrefix(name_space, uuid));
 }
 
 IMetaStore::IteratorPtr MetastoreProxy::getStagedParts(const String & name_space, const String & uuid)
@@ -804,8 +810,8 @@ void MetastoreProxy::deleteRootPath(const String & root_path)
     {
         BatchCommitRequest batch_write;
         BatchCommitResponse resp;
-        batch_write.AddDelete(SingleDeleteRequest(ROOT_PATH_PREFIX + root_path));
-        batch_write.AddDelete(SingleDeleteRequest(ROOT_PATH_ID_UNIQUE_PREFIX + path_id));
+        batch_write.AddDelete(ROOT_PATH_PREFIX + root_path);
+        batch_write.AddDelete(ROOT_PATH_ID_UNIQUE_PREFIX + path_id);
         metastore_ptr->batchWrite(batch_write, resp);
     }
 }
@@ -860,7 +866,7 @@ void MetastoreProxy::removeTransactionRecords(const String & name_space, const s
     BatchCommitResponse resp;
 
     for (const auto & txn_id : txn_ids)
-        batch_write.AddDelete(SingleDeleteRequest(transactionRecordKey(name_space, txn_id.toUInt64())));
+        batch_write.AddDelete(transactionRecordKey(name_space, txn_id.toUInt64()));
 
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -1039,7 +1045,7 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
     /// CAS delete is needed becuase the intent could be overwrite by other transactions
     for (auto idx : matched_intent_index)
     {
-        batch_write.AddDelete(SingleDeleteRequest(intent_names[idx], {}, intents[idx].serialize()));
+        batch_write.AddDelete(intent_names[idx], intents[idx].serialize());
     }
 
     bool cas_success = metastore_ptr->batchWrite(batch_write, resp);
@@ -1077,7 +1083,7 @@ void MetastoreProxy::clearZombieIntent(const String & name_space, const UInt64 &
         intent_model.ParseFromString(it->value());
         if (intent_model.txn_id() == txn_id)
         {
-            batch_write.AddDelete(SingleDeleteRequest(it->value()));
+            batch_write.AddDelete(it->value());
         }
     }
 
@@ -1167,7 +1173,7 @@ void MetastoreProxy::multiDrop(const Strings & keys)
     BatchCommitResponse resp;
     for (const auto & key : keys)
     {
-        batch_write.AddDelete(SingleDeleteRequest(key));
+        batch_write.AddDelete(key);
     }
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -1248,7 +1254,7 @@ void MetastoreProxy::clearSyncList(const String & name_space, const String & uui
     BatchCommitRequest batch_write;
     BatchCommitResponse resp;
     for (auto & ts : sync_list)
-        batch_write.AddDelete(SingleDeleteRequest(syncListKey(name_space, uuid, ts)));
+        batch_write.AddDelete(syncListKey(name_space, uuid, ts));
 
     metastore_ptr->batchWrite(batch_write, resp);
 }
@@ -1333,9 +1339,45 @@ void MetastoreProxy::clearKafkaTransactions(const String & name_space, const Str
     metastore_ptr->clean(prefix);
 }
 
-void MetastoreProxy::setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered)
+void MetastoreProxy::setTableClusterStatus(const String & name_space, const String & uuid, const bool & already_clustered, const UInt64 & table_definition_hash)
 {
-    metastore_ptr->put(clusterStatusKey(name_space, uuid), already_clustered ? "true" : "false");
+    // TDH key may not exist in KV either because the table does not exist or there is an upgrade of CNCH version
+    String table_definition_hash_meta;
+    metastore_ptr->get(tableDefinitionHashKey(name_space, uuid), table_definition_hash_meta);
+    String expected_table_definition_hash = toString(table_definition_hash);
+    bool if_not_exists = false;
+    if (table_definition_hash_meta.empty())
+    {
+        expected_table_definition_hash = "";
+        if_not_exists = true;
+    }
+
+    auto table_definition_hash_put_request = SinglePutRequest(tableDefinitionHashKey(name_space, uuid), toString(table_definition_hash), expected_table_definition_hash);
+    table_definition_hash_put_request.if_not_exists = if_not_exists;
+
+    BatchCommitRequest batch_write;
+    batch_write.AddPut(SinglePutRequest(clusterStatusKey(name_space, uuid), already_clustered ? "true" : "false"));
+    batch_write.AddPut(table_definition_hash_put_request);
+    
+    BatchCommitResponse resp;
+    try
+    {
+        metastore_ptr->batchWrite(batch_write, resp);
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::METASTORE_COMMIT_CAS_FAILURE)
+        {
+            String error_message;
+            if (resp.puts.count(1) && if_not_exists)
+                error_message = "table_definition_hash of Table with uuid(" + uuid + ") already exists.";
+            else if (resp.puts.count(1))
+                error_message = "table_definition_hash of Table with uuid(" + uuid + ") has recently been changed in catalog. Please try the request again.";
+            throw Exception(error_message, ErrorCodes::METASTORE_TABLE_TDH_CAS_ERROR);
+        }
+        else
+            throw e;
+    }
 }
 
 void MetastoreProxy::getTableClusterStatus(const String & name_space, const String & uuid, bool & is_clustered)
@@ -1562,7 +1604,7 @@ void MetastoreProxy::removeInsertionLabels(const String & name_space, const std:
     BatchCommitRequest batch_write;
     BatchCommitResponse resp;
     for (auto & label : labels)
-        batch_write.AddDelete(SingleDeleteRequest(insertionLabelKey(name_space, toString(label.table_uuid), label.name)));
+        batch_write.AddDelete(insertionLabelKey(name_space, toString(label.table_uuid), label.name));
     metastore_ptr->batchWrite(batch_write, resp);
 }
 
@@ -1638,8 +1680,8 @@ void MetastoreProxy::removeTableStatistics(const String & name_space, const Stri
     BatchCommitRequest batch_write;
     for (const auto & tag : tags)
     {
-        batch_write.AddDelete(SingleDeleteRequest(tableStatisticKey(name_space, uuid, tag)));
-        batch_write.AddDelete(SingleDeleteRequest(tableStatisticTagKey(name_space, uuid, tag)));
+        batch_write.AddDelete(tableStatisticKey(name_space, uuid, tag));
+        batch_write.AddDelete(tableStatisticTagKey(name_space, uuid, tag));
     }
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
@@ -1712,8 +1754,8 @@ void MetastoreProxy::removeColumnStatistics(
     BatchCommitRequest batch_write;
     for (const auto & tag : tags)
     {
-        batch_write.AddDelete(SingleDeleteRequest(columnStatisticKey(name_space, uuid, column, tag)));
-        batch_write.AddDelete(SingleDeleteRequest(columnStatisticTagKey(name_space, uuid, column, tag)));
+        batch_write.AddDelete(columnStatisticKey(name_space, uuid, column, tag));
+        batch_write.AddDelete(columnStatisticTagKey(name_space, uuid, column, tag));
     }
     BatchCommitResponse resp;
     metastore_ptr->batchWrite(batch_write, resp);
@@ -1833,10 +1875,57 @@ void MetastoreProxy::setAsyncQueryStatus(
 {
     // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
     // {
-    //     bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
+    //     if (status.status() == AsyncQueryStatus::NotStarted || status.status() == AsyncQueryStatus::Running)
+    //     {
+    //         bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
+    //     }
+    //     else
+    //     {
+    //         DB::Catalog::BatchCommitRequest update_request;
+    //         DB::Catalog::BatchCommitResponse update_response;
+    //         update_request.AddDelete(asyncQueryStatusKey(name_space, id));
+    //         update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl));
+    //         if (!bytekv->batchWrite(update_request, update_response))
+    //         {
+    //             throw Exception(
+    //                 fmt::format("Update async query status fail with ns {} and id {}.", name_space, id), ErrorCodes::LOGICAL_ERROR);
+    //         }
+    //     }
     //     return;
     // }
     metastore_ptr->put(asyncQueryStatusKey(name_space, id), status.SerializeAsString());
+}
+
+void MetastoreProxy::markBatchAsyncQueryStatusFailed(
+    const String & name_space, std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason, UInt64 ttl) const
+{
+    // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
+    // {
+    //     DB::Catalog::BatchCommitRequest update_request;
+    //     DB::Catalog::BatchCommitResponse update_response;
+    //     for (auto & status : statuses)
+    //     {
+    //         status.set_status(Protos::AsyncQueryStatus::Failed);
+    //         status.set_error_msg(reason);
+    //         status.set_update_time(time(nullptr));
+    //         update_request.AddDelete(asyncQueryStatusKey(name_space, status.id()));
+    //         update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, status.id()), status.SerializeAsString(), ttl));
+    //     }
+    //     if (!bytekv->batchWrite(update_request, update_response))
+    //     {
+    //         throw Exception(
+    //             fmt::format("Mark batch async query status fail with ns {} and size {}.", name_space, statuses.size()),
+    //             ErrorCodes::LOGICAL_ERROR);
+    //     }
+    //     return;
+    // }
+    for (auto & status : statuses)
+    {
+        status.set_status(Protos::AsyncQueryStatus::Failed);
+        status.set_error_msg(reason);
+        status.set_update_time(time(nullptr));
+        setAsyncQueryStatus(name_space, status.id(), status);
+    }
 }
 
 bool MetastoreProxy::tryGetAsyncQueryStatus(const String & name_space, const String & id, Protos::AsyncQueryStatus & status) const
@@ -1844,9 +1933,317 @@ bool MetastoreProxy::tryGetAsyncQueryStatus(const String & name_space, const Str
     String value;
     metastore_ptr->get(asyncQueryStatusKey(name_space, id), value);
     if (value.empty())
+        metastore_ptr->get(finalAsyncQueryStatusKey(name_space, id), value);
+    if (value.empty())
         return false;
     status.ParseFromString(value);
     return true;
+}
+
+std::vector<Protos::AsyncQueryStatus> MetastoreProxy::getIntermidiateAsyncQueryStatuses(const String & name_space) const
+{
+    std::vector<Protos::AsyncQueryStatus> res;
+
+    auto status_prefix = asyncQueryStatusKey(name_space, String{});
+    auto it = metastore_ptr->getByPrefix(status_prefix);
+    while (it->next())
+    {
+        res.emplace_back();
+        res.back().ParseFromString(it->value());
+    }
+    return res;
+}
+
+class MetastoreMultiWriteInBatch
+{
+public:
+    MetastoreMultiWriteInBatch(MetastoreProxy::MetastorePtr & metastore_, size_t max_batch_size_)
+        : metastore(metastore_), max_batch_size(max_batch_size_), current_batch_size(0), batch_commit_request()
+    {
+    }
+
+    void addDelete(const String & key)
+    {
+        batch_commit_request.AddDelete(key);
+
+        ++current_batch_size;
+        flushIfNecessary();
+    }
+
+    void addPut(const String& key, const String& value)
+    {
+
+        SinglePutRequest put_request(key, value);
+        batch_commit_request.AddPut(put_request);
+
+        ++current_batch_size;
+        flushIfNecessary();
+    }
+
+    void finalize()
+    {
+        BatchCommitResponse batch_commit_response;
+        if (current_batch_size != 0)
+        {
+            if (!metastore->batchWrite(batch_commit_request, batch_commit_response))
+            {
+                throw Exception(
+                    fmt::format(
+                        "Batch Writer batchWrite fail with {} puts, {} deletes.",
+                        batch_commit_response.puts.size(),
+                        batch_commit_response.deletes.size()),
+                    ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+    }
+
+private:
+    void flushIfNecessary()
+    {
+        BatchCommitResponse batch_commit_response;
+        if (current_batch_size >= max_batch_size)
+        {
+            current_batch_size = 0;
+            if (!metastore->batchWrite(batch_commit_request, batch_commit_response))
+            {
+                throw Exception(
+                    fmt::format(
+                        "Batch Writer batchWrite fail with {} puts, {} deletes.",
+                        batch_commit_response.puts.size(),
+                        batch_commit_response.deletes.size()),
+                    ErrorCodes::LOGICAL_ERROR);
+            }
+
+            batch_commit_request = BatchCommitRequest();
+        }
+    }
+
+    MetastoreProxy::MetastorePtr metastore;
+    const size_t max_batch_size;
+
+    size_t current_batch_size;
+    BatchCommitRequest batch_commit_request;
+};
+
+void MetastoreProxy::attachDetachedParts(const String& name_space, const String& from_uuid,
+    const String& to_uuid, const std::vector<String>& detached_part_names,
+    const Protos::DataModelPartVector& parts, const Strings& current_partitions,
+    size_t batch_write_size, size_t batch_delete_size)
+{
+    if (detached_part_names.size() != static_cast<size_t>(parts.parts_size()))
+    {
+        throw Exception(fmt::format("Detached part names' size {} didn't match parts meta size {}",
+            detached_part_names.size(), parts.parts_size()), ErrorCodes::LOGICAL_ERROR);
+    }
+    if (detached_part_names.empty())
+    {
+        return;
+    }
+
+    // Write active part meta and corresponding partition list
+    {
+        std::unordered_set<String> existing_partitions{current_partitions.begin(), current_partitions.end()};
+        std::map<String, String> partition_map;
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_write_size);
+        // Write partition list
+        for (size_t idx = 0, parts_size = parts.parts_size(); idx < parts_size; ++idx)
+        {
+            auto info_ptr = createPartInfoFromModel(parts.parts(idx).part_info());
+            String part_key = dataPartKey(name_space, to_uuid, info_ptr->getPartName());
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), fmt::format("[attachDetachedParts] Write part record {}",
+                part_key));
+
+            if (!existing_partitions.contains(info_ptr->partition_id)
+                && !partition_map.contains(info_ptr->partition_id))
+            {
+                partition_map.emplace(info_ptr->partition_id, parts.parts(idx).partition_minmax());
+            }
+
+            batch_writer.addPut(part_key, parts.parts(idx).SerializeAsString());
+        }
+        Protos::PartitionMeta partition_model;
+        for (const auto& [partition_id, partition_minmax] : partition_map)
+        {
+            String partition_key = tablePartitionInfoPrefix(name_space, to_uuid) + partition_id + "_";
+            partition_model.set_id(partition_id);
+            partition_model.set_partition_minmax(partition_minmax);
+
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedParts] Write partition record {}",
+                partition_key);
+
+            batch_writer.addPut(partition_key, partition_model.SerializeAsString());
+        }
+        batch_writer.finalize();
+    }
+
+    // Delete detached part meta, since multi write is not atomic,
+    // it may delete detached part meta but failed to write part meta
+    // and lead to meta lost
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_delete_size);
+        for (size_t idx = 0; idx < detached_part_names.size(); ++idx)
+        {
+            if (!detached_part_names[idx].empty())
+            {
+                String detached_part_key = detachedPartKey(name_space, from_uuid,
+                    detached_part_names[idx]);
+                LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedParts] Delete detached part record {}",
+                    detached_part_key);
+
+                batch_writer.addDelete(detached_part_key);
+            }
+        }
+        batch_writer.finalize();
+    }
+}
+
+void MetastoreProxy::detachAttachedParts(const String& name_space, const String& from_uuid,
+    const String& to_uuid, const std::vector<String>& attached_part_names,
+    const std::vector<std::optional<Protos::DataModelPart>>& parts,
+    size_t batch_write_size, size_t batch_delete_size)
+{
+    if (attached_part_names.size() != parts.size())
+    {
+        throw Exception(fmt::format("Attached part names's count {} and parts count {} missmatch",
+            attached_part_names.size(), parts.size()), ErrorCodes::LOGICAL_ERROR);
+    }
+    if (attached_part_names.empty())
+    {
+        return;
+    }
+
+    // Write detached meta
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_write_size);
+        for (size_t idx = 0; idx < parts.size(); ++idx)
+        {
+            if (parts[idx].has_value())
+            {
+                auto info_ptr = createPartInfoFromModel(parts[idx].value().part_info());
+                String detached_part_key = detachedPartKey(name_space, to_uuid,
+                    info_ptr->getPartName());
+                LOG_TRACE(&Poco::Logger::get("MetaStore"), "[detachAttachedParts] Write detach part record {}",
+                    detached_part_key);
+
+                batch_writer.addPut(detached_part_key, parts[idx].value().SerializeAsString());
+            }
+        }
+        batch_writer.finalize();
+    }
+
+    // Delete part metas
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_delete_size);
+        for (size_t idx = 0; idx < attached_part_names.size(); ++idx)
+        {
+            String part_key = dataPartKey(name_space, from_uuid, attached_part_names[idx]);
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[detachAttachedParts] Delete part record {}",
+                part_key);
+
+            batch_writer.addDelete(part_key);
+        }
+        batch_writer.finalize();
+    }
+}
+
+// This method is used only for detach part's rollback, so we won't write
+// partition list here
+std::vector<std::pair<String, UInt64>> MetastoreProxy::attachDetachedPartsRaw(const String& name_space,
+    const String& tbl_uuid, const std::vector<String>& part_names,
+    size_t batch_write_size, size_t batch_delete_size)
+{
+    if (part_names.empty())
+    {
+        return {};
+    }
+
+    std::vector<String> keys;
+    keys.reserve(part_names.size());
+    std::for_each(part_names.begin(), part_names.end(), [&name_space, &tbl_uuid, &keys](const String& part_name) {
+        keys.push_back(detachedPartKey(name_space, tbl_uuid, part_name));
+    });
+    std::vector<std::pair<String, UInt64>> metas = metastore_ptr->multiGet(keys);
+
+    // Get all written detached part metas, write part metas
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_write_size);
+        for (size_t i = 0; i < part_names.size(); ++i)
+        {
+            if (!metas[i].first.empty())
+            {
+                String part_key = dataPartKey(name_space, tbl_uuid, part_names[i]);
+                LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedPartsRaw] Write part meta record {}",
+                    part_key);
+
+                batch_writer.addPut(part_key, metas[i].first);
+            }
+        }
+        batch_writer.finalize();
+    }
+
+    // Delete detached part metas
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_delete_size);
+        for (size_t i = 0; i < part_names.size(); ++i)
+        {
+            String detached_part_key = detachedPartKey(name_space, tbl_uuid, part_names[i]);
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedPartsRaw] Delete detached part record {}",
+                detached_part_key);
+
+            batch_writer.addDelete(detached_part_key);
+        }
+        batch_writer.finalize();
+    }
+
+    return metas;
+}
+
+void MetastoreProxy::detachAttachedPartsRaw(const String& name_space, const String& from_uuid,
+    const String& to_uuid, const std::vector<String>& attached_part_names,
+    const std::vector<std::pair<String, String>>& detached_part_metas,
+    size_t batch_write_size, size_t batch_delete_size)
+{
+    // Write detach meta first
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_write_size);
+        for (const auto& [detached_part_name, detached_part_meta] : detached_part_metas)
+        {
+            String detached_part_key = detachedPartKey(name_space, to_uuid, detached_part_name);
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "Write detached part record {} in detachAttachedPartsRaw",
+                detached_part_key);
+
+            batch_writer.addPut(detached_part_key, detached_part_meta);
+        }
+        batch_writer.finalize();
+    }
+
+    // Delete attached part metas
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_delete_size);
+        for (const String& attached_part_name : attached_part_names)
+        {
+            String attached_part_key = dataPartKey(name_space, from_uuid, attached_part_name);
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "Delete part record {} in detachAttachedPartsRaw",
+                attached_part_key);
+
+            batch_writer.addDelete(attached_part_key);
+        }
+        batch_writer.finalize();
+    }
+}
+
+IMetaStore::IteratorPtr MetastoreProxy::getDetachedPartsInRange(
+    const String& name_space, const String& tbl_uuid, const String& range_start,
+    const String& range_end, bool include_start, bool include_end)
+{
+    String prefix = detachedPartPrefix(name_space, tbl_uuid);
+    return metastore_ptr->getByRange(prefix + range_start, prefix + range_end,
+        include_start, include_end);
+}
+
+IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit)
+{
+    return metastore_ptr->getByPrefix(trashItemsPrefix(name_space, table_uuid), limit);
 }
 
 } /// end of namespace DB::Catalog

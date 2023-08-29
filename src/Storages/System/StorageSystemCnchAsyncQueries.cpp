@@ -1,12 +1,13 @@
 #include <Catalog/Catalog.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Protos/cnch_common.pb.h>
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/System/CollectWhereClausePredicate.h>
 #include <Storages/System/StorageSystemCnchAsyncQueries.h>
-#include "common/logger_useful.h"
+#include <common/logger_useful.h>
 
 
 namespace DB
@@ -19,7 +20,9 @@ NamesAndTypesList StorageSystemCnchAsyncQueries::getNamesAndTypes()
         {"query_id", std::make_shared<DataTypeString>()},
         {"status", std::make_shared<DataTypeString>()},
         {"error_msg", std::make_shared<DataTypeString>()},
+        {"start_time", std::make_shared<DataTypeDateTime>()},
         {"update_time", std::make_shared<DataTypeDateTime>()},
+        {"max_execution_time", std::make_shared<DataTypeUInt64>()},
     };
 }
 
@@ -44,7 +47,9 @@ void StorageSystemCnchAsyncQueries::fillData(MutableColumns & res_columns, Conte
                 res_columns[i++]->insert(data.query_id());
                 res_columns[i++]->insert(AsyncQueryStatus_Status_Name(data.status()));
                 res_columns[i++]->insert(data.error_msg());
+                res_columns[i++]->insert(static_cast<UInt64>(data.start_time()));
                 res_columns[i++]->insert(static_cast<UInt64>(data.update_time()));
+                res_columns[i++]->insert(static_cast<UInt64>(data.max_execution_time()));
             }
             else
             {

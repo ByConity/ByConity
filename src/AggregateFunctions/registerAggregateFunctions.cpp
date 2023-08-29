@@ -107,6 +107,14 @@ void registerAggregateFunctionNdvBuckets(AggregateFunctionFactory & factory);
 void registerAggregateFunctionNdvBucketsExtend(AggregateFunctionFactory & factory);
 void registerAggregateFunctionNothing(AggregateFunctionFactory & factory);
 void registerAggregateFunctionHllSketchEstimate(AggregateFunctionFactory &);
+void registerAggregateFunctionAuc(AggregateFunctionFactory &);
+void registerAggregateFunctionFastAuc(AggregateFunctionFactory &);
+void registerAggregateFunctionFastAuc2(AggregateFunctionFactory &);
+void registerAggregateFunctionFastAuc3(AggregateFunctionFactory &);
+void registerAggregateFunctionRegAuc(AggregateFunctionFactory &);
+void registerAggregateFunctionRegAucV2(AggregateFunctionFactory &);
+void registerAggregateFunctionDebiasAuc(AggregateFunctionFactory &);
+void registerAggregateFunctionEcpmAuc(AggregateFunctionFactory &);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -213,6 +221,14 @@ void registerAggregateFunctions()
         registerAggregateFunctionNdvBucketsExtend(factory);
         registerAggregateFunctionNothing(factory);
         registerAggregateFunctionHllSketchEstimate(factory);
+        registerAggregateFunctionAuc(factory);
+        registerAggregateFunctionFastAuc(factory);
+        registerAggregateFunctionFastAuc2(factory);
+        registerAggregateFunctionFastAuc3(factory);
+        registerAggregateFunctionRegAuc(factory);
+        registerAggregateFunctionRegAucV2(factory);
+        registerAggregateFunctionDebiasAuc(factory);
+        registerAggregateFunctionEcpmAuc(factory);
     }
 
     {

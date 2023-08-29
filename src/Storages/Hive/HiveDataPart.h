@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include <Storages/Hive/HiveDataPart_fwd.h>
+#include <Storages/DataPart_fwd.h>
 #include <Storages/IStorage.h>
 #include <Disks/IDisk.h>
 #include <IO/ReadBuffer.h>

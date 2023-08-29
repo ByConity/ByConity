@@ -1,0 +1,143 @@
+test partition level unique key and cluster by is same with unique key
+Ensure bucket number is assigned to a part in bucket table
+2023-06-26	1	1c
+2023-06-26	2	2a
+2023-06-26	3	3b
+\'2023-06-26\'	0	18009986678694354798
+\'2023-06-26\'	0	18009986678694354798
+Ensure join queries between bucket tables work correctly
+2023-06-26	0	0a
+2023-06-26	1	1b
+2023-06-26	4	4a
+\'2023-06-26\'	0	18009986678694354798
+1c	1	1b
+ALTER MODIFY CLUSTER KEY DEFINITION
+2023-06-26	0	0a
+2023-06-26	1	1b
+2023-06-26	2	2a
+2023-06-26	3	3b
+2023-06-26	4	4a
+0	3	18009986678694354798
+0	3	18009986678694354798
+1	2	13896112416291102887
+2	1	13896112416291102887
+AFTER MODIFY CLUSTER KEY, test insert one row
+2023-06-25	0	00a
+2023-06-25	1	11d
+2023-06-25	4	44a
+DROP bucket table definition, INSERT, ensure bucket number of new part is -1, ban recluster commands
+2023-06-25	0	0a
+2023-06-26	0	0a
+2023-06-26	1	1b
+2023-06-26	4	4a
+\'2023-06-25\'	-1	8225647635166672492
+\'2023-06-26\'	0	18009986678694354798
+
+test partition level unique key and cluster by is different with unique key
+Ensure bucket number is assigned to a part in bucket table
+2023-06-26	1	1c
+2023-06-26	2	2a
+2023-06-26	3	3b
+\'2023-06-26\'	0	16113718972914311075
+\'2023-06-26\'	0	16113718972914311075
+Ensure join queries between bucket tables work correctly
+2023-06-26	0	0a
+2023-06-26	1	1b
+2023-06-26	4	4a
+\'2023-06-26\'	0	16113718972914311075
+1c	1	1b
+ALTER MODIFY CLUSTER KEY DEFINITION
+2023-06-26	0	0a
+2023-06-26	1	1b
+2023-06-26	2	2a
+2023-06-26	3	3b
+2023-06-26	4	4a
+0	3	16113718972914311075
+0	3	16113718972914311075
+0	2	6988326703604145225
+2	1	6988326703604145225
+DROP bucket table definition, INSERT, ensure bucket number of new part is -1, ban recluster commands
+2023-06-25	0	0a
+2023-06-26	0	0a
+2023-06-26	1	1b
+2023-06-26	4	4a
+\'2023-06-25\'	-1	8225647635166672492
+\'2023-06-26\'	0	16113718972914311075
+Test there has duplicated keys in block
+2023-06-24	1	1b
+2023-06-24	2	2b
+2023-06-24	3	3b
+2023-06-25	1	1a
+2023-06-25	2	2a
+2023-06-25	3	3a
+2023-06-26	0	0a
+2023-06-26	1	1b
+2023-06-26	2	2a
+2023-06-26	3	3b
+2023-06-26	4	4a
+
+test table level unique key and cluster by is same with unique key
+Ensure bucket number is assigned to a part in bucket table
+2023-06-26	1	1c
+2023-06-26	2	2a
+2023-06-26	3	3b
+\'2023-06-26\'	0	18009986678694354798
+\'2023-06-26\'	0	18009986678694354798
+Ensure join queries between bucket tables work correctly
+2023-06-26	0	0a
+2023-06-26	1	1b
+2023-06-26	4	4a
+\'2023-06-26\'	0	18009986678694354798
+1c	1	1b
+ALTER MODIFY CLUSTER KEY DEFINITION
+2023-06-26	0	0a
+2023-06-26	1	1b
+2023-06-26	2	2a
+2023-06-26	3	3b
+2023-06-26	4	4a
+0	3	18009986678694354798
+0	3	18009986678694354798
+1	2	13896112416291102887
+2	1	13896112416291102887
+AFTER MODIFY CLUSTER KEY, test insert one row
+2023-06-25	0	00a
+2023-06-25	1	11d
+2023-06-26	2	2a
+2023-06-26	3	3b
+2023-06-25	4	44a
+DROP bucket table definition, INSERT, ensure bucket number of new part is -1, ban recluster commands
+2023-06-25	0	0a
+2023-06-26	1	1b
+2023-06-26	4	4a
+\'2023-06-25\'	-1	8225647635166672492
+\'2023-06-26\'	0	18009986678694354798
+
+test table level unique key and cluster by is different with unique key
+Ensure bucket number is assigned to a part in bucket table
+2023-06-26	1	1c
+2023-06-26	2	2a
+2023-06-26	3	3b
+\'2023-06-26\'	0	16113718972914311075
+\'2023-06-26\'	0	16113718972914311075
+Ensure join queries between bucket tables work correctly
+2023-06-26	0	0a
+2023-06-26	1	1b
+2023-06-26	4	4a
+\'2023-06-26\'	0	16113718972914311075
+1c	1	1b
+ALTER MODIFY CLUSTER KEY DEFINITION
+2023-06-26	0	0a
+2023-06-26	1	1b
+2023-06-26	2	2a
+2023-06-26	3	3b
+2023-06-26	4	4a
+0	3	16113718972914311075
+0	3	16113718972914311075
+0	2	6988326703604145225
+2	1	6988326703604145225
+DROP bucket table definition, INSERT, ensure bucket number of new part is -1, ban recluster commands
+2023-06-25	0	0a
+2023-06-26	1	1b
+2023-06-26	4	4a
+\'2023-06-25\'	-1	8225647635166672492
+\'2023-06-26\'	0	16113718972914311075

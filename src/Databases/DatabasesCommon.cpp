@@ -210,7 +210,7 @@ void DatabaseWithOwnTablesBase::attachTableUnlocked(const String & table_name, c
 
     if (table_id.hasUUID())
     {
-        assert(database_name == DatabaseCatalog::TEMPORARY_DATABASE || getUUID() != UUIDHelpers::Nil);
+        // assert(database_name == DatabaseCatalog::TEMPORARY_DATABASE || getUUID() != UUIDHelpers::Nil);
         DatabaseCatalog::instance().addUUIDMapping(table_id.uuid, shared_from_this(), table);
     }
 
@@ -306,6 +306,13 @@ std::vector<StoragePtr> getViews(const StorageID & storage_id, const ContextPtr 
         }
     }
     return views;
+}
+
+String generateInnerTableName(const StorageID & view_id)
+{
+    if (view_id.hasUUID())
+        return ".inner_id." + toString(view_id.uuid);
+    return ".inner." + view_id.getTableName();
 }
 
 }
