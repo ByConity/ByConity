@@ -1087,7 +1087,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
             formatReadableSizeWithBinarySuffix(mark_cache_size));
     }
     global_context->setMarkCache(mark_cache_size);
-    global_context->setPrimaryIndexCache(mark_cache_size);
     global_context->setChecksumsCache(config().getUInt64("checksum_cache_size", 10737418240)); // 10GB
 
     /// A cache for mmapped files.

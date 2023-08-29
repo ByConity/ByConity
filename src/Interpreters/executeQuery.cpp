@@ -21,14 +21,16 @@
 
 #include <memory>
 #include <Client/Connection.h>
-#include "common/logger_useful.h"
+#include <Interpreters/executeQueryHelper.h>
 #include <Common/Config/VWCustomizedSettings.h>
 #include <Common/Exception.h>
+#include <Common/HostWithPorts.h>
 #include <Common/PODArray.h>
 #include <Common/ThreadProfileEvents.h>
 #include <Common/formatReadable.h>
-#include <Common/HostWithPorts.h>
 #include <Common/typeid_cast.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
 
 #include <IO/LimitReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
@@ -46,9 +48,6 @@
 #include <Processors/Sources/RemoteSource.h>
 #include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
 
-#include <Parsers/ASTAlterQuery.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
@@ -91,7 +90,7 @@
 
 #include <Common/ProfileEvents.h>
 #include <Common/RpcClientPool.h>
-#include <DaemonManager/DaemonManagerClient.h>
+
 #include <DataStreams/IBlockStream_fwd.h>
 #include <DataStreams/NullBlockOutputStream.h>
 #include <DataStreams/RemoteQueryExecutor.h>
@@ -99,14 +98,12 @@
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Cluster.h>
-#include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/InterpreterCommitQuery.h>
-#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/NamedSession.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/StorageID.h>
-#include <Interpreters/VirtualWarehouseHandle.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/QueryPipeline.h>
@@ -165,7 +162,6 @@ namespace ErrorCodes
     extern const int CNCH_QUEUE_QUERY_FAILURE;
 }
 
-void forwardSelectQuery(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res);
 void tryQueueQuery(ContextMutablePtr context, ASTType ast_type)
 {
     auto worker_group_handler = context->tryGetCurrentWorkerGroup();
@@ -639,7 +635,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     assert(internal || CurrentThread::get().getQueryContext()->getCurrentQueryId() == CurrentThread::getQueryId());
 #endif
 
-    doSomeReplacementForSettings(context);
 
     const Settings & settings = context->getSettingsRef();
 
@@ -694,7 +689,15 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
         }
 
-        if (context->getServerType() == ServerType::cnch_server && context->getSettingsRef().enable_auto_query_forwarding)
+        if (isQueryInInteractiveSession(context, ast) && isDDLQuery(context, ast))
+        {
+            /// Commit the current explicit transaction
+            LOG_WARNING(&Poco::Logger::get("executeQuery"), "Receive DDL in interactive transaction session, will commit the session implicitly");
+            InterpreterCommitQuery(nullptr, context).execute();
+        }
+
+        if (context->getServerType() == ServerType::cnch_server
+            && (isQueryInInteractiveSession(context, ast) || context->getSettingsRef().enable_auto_query_forwarding || settings.use_query_cache))
         {
             auto host_ports = getTargetServer(context, ast);
             LOG_DEBUG(
@@ -753,37 +756,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         throw;
     }
 
-
-    /// NOTES: Interactive transaction session
-    /// 0. if query is ddl, commit the active transaction
-    /// 1. if this is non-write query, execute on local server
-    /// 2. if this is write query, need to create proxy transaction and include primary_txn_id and txn_id in query packet
-
-    if (isQueryInInteractiveSession(context, ast))
-    {
-        if (isDDLQuery(context, ast))
-        {
-            /// Commit the current explicit transaction
-            LOG_WARNING(
-                &Poco::Logger::get("executeQuery"), "Receive DDL in interactive transaction session, will commit the session implicitly");
-            InterpreterCommitQuery(nullptr, context).execute();
-        }
-        else
-        {
-            auto host_ports = getTargetServer(context, ast);
-            if (!host_ports.empty() && !isLocalServer(host_ports.getRPCAddress(), std::to_string(context->getRPCPort())))
-            {
-                LOG_INFO(
-                    &Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.getTCPAddress());
-                /// TODO: currently, this called only for compability with formal query flow, may need more shophisticated logic
-                /// in the future
-                context->initializeExternalTablesIfSet();
-                executeQueryByProxy(context, host_ports, ast, res);
-                LOG_INFO(&Poco::Logger::get("executeQuery"), "Query execution on remote server done");
-                return std::make_tuple(ast, std::move(res));
-            }
-        }
-    }
+    doSomeReplacementForSettings(context);
 
     setQuerySpecificSettings(ast, context);
 
@@ -969,36 +942,26 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 LOG_DEBUG(&Poco::Logger::get("executeQuery"), "StorageIDs:");
                 for (auto & storage_id : storage_ids)
                     LOG_DEBUG(&Poco::Logger::get("executeQuery"), "StorageID {}", storage_id.getNameForLogs());
-                HostWithPorts target_hp = context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage_ids.begin()->uuid), storage_ids.begin()->server_vw_name, true);
-                if (!target_hp.empty())
+                if (settings.enable_transactional_query_cache)
+                    source_update_time_for_query_cache = getMaxUpdateTime(storage_ids, context);
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "max update timestamp {}", source_update_time_for_query_cache);
+                if (source_update_time_for_query_cache.toUInt64() != 0)
                 {
-                    if (!isLocalServer(target_hp.getRPCAddress(), std::to_string(context->getRPCPort())))
+                    QueryCache::Key key(
+                        ast,
+                        res.pipeline.getHeader(),
+                        context->getUserName(),
+                        /*dummy for is_shared*/ false,
+                        /*dummy value for expires_at*/ std::chrono::system_clock::from_time_t(1),
+                        /*dummy value for is_compressed*/ false,
+                        context->getCurrentTransactionID());
+                    QueryCache::Reader reader = query_cache->createReader(key, source_update_time_for_query_cache);
+                    if (reader.hasCacheEntryForKey())
                     {
-                        forwardSelectQuery(context, target_hp, ast, res);
-                        return std::make_tuple(ast, std::move(res));
-                    }
-                    else
-                    {
-                        if (settings.enable_transactional_query_cache)
-                            source_update_time_for_query_cache = getMaxUpdateTime(storage_ids, context);
-                        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "max update timestamp {}", source_update_time_for_query_cache);
-                        if (source_update_time_for_query_cache.toUInt64() != 0)
-                        {
-                            QueryCache::Key key(
-                                ast, res.pipeline.getHeader(),
-                                context->getUserName(), /*dummy for is_shared*/ false,
-                                /*dummy value for expires_at*/ std::chrono::system_clock::from_time_t(1),
-                                /*dummy value for is_compressed*/ false,
-                                context->getCurrentTransactionID());
-                            QueryCache::Reader reader = query_cache->createReader(key, source_update_time_for_query_cache);
-                            if (reader.hasCacheEntryForKey())
-                            {
-                                QueryPipeline pipeline;
-                                pipeline.readFromQueryCache(reader.getSource(), reader.getSourceTotals(), reader.getSourceExtremes());
-                                res.pipeline = std::move(pipeline);
-                                read_result_from_query_cache = true;
-                            }
-                        }
+                        QueryPipeline pipeline;
+                        pipeline.readFromQueryCache(reader.getSource(), reader.getSourceTotals(), reader.getSourceExtremes());
+                        res.pipeline = std::move(pipeline);
+                        read_result_from_query_cache = true;
                     }
                 }
             }
@@ -1427,6 +1390,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         elem.used_table_functions = factories_info.table_functions;
                         elem.partition_ids = context->getPartitionIds();
 
+                        if (log_queries && elem.type >= log_queries_min_type
+                            && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
+                        {
+                            if (auto query_log = context->getQueryLog())
+                                query_log->add(elem);
+                        }
 
                         if (log_processors_profiles)
                         {
@@ -1950,162 +1919,6 @@ bool isDDLQuery([[maybe_unused]] const ContextPtr & context, const ASTPtr & quer
     auto * rename = query->as<ASTRenameQuery>();
 
     return create || (drop && drop->kind != ASTDropQuery::Kind::Truncate) || rename;
-}
-
-HostWithPorts getTargetServer(const ContextPtr & context, ASTPtr & ast)
-{
-    /// Only get target server for main table
-    StorageID table_id = StorageID::createEmpty();
-    if (auto * insert = ast->as<ASTInsertQuery>())
-    {
-        table_id = insert->table_id;
-    }
-    else if (auto * alter = ast->as<ASTAlterQuery>())
-    {
-        table_id = StorageID(alter->database, alter->table, alter->uuid);
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Get storage id: {}", table_id.getNameForLogs());
-    }
-    else if (auto * drop = ast->as<ASTDropQuery>())
-    {
-        table_id = StorageID(drop->database, drop->table, drop->uuid);
-    }
-    else
-    {
-        /// TODO: DDL query should auto commit?
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Executing query at local server");
-        return {};
-    }
-
-    if (table_id.database_name.empty())
-    {
-        table_id.database_name = context->getCurrentDatabase();
-    }
-
-    auto table = DatabaseCatalog::instance().getTable(table_id, context);
-
-    if (table_id.database_name == "system")
-        return {};
-
-    auto topology_master = context->getCnchTopologyMaster();
-
-    return topology_master->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table_id.server_vw_name, false);
-}
-
-void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
-{
-    /// Create a proxy transaction for insert/alter query
-    auto & coordinator = context->getCnchTransactionCoordinator();
-    auto primary_txn_id = context->getSessionContext()->getCurrentTransaction()->getTransactionID();
-    auto proxy_txn = coordinator.createProxyTransaction(server, primary_txn_id);
-    context->setCurrentTransaction(proxy_txn);
-    context->getSessionContext()->getCurrentTransaction()->as<CnchExplicitTransaction>()->addStatement(queryToString(ast));
-    /// Anyway, on finish and exception, we need to finish the proxy transaction
-    res.finish_callback = [proxy_txn](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *, UInt64) {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
-        proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
-    };
-    res.exception_callback = [proxy_txn](int) {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server");
-        proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
-    };
-    /// Create connection to host
-    auto query_client_info = context->getClientInfo();
-    query_client_info.client_type = ClientInfo::ClientType::CNCH_SERVER;
-    auto settings = context->getSettingsRef();
-    res.remote_execution_conn = std::make_shared<Connection>(
-        server.getHost(),
-        server.tcp_port,
-        context->getCurrentDatabase(), /*default_database_*/
-        query_client_info.current_user,
-        query_client_info.current_password,
-        "", /*cluster_*/
-        "", /*cluster_secret*/
-        "server", /*client_name_*/
-        Protocol::Compression::Disable,
-        Protocol::Secure::Disable);
-
-    res.remote_execution_conn->setDefaultDatabase(context->getCurrentDatabase());
-
-    String query = queryToString(ast);
-    auto * insert_ast = ast->as<ASTInsertQuery>();
-    bool wait_insert_data = insert_ast && !insert_ast->select && !insert_ast->in_file;
-    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings).getSaturated(settings.max_execution_time);
-    if (wait_insert_data)
-    {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as INSERT VALUES query");
-        res.out = std::make_shared<DB::RemoteBlockOutputStream>(
-            *res.remote_execution_conn, timeouts, query, settings, query_client_info, context);
-    }
-    else
-    {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
-        auto remote_stream = std::make_shared<DB::RemoteBlockInputStream>(*res.remote_execution_conn, query, Block(), context);
-        remote_stream->setPoolMode(PoolMode::GET_ONE);
-        remote_stream->readPrefix();
-        while (Block block = remote_stream->read())
-            ;
-        remote_stream->readSuffix();
-        /// Get the extended profile info which is mainly for INSERT SELECT/INFILE
-        context->setExtendedProfileInfo(remote_stream->getExtendedProfileInfo());
-        res.in = std::move(remote_stream);
-    }
-}
-
-void forwardSelectQuery(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
-{
-    /// Create a proxy transaction for insert/alter query
-    auto & coordinator = context->getCnchTransactionCoordinator();
-    auto primary_txn_id = context->getCurrentTransaction()->getTransactionID();
-    auto proxy_txn = coordinator.createProxyTransaction(server, primary_txn_id);
-    context->setCurrentTransaction(proxy_txn);
-    /// Anyway, on finish and exception, we need to finish the proxy transaction
-    res.finish_callback = [proxy_txn](IBlockInputStream * , IBlockOutputStream *, QueryPipeline *, UInt64)
-    {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
-        proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
-    };
-    res.exception_callback = [proxy_txn](int)
-    {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server");
-        proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
-    };
-    /// Create connection to host
-    auto query_client_info = context->getClientInfo();
-    query_client_info.client_type = ClientInfo::ClientType::CNCH_SERVER;
-    auto settings = context->getSettingsRef();
-    res.remote_execution_conn = std::make_shared<Connection>(
-        server.getHost(), server.tcp_port,
-        context->getCurrentDatabase(), /*default_database_*/
-        query_client_info.current_user, query_client_info.current_password,
-        "", /*cluster_*/
-        "", /*cluster_secret*/
-        "server", /*client_name_*/
-        Protocol::Compression::Disable,
-        Protocol::Secure::Disable);
-
-    res.remote_execution_conn->setDefaultDatabase(context->getCurrentDatabase());
-
-    String query = queryToString(ast);
-    auto * insert_ast = ast->as<ASTInsertQuery>();
-    bool wait_insert_data = insert_ast && !insert_ast->select && !insert_ast->in_file;
-    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings).getSaturated(settings.max_execution_time);
-    if (wait_insert_data)
-    {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as INSERT VALUES query");
-        res.out = std::make_shared<DB::RemoteBlockOutputStream>(*res.remote_execution_conn, timeouts, query, settings, query_client_info, context);
-    }
-    else
-    {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
-        auto remote_stream = std::make_shared<DB::RemoteBlockInputStream>(*res.remote_execution_conn, query, Block(), context);
-        remote_stream->setPoolMode(PoolMode::GET_ONE);
-        remote_stream->readPrefix();
-        while (Block block = remote_stream->read());
-        remote_stream->readSuffix();
-        /// Get the extended profile info which is mainly for INSERT SELECT/INFILE
-        context->setExtendedProfileInfo(remote_stream->getExtendedProfileInfo());
-        res.in = std::move(remote_stream);
-    }
 }
 
 bool isAsyncMode(ContextMutablePtr context)

@@ -28,7 +28,8 @@ enum class OperationType
     OPEN,
     PUT,
     GET,
-    CLEAN
+    CLEAN,
+    FDB_CREATE_TXN
 };
 
 const std::string Operation(const OperationType & type);

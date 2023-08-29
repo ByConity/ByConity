@@ -70,6 +70,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DROP UNCOMPRESSED CACHE";
         case Type::DROP_MMAP_CACHE:
             return "DROP MMAP CACHE";
+        case Type::DROP_QUERY_CACHE:
+            return "DROP QUERY CACHE";
         case Type::DROP_CHECKSUMS_CACHE:
             return "DROP CHECKSUMS CACHE";
         case Type::DROP_CNCH_PART_CACHE:
