@@ -467,7 +467,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, fallback_perfect_shard, true, "Whether to fallback if there is any exception", 0) \
     M(Bool, \
       optimize_skip_unused_shards, \
-      false, \
+      true, \
       "Assumes that data is distributed by sharding_key. Optimization to skip unused shards if SELECT query filters by sharding_key.", \
       0) \
     M(Bool, \
