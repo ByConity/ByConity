@@ -31,7 +31,6 @@ struct PrepareContextResult
 {
     String local_table_name;
     ServerDataPartsVector parts;
-    HiveDataPartsCNCHVector hive_parts;
     HiveFiles hive_files;
 };
 
