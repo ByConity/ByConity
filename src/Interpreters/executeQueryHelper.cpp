@@ -12,6 +12,10 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/queryToString.h>
 #include <Processors/Sources/RemoteSource.h>
+#include <Transaction/CnchExplicitTransaction.h>
+#include <Transaction/CnchProxyTransaction.h>
+#include <Transaction/ICnchTransaction.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/ReadFromPreparedSource.h>
 
@@ -71,11 +75,26 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
 
 void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
 {
-    // Todo: support explicit transaction
-    res.finish_callback = [&](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *, UInt64) {
+    auto session_txn = context->getSessionContext()->getCurrentTransaction();
+    ProxyTransactionPtr proxy_txn;
+    if (session_txn && session_txn->isPrimary())
+    {
+        proxy_txn = context->getCnchTransactionCoordinator().createProxyTransaction(server, session_txn->getPrimaryTransactionID());
+        context->setCurrentTransaction(proxy_txn);
+        session_txn->as<CnchExplicitTransaction>()->addStatement(queryToString(ast));
+    }
+
+    res.finish_callback = [proxy_txn](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *, UInt64) {
         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
+        if (proxy_txn)
+            proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
+
     };
-    res.exception_callback = [&](int) { LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server"); };
+    res.exception_callback = [proxy_txn](int) { 
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server"); 
+        if (proxy_txn)
+            proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
+    };
 
     /// Create connection to host
     const auto & query_client_info = context->getClientInfo();
@@ -91,6 +110,8 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
         "server", /*client_name_*/
         Protocol::Compression::Enable,
         Protocol::Secure::Disable);
+
+    res.remote_execution_conn->setDefaultDatabase(context->getCurrentDatabase());
 
     String query = queryToString(ast);
     LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");

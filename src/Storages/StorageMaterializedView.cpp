@@ -59,12 +59,15 @@
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 
+#include <DataStreams/AsynchronousBlockInputStream.h>
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataStreams/MaterializingBlockInputStream.h>
 #include <DataStreams/SquashingBlockInputStream.h>
 #include <DataStreams/ConvertingBlockInputStream.h>
 #include <DataStreams/PushingToViewsBlockOutputStream.h>
 #include <DataStreams/copyData.h>
+
+#include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 
 namespace DB
 {
@@ -124,7 +127,7 @@ StorageMaterializedView::StorageMaterializedView(
                                                     && query.to_table_id.table_name == table_id_.table_name;
     if (point_to_itself_by_uuid || point_to_itself_by_name)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Materialized view {} cannot point to itself", table_id_.getFullTableName());
-    
+
     if (!has_inner_table)
     {
         target_table_id = query.to_table_id;
@@ -148,7 +151,7 @@ StorageMaterializedView::StorageMaterializedView(
 
         manual_create_query->set(manual_create_query->columns_list, new_columns_list);
         manual_create_query->set(manual_create_query->storage, query.storage->ptr());
-        
+
         create_context->setCurrentTransaction(nullptr, false);
         executeQuery(serializeAST(*manual_create_query), create_context, true);
 
@@ -661,7 +664,7 @@ void StorageMaterializedView::refreshCnchImpl(const ASTPtr & partition, ContextP
     /// BEGIN
     auto & txn_coordinator = local_context->getCnchTransactionCoordinator();
     auto explicit_txn = txn_coordinator.createTransaction(CreateTransactionOption().setType(CnchTransactionType::Explicit));
-    
+
     const_cast<Context &>(*local_context).setCurrentTransaction(explicit_txn, true);
 
     auto create_command_context = [local_context]() {
@@ -695,6 +698,25 @@ void StorageMaterializedView::refreshCnchImpl(const ASTPtr & partition, ContextP
     try
     {
         drop_io = executeQuery(alter_query_ss.str(), drop_context, true);
+        if (drop_io.pipeline.initialized())
+        {
+            auto & pipeline = drop_io.pipeline;
+            PullingAsyncPipelineExecutor executor(pipeline);
+            Block block;
+            while (executor.pull(block)) {}
+        }
+        else if (drop_io.in)
+        {
+            AsynchronousBlockInputStream async_in(drop_io.in);
+            async_in.readPrefix();
+            while (true)
+            {
+                const auto block = async_in.read();
+                if (!block)
+                    break;
+            }
+            async_in.readSuffix();
+        }
         drop_io.onFinish();
     }
     catch (...)
@@ -734,6 +756,25 @@ void StorageMaterializedView::refreshCnchImpl(const ASTPtr & partition, ContextP
     try
     {
         insert_io = executeQuery(serializeAST(*insert_query), insert_context, true);
+        if (insert_io.pipeline.initialized())
+        {
+            auto & pipeline = insert_io.pipeline;
+            PullingAsyncPipelineExecutor executor(pipeline);
+            Block block;
+            while (executor.pull(block)) {}
+        }
+        else if (insert_io.in)
+        {
+            AsynchronousBlockInputStream async_in(insert_io.in);
+            async_in.readPrefix();
+            while (true)
+            {
+                const auto block = async_in.read();
+                if (!block)
+                    break;
+            }
+            async_in.readSuffix();
+        }
         insert_io.onFinish();
     }
     catch (...)
