@@ -64,7 +64,7 @@ void registerTableFunctions()
 
 #if USE_HIVE
     registerTableFunctionCnchHive(factory);
-    registerTableFunctionCloudHive(factory);
+    // registerTableFunctionCloudHive(factory);
     registerTableFunctionHiveMetadata(factory);
 #endif
 

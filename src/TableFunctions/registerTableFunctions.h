@@ -65,7 +65,7 @@ void registerTableFunctionPostgreSQL(TableFunctionFactory & factory);
 
 #if USE_HIVE
 void registerTableFunctionCnchHive(TableFunctionFactory & factory);
-void registerTableFunctionCloudHive(TableFunctionFactory & factory);
+// void registerTableFunctionCloudHive(TableFunctionFactory & factory);
 void registerTableFunctionHiveMetadata(TableFunctionFactory & factory);
 #endif
 
