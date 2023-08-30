@@ -650,9 +650,6 @@ private:
     /// Loads marks index granularity into memory
     virtual void loadIndexGranularity();
 
-    /// Loads index from cache
-    void loadIndexFromCache();
-
     /// Loads index file.
     virtual IndexPtr loadIndex();
 

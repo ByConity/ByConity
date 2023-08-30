@@ -98,12 +98,6 @@ bool isQueryInInteractiveSession(const ContextPtr & context, [[maybe_unused]] co
 /// Return true if query is ddl
 bool isDDLQuery(const ContextPtr & context, const ASTPtr & query);
 
-/// Get target server for a query, can be localhost
-HostWithPorts getTargetServer(const ContextPtr & context, ASTPtr & ast);
-
-/// Execute the query on the target server.
-void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res);
-
 
 /// Async query execution
 

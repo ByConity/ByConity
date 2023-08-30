@@ -101,7 +101,6 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     , pinned_part_uuids(std::make_shared<PinnedPartUUIDs>())
     , data_parts_by_info(data_parts_indexes.get<TagByInfo>())
     , data_parts_by_state_and_info(data_parts_indexes.get<TagByStateAndInfo>())
-    , primary_index_cache(context_->getPrimaryIndexCache())
     , relative_data_path(relative_data_path_)
 {
     const auto & settings = getSettings();

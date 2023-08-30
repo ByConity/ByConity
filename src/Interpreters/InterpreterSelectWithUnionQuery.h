@@ -23,7 +23,6 @@
 
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/IInterpreterUnionOrSelectQuery.h>
-#include <QueryPlan/QueryCacheStep.h>
 
 namespace DB
 {
@@ -64,8 +63,6 @@ public:
     virtual void ignoreWithTotals() override;
 
 private:
-
-    void checkQueryCache(QueryPlan & query_plan);
 
     std::vector<std::unique_ptr<IInterpreterUnionOrSelectQuery>> nested_interpreters;
 

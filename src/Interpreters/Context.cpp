@@ -26,6 +26,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <Interpreters/Cache/QueryCache.h>
 #include <Access/AccessControlManager.h>
 #include <Access/ContextAccess.h>
 #include <Access/Credentials.h>
@@ -98,7 +99,6 @@
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Parsers/parseQuery.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
-#include <Processors/QueryCache.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <ResourceGroup/InternalResourceGroupManager.h>
 #include <ResourceGroup/VWResourceGroupManager.h>
@@ -321,7 +321,7 @@ struct ContextSharedPart
     mutable ResourceGroupManagerPtr resource_group_manager; /// Known resource groups
     mutable UncompressedCachePtr uncompressed_cache; /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
-    mutable QueryCachePtr query_cache; /// Cache of queries' results.
+    mutable QueryCachePtr query_cache;         /// Cache of query results.
     mutable MMappedFileCachePtr
         mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     ProcessList process_list; /// Executing queries at the moment.
@@ -2264,36 +2264,22 @@ void Context::dropMarkCache() const
         shared->mark_cache->reset();
 }
 
-void Context::setPrimaryIndexCache(size_t cache_size_in_bytes)
-{
-    auto lock = getLock();
-
-    if (shared->primary_index_cache)
-        throw Exception("Primary cache has been already created.", ErrorCodes::LOGICAL_ERROR);
-
-    shared->primary_index_cache = std::make_shared<PrimaryIndexCache>(cache_size_in_bytes);
-}
-
-std::shared_ptr<PrimaryIndexCache> Context::getPrimaryIndexCache() const
-{
-    auto lock = getLock();
-    return shared->primary_index_cache;
-}
-
-void Context::dropPrimaryIndexCache() const
-{
-    if (shared->primary_index_cache)
-        shared->primary_index_cache->reset();
-}
-
-void Context::setQueryCache(size_t cache_size_in_bytes)
+void Context::setQueryCache(const Poco::Util::AbstractConfiguration & config)
 {
     auto lock = getLock();
 
     if (shared->query_cache)
-        throw Exception("Query cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Query cache has been already created.");
 
-    shared->query_cache = std::make_shared<QueryCache>(cache_size_in_bytes);
+    shared->query_cache = std::make_shared<QueryCache>();
+    shared->query_cache->updateConfiguration(config);
+}
+
+void Context::updateQueryCacheConfiguration(const Poco::Util::AbstractConfiguration & config)
+{
+    auto lock = getLock();
+    if (shared->query_cache)
+        shared->query_cache->updateConfiguration(config);
 }
 
 QueryCachePtr Context::getQueryCache() const
@@ -2308,22 +2294,6 @@ void Context::dropQueryCache() const
     if (shared->query_cache)
         shared->query_cache->reset();
 }
-
-void Context::dropQueryCache(const String & name) const
-{
-    auto lock = getLock();
-    if (shared->query_cache)
-        shared->query_cache->dropQueryCache(name);
-}
-
-void Context::dropQueryCache(const String & database, const String & table) const
-{
-    String name = database + "." + table;
-    auto lock = getLock();
-    if (shared->query_cache)
-        shared->query_cache->dropQueryCache(name);
-}
-
 
 void Context::setMMappedFileCache(size_t cache_size_in_num_entries)
 {

@@ -142,9 +142,10 @@ fdb_error_t FDBClient::Put(FDBTransactionPtr tr, const PutRequest & put)
         fdb_error_t code = fdb_future_get_error(f->future);
         if (code == 0)
             break;
-        else if (code == FDBError::FDB_transaction_too_old)
+        else if (code == FDBError::FDB_transaction_too_old ||
+                code == FDBError::FDB_transaction_timed_out)
         {
-            LOG_DEBUG(&Poco::Logger::get("FDBClient::Put"), "Transaction too old, create new transaction");
+            LOG_DEBUG(&Poco::Logger::get("FDBClient::Put"), "create new transaction to retry because get fdb error {}", fdb_get_error(code));
             tr = std::make_shared<FDB::FDBTransactionRAII>();
             Catalog::MetastoreFDBImpl::check_fdb_op(CreateTransaction(tr));
             --retry;

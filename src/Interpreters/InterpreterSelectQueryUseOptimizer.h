@@ -46,7 +46,7 @@ public:
     }
 
     QueryPlanPtr buildQueryPlan();
-    PlanSegmentTreePtr getPlanSegment();
+    std::pair<PlanSegmentTreePtr, std::set<StorageID>> getPlanSegment();
 
     BlockIO execute() override;
 

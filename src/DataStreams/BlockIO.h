@@ -21,10 +21,9 @@
 
 #pragma once
 
-#include <Client/Connection.h>
-#include <DataStreams/IBlockStream_fwd.h>
 #include <functional>
 #include <memory>
+#include <DataStreams/IBlockStream_fwd.h>
 
 #include <Processors/QueryPipeline.h>
 #include <Client/Connection.h>

@@ -109,7 +109,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
     return query_plan;
 }
 
-PlanSegmentTreePtr InterpreterSelectQueryUseOptimizer::getPlanSegment()
+std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOptimizer::getPlanSegment()
 {
     Stopwatch stage_watch, total_watch;
     total_watch.start();
@@ -127,8 +127,7 @@ PlanSegmentTreePtr InterpreterSelectQueryUseOptimizer::getPlanSegment()
     PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(*query_plan, cluster_info_context);
 
     stage_watch.restart();
-    plan.allocateLocalTable(context);
-
+    std::set<StorageID> used_storage_ids = plan.allocateLocalTable(context);
     // select health worker before split
     if (context->getSettingsRef().enable_adaptive_scheduler && context->tryGetCurrentWorkerGroup())
     {
@@ -150,10 +149,13 @@ PlanSegmentTreePtr InterpreterSelectQueryUseOptimizer::getPlanSegment()
 
 BlockIO InterpreterSelectQueryUseOptimizer::execute()
 {
-    PlanSegmentTreePtr plan_segment_tree = getPlanSegment();
+    std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
 
-    auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree), context, MPPQueryOptions());
-    return coodinator->execute();
+    auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree_and_used_storage_ids.first), context, MPPQueryOptions());
+
+    BlockIO res = coodinator->execute();
+    res.pipeline.addUsedStorageIDs(plan_segment_tree_and_used_storage_ids.second);
+    return res;
 }
 
 QueryPlan PlanNodeToNodeVisitor::convert(QueryPlan & query_plan)
