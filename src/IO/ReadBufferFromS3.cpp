@@ -40,6 +40,9 @@ namespace ProfileEvents
     extern const Event S3ReadMicroseconds;
     extern const Event S3ReadBytes;
     extern const Event S3ReadRequestsErrors;
+
+    extern const Event ReadBufferFromS3ReadMicro;
+    extern const Event ReadBufferFromS3ReadBytes;
 }
 
 namespace DB
@@ -213,6 +216,83 @@ size_t ReadBufferFromS3::getFileSize()
     }
 }
 
+Aws::S3::Model::GetObjectResult ReadBufferFromS3::sendRequest(size_t range_begin, std::optional<size_t> range_end_incl) const
+{
+    Aws::S3::Model::GetObjectRequest req;
+    req.SetBucket(bucket);
+    req.SetKey(key);
+    // if (!version_id.empty())
+    //     req.SetVersionId(version_id);
+
+    if (range_end_incl)
+    {
+        req.SetRange(fmt::format("bytes={}-{}", range_begin, *range_end_incl));
+        LOG_TRACE(
+            log, "Read S3 object. Bucket: {}, Key: {}, Range: {}-{}",
+            bucket, key, range_begin, *range_end_incl);
+    }
+    else if (range_begin)
+    {
+        req.SetRange(fmt::format("bytes={}-", range_begin));
+        LOG_TRACE(
+            log, "Read S3 object. Bucket: {}, Key: {}, Offset: {}",
+            bucket, key, range_begin);
+    }
+
+    // ProfileEvents::increment(ProfileEvents::S3GetObject);
+    Stopwatch watch;
+
+    Aws::S3::Model::GetObjectOutcome outcome = client_ptr->GetObject(req);
+
+    if (outcome.IsSuccess())
+    {
+        watch.stop();
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadMicro, watch.elapsedMicroseconds());
+
+        return outcome.GetResultWithOwnership();
+    }
+    else
+    {
+        throw Exception(outcome.GetError().GetMessage(), ErrorCodes::S3_ERROR);
+    }
+}
+
+size_t ReadBufferFromS3::readBigAt(char * to, size_t n, size_t range_begin, const std::function<bool(size_t)> & progress_callback)
+{
+    if (n == 0)
+        return 0;
+
+    size_t sleep_time_with_backoff_milliseconds = 100;
+    for (size_t attempt = 0;; ++attempt)
+    {
+        bool last_attempt = attempt + 1 >= max_single_read_retries;
+
+        Stopwatch watch;
+
+        try
+        {
+            auto result = sendRequest(range_begin, range_begin + n - 1);
+            std::istream & istr = result.GetBody();
+
+            size_t bytes = copyFromIStreamWithProgressCallback(istr, to, n, progress_callback);
+
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadBytes, bytes);
+
+            return bytes;
+        }
+        catch (Poco::Exception & e)
+        {
+            if (!last_attempt)
+                throw e;
+
+            sleepForMilliseconds(sleep_time_with_backoff_milliseconds);
+            sleep_time_with_backoff_milliseconds *= 2;
+        }
+
+        watch.stop();
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadMicro, watch.elapsedMicroseconds());
+    }
+}
 }
 
 #endif

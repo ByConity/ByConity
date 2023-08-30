@@ -437,4 +437,32 @@ WorkerGroupHandle getWorkerGroupForTable(const MergeTreeMetaBase & storage, cons
     return worker_group;
 }
 
+WorkerGroupHandle getWorkerGroupForTable(ContextPtr local_context, StoragePtr storage)
+{
+    if (auto wg = local_context->tryGetCurrentWorkerGroup(); wg)
+        return wg;
+
+    String vw_name;
+    if (const auto & name = local_context->getSettingsRef().virtual_warehouse.value; !name.empty())
+    {
+        vw_name = name;
+    }
+    else if (auto opt_vw_name = storage->getVirtualWarehouseName(VirtualWarehouseType::Default); opt_vw_name)
+    {
+        vw_name = *opt_vw_name;
+    }
+    else
+    {
+        throw Exception("Storage does not support virtual warehouse", ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    auto vw = local_context->getVirtualWarehousePool().get(vw_name);
+    auto value = local_context->getSettingsRef().vw_schedule_algo.value;
+    auto algo = ResourceManagement::toVWScheduleAlgo(&value[0]);
+    auto worker_group = vw->pickWorkerGroup(algo);
+
+    local_context->setCurrentWorkerGroup(worker_group);
+    return worker_group;
+}
+
 }

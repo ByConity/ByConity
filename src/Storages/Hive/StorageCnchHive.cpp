@@ -7,6 +7,7 @@
 #include "Interpreters/ClusterProxy/executeQuery.h"
 #include "Interpreters/InterpreterSelectQuery.h"
 #include "Interpreters/SelectQueryOptions.h"
+#include "Interpreters/trySetVirtualWarehouse.h"
 #include "Interpreters/evaluateConstantExpression.h"
 #include "MergeTreeCommon/CnchStorageCommon.h"
 #include "Parsers/ASTCreateQuery.h"
@@ -45,7 +46,7 @@ StorageCnchHive::StorageCnchHive(
         const String & hive_db_name_,
         const String & hive_table_name_,
         StorageInMemoryMetadata metadata_,
-        ContextMutablePtr context_,
+        ContextPtr context_,
         std::shared_ptr<CnchHiveSettings> settings_)
     : IStorage(table_id_)
     , WithContext(context_)
@@ -59,15 +60,11 @@ StorageCnchHive::StorageCnchHive(
         hive_client = HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url);
         hive_table = hive_client->getTable(hive_db_name, hive_table_name);
     }
-    catch (Exception & e)
+    catch (...)
     {
-        e.addMessage(
-            "Error getting hive metastore client for cnch table {}, hive table {}.{} from metastore {}",
-            getStorageID().getFullTableName(),
-            hive_db_name,
-            hive_table_name,
-            hive_metastore_url);
-        throw;
+        hive_exception = std::current_exception();
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        return;
     }
 
     HiveSchemaConverter converter(context_, hive_table);
@@ -84,6 +81,15 @@ StorageCnchHive::StorageCnchHive(
 
     /// check file format
     IHiveFile::fromHdfsInputFormatClass(hive_table->sd.inputFormat);
+}
+
+void StorageCnchHive::startup()
+{
+    /// for some reason, we do not what to throw exceptions in ctor
+    if (hive_exception)
+    {
+        std::rethrow_exception(hive_exception);
+    }
 }
 
 bool StorageCnchHive::isBucketTable() const
@@ -130,9 +136,8 @@ std::optional<String> StorageCnchHive::getVirtualWarehouseName(VirtualWarehouseT
 
 void StorageCnchHive::collectResource(ContextPtr local_context, PrepareContextResult & result)
 {
-    auto work_group = local_context->getCurrentWorkerGroup();
+    auto worker_group = getWorkerGroupForTable(local_context, shared_from_this());
     auto cnch_resource = local_context->getCnchServerResource();
-
     auto txn_id = local_context->getCurrentTransactionID();
     StorageID cloud_storage_id = getStorageID();
     cloud_storage_id.table_name = cloud_storage_id.table_name + '_' + txn_id.toString();
@@ -218,7 +223,7 @@ void StorageCnchHive::read(
     PrepareContextResult result = prepareReadContext(column_names, metadata_snapshot, query_info, local_context, num_streams);
     Block header = InterpreterSelectQuery(query_info.query, local_context, SelectQueryOptions(processed_stage)).getSampleBlock();
 
-    auto worker_group = local_context->getCurrentWorkerGroup();
+    auto worker_group = getWorkerGroupForTable(local_context, shared_from_this());
     /// Return directly (with correct header) if no shard read from
     if (!worker_group || worker_group->getShardsInfo().empty() || result.hive_files.empty())
     {
@@ -321,7 +326,7 @@ void registerStorageCnchHive(StorageFactory & factory)
         String hive_table = engine_args[2]->as<ASTLiteral &>().value.safeGet<String>();
 
         StorageInMemoryMetadata metadata;
-        std::shared_ptr<CnchHiveSettings> hive_settings = std::make_shared<CnchHiveSettings>();
+        std::shared_ptr<CnchHiveSettings> hive_settings = std::make_shared<CnchHiveSettings>(args.getContext()->getCnchHiveSettings());
         if (args.storage_def->settings)
         {
             hive_settings->loadFromQuery(*args.storage_def);

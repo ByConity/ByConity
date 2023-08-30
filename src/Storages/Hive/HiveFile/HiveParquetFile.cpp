@@ -157,7 +157,21 @@ SourcePtr HiveParquetFile::getReader(const Block & block, const std::shared_ptr<
         params->read_buf = readFile(params->read_settings);
 
     std::unique_ptr<parquet::arrow::FileReader> reader;
-    THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(*params->read_buf, file_size), arrow::default_memory_pool(), &reader));
+    parquet::ArrowReaderProperties properties;
+    properties.set_use_threads(false);
+    properties.set_pre_buffer(true);
+    auto cache_options = arrow::io::CacheOptions::LazyDefaults();
+    cache_options.hole_size_limit = params->read_settings.remote_read_min_bytes_for_seek;
+    cache_options.range_size_limit = 1l << 40; // reading the whole row group at once is fine
+    properties.set_cache_options(cache_options);
+    parquet::arrow::FileReaderBuilder builder;
+
+    THROW_ARROW_NOT_OK(
+        builder.Open(asArrowFile(*params->read_buf, file_size), /* not to be confused with ArrowReaderProperties */ parquet::default_reader_properties(), metadata));
+    builder.properties(properties);
+
+    THROW_ARROW_NOT_OK(builder.Build(&reader));
+
     return std::make_shared<ParquetSliceSource>(std::move(reader), std::move(column_indices), params, std::move(arrow_column_to_ch_column));
 }
 

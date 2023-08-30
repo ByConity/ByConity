@@ -63,9 +63,11 @@ void registerTableFunctionMySQL(TableFunctionFactory & factory);
 void registerTableFunctionPostgreSQL(TableFunctionFactory & factory);
 #endif
 
-// #if USE_HIVE
-// void registerTableFunctionCloudHive(TableFunctionFactory & factory);
-// #endif
+#if USE_HIVE
+void registerTableFunctionCnchHive(TableFunctionFactory & factory);
+void registerTableFunctionCloudHive(TableFunctionFactory & factory);
+void registerTableFunctionHiveMetadata(TableFunctionFactory & factory);
+#endif
 
 void registerTableFunctionDictionary(TableFunctionFactory & factory);
 void registerTableFunctionCnch(TableFunctionFactory & factory);

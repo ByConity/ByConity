@@ -96,7 +96,8 @@ StorageHiveSource::StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, Al
     format_settings.parquet.allow_missing_columns = true;
 
     const auto & settings = context_->getSettingsRef();
-    read_params = std::make_shared<IHiveFile::ReadParams>(IHiveFile::ReadParams{
+    read_params = std::make_shared<IHiveFile::ReadParams>(
+        IHiveFile::ReadParams{
             .max_block_size = settings.max_block_size,
             .format_settings = std::move(format_settings),
             .context = context_,

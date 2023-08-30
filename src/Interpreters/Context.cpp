@@ -3489,7 +3489,7 @@ const CnchHiveSettings & Context::getCnchHiveSettings() const
     {
         const auto & config = getConfigRef();
         CnchHiveSettings cnchhive_settings;
-        cnchhive_settings.loadFromConfig("cnch_hive", config);
+        cnchhive_settings.loadFromConfig("hive", config);
         shared->cnchhive_settings.emplace(cnchhive_settings);
     }
 

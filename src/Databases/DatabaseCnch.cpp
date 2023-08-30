@@ -125,6 +125,11 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
 
     bool attach = query->as<ASTCreateQuery&>().attach;
 
+    /// Cnch table should not throw exceptions during creating StoragePtr. Otherwise, it will cause problems when
+    /// atempting to drop the table later.
+    /// Cnch Hive table catch exception during table creation and throws exception in startup()
+    table->startup();
+
     CreateActionParams params = {table->getStorageID(), getObjectDefinitionFromCreateQueryForCnch(query), attach, table->isDictionary()};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));

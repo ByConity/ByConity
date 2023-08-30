@@ -218,7 +218,7 @@ void registerStorageCloudHive(StorageFactory & factory)
     factory.registerStorage("CloudHive", [](const StorageFactory::Arguments & args)
     {
         StorageInMemoryMetadata metadata;
-        std::shared_ptr<CnchHiveSettings> settings = std::make_shared<CnchHiveSettings>();
+        std::shared_ptr<CnchHiveSettings> settings = std::make_shared<CnchHiveSettings>(args.getContext()->getCnchHiveSettings());
         if (args.storage_def->settings)
         {
             settings->loadFromQuery(*args.storage_def);

@@ -26,13 +26,15 @@ public:
     bool isRemote() const override { return true; }
     bool isBucketTable() const override;
 
+    void startup() override;
+
     StorageCnchHive(
         const StorageID & table_id_,
         const String & hive_metastore_url_,
         const String & hive_db_name_,
         const String & hive_table_name_,
         StorageInMemoryMetadata metadata_,
-        ContextMutablePtr context_,
+        ContextPtr context_,
         std::shared_ptr<CnchHiveSettings> settings_);
 
     QueryProcessingStage::Enum
@@ -78,17 +80,7 @@ private:
         const SelectQueryInfo & query_info,
         const HiveWhereOptimizer & optimizer);
 
-    HiveFiles selectFilesFromPartitions(
-        ContextPtr local_context,
-        const StorageMetadataPtr & metadata_snapshot,
-        const SelectQueryInfo & query_info,
-        const HiveWhereOptimizer & optimizer,
-        const HivePartitions & partitions);
-
-    std::set<Int64> selectBucketNumbers(
-        ContextPtr local_context,
-        const StorageMetadataPtr & metdata_snapshot,
-        const HiveWhereOptimizer & optimizer);
+    WorkerGroupHandle getWorkerGroup(ContextPtr context) const;
 
     String hive_metastore_url;
     String hive_db_name;
@@ -99,6 +91,8 @@ private:
 
     std::shared_ptr<CnchHiveSettings> storage_settings;
     Poco::Logger * log {&Poco::Logger::get("CnchHive")};
+
+    std::exception_ptr hive_exception = nullptr;
 };
 }
 

@@ -53,8 +53,13 @@ public:
     std::string getFileName() const override { return bucket + "/" + key; }
     size_t getFileSize() override;
 
+    bool supportsReadAt() override { return true; }
+    size_t readBigAt(char * to, size_t n, size_t range_begin, const std::function<bool(size_t)> & progress_callback) override;
+
 private:
     std::unique_ptr<ReadBuffer> initialize();
+    Aws::S3::Model::GetObjectResult sendRequest(size_t range_begin, std::optional<size_t> range_end_incl) const;
+
     ReadSettings read_settings;
     std::optional<size_t> file_size;
     bool restricted_seek;
