@@ -31,8 +31,8 @@ struct PrepareContextResult
 {
     String local_table_name;
     ServerDataPartsVector parts;
-    FileDataPartsCNCHVector file_parts;
     HiveFiles hive_files;
+    FileDataPartsCNCHVector file_parts;
 };
 
 enum class WorkerGroupUsageType
