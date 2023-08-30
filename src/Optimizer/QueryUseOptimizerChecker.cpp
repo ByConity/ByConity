@@ -30,11 +30,10 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
 #include <common/logger_useful.h>
-#include "Storages/RemoteFile/IStorageCnchFile.h"
 #include "Storages/Hive/StorageCnchHive.h"
+#include "Storages/RemoteFile/IStorageCnchFile.h"
 #include "Storages/StorageCnchMergeTree.h"
 #include "Storages/StorageMaterializedView.h"
->>>>>>> bridge_branch-20230818
 //#include <Common/TestLog.h>
 
 namespace DB
