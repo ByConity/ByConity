@@ -28,6 +28,7 @@
 #include <Access/EnabledQuota.h>
 #include <DataStreams/SizeLimits.h>
 #include <Storages/TableLockHolder.h>
+#include <Interpreters/Cache/QueryCache.h> /// nested classes such as QC::Writer can't be fwd declared
 
 namespace DB
 {
@@ -94,6 +95,13 @@ public:
     void addTransform(ProcessorPtr transform, OutputPort * totals, OutputPort * extremes);
     void addTransform(ProcessorPtr transform, InputPort * totals, InputPort * extremes);
 
+    void readFromQueryCache(
+        std::unique_ptr<SourceFromChunks> source,
+        std::unique_ptr<SourceFromChunks> source_totals,
+        std::unique_ptr<SourceFromChunks> source_extremes);
+    void addQueryCacheTransform(std::shared_ptr<QueryCache::Writer> query_cache_writer);
+    void finalizeWriteInQueryCache();
+
     enum class StreamType
     {
         Main = 0, /// Stream for query data. There may be several streams of this type.
@@ -133,7 +141,8 @@ public:
     void addTableLock(TableLockHolder lock) { holder.table_locks.emplace_back(std::move(lock)); }
     /// This methods are from QueryPipeline. Needed to make conversion from pipeline to pipe possible.
     void addInterpreterContext(std::shared_ptr<const Context> context) { holder.interpreter_context.emplace_back(std::move(context)); }
-    void addStorageHolder(StoragePtr storage) { holder.storage_holders.emplace_back(std::move(storage)); }
+    //void addStorageHolder(StoragePtr storage) { holder.storage_holders.emplace_back(std::move(storage)); }
+    void addStorageHolder(StoragePtr storage);
     void addQueryIdHolder(std::shared_ptr<QueryIdHolder> query_id_holder) { holder.query_id_holder = std::move(query_id_holder); }
     void addRuntimeFilterHolder(RuntimeFilterHolder rf_holder) { holder.runtime_filters.emplace_back(std::move(rf_holder)); }
     /// For queries with nested interpreters (i.e. StorageDistributed)

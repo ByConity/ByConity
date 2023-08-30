@@ -399,11 +399,11 @@ void TCPHandler::runImpl()
                         sendData(res);
                     },
                     [need_receive_data_for_input = state.need_receive_data_for_input,
-                     may_have_embedded_data](String query, ASTPtr ast, ContextMutablePtr context, ReadBuffer * istr) {
+                     may_have_embedded_data](String query, ASTPtr ast1, ContextMutablePtr context, ReadBuffer *) {
                         BlockIO io;
                         try
                         {
-                            io = executeQuery(query, ast, context, false, QueryProcessingStage::Complete, may_have_embedded_data);
+                            io = executeQuery(query, ast1, context, false, QueryProcessingStage::Complete, may_have_embedded_data);
                             if (need_receive_data_for_input) // It implies pipeline execution
                             {
                                 /// It is special case for input(), all works for reading data from client will be done in callbacks.
