@@ -1,21 +1,20 @@
-
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #if USE_HIVE
 
-#    include <Formats/FormatFactory.h>
-#    include "Disks/DiskFactory.h"
-#    include "IO/ReadHelpers.h"
-#    include "IO/WriteHelpers.h"
-#    include "Processors/Formats/IInputFormat.h"
-#    include "Protos/hive_models.pb.h"
-#    include "Storages/DiskCache/DiskCacheFactory.h"
-#    include "Storages/DiskCache/FileDiskCacheSegment.h"
-#    include "Storages/DiskCache/IDiskCache.h"
-#    include "Storages/Hive/DirectoryLister.h"
-#    include "Storages/Hive/HiveFile/HiveORCFile.h"
-#    include "Storages/Hive/HiveFile/HiveParquetFile.h"
-#    include "Storages/Hive/HivePartition.h"
-#    include "Storages/StorageInMemoryMetadata.h"
+#include "Disks/DiskFactory.h"
+#include "Formats/FormatFactory.h"
+#include "IO/ReadHelpers.h"
+#include "IO/WriteHelpers.h"
+#include "Storages/DiskCache/DiskCacheFactory.h"
+#include "Storages/DiskCache/FileDiskCacheSegment.h"
+#include "Storages/DiskCache/IDiskCache.h"
+#include "Storages/Hive/DirectoryLister.h"
+#include "Storages/Hive/HiveFile/HiveORCFile.h"
+#include "Storages/Hive/HiveFile/HiveParquetFile.h"
+#include "Storages/Hive/HivePartition.h"
+#include "Storages/StorageInMemoryMetadata.h"
+#include "Processors/Formats/IInputFormat.h"
+#include "Protos/hive_models.pb.h"
 
 namespace DB
 {
@@ -57,8 +56,12 @@ String IHiveFile::toString(IHiveFile::FileFormat format)
     return format_names[static_cast<int>(format)];
 }
 
-HiveFilePtr
-IHiveFile::create(FileFormat format, String file_path, size_t file_size, const DiskPtr & disk, const HivePartitionPtr & partition)
+HiveFilePtr IHiveFile::create(
+    FileFormat format,
+    String file_path,
+    size_t file_size,
+    const DiskPtr & disk,
+    const HivePartitionPtr & partition)
 {
     HiveFilePtr file;
     if (format == IHiveFile::FileFormat::PARQUET)
@@ -98,17 +101,17 @@ String IHiveFile::getFormatName() const
 
 std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings & settings) const
 {
+    auto * log = &Poco::Logger::get(__func__);
     if (settings.disk_cache_mode < DiskCacheMode::SKIP_DISK_CACHE)
     {
         /// use local cache
-        auto * log = &Poco::Logger::get(__func__);
         try
         {
             auto cache = DiskCacheFactory::instance().get(DiskCacheType::Hive);
             auto [cache_disk, segment_path] = cache->get(file_path);
             if (cache_disk && cache_disk->exists(segment_path))
             {
-                LOG_DEBUG(log, "Read from local cache {}/{}", cache_disk->getPath(), segment_path);
+                LOG_TRACE(log, "Read from local cache {}/{}", cache_disk->getPath(), segment_path);
                 return cache_disk->readFile(segment_path);
             }
             cache->cacheSegmentsToLocalDisk({std::make_shared<FileDiskCacheSegment>(disk, file_path, settings)});
@@ -122,9 +125,8 @@ std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings &
         {
             throw Exception(ErrorCodes::DISK_CACHE_NOT_USED, "Hive file {}/{} has no disk cache", disk->getPath(), file_path);
         }
-        LOG_DEBUG(log, "Read from remote {}/{}, disk_cache_mode {}", disk->getPath(), file_path, settings.disk_cache_mode);
     }
-
+    LOG_TRACE(log, "Read from remote {}/{}, disk_cache_mode {}", disk->getPath(), file_path, settings.disk_cache_mode);
     return disk->readFile(file_path, settings);
 }
 
@@ -159,50 +161,58 @@ SourcePtr IHiveFile::getReader(const Block & block, const std::shared_ptr<ReadPa
 
 namespace RPCHelpers
 {
-    void serialize(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files)
+void serialize(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files)
+{
+    /// TODO: hack here
+    if (!hive_files.empty() && hive_files.front()->partition)
     {
-        /// TODO: hack here
-        if (!hive_files.empty() && hive_files.front()->partition)
-        {
-            proto.set_sd_url(hive_files.front()->partition->location);
-        }
-
-        for (const auto & hive_file : hive_files)
-        {
-            auto * proto_file = proto.add_files();
-            hive_file->serialize(*proto_file);
-        }
-
-        std::cout << proto.DebugString() << std::endl;
+        proto.set_sd_url(hive_files.front()->partition->location);
     }
 
-    HiveFiles deserialize(
-        const Protos::ProtoHiveFiles & proto,
-        const ContextPtr & context,
-        const StorageMetadataPtr & metadata,
-        const CnchHiveSettings & settings)
+    for (const auto & hive_file : hive_files)
     {
-        HiveFiles files;
-        DiskPtr disk = getDiskFromURI(proto.sd_url(), context, settings);
-        std::unordered_map<String, HivePartitionPtr> partition_map;
-
-        for (const auto & file : proto.files())
-        {
-            HivePartitionPtr partition;
-            if (auto it = partition_map.find(file.partition_id()); it != partition_map.end())
-                partition = it->second;
-            else if (metadata->hasPartitionKey())
-            {
-                partition = std::make_shared<HivePartition>();
-                partition->load(file.partition_id(), metadata->getPartitionKey());
-                partition_map.emplace(file.partition_id(), partition);
-            }
-
-            files.emplace_back(
-                IHiveFile::create(static_cast<IHiveFile::FileFormat>(file.format()), file.file_path(), file.file_size(), disk, partition));
-        }
-        return files;
+        auto * proto_file = proto.add_files();
+        hive_file->serialize(*proto_file);
     }
+
+    LOG_TRACE(&Poco::Logger::get(__func__), "Proto files {}", proto.DebugString());
+}
+
+HiveFiles deserialize(
+    const Protos::ProtoHiveFiles & proto,
+    const ContextPtr & context,
+    const StorageMetadataPtr & metadata,
+    const CnchHiveSettings & settings)
+{
+    HiveFiles files;
+    DiskPtr disk;
+    std::unordered_map<String, HivePartitionPtr> partition_map;
+
+    for (const auto & file : proto.files())
+    {
+        if (!disk)
+            disk = HiveUtil::getDiskFromURI(proto.sd_url(), context, settings);
+
+        HivePartitionPtr partition;
+        if (auto it = partition_map.find(file.partition_id()); it != partition_map.end())
+            partition = it->second;
+        else if (metadata->hasPartitionKey())
+        {
+            partition = std::make_shared<HivePartition>();
+            partition->load(file.partition_id(), metadata->getPartitionKey());
+            partition_map.emplace(file.partition_id(), partition);
+        }
+
+        files.emplace_back(IHiveFile::create(
+            static_cast<IHiveFile::FileFormat>(file.format()),
+            file.file_path(),
+            file.file_size(),
+            disk,
+            partition));
+    }
+    return files;
+}
+
 }
 
 }

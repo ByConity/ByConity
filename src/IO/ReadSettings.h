@@ -17,13 +17,12 @@
 
 #include <cstddef>
 #include <Core/Defines.h>
-#include <IO/MMappedFileCache.h>
-#include "Interpreters/Context.h"
-
-class MMappedFileCache;
+#include <Core/SettingsEnums.h>
+#include <Common/Throttler.h>
 
 namespace DB
 {
+class MMappedFileCache;
 
 struct ReadSettings
 {
@@ -36,7 +35,10 @@ struct ReadSettings
     size_t filesystem_cache_max_download_size = (128UL * 1024 * 1024 * 1024);
     bool skip_download_if_exceeds_query_cache = true;
     ThrottlerPtr throttler = nullptr;
+    size_t remote_read_min_bytes_for_seek = DBMS_DEFAULT_BUFFER_SIZE;
     DiskCacheMode disk_cache_mode {DiskCacheMode::AUTO};
+
+    bool s3_use_read_ahead {true};
 };
 
 }

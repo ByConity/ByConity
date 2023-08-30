@@ -46,6 +46,7 @@ void HiveMetastoreClient::tryCallHiveClient(std::function<void(ThriftHiveMetasto
         }
         catch (apache::thrift::transport::TTransportException & e)
         {
+            client.expire();
             err_msg = e.what();
             continue;
         }
@@ -58,7 +59,7 @@ void HiveMetastoreClient::tryCallHiveClient(std::function<void(ThriftHiveMetasto
 Strings HiveMetastoreClient::getAllDatabases()
 {
     Strings databases;
-    tryCallHiveClient([&](auto & client) { 
+    tryCallHiveClient([&](auto & client) {
         client->get_all_databases(databases);
     });
     return databases;
@@ -67,8 +68,8 @@ Strings HiveMetastoreClient::getAllDatabases()
 Strings HiveMetastoreClient::getAllTables(const String & db_name)
 {
     Strings tables;
-    tryCallHiveClient([&](auto & client) { 
-        client->get_all_tables(tables, db_name); 
+    tryCallHiveClient([&](auto & client) {
+        client->get_all_tables(tables, db_name);
     });
     return tables;
 }
@@ -110,7 +111,7 @@ HiveMetastoreClientPtr HiveMetastoreClientFactory::getOrCreate(const String & na
     auto it = clients.find(name);
     if (it == clients.end())
     {
-        auto builder = [&name]() { return createThriftHiveMetastoreClient(name); };
+        auto builder = [name]() { return createThriftHiveMetastoreClient(name); };
 
         auto client = std::make_shared<HiveMetastoreClient>(builder);
         clients.emplace(name, client);

@@ -6,6 +6,7 @@
 #include "Core/NamesAndTypes.h"
 #include "Disks/IDisk.h"
 #include "Processors/ISource.h"
+#include "Storages/Hive/CnchHiveSettings.h"
 #include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
 #include "Storages/MergeTree/KeyCondition.h"
 #include "Storages/KeyDescription.h"
@@ -73,6 +74,7 @@ public:
     virtual void loadSplitMinMaxIndex(const NamesAndTypesList & index_names_and_types) = 0;
     String describeMinMaxIndex(const NamesAndTypesList & index_names_and_types) const;
     void setSkipSplits(const std::vector<bool> & skip_splits_) { skip_splits = skip_splits_; }
+    bool canSkipSplit(size_t split) { return !skip_splits.empty() && skip_splits.at(split); }
 
     struct ReadParams
     {
@@ -81,6 +83,7 @@ public:
         ContextPtr context;
         std::optional<size_t> slice;
         ReadSettings read_settings;
+        std::unique_ptr<ReadBufferFromFileBase> read_buf;
     };
     virtual SourcePtr getReader(const Block & block, const std::shared_ptr<ReadParams> & params);
 

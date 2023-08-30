@@ -284,7 +284,7 @@ DatabaseTablesIteratorPtr DatabaseCnch::getTablesIterator(ContextPtr local_conte
     Tables tables;
     Strings names = local_context->getCnchCatalog()->getTablesInDB(getDatabaseName());
     std::for_each(names.begin(), names.end(), [this, &local_context, &tables](const String & name) {
-        StoragePtr storage = tryGetTableImpl(name, local_context);
+        StoragePtr storage = tryGetTable(name, local_context);
         if (!storage || storage->is_detached || storage->is_dropped)
             return;
         /// debug

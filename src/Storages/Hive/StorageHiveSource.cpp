@@ -1,10 +1,11 @@
 #include "Storages/Hive/StorageHiveSource.h"
-#include "Core/Defines.h"
-#include "IO/ReadSettings.h"
 #if USE_HIVE
 
+#include "Core/Defines.h"
 #include "DataTypes/DataTypeString.h"
 #include "Formats/FormatFactory.h"
+#include "Interpreters/Context.h"
+#include "IO/ReadSettings.h"
 #include "Processors/Executors/PullingPipelineExecutor.h"
 #include <Processors/Formats/InputStreamFromInputFormat.h>
 #include "Processors/Sources/SourceFromSingleChunk.h"
@@ -34,27 +35,26 @@ StorageHiveSource::BlockInfo::BlockInfo(const Block & header_, bool need_path_co
 }
 
 StorageHiveSource::Allocator::Allocator(HiveFiles files_)
-    : files(std::move(files_)), progress(files.size())
+    : files(std::move(files_)), slice_progress(files.size())
 {
 }
 
-void StorageHiveSource::Allocator::next(std::optional<FileSlice> & file_slice) const
+void StorageHiveSource::Allocator::next(FileSlice & file_slice) const
 {
-    /// initialize file_slice
-    if (!file_slice)
-        file_slice.emplace(FileSlice{unallocated.fetch_add(1) % files.size(), 0});
-
-    /// get unassigned slice in the current file
-    if (nextSlice(*file_slice))
+    if (files.empty())
         return;
 
-    /// get unassigned slice in other files
+    /// the first file to start searching an available slice to read
+    int start = file_slice.empty() ? unallocated.fetch_add(1) % files.size() : file_slice.file;
+
     for (size_t i = 0; i < files.size(); ++i)
     {
-        file_slice->file = i;
-        if (nextSlice(*file_slice))
+        file_slice.file = (start + i) % files.size();
+        if (nextSlice(file_slice))
             return;
     }
+
+    // can not find a file to read from
     file_slice.reset();
 }
 
@@ -64,12 +64,16 @@ bool StorageHiveSource::Allocator::nextSlice(FileSlice & file_slice) const
 
     /// if read by slice is not supported, we consider the file only has one slice
     size_t max_slice_num = allow_allocate_by_slice ? file->numSlices() : 1;
-    size_t slice = progress[file_slice.file].fetch_add(1);
-    if (slice < max_slice_num)
+    for (size_t slice = slice_progress[file_slice.file].fetch_add(1); slice < max_slice_num;
+         slice = slice_progress[file_slice.file].fetch_add(1))
     {
-        file_slice.slice = slice;
-        return true;
+        if (!file->canSkipSplit(slice))
+        {
+            file_slice.slice = slice;
+            return true;
+        }
     }
+
     return false;
 }
 
@@ -91,13 +95,12 @@ StorageHiveSource::StorageHiveSource(ContextPtr context_, BlockInfoPtr info_, Al
     format_settings.orc.allow_missing_columns = true;
     format_settings.parquet.allow_missing_columns = true;
 
+    const auto & settings = context_->getSettingsRef();
     read_params = std::make_shared<IHiveFile::ReadParams>(IHiveFile::ReadParams{
-            .max_block_size = DEFAULT_BLOCK_SIZE,
+            .max_block_size = settings.max_block_size,
             .format_settings = std::move(format_settings),
-            .context = getContext(),
-            .read_settings = ReadSettings{
-                .buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
-                .disk_cache_mode = context_->getSettingsRef().disk_cache_mode.value}
+            .context = context_,
+            .read_settings = context_->getReadSettings(),
         });
 }
 
@@ -105,19 +108,17 @@ StorageHiveSource::~StorageHiveSource() = default;
 
 void StorageHiveSource::prepareReader()
 {
-    int previous_file = current.has_value() ? current->file : -1;
-    int previous_slice = current.has_value() ? current->slice : -1;
-
-    allocator->next(current);
+    int previous_file = current_file_slice.file;
+    allocator->next(current_file_slice);
     /// no next file to read from
-    if (!current)
+    if (current_file_slice.empty())
         return;
 
-    bool continue_reading = (previous_file == static_cast<int>(current->file));
-    const auto & hive_file = allocator->files[current->file];
+    bool continue_reading = (previous_file == static_cast<int>(current_file_slice.file));
+    const auto & hive_file = allocator->files[current_file_slice.file];
 
-    LOG_TRACE(log, "Read from {} file, {} slice, continue_reading {}, previous file {}, previous slice {}",
-        current->file, current->slice, continue_reading, previous_file, previous_slice);
+    LOG_TRACE(log, "Read from file {}, slice {}, continue_reading {}",
+        current_file_slice.file, current_file_slice.slice, continue_reading);
 
     /// all blocks are 'virtual' i.e. all columns are partition column
     if (auto num_rows = hive_file->numRows(); !block_info->to_read.columns() && num_rows)
@@ -139,28 +140,19 @@ void StorageHiveSource::prepareReader()
     else
         need_partition_columns = true;
 
-    if (continue_reading)
-    {
-        read_params->slice = current->slice;
-        pipeline = std::make_unique<QueryPipeline>();
-        pipeline->init(Pipe(data_source));
-        reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
-    }
-    else
-    {
-        /// change the file to read from
-        read_params->slice = current->slice;
+    if (!continue_reading)
+        read_params->read_buf.reset();
 
-        data_source = hive_file->getReader(block_info->to_read, read_params);
-        pipeline = std::make_unique<QueryPipeline>();
-        pipeline->init(Pipe(data_source));
-        reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
-    }
+    read_params->slice = current_file_slice.slice;
+    pipeline = std::make_unique<QueryPipeline>();
+    data_source = hive_file->getReader(block_info->to_read, read_params);
+    pipeline->init(Pipe(data_source));
+    reader = std::make_unique<PullingPipelineExecutor>(*pipeline);
 }
 
 Chunk StorageHiveSource::generate()
 {
-    if (!std::exchange(initialized, true))
+    if (!reader)
         prepareReader();
 
     while (reader)
@@ -174,19 +166,17 @@ Chunk StorageHiveSource::generate()
 
         reader.reset();
         pipeline.reset();
-
-        prepare();
+        prepareReader();
     }
-
     return {};
 }
 
 void StorageHiveSource::buildResultChunk(Chunk & chunk) const
 {
-    if (!current)
+    if (current_file_slice.empty())
         return;
 
-    const auto & hive_file = allocator->files[current->file];
+    const auto & hive_file = allocator->files[current_file_slice.file];
     auto num_rows = chunk.getNumRows();
 
     if (need_partition_columns)

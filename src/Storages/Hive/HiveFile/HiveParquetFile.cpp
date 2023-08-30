@@ -153,20 +153,20 @@ SourcePtr HiveParquetFile::getReader(const Block & block, const std::shared_ptr<
         params->format_settings.null_as_default);
 
     std::vector<int> column_indices = ParquetBlockInputFormat::getColumnIndices(schema, block);
-    auto in = readFile(params->read_settings);
+    if (!params->read_buf)
+        params->read_buf = readFile(params->read_settings);
+
     std::unique_ptr<parquet::arrow::FileReader> reader;
-    THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(*in, file_size), arrow::default_memory_pool(), &reader));
-    return std::make_shared<ParquetSliceSource>(std::move(in), std::move(reader), std::move(column_indices), params, std::move(arrow_column_to_ch_column));
+    THROW_ARROW_NOT_OK(parquet::arrow::OpenFile(asArrowFile(*params->read_buf, file_size), arrow::default_memory_pool(), &reader));
+    return std::make_shared<ParquetSliceSource>(std::move(reader), std::move(column_indices), params, std::move(arrow_column_to_ch_column));
 }
 
 ParquetSliceSource::ParquetSliceSource(
-    std::unique_ptr<ReadBuffer> in_,
     std::unique_ptr<parquet::arrow::FileReader> reader_,
     std::vector<int> column_indices_,
     std::shared_ptr<IHiveFile::ReadParams> read_params_,
     std::shared_ptr<ArrowColumnToCHColumn> arrow_column_to_ch_column_)
     : ISource({})
-    , in(std::move(in_))
     , reader(std::move(reader_))
     , column_indices(std::move(column_indices_))
     , read_params(std::move(read_params_))

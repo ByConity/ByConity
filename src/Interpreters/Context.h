@@ -29,6 +29,7 @@
 #include <Core/Settings.h>
 #include <Core/UUID.h>
 #include <DataStreams/IBlockStream_fwd.h>
+#include <IO/ReadSettings.h>
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
@@ -1477,6 +1478,8 @@ public:
     bool isAsyncMode() const;
     void markReadFromClientFinished();
     void waitReadFromClientFinished() const;
+
+    ReadSettings getReadSettings() const;
 
 private:
     String tenant_id;

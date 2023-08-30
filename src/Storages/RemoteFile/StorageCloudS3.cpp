@@ -8,9 +8,10 @@
 #    include <DataStreams/IBlockInputStream.h>
 #    include <DataStreams/PartitionedBlockOutputStream.h>
 #    include <DataStreams/UnionBlockInputStream.h>
+#    include <IO/ReadBufferFromS3.h>
 #    include <Storages/S3/RAReadBufferFromS3.h>
 #    include <Storages/S3/WriteBufferFromByteS3.h>
-#    include <IO/ReadBufferFromS3.h>
+#    include "Interpreters/Context.h"
 #    include <IO/WriteBufferFromS3.h>
 #    include <Interpreters/evaluateConstantExpression.h>
 #    include <Parsers/ASTCreateQuery.h>
@@ -32,7 +33,7 @@ std::unique_ptr<ReadBuffer> StorageCloudS3::FileBufferClient::createReadBuffer(c
 {
     if (config.use_read_ahead)
         return std::make_unique<RAReadBufferFromS3>(config.client, config.uri.bucket, key, config.rw_settings.max_single_read_retries);
-    return std::make_unique<ReadBufferFromS3>(config.client, config.uri.bucket, key, config.rw_settings.max_single_read_retries);
+    return std::make_unique<ReadBufferFromS3>(config.client, config.uri.bucket, key, ReadSettings{}, config.rw_settings.max_single_read_retries);
 }
 
 std::unique_ptr<WriteBuffer> StorageCloudS3::FileBufferClient::createWriteBuffer(const DB::String & key)

@@ -3,6 +3,7 @@
 #include <Common/config.h>
 
 #if USE_HDFS
+#    include <Interpreters/Context.h>
 #    include <Storages/DataPart_fwd.h>
 #    include <Storages/IStorage.h>
 #    include <Storages/RemoteFile/CnchFileCommon.h>

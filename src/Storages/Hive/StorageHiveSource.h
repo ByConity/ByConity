@@ -3,9 +3,9 @@
 #include "Common/config.h"
 #if USE_HIVE
 
-#    include <Processors/Sources/SourceWithProgress.h>
-#    include "Processors/QueryPipeline.h"
-#    include "Storages/Hive/HiveFile/IHiveFile.h"
+#include "Processors/QueryPipeline.h"
+#include <Processors/Sources/SourceWithProgress.h>
+#include "Storages/Hive/HiveFile/IHiveFile.h"
 
 namespace DB
 {
@@ -33,14 +33,19 @@ public:
 
     struct FileSlice
     {
-        size_t file;
-        int slice;
+        int file {-1};
+        int slice {0};
+
+        bool empty() const { return file == -1; }
+        void reset() { file = -1; }
     };
     struct Allocator
     {
         explicit Allocator(HiveFiles files_);
         size_t size() const { return files.size(); }
-        void next(std::optional<FileSlice> & file_slice) const;
+
+        /// next file slice to read from
+        void next(FileSlice & file_slice) const;
 
         HiveFiles files;
         bool allow_allocate_by_slice = true;
@@ -48,7 +53,7 @@ public:
     private:
         mutable std::atomic_int unallocated = 0;
         bool nextSlice(FileSlice & file_slice) const;
-        mutable std::vector<std::atomic_int> progress;
+        mutable std::vector<std::atomic_int> slice_progress;
     };
 
     using AllocatorPtr = std::shared_ptr<Allocator>;
@@ -63,9 +68,8 @@ public:
 private:
     void buildResultChunk(Chunk & chunk) const;
 
-    bool initialized = false;
     bool need_partition_columns = true;
-    std::optional<FileSlice> current;
+    FileSlice current_file_slice;
     std::shared_ptr<const BlockInfo> block_info;
     std::shared_ptr<const Allocator> allocator;
 

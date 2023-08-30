@@ -7,6 +7,7 @@
 #include "Disks/HDFS/DiskByteHDFS.h"
 #include "Disks/S3/DiskS3.h"
 #include "IO/S3Common.h"
+#include "Interpreters/Context.h"
 #include "Poco/Util/MapConfiguration.h"
 #include "Poco/URI.h"
 #include "Storages/Hive/HiveFile/IHiveFile.h"
@@ -21,19 +22,19 @@ namespace ErrorCodes
     extern const int UNKNOWN_STORAGE;
 }
 
-static String getPath(const String & path)
+namespace HiveUtil
+{
+String getPath(const String & path)
 {
     Poco::URI uri(path);
     const String & scheme = uri.getScheme();
-    if (scheme == "hdfs")
+    if (scheme == "hdfs" || scheme == "file")
     {
         return uri.getPath();
     }
-    else if (scheme == "s3a")
+    else if (scheme == "s3a" || scheme == "s3")
     {
         uri.setScheme("s3"); /// to correctly parse uri
-        // if (!endsWith(uri.getPath(), "/"))
-        //     uri.setPath(uri.getPath() + "/");
         S3::URI s3_uri(uri);
         return s3_uri.key;
     }
@@ -41,28 +42,14 @@ static String getPath(const String & path)
     throw Exception(ErrorCodes::UNKNOWN_STORAGE, "Unknown scheme {}", scheme);
 }
 
-DiskDirectoryLister::DiskDirectoryLister(const HivePartitionPtr & partition_, const DiskPtr & disk_)
-    : partition(partition_), disk(disk_)
+String getDirectoryPath(const String & path)
 {
-}
-
-HiveFiles DiskDirectoryLister::list()
-{
-    HiveFiles hive_files;
-    IHiveFile::FileFormat format = IHiveFile::fromHdfsInputFormatClass(partition->file_format);
-
-    std::vector<String> file_names;
-    String partition_path = getPath(partition->location);
-    auto it = disk->iterateDirectory(partition_path);
-    for (; it->isValid(); it->next())
+    String dir_path = getPath(path);
+    if (!endsWith(dir_path, "/"))
     {
-        if (it->size() == 0)
-            continue;
-        HiveFilePtr file = IHiveFile::create(format, it->path(), it->size(), disk, partition);
-        hive_files.push_back(std::move(file));
+        dir_path += '/';
     }
-
-    return hive_files;
+    return dir_path;
 }
 
 DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const CnchHiveSettings & settings)
@@ -100,6 +87,7 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const 
         String config_prefix = "hive_s3";
         configuration->setString(config_prefix + ".type", "bytes3");
         configuration->setString(config_prefix + ".endpoint", settings.endpoint);
+        configuration->setString(config_prefix + ".region", settings.region);
         configuration->setString(config_prefix + ".bucket", s3_uri.bucket);
         configuration->setString(config_prefix + ".path", "");
         configuration->setString(config_prefix + ".ak_id", settings.ak_id);
@@ -113,8 +101,34 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const 
     }
 #endif
 
-    throw Exception(ErrorCodes::UNKNOWN_STORAGE, "Unknown scheme {}", scheme);
+    throw Exception(ErrorCodes::UNKNOWN_STORAGE, "Unknown scheme {} in url {}", scheme, sd_url);
 }
+}
+
+DiskDirectoryLister::DiskDirectoryLister(const HivePartitionPtr & partition_, const DiskPtr & disk_)
+    : partition(partition_), disk(disk_)
+{
+}
+
+HiveFiles DiskDirectoryLister::list()
+{
+    HiveFiles hive_files;
+    IHiveFile::FileFormat format = IHiveFile::fromHdfsInputFormatClass(partition->file_format);
+
+    std::vector<String> file_names;
+    String partition_path = HiveUtil::getDirectoryPath(partition->location);
+    auto it = disk->iterateDirectory(partition_path);
+    for (; it->isValid(); it->next())
+    {
+        if (it->size() == 0)
+            continue;
+        HiveFilePtr file = IHiveFile::create(format, it->path(), it->size(), disk, partition);
+        hive_files.push_back(std::move(file));
+    }
+
+    return hive_files;
+}
+
 
 }
 

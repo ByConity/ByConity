@@ -156,25 +156,25 @@ public:
         const String & bucket_,
         DiskS3::Metadata metadata_,
         size_t max_single_read_retries_,
-        size_t buf_size_)
+        const ReadSettings & read_settings_)
         : ReadIndirectBufferFromRemoteFS<ReadBufferFromS3>(metadata_)
         , client_ptr(std::move(client_ptr_))
         , bucket(bucket_)
         , max_single_read_retries(max_single_read_retries_)
-        , buf_size(buf_size_)
+        , read_settings(read_settings_)
     {
     }
 
     std::unique_ptr<ReadBufferFromS3> createReadBuffer(const String & path) override
     {
-        return std::make_unique<ReadBufferFromS3>(client_ptr, bucket, metadata.remote_fs_root_path + path, max_single_read_retries, buf_size);
+        return std::make_unique<ReadBufferFromS3>(client_ptr, bucket, metadata.remote_fs_root_path + path, read_settings, max_single_read_retries, true);
     }
 
 private:
     std::shared_ptr<Aws::S3::S3Client> client_ptr;
     const String & bucket;
     UInt64 max_single_read_retries;
-    size_t buf_size;
+    ReadSettings read_settings;
 };
 
 DiskS3::DiskS3(
@@ -259,8 +259,7 @@ std::unique_ptr<ReadBufferFromFileBase> DiskS3::readFile(const String & path, co
     LOG_DEBUG(log, "Read from file by path: {}. Existing S3 objects: {}",
         backQuote(metadata_path + path), metadata.remote_fs_objects.size());
 
-    auto reader = std::make_unique<ReadIndirectBufferFromS3>(settings->client, bucket, metadata, settings->s3_max_single_read_retries, rd_settings.buffer_size);
-    return std::make_unique<SeekAvoidingReadBuffer>(std::move(reader), settings->min_bytes_for_seek);
+    return std::make_unique<ReadIndirectBufferFromS3>(settings->client, bucket, metadata, settings->s3_max_single_read_retries, rd_settings);
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskS3::writeFile(const String & path, const WriteSettings& wr_settings)
@@ -405,6 +404,7 @@ int DiskS3::readSchemaVersion(const String & source_bucket, const String & sourc
         settings->client,
         source_bucket,
         source_path + SCHEMA_VERSION_OBJECT,
+        ReadSettings{},
         settings->s3_max_single_read_retries);
 
     readIntText(version, buffer);

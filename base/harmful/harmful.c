@@ -145,8 +145,8 @@ TRAP(mallopt) // Used by tsan
 TRAP(mblen)
 TRAP(mbrlen)
 TRAP(mbrtowc)
-// TRAP(mbsnrtowcs)
 // TRAP(mbsrtowcs)
+TRAP(mbsnrtowcs)
 //TRAP(mbtowc) // Used by Standard C++ library
 TRAP(mcheck)
 TRAP(mprobe)
