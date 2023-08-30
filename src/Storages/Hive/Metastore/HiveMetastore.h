@@ -8,6 +8,8 @@
 
 namespace DB
 {
+class CnchHiveSettings;
+
 using ThriftHiveMetastoreClientBuilder = std::function<std::shared_ptr<Apache::Hadoop::Hive::ThriftHiveMetastoreClient>()>;
 
 class ThriftHiveMetastoreClientPool : public PoolBase<Apache::Hadoop::Hive::ThriftHiveMetastoreClient>
@@ -54,10 +56,10 @@ class HiveMetastoreClientFactory final : private boost::noncopyable
 public:
     static HiveMetastoreClientFactory & instance();
 
-    HiveMetastoreClientPtr getOrCreate(const String & name);
+    HiveMetastoreClientPtr getOrCreate(const String & name, const std::shared_ptr<CnchHiveSettings> & settings);
 
 private:
-    static std::shared_ptr<Apache::Hadoop::Hive::ThriftHiveMetastoreClient> createThriftHiveMetastoreClient(const String & name);
+    static std::shared_ptr<Apache::Hadoop::Hive::ThriftHiveMetastoreClient> createThriftHiveMetastoreClient(const String & name, const std::shared_ptr<CnchHiveSettings> & settings);
 
     std::mutex mutex;
     std::map<String, HiveMetastoreClientPtr> clients;

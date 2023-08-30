@@ -58,9 +58,9 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const 
     const auto & scheme = uri.getScheme();
     if (scheme == "hdfs")
     {
-        if (!settings.fs.value.empty())
+        if (!settings.hdfs_fs.value.empty())
         {
-            Poco::URI new_uri(settings.fs.value);
+            Poco::URI new_uri(settings.hdfs_fs.value);
             new_uri.setPath(uri.getPath());
             uri = new_uri;
         }

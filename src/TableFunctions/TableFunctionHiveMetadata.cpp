@@ -51,7 +51,7 @@ ColumnsDescription TableFunctionHiveMetadata::getActualTableStructure(ContextPtr
 
 void TableFunctionHiveMetadata::fillData(MutableColumns & columns) const
 {
-    auto hive_client = HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url);
+    auto hive_client = HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url, std::shared_ptr<CnchHiveSettings>());
     auto hive_table = hive_client->getTable(hive_database_name, hive_table_name);
 
     std::stringstream ss;

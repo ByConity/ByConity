@@ -2,6 +2,10 @@
 #include <ServiceDiscovery/ServiceDiscoveryHelper.h>
 #if USE_HIVE
 
+#include "Access/KerberosInit.h"
+#include "Storages/Hive/CnchHiveSettings.h"
+#include "Storages/Hive/TSaslClientTransport.h"
+
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TBufferTransports.h>
 #include <thrift/transport/TSocket.h>
@@ -105,13 +109,13 @@ HiveMetastoreClientFactory & HiveMetastoreClientFactory::instance()
     return factory;
 }
 
-HiveMetastoreClientPtr HiveMetastoreClientFactory::getOrCreate(const String & name)
+HiveMetastoreClientPtr HiveMetastoreClientFactory::getOrCreate(const String & name, const std::shared_ptr<CnchHiveSettings> & settings)
 {
     std::lock_guard lock(mutex);
     auto it = clients.find(name);
     if (it == clients.end())
     {
-        auto builder = [name]() { return createThriftHiveMetastoreClient(name); };
+        auto builder = [name, settings]() { return createThriftHiveMetastoreClient(name, settings); };
 
         auto client = std::make_shared<HiveMetastoreClient>(builder);
         clients.emplace(name, client);
@@ -121,7 +125,8 @@ HiveMetastoreClientPtr HiveMetastoreClientFactory::getOrCreate(const String & na
     return it->second;
 }
 
-std::shared_ptr<Apache::Hadoop::Hive::ThriftHiveMetastoreClient> HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String &name)
+std::shared_ptr<Apache::Hadoop::Hive::ThriftHiveMetastoreClient>
+HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String & name, const std::shared_ptr<CnchHiveSettings> & settings)
 {
     using namespace apache::thrift;
     using namespace apache::thrift::protocol;
@@ -138,6 +143,12 @@ std::shared_ptr<Apache::Hadoop::Hive::ThriftHiveMetastoreClient> HiveMetastoreCl
     socket->setRecvTimeout(hive_metastore_client_recv_timeout_ms);
     socket->setSendTimeout(hive_metastore_client_send_timeout_ms);
     std::shared_ptr<TTransport> transport = std::make_shared<TBufferedTransport>(socket);
+    if (settings && settings->hive_metastore_client_kerberos_auth)
+    {
+        String hadoop_kerberos_principal = fmt::format("{}/{}", settings->hive_metastore_client_principal.toString(), settings->hive_metastore_client_service_fqdn.toString());
+        kerberosInit(settings->hive_metastore_client_keytab_path,hadoop_kerberos_principal);
+        transport = TSaslClientTransport::wrapClientTransports(settings->hive_metastore_client_service_fqdn, settings->hive_metastore_client_principal, transport);
+    }
     std::shared_ptr<TProtocol> protocol = std::make_shared<TBinaryProtocol>(transport);
     std::shared_ptr<ThriftHiveMetastoreClient> thrift_client = std::make_shared<ThriftHiveMetastoreClient>(protocol);
     try
@@ -150,7 +161,6 @@ std::shared_ptr<Apache::Hadoop::Hive::ThriftHiveMetastoreClient> HiveMetastoreCl
     }
     return thrift_client;
 }
-
 }
 
 #endif

@@ -57,7 +57,7 @@ StorageCnchHive::StorageCnchHive(
 {
     try
     {
-        hive_client = HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url);
+        hive_client = HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url, storage_settings);
         hive_table = hive_client->getTable(hive_db_name, hive_table_name);
     }
     catch (...)
