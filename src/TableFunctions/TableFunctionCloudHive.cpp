@@ -17,18 +17,18 @@
 //     extern const int UNKNOWN_STORAGE;
 // }
 
-StoragePtr TableFunctionCloudHive::getStorage(const ColumnsDescription & columns, ContextPtr global_context, const std::string & table_name) const
-{
-    StorageInMemoryMetadata metadata;
-    metadata.setColumns(columns);
-    auto settings = std::make_shared<CnchHiveSettings>(global_context->getCnchHiveSettings());
-    /// here global_context maybe query_context
-    /// anyway this table function is used for testing purpose;
-    const auto & ctx_settings = global_context->getSettingsRef();
-    settings->endpoint = ctx_settings.s3_endpoint;
-    settings->region = ctx_settings.s3_region;
-    settings->ak_id = ctx_settings.s3_access_key_id;
-    settings->ak_secret = ctx_settings.s3_access_key_secret;
+// StoragePtr TableFunctionCloudHive::getStorage(const ColumnsDescription & columns, ContextPtr global_context, const std::string & table_name) const
+// {
+//     StorageInMemoryMetadata metadata;
+//     metadata.setColumns(columns);
+//     auto settings = std::make_shared<CnchHiveSettings>(global_context->getCnchHiveSettings());
+//     /// here global_context maybe query_context
+//     /// anyway this table function is used for testing purpose;
+//     const auto & ctx_settings = global_context->getSettingsRef();
+//     settings->endpoint = ctx_settings.s3_endpoint;
+//     settings->region = ctx_settings.s3_region;
+//     settings->ak_id = ctx_settings.s3_access_key_id;
+//     settings->ak_secret = ctx_settings.s3_access_key_secret;
 
 //     auto storage = std::make_shared<StorageCloudHive>(StorageID(getDatabaseName(), table_name), metadata, global_context, settings);
 
