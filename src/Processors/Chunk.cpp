@@ -187,6 +187,22 @@ std::string Chunk::dumpStructure() const
     return out.str();
 }
 
+void Chunk::append(const Chunk & chunk)
+{
+    append(chunk, 0, chunk.getNumRows());
+}
+
+void Chunk::append(const Chunk & chunk, size_t from, size_t length)
+{
+    MutableColumns mutable_columns = mutateColumns();
+    for (size_t position = 0; position < mutable_columns.size(); ++position)
+    {
+        auto column = chunk.getColumns()[position];
+        mutable_columns[position]->insertRangeFrom(*column, from, length);
+    }
+    size_t rows = mutable_columns[0]->size();
+    setColumns(std::move(mutable_columns), rows);
+}
 
 void ChunkMissingValues::setBit(size_t column_idx, size_t row_idx)
 {

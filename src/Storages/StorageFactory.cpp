@@ -138,8 +138,6 @@ StoragePtr StorageFactory::get(
 
             name = engine_def.name;
 
-            LOG_DEBUG(&Poco::Logger::get("StorageFactory"), " engine name {}", name);
-
             if (name == "View")
             {
                 throw Exception(

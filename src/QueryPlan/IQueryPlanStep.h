@@ -144,7 +144,6 @@ public:
         M(PartialSorting) \
         M(PlanSegmentSource) \
         M(Projection) \
-        M(QueryCache) \
         M(ReadFromStorage) \
         M(ReadNothing) \
         M(RemoteExchangeSource) \

@@ -39,7 +39,7 @@ namespace DB
 QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
 {
         // When interpret sub query, reuse context info, e.g. PlanNodeIdAllocator, SymbolAllocator.
-    if (interpret_sub_query) 
+    if (interpret_sub_query)
     {
         QueryPlanPtr sub_query_plan = std::make_unique<QueryPlan>(sub_plan_ptr, cte_info, context->getPlanNodeIdAllocator());
         PlanOptimizer::optimize(*sub_query_plan, context);
@@ -105,7 +105,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
     return query_plan;
 }
 
-PlanSegmentTreePtr InterpreterSelectQueryUseOptimizer::getPlanSegment()
+std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOptimizer::getPlanSegment()
 {
     Stopwatch stage_watch, total_watch;
     total_watch.start();
@@ -123,8 +123,7 @@ PlanSegmentTreePtr InterpreterSelectQueryUseOptimizer::getPlanSegment()
     PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(*query_plan, cluster_info_context);
 
     stage_watch.restart();
-    plan.allocateLocalTable(context);
-
+    std::set<StorageID> used_storage_ids = plan.allocateLocalTable(context);
     // select health worker before split
     if (context->getSettingsRef().enable_adaptive_scheduler && context->tryGetCurrentWorkerGroup())
     {
@@ -139,15 +138,18 @@ PlanSegmentTreePtr InterpreterSelectQueryUseOptimizer::getPlanSegment()
 
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
     context->logOptimizerProfile(log, "Optimizer total run time: ", "Optimizer Total", std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms");
-    return plan_segment_tree;
+    return std::make_pair(std::move(plan_segment_tree), std::move(used_storage_ids));
 }
 
 BlockIO InterpreterSelectQueryUseOptimizer::execute()
 {
-    PlanSegmentTreePtr plan_segment_tree = getPlanSegment();
+    std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
 
-    auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree), context, MPPQueryOptions());
-    return coodinator->execute();
+    auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree_and_used_storage_ids.first), context, MPPQueryOptions());
+
+    BlockIO res = coodinator->execute();
+    res.pipeline.addUsedStorageIDs(plan_segment_tree_and_used_storage_ids.second);
+    return res;
 }
 
 QueryPlan PlanNodeToNodeVisitor::convert(QueryPlan & query_plan)
@@ -237,7 +239,7 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableSca
             .shard_number =  worker_group->getShardsInfo().size(),
             .cluster_name = worker_group->getID(),
             .plan_segment_tree = cluster_info_context.plan_segment_tree.get(),
-            .health_parallel = worker_group_status_ptr ? 
+            .health_parallel = worker_group_status_ptr ?
                 std::optional<size_t>(worker_group_status_ptr->getAvaiableComputeWorkerSize()) : std::nullopt};
         return plan_segment_context;
     }

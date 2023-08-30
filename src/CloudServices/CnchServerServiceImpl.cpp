@@ -16,28 +16,25 @@
 #include <CloudServices/CnchServerServiceImpl.h>
 
 #include <Catalog/Catalog.h>
-#include <Protos/RPCHelpers.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
-#include <MergeTreeCommon/CnchTopologyMaster.h>
-#include <Transaction/TransactionCommon.h>
-#include <Transaction/TransactionCoordinatorRcCnch.h>
-#include <Interpreters/Context.h>
+#include <Catalog/CatalogUtils.h>
+#include <CloudServices/CnchDataWriter.h>
+#include <CloudServices/CnchMergeMutateThread.h>
+#include <CloudServices/DedupWorkerManager.h>
+#include <CloudServices/DedupWorkerStatus.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
+#include <Interpreters/Context.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Protos/RPCHelpers.h>
+#include <Storages/Kafka/CnchKafkaConsumeManager.h>
+#include <Storages/PartCacheManager.h>
+#include <Transaction/LockManager.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
-#include <Transaction/LockManager.h>
+#include <WorkerTasks/ManipulationType.h>
 #include "Common/tests/gtest_global_context.h"
 #include <Common/Exception.h>
-#include <CloudServices/CnchMergeMutateThread.h>
-#include <CloudServices/CnchDataWriter.h>
-#include <CloudServices/DedupWorkerManager.h>
-#include <CloudServices/DedupWorkerStatus.h>
-#include <Catalog/CatalogUtils.h>
-#include <WorkerTasks/ManipulationType.h>
-#include <Storages/Kafka/CnchKafkaConsumeManager.h>
-#include <Storages/PartCacheManager.h>
 
 namespace DB
 {
@@ -987,6 +984,7 @@ void CnchServerServiceImpl::removeMergeMutateTasksOnPartitions(
         }
     );
 }
+
 void CnchServerServiceImpl::submitQueryWorkerMetrics(
     google::protobuf::RpcController * /*cntl*/,
     const Protos::SubmitQueryWorkerMetricsReq * request,
