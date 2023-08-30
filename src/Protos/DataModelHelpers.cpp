@@ -440,6 +440,18 @@ IMergeTreeDataPartsVector createPartVectorFromServerParts(
     return res;
 }
 
+size_t fillCnchFilePartsModel(const FileDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model)
+{
+    for (const auto & part : parts)
+    {
+        auto & part_model = *parts_model.Add();
+        auto & info = *part_model.mutable_part_info();
+        *info.mutable_name() = part->info.name;
+    }
+
+    return parts.size();
+}
+
 FileDataPartsCNCHVector createCnchFileDataParts(const ContextPtr & /*context*/, const pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model)
 {
     FileDataPartsCNCHVector res;
