@@ -16,20 +16,19 @@
 #pragma once
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <CloudServices/CnchWorkerClient.h>
-#include <Common/HostWithPorts.h>
 #include <Core/Types.h>
 #include <Interpreters/StorageID.h>
 #include <Interpreters/WorkerGroupHandle.h>
+#include <Storages/DataPart_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
-#include <Storages/DataPart_fwd.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Poco/Logger.h>
+#include <Common/HostWithPorts.h>
 
 
 namespace DB
 {
-
 class ServerResourceLockManager
 {
 public:
@@ -55,16 +54,12 @@ private:
 
 struct SendLock
 {
-    SendLock(const std::string & address_, ServerResourceLockManager & manager_)
-        : address(address_), manager(manager_)
+    SendLock(const std::string & address_, ServerResourceLockManager & manager_) : address(address_), manager(manager_)
     {
         manager.add(address);
     }
 
-    ~SendLock()
-    {
-        manager.remove(address);
-    }
+    ~SendLock() { manager.remove(address); }
 
     std::string address;
     ServerResourceLockManager & manager;
@@ -83,15 +78,15 @@ struct AssignedResource
 
     /// parts info
     ServerDataPartsVector server_parts;
-    HiveDataPartsCNCHVector hive_parts;
     FileDataPartsCNCHVector file_parts;
+    HiveFiles hive_parts;
     std::set<Int64> bucket_numbers;
 
     std::unordered_set<String> part_names;
 
     void addDataParts(const ServerDataPartsVector & parts);
-    void addDataParts(const HiveDataPartsCNCHVector & parts);
     void addDataParts(const FileDataPartsCNCHVector & parts);
+    void addDataParts(const HiveFiles & parts);
 
     bool empty() const { return sent_create_query && server_parts.empty(); }
 };
@@ -100,17 +95,15 @@ class CnchServerResource
 {
 public:
     explicit CnchServerResource(TxnTimestamp curr_txn_id)
-        : txn_id(curr_txn_id)
-        , log(&Poco::Logger::get("SessionResource(" + txn_id.toString() + ")"))
-    {}
+        : txn_id(curr_txn_id), log(&Poco::Logger::get("SessionResource(" + txn_id.toString() + ")"))
+    {
+    }
 
     ~CnchServerResource();
 
-    void addCreateQuery(const ContextPtr & context, const StoragePtr & storage, const String & create_query, const String & worker_table_name);
-    void setAggregateWorker(HostWithPorts aggregate_worker_)
-    {
-        aggregate_worker = std::move(aggregate_worker_);
-    }
+    void
+    addCreateQuery(const ContextPtr & context, const StoragePtr & storage, const String & create_query, const String & worker_table_name);
+    void setAggregateWorker(HostWithPorts aggregate_worker_) { aggregate_worker = std::move(aggregate_worker_); }
 
     void setWorkerGroup(WorkerGroupHandle worker_group_)
     {
@@ -137,7 +130,8 @@ public:
     void sendResources(const ContextPtr & context);
 
     /// WorkerAction should not throw
-    using WorkerAction = std::function<std::vector<brpc::CallId>(CnchWorkerClientPtr, const std::vector<AssignedResource> &, const ExceptionHandlerPtr &)>;
+    using WorkerAction
+        = std::function<std::vector<brpc::CallId>(CnchWorkerClientPtr, const std::vector<AssignedResource> &, const ExceptionHandlerPtr &)>;
     void sendResources(const ContextPtr & context, WorkerAction act);
 
 private:

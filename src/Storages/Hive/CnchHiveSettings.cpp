@@ -17,7 +17,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSetQuery.h>
-#include <Storages/MergeTree/CnchHiveSettings.h>
+#include <Storages/Hive/CnchHiveSettings.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Common/Exception.h>
 

@@ -41,6 +41,7 @@ private:
 
         ObjectPtr object;
         bool in_use = false;
+        std::atomic<bool> is_expired = false;
         PoolBase & pool;
     };
 
@@ -87,6 +88,12 @@ public:
         Object & operator*() &              { return *data->data.object; }
         const Object & operator*() const &  { return *data->data.object; }
 
+        void expire()
+        {
+            if (data)
+                data->data.is_expired = true;
+        }
+
         bool isNull() const { return data == nullptr; }
 
         PoolBase * getPool() const
@@ -113,7 +120,19 @@ public:
         {
             for (auto & item : items)
                 if (!item->in_use)
-                    return Entry(*item);
+                {
+                    if (likely(!item->is_expired))
+                    {
+                        return Entry(*item);
+                    }
+                    else
+                    {
+                        expireObject(item->object);
+                        item->object = allocObject();
+                        item->is_expired = false;
+                        return Entry(*item);
+                    }
+                }
 
             if (items.size() < max_items)
             {
@@ -162,5 +181,6 @@ protected:
 
     /** Creates a new object to put into the pool. */
     virtual ObjectPtr allocObject() = 0;
+    virtual void expireObject(ObjectPtr) {}
 };
 

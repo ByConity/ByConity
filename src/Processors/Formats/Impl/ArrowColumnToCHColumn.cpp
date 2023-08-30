@@ -32,6 +32,7 @@
 #include <DataTypes/DataTypeTuple.h>
 #include <DataTypes/DataTypeMap.h>
 #include <DataTypes/DataTypeByteMap.h>
+#include <DataTypes/DataTypeFixedString.h>
 #include <common/DateLUTImpl.h>
 #include <common/types.h>
 #include <Core/Block.h>
@@ -46,7 +47,6 @@
 #include <Interpreters/castColumn.h>
 #include <algorithm>
 #include <fmt/format.h>
-#include "common/logger_useful.h"
 #include <DataTypes/NestedUtils.h>
 #include <Common/escapeForFileName.h>
 
@@ -154,6 +154,22 @@ namespace DB
             }
         }
     }
+
+    static void fillColumnWithFixedStringData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column)
+    {
+        const auto * fixed_type = assert_cast<arrow::FixedSizeBinaryType *>(arrow_column->type().get());
+        auto fixed_len = fixed_type->byte_width();
+        PaddedPODArray<UInt8> & column_chars_t = assert_cast<ColumnFixedString &>(internal_column).getChars();
+        column_chars_t.reserve(arrow_column->length() * fixed_len);
+
+        for (int chunk_i = 0, num_chunks = arrow_column->num_chunks(); chunk_i < num_chunks; ++chunk_i)
+        {
+            arrow::FixedSizeBinaryArray & chunk = dynamic_cast<arrow::FixedSizeBinaryArray &>(*(arrow_column->chunk(chunk_i)));
+            const uint8_t * raw_data = chunk.raw_values();
+            column_chars_t.insert_assume_reserved(raw_data, raw_data + fixed_len * chunk.length());
+        }
+    }
+
 
     static void fillColumnWithBooleanData(std::shared_ptr<arrow::ChunkedArray> & arrow_column, IColumn & internal_column, const bool replace_null_with_default = false)
     {
@@ -410,6 +426,9 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                 //case arrow::Type::FIXED_SIZE_BINARY:
                 fillColumnWithStringData(arrow_column, internal_column);
                 break;
+            case arrow::Type::FIXED_SIZE_BINARY:
+                fillColumnWithFixedStringData(arrow_column, internal_column);
+                break;
             case arrow::Type::BOOL:
                 fillColumnWithBooleanData(arrow_column, internal_column, replace_null_with_default);
                 break;
@@ -641,6 +660,12 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
                 );
         }
 #endif
+        if (arrow_type->id() == arrow::Type::FIXED_SIZE_BINARY)
+        {
+            const auto * arrow_fixed_size_binary_type = typeid_cast<arrow::FixedSizeBinaryType *>(arrow_type.get());
+            auto byte_width = arrow_fixed_size_binary_type->byte_width();
+            return std::make_shared<DataTypeFixedString>(byte_width);
+        }
 
         auto filter = [=](auto && elem)
         {
@@ -671,13 +696,11 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
         std::shared_ptr<arrow::Schema> schema_,
         const std::string & format_name_,
         bool allow_missing_columns_,
-        bool null_as_default_,
-        const std::map<String, String> & partition_kv_)
+        bool null_as_default_)
         : header(header_)
         , format_name(format_name_)
         , allow_missing_columns(allow_missing_columns_)
         , null_as_default(null_as_default_)
-        , partition_kv(partition_kv_)
     {
         for (const auto & field : schema_->fields())
         {
@@ -713,50 +736,17 @@ static void fillColumnWithDate32Data(std::shared_ptr<arrow::ChunkedArray> & arro
             String nested_table_name = Nested::extractTableName(header_column.name);
             if (name_to_column_ptr.find(header_column.name) == name_to_column_ptr.end())
             {
-                // // TODO: What if some columns were not presented? Insert NULLs? What if a column is not nullable?
-                // throw Exception{fmt::format("Column \"{}\" is not presented in input data.", header_column.name),
-                //                 ErrorCodes::THERE_IS_NO_COLUMN};
-
-                auto partition_column = partition_kv.find(column_name);
-                if (partition_column != partition_kv.end())
-                {
-                    auto column_type = header_column.type;
-                    ColumnWithTypeAndName column;
-                    column.name = column_name;
-                    column.type = column_type;
-                    Field value = partition_column->second;
-                    if (!isString(column_type))
-                        value = column_type->stringToVisitorField(partition_column->second);
-                    MutableColumnPtr col = column.type->createColumn();
-                    for(int i = 0; i < table->num_rows(); ++i)
-                        col->insert(value);
-                    column.column = std::move(col);
-                    num_rows = column.column->size();
-                    columns_list.push_back(std::move(column.column));
-                    continue;
-                }
-                else if (name_to_column_ptr.contains(nested_table_name))
-                {
-                    column_name = nested_table_name;
-                }
+                if (!allow_missing_columns)
+                    throw Exception{ErrorCodes::THERE_IS_NO_COLUMN, "Column '{}' is not presented in input data.", header_column.name};
                 else
                 {
-                    column_name = escapeForFileName(column_name);
-                    if (name_to_column_ptr.find(column_name) == name_to_column_ptr.end())
-                    {
-                        if (!allow_missing_columns)
-                            throw Exception{ErrorCodes::THERE_IS_NO_COLUMN, "Column '{}' is not presented in input data.", header_column.name};
-                        else
-                        {
-                            ColumnWithTypeAndName column;
-                            column.name = header_column.name;
-                            column.type = header_column.type;
-                            column.column = header_column.column->cloneResized(num_rows);
-                            columns_list.push_back(std::move(column.column));
+                    ColumnWithTypeAndName column;
+                    column.name = header_column.name;
+                    column.type = header_column.type;
+                    column.column = header_column.column->cloneResized(num_rows);
+                    columns_list.push_back(std::move(column.column));
 
-                            continue;
-                        }
-                    }
+                    continue;
                 }
             }
             std::shared_ptr<arrow::ChunkedArray> arrow_column = name_to_column_ptr[header_column.name];

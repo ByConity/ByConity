@@ -236,7 +236,6 @@ void TSaslClientTransport::doSaslNegotiation()
                 ss << "Expected COMPLETE or OK, got " << status;
                 throw TTransportException(ss.str());
             }
-            
             uint32_t challenge_length;
             uint8_t * challenge = sasl_client->evaluateChallengeOrResponse(message, res_length, &challenge_length);
             sendSaslMessage(sasl_client->isComplete() ? TSASL_COMPLETE : TSASL_OK, challenge, challenge_length);

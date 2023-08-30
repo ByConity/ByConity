@@ -111,21 +111,6 @@ message DataModelPart
     optional UUID part_id = 35;
 };
 
-message CnchHivePartInfo
-{
-    required string name = 1;
-    required string partition_id = 2;
-}
-
-message CnchHivePartModel
-{
-    required CnchHivePartInfo part_info = 1;
-    required string relative_path = 2;
-    required int64 skip_lists = 3;
-    repeated int64 skip_numbers = 4;
-    optional string hdfs_uri = 5;
-    required string format_name = 6;
-}
 
 message CnchFilePartInfo
 {

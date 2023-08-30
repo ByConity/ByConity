@@ -17,6 +17,7 @@
 
 #include <atomic>
 #include <filesystem>
+#include <Common/HashTable/Hash.h>
 #include <Storages/DiskCache/IDiskCache.h>
 #include <Storages/DiskCache/BucketLRUCache.h>
 #include <Storages/DiskCache/ShardCache.h>

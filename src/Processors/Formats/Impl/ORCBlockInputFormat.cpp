@@ -1,42 +1,34 @@
 #include "ORCBlockInputFormat.h"
 #if USE_ORC
 
-#include <Formats/FormatFactory.h>
-#include <IO/ReadBufferFromMemory.h>
-#include <IO/WriteHelpers.h>
-#include <IO/copyData.h>
-#include <arrow/adapters/orc/adapter.h>
-#include <arrow/io/memory.h>
-#include "ArrowBufferedStreams.h"
-#include "ArrowColumnToCHColumn.h"
+#    include <Formats/FormatFactory.h>
+#    include <IO/ReadBufferFromMemory.h>
+#    include <IO/WriteHelpers.h>
+#    include <IO/copyData.h>
+#    include <arrow/adapters/orc/adapter.h>
+#    include <arrow/io/memory.h>
+#    include "ArrowBufferedStreams.h"
+#    include "ArrowColumnToCHColumn.h"
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
     extern const int CANNOT_READ_ALL_DATA;
 }
 
-    // #define THROW_ARROW_NOT_OK(status)                                     \
-    // do                                                                 \
+#    define THROW_ARROW_NOT_OK(status) \
+        // do                                                                 \
     // {                                                                  \
     //     if (::arrow::Status _s = (status); !_s.ok())                   \
     //         throw Exception(_s.ToString(), ErrorCodes::BAD_ARGUMENTS); \
     // } while (false)
 
-ORCBlockInputFormat::ORCBlockInputFormat(
-    ReadBuffer & in_,
-    Block header_,
-    const FormatSettings & format_settings_,
-    const std::map<String, String> & partition_kv_)
-    : IInputFormat(std::move(header_), in_)
-    , format_settings(format_settings_)
-    , partition_kv{partition_kv_}
-    , read_stripe(format_settings_.orc.read_stripe)
- {
- }
+ORCBlockInputFormat::ORCBlockInputFormat(ReadBuffer & in_, Block header_, const FormatSettings & format_settings_)
+    : IInputFormat(std::move(header_), in_), format_settings(format_settings_)
+{
+}
 
 Chunk ORCBlockInputFormat::generate()
 {
@@ -45,38 +37,21 @@ Chunk ORCBlockInputFormat::generate()
     if (!file_reader)
         prepareReader();
 
+    const auto & skip_stripes = format_settings.orc.skip_stripes;
+    while (!skip_stripes.empty() && stripe_current < stripe_total && skip_stripes.at(stripe_current))
+        ++stripe_current;
+
     if (stripe_current >= stripe_total)
         return res;
 
-    // std::shared_ptr<arrow::RecordBatch> batch_result;
-    std::shared_ptr<arrow::Table> table;    
-    
-    
-    /// We should extract the number of rows directly from the stripe, because in case when
-    /// record batch contains 0 columns (for example if we requested only columns that
-    /// are not presented in data) the number of rows in record batch will be 0.
-    if(!include_indices.empty())
-    {
-    auto batch_status = file_reader->ReadStripe(stripe_current, include_indices );
+    std::shared_ptr<arrow::Table> table;
+    auto batch_status = file_reader->ReadStripe(stripe_current, include_indices);
     if (!batch_status.ok())
-        throw ParsingException(ErrorCodes::CANNOT_READ_ALL_DATA,
-                               "Error while reading batch of ORC data: {}", batch_status.status().ToString());
+        throw ParsingException(
+            ErrorCodes::CANNOT_READ_ALL_DATA, "Error while reading batch of ORC data: {}", batch_status.status().ToString());
 
-
-    auto status = arrow::Table::FromRecordBatches({batch_status.ValueOrDie()}).Value(&table);
-    
-    if (!status.ok())
-        throw ParsingException(ErrorCodes::CANNOT_READ_ALL_DATA,
-                               "Error while reading batch of ORC data: {}", status.ToString());
-    } else {
-        size_t num_rows = file_reader->GetRawORCReader()->getStripe(stripe_current)->getNumberOfRows();
-        std::vector<std::shared_ptr<arrow::ChunkedArray>> columns;
-        arrow::FieldVector fields; 
-        table = arrow::Table::Make(std::make_shared<arrow::Schema>(fields),columns, num_rows);
-    }
-    
+    THROW_ARROW_NOT_OK(arrow::Table::FromRecordBatches({batch_status.ValueOrDie()}).Value(&table));
     ++stripe_current;
-
     arrow_column_to_ch_column->arrowTableToCHChunk(res, table);
     return res;
 }
@@ -113,74 +88,75 @@ static size_t countIndicesForType(std::shared_ptr<arrow::DataType> type)
     return 1;
 }
 
+std::vector<int> ORCBlockInputFormat::getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header)
+{
+    std::vector<int> include_indices;
+    for (int i = 0; i < schema->num_fields(); ++i)
+    {
+        // /// LIST type require 2 indices, STRUCT - the number of elements + 1,
+        // /// so we should recursively count the number of indices we need for this type.
+        // int indexes_count = countIndicesForType(schema->field(i)->type());
+        // if (header.has(schema->field(i)->name()))
+        // {
+        //     for (int j = 0; j != indexes_count; ++j)
+        //         include_indices.push_back(index + j);
+        // }
+        // index += indexes_count;
+        /// TODO: check later, this seems to work
+        const auto & name = schema->field(i)->name();
+        if (header.has(name))
+            include_indices.push_back(i);
+    }
+    return include_indices;
+}
+
 void ORCBlockInputFormat::prepareReader()
 {
     auto arrow_file = asArrowFile(in);
-    auto reader_status = arrow::adapters::orc::ORCFileReader::Open(arrow_file,arrow::default_memory_pool()).Value(&file_reader);
-    if(!reader_status.ok())
+    auto reader_status = arrow::adapters::orc::ORCFileReader::Open(arrow_file, arrow::default_memory_pool()).Value(&file_reader);
+    if (!reader_status.ok())
     {
-        throw Exception(reader_status.ToString(), ErrorCodes::BAD_ARGUMENTS); 
+        throw Exception(reader_status.ToString(), ErrorCodes::BAD_ARGUMENTS);
     }
     stripe_total = file_reader->NumberOfStripes();
-    if(read_stripe)
-        stripe_current = format_settings.orc.current_stripe;
-    else 
-        stripe_current = 0;
+    stripe_current = 0;
 
     auto schema_status = file_reader->ReadSchema();
-    if(!schema_status.ok())
+    if (!schema_status.ok())
     {
-        throw Exception(schema_status.status().ToString(), ErrorCodes::BAD_ARGUMENTS); 
+        throw Exception(schema_status.status().ToString(), ErrorCodes::BAD_ARGUMENTS);
+    }
+
+    if (!schema_status.ok())
+    {
+        throw Exception(schema_status.status().ToString(), ErrorCodes::BAD_ARGUMENTS);
     }
 
     auto & schema = schema_status.ValueOrDie();
 
     arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
-        getPort().getHeader(),
-        schema,
-        "ORC",
-        format_settings.orc.allow_missing_columns,
-        format_settings.null_as_default,
-        partition_kv);
+        getPort().getHeader(), schema, "ORC", format_settings.orc.allow_missing_columns, format_settings.null_as_default);
 
-    int index = 0;
-    for (int i = 0; i < schema->num_fields(); ++i)
-    {
-        /// LIST type require 2 indices, STRUCT - the number of elements + 1,
-        /// so we should recursively count the number of indices we need for this type.
-        int indexes_count = countIndicesForType(schema->field(i)->type());
-        if (getPort().getHeader().has(schema->field(i)->name()))
-        {
-            for (int j = 0; j != indexes_count; ++j)
-                include_indices.push_back(index + j);
-        }
-        index += indexes_count;
-    }
+    include_indices = getColumnIndices(schema, getPort().getHeader());
 }
 
-void registerInputFormatProcessorORC(FormatFactory &factory)
+void registerInputFormatProcessorORC(FormatFactory & factory)
 {
     factory.registerInputFormatProcessor(
-            "ORC",
-            [](ReadBuffer &buf,
-                const Block &sample,
-                const RowInputFormatParams &,
-                const FormatSettings & settings)
-            {
-                return std::make_shared<ORCBlockInputFormat>(buf, sample, settings, settings.orc.partition_kv);
-            });
+        "ORC", [](ReadBuffer & buf, const Block & sample, const RowInputFormatParams &, const FormatSettings & settings) {
+            return std::make_shared<ORCBlockInputFormat>(buf, sample, settings);
+        });
     factory.markFormatAsColumnOriented("ORC");
 }
-
 }
 #else
 
 namespace DB
 {
-    class FormatFactory;
-    void registerInputFormatProcessorORC(FormatFactory &)
-    {
-    }
+class FormatFactory;
+void registerInputFormatProcessorORC(FormatFactory &)
+{
+}
 }
 
 #endif
