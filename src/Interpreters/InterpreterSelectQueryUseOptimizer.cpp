@@ -17,6 +17,7 @@
 #include <Analyzers/QueryRewriter.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/WorkerStatusManager.h>
@@ -27,12 +28,12 @@
 #include <QueryPlan/PlanCache.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/QueryPlanner.h>
+#include <Storages/Hive/StorageCnchHive.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
 #include <common/logger_useful.h>
-#include <Storages/RemoteFile/IStorageCnchFile.h>
 #include "QueryPlan/QueryPlan.h"
-#include <Storages/Hive/StorageCnchHive.h>
 
 namespace DB
 {
