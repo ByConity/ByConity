@@ -384,6 +384,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             table_id = StorageID::createEmpty();
             metadata_snapshot = nullptr;
         }
+        has_join = true;
     }
 
     if (!has_input)
@@ -663,7 +664,7 @@ void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
 
     if (!table_id.empty())
         addUsedStorageID(table_id);
-    if (query_plan.hasJoin())
+    if (has_join)
         setHasAllUsedStorageIDs(false);
 
     if (interpreter_subquery)

@@ -819,12 +819,4 @@ PlanNodePtr QueryPlan::getPlanNodeById(PlanNodeId node_id) const
     return nullptr;
 }
 
-bool QueryPlan::hasJoin() const
-{
-    return std::any_of(nodes.begin(), nodes.end(),
-        [](const auto & node) {
-            return (node.step->getType() == IQueryPlanStep::Type::Join);
-        });
-}
-
 }

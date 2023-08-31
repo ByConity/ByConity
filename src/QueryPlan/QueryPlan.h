@@ -83,7 +83,6 @@ public:
     bool isInitialized() const { return root != nullptr; } /// Tree is not empty
     bool isCompleted() const; /// Tree is not empty and root hasOutputStream()
     const DataStream & getCurrentDataStream() const; /// Checks that (isInitialized() && !isCompleted())
-    bool hasJoin() const; /// Check if there is join operation in plan
 
     void optimize(const QueryPlanOptimizationSettings & optimization_settings);
 
