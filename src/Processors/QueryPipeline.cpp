@@ -670,7 +670,7 @@ Processors QueryPipelineProcessorsCollector::detachProcessors(size_t group)
 
 void QueryPipeline::writeResultIntoQueryCache(std::shared_ptr<QueryCache::Writer> query_cache_writer)
 {
-    assert(pipeline.getNumStreams() > 0);
+    assert(pipe.numOutputPorts() > 0);
     pipe.addQueryCacheTransform(std::move(query_cache_writer));
 }
 
