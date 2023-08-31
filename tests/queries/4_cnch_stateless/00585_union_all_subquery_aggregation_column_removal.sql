@@ -3,9 +3,6 @@ DROP TABLE IF EXISTS clicks;
 DROP TABLE IF EXISTS transactions;
 SET output_format_json_quote_64bit_integers = 1;
 
--- TODO @zhoukun FIX enable_optimizer
-set enable_optimizer=0;
-
 CREATE TABLE clicks (domain String) ENGINE = CnchMergeTree ORDER BY domain;
 CREATE TABLE transactions (domain String) ENGINE = CnchMergeTree ORDER BY domain;
 INSERT INTO clicks VALUES ('facebook.com'), ('yandex.ru'), ('google.com');

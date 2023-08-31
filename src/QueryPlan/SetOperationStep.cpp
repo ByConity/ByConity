@@ -79,10 +79,20 @@ SetOperationStep::SetOperationStep(
     std::vector<const ColumnWithTypeAndName *> columns(num_selects);
     for (size_t column_num = 0; column_num < output_stream->header.columns(); ++column_num)
     {
-        for (size_t i = 0; i < num_selects; ++i)
-            columns[i] = &input_streams[i].header.getByPosition(column_num);
-
         ColumnWithTypeAndName & result_elem = output_stream->header.getByPosition(column_num);
+        for (size_t i = 0; i < num_selects; ++i)
+        {
+            if(output_to_inputs.contains(result_elem.name))
+            {
+                for (auto & input_name : output_to_inputs[result_elem.name])
+                {
+                    if (input_streams[i].header.findByName(input_name))
+                        columns[i] = input_streams[i].header.findByName(input_name);
+                }
+            }
+            else
+                columns[i] = &input_streams[i].header.getByPosition(column_num);
+        }
         result_elem.column = getCommonColumnForUnion(columns);
     }
 
