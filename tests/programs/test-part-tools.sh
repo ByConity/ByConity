@@ -23,9 +23,9 @@ CSV_FILE="test-data.csv"
 PARTITION_VALUE="2020-01-01"
 CLICKHOUSE_BIN=${CLICKHOUSE_BIN:-"$SCRIPT_DIR/../../build/programs/clickhouse"}
 # HDFS_HOST is used by CI to bypass nnproxy.
-HDFS_DIR="hdfs://$HDFS_HOST/home/byte_dataplatform_olap_engines/user/clickhouse/ci"
-WRITER_LOCATION="$HDFS_DIR/writer-test"
-MERGER_LOCATION="$HDFS_DIR/merger-test"
+PART_TOOLS_HDFS_DIR=${PART_TOOLS_HDFS_DIR:-"hdfs://$HDFS_HOST/home/byte_dataplatform_olap_engines/user/clickhouse/ci"}
+WRITER_LOCATION="$PART_TOOLS_HDFS_DIR/writer-test"
+MERGER_LOCATION="$PART_TOOLS_HDFS_DIR/merger-test"
 
 test_writer_and_merger ()
 {
@@ -54,12 +54,13 @@ test_writer_and_merger ()
 
   $CLICKHOUSE_BIN part-merger --create-table-sql "create table my_db.tmp $SCHEMA" \
     --source-path "$WRITER_LOCATION/" \
-    --output-path "$MERGER_LOCATION/" \
+    --output-path "$MERGER_LOCATION/$UUID" \
     --uuids "$UUID" \
     --verbose
 
   set +e
 
+  hdfs dfs -ls "$MERGER_LOCATION/$UUID/"
   hdfs dfs -rm -r "$WRITER_LOCATION/$UUID/" "$MERGER_LOCATION/$UUID/"
   rm -r $CSV_FILE
 
