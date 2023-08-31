@@ -34,18 +34,3 @@ Projection Est. ? rows
                   │     Partition by: {a, c}
                   └─ TableScan test.multi_dist Est. ? rows
                            Outputs: [a, b, c]
-0	2	2	0.002	1
-1	1	1	0.001	1
-\N	2	2	0.002	1
-Projection Est. ? rows
-│     Expressions: tuple(uid, customer_id_bk):=`expr#tuple(uid, customer_id_bk)`
-└─ Gather Exchange Est. ? rows
-   └─ MergingAggregated Est. ? rows
-      └─ Repartition Exchange Est. ? rows
-         │     Partition by: {expr#tuple(uid, customer_id_bk)}
-         └─ Aggregating Est. ? rows
-            │     Group by: {expr#tuple(uid, customer_id_bk)}
-            └─ Projection Est. ? rows
-               │     Expressions: expr#tuple(uid, customer_id_bk):=(uid, customer_id_bk)
-               └─ TableScan aeolus_data_db_cnch_gamma_yg_202305.aeolus_data_table_35_1537237_prod Est. ? rows
-                        Outputs: [customer_id_bk, uid]

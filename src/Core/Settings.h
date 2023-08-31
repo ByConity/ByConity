@@ -1802,7 +1802,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_windows_reorder, true, "Reorder adjacent windows to decrease exchange", 0) \
     M(Bool, enable_swap_predicate_rewrite, true, "Whether enable swap predicate rewrite", 0) \
     M(Bool, enable_equivalences, true, "Whether enable using equivalences when property match", 0) \
-    M(Bool, enable_injective_in_property, true, "Whether enable using injective function when property match", 0) \
     M(Bool, enable_replace_group_by_literal_to_symbol, false, "Replace group by literal to symbol", 0) \
     M(Bool, enable_replace_order_by_literal_to_symbol, false, "Replace order by literal to symbol", 0) \
     M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \

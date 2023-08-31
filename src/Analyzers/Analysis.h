@@ -254,10 +254,6 @@ struct Analysis
     void setExpressionColumnWithType(const ASTPtr & expression, const ColumnWithType & column_with_type);
     std::optional<ColumnWithType> tryGetExpressionColumnWithType(const ASTPtr & expression);
     ExpressionTypes getExpressionTypes();
-    std::unordered_map<ASTPtr, ColumnWithType> getExpressionColumnWithTypes()
-    {
-        return expression_column_with_types;
-    }
     DataTypePtr getExpressionType(const ASTPtr & expression);
 
     // ASTIdentifier, ASTFieldReference
