@@ -785,6 +785,8 @@ namespace S3
         ak_id = cfg.getString(cfg_prefix + ".ak_id", "");
         ak_secret = cfg.getString(cfg_prefix + ".ak_secret", "");
 
+        is_virtual_hosted_style = cfg.getBool(cfg_prefix + ".is_virtual_hosted_style", false);
+
         if (ak_id.empty())
             collectCredentialsFromEnv();
     }
