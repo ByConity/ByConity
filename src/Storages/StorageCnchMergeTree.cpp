@@ -736,8 +736,8 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(
     return create_view_sqls;
 }
 
-String StorageCnchMergeTree::createLocalTableForWrite(
-    ASTInsertQuery * insert_query, ContextPtr local_context, bool enable_staging_area, bool send_query)
+std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocalTableForWrite(
+    ASTInsertQuery * insert_query, ContextPtr local_context, bool enable_staging_area, bool send_query_in_normal_mode)
 {
     auto generated_tb_name = getCloudTableName(local_context);
     auto local_table_name = generated_tb_name + "_write";
@@ -755,71 +755,82 @@ String StorageCnchMergeTree::createLocalTableForWrite(
     if (!num_of_workers)
         throw Exception("No heathy worker available", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
 
+    std::vector<CnchWorkerClientPtr> worker_clients_for_send;
     std::size_t index = std::hash<String>{}(local_context->getCurrentQueryId() + std::to_string(retry)) % num_of_workers;
     const auto * write_shard_ptr = &(worker_group->getShardsInfo().at(index));
 
-    // TODO: healthy check by rpc
-    if (settings.query_worker_fault_tolerance)
+    if (!send_query_in_normal_mode)
     {
-        ConnectionTimeouts connection_timeouts = DB::ConnectionTimeouts::getTCPTimeoutsWithoutFailover(local_context->getSettingsRef());
-
-        // Perform health check for selected write_shard and retry for 2 more times if there are enough write workers.
-        while (true)
+        worker_clients_for_send = worker_group->getWorkerClients();
+    }
+    else
+    {
+        // TODO: healthy check by rpc
+        if (settings.query_worker_fault_tolerance)
         {
-            LOG_TRACE(log, "Health check for worker: {}", write_shard_ptr->worker_id);
+            ConnectionTimeouts connection_timeouts = DB::ConnectionTimeouts::getTCPTimeoutsWithoutFailover(local_context->getSettingsRef());
 
-            try
+            // Perform health check for selected write_shard and retry for 2 more times if there are enough write workers.
+            while (true)
             {
-                // The checking task checks whether the current connection is connected or can connect.
-                auto entry = write_shard_ptr->pool->get(connection_timeouts, &settings, true);
-                Connection * conn = &(*entry);
-                conn->tryConnect(connection_timeouts);
-                break;
-            }
-            catch (const NetException &)
-            {
-                // Don't throw network exception, instead remove the unhealthy worker unless no more available workers or reach retry limit.
-                if (++retry > max_retry)
-                    throw Exception(
-                        "Cannot find healthy worker after " + std::to_string(max_retry) + " times retries.",
-                        ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
+                LOG_TRACE(log, "Health check for worker: {}", write_shard_ptr->worker_id);
 
-                index = (index + 1) % num_of_workers;
-                write_shard_ptr = &(worker_group->getShardsInfo().at(index));
+                try
+                {
+                    // The checking task checks whether the current connection is connected or can connect.
+                    auto entry = write_shard_ptr->pool->get(connection_timeouts, &settings, true);
+                    Connection * conn = &(*entry);
+                    conn->tryConnect(connection_timeouts);
+                    break;
+                }
+                catch (const NetException &)
+                {
+                    // Don't throw network exception, instead remove the unhealthy worker unless no more available workers or reach retry limit.
+                    if (++retry > max_retry)
+                        throw Exception(
+                            "Cannot find healthy worker after " + std::to_string(max_retry) + " times retries.",
+                            ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
+
+                    index = (index + 1) % num_of_workers;
+                    write_shard_ptr = &(worker_group->getShardsInfo().at(index));
+                }
             }
+        }
+
+        auto worker_client = worker_group->getWorkerClients().at(index);
+        worker_clients_for_send.emplace_back(worker_client);
+    }
+
+    for (auto & worker_client : worker_clients_for_send)
+    {
+        LOG_DEBUG(
+            log,
+            "Will send create query: {} to target worker: {}",
+            create_local_tb_query,
+            worker_client->getHostWithPorts().toDebugString());
+
+        worker_client->sendCreateQueries(local_context, {create_local_tb_query});
+
+        auto table_suffix = extractTableSuffix(generated_tb_name);
+        Names dependency_create_queries = genViewDependencyCreateQueries(getStorageID(), local_context, table_suffix + "_write");
+        for (const auto & dependency_create_query : dependency_create_queries)
+        {
+            LOG_DEBUG(log, "Will send create query {}", dependency_create_query);
+        }
+        worker_client->sendCreateQueries(local_context, dependency_create_queries);
+    }
+
+    if (send_query_in_normal_mode)
+    {
+        /// Ensure worker session local_context resource could be released
+        if (auto session_resource = local_context->tryGetCnchServerResource())
+        {
+            std::vector<size_t> index_values{index};
+            session_resource->setWorkerGroup(std::make_shared<WorkerGroupHandleImpl>(*worker_group, index_values));
         }
     }
 
-    LOG_DEBUG(log, "Will send create query: {} to target worker: {}", create_local_tb_query, write_shard_ptr->worker_id);
-    auto worker_client = worker_group->getWorkerClients().at(index);
-
-    worker_client->sendCreateQueries(local_context, {create_local_tb_query});
-
-    auto table_suffix = extractTableSuffix(generated_tb_name);
-    Names dependency_create_queries = genViewDependencyCreateQueries(getStorageID(), local_context, table_suffix + "_write");
-    for (const auto & dependency_create_query : dependency_create_queries)
-    {
-        LOG_DEBUG(log, "Will send create query {}", dependency_create_query);
-    }
-    worker_client->sendCreateQueries(local_context, dependency_create_queries);
-
-    /// Ensure worker session local_context resource could be released
-    if (auto session_resource = local_context->tryGetCnchServerResource())
-    {
-        std::vector<size_t> index_values{index};
-        session_resource->setWorkerGroup(std::make_shared<WorkerGroupHandleImpl>(*worker_group, index_values));
-    }
-
-    if (insert_query && send_query)
-    {
-        String query_statement = queryToString(*insert_query);
-
-        LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
-        /// TODO: send insert query by rpc.
-        sendQueryPerShard(local_context, query_statement, *write_shard_ptr, true);
-    }
-
-    return local_table_name;
+    return std::make_pair(local_table_name, write_shard_ptr);
 }
 
 BlockOutputStreamPtr
@@ -862,8 +873,11 @@ StorageCnchMergeTree::writeInWorker(const ASTPtr & query, const StorageMetadataP
         RestoreTableExpressionsVisitor(data).visit(insert_query.select);
     }
 
-    createLocalTableForWrite(&insert_query, local_context, enable_staging_area, true);
-    return nullptr;
+    std::pair<String, const Cluster::ShardInfo *> write_shard_info = prepareLocalTableForWrite(&insert_query, local_context, enable_staging_area, true);
+    String query_statement = queryToString(insert_query);
+
+    LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
+    return sendQueryPerShard(local_context, query_statement, *write_shard_info.second, true);
 }
 
 HostWithPortsVec StorageCnchMergeTree::getWriteWorkers(const ASTPtr & /**/, ContextPtr local_context)

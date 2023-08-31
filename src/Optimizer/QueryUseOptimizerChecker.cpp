@@ -108,7 +108,7 @@ static bool checkDatabaseAndTable(String database_name, String table_name, const
     return true;
 }
 
-bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & context, bool insert_select_from_table)
+bool QueryUseOptimizerChecker::check(ASTPtr node, const ContextMutablePtr & context, bool insert_select_from_table)
 {
     if (!node || (!context->getSettingsRef().enable_optimizer && !insert_select_from_table))
     {

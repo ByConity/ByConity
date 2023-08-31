@@ -83,7 +83,7 @@ public:
     PrepareContextResult prepareReadContext(
         const Names & column_names, const StorageMetadataPtr & metadata_snapshot, SelectQueryInfo & query_info, ContextPtr & local_context);
 
-    String createLocalTableForWrite(ASTInsertQuery * insert_query, ContextPtr local_context, bool enable_staging_area, bool send_query);
+    std::pair<String, const Cluster::ShardInfo *> prepareLocalTableForWrite(ASTInsertQuery * insert_query, ContextPtr local_context, bool enable_staging_area, bool send_query);
 
     BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context) override;
 

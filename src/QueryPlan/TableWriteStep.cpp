@@ -182,11 +182,11 @@ void TableWriteStep::allocate(const ContextPtr & context)
 {
     if (auto * cnch = dynamic_cast<StorageCnchMergeTree *>(target->getStorage().get()))
     {
-        auto local_table_name = cnch->createLocalTableForWrite(nullptr, context, false, false);
+        auto local_table_info = cnch->prepareLocalTableForWrite(nullptr, context, false, false);
 
-        if (auto input_target = dynamic_cast<InsertTarget *>(target.get()))
+        if (auto * input_target = dynamic_cast<InsertTarget *>(target.get()))
         {
-            input_target->setTable(local_table_name);
+            input_target->setTable(local_table_info.first);
         }
     }
 }
