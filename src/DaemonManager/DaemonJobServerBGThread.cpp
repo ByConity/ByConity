@@ -99,7 +99,12 @@ std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread 
         }
         catch (Exception & e)
         {
-            LOG_WARNING(log, "Fail to schedule for {}.{}. Error: ", data_model.database(), data_model.name(), e.message());
+            LOG_WARNING(log, "Fail to schedule for {}.{}. Error: {}", data_model.database(), data_model.name(), e.message());
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
+        catch (...)
+        {
+            LOG_WARNING(log, "Fail to construct storage for {}.{}", data_model.database(), data_model.name());
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
@@ -1046,7 +1051,12 @@ void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
         }
         catch (Exception & e)
         {
-            LOG_WARNING(log, "Fail to construct storage for {}.{}. Error: ", data_model.database(), data_model.name(), e.message());
+            LOG_WARNING(log, "Fail to construct storage for {}.{}. Error: {}", data_model.database(), data_model.name(), e.message());
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
+        catch (...)
+        {
+            LOG_WARNING(log, "Fail to construct storage for {}.{}", data_model.database(), data_model.name());
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
