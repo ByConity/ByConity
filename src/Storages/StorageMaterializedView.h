@@ -122,11 +122,11 @@ public:
 
     ASTPtr getInnerQuery() const { return getInMemoryMetadataPtr()->select.inner_query->clone(); }
     bool isRefreshable(bool cascading) const;
-    void refresh(const ASTPtr & partition, ContextPtr local_context, bool async);
+    void refresh(const ASTPtr & partition, ContextMutablePtr local_context, bool async);
     
 private:
     void refreshImpl(const ASTPtr & partition, ContextPtr local_context);
-    void refreshCnchImpl(const ASTPtr & partition, ContextPtr local_context);
+    void refreshCnchImpl(const ASTPtr & partition, ContextMutablePtr local_context);
 
     /// Will be initialized in constructor
     StorageID target_table_id = StorageID::createEmpty();

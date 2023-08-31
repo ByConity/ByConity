@@ -2090,8 +2090,6 @@ void StorageCnchMergeTree::dropPartitionOrPart(
     {
         if (command.part)
             throw Exception(ErrorCodes::NO_SUCH_DATA_PART, "No part found");
-        else
-            return;
     }
 
     auto parts = createPartVectorFromServerParts(*this, svr_parts);
@@ -2111,6 +2109,13 @@ void StorageCnchMergeTree::dropPartsImpl(
     size_t max_threads)
 {
     auto txn = local_context->getCurrentTransaction();
+    if (svr_parts_to_drop.empty())
+    {
+        /// Note that it doesn't matter if we commit or rollback here, because there's no data anyway. But commit is more
+        /// semantically correct, because there's no exception, so client side expect that the transaction is success.
+        txn->commitV2();
+        return;
+    }
 
     if (detach)
     {
