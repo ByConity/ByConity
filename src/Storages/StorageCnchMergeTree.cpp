@@ -2026,6 +2026,7 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "cnch_merge_enable_batch_select",
         "cnch_merge_max_total_rows_to_merge",
         "cnch_merge_max_total_bytes_to_merge",
+        "cnch_merge_max_parts_to_merge",
         "cnch_merge_only_realtime_partition",
         "cnch_merge_select_nonadjacent_parts",
         "cnch_merge_pick_worker_algo",

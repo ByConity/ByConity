@@ -599,7 +599,8 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
         DanceMergeSelector::Settings merge_settings;
         merge_settings.loadFromConfig(config);
         /// Override value from table settings
-        merge_settings.max_parts_to_merge_base = data_settings->max_parts_to_merge_at_once;
+        /// For CNCH compatibility, we use cnch_merge_max_parts_to_merge and max_parts_to_merge_at_once.
+        merge_settings.max_parts_to_merge_base = std::min(data_settings->cnch_merge_max_parts_to_merge, data_settings->max_parts_to_merge_at_once);
         merge_settings.enable_batch_select = enable_batch_select;
         if (aggressive)
             merge_settings.min_parts_to_merge_base = 1;
@@ -609,7 +610,7 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
     {
         SimpleMergeSelector::Settings merge_settings;
         /// Override value from table settings
-        merge_settings.max_parts_to_merge_at_once = data_settings->max_parts_to_merge_at_once;
+        merge_settings.max_parts_to_merge_at_once = std::min(data_settings->cnch_merge_max_parts_to_merge, data_settings->max_parts_to_merge_at_once);
         merge_settings.enable_batch_select = enable_batch_select;
         if (aggressive)
             merge_settings.base = 1;

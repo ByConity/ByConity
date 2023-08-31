@@ -128,6 +128,7 @@ struct MergeSelectionMetrics
             << ", elapsed_select_parts:" << elapsed_select_parts
             << "; num_partitions:" << num_partitions
             << ", num_unlock_partitions:" << num_unlock_partitions
+            << ", num_source_parts:" << num_source_parts
             << ", num_visible_parts:" << num_visible_parts
             << ", num_legal_visible_parts:" << num_legal_visible_parts
             << '}';
