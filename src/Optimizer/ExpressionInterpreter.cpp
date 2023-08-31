@@ -566,9 +566,10 @@ InterpretIMResult ExpressionInterpreter::visitInFunction(const ASTFunction & fun
     const auto & right_arg = function.arguments->children[1];
     auto left_arg_result = visit(left_arg);
     auto rewritten_left_arg = left_arg_result.convertToAST(context);
+    auto rewritten_in_func = makeASTFunction(function.name, rewritten_left_arg, right_arg);
 
     if (left_arg_result.isAST() && !setting.enable_function_simplify)
-        return {std::make_shared<DataTypeUInt8>(), makeASTFunction(function.name, rewritten_left_arg, right_arg)};
+        return {getType(rewritten_in_func), rewritten_in_func};
 
     // build set for IN statement(see also ActionsVisitor)
     SetPtr set;
@@ -614,7 +615,7 @@ InterpretIMResult ExpressionInterpreter::visitInFunction(const ASTFunction & fun
     auto set_columns = set->getSetElements();
     // TODO: support (x, y) IN ((1, 2), (3, 4))
     if (set_columns.size() != 1)
-        return {std::make_shared<DataTypeUInt8>(), makeASTFunction(function.name, rewritten_left_arg, right_arg)};
+        return {getType(rewritten_in_func), rewritten_in_func};
 
     auto & set_column = set_columns[0];
     ASTs set_values;
@@ -625,8 +626,7 @@ InterpretIMResult ExpressionInterpreter::visitInFunction(const ASTFunction & fun
     // in some cases, there are no values filled in the set, e.g. IN NULL/NOT IN NULL, keep the original expression
     if (set_values.empty())
     {
-        ASTPtr rewritten_func = makeASTFunction(function.name, rewritten_left_arg, right_arg);
-        return {std::make_shared<DataTypeUInt8>(), rewritten_func};
+        return {getType(rewritten_in_func), rewritten_in_func};
     }
     // rewrite `x IN 1` to `x = 1`, notice `NULL nullIn (NULL)` should return 1 so it can't be rewritten
     else if (set_values.size() == 1 && inFunctionIsNullSkipped(function.name))
@@ -638,7 +638,8 @@ InterpretIMResult ExpressionInterpreter::visitInFunction(const ASTFunction & fun
     }
 
     auto tuple_func = makeASTFunction("tuple", set_values);
-    return {std::make_shared<DataTypeUInt8>(), makeASTFunction(function.name, rewritten_left_arg, tuple_func)};
+    auto simplified_in_func = makeASTFunction(function.name, rewritten_left_arg, tuple_func);
+    return {getType(simplified_in_func), simplified_in_func};
 }
 
 }
