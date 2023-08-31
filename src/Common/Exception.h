@@ -40,6 +40,7 @@ namespace Poco { class Logger; }
 
 namespace DB
 {
+extern bool g_disable_abort_on_logical_error;
 
 void abortOnFailedAssertion(const String & description);
 

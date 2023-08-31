@@ -101,7 +101,7 @@ namespace fs = std::filesystem;
 
 namespace DB::ErrorCodes
 {
-    extern const int PROF_NOT_SET; 
+extern const int PROF_NOT_SET;
 }
 
 /* Check whether prof:true has been set in MALLOC_CONF env
@@ -892,6 +892,13 @@ void BaseDaemon::initialize(Application & self)
     initializeTerminationAndSignalProcessing();
     logRevision();
     debugIncreaseOOMScore();
+
+    /// In some cases, we may want to disable the abort-on-logical-error behavior
+    /// in debug & santitizer build
+    if (config().getBool("disable_abort_on_logical_error", false))
+    {
+        DB::g_disable_abort_on_logical_error = true;
+    }
 
     for (const auto & key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
     {
