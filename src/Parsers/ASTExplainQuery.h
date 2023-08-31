@@ -48,6 +48,7 @@ public:
         LogicalAnalyze,    /// 'EXPLAIN ANALYZE SELECT...'
         TraceOptimizer,    /// 'EXPLAIN TRACE_OPT SELECT...'
         TraceOptimizerRule,    /// 'EXPLAIN TRACE_OPT RULE SELECT...'
+        Analysis, // 'EXPLAIN ANALYSIS...'
     };
 
     explicit ASTExplainQuery(ExplainKind kind_) : kind(kind_) {}
@@ -120,6 +121,7 @@ private:
             case Distributed: return "EXPLAIN DISTRIBUTED";
             case TraceOptimizer: return "EXPLAIN TRACE_OPT";
             case TraceOptimizerRule: return "EXPLAIN TRACE_OPT RULE";
+            case Analysis: return "EXPLAIN ANALYSIS";
         }
 
         __builtin_unreachable();

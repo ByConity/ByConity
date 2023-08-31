@@ -237,6 +237,7 @@ struct Analysis
     std::unordered_map<ASTIdentifier *, ScopePtr> table_storage_scopes;
     void setTableStorageScope(ASTIdentifier &, ScopePtr);
     ScopePtr getTableStorageScope(ASTIdentifier &);
+    std::unordered_map<ASTIdentifier *, ScopePtr> & getTableStorageScopeMap();
 
     std::unordered_map<ASTIdentifier *, ASTs> table_alias_columns;
     void setTableAliasColumns(ASTIdentifier &, ASTs);
@@ -385,6 +386,10 @@ struct Analysis
 
     std::unordered_map<ASTSelectQuery *, ArrayJoinAnalysis> array_join_analysis;
     ArrayJoinAnalysis & getArrayJoinAnalysis(ASTSelectQuery & select_query);
+
+    // function names
+    std::set<String> function_names;
+    std::set<String> & getFunctionNames() { return function_names; }
 };
 
 }

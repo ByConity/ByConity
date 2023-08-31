@@ -721,6 +721,23 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         if (input_ast == nullptr)
             interpretSettings(ast, context);
 
+        if (auto * explain_select_query = ast->as<ASTExplainQuery>())
+        {
+            const auto * select_with_union_query = explain_select_query->getExplainedQuery()->as<ASTSelectWithUnionQuery>();
+            if (select_with_union_query && !select_with_union_query->list_of_selects->children.empty())
+            {
+                const auto * last_select = select_with_union_query->list_of_selects->children.back()->as<ASTSelectQuery>();
+                if (last_select && last_select->settings())
+                    InterpreterSetQuery(last_select->settings(), context).executeForCurrentContext();
+            }
+            else
+            {
+                auto * insert_query = explain_select_query->getExplainedQuery()->as<ASTInsertQuery>();
+                if (insert_query && insert_query->settings_ast)
+                    InterpreterSetQuery(insert_query->settings_ast, context).executeForCurrentContext();
+            }
+        }
+
         if (const auto * query_with_table_output = dynamic_cast<const ASTQueryWithTableAndOutput *>(ast.get()))
         {
             query_database = query_with_table_output->database;
