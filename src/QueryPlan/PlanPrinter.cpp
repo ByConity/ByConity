@@ -856,14 +856,6 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
         out << intent.detailIntent() << "Size: " << topn_filter->getSize();
     }
-
-    if (verbose && plan->getType() == IQueryPlanStep::Type::TableWrite)
-    {
-        const auto * table_write = dynamic_cast<const TableWriteStep *>(plan.get());
-        if (table_write->getTarget())
-            out << intent.detailIntent() << table_write->getTarget()->toString();
-    }
-
     return out.str();
 }
 

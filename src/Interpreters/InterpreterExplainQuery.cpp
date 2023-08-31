@@ -29,7 +29,6 @@
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
-#include <DataTypes/DataTypeMap.h>
 #include <Interpreters/InDepthNodeVisitor.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
@@ -55,7 +54,6 @@
 #include <Storages/StorageView.h>
 #include <Common/JSONBuilder.h>
 #include <Interpreters/GetAggregatesVisitor.h>
-#include <Analyzers/QueryAnalyzer.h>
 
 namespace DB
 {
@@ -472,8 +470,6 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
         if (plan_segment_tree)
             buf << plan_segment_tree->toString();
     }
-    else if (ast.getKind() == ASTExplainQuery::Analysis)
-        return explainAnalysis(query);
 
     if (single_line)
         res_columns[0]->insertData(buf.str().data(), buf.str().size());
@@ -852,118 +848,8 @@ void InterpreterExplainQuery::explainDistributedWithOptimizer(
     buffer << PlanPrinter::textDistributedPlan(plan_segment_descriptions, true, true, costs, {}, plan);
 }
 
-BlockInputStreamPtr InterpreterExplainQuery::explainAnalysis(const ASTPtr & ast)
-{
-    const auto & explain = ast->as<ASTExplainQuery &>();
-    auto context = Context::createCopy(getContext());
-    auto query_ptr = explain.getExplainedQuery();
-    query_ptr = QueryRewriter().rewrite(query_ptr, context);
-    AnalysisPtr analysis = QueryAnalyzer::analyze(query_ptr, context);
-    auto & table_storage_scopes = analysis->getTableStorageScopeMap();
-
-    // get used tables, databases, columns_list
-    auto column_tables = ColumnArray::create(ColumnString::create());
-    auto column_databases = ColumnArray::create(ColumnString::create());
-    auto column_columns_list = ColumnArray::create(ColumnString::create());
-
-    auto column_lists_off = ColumnUInt64::create();
-    auto & columns_list_offset_data = column_lists_off->getData();
-
-    Array tables_array;
-    Array databases_array;
-    size_t array_off_size = 0;
-    for (auto & it : table_storage_scopes)
-    {
-        Array columns_array;
-        auto & db_and_table = it.first->as<ASTTableIdentifier &>();
-        auto storage = analysis->getStorageAnalysis(*it.first);
-        tables_array.push_back(storage.table);
-        databases_array.push_back(storage.database);
-        const auto & column_id_set = analysis->getUsedColumns(*it.first);
-        std::vector<String> column_list;
-        array_off_size++;
-        for (size_t i : column_id_set)
-        {
-            columns_array.push_back(it.second->at(i).name);
-        }
-        column_columns_list->insert(columns_array);
-    }
-    columns_list_offset_data.push_back(array_off_size);
-
-    //get used functions
-    auto column_functions = ColumnArray::create(ColumnString::create());
-    Array functions_array;
-    for (auto & func_name : analysis->getFunctionNames())
-        functions_array.push_back(func_name);
-
-    // get settings
-    ASTPtr settings;
-    if (const auto * select_with_union_query = query_ptr->as<ASTSelectWithUnionQuery>())
-    {
-        const auto * last_select = select_with_union_query->list_of_selects->children.back()->as<ASTSelectQuery>();
-        settings = last_select->settings();
-    }
-    else if (const auto * select_query = query_ptr->as<ASTSelectQuery>())
-        settings = select_query->settings();
-    else if (const auto * insert_query = query_ptr->as<ASTInsertQuery>())
-        settings = insert_query->settings_ast;
-
-    auto key_column = ColumnString::create();
-    auto value_column = ColumnString::create();
-    auto settings_offset_column = ColumnVector<UInt64>::create();
-    size_t offest_size = 0;
-    if (settings)
-    {
-        const auto & changes = settings->as<ASTSetQuery &>().changes;
-        for (const auto & setting : changes)
-        {
-            offest_size++;
-            key_column->insert(setting.name);
-            value_column->insert(setting.value.toString());
-        }
-    }
-    settings_offset_column->insert(offest_size);
-
-    auto insert_list = ColumnArray::create(ColumnString::create());
-    auto insert_offset = ColumnUInt64::create();
-    auto & insert_offset_data = insert_offset->getData();
-    size_t insert_offest_size = 0;
-    if (analysis->getInsert())
-    {
-        insert_offest_size += 3;
-        auto & insert_info = analysis->getInsert().value();
-        Array database_array;
-        database_array.push_back(insert_info.storage_id.getDatabaseName());
-        insert_list->insert(database_array);
-        Array table_array;
-        table_array.push_back(insert_info.storage_id.getTableName());
-        insert_list->insert(table_array);
-        Array columns;
-        for (auto & column_info : insert_info.columns)
-            columns.push_back(column_info.name);
-        insert_list->insert(columns);
-    }
-    insert_offset_data.push_back(insert_offest_size);
-
-    column_tables->insert(tables_array);
-    column_databases->insert(databases_array);
-    column_functions->insert(functions_array);
-    auto col_arr_arr = ColumnArray::create(std::move(column_columns_list), std::move(column_lists_off));
-    ColumnPtr settings_column = ColumnMap::create(std::move(key_column), std::move(value_column), std::move(settings_offset_column));
-    auto insert_info_arr = ColumnArray::create(std::move(insert_list), std::move(insert_offset));
-
-    Block block;
-    block.insert({std::move(column_tables), std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()), "tables"});
-    block.insert({std::move(column_databases), std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()), "databases"});
-    block.insert({std::move(col_arr_arr), std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())), "columns_lists"});
-    block.insert({std::move(column_functions), std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()), "used_function_names"});
-    block.insert({std::move(settings_column), std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()), "settings"});
-    block.insert({std::move(insert_info_arr), std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())), "insert_info"});
-
-    return std::make_shared<OneBlockInputStream>(block);
-}
-
-void InterpreterExplainQuery::explainPipelineWithOptimizer(const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr)
+void InterpreterExplainQuery::explainPipelineWithOptimizer(
+    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr)
 {
     auto settings = checkAndGetSettings<QueryPipelineSettings>(explain_ast.getSettings());
     QueryPlan query_plan = PlanNodeToNodeVisitor::convert(plan);

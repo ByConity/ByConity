@@ -106,13 +106,13 @@ public:
             throw Exception(ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT, "First argument for function {} must be map.", getName());
 
         /// TODO: fix Map<Int32, Int32> KV case
-        // if (map->getKeyType()->getName() != arguments[1].type->getName())
-        //     throw Exception(
-        //         ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
-        //         "Second argument which type is {} for function {} does not match map key type {}.",
-        //         arguments[1].type->getName(),
-        //         getName(),
-        //         map->getKeyType()->getName());
+        if (map->getKeyType()->getName() != arguments[1].type->getName())
+            throw Exception(
+                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT,
+                "Second argument which type is {} for function {} does not match map key type {}.",
+                arguments[1].type->getName(),
+                getName(),
+                map->getKeyType()->getName());
 
         return map->getValueTypeForImplicitColumn();
     }
