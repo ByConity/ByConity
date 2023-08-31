@@ -61,6 +61,7 @@ struct WindowFunctionWorkspace
 
 struct WindowTransformBlock
 {
+    Columns original_input_columns;
     Columns input_columns;
     MutableColumns output_columns;
 
