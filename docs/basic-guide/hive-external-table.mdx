@@ -1,0 +1,126 @@
+---
+title: Hive External Table
+tags:
+  - Docs
+---
+
+# Hive
+
+CnchHive is a table engine provided by ByConity, which supports federated query in the form of external tables, and users can directly accelerate data query without importing data. CnchHive supports querying data on both HDFS and S3 Hive table.
+
+Currently supports querying data files of Hive in Parquet and ORC formats.
+
+## Creating a Table
+```sql
+CREATE TABLE [IF NOT EXISTS] [db.]hive_ext
+ENGINE = CnchHive('thrift://127.0.0.1:9083', 'hive_db', 'hive_table')
+[SETTING vw_default = '']
+```
+
+Table columns and partition columns will be automatically inferenced from hive metadata.
+Manully specify column names and types is also supported.
+
+## Table Settings
+
+CnchHive table settings is allowed to configure during table creation or though configuration file.
+```xml
+<yandex>
+  <hive>
+    <vw_default>vw_default</vw_default>
+  </hive>
+</yandex>
+```
+
+* vw_default: virtual warehouse for executing select queryies
+* hdfs_fs: hdfs namenode url.
+* endpoint: S3 enpoint
+* region: S3 region
+* ak_id: S3 access key
+* ak_secret: S3 secret key
+
+### Example config a HDFS hive table
+```xml
+<hive>
+  <hdfs_fs>hdfs://127.0.0.1:9010</hdfs_fs>
+</hive>
+```
+
+### Example config a S3 hive table
+```xml
+<hive>
+  <endpoint>http://127.0.0.1:9000</endpoint>
+  <ak_id>id</ak_id>
+  <ak_secret>secret</ak_secret>
+</hive>
+```
+
+## Disk Cache Configuration
+To enable disk cache for CnchHive, add it to **worker.xml**
+```xml
+<yandex>
+  <disk_cache_strategies>
+    <Hive>
+      <disk_cache_dir>hive</disk_cache_dir>
+    </Hive>
+  </disk_cache_strategies>
+</yandex>
+```
+
+## Query Settings
+
+### disk_cache_mode
+Whether to use disk cache in SELECT queries. Possible values:
+* AUTO - USE disk cache when available.
+* SKIP_DISK_CACHE - Do not use disk cache.
+
+If cache misses, hive files will be cached in the backrgound.
+
+default: AUTO
+
+### use_hive_metastore_filter
+If enabled, CnchHive checks whether the query has partition key conditions
+which can be passed to hive metastore for restricting partitions. Hive metastore will return
+a trimmed list of partitions based on the conditions. Hive metastore can only recognise simple
+conditions.
+
+**Example**
+```sql
+# Column d is the hive partition key, and hive has partition
+# d=1/, d=2/, d=3/
+
+SELECT * FROM hive_ext WHERE d = 1
+# Hive metastore will only return the path of d=1/ partition
+```
+
+default: true
+
+### use_hive_partition_filter
+If enabled, CnchHive further does partition pruning on the list of partitions returned from hive metastore.
+
+**Example**
+```sql
+# Column d is the hive partition key, and hive has partition
+# d=20220203/, d=20220204/, d=20220205/
+
+SELECT * FROM hive_ext WHERE toDate(d) = '2022-02-03'
+# Hive metastore will return all three partitions, and CnchHive will do partition pruning. Only partition d=20220203/ will later be read.
+```
+
+default: true
+
+### use_hive_split_level_filter
+Parquet and ORC files have index data for each row group/stripe. If enabled, CnchHive will filter row groups/stripes.
+
+default: false
+
+## Table Functions
+
+```sql
+SELECT count() FROM hive('thrift://127.0.0.1', 'hive_db', 'hive_table)
+```
+Query the hive table without explicitly creating a table.
+
+```sql
+SELECT * FROM hiveMetadata('thrift://127.0.0.1', 'hive_db', 'hive_table')
+```
+Return the hive table storage description from the hive metastore.
