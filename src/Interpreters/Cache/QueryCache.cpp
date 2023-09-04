@@ -545,6 +545,8 @@ TxnTimestamp getMaxUpdateTime(const std::set<StorageID> & storage_ids, ContextPt
         {
             /// get commit timestamp of table schema
             StoragePtr storage_ptr = context->getCnchCatalog()->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(storage_id.uuid), ts);
+            if (!storage_ptr)
+                continue;
             UInt64 table_commit_ts = storage_ptr->commit_time.toUInt64();
             if (table_commit_ts > max_last_modification_time)
                 max_last_modification_time = table_commit_ts;
