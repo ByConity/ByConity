@@ -234,6 +234,20 @@ PropertySets DeterminerVisitor::visitExceptStep(const ExceptStep & node, Determi
     return visitStep(node, context);
 }
 
+PropertySets DeterminerVisitor::visitIntersectOrExceptStep(const IntersectOrExceptStep & node, DeterminerContext &)
+{
+    PropertySet set;
+    for (const auto & input : node.getInputStreams())
+    {
+        set.emplace_back(Property{Partitioning{
+            Partitioning::Handle::FIXED_HASH,
+            input.header.getNames(),
+        }});
+    }
+    
+    return {set};
+}
+
 PropertySets DeterminerVisitor::visitExchangeStep(const ExchangeStep & node, DeterminerContext & context)
 {
     return visitStep(node, context);

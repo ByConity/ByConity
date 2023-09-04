@@ -78,6 +78,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::Union, "turquoise4"},
     {IQueryPlanStep::Type::Intersect, "turquoise4"},
     {IQueryPlanStep::Type::Except, "turquoise4"},
+    {IQueryPlanStep::Type::IntersectOrExcept, "turquoise4"},
     {IQueryPlanStep::Type::Exchange, "gold"},
     {IQueryPlanStep::Type::RemoteExchangeSource, "gold"},
     {IQueryPlanStep::Type::TableScan, "deepskyblue"},
@@ -239,6 +240,15 @@ Void PlanNodePrinter::visitExceptNode(ExceptNode & node, PrinterContext & contex
     String color{NODE_COLORS[step.getType()]};
     String label{"ExceptNode"};
     printNode(node, label, StepPrinter::printExceptStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitIntersectOrExceptNode(IntersectOrExceptNode & node, PrinterContext & context)
+{
+    String label{"IntersectOrExceptNode"};
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printIntersectOrExceptStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -827,6 +837,16 @@ Void PlanSegmentNodePrinter::visitFillingNode(QueryPlan::Node * node, PrinterCon
     auto & step = dynamic_cast<const FillingStep &>(*stepPtr);
     String color{NODE_COLORS[stepPtr->getType()]};
     printNode(node, label, StepPrinter::printFillingStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanSegmentNodePrinter::visitIntersectOrExceptNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & stepPtr = node->step;
+    String label{"IntersectOrExceptNode"};
+    auto & step = dynamic_cast<const IntersectOrExceptStep &>(*stepPtr);
+    String color{NODE_COLORS[stepPtr->getType()]};
+    printNode(node, label, StepPrinter::printIntersectOrExceptStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1470,6 +1490,20 @@ String StepPrinter::printUnionStep(const UnionStep & step)
         }
         details << "\\n";
     }
+    details << "|";
+    details << "Output |";
+    for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+    return details.str();
+}
+
+String StepPrinter::printIntersectOrExceptStep(const IntersectOrExceptStep & step)
+{
+    std::stringstream details;
+    details << "Operator :" << step.getOperator();
     details << "|";
     details << "Output |";
     for (const auto & column : step.getOutputStream().header)

@@ -81,6 +81,7 @@ public:
     Void visitExplainAnalyzeNode(ExplainAnalyzeNode & node, PrinterContext & context) override;
     Void visitTopNFilteringNode(TopNFilteringNode & node, PrinterContext & context) override;
     Void visitFillingNode(FillingNode & node, PrinterContext & context) override;
+    Void visitIntersectOrExceptNode(IntersectOrExceptNode & node, PrinterContext & context) override;
 
 private:
     void printCTEDefNode(CTEId cte_id);
@@ -149,6 +150,7 @@ public:
     Void visitExplainAnalyzeNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitTopNFilteringNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitFillingNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitIntersectOrExceptNode(QueryPlan::Node * node, PrinterContext & context) override;
 
 private:
     std::stringstream & out;
@@ -203,6 +205,7 @@ public:
     static String printExplainAnalyzeStep(const ExplainAnalyzeStep & step);
     static String printTopNFilteringStep(const TopNFilteringStep & step);
     static String printFillingStep(const FillingStep & step);
+    static String printIntersectOrExceptStep(const IntersectOrExceptStep & step);
 
 private:
     static String printFilter(const ConstASTPtr & filter);

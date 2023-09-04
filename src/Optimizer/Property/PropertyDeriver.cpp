@@ -388,6 +388,11 @@ Property DeriverVisitor::visitIntersectStep(const IntersectStep &, DeriverContex
     return context.getInput()[0].clearSorting();
 }
 
+Property DeriverVisitor::visitIntersectOrExceptStep(const IntersectOrExceptStep &, DeriverContext & context)
+{
+    return context.getInput()[0].clearSorting();
+}
+
 Property DeriverVisitor::visitExchangeStep(const ExchangeStep & step, DeriverContext & context)
 {
     const ExchangeMode & mode = step.getExchangeMode();

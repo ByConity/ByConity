@@ -1,5 +1,4 @@
 -- { echo }
-set enable_optimizer = 0;
 set intersect_default_mode = 'ALL';
 set except_default_mode = 'ALL';
 
@@ -41,9 +40,9 @@ select count() from (select 1 union all select max) limit 100;
 
 select 1 union all select 1 intersect select 1;
 select 1 union all select 1 intersect select 2;
-select * from (select 1 union all select 2 union all select 3 union all select 4 except select 3 union all select 5) order by 1;
-select * from (select 1 union all select 2 union all select 3 union all select 4 intersect select 3 union all select 5) order by 1;
-select * from (select 1 union all select 2 union all select 3 union all select 4 intersect select 3 union all select 5 except select 1) order by 1;
+select * from (select 1 as a union all select 2 union all select 3 union all select 4 except select 3 union all select 5) order by a;
+select * from (select 1 as a union all select 2 union all select 3 union all select 4 intersect select 3 union all select 5) order by a;
+select * from (select 1 as a union all select 2 union all select 3 union all select 4 intersect select 3 union all select 5 except select 1) order by a;
 
 select 1 intersect (select 1 except select 2);
 select 1 union all select 2  except (select 2 except select 1 union all select 1) except select 4;

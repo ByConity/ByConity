@@ -29,5 +29,16 @@ select * from ( select a from t1 intersect all select a from t2 intersect select
 select * from ( select a from t1 intersect select a from t2 intersect all select a from t2 ) order by a;
 select * from ( select a from t1 intersect select a from t2 intersect select a from t2 ) order by a;
 
+set enable_setoperation_to_agg = 0;
+select * from ( select b from t1 except all select a from t2 except all select b from t2 ) order by b;
+select * from ( select b from t1 except all select a from t2 except select b from t2 ) order by b;
+select * from ( select b from t1 except select a from t2 except all select b from t2 ) order by b;
+select * from ( select b from t1 except select a from t2 except select b from t2 ) order by b;
+
+select * from ( select a from t1 intersect all select a from t2 intersect all select a from t2 ) order by a;
+select * from ( select a from t1 intersect all select a from t2 intersect select a from t2 ) order by a;
+select * from ( select a from t1 intersect select a from t2 intersect all select a from t2 ) order by a;
+select * from ( select a from t1 intersect select a from t2 intersect select a from t2 ) order by a;
+
 drop table if exists t1;
 drop table if exists t2;

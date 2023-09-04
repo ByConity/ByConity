@@ -84,4 +84,48 @@ void IntersectOrExceptStep::describePipeline(FormatSettings & settings) const
     IQueryPlanStep::describePipeline(processors, settings);
 }
 
+void IntersectOrExceptStep::serialize(WriteBuffer & buf) const
+{
+    writeBinary(input_streams.size(), buf);
+    for (const auto & input_stream : input_streams)
+        serializeDataStream(input_stream, buf);
+    
+    serializeEnum(current_operator, buf);
+    
+}
+
+QueryPlanStepPtr IntersectOrExceptStep::deserialize(ReadBuffer & buf, ContextPtr)
+{
+    size_t size;
+    readBinary(size, buf);
+    
+    DataStreams input_streams(size);
+    for (size_t i = 0; i < size; ++i)
+        input_streams[i] = deserializeDataStream(buf);
+
+    Operator current_operator;
+    deserializeEnum(current_operator, buf);
+ 
+    return std::make_shared<IntersectOrExceptStep>(input_streams, current_operator);
+}
+
+String IntersectOrExceptStep::getOperator() const 
+{
+    if (current_operator == ASTSelectIntersectExceptQuery::Operator::INTERSECT_ALL) {
+        return "INTERSECT_ALL";
+    }
+    if (current_operator == ASTSelectIntersectExceptQuery::Operator::INTERSECT_DISTINCT) {
+        return "INTERSECT_DISTINCT";
+    }
+    if (current_operator == ASTSelectIntersectExceptQuery::Operator::EXCEPT_ALL) {
+        return "EXCEPT_ALL";
+    }
+    if (current_operator == ASTSelectIntersectExceptQuery::Operator::EXCEPT_DISTINCT) {
+        return "EXCEPT_DISTINCT";
+    }
+    if (current_operator == ASTSelectIntersectExceptQuery::Operator::UNKNOWN) {
+        return "UNKNOWN";
+    }
+    return "UNKNOWN";
+}
 }

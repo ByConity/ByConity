@@ -23,6 +23,7 @@
 #include <QueryPlan/ExceptStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/IntersectStep.h>
+#include <QueryPlan/IntersectOrExceptStep.h>
 
 namespace DB
 {
@@ -38,15 +39,58 @@ PatternPtr ImplementExceptRule::getPattern() const
 
 TransformResult ImplementExceptRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
+    const auto * step = dynamic_cast<const ExceptStep *>(node->getStep().get());
+
     auto & context = *rule_context.context;
     if (!context.getSettingsRef().enable_setoperation_to_agg)
     {
-        return {};
+        Block output_block = node->getStep()->getOutputStream().header;
+        
+        DataStreams input_streams;
+        PlanNodes new_children;
+        for (auto & child : node->getChildren())
+        {
+            auto input_block = child->getStep()->getOutputStream().header;
+
+            Assignments assignments;
+            NameToType name_to_type;
+
+            for (size_t i = 0; i < output_block.columns(); ++i)
+            {
+                Assignment assignment{
+                    output_block.getByPosition(i).name, std::make_shared<ASTIdentifier>(input_block.getByPosition(i).name)};
+                assignments.emplace_back(assignment);
+                name_to_type[output_block.getByPosition(i).name] = input_block.getByPosition(i).type;
+            }
+
+            auto projection_step = std::make_shared<ProjectionStep>(child->getStep()->getOutputStream(), assignments, name_to_type);
+            auto projection_node = PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(projection_step), PlanNodes{child});
+
+            input_streams.emplace_back(projection_node->getStep()->getOutputStream());
+            new_children.emplace_back(projection_node);
+        }
+
+        if (step->isDistinct())
+        {
+            auto step_new = std::make_shared<IntersectOrExceptStep>(input_streams, ASTSelectIntersectExceptQuery::Operator::EXCEPT_DISTINCT);
+            auto node_new = PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(step_new), new_children);
+            
+            const auto & settings = context.getSettingsRef();
+            UInt64 limit_for_distinct = 0;
+            auto distinct_step = std::make_unique<DistinctStep>(
+                node_new->getStep()->getOutputStream(),
+                SizeLimits(settings.max_rows_in_distinct, settings.max_bytes_in_distinct, settings.distinct_overflow_mode),
+                limit_for_distinct,
+                output_block.getNames(),
+                true);
+            return PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(distinct_step), PlanNodes{node_new});
+        }
+
+        auto step_new = std::make_shared<IntersectOrExceptStep>(input_streams, ASTSelectIntersectExceptQuery::Operator::EXCEPT_ALL);
+        return PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(step_new), new_children);
     }
+
     SetOperationNodeTranslator translator{context};
-
-    const auto * step = dynamic_cast<const ExceptStep *>(node->getStep().get());
-
     /**
     * Converts EXCEPT DISTINCT queries into UNION ALL..GROUP BY...WHERE
     * E.g.:
@@ -210,15 +254,57 @@ PatternPtr ImplementIntersectRule::getPattern() const
 
 TransformResult ImplementIntersectRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
+    const auto * step = dynamic_cast<const IntersectStep *>(node->getStep().get());
     auto & context = *rule_context.context;
     if (!context.getSettingsRef().enable_setoperation_to_agg)
     {
-        return {};
+        Block output_block = node->getStep()->getOutputStream().header;
+
+        DataStreams input_streams;
+        PlanNodes new_children;
+        for (auto & child : node->getChildren())
+        {
+            auto input_block = child->getStep()->getOutputStream().header;
+
+            Assignments assignments;
+            NameToType name_to_type;
+
+            for (size_t i = 0; i < output_block.columns(); ++i)
+            {
+                Assignment assignment{
+                    output_block.getByPosition(i).name, std::make_shared<ASTIdentifier>(input_block.getByPosition(i).name)};
+                assignments.emplace_back(assignment);
+                name_to_type[output_block.getByPosition(i).name] = input_block.getByPosition(i).type;
+            }
+
+            auto projection_step = std::make_shared<ProjectionStep>(child->getStep()->getOutputStream(), assignments, name_to_type);
+            auto projection_node = PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(projection_step), PlanNodes{child});
+
+            input_streams.emplace_back(projection_node->getStep()->getOutputStream());
+            new_children.emplace_back(projection_node);
+        }
+
+        if (step->isDistinct())
+        {
+            auto step_new = std::make_shared<IntersectOrExceptStep>(input_streams, ASTSelectIntersectExceptQuery::Operator::INTERSECT_DISTINCT);
+            auto node_new = PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(step_new), new_children);
+            
+            const auto & settings = context.getSettingsRef();
+            UInt64 limit_for_distinct = 0;
+            auto distinct_step = std::make_unique<DistinctStep>(
+                node_new->getStep()->getOutputStream(),
+                SizeLimits(settings.max_rows_in_distinct, settings.max_bytes_in_distinct, settings.distinct_overflow_mode),
+                limit_for_distinct,
+                output_block.getNames(),
+                true);
+            return PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(distinct_step), PlanNodes{node_new});
+        }
+
+        auto step_new = std::make_shared<IntersectOrExceptStep>(input_streams, ASTSelectIntersectExceptQuery::Operator::INTERSECT_ALL);
+        return PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(step_new), new_children);
     }
+    
     SetOperationNodeTranslator translator{context};
-
-    const auto * step = dynamic_cast<const IntersectStep *>(node->getStep().get());
-
     /**
      * Converts INTERSECT DISTINCT queries into UNION ALL..GROUP BY...WHERE
      * E.g.:
