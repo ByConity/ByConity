@@ -13,9 +13,9 @@
 
 namespace DB
 {
-ProtobufRowInputFormat::ProtobufRowInputFormat(ReadBuffer & in_, const Block & header_, const Params & params_, const FormatSchemaInfo & schema_info_, bool with_length_delimiter_)
+ProtobufRowInputFormat::ProtobufRowInputFormat(ReadBuffer & in_, const Block & header_, const Params & params_, const FormatSchemaInfo & schema_info_, const FormatSettings & format_settings_, bool with_length_delimiter_)
     : IRowInputFormat(header_, in_, params_)
-    , reader(std::make_unique<ProtobufReader>(in_))
+    , reader(std::make_unique<ProtobufReader>(in_, format_settings_))
     , serializer(ProtobufSerializer::create(
           header_.getNames(),
           header_.getDataTypes(),
@@ -69,7 +69,7 @@ void registerInputFormatProcessorProtobuf(FormatFactory & factory)
             return std::make_shared<ProtobufRowInputFormat>(buf, sample, std::move(params),
                 FormatSchemaInfo(settings.schema.format_schema, "Protobuf", true,
                                 settings.schema.is_server, settings.schema.format_schema_path),
-                with_length_delimiter);
+                settings, with_length_delimiter);
         });
     }
 }

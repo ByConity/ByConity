@@ -122,6 +122,8 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.arrow.low_cardinality_as_dictionary = settings.output_format_arrow_low_cardinality_as_dictionary;
     format_settings.arrow.allow_missing_columns = settings.input_format_arrow_allow_missing_columns;
     format_settings.orc.allow_missing_columns = settings.input_format_orc_allow_missing_columns;
+    format_settings.protobuf.enable_multiple_message = settings.input_format_protobuf_enable_multiple_message;
+    format_settings.protobuf.default_length_parser = settings.input_format_protobuf_default_length_parser;
 
     /// Validate avro_schema_registry_url with RemoteHostFilter when non-empty and in Server context
     if (format_settings.schema.is_server)

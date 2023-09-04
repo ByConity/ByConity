@@ -695,8 +695,8 @@ SettingsChanges StorageCloudKafka::createSettingsAdjustments()
     result.emplace_back("input_format_parallel_parsing", false);
 
     result.emplace_back("input_format_json_aggregate_function_type_base64_encode", settings.json_aggregate_function_type_base64_encode.value);
-    result.emplace_back("format_protobuf_enable_multiple_message", settings.protobuf_enable_multiple_message.value);
-    result.emplace_back("format_protobuf_default_length_parser", settings.protobuf_default_length_parser.value);
+    result.emplace_back("input_format_protobuf_enable_multiple_message", settings.protobuf_enable_multiple_message.value);
+    result.emplace_back("input_format_protobuf_default_length_parser", settings.protobuf_default_length_parser.value);
 
     return result;
 }

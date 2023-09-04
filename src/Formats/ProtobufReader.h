@@ -7,7 +7,7 @@
 #if USE_PROTOBUF
 #   include <Common/PODArray.h>
 #   include <IO/ReadBuffer.h>
-
+#include <Formats/FormatSettings.h>
 
 namespace DB
 {
@@ -18,7 +18,7 @@ class ReadBuffer;
 class ProtobufReader
 {
 public:
-    ProtobufReader(ReadBuffer & in_);
+    ProtobufReader(ReadBuffer & in_, const FormatSettings & format_settings_);
 
     void startMessage(bool with_length_delimiter_);
     void endMessage(bool ignore_errors);
@@ -53,12 +53,27 @@ private:
         return continueReadingVarint(first_byte);
     }
 
+    // read 8-bytes fixed length header;
+    UInt64 ALWAYS_INLINE readMessageSize()
+    {
+        UInt64 size = 0;
+        for (size_t i=0; i<8; i++)
+        {
+            char c;
+            in.readStrict(c);
+            size |= (c & 0xFF) << (i*8);
+            ++cursor;
+        }
+        return size;
+    }
+
     UInt64 continueReadingVarint(UInt64 first_byte);
     void ignoreVarint();
     void ignoreGroup();
     [[noreturn]] void throwUnknownFormat() const;
 
     ReadBuffer & in;
+    const FormatSettings format_settings;
     Int64 cursor = 0;
     bool root_message_has_length_delimiter = false;
     size_t current_message_level = 0;

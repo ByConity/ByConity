@@ -1957,25 +1957,16 @@ enum PreloadLevelSettings : UInt64
       IMPORTANT) \
     M(Bool, input_format_tsv_empty_as_default, false, "Treat empty fields in TSV input as default values.", 0) \
     M(Bool, input_format_tsv_enum_as_number, false, "Treat inserted enum values in TSV formats as enum indices \\N", 0) \
-    M(Bool, \
-      input_format_null_as_default, \
-      true, \
-      "For text input formats initialize null fields with default values if data type of this field is not nullable", \
-      0) \
-\
-    M(DateTimeInputFormat, \
-      date_time_input_format, \
-      FormatSettings::DateTimeInputFormat::Basic, \
-      "Method to read DateTime from text input formats. Possible values: 'basic' and 'best_effort'.", \
-      0) \
-    M(DateTimeOutputFormat, \
-      date_time_output_format, \
-      FormatSettings::DateTimeOutputFormat::Simple, \
-      "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", \
-      0) \
+    M(Bool, input_format_null_as_default, true, "For text input formats initialize null fields with default values if data type of this field is not nullable", 0) \
+    M(Bool, input_format_protobuf_enable_multiple_message, true, "If it is set to true, allows read protobuf messages which separated by a length header consecutively.", 0) \
+    M(Bool, input_format_protobuf_default_length_parser, false, "If it is set to true, use variable length header, otherwise a 8 byte fixed length header is used.", 0) \
+    \
+    M(DateTimeInputFormat, date_time_input_format, FormatSettings::DateTimeInputFormat::Basic, "Method to read DateTime from text input formats. Possible values: 'basic' and 'best_effort'.", 0) \
+    M(DateTimeOutputFormat, date_time_output_format, FormatSettings::DateTimeOutputFormat::Simple, "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", 0) \
+    \
+    M(UInt64, max_hdfs_write_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to write data to hdfs.",0) \
     M(String, bool_true_representation, "true", "Text to represent bool value in TSV/CSV formats.", 0) \
     M(String, bool_false_representation, "false", "Text to represent bool value in TSV/CSV formats.", 0) \
-    M(UInt64, max_hdfs_write_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to write data to hdfs.", 0) \
 \
     M(Bool, \
       input_format_values_interpret_expressions, \

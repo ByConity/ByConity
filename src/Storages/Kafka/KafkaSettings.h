@@ -76,8 +76,8 @@ class ASTStorage;
     M(String, memory_table_read_mode, "ALL", "Memory table read mode valid values: ALL, PART, SKIP", 0) \
     M(UInt64, memory_table_queue_size, 2, "Memory table write block queue size", 0) \
     M(Bool, json_aggregate_function_type_base64_encode, false, "Indicate whether the json data of aggregate function type is encoded by base64.", 0) \
-    M(Bool, protobuf_enable_multiple_message, true, "Same as 'format_protobuf_enable_multiple_message' in settings", 0) \
-    M(Bool, protobuf_default_length_parser, false, "Same as 'format_protobuf_default_length_parser' in settings", 0) \
+    M(Bool, protobuf_enable_multiple_message, true, "Same as 'input_format_protobuf_enable_multiple_message' in settings", 0) \
+    M(Bool, protobuf_default_length_parser, false, "Same as 'input_format_protobuf_default_length_parser' in settings", 0) \
     M(String, api_version_request, "true", "Librdkafka config: request broker's supported API versions to adjust functionality to available protocol features", 0) \
     M(String, broker_version_fallback, "", "Librdkafka config: older broker versions", 0) \
     M(String, auto_offset_reset, "", "Librdkafka config: action to take when there is no initial offset in offset store or the desired offset is out of range", 0) \

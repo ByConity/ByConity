@@ -36,8 +36,8 @@ namespace
 }
 
 
-ProtobufReader::ProtobufReader(ReadBuffer & in_)
-    : in(in_)
+ProtobufReader::ProtobufReader(ReadBuffer & in_, const FormatSettings & format_settings_)
+    : in(in_), format_settings(format_settings_)
 {
 }
 
@@ -49,8 +49,22 @@ void ProtobufReader::startMessage(bool with_length_delimiter_)
     root_message_has_length_delimiter = with_length_delimiter_;
     if (root_message_has_length_delimiter)
     {
-        size_t size_of_message = readVarint();
-        current_message_end = cursor + size_of_message;
+        if (format_settings.protobuf.enable_multiple_message)
+        {
+            /// buffer contains rows with length delimiter.
+            size_t size_of_message = 0;
+            if (format_settings.protobuf.default_length_parser)
+                size_of_message = readVarint();
+            else
+                size_of_message = readMessageSize();
+            current_message_end = cursor + size_of_message;
+        }
+        else
+        {
+            /// The buffer only has one row at a time util call next().
+            size_t size_of_message = in.buffer().size();
+            current_message_end = cursor + size_of_message;
+        }
     }
     else
     {
