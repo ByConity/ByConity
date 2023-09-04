@@ -14,23 +14,24 @@
  */
 
 #pragma once
-#include <cstdio>
-#include <cstring>
-#include <fstream>
-#include <iostream>
-#include <unordered_set>
+#include <Common/Exception.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/WriteBufferFromFile.h>
+#include <IO/HashingWriteBuffer.h>
+#include <IO/ReadHelpers.h>
 #include <dirent.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <cstring>
+#include <cstdio>
 #include <fcntl.h>
 #include <unistd.h>
-#include <IO/HashingWriteBuffer.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteBufferFromFile.h>
-#include <boost/algorithm/string.hpp>
-#include <sys/stat.h>
+#include <iostream>
+#include <fstream>
+#include <unordered_set>
 #include <sys/syscall.h>
-#include <Common/Exception.h>
 #include <common/logger_useful.h>
+#include <boost/algorithm/string.hpp>
 
 namespace DB
 {
@@ -55,13 +56,19 @@ struct CpuUsageInfo
     size_t irq;
     size_t softirq;
 
-    size_t total() { return user + nice + system + idle + iowait + irq + softirq; }
+    size_t total()
+    {
+        return user + nice + system + idle + iowait + irq + softirq;
+    }
 };
 
 class SystemUtils
 {
 public:
-    static size_t getSystemCpuNum() { return sysconf(_SC_NPROCESSORS_ONLN); }
+    static size_t getSystemCpuNum()
+    {
+        return sysconf(_SC_NPROCESSORS_ONLN);
+    }
 
     /**
      * for remove cgroup dir
@@ -69,19 +76,19 @@ public:
      * @param path path
      * @return 0 for success
      */
-    static int rmdirAll(const char * path)
+    static int rmdirAll(const char* path)
     {
-        DIR * d = opendir(path);
+        DIR *d = opendir(path);
         size_t path_len = strlen(path);
         int r = -1;
         if (d)
         {
-            struct dirent * p;
+            struct dirent *p;
             r = 0;
             while (!r && (p = readdir(d)))
             {
                 int r2 = -1;
-                char * buf;
+                char *buf;
                 size_t len;
 
                 /* Skip the names "." and ".." as we don't want to recurse on them. */
@@ -129,17 +136,17 @@ public:
 
     static size_t gettid()
     {
-#if defined(__linux__)
+        #if defined(__linux__)
         return static_cast<size_t>(syscall(SYS_gettid));
-#endif
+        #endif
         return 0;
     }
 
     static size_t getMaxNumaNode()
     {
-#if defined(__linux__)
+        #if defined(__linux__)
         return max_numa_node;
-#endif
+        #endif
         return 0;
     }
 
@@ -154,7 +161,7 @@ public:
         skipWhitespaceIfAny(file_reader);
 
         size_t cpu_num = getSystemCpuNum();
-        size_t idx = 0;
+        size_t idx=0;
         for (size_t i = 0; i < cpu_num; ++i)
         {
             readString(line, file_reader);
