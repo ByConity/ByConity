@@ -8,5 +8,5 @@ namespace DB
 {
 HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast);
 
-void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res);
+void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res, bool in_interactive_txn);
 }

@@ -107,14 +107,6 @@ void StorageCnchKafka::checkAlterIsPossible(const AlterCommands & commands, Cont
 
 void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & /* alter_lock_holder */)
 {
-    /// Try to forward ALTER query to the target server if needs to
-    if (local_context->getSettings().enable_sql_forwarding)
-    {
-        auto cnch_table_helper = CnchStorageCommonHelper(getStorageID(), getDatabaseName(), getTableName());
-        if (cnch_table_helper.forwardQueryToServerIfNeeded(local_context, getStorageID()))
-            return;
-    }
-
     auto daemon_manager = getGlobalContext()->getDaemonManagerClient();
     bool kafka_table_is_active = tableIsActive();
 
