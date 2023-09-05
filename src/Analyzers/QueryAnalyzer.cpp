@@ -225,6 +225,8 @@ Void QueryAnalyzerVisitor::visitASTInsertQuery(ASTPtr & node, const Void &)
     }
 
     // check column mask & row filter?
+    if (!insert_query.select)
+        throw Exception("Only support insert select", ErrorCodes::NOT_IMPLEMENTED);
 
     process(insert_query.select);
     auto query_columns = analysis.getOutputDescription(*insert_query.select);
