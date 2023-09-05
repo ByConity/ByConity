@@ -19,6 +19,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
+#include <Interpreters/StorageID.h>
 #include <Poco/Logger.h>
 
 #include <list>
@@ -72,7 +73,7 @@ public:
 
     QueryPlan & operator=(QueryPlan &&);
 
-    void allocateLocalTable(ContextPtr context);
+    std::set<StorageID> allocateLocalTable(ContextPtr context);
     PlanNodeIdAllocatorPtr & getIdAllocator() { return id_allocator; }
     void update(PlanNodePtr plan) { plan_node = std::move(plan); }
 

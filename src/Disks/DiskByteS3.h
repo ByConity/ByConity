@@ -76,7 +76,7 @@ public:
 
     virtual void moveDirectory(const String & , const String & ) override { throw Exception("moveDirecotry is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
 
-    virtual DiskDirectoryIteratorPtr iterateDirectory(const String & ) override { throw Exception("iterateDirectory is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
+    virtual DiskDirectoryIteratorPtr iterateDirectory(const String & ) override;
 
     virtual void createFile(const String & ) override { throw Exception("createFile is not implemented in DiskByteS3", ErrorCodes::NOT_IMPLEMENTED); }
 

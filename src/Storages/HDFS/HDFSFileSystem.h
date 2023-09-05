@@ -63,7 +63,7 @@ public:
     bool remove(const std::string& path, bool recursive = false) const;
     ssize_t getFileSize(const std::string& path) const;
     ssize_t getCapacity() const;
-    void list(const std::string& path, std::vector<std::string>& files) const;
+    void list(const std::string& path, std::vector<std::string>& files, std::vector<size_t> & sizes) const;
     int64_t getLastModifiedInSeconds(const std::string& path) const;
     bool renameTo(const std::string& path, const std::string& rpath) const;
     bool createFile(const std::string& path) const;

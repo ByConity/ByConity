@@ -243,6 +243,7 @@ private:
 
     Poco::Logger * log;
     StorageMetadataPtr metadata_snapshot;
+    bool has_join = false;
 };
 
 }

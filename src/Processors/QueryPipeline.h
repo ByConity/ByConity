@@ -24,10 +24,12 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IBlockOutputStream.h>
 #include <Processors/Executors/PipelineExecutor.h>
+#include <Processors/Sources/SourceFromChunks.h>
 #include <Processors/IProcessor.h>
 #include <Processors/Pipe.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/TableLockHolder.h>
+#include <Interpreters/Cache/QueryCache.h> /// nested classes such as QC::Writer can't be fwd declared
 
 namespace DB
 {
@@ -143,7 +145,6 @@ public:
     bool hasTotals() const { return pipe.getTotalsPort() != nullptr; }
 
     const Block & getHeader() const { return pipe.getHeader(); }
-
     void addTableLock(TableLockHolder lock) { pipe.addTableLock(std::move(lock)); }
     void addInterpreterContext(std::shared_ptr<const Context> context) { pipe.addInterpreterContext(std::move(context)); }
     void addStorageHolder(StoragePtr storage) { pipe.addStorageHolder(std::move(storage)); }
@@ -156,6 +157,14 @@ public:
     /// For compatibility with IBlockInputStream.
     void setProgressCallback(const ProgressCallback & callback);
     void setProcessListElement(QueryStatus * elem);
+
+    void writeResultIntoQueryCache(std::shared_ptr<QueryCache::Writer> query_cache_writer);
+    void readFromQueryCache(
+        std::unique_ptr<SourceFromChunks> source,
+        std::unique_ptr<SourceFromChunks> source_totals,
+        std::unique_ptr<SourceFromChunks> source_extremes);
+
+    void finalizeWriteInQueryCache();
 
     /// Recommend number of threads for pipeline execution.
     size_t getNumThreads() const
@@ -186,6 +195,11 @@ public:
     /// Convert query pipeline to pipe.
     static Pipe getPipe(QueryPipeline pipeline) { return std::move(pipeline.pipe); }
 
+    /// use for query cache
+    void addUsedStorageIDs(const std::set<StorageID> & storage_id);
+    std::set<StorageID> getUsedStorageIDs() const;
+    bool hasAllUsedStorageIDs() const;
+    void setHasAllUsedStorageIDs(bool val);
 private:
 
     Pipe pipe;
@@ -197,6 +211,9 @@ private:
 
     /// Limit on the minimum number of threads.
     size_t min_threads = 0;
+    /// use for query cache to detect which tables is used
+    std::set<StorageID> used_storage_ids;
+    bool has_all_used_storage_ids = true;
 
     QueryStatus * process_list_element = nullptr;
 

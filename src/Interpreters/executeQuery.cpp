@@ -21,13 +21,16 @@
 
 #include <memory>
 #include <Client/Connection.h>
-#include "common/logger_useful.h"
+#include <Interpreters/executeQueryHelper.h>
 #include <Common/Config/VWCustomizedSettings.h>
 #include <Common/Exception.h>
+#include <Common/HostWithPorts.h>
 #include <Common/PODArray.h>
 #include <Common/ThreadProfileEvents.h>
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
 
 #include <IO/LimitReadBuffer.h>
 #include <IO/WriteBufferFromFile.h>
@@ -45,9 +48,6 @@
 #include <Processors/Sources/RemoteSource.h>
 #include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
 
-#include <Parsers/ASTAlterQuery.h>
-#include <Parsers/ASTCreateQuery.h>
-#include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTLiteral.h>
@@ -56,6 +56,7 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ASTWatchQuery.h>
+#include <Parsers/ASTExplainQuery.h>
 #include <Parsers/Lexer.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/parseQuery.h>
@@ -85,7 +86,8 @@
 #include <Interpreters/VirtualWarehouseHandle.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
-#include <QueryPlan/QueryCacheStep.h>
+#include <Interpreters/Cache/QueryCache.h>
+
 #include <Common/ProfileEvents.h>
 #include <Common/RpcClientPool.h>
 
@@ -96,14 +98,12 @@
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
 #include <Interpreters/Cluster.h>
-#include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/InterpreterCommitQuery.h>
-#include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/NamedSession.h>
 #include <Interpreters/Set.h>
 #include <Interpreters/StorageID.h>
-#include <Interpreters/VirtualWarehouseHandle.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/QueryPipeline.h>
@@ -635,7 +635,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     assert(internal || CurrentThread::get().getQueryContext()->getCurrentQueryId() == CurrentThread::getQueryId());
 #endif
 
-    doSomeReplacementForSettings(context);
 
     const Settings & settings = context->getSettingsRef();
 
@@ -690,7 +689,15 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
         }
 
-        if (context->getServerType() == ServerType::cnch_server && context->getSettingsRef().enable_auto_query_forwarding)
+        if (isQueryInInteractiveSession(context, ast) && isDDLQuery(context, ast))
+        {
+            /// Commit the current explicit transaction
+            LOG_WARNING(&Poco::Logger::get("executeQuery"), "Receive DDL in interactive transaction session, will commit the session implicitly");
+            InterpreterCommitQuery(nullptr, context).execute();
+        }
+
+        if (context->getServerType() == ServerType::cnch_server
+            && (isQueryInInteractiveSession(context, ast) || context->getSettingsRef().enable_auto_query_forwarding || settings.use_query_cache))
         {
             auto host_ports = getTargetServer(context, ast);
             LOG_DEBUG(
@@ -749,39 +756,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         throw;
     }
 
-
-    /// NOTES: Interactive transaction session
-    /// 0. if query is ddl, commit the active transaction
-    /// 1. if this is non-write query, execute on local server
-    /// 2. if this is write query, need to create proxy transaction and include primary_txn_id and txn_id in query packet
-
-    if (isQueryInInteractiveSession(context, ast))
-    {
-        if (isDDLQuery(context, ast))
-        {
-            /// Commit the current explicit transaction
-            LOG_WARNING(
-                &Poco::Logger::get("executeQuery"), "Receive DDL in interactive transaction session, will commit the session implicitly");
-            InterpreterCommitQuery(nullptr, context).execute();
-        }
-        else
-        {
-            auto host_ports = getTargetServer(context, ast);
-            if (!host_ports.empty() && !isLocalServer(host_ports.getRPCAddress(), std::to_string(context->getRPCPort())))
-            {
-                LOG_INFO(
-                    &Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.getTCPAddress());
-                /// TODO: currently, this called only for compability with formal query flow, may need more shophisticated logic
-                /// in the future
-                context->initializeExternalTablesIfSet();
-                executeQueryByProxy(context, host_ports, ast, res);
-                LOG_INFO(&Poco::Logger::get("executeQuery"), "Query execution on remote server done");
-                return std::make_tuple(ast, std::move(res));
-            }
-        }
-    }
+    doSomeReplacementForSettings(context);
 
     setQuerySpecificSettings(ast, context);
+
+    bool can_use_query_cache = settings.use_query_cache && !internal && !ast->as<ASTExplainQuery>();
+
     auto txn = prepareCnchTransaction(context, ast);
     if (txn)
     {
@@ -907,6 +887,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             limits.size_limits = SizeLimits(settings.max_result_rows, settings.max_result_bytes, settings.result_overflow_mode);
         }
 
+
+        bool read_result_from_query_cache = false; /// a query must not read from *and* write to the query cache at the same time
+        TxnTimestamp source_update_time_for_query_cache = TxnTimestamp::minTS();
         {
             OpenTelemetrySpanHolder span("IInterpreter::execute()");
             try
@@ -946,6 +929,40 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 else
                 {
                     throw;
+                }
+            }
+
+            const std::set<StorageID> storage_ids = res.pipeline.getUsedStorageIDs();
+            LOG_DEBUG(&Poco::Logger::get("executeQuery"), "pipeline has all used StorageIDs: {}", res.pipeline.hasAllUsedStorageIDs());
+            auto query_cache = context->getQueryCache();
+            if (query_cache != nullptr
+                && (can_use_query_cache && settings.enable_reads_from_query_cache)
+                && (res.pipeline.getNumStreams() > 0) && (res.pipeline.hasAllUsedStorageIDs()) && (!storage_ids.empty()))
+            {
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "StorageIDs:");
+                for (auto & storage_id : storage_ids)
+                    LOG_DEBUG(&Poco::Logger::get("executeQuery"), "StorageID {}", storage_id.getNameForLogs());
+                if (settings.enable_transactional_query_cache)
+                    source_update_time_for_query_cache = getMaxUpdateTime(storage_ids, context);
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "max update timestamp {}", source_update_time_for_query_cache);
+                if (source_update_time_for_query_cache.toUInt64() != 0)
+                {
+                    QueryCache::Key key(
+                        ast,
+                        res.pipeline.getHeader(),
+                        context->getUserName(),
+                        /*dummy for is_shared*/ false,
+                        /*dummy value for expires_at*/ std::chrono::system_clock::from_time_t(1),
+                        /*dummy value for is_compressed*/ false,
+                        context->getCurrentTransactionID());
+                    QueryCache::Reader reader = query_cache->createReader(key, source_update_time_for_query_cache);
+                    if (reader.hasCacheEntryForKey())
+                    {
+                        QueryPipeline pipeline;
+                        pipeline.readFromQueryCache(reader.getSource(), reader.getSourceTotals(), reader.getSourceExtremes());
+                        res.pipeline = std::move(pipeline);
+                        read_result_from_query_cache = true;
+                    }
                 }
             }
         }
@@ -1017,6 +1034,42 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 if (auto * stream = dynamic_cast<CountingBlockOutputStream *>(res.out.get()))
                 {
                     stream->setProcessListElement(context->getProcessListElement());
+                }
+            }
+        }
+
+        {
+            /// If
+            /// - it is a SELECT query, and
+            /// - active (write) use of the query cache is enabled
+            /// then add a processor on top of the pipeline which stores the result in the query cache.
+
+            auto query_cache = context->getQueryCache();
+            if (!read_result_from_query_cache
+                && query_cache != nullptr
+                && can_use_query_cache && settings.enable_writes_to_query_cache
+                && (res.pipeline.getNumStreams() > 0)
+                && (!astContainsNonDeterministicFunctions(ast, context) || settings.query_cache_store_results_of_queries_with_nondeterministic_functions))
+            {
+                QueryCache::Key key(
+                    ast, res.pipeline.getHeader(),
+                    context->getUserName(), settings.query_cache_share_between_users,
+                    std::chrono::system_clock::now() + std::chrono::seconds(settings.query_cache_ttl),
+                    settings.query_cache_compress_entries,
+                    context->getCurrentTransactionID());
+
+                const size_t num_query_runs = query_cache->recordQueryRun(key);
+                if (num_query_runs > settings.query_cache_min_query_runs)
+                {
+                    auto query_cache_writer = std::make_shared<QueryCache::Writer>(query_cache->createWriter(
+                                     key,
+                                     std::chrono::milliseconds(settings.query_cache_min_query_duration.totalMilliseconds()),
+                                     settings.query_cache_squash_partial_results,
+                                     settings.max_block_size,
+                                     settings.query_cache_max_size_in_bytes,
+                                     settings.query_cache_max_entries,
+                                     source_update_time_for_query_cache));
+                    res.pipeline.writeResultIntoQueryCache(query_cache_writer);
                 }
             }
         }
@@ -1143,232 +1196,255 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
             auto query_id = context->getCurrentQueryId();
             /// Also make possible for caller to log successful query finish and exception during execution.
-            auto finish_callback = [elem,
+            auto finish_callback
+                =
+                    [elem,
+                     context,
+                     query,
+                     ast,
+                     my_can_use_query_cache = can_use_query_cache,
+                     enable_writes_to_query_cache = settings.enable_writes_to_query_cache,
+                     query_cache_store_results_of_queries_with_nondeterministic_functions = settings.query_cache_store_results_of_queries_with_nondeterministic_functions,
+                     log_queries,
+                     log_queries_min_type = settings.log_queries_min_type,
+                     log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
+                     log_processors_profiles = settings.log_processors_profiles,
+                     status_info_to_query_log,
+                     query_id,
+                     finish_current_transaction,
+                     complex_query,
+                     pulling_pipeline = (res.pipeline.getNumStreams() > 0),
+                     init_time](
+                        IBlockInputStream * stream_in,
+                        IBlockOutputStream * stream_out,
+                        QueryPipeline * query_pipeline,
+                        UInt64 runtime_latency) mutable {
+                        /// If active (write) use of the query cache is enabled and the query is eligible for result caching, then store the query
+                        /// result buffered in the special-purpose cache processor (added on top of the pipeline) into the cache.
+                        auto query_cache = context->getQueryCache();
+                        if (query_cache != nullptr
+                            && pulling_pipeline
+                            && my_can_use_query_cache && enable_writes_to_query_cache
+                            && (!astContainsNonDeterministicFunctions(ast, context) || query_cache_store_results_of_queries_with_nondeterministic_functions))
+                        {
+                            query_pipeline->finalizeWriteInQueryCache();
+                        }
+
+                        finish_current_transaction(context);
+                        QueryStatus * process_list_elem = context->getProcessListElement();
+
+                        if (!process_list_elem)
+                            return;
+
+                        /// Update performance counters before logging to query_log
+                        CurrentThread::finalizePerformanceCounters();
+
+                        QueryStatusInfo info = process_list_elem->getInfo(true, context->getSettingsRef().log_profile_events);
+
+                        double elapsed_seconds = info.elapsed_seconds;
+
+                        elem.type = QueryLogElementType::QUERY_FINISH;
+
+                        // construct event_time and event_time_microseconds using the same time point
+                        // so that the two times will always be equal up to a precision of a second.
+                        const auto finish_time = std::chrono::system_clock::now();
+                        elem.event_time = time_in_seconds(finish_time);
+                        elem.event_time_microseconds = time_in_microseconds(finish_time);
+                        status_info_to_query_log(elem, info, ast);
+
+                        auto progress_callback = context->getProgressCallback();
+
+                        if (progress_callback)
+                            progress_callback(Progress(WriteProgress(info.written_rows, info.written_bytes)));
+
+                        if (stream_in)
+                        {
+                            const BlockStreamProfileInfo & stream_in_info = stream_in->getProfileInfo();
+
+                            /// NOTE: INSERT SELECT query contains zero metrics
+                            elem.result_rows = stream_in_info.rows;
+                            elem.result_bytes = stream_in_info.bytes;
+                        }
+                        else if (stream_out) /// will be used only for ordinary INSERT queries
+                        {
+                            if (const auto * counting_stream = dynamic_cast<const CountingBlockOutputStream *>(stream_out))
+                            {
+                                /// NOTE: Redundancy. The same values could be extracted from process_list_elem->progress_out.query_settings = process_list_elem->progress_in
+                                elem.result_rows = counting_stream->getProgress().read_rows;
+                                elem.result_bytes = counting_stream->getProgress().read_bytes;
+                            }
+                        }
+                        else if (query_pipeline)
+                        {
+                            if (const auto * output_format = query_pipeline->getOutputFormat())
+                            {
+                                elem.result_rows = output_format->getResultRows();
+                                elem.result_bytes = output_format->getResultBytes();
+                            }
+                        }
+
+                        if (elem.read_rows != 0)
+                        {
+                            LOG_INFO(
+                                &Poco::Logger::get("executeQuery"),
+                                "Read {} rows, {} in {} sec., {} rows/sec., {}/sec.",
+                                elem.read_rows,
+                                ReadableSize(elem.read_bytes),
+                                elapsed_seconds,
+                                static_cast<size_t>(elem.read_rows / elapsed_seconds),
+                                ReadableSize(elem.read_bytes / elapsed_seconds));
+                        }
+
+                        if (context->getSettingsRef().enable_query_level_profiling)
+                        {
+                            if (stream_in)
+                            {
+                                insertCnchQueryMetric(
                                     context,
                                     query,
+                                    QueryMetricLogState::QUERY_FINISH,
+                                    time(nullptr),
                                     ast,
-                                    log_queries,
-                                    log_queries_min_type = settings.log_queries_min_type,
-                                    log_queries_min_query_duration_ms = settings.log_queries_min_query_duration_ms.totalMilliseconds(),
-                                    log_processors_profiles = settings.log_processors_profiles,
-                                    status_info_to_query_log,
-                                    query_id,
-                                    finish_current_transaction,
+                                    &info,
+                                    &stream_in->getProfileInfo(),
+                                    nullptr,
+                                    false,
                                     complex_query,
-                                    init_time](
-                                       IBlockInputStream * stream_in,
-                                       IBlockOutputStream * stream_out,
-                                       QueryPipeline * query_pipeline,
-                                       UInt64 runtime_latency) mutable {
-                finish_current_transaction(context);
-                QueryStatus * process_list_elem = context->getProcessListElement();
+                                    init_time,
+                                    runtime_latency,
+                                    "",
+                                    "");
+                            }
+                            else if (stream_out)
+                            {
+                                insertCnchQueryMetric(
+                                    context,
+                                    query,
+                                    QueryMetricLogState::QUERY_FINISH,
+                                    time(nullptr),
+                                    ast,
+                                    &info,
+                                    nullptr,
+                                    nullptr,
+                                    false,
+                                    complex_query,
+                                    init_time,
+                                    runtime_latency,
+                                    "",
+                                    "");
+                            }
+                            else if (query_pipeline)
+                            {
+                                insertCnchQueryMetric(
+                                    context,
+                                    query,
+                                    QueryMetricLogState::QUERY_FINISH,
+                                    time(nullptr),
+                                    ast,
+                                    &info,
+                                    nullptr,
+                                    query_pipeline,
+                                    false,
+                                    complex_query,
+                                    init_time,
+                                    runtime_latency,
+                                    "",
+                                    "");
+                            }
+                            else
+                            {
+                                insertCnchQueryMetric(
+                                    context,
+                                    query,
+                                    QueryMetricLogState::QUERY_FINISH,
+                                    time(nullptr),
+                                    ast,
+                                    &info,
+                                    nullptr,
+                                    nullptr,
+                                    true,
+                                    complex_query,
+                                    init_time,
+                                    runtime_latency,
+                                    "",
+                                    "");
+                            }
+                        }
 
-                if (!process_list_elem)
-                    return;
-
-                /// Update performance counters before logging to query_log
-                CurrentThread::finalizePerformanceCounters();
-
-                QueryStatusInfo info = process_list_elem->getInfo(true, context->getSettingsRef().log_profile_events);
-
-                double elapsed_seconds = info.elapsed_seconds;
-
-                elem.type = QueryLogElementType::QUERY_FINISH;
-
-                // construct event_time and event_time_microseconds using the same time point
-                // so that the two times will always be equal up to a precision of a second.
-                const auto finish_time = std::chrono::system_clock::now();
-                elem.event_time = time_in_seconds(finish_time);
-                elem.event_time_microseconds = time_in_microseconds(finish_time);
-                status_info_to_query_log(elem, info, ast);
-
-                auto progress_callback = context->getProgressCallback();
-
-                if (progress_callback)
-                    progress_callback(Progress(WriteProgress(info.written_rows, info.written_bytes)));
-
-                if (stream_in)
-                {
-                    const BlockStreamProfileInfo & stream_in_info = stream_in->getProfileInfo();
-
-                    /// NOTE: INSERT SELECT query contains zero metrics
-                    elem.result_rows = stream_in_info.rows;
-                    elem.result_bytes = stream_in_info.bytes;
-                }
-                else if (stream_out) /// will be used only for ordinary INSERT queries
-                {
-                    if (const auto * counting_stream = dynamic_cast<const CountingBlockOutputStream *>(stream_out))
-                    {
-                        /// NOTE: Redundancy. The same values could be extracted from process_list_elem->progress_out.query_settings = process_list_elem->progress_in
-                        elem.result_rows = counting_stream->getProgress().read_rows;
-                        elem.result_bytes = counting_stream->getProgress().read_bytes;
-                    }
-                }
-                else if (query_pipeline)
-                {
-                    if (const auto * output_format = query_pipeline->getOutputFormat())
-                    {
-                        elem.result_rows = output_format->getResultRows();
-                        elem.result_bytes = output_format->getResultBytes();
-                    }
-                }
-
-                if (elem.read_rows != 0)
-                {
-                    LOG_INFO(
-                        &Poco::Logger::get("executeQuery"),
-                        "Read {} rows, {} in {} sec., {} rows/sec., {}/sec.",
-                        elem.read_rows,
-                        ReadableSize(elem.read_bytes),
-                        elapsed_seconds,
-                        static_cast<size_t>(elem.read_rows / elapsed_seconds),
-                        ReadableSize(elem.read_bytes / elapsed_seconds));
-                }
-
-                if (context->getSettingsRef().enable_query_level_profiling)
-                {
-                    if (stream_in)
-                    {
-                        insertCnchQueryMetric(
-                            context,
-                            query,
-                            QueryMetricLogState::QUERY_FINISH,
-                            time(nullptr),
-                            ast,
-                            &info,
-                            &stream_in->getProfileInfo(),
-                            nullptr,
-                            false,
-                            complex_query,
-                            init_time,
-                            runtime_latency,
-                            "",
-                            "");
-                    }
-                    else if (stream_out)
-                    {
-                        insertCnchQueryMetric(
-                            context,
-                            query,
-                            QueryMetricLogState::QUERY_FINISH,
-                            time(nullptr),
-                            ast,
-                            &info,
-                            nullptr,
-                            nullptr,
-                            false,
-                            complex_query,
-                            init_time,
-                            runtime_latency,
-                            "",
-                            "");
-                    }
-                    else if (query_pipeline)
-                    {
-                        insertCnchQueryMetric(
-                            context,
-                            query,
-                            QueryMetricLogState::QUERY_FINISH,
-                            time(nullptr),
-                            ast,
-                            &info,
-                            nullptr,
-                            query_pipeline,
-                            false,
-                            complex_query,
-                            init_time,
-                            runtime_latency,
-                            "",
-                            "");
-                    }
-                    else
-                    {
-                        insertCnchQueryMetric(
-                            context,
-                            query,
-                            QueryMetricLogState::QUERY_FINISH,
-                            time(nullptr),
-                            ast,
-                            &info,
-                            nullptr,
-                            nullptr,
-                            true,
-                            complex_query,
-                            init_time,
-                            runtime_latency,
-                            "",
-                            "");
-                    }
-                }
-
-                elem.thread_ids = std::move(info.thread_ids);
-                elem.profile_counters = std::move(info.profile_counters);
-                elem.max_io_time_thread_name = std::move(info.max_io_time_thread_name);
-                elem.max_io_time_thread_ms = info.max_io_time_thread_ms;
-                elem.max_thread_io_profile_counters = std::move(info.max_io_thread_profile_counters);
+                        elem.thread_ids = std::move(info.thread_ids);
+                        elem.profile_counters = std::move(info.profile_counters);
+                        elem.max_io_time_thread_name = std::move(info.max_io_time_thread_name);
+                        elem.max_io_time_thread_ms = info.max_io_time_thread_ms;
+                        elem.max_thread_io_profile_counters = std::move(info.max_io_thread_profile_counters);
 
 
-                const auto & factories_info = context->getQueryFactoriesInfo();
-                elem.used_aggregate_functions = factories_info.aggregate_functions;
-                elem.used_aggregate_function_combinators = factories_info.aggregate_function_combinators;
-                elem.used_database_engines = factories_info.database_engines;
-                elem.used_data_type_families = factories_info.data_type_families;
-                elem.used_dictionaries = factories_info.dictionaries;
-                elem.used_formats = factories_info.formats;
-                elem.used_functions = factories_info.functions;
-                elem.used_storages = factories_info.storages;
-                elem.used_table_functions = factories_info.table_functions;
-                elem.partition_ids = context->getPartitionIds();
+                        const auto & factories_info = context->getQueryFactoriesInfo();
+                        elem.used_aggregate_functions = factories_info.aggregate_functions;
+                        elem.used_aggregate_function_combinators = factories_info.aggregate_function_combinators;
+                        elem.used_database_engines = factories_info.database_engines;
+                        elem.used_data_type_families = factories_info.data_type_families;
+                        elem.used_dictionaries = factories_info.dictionaries;
+                        elem.used_formats = factories_info.formats;
+                        elem.used_functions = factories_info.functions;
+                        elem.used_storages = factories_info.storages;
+                        elem.used_table_functions = factories_info.table_functions;
+                        elem.partition_ids = context->getPartitionIds();
+
+                        if (log_queries && elem.type >= log_queries_min_type
+                            && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
+                        {
+                            if (auto query_log = context->getQueryLog())
+                                query_log->add(elem);
+                        }
+
+                        if (log_processors_profiles)
+                        {
+                            auto processors_profile_log = context->getProcessorsProfileLog();
+                            if (query_pipeline && processors_profile_log)
+                                processors_profile_log->addLogs(query_pipeline, elem.client_info.current_query_id, finish_time);
+                        }
 
 
-                if (log_processors_profiles)
-                {
-                    auto processors_profile_log = context->getProcessorsProfileLog();
-                    if (query_pipeline && processors_profile_log)
-                        processors_profile_log->addLogs(query_pipeline, elem.client_info.current_query_id, finish_time);
-                }
+                        if (auto opentelemetry_span_log = context->getOpenTelemetrySpanLog();
+                            context->query_trace_context.trace_id != UUID() && opentelemetry_span_log)
+                        {
+                            OpenTelemetrySpanLogElement span;
+                            span.trace_id = context->query_trace_context.trace_id;
+                            span.span_id = context->query_trace_context.span_id;
+                            span.parent_span_id = context->getClientInfo().client_trace_context.span_id;
+                            span.operation_name = "query";
+                            span.start_time_us = elem.query_start_time_microseconds;
+                            span.finish_time_us = time_in_microseconds(finish_time);
 
+                            /// Keep values synchronized to type enum in QueryLogElement::createBlock.
+                            span.attribute_names.push_back("clickhouse.query_status");
+                            span.attribute_values.push_back("QueryFinish");
 
-                if (auto opentelemetry_span_log = context->getOpenTelemetrySpanLog();
-                    context->query_trace_context.trace_id != UUID() && opentelemetry_span_log)
-                {
-                    OpenTelemetrySpanLogElement span;
-                    span.trace_id = context->query_trace_context.trace_id;
-                    span.span_id = context->query_trace_context.span_id;
-                    span.parent_span_id = context->getClientInfo().client_trace_context.span_id;
-                    span.operation_name = "query";
-                    span.start_time_us = elem.query_start_time_microseconds;
-                    span.finish_time_us = time_in_microseconds(finish_time);
+                            span.attribute_names.push_back("db.statement");
+                            span.attribute_values.push_back(elem.query);
 
-                    /// Keep values synchronized to type enum in QueryLogElement::createBlock.
-                    span.attribute_names.push_back("clickhouse.query_status");
-                    span.attribute_values.push_back("QueryFinish");
+                            span.attribute_names.push_back("clickhouse.query_id");
+                            span.attribute_values.push_back(elem.client_info.current_query_id);
+                            if (!context->query_trace_context.tracestate.empty())
+                            {
+                                span.attribute_names.push_back("clickhouse.tracestate");
+                                span.attribute_values.push_back(context->query_trace_context.tracestate);
+                            }
 
-                    span.attribute_names.push_back("db.statement");
-                    span.attribute_values.push_back(elem.query);
+                            opentelemetry_span_log->add(span);
+                        }
 
-                    span.attribute_names.push_back("clickhouse.query_id");
-                    span.attribute_values.push_back(elem.client_info.current_query_id);
-                    if (!context->query_trace_context.tracestate.empty())
-                    {
-                        span.attribute_names.push_back("clickhouse.tracestate");
-                        span.attribute_values.push_back(context->query_trace_context.tracestate);
-                    }
+                        if (const String & async_query_id = context->getAsyncQueryId(); !async_query_id.empty())
+                        {
+                            updateAsyncQueryStatus(context, async_query_id, query_id, AsyncQueryStatus::Finished);
+                        }
 
-                    opentelemetry_span_log->add(span);
-                }
-
-                if (const String & async_query_id = context->getAsyncQueryId(); !async_query_id.empty())
-                {
-                    updateAsyncQueryStatus(context, async_query_id, query_id, AsyncQueryStatus::Finished);
-                }
-
-                // cancel coordinator itself
-                context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id);
-                SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
-                scheduler->finishPlanSegments(query_id);
-                RuntimeFilterManager::getInstance().removeQuery(query_id);
-            };
+                        // cancel coordinator itself
+                        context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id);
+                        SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
+                        scheduler->finishPlanSegments(query_id);
+                        RuntimeFilterManager::getInstance().removeQuery(query_id);
+                    };
 
             auto exception_callback = [elem,
                                        context,
@@ -1843,105 +1919,6 @@ bool isDDLQuery([[maybe_unused]] const ContextPtr & context, const ASTPtr & quer
     auto * rename = query->as<ASTRenameQuery>();
 
     return create || (drop && drop->kind != ASTDropQuery::Kind::Truncate) || rename;
-}
-
-HostWithPorts getTargetServer(const ContextPtr & context, ASTPtr & ast)
-{
-    /// Only get target server for main table
-    StorageID table_id = StorageID::createEmpty();
-    if (auto * insert = ast->as<ASTInsertQuery>())
-    {
-        table_id = insert->table_id;
-    }
-    else if (auto * alter = ast->as<ASTAlterQuery>())
-    {
-        table_id = StorageID(alter->database, alter->table, alter->uuid);
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Get storage id: {}", table_id.getNameForLogs());
-    }
-    else if (auto * drop = ast->as<ASTDropQuery>())
-    {
-        table_id = StorageID(drop->database, drop->table, drop->uuid);
-    }
-    else
-    {
-        /// TODO: DDL query should auto commit?
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Executing query at local server");
-        return {};
-    }
-
-    if (table_id.database_name.empty())
-    {
-        table_id.database_name = context->getCurrentDatabase();
-    }
-
-    auto table = DatabaseCatalog::instance().getTable(table_id, context);
-
-    if (table_id.database_name == "system")
-        return {};
-
-    auto topology_master = context->getCnchTopologyMaster();
-
-    return topology_master->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table_id.server_vw_name, false);
-}
-
-void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
-{
-    /// Create a proxy transaction for insert/alter query
-    auto & coordinator = context->getCnchTransactionCoordinator();
-    auto primary_txn_id = context->getSessionContext()->getCurrentTransaction()->getTransactionID();
-    auto proxy_txn = coordinator.createProxyTransaction(server, primary_txn_id);
-    context->setCurrentTransaction(proxy_txn);
-    context->getSessionContext()->getCurrentTransaction()->as<CnchExplicitTransaction>()->addStatement(queryToString(ast));
-    /// Anyway, on finish and exception, we need to finish the proxy transaction
-    res.finish_callback = [proxy_txn](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *, UInt64) {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query success on remote server");
-        proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
-    };
-    res.exception_callback = [proxy_txn](int) {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server");
-        proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
-    };
-    /// Create connection to host
-    auto query_client_info = context->getClientInfo();
-    query_client_info.client_type = ClientInfo::ClientType::CNCH_SERVER;
-    auto settings = context->getSettingsRef();
-    res.remote_execution_conn = std::make_shared<Connection>(
-        server.getHost(),
-        server.tcp_port,
-        context->getCurrentDatabase(), /*default_database_*/
-        query_client_info.current_user,
-        query_client_info.current_password,
-        "", /*cluster_*/
-        "", /*cluster_secret*/
-        "server", /*client_name_*/
-        Protocol::Compression::Disable,
-        Protocol::Secure::Disable);
-
-    res.remote_execution_conn->setDefaultDatabase(context->getCurrentDatabase());
-
-    String query = queryToString(ast);
-    auto * insert_ast = ast->as<ASTInsertQuery>();
-    bool wait_insert_data = insert_ast && !insert_ast->select && !insert_ast->in_file;
-    auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithFailover(settings).getSaturated(settings.max_execution_time);
-    if (wait_insert_data)
-    {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as INSERT VALUES query");
-        res.out = std::make_shared<DB::RemoteBlockOutputStream>(
-            *res.remote_execution_conn, timeouts, query, settings, query_client_info, context);
-    }
-    else
-    {
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
-        auto remote_stream = std::make_shared<DB::RemoteBlockInputStream>(*res.remote_execution_conn, query, Block(), context);
-        remote_stream->setPoolMode(PoolMode::GET_ONE);
-        remote_stream->readPrefix();
-        while (Block block = remote_stream->read())
-            ;
-        remote_stream->readSuffix();
-        /// Get the extended profile info which is mainly for INSERT SELECT/INFILE
-        context->setExtendedProfileInfo(remote_stream->getExtendedProfileInfo());
-        res.in = std::move(remote_stream);
-    }
 }
 
 bool isAsyncMode(ContextMutablePtr context)

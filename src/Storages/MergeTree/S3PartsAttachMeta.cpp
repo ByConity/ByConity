@@ -49,7 +49,7 @@ S3PartsLazyCleaner::S3PartsLazyCleaner(
 }
 
 void S3PartsLazyCleaner::push(const String & part_rel_key_)
-{       
+{
     String part_key = std::filesystem::path(data_key_prefix) / part_rel_key_ / "data";
     lazy_cleaner->push(part_key);
 }
@@ -210,14 +210,12 @@ std::vector<String> S3PartsAttachMeta::listMetaFiles()
     std::vector<String> all_keys;
     String meta_prefix = data_key_prefix + metaPrefix(generator_id.id);
 
-    bool more = false;
-    std::optional<String> token = std::nullopt;
-    std::vector<String> keys;
+    S3::S3Util::S3ListResult result;
 
     do
     {
-        std::tie(more, token, keys) = s3_util.listObjectsWithPrefix(meta_prefix, token);
-
+        result = s3_util.listObjectsWithPrefix(meta_prefix, result.token);
+        const auto & keys = result.object_names;
         all_keys.reserve(all_keys.size() + keys.size());
         std::for_each(keys.begin(), keys.end(), [&all_keys](const String & key) {
             if (endsWith(key, ".am"))
@@ -225,7 +223,7 @@ std::vector<String> S3PartsAttachMeta::listMetaFiles()
                 all_keys.push_back(key);
             }
         });
-    } while (more);
+    } while (result.has_more);
 
     return all_keys;
 }

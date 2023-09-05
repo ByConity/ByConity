@@ -467,7 +467,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, fallback_perfect_shard, true, "Whether to fallback if there is any exception", 0) \
     M(Bool, \
       optimize_skip_unused_shards, \
-      false, \
+      true, \
       "Assumes that data is distributed by sharding_key. Optimization to skip unused shards if SELECT query filters by sharding_key.", \
       0) \
     M(Bool, \
@@ -515,28 +515,11 @@ enum PreloadLevelSettings : UInt64
       "If at least as many bytes are read from one file, the reading can be parallelized.", \
       0) \
     M(UInt64, merge_tree_min_rows_for_seek, 0, "You can skip reading more than that number of rows at the price of one seek per file.", 0) \
-    M(UInt64, \
-      merge_tree_min_bytes_for_seek, \
-      0, \
-      "You can skip reading more than that number of bytes at the price of one seek per file.", \
-      0) \
-    M(UInt64, \
-      merge_tree_coarse_index_granularity, \
-      8, \
-      "If the index segment can contain the required keys, divide it into as many parts and recursively check them.", \
-      0) \
-    M(UInt64, \
-      merge_tree_max_rows_to_use_cache, \
-      (128 * 8192), \
-      "The maximum number of rows per request, to use the cache of uncompressed data. If the request is large, the cache is not used. " \
-      "(For large queries not to flush out the cache.)", \
-      0) \
-    M(UInt64, \
-      merge_tree_max_bytes_to_use_cache, \
-      (192 * 10 * 1024 * 1024), \
-      "The maximum number of bytes per request, to use the cache of uncompressed data. If the request is large, the cache is not used. " \
-      "(For large queries not to flush out the cache.)", \
-      0) \
+    M(UInt64, merge_tree_min_bytes_for_seek, 0, "You can skip reading more than that number of bytes at the price of one seek per file.", 0) \
+    M(UInt64, remote_read_min_bytes_for_seek, 4 * DBMS_DEFAULT_BUFFER_SIZE, "Min bytes required for remote read (url, s3) to do seek, instead of read with ignore.", 0) \
+    M(UInt64, merge_tree_coarse_index_granularity, 8, "If the index segment can contain the required keys, divide it into as many parts and recursively check them.", 0) \
+    M(UInt64, merge_tree_max_rows_to_use_cache, (128 * 8192), "The maximum number of rows per request, to use the cache of uncompressed data. If the request is large, the cache is not used. (For large queries not to flush out the cache.)", 0) \
+    M(UInt64, merge_tree_max_bytes_to_use_cache, (192 * 10 * 1024 * 1024), "The maximum number of bytes per request, to use the cache of uncompressed data. If the request is large, the cache is not used. (For large queries not to flush out the cache.)", 0) \
     M(UInt64, merge_tree_calculate_columns_size_sample, 1000, "The number of the sample parts to calculate columns size.", 0) \
     M(Bool, do_not_merge_across_partitions_select_final, false, "Merge parts only in one partition in select final", 0) \
 \
@@ -874,7 +857,6 @@ enum PreloadLevelSettings : UInt64
       "available on the initiator and we need to always scatter their data on-the-fly during distributed processing with the GLOBAL " \
       "keyword. It's also useful to reduce the need to access the external sources joining external tables.", \
       0) \
-    M(Bool, enable_query_cache, false, "Whether to enable query cache", 0) \
     M(UInt64, connection_check_pool_size, 16, "Number of thread for connection check", 0) \
     M(Bool, \
       query_worker_fault_tolerance, \
@@ -1565,6 +1547,20 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Bool, allow_multi_if_const_optimize, true, "Whether to optimize multiIf function for const case", 0) \
 \
+    M(Bool, use_query_cache, false, "Enable the query cache", 0) \
+    M(Bool, enable_transactional_query_cache, true, "Enable transactional query cache for CNCH engine table", IMPORTANT) \
+    M(Bool, enable_writes_to_query_cache, true, "Enable storing results of SELECT queries in the query cache", 0) \
+    M(Bool, enable_reads_from_query_cache, true, "Enable reading results of SELECT queries from the query cache", 0) \
+    M(Bool, query_cache_store_results_of_queries_with_nondeterministic_functions, false, "Store results of queries with non-deterministic functions (e.g. rand(), now()) in the query cache", 0) \
+    M(UInt64, query_cache_max_size_in_bytes, 0, "The maximum amount of memory (in bytes) the current user may allocate in the query cache. 0 means unlimited. ", 0) \
+    M(UInt64, query_cache_max_entries, 0, "The maximum number of query results the current user may store in the query cache. 0 means unlimited.", 0) \
+    M(UInt64, query_cache_min_query_runs, 0, "Minimum number a SELECT query must run before its result is stored in the query cache", 0) \
+    M(Milliseconds, query_cache_min_query_duration, 0, "Minimum time in milliseconds for a query to run for its result to be stored in the query cache.", 0) \
+    M(Bool, query_cache_compress_entries, true, "Compress cache entries.", 0) \
+    M(Bool, query_cache_squash_partial_results, true, "Squash partial result blocks to blocks of size 'max_block_size'. Reduces performance of inserts into the query cache but improves the compressability of cache entries.", 0) \
+    M(Seconds, query_cache_ttl, 60, "After this time in seconds entries in the query cache become stale", 0) \
+    M(Bool, query_cache_share_between_users, false, "Allow other users to read entry in the query cache", 0) \
+    \
     /** settings in cnch **/ \
     M(Seconds, drop_range_memory_lock_timeout, 5, "The time that spend on wait for memory lock when doing drop range", 0) \
     M(UInt64, cnch_data_retention_time_in_sec, 3 * 24 * 60 * 60, "Waiting time when dropped table or database is actually removed.", 0) \
@@ -1615,6 +1611,12 @@ enum PreloadLevelSettings : UInt64
     M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
     M(Bool, enable_vw_customized_setting, false, "Allow vw customized overwrite profile settings", 0) \
     M(Bool, enable_async_execution, false, "Whether to enable async execution", 0) \
+    /** Settings for hive */ \
+    M(Bool, use_hive_metastore_filter, true, "", 0) \
+    M(Bool, use_hive_cluster_key_filter, true, "", 0) \
+    M(Bool, use_hive_partition_filter, true, "", 0) \
+    M(Bool, use_hive_file_level_filter, false, "", 0) \
+    M(Bool, use_hive_split_level_filter, false, "", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
     M(Milliseconds, dedup_worker_heartbeat_ms, 3000, "Dedup worker heartbeat interval time", 0) \
@@ -2099,12 +2101,12 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
     M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
-    M(Bool, enable_auto_query_forwarding, false, "Auto forward query to target server when having multiple servers", 0) \
     M(Bool, allow_attach_parts_with_different_table_definition_hash, true, "Whether to allow attaching of parts with different table definition hash to target table.", 0)  \
     M(String, tenant_id, "", "tenant_id of cnch user", 0) \
     M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
     M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \
     M(Bool, offloading_with_query_plan, false, "utilize query plan to offload the computation comoetely to worker", 0) \
+    M(Bool, enable_auto_query_forwarding, true, "Auto forward query to target server when having multiple servers", 0) \
 
 
 // End of FORMAT_FACTORY_SETTINGS

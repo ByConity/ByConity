@@ -1100,7 +1100,7 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
 
     if (!dict_name_p.parse(pos, name, expected))
         return false;
-    tryRewriteCnchDatabaseName(name, pos.getContext());    
+    tryRewriteCnchDatabaseName(name, pos.getContext());
 
     if (s_on.ignore(pos, expected))
     {

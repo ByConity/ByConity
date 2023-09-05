@@ -3,18 +3,18 @@
 #if USE_PARQUET
 
 // TODO: clean includes
-#include <Columns/ColumnString.h>
-#include <Columns/ColumnVector.h>
-#include <Common/assert_cast.h>
-#include <Core/callOnTypeIndex.h>
-#include <DataStreams/SquashingBlockOutputStream.h>
-#include <Formats/FormatFactory.h>
-#include <IO/WriteHelpers.h>
-#include <arrow/api.h>
-#include <arrow/util/memory.h>
-#include <parquet/arrow/writer.h>
-#include "ArrowBufferedStreams.h"
-#include "CHColumnToArrowColumn.h"
+#    include <Columns/ColumnString.h>
+#    include <Columns/ColumnVector.h>
+#    include <Core/callOnTypeIndex.h>
+#    include <DataStreams/SquashingBlockOutputStream.h>
+#    include <Formats/FormatFactory.h>
+#    include <IO/WriteHelpers.h>
+#    include <arrow/api.h>
+#    include <arrow/util/memory.h>
+#    include <parquet/arrow/writer.h>
+#    include <Common/assert_cast.h>
+#    include "ArrowBufferedStreams.h"
+#    include "CHColumnToArrowColumn.h"
 
 
 namespace DB
@@ -47,19 +47,16 @@ void ParquetBlockOutputFormat::consume(Chunk chunk)
         auto sink = std::make_shared<ArrowBufferedOutputStream>(out);
 
         parquet::WriterProperties::Builder builder;
-#if USE_SNAPPY
+#    if USE_SNAPPY
         builder.compression(parquet::Compression::SNAPPY);
-#endif
+#    endif
         auto props = builder.build();
         auto status = parquet::arrow::FileWriter::Open(
-            *arrow_table->schema(),
-            arrow::default_memory_pool(),
-            sink,
-            props /*parquet::default_writer_properties(),*/
-            ).Value(&file_writer);
+                          *arrow_table->schema(), arrow::default_memory_pool(), sink, props /*parquet::default_writer_properties(),*/
+                          )
+                          .Value(&file_writer);
         if (!status.ok())
             throw Exception{"Error while opening a table: " + status.ToString(), ErrorCodes::UNKNOWN_EXCEPTION};
-        
     }
 
     // TODO: calculate row_group_size depending on a number of rows and table size
@@ -86,12 +83,7 @@ void ParquetBlockOutputFormat::finalize()
 void registerOutputFormatProcessorParquet(FormatFactory & factory)
 {
     factory.registerOutputFormatProcessor(
-        "Parquet",
-        [](WriteBuffer & buf,
-           const Block & sample,
-           const RowOutputFormatParams &,
-           const FormatSettings & format_settings)
-        {
+        "Parquet", [](WriteBuffer & buf, const Block & sample, const RowOutputFormatParams &, const FormatSettings & format_settings) {
             auto impl = std::make_shared<ParquetBlockOutputFormat>(buf, sample, format_settings);
             /// TODO
             // auto res = std::make_shared<SquashingBlockOutputStream>(impl, impl->getHeader(), format_settings.parquet.row_group_size, 0);

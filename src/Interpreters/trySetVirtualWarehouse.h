@@ -18,6 +18,7 @@
 #include <Parsers/IAST_fwd.h>
 #include <Interpreters/Context_fwd.h>
 #include <ResourceManagement/VirtualWarehouseType.h>
+#include <Storages/IStorage_fwd.h>
 
 namespace DB
 {
@@ -43,5 +44,6 @@ VirtualWarehouseHandle getVirtualWarehouseForTable(const MergeTreeMetaBase & sto
 
 /// Won't set virtual warehouse or worker group
 WorkerGroupHandle getWorkerGroupForTable(const MergeTreeMetaBase & storage, const ContextPtr & context);
+WorkerGroupHandle getWorkerGroupForTable(ContextPtr local_context, StoragePtr storage);
 
 }

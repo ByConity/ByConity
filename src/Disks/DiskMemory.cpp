@@ -57,6 +57,8 @@ public:
 
     String name() const override { return iter->filename(); }
 
+    size_t size() const override { return 0; }
+
 private:
     std::vector<fs::path> dir_file_paths;
     std::vector<fs::path>::iterator iter;

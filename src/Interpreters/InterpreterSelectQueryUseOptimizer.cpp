@@ -17,8 +17,10 @@
 #include <Analyzers/QueryRewriter.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/SegmentScheduler.h>
+#include <Interpreters/WorkerStatusManager.h>
 #include <Optimizer/JoinOrderUtils.h>
 #include <Optimizer/PlanNodeSearcher.h>
 #include <Optimizer/PlanOptimizer.h>
@@ -26,20 +28,19 @@
 #include <QueryPlan/PlanCache.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/QueryPlanner.h>
-#include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageCnchHive.h>
-#include <Storages/StorageDistributed.h>
-#include "QueryPlan/QueryPlan.h"
-#include <Interpreters/WorkerStatusManager.h>
-#include <common/logger_useful.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageDistributed.h>
+#include <common/logger_useful.h>
+#include "QueryPlan/QueryPlan.h"
 
 namespace DB
 {
 QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
 {
-        // When interpret sub query, reuse context info, e.g. PlanNodeIdAllocator, SymbolAllocator.
-    if (interpret_sub_query) 
+    // When interpret sub query, reuse context info, e.g. PlanNodeIdAllocator, SymbolAllocator.
+    if (interpret_sub_query)
     {
         QueryPlanPtr sub_query_plan = std::make_unique<QueryPlan>(sub_plan_ptr, cte_info, context->getPlanNodeIdAllocator());
         PlanOptimizer::optimize(*sub_query_plan, context);
@@ -74,19 +75,23 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
             stage_watch.start();
             auto cloned_query = query_ptr->clone();
             cloned_query = QueryRewriter().rewrite(cloned_query, context);
-            context->logOptimizerProfile(log, "Optimizer stage run time: ", "Rewrite", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            context->logOptimizerProfile(
+                log, "Optimizer stage run time: ", "Rewrite", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
             stage_watch.restart();
             AnalysisPtr analysis = QueryAnalyzer::analyze(cloned_query, context);
-            context->logOptimizerProfile(log, "Optimizer stage run time: ", "Analyzer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            context->logOptimizerProfile(
+                log, "Optimizer stage run time: ", "Analyzer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
             stage_watch.restart();
             query_plan = QueryPlanner().plan(cloned_query, *analysis, context);
-            context->logOptimizerProfile(log, "Optimizer stage run time: ", "Planning", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            context->logOptimizerProfile(
+                log, "Optimizer stage run time: ", "Planning", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
             stage_watch.restart();
             PlanOptimizer::optimize(*query_plan, context);
-            context->logOptimizerProfile(log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            context->logOptimizerProfile(
+                log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
             if (context->getSettingsRef().enable_plan_cache)
             {
                 WriteBufferFromOwnString query_buffer;
@@ -105,7 +110,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
     return query_plan;
 }
 
-PlanSegmentTreePtr InterpreterSelectQueryUseOptimizer::getPlanSegment()
+std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOptimizer::getPlanSegment()
 {
     Stopwatch stage_watch, total_watch;
     total_watch.start();
@@ -123,8 +128,7 @@ PlanSegmentTreePtr InterpreterSelectQueryUseOptimizer::getPlanSegment()
     PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(*query_plan, cluster_info_context);
 
     stage_watch.restart();
-    plan.allocateLocalTable(context);
-
+    std::set<StorageID> used_storage_ids = plan.allocateLocalTable(context);
     // select health worker before split
     if (context->getSettingsRef().enable_adaptive_scheduler && context->tryGetCurrentWorkerGroup())
     {
@@ -135,19 +139,23 @@ PlanSegmentTreePtr InterpreterSelectQueryUseOptimizer::getPlanSegment()
     }
 
     PlanSegmentSplitter::split(plan, plan_segment_context);
-    context->logOptimizerProfile(log, "Optimizer total run time: ", "PlanSegment build", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+    context->logOptimizerProfile(
+        log, "Optimizer total run time: ", "PlanSegment build", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
     context->logOptimizerProfile(log, "Optimizer total run time: ", "Optimizer Total", std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms");
-    return plan_segment_tree;
+    return std::make_pair(std::move(plan_segment_tree), std::move(used_storage_ids));
 }
 
 BlockIO InterpreterSelectQueryUseOptimizer::execute()
 {
-    PlanSegmentTreePtr plan_segment_tree = getPlanSegment();
+    std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
 
-    auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree), context, MPPQueryOptions());
-    return coodinator->execute();
+    auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree_and_used_storage_ids.first), context, MPPQueryOptions());
+
+    BlockIO res = coodinator->execute();
+    res.pipeline.addUsedStorageIDs(plan_segment_tree_and_used_storage_ids.second);
+    return res;
 }
 
 QueryPlan PlanNodeToNodeVisitor::convert(QueryPlan & query_plan)
@@ -234,11 +242,11 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableSca
             .context = cluster_info_context.context,
             .query_plan = cluster_info_context.query_plan,
             .query_id = cluster_info_context.context->getCurrentQueryId(),
-            .shard_number =  worker_group->getShardsInfo().size(),
+            .shard_number = worker_group->getShardsInfo().size(),
             .cluster_name = worker_group->getID(),
             .plan_segment_tree = cluster_info_context.plan_segment_tree.get(),
-            .health_parallel = worker_group_status_ptr ? 
-                std::optional<size_t>(worker_group_status_ptr->getAvaiableComputeWorkerSize()) : std::nullopt};
+            .health_parallel
+            = worker_group_status_ptr ? std::optional<size_t>(worker_group_status_ptr->getAvaiableComputeWorkerSize()) : std::nullopt};
         return plan_segment_context;
     }
     return std::nullopt;

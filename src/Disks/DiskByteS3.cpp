@@ -19,6 +19,8 @@
 #include <Common/filesystemHelpers.h>
 #include <Common/quoteString.h>
 #include <Common/formatReadable.h>
+#include "IO/ReadBufferFromS3.h"
+#include "IO/S3Common.h"
 #include <Disks/DiskFactory.h>
 #include <Storages/S3/RAReadBufferFromS3.h>
 #include <Storages/S3/WriteBufferFromByteS3.h>
@@ -32,9 +34,66 @@ namespace ErrorCodes
     extern const int INCORRECT_DISK_INDEX;
     extern const int NOT_IMPLEMENTED;
     extern const int BAD_ARGUMENTS;
+    extern const int PATH_ACCESS_DENIED;
 }
 
 std::mutex DiskByteS3::reservation_mutex;
+
+class DiskByteS3DirectoryIterator : public IDiskDirectoryIterator
+{
+public:
+    DiskByteS3DirectoryIterator(S3::S3Util * s3_util_, const String & root_prefix, const String & path)
+        : s3_util(s3_util_), prefix(std::filesystem::path(root_prefix) / path)
+    {
+        LOG_TRACE(log, "list s3 bucket {} prefix {}", s3_util->getBucket(), prefix.string());
+        res.has_more = true;
+        next();
+    }
+
+    void next() override
+    {
+        idx++;
+        if (idx >= res.object_names.size() && res.has_more)
+        {
+            fetchNextBatch();
+            idx = 0;
+        }
+    }
+
+    bool isValid() const override
+    {
+        return idx < res.object_names.size();
+    }
+
+    String path() const override
+    {
+        return res.object_names.at(idx);
+    }
+
+    String name() const override
+    {
+        return res.object_names.at(idx);
+    }
+
+    size_t size() const override
+    {
+        return res.object_sizes.at(idx);
+    }
+
+private:
+    void fetchNextBatch()
+    {
+        res = s3_util->listObjectsWithPrefix(prefix.string(), res.token);
+        LOG_TRACE(log, "get {} objs, finished {}", res.object_names.size(), res.has_more);
+    }
+
+    S3::S3Util * s3_util = nullptr; /// shared_ptr should be better
+    S3::S3Util::S3ListResult res;
+    std::filesystem::path prefix;
+    size_t idx {0};
+
+    Poco::Logger * log {&Poco::Logger::get("DiskByteS3DirectoryIterator")};
+};
 
 class DiskByteS3Reservation : public IReservation
 {
@@ -84,9 +143,9 @@ UInt64 DiskByteS3::getID() const
 bool DiskByteS3::exists(const String& path) const
 {
     // exists may used for object or some prefix, so use list instead of head object
-    auto [more, token, object_names] = s3_util.listObjectsWithPrefix(
+    auto res = s3_util.listObjectsWithPrefix(
         std::filesystem::path(root_prefix) / path, std::nullopt, 1);
-    return !object_names.empty();
+    return !res.object_names.empty();
 }
 
 size_t DiskByteS3::getFileSize(const String& path) const
@@ -94,28 +153,35 @@ size_t DiskByteS3::getFileSize(const String& path) const
     return s3_util.getObjectSize(std::filesystem::path(root_prefix) / path);
 }
 
+DiskDirectoryIteratorPtr DiskByteS3::iterateDirectory(const String & path)
+{
+    return std::make_unique<DiskByteS3DirectoryIterator>(&s3_util, root_prefix, path);
+}
+
 void DiskByteS3::listFiles(const String& path, std::vector<String>& file_names)
 {
     String prefix = std::filesystem::path(root_prefix) / path;
 
-    bool more_objects = false;
-    std::optional<String> next_token = std::nullopt;
-    std::vector<String> object_names;
+    S3::S3Util::S3ListResult res;
 
     do {
-        std::tie(more_objects, next_token, object_names) = s3_util.listObjectsWithPrefix(
-            prefix, next_token);
-        file_names.reserve(file_names.size() + object_names.size());
-        file_names.insert(file_names.end(), object_names.begin(), object_names.end());
-    } while(more_objects);
+        res = s3_util.listObjectsWithPrefix(
+            prefix, res.token);
+        file_names.reserve(file_names.size() + res.object_names.size());
+        file_names.insert(file_names.end(), res.object_names.begin(), res.object_names.end());
+    } while(res.has_more);
 }
 
-std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String& path,
-    const ReadSettings& settings) const
+std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path, const ReadSettings & settings) const
 {
-    return std::make_unique<RAReadBufferFromS3>(s3_util.getClient(),
-        s3_util.getBucket(), std::filesystem::path(root_prefix) / path, 3,
-        settings.buffer_size);
+    if (settings.s3_use_read_ahead)
+    {
+        return std::make_unique<RAReadBufferFromS3>(
+            s3_util.getClient(), s3_util.getBucket(), std::filesystem::path(root_prefix) / path, 3, settings.buffer_size);
+    }
+
+    return std::make_unique<ReadBufferFromS3>(
+        s3_util.getClient(), s3_util.getBucket(), std::filesystem::path(root_prefix) / path, settings, 3, false);
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String& path,
@@ -145,6 +211,23 @@ void DiskByteS3::removeRecursive(const String& path)
     s3_util.deleteObjectsWithPrefix(prefix, [](const S3::S3Util&, const String&){return true;});
 }
 
+static void checkWriteAccess(IDisk & disk)
+{
+    auto file = disk.writeFile("test_acl", {.buffer_size = DBMS_DEFAULT_BUFFER_SIZE, .mode = WriteMode::Rewrite});
+    file->write("test", 4);
+}
+
+static void checkReadAccess(const String & disk_name, IDisk & disk)
+{
+    auto file = disk.readFile("test_acl", {.buffer_size = DBMS_DEFAULT_BUFFER_SIZE});
+    String buf(4, '0');
+    file->readStrict(buf.data(), 4);
+    if (buf != "test")
+        throw Exception("No read access to S3 bucket in disk " + disk_name, ErrorCodes::PATH_ACCESS_DENIED);
+}
+
+static void checkRemoveAccess(IDisk & disk) { disk.removeFile("test_acl"); }
+
 void registerDiskByteS3(DiskFactory& factory)
 {
     auto creator = [](const String& name,
@@ -153,8 +236,15 @@ void registerDiskByteS3(DiskFactory& factory)
         S3::S3Config s3_cfg(config, config_prefix);
         std::shared_ptr<Aws::S3::S3Client> client = s3_cfg.create();
 
-        return std::make_shared<DiskByteS3>(name, s3_cfg.root_prefix, s3_cfg.bucket,
-            client);
+        auto s3disk = std::make_shared<DiskByteS3>(name, s3_cfg.root_prefix, s3_cfg.bucket, client);
+
+        if (!config.getBool(config_prefix + ".skip_access_check", true))
+        {
+            checkWriteAccess(*s3disk);
+            checkReadAccess(name, *s3disk);
+            checkRemoveAccess(*s3disk);
+        }
+        return s3disk;
     };
     factory.registerDiskType("bytes3", creator);
     factory.registerDiskType("s3", creator);

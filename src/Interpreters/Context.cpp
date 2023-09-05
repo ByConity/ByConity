@@ -26,6 +26,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <Interpreters/Cache/QueryCache.h>
 #include <Access/AccessControlManager.h>
 #include <Access/ContextAccess.h>
 #include <Access/Credentials.h>
@@ -98,7 +99,6 @@
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Parsers/parseQuery.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
-#include <Processors/QueryCache.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <ResourceGroup/InternalResourceGroupManager.h>
 #include <ResourceGroup/VWResourceGroupManager.h>
@@ -113,7 +113,7 @@
 #include <Storages/MarkCache.h>
 #include <Storages/MergeTree/BackgroundJobsExecutor.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
-#include <Storages/MergeTree/CnchHiveSettings.h>
+#include <Storages/Hive/CnchHiveSettings.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
 #include <Storages/MergeTree/MergeList.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -321,7 +321,7 @@ struct ContextSharedPart
     mutable ResourceGroupManagerPtr resource_group_manager; /// Known resource groups
     mutable UncompressedCachePtr uncompressed_cache; /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
-    mutable QueryCachePtr query_cache; /// Cache of queries' results.
+    mutable QueryCachePtr query_cache;         /// Cache of query results.
     mutable MMappedFileCachePtr
         mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     ProcessList process_list; /// Executing queries at the moment.
@@ -711,6 +711,19 @@ WorkerGroupHandle Context::tryGetHealthWorkerGroup() const
 InterserverIOHandler & Context::getInterserverIOHandler()
 {
     return shared->interserver_io_handler;
+}
+
+ReadSettings Context::getReadSettings() const
+{
+    ReadSettings res;
+    res.buffer_size = settings.max_read_buffer_size;
+    res.aio_threshold = settings.min_bytes_to_use_direct_io;
+    res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
+    res.remote_read_min_bytes_for_seek = settings.remote_read_min_bytes_for_seek;
+    res.disk_cache_mode = settings.disk_cache_mode;
+    res.skip_download_if_exceeds_query_cache = settings.skip_download_if_exceeds_query_cache;
+    res.s3_use_read_ahead = settings.s3_use_read_ahead;
+    return res;
 }
 
 std::unique_lock<std::recursive_mutex> Context::getLock() const
@@ -2251,36 +2264,22 @@ void Context::dropMarkCache() const
         shared->mark_cache->reset();
 }
 
-void Context::setPrimaryIndexCache(size_t cache_size_in_bytes)
-{
-    auto lock = getLock();
-
-    if (shared->primary_index_cache)
-        throw Exception("Primary cache has been already created.", ErrorCodes::LOGICAL_ERROR);
-
-    shared->primary_index_cache = std::make_shared<PrimaryIndexCache>(cache_size_in_bytes);
-}
-
-std::shared_ptr<PrimaryIndexCache> Context::getPrimaryIndexCache() const
-{
-    auto lock = getLock();
-    return shared->primary_index_cache;
-}
-
-void Context::dropPrimaryIndexCache() const
-{
-    if (shared->primary_index_cache)
-        shared->primary_index_cache->reset();
-}
-
-void Context::setQueryCache(size_t cache_size_in_bytes)
+void Context::setQueryCache(const Poco::Util::AbstractConfiguration & config)
 {
     auto lock = getLock();
 
     if (shared->query_cache)
-        throw Exception("Query cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Query cache has been already created.");
 
-    shared->query_cache = std::make_shared<QueryCache>(cache_size_in_bytes);
+    shared->query_cache = std::make_shared<QueryCache>();
+    shared->query_cache->updateConfiguration(config);
+}
+
+void Context::updateQueryCacheConfiguration(const Poco::Util::AbstractConfiguration & config)
+{
+    auto lock = getLock();
+    if (shared->query_cache)
+        shared->query_cache->updateConfiguration(config);
 }
 
 QueryCachePtr Context::getQueryCache() const
@@ -2295,22 +2294,6 @@ void Context::dropQueryCache() const
     if (shared->query_cache)
         shared->query_cache->reset();
 }
-
-void Context::dropQueryCache(const String & name) const
-{
-    auto lock = getLock();
-    if (shared->query_cache)
-        shared->query_cache->dropQueryCache(name);
-}
-
-void Context::dropQueryCache(const String & database, const String & table) const
-{
-    String name = database + "." + table;
-    auto lock = getLock();
-    if (shared->query_cache)
-        shared->query_cache->dropQueryCache(name);
-}
-
 
 void Context::setMMappedFileCache(size_t cache_size_in_num_entries)
 {
@@ -3476,7 +3459,7 @@ const CnchHiveSettings & Context::getCnchHiveSettings() const
     {
         const auto & config = getConfigRef();
         CnchHiveSettings cnchhive_settings;
-        cnchhive_settings.loadFromConfig("cnch_hive", config);
+        cnchhive_settings.loadFromConfig("hive", config);
         shared->cnchhive_settings.emplace(cnchhive_settings);
     }
 

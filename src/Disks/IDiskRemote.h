@@ -233,6 +233,8 @@ public:
 
     String name() const override { return iter->path().filename(); }
 
+    size_t size() const override { return iter->file_size(); }
+
 private:
     fs::directory_iterator iter;
     fs::path folder_path;

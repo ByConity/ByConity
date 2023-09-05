@@ -33,6 +33,8 @@ const std::string Operation(const OperationType & type)
         return "GET";
         case OperationType::CLEAN :
         return "CLEAN";
+        case OperationType::FDB_CREATE_TXN :
+        return "FDB_CREATE_TXN";
     }
 
     __builtin_unreachable();

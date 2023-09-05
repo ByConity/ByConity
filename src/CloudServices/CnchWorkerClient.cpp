@@ -15,16 +15,17 @@
 
 #include <CloudServices/CnchWorkerClient.h>
 
+#include <CloudServices/CnchServerResource.h>
+#include <CloudServices/DedupWorkerStatus.h>
 #include <Interpreters/Context.h>
 #include <Protos/DataModelHelpers.h>
 #include <Protos/RPCHelpers.h>
 #include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/IStorage.h>
 #include <Transaction/ICnchTransaction.h>
-#include <CloudServices/DedupWorkerStatus.h>
-#include <CloudServices/CnchServerResource.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
+#include "Storages/Hive/HiveFile/IHiveFile.h"
 
 #include <brpc/channel.h>
 #include <brpc/controller.h>
@@ -86,12 +87,7 @@ void CnchWorkerClient::shutdownManipulationTasks(const UUID & table_uuid, const 
     RPCHelpers::fillUUID(table_uuid, *request.mutable_table_uuid());
     if (!task_ids.empty())
     {
-        std::for_each(task_ids.begin(), task_ids.end(),
-            [& request] (const String & task_id)
-            {
-                request.add_task_ids(task_id);
-            }
-        );
+        std::for_each(task_ids.begin(), task_ids.end(), [&request](const String & task_id) { request.add_task_ids(task_id); });
     }
 
     stub->shutdownManipulationTasks(&cntl, &request, &response, nullptr);
@@ -184,53 +180,6 @@ void CnchWorkerClient::sendCreateQueries(const ContextPtr & context, const std::
     RPCHelpers::checkResponse(response);
 }
 
-brpc::CallId CnchWorkerClient::sendCnchHiveDataParts(
-    const ContextPtr & context,
-    const StoragePtr & storage,
-    const String & local_table_name,
-    const HiveDataPartsCNCHVector & parts,
-    const ExceptionHandlerPtr & handler)
-{
-    Protos::SendCnchHiveDataPartsReq request;
-
-    request.set_txn_id(context->getCurrentTransactionID());
-    request.set_database_name(storage->getDatabaseName());
-    request.set_table_name(local_table_name);
-    fillCnchHivePartsModel(parts, *request.mutable_parts());
-
-    auto * cntl = new brpc::Controller();
-    Protos::SendCnchHiveDataPartsResp * response = new Protos::SendCnchHiveDataPartsResp();
-    const auto & settings = context->getSettingsRef();
-    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
-    cntl->set_timeout_ms(send_timeout);
-
-    auto call_id = cntl->call_id();
-    stub->sendCnchHiveDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
-
-    return call_id;
-}
-
-brpc::CallId CnchWorkerClient::sendCnchFileDataParts(
-    const ContextPtr & context,
-    const StoragePtr & storage,
-    const String & local_table_name,
-    const DB::FileDataPartsCNCHVector & parts,
-    const ExceptionHandlerPtr & handler)
-{
-    Protos::SendCnchFileDataPartsReq request;
-    request.set_txn_id(context->getCurrentTransactionID());
-    request.set_database_name(storage->getDatabaseName());
-    request.set_table_name(local_table_name);
-    fillCnchFilePartsModel(parts, *request.mutable_parts());
-
-    auto * cntl = new brpc::Controller;
-    const auto call_id = cntl->call_id();
-    auto * response = new Protos::SendCnchFileDataPartsResp;
-    stub->sendCnchFileDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDone, response, cntl, handler));
-    return call_id;
-}
-
-
 brpc::CallId CnchWorkerClient::preloadDataParts(
     const ContextPtr & context,
     const TxnTimestamp & txn_id,
@@ -239,8 +188,7 @@ brpc::CallId CnchWorkerClient::preloadDataParts(
     const ServerDataPartsVector & parts,
     const ExceptionHandlerPtr & handler,
     bool enable_parts_sync_preload,
-    UInt64 parts_preload_level
-   )
+    UInt64 parts_preload_level)
 {
     Protos::PreloadDataPartsReq request;
     request.set_txn_id(txn_id);
@@ -298,7 +246,8 @@ brpc::CallId CnchWorkerClient::sendQueryDataParts(
     cntl->set_timeout_ms(send_timeout);
 
     auto call_id = cntl->call_id();
-    stub->sendQueryDataParts(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDoneWithFailedInfo, response, cntl, handler, worker_id));
+    stub->sendQueryDataParts(
+        cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDoneWithFailedInfo, response, cntl, handler, worker_id));
 
     return call_id;
 }
@@ -314,7 +263,7 @@ brpc::CallId CnchWorkerClient::sendOffloadingInfo( // NOLINT
     return {};
 }
 
- brpc::CallId CnchWorkerClient::sendResources(
+brpc::CallId CnchWorkerClient::sendResources(
     const ContextPtr & context,
     const std::vector<AssignedResource> & resources_to_send,
     const ExceptionHandlerWithFailedInfoPtr & handler,
@@ -332,7 +281,7 @@ brpc::CallId CnchWorkerClient::sendOffloadingInfo( // NOLINT
     auto recycle_timeout = max_execution_time ? max_execution_time + 60 : 3600;
     request.set_timeout(recycle_timeout);
 
-    for (const auto & resource: resources_to_send)
+    for (const auto & resource : resources_to_send)
     {
         if (!resource.sent_create_query)
             request.add_create_queries(resource.create_table_query);
@@ -346,12 +295,16 @@ brpc::CallId CnchWorkerClient::sendOffloadingInfo( // NOLINT
         if (!resource.server_parts.empty())
         {
             fillBasePartAndDeleteBitmapModels(
-                *resource.storage, resource.server_parts, *table_data_parts.mutable_server_parts(), *table_data_parts.mutable_server_part_bitmaps());
+                *resource.storage,
+                resource.server_parts,
+                *table_data_parts.mutable_server_parts(),
+                *table_data_parts.mutable_server_part_bitmaps());
         }
 
         if (!resource.hive_parts.empty())
         {
-            fillCnchHivePartsModel(resource.hive_parts, *table_data_parts.mutable_hive_parts());
+            auto * mutable_hive_parts = table_data_parts.mutable_hive_parts();
+            RPCHelpers::serialize(*mutable_hive_parts, resource.hive_parts);
         }
 
         if (!resource.file_parts.empty())
@@ -360,7 +313,7 @@ brpc::CallId CnchWorkerClient::sendOffloadingInfo( // NOLINT
         }
 
         /// bucket numbers
-        for (const auto & bucket_num: resource.bucket_numbers)
+        for (const auto & bucket_num : resource.bucket_numbers)
             *table_data_parts.mutable_bucket_numbers()->Add() = bucket_num;
     }
 
@@ -373,7 +326,8 @@ brpc::CallId CnchWorkerClient::sendOffloadingInfo( // NOLINT
     cntl->set_timeout_ms(send_timeout_ms);
     const auto call_id = cntl->call_id();
     auto * response = new Protos::SendResourcesResp();
-    stub->sendResources(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDoneWithFailedInfo, response, cntl, handler, worker_id));
+    stub->sendResources(
+        cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDoneWithFailedInfo, response, cntl, handler, worker_id));
 
     return call_id;
 }
@@ -417,7 +371,6 @@ void CnchWorkerClient::dropDedupWorker(const StorageID & storage_id)
     stub->dropDedupWorker(&cntl, &request, &response, nullptr);
     assertController(cntl);
     RPCHelpers::checkResponse(response);
-
 }
 
 DedupWorkerStatus CnchWorkerClient::getDedupWorkerStatus(const StorageID & storage_id)

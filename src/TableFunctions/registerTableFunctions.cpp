@@ -62,6 +62,12 @@ void registerTableFunctions()
     registerTableFunctionPostgreSQL(factory);
 #endif
 
+#if USE_HIVE
+    registerTableFunctionCnchHive(factory);
+    // registerTableFunctionCloudHive(factory);
+    registerTableFunctionHiveMetadata(factory);
+#endif
+
     registerTableFunctionDictionary(factory);
     registerTableFunctionCnch(factory);
 }

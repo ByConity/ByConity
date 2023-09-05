@@ -61,13 +61,19 @@ public:
     /// storage then we can only keep the scalar result around while we are working with that source block
     /// You can find more details about this under ExecuteScalarSubqueriesMatcher::visit
     bool usesViewSource() const { return uses_view_source; }
+    void setHasAllUsedStorageIDs(bool);
+    bool hasAllUsedStorageIDs() const;
+
+    std::set<StorageID> getUsedStorageIDs() const;
+    void addUsedStorageIDs(const std::set<StorageID> & storage_ids);
+    void addUsedStorageID(const StorageID & storage_id);
 
 protected:
     ASTPtr query_ptr;
     ContextMutablePtr context;
     Block result_header;
     SelectQueryOptions options;
-    
+
     size_t max_streams = 1;
     bool settings_limit_offset_needed = false;
     bool settings_limit_offset_done = false;
@@ -77,6 +83,8 @@ protected:
     /// Set quotas to query pipeline.
     void setQuota(QueryPipeline & pipeline) const;
 
+    std::set<StorageID> used_storage_ids;
+    bool has_all_used_storage_ids = true;
 };
 }
 

@@ -111,7 +111,8 @@ int main(int argc, char ** argv) {
             return 0;
         }
         std::vector<String> files;
-        hdfs_fs->list(directory, files);
+        std::vector<size_t> file_sizes;
+        hdfs_fs->list(directory, files, file_sizes);
         for (auto & f : files)
         {
             std::cout << directory << "/" << f << std::endl;

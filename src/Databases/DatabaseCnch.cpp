@@ -125,6 +125,11 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
 
     bool attach = query->as<ASTCreateQuery&>().attach;
 
+    /// Cnch table should not throw exceptions during creating StoragePtr. Otherwise, it will cause problems when
+    /// atempting to drop the table later.
+    /// Cnch Hive table catch exception during table creation and throws exception in startup()
+    table->startup();
+
     CreateActionParams params = {table->getStorageID(), getObjectDefinitionFromCreateQueryForCnch(query), attach, table->isDictionary()};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
@@ -284,7 +289,7 @@ DatabaseTablesIteratorPtr DatabaseCnch::getTablesIterator(ContextPtr local_conte
     Tables tables;
     Strings names = local_context->getCnchCatalog()->getTablesInDB(getDatabaseName());
     std::for_each(names.begin(), names.end(), [this, &local_context, &tables](const String & name) {
-        StoragePtr storage = tryGetTableImpl(name, local_context);
+        StoragePtr storage = tryGetTable(name, local_context);
         if (!storage || storage->is_detached || storage->is_dropped)
             return;
         /// debug

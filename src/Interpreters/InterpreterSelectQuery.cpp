@@ -384,6 +384,7 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             table_id = StorageID::createEmpty();
             metadata_snapshot = nullptr;
         }
+        has_join = true;
     }
 
     if (!has_input)
@@ -660,6 +661,18 @@ void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
             query_plan.addStep(std::move(sampling));
         }
     }
+
+    if (!table_id.empty())
+        addUsedStorageID(table_id);
+    if (has_join)
+        setHasAllUsedStorageIDs(false);
+
+    if (interpreter_subquery)
+    {
+        addUsedStorageIDs(interpreter_subquery->getUsedStorageIDs());
+        if (!interpreter_subquery->hasAllUsedStorageIDs())
+            setHasAllUsedStorageIDs(false);
+    }
 }
 
 BlockIO InterpreterSelectQuery::execute()
@@ -671,6 +684,8 @@ BlockIO InterpreterSelectQuery::execute()
 
     res.pipeline = std::move(*query_plan.buildQueryPipeline(
         QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
+
+    res.pipeline.addUsedStorageIDs(getUsedStorageIDs());
     return res;
 }
 
