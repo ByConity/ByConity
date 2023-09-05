@@ -74,9 +74,43 @@ void turnOffOptimizer(ContextMutablePtr context, ASTPtr & node)
     changeDistributedStages(node);
 }
 
-bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & context, bool use_distributed_stages)
+static bool checkDatabaseAndTable(String database_name, String table_name, const ContextMutablePtr & context, const NameSet & with_tables)
 {
-    if (!node || (!context->getSettingsRef().enable_optimizer && !use_distributed_stages))
+    /// not with table
+    if (!(database_name.empty() && with_tables.find(table_name) != with_tables.end()))
+    {
+        /// If the database is not specified - use the current database.
+        auto table_id = context->tryResolveStorageID(StorageID(database_name, table_name));
+        auto storage_table = DatabaseCatalog::instance().tryGetTable(table_id, context);
+        if (database_name.empty() && !storage_table)
+            database_name = context->getCurrentDatabase();
+
+        if (!storage_table)
+            return false;
+
+        if (database_name == "system")
+            return true;
+
+        if (dynamic_cast<const StorageView *>(storage_table.get()))
+        {
+            auto table_metadata_snapshot = storage_table->getInMemoryMetadataPtr();
+            auto subquery = table_metadata_snapshot->getSelectQuery().inner_query->clone();
+            return QueryUseOptimizerChecker::check(subquery, context);
+        }
+
+        if (dynamic_cast<const MergeTreeMetaBase *>(storage_table.get()) || dynamic_cast<const StorageCnchHive *>(storage_table.get())
+            || dynamic_cast<const StorageMaterializedView *>(storage_table.get()))
+            return true;
+        else
+            return false;
+    }
+
+    return true;
+}
+
+bool QueryUseOptimizerChecker::check(ASTPtr node, const ContextMutablePtr & context, bool insert_select_from_table)
+{
+    if (!node || (!context->getSettingsRef().enable_optimizer && !insert_select_from_table))
     {
         turnOffOptimizer(context, node);
         return false;
@@ -93,8 +127,6 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
         return false;
     }
 
-    bool support = false;
-
     if (auto * explain = node->as<ASTExplainQuery>())
     {
         bool explain_plan = explain->getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan
@@ -103,13 +135,17 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
             || explain->getKind() == ASTExplainQuery::DistributedAnalyze || explain->getKind() == ASTExplainQuery::LogicalAnalyze
             || explain->getKind() == ASTExplainQuery::Distributed || explain->getKind() == ASTExplainQuery::TraceOptimizerRule
             || explain->getKind() == ASTExplainQuery::TraceOptimizer;
-        support = explain_plan && check(explain->getExplainedQuery(), context);
+        return explain_plan && check(explain->getExplainedQuery(), context);
     }
-    else if (auto * dump = node->as<ASTDumpInfoQuery>())
+
+    if (auto * dump = node->as<ASTDumpInfoQuery>())
     {
         return check(dump->dump_query, context);
     }
-    else if (node->as<ASTSelectQuery>() || node->as<ASTSelectWithUnionQuery>() || node->as<ASTSelectIntersectExceptQuery>())
+
+    bool support = false;
+
+    if (node->as<ASTSelectQuery>() || node->as<ASTSelectWithUnionQuery>() || node->as<ASTSelectIntersectExceptQuery>())
     {
         // disable system query, array join, table function, no merge tree table
         NameSet with_tables;
@@ -129,7 +165,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
         }
 
 
-        if (support && context->getSettingsRef().enable_optimizer_white_list)
+        if (support && (context->getSettingsRef().enable_optimizer_white_list || insert_select_from_table))
         {
             QuerySupportOptimizerVisitor support_checker;
             try
@@ -145,6 +181,28 @@ bool QueryUseOptimizerChecker::check(ASTPtr & node, const ContextMutablePtr & co
         }
         if (!support)
             LOG_INFO(&Poco::Logger::get("QueryUseOptimizerChecker"), "query is unsupported for optimizer, reason: " + checker.getReason());
+    }
+    else if (node->as<ASTInsertQuery>())
+    {
+        support = true;
+        auto * insert_query = node->as<ASTInsertQuery>();
+        if (insert_query->in_file || insert_query->table_function || !insert_query->select)
+            support = false;
+        else
+        {
+            auto database = insert_query->table_id.database_name;
+            if (database.empty())
+                database = context->getCurrentDatabase();
+
+            if (!checkDatabaseAndTable(database, insert_query->table_id.getTableName(), context, {}))
+                support = false;
+        }
+
+        LOG_DEBUG(
+            &Poco::Logger::get("QueryUseOptimizerChecker"),
+            fmt::format("support: {}, check: {}", support, check(insert_query->select, context)));
+        if (support)
+            support = check(insert_query->select, context, true);
     }
 
     if (!support)
@@ -171,36 +229,7 @@ checkDatabaseAndTable(const ASTTableExpression & table_expression, const Context
     if (table_expression.database_and_table_name)
     {
         auto db_and_table = DatabaseAndTableWithAlias(table_expression.database_and_table_name);
-
-        auto table_name = db_and_table.table;
-        auto database_name = db_and_table.database;
-
-        /// not with table
-        if (!(database_name.empty() && with_tables.find(table_name) != with_tables.end()))
-        {
-            /// If the database is not specified - use the current database.
-            auto table_id = context->tryResolveStorageID(table_expression.database_and_table_name);
-            auto storage_table = DatabaseCatalog::instance().tryGetTable(table_id, context);
-            if (database_name.empty() && !storage_table)
-                database_name = context->getCurrentDatabase();
-
-            if (!storage_table)
-                return false;
-
-            if (database_name == "system")
-                return true;
-
-            if (dynamic_cast<const StorageView *>(storage_table.get()))
-            {
-                auto table_metadata_snapshot = storage_table->getInMemoryMetadataPtr();
-                auto subquery = table_metadata_snapshot->getSelectQuery().inner_query->clone();
-                return QueryUseOptimizerChecker::check(subquery, context);
-            }
-
-            if (!dynamic_cast<const MergeTreeMetaBase *>(storage_table.get())
-                && !dynamic_cast<const StorageCnchHive *>(storage_table.get()))
-                return false;
-        }
+        return checkDatabaseAndTable(db_and_table.database, db_and_table.table, context, with_tables);
     }
     return true;
 }

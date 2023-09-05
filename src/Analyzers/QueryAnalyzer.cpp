@@ -51,6 +51,7 @@
 #include <DataTypes/DataTypeArray.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <unordered_map>
 #include <sstream>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
@@ -82,6 +83,7 @@ class QueryAnalyzerVisitor : public ASTVisitor<Void, const Void>
 public:
     Void process(ASTPtr & node) { return ASTVisitorUtil::accept(node, *this, {}); }
 
+    Void visitASTInsertQuery(ASTPtr & node, const Void &) override;
     Void visitASTSelectIntersectExceptQuery(ASTPtr & node, const Void &) override;
     Void visitASTSelectWithUnionQuery(ASTPtr & node, const Void &) override;
     Void visitASTSelectQuery(ASTPtr & node, const Void &) override;
@@ -168,6 +170,79 @@ void QueryAnalyzer::analyze(ASTPtr & query, ScopePtr outer_query_scope, ContextM
 {
     QueryAnalyzerVisitor analyzer_visitor {std::move(context), analysis, outer_query_scope};
     analyzer_visitor.process(query);
+}
+
+Void QueryAnalyzerVisitor::visitASTInsertQuery(ASTPtr & node, const Void &)
+{
+    auto & insert_query = node->as<ASTInsertQuery &>();
+    if (insert_query.table_function || insert_query.in_file || !insert_query.select)
+        throw Exception("Insert query only support Insert ... Select .. ", ErrorCodes::NOT_IMPLEMENTED);
+    if (insert_query.table_id.database_name.empty())
+        insert_query.table_id.database_name = context->getCurrentDatabase();
+    StoragePtr storage = DatabaseCatalog::instance().getTable(insert_query.table_id, context);
+    if (auto * dist_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()); !dist_table)
+        throw Exception(
+            "Optimizer don't support insert for Engine " + storage->getName() + ", only support MergeTree* Storage.",
+            ErrorCodes::NOT_IMPLEMENTED);
+    // if (auto * materialized_view = dynamic_cast<const StorageMaterializedView *>(table.get()))
+    //     throw Exception("Inserting into materialized views is not supported", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+    // if (auto * view = dynamic_cast<const StorageView *>(table.get()))
+    //     throw Exception("Inserting into views is not supported", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+    StorageMetadataPtr storage_metadata = storage->getInMemoryMetadataPtr();
+
+    // For StorageCnchMergeTree, the metadata of distributed table may diff with the metadata of local table.
+    // In this case, we use the one of local table.
+    // if (const auto * storage_distributed = dynamic_cast<const StorageCnchMergeTree *>(storage.get()))
+    // {
+    //     // when diff server diff remote database name, the database name is empty.
+    //     if (!storage_distributed->getRemoteDatabaseName().empty())
+    //     {
+    //         StorageID local_id {storage_distributed->getRemoteDatabaseName(), storage_distributed->getRemoteTableName()};
+    //         auto storage_local = DatabaseCatalog::instance().getTable(local_id, context);
+    //         storage_metadata = storage_local->getInMemoryMetadataPtr();
+    //     }
+    // }
+
+    auto table_columns = storage_metadata->getColumns();
+    NamesAndTypes insert_columns;
+    std::unordered_set<String> insert_columns_set;
+    if (insert_query.columns)
+    {
+        for (auto & column_ast : insert_query.columns->children)
+        {
+            const auto & column_name = column_ast->as<ASTIdentifier &>().name();
+            if (!insert_columns_set.emplace(column_name).second)
+                throw Exception("Duplicate column " + column_name + " in INSERT query", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+            auto column = table_columns.getPhysical(column_name);
+            insert_columns.emplace_back(NameAndTypePair{column.name, column.type});
+        }
+    }
+    else
+    {
+        for (auto & column : table_columns.getAllPhysical())
+            insert_columns.emplace_back(NameAndTypePair{column.name, column.type});
+    }
+
+    // check column mask & row filter?
+
+    process(insert_query.select);
+    auto query_columns = analysis.getOutputDescription(*insert_query.select);
+    if (query_columns.size() != insert_columns.size())
+        throw Exception(
+            "Insert query has mismatched column size, Table: " + std::to_string(insert_columns.size())
+                + ", Query: " + std::to_string(query_columns.size()),
+            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+    NamesAndTypes inserted_query_columns;
+    for (const auto & item : query_columns)
+    {
+        inserted_query_columns.emplace_back(NameAndTypePair{item.name, item.type});
+    }
+
+    analysis.insert_analysis = InsertAnalysis{storage, insert_query.table_id, insert_columns};
+    analysis.output_descriptions[node.get()] = {};
+    return {};
 }
 
 Void QueryAnalyzerVisitor::visitASTSelectIntersectExceptQuery(ASTPtr & node, const Void &)

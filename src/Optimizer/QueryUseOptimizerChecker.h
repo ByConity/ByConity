@@ -29,7 +29,7 @@ void turnOffOptimizer(ContextMutablePtr context, ASTPtr & node);
 class QueryUseOptimizerChecker
 {
 public:
-    static bool check(ASTPtr & node, const ContextMutablePtr & context, bool use_distributed_stages = false);
+    static bool check(ASTPtr node, const ContextMutablePtr & context, bool insert_select_from_table = false);
 };
 
 struct QueryUseOptimizerContext

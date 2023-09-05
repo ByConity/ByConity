@@ -81,6 +81,8 @@ public:
     Property visitExplainAnalyzeStep(const ExplainAnalyzeStep &, DeriverContext & context) override;
     Property visitTopNFilteringStep(const TopNFilteringStep &, DeriverContext & context) override;
     Property visitFillingStep(const FillingStep &, DeriverContext & context) override;
+    Property visitTableWriteStep(const TableWriteStep &, DeriverContext & context) override;
+    Property visitTableFinishStep(const TableFinishStep &, DeriverContext & context) override;
 };
 
 }
