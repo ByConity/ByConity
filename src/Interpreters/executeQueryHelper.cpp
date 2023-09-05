@@ -73,9 +73,9 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
         UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), context->getTimestamp(), true);
 }
 
-void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res)
+void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res, bool in_interactive_txn)
 {
-    auto session_txn = context->getSessionContext()->getCurrentTransaction();
+    auto session_txn = in_interactive_txn ? context->getSessionContext()->getCurrentTransaction() : nullptr;
     ProxyTransactionPtr proxy_txn;
     if (session_txn && session_txn->isPrimary())
     {
