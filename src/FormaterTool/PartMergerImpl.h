@@ -87,8 +87,9 @@ private:
     /**
      * Copies part data from a disk to another.
      */
-    static void copyPartData(const DiskPtr & from_disk, const DiskPtr & to_disk, const String & relative_path);
+    static void copyPartData(const DiskPtr & from_disk, const String & from_path, const DiskPtr & to_disk, const String & to_path);
 
+    std::shared_ptr<StorageCloudMergeTree> createStorage(const String & path, const String & create_table_query);
     std::vector<std::shared_ptr<StorageCloudMergeTree>>
     createStorages(const std::vector<String> & uuids, const String & create_table_query);
 

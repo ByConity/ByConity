@@ -212,6 +212,7 @@ struct Settings;
     M(UInt64, cnch_merge_parts_cache_min_count, 1000, "", 0)                                                  \
     M(UInt64, cnch_merge_max_total_rows_to_merge, 50000000, "", 0) \
     M(UInt64, cnch_merge_max_total_bytes_to_merge, 150ULL * 1024 * 1024 * 1024, "", 0) \
+    M(UInt64, cnch_merge_max_parts_to_merge, 100, "", 0) \
     \
     /* Unique table related settings */\
     M(Bool, cloud_enable_staging_area, false, "", 0) \

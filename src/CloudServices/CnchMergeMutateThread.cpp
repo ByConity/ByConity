@@ -574,7 +574,9 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     bool only_realtime_partition = storage_settings->cnch_merge_only_realtime_partition;
 
     auto partitions = partition_selector->selectForMerge(istorage, num_partitions, only_realtime_partition);
+    metrics.num_partitions = partitions.size();
     partitions = removeLockedPartition(partitions);
+    metrics.num_unlock_partitions = partitions.size();
 
     if (partitions.empty())
     {
@@ -585,6 +587,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     {
         data_parts = catalog->getServerDataPartsInPartitions(istorage, partitions, getContext()->getTimestamp(), nullptr);
     }
+    metrics.num_source_parts = data_parts.size();
 
     if (data_parts.empty())
     {
@@ -598,6 +601,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     watch.restart();
 
     auto visible_parts = CnchPartsHelper::calcVisibleParts(data_parts, false);
+    metrics.num_visible_parts = visible_parts.size();
     metrics.elapsed_calc_visible_parts = watch.elapsedMicroseconds();
     watch.restart();
 
@@ -647,6 +651,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
         }
 
     }
+    metrics.num_legal_visible_parts = visible_parts.size();
 
     /// Step 3: selection
     std::vector<ServerDataPartsVector> res;
@@ -877,8 +882,10 @@ String CnchMergeMutateThread::triggerPartMerge(
     std::lock_guard lock(try_merge_parts_mutex);
 
     NameSet merging_mutating_parts_snapshot;
-    if (!try_execute)
-        merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
+    merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
+
+    if (try_execute)
+        LOG_TRACE(log, fmt::format("merging_mutating_parts:\n{}", fmt::join(merging_mutating_parts_snapshot, "\n")));
 
     ServerDataPartsVector data_parts;
     if (partition_id.empty() || partition_id == "all")

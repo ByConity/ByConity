@@ -565,7 +565,7 @@ bool StorageMaterializedView::isRefreshable(bool cascading) const
 
 /// TODO: Async mode is useless when atomic parameter refreshing ensure only one refresh task to execute.
 ///       Temporarily only support sync refresh mode later provide parallel solution.
-void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr local_context, bool /*async*/)
+void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextMutablePtr local_context, bool /*async*/)
 {
     if (local_context->getServerType() == ServerType::cnch_server)
     {
@@ -652,7 +652,7 @@ void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextPtr loca
         refreshImpl(partition, local_context);
 }
 
-void StorageMaterializedView::refreshCnchImpl(const ASTPtr & partition, ContextPtr local_context)
+void StorageMaterializedView::refreshCnchImpl(const ASTPtr & partition, ContextMutablePtr local_context)
 {
     /** Compose the operation into a sequence of command within an interactive transaction session
         - BEGIN
@@ -672,7 +672,7 @@ void StorageMaterializedView::refreshCnchImpl(const ASTPtr & partition, ContextP
         command_context->setCurrentTransaction(nullptr, false);
         command_context->setCurrentVW(nullptr);
         command_context->setCurrentWorkerGroup(nullptr);
-        command_context->makeSessionContext();
+        command_context->setSessionContext(local_context);
         command_context->setQueryContext(command_context);
         return command_context;
     };

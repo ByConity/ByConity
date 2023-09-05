@@ -28,40 +28,45 @@ String getNextPartName(
     }
 }
 
-void PartMergerImpl::copyPartData(const DiskPtr & from_disk, const DiskPtr & to_disk, const String & relative_path)
+void PartMergerImpl::copyPartData(const DiskPtr & from_disk, const String & from_path, const DiskPtr & to_disk, const String & to_path)
 {
-    if (!from_disk->isDirectory(relative_path))
-        throw Exception("Source path " + from_disk->getPath() + relative_path + " is not directory", ErrorCodes::LOGICAL_ERROR);
+    if (!from_disk->isDirectory(from_path))
+        throw Exception("Source path " + from_disk->getPath() + from_path + " is not directory", ErrorCodes::LOGICAL_ERROR);
 
-    if (to_disk->exists(relative_path))
-        throw Exception("Target path " + to_disk->getPath() + relative_path + " already exists", ErrorCodes::LOGICAL_ERROR);
+    if (to_disk->exists(to_path))
+        throw Exception("Target path " + to_disk->getPath() + to_path + " already exists", ErrorCodes::LOGICAL_ERROR);
 
-    to_disk->createDirectory(relative_path);
-    for (auto it = from_disk->iterateDirectory(relative_path); it->isValid(); it->next())
+    to_disk->createDirectory(to_path);
+    for (auto it = from_disk->iterateDirectory(from_path); it->isValid(); it->next())
     {
         /// Copy data from the source file to the target directory.
-        from_disk->copy(relative_path + it->name(), to_disk, relative_path + '/');
+        from_disk->copy(from_path + it->name(), to_disk, to_path);
     }
+}
+
+std::shared_ptr<StorageCloudMergeTree> PartMergerImpl::createStorage(const String & path, const String & create_table_query)
+{
+    auto context = getContext();
+    auto storage = createStorageFromQuery(create_table_query, context);
+    auto merge_tree = std::dynamic_pointer_cast<StorageCloudMergeTree>(storage);
+    merge_tree->setRelativeDataPath(IStorage::StorageLocation::MAIN, path);
+    if (!merge_tree)
+    {
+        /// Must use part-merger with `ENGINE = CloudMergeTree`.
+        throw Exception("Please choose `CloudMergeTree` as the engine.", ErrorCodes::INVALID_CONFIG_PARAMETER);
+    }
+
+    return merge_tree;
 }
 
 auto PartMergerImpl::createStorages(const std::vector<String> & uuids, const String & create_table_query)
     -> std::vector<StorageCloudMergeTreePtr>
 {
-    auto context = getContext();
     std::vector<StorageCloudMergeTreePtr> res;
     res.reserve(uuids.size());
     for (const auto & uuid : uuids)
     {
-        auto storage = createStorageFromQuery(create_table_query, context);
-        auto merge_tree = std::dynamic_pointer_cast<StorageCloudMergeTree>(storage);
-        merge_tree->setRelativeDataPath(IStorage::StorageLocation::MAIN, uuid);
-        if (!merge_tree)
-        {
-            /// Must use part-merger with `ENGINE = CloudMergeTree`.
-            throw Exception("Please choose `CloudMergeTree` as the engine.", ErrorCodes::INVALID_CONFIG_PARAMETER);
-        }
-
-        res.push_back(merge_tree);
+        res.push_back(createStorage(uuid, create_table_query));
     }
 
     return res;
@@ -183,8 +188,8 @@ void PartMergerImpl::execute()
     boost::split(uuids, params.uuids_str, boost::is_any_of(","));
 
     /// Generate a vector of IStorage per UUID.
-
     std::vector<StorageCloudMergeTreePtr> cloud_trees = createStorages(uuids, params.create_table_query);
+    StorageCloudMergeTreePtr output_cloud_tree = createStorage("", params.create_table_query);
 
     if (cloud_trees.empty())
     {
@@ -250,7 +255,7 @@ void PartMergerImpl::execute()
             LOG_DEBUG(log, "No merge task selected. Directly copy all parts to target directory. Disable reason: {}", disable_reason);
             for (const auto & part : parts)
             {
-                copyPartData(remote_disk, target_disk, part->getFullRelativePath());
+                copyPartData(remote_disk, part->getFullRelativePath(), target_disk, part->name);
             }
             return;
     }
@@ -286,7 +291,7 @@ void PartMergerImpl::execute()
             {
                 MergeTask task = std::make_unique<CloudMergeTreeMergeTask>(*cloud_trees[0], merge_task_params, getContext());
                 task->setManipulationEntry();
-                executeMergeTask(*cloud_trees[0], target_disk, task);
+                executeMergeTask(*output_cloud_tree, target_disk, task);
                 succeed_tasks++;
             }
             catch (...)
@@ -312,7 +317,7 @@ void PartMergerImpl::execute()
         if (!parts_executing_merge.count(it.first))
         {
             counter++;
-            copyPartData(remote_disk, target_disk, it.second->getFullRelativePath());
+            copyPartData(remote_disk, it.second->getFullRelativePath(), target_disk, it.first);
         }
     }
 

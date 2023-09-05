@@ -24,7 +24,6 @@
 #include <DataStreams/ConvertingBlockInputStream.h>
 #include <Interpreters/addMissingDefaults.h>
 #include <Interpreters/CnchSystemLog.h>
-#include <Storages/Kafka/KafkaConsumeInfo.h>
 #include <DataTypes/DataTypeString.h>
 #include <Processors/Formats/IRowInputFormat.h>
 #include <Processors/Formats/InputStreamFromInputFormat.h>
