@@ -52,7 +52,7 @@ namespace DB::RPCHelpers
     }
 
     inline StorageID createStorageID(const Protos::StorageID & id)
-    { 
+    {
         auto storage_id = StorageID(id.database(), id.table(), createUUID(id.uuid()));
         if (id.has_server_vw_name())
             storage_id.server_vw_name = id.server_vw_name();
@@ -86,6 +86,7 @@ namespace DB::RPCHelpers
             hp.hostname(),
         };
     }
+
 
     // inline BpQueryKeyPtr createBpQueryKey(const Protos::BpQueryKey & bqk)
     // {

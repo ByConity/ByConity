@@ -470,7 +470,7 @@ namespace Catalog
         return parseQuery(parser, begin, end, "", 0, 0);
     }
 
-    Catalog::Catalog(Context & _context, MetastoreConfig & config, String _name_space) : context(_context), name_space(_name_space)
+    Catalog::Catalog(Context & _context, const MetastoreConfig & config, String _name_space) : context(_context), name_space(_name_space)
     {
         runWithMetricSupport(
             [&] {
@@ -497,6 +497,11 @@ namespace Catalog
             },
             ProfileEvents::CatalogConstructorSuccess,
             ProfileEvents::CatalogConstructorFailed);
+    }
+
+    MetastoreProxy::MetastorePtr Catalog::getMetastore()
+    {
+        return meta_proxy->getMetastore();
     }
 
     void Catalog::createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts)
@@ -1567,7 +1572,7 @@ namespace Catalog
                 // ensure that the table_definition_hash is the same before committing
                 // If allow_attach_parts_with_different_table_definition_hash is set to true AND the table is NOT clustered by user defined expression, skip this check
                 // TODO: Implement rollback for this to work properly
-                bool skip_table_definition_hash_check = context.getSettings().allow_attach_parts_with_different_table_definition_hash 
+                bool skip_table_definition_hash_check = context.getSettings().allow_attach_parts_with_different_table_definition_hash
                                                         && !storage->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
                 if (storage->isBucketTable() && !skip_table_definition_hash_check)
                 {
@@ -2517,7 +2522,7 @@ namespace Catalog
                 // ensure that the table_definition_hash is the same before committing
                 // If allow_attach_parts_with_different_table_definition_hash is set to true AND the table is NOT clustered by user defined expression, skip this check
                 // TODO: Implement rollback for this to work properly
-                bool skip_table_definition_hash_check = context.getSettings().allow_attach_parts_with_different_table_definition_hash 
+                bool skip_table_definition_hash_check = context.getSettings().allow_attach_parts_with_different_table_definition_hash
                                                         && !table->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
                 if (table->isBucketTable() && !skip_table_definition_hash_check)
                 {

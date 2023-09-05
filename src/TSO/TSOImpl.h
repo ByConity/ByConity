@@ -72,7 +72,10 @@ public:
         ::DB::TSO::GetTimestampsResp* response,
         ::google::protobuf::Closure* done) override;
 
-    void setExitLeaderElectionFunction(std::function<void()> exitLeaderElection_) { exitLeaderElection = exitLeaderElection_; }
+    void setExitLeaderElectionFunction(std::function<void()> exit_leader_election_)
+    {
+        exit_leader_election = std::move(exit_leader_election_);
+    }
 
 private:
     std::atomic<UInt64> ts = 0;
@@ -80,7 +83,7 @@ private:
     std::atomic_bool is_kv_down{false};
     Poco::Logger * log = &Poco::Logger::get("TSOImpl");
     std::atomic<bool> logical_clock_checking {false};
-    std::function<void()> exitLeaderElection;
+    std::function<void()> exit_leader_election;
 
     UInt64 fetchAddLogical(UInt32 to_add);
     void checkLogicalClock(UInt32 logical_value);

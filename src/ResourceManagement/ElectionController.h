@@ -15,18 +15,13 @@
 
 #pragma once
 
+#include <Common/StorageElection/StorageElector.h>
+#include <Catalog/IMetastore.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
 #include <ResourceManagement/ResourceManagerController.h>
-#include <Coordination/LeaderElectionBase.h>
 
-namespace zkutil
-{
-    class LeaderElection;
-    class ZooKeeper;
-    using ZooKeeperPtr = std::shared_ptr<ZooKeeper>;
-}
 
 namespace DB::ResourceManagement
 {
@@ -35,30 +30,27 @@ namespace DB::ResourceManagement
   * It contains a background thread to check for leader information, and ensures that a newly elected
   * leader retrieves its state from KV store.
   */
-class ElectionController : public WithContext, public LeaderElectionBase
+class ElectionController : public WithContext
 {
 
 public:
-    ElectionController(ResourceManagerController & rm_controller_);
-    ~ElectionController() override;
+    explicit ElectionController(ResourceManagerController & rm_controller_);
+    ~ElectionController();
 
-    bool isLeader() const { return is_leader; }
+    bool isLeader() const;
 
 private:
+    bool onLeader();
+    bool onFollower();
     void shutDown();
-
-    void enterLeaderElection() override;
-    void onLeader() override;
-    void exitLeaderElection() override;
 
     // Pulls logical VW and worker group info from KV store.
     bool pullState();
 
     Poco::Logger * log = &Poco::Logger::get("ElectionController");
     ResourceManagerController & rm_controller;
-    bool enable_leader_election{false};
-    std::atomic_bool is_leader{false};
 
+    std::shared_ptr<StorageElector> elector;
 };
 
 using ElectionControllerPtr = std::shared_ptr<ElectionController>;

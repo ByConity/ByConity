@@ -131,25 +131,43 @@ static EntityMetastorePrefix getEntityMetastorePrefix(EntityType type)
 }
 
 
+static std::shared_ptr<MetastoreFDBImpl> getFDBInstance(const String & cluster_config_path)
+{
+    /// Notice: A single process can only have fdb instance
+    static std::shared_ptr<MetastoreFDBImpl> metastore_fdb(new MetastoreFDBImpl(cluster_config_path));
+    return metastore_fdb;
+}
+
+inline std::shared_ptr<IMetaStore> getMetastorePtr(const MetastoreConfig & config)
+{
+    if (config.type == MetaStoreType::FDB)
+        return getFDBInstance(config.fdb_conf.cluster_conf_path);
+
+    throw Exception("Catalog must be correctly configured. Only support foundationdb and bytekv now.", ErrorCodes::METASTORE_EXCEPTION);
+}
+
 class MetastoreProxy
 {
 public:
     using MetastorePtr = std::shared_ptr<IMetaStore>;
     using RepeatedFields = google::protobuf::RepeatedPtrField<std::string>;
 
-    MetastoreProxy(MetastoreConfig & config)
+    explicit MetastoreProxy(const MetastoreConfig & config)
+        : metastore_ptr(getMetastorePtr(config))
     {
-        if (config.type == MetaStoreType::FDB)
-        {
-            metastore_ptr = std::make_shared<MetastoreFDBImpl>(config.fdb_conf.cluster_conf_path);
-        }
-        else
-        {
-            throw Exception("Catalog must be correctly configured. Only support foundationdb and bytekv now.", ErrorCodes::METASTORE_EXCEPTION);
-        }
     }
 
-    ~MetastoreProxy() {}
+    explicit MetastoreProxy(MetastorePtr metastore_ptr_)
+        : metastore_ptr(std::move(metastore_ptr_))
+    {
+    }
+
+    ~MetastoreProxy() = default;
+
+    MetastorePtr getMetastore()
+    {
+        return metastore_ptr;
+    }
 
     /**
      * Metastore Proxy keying schema

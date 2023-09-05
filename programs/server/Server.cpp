@@ -635,6 +635,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // global_context->initTestLog();
     }
 
+    global_context->initTSOElectionReader();
+
     bool has_zookeeper = config().has("zookeeper");
 
     zkutil::ZooKeeperNodeCache main_config_zk_node_cache([&] { return global_context->getZooKeeper(); });

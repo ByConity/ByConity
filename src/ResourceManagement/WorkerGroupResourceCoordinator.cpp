@@ -83,7 +83,7 @@ void WorkerGroupResourceCoordinator::start()
 
 void WorkerGroupResourceCoordinator::stop()
 {
-    LOG_DEBUG(log, "Dectivating resource coordinator background task");
+    LOG_DEBUG(log, "Deactivating resource coordinator background task");
     background_task->deactivate();
 }
 
@@ -189,8 +189,8 @@ void WorkerGroupResourceCoordinator::unlinkOverborrowedGroups(
 }
 
 void WorkerGroupResourceCoordinator::unlinkIneligibleGroups(
-    const std::unordered_map<String, VirtualWarehousePtr> & vws, 
-    std::lock_guard<bthread::Mutex> * vw_lock, 
+    const std::unordered_map<String, VirtualWarehousePtr> & vws,
+    std::lock_guard<bthread::Mutex> * vw_lock,
     std::lock_guard<bthread::Mutex> * wg_lock)
 {
     for (const auto & [name, vw] : vws)
@@ -398,7 +398,7 @@ void WorkerGroupResourceCoordinator::runAutoSharing()
 void WorkerGroupResourceCoordinator::runAutoScaling()
 {
     auto vw_lock = rm_controller.getVirtualWarehouseManager().getLock();
-    auto vws = rm_controller.getVirtualWarehouseManager().getAllVirtualWarehousesImpl(&vw_lock); 
+    auto vws = rm_controller.getVirtualWarehouseManager().getAllVirtualWarehousesImpl(&vw_lock);
 
     for (const auto & [vw_name, vw] : vws)
     {
@@ -461,7 +461,7 @@ void WorkerGroupResourceCoordinator::runAutoScaling()
 
         if (decide_scaleup && decide_scaledown)
             throw Exception("Conflicting decision: scaleup and scaledown are both decided.", ErrorCodes::LOGICAL_ERROR);
-        
+
         /// Store decisions (will be pulled by metrics writer)
         if (decide_scaleup)
         {
