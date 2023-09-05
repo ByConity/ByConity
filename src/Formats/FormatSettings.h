@@ -165,6 +165,18 @@ struct FormatSettings
          * because Protobuf without delimiters is not generally useful.
          */
         bool allow_multiple_rows_without_delimiter = false;
+        /**
+         * Some buffers like kafka only has one row each message without length
+         *  delimiter. To be compatible with previous version, add this setting
+         * to force ProtobufReader only consume one row in each buffer.
+         */
+        bool enable_multiple_message = false;
+        /**
+         * Only has meaning when enable_multiple_message is set to true.
+         * When set to true, parse a varint header as message length. Otherwise, a 8 bytes fixed length header
+         * will be read before each message.
+         */
+        bool default_length_parser = false;
     } protobuf;
 
     struct

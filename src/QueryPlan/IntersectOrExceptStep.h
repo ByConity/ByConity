@@ -24,7 +24,12 @@ public:
 
     QueryPipelinePtr updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & settings) override;
 
+    void serialize(WriteBuffer & buf) const override;
+    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr context);
+    
     void describePipeline(FormatSettings & settings) const override;
+    
+    String getOperator() const;
 
 private:
     Block header;

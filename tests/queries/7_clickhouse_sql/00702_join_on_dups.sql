@@ -1,3 +1,5 @@
+SET enable_optimizer = 1;
+
 USE test;
 drop table if exists X;
 drop table if exists Y;
