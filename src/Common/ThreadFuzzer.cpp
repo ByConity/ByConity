@@ -1,3 +1,24 @@
+/*
+ * Copyright 2016-2023 ClickHouse, Inc.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+
+/*
+ * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
+ * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
+ */
+ 
 #include <signal.h>
 #include <sys/time.h>
 #if defined(OS_LINUX)
@@ -23,6 +44,28 @@
     #define THREAD_FUZZER_WRAP_PTHREAD 1
 #else
     #define THREAD_FUZZER_WRAP_PTHREAD 0
+#endif
+
+/// Starting from glibc 2.34 there are no internal symbols without version,
+/// so not __pthread_mutex_lock but __pthread_mutex_lock@2.2.5
+#if defined(OS_LINUX)
+    /// You can get version from glibc/sysdeps/unix/sysv/linux/$ARCH/$BITS_OR_BYTE_ORDER/libc.abilist
+    #if defined(__amd64__)
+    #    define GLIBC_SYMVER "GLIBC_2.2.5"
+    #elif defined(__aarch64__)
+    #    define GLIBC_SYMVER "GLIBC_2.17"
+    #elif defined(__riscv) && (__riscv_xlen == 64)
+    #    define GLIBC_SYMVER "GLIBC_2.27"
+    #elif (defined(__PPC64__) || defined(__powerpc64__)) && __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    #    define GLIBC_SYMVER "GLIBC_2.17"
+    #else
+    #    error Your platform is not supported.
+    #endif
+
+    #define GLIBC_COMPAT_SYMBOL(func) __asm__(".symver " #func "," #func "@" GLIBC_SYMVER);
+
+    GLIBC_COMPAT_SYMBOL(__pthread_mutex_unlock)
+    GLIBC_COMPAT_SYMBOL(__pthread_mutex_lock)
 #endif
 
 #if THREAD_FUZZER_WRAP_PTHREAD

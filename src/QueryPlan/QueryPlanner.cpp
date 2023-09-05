@@ -96,6 +96,7 @@ public:
     {
     }
 
+    RelationPlan visitASTInsertQuery(ASTPtr & node, const Void &) override;
     RelationPlan visitASTSelectIntersectExceptQuery(ASTPtr & node, const Void &) override;
     RelationPlan visitASTSelectWithUnionQuery(ASTPtr & node, const Void &) override;
     RelationPlan visitASTSelectQuery(ASTPtr & node, const Void &) override;
@@ -281,6 +282,37 @@ RelationPlan QueryPlanner::planQuery(
     QueryPlannerVisitor visitor{context, cte_plans, analysis, outer_query_context};
     return visitor.process(query);
 }
+
+RelationPlan QueryPlannerVisitor::visitASTInsertQuery(ASTPtr & node, const Void &)
+{
+    auto & insert_query = node->as<ASTInsertQuery &>();
+
+    auto & insert = *analysis.getInsert();
+    auto select_plan = process(insert_query.select);
+    select_plan.withNewRoot(planOutput(select_plan, insert_query.select, analysis, context));
+
+    auto target = std::make_shared<TableWriteStep::InsertTarget>(insert.storage, insert.storage_id, insert.columns);
+
+    auto insert_node = select_plan.getRoot()->addStep(
+        context->nextNodeId(),
+        std::make_shared<TableWriteStep>(select_plan.getRoot()->getCurrentDataStream(), target),
+        {select_plan.getRoot()});
+
+    auto total_affected_row_count_symbol = context->getSymbolAllocator()->newSymbol("rows");
+    // plan = PlanNodeBase::createPlanNode(
+    //     context.nextNodeId(),
+    //     std::make_shared<TableFinishStep>(plan->getCurrentDataStream(), target, total_affected_row_count_symbol),
+    //     {plan});
+
+    auto return_node = PlanNodeBase::createPlanNode(
+        context->nextNodeId(),
+        std::make_shared<TableFinishStep>(insert_node->getCurrentDataStream(), target, total_affected_row_count_symbol),
+        {insert_node});
+
+    PRINT_PLAN(return_node, plan_insert);
+    return {return_node, {}};
+}
+
 
 RelationPlan QueryPlannerVisitor::visitASTSelectIntersectExceptQuery(ASTPtr & node, const Void &)
 {

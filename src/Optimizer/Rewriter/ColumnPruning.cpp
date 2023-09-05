@@ -728,4 +728,16 @@ PlanNodePtr ColumnPruningVisitor::visitFillingNode(FillingNode & node, NameSet &
     return FillingNode::createPlanNode(context->nextNodeId(), std::move(fill_step), PlanNodes{child}, node.getStatistics());
 }
 
+
+PlanNodePtr ColumnPruningVisitor::visitTableWriteNode(TableWriteNode & node, NameSet &)
+{
+    auto table_write = dynamic_cast<const TableWriteStep *>(node.getStep().get());
+    NameSet require;
+    for (const auto & item : table_write->getInputStreams()[0].header)
+        require.insert(item.name);
+    PlanNodePtr child = node.getChildren()[0];
+    PlanNodePtr new_child = VisitorUtil::accept(*child, *this, require);
+    node.replaceChildren({new_child});
+    return node.shared_from_this();
+}
 }

@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <memory>
 #include <Interpreters/trySetVirtualWarehouse.h>
 
 #include <Interpreters/DatabaseAndTableWithAlias.h>
@@ -34,6 +35,7 @@
 #include "Interpreters/StorageID.h"
 #include "Storages/StorageCnchMergeTree.h"
 #include <Storages/RemoteFile/IStorageCnchFile.h>
+#include <Optimizer/QueryUseOptimizerChecker.h>
 
 
 namespace DB
@@ -126,6 +128,9 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
             auto table_id = insert->table_id;
             if (table_id.database_name.empty())
                 table_id.database_name = context->getCurrentDatabase();
+            if (QueryUseOptimizerChecker::check(ast, context)
+                && trySetVirtualWarehouseFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Read))
+                return true;
             if (trySetVirtualWarehouseFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Write))
                 return true;
         }
@@ -245,6 +250,9 @@ static String tryGetVirtualWarehouseNameFromAST(const ASTPtr & ast, ContextMutab
             auto table_id = insert->table_id;
             if (table_id.database_name.empty())
                 table_id.database_name = context->getCurrentDatabase();
+            if (QueryUseOptimizerChecker::check(ast, context))
+                return tryGetVirtualWarehouseNameFromTable(
+                    table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Read);
             return tryGetVirtualWarehouseNameFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Write);
         }
         else if (auto * table_expr = ast->as<ASTTableExpression>())

@@ -800,6 +800,11 @@ std::set<StorageID> QueryPlan::allocateLocalTable(ContextPtr context)
             res.insert(table_scan->getStorageID());
             table_scan->allocate(context);
         }
+        else if (node.step->getType() == IQueryPlanStep::Type::TableWrite)
+        {
+            auto write_step = dynamic_cast<TableWriteStep *>(node.step.get());
+            write_step->allocate(context);
+        }
     }
     return res;
 }

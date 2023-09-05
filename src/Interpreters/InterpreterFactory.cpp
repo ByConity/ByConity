@@ -209,6 +209,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
         QueryUseOptimizerChecker::check(query, context);
 
         ProfileEvents::increment(ProfileEvents::InsertQuery);
+        if (QueryUseOptimizerChecker::check(query, context))
+        {
+            return std::make_unique<InterpreterSelectQueryUseOptimizer>(query, context, options);
+        }
         bool allow_materialized = static_cast<bool>(context->getSettingsRef().insert_allow_materialized_columns);
         return std::make_unique<InterpreterInsertQuery>(query, context, allow_materialized);
     }
