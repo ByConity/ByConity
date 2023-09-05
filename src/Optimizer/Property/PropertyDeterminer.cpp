@@ -28,19 +28,15 @@ PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step
 {
     DeterminerContext context{property};
     static DeterminerVisitor visitor{};
-    return VisitorUtil::accept(step, visitor, context);
-}
-
-PropertySets PropertyDeterminer::determineRequiredProperty(
-    QueryPlanStepPtr step, const Property & property, const std::vector<std::unordered_set<CTEId>> & child_with_clause)
-{
-    auto input_properties = determineRequiredProperty(step, property);
-    for (auto & property_set : input_properties)
+    PropertySets input_properties = VisitorUtil::accept(step, visitor, context);
+    if (!property.getCTEDescriptions().empty())
     {
-        for (size_t i = 0; i < property_set.size(); ++i)
+        for (auto & property_set : input_properties)
         {
-            auto cte_descriptions = property.getCTEDescriptions().filter(child_with_clause[i]);
-            property_set[i].setCTEDescriptions(std::move(cte_descriptions));
+            for (auto & prop : property_set)
+            {
+                prop.setCTEDescriptions(property.getCTEDescriptions());
+            }
         }
     }
     return input_properties;
