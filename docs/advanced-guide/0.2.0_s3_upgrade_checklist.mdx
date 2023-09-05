@@ -1,0 +1,44 @@
+---
+title: Byconity 0.2.0 s3 storage upgrade checklist
+tags:
+  - Docs
+---
+
+# Background
+
+There are some s3 object key and s3 metadata changes after s3's preview version(from pre 0.2.0 version to 0.2.0 version). And we provide some tools to migrate from old version. Only use this if you are using old version of byconity and store data in s3.
+
+# Usage
+
+1. Stop bycontiy cluster
+2. Migrate s3 data with provided tool
+  ```text
+# If you know where the clickhouse binary is(If you are running bycontiy with docker you can find it by login into server/worker pod and using ps command to find the clickhouse binary path)
+./clickhouse s3-rename --s3_ak_id ${S3_AK_ID} --s3_ak_secret ${S3_AK_SECRET} --from_bucket ${BYCONITY_S3_BUCKET} --s3_endpoint ${S3_ENDPOINT} --s3_region ${S3_REGION} --root_prefix ${BYCONTIY_DATA_PREFIX}
+
+# Or if you are running byconity with docker wrapper
+docker run -it --rm --network host --name byconity-s3-sanitizer byconity/byconity-server:stable s3-rename --s3_ak_id ${S3_AK_ID} --s3_ak_secret ${S3_AK_SECRET} --from_bucket ${BYCONITY_S3_BUCKET} --s3_endpoint ${S3_ENDPOINT} --s3_region ${S3_REGION} --root_prefix ${BYCONTIY_DATA_PREFIX}
+  ```
+  - tool arguments
+    - s3_ak_id, s3 access key id which byconity is using
+    - s3_ak_secret, s3 secret access key which byconity is using
+    - s3_region, s3 region which byconity is using
+    - s3_endpoint, s3 endpoint which byconity is using
+    - from_bucket, s3 bucket name which byconity is using
+    - root_prefix, s3 object prefix which byconity is using
+    - thread_number, using how many threads, default to 1 thread
+    - need_delete, whether delete origin file, default true
+    - uuid_check, whether check uuid is valid or not, default true
+    - enable_logging, whether enable logging output
+    - logging_level, logging level, default is debug output
+3. Migrate s3 metadata with provided tool
+  ```text
+# If you know where the clickhouse binary is
+./clickhouse s3-meta-sanitizer -C cnch_config.xml
+
+# If you are running byconity with docker wrapper
+docker run -it --rm --network host --name byconity-s3-sanitizer byconity/byconity-server:stable s3-meta-sanitizer --config-file /root/app/config/cnch_config.xml
+  ```
+  - tool argument
+    - C, specify config file from `cnch_config` configuration field in your bycontiy server configuration file
+4. Start bycontiy cluster
