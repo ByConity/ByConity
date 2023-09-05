@@ -16,8 +16,7 @@
 #pragma once
 
 #include <Common/Config/ConfigProcessor.h>
-#include <Coordination/LeaderElection.h>
-#include <Coordination/LeaderElectionBase.h>
+#include <Common/StorageElection/StorageElector.h>
 #include <daemon/BaseDaemon.h>
 #include <Server/IServer.h>
 #include <TSO/TSOProxy.h>
@@ -42,7 +41,7 @@ namespace TSO
 
 class TSOImpl;
 
-class TSOServer : public BaseDaemon, public IServer, public LeaderElectionBase
+class TSOServer : public BaseDaemon, public IServer
 {
 
 public:
@@ -83,6 +82,11 @@ public:
         return BaseDaemon::isCancelled();
     }
 
+    /// Functions for exposing metrics
+    int getNumYieldedLeadership() const { return num_yielded_leadership; }
+    bool getIsLeaderFromTSOService() const;
+    String tryGetTSOLeaderHostPort() const;
+
 protected:
     int run() override;
 
@@ -92,9 +96,7 @@ private:
     Poco::Logger * log;
 
     size_t tso_window;
-    Int32 tso_max_retry_count; // TSOV: see if can keep or remove
 
-    int tso_port;
     String host_port;
 
     TSOProxyPtr proxy_ptr;
@@ -108,14 +110,16 @@ private:
 
     ContextMutablePtr global_context;
 
-    std::shared_ptr<KeeperDispatcher> keeper_dispatcher;
+    std::unique_ptr<StorageElector> leader_election;
 
     /// keep tcp servers for clickhouse-keeper
     std::vector<ProtocolServerAdapterPtr> keeper_servers;
 
-    void onLeader() override;
-    void exitLeaderElection() override;
-    void enterLeaderElection() override;
+    // Metrics
+    int num_yielded_leadership;
+    bool onLeader();
+    bool onFollower();
+    void enterLeaderElection();
 
     using CreateServerFunc = std::function<std::shared_ptr<ProtocolServerAdapter>(UInt16)>;
     void createServer(const std::string & listen_host, const char * port_name, bool listen_try, CreateServerFunc && func);

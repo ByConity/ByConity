@@ -35,6 +35,7 @@ void RootConfiguration::loadFromPocoConfigImpl(const PocoAbstractConfig & config
     service_discovery.loadFromPocoConfig(*service_discovery_config, "service_discovery");
     queue_manager.loadFromPocoConfig(config, "queue_manager");
     adaptive_scheduler.loadFromPocoConfig(config, "adaptive_scheduler");
+    tso_service.loadFromPocoConfig(config, "tso_service");
 }
 
 }

@@ -1,0 +1,2 @@
+add_executable(memstore_election_demo memstore_election_demo.cpp)
+target_link_libraries(memstore_election_demo PUBLIC loggers PRIVATE clickhouse_common_storage_election)

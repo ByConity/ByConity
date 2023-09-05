@@ -15,39 +15,34 @@
 
 #pragma once
 
-#include <Coordination/LeaderElectionBase.h>
+#include <Catalog/IMetastore.h>
+#include <Common/StorageElection/KvStorage.h>
+#include <Common/StorageElection/StorageElector.h>
 #include <Core/BackgroundSchedulePool.h>
 #include <Interpreters/Context_fwd.h>
 #include <MergeTreeCommon/CnchServerTopology.h>
-
-namespace zkutil
-{
-    class LeaderElection;
-    class ZooKeeper;
-    using ZooKeeperPtr = std::shared_ptr<ZooKeeper>;
-}
 
 namespace DB
 {
 
 /***
- * CnchServerManager is used to synchronize topology of current cluster in metastore with that in consul.
+ * CnchServerManager is used to get the current topology from service discovery and synchronize it to metastore.
  * It contains two kind of background tasks:
- * 1. Topology refresh task. This task periodically get current servers topology from consul.
+ * 1. Topology refresh task. This task periodically get current servers topology from service discovery.
  * 2. Lease renew task. This task is responsible for periodically update the topology to metastore.
  *
  * Leader election is required to make sure only one CnchServerManager can update server topology at a time.
  */
-class CnchServerManager: public WithContext, public LeaderElectionBase
+class CnchServerManager: public WithContext
 {
 using Topology = CnchServerTopology;
 
 public:
     explicit CnchServerManager(ContextPtr context_, const Poco::Util::AbstractConfiguration & config);
 
-    ~CnchServerManager() override;
+    ~CnchServerManager();
 
-    bool isLeader() {return is_leader;}
+    bool isLeader() const;
 
     void shutDown();
     void partialShutdown();
@@ -56,16 +51,15 @@ public:
 
     void updateServerVirtualWarehouses(const Poco::Util::AbstractConfiguration & config, const String & config_name = "server_virtual_warehouses");
 private:
-    void onLeader() override;
-    void exitLeaderElection() override;
-    void enterLeaderElection() override;
+    bool onLeader();
+    bool onFollower();
 
     bool refreshTopology();
     bool renewLease();
     bool checkAsyncQueryStatus();
 
     /// set topology status when becoming leader. may runs in background tasks.
-    void setLeaderStatus();
+    void initLeaderStatus();
 
     Poco::Logger * log = &Poco::Logger::get("CnchServerManager");
 
@@ -79,8 +73,7 @@ private:
 
     UInt64 term = 0;
 
-    std::atomic_bool need_stop{false};
-    std::atomic_bool is_leader{false};
+    std::shared_ptr<StorageElector> elector;
     std::atomic_bool leader_initialized{false};
     std::atomic<UInt64> refresh_topology_time{0};
     std::atomic<UInt64> renew_lease_time{0};

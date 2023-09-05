@@ -23,17 +23,14 @@
 #include <memory>
 #include <thread>
 
-namespace DB
-{
-
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
     extern const int TSO_TIMESTAMP_NOT_FOUND_ERROR;
     extern const int TSO_TIMESTAMPS_SIZE_TOO_LARGE;
     extern const int TSO_INTERNAL_ERROR;
 }
 
-namespace TSO
+namespace DB::TSO
 {
 
 TSOImpl::TSOImpl() = default;
@@ -59,7 +56,6 @@ UInt64 TSOImpl::fetchAddLogical(UInt32 to_add)
     UInt32 next_logical = ts_to_logical(timestamp) + to_add;
     checkLogicalClock(next_logical);
     return timestamp;
-
 }
 
 void TSOImpl::GetTimestamp(
@@ -155,10 +151,10 @@ void TSOImpl::checkLogicalClock(UInt32 logical_value)
                 UInt64 machine_time_now = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
                 // Check the leader result in case the node yielded the leadership during sleeping
                 // Timestamp stored in TSO is at least 10 seconds away from machine time
-                if (exitLeaderElection && is_leader.load(std::memory_order_acquire) && (machine_time_now - ts_now) >= 10000) 
+                if (exit_leader_election && is_leader.load(std::memory_order_acquire) && (machine_time_now - ts_now) >= 10000)
                 {
                     // Fallback to leader election if an overflow issue happens even after sleep_for(TSO_UPDATE_INTERVAL).
-                    exitLeaderElection(); // yield leadership as updateTSO thread stopped functioning
+                    exit_leader_election(); // yield leadership as updateTSO thread stopped functioning
                     LOG_INFO(log, "Resign leader. TSO update timestamp thread has stopped functioning. Machine Time: {} | TSO Timestamp: {}", machine_time_now, ts_now);
                 }
                 logical_clock_checking.store(false, std::memory_order_relaxed);
@@ -173,8 +169,6 @@ void TSOImpl::checkLogicalClock(UInt32 logical_value)
 
     TSOClock cur_ts = getClock();
     throw Exception("GetTimestamp: TSO logical clock overflow. Physical: " + std::to_string(cur_ts.physical) + " | Logical: " + std::to_string(cur_ts.logical) + " | Input logical value: " + std::to_string(logical_value), ErrorCodes::TSO_INTERNAL_ERROR);
-}
-
 }
 
 }

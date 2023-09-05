@@ -437,8 +437,7 @@ struct ContextSharedPart
     std::unique_ptr<TSOClientPool> tso_client_pool;
     std::unique_ptr<DaemonManagerClientPool> daemon_manager_pool;
 
-    mutable String tso_leader_host_port;
-    mutable std::mutex tso_mutex;
+    std::unique_ptr<ElectionReader> tso_election_reader;
 
     /// vector of xdbc-bridge commands, they will be killed when Context will be destroyed
     std::vector<std::unique_ptr<ShellCommand>> bridge_commands;
@@ -4383,7 +4382,7 @@ std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
     return shared->checksums_cache;
 }
 
-void Context::updateQueueManagerConfig()
+void Context::updateQueueManagerConfig() const
 {
     getQueueManager()->loadConfig(getRootConfig().queue_manager);
 }
@@ -4410,69 +4409,40 @@ std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
     if (!shared->tso_client_pool)
         throw Exception("Cnch tso client pool is not initialized", ErrorCodes::LOGICAL_ERROR);
 
-    /// There should be no zookeeper
-    if (!hasZooKeeper())
-        return shared->tso_client_pool->get();
-
-    auto host_port = getTSOLeaderHostPort();
+    auto host_port = tryGetTSOLeaderHostPort();
 
     if (host_port.empty())
         updateTSOLeaderHostPort();
 
-    if (auto updated_host_port = getTSOLeaderHostPort(); !updated_host_port.empty())
+    if (auto updated_host_port = tryGetTSOLeaderHostPort(); !updated_host_port.empty())
     {
         LOG_TRACE(&Poco::Logger::get("Context::getCnchTSOClient"), "TSO Leader host-port is: {} ", updated_host_port);
         return shared->tso_client_pool->get(updated_host_port);
     }
     else
-        throw Exception(ErrorCodes::NOT_A_LEADER, "Get an empty tso leader from keeper");
+        throw Exception(ErrorCodes::NOT_A_LEADER, "Can't get leader for tso");
 }
 
-String Context::getTSOLeaderHostPort() const
+void Context::initTSOElectionReader()
 {
-    std::lock_guard lock(shared->tso_mutex);
-    return shared->tso_leader_host_port;
+    shared->tso_election_reader = std::make_unique<ElectionReader>(
+        std::make_shared<TSOKvStorage>(getCnchCatalog()->getMetastore()),
+        getRootConfig().service_discovery_kv.tso_host_path);
+}
+
+String Context::tryGetTSOLeaderHostPort() const
+{
+    if (!shared || !shared->tso_election_reader)
+        return "";
+    if (auto leader_info = shared->tso_election_reader->tryGetLeaderInfo())
+        return createHostPortString(leader_info->getHost(), leader_info->getRPCPort());
+
+    return "";
 }
 
 void Context::updateTSOLeaderHostPort() const
 {
-    if (!hasZooKeeper())
-        return;
-
-    auto current_zookeeper = getZooKeeper();
-    String tso_election_path = getConfigRef().getString("tso_service.election_path", TSO_ELECTION_DEFAULT_PATH);
-
-    if (!current_zookeeper->exists(tso_election_path))
-    {
-        /// leader election maybe disabled, there should be one tso-server
-        std::lock_guard lock(shared->tso_mutex);
-        shared->tso_leader_host_port = "";
-        LOG_WARNING(&Poco::Logger::get("Context::updateTSO"), "TSO leader election path {} doesn't exists in keeper", tso_election_path);
-        return;
-    }
-
-    auto children = current_zookeeper->getChildren(tso_election_path);
-    if (children.empty())
-        throw Exception(ErrorCodes::NOT_A_LEADER, "Can't get current tso-leader, leader election path {} is empty", tso_election_path);
-
-    std::sort(children.begin(), children.end());
-    auto current_leader_node = tso_election_path + "/" + children.front();
-    String current_leader = current_zookeeper->get(current_leader_node);
-    if (current_leader.empty())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR, "Can't get current tso-leader, leader_node `{}` in keeper is empty.", current_leader_node);
-
-    LOG_TRACE(&Poco::Logger::get("Context::updateTSO"), "Upated TSO Leader host-port to: {} ", current_leader);
-    {
-        std::lock_guard lock(shared->tso_mutex);
-        shared->tso_leader_host_port = std::move(current_leader);
-    }
-}
-
-void Context::setTSOLeaderHostPort(String host_port) const
-{
-    std::lock_guard lock(shared->tso_mutex);
-    shared->tso_leader_host_port = std::move(host_port);
+    shared->tso_election_reader->refresh();
 }
 
 UInt64 Context::getTimestamp() const
@@ -4489,7 +4459,7 @@ UInt64 Context::tryGetTimestamp(const String & pretty_func_name) const
     catch (...)
     {
         tryLogCurrentException(
-            pretty_func_name.c_str(), fmt::format("Unable to reach TSO from {} during call to tryGetTimestamp", getTSOLeaderHostPort()));
+            pretty_func_name.c_str(), fmt::format("Unable to reach TSO from {} during call to tryGetTimestamp", tryGetTSOLeaderHostPort()));
         return TxnTimestamp::fallbackTS();
     }
 }
@@ -4539,7 +4509,7 @@ PartCacheManagerPtr Context::getPartCacheManager() const
     return shared->cache_manager;
 }
 
-void Context::initCatalog(MetastoreConfig & catalog_conf, const String & name_space)
+void Context::initCatalog(const MetastoreConfig & catalog_conf, const String & name_space)
 {
     shared->cnch_catalog = std::make_unique<Catalog::Catalog>(*this, catalog_conf, name_space);
 }
@@ -4622,6 +4592,14 @@ UInt16 Context::getRPCPort() const
     if (auto env_port = getPortFromEnvForConsul("PORT1"))
         return env_port;
 
+    /// In the current implementation, we needed to read rpc_port from the configuration of the components,
+    /// as they might not be set separately rpc_port configuration in root_config.
+    if (getServerType() == ServerType::cnch_resource_manager)
+        return getRootConfig().resource_manager.port;
+
+    if (getServerType() == ServerType::cnch_tso_server)
+        return getRootConfig().tso_service.port;
+
     return getRootConfig().rpc_port;
 }
 
@@ -4645,6 +4623,8 @@ void Context::setServerType(const String & type_str)
         shared->server_type = ServerType::cnch_daemon_manager;
     else if (type_str == "resource_manager")
         shared->server_type = ServerType::cnch_resource_manager;
+    else if (type_str == "tso_server")
+        shared->server_type = ServerType::cnch_tso_server;
     else if (type_str == "bytepond")
         shared->server_type = ServerType::cnch_bytepond;
     else
