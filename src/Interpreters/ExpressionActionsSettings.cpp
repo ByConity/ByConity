@@ -36,7 +36,7 @@ ExpressionActionsSettings ExpressionActionsSettings::fromSettings(const Settings
     settings.max_temporary_non_const_columns = from.max_temporary_non_const_columns;
     settings.compile_expressions = compile_expressions;
     settings.dialect_type = from.dialect_type;
-
+    
     return settings;
 }
 

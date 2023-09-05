@@ -21,6 +21,7 @@
 
 #include <Common/quoteString.h>
 #include <Common/typeid_cast.h>
+#include "Core/SettingsEnums.h"
 
 #include <Functions/grouping.h>
 #include <Functions/FunctionFactory.h>
@@ -874,31 +875,34 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
             arguments_indexes.push_back(pos);
         }
 
-        const bool ansi_mode = data.getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE;
+        bool force_grouping_standard_compatibility = data.getContext()->getSettingsRef().force_grouping_standard_compatibility;
+        if (data.getContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
+            force_grouping_standard_compatibility = true;
+
         switch (keys_info.group_by_kind)
         {
             case GroupByKind::GROUPING_SETS: {
                 data.addFunction(std::make_shared<FunctionToOverloadResolverAdaptor>(
                                          std::make_shared<FunctionGroupingForGroupingSets>(std::move(arguments_indexes),
-                                                                                           keys_info.grouping_set_keys, ansi_mode)),
+                                                                                           keys_info.grouping_set_keys, force_grouping_standard_compatibility)),
                                  {"__grouping_set"}, column_name);
                 break;
             }
             case GroupByKind::ROLLUP:
                 data.addFunction(std::make_shared<FunctionToOverloadResolverAdaptor>(
                                          std::make_shared<FunctionGroupingForRollup>(std::move(arguments_indexes),
-                                                                                     aggregation_keys_number, ansi_mode)),
+                                                                                     aggregation_keys_number, force_grouping_standard_compatibility)),
                                  {"__grouping_set"}, column_name);
                 break;
             case GroupByKind::CUBE: {
                 data.addFunction(std::make_shared<FunctionToOverloadResolverAdaptor>(
                         std::make_shared<FunctionGroupingForCube>(std::move(arguments_indexes), aggregation_keys_number,
-                                                                  ansi_mode)), {"__grouping_set"}, column_name);
+                                                                  force_grouping_standard_compatibility)), {"__grouping_set"}, column_name);
                 break;
             }
             case GroupByKind::ORDINARY: {
                 data.addFunction(std::make_shared<FunctionToOverloadResolverAdaptor>(
-                                         std::make_shared<FunctionGroupingOrdinary>(std::move(arguments_indexes), ansi_mode)), {},
+                                         std::make_shared<FunctionGroupingOrdinary>(std::move(arguments_indexes), force_grouping_standard_compatibility)), {},
                                  column_name);
                 break;
             }

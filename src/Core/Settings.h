@@ -216,10 +216,23 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, s3_max_single_read_retries, 4, "The maximum number of retries during single S3 read.", 0) \
     M(UInt64, s3_max_redirects, 10, "Max number of S3 redirects hops allowed.", 0) \
     M(UInt64, s3_max_connections, 1024, "The maximum number of connections per server.", 0) \
-    M(Bool, s3_check_objects_after_upload, false, "Check each uploaded object to s3 with head request to be sure that upload was successful",0) \
+    M(Bool, \
+      s3_check_objects_after_upload, \
+      false, \
+      "Check each uploaded object to s3 with head request to be sure that upload was successful", \
+      0) \
     M(UInt64, s3_max_unexpected_write_error_retries, 4, "The maximum number of retries in case of unexpected errors during S3 write.", 0) \
-    M(UInt64, s3_upload_part_size_multiply_factor, 2, "Multiply s3_min_upload_part_size by this factor each time s3_multiply_parts_count_threshold parts were uploaded from a single write to S3.", 0) \
-    M(UInt64, s3_upload_part_size_multiply_parts_count_threshold, 500, "Each time this number of parts was uploaded to S3 s3_min_upload_part_size multiplied by s3_upload_part_size_multiply_factor.", 0) \
+    M(UInt64, \
+      s3_upload_part_size_multiply_factor, \
+      2, \
+      "Multiply s3_min_upload_part_size by this factor each time s3_multiply_parts_count_threshold parts were uploaded from a single " \
+      "write to S3.", \
+      0) \
+    M(UInt64, \
+      s3_upload_part_size_multiply_parts_count_threshold, \
+      500, \
+      "Each time this number of parts was uploaded to S3 s3_min_upload_part_size multiplied by s3_upload_part_size_multiply_factor.", \
+      0) \
     M(String, s3_access_key_id, "", "S3 table access key id", 0) \
     M(String, s3_access_key_secret, "", "S3 table access key secret", 0) \
     M(Bool, s3_use_read_ahead, true, "Enable read ahead buffer when read s3, now it is just for CnchS3", 0) \
@@ -515,11 +528,33 @@ enum PreloadLevelSettings : UInt64
       "If at least as many bytes are read from one file, the reading can be parallelized.", \
       0) \
     M(UInt64, merge_tree_min_rows_for_seek, 0, "You can skip reading more than that number of rows at the price of one seek per file.", 0) \
-    M(UInt64, merge_tree_min_bytes_for_seek, 0, "You can skip reading more than that number of bytes at the price of one seek per file.", 0) \
-    M(UInt64, remote_read_min_bytes_for_seek, 4 * DBMS_DEFAULT_BUFFER_SIZE, "Min bytes required for remote read (url, s3) to do seek, instead of read with ignore.", 0) \
-    M(UInt64, merge_tree_coarse_index_granularity, 8, "If the index segment can contain the required keys, divide it into as many parts and recursively check them.", 0) \
-    M(UInt64, merge_tree_max_rows_to_use_cache, (128 * 8192), "The maximum number of rows per request, to use the cache of uncompressed data. If the request is large, the cache is not used. (For large queries not to flush out the cache.)", 0) \
-    M(UInt64, merge_tree_max_bytes_to_use_cache, (192 * 10 * 1024 * 1024), "The maximum number of bytes per request, to use the cache of uncompressed data. If the request is large, the cache is not used. (For large queries not to flush out the cache.)", 0) \
+    M(UInt64, \
+      merge_tree_min_bytes_for_seek, \
+      0, \
+      "You can skip reading more than that number of bytes at the price of one seek per file.", \
+      0) \
+    M(UInt64, \
+      remote_read_min_bytes_for_seek, \
+      4 * DBMS_DEFAULT_BUFFER_SIZE, \
+      "Min bytes required for remote read (url, s3) to do seek, instead of read with ignore.", \
+      0) \
+    M(UInt64, \
+      merge_tree_coarse_index_granularity, \
+      8, \
+      "If the index segment can contain the required keys, divide it into as many parts and recursively check them.", \
+      0) \
+    M(UInt64, \
+      merge_tree_max_rows_to_use_cache, \
+      (128 * 8192), \
+      "The maximum number of rows per request, to use the cache of uncompressed data. If the request is large, the cache is not used. " \
+      "(For large queries not to flush out the cache.)", \
+      0) \
+    M(UInt64, \
+      merge_tree_max_bytes_to_use_cache, \
+      (192 * 10 * 1024 * 1024), \
+      "The maximum number of bytes per request, to use the cache of uncompressed data. If the request is large, the cache is not used. " \
+      "(For large queries not to flush out the cache.)", \
+      0) \
     M(UInt64, merge_tree_calculate_columns_size_sample, 1000, "The number of the sample parts to calculate columns size.", 0) \
     M(Bool, do_not_merge_across_partitions_select_final, false, "Merge parts only in one partition in select final", 0) \
 \
@@ -1444,12 +1479,41 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(DistributedDDLOutputMode, distributed_ddl_output_mode, DistributedDDLOutputMode::THROW, "Format of distributed DDL query result", 0) \
     M(UInt64, distributed_ddl_entry_format_version, 2, "Version of DDL entry to write into ZooKeeper", 0) \
-    M(UInt64, external_storage_max_read_rows, 0, "Limit maximum number of rows when table with external engine should flush history data. Now supported only for MySQL table engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", 0) \
-    M(UInt64, external_storage_max_read_bytes, 0, "Limit maximum number of bytes when table with external engine should flush history data. Now supported only for MySQL table engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", 0)  \
-    M(SetOperationMode, union_default_mode, SetOperationMode::DISTINCT, "Set default mode in UNION query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
-    M(SetOperationMode, intersect_default_mode, SetOperationMode::DISTINCT, "Set default mode in INTERSECT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
-    M(SetOperationMode, except_default_mode, SetOperationMode::DISTINCT, "Set default mode in EXCEPT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw exception.", 0) \
-    M(Bool, optimize_aggregators_of_group_by_keys, true, "Eliminates min/max/any/anyLast aggregators of GROUP BY keys in SELECT section", 0) \
+    M(UInt64, \
+      external_storage_max_read_rows, \
+      0, \
+      "Limit maximum number of rows when table with external engine should flush history data. Now supported only for MySQL table " \
+      "engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", \
+      0) \
+    M(UInt64, \
+      external_storage_max_read_bytes, \
+      0, \
+      "Limit maximum number of bytes when table with external engine should flush history data. Now supported only for MySQL table " \
+      "engine, database engine, dictionary and MaterializeMySQL. If equal to 0, this setting is disabled", \
+      0) \
+    M(SetOperationMode, \
+      union_default_mode, \
+      SetOperationMode::DISTINCT, \
+      "Set default mode in UNION query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw " \
+      "exception.", \
+      0) \
+    M(SetOperationMode, \
+      intersect_default_mode, \
+      SetOperationMode::DISTINCT, \
+      "Set default mode in INTERSECT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw " \
+      "exception.", \
+      0) \
+    M(SetOperationMode, \
+      except_default_mode, \
+      SetOperationMode::DISTINCT, \
+      "Set default mode in EXCEPT query. Possible values: empty string, 'ALL', 'DISTINCT'. If empty, query without mode will throw " \
+      "exception.", \
+      0) \
+    M(Bool, \
+      optimize_aggregators_of_group_by_keys, \
+      true, \
+      "Eliminates min/max/any/anyLast aggregators of GROUP BY keys in SELECT section", \
+      0) \
     M(Bool, optimize_group_by_function_keys, true, "Eliminates functions of other keys in GROUP BY section", 0) \
     M(Bool, \
       legacy_column_name_of_tuple_literal, \
@@ -1494,17 +1558,33 @@ enum PreloadLevelSettings : UInt64
     M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
     M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \
     M(Bool, enable_element_mv_rows, false, "Whether enable element query calculate base rows and view rows", 0) \
-    M(UInt64, max_rows_to_refresh_by_partition, 100000000, "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", 0) \
-    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0)\
-    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0)\
-    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0)\
-    M(UInt64, expired_start_hour_to_merge, 12, "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", 0)\
-    M(UInt64, expired_end_hour_to_merge, 12, "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", 0)\
-    M(UInt64, strict_rows_to_schedule_merge, 50000000, "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", 0)\
-    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0)\
-    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0)\
-    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
-    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
+    M(UInt64, \
+      max_rows_to_refresh_by_partition, \
+      100000000, \
+      "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", \
+      0) \
+    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0) \
+    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0) \
+    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0) \
+    M(UInt64, \
+      expired_start_hour_to_merge, \
+      12, \
+      "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", \
+      0) \
+    M(UInt64, \
+      expired_end_hour_to_merge, \
+      12, \
+      "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", \
+      0) \
+    M(UInt64, \
+      strict_rows_to_schedule_merge, \
+      50000000, \
+      "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", \
+      0) \
+    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0) \
+    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0) \
+    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0) \
+    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0) \
     M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
     M(String, virtual_warehouse_write, "", "The write vw name set by user on which the query run", 0) \
@@ -1518,12 +1598,25 @@ enum PreloadLevelSettings : UInt64
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
     M(Bool, adaptive_type_cast, false, "Performs type cast operations adaptively, according to the value", 0) \
     M(Bool, parse_literal_as_decimal, false, "Parse numeric literal as decimal instead of float", 0) \
-    M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
-    M(Bool, formatdatetime_parsedatetime_m_is_month_name, true, "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", 0) \
-    M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
-    M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
-    M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\
-    M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
+    M(Bool, \
+      formatdatetime_f_prints_single_zero, \
+      false, \
+      "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no " \
+      "fractional seconds.", \
+      0) \
+    M(Bool, \
+      formatdatetime_parsedatetime_m_is_month_name, \
+      true, \
+      "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", \
+      0) \
+    M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0) \
+    M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0) \
+    M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0) \
+    M(Milliseconds, \
+      meta_sync_task_interval_ms, \
+      1 * 60 * 60 * 1000, \
+      "Interval of background schedule task for metasore synchronization", \
+      0) \
     M(Bool, enable_fetch_part_incrementally, true, "Whether to enable fetching part incrementally", 0) \
     M(String, \
       blocklist_for_merge_thread_regex, \
@@ -1551,16 +1644,37 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_transactional_query_cache, true, "Enable transactional query cache for CNCH engine table", IMPORTANT) \
     M(Bool, enable_writes_to_query_cache, true, "Enable storing results of SELECT queries in the query cache", 0) \
     M(Bool, enable_reads_from_query_cache, true, "Enable reading results of SELECT queries from the query cache", 0) \
-    M(Bool, query_cache_store_results_of_queries_with_nondeterministic_functions, false, "Store results of queries with non-deterministic functions (e.g. rand(), now()) in the query cache", 0) \
-    M(UInt64, query_cache_max_size_in_bytes, 0, "The maximum amount of memory (in bytes) the current user may allocate in the query cache. 0 means unlimited. ", 0) \
-    M(UInt64, query_cache_max_entries, 0, "The maximum number of query results the current user may store in the query cache. 0 means unlimited.", 0) \
+    M(Bool, \
+      query_cache_store_results_of_queries_with_nondeterministic_functions, \
+      false, \
+      "Store results of queries with non-deterministic functions (e.g. rand(), now()) in the query cache", \
+      0) \
+    M(UInt64, \
+      query_cache_max_size_in_bytes, \
+      0, \
+      "The maximum amount of memory (in bytes) the current user may allocate in the query cache. 0 means unlimited. ", \
+      0) \
+    M(UInt64, \
+      query_cache_max_entries, \
+      0, \
+      "The maximum number of query results the current user may store in the query cache. 0 means unlimited.", \
+      0) \
     M(UInt64, query_cache_min_query_runs, 0, "Minimum number a SELECT query must run before its result is stored in the query cache", 0) \
-    M(Milliseconds, query_cache_min_query_duration, 0, "Minimum time in milliseconds for a query to run for its result to be stored in the query cache.", 0) \
+    M(Milliseconds, \
+      query_cache_min_query_duration, \
+      0, \
+      "Minimum time in milliseconds for a query to run for its result to be stored in the query cache.", \
+      0) \
     M(Bool, query_cache_compress_entries, true, "Compress cache entries.", 0) \
-    M(Bool, query_cache_squash_partial_results, true, "Squash partial result blocks to blocks of size 'max_block_size'. Reduces performance of inserts into the query cache but improves the compressability of cache entries.", 0) \
+    M(Bool, \
+      query_cache_squash_partial_results, \
+      true, \
+      "Squash partial result blocks to blocks of size 'max_block_size'. Reduces performance of inserts into the query cache but improves " \
+      "the compressability of cache entries.", \
+      0) \
     M(Seconds, query_cache_ttl, 60, "After this time in seconds entries in the query cache become stale", 0) \
     M(Bool, query_cache_share_between_users, false, "Allow other users to read entry in the query cache", 0) \
-    \
+\
     /** settings in cnch **/ \
     M(Seconds, drop_range_memory_lock_timeout, 5, "The time that spend on wait for memory lock when doing drop range", 0) \
     M(UInt64, cnch_data_retention_time_in_sec, 3 * 24 * 60 * 60, "Waiting time when dropped table or database is actually removed.", 0) \
@@ -1606,11 +1720,26 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
     M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
     M(Bool, enable_async_preload_parts, true, "Allow to preload data parts asynchronously", 0) \
-    M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
-    M(UInt64, parts_preload_level, 1, "used for global preload(manual alter&table auto), 0=close preload;1=preload meta;2=preload data;3=preload meta&data, Note: for table auto preload, 0 will disable all table preload, > 0 will use table preload setting", 0) \
+    M(UInt64, \
+      cloud_task_auto_stop_timeout, \
+      60, \
+      "We will remove this task when heartbeat can't find this task more than retries_count times.", \
+      0) \
+    M(UInt64, \
+      parts_preload_level, \
+      1, \
+      "used for global preload(manual alter&table auto), 0=close preload;1=preload meta;2=preload data;3=preload meta&data, Note: for " \
+      "table auto preload, 0 will disable all table preload, > 0 will use table preload setting", \
+      0) \
     M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
     M(Bool, enable_vw_customized_setting, false, "Allow vw customized overwrite profile settings", 0) \
     M(Bool, enable_async_execution, false, "Whether to enable async execution", 0) \
+    M(Bool, drop_vw_disk_cache, false, "if drop the all disk cache of vw even pass one table.", 0) \
+    M(Bool, \
+      force_grouping_standard_compatibility, \
+      true, \
+      "Make GROUPING function to return 1 when argument is not used as an aggregation key", \
+      0) \
     /** Settings for hive */ \
     M(Bool, use_hive_metastore_filter, true, "", 0) \
     M(Bool, use_hive_cluster_key_filter, true, "", 0) \
@@ -1811,11 +1940,23 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
     M(Bool, enable_materialized_view_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
-    M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0)               \
+    M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_empty_grouping_rewriting, true, "Whether enable materialized view based rewriter for query", 0) \
-    M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
-    M(Bool, enable_materialized_view_rewrite_match_range_filter, false, "Whether enable materialized view based rewriter matching range filter by its allowable value Domain", 0) \
-    M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::NONE, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
+    M(Bool, \
+      enable_materialized_view_join_rewriting, \
+      false, \
+      "Whether enable materialized view based rewriter for query using join materialized views", \
+      0) \
+    M(Bool, \
+      enable_materialized_view_rewrite_match_range_filter, \
+      false, \
+      "Whether enable materialized view based rewriter matching range filter by its allowable value Domain", \
+      0) \
+    M(MaterializedViewConsistencyCheckMethod, \
+      materialized_view_consistency_check_method, \
+      MaterializedViewConsistencyCheckMethod::NONE, \
+      "The method to check whether a materialized view is consistent with the base table for a query", \
+      0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
     M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \
@@ -1885,11 +2026,11 @@ enum PreloadLevelSettings : UInt64
     M(String, utc_time_interval_allow_clone, "", "A list of UTC time, every two elements consist an interval which can execute clone", 0) \
     M(String, utc_time_interval_stop_clone, "", "A list of UTC time, every two elements consist an interval which stop clone", 0) \
     M(Bool, remote_query_memory_table, false, "Query remote memory table", 0) \
-    \
-    /** S3 Storage settings*/\
+\
+    /** S3 Storage settings*/ \
     M(UInt64, s3_gc_inter_partition_parallelism, 4, "Partition level concurrency when gc s3 table", 0) \
     M(UInt64, s3_gc_intra_partition_parallelism, 16, "Part level concurrency when gc s3 table", 0) \
-    \
+\
     /* Transaction and catalog */ \
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
     M(Bool, bypass_ddl_db_lock, true, "Bypass locking database while creating tables", 0) \
@@ -1899,7 +2040,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, cnch_atomic_attach_part, true, "Whether to ATTACH PARTITION/PARTS in atomic way", 0) \
     M(Bool, cnch_atomic_attach_part_preemtive_lock_acquire, false, "Whether to acquire lock preemptively during atomic attach part", 0) \
     M(Bool, allow_full_scan_txn_records, false, "Whether to allow full scan of all transaction records on catalog", 0) \
-    \
+\
     /* Outfile related Settings */ \
     M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
     M(String, tos_access_key, "", "The access_key set by user when accessing ve tos.", 0) \
@@ -1914,7 +2055,7 @@ enum PreloadLevelSettings : UInt64
     M(String, lasfs_service_name, "", "the service_name set by user when accessing lasfs", 0) \
     M(String, lasfs_endpoint, "", "the endpoint set by user when accessing lasfs", 0) \
     M(String, lasfs_region, "", "the region set by user when accessing lasfs", 0) \
-    M(String, lasfs_overwrite, "false" ,"pass true if user want to overwrite when the file exists", 0) \
+    M(String, lasfs_overwrite, "false", "pass true if user want to overwrite when the file exists", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0)
 
@@ -1957,14 +2098,34 @@ enum PreloadLevelSettings : UInt64
       IMPORTANT) \
     M(Bool, input_format_tsv_empty_as_default, false, "Treat empty fields in TSV input as default values.", 0) \
     M(Bool, input_format_tsv_enum_as_number, false, "Treat inserted enum values in TSV formats as enum indices \\N", 0) \
-    M(Bool, input_format_null_as_default, true, "For text input formats initialize null fields with default values if data type of this field is not nullable", 0) \
-    M(Bool, input_format_protobuf_enable_multiple_message, true, "If it is set to true, allows read protobuf messages which separated by a length header consecutively.", 0) \
-    M(Bool, input_format_protobuf_default_length_parser, false, "If it is set to true, use variable length header, otherwise a 8 byte fixed length header is used.", 0) \
-    \
-    M(DateTimeInputFormat, date_time_input_format, FormatSettings::DateTimeInputFormat::Basic, "Method to read DateTime from text input formats. Possible values: 'basic' and 'best_effort'.", 0) \
-    M(DateTimeOutputFormat, date_time_output_format, FormatSettings::DateTimeOutputFormat::Simple, "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", 0) \
-    \
-    M(UInt64, max_hdfs_write_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to write data to hdfs.",0) \
+    M(Bool, \
+      input_format_null_as_default, \
+      true, \
+      "For text input formats initialize null fields with default values if data type of this field is not nullable", \
+      0) \
+    M(Bool, \
+      input_format_protobuf_enable_multiple_message, \
+      true, \
+      "If it is set to true, allows read protobuf messages which separated by a length header consecutively.", \
+      0) \
+    M(Bool, \
+      input_format_protobuf_default_length_parser, \
+      false, \
+      "If it is set to true, use variable length header, otherwise a 8 byte fixed length header is used.", \
+      0) \
+\
+    M(DateTimeInputFormat, \
+      date_time_input_format, \
+      FormatSettings::DateTimeInputFormat::Basic, \
+      "Method to read DateTime from text input formats. Possible values: 'basic' and 'best_effort'.", \
+      0) \
+    M(DateTimeOutputFormat, \
+      date_time_output_format, \
+      FormatSettings::DateTimeOutputFormat::Simple, \
+      "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", \
+      0) \
+\
+    M(UInt64, max_hdfs_write_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to write data to hdfs.", 0) \
     M(String, bool_true_representation, "true", "Text to represent bool value in TSV/CSV formats.", 0) \
     M(String, bool_false_representation, "false", "Text to represent bool value in TSV/CSV formats.", 0) \
 \
@@ -2092,12 +2253,16 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
     M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
-    M(Bool, allow_attach_parts_with_different_table_definition_hash, true, "Whether to allow attaching of parts with different table definition hash to target table.", 0)  \
+    M(Bool, \
+      allow_attach_parts_with_different_table_definition_hash, \
+      true, \
+      "Whether to allow attaching of parts with different table definition hash to target table.", \
+      0) \
     M(String, tenant_id, "", "tenant_id of cnch user", 0) \
     M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
     M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \
     M(Bool, offloading_with_query_plan, false, "utilize query plan to offload the computation comoetely to worker", 0) \
-    M(Bool, enable_auto_query_forwarding, true, "Auto forward query to target server when having multiple servers", 0) \
+    M(Bool, enable_auto_query_forwarding, true, "Auto forward query to target server when having multiple servers", 0)
 
 
 // End of FORMAT_FACTORY_SETTINGS
