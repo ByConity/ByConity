@@ -689,7 +689,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
         }
 
-        if (isQueryInInteractiveSession(context, ast) && isDDLQuery(context, ast))
+        bool in_interactive_txn = isQueryInInteractiveSession(context, ast);
+        if (in_interactive_txn && isDDLQuery(context, ast))
         {
             /// Commit the current explicit transaction
             LOG_WARNING(&Poco::Logger::get("executeQuery"), "Receive DDL in interactive transaction session, will commit the session implicitly");
@@ -697,7 +698,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         }
 
         if (context->getServerType() == ServerType::cnch_server
-            && (isQueryInInteractiveSession(context, ast) || context->getSettingsRef().enable_auto_query_forwarding || settings.use_query_cache))
+            && (in_interactive_txn || context->getSettingsRef().enable_auto_query_forwarding || settings.use_query_cache))
         {
             auto host_ports = getTargetServer(context, ast);
             LOG_DEBUG(
@@ -710,7 +711,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 LOG_DEBUG(
                     &Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.getTCPAddress());
                 context->initializeExternalTablesIfSet();
-                executeQueryByProxy(context, host_ports, ast, res);
+                executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn);
                 LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query execution on remote server done");
                 return std::make_tuple(ast, std::move(res));
             }

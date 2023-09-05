@@ -70,7 +70,7 @@ void CloudMergeTreeBlockOutputStream::writePrefix()
 void CloudMergeTreeBlockOutputStream::write(const Block & block)
 {
     Stopwatch watch;
-    LOG_DEBUG(storage.getLogger(), "Start to write new block");
+    LOG_DEBUG(storage.getLogger(), "Start to write new block of size: {}", block.rows());
     auto temp_parts = convertBlockIntoDataParts(block);
     /// Generate delete bitmaps, delete bitmap is valid only when using delete_flag info for unique table
     LocalDeleteBitmaps bitmaps;

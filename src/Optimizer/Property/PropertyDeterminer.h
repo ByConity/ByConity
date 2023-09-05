@@ -17,6 +17,7 @@
 
 #include <Optimizer/Property/Property.h>
 #include <QueryPlan/PlanVisitor.h>
+#include "QueryPlan/TableWriteStep.h"
 
 #include <utility>
 
@@ -80,6 +81,8 @@ public:
     PropertySets visitExplainAnalyzeStep(const ExplainAnalyzeStep &, DeterminerContext &) override;
     PropertySets visitTopNFilteringStep(const TopNFilteringStep &, DeterminerContext & context) override;
     PropertySets visitFillingStep(const FillingStep &, DeterminerContext &) override;
+    PropertySets visitTableWriteStep(const TableWriteStep &, DeterminerContext &) override;
+    PropertySets visitTableFinishStep(const TableFinishStep &, DeterminerContext &) override;
 
 private:
     static PropertySet single()

@@ -151,6 +151,8 @@ public:
         M(SettingQuotaAndLimits) \
         M(TotalsHaving) \
         M(TableScan) \
+        M(TableWrite) \
+        M(TableFinish) \
         M(Union) \
         M(Values) \
         M(Window) \

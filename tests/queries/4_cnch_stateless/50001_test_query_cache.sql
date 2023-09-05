@@ -28,6 +28,11 @@ SELEcT * FROM test_query_cache ORDER BY id SETTINGS use_query_cache = 1;
 
 SELECt * FROM test_query_cache ORDER BY id SETTINGS use_query_cache = 1; 
 DROP TABLE test_query_cache;
+
+--- not use CNCH table ---
+SELECT * FROM system.one SETTINGS use_query_cache = 1 FORMAT Null;
+SELECT 1 SETTINGS use_query_cache = 1 FORMAT Null;
+SELECT count() from system.query_log SETTINGS use_query_cache = 1 FORMAT Null;
 --- wait until data is flush into system table --
 SYSTEM FLUSH LOGS;
 SELECT ProfileEvents.Values[indexOf(ProfileEvents.Names, 'QueryCacheHits')] as h, ProfileEvents.Values[indexOf(ProfileEvents.Names, 'QueryCacheMisses')] as m FROM cnch(server, system.query_log) WHERE event_date = today() and type = 'QueryFinish' and query = 'sELECT * FROM test_query_cache ORDER BY id SETTINGS use_query_cache = 1;' and current_database = currentDatabase();
@@ -41,3 +46,4 @@ SELECT ProfileEvents.Values[indexOf(ProfileEvents.Names, 'QueryCacheHits')] as h
 SELECT ProfileEvents.Values[indexOf(ProfileEvents.Names, 'QueryCacheHits')] as h, ProfileEvents.Values[indexOf(ProfileEvents.Names, 'QueryCacheMisses')] as m FROM cnch(server, system.query_log) WHERE event_date = today() and type = 'QueryFinish' and query = 'SELEcT * FROM test_query_cache ORDER BY id SETTINGS use_query_cache = 1;' and current_database = currentDatabase();
 
 SELECT ProfileEvents.Values[indexOf(ProfileEvents.Names, 'QueryCacheHits')] as h, ProfileEvents.Values[indexOf(ProfileEvents.Names, 'QueryCacheMisses')] as m FROM cnch(server, system.query_log) WHERE event_date = today() and type = 'QueryFinish' and query = 'SELECt * FROM test_query_cache ORDER BY id SETTINGS use_query_cache = 1;' and current_database = currentDatabase();
+

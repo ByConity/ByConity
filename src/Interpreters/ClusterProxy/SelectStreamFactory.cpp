@@ -289,7 +289,7 @@ void SelectStreamFactory::createForShard(
         }
         else if(main_table)
         {
-            auto resolved_id = context->resolveStorageID(main_table);
+            auto resolved_id = context->tryResolveStorageID(main_table);
             main_table_storage = DatabaseCatalog::instance().tryGetTable(resolved_id, context);
         }
 
