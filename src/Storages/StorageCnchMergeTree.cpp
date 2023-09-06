@@ -736,11 +736,7 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(
     return create_view_sqls;
 }
 
-<<<<<<< HEAD
 std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocalTableForWrite(
-=======
-String StorageCnchMergeTree::createLocalTableForWrite(
->>>>>>> 2b998bba116 (Merge branch 'cnch-20-session-context' into 'cnch-ce-merge')
     ASTInsertQuery * insert_query, ContextPtr local_context, bool enable_staging_area, bool send_query_in_normal_mode)
 {
     auto generated_tb_name = getCloudTableName(local_context);
