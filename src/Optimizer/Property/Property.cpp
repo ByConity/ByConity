@@ -73,7 +73,8 @@ bool Partitioning::satisfy(const Partitioning & requirement, const Constants & c
     switch (requirement.getPartitioningHandle())
     {
         case Handle::FIXED_HASH:
-            return getPartitioningColumns() == requirement.getPartitioningColumns() || this->isPartitionOn(requirement, constants);
+            return getPartitioningColumns() == requirement.getPartitioningColumns()
+                || (!requirement.isExactlyMatch() && this->isPartitionOn(requirement, constants));
         default:
             return getPartitioningHandle() == requirement.getPartitioningHandle() && getBuckets() == requirement.getBuckets()
                 && getPartitioningColumns() == requirement.getPartitioningColumns();

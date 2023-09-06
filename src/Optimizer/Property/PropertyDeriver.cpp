@@ -357,14 +357,15 @@ Property DeriverVisitor::visitUnionStep(const UnionStep & step, DeriverContext &
         transformed_children_prop.emplace_back(child_prop.translate(mapping));
     }
 
-    if (first_child_property.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::FIXED_HASH)
+    if (first_child_property.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::FIXED_HASH
+        || first_child_property.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::BUCKET_TABLE)
     {
         const Names & keys = first_child_property.getNodePartitioning().getPartitioningColumns();
         Names output_keys;
         bool match = true;
         for (const auto & transformed : transformed_children_prop)
         {
-            if (transformed != transformed_children_prop[0])
+            if (!(transformed.getNodePartitioning() == transformed_children_prop[0].getNodePartitioning()))
             {
                 match = false;
                 break;

@@ -11,7 +11,7 @@ Projection Est. 100 rows
             │     Limit: 100
             └─ MergingAggregated Est. 3458766 rows
                └─ Repartition Exchange Est. 3458766 rows
-                  │     Partition by: {ca_country, ca_county, ca_state, i_item_id}
+                  │     Partition by: {__grouping_set, ca_country, ca_county, ca_state, i_item_id}
                   └─ Aggregating Est. 3458766 rows
                      │     Group by: {ca_country, ca_county, ca_state, i_item_id}
                      │     Aggregates: expr#avg(CAST(cs_quantity, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_quantity, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_list_price, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_list_price, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_net_profit, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_net_profit, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(c_birth_year, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(c_birth_year, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))'))

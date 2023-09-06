@@ -73,13 +73,15 @@ public:
         bool require_handle_ = false,
         UInt64 buckets_ = 0,
         bool enforce_round_robin_ = true,
-        Component component_ = Component::ANY)
+        Component component_ = Component::ANY,
+        bool exactly_match_ = false)
         : handle(handle_)
         , columns(std::move(columns_))
         , require_handle(require_handle_)
         , buckets(buckets_)
         , enforce_round_robin(enforce_round_robin_)
         , component(component_)
+        , exactly_match(exactly_match_)
     {
     }
     bool operator==(const Partitioning & other) const;
@@ -95,6 +97,10 @@ public:
     Component getComponent() const { return component; }
     void setComponent(Component component_) { component = component_; }
 
+    bool isExactlyMatch() const
+    {
+        return exactly_match;
+    }
 
     Partitioning translate(const std::unordered_map<String, String> & identities) const;
     Partitioning normalize(const SymbolEquivalences & symbol_equivalences) const;
@@ -113,6 +119,7 @@ private:
     UInt64 buckets;
     bool enforce_round_robin;
     Component component;
+    bool exactly_match;
 };
 
 enum class SortOrder : UInt8

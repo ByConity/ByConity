@@ -42,6 +42,7 @@ PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step
     return input_properties;
 }
 
+
 PropertySets DeterminerVisitor::visitStep(const IQueryPlanStep &, DeterminerContext & context)
 {
     return {{context.getRequired()}};
@@ -143,10 +144,8 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     if (step.isGroupingSet())
     {
         keys.emplace_back("__grouping_set");
-        sets.emplace_back(PropertySet{Property{Partitioning{
-            Partitioning::Handle::FIXED_HASH,
-            keys,
-        }}});
+        return {PropertySet{
+            Property{Partitioning{Partitioning::Handle::FIXED_HASH, keys, false, 0, true, Partitioning::Component::ANY, true}}}};
     }
 
     return sets;
