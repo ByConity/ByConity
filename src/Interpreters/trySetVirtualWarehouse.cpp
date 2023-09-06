@@ -20,6 +20,7 @@
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/VirtualWarehousePool.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Optimizer/QueryUseOptimizerChecker.h>
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
@@ -28,14 +29,13 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTUpdateQuery.h>
 #include <Parsers/queryToString.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/StorageView.h>
 #include <unicode/tzfmt.h>
 #include "Interpreters/DatabaseCatalog.h"
 #include "Interpreters/StorageID.h"
 #include "Storages/StorageCnchMergeTree.h"
-#include <Storages/RemoteFile/IStorageCnchFile.h>
-#include <Optimizer/QueryUseOptimizerChecker.h>
 
 
 namespace DB
@@ -67,6 +67,11 @@ static bool trySetVirtualWarehouseFromTable(
         String vw_name = vw_type == VirtualWarehouseType::Write ? cnch_table->getSettings()->cnch_vw_write
                                                                 : cnch_table->getSettings()->cnch_vw_default;
 
+        LOG_DEBUG(
+            &Poco::Logger::get("trySetVirtualWarehouse"),
+            "try get warehouse from {}, type is WRITE {}",
+            vw_name,
+            VirtualWarehouseType::Write == vw_type);
         setVirtualWarehouseByName(vw_name, context);
         return true;
     }
@@ -78,14 +83,14 @@ static bool trySetVirtualWarehouseFromTable(
     }
     else if (auto * cnchfile = dynamic_cast<IStorageCnchFile *>(storage.get()))
     {
-        String vw_name = vw_type == VirtualWarehouseType::Write
-                         ? cnchfile->settings.cnch_vw_write
-                         : cnchfile->settings.cnch_vw_default;
+        String vw_name = vw_type == VirtualWarehouseType::Write ? cnchfile->settings.cnch_vw_write : cnchfile->settings.cnch_vw_default;
 
         setVirtualWarehouseByName(vw_name, context);
         LOG_DEBUG(
             &Poco::Logger::get("VirtualWarehouse"),
-            "CnchHDFS/CnchS3 Set virtual warehouse {} from {}", context->getCurrentVW()->getName(), storage->getStorageID().getNameForLogs());
+            "CnchHDFS/CnchS3 Set virtual warehouse {} from {}",
+            context->getCurrentVW()->getName(),
+            storage->getStorageID().getNameForLogs());
         return true;
     }
     else if (auto * view_table = dynamic_cast<StorageView *>(storage.get()))
@@ -121,7 +126,7 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
         }
         else if (auto * insert = ast->as<ASTInsertQuery>())
         {
-            //this means the query is function insert, for example `insert into function CnchS3(...) 
+            //this means the query is function insert, for example `insert into function CnchS3(...)
             if (insert->table_id.empty())
                 break;
 
@@ -131,6 +136,10 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
             if (QueryUseOptimizerChecker::check(ast, context)
                 && trySetVirtualWarehouseFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Read))
                 return true;
+<<<<<<< HEAD
+=======
+
+>>>>>>> 2b998bba116 (Merge branch 'cnch-20-session-context' into 'cnch-ce-merge')
             if (trySetVirtualWarehouseFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Write))
                 return true;
         }
@@ -244,9 +253,9 @@ static String tryGetVirtualWarehouseNameFromAST(const ASTPtr & ast, ContextMutab
         }
         else if (auto * insert = ast->as<ASTInsertQuery>())
         {
-            //this means the query is function insert, for example `insert into function CnchS3(...) 
+            //this means the query is function insert, for example `insert into function CnchS3(...)
             if (insert->table_id.empty())
-                break; 
+                break;
             auto table_id = insert->table_id;
             if (table_id.database_name.empty())
                 table_id.database_name = context->getCurrentDatabase();
@@ -472,5 +481,4 @@ WorkerGroupHandle getWorkerGroupForTable(ContextPtr local_context, StoragePtr st
     local_context->setCurrentWorkerGroup(worker_group);
     return worker_group;
 }
-
 }

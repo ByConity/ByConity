@@ -646,7 +646,7 @@ static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const S
 
     ParserCreateQuery parser;
     ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
-    
+
 
     auto & create_query = ast->as<ASTCreateQuery &>();
     create_query.to_inner_uuid = UUIDHelpers::Nil;
@@ -736,7 +736,11 @@ Names StorageCnchMergeTree::genViewDependencyCreateQueries(
     return create_view_sqls;
 }
 
+<<<<<<< HEAD
 std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocalTableForWrite(
+=======
+String StorageCnchMergeTree::createLocalTableForWrite(
+>>>>>>> 2b998bba116 (Merge branch 'cnch-20-session-context' into 'cnch-ce-merge')
     ASTInsertQuery * insert_query, ContextPtr local_context, bool enable_staging_area, bool send_query_in_normal_mode)
 {
     auto generated_tb_name = getCloudTableName(local_context);
@@ -774,7 +778,6 @@ std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocal
             while (true)
             {
                 LOG_TRACE(log, "Health check for worker: {}", write_shard_ptr->worker_id);
-
                 try
                 {
                     // The checking task checks whether the current connection is connected or can connect.
@@ -828,6 +831,15 @@ std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocal
             std::vector<size_t> index_values{index};
             session_resource->setWorkerGroup(std::make_shared<WorkerGroupHandleImpl>(*worker_group, index_values));
         }
+
+        if (insert_query)
+        {
+            String query_statement = queryToString(*insert_query);
+
+            LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
+            /// TODO: send insert query by rpc.
+            sendQueryPerShard(local_context, query_statement, *write_shard_ptr, true);
+        }
     }
 
     return std::make_pair(local_table_name, write_shard_ptr);
@@ -873,7 +885,8 @@ StorageCnchMergeTree::writeInWorker(const ASTPtr & query, const StorageMetadataP
         RestoreTableExpressionsVisitor(data).visit(insert_query.select);
     }
 
-    std::pair<String, const Cluster::ShardInfo *> write_shard_info = prepareLocalTableForWrite(&insert_query, local_context, enable_staging_area, true);
+    std::pair<String, const Cluster::ShardInfo *> write_shard_info
+        = prepareLocalTableForWrite(&insert_query, local_context, enable_staging_area, true);
     String query_statement = queryToString(insert_query);
 
     LOG_DEBUG(log, "Prepare execute insert query: {}", query_statement);
@@ -1399,7 +1412,8 @@ void StorageCnchMergeTree::removeCheckpoint(const Protos::Checkpoint & checkpoin
     // getContext()->getCnchCatalog()->markCheckpoint(shared_from_this(), new_checkpoint);
 }
 
-void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload, UInt64 parts_preload_level)
+void StorageCnchMergeTree::sendPreloadTasks(
+    ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload, UInt64 parts_preload_level)
 {
     auto worker_group = getWorkerGroupForTable(*this, local_context);
     local_context->setCurrentWorkerGroup(worker_group);
@@ -1422,16 +1436,30 @@ void StorageCnchMergeTree::sendPreloadTasks(ContextPtr local_context, ServerData
     server_resource->addCreateQuery(local_context, shared_from_this(), create_table_query, "");
     server_resource->addDataParts(getStorageUUID(), parts, bucket_numbers);
 
-    server_resource->sendResources(local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
-        std::vector<brpc::CallId> ids;
-        for (const auto & resource : resources)
-        {
-            brpc::CallId id = client->preloadDataParts(local_context, txn_id, *this, create_table_query, resource.server_parts, handler, enable_parts_sync_preload, parts_preload_level);
-            ids.emplace_back(id);
-            LOG_TRACE(log, "send preload data parts size = {}, enable_parts_sync_preload = {}, enable_parts_sync_preload = {}", resource.server_parts.size(), enable_parts_sync_preload, parts_preload_level);
-        }
-        return ids;
-    });
+    server_resource->sendResources(
+        local_context, [&](CnchWorkerClientPtr client, const auto & resources, const ExceptionHandlerPtr & handler) {
+            std::vector<brpc::CallId> ids;
+            for (const auto & resource : resources)
+            {
+                brpc::CallId id = client->preloadDataParts(
+                    local_context,
+                    txn_id,
+                    *this,
+                    create_table_query,
+                    resource.server_parts,
+                    handler,
+                    enable_parts_sync_preload,
+                    parts_preload_level);
+                ids.emplace_back(id);
+                LOG_TRACE(
+                    log,
+                    "send preload data parts size = {}, enable_parts_sync_preload = {}, enable_parts_sync_preload = {}",
+                    resource.server_parts.size(),
+                    enable_parts_sync_preload,
+                    parts_preload_level);
+            }
+            return ids;
+        });
 }
 
 Strings StorageCnchMergeTree::getPrunedPartitions(
@@ -1446,7 +1474,8 @@ Strings StorageCnchMergeTree::getPrunedPartitions(
     return pruned_partitions;
 }
 
-ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
+ServerDataPartsVector
+StorageCnchMergeTree::filterPartsInExplicitTransaction(ServerDataPartsVector & data_parts, ContextPtr local_context) const
 {
     Int64 primary_txn_id = local_context->getCurrentTransaction()->getPrimaryTransactionID().toUInt64();
     TxnTimestamp start_time = local_context->getCurrentTransaction()->getStartTime();
@@ -1459,17 +1488,14 @@ ServerDataPartsVector StorageCnchMergeTree::filterPartsInExplicitTransaction(Ser
         success_secondary_txns.emplace(txn_id, record.status() == CnchTransactionStatus::Finished);
         return record.status() == CnchTransactionStatus::Finished;
     };
-    std::for_each(data_parts.begin(), data_parts.end(), [&](const auto & part)
-    {
-        if (part->info().mutation == primary_txn_id
-            && part->part_model_wrapper->part_model->has_secondary_txn_id()
+    std::for_each(data_parts.begin(), data_parts.end(), [&](const auto & part) {
+        if (part->info().mutation == primary_txn_id && part->part_model_wrapper->part_model->has_secondary_txn_id()
             && check_success_txn(part->part_model_wrapper->part_model->secondary_txn_id()))
             target_parts.push_back(part);
     });
     getCommittedServerDataParts(data_parts, start_time, &(*local_context->getCnchCatalog()));
     std::move(data_parts.begin(), data_parts.end(), std::back_inserter(target_parts));
     return target_parts;
-
 }
 
 namespace
@@ -2523,7 +2549,8 @@ std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQuery
     }
     return bucket_numbers;
 }
-StorageCnchMergeTree * StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & source_table, ContextPtr local_context) const
+StorageCnchMergeTree *
+StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & source_table, ContextPtr local_context) const
 {
     StorageCnchMergeTree * src_data = dynamic_cast<StorageCnchMergeTree *>(source_table.get());
     if (!src_data)
@@ -2581,7 +2608,7 @@ StorageCnchMergeTree * StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(c
     // If target table is a bucket table, ensure that source table is a bucket table
     // or if the source table is a bucket table, ensure the table_definition_hash is the same before proceeding to drop parts
     // Can remove this check if rollback has been implemented
-    if (isBucketTable() && !local_context->getSettingsRef().allow_attach_parts_with_different_table_definition_hash 
+    if (isBucketTable() && !local_context->getSettingsRef().allow_attach_parts_with_different_table_definition_hash
         && (!src_data->isBucketTable() || getTableHashForClusterBy() != src_data->getTableHashForClusterBy()))
     {
         LOG_DEBUG(
