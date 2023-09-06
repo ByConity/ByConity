@@ -136,10 +136,6 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
             if (QueryUseOptimizerChecker::check(ast, context)
                 && trySetVirtualWarehouseFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Read))
                 return true;
-<<<<<<< HEAD
-=======
-
->>>>>>> 2b998bba116 (Merge branch 'cnch-20-session-context' into 'cnch-ce-merge')
             if (trySetVirtualWarehouseFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Write))
                 return true;
         }
