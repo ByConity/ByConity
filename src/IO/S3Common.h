@@ -31,6 +31,8 @@ namespace DB
     {
         return strcasecmp(scheme.c_str(), "s3") == 0;
     }
+
+    bool isS3URIScheme(const String& scheme);
 }
 
 namespace DB::S3

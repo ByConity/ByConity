@@ -543,6 +543,10 @@ namespace ErrorCodes
     extern const int UNKNOWN_ELEMENT_IN_CONFIG;
 }
 
+bool isS3URIScheme(const String& scheme) {
+    return (strcasecmp(scheme.c_str(), "s3") == 0) || (strcasecmp(scheme.c_str(), "http") == 0) || (strcasecmp(scheme.c_str(), "https") == 0);
+}
+
 namespace S3
 {
     S3Exception::S3Exception(const Aws::S3::S3Error & s3_err, const String & extra_msg)

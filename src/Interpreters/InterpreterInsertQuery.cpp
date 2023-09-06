@@ -22,7 +22,9 @@
 #include <Interpreters/InterpreterInsertQuery.h>
 
 #include <Access/AccessFlags.h>
+#include <CloudServices/CnchCreateQueryHelper.h>
 #include <CloudServices/CnchServerResource.h>
+#include <CloudServices/CnchWorkerResource.h>
 #include <Columns/ColumnNullable.h>
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataStreams/CheckConstraintsBlockOutputStream.h>
@@ -36,7 +38,9 @@
 #include <DataStreams/UnionBlockInputStream.h>
 #include <DataStreams/copyData.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <Databases/DatabasesCommon.h>
 #include <IO/ConnectionTimeoutsContext.h>
+#include <IO/S3Common.h>
 #include <IO/SnappyReadBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -57,6 +61,7 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/getSourceFromFromASTInsertQuery.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
+#include <Storages/S3/RAReadBufferFromS3.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
@@ -64,9 +69,6 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Common/checkStackSize.h>
 #include "Interpreters/Context_fwd.h"
-#include <Databases/DatabasesCommon.h>
-#include <CloudServices/CnchWorkerResource.h>
-#include <CloudServices/CnchCreateQueryHelper.h>
 
 
 namespace DB
@@ -139,29 +141,36 @@ static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local
         auto table = DatabaseCatalog::instance().tryGetTable(dependence, local_context);
         if (!table)
         {
-            LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table {} not found", dependence.getNameForLogs());
+            LOG_WARNING(
+                &Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table {} not found", dependence.getNameForLogs());
             continue;
         }
 
-        if (auto * mv = dynamic_cast<StorageMaterializedView*>(table.get()))
+        if (auto * mv = dynamic_cast<StorageMaterializedView *>(table.get()))
         {
             auto target_table = DatabaseCatalog::instance().tryGetTable(mv->getStorageID(), local_context);
             if (!target_table)
             {
-                LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "target table for {} not exist", mv->getStorageID().getNameForLogs());
+                LOG_WARNING(
+                    &Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"),
+                    "target table for {} not exist",
+                    mv->getStorageID().getNameForLogs());
                 continue;
             }
 
             /// target table should be CnchMergeTree
-            auto * target_cnch_merge = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
+            auto * target_cnch_merge = dynamic_cast<StorageCnchMergeTree *>(target_table.get());
             if (!target_cnch_merge)
             {
-                LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table type not matched for {}, CnchMergeTree is expected", 
-                            target_table->getStorageID().getNameForLogs());
+                LOG_WARNING(
+                    &Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"),
+                    "table type not matched for {}, CnchMergeTree is expected",
+                    target_table->getStorageID().getNameForLogs());
                 continue;
             }
             auto create_target_query = target_table->getCreateTableSql();
-            auto create_local_target_query = target_cnch_merge->getCreateQueryForCloudTable(create_target_query, target_cnch_merge->getTableName());
+            auto create_local_target_query
+                = target_cnch_merge->getCreateQueryForCloudTable(create_target_query, target_cnch_merge->getTableName());
             create_view_sqls.emplace_back(create_local_target_query);
             create_view_sqls.emplace_back(replaceMatierializedViewQuery(mv));
         }
@@ -189,10 +198,13 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
 
         auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
         if (!cnch_table)
-            throw Exception("Engine " + storage->getStorageID().getNameForLogs() + " doesn't support direct insertion", ErrorCodes::SUPPORT_IS_DISABLED);
+            throw Exception(
+                "Engine " + storage->getStorageID().getNameForLogs() + " doesn't support direct insertion",
+                ErrorCodes::SUPPORT_IS_DISABLED);
 
-        auto create_query = cnch_table->getCreateQueryForCloudTable(cnch_table->getCreateTableSql(), query.table_id.database_name, query.table_id.table_name);
-        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Worker side create query: {}" , create_query);
+        auto create_query = cnch_table->getCreateQueryForCloudTable(
+            cnch_table->getCreateTableSql(), query.table_id.database_name, query.table_id.table_name);
+        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Worker side create query: {}", create_query);
 
         Names view_create_sqls = genViewDependencyCreateQueries(storage, getContext());
         if (!view_create_sqls.empty())
@@ -201,7 +213,7 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
             if (!mutable_context->tryGetCnchWorkerResource())
                 mutable_context->initCnchWorkerResource();
             view_create_sqls.emplace_back(create_query);
-            for(const auto & create_sql : view_create_sqls)
+            for (const auto & create_sql : view_create_sqls)
                 mutable_context->getCnchWorkerResource()->executeCreateQuery(mutable_context, create_sql);
             if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(mutable_context->getCurrentTransaction()); worker_txn)
             {
@@ -696,6 +708,32 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
                         nullptr,
                         0,
                         false,
+                        context_ptr->getProcessList().getHDFSDownloadThrottler());
+                }
+#endif
+#if USE_AWS_S3
+                else if (isS3URIScheme(scheme))
+                {
+                    S3::URI s3_uri(Poco::URI(uriPrefix + name));
+                    String endpoint = s3_uri.endpoint.empty() ? context_ptr->getSettingsRef().s3_endpoint.toString() : s3_uri.endpoint;
+                    String bucket = s3_uri.bucket;
+                    String key = s3_uri.key;
+                    S3::S3Config s3_cfg(
+                        endpoint,
+                        context_ptr->getSettingsRef().s3_region.toString(),
+                        bucket,
+                        context_ptr->getSettingsRef().s3_ak_id.toString(),
+                        context_ptr->getSettingsRef().s3_ak_secret.toString(),
+                        "");
+                    const std::shared_ptr<Aws::S3::S3Client> client = s3_cfg.create();
+                    read_buf = std::make_unique<RAReadBufferFromS3>(
+                        client,
+                        bucket,
+                        key,
+                        3,
+                        DBMS_DEFAULT_BUFFER_SIZE,
+                        nullptr,
+                        0,
                         context_ptr->getProcessList().getHDFSDownloadThrottler());
                 }
 #endif
