@@ -419,7 +419,6 @@ void OptimizeInput::execute()
 
                     auto first_handle = first_props.getNodePartitioning().getPartitioningHandle();
                     auto first_bucket_count = first_props.getNodePartitioning().getBuckets();
-                    auto first_sharding_expr = first_props.getNodePartitioning().getSharingExpr();
                     const auto first_partition_column
                         = first_props.getNodePartitioning().normalize(*left_equivalences).getPartitioningColumns();
 
@@ -427,8 +426,7 @@ void OptimizeInput::execute()
                     {
                         auto translated_prop = actual_input_props[actual_prop_index].normalize(*right_equivalences);
                         if (translated_prop.getNodePartitioning().getPartitioningHandle() != first_handle
-                            || translated_prop.getNodePartitioning().getBuckets() != first_bucket_count
-                            || !ASTEquality::compareTree(translated_prop.getNodePartitioning().getSharingExpr(), first_sharding_expr))
+                            || translated_prop.getNodePartitioning().getBuckets() != first_bucket_count)
                         {
                             match = false;
                             break;

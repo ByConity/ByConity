@@ -16,9 +16,9 @@
 #include <Optimizer/Property/Property.h>
 
 #include <Functions/FunctionsHashing.h>
-#include <Optimizer/SymbolEquivalencesDeriver.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Optimizer/SymbolEquivalencesDeriver.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <QueryPlan/PlanSerDerHelper.h>
 
@@ -38,12 +38,37 @@ size_t Partitioning::hash() const
     return hash;
 }
 
+bool Partitioning::operator==(const Partitioning & other) const
+{
+    return handle == other.handle && columns == other.columns && require_handle == other.require_handle && buckets == other.buckets
+        && enforce_round_robin == other.enforce_round_robin && isRequireHandle() == other.isRequireHandle();
+}
+
 bool Partitioning::satisfy(const Partitioning & requirement, const Constants & constants) const
 {
     if (requirement.require_handle)
         return getPartitioningHandle() == requirement.getPartitioningHandle() && getBuckets() == requirement.getBuckets()
-            && getPartitioningColumns() == requirement.getPartitioningColumns()
-            && ASTEquality::compareTree(sharding_expr, requirement.sharding_expr);
+            && getPartitioningColumns() == requirement.getPartitioningColumns();
+
+    switch (requirement.component)
+    {
+        case Component::COORDINATOR: {
+            if (component == Component::WORKER)
+            {
+                return false;
+            }
+            break;
+        };
+        case Component::WORKER: {
+            if (component == Component::COORDINATOR)
+            {
+                return false;
+            }
+            break;
+        }
+        default:
+            break;
+    }
 
     switch (requirement.getPartitioningHandle())
     {
@@ -51,8 +76,7 @@ bool Partitioning::satisfy(const Partitioning & requirement, const Constants & c
             return getPartitioningColumns() == requirement.getPartitioningColumns() || this->isPartitionOn(requirement, constants);
         default:
             return getPartitioningHandle() == requirement.getPartitioningHandle() && getBuckets() == requirement.getBuckets()
-                && getPartitioningColumns() == requirement.getPartitioningColumns()
-                && ASTEquality::compareTree(sharding_expr, requirement.sharding_expr);
+                && getPartitioningColumns() == requirement.getPartitioningColumns();
     }
 }
 
@@ -73,7 +97,7 @@ bool Partitioning::isPartitionOn(const Partitioning & requirement, const Constan
     for (auto & actual_column : actual_columns)
     {
         if (constants.contains(actual_column))
-            continue ;
+            continue;
 
         if (!required_columns_set.count(actual_column))
         {
@@ -94,7 +118,7 @@ Partitioning Partitioning::normalize(const SymbolEquivalences & symbol_equivalen
             mapping[item] = item;
         }
     }
-    return translate(mapping);
+    return this->translate(mapping);
 }
 
 Partitioning Partitioning::translate(const std::unordered_map<String, String> & identities) const
@@ -107,7 +131,7 @@ Partitioning Partitioning::translate(const std::unordered_map<String, String> & 
         else // note: don't discard column
             translate_columns.emplace_back(column);
     }
-    return Partitioning{handle, translate_columns, require_handle, buckets, sharding_expr, enforce_round_robin};
+    return Partitioning{handle, translate_columns, require_handle, buckets, enforce_round_robin, component};
 }
 
 
@@ -117,8 +141,8 @@ void Partitioning::serialize(WriteBuffer & buf) const
     serializeStrings(columns, buf);
     writeBinary(require_handle, buf);
     writeBinary(buckets, buf);
-    serializeAST(sharding_expr, buf);
     writeBinary(enforce_round_robin, buf);
+    serializeEnum(component, buf);
 }
 
 void Partitioning::deserialize(ReadBuffer & buf)
@@ -127,8 +151,8 @@ void Partitioning::deserialize(ReadBuffer & buf)
     columns = deserializeStrings(buf);
     readBinary(require_handle, buf);
     readBinary(buckets, buf);
-    sharding_expr = deserializeAST(buf);
     readBinary(enforce_round_robin, buf);
+    deserializeEnum(component, buf);
 }
 
 String Partitioning::toString() const
@@ -306,7 +330,11 @@ String CTEDescriptions::toString() const
 
 Property Property::translate(const std::unordered_map<String, String> & identities) const
 {
-    Property result{node_partitioning.translate(identities), stream_partitioning.translate(identities), sorting.translate(identities), constants.translate(identities)};
+    Property result{
+        node_partitioning.translate(identities),
+        stream_partitioning.translate(identities),
+        sorting.translate(identities),
+        constants.translate(identities)};
     result.setPreferred(preferred);
     result.setCTEDescriptions(cte_descriptions.translate(identities));
     return result;
@@ -314,7 +342,11 @@ Property Property::translate(const std::unordered_map<String, String> & identiti
 
 Property Property::normalize(const SymbolEquivalences & symbol_equivalences) const
 {
-    Property result{node_partitioning.normalize(symbol_equivalences), stream_partitioning.normalize(symbol_equivalences), sorting, constants.normalize(symbol_equivalences)};
+    Property result{
+        node_partitioning.normalize(symbol_equivalences),
+        stream_partitioning.normalize(symbol_equivalences),
+        sorting,
+        constants.normalize(symbol_equivalences)};
     result.setPreferred(preferred);
     result.setCTEDescriptions(cte_descriptions);
     return result;
@@ -326,7 +358,7 @@ size_t Property::hash() const
     hash = MurmurHash3Impl64::combineHashes(hash, node_partitioning.hash());
     hash = MurmurHash3Impl64::combineHashes(hash, stream_partitioning.hash());
     hash = MurmurHash3Impl64::combineHashes(hash, sorting.hash());
-//    hash = MurmurHash3Impl64::combineHashes(hash, constants.hash());
+    //    hash = MurmurHash3Impl64::combineHashes(hash, constants.hash());
     hash = MurmurHash3Impl64::combineHashes(hash, cte_descriptions.hash());
     return hash;
 }
@@ -380,7 +412,8 @@ bool CTEDescription::operator==(const CTEDescription & other) const
 
 Property CTEDescription::createCTEDefGlobalProperty(const Property & property, CTEId cte_id)
 {
-    if (!property.getCTEDescriptions().isShared(cte_id)) {
+    if (!property.getCTEDescriptions().isShared(cte_id))
+    {
         Property any;
         any.setCTEDescriptions(property.getCTEDescriptions());
         any.getCTEDescriptions().erase(cte_id);

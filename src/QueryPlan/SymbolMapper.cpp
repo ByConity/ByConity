@@ -198,8 +198,8 @@ Partitioning SymbolMapper::map(const Partitioning & partition)
         map(partition.getPartitioningColumns()),
         partition.isRequireHandle(),
         partition.getBuckets(),
-        map(partition.getSharingExpr()),
-        partition.isEnforceRoundRobin()};
+        partition.isEnforceRoundRobin(),
+        partition.getComponent()};
 }
 
 std::shared_ptr<JoinStep> SymbolMapper::map(const JoinStep & join)
