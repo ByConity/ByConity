@@ -57,7 +57,8 @@ ExchangeResult ExchangeVisitor::visitPlanNode(PlanNodeBase & node, ExchangeConte
     PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired())[0];
     PlanNodePtr child = ptr->getChildren()[0];
     Property preferred = required_set[0];
-    ExchangeResult result = visitChild(child, cxt);
+    ExchangeContext child_context{cxt.getContext(), preferred};
+    ExchangeResult result = visitChild(child, child_context);
     return rebaseAndDeriveProperties(ptr, result, cxt.getContext());
 }
 
@@ -148,24 +149,12 @@ ExchangeResult ExchangeVisitor::visitUnionNode(UnionNode & node, ExchangeContext
         Property preferred = required_set[index];
         ExchangeContext child_cxt(cxt.getContext(), preferred);
         auto result = visitChild(child, child_cxt);
-        if (!PropertyMatcher::matchNodePartitioning(
-                *cxt.getContext(), preferred.getNodePartitioningRef(), result.getOutputProperty().getNodePartitioning()))
-        {
-            PlanNodePtr enforced_node
-                = PropertyEnforcer::enforceNodePartitioning(result.getNodePtr(), preferred, result.getOutputProperty(), *cxt.getContext());
-            Property enforced_prop = PropertyDeriver::deriveProperty(enforced_node->getStep(), result.getOutputProperty(), cxt.getContext());
-            ExchangeResult enforced_result{enforced_node, enforced_prop};
-            result = enforced_result;
-        }
         children_property.emplace_back(result.getOutputProperty());
         children.push_back(result.getNodePtr());
         results.emplace_back(result);
     }
 
-
-    Property output_prop = PropertyDeriver::deriveProperty(node.getStep(), children_property, cxt.getContext());
-    node.replaceChildren(children);
-    return ExchangeResult{ptr, output_prop};
+    return rebaseAndDeriveProperties(ptr, results, cxt.getContext());
 }
 
 ExchangeResult ExchangeVisitor::visitExchangeNode(ExchangeNode & node, ExchangeContext & cxt)
@@ -309,6 +298,11 @@ ExchangeResult ExchangeVisitor::visitTableWriteNode(TableWriteNode & node, Excha
     return enforceNodeAndStream(node, cxt);
 }
 
+ExchangeResult ExchangeVisitor::visitTableFinishNode(TableFinishNode & node, ExchangeContext & cxt)
+{
+    return enforceNodeAndStream(node, cxt);
+}
+
 ExchangeResult ExchangeVisitor::visitChild(PlanNodePtr node, ExchangeContext & cxt)
 {
     return VisitorUtil::accept(node, *this, cxt);
@@ -357,10 +351,12 @@ ExchangeResult ExchangeVisitor::enforceNodeAndStream(PlanNodeBase & node, Exchan
     PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired())[0];
     PlanNodePtr child = ptr->getChildren()[0];
     Property preferred = required_set[0];
-    ExchangeResult result = visitChild(child, cxt);
+    ExchangeContext child_context{cxt.getContext(), preferred};
+    ExchangeResult result = visitChild(child, child_context);
 
     ExchangeResult enforced_node_result;
-    if (!PropertyMatcher::matchNodePartitioning(
+    if (!preferred.isPreferred()
+        && !PropertyMatcher::matchNodePartitioning(
             *cxt.getContext(), preferred.getNodePartitioningRef(), result.getOutputProperty().getNodePartitioning()))
     {
         PlanNodePtr enforced_node
@@ -370,7 +366,8 @@ ExchangeResult ExchangeVisitor::enforceNodeAndStream(PlanNodeBase & node, Exchan
     }
 
     ExchangeResult enforced_stream_result;
-    if (!PropertyMatcher::matchStreamPartitioning(
+    if (!preferred.isPreferred()
+        && !PropertyMatcher::matchStreamPartitioning(
             *cxt.getContext(), preferred.getStreamPartitioning(), result.getOutputProperty().getStreamPartitioning()))
     {
         if (enforced_node_result.getNodePtr() != nullptr)
@@ -407,8 +404,10 @@ ExchangeResult ExchangeVisitor::enforceNode(PlanNodeBase & node, ExchangeContext
     PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired())[0];
     PlanNodePtr child = ptr->getChildren()[0];
     Property preferred = required_set[0];
-    ExchangeResult result = visitChild(child, cxt);
-    if (PropertyMatcher::matchNodePartitioning(
+    ExchangeContext child_context{cxt.getContext(), preferred};
+    ExchangeResult result = visitChild(child, child_context);
+    if (!preferred.isPreferred()
+        && PropertyMatcher::matchNodePartitioning(
             *cxt.getContext(), preferred.getNodePartitioningRef(), result.getOutputProperty().getNodePartitioning()))
     {
         return rebaseAndDeriveProperties(ptr, result, cxt.getContext());

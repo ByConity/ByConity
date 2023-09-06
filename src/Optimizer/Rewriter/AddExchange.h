@@ -97,6 +97,7 @@ public:
     ExchangeResult visitCTERefNode(CTERefNode & node, ExchangeContext &) override;
     ExchangeResult visitTopNFilteringNode(TopNFilteringNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitTableWriteNode(TableWriteNode & node, ExchangeContext & cxt) override;
+    ExchangeResult visitTableFinishNode(TableFinishNode & node, ExchangeContext & cxt) override;
 
 private:
     /**
