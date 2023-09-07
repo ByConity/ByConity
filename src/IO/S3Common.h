@@ -130,7 +130,7 @@ public:
         const String& ak_id_, const String& ak_secret_, const String& root_prefix_,
         bool is_virtual_hosted_style_ = false,
         int connect_timeout_ms_ = 10000, int request_timeout_ms_ = 30000,
-        int max_redirects_ = 10, int max_connections_ = 100, uint32_t http_keep_alive_timeout_ms_ = 10000,
+        int max_redirects_ = 10, int max_connections_ = 100, uint32_t http_keep_alive_timeout_ms_ = 5000,
         size_t http_connection_pool_size_ = 1024):
             max_redirects(max_redirects_), connect_timeout_ms(connect_timeout_ms_),
             request_timeout_ms(request_timeout_ms_), max_connections(max_connections_),

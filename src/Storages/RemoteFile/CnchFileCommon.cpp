@@ -28,7 +28,7 @@ void StorageS3Configuration::updateS3Client(const ContextPtr & ctx, const CnchFi
 
     S3::PocoHTTPClientConfiguration client_configuration = S3::ClientFactory::instance().createClientConfiguration(
         auth_settings.region, ctx->getRemoteHostFilter(), static_cast<unsigned>(ctx->getSettingsRef().s3_max_redirects),
-        ctx->getConfigRef().getUInt("s3.http_keep_alive_timeout_ms", 10000),
+        ctx->getConfigRef().getUInt("s3.http_keep_alive_timeout_ms", 5000),
         ctx->getConfigRef().getUInt("s3.http_connection_pool_size", 1024), false);
 
     client_configuration.endpointOverride = uri.endpoint.empty() ? s3_settings.endpoint : uri.endpoint;

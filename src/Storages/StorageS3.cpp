@@ -503,7 +503,7 @@ void StorageS3::updateClientAndAuthSettings(ContextPtr ctx, StorageS3::ClientAut
     S3::PocoHTTPClientConfiguration client_configuration = S3::ClientFactory::instance().createClientConfiguration(
         settings.region,
         ctx->getRemoteHostFilter(), ctx->getGlobalContext()->getSettingsRef().s3_max_redirects,
-        ctx->getConfigRef().getUInt("s3.http_keep_alive_timeout_ms", 10000),
+        ctx->getConfigRef().getUInt("s3.http_keep_alive_timeout_ms", 5000),
         ctx->getConfigRef().getUInt("s3.http_connection_pool_size", 1024), false);
 
     client_configuration.endpointOverride = upd.uri.endpoint;

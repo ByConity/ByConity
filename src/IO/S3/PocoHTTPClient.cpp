@@ -197,9 +197,8 @@ void PocoHTTPClient::makeRequestInternal(
 
             auto request_configuration = per_request_configuration(request);
 
-            // TODO(wsy): Disable pooled session by now, since there are still some http related issue to be solved
-            // if (http_connection_pool_size == 0 || !request_configuration.proxyHost.empty())
-            // {
+            if (http_connection_pool_size == 0 || !request_configuration.proxyHost.empty())
+            {
                 /// Reverse proxy can replace host header with resolved ip address instead of host name.
                 /// This can lead to request signature difference on S3 side.
                 volatile_session = makeHTTPSession(target_uri, timeouts, false);
@@ -213,12 +212,12 @@ void PocoHTTPClient::makeRequestInternal(
                     Aws::Http::SchemeMapper::ToString(request_configuration.proxyScheme),
                     use_tunnel
                 );
-            // }
-            // else
-            // {
-            //     pooled_session = makePooledHTTPSession(target_uri, timeouts, http_connection_pool_size, wait_on_pool_size_limit, false);
-            //     session = &(*pooled_session);
-            // }
+            }
+            else
+            {
+                pooled_session = makePooledHTTPSession(target_uri, timeouts, http_connection_pool_size, wait_on_pool_size_limit, false);
+                session = &(*pooled_session);
+            }
 
             Poco::Net::HTTPRequest poco_request(Poco::Net::HTTPRequest::HTTP_1_1);
 
