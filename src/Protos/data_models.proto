@@ -634,3 +634,11 @@ message S3SanitizerDataModelPart
     repeated string projections = 31; // record names of projections managed by the current part
     optional UUID new_part_id = 35; // To make this compatabile with new version of meta
 };
+
+message DataModelAccessEntity
+{
+    required string name = 1;
+    required string create_sql = 2; // contains CREATE and GRANT queries of the entity
+    required uint64 commit_time = 3;
+    required UUID uuid = 4;
+}
