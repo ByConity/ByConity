@@ -94,6 +94,10 @@ void computeGroupingFunctions(
         return;
 
     const bool ansi_mode = build_settings.context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE;
+    bool force_grouping_standard_compatibility = build_settings.context->getSettingsRef().force_grouping_standard_compatibility;
+    if (ansi_mode)
+        force_grouping_standard_compatibility = true;
+
     auto actions = std::make_shared<ActionsDAG>(pipeline.getHeader().getColumnsWithTypeAndName());
     ActionsDAG::NodeRawConstPtrs index = actions->getIndex();
     ActionsDAG::NodeRawConstPtrs children;
@@ -127,13 +131,13 @@ void computeGroupingFunctions(
         if (!grouping_set_params.empty()) // GROUPING SETS, ROLLUP, CUBE
             index.push_back(&actions->addFunction(
                 std::make_shared<FunctionToOverloadResolverAdaptor>(
-                    std::make_shared<FunctionGroupingForGroupingSets>(std::move(arguments_indexes), grouping_sets_indices, ansi_mode)),
+                    std::make_shared<FunctionGroupingForGroupingSets>(std::move(arguments_indexes), grouping_sets_indices, force_grouping_standard_compatibility)),
                 children,
                 grouping.output_name));
         else // ORDINARY
             index.push_back(&actions->addFunction(
                 std::make_shared<FunctionToOverloadResolverAdaptor>(
-                    std::make_shared<FunctionGroupingOrdinary>(std::move(arguments_indexes), ansi_mode)),
+                    std::make_shared<FunctionGroupingOrdinary>(std::move(arguments_indexes), force_grouping_standard_compatibility)),
                 children,
                 grouping.output_name));
     }
