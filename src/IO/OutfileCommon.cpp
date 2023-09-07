@@ -1,6 +1,5 @@
 #include <Common/config.h>
 
-#include <IO/OutfileCommon.h>
 #include <IO/WriteBuffer.h>
 
 #include <Interpreters/Context.h>
