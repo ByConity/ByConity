@@ -118,17 +118,22 @@ public:
 
 private:
     /**
-     * Explore and derive input properties. This function can be called repeatedly
+     * Determine input properties.
+     */
+    void initInputProperties();
+
+    /**
+     * Explore input properties. This function may be called repeatedly
      * until all possible input properties are explored.
      */
     void exploreInputProperties();
 
     /**
-     * Explore and derive input properties considering CTE(id) shared.
+     * Explore and derive input properties considering CTE(id) shared and its property.
      * @param id cte id
      * @param cte_description property for cte
      */
-    void addInputPropertiesForCTE(size_t id, CTEDescription cte_description);
+    void addInputPropertiesForCTE(CTEId id, CTEDescription cte_description);
 
     /**
      * GroupExpression to optimize
@@ -141,14 +146,19 @@ private:
     PropertySets input_properties;
 
     /**
-     * Store explored properties and its order
-     */
-    std::vector<Property> explored_properties;
-
-    /**
-     * The CTEs that the children contains
+     * The CTEs of children groups
      */
     std::vector<std::unordered_set<CTEId>> input_cte_ids;
+
+    /**
+     * The CTEs should be explored
+     */
+    std::set<CTEId> cte_common_ancestor;
+
+    /**
+     * Indicate whether cte property is enumerated
+     */
+    std::set<CTEId> cte_property_enumerated;
 
     /**
      * Explored property for CTE
@@ -180,11 +190,6 @@ private:
      * it works in the same way as prev_child_idx
      */
     bool wait_cte_optimization = false;
-
-    /**
-     * Indicate whether cte property is enumerated
-     */
-    bool is_cte_property_enumerated = false;
 };
 
 class ApplyRule : public OptimizerTask

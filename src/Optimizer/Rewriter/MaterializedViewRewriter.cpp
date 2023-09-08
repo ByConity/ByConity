@@ -1520,6 +1520,9 @@ protected:
         if (prewhere_expr)
             generated_query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(prewhere_expr));
 
+        generated_query->replaceDatabaseAndTable(
+            target_database_and_table_name.getDatabaseName(), target_database_and_table_name.getTableName());
+
         query_info.query = generated_query;
 
         UInt64 max_block_size = context->getSettingsRef().max_block_size;

@@ -31,7 +31,8 @@ CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::Abst
     , LeaderElectionBase(getContext()->getConfigRef().getUInt64("server_master.election_check_ms", 100))
     , topology_refresh_task(getContext()->getTopologySchedulePool().createTask("TopologyRefresher", [&]() { refreshTopology(); }))
     , lease_renew_task(getContext()->getTopologySchedulePool().createTask("LeaseRenewer", [&]() { renewLease(); }))
-    , async_query_status_check_task(getContext()->getTopologySchedulePool().createTask("AsyncQueryStatusChecker", [&]() { renewLease(); }))
+    , async_query_status_check_task(
+          getContext()->getTopologySchedulePool().createTask("AsyncQueryStatusChecker", [&]() { checkAsyncQueryStatus(); }))
 {
     updateServerVirtualWarehouses(config);
     if (!getContext()->hasZooKeeper())
@@ -258,6 +259,7 @@ void CnchServerManager::checkAsyncQueryStatus()
 
         if (!to_expire.empty())
         {
+            LOG_INFO(log, "Mark {} async queries to failed.", to_expire.size());
             getContext()->getCnchCatalog()->markBatchAsyncQueryStatusFailed(to_expire, "Status expired");
         }
     }

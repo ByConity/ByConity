@@ -483,7 +483,7 @@ void SegmentScheduler::updateReceivedSegmentStausCounter(const String & query_id
 
 bool SegmentScheduler::alreadyReceivedAllSegmentStatus(const String & query_id) const
 {
-    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+    std::scoped_lock<bthread::Mutex, bthread::Mutex> lock{mutex, segment_status_mutex};
     auto all_segments_iterator = query_map.find(query_id);
     auto received_status_segments_counter_iterator = query_status_received_counter_map.find(query_id);
 

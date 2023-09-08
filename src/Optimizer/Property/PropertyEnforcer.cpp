@@ -69,7 +69,7 @@ GroupExprPtr PropertyEnforcer::enforceStreamPartitioning(
 }
 
 QueryPlanStepPtr PropertyEnforcer::enforceNodePartitioning(
-    QueryPlanStepPtr step, const Property & required, const Property &, const Context & context)
+    QueryPlanStepPtr step, const Property & required, const Property & actual, const Context & context)
 {
     const auto & output_stream = step->getOutputStream();
     DataStreams streams{output_stream};
@@ -95,6 +95,11 @@ QueryPlanStepPtr PropertyEnforcer::enforceNodePartitioning(
     }
     if (partitioning.getPartitioningHandle() == Partitioning::Handle::FIXED_ARBITRARY)
     {
+        if (partitioning.getComponent() == Partitioning::Component::WORKER
+            && actual.getNodePartitioning().getComponent() == Partitioning::Component::COORDINATOR)
+        {
+            return std::make_unique<ExchangeStep>(streams, ExchangeMode::GATHER, partitioning, keep_order);
+        }
         QueryPlanStepPtr step_ptr
             = std::make_unique<ExchangeStep>(streams, ExchangeMode::LOCAL_NO_NEED_REPARTITION, partitioning, keep_order);
         return step_ptr;

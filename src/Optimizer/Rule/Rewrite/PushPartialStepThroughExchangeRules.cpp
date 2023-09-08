@@ -153,9 +153,9 @@ TransformResult pushPartial(const PlanNodePtr & node, RuleContext & context)
 
 TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
-    if (!context.context->getSettingsRef().enable_push_partial_agg)
-        return {};
     const auto * step = dynamic_cast<const AggregatingStep *>(node->getStep().get());
+    if (!context.context->getSettingsRef().enable_push_partial_agg && !step->isGroupingSet())
+        return {};
 
     for (const auto & agg : step->getAggregates())
     {
