@@ -48,6 +48,7 @@ struct SDConfiguration final : public SDConfigurationData
 };
 
 #define SDKV_CONFIG_FIELDS_LIST(M) \
+    M(String, election_prefix, "election_prefix", "", ConfigFlag::Recommended, "common prefix for all election keys") \
     M(String, server_manager_host_path, "server_manager.host_path", "data.cnch.server-election", ConfigFlag::Recommended, "election key of server manager") \
     M(UInt64, server_manager_refresh_interval_ms, "server_manager.refresh_interval_ms", 1000, ConfigFlag::Default, "") \
     M(UInt64, server_manager_expired_interval_ms, "server_manager.expired_interval_ms", 3000, ConfigFlag::Default, "") \

@@ -44,7 +44,8 @@ ResourceManagerClient::ResourceManagerClient(ContextPtr global_context_)
     : WithContext(global_context_)
     , RpcLeaderClientBase(getName(), "127.0.0.1:18989")
 {
-    auto election_path = getContext()->getRootConfig().service_discovery_kv.resource_manager_host_path.value;
+    auto prefix = getContext()->getRootConfig().service_discovery_kv.election_prefix.value;
+    auto election_path = prefix + getContext()->getRootConfig().service_discovery_kv.resource_manager_host_path.value;
     auto metastore_ptr = getContext()->getCnchCatalog()->getMetastore();
     election_reader = std::make_unique<ElectionReader>(
         std::make_shared<ResourceManagerKvStorage>(metastore_ptr),

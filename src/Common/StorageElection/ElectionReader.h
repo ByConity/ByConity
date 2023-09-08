@@ -25,7 +25,7 @@ private:
     mutable std::mutex leader_info_mutex;
     IKvStoragePtr store;
     String election_key;
-    Poco::Logger * logger;
+    Poco::Logger * logger = nullptr;
 };
 
 }

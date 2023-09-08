@@ -244,9 +244,17 @@ void StorageElector::tryUpdateRemoteRecord(bool refreshed, bool yield)
     if (result.first)
     {
         if (tryUpdateLocalRecord(new_leader_info, leader_info_string, !yield))
-            LOG_WARNING(logger, "It is updated successfully on remote but expired on local: {}", new_leader_info.DebugString());
+            LOG_WARNING(
+                logger,
+                "It is updated successfully on remote but expired on local: {}, time cost : {}ms",
+                new_leader_info.DebugString(),
+                getCurrentTimeMs() - now);
         else if (!refreshed)
-            LOG_INFO(logger, "It is updated successfully and not expired: {}", new_leader_info.DebugString());
+            LOG_INFO(
+                logger,
+                "It is updated successfully and not expired: {}, time cost : {}ms",
+                new_leader_info.DebugString(),
+                getCurrentTimeMs() - now);
         else
             LOG_TRACE(logger, "It is refreshed successfully and not expired: {}", new_leader_info.DebugString());
     }
@@ -289,7 +297,7 @@ void StorageElector::doLeaderCheck()
     {
         if (isLeaseExpired(last_leader_info))
         {
-            LOG_INFO(logger, "Current node maybe to busy to refresh the lease. Yield first.");
+            LOG_INFO(logger, "Current node maybe to busy to refresh the lease. Yield first. last_leader_info: {}", last_leader_info.DebugString());
             doYield();
         }
         else
@@ -349,9 +357,12 @@ void StorageElector::doFollowerCheck()
             // An in-flight put request makes current node to become a leader already.
             if (isSameLeader(leader_info))
             {
-                LOG_INFO(logger, "Current node used to be a leader. May be an in-flight put request "
+                LOG_INFO(
+                    logger,
+                    "Current node used to be a leader. May be an in-flight put request "
                     "or it yiled the leader role for a long time but other nodes did not be the leader. "
-                    "Old leader info: {}", leader_info.DebugString());
+                    "Old leader info: {}",
+                    leader_info.DebugString());
 
                 bool expired = tryUpdateLocalRecord(leader_info, result, false);
                 // Refresh the lease or try to be the leader
@@ -406,6 +417,7 @@ void StorageElector::doYield()
 
 void StorageElector::start()
 {
+    LOG_INFO(logger, "election_key: {}", election_key);
     {
         std::unique_lock<std::mutex> lk(cv_m);
         if (!thread_stop)
