@@ -43,6 +43,7 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     , storage(data_part_->storage.shared_from_this()) /// Need to extend the lifetime of storage because disk cache can run async
     , mrk_file_pos(mrk_file_pos_)
     , marks_count(marks_count_)
+    , read_settings(data_part_->storage.getContext()->getReadSettings())
     , stream_name(stream_name_)
     , extension(extension_)
     , stream_file_pos(stream_file_pos_)
@@ -57,7 +58,8 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
           data_part->index_granularity_info,
           false,
           mrk_file_pos.file_offset,
-          mrk_file_pos.file_size)
+          mrk_file_pos.file_size,
+          read_settings)
 {
 }
 
@@ -113,7 +115,8 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
             String data_path = data_part->getFullRelativePath() + "data";
             auto disk = data_part->volume->getDisk();
             auto source_buffer = std::make_unique<CompressedReadBufferFromFile>(
-                disk->readFile(data_path), stream_file_pos.file_offset, stream_file_pos.file_size, true);
+                disk->readFile(data_path, read_settings), stream_file_pos.file_offset,
+                stream_file_pos.file_size, true);
 
             source_buffer->seek(stream_file_pos.file_offset + marks_loader.getMark(right_mark).offset_in_compressed_file, 0);
             cache_data_right_offset = marks_loader.getMark(right_mark).offset_in_compressed_file + source_buffer->getSizeCompressed();
@@ -131,7 +134,7 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
 
         String data_path = data_part->getFullRelativePath() + "data";
         auto disk = data_part->volume->getDisk();
-        auto data_file = disk->readFile(data_path);
+        auto data_file = disk->readFile(data_path, read_settings);
 
         /// cache data segment
         LOG_DEBUG(disk_cache.getLogger(), "level: {}, cache data: {}, cache mark: {} ", preload_level, preload_level & PreloadLevelSettings::DataPreload, preload_level & PreloadLevelSettings::MetaPreload);

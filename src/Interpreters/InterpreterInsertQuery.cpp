@@ -38,6 +38,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <IO/SnappyReadBuffer.h>
+#include <IO//RAReadBufferFromS3.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
@@ -156,7 +157,7 @@ static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local
             auto * target_cnch_merge = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
             if (!target_cnch_merge)
             {
-                LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table type not matched for {}, CnchMergeTree is expected", 
+                LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "table type not matched for {}, CnchMergeTree is expected",
                             target_table->getStorageID().getNameForLogs());
                 continue;
             }

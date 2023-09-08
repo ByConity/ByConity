@@ -131,6 +131,9 @@
     M(FilesystemCacheElements, "Filesystem cache elements (file segments)") \
     M(TemporaryFilesForJoin, "Number of temporary files created for JOIN") \
     M(TemporaryFilesUnknown, "Number of temporary files created without known purpose") \
+    \
+    M(IOSchUserRequests, "UserRequests in io scheduler") \
+    M(IOSchRawRequests, "RawRequests in deadline scheduler") \
 
 namespace CurrentMetrics
 {

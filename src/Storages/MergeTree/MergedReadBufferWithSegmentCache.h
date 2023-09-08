@@ -35,8 +35,7 @@ public:
         const String& part_name_, const String& stream_name_, const DiskPtr& source_disk_,
         const String& source_file_path_, size_t source_data_offset_,
         size_t source_data_size_, size_t cache_segment_size_,
-        IDiskCache* segment_cache_, size_t estimated_range_bytes_,
-        size_t buffer_size_, const MergeTreeReaderSettings& settings_,
+        IDiskCache* segment_cache_, const MergeTreeReaderSettings& settings_,
         size_t total_segment_count_, MergeTreeMarksLoader& marks_loader_,
         UncompressedCache* uncompressed_cache_ = nullptr,
         const ReadBufferFromFileBase::ProfileCallback& profile_callback_ = {},
@@ -97,9 +96,6 @@ private:
     const size_t cache_segment_size;
     IDiskCache* segment_cache;
 
-    // Readbuffer's settings
-    size_t estimated_range_bytes;
-    size_t buffer_size;
     MergeTreeReaderSettings settings;
     UncompressedCache* uncompressed_cache;
     ReadBufferFromFileBase::ProfileCallback profile_callback;

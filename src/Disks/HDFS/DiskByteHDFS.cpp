@@ -20,8 +20,12 @@
 #include <Disks/HDFS/DiskByteHDFS.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
+#include <IO/Scheduler/IOScheduler.h>
+#include <IO/PFRAWSReadBufferFromFS.h>
+#include <IO/WSReadBufferFromFS.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
+#include "IO/HDFSRemoteFSReader.h"
 
 namespace DB
 {
@@ -80,6 +84,8 @@ private:
 DiskByteHDFS::DiskByteHDFS(const String & disk_name_, const String & hdfs_base_path_, const HDFSConnectionParams & hdfs_params_)
     : disk_name(disk_name_), disk_path(hdfs_base_path_), hdfs_params(hdfs_params_), hdfs_fs(hdfs_params_, 10000, 100, 0)
 {
+    pread_reader_opts = std::make_shared<HDFSRemoteFSReaderOpts>(hdfs_params, true);
+    read_reader_opts = std::make_shared<HDFSRemoteFSReaderOpts>(hdfs_params, false);
 }
 
 const String & DiskByteHDFS::getName() const
@@ -178,7 +184,28 @@ void DiskByteHDFS::listFiles(const String & path, std::vector<String> & file_nam
 
 std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & path, const ReadSettings & settings) const
 {
-    return std::make_unique<ReadBufferFromByteHDFS>(absolutePath(path), settings.byte_hdfs_pread, hdfs_params, settings.buffer_size);
+    String file_path = absolutePath(path);
+
+    if (IO::Scheduler::IOSchedulerSet::instance().enabled() && settings.enable_io_scheduler) {
+        if (settings.enable_io_pfra) {
+            return std::make_unique<PFRAWSReadBufferFromFS>(file_path,
+                settings.byte_hdfs_pread ? pread_reader_opts : read_reader_opts,
+                IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(file_path),
+                PFRAWSReadBufferFromFS::Options {
+                    .min_buffer_size_ = settings.buffer_size,
+                    .throttler_ = settings.throttler,
+                }
+            );
+        } else {
+            return std::make_unique<WSReadBufferFromFS>(file_path,
+                settings.byte_hdfs_pread ? pread_reader_opts : read_reader_opts,
+                IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(file_path),
+                settings.buffer_size, nullptr, 0, settings.throttler);
+        }
+    } else {
+        return std::make_unique<ReadBufferFromByteHDFS>(file_path, settings.byte_hdfs_pread,
+            hdfs_params, settings.buffer_size);
+    }
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteHDFS::writeFile(const String & path, const WriteSettings & settings)

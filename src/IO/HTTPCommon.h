@@ -21,21 +21,7 @@ constexpr int HTTP_TOO_MANY_REQUESTS = 429;
 
 class HTTPServerResponse;
 
-class SingleEndpointHTTPSessionPool : public PoolBase<Poco::Net::HTTPClientSession>
-{
-private:
-    const std::string host;
-    const UInt16 port;
-    const bool https;
-    using Base = PoolBase<Poco::Net::HTTPClientSession>;
-
-    ObjectPtr allocObject() override;
-
-public:
-    SingleEndpointHTTPSessionPool(const std::string & host_, UInt16 port_, bool https_, size_t max_pool_size_);
-};
-
-using PooledHTTPSessionPtr = SingleEndpointHTTPSessionPool::Entry;
+using PooledHTTPSessionPtr = PoolBase<Poco::Net::HTTPClientSession>::Entry;
 using HTTPSessionPtr = std::shared_ptr<Poco::Net::HTTPClientSession>;
 
 void setResponseDefaultHeaders(HTTPServerResponse & response, unsigned keep_alive_timeout);
@@ -44,8 +30,8 @@ void setResponseDefaultHeaders(HTTPServerResponse & response, unsigned keep_aliv
 HTTPSessionPtr makeHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, bool resolve_host = true, bool tcp_keep_alive = false);
 
 /// As previous method creates session, but tooks it from pool, without and with proxy uri.
-PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host = true);
-PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const Poco::URI & proxy_uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool resolve_host = true);
+PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool wait_on_pool_size_limit, bool resolve_host);
+PooledHTTPSessionPtr makePooledHTTPSession(const Poco::URI & uri, const Poco::URI & proxy_uri, const ConnectionTimeouts & timeouts, size_t per_endpoint_pool_size, bool wait_on_pool_size_limit, bool resolve_host);
 
 bool isRedirect(Poco::Net::HTTPResponse::HTTPStatus status);
 

@@ -1,19 +1,4 @@
-/*
- * Copyright 2023 Bytedance Ltd. and/or its affiliates.
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
-#include <Storages/S3/WriteBufferFromByteS3.h>
+#include <IO/WriteBufferFromByteS3.h>
 #include <IO/WriteHelpers.h>
 #include <IO/S3Common.h>
 #include <Common/MemoryTracker.h>
@@ -27,23 +12,18 @@
 #define RECORD_S3_OP_TIME(logger, event, extra_msg) \
     Stopwatch s3_op_watch; \
     SCOPE_EXIT({ \
-        ProfileEvents::increment(event, s3_op_watch.elapsedMilliseconds()); \
-        LOG_TRACE(logger, "S3 operation {} takes {} ms. {} ", #event, \
-        s3_op_watch.elapsedMilliseconds(), extra_msg); \
+        UInt64 elapsed = s3_op_watch.elapsedMicroseconds(); \
+        ProfileEvents::increment(event, elapsed); \
+        LOG_TRACE(logger, fmt::format("S3 operation "#event" takes {} micro seconds, Extra: {}", \
+            elapsed, extra_msg)); \
     })
 
 namespace ProfileEvents
 {
-    // For api PutObject and UploadPart
-    extern const Event WriteBufferFromS3WriteOp;
-    extern const Event WriteBufferFromS3WriteOpFailed;
-    extern const Event WriteBufferFromS3WriteOpMicro;
-    extern const Event WriteBufferFromS3WriteOpBytes;
-
-    // For api CreateMultiUpload, CompleteMultiUpload, AbortMultiUpload
-    extern const Event WriteBufferFromS3ControlOp;
-    extern const Event WriteBufferFromS3ControlOpFailed;
-    extern const Event WriteBufferFromS3ControlOpMicro;
+    extern const Event WriteBufferFromS3Write;
+    extern const Event WriteBufferFromS3WriteFailed;
+    extern const Event WriteBufferFromS3WriteMicro;
+    extern const Event WriteBufferFromS3WriteBytes;
 }
 
 namespace DB
@@ -59,6 +39,7 @@ namespace ErrorCodes
     extern const int S3_ERROR;
     extern const int NOT_IMPLEMENTED;
     extern const int S3_OBJECT_ALREADY_EXISTS;
+    extern const int BAD_ARGUMENTS;
 }
 
 WriteBufferFromByteS3::WriteBufferFromByteS3(
@@ -67,9 +48,9 @@ WriteBufferFromByteS3::WriteBufferFromByteS3(
     const String& key_,
     UInt64 max_single_put_threshold_,
     UInt64 min_segment_size_,
-    bool allow_overwrite_,
     std::optional<std::map<String, String>> object_metadata_,
     size_t buf_size_,
+    bool allow_overwrite_,
     char* mem_,
     size_t alignment_)
     : WriteBufferFromFileBase(buf_size_, mem_, alignment_)
@@ -81,8 +62,14 @@ WriteBufferFromByteS3::WriteBufferFromByteS3(
     , temporary_buffer(nullptr)
     , last_part_size(0)
     , total_write_size(0)
-    , log(&Poco::Logger::get("WriteBufferFromS3"))
+    , log(&Poco::Logger::get("WriteBufferFromByteS3"))
 {
+    if (max_single_put_threshold > min_segment_size)
+    {
+        throw Exception(fmt::format("Single put size {} must larger than segment {}",
+            max_single_put_threshold, min_segment_size), ErrorCodes::BAD_ARGUMENTS);
+    }
+
     if (!allow_overwrite_ && s3_util.exists(key_))
     {
         throw Exception(fmt::format("Object {} already exists, abort", key_),
@@ -116,7 +103,7 @@ void WriteBufferFromByteS3::nextImpl()
         last_part_size += offset();
 
         /// Data size exceeds singlepart upload threshold, need to use multipart upload.
-        if (multipart_upload_id.empty() && last_part_size > max_single_put_threshold)
+        if (multipart_upload_id.empty() && last_part_size >= max_single_put_threshold)
         {
             createMultipartUpload();
         }
@@ -138,11 +125,6 @@ void WriteBufferFromByteS3::nextImpl()
 
         throw;
     }
-}
-
-off_t WriteBufferFromByteS3::getPositionInFile()
-{
-    return count();
 }
 
 void WriteBufferFromByteS3::sync()
@@ -202,10 +184,10 @@ void WriteBufferFromByteS3::finalize()
 }
 
 void WriteBufferFromByteS3::createMultipartUpload()
-{   
-    RECORD_S3_OP_TIME(log, ProfileEvents::WriteBufferFromS3ControlOpMicro,
-       fmt::format("Create multipart upload with id {}", multipart_upload_id));
-    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3ControlOp, 1);
+{
+    RECORD_S3_OP_TIME(log, ProfileEvents::WriteBufferFromS3WriteMicro,
+        "Create multipart upload with id " + multipart_upload_id);
+    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3Write, 1);
 
     try
     {
@@ -213,7 +195,7 @@ void WriteBufferFromByteS3::createMultipartUpload()
     }
     catch (...)
     {
-        ProfileEvents::increment(ProfileEvents::WriteBufferFromS3ControlOpFailed, 1);
+        ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteFailed, 1);
         throw;
     }
 }
@@ -238,10 +220,10 @@ void WriteBufferFromByteS3::writePart()
     }
 
     String tag;
-    RECORD_S3_OP_TIME(log, ProfileEvents::WriteBufferFromS3WriteOpMicro,
+    RECORD_S3_OP_TIME(log, ProfileEvents::WriteBufferFromS3WriteMicro,
         "Write part for " + multipart_upload_id + " with size " + std::to_string(size) + ", tag: " + tag);
-    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteOp, 1);
-    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteOpBytes, size);
+    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3Write, 1);
+    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteBytes, size);
     try
     {
         tag = s3_util.uploadPart(key, multipart_upload_id, part_tags.size() + 1,
@@ -250,7 +232,7 @@ void WriteBufferFromByteS3::writePart()
     }
     catch (...)
     {
-        ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteOpFailed, 1);
+        ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteFailed, 1);
         throw;
     }
 }
@@ -262,9 +244,10 @@ void WriteBufferFromByteS3::completeMultipartUpload()
         throw Exception("Failed to complete multipart upload. No parts have uploaded",
             ErrorCodes::S3_ERROR);
     }
-    RECORD_S3_OP_TIME(log, ProfileEvents::WriteBufferFromS3ControlOpMicro,
+
+    RECORD_S3_OP_TIME(log, ProfileEvents::WriteBufferFromS3WriteMicro,
         "Complete multipart upload " + multipart_upload_id);
-    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3ControlOp, 1);
+    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3Write, 1);
     try
     {
         s3_util.completeMultipartUpload(key, multipart_upload_id,
@@ -272,7 +255,7 @@ void WriteBufferFromByteS3::completeMultipartUpload()
     }
     catch (...)
     {
-        ProfileEvents::increment(ProfileEvents::WriteBufferFromS3ControlOpFailed, 1);
+        ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteFailed, 1);
         throw;
     }
 }
@@ -284,9 +267,10 @@ void WriteBufferFromByteS3::abortMultipartUpload()
         throw Exception("Trying to abort multi part upload but no multi part has been created",
             ErrorCodes::LOGICAL_ERROR);
     }
-    RECORD_S3_OP_TIME(log, ProfileEvents::WriteBufferFromS3ControlOpMicro,
+
+    RECORD_S3_OP_TIME(log, ProfileEvents::WriteBufferFromS3WriteMicro,
         "Abort multi part upload " + multipart_upload_id);
-    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3ControlOp, 1);
+    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3Write, 1);
 
     try
     {
@@ -294,7 +278,7 @@ void WriteBufferFromByteS3::abortMultipartUpload()
     }
     catch (...)
     {
-        ProfileEvents::increment(ProfileEvents::WriteBufferFromS3ControlOpFailed, 1);
+        ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteFailed, 1);
         throw;
     }
 }
@@ -307,16 +291,11 @@ void WriteBufferFromByteS3::makeSinglepartUpload()
     {
         throw Exception("Failed to make single part upload. Buffer in invalid state", ErrorCodes::S3_ERROR);
     }
-    if (size == 0)
-    {
-        LOG_TRACE(log, "Skipping single part upload. Buffer is empty.");
-        return;
-    }
 
-    RECORD_S3_OP_TIME(log, ProfileEvents::WriteBufferFromS3WriteOpMicro,
+    RECORD_S3_OP_TIME(log, ProfileEvents::WriteBufferFromS3WriteMicro,
         "Write single part of size " + std::to_string(size));
-    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteOp, 1);
-    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteOpBytes, size);
+    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3Write, 1);
+    ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteBytes, size);
 
     try
     {
@@ -324,7 +303,7 @@ void WriteBufferFromByteS3::makeSinglepartUpload()
     }
     catch (...)
     {
-        ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteOpFailed, 1);
+        ProfileEvents::increment(ProfileEvents::WriteBufferFromS3WriteFailed, 1);
         throw;
     }
 }

@@ -119,6 +119,14 @@ struct Memory : boost::noncopyable, Allocator
         }
     }
 
+    void swap(Memory& rhs)
+    {
+        std::swap(m_capacity, rhs.m_capacity);
+        std::swap(m_size, rhs.m_size);
+        std::swap(m_data, rhs.m_data);
+        std::swap(alignment, rhs.alignment);
+    }
+
 private:
     static size_t align(const size_t value, const size_t alignment)
     {

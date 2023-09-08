@@ -9,8 +9,8 @@
 #    include <DataStreams/PartitionedBlockOutputStream.h>
 #    include <DataStreams/UnionBlockInputStream.h>
 #    include <IO/ReadBufferFromS3.h>
-#    include <Storages/S3/RAReadBufferFromS3.h>
-#    include <Storages/S3/WriteBufferFromByteS3.h>
+#    include <IO/RAReadBufferFromS3.h>
+#    include <IO/WriteBufferFromByteS3.h>
 #    include "Interpreters/Context.h"
 #    include <IO/WriteBufferFromS3.h>
 #    include <Interpreters/evaluateConstantExpression.h>
@@ -38,7 +38,7 @@ std::unique_ptr<ReadBuffer> StorageCloudS3::FileBufferClient::createReadBuffer(c
 
 std::unique_ptr<WriteBuffer> StorageCloudS3::FileBufferClient::createWriteBuffer(const DB::String & key)
 {
-    return std::make_unique<WriteBufferFromByteS3>(config.client, config.uri.bucket, key, config.rw_settings.min_upload_part_size, config.rw_settings.max_single_part_upload_size, true);
+    return std::make_unique<WriteBufferFromByteS3>(config.client, config.uri.bucket, key, config.rw_settings.max_single_part_upload_size, config.rw_settings.min_upload_part_size, std::nullopt, true);
 }
 
 bool StorageCloudS3::FileBufferClient::exist(const DB::String & key)
