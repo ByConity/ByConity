@@ -88,7 +88,8 @@ CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::Abst
     const auto & conf = getContext()->getRootConfig();
     auto refresh_interval_ms = conf.service_discovery_kv.server_manager_refresh_interval_ms.value;
     auto expired_interval_ms = conf.service_discovery_kv.server_manager_expired_interval_ms.value;
-    auto election_path = conf.service_discovery_kv.server_manager_host_path.value;
+    auto prefix = conf.service_discovery_kv.election_prefix.value;
+    auto election_path = prefix + conf.service_discovery_kv.server_manager_host_path.value;
     auto host = getContext()->getHostWithPorts();
     auto metastore_ptr = getContext()->getCnchCatalog()->getMetastore();
 

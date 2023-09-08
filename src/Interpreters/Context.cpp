@@ -4428,9 +4428,10 @@ std::shared_ptr<TSO::TSOClient> Context::getCnchTSOClient() const
 
 void Context::initTSOElectionReader()
 {
+    auto prefix = getRootConfig().service_discovery_kv.election_prefix.value;
     shared->tso_election_reader = std::make_unique<ElectionReader>(
         std::make_shared<TSOKvStorage>(getCnchCatalog()->getMetastore()),
-        getRootConfig().service_discovery_kv.tso_host_path);
+        prefix + getRootConfig().service_discovery_kv.tso_host_path.value);
 }
 
 String Context::tryGetTSOLeaderHostPort() const

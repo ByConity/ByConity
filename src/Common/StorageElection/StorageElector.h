@@ -81,7 +81,7 @@ private:
     std::chrono::milliseconds sleep_time{std::chrono::milliseconds::zero()};
     uint64_t last_refresh_local_time{0};
 
-    Poco::Logger * logger;
+    Poco::Logger * logger = nullptr;
 
     void start();
     void stop();

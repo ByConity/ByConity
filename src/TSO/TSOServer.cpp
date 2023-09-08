@@ -276,12 +276,13 @@ void TSOServer::enterLeaderElection()
 
         auto election_metastore = Catalog::getMetastorePtr(MetastoreConfig{config(), CATALOG_SERVICE_CONFIGURE});
 
+        auto prefix = global_context->getRootConfig().service_discovery_kv.election_prefix.value;
         leader_election = std::make_unique<StorageElector>(
             std::make_shared<TSOKvStorage>(std::move(election_metastore)),
             global_context->getRootConfig().service_discovery_kv.tso_refresh_interval_ms,
             global_context->getRootConfig().service_discovery_kv.tso_expired_interval_ms,
             global_context->getHostWithPorts(),
-            global_context->getRootConfig().service_discovery_kv.tso_host_path,
+            prefix + global_context->getRootConfig().service_discovery_kv.tso_host_path.value,
             [&](const HostWithPorts * /*host_ports*/) { return onLeader(); },
             [&](const HostWithPorts *) { return onFollower(); });
     }

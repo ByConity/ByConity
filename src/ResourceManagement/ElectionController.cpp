@@ -39,7 +39,8 @@ ElectionController::ElectionController(ResourceManagerController & rm_controller
     , rm_controller(rm_controller_)
 {
     const auto & config = getContext()->getRootConfig();
-    auto election_path = config.service_discovery_kv.resource_manager_host_path.value;
+    auto prefix = config.service_discovery_kv.election_prefix.value;
+    auto election_path = prefix + config.service_discovery_kv.resource_manager_host_path.value;
     auto refresh_interval_ms = config.service_discovery_kv.resource_manager_refresh_interval_ms.value;
     auto expired_interval_ms =  config.service_discovery_kv.resource_manager_expired_interval_ms.value;
     auto host = getContext()->getHostWithPorts();
