@@ -8,7 +8,7 @@
 
 namespace DB
 {
-class CnchHiveSettings;
+struct CnchHiveSettings;
 
 using ThriftHiveMetastoreClientBuilder = std::function<std::shared_ptr<Apache::Hadoop::Hive::ThriftHiveMetastoreClient>()>;
 

@@ -3,16 +3,20 @@
 #include <Poco/Util/MapConfiguration.h>
 #if USE_HIVE
 
+#include "Poco/URI.h"
+#include "Poco/Util/MapConfiguration.h"
 #include "Common/StringUtils/StringUtils.h"
 #include "Disks/HDFS/DiskByteHDFS.h"
 #include "Disks/S3/DiskS3.h"
 #include "IO/S3Common.h"
 #include "Interpreters/Context.h"
-#include "Poco/Util/MapConfiguration.h"
-#include "Poco/URI.h"
+#include "Storages/DataLakes/HudiDirectoryLister.h"
+#include "Storages/Hive/CnchHiveSettings.h"
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Storages/Hive/HivePartition.h"
-#include "Storages/Hive/CnchHiveSettings.h"
+#include "Storages/Hive/StorageCnchHive.h"
+
+#include <hive_metastore_types.h>
 
 
 namespace DB
@@ -26,7 +30,9 @@ namespace HiveUtil
 {
 String getPath(const String & path)
 {
-    Poco::URI uri(path);
+    String encoded;
+    Poco::URI::encode(path, "", encoded);
+    Poco::URI uri(encoded);
     const String & scheme = uri.getScheme();
     if (scheme == "hdfs" || scheme == "file")
     {
@@ -42,7 +48,7 @@ String getPath(const String & path)
     throw Exception(ErrorCodes::UNKNOWN_STORAGE, "Unknown scheme {}", scheme);
 }
 
-String getDirectoryPath(const String & path)
+String getPathForListing(const String & path)
 {
     String dir_path = getPath(path);
     if (!endsWith(dir_path, "/"))
@@ -105,24 +111,23 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const 
 }
 }
 
-DiskDirectoryLister::DiskDirectoryLister(const HivePartitionPtr & partition_, const DiskPtr & disk_)
-    : partition(partition_), disk(disk_)
+DiskDirectoryLister::DiskDirectoryLister(const DiskPtr & disk_, IHiveFile::FileFormat format)
+    : disk(disk_), file_format(format)
 {
 }
 
-HiveFiles DiskDirectoryLister::list()
+HiveFiles DiskDirectoryLister::list(const HivePartitionPtr & partition)
 {
     HiveFiles hive_files;
-    IHiveFile::FileFormat format = IHiveFile::fromHdfsInputFormatClass(partition->file_format);
 
     std::vector<String> file_names;
-    String partition_path = HiveUtil::getDirectoryPath(partition->location);
+    String partition_path = HiveUtil::getPathForListing(partition->location);
     auto it = disk->iterateDirectory(partition_path);
     for (; it->isValid(); it->next())
     {
         if (it->size() == 0)
             continue;
-        HiveFilePtr file = IHiveFile::create(format, it->path(), it->size(), disk, partition);
+        HiveFilePtr file = IHiveFile::create(file_format, it->path(), it->size(), disk, partition);
         hive_files.push_back(std::move(file));
     }
 

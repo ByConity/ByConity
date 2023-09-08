@@ -28,6 +28,7 @@ public:
     {
         PARQUET,
         ORC,
+        HUDI,
     };
     static FileFormat fromHdfsInputFormatClass(const String & class_name);
     static FileFormat fromFormatName(const String & format_name);
@@ -44,6 +45,7 @@ public:
     virtual ~IHiveFile() = default;
 
     virtual void serialize(Protos::ProtoHiveFile & proto) const;
+    virtual void deserialize(const Protos::ProtoHiveFile & proto);
 
     struct Features
     {
@@ -71,7 +73,7 @@ public:
 
     /// TODO: file min max
     /// virtual void loadFileMinMaxIndex(const NamesAndTypesList & index_names_and_types) = 0;
-    virtual void loadSplitMinMaxIndex(const NamesAndTypesList & index_names_and_types) = 0;
+    virtual void loadSplitMinMaxIndex(const NamesAndTypesList & /*index_names_and_types*/) {}
     String describeMinMaxIndex(const NamesAndTypesList & index_names_and_types) const;
     void setSkipSplits(const std::vector<bool> & skip_splits_) { skip_splits = skip_splits_; }
     bool canSkipSplit(size_t split) { return !skip_splits.empty() && skip_splits.at(split); }
@@ -97,6 +99,7 @@ public:
 
 protected:
     IHiveFile() = default;
+    void load(FileFormat format, const String & file_path, size_t file_size, const DiskPtr & disk, const HivePartitionPtr & partition);
 
     MinMaxIndexPtr file_minmax_idx;
     std::vector<MinMaxIndexPtr> split_minmax_idxes;

@@ -153,6 +153,13 @@ public:
 
     AccessType getSourceAccessType(const String & table_engine) const;
 
+    bool checkIfStorageSupportsSchemaInference(const String & storage_name)
+    {
+        if (auto it = storages.find(storage_name); it != storages.end())
+            return it->second.features.supports_schema_inference;
+        return false;
+    }
+
 private:
     Storages storages;
 };
