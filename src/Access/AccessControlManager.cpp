@@ -4,6 +4,7 @@
 #include <Access/UsersConfigAccessStorage.h>
 #include <Access/DiskAccessStorage.h>
 #include <Access/LDAPAccessStorage.h>
+#include <Access/KVAccessStorage.h>
 #include <Access/ContextAccess.h>
 #include <Access/RoleCache.h>
 #include <Access/RowPolicyCache.h>
@@ -130,7 +131,7 @@ private:
 
 
 AccessControlManager::AccessControlManager()
-    : MultipleAccessStorage("user directories"),
+    : MultipleAccessStorage("user KV Storage"),
       context_access_cache(std::make_unique<ContextAccessCache>(*this)),
       role_cache(std::make_unique<RoleCache>(*this)),
       row_policy_cache(std::make_unique<RowPolicyCache>(*this)),
@@ -225,6 +226,28 @@ void AccessControlManager::startPeriodicReloadingUsersConfigs()
     }
 }
 
+void AccessControlManager::addKVStorage(const ContextPtr & context)
+{
+    auto storages = getStoragesPtr();
+    for (const auto & storage : *storages)
+    {
+        if (auto kv_storage = typeid_cast<std::shared_ptr<KVAccessStorage>>(storage))
+            return;
+    }
+    auto new_storage = std::make_shared<KVAccessStorage>(context);
+    addStorage(new_storage);
+    LOG_DEBUG(getLogger(), "Added {} access storage '{}'", String(new_storage->getStorageType()), new_storage->getStorageName());
+}
+
+void AccessControlManager::stopBgJobForKVStorage()
+{
+    auto storages = getStoragesPtr();
+    for (const auto & storage : *storages)
+    {
+        if (auto kv_storage = typeid_cast<std::shared_ptr<KVAccessStorage>>(storage))
+            kv_storage->stopBgJob();
+    }
+}
 
 void AccessControlManager::addDiskStorage(const String & directory_, bool readonly_)
 {
@@ -357,12 +380,12 @@ void AccessControlManager::addStoragesFromMainConfig(
         addUsersConfigStorage(users_config_path, include_from_path, dbms_dir, get_zookeeper_function);
     }
 
-    String disk_storage_dir = config.getString("access_control_path", "");
-    if (!disk_storage_dir.empty())
-        addDiskStorage(disk_storage_dir);
+    // String disk_storage_dir = config.getString("access_control_path", "");
+    // if (!disk_storage_dir.empty())
+    //     addDiskStorage(disk_storage_dir);
 
-    if (has_user_directories)
-        addStoragesFromUserDirectoriesConfig(config, "user_directories", config_dir, dbms_dir, include_from_path, get_zookeeper_function);
+    // if (has_user_directories)
+    //     addStoragesFromUserDirectoriesConfig(config, "user_directories", config_dir, dbms_dir, include_from_path, get_zookeeper_function);
 }
 
 

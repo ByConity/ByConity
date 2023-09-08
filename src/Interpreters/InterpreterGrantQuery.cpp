@@ -3,7 +3,7 @@
 #include <Parsers/ASTGrantQuery.h>
 #include <Parsers/ASTRolesOrUsersSet.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
+// #include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Access/AccessControlManager.h>
 #include <Access/ContextAccess.h>
 #include <Access/RolesOrUsersSet.h>
@@ -245,14 +245,14 @@ BlockIO InterpreterGrantQuery::execute()
     if (roles_set)
         roles = getRoleIDsAndCheckAdminOption(access_control, *getContext()->getAccess(), query, *roles_set, grantees);
 
-    if (!query.cluster.empty())
-    {
-        /// To execute the command GRANT the current user needs to have the access granted with GRANT OPTION.
-        auto required_access = query.access_rights_elements;
-        std::for_each(required_access.begin(), required_access.end(), [&](AccessRightsElement & element) { element.grant_option = true; });
-        checkGranteesAreAllowed(access_control, *getContext()->getAccess(), grantees);
-        return executeDDLQueryOnCluster(query_ptr, getContext(), std::move(required_access));
-    }
+    // if (!query.cluster.empty())
+    // {
+    //     /// To execute the command GRANT the current user needs to have the access granted with GRANT OPTION.
+    //     auto required_access = query.access_rights_elements;
+    //     std::for_each(required_access.begin(), required_access.end(), [&](AccessRightsElement & element) { element.grant_option = true; });
+    //     checkGranteesAreAllowed(access_control, *getContext()->getAccess(), grantees);
+    //     return executeDDLQueryOnCluster(query_ptr, getContext(), std::move(required_access));
+    // }
 
     query.replaceEmptyDatabase(getContext()->getCurrentDatabase());
 

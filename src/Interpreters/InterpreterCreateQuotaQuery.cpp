@@ -2,7 +2,7 @@
 #include <Parsers/ASTCreateQuotaQuery.h>
 #include <Parsers/ASTRolesOrUsersSet.h>
 #include <Interpreters/Context.h>
-#include <Interpreters/executeDDLQueryOnCluster.h>
+// #include <Interpreters/executeDDLQueryOnCluster.h>
 #include <Access/AccessControlManager.h>
 #include <Access/AccessFlags.h>
 #include <common/range.h>
@@ -80,11 +80,11 @@ BlockIO InterpreterCreateQuotaQuery::execute()
     auto & access_control = getContext()->getAccessControlManager();
     getContext()->checkAccess(query.alter ? AccessType::ALTER_QUOTA : AccessType::CREATE_QUOTA);
 
-    if (!query.cluster.empty())
-    {
-        query.replaceCurrentUserTag(getContext()->getUserName());
-        return executeDDLQueryOnCluster(query_ptr, getContext());
-    }
+    // if (!query.cluster.empty())
+    // {
+    //     query.replaceCurrentUserTag(getContext()->getUserName());
+    //     return executeDDLQueryOnCluster(query_ptr, getContext());
+    // }
 
     std::optional<RolesOrUsersSet> roles_from_query;
     if (query.roles)

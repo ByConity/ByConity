@@ -37,6 +37,13 @@
 #include <cppkafka/cppkafka.h>
 #include <google/protobuf/repeated_field.h>
 #include <common/types.h>
+#include <Access/IAccessEntity.h>
+#include <Parsers/formatTenantDatabaseName.h>
+
+namespace DB::ErrorCodes
+{
+    extern const int METASTORE_ACCESS_ENTITY_NOT_IMPLEMENTED;
+}
 
 namespace DB::Catalog
 {
@@ -93,6 +100,33 @@ namespace DB::Catalog
 #define UDF_STORE_PREFIX "UDF_"
 #define MERGEMUTATE_THREAD_START_TIME "MTST_"
 #define DETACHED_PART_PREFIX "DP_"
+#define ENTITY_UUID_MAPPING "EUM_"
+
+using EntityType = IAccessEntity::Type;
+struct EntityMetastorePrefix
+{
+    const char* prefix;
+};
+
+static EntityMetastorePrefix getEntityMetastorePrefix(EntityType type)
+{
+    switch(type)
+    {
+        case EntityType::USER:
+            return EntityMetastorePrefix{"UE_"};
+        case EntityType::ROLE:
+            return EntityMetastorePrefix{"RE_"};
+        case EntityType::SETTINGS_PROFILE:
+            return EntityMetastorePrefix{"SPE_"};
+        case EntityType::ROW_POLICY:
+            return EntityMetastorePrefix{"RPE_"};
+        case EntityType::QUOTA:
+            return EntityMetastorePrefix{"QE_"};
+        default:
+            throw Exception("Access Entity not implemented", ErrorCodes::METASTORE_ACCESS_ENTITY_NOT_IMPLEMENTED);
+    }
+}
+
 
 class MetastoreProxy
 {
@@ -597,6 +631,28 @@ public:
     {
         return escapeString(name_space) + "_" + DATA_ITEM_TRASH_PREFIX + uuid + "_";
     }
+    
+    static std::string accessEntityPrefix(EntityType type, const std::string & name_space)
+    {
+        return fmt::format("{}_{}", escapeString(name_space), formatTenantEntityPrefix(getEntityMetastorePrefix(type).prefix));
+    }
+    // RBAC TODO: use special separator betweem prefix and name
+    static std::string accessEntityKey(EntityType type, const std::string & name_space, const std::string & name)
+    {
+        return fmt::format("{}{}", accessEntityPrefix(type, name_space), name);
+    }
+
+    static std::string accessEntityUUIDNameMappingPrefix(const std::string & name_space)
+    {
+        return fmt::format("{}_{}", escapeString(name_space), formatTenantEntityPrefix(ENTITY_UUID_MAPPING));
+    }
+
+    // Should not need Entity type here. No need to use prefix here. so remove accessEntityUUIDNameMappingPrefix method and just get the name
+    // change put to simple put the mapping key without type
+    static std::string accessEntityUUIDNameMappingKey(const std::string & name_space, const std::string & uuid)
+    {
+        return fmt::format("{}{}", accessEntityUUIDNameMappingPrefix(name_space), uuid);
+    }
 
     /// end of Metastore Proxy keying schema
 
@@ -854,6 +910,13 @@ public:
      * @param limit Limit the results, disabled by passing 0.
      */
     IMetaStore::IteratorPtr getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit);
+    
+    // Access Entities
+    String getAccessEntity(EntityType type, const String & name_space, const String & name) const;
+    Strings getAllAccessEntities(EntityType type, const String & name_space) const;
+    String getAccessEntityNameByUUID(const String & name_space, const UUID & id) const;
+    bool dropAccessEntity(EntityType type, const String & name_space, const UUID & id, const String & name) const;
+    bool putAccessEntity(EntityType type, const String & name_space, const AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists) const;
 
 private:
 

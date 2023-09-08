@@ -5,7 +5,7 @@
 #include <Common/ZooKeeper/Common.h>
 #include <boost/container/flat_set.hpp>
 #include <memory>
-
+#include <Interpreters/Context_fwd.h>
 
 namespace Poco
 {
@@ -21,6 +21,7 @@ namespace Poco
 
 namespace DB
 {
+class Context;
 class ContextAccess;
 struct ContextAccessParams;
 struct User;
@@ -72,6 +73,10 @@ public:
 
     void reloadUsersConfigs();
     void startPeriodicReloadingUsersConfigs();
+
+    /// Loads access entities from KV
+    void addKVStorage(const ContextPtr & context);
+    void stopBgJobForKVStorage();
 
     /// Loads access entities from the directory on the local disk.
     /// Use that directory to keep created users/roles/etc.

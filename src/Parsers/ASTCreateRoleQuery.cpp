@@ -66,7 +66,7 @@ void ASTCreateRoleQuery::formatImpl(const FormatSettings & format, FormatState &
         format.ostr << (format.hilite ? hilite_keyword : "") << " OR REPLACE" << (format.hilite ? hilite_none : "");
 
     formatNames(names, format);
-    formatOnCluster(format);
+    // formatOnCluster(format);
 
     if (!new_name.empty())
         formatRenameTo(new_name, format);

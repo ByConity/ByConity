@@ -511,6 +511,8 @@ struct ContextSharedPart
 
             if (cache_manager)
                 cache_manager.reset();
+
+            access_control_manager.stopBgJobForKVStorage();
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
 
@@ -1370,7 +1372,21 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
 
 void Context::setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address)
 {
-    setUser(BasicCredentials(name, password), address);
+    //CNCH multi-tenant user name pattern from gateway client: {tenant_id}`{user_name}
+    String user = name;
+    bool pushed = false;
+    if (auto pos = user.find('`'); pos != String::npos)
+    {
+        auto tenant_id = String(user.c_str(), pos);
+        this->setSetting("tenant_id", tenant_id); /// {tenant_id}`*
+        this->setTenantId(tenant_id);
+        pushTenantId(tenant_id);
+        pushed = true;
+        user = user.substr(pos + 1); ///{tenant_id}`user_name=>user_name
+    }
+    setUser(BasicCredentials(user, password), address);
+    if (pushed)
+        popTenantId();
 }
 
 void Context::setUserWithoutCheckingPassword(const String & name, const Poco::Net::SocketAddress & address)

@@ -22,7 +22,7 @@
 #pragma once
 
 #include <Parsers/IAST.h>
-#include <Parsers/ASTQueryWithOnCluster.h>
+// #include <Parsers/ASTQueryWithOnCluster.h>
 
 
 namespace DB
@@ -40,7 +40,7 @@ class ASTRolesOrUsersSet;
   *     [SETTINGS variable [= value] [MIN [=] min_value] [MAX [=] max_value] [READONLY|WRITABLE] | PROFILE 'profile_name'] [,...]
   *     [TO {role [,...] | ALL | ALL EXCEPT role [,...]}]
   */
-class ASTCreateSettingsProfileQuery : public IAST, public ASTQueryWithOnCluster
+class ASTCreateSettingsProfileQuery : public IAST
 {
 public:
     bool alter = false;
@@ -64,6 +64,6 @@ public:
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const override;
     void replaceCurrentUserTag(const String & current_user_name) const;
-    ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTCreateSettingsProfileQuery>(clone()); }
+    // ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTCreateSettingsProfileQuery>(clone()); }
 };
 }

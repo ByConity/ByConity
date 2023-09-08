@@ -1159,6 +1159,7 @@ void TCPHandler::receiveHello()
 
     if (user != USER_INTERSERVER_MARKER)
     {
+        LOG_DEBUG(log,"Connected {}", user);
         connection_context->setUser(user, password, socket().peerAddress());
     }
     else
