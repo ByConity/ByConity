@@ -92,7 +92,7 @@ void MergeTreeCNCHDataDumper::writeDataFileFooter(WriteBuffer & to, const CNCHDa
 
 /// Check correctness of data file in remote storage,
 /// Now we only check data file length.
-size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, const std::shared_ptr<MergeTreeDataPartChecksums> & checksums, const CNCHDataMeta & meta)
+size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, const std::shared_ptr<MergeTreeDataPartChecksums> & checksums, const CNCHDataMeta & meta) const
 {
     DiskPtr remote_disk = remote_part->volume->getDisk();
     String part_data_rel_path = remote_part->getFullRelativePath() + "data";
@@ -121,7 +121,7 @@ size_t MergeTreeCNCHDataDumper::check(MergeTreeDataPartCNCHPtr remote_part, cons
     if(meta.checksums_size != 0)
     {
         std::unique_ptr<ReadBufferFromFileBase> reader = remote_disk->readFile(
-            part_data_rel_path);
+            part_data_rel_path, data.getContext()->getReadSettings());
         reader->seek(meta.checksums_offset);
         assertString("checksums format version: ", *reader);
     }

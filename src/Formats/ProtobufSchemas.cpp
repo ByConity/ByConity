@@ -73,6 +73,8 @@ ProtobufSchemas::~ProtobufSchemas() = default;
 
 const google::protobuf::Descriptor * ProtobufSchemas::getMessageTypeForFormatSchema(const FormatSchemaInfo & info)
 {
+    /// Add lock here in case of data race on `importers` for multi threads case
+    std::lock_guard lock(mutex);
     auto it = importers.find(info.schemaDirectory());
     if (it == importers.end())
         it = importers.emplace(info.schemaDirectory(), std::make_unique<ImporterWithSourceTree>(info.schemaDirectory())).first;

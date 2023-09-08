@@ -45,8 +45,9 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
     clockid_t clock_type_):
         marks_loader(disk_, mark_cache_, mark_path_,
             stream_name_, marks_count_, *index_granularity_info_,
-            settings_.save_marks_in_cache, mark_offset_, mark_size_, 1,
-            segment_cache_, storage_id_.uuid, part_name_)
+            settings_.save_marks_in_cache, mark_offset_, mark_size_,
+            settings_.read_settings, 1, segment_cache_, storage_id_.uuid,
+            part_name_)
 {
     size_t max_mark_range_bytes = 0;
     size_t sum_mark_range_bytes = 0;
@@ -55,18 +56,22 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
         &max_mark_range_bytes, &sum_mark_range_bytes);
 
     if (max_mark_range_bytes == 0)
-        max_mark_range_bytes = settings_.max_read_buffer_size;
+        max_mark_range_bytes = settings_.read_settings.buffer_size;
 
-    size_t buffer_size = std::min(settings_.max_read_buffer_size,
+    size_t buffer_size = std::min(settings_.read_settings.buffer_size,
         max_mark_range_bytes);
 
     size_t total_segment_count = (marks_count_ + cache_segment_size_ - 1) / cache_segment_size_;
 
+    MergeTreeReaderSettings reader_settings = settings_;
+    reader_settings.read_settings.estimated_size = sum_mark_range_bytes;
+    reader_settings.read_settings.buffer_size = buffer_size;
+
     read_buffer_holder = std::make_unique<MergedReadBufferWithSegmentCache>(
         storage_id_, part_name_, stream_name_, disk_, data_path_, data_offset_,
-        data_size_, cache_segment_size_, segment_cache_, sum_mark_range_bytes,
-        buffer_size, settings_, total_segment_count, marks_loader, uncompressed_cache_,
-        profile_callback_, clock_type_
+        data_size_, cache_segment_size_, segment_cache_, settings_,
+        total_segment_count, marks_loader, uncompressed_cache_, profile_callback_,
+        clock_type_
     );
     data_buffer = read_buffer_holder.get();
 }

@@ -41,6 +41,7 @@
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
 #include <IO/UseSSL.h>
+#include <IO/Scheduler/IOScheduler.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/DNSCacheUpdater.h>
@@ -609,6 +610,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     // Init bRPC
     BrpcApplication::getInstance().initialize(config());
+
+    // Init io scheduler
+    IO::Scheduler::IOSchedulerSet::instance().initialize(config(),
+        "io_scheduler");
+    auto worker_pool = IO::Scheduler::IOSchedulerSet::instance().workerPool();
+    if (worker_pool != nullptr) {
+        worker_pool->startup();
+    }
+    SCOPE_EXIT({
+        if (worker_pool != nullptr) {
+            try {
+                worker_pool->shutdown();
+            } catch(...) {
+                tryLogCurrentException(log);
+            }
+        }
+
+        IO::Scheduler::IOSchedulerSet::instance().uninitialize();
+    });
 
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
         global_context->setComplexQueryActive(true);

@@ -35,12 +35,12 @@ protected:
 
     const ColumnNumbers arguments_indexes;
 
-    const bool ansi_mode = false;
+    const bool force_grouping_standard_compatibility = true;
 
 public:
-    FunctionGroupingBase(ColumnNumbers arguments_indexes_, bool ansi_mode_)
+    FunctionGroupingBase(ColumnNumbers arguments_indexes_, bool force_grouping_standard_compatibility_)
         : arguments_indexes(std::move(arguments_indexes_))
-        , ansi_mode(ansi_mode_)
+        , force_grouping_standard_compatibility(force_grouping_standard_compatibility_)
     {}
 
     bool isVariadic() const override { return true; }
@@ -65,8 +65,8 @@ public:
         auto & result_data = result->getData();
         result_data.reserve(input_rows_count);
 
-        const UInt64 true_val = static_cast<UInt64>(!ansi_mode);
-        const UInt64 false_val = static_cast<UInt64>(ansi_mode);
+        const UInt64 true_val = static_cast<UInt64>(!force_grouping_standard_compatibility);
+        const UInt64 false_val = static_cast<UInt64>(force_grouping_standard_compatibility);
         for (size_t i = 0; i < input_rows_count; ++i)
         {
             UInt64 set_index = grouping_set_column->getElement(i);
@@ -84,15 +84,15 @@ public:
 class FunctionGroupingOrdinary : public FunctionGroupingBase
 {
 public:
-    explicit FunctionGroupingOrdinary(ColumnNumbers arguments_indexes_, bool ansi_mode_ = false)
-        : FunctionGroupingBase(std::move(arguments_indexes_), ansi_mode_)
+    explicit FunctionGroupingOrdinary(ColumnNumbers arguments_indexes_, bool force_grouping_standard_compatibility_ = true)
+        : FunctionGroupingBase(std::move(arguments_indexes_), force_grouping_standard_compatibility_)
     {}
 
     String getName() const override { return "groupingOrdinary"; }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr &, size_t input_rows_count) const override
     {
-        if (ansi_mode)
+        if (likely(force_grouping_standard_compatibility))
         {
             return ColumnUInt64::create(input_rows_count, static_cast<UInt64>(0));
         }
@@ -106,8 +106,8 @@ class FunctionGroupingForRollup : public FunctionGroupingBase
     const UInt64 aggregation_keys_number;
 
 public:
-    FunctionGroupingForRollup(ColumnNumbers arguments_indexes_, UInt64 aggregation_keys_number_, bool ansi_mode_ = false)
-        : FunctionGroupingBase(std::move(arguments_indexes_), ansi_mode_)
+    FunctionGroupingForRollup(ColumnNumbers arguments_indexes_, UInt64 aggregation_keys_number_, bool force_grouping_standard_compatibility_ = true)
+        : FunctionGroupingBase(std::move(arguments_indexes_), force_grouping_standard_compatibility_)
         , aggregation_keys_number(aggregation_keys_number_)
     {}
 
@@ -136,8 +136,8 @@ class FunctionGroupingForCube : public FunctionGroupingBase
 
 public:
 
-    FunctionGroupingForCube(ColumnNumbers arguments_indexes_, UInt64 aggregation_keys_number_, bool ansi_mode_ = false)
-        : FunctionGroupingBase(arguments_indexes_, ansi_mode_)
+    FunctionGroupingForCube(ColumnNumbers arguments_indexes_, UInt64 aggregation_keys_number_, bool force_grouping_standard_compatibility_ = true)
+        : FunctionGroupingBase(arguments_indexes_, force_grouping_standard_compatibility_)
         , aggregation_keys_number(aggregation_keys_number_)
     {}
 
@@ -165,8 +165,8 @@ class FunctionGroupingForGroupingSets : public FunctionGroupingBase
 {
     ColumnNumbersSetList grouping_sets;
 public:
-    FunctionGroupingForGroupingSets(ColumnNumbers arguments_indexes_, ColumnNumbersList const & grouping_sets_, bool ansi_mode_ = false)
-        : FunctionGroupingBase(std::move(arguments_indexes_), ansi_mode_)
+    FunctionGroupingForGroupingSets(ColumnNumbers arguments_indexes_, ColumnNumbersList const & grouping_sets_, bool force_grouping_standard_compatibility_ = true)
+        : FunctionGroupingBase(std::move(arguments_indexes_), force_grouping_standard_compatibility_)
     {
         for (auto const & set : grouping_sets_)
             grouping_sets.emplace_back(set.begin(), set.end());

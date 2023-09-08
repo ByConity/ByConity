@@ -19,11 +19,15 @@
 #include <Common/filesystemHelpers.h>
 #include <Common/quoteString.h>
 #include <Common/formatReadable.h>
-#include "IO/ReadBufferFromS3.h"
-#include "IO/S3Common.h"
+#include <IO/Scheduler/IOScheduler.h>
+#include <IO/S3Common.h>
+#include <IO/S3RemoteFSReader.h>
+#include <IO/ReadBufferFromS3.h>
+#include <IO/PFRAWSReadBufferFromFS.h>
+#include <IO/WSReadBufferFromFS.h>
 #include <Disks/DiskFactory.h>
-#include <Storages/S3/RAReadBufferFromS3.h>
-#include <Storages/S3/WriteBufferFromByteS3.h>
+#include <IO/RAReadBufferFromS3.h>
+#include <IO/WriteBufferFromByteS3.h>
 
 namespace DB
 {
@@ -130,6 +134,14 @@ private:
     CurrentMetrics::Increment metric_increment;
 };
 
+DiskByteS3::DiskByteS3(const String& name_, const String& root_prefix_, const String& bucket_,
+    const std::shared_ptr<Aws::S3::S3Client>& client_):
+        disk_id(next_disk_id.fetch_add(1)), name(name_), root_prefix(root_prefix_),
+        s3_util(client_, bucket_), reader_opts(std::make_shared<S3RemoteFSReaderOpts>(client_, bucket_)),
+        reserved_bytes(0), reservation_count(0)
+{
+}
+
 ReservationPtr DiskByteS3::reserve(UInt64 bytes)
 {
     return std::make_unique<DiskByteS3Reservation>(std::static_pointer_cast<DiskByteS3>(shared_from_this()), bytes);
@@ -174,14 +186,30 @@ void DiskByteS3::listFiles(const String& path, std::vector<String>& file_names)
 
 std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path, const ReadSettings & settings) const
 {
-    if (settings.s3_use_read_ahead)
-    {
-        return std::make_unique<RAReadBufferFromS3>(
-            s3_util.getClient(), s3_util.getBucket(), std::filesystem::path(root_prefix) / path, 3, settings.buffer_size);
+    String object_key = std::filesystem::path(root_prefix) / path;
+    if (IO::Scheduler::IOSchedulerSet::instance().enabled() && settings.enable_io_scheduler) {
+        if (settings.enable_io_pfra) {
+            return std::make_unique<PFRAWSReadBufferFromFS>(object_key, reader_opts,
+                IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(object_key),
+                PFRAWSReadBufferFromFS::Options {
+                    .min_buffer_size_ = settings.buffer_size,
+                    .throttler_ = settings.throttler,
+                }
+            );
+        } else {
+            return std::make_unique<WSReadBufferFromFS>(object_key, reader_opts,
+                IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(object_key),
+                settings.buffer_size, nullptr, 0, settings.throttler);
+        }
+    } else {
+        if (settings.enable_io_pfra) {
+            return std::make_unique<RAReadBufferFromS3>(s3_util.getClient(),
+                s3_util.getBucket(), object_key, 3, settings.buffer_size);
+        } else {
+            return std::make_unique<ReadBufferFromS3>(s3_util.getClient(),
+                s3_util.getBucket(), object_key, settings, 3, false);
+        }
     }
-
-    return std::make_unique<ReadBufferFromS3>(
-        s3_util.getClient(), s3_util.getBucket(), std::filesystem::path(root_prefix) / path, settings, 3, false);
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String& path,
@@ -189,7 +217,7 @@ std::unique_ptr<WriteBufferFromFileBase> DiskByteS3::writeFile(const String& pat
 {
     return std::make_unique<WriteBufferFromByteS3>(s3_util.getClient(), s3_util.getBucket(),
         std::filesystem::path(root_prefix) / path, 16 * 1024 * 1024,
-        16 * 1024 * 1024, false, settings.file_meta, settings.buffer_size);
+        16 * 1024 * 1024, settings.file_meta, settings.buffer_size, false);
 }
 
 void DiskByteS3::removeFile(const String& path)

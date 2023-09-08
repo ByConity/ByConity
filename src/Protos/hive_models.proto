@@ -1,6 +1,15 @@
 syntax = "proto2";
 package DB.Protos;
 
+message HudiProperties {
+  message KeyValue {
+    optional string key = 1;
+    optional string value = 2;
+  }
+
+  repeated KeyValue properties = 1;
+}
+
 message ProtoHiveFile
 {
     optional uint32 format = 1;
@@ -8,6 +17,8 @@ message ProtoHiveFile
     optional uint64 file_size = 3;
     optional string storage = 4;
     optional string partition_id = 5;
+
+    optional HudiProperties properties = 6;
 }
 
 message ProtoHiveFiles

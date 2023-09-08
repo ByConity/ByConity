@@ -23,6 +23,7 @@
 #include <Optimizer/SymbolEquivalencesDeriver.h>
 
 #include <memory>
+#include <string>
 
 namespace DB
 {
@@ -71,7 +72,8 @@ public:
         {
             return lowest_cost_expressions.at(property_set);
         }
-        throw Exception("Cascades can not build plan", ErrorCodes::PLAN_BUILD_ERROR);
+        throw Exception(
+            "Cascades can not build plan, Group " + std::to_string(id) + " " + property_set.toString(), ErrorCodes::PLAN_BUILD_ERROR);
     }
 
     bool hasWinner(const Property & property_set) const { return lowest_cost_expressions.contains(property_set); }

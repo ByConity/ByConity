@@ -296,12 +296,12 @@ public:
         : Parent(uri, timeouts_, max_redirects_)
         , per_endpoint_pool_size { per_endpoint_pool_size_ }
     {
-        session = makePooledHTTPSession(initial_uri, timeouts, per_endpoint_pool_size);
+        session = makePooledHTTPSession(initial_uri, timeouts, per_endpoint_pool_size, true, true);
     }
 
     void buildNewSession(const Poco::URI & uri) override
     {
-       session = makePooledHTTPSession(uri, timeouts, per_endpoint_pool_size);
+       session = makePooledHTTPSession(uri, timeouts, per_endpoint_pool_size, true, true);
     }
 };
 

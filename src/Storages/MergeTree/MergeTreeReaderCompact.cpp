@@ -57,30 +57,26 @@ MergeTreeReaderCompact::CompactDataReader::CompactDataReader(
         settings.save_marks_in_cache,
         data_part->getFileOffsetOrZero(data_part->index_granularity_info.getMarksFilePath(MergeTreeDataPartCompact::DATA_FILE_NAME)),
         data_part->getFileSizeOrZero(data_part->index_granularity_info.getMarksFilePath(MergeTreeDataPartCompact::DATA_FILE_NAME)),
+        settings.read_settings,
         std::dynamic_pointer_cast<const MergeTreeDataPartCompact>(data_part)->getColumnsWithoutByteMapColSize())
 {
     // Do not use max_read_buffer_size, but try to lower buffer size with maximal size of granule to avoid reading much data.
     auto buffer_size = getReadBufferSize(data_part, marks_loader, column_positions_, all_mark_ranges);
-    if (!buffer_size || settings.max_read_buffer_size < buffer_size)
-        buffer_size = settings.max_read_buffer_size;
+    if (!buffer_size || settings.read_settings.buffer_size < buffer_size)
+        buffer_size = settings.read_settings.buffer_size;
     // auto buffer_size = settings.max_read_buffer_size;
 
+    ReadSettings data_read_settings = settings.read_settings;
+    data_read_settings.buffer_size = buffer_size;
+    data_read_settings.estimated_size = 0;
     const String full_data_path = data_part->getFullRelativePath() + MergeTreeDataPartCompact::DATA_FILE_NAME_WITH_EXTENSION;
     if (uncompressed_cache)
     {
         auto buffer = std::make_unique<CachedCompressedReadBuffer>(
             fullPath(data_part->volume->getDisk(), full_data_path),
-            [&, full_data_path, buffer_size]() {
+            [&, full_data_path, data_read_settings]() {
                 return data_part->volume->getDisk()->readFile(
-                    full_data_path,
-                    {
-                        .buffer_size = buffer_size,
-                        .estimated_size = 0,
-                        .aio_threshold = settings.min_bytes_to_use_direct_io,
-                        .mmap_threshold = settings.min_bytes_to_use_mmap_io,
-                        .mmap_cache = settings.mmap_cache.get()
-                    }
-                );
+                    full_data_path, data_read_settings);
             },
             uncompressed_cache,
             /* allow_different_codecs = */ true);
@@ -97,16 +93,7 @@ MergeTreeReaderCompact::CompactDataReader::CompactDataReader(
     else
     {
         auto buffer = std::make_unique<CompressedReadBufferFromFile>(
-            data_part->volume->getDisk()->readFile(
-                full_data_path,
-                {
-                    .buffer_size = buffer_size,
-                    .estimated_size = 0,
-                    .aio_threshold = settings.min_bytes_to_use_direct_io,
-                    .mmap_threshold = settings.min_bytes_to_use_mmap_io,
-                    .mmap_cache = settings.mmap_cache.get()
-                }
-            ),
+            data_part->volume->getDisk()->readFile(full_data_path, data_read_settings),
             /* allow_different_codecs = */ true);
 
         if (profile_callback_)

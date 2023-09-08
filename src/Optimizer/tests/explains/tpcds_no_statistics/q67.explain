@@ -19,7 +19,7 @@ Projection Est. 100 rows
                            │     Expressions: [d_moy, d_qoy, d_year, expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)), i_brand, i_category, i_class, i_product_name, s_store_id]
                            └─ MergingAggregated Est. ? rows
                               └─ Repartition Exchange Est. ? rows
-                                 │     Partition by: {d_moy, d_qoy, d_year, i_brand, i_category, i_class, i_product_name, s_store_id}
+                                 │     Partition by: {__grouping_set, d_moy, d_qoy, d_year, i_brand, i_category, i_class, i_product_name, s_store_id}
                                  └─ Aggregating Est. ? rows
                                     │     Group by: {d_moy, d_qoy, d_year, i_brand, i_category, i_class, i_product_name, s_store_id}
                                     │     Aggregates: expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)):=AggNull(sum)(expr#coalesce(multiply(ss_sales_price, ss_quantity), 0))

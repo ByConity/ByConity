@@ -23,6 +23,7 @@
 #include <IO/S3Common.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 #include <aws/s3/S3Client.h>
+#include <IO/RemoteFSReader.h>
 
 namespace DB
 {
@@ -40,9 +41,7 @@ public:
     friend class DiskByteS3Reservation;
 
     DiskByteS3(const String& name_, const String& root_prefix_, const String& bucket_,
-        const std::shared_ptr<Aws::S3::S3Client>& client_):
-            disk_id(next_disk_id.fetch_add(1)), name(name_), root_prefix(root_prefix_),
-            s3_util(client_, bucket_), reserved_bytes(0), reservation_count(0) {}
+        const std::shared_ptr<Aws::S3::S3Client>& client_);
 
     virtual const String & getName() const override { return name; }
 
@@ -132,6 +131,8 @@ private:
     String name;
     String root_prefix;
     S3::S3Util s3_util;
+
+    std::shared_ptr<RemoteFSReaderOpts> reader_opts;
 
     UInt64 reserved_bytes;
     UInt64 reservation_count;

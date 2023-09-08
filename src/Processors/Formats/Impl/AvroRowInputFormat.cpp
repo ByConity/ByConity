@@ -664,7 +664,7 @@ private:
                 Poco::Net::HTTPRequest request(Poco::Net::HTTPRequest::HTTP_GET, url.getPathAndQuery(), Poco::Net::HTTPRequest::HTTP_1_1);
                 request.setHost(url.getHost());
 
-                auto session = makePooledHTTPSession(url, timeouts, 1);
+                auto session = makePooledHTTPSession(url, timeouts, 1, true, true);
                 std::istream * response_body{};
                 try
                 {

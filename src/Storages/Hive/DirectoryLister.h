@@ -3,11 +3,12 @@
 #include "Common/config.h"
 #if USE_HIVE
 
-#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
+#include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Disks/IDisk.h"
 
 namespace DB
 {
+class StorageCnchHive;
 
 class IDirectoryLister
 {
@@ -15,19 +16,21 @@ public:
     IDirectoryLister() = default;
     virtual ~IDirectoryLister() = default;
 
-    virtual HiveFiles list() = 0;
+    virtual HiveFiles list(const HivePartitionPtr & partition) = 0;
 };
 
 class DiskDirectoryLister : public IDirectoryLister
 {
 public:
-    DiskDirectoryLister(const HivePartitionPtr & partition_, const DiskPtr & disk_);
+    explicit DiskDirectoryLister(const DiskPtr & disk_, IHiveFile::FileFormat format);
 
-    HiveFiles list() override;
+    HiveFiles list(const HivePartitionPtr & partition) override;
+
+protected:
+    DiskPtr disk;
 
 private:
-    HivePartitionPtr partition;
-    DiskPtr disk;
+    IHiveFile::FileFormat file_format;
 };
 
 struct CnchHiveSettings;

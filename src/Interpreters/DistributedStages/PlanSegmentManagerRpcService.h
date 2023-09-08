@@ -108,7 +108,7 @@ public:
         brpc::ClosureGuard done_guard(done);
         RuntimeSegmentsStatus status{
             request->query_id(), request->segment_id(), request->is_succeed(), request->is_canceled(), RuntimeSegmentsMetrics(request->metrics()), request->message(), request->code()};
-        const SegmentSchedulerPtr & scheduler = context->getSegmentScheduler();
+        SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
         scheduler->updateSegmentStatus(status);
         scheduler->updateQueryStatus(status);
 

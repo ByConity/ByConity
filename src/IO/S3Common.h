@@ -74,7 +74,10 @@ public:
     PocoHTTPClientConfiguration createClientConfiguration(
         const String & force_region,
         const RemoteHostFilter & remote_host_filter,
-        unsigned int s3_max_redirects);
+        unsigned int s3_max_redirects,
+        uint32_t http_keep_alive_timeout_ms,
+        size_t http_connection_pool_size,
+        bool wait_on_pool_size_limit);
 
 private:
     ClientFactory();
@@ -125,13 +128,17 @@ public:
 
     S3Config(const String& endpoint_, const String& region_, const String& bucket_,
         const String& ak_id_, const String& ak_secret_, const String& root_prefix_,
+        bool is_virtual_hosted_style_ = false,
         int connect_timeout_ms_ = 10000, int request_timeout_ms_ = 30000,
-        int max_redirects_ = 10, int max_connections_ = 100):
-            virtual_host_style(false), max_redirects(max_redirects_),
-            connect_timeout_ms(connect_timeout_ms_),
+        int max_redirects_ = 10, int max_connections_ = 100, uint32_t http_keep_alive_timeout_ms_ = 5000,
+        size_t http_connection_pool_size_ = 1024):
+            max_redirects(max_redirects_), connect_timeout_ms(connect_timeout_ms_),
             request_timeout_ms(request_timeout_ms_), max_connections(max_connections_),
             endpoint(endpoint_), region(region_), bucket(bucket_), ak_id(ak_id_),
-            ak_secret(ak_secret_), root_prefix(root_prefix_) {}
+            ak_secret(ak_secret_), root_prefix(root_prefix_),
+            is_virtual_hosted_style(is_virtual_hosted_style_),
+            http_keep_alive_timeout_ms(http_keep_alive_timeout_ms_),
+            http_connection_pool_size(http_connection_pool_size_) {}
 
     S3Config(const Poco::Util::AbstractConfiguration& cfg, const String& cfg_prefix);
 
@@ -139,7 +146,6 @@ public:
 
     std::shared_ptr<Aws::S3::S3Client> create() const;
 
-    bool virtual_host_style;
     int max_redirects;
     int connect_timeout_ms;
     int request_timeout_ms;
@@ -150,6 +156,9 @@ public:
     String ak_id;
     String ak_secret;
     String root_prefix;
+    bool is_virtual_hosted_style;
+    uint32_t http_keep_alive_timeout_ms;
+    size_t http_connection_pool_size;
 };
 
 class S3Util

@@ -43,7 +43,7 @@ public:
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 
     String name() const override { return "CascadesOptimizer"; }
-    static Property optimize(GroupId root, CascadesContext & context, const Property & required_prop);
+    static WinnerPtr optimize(GroupId root, CascadesContext & context, const Property & required_prop);
     static PlanNodePtr buildPlanNode(GroupId root, CascadesContext & context, const Property & required_prop);
 };
 

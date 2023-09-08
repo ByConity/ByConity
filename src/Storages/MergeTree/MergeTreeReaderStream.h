@@ -30,7 +30,8 @@
 #include <Compression/CompressedReadBufferFromFile.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
-#include "Storages/MergeTree/IMergeTreeReaderStream.h"
+#include <IO/ReadSettings.h>
+#include <Storages/MergeTree/IMergeTreeReaderStream.h>
 
 
 namespace DB
@@ -62,8 +63,7 @@ private:
 
     size_t marks_count;
 
-    MarkCache * mark_cache;
-    bool save_marks_in_cache;
+    ReadSettings read_settings;
 
     off_t data_file_offset;
 

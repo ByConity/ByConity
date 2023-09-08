@@ -11,7 +11,7 @@ Projection Est. 100 rows
             │     Limit: 100
             └─ MergingAggregated Est. ? rows
                └─ Repartition Exchange Est. ? rows
-                  │     Partition by: {i_brand, i_category, i_class, i_product_name}
+                  │     Partition by: {__grouping_set, i_brand, i_category, i_class, i_product_name}
                   └─ Aggregating Est. ? rows
                      │     Group by: {i_brand, i_category, i_class, i_product_name}
                      │     Aggregates: expr#avg(inv_quantity_on_hand):=AggNull(avg)(inv_quantity_on_hand)

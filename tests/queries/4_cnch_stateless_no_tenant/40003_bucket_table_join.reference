@@ -1,0 +1,14 @@
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Inner Join Est. ? rows
+            │     Condition: event_date == p_date, hash_uid == hash_uid_1
+            ├─ Local Exchange Est. ? rows
+            │  └─ TableScan test.table_misc Est. ? rows
+            │           Outputs: [event_date, hash_uid]
+            └─ TableScan test.daily_misc Est. ? rows
+                     Outputs: [p_date], hash_uid_1:=hash_uid
