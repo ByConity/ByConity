@@ -14,28 +14,24 @@ users:
     password: ""
     profile: default
     quota: default
-    access_management: 1
   readonly:
     networks:
       ip: ::/0
     password: ""
     profile: readonly
     quota: default
-    access_management: 1
   server:
     networks:
       ip: ::/0
     password: ""
     profile: default
     quota: default
-    access_management: 1
   probe:
     networks:
       ip: ::/0
     password: ""
     profile: default
     quota: default
-    access_management: 1
 
 quotas:
   default:
