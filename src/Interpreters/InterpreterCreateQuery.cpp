@@ -684,7 +684,11 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
     {
         return {};
     }
-    else
+    else if (!create.storage || !create.storage->engine)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected application state. CREATE query is missing either its storage or engine.");
+    /// We can have queries like "CREATE TABLE <table> ENGINE=<engine>" if <engine>
+    /// supports schema inference (will determine table structure in it's constructor).
+    else if (!StorageFactory::instance().checkIfStorageSupportsSchemaInference(create.storage->engine->name))
         throw Exception("Incorrect CREATE query: required list of column descriptions or AS section or SELECT.", ErrorCodes::INCORRECT_QUERY);
 
     /// Even if query has list of columns, canonicalize it (unfold Nested columns).
