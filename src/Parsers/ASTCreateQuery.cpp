@@ -399,7 +399,7 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
 
     frame.expression_list_always_start_on_new_line = true;
 
-    if (columns_list && !as_table_function)
+    if (columns_list && !columns_list->empty() && !as_table_function)
     {
         settings.ostr << (settings.one_line ? " (" : "\n(");
         FormatStateStacked frame_nested = frame;

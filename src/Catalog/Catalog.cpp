@@ -1561,7 +1561,7 @@ namespace Catalog
                 }
 
                 // If target table is a bucket table, table_definition_hash check was skipped and is initially fully clustered
-                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false 
+                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false
                 if (storage->isBucketTable()
                     && context.getSettings().allow_attach_parts_with_different_table_definition_hash
                     && isTableClustered(storage->getStorageUUID()))
@@ -1572,7 +1572,7 @@ namespace Catalog
                         {
                             setTableClusterStatus(storage->getStorageUUID(), false, storage->getTableHashForClusterBy());
                             break;
-                        }       
+                        }
                     }
                 }
 
@@ -2470,7 +2470,7 @@ namespace Catalog
                 }
 
                 // If target table is a bucket table, table_definition_hash check was skipped and is initially fully clustered
-                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false 
+                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false
                 if (table->isBucketTable()
                     && context.getSettings().allow_attach_parts_with_different_table_definition_hash
                     && isTableClustered(table->getStorageUUID()))
@@ -2481,7 +2481,7 @@ namespace Catalog
                         {
                             setTableClusterStatus(table->getStorageUUID(), false, table->getTableHashForClusterBy());
                             break;
-                        }       
+                        }
                     }
                 }
 
@@ -5350,7 +5350,7 @@ namespace Catalog
             [&] {
                 isSuccessful = meta_proxy->putAccessEntity(type, name_space, new_access_entity, old_access_entity, replace_if_exists);
                 if (!isSuccessful) // RBAC TODO: remove this check once FDB batchWrite throws exception on CAS fail like ByteKV batchWrite
-                {   
+                {
                     String error_msg = replace_if_exists ? "Failed to perform operation on KV Storage" : fmt::format("Access entity with name {} already exists", new_access_entity.name());
                     throw Exception(error_msg, ErrorCodes::ACCESS_ENTITY_ALREADY_EXISTS);
                 }
