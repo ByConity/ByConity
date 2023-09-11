@@ -218,6 +218,24 @@ std::set<String> getDeletingTablesFromServers(
     return res;
 }
 
+namespace
+{
+bool tryNext(Catalog::IMetaStore::IteratorPtr & trash_table_it)
+{
+    /// if the next() call got exception for some reason like iterator not found, return false so that iterator is reinitialized later.
+    bool ret = false;
+    try
+    {
+        ret = trash_table_it->next();
+    }
+    catch (Exception & e)
+    {
+        tryLogDebugCurrentException(__PRETTY_FUNCTION__);
+    }
+    return ret;
+}
+}
+
 bool DaemonJobGlobalGC::executeImpl()
 {
     Context & context = *getContext();
@@ -275,7 +293,7 @@ bool DaemonJobGlobalGC::executeImpl()
         LOG_DEBUG(log, "get trash table iterator took {} ms.", milliseconds);
     while(!num_of_table_can_send_sorted.empty())
     {
-        if (!trash_table_it->next())
+        if (!tryNext(trash_table_it))
         {
             if (new_iteration)
                 break;
