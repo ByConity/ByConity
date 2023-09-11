@@ -42,6 +42,8 @@ namespace ErrorCodes
 }
 }
 
+static time_t last_kinit_time = 0;
+
 namespace
 {
 struct K5Data
@@ -241,12 +243,16 @@ KerberosInit::~KerberosInit()
     }
 }
 
-void kerberosInit(const String & keytab_file, const String & principal, const String & cache_name)
-{
-    // Using mutex to prevent cache file corruptions
-    static std::mutex kinit_mtx;
-    std::lock_guard lck(kinit_mtx);
-    KerberosInit k_init;
-    k_init.init(keytab_file, principal, cache_name);
+void kerberosInit(const String & keytab_file, const String & principal, const String & cache_name, time_t kinit_timeout)
+{   
+    if ( time(nullptr) - kinit_timeout > last_kinit_time)
+    {
+        // Using mutex to prevent cache file corruptions
+        static std::mutex kinit_mtx;
+        std::lock_guard lck(kinit_mtx);
+        KerberosInit k_init;
+        k_init.init(keytab_file, principal, cache_name);
+        last_kinit_time =time(nullptr);
+    }
 }
 #endif // USE_KRB5
