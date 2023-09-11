@@ -39,6 +39,7 @@ namespace ErrorCodes
     extern const int BRPC_TIMEOUT;
     extern const int NO_SUCH_SERVICE;
     extern const int RESOURCE_MANAGER_NO_LEADER_ELECTED;
+    extern const int RESOURCE_MANAGER_LEADER_NOT_WORK_WELL;
 }
 
 namespace ResourceManagement
@@ -157,6 +158,10 @@ private:
             {
                 LOG_ERROR(log, "There is no active elected RM leader");
                 throw Exception("No active RM leader", ErrorCodes::RESOURCE_MANAGER_NO_LEADER_ELECTED);
+            }
+            else if (new_leader == leader_host_port)
+            {
+                throw Exception("The leader from election result not work well", ErrorCodes::RESOURCE_MANAGER_LEADER_NOT_WORK_WELL);
             }
             /// Update leader address and retry in case of any exception.
             else
