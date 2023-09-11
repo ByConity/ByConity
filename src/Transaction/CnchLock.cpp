@@ -138,10 +138,17 @@ CnchLockHolder::CnchLockHolder(const ContextPtr & context_, std::vector<LockInfo
 
 CnchLockHolder::~CnchLockHolder()
 {
-    if (report_lock_heartbeat_task)
-        report_lock_heartbeat_task->deactivate();
+    try
+    {
+        if (report_lock_heartbeat_task)
+            report_lock_heartbeat_task->deactivate();
 
-    unlock();
+        unlock();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
 }
 
 bool CnchLockHolder::tryLock()
