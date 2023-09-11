@@ -20,6 +20,7 @@
 #if USE_KRB5
 #include <string>
 #include <hdfs/hdfs.h>
+#include <Access/KerberosInit.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <common/types.h>
 
@@ -34,6 +35,8 @@ public:
     String hadoop_kerberos_keytab;
     String hadoop_kerberos_principal;
     String hadoop_security_kerberos_ticket_cache_path;
+
+    time_t kinit_timeout = DEFAULT_KINIT_TIMEOUT;
 
     bool need_kinit{false};
 

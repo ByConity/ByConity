@@ -42,6 +42,7 @@ HDFSKrb5Params::parseKrb5FromConfig(const Poco::Util::AbstractConfiguration & co
     const String kerberos_keytab = config_key("hadoop_kerberos_keytab");
     const String kerberos_principal = config_key("hadoop_kerberos_principal");
     const String kerberos_ticket_cache_path = config_key("hadoop_security_kerberos_ticket_cache_path");
+    const String kerberos_kinit_timeout = config_key("hadoop_security_kerberos_kinit_timeout");
 
     HDFSKrb5Params krb5_params;
 
@@ -66,6 +67,11 @@ HDFSKrb5Params::parseKrb5FromConfig(const Poco::Util::AbstractConfiguration & co
         krb5_params.hadoop_security_kerberos_ticket_cache_path = config.getString(kerberos_ticket_cache_path);
     }
 
+    if (config.has(kerberos_kinit_timeout))
+    {
+        krb5_params.kinit_timeout = config.getUInt(kerberos_kinit_timeout);
+    }
+
     return krb5_params;
 }
 
@@ -83,7 +89,7 @@ void HDFSKrb5Params::runKinit() const
     if (need_kinit)
     {
         LOG_DEBUG(&Poco::Logger::get("HDFSClient"), "Running KerberosInit");
-        kerberosInit(hadoop_kerberos_keytab, hadoop_kerberos_principal, hadoop_security_kerberos_ticket_cache_path);
+        kerberosInit(hadoop_kerberos_keytab, hadoop_kerberos_principal, hadoop_security_kerberos_ticket_cache_path, kinit_timeout);
         LOG_DEBUG(&Poco::Logger::get("HDFSClient"), "Finished KerberosInit");
     }
 }
