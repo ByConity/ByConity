@@ -117,7 +117,7 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
     Block header;
     if (ast->as<ASTSelectWithUnionQuery>())
-        header = InterpreterSelectWithUnionQuery(ast, context, SelectQueryOptions(QueryProcessingStage::Complete).analyze()).getSampleBlock();
+        header = InterpreterSelectWithUnionQuery(ast, context, SelectQueryOptions(QueryProcessingStage::Complete)).getSampleBlock();
     Pipes remote_pipes;
     auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(*res.remote_execution_conn, query, header, context);
     remote_query_executor->setPoolMode(PoolMode::GET_ONE);

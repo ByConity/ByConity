@@ -1051,9 +1051,6 @@ ServerDataPartsVector StorageCnchMergeTree::getAllPartsInPartitions(
     if (local_context->getCnchCatalog())
     {
         TransactionCnchPtr cur_txn = local_context->getCurrentTransaction();
-        if (!cur_txn)
-            throw Exception("current txn is not set.", ErrorCodes::LOGICAL_ERROR);
-
         Stopwatch watch;
         auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
         // TEST_LOG(testlog, "get partition list.");
