@@ -95,9 +95,8 @@ BlockIO executeQuery(
 /// Return true if current query is in an interactive transaction session
 bool isQueryInInteractiveSession(const ContextPtr & context, [[maybe_unused]] const ASTPtr & query = nullptr);
 
-/// Return true if query is ddl
+// Return true if query is ddl
 bool isDDLQuery(const ContextPtr & context, const ASTPtr & query);
-
 
 /// Async query execution
 
