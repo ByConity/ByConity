@@ -258,6 +258,12 @@ public:
         Protos::ExecuteOptimizeQueryResp * response,
         google::protobuf::Closure * done) override;
 
+    void notifyAccessEntityChange(
+    google::protobuf::RpcController *,
+    const Protos::notifyAccessEntityChangeReq * request,
+    Protos::notifyAccessEntityChangeResp * response,
+    google::protobuf::Closure *done) override;
+
 private:
     const UInt64 server_start_time;
     std::optional<GlobalGCManager> global_gc_manager;

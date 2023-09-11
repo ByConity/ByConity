@@ -69,8 +69,8 @@ namespace
         query->names->push_back(user.getName());
         query->attach = attach_mode;
 
-        if (user.allowed_client_hosts != AllowedClientHosts::AnyHostTag{})
-            query->hosts = user.allowed_client_hosts;
+        // if (user.allowed_client_hosts != AllowedClientHosts::AnyHostTag{})
+        //     query->hosts = user.allowed_client_hosts;
 
         if (user.default_roles != RolesOrUsersSet::AllTag{})
         {

@@ -415,6 +415,16 @@ namespace ProfileEvents
     extern const Event GetBGJobStatusesFailed;
     extern const Event DropBGJobStatusSuccess;
     extern const Event DropBGJobStatusFailed;
+    extern const Event TryGetAccessEntitySuccess;
+    extern const Event TryGetAccessEntityFailed;
+    extern const Event GetAllAccessEntitySuccess;
+    extern const Event GetAllAccessEntityFailed;
+    extern const Event TryGetAccessEntityNameSuccess;
+    extern const Event TryGetAccessEntityNameFailed;
+    extern const Event PutAccessEntitySuccess;
+    extern const Event PutAccessEntityFailed;
+    extern const Event DropAccessEntitySuccess;
+    extern const Event DropAccessEntityFailed;
 }
 
 namespace DB
@@ -439,6 +449,7 @@ namespace ErrorCodes
     extern const int DICTIONARY_NOT_EXIST;
     extern const int UNKNOWN_MASKING_POLICY_NAME;
     extern const int BUCKET_TABLE_ENGINE_MISMATCH;
+    extern const int ACCESS_ENTITY_ALREADY_EXISTS;
 }
 
 namespace Catalog
@@ -1550,7 +1561,7 @@ namespace Catalog
                 }
 
                 // If target table is a bucket table, table_definition_hash check was skipped and is initially fully clustered
-                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false 
+                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false
                 if (storage->isBucketTable()
                     && context.getSettings().allow_attach_parts_with_different_table_definition_hash
                     && isTableClustered(storage->getStorageUUID()))
@@ -1561,7 +1572,7 @@ namespace Catalog
                         {
                             setTableClusterStatus(storage->getStorageUUID(), false, storage->getTableHashForClusterBy());
                             break;
-                        }       
+                        }
                     }
                 }
 
@@ -2459,7 +2470,7 @@ namespace Catalog
                 }
 
                 // If target table is a bucket table, table_definition_hash check was skipped and is initially fully clustered
-                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false 
+                // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false
                 if (table->isBucketTable()
                     && context.getSettings().allow_attach_parts_with_different_table_definition_hash
                     && isTableClustered(table->getStorageUUID()))
@@ -2470,7 +2481,7 @@ namespace Catalog
                         {
                             setTableClusterStatus(table->getStorageUUID(), false, table->getTableHashForClusterBy());
                             break;
-                        }       
+                        }
                     }
                 }
 
@@ -5265,6 +5276,137 @@ namespace Catalog
                 createPartWrapperFromModel(storage, part_model)));
         }
         return parts_vec;
+    }
+
+    // Access Entities
+    std::optional<AccessEntityModel> Catalog::tryGetAccessEntity(EntityType type, const String & name)
+    {
+        String data;
+        runWithMetricSupport(
+            [&] {
+                data = meta_proxy->getAccessEntity(type, name_space, name);
+            },
+            ProfileEvents::TryGetAccessEntitySuccess,
+            ProfileEvents::TryGetAccessEntityFailed);
+
+        if (data.empty())
+            return {};
+
+        AccessEntityModel entity;
+        entity.ParseFromString(std::move(data));
+        return entity;
+    }
+
+    std::vector<AccessEntityModel> Catalog::getAllAccessEntities(EntityType type)
+    {
+        std::vector<AccessEntityModel> entities;
+        runWithMetricSupport(
+            [&] {
+                Strings data = meta_proxy->getAllAccessEntities(type, name_space);
+                entities.reserve(data.size());
+                for (const auto & s : data)
+                {
+                    AccessEntityModel model;
+                    model.ParseFromString(std::move(s));
+                    entities.push_back(std::move(model));
+                }
+            },
+            ProfileEvents::GetAllAccessEntitySuccess,
+            ProfileEvents::GetAllAccessEntityFailed);
+        return entities;
+    }
+
+    std::optional<String> Catalog::tryGetAccessEntityName(const UUID & uuid)
+    {
+        String data;
+        runWithMetricSupport(
+            [&] {
+                data = meta_proxy->getAccessEntityNameByUUID(name_space, uuid);
+            },
+            ProfileEvents::TryGetAccessEntityNameSuccess,
+            ProfileEvents::TryGetAccessEntityNameFailed);
+
+        return data;
+    }
+
+    void Catalog::dropAccessEntity(EntityType type, const UUID & uuid, const String & name)
+    {
+        bool isSuccessful = false;
+        runWithMetricSupport(
+            [&] {
+                isSuccessful = meta_proxy->dropAccessEntity(type, name_space, uuid, name);
+            },
+            ProfileEvents::DropAccessEntitySuccess,
+            ProfileEvents::DropAccessEntityFailed);
+        if (isSuccessful)
+            notifyOtherServersOnAccessEntityChange(context, type, name, log);
+    }
+
+    void Catalog::putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists)
+    {
+        new_access_entity.set_commit_time(context.getTimestamp());
+        bool isSuccessful = false;
+        runWithMetricSupport(
+            [&] {
+                isSuccessful = meta_proxy->putAccessEntity(type, name_space, new_access_entity, old_access_entity, replace_if_exists);
+                if (!isSuccessful) // RBAC TODO: remove this check once FDB batchWrite throws exception on CAS fail like ByteKV batchWrite
+                {
+                    String error_msg = replace_if_exists ? "Failed to perform operation on KV Storage" : fmt::format("Access entity with name {} already exists", new_access_entity.name());
+                    throw Exception(error_msg, ErrorCodes::ACCESS_ENTITY_ALREADY_EXISTS);
+                }
+            },
+            ProfileEvents::PutAccessEntitySuccess,
+            ProfileEvents::PutAccessEntityFailed);
+        if (isSuccessful)
+            notifyOtherServersOnAccessEntityChange(context, type, new_access_entity.name(), log);
+    }
+
+    void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & name, Poco::Logger * log)
+    {
+        std::shared_ptr<CnchTopologyMaster> topology_master = context.getCnchTopologyMaster();
+        if (!topology_master)
+        {
+            LOG_ERROR(log, "Failed to get topology master, skip notifying other servers of access entity change");
+            return;
+        }
+
+        std::vector<CnchServerClientPtr> clients;
+        std::list<CnchServerTopology> server_topologies = topology_master->getCurrentTopology();
+        if (server_topologies.empty())
+        {
+            LOG_ERROR(log, "Server topology is empty, something wrong with topology, return empty result");
+            return;
+        }
+
+        HostWithPortsVec host_ports = server_topologies.back().getServerList();
+
+        for (const auto & host_port : host_ports)
+        {
+            String rpc_address = host_port.getRPCAddress();
+            if (isLocalServer(rpc_address, std::to_string(context.getRPCPort())))
+                continue;
+            CnchServerClientPtr client_ptr = context.getCnchServerClientPool().get(host_port);
+            if (!client_ptr)
+                continue;
+            else
+                clients.push_back(client_ptr);
+        }
+
+        for (const auto & client : clients)
+        {
+            if (!client)
+                continue;
+            String rpc_address = client->getRPCAddress();
+            try
+            {
+                client->notifyAccessEntityChange(type, name);
+            }
+            catch (...)
+            {
+                LOG_INFO(log, "Failed to reach server: {}, detail: ", rpc_address);
+                tryLogCurrentException(log, "Failed to reach server: " + rpc_address);
+            }
+        }
     }
 
     void fillUUIDForDictionary(DB::Protos::DataModelDictionary & d)

@@ -65,6 +65,8 @@ private:
     FileOffsetAndSize mrk_file_pos;
     size_t marks_count;
 
+    ReadSettings read_settings;
+
     String stream_name;
     String extension;
     FileOffsetAndSize stream_file_pos;

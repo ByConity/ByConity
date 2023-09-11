@@ -261,3 +261,6 @@
 [submodule "contrib/parallel-hashmap"]
 	path = contrib/parallel-hashmap
 	url = https://github.com/greg7mdp/parallel-hashmap.git
+[submodule "contrib/arrow-nanoarrow"]
+	path = contrib/arrow-nanoarrow
+	url = https://github.com/apache/arrow-nanoarrow.git

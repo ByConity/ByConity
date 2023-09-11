@@ -511,6 +511,8 @@ struct ContextSharedPart
 
             if (cache_manager)
                 cache_manager.reset();
+
+            access_control_manager.stopBgJobForKVStorage();
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
 
@@ -716,13 +718,15 @@ InterserverIOHandler & Context::getInterserverIOHandler()
 ReadSettings Context::getReadSettings() const
 {
     ReadSettings res;
+    res.enable_io_scheduler = settings.enable_io_scheduler;
+    res.enable_io_pfra = settings.enable_io_pfra || settings.s3_use_read_ahead;
     res.buffer_size = settings.max_read_buffer_size;
     res.aio_threshold = settings.min_bytes_to_use_direct_io;
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
+    res.mmap_cache = getMMappedFileCache().get();
     res.remote_read_min_bytes_for_seek = settings.remote_read_min_bytes_for_seek;
     res.disk_cache_mode = settings.disk_cache_mode;
     res.skip_download_if_exceeds_query_cache = settings.skip_download_if_exceeds_query_cache;
-    res.s3_use_read_ahead = settings.s3_use_read_ahead;
     return res;
 }
 
@@ -1368,7 +1372,21 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
 
 void Context::setUser(const String & name, const String & password, const Poco::Net::SocketAddress & address)
 {
-    setUser(BasicCredentials(name, password), address);
+    //CNCH multi-tenant user name pattern from gateway client: {tenant_id}`{user_name}
+    String user = name;
+    bool pushed = false;
+    if (auto pos = user.find('`'); pos != String::npos)
+    {
+        auto tenant_id = String(user.c_str(), pos);
+        this->setSetting("tenant_id", tenant_id); /// {tenant_id}`*
+        this->setTenantId(tenant_id);
+        pushTenantId(tenant_id);
+        pushed = true;
+        user = user.substr(pos + 1); ///{tenant_id}`user_name=>user_name
+    }
+    setUser(BasicCredentials(user, password), address);
+    if (pushed)
+        popTenantId();
 }
 
 void Context::setUserWithoutCheckingPassword(const String & name, const Poco::Net::SocketAddress & address)

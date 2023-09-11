@@ -46,10 +46,11 @@ MergeTreeReaderStream::MergeTreeReaderStream(
     clockid_t clock_type_):
         data_disk(bin_file_.disk), data_rel_path(bin_file_.rel_path),
         stream_name(stream_name_), marks_count(marks_count_),
-        mark_cache(mark_cache_), save_marks_in_cache(settings_.save_marks_in_cache),
-        data_file_offset(bin_file_.offset), index_granularity_info(index_granularity_info_),
+        read_settings(settings_.read_settings), data_file_offset(bin_file_.offset),
+        index_granularity_info(index_granularity_info_),
         marks_loader(mrk_file_.disk, mark_cache_, mrk_file_.rel_path, stream_name_,
-            marks_count_, *index_granularity_info_, save_marks_in_cache, mrk_file_.offset, mrk_file_.size)
+            marks_count_, *index_granularity_info_, settings_.save_marks_in_cache, mrk_file_.offset,
+            mrk_file_.size, settings_.read_settings)
 {
     /// Compute the size of the buffer.
     size_t max_mark_range_bytes = 0;
@@ -96,27 +97,20 @@ MergeTreeReaderStream::MergeTreeReaderStream(
     /// Avoid empty buffer. May happen while reading dictionary for DataTypeLowCardinality.
     /// For example: part has single dictionary and all marks point to the same position.
     if (max_mark_range_bytes == 0)
-        max_mark_range_bytes = settings_.max_read_buffer_size;
+        max_mark_range_bytes = settings_.read_settings.buffer_size;
 
-    size_t buffer_size = std::min(settings_.max_read_buffer_size, max_mark_range_bytes);
+    size_t buffer_size = std::min(settings_.read_settings.buffer_size, max_mark_range_bytes);
+    read_settings.buffer_size = buffer_size;
+    read_settings.estimated_size = sum_mark_range_bytes;
 
     /// Initialize the objects that shall be used to perform read operations.
     if (uncompressed_cache_)
     {
         auto buffer = std::make_unique<CachedCompressedReadBuffer>(
             fullPath(data_disk, data_rel_path),
-            [this, buffer_size, sum_mark_range_bytes, &settings_]()
+            [this]()
             {
-                return data_disk->readFile(
-                    data_rel_path,
-                    {
-                        .buffer_size = buffer_size,
-                        .estimated_size = sum_mark_range_bytes,
-                        .aio_threshold = settings_.min_bytes_to_use_direct_io,
-                        .mmap_threshold = settings_.min_bytes_to_use_mmap_io,
-                        .mmap_cache = settings_.mmap_cache.get()
-                    }
-                );
+                return data_disk->readFile(data_rel_path, read_settings);
             },
             uncompressed_cache_,
             /* allow_different_codecs = */false,
@@ -136,16 +130,7 @@ MergeTreeReaderStream::MergeTreeReaderStream(
     else
     {
         auto buffer = std::make_unique<CompressedReadBufferFromFile>(
-            data_disk->readFile(
-                data_rel_path,
-                {
-                    .buffer_size = buffer_size,
-                    .estimated_size = sum_mark_range_bytes,
-                    .aio_threshold = settings_.min_bytes_to_use_direct_io,
-                    .mmap_threshold = settings_.min_bytes_to_use_mmap_io,
-                    .mmap_cache = settings_.mmap_cache.get()
-                }
-            ),
+            data_disk->readFile(data_rel_path, read_settings),
             /* allow_different_codecs = */false,
             bin_file_.offset,
             bin_file_.size,

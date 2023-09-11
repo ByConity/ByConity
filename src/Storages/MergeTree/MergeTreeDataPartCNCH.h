@@ -137,6 +137,8 @@ private:
     void removeImpl(bool keep_shared_data) const override;
 
     void fillProjectionNamesFromChecksums(const MergeTreeDataPartChecksum & checksum_file);
+
+    std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr& disk, const String& path, size_t file_size) const;
 };
 
 }

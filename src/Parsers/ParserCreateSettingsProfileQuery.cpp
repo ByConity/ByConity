@@ -62,13 +62,13 @@ namespace
         });
     }
 
-    bool parseOnCluster(IParserBase::Pos & pos, Expected & expected, String & cluster)
-    {
-        return IParserBase::wrapParseImpl(pos, [&]
-        {
-            return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
-        });
-    }
+    // bool parseOnCluster(IParserBase::Pos & pos, Expected & expected, String & cluster)
+    // {
+    //     return IParserBase::wrapParseImpl(pos, [&]
+    //     {
+    //         return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
+    //     });
+    // }
 }
 
 
@@ -110,7 +110,7 @@ bool ParserCreateSettingsProfileQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
 
     String new_name;
     std::shared_ptr<ASTSettingsProfileElements> settings;
-    String cluster;
+    // String cluster;
 
     while (true)
     {
@@ -126,8 +126,8 @@ bool ParserCreateSettingsProfileQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
             continue;
         }
 
-        if (cluster.empty() && parseOnCluster(pos, expected, cluster))
-            continue;
+        // if (cluster.empty() && parseOnCluster(pos, expected, cluster))
+        //     continue;
 
         break;
     }
@@ -135,8 +135,8 @@ bool ParserCreateSettingsProfileQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
     std::shared_ptr<ASTRolesOrUsersSet> to_roles;
     parseToRoles(pos, expected, attach_mode, to_roles);
 
-    if (cluster.empty())
-        parseOnCluster(pos, expected, cluster);
+    // if (cluster.empty())
+    //     parseOnCluster(pos, expected, cluster);
 
     auto query = std::make_shared<ASTCreateSettingsProfileQuery>();
     node = query;
@@ -146,7 +146,7 @@ bool ParserCreateSettingsProfileQuery::parseImpl(Pos & pos, ASTPtr & node, Expec
     query->if_exists = if_exists;
     query->if_not_exists = if_not_exists;
     query->or_replace = or_replace;
-    query->cluster = std::move(cluster);
+    // query->cluster = std::move(cluster);
     query->names = std::move(names);
     query->new_name = std::move(new_name);
     query->settings = std::move(settings);

@@ -22,7 +22,7 @@
 #pragma once
 
 #include <Parsers/IAST.h>
-#include <Parsers/ASTQueryWithOnCluster.h>
+// #include <Parsers/ASTQueryWithOnCluster.h>
 #include <Access/Quota.h>
 
 
@@ -46,7 +46,7 @@ class ASTRolesOrUsersSet;
   *        NO LIMITS | TRACKING ONLY} [,...]]
   *      [TO {role [,...] | ALL | ALL EXCEPT role [,...]}]
   */
-class ASTCreateQuotaQuery : public IAST, public ASTQueryWithOnCluster
+class ASTCreateQuotaQuery : public IAST
 {
 public:
     bool alter = false;
@@ -81,6 +81,6 @@ public:
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
     void replaceCurrentUserTag(const String & current_user_name) const;
-    ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTCreateQuotaQuery>(clone()); }
+    // ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTCreateQuotaQuery>(clone()); }
 };
 }

@@ -257,13 +257,13 @@ namespace
         });
     }
 
-    bool parseOnCluster(IParserBase::Pos & pos, Expected & expected, String & cluster)
-    {
-        return IParserBase::wrapParseImpl(pos, [&]
-        {
-            return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
-        });
-    }
+    // bool parseOnCluster(IParserBase::Pos & pos, Expected & expected, String & cluster)
+    // {
+    //     return IParserBase::wrapParseImpl(pos, [&]
+    //     {
+    //         return ParserKeyword{"ON"}.ignore(pos, expected) && ASTQueryWithOnCluster::parse(pos, cluster, expected);
+    //     });
+    // }
 }
 
 
@@ -306,7 +306,7 @@ bool ParserCreateQuotaQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     String new_name;
     std::optional<KeyType> key_type;
     std::vector<ASTCreateQuotaQuery::Limits> all_limits;
-    String cluster;
+    // String cluster;
 
     while (true)
     {
@@ -326,8 +326,8 @@ bool ParserCreateQuotaQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         if (parseIntervalsWithLimits(pos, expected, all_limits))
             continue;
 
-        if (cluster.empty() && parseOnCluster(pos, expected, cluster))
-            continue;
+        // if (cluster.empty() && parseOnCluster(pos, expected, cluster))
+        //     continue;
 
         break;
     }
@@ -335,8 +335,8 @@ bool ParserCreateQuotaQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     std::shared_ptr<ASTRolesOrUsersSet> roles;
     parseToRoles(pos, expected, attach_mode, roles);
 
-    if (cluster.empty())
-        parseOnCluster(pos, expected, cluster);
+    // if (cluster.empty())
+    //     parseOnCluster(pos, expected, cluster);
 
     auto query = std::make_shared<ASTCreateQuotaQuery>();
     node = query;
@@ -345,7 +345,7 @@ bool ParserCreateQuotaQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     query->if_exists = if_exists;
     query->if_not_exists = if_not_exists;
     query->or_replace = or_replace;
-    query->cluster = std::move(cluster);
+    // query->cluster = std::move(cluster);
     query->names = std::move(names);
     query->new_name = std::move(new_name);
     query->key_type = key_type;

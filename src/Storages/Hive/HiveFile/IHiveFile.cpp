@@ -8,6 +8,7 @@
 #include "Storages/DiskCache/DiskCacheFactory.h"
 #include "Storages/DiskCache/FileDiskCacheSegment.h"
 #include "Storages/DiskCache/IDiskCache.h"
+#include "Storages/DataLakes/HiveFile/HiveHudiFile.h"
 #include "Storages/Hive/DirectoryLister.h"
 #include "Storages/Hive/HiveFile/HiveORCFile.h"
 #include "Storages/Hive/HiveFile/HiveParquetFile.h"
@@ -24,24 +25,12 @@ namespace ErrorCodes
     extern const int UNKNOWN_FORMAT;
 }
 
-IHiveFile::FileFormat IHiveFile::fromHdfsInputFormatClass(const String & class_name)
-{
-    const static std::map<String, FileFormat> format_map = {
-        {"org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat", FileFormat::PARQUET},
-        {"org.apache.hadoop.hive.ql.io.orc.OrcInputFormat", FileFormat::ORC},
-    };
-
-    if (auto it = format_map.find(class_name); it != format_map.end())
-        return it->second;
-    else
-        throw Exception(ErrorCodes::UNKNOWN_FORMAT, "Unknown hive file format {}", class_name);
-}
-
 IHiveFile::FileFormat IHiveFile::fromFormatName(const String & format_name)
 {
     const static std::map<String, FileFormat> format_map = {
         {"Parquet", FileFormat::PARQUET},
         {"ORC", FileFormat::ORC},
+        {"HUDI", FileFormat::HUDI},
     };
 
     if (auto it = format_map.find(format_name); it != format_map.end())
@@ -52,7 +41,7 @@ IHiveFile::FileFormat IHiveFile::fromFormatName(const String & format_name)
 
 String IHiveFile::toString(IHiveFile::FileFormat format)
 {
-    constexpr static std::array format_names = {"Parquet", "ORC"};
+    constexpr static std::array format_names = {"Parquet", "ORC", "HUDI"};
     return format_names[static_cast<int>(format)];
 }
 
@@ -72,15 +61,16 @@ HiveFilePtr IHiveFile::create(
     {
         file = std::make_shared<HiveORCFile>();
     }
+#if USE_JAVA_EXTENSIONS
+    else if (format == IHiveFile::FileFormat::HUDI)
+    {
+        file = std::make_shared<HiveHudiFile>();
+    }
+#endif
     else
         throw Exception(ErrorCodes::UNKNOWN_FORMAT, "Unknown hive file format {}", format);
 
-    file->format = format;
-    file->file_path = file_path;
-    file->file_size = file_size;
-    file->disk = disk;
-    file->partition = partition;
-
+    file->load(format, file_path, file_size, disk, partition);
     return file;
 }
 
@@ -92,6 +82,13 @@ void IHiveFile::serialize(Protos::ProtoHiveFile & proto) const
 
     if (partition)
         proto.set_partition_id(partition->partition_id);
+}
+
+void IHiveFile::deserialize(const Protos::ProtoHiveFile & proto)
+{
+    format = static_cast<FileFormat>(proto.format());
+    file_path = proto.file_path();
+    file_size = proto.file_size();
 }
 
 String IHiveFile::getFormatName() const
@@ -159,6 +156,15 @@ SourcePtr IHiveFile::getReader(const Block & block, const std::shared_ptr<ReadPa
     return input_format;
 }
 
+void IHiveFile::load(FileFormat format_, const String & file_path_, size_t file_size_, const DiskPtr & disk_, const HivePartitionPtr & partition_)
+{
+    format = format_;
+    file_path = file_path_;
+    file_size = file_size_;
+    disk = disk_;
+    partition = partition_;
+}
+
 namespace RPCHelpers
 {
 void serialize(Protos::ProtoHiveFiles & proto, const HiveFiles & hive_files)
@@ -188,27 +194,29 @@ HiveFiles deserialize(
     DiskPtr disk;
     std::unordered_map<String, HivePartitionPtr> partition_map;
 
-    for (const auto & file : proto.files())
+    for (const auto & file_proto : proto.files())
     {
         if (!disk)
             disk = HiveUtil::getDiskFromURI(proto.sd_url(), context, settings);
 
         HivePartitionPtr partition;
-        if (auto it = partition_map.find(file.partition_id()); it != partition_map.end())
+        if (auto it = partition_map.find(file_proto.partition_id()); it != partition_map.end())
             partition = it->second;
         else if (metadata->hasPartitionKey())
         {
             partition = std::make_shared<HivePartition>();
-            partition->load(file.partition_id(), metadata->getPartitionKey());
-            partition_map.emplace(file.partition_id(), partition);
+            partition->load(file_proto.partition_id(), metadata->getPartitionKey());
+            partition_map.emplace(file_proto.partition_id(), partition);
         }
 
-        files.emplace_back(IHiveFile::create(
-            static_cast<IHiveFile::FileFormat>(file.format()),
-            file.file_path(),
-            file.file_size(),
+        auto hive_file = IHiveFile::create(
+            static_cast<IHiveFile::FileFormat>(file_proto.format()),
+            file_proto.file_path(),
+            file_proto.file_size(),
             disk,
-            partition));
+            partition);
+        hive_file->deserialize(file_proto);
+        files.push_back(std::move(hive_file));
     }
     return files;
 }

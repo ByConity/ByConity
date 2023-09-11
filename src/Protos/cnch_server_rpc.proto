@@ -438,6 +438,17 @@ message ExecuteOptimizeQueryResp
   optional string exception = 1;
 }
 
+message notifyAccessEntityChangeReq
+{
+  required string type = 1;
+  required string name = 2;
+}
+
+message notifyAccessEntityChangeResp
+{
+  optional string exception = 1;
+}
+
 service CnchServerService
 {
   rpc reportTaskHeartbeat(ReportTaskHeartbeatReq) returns (ReportTaskHeartbeatResp);
@@ -507,6 +518,8 @@ service CnchServerService
   rpc submitQueryWorkerMetrics(SubmitQueryWorkerMetricsReq) returns (SubmitQueryWorkerMetricsResp);
 
   rpc executeOptimize(ExecuteOptimizeQueryReq) returns (ExecuteOptimizeQueryResp);
+
+  rpc notifyAccessEntityChange(notifyAccessEntityChangeReq) returns (notifyAccessEntityChangeResp);
 
   rpc submitPreloadTask(SubmitPreloadTaskReq) returns (SubmitPreloadTaskResp);
 };

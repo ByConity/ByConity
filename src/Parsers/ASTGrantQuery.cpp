@@ -111,7 +111,7 @@ void ASTGrantQuery::formatImpl(const FormatSettings & settings, FormatState &, F
         throw Exception("A partial revoke should be revoked, not granted", ErrorCodes::LOGICAL_ERROR);
     bool grant_option = !access_rights_elements.empty() && access_rights_elements[0].grant_option;
 
-    formatOnCluster(settings);
+    // formatOnCluster(settings);
 
     if (is_revoke)
     {

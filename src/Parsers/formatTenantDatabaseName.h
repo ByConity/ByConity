@@ -13,6 +13,8 @@ String formatTenantDefaultDatabaseName(const String & database_name);
 
 String formatTenantConnectUserName(const String & user_name);
 
+String formatTenantEntityPrefix(const String & prefix);
+
 String getOriginalDatabaseName(const String & tenant_database_name);
 
 void pushTenantId(const String &tenant_id);

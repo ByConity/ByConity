@@ -19,8 +19,8 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/MergeTree/S3PartsAttachMeta.h>
-#include <Storages/S3/RAReadBufferFromS3.h>
-#include <Storages/S3/WriteBufferFromByteS3.h>
+#include <IO/RAReadBufferFromS3.h>
+#include <IO/WriteBufferFromByteS3.h>
 #include <Common/ThreadPool.h>
 
 namespace DB

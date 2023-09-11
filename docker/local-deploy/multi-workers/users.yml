@@ -12,6 +12,7 @@ users:
     password: ""
     profile: default
     quota: default
+    access_management: 1
   server:
     networks:
       ip: ::/0

@@ -101,6 +101,8 @@ private:
     size_t segment_size;
     String temp_dir_rel_path;
 
+    ReadSettings read_settings;
+
     std::unordered_map<String, std::unique_ptr<PartFutureFiles>> part_to_future_files;
     std::set<String> columns_may_inject;
 

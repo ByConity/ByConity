@@ -18,10 +18,13 @@ struct PrepareContextResult;
 struct HivePartition;
 class IMetaClient;
 class HiveWhereOptimizer;
+class IDirectoryLister;
 
-class StorageCnchHive : public shared_ptr_helper<StorageCnchHive>, public IStorage, WithContext
+class StorageCnchHive : public shared_ptr_helper<StorageCnchHive>, public IStorage, protected WithContext
 {
 public:
+    friend class IDirectoryLister;
+
     std::string getName() const override { return "CnchHive"; }
     bool isRemote() const override { return true; }
     bool isBucketTable() const override;
@@ -70,7 +73,7 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
-private:
+protected:
 
     void collectResource(ContextPtr local_context, PrepareContextResult & result);
 
@@ -80,7 +83,8 @@ private:
         const SelectQueryInfo & query_info,
         const HiveWhereOptimizer & optimizer);
 
-    WorkerGroupHandle getWorkerGroup(ContextPtr context) const;
+    /// DirectoryList is not multi-threaded
+    virtual std::shared_ptr<IDirectoryLister> getDirectoryLister();
 
     String hive_metastore_url;
     String hive_db_name;

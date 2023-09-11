@@ -1,4 +1,4 @@
-protobuf_generate_cpp(dbms_proto_srcs dbms_proto_headers
+PROTOBUF_GENERATE_CPP(dbms_proto_srcs dbms_proto_headers
     cnch_common.proto
     cnch_server_rpc.proto
     cnch_worker_rpc.proto

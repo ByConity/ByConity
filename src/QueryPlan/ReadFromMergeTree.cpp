@@ -69,14 +69,10 @@ static const char * indexTypeToString(ReadFromMergeTree::IndexType type)
 
 static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & context)
 {
-    const auto & settings = context->getSettingsRef();
     return {
-        .min_bytes_to_use_direct_io = settings.min_bytes_to_use_direct_io,
-        .min_bytes_to_use_mmap_io = settings.min_bytes_to_use_mmap_io,
-        .mmap_cache = context->getMMappedFileCache(),
-        .max_read_buffer_size = settings.max_read_buffer_size,
+        .read_settings = context->getReadSettings(),
         .save_marks_in_cache = true,
-        .checksum_on_read = settings.checksum_on_read,
+        .checksum_on_read = context->getSettingsRef().checksum_on_read,
     };
 }
 

@@ -51,11 +51,6 @@ namespace ErrorCodes
 
 static constexpr auto DATA_FILE = "data";
 
-static std::unique_ptr<ReadBufferFromFileBase> openForReading(const DiskPtr & disk, const String & path, size_t file_size)
-{
-    return disk->readFile(path, {.buffer_size = std::min(file_size, static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE))});
-}
-
 static LimitReadBuffer readPartFile(ReadBufferFromFileBase & in, off_t file_offset, size_t file_size)
 {
     if (file_size == 0)
@@ -788,8 +783,7 @@ void MergeTreeDataPartCNCH::getUniqueKeyIndexFilePosAndSize(const IMergeTreeData
     String data_rel_path = fs::path(part->getFullRelativePath()) / "data";
     String data_full_path = fs::path(part->getFullPath()) / "data";
 
-    std::unique_ptr<ReadBufferFromFileBase> reader =
-        volume->getDisk()->readFile(data_rel_path);
+    auto reader = openForReading(volume->getDisk(), data_rel_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
     size_t data_file_size = volume->getDisk()->getFileSize(data_rel_path);
     reader->seek(data_file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE + 3 * (2 * sizeof(size_t) + sizeof(CityHash_v1_0_2::uint128)));
     readIntBinary(off, *reader);
@@ -1220,4 +1214,12 @@ void MergeTreeDataPartCNCH::prefetchChecksums() const
         }
     }
 }
+
+std::unique_ptr<ReadBufferFromFileBase> MergeTreeDataPartCNCH::openForReading(const DiskPtr & disk, const String & path, size_t file_size) const
+{
+    ReadSettings settings = storage.getContext()->getReadSettings();
+    settings.buffer_size = std::min(settings.buffer_size, file_size);
+    return disk->readFile(path, settings);
+}
+
 }

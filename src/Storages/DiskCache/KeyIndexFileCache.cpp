@@ -197,10 +197,10 @@ int KeyIndexFileCache::get(const IndexFile::RemoteFileInfo & file)
                 try
                 {
                     Context & context = rep_inner->context;
+                    ReadSettings settings = context.getReadSettings();
+                    settings.throttler = context.getDiskCacheThrottler();
                     std::unique_ptr<ReadBufferFromFileBase> reader = file.disk->readFile(file.rel_path,
-                        ReadSettings {
-                            .throttler = context.getDiskCacheThrottler()
-                        });
+                        settings);
                     reader->seek(file.start_offset);
                     LimitReadBuffer from(*reader, file.size, false);
 

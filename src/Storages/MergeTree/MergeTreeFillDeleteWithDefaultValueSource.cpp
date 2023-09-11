@@ -13,9 +13,11 @@
  * limitations under the License.
  */
 
+#include <limits>
 #include <Storages/MergeTree/MergeTreeFillDeleteWithDefaultValueSource.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <Interpreters/Context.h>
+#include "Core/Defines.h"
 
 namespace DB
 {
@@ -60,8 +62,10 @@ MergeTreeFillDeleteWithDefaultValueSource::MergeTreeFillDeleteWithDefaultValueSo
 
     MergeTreeReaderSettings reader_settings =
     {
-        .min_bytes_to_use_direct_io = std::numeric_limits<size_t>::max(), // disable direct io
-        .max_read_buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
+        .read_settings = ReadSettings {
+            .aio_threshold = std::numeric_limits<size_t>::max(), // disable direct io
+            .buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
+        },
         .save_marks_in_cache = false
     };
 
