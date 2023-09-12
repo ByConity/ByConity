@@ -247,6 +247,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTFunction(ASTPtr & node, const
     ASTFunctionPtr function_ptr = std::dynamic_pointer_cast<ASTFunction>(node);
     expandUntuple(function_ptr->arguments->children);
     expandAsterisk(function_ptr->arguments->children);
+    analysis.function_names.insert(function_ptr->name);
     auto function_type = getFunctionType(*function_ptr, context);
 
     if (function_type == FunctionType::WINDOW_FUNCTION)
