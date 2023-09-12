@@ -45,6 +45,22 @@ MultiPartitionExchangeSink::MultiPartitionExchangeSink(
     , logger(&Poco::Logger::get("MultiPartitionExchangeSink"))
 
 {
+    bool has_null_shuffle_key = false;
+    for (size_t key_idx : repartition_keys)
+    {
+        const auto & type_and_name = header.safeGetByPosition(key_idx);
+        if (type_and_name.type->isNullable())
+        {
+            has_null_shuffle_key = true;
+            break;
+        }
+    }
+
+    if (has_null_shuffle_key)
+        repartition_result_type_ptr = &RepartitionTransform::REPARTITION_FUNC_NULLABLE_RESULT_TYPE;
+    else
+        repartition_result_type_ptr = &RepartitionTransform::REPARTITION_FUNC_RESULT_TYPE;
+
     for(size_t i = 0; i < partition_num; ++i)
     {
         ExchangeBufferedSender buffered_sender (header, partition_senders[i], options.send_threshold_in_bytes, options.send_threshold_in_row_num);
@@ -87,7 +103,7 @@ void MultiPartitionExchangeSink::consume(Chunk chunk)
     IColumn::Selector partition_selector;
     RepartitionTransform::PartitionStartPoints partition_start_points;
     std::tie(partition_selector, partition_start_points) = RepartitionTransform::doRepartition(
-        partition_num, chunk, header, repartition_keys, repartition_func, RepartitionTransform::REPARTITION_FUNC_RESULT_TYPE);
+        partition_num, chunk, header, repartition_keys, repartition_func, *repartition_result_type_ptr);
 
     const auto &  columns = chunk.getColumns();
     for (size_t i = 0; i < column_num; i++)

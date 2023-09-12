@@ -68,10 +68,6 @@ GROUP BY
 ORDER BY fact_3_id ASC;
 
 -- Following two queries were fuzzed
-
--- TODO @zhoukun FIX enable_optimizer
-set enable_optimizer=0;
-
 SELECT 'w\0\0ldworldwo\0l\0world'
 FROM grouping_sets
 GROUP BY
