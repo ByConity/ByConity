@@ -13,36 +13,40 @@
  * limitations under the License.
  */
 
-#include <Interpreters/InterpreterRefreshQuery.h>
+
+#include <CloudServices/CnchServerResource.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/InterpreterRefreshQuery.h>
+#include <Interpreters/InterpreterSetQuery.h>
 #include <Parsers/ASTRefreshQuery.h>
 #include <Storages/StorageMaterializedView.h>
-#include <Interpreters/InterpreterSetQuery.h>
 
 
 namespace DB
 {
-    namespace ErrorCodes
-    {
-        extern const int LOGICAL_ERROR;
-    }
+namespace ErrorCodes
+{
+    extern const int LOGICAL_ERROR;
+}
 
-    BlockIO InterpreterRefreshQuery::execute()
+BlockIO InterpreterRefreshQuery::execute()
+{
+    const auto & refresh = query_ptr->as<ASTRefreshQuery &>();
+    if (refresh.settings_ast)
+        InterpreterSetQuery(refresh.settings_ast, getContext()).executeForCurrentContext();
+    StoragePtr storage_ptr = DatabaseCatalog::instance().getTable({refresh.database, refresh.table}, getContext());
+    if (auto * view = dynamic_cast<StorageMaterializedView *>(storage_ptr.get()))
     {
-        const auto & refresh = query_ptr->as<ASTRefreshQuery &>();
-        if (refresh.settings_ast)
-            InterpreterSetQuery(refresh.settings_ast, getContext()).executeForCurrentContext();
-        StoragePtr storage_ptr = DatabaseCatalog::instance().getTable({refresh.database, refresh.table}, getContext());
-        if (auto * view = dynamic_cast<StorageMaterializedView *>(storage_ptr.get()))
-        {
-            view->refresh(refresh.partition, getContext(), refresh.async);
-        }
-        else
-        {
-            String db_str = refresh.database.empty() ? "" : backQuoteIfNeed(refresh.database) + ".";
-            throw Exception("Table " + db_str + backQuoteIfNeed(refresh.table) +
-                            " isn't a materialized view, can't be refreshed.", ErrorCodes::LOGICAL_ERROR);
-        }
-        return {};
+        view->refresh(refresh.partition, getContext(), refresh.async);
     }
+    else
+    {
+        String db_str = refresh.database.empty() ? "" : backQuoteIfNeed(refresh.database) + ".";
+        throw Exception(
+            "Table " + db_str + backQuoteIfNeed(refresh.table) + " isn't a materialized view, can't be refreshed.",
+            ErrorCodes::LOGICAL_ERROR);
+    }
+    getContext()->getCnchServerResource()->skipCleanWorker();
+    return {};
+}
 }
