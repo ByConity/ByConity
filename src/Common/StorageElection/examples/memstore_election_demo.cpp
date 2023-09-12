@@ -151,11 +151,11 @@ int main(int argc, char ** argv)
         while (sleep_time--)
         {
             reader.refresh();
-            auto result = reader.getLeaderInfo();
+            auto result = reader.tryGetLeaderInfo();
             struct timeval tv1;
             gettimeofday(&tv1, nullptr);
             long now = tv1.tv_sec * 1000 + tv1.tv_usec / 1000 - ms_start;
-            if (!result.has_value())
+            if (!result)
                 std::cout << now << " client: nobody is the leader" << std::endl;
             else
                 std::cout << now << " client: " << result->id << " is the leader" << std::endl;

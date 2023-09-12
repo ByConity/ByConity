@@ -81,7 +81,7 @@ bool StorageElector::setRole(Role role_)
                     "Failed to call on_leader, try to yield leader on {}",
                     curr_leader_host.has_value() ? curr_leader_host->toDebugString() : "nullptr");
 
-                doYield();
+                doYield(false);
                 return false;
             }
         }
@@ -298,7 +298,7 @@ void StorageElector::doLeaderCheck()
         if (isLeaseExpired(last_leader_info))
         {
             LOG_INFO(logger, "Current node maybe to busy to refresh the lease. Yield first. last_leader_info: {}", last_leader_info.DebugString());
-            doYield();
+            doYield(true);
         }
         else
             tryUpdateRemoteRecord(true);
@@ -393,15 +393,19 @@ void StorageElector::doFollowerCheck()
     }
 }
 
-void StorageElector::doYield()
+void StorageElector::doYield(bool soft)
 {
     // Even cas failed, the node should be switched to follower first.
     {
         std::lock_guard lock(leader_host_mutex);
         curr_leader_host.reset();
     }
+    if (role != Role::Leader)
+        return;
 
     setRole(Role::Follower);
+    if (soft)
+        return;
     // You can not try to become a leader immediately. Wait for a longer time.
     sleep_time = std::chrono::milliseconds(2 * local_info.expired_interval_ms);
 
@@ -448,6 +452,7 @@ void StorageElector::start()
                     break;
             }
         } while (true);
+        doYield(false);
         LOG_INFO(logger, "StorageElector thread is now stopped!");
     });
 }
