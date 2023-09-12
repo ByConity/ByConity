@@ -780,6 +780,18 @@
     M(PocoHTTPS3GetCount, "") \
     M(PocoHTTPS3GetTime, "") \
     M(PocoHTTPS3GetSessionTime, "") \
+    \
+    M(PutAccessEntitySuccess, "") \
+    M(PutAccessEntityFailed, "") \
+    M(TryGetAccessEntitySuccess, "") \
+    M(TryGetAccessEntityFailed, "") \
+    M(GetAllAccessEntitySuccess, "") \
+    M(GetAllAccessEntityFailed, "") \
+    M(DropAccessEntitySuccess, "") \
+    M(DropAccessEntityFailed, "") \
+    M(TryGetAccessEntityNameSuccess, "") \
+    M(TryGetAccessEntityNameFailed, "") \
+
 
 namespace ProfileEvents
 {
