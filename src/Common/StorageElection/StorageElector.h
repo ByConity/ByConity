@@ -96,7 +96,7 @@ private:
     // Return wait time for another round of check.
     void doLeaderCheck();
     void doFollowerCheck();
-    void doYield();
+    void doYield(bool soft);
 
     bool setRole(Role role_);
     void tryUpdateRemoteRecord(bool refreshed, bool yield = false);
