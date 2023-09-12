@@ -13,7 +13,9 @@
  * limitations under the License.
  */
 
+#include <Functions/FunctionFactory.h>
 #include <Optimizer/ExpressionRewriter.h>
+#include <Parsers/ASTVisitor.h>
 
 namespace DB
 {
@@ -29,5 +31,49 @@ ASTPtr ExpressionRewriterVisitor::visitNode(ASTPtr & node, ConstASTMap & express
     if (expression_map.contains(result))
         return expression_map[result]->clone();
     return result;
+}
+
+bool FunctionIsInjective::isInjective(const ConstASTPtr & expr, ContextMutablePtr & context, const NamesAndTypes & input_types)
+{
+    Analysis analysis;
+    FieldDescriptions fields;
+    for (const auto & input : input_types)
+    {
+        FieldDescription field{input.name, input.type};
+        fields.emplace_back(field);
+    }
+    Scope scope(Scope::ScopeType::RELATION, nullptr, true, fields);
+    ExprAnalyzerOptions options;
+    ExprAnalyzer::analyze(std::const_pointer_cast<IAST>(expr), &scope, context, analysis, options);
+    auto contextc = std::const_pointer_cast<const Context>(context);
+    FunctionIsInjectiveVisitor visitor{contextc, analysis.getExpressionColumnWithTypes()};
+    std::set<String> s;
+    return ASTVisitorUtil::accept(expr, visitor, s);
+}
+
+bool FunctionIsInjectiveVisitor::visitNode(const ConstASTPtr & node, std::set<String> & c)
+{
+    bool is_injective = true;
+    for (ConstASTPtr child : node->children)
+    {
+        is_injective &= ASTVisitorUtil::accept(child, *this, c);
+    }
+    return is_injective;
+}
+
+bool FunctionIsInjectiveVisitor::visitASTFunction(const ConstASTPtr & node, std::set<String> & c)
+{
+    auto function = node->as<ASTFunction>();
+    FunctionOverloadResolverPtr function_builder = FunctionFactory::instance().get(function->name, context);
+    ColumnsWithTypeAndName processed_arguments;
+    for (auto & arg : function->arguments->children)
+    {
+        auto & col_type = expr_types[arg];
+        processed_arguments.emplace_back(col_type.column, col_type.type, arg->getColumnName());
+    }
+    auto function_base = function_builder->build(processed_arguments);
+    bool is_injective = function_base->isInjective(processed_arguments);
+
+    return is_injective && visitNode(node, c);
 }
 }
