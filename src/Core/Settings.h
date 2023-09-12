@@ -2059,9 +2059,9 @@ enum PreloadLevelSettings : UInt64
     M(String, lasfs_overwrite, "false", "pass true if user want to overwrite when the file exists", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
-    \
+\
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
-    M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
+    M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0)
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
