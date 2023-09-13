@@ -224,6 +224,7 @@ int DaemonManager::main(const std::vector<std::string> &)
 
     global_context->makeGlobalContext();
     global_context->setServerType("daemon_manager");
+    global_context->initRootConfig(config());
     global_context->setSetting("background_schedule_pool_size", config().getUInt64("background_schedule_pool_size", 12));
     GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 100));
 
