@@ -1,5 +1,6 @@
 #include <memory>
 #include <mutex>
+#include <Catalog/CatalogConfig.h>
 #include <Catalog/MetastoreProxy.h>
 #include <ExternalCatalog/CnchExternalCatalogMgr.h>
 #include <ExternalCatalog/HiveExternalCatalog.h>
@@ -8,7 +9,6 @@
 #include <IO/WriteBufferFromString.h>
 #include <Protos/data_models.pb.h>
 #include <boost/algorithm/string.hpp>
-#include <Common/Config/MetastoreConfig.h>
 #include <Common/ErrorCodes.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>

@@ -1,38 +1,38 @@
-#include "Storages/Hive/StorageCnchHive.h"
+#include <Storages/Hive/StorageCnchHive.h>
 #if USE_HIVE
 
-#include "CloudServices/CnchServerResource.h"
-#include "DataStreams/narrowBlockInputStreams.h"
-#include "Interpreters/ClusterProxy/SelectStreamFactory.h"
-#include "Interpreters/ClusterProxy/executeQuery.h"
-#include "Interpreters/InterpreterSelectQuery.h"
-#include "Interpreters/SelectQueryOptions.h"
-#include "Interpreters/trySetVirtualWarehouse.h"
-#include "Interpreters/evaluateConstantExpression.h"
-#include "MergeTreeCommon/CnchStorageCommon.h"
-#include "Parsers/ASTCreateQuery.h"
-#include "Parsers/ASTLiteral.h"
-#include "Parsers/ASTSelectQuery.h"
-#include "Parsers/queryToString.h"
-#include "Processors/Sources/NullSource.h"
-#include "QueryPlan/BuildQueryPipelineSettings.h"
-#include "QueryPlan/Optimizations/QueryPlanOptimizationSettings.h"
-#include "QueryPlan/ReadFromPreparedSource.h"
-#include "ResourceManagement/CommonData.h"
-#include "Storages/DataLakes/HudiDirectoryLister.h"
-#include "Storages/Hive/CnchHiveSettings.h"
-#include "Storages/Hive/DirectoryLister.h"
-#include "Storages/Hive/HiveFile/IHiveFile.h"
-#include "Storages/Hive/HivePartition.h"
-#include "Storages/Hive/HiveSchemaConverter.h"
-#include "Storages/Hive/HiveWhereOptimizer.h"
-#include "Storages/Hive/Metastore/HiveMetastore.h"
-#include "Storages/Hive/StorageHiveSource.h"
-#include "Storages/MergeTree/PartitionPruner.h"
-#include "Storages/StorageFactory.h"
-#include "Storages/StorageInMemoryMetadata.h"
+#include <CloudServices/CnchServerResource.h>
+#include <DataStreams/narrowBlockInputStreams.h>
+#include <Interpreters/ClusterProxy/SelectStreamFactory.h>
+#include <Interpreters/ClusterProxy/executeQuery.h>
+#include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/SelectQueryOptions.h>
+#include <Interpreters/evaluateConstantExpression.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
+#include <MergeTreeCommon/CnchStorageCommon.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/queryToString.h>
+#include <Processors/Sources/NullSource.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
+#include <ResourceManagement/CommonData.h>
+#include <Storages/DataLakes/HudiDirectoryLister.h>
+#include <Storages/Hive/CnchHiveSettings.h>
+#include <Storages/Hive/DirectoryLister.h>
+#include <Storages/Hive/HiveFile/IHiveFile.h>
+#include <Storages/Hive/HivePartition.h>
+#include <Storages/Hive/HiveSchemaConverter.h>
+#include <Storages/Hive/HiveWhereOptimizer.h>
+#include <Storages/Hive/Metastore/HiveMetastore.h>
+#include <Storages/Hive/StorageHiveSource.h>
+#include <Storages/MergeTree/PartitionPruner.h>
+#include <Storages/StorageFactory.h>
+#include <Storages/StorageInMemoryMetadata.h>
 
-#include "common/scope_guard_safe.h"
+#include <common/scope_guard_safe.h>
 
 namespace DB
 {
@@ -68,11 +68,12 @@ StorageCnchHive::StorageCnchHive(
     catch (...)
     {
         hive_exception = std::current_exception();
-        // tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentException(__PRETTY_FUNCTION__);
         return;
     }
 
     HiveSchemaConverter converter(context_, hive_table);
+
     if (metadata_.columns.empty())
     {
         converter.convert(metadata_);
@@ -341,14 +342,13 @@ HivePartitions StorageCnchHive::selectPartitions(
 std::pair<UInt64, ApacheHive::TableStatsResult> StorageCnchHive::getTableStats(const Strings & col_names, ContextPtr local_context)
 {
     bool merge_partition_stats = local_context->getSettingsRef().merge_partition_stats;
-    LOG_INFO(log, "merge partition stats {}", merge_partition_stats);
 
     auto stats = hive_client->getTableStats(hive_db_name, hive_table_name, col_names, merge_partition_stats);
     if (stats.row_count == 0)
     {
         return {0, {}};
     }
-    LOG_TRACE(log, " row_count {}, stats {}", stats.row_count, apache::thrift::to_string(stats.table_stats));
+    // LOG_TRACE(log, " row_count {}, stats {}", stats.row_count, apache::thrift::to_string(stats.table_stats));
     return {stats.row_count, stats.table_stats};
 }
 
@@ -383,11 +383,12 @@ void registerStorageCnchHive(StorageFactory & factory)
             hive_settings->loadFromQuery(*args.storage_def);
             metadata.settings_changes = args.storage_def->settings->ptr();
         }
-
+        LOG_INFO(&Poco::Logger::get(__func__), "columns size {}", args.columns.size());
         if (!args.columns.empty())
             metadata.setColumns(args.columns);
 
         metadata.setComment(args.comment);
+        LOG_INFO(&Poco::Logger::get(__func__), "columns size {}", metadata.getColumns().size());
 
         if (args.storage_def->partition_by)
         {
@@ -410,7 +411,8 @@ void registerStorageCnchHive(StorageFactory & factory)
             hive_table,
             std::move(metadata),
             args.getContext(),
-            hive_settings);
+            hive_settings,
+            args.hive_client);
     },
     features);
 }

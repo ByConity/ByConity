@@ -17,7 +17,6 @@
 #include <random>
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Storages/Hive/Metastore/MetastoreConvertUtils.h>
-#include <consul/bridge.h>
 namespace DB
 {
 namespace ErrorCodes

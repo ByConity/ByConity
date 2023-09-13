@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Databases/DatabaseReplicated.h>
 #include <Databases/IDatabase.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
 #include <Interpreters/Context.h>

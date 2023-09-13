@@ -1,12 +1,12 @@
 #pragma once
 
 #include <mutex>
+#include <Catalog/CatalogConfig.h>
 #include <Catalog/MetastoreProxy.h>
 #include <ExternalCatalog/IExternalCatalog.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Poco/Logger.h>
 #include <Poco/Util/AbstractConfiguration.h>
-#include <Common/Config/MetastoreConfig.h>
 #include <common/logger_useful.h>
 #include "IExternalCatalogMgr.h"
 namespace DB::ExternalCatalog
@@ -31,7 +31,7 @@ public:
 private:
     std::mutex mu;
     [[maybe_unused]] Context & context;
-    MetastoreConfig metastore_conf;
+    Catalog::CatalogConfig metastore_conf;
     std::shared_ptr<Catalog::MetastoreProxy> meta_proxy; // connection to fdb/bytekv.
     std::string name_space;
     std::map<std::string, PlainConfigsPtr> catalog_confs; // use for check whether the catalog has been changed.

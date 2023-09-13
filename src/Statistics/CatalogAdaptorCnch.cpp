@@ -19,14 +19,10 @@
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/HiveConverter.h>
-#include <Statistics/StatisticsCollectorObjects.h>
-#include <Statistics/StatsUdiCounter.h>
 #include <Statistics/SubqueryHelper.h>
 #include <Statistics/TypeUtils.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <boost/algorithm/string.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/regex.hpp>
-
 namespace DB::Statistics
 {
 using Catalog::CatalogPtr;
@@ -100,6 +96,8 @@ StatsCollection CatalogAdaptorCnch::readSingleStats(const StatsTableIdentifier &
 
 StatsData CatalogAdaptorCnch::readStatsData(const StatsTableIdentifier & table)
 {
+    auto storage = getStorageByTableId(table);
+    auto columns_desc = this->getCollectableColumns(table);
     StatsData result;
 
     if (storage->getName() == "CnchHive")
@@ -129,7 +127,6 @@ StatsData CatalogAdaptorCnch::readStatsData(const StatsTableIdentifier & table)
     result.table_stats = readSingleStats(table, std::nullopt);
 
     // step 2: read column stats
-    auto columns_desc = this->getCollectableColumns(table);
     for (auto & desc : columns_desc)
     {
         auto column_name = desc.name;

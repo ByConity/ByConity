@@ -1143,21 +1143,14 @@ getDatabaseFromCnchOrHiveCatalog(const String & database_name, ContextPtr contex
     {
         db_name = {database_name};
     }
-
-    LOG_DEBUG(
-        &Poco::Logger::get(__func__), "database_name {} {} {} {}", database_name, catalog_name.has_value(), db_name.value(), __LINE__);
     //get database from cnch catalog
     if (!catalog_name.has_value() || catalog_name.value() == "cnch")
     {
-        LOG_DEBUG(&Poco::Logger::get(__func__), "database_name {} {}", database_name, __LINE__);
-
         auto catalog = context->tryGetCnchCatalog();
         return catalog->getDatabase(tenant_db, context, timestamp);
     }
     else
     {
-        LOG_DEBUG(&Poco::Logger::get(__func__), "database_name {} {}", database_name, __LINE__);
-
         // get database from hive catalog
         return std::make_shared<DatabaseExternalHive>(catalog_name.value(), db_name.value(), context);
     }

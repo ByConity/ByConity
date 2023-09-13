@@ -1,11 +1,11 @@
 #pragma once
 
-#include "Common/config.h"
-#include "Storages/Hive/Metastore/IMetaClient.h"
+#include <Common/config.h>
 #if USE_HIVE
 
-#include "MergeTreeCommon/CnchStorageCommon.h"
-#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
+#include <MergeTreeCommon/CnchStorageCommon.h>
+#include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
+#include <Storages/Hive/Metastore/IMetaClient.h>
 #include <common/shared_ptr_helper.h>
 
 namespace Apache::Hadoop::Hive

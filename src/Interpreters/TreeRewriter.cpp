@@ -973,6 +973,12 @@ void TreeRewriterResult::collectUsedColumns(const ContextPtr & context, ASTPtr &
         ss << ", required columns:";
         for (const auto & name : columns_context.requiredColumns())
             ss << " '" << name << "'";
+        ss << ", source_columns:";
+        for (const auto & name : source_columns_set)
+        {
+            ss << " '" << name << "'";
+        }
+
 
         if (storage)
         {

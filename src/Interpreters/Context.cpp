@@ -166,7 +166,6 @@
 
 #include <ExternalCatalog/CnchExternalCatalogMgr.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
-#include <IO/VETosCommon.h>
 #include <Interpreters/TemporaryDataOnDisk.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>

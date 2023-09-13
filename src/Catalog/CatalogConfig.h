@@ -51,13 +51,13 @@ struct CatalogConfig
 
     CatalogConfig() {}
 
-    CatalogConfig(const Poco::Util::AbstractConfiguration & poco_config)
+    CatalogConfig(const Poco::Util::AbstractConfiguration & poco_config, const std::string & service_name = "catalog_service")
     {
-        if (poco_config.has("catalog_service"))
+        if (poco_config.has(service_name))
         {
-            if (poco_config.has("catalog_service.type"))
+            if (poco_config.has(service_name + ".type"))
             {
-                std::string metastore_type = poco_config.getString("catalog_service.type");
+                std::string metastore_type = poco_config.getString(service_name + ".type");
                 if (metastore_type == "fdb")
                     type = StoreType::FDB;
                 else if (metastore_type == "bytekv")
@@ -68,14 +68,14 @@ struct CatalogConfig
 
             if (type == StoreType::FDB)
             {
-                fdb_conf.cluster_conf_path = poco_config.getString("catalog_service.fdb.cluster_file");
+                fdb_conf.cluster_conf_path = poco_config.getString(service_name + ".fdb.cluster_file");
             }
             else if (type == StoreType::BYTEKV)
             {
-                bytekv_conf.service_name = poco_config.getString("catalog_service.bytekv.service_name");
-                bytekv_conf.cluster_name = poco_config.getString("catalog_service.bytekv.cluster_name");
-                bytekv_conf.name_space = poco_config.getString("catalog_service.bytekv.name_space");
-                bytekv_conf.table_name = poco_config.getString("catalog_service.bytekv.table_name");
+                bytekv_conf.service_name = poco_config.getString(service_name + ".bytekv.service_name");
+                bytekv_conf.cluster_name = poco_config.getString(service_name + ".bytekv.cluster_name");
+                bytekv_conf.name_space = poco_config.getString(service_name + ".bytekv.name_space");
+                bytekv_conf.table_name = poco_config.getString(service_name + ".bytekv.table_name");
             }
         }
     }

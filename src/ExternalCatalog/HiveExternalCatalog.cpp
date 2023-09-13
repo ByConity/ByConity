@@ -84,7 +84,6 @@ DB::StoragePtr HiveExternalCatalog::getTable(
     [[maybe_unused]] ContextPtr local_context)
 {
     auto db_name_without_tenant = getOriginalDatabaseName(db_name);
-    LOG_TRACE(log, "get hive table {}.{}, db name with tenant: {}", db_name_without_tenant, table_name, db_name);
     auto hive_table = hms_client->getTable(db_name_without_tenant, table_name);
     // hive_table->dbName = formatTenantDatabaseName(hive_table->dbName);
     HiveSchemaConverter converter(local_context, hive_table);
@@ -101,15 +100,14 @@ DB::StoragePtr HiveExternalCatalog::getTable(
     addCreateQuerySettings(create_query_ast, configs);
     auto create_query = serializeAST(create_query_ast);
     LOG_TRACE(log, "{}.{}.{} create query: {}", name(), db_name, table_name, create_query);
+    auto columns = InterpreterCreateQuery::getColumnsDescription(*create_query_ast.columns_list->columns, mutable_context, false);
     auto ret = StorageFactory::instance().get(
         create_query_ast,
         "",
         mutable_context,
         mutable_context->getGlobalContext(),
-        InterpreterCreateQuery::getColumnsDescription(*create_query_ast.columns_list->columns, mutable_context, false),
+        columns,
         InterpreterCreateQuery::getConstraintsDescription(create_query_ast.columns_list->constraints),
-        {},
-        {},
         false,
         std::move(hive_params));
 
