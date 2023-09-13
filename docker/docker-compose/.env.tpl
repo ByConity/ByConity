@@ -1,5 +1,9 @@
-COMPOSE_PROJECT_NAME=""
-HADOOP_CONF_DIR=/etc/hadoop/conf
-#BYCONITY_IMAGE=byconity/debian-builder
-BYCONITY_IMAGE=byconity/byconity:latest
-#BYCONITY_BINARY_PATH=~/ByConity/build/programs
+COMPOSE_PROJECT_NAME="random"
+
+DATA_DIR="./data"
+SERVER_TCP_PORT=9123
+SERVER_HTTP_PORT=8123
+
+BYCONITY_IMAGE=byconity/debian-runner
+# BYCONITY_IMAGE=byconity/byconity:0.2.0
+BYCONITY_BINARY_PATH=~/ck/ByConity/build_docker/programs

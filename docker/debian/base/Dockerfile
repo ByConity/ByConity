@@ -13,13 +13,12 @@ RUN wget -qO tini https://github.com/krallin/tini/releases/download/v0.19.0/tini
 FROM debian:11.6 as debian-builder
 LABEL description="Debian image for compiling"
 LABEL org.opencontainers.image.source="https://github.com/ByConity/ByConity"
-ENV DEBIAN_FRONTEND=noninteractive
 
 RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
-RUN apt-get update && apt-get install --no-install-recommends -y \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     binutils gettext-base strace bpftrace sysstat gdb maven default-jdk ninja-build \
     lsb-release wget curl software-properties-common gnupg ccache git vim \
-    RUN rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=downloader /downloads /downloads
 WORKDIR /downloads
@@ -27,10 +26,6 @@ RUN tar --strip-components=1 -xzf cmake.3.17.tar.gz -C /usr/local
 RUN chmod +x llvm.sh && ./llvm.sh 11 -m https://mirrors.tuna.tsinghua.edu.cn/llvm-apt
 RUN dpkg -i foundationdb-clients.deb
 RUN rm -rf /downloads
-
-ARG APP_ROOT=/root/ByConity/
-ENV APP_ROOT="${APP_ROOT}"
-WORKDIR ${APP_ROOT}
 
 COPY build.sh /
 RUN chmod +x /build.sh
@@ -41,18 +36,14 @@ RUN echo "/usr/lib/jvm/default-java/lib/server" >> /etc/ld.so.conf.d/libjvm.conf
 RUN ldconfig
 
 ENV CC=clang-11 CXX=clang++-11
-ENV PATH="${PATH}:/opt/byconity/bin" \
-    PATH="${PATH}:/opt/local/bin"
-
 
 # Base runner image
 FROM debian:11.6-slim as debian-runner
 LABEL description="Base Debian image for runtime"
 LABEL org.opencontainers.image.source="https://github.com/ByConity/ByConity"
 
-ENV DEBIAN_FRONTEND=noninteractive
 RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
-RUN apt-get update && apt-get install --no-install-recommends -y \
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     binutils gettext-base strace bpftrace sysstat gdb curl runit \
     && rm -rf /var/lib/apt/lists/*
 
@@ -61,6 +52,16 @@ WORKDIR /downloads
 RUN dpkg -i foundationdb-clients.deb
 RUN mv /downloads/tini /tini && chmod +x /tini
 RUN rm -rf /downloads
+
+# /opt/local/bin for attaching local compiled binary, see docker-compose
+ENV PATH="${PATH}:/opt/local/bin"
+
+# APP_ROOT is the install dir
+ARG APP_ROOT=/opt/byconity
+ENV PATH="${PATH}:${APP_ROOT}/bin" \
+    LD_LIBRARY_PATH="${APP_ROOT}/lib:${LD_LIBRARY_PATH}" \
+    APP_ROOT="${APP_ROOT}"
+WORKDIR ${APP_ROOT}
 
 WORKDIR /
 ENTRYPOINT ["/tini", "--"]
