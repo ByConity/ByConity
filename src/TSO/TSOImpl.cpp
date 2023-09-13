@@ -18,6 +18,7 @@
 #include <brpc/controller.h>
 #include <Protos/RPCHelpers.h>
 #include <common/logger_useful.h>
+#include <TSO/TSOServer.h>
 
 #include <atomic>
 #include <memory>
@@ -33,8 +34,16 @@ namespace DB::ErrorCodes
 namespace DB::TSO
 {
 
-TSOImpl::TSOImpl() = default;
+TSOImpl::TSOImpl(TSOServer & tso_server_): tso_server(tso_server_)
+{
+}
+
 TSOImpl::~TSOImpl() = default;
+
+bool TSOImpl::isLeader() const
+{
+    return tso_server.isLeader();
+}
 
 /** Here we make the setting operation of TSO value atomically.
   * Because if the physical time and logical time are set separately,
@@ -60,7 +69,7 @@ UInt64 TSOImpl::fetchAddLogical(UInt32 to_add)
 
 void TSOImpl::GetTimestamp(
     ::google::protobuf::RpcController *,
-    const ::DB::TSO::GetTimestampReq * /*request*/,
+    const ::DB::TSO::GetTimestampReq *,
     ::DB::TSO::GetTimestampResp *response,
     ::google::protobuf::Closure *done)
 {
@@ -73,7 +82,7 @@ void TSOImpl::GetTimestamp(
             throw Exception("KV Storage is unreachable at the moment. It may have crashed. Timestamps will not be returned until KV has recovered.", ErrorCodes::TSO_INTERNAL_ERROR);
         }
 
-        if (!is_leader.load(std::memory_order_acquire))
+        if (!isLeader())
         {
             response->set_is_leader(false);
             return;
@@ -93,21 +102,20 @@ void TSOImpl::GetTimestamp(
     }
 }
 
-void TSOImpl::GetTimestamps(::google::protobuf::RpcController *,
-                            const ::DB::TSO::GetTimestampsReq * request,
-                            ::DB::TSO::GetTimestampsResp *response,
-                            ::google::protobuf::Closure *done)
+void TSOImpl::GetTimestamps(
+    ::google::protobuf::RpcController *,
+    const ::DB::TSO::GetTimestampsReq * request,
+    ::DB::TSO::GetTimestampsResp *response,
+    ::google::protobuf::Closure *done)
 {
     brpc::ClosureGuard done_guard(done);
 
     try
     {
         if (unlikely(getIsKvDown()))
-        {
             throw Exception("KV Storage is unreachable at the moment. It may have crashed. Timestamps will not be returned until KV has recovered.", ErrorCodes::TSO_INTERNAL_ERROR);
-        }
 
-        if (!is_leader.load(std::memory_order_acquire))
+        if (!isLeader())
         {
             response->set_is_leader(false);
             return;
@@ -137,7 +145,8 @@ void TSOImpl::GetTimestamps(::google::protobuf::RpcController *,
 
 void TSOImpl::checkLogicalClock(UInt32 logical_value)
 {
-    if (likely(logical_value < MAX_LOGICAL)) return;
+    if (likely(logical_value < MAX_LOGICAL))
+        return;
 
     bool old_value = false;
     if (logical_clock_checking.compare_exchange_strong(old_value, true, std::memory_order_seq_cst, std::memory_order_relaxed))
@@ -151,10 +160,11 @@ void TSOImpl::checkLogicalClock(UInt32 logical_value)
                 UInt64 machine_time_now = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
                 // Check the leader result in case the node yielded the leadership during sleeping
                 // Timestamp stored in TSO is at least 10 seconds away from machine time
-                if (exit_leader_election && is_leader.load(std::memory_order_acquire) && (machine_time_now - ts_now) >= 10000)
+                if (isLeader() && (machine_time_now - ts_now) >= 10000)
                 {
                     // Fallback to leader election if an overflow issue happens even after sleep_for(TSO_UPDATE_INTERVAL).
-                    exit_leader_election(); // yield leadership as updateTSO thread stopped functioning
+                    // yield leadership as updateTSO thread stopped functioning
+                    tso_server.onFollower();
                     LOG_INFO(log, "Resign leader. TSO update timestamp thread has stopped functioning. Machine Time: {} | TSO Timestamp: {}", machine_time_now, ts_now);
                 }
                 logical_clock_checking.store(false, std::memory_order_relaxed);

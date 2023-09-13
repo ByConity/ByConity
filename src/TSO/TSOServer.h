@@ -85,8 +85,9 @@ public:
 
     /// Functions for exposing metrics
     int getNumYieldedLeadership() const { return num_yielded_leadership; }
-    bool getIsLeaderFromTSOService() const;
     String tryGetTSOLeaderHostPort() const;
+
+    bool isLeader() const;
 
 protected:
     int run() override;
@@ -94,6 +95,8 @@ protected:
     int main(const std::vector<std::string> & args) override;
 
 private:
+    friend class TSOImpl;
+
     Poco::Logger * log;
 
     size_t tso_window;
@@ -118,12 +121,11 @@ private:
 
     // Metrics
     int num_yielded_leadership;
+
     bool onLeader();
     bool onFollower();
-    void enterLeaderElection();
+    void initLeaderElection();
 
-    using CreateServerFunc = std::function<std::shared_ptr<ProtocolServerAdapter>(UInt16)>;
-    void createServer(const std::string & listen_host, const char * port_name, bool listen_try, CreateServerFunc && func);
     Poco::Net::SocketAddress socketBindListen(Poco::Net::ServerSocket & socket, const std::string & host, UInt16 port, [[maybe_unused]] bool secure = false) const;
 };
 

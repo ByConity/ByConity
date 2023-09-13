@@ -41,23 +41,29 @@ class TSOImpl : public TSO
 {
 
 public:
-    explicit TSOImpl();
+    explicit TSOImpl(TSOServer & tso_server_);
 
     ~TSOImpl() override;
 
     void setPhysicalTime(UInt64 time);
 
-    void setIsLeader(bool is_leader_) { is_leader.store(is_leader_, std::memory_order_release); }
-    bool getIsLeader() { return is_leader.load(std::memory_order_acquire); }
+    bool isLeader() const;
 
     void setIsKvDown(bool is_kv_down_) { is_kv_down.store(is_kv_down_, std::memory_order_release); }
-    bool getIsKvDown() { return is_kv_down.load(std::memory_order_relaxed); }
+    bool getIsKvDown() const { return is_kv_down.load(std::memory_order_relaxed); }
 
     TSOClock getClock() const
     {
         UInt64 timestamp = ts.load(std::memory_order_acquire);
         TSOClock clock = {ts_to_physical(timestamp), UInt32 ts_to_logical(timestamp)};
         return clock;
+    }
+
+    /// for gtest
+    static TSOClock getClock(UInt64 physical_time)
+    {
+        UInt64 new_ts = physical_logical_to_ts(physical_time, 0);
+        return {ts_to_physical(new_ts), UInt32 ts_to_logical(new_ts)};
     }
 
     void GetTimestamp(
@@ -72,21 +78,16 @@ public:
         ::DB::TSO::GetTimestampsResp* response,
         ::google::protobuf::Closure* done) override;
 
-    void setExitLeaderElectionFunction(std::function<void()> exit_leader_election_)
-    {
-        exit_leader_election = std::move(exit_leader_election_);
-    }
-
 private:
     std::atomic<UInt64> ts = 0;
-    std::atomic_bool is_leader{false};
     std::atomic_bool is_kv_down{false};
     Poco::Logger * log = &Poco::Logger::get("TSOImpl");
     std::atomic<bool> logical_clock_checking {false};
-    std::function<void()> exit_leader_election;
 
     UInt64 fetchAddLogical(UInt32 to_add);
     void checkLogicalClock(UInt32 logical_value);
+
+    TSOServer & tso_server;
 };
 
 }

@@ -254,21 +254,25 @@ bool TSOServer::onLeader()
     timer.start(callback);
 
     LOG_INFO(log, "Current node {} become leader", host_port);
-    tso_service->setIsLeader(true);
     return true;
 };
 
 bool TSOServer::onFollower()
 {
     num_yielded_leadership++;
-    tso_service->setIsLeader(false);
     timer.stop();
 
     LOG_INFO(log, "Current node {} become follower", host_port);
     return true;
 }
 
-void TSOServer::enterLeaderElection()
+
+bool TSOServer::isLeader() const
+{
+    return leader_election->isLeader();
+}
+
+void TSOServer::initLeaderElection()
 {
     try
     {
@@ -290,11 +294,6 @@ void TSOServer::enterLeaderElection()
     {
         tryLogCurrentException(__PRETTY_FUNCTION__);
     }
-}
-
-bool TSOServer::getIsLeaderFromTSOService() const
-{
-    return tso_service->getIsLeader();
 }
 
 String TSOServer::tryGetTSOLeaderHostPort() const
@@ -334,7 +333,10 @@ int TSOServer::main(const std::vector<std::string> &)
     auto metastore_conf = MetastoreConfig{config(), TSO_SERVICE_CONFIGURE};
     auto tso_metastore = Catalog::getMetastorePtr(metastore_conf);
     proxy_ptr = std::make_shared<TSOProxy>(std::move(tso_metastore), metastore_conf.key_name);
-    tso_service = std::make_shared<TSOImpl>();
+    tso_service = std::make_shared<TSOImpl>(*this);
+
+    /// leader election for tso-server
+    initLeaderElection();
 
     bool listen_try = config().getBool("listen_try", false);
     auto listen_hosts = getMultipleValuesFromConfig(config(), "", "listen_host");
@@ -348,9 +350,6 @@ int TSOServer::main(const std::vector<std::string> &)
     }
 
     Poco::ThreadPool server_pool(3, config().getUInt("max_connections", 1024));
-    /// leader election for tso-server
-    enterLeaderElection();
-    tso_service->setExitLeaderElectionFunction([this] { onFollower(); });
 
     static KillingErrorHandler error_handler;
     Poco::ErrorHandler::set(&error_handler);
