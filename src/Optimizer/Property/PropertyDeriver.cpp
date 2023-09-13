@@ -134,6 +134,43 @@ Property DeriverVisitor::visitStep(const IQueryPlanStep &, DeriverContext & cont
 Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, DeriverContext & context)
 {
     auto assignments = step.getAssignments();
+
+    if (!context.getInput()[0].getNodePartitioning().getPartitioningColumns().empty()
+        && context.getContext()->getSettingsRef().enable_injective_in_property)
+    {
+        for (const auto & item : assignments)
+        {
+            if (item.second->as<ASTFunction>())
+            {
+                std::set<String> symbols = SymbolsExtractor::extract(item.second);
+                bool contains_all = true;
+                auto partition_col = context.getInput()[0].getNodePartitioning().getPartitioningColumns();
+                for (auto col : partition_col)
+                {
+                    if (!symbols.count(col))
+                    {
+                        contains_all = false;
+                        break;
+                    }
+                }
+                if (contains_all)
+                {
+                    try
+                    {
+                        if (FunctionIsInjective::isInjective(
+                                item.second, context.getContext(), step.getInputStreams()[0].getNamesAndTypes()))
+                        {
+                            return {{Property{Partitioning{Partitioning::Handle::FIXED_HASH, {item.first}}}}};
+                        }
+                    }
+                    catch (...)
+                    {
+                    }
+                }
+            }
+        }
+    }
+
     std::unordered_map<String, String> identities = Utils::computeIdentityTranslations(assignments);
     std::unordered_map<String, String> revert_identifies;
 

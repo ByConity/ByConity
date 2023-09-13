@@ -53,6 +53,7 @@ public:
     inline static const String REPARTITION_FUNC{"cityHash64"};
 
     static const DataTypePtr REPARTITION_FUNC_RESULT_TYPE;
+    static const DataTypePtr REPARTITION_FUNC_NULLABLE_RESULT_TYPE;
 
     static std::pair<IColumn::Selector, PartitionStartPoints> doRepartition(
         size_t partition_num,

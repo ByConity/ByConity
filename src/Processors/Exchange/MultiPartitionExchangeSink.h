@@ -22,6 +22,7 @@
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Exchange/IExchangeSink.h>
 #include <Processors/IProcessor.h>
+#include <DataTypes/IDataType.h>
 
 namespace DB
 {
@@ -70,6 +71,7 @@ private:
     ExchangeOptions options;
     ExchangeBufferedSenders buffered_senders;
     Poco::Logger * logger;
+    const DataTypePtr * repartition_result_type_ptr ;
 };
 
 }

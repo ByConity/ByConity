@@ -26,6 +26,7 @@
 #include <Poco/Logger.h>
 #include <Common/WeakHash.h>
 #include <common/logger_useful.h>
+#include <DataTypes/DataTypeNullable.h>
 
 namespace DB
 {
@@ -118,5 +119,5 @@ ExecutableFunctionPtr RepartitionTransform::getDefaultRepartitionFunction(const 
 }
 
 const DataTypePtr RepartitionTransform::REPARTITION_FUNC_RESULT_TYPE = std::make_shared<DataTypeUInt64>();
-
+const DataTypePtr RepartitionTransform::REPARTITION_FUNC_NULLABLE_RESULT_TYPE = std::make_shared<DataTypeNullable>(RepartitionTransform::REPARTITION_FUNC_RESULT_TYPE);
 }

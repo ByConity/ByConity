@@ -36,6 +36,9 @@
 #include <Processors/QueryPipeline.h>
 #include <Processors/tests/gtest_processers_utils.h>
 #include <Common/tests/gtest_global_context.h>
+#include "Columns/ColumnNothing.h"
+#include "DataTypes/DataTypeNothing.h"
+#include <Columns/ColumnConst.h>
 
 using namespace DB;
 namespace UnitTest
@@ -104,4 +107,34 @@ TEST(RepartitionTransform, doRepartitionNullableTest)
     }
 }
 
+TEST(RepartitionTransform, doRepartitionOnlyNullTest)
+{
+    const size_t partition_num = 6;
+    const size_t rows = 10;
+    ColumnsWithTypeAndName cols;
+    for (int i = 0; i < 3; i++)
+    {
+        auto nest_col = ColumnNothing::create(1);
+        auto res_null_map = ColumnUInt8::create(1, 1);
+        auto null_column = ColumnNullable::create(std::move(nest_col), std::move(res_null_map));
+        auto column = ColumnConst::create(std::move(null_column), rows);
+        cols.emplace_back(
+            std::move(column), std::make_shared<DataTypeNullable>(std::make_shared<DataTypeNothing>()), "column" + std::to_string(i));
+    }
+
+    Block block{cols};
+
+    Block header = block.cloneEmpty();
+    Chunk chunk(block.mutateColumns(), rows);
+    ColumnsWithTypeAndName arguments;
+    arguments.push_back(header.getByPosition(1));
+    arguments.push_back(header.getByPosition(2));
+    auto func = createRepartitionFunction(getContext().context, arguments);
+    EXPECT_THROW(
+        RepartitionTransform::doRepartition(
+            partition_num, chunk, header, ColumnNumbers{1, 2}, func, RepartitionTransform::REPARTITION_FUNC_RESULT_TYPE),
+        DB::Exception);
+    EXPECT_NO_THROW(RepartitionTransform::doRepartition(
+        partition_num, chunk, header, ColumnNumbers{1, 2}, func, RepartitionTransform::REPARTITION_FUNC_NULLABLE_RESULT_TYPE));
+}
 }
