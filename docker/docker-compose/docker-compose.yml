@@ -1,0 +1,159 @@
+version: "3"
+services:
+# hdfs / remote fs
+  hdfs-namenode:
+    image: gchq/hdfs:3.3
+    command: namenode
+    environment:
+      - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
+    ports:
+      - 9870:9870
+    volumes:
+      - ./hdfs:${HADOOP_CONF_DIR}:ro
+      - /data1
+      - /data2
+    networks:
+      - base_net
+
+  hdfs-datanode:
+    depends_on:
+      - hdfs-namenode
+    image: gchq/hdfs:3.3
+    command: datanode
+    environment:
+      - HADOOP_CONF_DIR=${HADOOP_CONF_DIR}
+    volumes:
+      - ./hdfs:${HADOOP_CONF_DIR}:ro
+      - /data1
+      - /data2
+    networks:
+      - base_net
+
+# foundation db / catalog
+  fdb-0:
+    image: foundationdb/foundationdb:7.1.24
+    container_name: fdb-0
+    ports:
+      - "4550:4550"
+    environment:
+      FDB_NETWORKING_MODE: container
+      FDB_COORDINATOR_PORT: 4550
+      FDB_PORT: 4550
+    networks:
+      - base_net
+
+# byconity:
+  tso-0:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "fdbcli -C /config/fdb.cluster --exec \"configure new single ssd\"; tso-server --config-file /config/tso.yml"
+    depends_on:
+      - fdb-0
+      - hdfs-namenode
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-simple-cluster/:/config/:ro"
+    # evironment:
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "tso-0:18845/status"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  server-0:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 tso-0:18845/status && clickhouse-server --config-file /config/server.yml"
+    depends_on:
+      - tso-0
+      - hdfs-namenode
+    ports:
+      - "9123:52145"
+      - "8123:21557"
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-simple-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "server-0:21557/?query=SELECT%201"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  worker-write-0:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server-0:21557 && clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server-0
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-simple-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "worker-write-0:21557/?query=SELECT%201"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  worker-default-0:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server-0:21557 && clickhouse-server --config-file /config/worker.yml"
+    depends_on:
+      - server-0
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-simple-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "worker-default-0:21557/?query=SELECT%201"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  daemon-manager-0:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server-0:21557 && daemon-manager --config-file /config/daemon-manager.yml"
+    depends_on:
+      - server-0
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-simple-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "daemon-manager-0:17553/status"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+networks:
+  base_net:
+    name: byconity_net

@@ -1,0 +1,36 @@
+profiles:
+  default:
+    load_balancing: random
+    log_queries: 1
+    max_execution_time: 180
+    exchange_timeout_ms: 300000
+
+users:
+  default:
+    networks:
+      ip: ::/0
+    password: ""
+    profile: default
+    quota: default
+  server:
+    networks:
+      ip: ::/0
+    password: ""
+    profile: default
+    quota: default
+  probe:
+    networks:
+      ip: ::/0
+    password: ""
+    profile: default
+    quota: default
+
+quotas:
+  default:
+    interval:
+      duration: 3600
+      queries: 0
+      errors: 0
+      result_rows: 0
+      read_rows: 0
+      execution_time: 0
