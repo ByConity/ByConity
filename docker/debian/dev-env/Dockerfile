@@ -1,7 +1,7 @@
 FROM byconity/debian-builder
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-    openssh-server zsh \
+    build-essential openssh-server make zsh netcat vim wget \
     && rm -rf /var/lib/apt/lists/*
 
 RUN echo "root:root" | chpasswd && \
@@ -11,6 +11,3 @@ RUN echo "root:root" | chpasswd && \
 
 WORKDIR /root/ByConity
 ENV CCACHE_DIR=/root/.ccache
-
-EXPOSE 2222
-ENTRYPOINT ["/usr/sbin/sshd", "-D"]

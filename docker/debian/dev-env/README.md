@@ -4,26 +4,19 @@
 
 Start by pulling the image
 ```
-docker pull byconity/dev-env
+make pull
 ```
 
-You can run the "byconity/dev-env" container with specific configurations and mounted volumes. The following command does this:
+You can run the "byconity/dev-env" container with the following command:
 ```bash
-BYCONITY_SOURCE=$(pwd)/../../..
-docker run -it --privileged --cap-add SYS_PTRACE \
-  -p 2222:2222 \
-  -v ~/.m2:/root/.m2 \
-  -v ${BYCONITY_SOURCE}:/root/ByConity \
-  -v ~/.ccache:/root/.ccache \
-  --name dev-env \
-  -d byconity/dev-env
+make run
 ```
-Set the environment variable `BYCONITY_SOURCE` to the path where your ByConity source code is located.
+modify the `Makefile` and Set the environment variable `BYCONITY_SOURCE` to the path where your ByConity source code is located.
 
 
 After starting the container, you can enter it with:
 ```bash
-docker exec -it dev-env /bin/bash
+make exec
 ```
 ~~ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost -p 2222~~
 
