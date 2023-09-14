@@ -14,6 +14,15 @@ RUN wget -qO foundationdb-clients.deb https://github.com/apple/foundationdb/rele
 RUN dpkg -i foundationdb-clients.deb && rm foundationdb-clients.deb
 
 ENV CCACHE_DIR=/root/.ccache
-ENV CC=clang CXX=clang++
+ENV CC=clang-11 CXX=clang++-11
+
+# /opt/local/bin for attaching local compiled binary, see docker-compose
+ENV PATH="${PATH}:/opt/local/bin"
+
+# APP_ROOT is the install dir
+ARG APP_ROOT=/opt/byconity
+ENV PATH="${PATH}:${APP_ROOT}/bin" \
+    LD_LIBRARY_PATH="${APP_ROOT}/lib:${LD_LIBRARY_PATH}" \
+    APP_ROOT="${APP_ROOT}"
 
 WORKDIR /root
