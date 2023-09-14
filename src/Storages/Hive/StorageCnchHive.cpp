@@ -383,12 +383,10 @@ void registerStorageCnchHive(StorageFactory & factory)
             hive_settings->loadFromQuery(*args.storage_def);
             metadata.settings_changes = args.storage_def->settings->ptr();
         }
-        LOG_INFO(&Poco::Logger::get(__func__), "columns size {}", args.columns.size());
         if (!args.columns.empty())
             metadata.setColumns(args.columns);
 
         metadata.setComment(args.comment);
-        LOG_INFO(&Poco::Logger::get(__func__), "columns size {}", metadata.getColumns().size());
 
         if (args.storage_def->partition_by)
         {
