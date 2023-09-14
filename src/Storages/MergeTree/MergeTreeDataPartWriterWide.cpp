@@ -360,6 +360,9 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
     if (!settings.enable_disk_based_key_index || rows_count == 0)
         return;
 
+    if (rows_count > std::numeric_limits<UInt32>::max())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "rows count {} doesn't fit in 32-bits", rows_count);
+
     /// write unique_key -> rowid mappings to key index file
     String unique_key_index_file = fullPath(data_part->volume->getDisk(), part_path + UKI_FILE_NAME);
     IndexFile::Options options;
@@ -369,6 +372,7 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
     if (!status.ok())
         throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Error while opening file {}: {}", unique_key_index_file, status.ToString());
 
+    size_t keys_count = 0; /// number of unique keys
     if (!temp_unique_key_index)
     {
         /// normal insert case : create index file from buffered block
@@ -405,6 +409,7 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
         if (data_part->storage.merging_params.hasExplicitVersionColumn())
             version_column = buffered_unique_key_block.getByName(data_part->storage.merging_params.version_column).column;
 
+        Stopwatch timer;
         for (UInt32 rid = 0, size = buffered_unique_key_block.rows(); rid < size; ++rid)
         {
             size_t idx = unique_key_perm_ptr ? unique_key_perm[rid] : rid;
@@ -422,7 +427,9 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
             if (!status.ok())
                 throw Exception("Error while adding key to " + unique_key_index_file + ": " + status.ToString(), ErrorCodes::LOGICAL_ERROR);
         }
+        LOG_DEBUG(storage.getLogger(), "Write data into unique key index file cost {} ms", timer.elapsedMilliseconds());
 
+        keys_count = buffered_unique_key_block.rows();
         buffered_unique_key_block.clear();
     }
     else
@@ -436,6 +443,7 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
             status = index_writer.Add(Slice(key.data(), key.size()), Slice(val.data(), val.size()));
             if (!status.ok())
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Error while adding key to {}: {}", unique_key_index_file, status.ToString());
+            keys_count++;
         }
         if (!iter->status().ok())
             throw Exception(
@@ -446,6 +454,10 @@ void MergeTreeDataPartWriterWide::writeFinalUniqueKeyIndexFile(IndexFile::IndexF
         iter.reset();
         closeTempUniqueKeyIndex();
     }
+
+    /// Prevent merge task from creating merged part with duplicated keys
+    if (rows_count != keys_count)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "rows count {} doesn't match unique keys count {}", rows_count, keys_count);
 
     status = index_writer.Finish(&file_info);
     if (!status.ok())

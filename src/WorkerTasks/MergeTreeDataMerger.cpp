@@ -412,7 +412,6 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             data,
             metadata_snapshot,
             part,
-            nullptr, /// delete bitmap
             merging_column_names,
             false, // read_with_direct_io: We believe source parts will be mostly in page cache
             true, /// take_column_types_from_storage

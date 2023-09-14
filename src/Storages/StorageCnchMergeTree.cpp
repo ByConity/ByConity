@@ -914,7 +914,7 @@ bool StorageCnchMergeTree::optimize(
 {
     auto & optimize_query = query->as<ASTOptimizeQuery &>();
     auto enable_try = optimize_query.enable_try;
-    if (optimize_query.final)
+    if (optimize_query.final && query_context->getSettingsRef().disable_optimize_final)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "FINAL is disabled because it is dangerous");
 
     auto bg_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());

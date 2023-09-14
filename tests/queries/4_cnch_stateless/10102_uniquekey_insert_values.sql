@@ -22,7 +22,7 @@ INSERT INTO u10102_pl VALUES ('2021-03-01', 5, '5a'), ('2021-03-01', 6, '6a');
 SELECT * FROM u10102_pl ORDER BY d, id;
 
 SELECT 'after merge';
-OPTIMIZE TABLE u10102_pl SETTINGS mutations_sync = 1;
+OPTIMIZE TABLE u10102_pl FINAL SETTINGS mutations_sync = 1, disable_optimize_final = 0;
 SELECT * FROM u10102_pl ORDER BY d, id;
 
 DROP TABLE IF EXISTS u10102_pl;
@@ -53,7 +53,7 @@ INSERT INTO u10102_tl VALUES ('2021-04-01', 6, '6d'), ('2021-04-01', 7, '7d'), (
 SELECT * FROM u10102_tl ORDER BY id;
 
 SELECT 'after merge';
-OPTIMIZE TABLE u10102_tl SETTINGS mutations_sync = 1;
+OPTIMIZE TABLE u10102_tl FINAL SETTINGS mutations_sync = 1, disable_optimize_final = 0;
 SELECT * FROM u10102_tl ORDER BY id;
 
 DROP TABLE IF EXISTS u10102_tl;
