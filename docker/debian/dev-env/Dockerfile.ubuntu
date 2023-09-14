@@ -1,0 +1,28 @@
+FROM ubuntu:22.04
+
+RUN sed -i 's@//.*archive.ubuntu.com@//mirrors.ustc.edu.cn@g' /etc/apt/sources.list
+
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+        automake binutils-dev bison byacc ccache flex libiberty-dev libtool maven zip python3 python-is-python3 \
+        make cmake gcc g++ clang default-jdk git patch lld bzip2 \
+        wget unzip curl vim tree net-tools openssh-client xz-utils \
+        openssh-server mold zsh ninja-build \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG FDB_VERSION=7.1.27
+RUN wget -qO foundationdb-clients.deb https://github.com/apple/foundationdb/releases/download/${FDB_VERSION}/foundationdb-clients_${FDB_VERSION}-1_amd64.deb
+RUN dpkg -i foundationdb-clients.deb && rm foundationdb-clients.deb
+
+ENV CCACHE_DIR=/root/.ccache
+ENV CC=clang-11 CXX=clang++-11
+
+# /opt/local/bin for attaching local compiled binary, see docker-compose
+ENV PATH="${PATH}:/opt/local/bin"
+
+# APP_ROOT is the install dir
+ARG APP_ROOT=/opt/byconity
+ENV PATH="${PATH}:${APP_ROOT}/bin" \
+    LD_LIBRARY_PATH="${APP_ROOT}/lib:${LD_LIBRARY_PATH}" \
+    APP_ROOT="${APP_ROOT}"
+
+WORKDIR /root

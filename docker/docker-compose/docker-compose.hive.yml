@@ -1,0 +1,103 @@
+version: "3"
+services:
+  # Hadoop
+  namenode:
+    image: johannestang/hadoop-namenode:2.0.0-hadoop2.8.5-java8
+    restart: always
+    volumes:
+      - ${DATA_DIR}/hive-namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=hive-hdfs
+    env_file:
+      - ./hive/config/hadoop-hive.env
+    # ports:
+    #   - "50070:50070"
+    #   - "8020:8020"
+    networks:
+      - base_net
+
+  datanode:
+    image: johannestang/hadoop-datanode:2.0.0-hadoop2.8.5-java8
+    restart: always
+    volumes:
+      - ${DATA_DIR}/hive-datanode:/hadoop/dfs/data
+    env_file:
+      - ./hive/config/hadoop-hive.env
+    environment:
+      SERVICE_PRECONDITION: "namenode:50070"
+    # ports:
+    #   - "50075:50075"
+    networks:
+      - base_net
+
+  # Hive
+  hive-server:
+    image: johannestang/hive:2.3.6-postgresql-metastore-s3
+    restart: always
+    env_file:
+      - ./hive/config/hadoop-hive.env
+    environment:
+      HIVE_CORE_CONF_javax_jdo_option_ConnectionURL: "jdbc:postgresql://hive-metastore/metastore"
+      SERVICE_PRECONDITION: "hive-metastore:9083"
+      HDFS_CONF_fs_s3a_access_key: ${MINIO_ACCESS_KEY}
+      HDFS_CONF_fs_s3a_secret_key: ${MINIO_SECRET_KEY}
+    ports:
+      - "10000:10000"
+      - "10002:10002"
+    networks:
+      - base_net
+
+  hive-metastore:
+    image: johannestang/hive:2.3.6-postgresql-metastore-s3
+    restart: always
+    env_file:
+      - ./hive/config/hadoop-hive.env
+    command: /opt/hive/bin/hive --service metastore
+    environment:
+      SERVICE_PRECONDITION: "namenode:50070 datanode:50075 hive-metastore-postgresql:5432"
+      HDFS_CONF_fs_s3a_access_key: ${MINIO_ACCESS_KEY}
+      HDFS_CONF_fs_s3a_secret_key: ${MINIO_SECRET_KEY}
+    ports:
+      - "${HIVE_METASTORE_PORT}:9083"
+    networks:
+      - base_net
+
+  hive-metastore-postgresql:
+    image: bde2020/hive-metastore-postgresql:2.3.0
+    volumes:
+      - ${DATA_DIR}/hive-metastore:/var/lib/postgresql/data
+    networks:
+      - base_net
+
+  # trino-coordinator:
+  #   image: trinodb/trino:351
+  #   restart: always
+  #   ports:
+  #     - "8080:8080"
+  #   environment:
+  #     S3_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+  #     S3_SECRET_KEY: ${MINIO_SECRET_KEY}
+  #     S3_ENDPOINT: "http://minio:9000"
+  #   volumes:
+  #     - ./etc/trino:/etc/trino
+  #   networks:
+  #     - base_net
+
+  minio:
+    image: minio/minio
+    restart: always
+    ports:
+      - ${MINIO_PORT}:9000
+      - ${MINIO_ADMIN_PORT}:9001
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+    volumes:
+      - ${DATA_DIR}/minio/data:/data
+      - ${DATA_DIR}/minio/config:/root/.minio
+    command: server --console-address ":9001" /data
+    networks:
+      - base_net
+
+networks:
+  base_net:

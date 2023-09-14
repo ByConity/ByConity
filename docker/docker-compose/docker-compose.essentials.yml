@@ -1,0 +1,46 @@
+version: "3"
+services:
+# hdfs / remote fs
+  hdfs-namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    restart: always
+    ports:
+      - 9087:9087
+      - 9086:9000
+    volumes:
+      - ${DATA_DIR}/hadoop_namenode:/hadoop/dfs/name
+    environment:
+      - CLUSTER_NAME=byconity-hdfs
+    env_file:
+      - ./hdfs/hadoop.env
+    networks:
+      - base_net
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    restart: always
+    volumes:
+      - ${DATA_DIR}/hadoop_datanode:/hadoop/dfs/data
+    environment:
+      SERVICE_PRECONDITION: "hdfs-namenode:9000"
+    env_file:
+      - ./hdfs/hadoop.env
+    networks:
+      - base_net
+
+# foundation db / catalog
+  fdb-0:
+    image: foundationdb/foundationdb:7.1.24
+    ports:
+      - "4550:4550"
+    environment:
+      FDB_NETWORKING_MODE: container
+      FDB_COORDINATOR_PORT: 4550
+      FDB_PORT: 4550
+    volumes:
+      - ${DATA_DIR}/fdb:/var/fdb/data/
+    networks:
+      - base_net
+
+networks:
+  base_net:

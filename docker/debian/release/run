@@ -1,0 +1,2 @@
+#!/bin/bash
+exec "${APP_ROOT}/bin/clickhouse-server" --config "${APP_ROOT}/etc/clickhouse-server/config.xml"

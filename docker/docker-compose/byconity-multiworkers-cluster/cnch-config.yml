@@ -1,0 +1,72 @@
+service_discovery:
+  mode: local
+  cluster: default
+  disable_cache: false
+  cache_timeout: 5
+  server:
+    psm: data.cnch.server
+    node:
+      host: server-0
+      hostname: server-0
+      ports:
+        port:
+        -
+          name: PORT2
+          value: 21557
+        -
+          name: PORT1
+          value: 30605
+        -
+          name: PORT0
+          value: 52145
+        -
+          name: PORT4
+          value: 27651
+        -
+          name: PORT3
+          value: 45443
+        -
+          name: PORT5
+          value: 47447
+        -
+          name: PORT6
+          value: 60611
+  resource_manager:
+    psm: data.cnch.resource_manager
+    node:
+      host: resource-manager-0
+      hostname: resource-manager-0
+      ports:
+        port:
+          name: PORT0
+          value: 28989
+  daemon_manager:
+    psm: data.cnch.daemon_manager
+    node:
+      host: daemon-manager-0
+      hostname: daemon-manager-0
+      ports:
+        port:
+          name: PORT0
+          value: 17553
+  tso:
+    psm: data.cnch.tso
+    node:
+      host: tso-0
+      hostname: tso-0
+      ports:
+        port:
+        -
+          name: PORT0
+          value: 18845
+        -
+          name: PORT2
+          value: 9181
+  vw_psm: data.cnch.vw
+catalog:
+  name_space: default
+catalog_service:
+  type: fdb
+  fdb:
+    cluster_file: /config/fdb.cluster
+hdfs_addr: "hdfs://hdfs-namenode:9000"
