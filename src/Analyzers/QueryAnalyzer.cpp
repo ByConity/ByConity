@@ -13,48 +13,49 @@
  * limitations under the License.
  */
 
-#include <Analyzers/QueryAnalyzer.h>
+#include <sstream>
+#include <unordered_map>
 #include <Analyzers/ExprAnalyzer.h>
+#include <Analyzers/ExpressionVisitor.h>
+#include <Analyzers/QueryAnalyzer.h>
 #include <Analyzers/ScopeAwareEquals.h>
 #include <Analyzers/analyze_common.h>
 #include <Analyzers/function_utils.h>
-#include <Analyzers/ExpressionVisitor.h>
 #include <Analyzers/tryEvaluateConstantExpression.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeTuple.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <Interpreters/ArrayJoinedColumnsVisitor.h>
 #include <Interpreters/QueryAliasesVisitor.h>
 #include <Interpreters/QueryNormalizer.h>
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/convertFieldToType.h>
-#include <Interpreters/ArrayJoinedColumnsVisitor.h>
-#include <Parsers/ASTVisitor.h>
-#include <Parsers/ASTSelectQuery.h>
-#include <Parsers/ASTExplainQuery.h>
-#include <DataTypes/DataTypeString.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Optimizer/Utils.h>
 #include <Parsers/ASTAsterisk.h>
-#include <Parsers/ASTQualifiedAsterisk.h>
 #include <Parsers/ASTColumnsMatcher.h>
+#include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTFieldReference.h>
+#include <Parsers/ASTQualifiedAsterisk.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/ASTVisitor.h>
 #include <Parsers/queryToString.h>
 #include <QueryPlan/Void.h>
-#include <Storages/IStorage.h>
-#include <Storages/StorageDistributed.h>
 #include <Storages/Hive/StorageCnchHive.h>
-#include <Storages/StorageMemory.h>
-#include <Optimizer/Utils.h>
-#include <DataTypes/DataTypeTuple.h>
-#include <DataTypes/DataTypeArray.h>
+#include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
-#include <Storages/StorageCnchMergeTree.h>
-#include <unordered_map>
-#include <sstream>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageDistributed.h>
+#include <Storages/StorageMemory.h>
+#include "Parsers/formatAST.h"
 
 using namespace std::string_literals;
 
@@ -501,10 +502,10 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, c
     // get storage information
     StoragePtr storage;
     String full_table_name;
-
     {
         auto storage_id = context->tryResolveStorageID(db_and_table.getTableId());
         storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        storage->renameInMemory(storage_id);
         full_table_name = storage_id.getFullTableName();
 
         if (storage_id.getDatabaseName() != "system" &&

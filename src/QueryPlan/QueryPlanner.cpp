@@ -16,6 +16,7 @@
 #include <QueryPlan/QueryPlanner.h>
 
 #include <algorithm>
+#include <memory>
 #include <unordered_set>
 #include <Analyzers/ExpressionVisitor.h>
 #include <Analyzers/analyze_common.h>
@@ -57,7 +58,6 @@
 #include <QueryPlan/WindowStep.h>
 #include <QueryPlan/planning_common.h>
 #include <Common/FieldVisitors.h>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -452,6 +452,7 @@ PlanBuilder QueryPlannerVisitor::planWithoutTables(ASTSelectQuery & select_query
 PlanBuilder QueryPlannerVisitor::planTables(ASTTablesInSelectQuery & tables_in_select, ASTSelectQuery & select_query)
 {
     auto & first_table_elem = tables_in_select.children[0]->as<ASTTablesInSelectQueryElement &>();
+
     auto builder = planTableExpression(first_table_elem.table_expression->as<ASTTableExpression &>(), select_query);
 
     for (size_t idx = 1; idx < tables_in_select.children.size(); ++idx)
@@ -1143,7 +1144,9 @@ MergeTreeBitMapSchedulerPtr QueryPlannerVisitor::getBitMapScheduler(ASTSelectQue
 PlanBuilder QueryPlannerVisitor::planFrom(ASTSelectQuery & select_query)
 {
     if (select_query.tables())
+    {
         return planTables(select_query.refTables()->as<ASTTablesInSelectQuery &>(), select_query);
+    }
     else
         return planWithoutTables(select_query);
 }

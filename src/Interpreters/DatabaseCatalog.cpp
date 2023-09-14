@@ -280,7 +280,6 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
             exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Cannot find table: StorageID is empty");
         return {};
     }
-    LOG_INFO(log, table_id.getFullTableName());
 
     if (context_->getServerType() == ServerType::cnch_worker)
     {
@@ -366,8 +365,14 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
     }
 
     auto table = database->tryGetTable(table_id.table_name, context_);
+
     if (!table && exception)
-            exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Table {} doesn't exist", table_id.getNameForLogs());
+        exception->emplace(
+            ErrorCodes::UNKNOWN_TABLE,
+            "Table {} doesn't exist in {}, database engine type: {}",
+            table_id.getNameForLogs(),
+            database->getDatabaseName(),
+            database->getEngineName());
     if (!table)
         database = nullptr;
 
@@ -1144,10 +1149,10 @@ getDatabaseFromCnchOrHiveCatalog(const String & database_name, ContextPtr contex
         db_name = {database_name};
     }
     //get database from cnch catalog
-    if (!catalog_name.has_value() || catalog_name.value() == "cnch")
+    if (!catalog_name.has_value() || getOriginalDatabaseName(catalog_name.value()) == "cnch")
     {
         auto catalog = context->tryGetCnchCatalog();
-        return catalog->getDatabase(tenant_db, context, timestamp);
+        return catalog->getDatabase(appendTenantIdOnly(db_name.value()), context, timestamp);
     }
     else
     {
