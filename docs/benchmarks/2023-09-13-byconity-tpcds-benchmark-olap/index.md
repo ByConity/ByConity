@@ -6,11 +6,11 @@ authors: [vinijaiswal] [tigerwangyb]
 tags: [tpc ds benchmarks, olap engines]
 keywords: ["ByteDance", "datawarehouse", "benchmarks", "olap", "open source"]
 ---
-
+# Introduction
 With the increasing amount and complexity of data, enterprises are increasingly turning to OLAP (On-Line Analytical Processing) engines to process large-scale data and deliver real-time analytical insights. Performance is a very important factor when choosing an OLAP engine. Therefore, this article aims to offer valuable insights by conducting a performance comparison among four prominent open-source OLAP engines: ClickHouse, Doris, Presto, and ByConity. To achieve this, we employ a set of 99 query statements sourced from the TPC-DS benchmark. Our aim is to provide reference for enterprises in their journey to select the most fitting OLAP engine for their specific needs.
 
-# Introduction to TPC-DS Benchmark Testing
 
+# TPC-DS Benchmark Testing
 TPC-DS (Transaction Processing Performance Council Decision Support Benchmark) is a benchmark for Decision Support Systems (DSS). The tool was developed by the TPC organization. It simulates multidimensional analysis and decision support scenarios and provides 99 query statements to evaluate the performance of the Database System in complex multidimensional analysis scenarios. Each query is designed to simulate complex decision support scenarios, including advanced SQL techniques such as joins across multiple tables, aggregation and grouping, and subqueries.
 
 # OLAP Engines 
