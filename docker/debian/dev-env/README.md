@@ -27,7 +27,8 @@ docker exec -it dev-env /bin/bash
 ```
 ~~ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost -p 2222~~
 
-Inside the container, you can compile the ByConity code using the following commands:
+Inside the container, you can compile the ByConity code using the following commands.
+The compiled binary will be found within your local filesystem at `${BYCONITY_SOURCE}/build_dev/program`
 ```bash
 cmake -S /root/ByConity -B build_dev
 ninja -C build_dev clickhouse-server -j 64
