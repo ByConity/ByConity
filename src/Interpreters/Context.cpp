@@ -3954,14 +3954,9 @@ StorageID Context::resolveStorageIDImpl(StorageID storage_id, StorageNamespace w
     }
 
     bool look_for_external_table = where & StorageNamespace::ResolveExternal;
-    // bool in_current_catalog = where & StorageNamespace::ResolveCurrentCatalog;
     bool in_current_database = where & StorageNamespace::ResolveCurrentDatabase;
     bool in_specified_database = where & StorageNamespace::ResolveGlobal;
 
-
-    // if(storage_id.catalog_name.empty()){
-    //     storage_id.catalog_name = current_catalog;
-    // }
 
     if (!storage_id.database_name.empty())
     {

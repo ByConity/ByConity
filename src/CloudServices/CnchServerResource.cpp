@@ -130,7 +130,7 @@ void CnchServerResource::addCreateQuery(
     if (storage->getStorageUUID() == UUIDHelpers::Nil)
     {
         // throw DB::Exception(ErrorCodes::LOGICAL_ERROR, "UUID for resources should not be nil");
-        LOG_DEBUG(log, "UUID for resources should not be nil");
+        LOG_DEBUG(log, "UUID for resources should not be nil, query: {}, table: {}", create_query, worker_table_name);
     }
     if (it == assigned_table_resource.end())
         it = assigned_table_resource.emplace(storage->getStorageUUID(), AssignedResource{storage}).first;

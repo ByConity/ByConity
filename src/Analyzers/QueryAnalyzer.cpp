@@ -505,6 +505,10 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, c
     {
         auto storage_id = context->tryResolveStorageID(db_and_table.getTableId());
         storage = DatabaseCatalog::instance().getTable(storage_id, context);
+        if(!storage_id.hasUUID())
+        {
+            storage_id.uuid = storage->getStorageUUID();
+        }
         storage->renameInMemory(storage_id);
         full_table_name = storage_id.getFullTableName();
 
@@ -516,6 +520,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, c
             throw Exception("Only cnch tables & system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
 
         analysis.storage_results[&db_and_table] = StorageAnalysis { storage_id.getDatabaseName(), storage_id.getTableName(), storage};
+
     }
 
     StorageMetadataPtr storage_metadata = storage->getInMemoryMetadataPtr();

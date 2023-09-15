@@ -70,8 +70,6 @@ struct StorageID
     StorageID(const ASTTableIdentifier & table_identifier_node);
     StorageID(const ASTPtr & node);
 
-    String getCatalogName() const;
-
     String getDatabaseName() const;
 
     String getTableName() const;
