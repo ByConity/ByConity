@@ -44,7 +44,8 @@ LABEL org.opencontainers.image.source="https://github.com/ByConity/ByConity"
 
 RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
-    binutils gettext-base strace bpftrace sysstat gdb curl runit \
+    runit binutils gettext-base strace bpftrace sysstat gdb curl vim nano net-tools linux-perf \
+    dstat procps telnet \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=downloader /downloads /downloads
@@ -61,7 +62,6 @@ ARG APP_ROOT=/opt/byconity
 ENV PATH="${PATH}:${APP_ROOT}/bin" \
     LD_LIBRARY_PATH="${APP_ROOT}/lib:${LD_LIBRARY_PATH}" \
     APP_ROOT="${APP_ROOT}"
-WORKDIR ${APP_ROOT}
 
 WORKDIR /
 ENTRYPOINT ["/tini", "--"]
