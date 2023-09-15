@@ -38,7 +38,7 @@ CloudUniqueMergeTreeMergeTask::CloudUniqueMergeTreeMergeTask(
     , storage(storage_)
     , log_name(storage.getLogName() + "(MergeTask)")
     , log(&Poco::Logger::get(log_name))
-    , cnch_writer(storage, getContext(), ManipulationType::Merge)
+    , cnch_writer(storage, getContext(), ManipulationType::Merge, getTaskID())
 {
     if (params.source_data_parts.empty())
         throw Exception("Empty source data parts for merge task " + params.task_id, ErrorCodes::LOGICAL_ERROR);

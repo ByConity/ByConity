@@ -604,6 +604,14 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
         merge_settings.enable_batch_select = enable_batch_select;
         if (aggressive)
             merge_settings.min_parts_to_merge_base = 1;
+
+        /// make sure rowid could be represented in 4 bytes
+        if (metadata_snapshot->hasUniqueKey())
+        {
+            auto & max_rows = merge_settings.max_total_rows_to_merge;
+            if (!(0 < max_rows && max_rows <= std::numeric_limits<UInt32>::max()))
+                max_rows = std::numeric_limits<UInt32>::max();
+        }
         merge_selector = std::make_unique<DanceMergeSelector>(data, merge_settings);
     }
     else
@@ -614,6 +622,14 @@ SelectPartsDecision MergeTreeDataMergerMutator::selectPartsToMergeMulti(
         merge_settings.enable_batch_select = enable_batch_select;
         if (aggressive)
             merge_settings.base = 1;
+
+        /// make sure rowid could be represented in 4 bytes
+        if (metadata_snapshot->hasUniqueKey())
+        {
+            auto & max_rows = merge_settings.max_total_rows_to_merge;
+            if (!(0 < max_rows && max_rows <= std::numeric_limits<UInt32>::max()))
+                max_rows = std::numeric_limits<UInt32>::max();
+        }
         merge_selector = std::make_unique<SimpleMergeSelector>(merge_settings);
     }
 
