@@ -77,7 +77,9 @@ ManipulationListElement::ManipulationListElement(const ManipulationTaskParams & 
     /// so it's parent is required.
     MemoryTracker * query_memory_tracker = CurrentThread::getMemoryTracker();
     MemoryTracker * parent_query_memory_tracker;
-    if (query_memory_tracker->level == VariableContext::Thread && (parent_query_memory_tracker = query_memory_tracker->getParent())
+    if (query_memory_tracker
+        && query_memory_tracker->level == VariableContext::Thread
+        && (parent_query_memory_tracker = query_memory_tracker->getParent())
         && parent_query_memory_tracker != &total_memory_tracker)
     {
         memory_tracker.setOrRaiseHardLimit(parent_query_memory_tracker->getHardLimit());
