@@ -78,9 +78,6 @@ std::shared_ptr<IQueryPlanStep> CreatingSetStep::copy(ContextPtr ptr) const
 {
     SubqueryForSet new_subquery_for_set;
     new_subquery_for_set.set = subquery_for_set.set;
-    new_subquery_for_set.set = subquery_for_set.set;
-    new_subquery_for_set.set = subquery_for_set.set;
-    new_subquery_for_set.set = subquery_for_set.set;
     return std::make_shared<CreatingSetStep>(input_streams[0], description, std::move(new_subquery_for_set), network_transfer_limits, ptr);
 }
 
