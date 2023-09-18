@@ -46,8 +46,11 @@ void ASTDropQuery::formatQueryImpl(const FormatSettings & settings, FormatState 
     if (temporary)
         settings.ostr << "TEMPORARY ";
 
+
     if (table.empty() && !database.empty())
         settings.ostr << "DATABASE ";
+    else if (table.empty() && database.empty() && !catalog.empty())
+        settings.ostr << "EXTERNAL CATALOG ";
     else if (is_dictionary)
         settings.ostr << "DICTIONARY ";
     else if (is_view)
@@ -59,8 +62,9 @@ void ASTDropQuery::formatQueryImpl(const FormatSettings & settings, FormatState 
         settings.ostr << "IF EXISTS ";
 
     settings.ostr << (settings.hilite ? hilite_none : "");
-
-    if (table.empty() && !database.empty())
+    if (table.empty() && database.empty() && !catalog.empty())
+        settings.ostr << backQuoteIfNeed(catalog);
+    else if (table.empty() && !database.empty())
         settings.ostr << backQuoteIfNeed(database);
     else
         settings.ostr << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table);

@@ -40,7 +40,6 @@ class Context;
 
 /// FIXME: rewrite code about params - they should be substituted at the parsing stage,
 ///        or parsed as a separate AST entity.
-
 /// Generic identifier. ASTTableIdentifier - for table identifier.
 class ASTIdentifier : public ASTWithAlias
 {
@@ -84,12 +83,17 @@ public:
 
     /// All the global identifiers will be rewritten in multi-tenant context settings.
     /// Todo: we will rewrite all the global identifiers one by one: database name, user name, vw name...
-    virtual void rewriteCnchDatabaseName(const Context *context);
+    virtual void rewriteCnchDatabaseName(const Context * context);
+
+    virtual void appendCatalogName(const std::string & catalog_name);
+
+    virtual void appendTenantId(const Context * context);
 
     String full_name;
     std::vector<String> name_parts;
     std::shared_ptr<IdentifierSemanticImpl> semantic; /// pimpl
     bool cnch_rewritten = false;
+    bool cnch_append_catalog = false;
     void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void appendColumnNameImpl(WriteBuffer & ostr) const override;
     void resetFullName();
@@ -131,7 +135,10 @@ public:
     void deserializeImpl(ReadBuffer & buf) override;
     static ASTPtr deserialize(ReadBuffer & buf);
 
-    void rewriteCnchDatabaseName(const Context *context) override;
+    // void rewriteCnchDatabaseOrCatalog(const Context *context) override;
+    void rewriteCnchDatabaseName(const Context * context) override;
+    virtual void appendCatalogName(const std::string & catalog_name) override;
+    virtual void appendTenantId(const Context * context) override;
 };
 
 
@@ -143,6 +150,9 @@ String getIdentifierName(const IAST * ast);
 std::optional<String> tryGetIdentifierName(const IAST * ast);
 bool tryGetIdentifierNameInto(const IAST * ast, String & name);
 void tryRewriteCnchDatabaseName(ASTPtr & ast_database, const Context *context);
+void tryAppendCatalogName(ASTPtr & ast_catalog, ASTPtr & ast_database);
+void tryRewriteHiveCatalogName(ASTPtr & ast_catalog, const Context * context);
+// void tryRewriteCnchDatabaseOrCatalog(ASTPtr & ast, const Context *context);
 
 inline String getIdentifierName(const ASTPtr & ast) { return getIdentifierName(ast.get()); }
 inline std::optional<String> tryGetIdentifierName(const ASTPtr & ast) { return tryGetIdentifierName(ast.get()); }

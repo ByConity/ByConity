@@ -13,14 +13,16 @@
  * limitations under the License.
  */
 
+#include <hive_metastore_types.h>
 #include <Catalog/Catalog.h>
 #include <Interpreters/executeQuery.h>
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
-#include <Statistics/TypeUtils.h>
+#include <Statistics/HiveConverter.h>
 #include <Statistics/SubqueryHelper.h>
+#include <Statistics/TypeUtils.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <boost/algorithm/string.hpp>
-
 namespace DB::Statistics
 {
 using Catalog::CatalogPtr;
@@ -94,14 +96,37 @@ StatsCollection CatalogAdaptorCnch::readSingleStats(const StatsTableIdentifier &
 
 StatsData CatalogAdaptorCnch::readStatsData(const StatsTableIdentifier & table)
 {
+    auto storage = getStorageByTableId(table);
+    auto columns_desc = this->getCollectableColumns(table);
     StatsData result;
+
+    if (storage->getName() == "CnchHive")
+    {
+        auto hive_storage = std::dynamic_pointer_cast<StorageCnchHive>(storage);
+        std::vector<String> cols_name;
+        NameToType name_to_type;
+        for (auto desc : columns_desc)
+        {
+            cols_name.emplace_back(desc.name);
+            name_to_type[desc.name] = desc.type;
+        }
+
+        auto [row_count, hive_stats] = hive_storage->getTableStats(cols_name, context);
+        auto [table_stats, column_stats] = StatisticsImpl::convertHiveToStats(row_count, name_to_type, hive_stats);
+        result.table_stats = table_stats.writeToCollection();
+        for (auto & [k, v] : column_stats)
+        {
+            result.column_stats[k] = v.writeToCollection();
+        }
+        return result;
+    }
+
     auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
 
     // step 1: read table stats
     result.table_stats = readSingleStats(table, std::nullopt);
 
     // step 2: read column stats
-    auto columns_desc = this->getCollectableColumns(table);
     for (auto & desc : columns_desc)
     {
         auto column_name = desc.name;

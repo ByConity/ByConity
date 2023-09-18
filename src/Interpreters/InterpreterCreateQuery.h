@@ -90,7 +90,7 @@ private:
         ConstraintsDescription constraints;
         ProjectionsDescription projections;
     };
-
+    BlockIO createExternalCatalog(ASTCreateQuery & create);
     BlockIO createDatabase(ASTCreateQuery & create);
     BlockIO createTable(ASTCreateQuery & create);
 

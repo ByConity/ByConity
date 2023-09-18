@@ -41,7 +41,22 @@ public:
 
     std::shared_ptr<ApacheHive::Table> getTable(const String & db_name, const String & table_name) override;
 
+    bool isTableExist(const String & db_name, const String & table_name) override;
+
     std::vector<ApacheHive::Partition> getPartitionsByFilter(const String & db_name, const String & table_name, const String & filter) override;
+
+    HiveTableStats getTableStats(
+        const String & db_name, const String & table_name, const Strings & col_names, const bool merge_all_partition = false) override;
+
+    // ApacheHive::TableStatsResult getPartitionedTableStats(const String & db_name, const String & table_name, const Strings& col_names, const std::vector<ApacheHive::Partition>& partitions ) override;
+
+    ApacheHive::PartitionsStatsResult getPartitionStats(
+        const String & db_name,
+        const String & table_name,
+        const Strings & col_names,
+        const Strings & partition_keys,
+        const std::vector<Strings> & partition_vals) override;
+
 
 private:
     void tryCallHiveClient(std::function<void(ThriftHiveMetastoreClientPool::Entry &)> func);

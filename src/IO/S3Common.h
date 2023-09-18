@@ -6,18 +6,18 @@
 
 #if USE_AWS_S3
 
-#include <common/types.h>
-#include <Common/ThreadPool.h>
-#include <aws/core/Aws.h>  // Y_IGNORE
+#include <IO/BufferBase.h>
+#include <IO/S3/PocoHTTPClient.h>
+#include <aws/core/Aws.h> // Y_IGNORE
+#include <aws/core/auth/AWSCredentialsProviderChain.h>
 #include <aws/core/client/ClientConfiguration.h> // Y_IGNORE
 #include <aws/s3/S3Errors.h>
-#include <aws/s3/model/HeadObjectResult.h>
 #include <aws/s3/model/GetObjectResult.h>
-#include <IO/S3/PocoHTTPClient.h>
-#include <IO/BufferBase.h>
+#include <aws/s3/model/HeadObjectResult.h>
 #include <Poco/URI.h>
 #include <Common/HeaderCollection.h>
-
+#include <Common/ThreadPool.h>
+#include <common/types.h>
 namespace Aws::S3
 {
     class S3Client;
@@ -276,6 +276,18 @@ struct AuthSettings
     void updateFrom(const AuthSettings & from);
 };
 
+namespace Auth
+{
+    class S3CredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
+    {
+    public:
+        explicit S3CredentialsProviderChain(
+            const DB::S3::PocoHTTPClientConfiguration & configuration,
+            const Aws::Auth::AWSCredentials & credentials,
+            bool use_environment_credentials,
+            bool use_insecure_imds_request);
+    };
+}
 }
 
 #endif

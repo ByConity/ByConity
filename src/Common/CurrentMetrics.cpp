@@ -112,6 +112,8 @@
     M(MMappedFiles, "Total number of mmapped files.") \
     M(MMappedFileBytes, "Sum size of mmapped file regions.")     \
     M(MemoryTrackingForExchange, "Total amount of memory (bytes) allocated for complex query exchange") \
+    M(ParquetDecoderThreads, "Number of threads in the ParquetBlockInputFormat thread pool.") \
+    M(ParquetDecoderThreadsActive, "Number of threads in the ParquetBlockInputFormat thread pool running a task.") \
     \
     M(StorageMemoryRows, "Memory table input rows") \
     M(StorageMemoryBytes, "Memory table input bytes") \

@@ -150,4 +150,48 @@ namespace DB
 
         return res;
     }
+
+    bool extractNameFromWhereClause(const ASTPtr & node, const String & key_name, String & ret)
+    {
+        if (const auto * func_and = node->as<ASTFunction>(); func_and && func_and->name == "and")
+        {
+            for (const auto & elem : func_and->arguments->children)
+            {
+                if (extractNameFromWhereClause(elem, key_name, ret))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        else
+        {
+            const auto * func_equal = node->as<ASTFunction>();
+            if (!func_equal)
+                return false;
+            if (func_equal->name != "equals")
+                return false;
+
+            auto * left_arg = func_equal->arguments->children.front().get();
+            auto * right_arg = func_equal->arguments->children.back().get();
+            if (!left_arg->as<ASTIdentifier>() && right_arg->as<ASTIdentifier>())
+                std::swap(left_arg, right_arg);
+            if (const auto * left_identifier = left_arg->as<ASTIdentifier>())
+            {
+                const auto & cond_key_name = left_identifier->name();
+                if (cond_key_name != key_name)
+                    return false;
+                if (const auto * literal = right_arg->as<ASTLiteral>())
+                {
+                    const auto & field = literal->value;
+                    const auto type = field.getType();
+                    if (type != Field::Types::String)
+                        return false;
+                    ret = DB::toString(field);
+                    return true;
+                }
+            }
+            return false;
+        }
+    }
 }

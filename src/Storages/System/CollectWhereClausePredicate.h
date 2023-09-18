@@ -27,4 +27,5 @@ namespace DB
     /// e.g for query "select ... where db = 'x' ", method will return {'db' : 'x'} map
     void collectWhereClausePredicate(const ASTPtr & ast, std::map<String,String> & columnToValue);
     std::vector<std::map<String,Field>> collectWhereORClausePredicate(const ASTPtr & ast, const ContextPtr & context);
+    bool extractNameFromWhereClause(const ASTPtr & node, const String & key_name, String & ret);
 }

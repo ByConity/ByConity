@@ -22,6 +22,8 @@ private:
     ASTPtr query_ptr;
 
     BlockInputStreamPtr executeImpl();
+    BlockInputStreamPtr executeForExternalImpl();
+    BlockInputStreamPtr executeForExternalTableImpl();
 };
 
 

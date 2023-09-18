@@ -445,6 +445,7 @@ static String getTableExpressionAlias(const ASTTableExpression * table_expressio
     return String();
 }
 
+// NOTE(renming):: we should avoid using this function since it didn't handle catalog correctly.
 void ASTSelectQuery::replaceDatabaseAndTable(const String & database_name, const String & table_name)
 {
     assert(database_name != "_temporary_and_external_tables");

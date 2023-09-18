@@ -34,6 +34,7 @@
 #include <Parsers/ParserDropQuery.h>
 #include <Parsers/ParserDropWarehouseQuery.h>
 #include <Parsers/ParserDropWorkerGroupQuery.h>
+#include <Parsers/ParserExternalDDLQuery.h>
 #include <Parsers/ParserGrantQuery.h>
 #include <Parsers/ParserInsertQuery.h>
 #include <Parsers/ParserOptimizeQuery.h>
@@ -43,11 +44,10 @@
 #include <Parsers/ParserSetQuery.h>
 #include <Parsers/ParserSetRoleQuery.h>
 #include <Parsers/ParserShowWarehousesQuery.h>
+#include <Parsers/ParserSwitchQuery.h>
 #include <Parsers/ParserSystemQuery.h>
-#include <Parsers/ParserUseQuery.h>
-#include <Parsers/ParserExternalDDLQuery.h>
 #include <Parsers/ParserUpdateQuery.h>
-
+#include <Parsers/ParserUseQuery.h>
 
 namespace DB
 {
@@ -58,6 +58,7 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserQueryWithOutput query_with_output_p(end, dt);
     ParserInsertQuery insert_p(end, dt);
     ParserUseQuery use_p;
+    ParserSwitchQuery switch_p;
     ParserSetQuery set_p(false);
     ParserSystemQuery system_p(dt);
     ParserCreateUserQuery create_user_p;
@@ -78,28 +79,16 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserDeleteQuery delete_p;
     ParserUpdateQuery update_query_p;
 
-    bool res = query_with_output_p.parse(pos, node, expected)
-        || insert_p.parse(pos, node, expected)
-        || use_p.parse(pos, node, expected)
-        || set_role_p.parse(pos, node, expected)
-        || set_p.parse(pos, node, expected)
-        || system_p.parse(pos, node, expected)
-        || create_user_p.parse(pos, node, expected)
-        || create_role_p.parse(pos, node, expected)
-        || create_quota_p.parse(pos, node, expected)
-        || create_row_policy_p.parse(pos, node, expected)
-        || create_settings_profile_p.parse(pos, node, expected)
-        || drop_access_entity_p.parse(pos, node, expected)
-        || grant_p.parse(pos, node, expected)
-        || external_ddl_p.parse(pos, node, expected)
-        || create_warehouse_p.parse(pos, node, expected)
-        || alter_warehouse_p.parse(pos, node, expected)
-        || drop_warehouse_p.parse(pos, node, expected)
-        || show_warehouse_p.parse(pos, node, expected)
-        || create_worker_group_p.parse(pos, node, expected)
-        || drop_worker_group_p.parse(pos, node, expected)
-        || delete_p.parse(pos, node, expected)
-        || update_query_p.parse(pos, node ,expected);
+    bool res = query_with_output_p.parse(pos, node, expected) || insert_p.parse(pos, node, expected) || use_p.parse(pos, node, expected)
+        || switch_p.parse(pos, node, expected) || set_role_p.parse(pos, node, expected) || set_p.parse(pos, node, expected)
+        || system_p.parse(pos, node, expected) || create_user_p.parse(pos, node, expected) || create_role_p.parse(pos, node, expected)
+        || create_quota_p.parse(pos, node, expected) || create_row_policy_p.parse(pos, node, expected)
+        || create_settings_profile_p.parse(pos, node, expected) || drop_access_entity_p.parse(pos, node, expected)
+        || grant_p.parse(pos, node, expected) || external_ddl_p.parse(pos, node, expected) || create_warehouse_p.parse(pos, node, expected)
+        || alter_warehouse_p.parse(pos, node, expected) || drop_warehouse_p.parse(pos, node, expected)
+        || show_warehouse_p.parse(pos, node, expected) || create_worker_group_p.parse(pos, node, expected)
+        || drop_worker_group_p.parse(pos, node, expected) || delete_p.parse(pos, node, expected)
+        || update_query_p.parse(pos, node, expected);
 
     return res;
 }

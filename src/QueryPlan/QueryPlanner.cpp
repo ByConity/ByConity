@@ -15,24 +15,26 @@
 
 #include <QueryPlan/QueryPlanner.h>
 
+#include <algorithm>
+#include <memory>
+#include <unordered_set>
 #include <Analyzers/ExpressionVisitor.h>
 #include <Analyzers/analyze_common.h>
 #include <Columns/Collator.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/Names.h>
 #include <Core/SortDescription.h>
-#include <Core/ColumnWithTypeAndName.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/WindowDescription.h>
 #include <Interpreters/getTableExpressions.h>
-#include <Optimizer/PredicateUtils.h>
 #include <Optimizer/ExpressionExtractor.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Rewriter/ColumnPruning.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
 #include <Optimizer/makeCastFunction.h>
+#include <Parsers/formatAST.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/DistinctStep.h>
@@ -56,10 +58,6 @@
 #include <QueryPlan/WindowStep.h>
 #include <QueryPlan/planning_common.h>
 #include <Common/FieldVisitors.h>
-
-#include <algorithm>
-#include <unordered_set>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -346,6 +344,7 @@ RelationPlan QueryPlannerVisitor::visitASTSelectWithUnionQuery(ASTPtr & node, co
 
 RelationPlan QueryPlannerVisitor::visitASTSelectQuery(ASTPtr & node, const Void &)
 {
+    LOG_INFO(&Poco::Logger::get(__func__), serializeAST(*node, true));
     auto & select_query = node->as<ASTSelectQuery &>();
 
     PlanBuilder builder = planFrom(select_query);
@@ -453,6 +452,7 @@ PlanBuilder QueryPlannerVisitor::planWithoutTables(ASTSelectQuery & select_query
 PlanBuilder QueryPlannerVisitor::planTables(ASTTablesInSelectQuery & tables_in_select, ASTSelectQuery & select_query)
 {
     auto & first_table_elem = tables_in_select.children[0]->as<ASTTablesInSelectQueryElement &>();
+
     auto builder = planTableExpression(first_table_elem.table_expression->as<ASTTableExpression &>(), select_query);
 
     for (size_t idx = 1; idx < tables_in_select.children.size(); ++idx)
@@ -1144,7 +1144,9 @@ MergeTreeBitMapSchedulerPtr QueryPlannerVisitor::getBitMapScheduler(ASTSelectQue
 PlanBuilder QueryPlannerVisitor::planFrom(ASTSelectQuery & select_query)
 {
     if (select_query.tables())
+    {
         return planTables(select_query.refTables()->as<ASTTablesInSelectQuery &>(), select_query);
+    }
     else
         return planWithoutTables(select_query);
 }

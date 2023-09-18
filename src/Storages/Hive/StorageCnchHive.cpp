@@ -1,38 +1,38 @@
-#include "Storages/Hive/StorageCnchHive.h"
+#include <Storages/Hive/StorageCnchHive.h>
 #if USE_HIVE
 
-#include "CloudServices/CnchServerResource.h"
-#include "DataStreams/narrowBlockInputStreams.h"
-#include "Interpreters/ClusterProxy/SelectStreamFactory.h"
-#include "Interpreters/ClusterProxy/executeQuery.h"
-#include "Interpreters/InterpreterSelectQuery.h"
-#include "Interpreters/SelectQueryOptions.h"
-#include "Interpreters/trySetVirtualWarehouse.h"
-#include "Interpreters/evaluateConstantExpression.h"
-#include "MergeTreeCommon/CnchStorageCommon.h"
-#include "Parsers/ASTCreateQuery.h"
-#include "Parsers/ASTLiteral.h"
-#include "Parsers/ASTSelectQuery.h"
-#include "Parsers/queryToString.h"
-#include "Processors/Sources/NullSource.h"
-#include "QueryPlan/BuildQueryPipelineSettings.h"
-#include "QueryPlan/Optimizations/QueryPlanOptimizationSettings.h"
-#include "QueryPlan/ReadFromPreparedSource.h"
-#include "ResourceManagement/CommonData.h"
-#include "Storages/DataLakes/HudiDirectoryLister.h"
-#include "Storages/Hive/CnchHiveSettings.h"
-#include "Storages/Hive/DirectoryLister.h"
-#include "Storages/Hive/HiveFile/IHiveFile.h"
-#include "Storages/Hive/HivePartition.h"
-#include "Storages/Hive/HiveSchemaConverter.h"
-#include "Storages/Hive/HiveWhereOptimizer.h"
-#include "Storages/Hive/Metastore/HiveMetastore.h"
-#include "Storages/Hive/StorageHiveSource.h"
-#include "Storages/MergeTree/PartitionPruner.h"
-#include "Storages/StorageFactory.h"
-#include "Storages/StorageInMemoryMetadata.h"
+#include <CloudServices/CnchServerResource.h>
+#include <DataStreams/narrowBlockInputStreams.h>
+#include <Interpreters/ClusterProxy/SelectStreamFactory.h>
+#include <Interpreters/ClusterProxy/executeQuery.h>
+#include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/SelectQueryOptions.h>
+#include <Interpreters/evaluateConstantExpression.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
+#include <MergeTreeCommon/CnchStorageCommon.h>
+#include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTLiteral.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Parsers/queryToString.h>
+#include <Processors/Sources/NullSource.h>
+#include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/ReadFromPreparedSource.h>
+#include <ResourceManagement/CommonData.h>
+#include <Storages/DataLakes/HudiDirectoryLister.h>
+#include <Storages/Hive/CnchHiveSettings.h>
+#include <Storages/Hive/DirectoryLister.h>
+#include <Storages/Hive/HiveFile/IHiveFile.h>
+#include <Storages/Hive/HivePartition.h>
+#include <Storages/Hive/HiveSchemaConverter.h>
+#include <Storages/Hive/HiveWhereOptimizer.h>
+#include <Storages/Hive/Metastore/HiveMetastore.h>
+#include <Storages/Hive/StorageHiveSource.h>
+#include <Storages/MergeTree/PartitionPruner.h>
+#include <Storages/StorageFactory.h>
+#include <Storages/StorageInMemoryMetadata.h>
 
-#include "common/scope_guard_safe.h"
+#include <common/scope_guard_safe.h>
 
 namespace DB
 {
@@ -43,13 +43,14 @@ namespace ErrorCodes
 }
 
 StorageCnchHive::StorageCnchHive(
-        const StorageID & table_id_,
-        const String & hive_metastore_url_,
-        const String & hive_db_name_,
-        const String & hive_table_name_,
-        StorageInMemoryMetadata metadata_,
-        ContextPtr context_,
-        std::shared_ptr<CnchHiveSettings> settings_)
+    const StorageID & table_id_,
+    const String & hive_metastore_url_,
+    const String & hive_db_name_,
+    const String & hive_table_name_,
+    StorageInMemoryMetadata metadata_,
+    ContextPtr context_,
+    std::shared_ptr<CnchHiveSettings> settings_,
+    IMetaClientPtr client_from_catalog)
     : IStorage(table_id_)
     , WithContext(context_)
     , hive_metastore_url(hive_metastore_url_)
@@ -59,17 +60,20 @@ StorageCnchHive::StorageCnchHive(
 {
     try
     {
-        hive_client = HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url, storage_settings);
+        hive_client = client_from_catalog != nullptr
+            ? client_from_catalog
+            : HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url, storage_settings);
         hive_table = hive_client->getTable(hive_db_name, hive_table_name);
     }
     catch (...)
     {
         hive_exception = std::current_exception();
-        // tryLogCurrentException(__PRETTY_FUNCTION__);
+        tryLogCurrentException(__PRETTY_FUNCTION__);
         return;
     }
 
     HiveSchemaConverter converter(context_, hive_table);
+
     if (metadata_.columns.empty())
     {
         converter.convert(metadata_);
@@ -81,6 +85,7 @@ StorageCnchHive::StorageCnchHive(
         setInMemoryMetadata(metadata_);
     }
 }
+
 
 void StorageCnchHive::startup()
 {
@@ -140,11 +145,10 @@ void StorageCnchHive::collectResource(ContextPtr local_context, PrepareContextRe
     auto txn_id = local_context->getCurrentTransactionID();
     StorageID cloud_storage_id = getStorageID();
     cloud_storage_id.table_name = cloud_storage_id.table_name + '_' + txn_id.toString();
-
     CloudTableBuilder builder;
     String cloud_table_sql = builder.setStorageID(cloud_storage_id).setMetadata(getInMemoryMetadataPtr()).setCloudEngine("CloudHive").build();
 
-    LOG_TRACE(log, "Create cloud table sql {}", cloud_table_sql);
+    LOG_INFO(log, "Create cloud table sql {}", cloud_table_sql);
     cnch_resource->addCreateQuery(local_context, shared_from_this(), cloud_table_sql, builder.cloudTableName());
     cnch_resource->addDataParts(getStorageUUID(), result.hive_files);
     result.local_table_name = builder.cloudTableName();
@@ -335,6 +339,20 @@ HivePartitions StorageCnchHive::selectPartitions(
     return partitions;
 }
 
+std::pair<UInt64, ApacheHive::TableStatsResult> StorageCnchHive::getTableStats(const Strings & col_names, ContextPtr local_context)
+{
+    bool merge_partition_stats = local_context->getSettingsRef().merge_partition_stats;
+
+    auto stats = hive_client->getTableStats(hive_db_name, hive_table_name, col_names, merge_partition_stats);
+    if (stats.row_count == 0)
+    {
+        return {0, {}};
+    }
+    // LOG_TRACE(log, " row_count {}, stats {}", stats.row_count, apache::thrift::to_string(stats.table_stats));
+    return {stats.row_count, stats.table_stats};
+}
+
+
 void registerStorageCnchHive(StorageFactory & factory)
 {
     StorageFactory::StorageFeatures features{
@@ -365,7 +383,6 @@ void registerStorageCnchHive(StorageFactory & factory)
             hive_settings->loadFromQuery(*args.storage_def);
             metadata.settings_changes = args.storage_def->settings->ptr();
         }
-
         if (!args.columns.empty())
             metadata.setColumns(args.columns);
 
@@ -392,7 +409,8 @@ void registerStorageCnchHive(StorageFactory & factory)
             hive_table,
             std::move(metadata),
             args.getContext(),
-            hive_settings);
+            hive_settings,
+            args.hive_client);
     },
     features);
 }

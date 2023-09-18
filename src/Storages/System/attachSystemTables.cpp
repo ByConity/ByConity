@@ -40,9 +40,18 @@
 #include <Storages/System/StorageSystemFunctions.h>
 #include <Storages/System/StorageSystemGraphite.h>
 
+#include <Storages/System/StorageSystemCloudTables.h>
+#include <Storages/System/StorageSystemCnchFilesystemLock.h>
+#include <Storages/System/StorageSystemCnchKafkaTables.h>
+#include <Storages/System/StorageSystemCnchTransactions.h>
+#include <Storages/System/StorageSystemContributors.h>
+#include <Storages/System/StorageSystemDDLWorkerQueue.h>
+#include <Storages/System/StorageSystemDistributionQueue.h>
+#include <Storages/System/StorageSystemErrors.h>
+#include <Storages/System/StorageSystemKafkaTables.h>
 #include <Storages/System/StorageSystemMacros.h>
+#include <Storages/System/StorageSystemMergeTreeSettings.h>
 #include <Storages/System/StorageSystemMerges.h>
-#include <Storages/System/StorageSystemReplicatedFetches.h>
 #include <Storages/System/StorageSystemMetrics.h>
 #include <Storages/System/StorageSystemModels.h>
 #include <Storages/System/StorageSystemMutations.h>
@@ -50,28 +59,20 @@
 #include <Storages/System/StorageSystemOne.h>
 #include <Storages/System/StorageSystemPartMovesBetweenShards.h>
 #include <Storages/System/StorageSystemParts.h>
-#include <Storages/System/StorageSystemProjectionParts.h>
 #include <Storages/System/StorageSystemPartsColumns.h>
-#include <Storages/System/StorageSystemProjectionPartsColumns.h>
 #include <Storages/System/StorageSystemProcesses.h>
+#include <Storages/System/StorageSystemProjectionParts.h>
+#include <Storages/System/StorageSystemProjectionPartsColumns.h>
 #include <Storages/System/StorageSystemReplicas.h>
+#include <Storages/System/StorageSystemReplicatedFetches.h>
 #include <Storages/System/StorageSystemReplicationQueue.h>
-#include <Storages/System/StorageSystemDistributionQueue.h>
+#include <Storages/System/StorageSystemResourceGroups.h>
 #include <Storages/System/StorageSystemSettings.h>
-#include <Storages/System/StorageSystemMergeTreeSettings.h>
 #include <Storages/System/StorageSystemTableEngines.h>
 #include <Storages/System/StorageSystemTableFunctions.h>
 #include <Storages/System/StorageSystemTables.h>
-#include <Storages/System/StorageSystemCloudTables.h>
 #include <Storages/System/StorageSystemZooKeeper.h>
-#include <Storages/System/StorageSystemContributors.h>
-#include <Storages/System/StorageSystemResourceGroups.h>
-#include <Storages/System/StorageSystemErrors.h>
-#include <Storages/System/StorageSystemDDLWorkerQueue.h>
-#include <Storages/System/StorageSystemKafkaTables.h>
-#include <Storages/System/StorageSystemCnchKafkaTables.h>
-#include <Storages/System/StorageSystemCnchTransactions.h>
-#include <Storages/System/StorageSystemCnchFilesystemLock.h>
+#include "Storages/System/StorageSystemExternalTables.h"
 
 #if !defined(ARCADIA_BUILD)
     #include <Storages/System/StorageSystemLicenses.h>
@@ -136,7 +137,11 @@
 #include <Storages/System/StorageSystemWorkers.h>
 #include <Storages/System/StorageSystemIOSchedulers.h>
 #include <Storages/System/StorageSystemIOWorkers.h>
-
+#if USE_HIVE
+#include <Storages/System/StorageSystemExternalCatalogs.h>
+#include <Storages/System/StorageSystemExternalDatabases.h>
+#include <Storages/System/StorageSystemExternalTables.h>
+#endif
 namespace DB
 {
 
@@ -258,6 +263,11 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchDedupWorkers>(system_database, "cnch_dedup_workers");
     attach<StorageSystemCnchAsyncQueries>(system_database, "cnch_async_queries");
     attach<StorageSystemCnchTrashItems>(system_database, "cnch_trash_items");
+#if USE_HIVE
+    attach<StorageSystemExternalCatalogs>(system_database, "external_catalogs");
+    attach<StorageSystemExternalDatabases>(system_database, "external_databases");
+    attach<StorageSystemExternalTables>(system_database, "external_tables");
+#endif
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)

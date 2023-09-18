@@ -21,13 +21,14 @@
 
 #pragma once
 
-#include <Parsers/ASTQueryWithTableAndOutput.h>
-#include <Parsers/ASTQueryWithOnCluster.h>
+#include <Interpreters/StorageID.h>
 #include <Parsers/ASTDictionary.h>
 #include <Parsers/ASTDictionaryAttributeDeclaration.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Parsers/ASTQueryWithOnCluster.h>
+#include <Parsers/ASTQueryWithTableAndOutput.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
-#include <Interpreters/StorageID.h>
+#include "Parsers/IAST_fwd.h"
 
 namespace DB
 {
@@ -121,6 +122,8 @@ public:
 
     std::optional<UInt64> live_view_timeout;    /// For CREATE LIVE VIEW ... WITH TIMEOUT ...
     std::optional<UInt64> live_view_periodic_refresh;    /// For CREATE LIVE VIEW ... WITH [PERIODIC] REFRESH ...
+
+    ASTSetQuery * catalog_properties;
 
     bool attach_short_syntax{false};
 

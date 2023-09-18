@@ -363,8 +363,7 @@ def run_single_test(args, ext, server_logs_level, client_options, case_file, std
 
     if ext == '.sql':
         pattern = "{client} --send_logs_level={logs_level} --testmode --multiquery {options} < " + pattern
-
-    command = pattern.format(**params)
+    command = pattern.format(**params).replace("$$", "\\$\\$")
 
     proc = Popen(command, shell=True, env=os.environ)
 

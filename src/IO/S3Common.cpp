@@ -47,7 +47,7 @@
 #    include <common/logger_useful.h>
 #    include <common/types.h>
 
-namespace
+namespace DB::S3::Auth
 {
 const char * S3_LOGGER_TAG_NAMES[][2] = {
     {"AWSClient", "AWSClient"},
@@ -374,100 +374,97 @@ private:
     Poco::Logger * logger;
 };
 
-class S3CredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
+S3CredentialsProviderChain::S3CredentialsProviderChain(
+    const DB::S3::PocoHTTPClientConfiguration & configuration,
+    const Aws::Auth::AWSCredentials & credentials,
+    bool use_environment_credentials,
+    bool use_insecure_imds_request)
 {
-public:
-    explicit S3CredentialsProviderChain(
-        const DB::S3::PocoHTTPClientConfiguration & configuration,
-        const Aws::Auth::AWSCredentials & credentials,
-        bool use_environment_credentials,
-        bool use_insecure_imds_request)
+    auto * logger = &Poco::Logger::get("S3CredentialsProviderChain");
+
+    if (use_environment_credentials)
     {
-        auto * logger = &Poco::Logger::get("S3CredentialsProviderChain");
+        static const char AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI[] = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
+        static const char AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI[] = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
+        static const char AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN[] = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
+        static const char AWS_EC2_METADATA_DISABLED[] = "AWS_EC2_METADATA_DISABLED";
 
-        if (use_environment_credentials)
+        /// The only difference from DefaultAWSCredentialsProviderChain::DefaultAWSCredentialsProviderChain()
+        /// is that this chain uses custom ClientConfiguration.
+
+        AddProvider(std::make_shared<Aws::Auth::EnvironmentAWSCredentialsProvider>());
+        AddProvider(std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>());
+        AddProvider(std::make_shared<Aws::Auth::ProcessCredentialsProvider>());
+        AddProvider(std::make_shared<Aws::Auth::STSAssumeRoleWebIdentityCredentialsProvider>());
+
+        /// ECS TaskRole Credentials only available when ENVIRONMENT VARIABLE is set.
+        const auto relative_uri = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI);
+        LOG_DEBUG(logger, "The environment variable value {} is {}", AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI, relative_uri);
+
+        const auto absolute_uri = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI);
+        LOG_DEBUG(logger, "The environment variable value {} is {}", AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI, absolute_uri);
+
+        const auto ec2_metadata_disabled = Aws::Environment::GetEnv(AWS_EC2_METADATA_DISABLED);
+        LOG_DEBUG(logger, "The environment variable value {} is {}", AWS_EC2_METADATA_DISABLED, ec2_metadata_disabled);
+
+        if (!relative_uri.empty())
         {
-            static const char AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI[] = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
-            static const char AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI[] = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
-            static const char AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN[] = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
-            static const char AWS_EC2_METADATA_DISABLED[] = "AWS_EC2_METADATA_DISABLED";
-
-            /// The only difference from DefaultAWSCredentialsProviderChain::DefaultAWSCredentialsProviderChain()
-            /// is that this chain uses custom ClientConfiguration.
-
-            AddProvider(std::make_shared<Aws::Auth::EnvironmentAWSCredentialsProvider>());
-            AddProvider(std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>());
-            AddProvider(std::make_shared<Aws::Auth::ProcessCredentialsProvider>());
-            AddProvider(std::make_shared<Aws::Auth::STSAssumeRoleWebIdentityCredentialsProvider>());
-
-            /// ECS TaskRole Credentials only available when ENVIRONMENT VARIABLE is set.
-            const auto relative_uri = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI);
-            LOG_DEBUG(logger, "The environment variable value {} is {}", AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI, relative_uri);
-
-            const auto absolute_uri = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI);
-            LOG_DEBUG(logger, "The environment variable value {} is {}", AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI, absolute_uri);
-
-            const auto ec2_metadata_disabled = Aws::Environment::GetEnv(AWS_EC2_METADATA_DISABLED);
-            LOG_DEBUG(logger, "The environment variable value {} is {}", AWS_EC2_METADATA_DISABLED, ec2_metadata_disabled);
-
-            if (!relative_uri.empty())
-            {
-                AddProvider(std::make_shared<Aws::Auth::TaskRoleCredentialsProvider>(relative_uri.c_str()));
-                LOG_INFO(
-                    logger,
-                    "Added ECS metadata service credentials provider with relative path: [{}] to the provider chain.",
-                    relative_uri);
-            }
-            else if (!absolute_uri.empty())
-            {
-                const auto token = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN);
-                AddProvider(std::make_shared<Aws::Auth::TaskRoleCredentialsProvider>(absolute_uri.c_str(), token.c_str()));
-
-                /// DO NOT log the value of the authorization token for security purposes.
-                LOG_INFO(
-                    logger,
-                    "Added ECS credentials provider with URI: [{}] to the provider chain with a{} authorization token.",
-                    absolute_uri,
-                    token.empty() ? "n empty" : " non-empty");
-            }
-            else if (Aws::Utils::StringUtils::ToLower(ec2_metadata_disabled.c_str()) != "true")
-            {
-                DB::S3::PocoHTTPClientConfiguration aws_client_configuration = DB::S3::ClientFactory::instance().createClientConfiguration(
-                    configuration.region, configuration.remote_host_filter, configuration.s3_max_redirects,
-                    configuration.http_keep_alive_timeout_ms, configuration.http_connection_pool_size,
-                    configuration.wait_on_pool_size_limit);
-
-                /// See MakeDefaultHttpResourceClientConfiguration().
-                /// This is part of EC2 metadata client, but unfortunately it can't be accessed from outside
-                /// of contrib/aws/aws-cpp-sdk-core/source/internal/AWSHttpResourceClient.cpp
-                aws_client_configuration.maxConnections = 2;
-                aws_client_configuration.scheme = Aws::Http::Scheme::HTTP;
-
-                /// Explicitly set the proxy settings to empty/zero to avoid relying on defaults that could potentially change
-                /// in the future.
-                aws_client_configuration.proxyHost = "";
-                aws_client_configuration.proxyUserName = "";
-                aws_client_configuration.proxyPassword = "";
-                aws_client_configuration.proxyPort = 0;
-
-                /// EC2MetadataService throttles by delaying the response so the service client should set a large read timeout.
-                /// EC2MetadataService delay is in order of seconds so it only make sense to retry after a couple of seconds.
-                aws_client_configuration.connectTimeoutMs = 1000;
-                aws_client_configuration.requestTimeoutMs = 1000;
-
-                aws_client_configuration.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(1, 1000);
-
-                auto ec2_metadata_client = std::make_shared<AWSEC2MetadataClient>(aws_client_configuration);
-                auto config_loader = std::make_shared<AWSEC2InstanceProfileConfigLoader>(ec2_metadata_client, !use_insecure_imds_request);
-
-                AddProvider(std::make_shared<AWSInstanceProfileCredentialsProvider>(config_loader));
-                LOG_INFO(logger, "Added EC2 metadata service credentials provider to the provider chain.");
-            }
+            AddProvider(std::make_shared<Aws::Auth::TaskRoleCredentialsProvider>(relative_uri.c_str()));
+            LOG_INFO(
+                logger, "Added ECS metadata service credentials provider with relative path: [{}] to the provider chain.", relative_uri);
         }
+        else if (!absolute_uri.empty())
+        {
+            const auto token = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN);
+            AddProvider(std::make_shared<Aws::Auth::TaskRoleCredentialsProvider>(absolute_uri.c_str(), token.c_str()));
 
-        AddProvider(std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(credentials));
+            /// DO NOT log the value of the authorization token for security purposes.
+            LOG_INFO(
+                logger,
+                "Added ECS credentials provider with URI: [{}] to the provider chain with a{} authorization token.",
+                absolute_uri,
+                token.empty() ? "n empty" : " non-empty");
+        }
+        else if (Aws::Utils::StringUtils::ToLower(ec2_metadata_disabled.c_str()) != "true")
+        {
+            DB::S3::PocoHTTPClientConfiguration aws_client_configuration = DB::S3::ClientFactory::instance().createClientConfiguration(
+                configuration.region,
+                configuration.remote_host_filter,
+                configuration.s3_max_redirects,
+                configuration.http_keep_alive_timeout_ms,
+                configuration.http_connection_pool_size,
+                configuration.wait_on_pool_size_limit);
+
+            /// See MakeDefaultHttpResourceClientConfiguration().
+            /// This is part of EC2 metadata client, but unfortunately it can't be accessed from outside
+            /// of contrib/aws/aws-cpp-sdk-core/source/internal/AWSHttpResourceClient.cpp
+            aws_client_configuration.maxConnections = 2;
+            aws_client_configuration.scheme = Aws::Http::Scheme::HTTP;
+
+            /// Explicitly set the proxy settings to empty/zero to avoid relying on defaults that could potentially change
+            /// in the future.
+            aws_client_configuration.proxyHost = "";
+            aws_client_configuration.proxyUserName = "";
+            aws_client_configuration.proxyPassword = "";
+            aws_client_configuration.proxyPort = 0;
+
+            /// EC2MetadataService throttles by delaying the response so the service client should set a large read timeout.
+            /// EC2MetadataService delay is in order of seconds so it only make sense to retry after a couple of seconds.
+            aws_client_configuration.connectTimeoutMs = 1000;
+            aws_client_configuration.requestTimeoutMs = 1000;
+
+            aws_client_configuration.retryStrategy = std::make_shared<Aws::Client::DefaultRetryStrategy>(1, 1000);
+
+            auto ec2_metadata_client = std::make_shared<AWSEC2MetadataClient>(aws_client_configuration);
+            auto config_loader = std::make_shared<AWSEC2InstanceProfileConfigLoader>(ec2_metadata_client, !use_insecure_imds_request);
+
+            AddProvider(std::make_shared<AWSInstanceProfileCredentialsProvider>(config_loader));
+            LOG_INFO(logger, "Added EC2 metadata service credentials provider to the provider chain.");
+        }
     }
-};
+
+    AddProvider(std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(credentials));
+}
 
 class S3AuthSigner : public Aws::Client::AWSAuthV4Signer
 {
@@ -569,7 +566,7 @@ namespace S3
     {
         aws_options = Aws::SDKOptions{};
         Aws::InitAPI(aws_options);
-        Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<AWSLogger>());
+        Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<Auth::AWSLogger>());
         Aws::Http::SetHttpClientFactory(std::make_shared<PocoHTTPClientFactory>());
     }
 
@@ -617,7 +614,7 @@ namespace S3
                  Aws::Utils::HashingUtils::Base64Encode(Aws::Utils::HashingUtils::CalculateMD5(str_buffer))});
         }
 
-        auto auth_signer = std::make_shared<S3AuthSigner>(
+        auto auth_signer = std::make_shared<Auth::S3AuthSigner>(
             client_configuration, std::move(credentials), std::move(headers), use_environment_credentials, use_insecure_imds_request);
 
         return std::make_shared<Aws::S3::S3Client>(

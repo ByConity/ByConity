@@ -32,22 +32,19 @@ namespace ErrorCodes
 namespace Catalog
 {
 
-MetastoreFDBImpl::MetastoreFDBImpl(const String & cluster_config_path)
-{
-    fdb_client = std::make_shared<FDB::FDBClient>(cluster_config_path);
-}
+    MetastoreFDBImpl::MetastoreFDBImpl(const String & cluster_config_path) { fdb_client = FDB::FDBClient::Instance(cluster_config_path); }
 
-void MetastoreFDBImpl::put(const String & key, const String & value, bool if_not_exists)
-{
-    FDB::PutRequest put_req;
-    put_req.key = StringRef(key);
-    put_req.value = StringRef(value);
-    put_req.if_not_exists = if_not_exists;
+    void MetastoreFDBImpl::put(const String & key, const String & value, bool if_not_exists)
+    {
+        FDB::PutRequest put_req;
+        put_req.key = StringRef(key);
+        put_req.value = StringRef(value);
+        put_req.if_not_exists = if_not_exists;
 
-    FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
-    check_fdb_op(fdb_client->CreateTransaction(tr));
-    check_fdb_op(fdb_client->Put(tr, put_req));
-}
+        FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
+        check_fdb_op(fdb_client->CreateTransaction(tr));
+        check_fdb_op(fdb_client->Put(tr, put_req));
+    }
 
 std::pair<bool, String> MetastoreFDBImpl::putCAS(const String & key, const String & value, const String & expected, bool with_old_value)
 {

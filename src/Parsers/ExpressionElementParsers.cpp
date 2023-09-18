@@ -68,7 +68,7 @@
 #include "ASTColumnsMatcher.h"
 
 #include <Interpreters/StorageID.h>
-
+#include <Parsers/formatTenantDatabaseName.h>
 namespace DB
 {
 
@@ -274,7 +274,7 @@ bool ParserCompoundIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
 
     if (table_name_with_optional_uuid)
     {
-        if (parts.size() > 2)
+        if (parts.size() > 3)
             return false;
 
         if (s_uuid.ignore(pos, expected))
@@ -287,7 +287,16 @@ bool ParserCompoundIdentifier::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
         }
 
         if (parts.size() == 1) node = std::make_shared<ASTTableIdentifier>(parts[0], std::move(params));
-        else{
+        else if (parts.size() == 3)
+        {
+            auto & catalog = parts[0];
+            auto & database = parts[1];
+            auto new_database = formatCatalogDatabaseName(database, catalog);
+            node = std::make_shared<ASTTableIdentifier>(new_database, parts[2], std::move(params));
+            node->as<ASTTableIdentifier>()->rewriteCnchDatabaseName(pos.getContext());
+        }
+        else
+        {
             node = std::make_shared<ASTTableIdentifier>(parts[0], parts[1], std::move(params));
             node->as<ASTTableIdentifier>()->rewriteCnchDatabaseName(pos.getContext());
         }

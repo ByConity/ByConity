@@ -31,17 +31,20 @@
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogConfig.h>
+// #include <Catalog/MetastoreConfig.h>
+#include <Catalog/Catalog.h>
 #include <CloudServices/CnchServerServiceImpl.h>
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchWorkerServiceImpl.h>
 #include <DataTypes/MapHelpers.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
+#include <ExternalCatalog/IExternalCatalogMgr.h>
 #include <Formats/registerFormats.h>
 #include <Functions/registerFunctions.h>
 #include <IO/HTTPCommon.h>
-#include <IO/UseSSL.h>
 #include <IO/Scheduler/IOScheduler.h>
+#include <IO/UseSSL.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/DNSCacheUpdater.h>
@@ -121,14 +124,8 @@
 #include <common/logger_useful.h>
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
-#include "MetricsTransmitter.h"
-#include <QueryPlan/PlanCache.h>
-#include <DataTypes/MapHelpers.h>
-#include <Statistics/CacheManager.h>
-#include <CloudServices/CnchWorkerClientPools.h>
 #include "BrpcServerHolder.h"
-#include <Catalog/Catalog.h>
-#include <QueryPlan/Hints/registerHints.h>
+#include "MetricsTransmitter.h"
 
 #include <CloudServices/CnchServerClientPool.h>
 
@@ -1252,6 +1249,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
         throw;
     }
 
+    // Note:: just for test.
+    {
+        // WARNING: There is a undesired restriction on FDB. Each process could only init one fdb client otherwise it will panic.
+        // so if we use fdb as the kv storage, the config for external and internal catalog must be the same.
+        if (global_context->getCnchConfigRef().has(ExternalCatalog::Mgr::configPrefix()))
+        {
+            ExternalCatalog::Mgr::init(*global_context, global_context->getCnchConfigRef());
+        }
+    }
     /// Check sanity of MergeTreeSettings on server startup
     global_context->getMergeTreeSettings().sanityCheck(settings);
     global_context->getReplicatedMergeTreeSettings().sanityCheck(settings);
@@ -1346,6 +1352,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// start background task to sync metadata automatically. consider to remove it later.
     global_context->setMetaChecker();
+
 
     /// Init trace collector only after trace_log system table was created
     /// Disable it if we collect test coverage information, because it will work extremely slow.

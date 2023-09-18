@@ -26,12 +26,14 @@
 
 #include <Common/typeid_cast.h>
 
-#include <Parsers/IAST.h>
 #include <Parsers/ASTIdentifier.h>
-#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
-
+#include <Parsers/ASTTablesInSelectQuery.h>
+#include <Parsers/IAST.h>
+#include <fmt/core.h>
+#include <Poco/Logger.h>
+#include <common/logger_useful.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -45,8 +47,15 @@ DatabaseAndTableWithAlias::DatabaseAndTableWithAlias(const ASTTableIdentifier & 
 
     auto table_id = identifier.getTableId();
     std::tie(database, table, uuid) = std::tie(table_id.database_name, table_id.table_name, table_id.uuid);
+    LOG_TRACE(&Poco::Logger::get("DatabaseAndTableWithAlias"), fmt::format("got {}.{}", database, table));
     if (database.empty())
         database = current_database;
+}
+
+
+StorageID DatabaseAndTableWithAlias::getStorageID() const
+{
+    return StorageID(database, table, uuid);
 }
 
 DatabaseAndTableWithAlias::DatabaseAndTableWithAlias(const ASTPtr & node, const String & current_database)

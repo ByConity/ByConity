@@ -218,7 +218,7 @@ StoragePtr JoinedTables::getLeftTableStorage()
     StorageID table_id = StorageID::createEmpty();
     if (left_db_and_table)
     {
-        table_id = context->resolveStorageID(StorageID(left_db_and_table->database, left_db_and_table->table, left_db_and_table->uuid));
+        table_id = context->resolveStorageID(left_db_and_table->getStorageID());
     }
     else /// If the table is not specified - use the table `system.one`.
     {

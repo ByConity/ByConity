@@ -78,7 +78,7 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const 
         return std::make_shared<DiskByteHDFS>("hive_hdfs", "/", *params);
     }
 #if USE_AWS_S3
-    else if (scheme == "s3a")
+    else if (scheme == "s3a" || scheme == "s3")
     {
         auto * log = &Poco::Logger::get(__func__);
         LOG_DEBUG(log, "sd_url: {}", sd_url);

@@ -103,11 +103,18 @@ private:
     int batch_read_index = 0;
 };
 
+class FDBClient;
+using FDBClientPtr = std::shared_ptr<FDBClient>;
 class FDBClient
 {
     friend Iterator;
+
+protected:
+    explicit FDBClient(const std::string & cluster_file);
+
 public:
-    FDBClient(const std::string & cluster_file);
+    // There is an undesired restriction on FDB. Each process could only init one fdb client otherwise it will panic.
+    static FDBClientPtr Instance(const std::string & cluster_file);
     ~FDBClient();
     fdb_error_t CreateTransaction(FDBTransactionPtr tr);
     fdb_error_t Get(FDBTransactionPtr tr, const std::string & key, GetResponse & res);
@@ -124,7 +131,6 @@ private:
     FDBDatabase * fdb = nullptr;
 };
 
-using FDBClientPtr = std::shared_ptr<FDBClient>;
 
 }
 

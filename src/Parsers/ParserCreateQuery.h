@@ -446,6 +446,17 @@ class ParserCreateDatabaseQuery : public IParserDialectBase
 protected:
     const char * getName() const override { return "CREATE DATABASE query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+class ParserCreateCatalogQuery : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "CREATE EXTERNAL CATALOG query"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+
 public:
     using IParserDialectBase::IParserDialectBase;
 };

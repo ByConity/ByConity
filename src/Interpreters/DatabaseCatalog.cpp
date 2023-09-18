@@ -40,17 +40,21 @@
 #include <filesystem>
 #include <Common/filesystemHelpers.h>
 
-#include <Transaction/ICnchTransaction.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <Databases/DatabaseCnch.h>
-#include <Common/Status.h>
-#include "Interpreters/Context_fwd.h"
+#include <ExternalCatalog/IExternalCatalogMgr.h>
 #include <Protos/RPCHelpers.h>
+#include <Transaction/ICnchTransaction.h>
+#include <Common/DefaultCatalogName.h>
 
 #include <Parsers/formatTenantDatabaseName.h>
-
+#include <Common/Status.h>
+#include "Core/SettingsEnums.h"
+#include "Databases/DatabaseExternalHive.h"
+#include "Interpreters/StorageID.h"
+#include "Transaction/TxnTimestamp.h"
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
 #endif
@@ -76,6 +80,7 @@ namespace DB
 
 namespace ErrorCodes
 {
+    extern const int UNKNOWN_CATALOG;
     extern const int UNKNOWN_DATABASE;
     extern const int UNKNOWN_TABLE;
     extern const int TABLE_ALREADY_EXISTS;
@@ -287,9 +292,13 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
             //     return getCnchTable()
 
             if (auto table = worker_resource->getTable(table_id))
+            {
+                LOG_INFO(log, "got table {} from worker resource", table_id.getNameForLogs());
                 return {nullptr, table};
+            }
         }
     }
+
 
     if (table_id.hasUUID() && table_id.database_name == TEMPORARY_DATABASE)
     {
@@ -334,7 +343,6 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
     }
 
     DatabasePtr database{};
-
     if (preferCnchCatalog(*context_))
         database = tryGetDatabaseCnch(table_id.getDatabaseName(), context_);
 
@@ -346,15 +354,25 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
         if (databases.end() == it)
         {
             if (exception)
-                exception->emplace(ErrorCodes::UNKNOWN_DATABASE, "Database {} doesn't exist", backQuoteIfNeed(table_id.getDatabaseName()));
+                exception->emplace(
+                    ErrorCodes::UNKNOWN_DATABASE,
+                    "Database {} doesn't exist when fetching {}",
+                    backQuoteIfNeed(table_id.getDatabaseName()),
+                    table_id.getNameForLogs());
             return {};
         }
         database = it->second;
     }
 
     auto table = database->tryGetTable(table_id.table_name, context_);
+
     if (!table && exception)
-            exception->emplace(ErrorCodes::UNKNOWN_TABLE, "Table {} doesn't exist", table_id.getNameForLogs());
+        exception->emplace(
+            ErrorCodes::UNKNOWN_TABLE,
+            "Table {} doesn't exist in {}, database engine type: {}",
+            table_id.getNameForLogs(),
+            database->getDatabaseName(),
+            database->getEngineName());
     if (!table)
         database = nullptr;
 
@@ -750,6 +768,7 @@ DatabasePtr DatabaseCatalog::getDatabase(const String & database_name, ContextPt
             return res;
     }
 
+
     return getDatabase(resolved_database);
 }
 
@@ -1115,9 +1134,38 @@ void DatabaseCatalog::waitTableFinallyDropped(const UUID & uuid)
     });
 }
 
+static DatabasePtr
+getDatabaseFromCnchOrHiveCatalog(const String & database_name, ContextPtr context, const TxnTimestamp & timestamp, bool enable_three_part)
+{
+    String tenant_db = formatTenantDatabaseName(database_name);
+    std::optional<String> catalog_name = std::nullopt;
+    std::optional<String> db_name = std::nullopt;
+    if (enable_three_part)
+    {
+        std::tie(catalog_name, db_name) = getCatalogNameAndDatabaseName(tenant_db);
+    }
+    else
+    {
+        db_name = {database_name};
+    }
+    //get database from cnch catalog
+    if (!catalog_name.has_value() || getOriginalDatabaseName(catalog_name.value()) == "cnch")
+    {
+        auto catalog = context->tryGetCnchCatalog();
+        return catalog->getDatabase(appendTenantIdOnly(db_name.value()), context, timestamp);
+    }
+    else
+    {
+        // get database from hive catalog
+        return std::make_shared<DatabaseExternalHive>(catalog_name.value(), db_name.value(), context);
+    }
+}
+
+
 DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const String & database_name) const
 {
-    DatabasePtr cnch_database = getContext()->getCnchCatalog()->getDatabase(formatTenantDatabaseName(database_name), getContext(), TxnTimestamp::maxTS());
+    DatabasePtr cnch_database = getDatabaseFromCnchOrHiveCatalog(
+        database_name, getContext(), TxnTimestamp::maxTS(), getContext()->getSettingsRef().enable_three_part_identifier);
     return cnch_database;
 }
 
@@ -1130,9 +1178,11 @@ DatabasePtr DatabaseCatalog::tryGetDatabaseCnch(const String & database_name, Co
         res = txn->tryGetDatabaseViaCache(tenant_db);
     if (res)
         return res;
-    auto catalog = getContext()->tryGetCnchCatalog();
-    if (catalog)
-        res = catalog->getDatabase(tenant_db, getContext(), txn ? txn->getStartTime() : TxnTimestamp::maxTS());
+    res = getDatabaseFromCnchOrHiveCatalog(
+        database_name,
+        getContext(),
+        txn ? txn->getStartTime() : TxnTimestamp::maxTS(),
+        local_context->getSettingsRef().enable_three_part_identifier);
     if (res && txn)
         txn->addDatabaseIntoCache(res);
     return res;
