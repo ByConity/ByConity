@@ -1,28 +1,21 @@
-UID := $(shell id -u)
-GID := $(shell id -g)
-BYCONITY_SOURCE := $(shell pwd)/../../..
-NAME := ${UID}-dev-env
+BYCONITY_SOURCE := $(realpath ../../..)
+CONTAINER := $(shell id -u)-dev-env
 
 run:
-	mkdir -p ~/.ccache
-	docker run -it \
+	mkdir -p $(HOME)/.ccache
+	docker run -it --rm \
 		--privileged \
 		--cap-add SYS_PTRACE \
-		--user=${UID}:${GID} \
 		--network host \
 		-e CCACHE_DIR=/root/.ccache \
-		-v ~/.m2:/root/.m2 \
-		-v ${BYCONITY_SOURCE}:/root/ByConity \
-		-v ~/.ccache:/root/.ccache \
-		--name ${NAME} \
+		-e http_proxy=${http_proxy} \
+		-e https_proxy=${https_proxy} \
+		-v $(HOME)/.m2:/root/.m2 \
+		-v $(HOME)/ck:/root/ck \
+		-v $(HOME)/.ccache:/root/.ccache \
+		--name $(CONTAINER) \
 		--workdir /root/ByConity \
-		-d byconity/dev-env
+		byconity/dev-env bash
 
 pull:
 	docker pull byconity/dev-env
-
-exec:
-	docker exec -it ${NAME} zsh
-
-stop:
-	docker stop ${NAME}
