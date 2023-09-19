@@ -1235,36 +1235,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
             real_cache_segments_count);
     });
 }
-void MergeTreeDataPartCNCH::fillProjectionNamesFromChecksums(const MergeTreeDataPartChecksum & checksum_file)
-{
-    projection_parts_names.clear();
-    String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
-    if (checksum_file.file_size == 0 /* && isDeleted() */)
-        throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of checksums in part {} under path {} is zero", name, data_rel_path);
 
-    auto data_file = openForReading(volume->getDisk(), data_rel_path, checksum_file.file_size);
-    LimitReadBuffer buf = readPartFile(*data_file, checksum_file.file_offset, checksum_file.file_size);
-
-    ChecksumsPtr checksums = std::make_shared<Checksums>();
-    checksums->storage_type = StorageType::ByteHDFS;
-
-    if (checksums->read(buf))
-    {
-        assertEOF(buf);
-    }
-
-    // remove deleted files in checksums
-    for (auto it = checksums->files.begin(); it != checksums->files.end();)
-    {
-        const auto & name = it->first;
-        const auto & file = it->second;
-        if (endsWith(name, ".proj") && !file.is_deleted)
-        {
-            projection_parts_names.insert(name.substr(0, name.find(".proj")));
-        }
-        ++it;
-    }
-}
 
 void MergeTreeDataPartCNCH::dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache) const
 {

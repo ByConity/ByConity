@@ -105,7 +105,9 @@ private:
 
     void checkConsistency(bool require_part_metadata) const override;
 
-    void loadIndex() override;
+    IndexPtr loadIndex() override;
+    /// speed up next get. store index into disk cache
+    // void prefetchIndex() const override;
 
     MergeTreeDataPartChecksums::FileChecksums loadPartDataFooter() const;
 
