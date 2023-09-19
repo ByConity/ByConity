@@ -192,7 +192,7 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
         if (!cnch_table)
             throw Exception("Engine " + storage->getStorageID().getNameForLogs() + " doesn't support direct insertion", ErrorCodes::SUPPORT_IS_DISABLED);
 
-        auto create_query = cnch_table->getCreateQueryForCloudTable(cnch_table->getCreateTableSql(), query.table_id.database_name, query.table_id.table_name);
+        auto create_query = cnch_table->getCreateQueryForCloudTable(cnch_table->getCreateTableSql(), query.table_id.table_name, nullptr, false, std::nullopt, Strings{}, query.table_id.database_name);
         LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Worker side create query: {}" , create_query);
 
         Names view_create_sqls = genViewDependencyCreateQueries(storage, getContext());
