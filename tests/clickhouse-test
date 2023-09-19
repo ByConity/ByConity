@@ -783,7 +783,9 @@ def run_tests_array(all_tests_with_params):
         except:
             exc_type, exc_value, tb = sys.exc_info()
             failures += 1
-            print("{0} - Test internal error: {1}\n{2}\n{3}".format(MSG_FAIL, exc_type.__name__, exc_value, "\n".join(traceback.format_tb(tb, 10))))
+            fail_case_name = "{0:72}".format(name + ": ")
+            print("{0} {1} - Test internal error: {2}\n{3}\n{4}".format(fail_case_name, MSG_FAIL, exc_type.__name__,exc_value,"\n".join(traceback.format_tb(tb, 10))))
+            # print("{0} - Test internal error: {1}\n{2}\n{3}".format(MSG_FAIL, exc_type.__name__, exc_value, "\n".join(traceback.format_tb(tb, 10))))
 
         if failures_chain >= 30:
             stop_tests()
