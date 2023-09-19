@@ -620,7 +620,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeSubquery(ASTPtr & node, const QualifiedNam
 
 ScopePtr QueryAnalyzerVisitor::analyzeTableFunction(ASTFunction & /*table_function*/, const QualifiedName & /*column_prefix*/)
 {
-    return nullptr;
+    throw Exception("table function is not supported yet", ErrorCodes::NOT_IMPLEMENTED);
     /*
     // execute table function
     StoragePtr storage = context->getQueryContext()->executeTableFunction(table_function.ptr());
