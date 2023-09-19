@@ -177,8 +177,9 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
             if (split_parts.size() - index == 3) {
                 if (checkUUid) {
                     DB::UUID uuid;
-                    DB::ReadBufferFromString read_buffer(split_parts[index]);
-                    if (!DB::tryReadUUIDText(uuid, read_buffer)) {
+                    DB::ReadBufferFromString table_buffer(split_parts[index]);
+                    DB::ReadBufferFromString part_buffer(split_parts[index + 1]);
+                    if (!DB::tryReadUUIDText(uuid, table_buffer) || !DB::tryReadUUIDText(uuid, part_buffer)) {
                         continue;
                     }
                 }
