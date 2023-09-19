@@ -1,6 +1,8 @@
 #include "S3MetaSanitizer.h"
+#include <exception>
 #include <iostream>
 #include <Poco/Exception.h>
+#include <Poco/Util/AbstractConfiguration.h>
 #include <Poco/Util/Application.h>
 #include <Poco/Util/Option.h>
 #include <Poco/Util/OptionSet.h>
@@ -10,6 +12,7 @@
 #include <Poco/Logger.h>
 #include <Poco/Path.h>
 #include <Poco/PatternFormatter.h>
+#include "Common/Config/ConfigProcessor.h"
 #include <common/logger_useful.h>
 #include <Common/Exception.h>
 #include <brpc/server.h>
@@ -56,6 +59,7 @@ void S3MetaSanitizer::defineOptions(Poco::Util::OptionSet& options)
         Poco::Util::Option("log-level", "L", "logging_level")
             .required(false)
             .repeatable(false)
+            .argument("<log-level>")
             .binding("log-level")
     );
 }
@@ -63,7 +67,8 @@ void S3MetaSanitizer::defineOptions(Poco::Util::OptionSet& options)
 void S3MetaSanitizer::initialize(Poco::Util::Application& self)
 {
     std::string conf_path = config().getString("config-file");
-    loadConfiguration(conf_path);
+    ConfigProcessor config_processor(conf_path, false, true);
+    config().add(config_processor.loadConfig().configuration.duplicate(), PRIO_APPLICATION, false);
 
     Application::initialize(self);
 
@@ -147,7 +152,15 @@ void S3MetaSanitizer::sanitizePartsMeta(const std::string& prefix)
 
 int mainEntryClickhouseS3MetaSanitizer(int argc, char** argv)
 {
-    Poco::AutoPtr<DB::S3MetaSanitizer> s3_meta_sanitizer = new DB::S3MetaSanitizer;
-    s3_meta_sanitizer->init(argc, argv);
-    return s3_meta_sanitizer->run();
+    try
+    {
+        Poco::AutoPtr<DB::S3MetaSanitizer> s3_meta_sanitizer = new DB::S3MetaSanitizer;
+        s3_meta_sanitizer->init(argc, argv);
+        return s3_meta_sanitizer->run();
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Failed to sanitize s3 meta: " << e.what() << std::endl; 
+    }
+    return -1;
 }
