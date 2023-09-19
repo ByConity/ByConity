@@ -264,3 +264,6 @@
 [submodule "contrib/arrow-nanoarrow"]
 	path = contrib/arrow-nanoarrow
 	url = https://github.com/apache/arrow-nanoarrow.git
+[submodule "contrib/ve-tos-cpp-sdk"]
+	path = contrib/ve-tos-cpp-sdk
+	url = https://github.com/volcengine/ve-tos-cpp-sdk.git

@@ -370,3 +370,7 @@ if (ENABLE_BENCHMARK)
 endif()
 
 add_subdirectory(hivemetastore-cmake)
+
+if (ENABLE_VE_TOS)
+    add_subdirectory(ve-tos-cpp-sdk-cmake)
+endif()

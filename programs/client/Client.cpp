@@ -72,8 +72,7 @@
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadBufferFromFileDescriptor.h>
 #include <IO/WriteBufferFromFileDescriptor.h>
-#include <IO/WriteBufferFromFile.h>
-#include <Storages/HDFS/WriteBufferFromHDFS.h>
+#include <IO/OutfileCommon.h>
 #include <IO/ReadBufferFromMemory.h>
 #include <IO/ReadBufferFromString.h>
 #include <IO/ZlibDeflatingWriteBuffer.h>
@@ -227,14 +226,9 @@ private:
 
     std::optional<String> out_path;
     /// The user can specify to redirect query output to a file.
-    std::optional<WriteBufferFromFile> out_file_buf;
-    BlockOutputStreamPtr block_out_stream;
-#if USE_HDFS
-    /// The user can specify to redirect query output to local file.
-    std::unique_ptr<WriteBufferFromHDFS> out_hdfs_raw;
-    std::optional<ZlibDeflatingWriteBuffer> out_hdfs_buf;
-#endif
+    OutfileTargetPtr outfile_target;
 
+    BlockOutputStreamPtr block_out_stream;
     /// The user could specify special file for server logs (stderr by default)
     std::unique_ptr<WriteBuffer> out_logs_buf;
     String server_logs_file;
@@ -2001,18 +1995,12 @@ private:
         }
         pager_cmd = nullptr;
 
-        if (out_file_buf)
+        if (outfile_target)
         {
-            out_file_buf->next();
-            out_file_buf.reset();
+            outfile_target->flushFile();
+            outfile_target.reset();
         }
-#if USE_HDFS
-        if (out_hdfs_buf)
-        {
-            out_hdfs_buf->finalize();
-            out_hdfs_buf.reset();
-        }
-#endif
+
         if (out_logs_buf)
         {
             out_logs_buf->next();
@@ -2272,32 +2260,17 @@ private:
                             ErrorCodes::BAD_ARGUMENTS);
                     }
                     out_path.emplace(typeid_cast<const ASTLiteral &>(*query_with_output->out_file).value.safeGet<std::string>());
-                    const Poco::URI out_uri(*out_path);
-                    const String & scheme = out_uri.getScheme();
-
-                    if(scheme.empty())
-                    {
-                        out_file_buf.emplace(*out_path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
-                        out_buf = &*out_file_buf;
-                    }
-#if USE_HDFS
-                    else if(isHdfsOrCfsScheme(scheme))
-                    {
-                        out_hdfs_raw = std::make_unique<WriteBufferFromHDFS>(*out_path,
-                            context->getHdfsConnectionParams(),
-                            context->getSettingsRef().max_hdfs_write_buffer_size);
-                        int compression_level = Z_DEFAULT_COMPRESSION;
-                        out_hdfs_buf.emplace(std::move(out_hdfs_raw), DB::CompressionMethod::Gzip, compression_level);
-                        out_buf = &*out_hdfs_buf;
-                    }
-#endif
-                    else
-                    {
-                        throw Exception("Path: " + *out_path + " is illegal, only support write query result to local file or tos", ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
-                    }
                     // We are writing to file, so default format is the same as in non-interactive mode.
                     if (is_interactive && is_default_format)
                         current_format = "TabSeparated";
+
+                    String compression_method_str; 
+                    UInt64 compression_level = 1;
+
+                    OutfileTarget::setOufileCompression(query_with_output, compression_method_str, compression_level);
+
+                    outfile_target = OutfileTarget::getOutfileTarget(*out_path, "", compression_method_str, compression_level);
+                    out_buf = outfile_target->getOutfileBuffer(context, true);
                 }
                 if (query_with_output->format != nullptr)
                 {
