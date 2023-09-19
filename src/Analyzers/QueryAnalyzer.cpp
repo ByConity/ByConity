@@ -176,15 +176,9 @@ void QueryAnalyzer::analyze(ASTPtr & query, ScopePtr outer_query_scope, ContextM
 Void QueryAnalyzerVisitor::visitASTInsertQuery(ASTPtr & node, const Void &)
 {
     auto & insert_query = node->as<ASTInsertQuery &>();
-    if (insert_query.table_function || insert_query.in_file || !insert_query.select)
-        throw Exception("Insert query only support Insert ... Select .. ", ErrorCodes::NOT_IMPLEMENTED);
     if (insert_query.table_id.database_name.empty())
         insert_query.table_id.database_name = context->getCurrentDatabase();
     StoragePtr storage = DatabaseCatalog::instance().getTable(insert_query.table_id, context);
-    if (auto * dist_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()); !dist_table)
-        throw Exception(
-            "Optimizer don't support insert for Engine " + storage->getName() + ", only support MergeTree* Storage.",
-            ErrorCodes::NOT_IMPLEMENTED);
     // if (auto * materialized_view = dynamic_cast<const StorageMaterializedView *>(table.get()))
     //     throw Exception("Inserting into materialized views is not supported", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     // if (auto * view = dynamic_cast<const StorageView *>(table.get()))
@@ -511,14 +505,6 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, c
         }
         storage->renameInMemory(storage_id);
         full_table_name = storage_id.getFullTableName();
-
-        if (storage_id.getDatabaseName() != "system" &&
-            !(dynamic_cast<const MergeTreeMetaBase *>(storage.get())
-              || dynamic_cast<const StorageMemory *>(storage.get())
-              || dynamic_cast<const StorageCnchHive *>(storage.get())
-              || dynamic_cast<const IStorageCnchFile *>(storage.get())))
-            throw Exception("Only cnch tables & system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
-
         analysis.storage_results[&db_and_table] = StorageAnalysis { storage_id.getDatabaseName(), storage_id.getTableName(), storage};
 
     }
@@ -689,12 +675,6 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoin(ASTTableJoin & table_join, ScopePtr l
 
         if (table_join.strictness == ASTTableJoin::Strictness::Any)
             table_join.strictness = ASTTableJoin::Strictness::RightAny;
-    }
-    else
-    {
-        if (table_join.strictness == ASTTableJoin::Strictness::Any)
-            if (table_join.kind == ASTTableJoin::Kind::Full)
-                throw Exception("ANY FULL JOINs are not implemented.", ErrorCodes::NOT_IMPLEMENTED);
     }
 
     {
@@ -1591,9 +1571,6 @@ void QueryAnalyzerVisitor::analyzeLimitBy(ASTSelectQuery & select_query, ScopePt
 
 void QueryAnalyzerVisitor::analyzeLimitAndOffset(ASTSelectQuery & select_query)
 {
-    if (select_query.limit_with_ties)
-        throw Exception("LIMIT/OFFSET FETCH WITH TIES not implemented", ErrorCodes::NOT_IMPLEMENTED);
-
     if (select_query.limitLength())
         analysis.limit_lengths[&select_query] = analyzeUIntConstExpression(select_query.limitLength());
 

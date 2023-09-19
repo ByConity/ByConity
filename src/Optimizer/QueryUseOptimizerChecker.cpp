@@ -130,10 +130,14 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
     {
         bool explain_plan = explain->getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan
             || explain->getKind() == ASTExplainQuery::ExplainKind::QueryPlan
-            || explain->getKind() == ASTExplainQuery::ExplainKind::QueryPipeline || explain->getKind() == ASTExplainQuery::AnalyzedSyntax
-            || explain->getKind() == ASTExplainQuery::DistributedAnalyze || explain->getKind() == ASTExplainQuery::LogicalAnalyze
-            || explain->getKind() == ASTExplainQuery::Distributed || explain->getKind() == ASTExplainQuery::TraceOptimizerRule
-            || explain->getKind() == ASTExplainQuery::TraceOptimizer;
+            || explain->getKind() == ASTExplainQuery::ExplainKind::QueryPipeline
+            || explain->getKind() ==  ASTExplainQuery::AnalyzedSyntax
+            || explain->getKind() ==  ASTExplainQuery::DistributedAnalyze
+            || explain->getKind() ==  ASTExplainQuery::LogicalAnalyze
+            || explain->getKind() ==  ASTExplainQuery::Distributed
+            || explain->getKind() ==  ASTExplainQuery::TraceOptimizerRule
+            || explain->getKind() ==  ASTExplainQuery::TraceOptimizer
+            || explain->getKind() ==  ASTExplainQuery::Analysis;
         return explain_plan && check(explain->getExplainedQuery(), context);
     }
 
@@ -234,6 +238,12 @@ static bool checkDatabaseAndTable(const ASTTableExpression & table_expression, c
 bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimizerContext & context)
 {
     auto * select = node->as<ASTSelectQuery>();
+
+    if (select->limit_with_ties)
+    {
+        reason = "LIMIT/OFFSET FETCH WITH TIES not implemented";
+        return false;
+    }
 
     if (select->group_by_with_totals)
     {

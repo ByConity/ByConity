@@ -18,5 +18,9 @@ explain analysis insert into analysis select t1.a as a, t2.b as b from analysis 
 
 explain analysis insert into analysis2 (a, b) select t1.a as a, t2.b as b from analysis t1 join analysis2 t2 on t1.a=t2.a settings enable_optimizer=1;
 
+explain analysis select * from analysis order by a limit 3 with ties;
+
+explain analysis insert into analysis select t1.a as a, t2.b as b from analysis t1  ANY FULL JOIN analysis2 t2 using(a);
+
 DROP TABLE IF EXISTS analysis;
 DROP TABLE IF EXISTS analysis2;
