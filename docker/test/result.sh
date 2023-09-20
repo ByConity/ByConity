@@ -9,6 +9,7 @@ then
     echo "::add-message level=info::all cases pass!"
     exit 0
 else
-    echo -e "::add-message level=error::\n$(cat /Artifacts/check_status.tsv)"
+    echo "::add-message level=error::$(cat /Artifacts/check_status.tsv)"
+    sed -n '/\[ FAIL \]/,/\[ OK \]/p' /Artifacts/test_result.txt | head -n -1 | xargs -I {} echo ::add-message level=info::{}
     exit 1
 fi
