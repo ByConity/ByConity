@@ -2269,7 +2269,6 @@ enum PreloadLevelSettings : UInt64
     M(String, s3_endpoint, "", "The endpoint set by user when accessing ve s3.", 0) \
 \
     M(Bool, enable_cache_reader_buffer_reuse, false, "Decpreated settings, only a place holder", 0) \
-\
     M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
     M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \
     M(String, default_catalog, "", "current catalog", 0)
