@@ -1,6 +1,6 @@
 #include <memory>
+#include <IO/S3Common.h>
 #include <Common/config.h>
-#include "S3Common.h"
 
 #if USE_AWS_S3
 
@@ -1233,7 +1233,7 @@ namespace S3
     {
     }
 
-    S3LazyCleaner::~S3LazyCleaner()
+    S3LazyCleaner::~S3LazyCleaner() noexcept
     {
         if (clean_pool != nullptr)
             clean_pool->wait();
@@ -1272,6 +1272,8 @@ namespace S3
         }
         else
         {
+            /// In case of out-of-order schedule.
+            clean_pool->wait();
             clean_pool->scheduleOrThrow(createExceptionHandledJob([this]() { lazyRemove(std::nullopt); }, except_hdl));
             clean_pool->wait();
         }

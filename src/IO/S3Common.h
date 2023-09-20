@@ -12,12 +12,13 @@
 #include <aws/core/Aws.h>  // Y_IGNORE
 #include <aws/core/client/ClientConfiguration.h> // Y_IGNORE
 #include <aws/s3/S3Errors.h>
-#include <aws/s3/model/GetObjectResult.h>
 #include <aws/s3/model/HeadObjectResult.h>
+#include <aws/s3/model/GetObjectResult.h>
+#include <IO/S3/PocoHTTPClient.h>
+#include <IO/BufferBase.h>
 #include <Poco/URI.h>
 #include <Common/HeaderCollection.h>
-#include <Common/ThreadPool.h>
-#include <common/types.h>
+#include <aws/core/auth/AWSCredentialsProviderChain.h>
 namespace Aws::S3
 {
     class S3Client;
@@ -138,7 +139,9 @@ public:
             request_timeout_ms(request_timeout_ms_), max_connections(max_connections_),
             endpoint(endpoint_), region(region_), bucket(bucket_), ak_id(ak_id_),
             ak_secret(ak_secret_), root_prefix(root_prefix_),
-            session_token(session_token_), is_virtual_hosted_style(is_virtual_hosted_style_){}
+            session_token(session_token_), is_virtual_hosted_style(is_virtual_hosted_style_),
+            http_keep_alive_timeout_ms(http_keep_alive_timeout_ms_),
+            http_connection_pool_size(http_connection_pool_size_) {}
 
     S3Config(const Poco::Util::AbstractConfiguration& cfg, const String& cfg_prefix);
 
@@ -158,6 +161,8 @@ public:
     String root_prefix;
     String session_token;
     bool is_virtual_hosted_style;
+    uint32_t http_keep_alive_timeout_ms;
+    size_t http_connection_pool_size;
 };
 
 class S3Util
@@ -229,7 +234,7 @@ public:
     S3LazyCleaner(const S3::S3Util& s3_util_,
         const std::function<bool(const S3::S3Util&, const String&)>& filter_,
         size_t max_threads_, size_t batch_clean_size_ = S3_DEFAULT_BATCH_CLEAN_SIZE);
-    ~S3LazyCleaner();
+    ~S3LazyCleaner() noexcept;
 
     void push(const String& key_);
     void finalize();

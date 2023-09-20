@@ -233,16 +233,6 @@ cppkafka::Configuration StorageCloudKafka::createConsumerConfiguration()
     conf.set_error_callback([this] (cppkafka::KafkaHandleBase &, int error, const std::string & reason)
     {
         String error_msg;
-#if USE_BYTEDANCE_RDKAFKA
-        ///  Special logic for Bytedance-Kafka: DC_CHANGE, which needs to re-create consumer
-        if (error == RD_KAFKA_RESP_ERR__CONSUMER_DC_CHANGE)
-        {
-            error_msg = "[CONSUMER_DC_CHANGE] DC of Kafka cluster is changed which consumers should be destroyed and recreated: " + reason;
-
-            consumer_context.error_event = true;
-        }
-#endif
-
         if (error_msg.empty())
             error_msg = ("[RDKAFKA Exception] error code: " + std::to_string(error) + ", reason: " + reason);
 
