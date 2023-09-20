@@ -5,7 +5,6 @@
 #include <Storages/Hive/Metastore/MetastoreConvertUtils.h>
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/glue/GlueClient.h>
-#include <aws/glue/GlueErrors.h>
 #include <aws/glue/model/GetColumnStatisticsForPartitionRequest.h>
 #include <aws/glue/model/GetColumnStatisticsForPartitionResult.h>
 #include <aws/glue/model/GetColumnStatisticsForTableRequest.h>
@@ -18,9 +17,10 @@
 #include "aws/glue/model/GetTableRequest.h"
 #include "aws/glue/model/GetTableResult.h"
 #include "aws/glue/model/GetTablesRequest.h"
+#include <aws/glue/GlueErrors.h>
 
-#include <Parsers/formatTenantDatabaseName.h>
 #include <Storages/Hive/Metastore/MetastoreConvertUtils.h>
+#include <Parsers/formatTenantDatabaseName.h>
 namespace DB::ErrorCodes
 {
 extern const int GLUE_CATALOG_RPC_ERROR;
@@ -72,8 +72,8 @@ Strings GlueMetastoreClient::getAllTables(const String & db_name)
 
     do
     {
-        GlueModel::GetTablesOutcome outcome = client.GetTables(
-            request.WithCatalogId(aux.catalog_id).WithNextToken(next_token).WithDatabaseName(getOriginalDatabaseName(db_name)));
+        GlueModel::GetTablesOutcome outcome
+            = client.GetTables(request.WithCatalogId(aux.catalog_id).WithNextToken(next_token).WithDatabaseName(getOriginalDatabaseName(db_name)));
         THROW_IF_FAIL(outcome);
         auto & result = outcome.GetResult();
         next_token = result.GetNextToken();
@@ -103,11 +103,9 @@ bool GlueMetastoreClient::isTableExist(const String & db_name, const String & ta
     GlueModel::GetTableRequest request;
     GlueModel::GetTableOutcome outcome
         = client.GetTable(request.WithCatalogId(aux.catalog_id).WithDatabaseName(getOriginalDatabaseName(db_name)).WithName(table_name));
-    if (outcome.IsSuccess())
-        return true;
+    if(outcome.IsSuccess()) return true;
     auto err = outcome.GetError().GetErrorType();
-    if (err == Aws::Glue::GlueErrors::ENTITY_NOT_FOUND)
-    {
+    if(err == Aws::Glue::GlueErrors::ENTITY_NOT_FOUND){
         return false;
     }
     THROW_IF_FAIL(outcome);
@@ -123,11 +121,8 @@ GlueMetastoreClient::getPartitionsByFilter(const String & db_name, const String 
 
     do
     {
-        GlueModel::GetPartitionsOutcome outcome
-            = client.GetPartitions(request.WithCatalogId(aux.catalog_id)
-                                       .WithDatabaseName(getOriginalDatabaseName(getOriginalDatabaseName(db_name)))
-                                       .WithTableName(table_name)
-                                       .WithExpression(filter));
+        GlueModel::GetPartitionsOutcome outcome = client.GetPartitions(
+            request.WithCatalogId(aux.catalog_id).WithDatabaseName(getOriginalDatabaseName(getOriginalDatabaseName(db_name))).WithTableName(table_name).WithExpression(filter));
         THROW_IF_FAIL(outcome);
         auto & result = outcome.GetResult();
         next_token = result.GetNextToken();
@@ -154,8 +149,8 @@ HiveTableStats GlueMetastoreClient::getTableStats(
         {
             request.AddColumnNames(col);
         }
-        GlueModel::GetColumnStatisticsForTableOutcome outcome = client.GetColumnStatisticsForTable(
-            request.WithCatalogId(aux.catalog_id).WithDatabaseName(getOriginalDatabaseName(db_name)).WithTableName(table_name));
+        GlueModel::GetColumnStatisticsForTableOutcome outcome
+            = client.GetColumnStatisticsForTable(request.WithCatalogId(aux.catalog_id).WithDatabaseName(getOriginalDatabaseName(db_name)).WithTableName(table_name));
         THROW_IF_FAIL(outcome);
         auto & result = outcome.GetResult();
         if (table->__isset.parameters && table->parameters.contains("numRows"))
@@ -209,12 +204,11 @@ ApacheHive::PartitionsStatsResult GlueMetastoreClient::getPartitionStats(
     ApacheHive::PartitionsStatsResult hive_stats;
     for (const auto & vals : partition_vals)
     {
-        GlueModel::GetColumnStatisticsForPartitionOutcome outcome
-            = client.GetColumnStatisticsForPartition(req.WithCatalogId(aux.catalog_id)
-                                                         .WithDatabaseName(getOriginalDatabaseName(db_name))
-                                                         .WithTableName(table_name)
-                                                         .WithColumnNames(col_names)
-                                                         .WithPartitionValues(vals));
+        GlueModel::GetColumnStatisticsForPartitionOutcome outcome = client.GetColumnStatisticsForPartition(req.WithCatalogId(aux.catalog_id)
+                                                                                                               .WithDatabaseName(getOriginalDatabaseName(db_name))
+                                                                                                               .WithTableName(table_name)
+                                                                                                               .WithColumnNames(col_names)
+                                                                                                               .WithPartitionValues(vals));
         THROW_IF_FAIL(outcome);
 
         auto & result = outcome.GetResult();
@@ -282,3 +276,4 @@ GlueMetastoreClientPtr GlueMetastoreClientFactory::getOrCreate(const ExternalCat
 }
 
 }
+

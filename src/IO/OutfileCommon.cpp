@@ -5,6 +5,7 @@
 
 #include <Interpreters/Context.h>
 #include <Common/config.h>
+#include <IO/VETosCommon.h>
 #include <IO/CompressionMethod.h>
 #include <IO/WriteBufferFromFile.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
@@ -14,11 +15,6 @@
 
 #include <memory>
 #include <string>
-
-#if USE_VE_TOS
-#    include <IO/VETosCommon.h>
-#    include <IO/WriteBufferFromVETos.h>
-#endif
 
 #if USE_LASFS
 #    include <IO/LasfsCommon.h>
@@ -98,17 +94,17 @@ WriteBuffer * OutfileTarget::getOutfileBuffer(const ContextPtr & context, bool a
         compression_method = CompressionMethod::None;
     }
 #endif
-#if USE_VE_TOS
+#if USE_AWS_S3
     else if (scheme == "vetos")
     {   
+        VETosConnectionParams vetos_connect_params = VETosConnectionParams::getVETosSettingsFromContext(context);
         auto tos_uri = verifyTosURI(uri);
         std::string bucket = tos_uri.getHost();
         std::string key = getTosKeyFromURI(tos_uri);
-        VETosConnectionParams vetos_connect_params = VETosConnectionParams::getVETosSettingsFromContext(context);
-        out_buf_raw = std::make_unique<WriteBufferFromVETos>(vetos_connect_params, bucket, key, getWriteBufferSizeForVETos(context));
+        S3::S3Config s3_config = VETosConnectionParams::getS3Config(vetos_connect_params, bucket);
+        out_buf_raw = std::make_unique<WriteBufferFromS3>(s3_config.create(), bucket, key,
+            context->getSettingsRef().s3_min_upload_part_size, context->getSettingsRef().s3_max_single_part_upload_size);
     }
-#endif
-#if USE_AWS_S3
     else if (isS3URIScheme(scheme))
     {
         S3::URI s3_uri(out_uri);

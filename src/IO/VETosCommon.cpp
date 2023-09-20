@@ -1,7 +1,7 @@
 #include <Common/config.h>
 #include "Interpreters/Context_fwd.h"
-
-#if USE_VE_TOS
+#include "S3Common.h"
+#include "VETosCommon.h"
 
 #include <string>
 #include <Interpreters/Context.h>
@@ -10,17 +10,19 @@
 #include <Poco/Path.h>
 #include <Poco/URI.h>
 #include <Common/Exception.h>
-#include <TosClientV2.h>
-#include <Vetos/utils/LogUtils.h>
 
 namespace DB
 {
+    
+static std::map<String, String> tos_s3_endpoint;
+
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int VETOS_CREATE_UPLOAD_ERROR;
 }
 
-//when region , ak and sk are set in sql we use sql settings.
+//when region, ak and sk are set in sql we use sql settings.
 inline bool useTosSqlSettings(const ContextPtr & context)
 {
     return context->getSettingsRef().tos_region.changed && context->getSettingsRef().tos_access_key.changed
@@ -39,33 +41,10 @@ Poco::URI verifyTosURI(const std::string & out_path)
     return tos_uri;
 }
 
-
-VETosConnectionParams::VETosConnectionParams() : enable_ssl(false)
-{
-}
-
 VETosConnectionParams::VETosConnectionParams(
-    std::string region_, std::string access_key_, std::string secret_key_, std::string security_token_, bool enable_ssl_)
-    : region(region_), access_key(access_key_), secret_key(secret_key_), security_token(security_token_), enable_ssl(enable_ssl_)
+    std::string region_, std::string access_key_, std::string secret_key_, std::string security_token_)
+    : region(region_), access_key(access_key_), secret_key(secret_key_), security_token(security_token_)
 {
-}
-
-std::unique_ptr<VolcengineTos::TosClientV2> VETosConnectionParams::getVETosClient()
-{   
-    VolcengineTos::ClientConfig config;
-    config.maxRetryCount = 3;
-    config.enableVerifySSL = enable_ssl;
-    if (!security_token.empty())
-    {
-        auto cred = VolcengineTos::StaticCredentials(access_key, secret_key, security_token);
-        auto client_ptr = std::make_unique<VolcengineTos::TosClientV2>(region, cred, config);
-        return client_ptr;
-    }
-    else
-    {
-        auto client_ptr = std::make_unique<VolcengineTos::TosClientV2>(region, access_key, secret_key, config);
-        return client_ptr;
-    }
 }
 
 VETosConnectionParams VETosConnectionParams::parseVeTosFromConfig(Poco::Util::AbstractConfiguration & config)
@@ -76,8 +55,8 @@ VETosConnectionParams VETosConnectionParams::parseVeTosFromConfig(Poco::Util::Ab
         std::string access_key = config.getString("ve_tos_config.access_key", "");
         std::string secret_key = config.getString("ve_tos_config.secret_key", "");
         std::string security_token = config.getString("ve_tos_config.security_token", "");
-        bool enable_ssl = config.getBool("ve_tos_config.enable_ssl", false);
-        return VETosConnectionParams(region, access_key, secret_key, security_token, enable_ssl);
+        parseVetosS3EndpointFromConfig(config);
+        return VETosConnectionParams(region, access_key, secret_key, security_token);
     }
     return VETosConnectionParams();
 }
@@ -98,33 +77,37 @@ VETosConnectionParams VETosConnectionParams::getVETosSettingsFromContext(const C
     }
 }
 
-VolcengineTos::LogLevel parseTosLogLevel(const std::string & log_level)
+void VETosConnectionParams::parseVetosS3EndpointFromConfig(Poco::Util::AbstractConfiguration &config)
 {
-    if (log_level == "info")
+    std::vector<std::string> regions;
+    config.keys("ve_tos_config.s3-regions", regions);
+    for (const String & region : regions)
     {
-        return VolcengineTos::LogLevel::LogInfo;
-    }
-    else if (log_level == "debug")
-    {
-        return VolcengineTos::LogLevel::LogDebug;
-    }
-    else
-    {
-        return VolcengineTos::LogLevel::LogOff;
+        if (!region.empty())
+        {
+            std::string endpoint = config.getString("ve_tos_config.s3-regions." + region, "");
+            tos_s3_endpoint[region] = endpoint;
+        }
     }
 }
 
-void VETosConnectionParams::initializeTOSClient(Poco::Util::AbstractConfiguration & config)
-{   
-    if(config.has("ve_tos_config.log"))
-    {       
-        std::string  log_file_path = config.getString("ve_tos_config.log.path", "ve_tos.log");
-        std::string  log_level = config.getString("ve_tos_config.log.level","LogOff");
-        VolcengineTos::LogUtils::SetLogger(log_file_path, "tos-cpp-sdk", parseTosLogLevel(log_level));
+S3::S3Config VETosConnectionParams::getS3Config(const VETosConnectionParams &vetos_connect_params, const String &bucket) {
+    String endpoint = tos_s3_endpoint[vetos_connect_params.region];
+
+    if (endpoint.empty()) {
+        throw Exception("Invalid tos region: " + vetos_connect_params.region + ", please check configuration.",
+                 ErrorCodes::VETOS_CREATE_UPLOAD_ERROR);
     }
-    VolcengineTos::InitializeClient();
+
+    return S3::S3Config(
+        endpoint,
+        vetos_connect_params.region,
+        bucket,
+        vetos_connect_params.access_key,
+        vetos_connect_params.secret_key,
+        "",
+        vetos_connect_params.security_token,
+        true);
 }
 
 }
-
-#endif
