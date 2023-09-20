@@ -121,9 +121,10 @@ void ParquetBlockInputFormat::initializeIfNeeded()
     column_indices = field_util.findRequiredIndices(getPort().getHeader(), *schema);
 }
 
-std::vector<int> ParquetBlockInputFormat::getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header)
+std::vector<int> ParquetBlockInputFormat::getColumnIndices(
+    const std::shared_ptr<arrow::Schema> & schema, const Block & header, const FormatSettings & format_settings)
 {
-    ArrowFieldIndexUtil field_util(false, false);
+    ArrowFieldIndexUtil field_util(format_settings.parquet.case_insensitive_column_matching, format_settings.parquet.allow_missing_columns);
     return field_util.findRequiredIndices(header, *schema);
 }
 
