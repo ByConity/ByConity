@@ -693,7 +693,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 /// TODO Parser should fail early when max_query_size limit is reached.
                 ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
             }
-            parser_span->End();
         }
         else
         {

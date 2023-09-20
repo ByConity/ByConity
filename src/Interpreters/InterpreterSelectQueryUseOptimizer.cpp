@@ -75,25 +75,21 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
             stage_watch.start();
             auto cloned_query = query_ptr->clone();
             cloned_query = QueryRewriter().rewrite(cloned_query, context);
-            rewrite_span->End();
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Rewrite", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
             stage_watch.restart();
             AnalysisPtr analysis = QueryAnalyzer::analyze(cloned_query, context);
-            analyze_span->End();
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Analyzer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
             stage_watch.restart();
             query_plan = QueryPlanner().plan(cloned_query, *analysis, context);
-            planning_span->End();
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Planning", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
             stage_watch.restart();
             PlanOptimizer::optimize(*query_plan, context);
-            optimize_span->End();
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
             if (context->getSettingsRef().enable_plan_cache)
@@ -143,7 +139,6 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     }
 
     PlanSegmentSplitter::split(plan, plan_segment_context);
-    segment_split_span->End();
     context->logOptimizerProfile(
         log, "Optimizer total run time: ", "PlanSegment build", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
