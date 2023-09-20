@@ -206,7 +206,7 @@ std::string AbstractPlanTestSuite::explain(const std::string & name)
         {
             auto query_plan = plan(sql.first, context);
             CardinalityEstimator::estimate(*query_plan, context);
-            explain += DB::PlanPrinter::textLogicalPlan(*query_plan, session_context, true, true);
+            explain += DB::PlanPrinter::textLogicalPlan(*query_plan, session_context, show_statistics, true);
         }
         else
             execute(sql.first, context);
@@ -266,6 +266,9 @@ void AbstractPlanTestSuite::loadTableStatistics()
     auto context = createQueryContext(std::unordered_map<String, Field>{{"graphviz_path", path.parent_path().string()}});
 
     auto file = path.parent_path() / std::filesystem::path(database_name + ".bin");
+    std::string expected_database = path.filename().string().substr(0, path.filename().string().size() - 4);
+    if (expected_database != database_name)
+        throw Exception("database should be " + expected_database, ErrorCodes::BAD_ARGUMENTS);
     if (!std::filesystem::exists(file))
         throw Exception(file.string() + " not found.", ErrorCodes::BAD_ARGUMENTS);
 

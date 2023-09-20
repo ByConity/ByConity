@@ -58,9 +58,11 @@ JoinPtr JoinStep::makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterCons
     //                table_join->joined_storage = table;
     //        }
     //    }
+    table_join->setColumnsFromJoinedTable(input_streams[1].header.getNamesAndTypesList());
     table_join->deduplicateAndQualifyColumnNames(input_streams[0].header.getNameSet(), "");
 
     auto using_ast = std::make_shared<ASTExpressionList>();
+    ASTs on_ast_terms;
     for (size_t index = 0; index < left_keys.size(); ++index)
     {
         ASTPtr left = std::make_shared<ASTIdentifier>(left_keys[index]);
@@ -74,12 +76,22 @@ JoinPtr JoinStep::makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterCons
         else
         {
             table_join->addOnKeys(left, right, false);
+            // const String fn = null_safe_columns && (*null_safe_columns)[i] ? "bitEquals" : "equals";
+            const String fn = "equals";
+            on_ast_terms.emplace_back(makeASTFunction(fn, left, right));
         }
     }
 
     if (has_using)
     {
         table_join->table_join.using_expression_list = using_ast;
+    }
+    else
+    {
+        if (on_ast_terms.size() == 1)
+            table_join->table_join.on_expression = on_ast_terms.back();
+        else if (on_ast_terms.size() > 1)
+            table_join->table_join.on_expression = makeASTFunction("and", on_ast_terms);
     }
 
     for (const auto & item : output_stream->header)
