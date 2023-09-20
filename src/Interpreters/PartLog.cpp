@@ -18,18 +18,16 @@ namespace DB
 
 NamesAndTypesList PartLogElement::getNamesAndTypes()
 {
-    auto event_type_datatype = std::make_shared<DataTypeEnum8>(
-        DataTypeEnum8::Values
-        {
-            {"NewPart",       static_cast<Int8>(NEW_PART)},
-            {"MergeParts",    static_cast<Int8>(MERGE_PARTS)},
-            {"DownloadPart",  static_cast<Int8>(DOWNLOAD_PART)},
-            {"RemovePart",    static_cast<Int8>(REMOVE_PART)},
-            {"MutatePart",    static_cast<Int8>(MUTATE_PART)},
-            {"MovePart",      static_cast<Int8>(MOVE_PART)},
-            {"PreloadPart",   static_cast<Int8>(PRELOAD_PART)},
-        }
-    );
+    auto event_type_datatype = std::make_shared<DataTypeEnum8>(DataTypeEnum8::Values{
+        {"NewPart", static_cast<Int8>(NEW_PART)},
+        {"MergeParts", static_cast<Int8>(MERGE_PARTS)},
+        {"DownloadPart", static_cast<Int8>(DOWNLOAD_PART)},
+        {"RemovePart", static_cast<Int8>(REMOVE_PART)},
+        {"MutatePart", static_cast<Int8>(MUTATE_PART)},
+        {"MovePart", static_cast<Int8>(MOVE_PART)},
+        {"PreloadPart", static_cast<Int8>(PRELOAD_PART)},
+        {"DROPCACHE_PART", static_cast<Int8>(DROPCACHE_PART)},
+    });
 
     ColumnsWithTypeAndName columns_with_type_and_name;
 
@@ -37,6 +35,7 @@ NamesAndTypesList PartLogElement::getNamesAndTypes()
         {"query_id", std::make_shared<DataTypeString>()},
         {"event_type", std::move(event_type_datatype)},
         {"event_date", std::make_shared<DataTypeDate>()},
+        {"start_time", std::make_shared<DataTypeDateTime>()},
 
         {"event_time", std::make_shared<DataTypeDateTime>()},
         {"event_time_microseconds", std::make_shared<DataTypeDateTime64>(6)},
@@ -50,6 +49,7 @@ NamesAndTypesList PartLogElement::getNamesAndTypes()
         {"path_on_disk", std::make_shared<DataTypeString>()},
 
         {"rows", std::make_shared<DataTypeUInt64>()},
+        {"segments", std::make_shared<DataTypeUInt64>()},
         {"size_in_bytes", std::make_shared<DataTypeUInt64>()}, // On disk
 
         /// Merge-specific info
@@ -72,6 +72,7 @@ void PartLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(query_id);
     columns[i++]->insert(event_type);
     columns[i++]->insert(DateLUT::instance().toDayNum(event_time).toUnderType());
+    columns[i++]->insert(start_time);
     columns[i++]->insert(event_time);
     columns[i++]->insert(event_time_microseconds);
     columns[i++]->insert(duration_ms);
@@ -83,6 +84,7 @@ void PartLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(path_on_disk);
 
     columns[i++]->insert(rows);
+    columns[i++]->insert(segments);
     columns[i++]->insert(bytes_compressed_on_disk);
 
     Array source_part_names_array;
@@ -176,11 +178,18 @@ bool PartLog::addNewParts(
     return true;
 }
 
-PartLogElement PartLog::createElement(PartLogElement::Type event_type, const IMergeTreeDataPartPtr & part, UInt64 elapsed_ns, const String & exception)
+PartLogElement PartLog::createElement(
+    PartLogElement::Type event_type,
+    const IMergeTreeDataPartPtr & part,
+    UInt64 elapsed_ns,
+    const String & exception,
+    UInt64 submit_ts,
+    UInt64 segments)
 {
     PartLogElement elem;
 
     elem.event_type = event_type;
+    elem.start_time = submit_ts;
     elem.event_time = time(nullptr);
     elem.duration_ms = elapsed_ns / 1000000;
 
@@ -190,6 +199,7 @@ PartLogElement PartLog::createElement(PartLogElement::Type event_type, const IMe
     elem.part_name = part->name;
 
     elem.rows = part->rows_count;
+    elem.segments = segments;
     elem.bytes_compressed_on_disk = part->bytes_on_disk;
     
     elem.exception = exception;

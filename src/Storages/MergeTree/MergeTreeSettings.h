@@ -43,142 +43,419 @@ struct Settings;
   */
 
 #define LIST_OF_MERGE_TREE_SETTINGS(M) \
-    M(UInt64, min_compress_block_size, 0, "When granule is written, compress the data in buffer if the size of pending uncompressed data is larger or equal than the specified threshold. If this setting is not set, the corresponding global setting is used.", 0) \
-    M(UInt64, max_compress_block_size, 0, "Compress the pending uncompressed data in buffer if its size is larger or equal than the specified threshold. Block of data will be compressed even if the current granule is not finished. If this setting is not set, the corresponding global setting is used.", 0) \
+    M(UInt64, \
+      min_compress_block_size, \
+      0, \
+      "When granule is written, compress the data in buffer if the size of pending uncompressed data is larger or equal than the " \
+      "specified threshold. If this setting is not set, the corresponding global setting is used.", \
+      0) \
+    M(UInt64, \
+      max_compress_block_size, \
+      0, \
+      "Compress the pending uncompressed data in buffer if its size is larger or equal than the specified threshold. Block of data will " \
+      "be compressed even if the current granule is not finished. If this setting is not set, the corresponding global setting is used.", \
+      0) \
     M(UInt64, index_granularity, 8192, "How many rows correspond to one primary key value.", 0) \
-    \
+\
     /** Data storing format settings. */ \
     /* For backward compatibility, do not use compact part */ \
-    M(UInt64, min_bytes_for_wide_part, /*10485760*/ 0, "Minimal uncompressed size in bytes to create part in wide format instead of compact", 0) \
+    M(UInt64, \
+      min_bytes_for_wide_part, \
+      /*10485760*/ 0, \
+      "Minimal uncompressed size in bytes to create part in wide format instead of compact", \
+      0) \
     M(UInt64, min_rows_for_wide_part, 0, "Minimal number of rows to create part in wide format instead of compact", 0) \
-    M(UInt64, min_bytes_for_compact_part, 0, "Experimental. Minimal uncompressed size in bytes to create part in compact format instead of saving it in RAM", 0) \
-    M(UInt64, min_rows_for_compact_part, 0, "Experimental. Minimal number of rows to create part in compact format instead of saving it in RAM", 0) \
-    M(Bool, in_memory_parts_enable_wal, true, "Whether to write blocks in Native format to write-ahead-log before creation in-memory part", 0) \
+    M(UInt64, \
+      min_bytes_for_compact_part, \
+      0, \
+      "Experimental. Minimal uncompressed size in bytes to create part in compact format instead of saving it in RAM", \
+      0) \
+    M(UInt64, \
+      min_rows_for_compact_part, \
+      0, \
+      "Experimental. Minimal number of rows to create part in compact format instead of saving it in RAM", \
+      0) \
+    M(Bool, \
+      in_memory_parts_enable_wal, \
+      true, \
+      "Whether to write blocks in Native format to write-ahead-log before creation in-memory part", \
+      0) \
     M(UInt64, write_ahead_log_max_bytes, 1024 * 1024 * 1024, "Rotate WAL, if it exceeds that amount of bytes", 0) \
-    \
+\
     /** Merge settings. */ \
     M(UInt64, merge_max_block_size, DEFAULT_MERGE_BLOCK_SIZE, "How many rows in blocks should be formed for merge operations.", 0) \
-    M(UInt64, max_bytes_to_merge_at_max_space_in_pool, 150ULL * 1024 * 1024 * 1024, "Maximum in total size of parts to merge, when there are maximum free threads in background pool (or entries in replication queue).", 0) \
-    M(UInt64, max_bytes_to_merge_at_min_space_in_pool, 1024 * 1024, "Maximum in total size of parts to merge, when there are minimum free threads in background pool (or entries in replication queue).", 0) \
-    M(UInt64, max_replicated_merges_in_queue, 16, "How many tasks of merging and mutating parts are allowed simultaneously in ReplicatedMergeTree queue.", 0) \
-    M(UInt64, max_replicated_mutations_in_queue, 8, "How many tasks of mutating parts are allowed simultaneously in ReplicatedMergeTree queue.", 0) \
-    M(UInt64, max_replicated_merges_with_ttl_in_queue, 1, "How many tasks of merging parts with TTL are allowed simultaneously in ReplicatedMergeTree queue.", 0) \
-    M(UInt64, number_of_free_entries_in_pool_to_lower_max_size_of_merge, 8, "When there is less than specified number of free entries in pool (or replicated queue), start to lower maximum size of merge to process (or to put in queue). This is to allow small merges to process - not filling the pool with long running merges.", 0) \
-    M(UInt64, number_of_free_entries_in_pool_to_execute_mutation, 10, "When there is less than specified number of free entries in pool, do not execute part mutations. This is to leave free threads for regular merges and avoid \"Too many parts\"", 0) \
-    M(UInt64, max_number_of_merges_with_ttl_in_pool, 2, "When there is more than specified number of merges with TTL entries in pool, do not assign new merge with TTL. This is to leave free threads for regular merges and avoid \"Too many parts\"", 0) \
+    M(UInt64, \
+      max_bytes_to_merge_at_max_space_in_pool, \
+      150ULL * 1024 * 1024 * 1024, \
+      "Maximum in total size of parts to merge, when there are maximum free threads in background pool (or entries in replication " \
+      "queue).", \
+      0) \
+    M(UInt64, \
+      max_bytes_to_merge_at_min_space_in_pool, \
+      1024 * 1024, \
+      "Maximum in total size of parts to merge, when there are minimum free threads in background pool (or entries in replication " \
+      "queue).", \
+      0) \
+    M(UInt64, \
+      max_replicated_merges_in_queue, \
+      16, \
+      "How many tasks of merging and mutating parts are allowed simultaneously in ReplicatedMergeTree queue.", \
+      0) \
+    M(UInt64, \
+      max_replicated_mutations_in_queue, \
+      8, \
+      "How many tasks of mutating parts are allowed simultaneously in ReplicatedMergeTree queue.", \
+      0) \
+    M(UInt64, \
+      max_replicated_merges_with_ttl_in_queue, \
+      1, \
+      "How many tasks of merging parts with TTL are allowed simultaneously in ReplicatedMergeTree queue.", \
+      0) \
+    M(UInt64, \
+      number_of_free_entries_in_pool_to_lower_max_size_of_merge, \
+      8, \
+      "When there is less than specified number of free entries in pool (or replicated queue), start to lower maximum size of merge to " \
+      "process (or to put in queue). This is to allow small merges to process - not filling the pool with long running merges.", \
+      0) \
+    M(UInt64, \
+      number_of_free_entries_in_pool_to_execute_mutation, \
+      10, \
+      "When there is less than specified number of free entries in pool, do not execute part mutations. This is to leave free threads " \
+      "for regular merges and avoid \"Too many parts\"", \
+      0) \
+    M(UInt64, \
+      max_number_of_merges_with_ttl_in_pool, \
+      2, \
+      "When there is more than specified number of merges with TTL entries in pool, do not assign new merge with TTL. This is to leave " \
+      "free threads for regular merges and avoid \"Too many parts\"", \
+      0) \
     M(Seconds, old_parts_lifetime, 8 * 60, "How many seconds to keep obsolete parts.", 0) \
-    M(Seconds, temporary_directories_lifetime, 86400, "How many seconds to keep tmp_-directories. You should not lower this value because merges and mutations may not be able to work with low value of this setting.", 0) \
-    M(Seconds, lock_acquire_timeout_for_background_operations, DBMS_DEFAULT_LOCK_ACQUIRE_TIMEOUT_SEC, "For background operations like merges, mutations etc. How many seconds before failing to acquire table locks.", 0) \
+    M(Seconds, \
+      temporary_directories_lifetime, \
+      86400, \
+      "How many seconds to keep tmp_-directories. You should not lower this value because merges and mutations may not be able to work " \
+      "with low value of this setting.", \
+      0) \
+    M(Seconds, \
+      lock_acquire_timeout_for_background_operations, \
+      DBMS_DEFAULT_LOCK_ACQUIRE_TIMEOUT_SEC, \
+      "For background operations like merges, mutations etc. How many seconds before failing to acquire table locks.", \
+      0) \
     M(UInt64, min_rows_to_fsync_after_merge, 0, "Minimal number of rows to do fsync for part after merge (0 - disabled)", 0) \
-    M(UInt64, min_compressed_bytes_to_fsync_after_merge, 0, "Minimal number of compressed bytes to do fsync for part after merge (0 - disabled)", 0) \
-    M(UInt64, min_compressed_bytes_to_fsync_after_fetch, 0, "Minimal number of compressed bytes to do fsync for part after fetch (0 - disabled)", 0) \
-    M(Bool, fsync_after_insert, false, "Do fsync for every inserted part. Significantly decreases performance of inserts, not recommended to use with wide parts.", 0) \
+    M(UInt64, \
+      min_compressed_bytes_to_fsync_after_merge, \
+      0, \
+      "Minimal number of compressed bytes to do fsync for part after merge (0 - disabled)", \
+      0) \
+    M(UInt64, \
+      min_compressed_bytes_to_fsync_after_fetch, \
+      0, \
+      "Minimal number of compressed bytes to do fsync for part after fetch (0 - disabled)", \
+      0) \
+    M(Bool, \
+      fsync_after_insert, \
+      false, \
+      "Do fsync for every inserted part. Significantly decreases performance of inserts, not recommended to use with wide parts.", \
+      0) \
     M(Bool, fsync_part_directory, false, "Do fsync for part directory after all part operations (writes, renames, etc.).", 0) \
     M(UInt64, write_ahead_log_bytes_to_fsync, 100ULL * 1024 * 1024, "Amount of bytes, accumulated in WAL to do fsync.", 0) \
     M(UInt64, write_ahead_log_interval_ms_to_fsync, 100, "Interval in milliseconds after which fsync for WAL is being done.", 0) \
     M(Bool, in_memory_parts_insert_sync, false, "If true insert of part with in-memory format will wait for fsync of WAL", 0) \
     M(UInt64, non_replicated_deduplication_window, 0, "How many last blocks of hashes should be kept on disk (0 - disabled).", 0) \
-    M(UInt64, max_parts_to_merge_at_once, 100, "Max amount of parts which can be merged at once (0 - disabled). Doesn't affect OPTIMIZE FINAL query.", 0) \
+    M(UInt64, \
+      max_parts_to_merge_at_once, \
+      100, \
+      "Max amount of parts which can be merged at once (0 - disabled). Doesn't affect OPTIMIZE FINAL query.", \
+      0) \
     M(UInt64, gc_remove_bitmap_batch_size, 1000, "Submit a batch of bitmaps to a background thread", 0) \
     M(UInt64, gc_remove_bitmap_thread_pool_size, 16, "Turn up the thread pool size to speed up GC processing of bitmaps", 0) \
-    \
+\
     /** Inserts settings. */ \
-    M(UInt64, parts_to_delay_insert, 150, "If table contains at least that many active parts in single partition, artificially slow down insert into table.", 0) \
-    M(UInt64, inactive_parts_to_delay_insert, 0, "If table contains at least that many inactive parts in single partition, artificially slow down insert into table.", 0) \
-    M(UInt64, parts_to_throw_insert, 300, "If more than this number active parts in single partition, throw 'Too many parts ...' exception.", 0) \
-    M(UInt64, inactive_parts_to_throw_insert, 0, "If more than this number inactive parts in single partition, throw 'Too many inactive parts ...' exception.", 0) \
-    M(UInt64, max_delay_to_insert, 1, "Max delay of inserting data into MergeTree table in seconds, if there are a lot of unmerged parts in single partition.", 0) \
-    M(UInt64, max_parts_in_total, 100000, "If more than this number active parts in all partitions in total, throw 'Too many parts ...' exception.", 0) \
-    \
+    M(UInt64, \
+      parts_to_delay_insert, \
+      150, \
+      "If table contains at least that many active parts in single partition, artificially slow down insert into table.", \
+      0) \
+    M(UInt64, \
+      inactive_parts_to_delay_insert, \
+      0, \
+      "If table contains at least that many inactive parts in single partition, artificially slow down insert into table.", \
+      0) \
+    M(UInt64, \
+      parts_to_throw_insert, \
+      300, \
+      "If more than this number active parts in single partition, throw 'Too many parts ...' exception.", \
+      0) \
+    M(UInt64, \
+      inactive_parts_to_throw_insert, \
+      0, \
+      "If more than this number inactive parts in single partition, throw 'Too many inactive parts ...' exception.", \
+      0) \
+    M(UInt64, \
+      max_delay_to_insert, \
+      1, \
+      "Max delay of inserting data into MergeTree table in seconds, if there are a lot of unmerged parts in single partition.", \
+      0) \
+    M(UInt64, \
+      max_parts_in_total, \
+      100000, \
+      "If more than this number active parts in all partitions in total, throw 'Too many parts ...' exception.", \
+      0) \
+\
     /** Replication settings. */ \
-    M(UInt64, replicated_deduplication_window, 100, "How many last blocks of hashes should be kept in ZooKeeper (old blocks will be deleted).", 0) \
-    M(UInt64, replicated_deduplication_window_seconds, 7 * 24 * 60 * 60 /* one week */, "Similar to \"replicated_deduplication_window\", but determines old blocks by their lifetime. Hash of an inserted block will be deleted (and the block will not be deduplicated after) if it outside of one \"window\". You can set very big replicated_deduplication_window to avoid duplicating INSERTs during that period of time.", 0) \
-    M(UInt64, max_replicated_logs_to_keep, 1000, "How many records may be in log, if there is inactive replica. Inactive replica becomes lost when when this number exceed.", 0) \
-    M(UInt64, min_replicated_logs_to_keep, 10, "Keep about this number of last records in ZooKeeper log, even if they are obsolete. It doesn't affect work of tables: used only to diagnose ZooKeeper log before cleaning.", 0) \
-    M(Seconds, prefer_fetch_merged_part_time_threshold, 3600, "If time passed after replication log entry creation exceeds this threshold and sum size of parts is greater than \"prefer_fetch_merged_part_size_threshold\", prefer fetching merged part from replica instead of doing merge locally. To speed up very long merges.", 0) \
-    M(UInt64, prefer_fetch_merged_part_size_threshold, 10ULL * 1024 * 1024 * 1024, "If sum size of parts exceeds this threshold and time passed after replication log entry creation is greater than \"prefer_fetch_merged_part_time_threshold\", prefer fetching merged part from replica instead of doing merge locally. To speed up very long merges.", 0) \
-    M(Seconds, execute_merges_on_single_replica_time_threshold, 0, "When greater than zero only a single replica starts the merge immediately, others wait up to that amount of time to download the result instead of doing merges locally. If the chosen replica doesn't finish the merge during that amount of time, fallback to standard behavior happens.", 0) \
-    M(Seconds, remote_fs_execute_merges_on_single_replica_time_threshold, 3 * 60 * 60, "When greater than zero only a single replica starts the merge immediatelys when merged part on shared storage and 'allow_remote_fs_zero_copy_replication' is enabled.", 0) \
-    M(Seconds, try_fetch_recompressed_part_timeout, 7200, "Recompression works slow in most cases, so we don't start merge with recompression until this timeout and trying to fetch recompressed part from replica which assigned this merge with recompression.", 0) \
+    M(UInt64, \
+      replicated_deduplication_window, \
+      100, \
+      "How many last blocks of hashes should be kept in ZooKeeper (old blocks will be deleted).", \
+      0) \
+    M(UInt64, \
+      replicated_deduplication_window_seconds, \
+      7 * 24 * 60 * 60 /* one week */, \
+      "Similar to \"replicated_deduplication_window\", but determines old blocks by their lifetime. Hash of an inserted block will be " \
+      "deleted (and the block will not be deduplicated after) if it outside of one \"window\". You can set very big " \
+      "replicated_deduplication_window to avoid duplicating INSERTs during that period of time.", \
+      0) \
+    M(UInt64, \
+      max_replicated_logs_to_keep, \
+      1000, \
+      "How many records may be in log, if there is inactive replica. Inactive replica becomes lost when when this number exceed.", \
+      0) \
+    M(UInt64, \
+      min_replicated_logs_to_keep, \
+      10, \
+      "Keep about this number of last records in ZooKeeper log, even if they are obsolete. It doesn't affect work of tables: used only " \
+      "to diagnose ZooKeeper log before cleaning.", \
+      0) \
+    M(Seconds, \
+      prefer_fetch_merged_part_time_threshold, \
+      3600, \
+      "If time passed after replication log entry creation exceeds this threshold and sum size of parts is greater than " \
+      "\"prefer_fetch_merged_part_size_threshold\", prefer fetching merged part from replica instead of doing merge locally. To speed up " \
+      "very long merges.", \
+      0) \
+    M(UInt64, \
+      prefer_fetch_merged_part_size_threshold, \
+      10ULL * 1024 * 1024 * 1024, \
+      "If sum size of parts exceeds this threshold and time passed after replication log entry creation is greater than " \
+      "\"prefer_fetch_merged_part_time_threshold\", prefer fetching merged part from replica instead of doing merge locally. To speed up " \
+      "very long merges.", \
+      0) \
+    M(Seconds, \
+      execute_merges_on_single_replica_time_threshold, \
+      0, \
+      "When greater than zero only a single replica starts the merge immediately, others wait up to that amount of time to download the " \
+      "result instead of doing merges locally. If the chosen replica doesn't finish the merge during that amount of time, fallback to " \
+      "standard behavior happens.", \
+      0) \
+    M(Seconds, \
+      remote_fs_execute_merges_on_single_replica_time_threshold, \
+      3 * 60 * 60, \
+      "When greater than zero only a single replica starts the merge immediatelys when merged part on shared storage and " \
+      "'allow_remote_fs_zero_copy_replication' is enabled.", \
+      0) \
+    M(Seconds, \
+      try_fetch_recompressed_part_timeout, \
+      7200, \
+      "Recompression works slow in most cases, so we don't start merge with recompression until this timeout and trying to fetch " \
+      "recompressed part from replica which assigned this merge with recompression.", \
+      0) \
     M(Bool, always_fetch_merged_part, 0, "If true, replica never merge parts and always download merged parts from other replicas.", 0) \
     M(UInt64, max_suspicious_broken_parts, 10, "Max broken parts, if more - deny automatic deletion.", 0) \
-    M(UInt64, max_files_to_modify_in_alter_columns, 75, "Not apply ALTER if number of files for modification(deletion, addition) more than this.", 0) \
+    M(UInt64, \
+      max_files_to_modify_in_alter_columns, \
+      75, \
+      "Not apply ALTER if number of files for modification(deletion, addition) more than this.", \
+      0) \
     M(UInt64, max_files_to_remove_in_alter_columns, 50, "Not apply ALTER, if number of files for deletion more than this.", 0) \
-    M(Float, replicated_max_ratio_of_wrong_parts, 0.5, "If ratio of wrong parts to total number of parts is less than this - allow to start.", 0) \
+    M(Float, \
+      replicated_max_ratio_of_wrong_parts, \
+      0.5, \
+      "If ratio of wrong parts to total number of parts is less than this - allow to start.", \
+      0) \
     M(UInt64, replicated_max_parallel_fetches, 0, "Limit parallel fetches.", 0) \
     M(UInt64, replicated_max_parallel_fetches_for_table, 0, "Limit parallel fetches for one table.", 0) \
-    M(UInt64, replicated_max_parallel_fetches_for_host, DEFAULT_COUNT_OF_HTTP_CONNECTIONS_PER_ENDPOINT, "Limit parallel fetches from endpoint (actually pool size).", 0) \
+    M(UInt64, \
+      replicated_max_parallel_fetches_for_host, \
+      DEFAULT_COUNT_OF_HTTP_CONNECTIONS_PER_ENDPOINT, \
+      "Limit parallel fetches from endpoint (actually pool size).", \
+      0) \
     M(UInt64, replicated_max_parallel_sends, 0, "Limit parallel sends.", 0) \
     M(UInt64, replicated_max_parallel_sends_for_table, 0, "Limit parallel sends for one table.", 0) \
-    M(Seconds, replicated_fetches_http_connection_timeout, 0, "HTTP connection timeout for part fetch requests. Inherited from default profile `http_connection_timeout` if not set explicitly.", 0) \
-    M(Seconds, replicated_fetches_http_send_timeout, 0, "HTTP send timeout for part fetch requests. Inherited from default profile `http_send_timeout` if not set explicitly.", 0) \
-    M(Seconds, replicated_fetches_http_receive_timeout, 0, "HTTP receive timeout for fetch part requests. Inherited from default profile `http_receive_timeout` if not set explicitly.", 0) \
+    M(Seconds, \
+      replicated_fetches_http_connection_timeout, \
+      0, \
+      "HTTP connection timeout for part fetch requests. Inherited from default profile `http_connection_timeout` if not set explicitly.", \
+      0) \
+    M(Seconds, \
+      replicated_fetches_http_send_timeout, \
+      0, \
+      "HTTP send timeout for part fetch requests. Inherited from default profile `http_send_timeout` if not set explicitly.", \
+      0) \
+    M(Seconds, \
+      replicated_fetches_http_receive_timeout, \
+      0, \
+      "HTTP receive timeout for fetch part requests. Inherited from default profile `http_receive_timeout` if not set explicitly.", \
+      0) \
     M(Bool, replicated_can_become_leader, true, "If true, Replicated tables replicas on this node will try to acquire leadership.", 0) \
     M(Seconds, zookeeper_session_expiration_check_period, 60, "ZooKeeper session expiration check period, in seconds.", 0) \
     M(Bool, detach_old_local_parts_when_cloning_replica, 1, "Do not remove old local parts when repairing lost replica.", 0) \
-    M(UInt64, max_replicated_fetches_network_bandwidth, 0, "The maximum speed of data exchange over the network in bytes per second for replicated fetches. Zero means unlimited.", 0) \
-    M(UInt64, max_replicated_sends_network_bandwidth, 0, "The maximum speed of data exchange over the network in bytes per second for replicated sends. Zero means unlimited.", 0) \
-    \
+    M(UInt64, \
+      max_replicated_fetches_network_bandwidth, \
+      0, \
+      "The maximum speed of data exchange over the network in bytes per second for replicated fetches. Zero means unlimited.", \
+      0) \
+    M(UInt64, \
+      max_replicated_sends_network_bandwidth, \
+      0, \
+      "The maximum speed of data exchange over the network in bytes per second for replicated sends. Zero means unlimited.", \
+      0) \
+\
     /** Check delay of replicas settings. */ \
-    M(UInt64, min_relative_delay_to_measure, 120, "Calculate relative replica delay only if absolute delay is not less that this value.", 0) \
+    M(UInt64, \
+      min_relative_delay_to_measure, \
+      120, \
+      "Calculate relative replica delay only if absolute delay is not less that this value.", \
+      0) \
     M(UInt64, cleanup_delay_period, 30, "Period to clean old queue logs, blocks hashes and parts.", 0) \
-    M(UInt64, cleanup_delay_period_random_add, 10, "Add uniformly distributed value from 0 to x seconds to cleanup_delay_period to avoid thundering herd effect and subsequent DoS of ZooKeeper in case of very large number of tables.", 0) \
-    M(UInt64, min_relative_delay_to_close, 300, "Minimal delay from other replicas to close, stop serving requests and not return Ok during status check.", 0) \
-    M(UInt64, min_absolute_delay_to_close, 0, "Minimal absolute delay to close, stop serving requests and not return Ok during status check.", 0) \
+    M(UInt64, \
+      cleanup_delay_period_random_add, \
+      10, \
+      "Add uniformly distributed value from 0 to x seconds to cleanup_delay_period to avoid thundering herd effect and subsequent DoS of " \
+      "ZooKeeper in case of very large number of tables.", \
+      0) \
+    M(UInt64, \
+      min_relative_delay_to_close, \
+      300, \
+      "Minimal delay from other replicas to close, stop serving requests and not return Ok during status check.", \
+      0) \
+    M(UInt64, \
+      min_absolute_delay_to_close, \
+      0, \
+      "Minimal absolute delay to close, stop serving requests and not return Ok during status check.", \
+      0) \
     M(UInt64, enable_vertical_merge_algorithm, 1, "Enable usage of Vertical merge algorithm.", 0) \
-    M(UInt64, vertical_merge_algorithm_min_rows_to_activate, 16 * DEFAULT_MERGE_BLOCK_SIZE, "Minimal (approximate) sum of rows in merging parts to activate Vertical merge algorithm.", 0) \
-    M(UInt64, vertical_merge_algorithm_min_columns_to_activate, 11, "Minimal amount of non-PK columns to activate Vertical merge algorithm.", 0) \
-    \
+    M(UInt64, \
+      vertical_merge_algorithm_min_rows_to_activate, \
+      16 * DEFAULT_MERGE_BLOCK_SIZE, \
+      "Minimal (approximate) sum of rows in merging parts to activate Vertical merge algorithm.", \
+      0) \
+    M(UInt64, \
+      vertical_merge_algorithm_min_columns_to_activate, \
+      11, \
+      "Minimal amount of non-PK columns to activate Vertical merge algorithm.", \
+      0) \
+\
     /** Compatibility settings */ \
-    M(Bool, compatibility_allow_sampling_expression_not_in_primary_key, false, "Allow to create a table with sampling expression not in primary key. This is needed only to temporarily allow to run the server with wrong tables for backward compatibility.", 0) \
-    M(Bool, use_minimalistic_checksums_in_zookeeper, true, "Use small format (dozens bytes) for part checksums in ZooKeeper instead of ordinary ones (dozens KB). Before enabling check that all replicas support new format.", 0) \
-    M(Bool, use_minimalistic_part_header_in_zookeeper, true, "Store part header (checksums and columns) in a compact format and a single part znode instead of separate znodes (<part>/columns and <part>/checksums). This can dramatically reduce snapshot size in ZooKeeper. Before enabling check that all replicas support new format.", 0) \
-    M(UInt64, finished_mutations_to_keep, 100, "How many records about mutations that are done to keep. If zero, then keep all of them.", 0) \
-    M(UInt64, min_merge_bytes_to_use_direct_io, 10ULL * 1024 * 1024 * 1024, "Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled).", 0) \
+    M(Bool, \
+      compatibility_allow_sampling_expression_not_in_primary_key, \
+      false, \
+      "Allow to create a table with sampling expression not in primary key. This is needed only to temporarily allow to run the server " \
+      "with wrong tables for backward compatibility.", \
+      0) \
+    M(Bool, \
+      use_minimalistic_checksums_in_zookeeper, \
+      true, \
+      "Use small format (dozens bytes) for part checksums in ZooKeeper instead of ordinary ones (dozens KB). Before enabling check that " \
+      "all replicas support new format.", \
+      0) \
+    M(Bool, \
+      use_minimalistic_part_header_in_zookeeper, \
+      true, \
+      "Store part header (checksums and columns) in a compact format and a single part znode instead of separate znodes (<part>/columns " \
+      "and <part>/checksums). This can dramatically reduce snapshot size in ZooKeeper. Before enabling check that all replicas support " \
+      "new format.", \
+      0) \
+    M(UInt64, \
+      finished_mutations_to_keep, \
+      100, \
+      "How many records about mutations that are done to keep. If zero, then keep all of them.", \
+      0) \
+    M(UInt64, \
+      min_merge_bytes_to_use_direct_io, \
+      10ULL * 1024 * 1024 * 1024, \
+      "Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled).", \
+      0) \
     M(UInt64, index_granularity_bytes, /*10 * 1024 * 1024*/ 0, "Approximate amount of bytes in single granule (0 - disabled).", 0) \
     M(UInt64, min_index_granularity_bytes, 1024, "Minimum amount of bytes in single granule.", 1024) \
     M(Int64, merge_with_ttl_timeout, 3600 * 4, "Minimal time in seconds, when merge with delete TTL can be repeated.", 0) \
-    M(Int64, merge_with_recompression_ttl_timeout, 3600 * 4, "Minimal time in seconds, when merge with recompression TTL can be repeated.", 0) \
+    M(Int64, \
+      merge_with_recompression_ttl_timeout, \
+      3600 * 4, \
+      "Minimal time in seconds, when merge with recompression TTL can be repeated.", \
+      0) \
     M(Bool, ttl_only_drop_parts, false, "Only drop altogether the expired parts and not partially prune them.", 0) \
     M(Bool, write_final_mark, 1, "Write final mark after end of column (0 - disabled, do nothing if index_granularity_bytes=0)", 0) \
     M(Bool, enable_mixed_granularity_parts, 1, "Enable parts with adaptive and non adaptive granularity", 0) \
     M(MaxThreads, max_part_loading_threads, 0, "The number of threads to load data parts at startup.", 0) \
-    M(MaxThreads, max_part_removal_threads, 0, "The number of threads for concurrent removal of inactive data parts. One is usually enough, but in 'Google Compute Environment SSD Persistent Disks' file removal (unlink) operation is extraordinarily slow and you probably have to increase this number (recommended is up to 16).", 0) \
-    M(UInt64, concurrent_part_removal_threshold, 100, "Activate concurrent part removal (see 'max_part_removal_threads') only if the number of inactive data parts is at least this.", 0) \
+    M(MaxThreads, \
+      max_part_removal_threads, \
+      0, \
+      "The number of threads for concurrent removal of inactive data parts. One is usually enough, but in 'Google Compute Environment " \
+      "SSD Persistent Disks' file removal (unlink) operation is extraordinarily slow and you probably have to increase this number " \
+      "(recommended is up to 16).", \
+      0) \
+    M(UInt64, \
+      concurrent_part_removal_threshold, \
+      100, \
+      "Activate concurrent part removal (see 'max_part_removal_threads') only if the number of inactive data parts is at least this.", \
+      0) \
     M(String, storage_policy, "default", "Name of storage disk policy", 0) \
     M(Bool, allow_nullable_key, false, "Allow Nullable types as primary keys.", 0) \
     M(Bool, allow_remote_fs_zero_copy_replication, false, "Allow Zero-copy replication over remote fs", 0) \
     M(Bool, remove_empty_parts, true, "Remove empty parts after they were pruned by TTL, mutation, or collapsing merge algorithm", 0) \
     M(Bool, assign_part_uuids, false, "Generate UUIDs for parts. Before enabling check that all replicas support new format.", 0) \
-    M(Int64, max_partitions_to_read, -1, "Limit the max number of partitions that can be accessed in one query. <= 0 means unlimited. This setting is the default that can be overridden by the query-level setting with the same name.", 0) \
-    M(UInt64, max_concurrent_queries, 0, "Max number of concurrently executed queries related to the MergeTree table (0 - disabled). Queries will still be limited by other max_concurrent_queries settings.", 0) \
-    M(UInt64, min_marks_to_honor_max_concurrent_queries, 0, "Minimal number of marks to honor the MergeTree-level's max_concurrent_queries (0 - disabled). Queries will still be limited by other max_concurrent_queries settings.", 0) \
-    M(UInt64, min_bytes_to_rebalance_partition_over_jbod, 0, "Minimal amount of bytes to enable part rebalance over JBOD array (0 - disabled).", 0) \
+    M(Int64, \
+      max_partitions_to_read, \
+      -1, \
+      "Limit the max number of partitions that can be accessed in one query. <= 0 means unlimited. This setting is the default that can " \
+      "be overridden by the query-level setting with the same name.", \
+      0) \
+    M(UInt64, \
+      max_concurrent_queries, \
+      0, \
+      "Max number of concurrently executed queries related to the MergeTree table (0 - disabled). Queries will still be limited by other " \
+      "max_concurrent_queries settings.", \
+      0) \
+    M(UInt64, \
+      min_marks_to_honor_max_concurrent_queries, \
+      0, \
+      "Minimal number of marks to honor the MergeTree-level's max_concurrent_queries (0 - disabled). Queries will still be limited by " \
+      "other max_concurrent_queries settings.", \
+      0) \
+    M(UInt64, \
+      min_bytes_to_rebalance_partition_over_jbod, \
+      0, \
+      "Minimal amount of bytes to enable part rebalance over JBOD array (0 - disabled).", \
+      0) \
     M(Bool, enable_compact_map_data, false, "Enable usage of compact map impl, this parameter is invalid in replicated engine", 0) \
     /** Experimental/work in progress feature. Unsafe for production. */ \
-    M(UInt64, part_moves_between_shards_enable, 0, "Experimental/Incomplete feature to move parts between shards. Does not take into account sharding expressions.", 0) \
+    M(UInt64, \
+      part_moves_between_shards_enable, \
+      0, \
+      "Experimental/Incomplete feature to move parts between shards. Does not take into account sharding expressions.", \
+      0) \
     M(UInt64, part_moves_between_shards_delay_seconds, 30, "Time to wait before/after moving parts between shards.", 0) \
-    \
+\
     /** ByteDance settings */ \
-    \
+\
     M(Bool, enable_run_optimization, true, "", 0) \
     M(UInt64, delta_merge_interval, 60, "", 0) \
-    /** Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled, "", 0) */                                 \
-    \
+    /** Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled, "", 0) */ \
+\
     /** If true, replicated tables would prefer to merge locally rather than                                  |
-      * fetching of merged part from replica */                                                               \
+      * fetching of merged part from replica */ \
     M(Bool, prefer_merge_than_fetch, false, "", 0) \
     M(Bool, heuristic_part_source_replica_lookup, true, "", 0) \
     /** Using in ingest partition function. If true, we'll insert default when                                |\
-      * the user have not provided values for some rows of a column */                                        \
+      * the user have not provided values for some rows of a column */ \
     M(Bool, ingest_default_column_value_if_not_provided, true, "", 0) \
     M(Bool, enable_ingest_wide_part, false, "", 0) \
-    /** detach partition lightweight rename directory instead of makeClone */                                 \
+    /** detach partition lightweight rename directory instead of makeClone */ \
     M(Bool, light_detach_partition, false, "", 0) \
     M(Bool, ha_fast_create_table, false, "", 0) \
     M(UInt64, zk_local_diff_threshold, 12, "", 0) \
     M(Bool, only_use_ttl_of_metadata, true, "", 0) \
-                                                                                                              \
+\
     M(Bool, enable_download_partition, false, "", 0) \
     M(UInt64, max_memory_usage_for_merge, 0, "", 0) \
     M(String, storage_policy_name, "default", "", 0) \
@@ -186,35 +463,36 @@ struct Settings;
     M(Bool, enable_async_init_metasotre, false, "", 0) \
     M(Bool, cnch_temporary_table, false, "", 0) \
     M(MaxThreads, cnch_parallel_prefetching, 0, "", 0) \
+    M(Bool, enable_prefetch_checksums, true, "", 0) \
     M(Bool, enable_calculate_columns_size_with_sample, 1, "", 0) \
-                                                                                                              \
+\
     M(Bool, disable_block_output, false, "", 0) \
     M(UInt64, min_drop_ranges_to_enable_cleanup, 365, "", 0) \
-    M(Seconds, drop_ranges_lifetime, 60 * 60  * 36, "", 0) \
-    \
+    M(Seconds, drop_ranges_lifetime, 60 * 60 * 36, "", 0) \
+\
     M(String, cnch_vw_default, "vw_default", "", 0) \
     M(String, cnch_vw_read, "vw_read", "", 0) \
     M(String, cnch_vw_write, "vw_write", "", 0) \
     M(String, cnch_vw_task, "vw_task", "", 0) \
     M(String, cnch_server_vw, DEFAULT_SERVER_VW_NAME, "", 0) \
-    \
+\
     M(UInt64, time_travel_retention_days, 0, "", 0) \
     M(UInt64, insertion_label_ttl, 8400 * 2, "", 0) \
-    \
-    M(Bool, cnch_merge_enable_batch_select, false, "", 0)                                                     \
+\
+    M(Bool, cnch_merge_enable_batch_select, false, "", 0) \
     M(Bool, enable_addition_bg_task, false, "", 0) \
     M(Int64, max_addition_bg_task_num, 32, "", 0) \
     M(Int64, max_addition_mutation_task_num, 10, "", 0) \
     M(Int64, max_partition_for_multi_select, 3, "", 0) \
-    \
-    /** Settings for parts cache on server for MergeTasks. Cache speed up the task scheduling. */             \
-    M(UInt64, cnch_merge_parts_cache_timeout, 10 * 60, "", 0)                                  \
-    M(UInt64, cnch_merge_parts_cache_min_count, 1000, "", 0)                                                  \
+\
+    /** Settings for parts cache on server for MergeTasks. Cache speed up the task scheduling. */ \
+    M(UInt64, cnch_merge_parts_cache_timeout, 10 * 60, "", 0) \
+    M(UInt64, cnch_merge_parts_cache_min_count, 1000, "", 0) \
     M(UInt64, cnch_merge_max_total_rows_to_merge, 50000000, "", 0) \
     M(UInt64, cnch_merge_max_total_bytes_to_merge, 150ULL * 1024 * 1024 * 1024, "", 0) \
     M(UInt64, cnch_merge_max_parts_to_merge, 100, "", 0) \
-    \
-    /* Unique table related settings */\
+\
+    /* Unique table related settings */ \
     M(Bool, cloud_enable_staging_area, false, "", 0) \
     M(Bool, cloud_enable_dedup_worker, false, "", 0) \
     M(UInt64, dedup_worker_max_heartbeat_interval, 16, "", 0) \
@@ -223,20 +501,25 @@ struct Settings;
     M(Seconds, unique_acquire_write_lock_timeout, 300, "", 0) \
     M(MaxThreads, cnch_parallel_dumping_threads, 8, "", 0) \
     M(MaxThreads, unique_table_dedup_threads, 8, "", 0) \
-    \
-    /* Metastore settings */\
+\
+    /* Metastore settings */ \
     M(Bool, enable_metastore, true, "Use KV metastore to manage data parts.", 0) \
-    M(Bool, enable_persistent_checksum, true, "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
-    \
+    M(Bool, \
+      enable_persistent_checksum, \
+      true, \
+      "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", \
+      0) \
+\
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
-    /*keep enable_preload_parts for compitable*/\
+    /*keep enable_preload_parts for compitable*/ \
     M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
     M(UInt64, parts_preload_level, 0, "0=close preload;1=preload meta;2=preload data;3=preload meta&data", 0) \
     M(Bool, enable_parts_sync_preload, 0, "Enable sync preload parts", 0) \
-    \
-    /* Renamed settings - cannot be ignored */\
+    M(Bool, enable_gc_evict_disk_cache, false, "Enable gc evict disk cache", 0) \
+\
+    /* Renamed settings - cannot be ignored */ \
     M(Bool, enable_nullable_sorting_key, false, "Alias of `allow_nullable_key`", 0) \
-    \
+\
     /*************************************************************************************/ \
     /** Obsolete settings. Kept for backward compatibility only, or will add usage later */ \
     M(UInt64, min_relative_delay_to_yield_leadership, 120, "Obsolete setting, does nothing.", 0) \
@@ -244,7 +527,11 @@ struct Settings;
     M(Bool, allow_floating_point_partition_key, false, "Allow floating point as partition key", 0) \
     M(Bool, cnch_enable_memory_buffer, false, "", 0) \
     M(Bool, cnch_merge_only_realtime_partition, false, "", 0) \
-    M(Bool, cnch_merge_select_nonadjacent_parts, false, "Select nonadjacent parts is allowed in the original design. Remove this when the feature is fully verified", 0) \
+    M(Bool, \
+      cnch_merge_select_nonadjacent_parts, \
+      false, \
+      "Select nonadjacent parts is allowed in the original design. Remove this when the feature is fully verified", \
+      0) \
     M(String, cnch_merge_pick_worker_algo, "RM", "RM - using RM, RoundRobin: - local round robin strategy", 0) \
     M(UInt64, cnch_merge_round_robin_partitions_interval, 600, "", 0) \
     M(UInt64, cnch_gc_round_robin_partitions_interval, 600, "", 0) \
@@ -252,10 +539,10 @@ struct Settings;
     M(UInt64, gc_remove_part_thread_pool_size, 2, "Turn up the thread pool size to speed up GC processing of parts", 0) \
     M(UInt64, gc_trash_part_batch_size, 5000, "Batch size to remove stale parts to trash in background tasks", 0) \
     M(UInt64, gc_remove_part_batch_size, 200, "Batch size to remove trash parts from storage in background tasks", 0) \
-    \
+\
     /** uuid of CnchMergeTree, as we won't use uuid in CloudMergeTree */ \
     M(String, cnch_table_uuid, "", "Used for CloudMergeTree to get uuid of Cnch Table for ingestion task, like Kafka", 0) \
-    \
+\
     M(String, remote_storage_type, "hdfs", "Table's storage type[deprcated]", 0) \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \

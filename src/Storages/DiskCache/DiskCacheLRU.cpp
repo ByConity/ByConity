@@ -169,8 +169,23 @@ fs::path DiskCacheLRU::getPath(const DiskCacheLRU::KeyType & hash_key, const Str
     return fs::path(path) / hex_key_high.substr(0, 3) / hex_key_high / hex_key_low;
 }
 
+static fs::path getRelativePathForPart(const String & part_name)
+{
+    /// relative path for part
+    auto hash = sipHash64(part_name.data(), part_name.size());
+    String hex_key(HEX_KEY_LEN / 2, '\0');
+    writeHexUIntLowercase(hash, hex_key.data());
+    return fs::path(hex_key.substr(0, 3)) / hex_key / "";
+}
+
 void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_hint)
 {
+    if (is_droping)
+    {
+        LOG_WARNING(log, fmt::format("skip write disk cache for droping disk cache is running"));
+        return;
+    }
+
     // Limit set rate to avoid too high write iops or lock contention
     if (set_rate_throttler)
     {
@@ -395,6 +410,31 @@ void DiskCacheLRU::load()
     }
 }
 
+size_t DiskCacheLRU::drop(const String & part_name)
+{
+    is_droping = true;
+    SCOPE_EXIT({ is_droping = false; });
+
+    auto part_base_path
+        = part_name.empty() ? fs::path(latest_disk_cache_dir) : fs::path(latest_disk_cache_dir) / getRelativePathForPart(part_name);
+    LOG_TRACE(log, fmt::format("start delete part {} cache {}", part_name, part_base_path.relative_path().c_str()));
+
+    const Disks & disks = volume->getDisks();
+    size_t delete_file_size = 0;
+    for (const auto & disk : disks)
+    {
+        if (!disk->exists(part_base_path))
+            continue;
+
+        DiskCacheDeleter deleter(*this, disk, 1, -1, -1);
+        deleter.exec(part_base_path);
+        delete_file_size += deleter.delete_file_size;
+    }
+
+    LOG_DEBUG(log, fmt::format("deleted {} cache {}, size {}", part_name, part_base_path.relative_path().c_str(), delete_file_size));
+    return delete_file_size;
+}
+
 DiskCacheLRU::DiskIterator::DiskIterator(
     DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk_, int min_depth_parallel_, int max_depth_parallel_)
     : disk_cache(cache_)
@@ -617,5 +657,57 @@ void DiskCacheLRU::DiskCacheMigrator::iterateFile(fs::path rel_path, size_t file
         shard.erase(key);
         throw;
     }
+}
+
+DiskCacheLRU::DiskCacheDeleter::DiskCacheDeleter(
+    DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk, int min_depth_parallel, int max_depth_parallel)
+    : DiskIterator(cache_, std::move(disk_), worker_per_disk, min_depth_parallel, max_depth_parallel)
+{
+}
+
+DiskCacheLRU::DiskCacheDeleter::~DiskCacheDeleter() = default;
+
+void DiskCacheLRU::DiskCacheDeleter::exec(std::filesystem::path entry_path)
+{
+    String full_path = fs::path(disk->getPath()) / entry_path;
+    struct stat obj_stat;
+    if (stat(full_path.c_str(), &obj_stat) != 0)
+        return; // not exists
+
+    if (!S_ISDIR(obj_stat.st_mode))
+        throw Exception(fmt::format("disk path {} {} is not a directory", disk->getPath(), entry_path.string()), ErrorCodes::LOGICAL_ERROR);
+
+    iterateDirectory(entry_path / "", 0);
+
+    LOG_DEBUG(log, "remove part disk cache path {} {}", disk->getPath().c_str(), entry_path.c_str());
+    disk->removeRecursive(entry_path);
+}
+
+void DiskCacheLRU::DiskCacheDeleter::iterateFile(std::filesystem::path file_path, size_t file_size)
+{
+    /// logic is similar to DiskCacheLoader
+    bool is_temp_segment = endsWith(file_path, DISK_CACHE_TEMP_FILE_SUFFIX);
+    String segment_hex = file_path.filename().string();
+
+    /// remove temp prefix
+    if (is_temp_segment)
+    {
+        segment_hex.resize(segment_hex.size() - TMP_SUFFIX_LEN);
+    }
+
+    String hex_key = segment_hex + file_path.parent_path().filename().string();
+    auto unhexed = unhexKey(hex_key);
+    if (!unhexed)
+    {
+        LOG_ERROR(log, "Invalid disk cache file path: {}, hex_key : {}", (fs::path(disk->getPath()) / file_path).c_str(), hex_key);
+        disk->removeFileIfExists(file_path);
+        return;
+    }
+
+    const KeyType & key = unhexed.value();
+
+    /// directly erase the key, to prevent setImpl setting the key again
+    disk_cache.containers.shard(key).erase(key);
+    delete_file_size += file_size;
 }
 }

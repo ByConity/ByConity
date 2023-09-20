@@ -36,7 +36,6 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     const String & stream_name_,
     const String & extension_,
     const FileOffsetAndSize & stream_file_pos_,
-    bool is_preload_,
     UInt64 preload_level_)
     : IDiskCacheSegment(segment_number_, segment_size_)
     , data_part(data_part_)
@@ -47,7 +46,6 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     , stream_name(stream_name_)
     , extension(extension_)
     , stream_file_pos(stream_file_pos_)
-    , is_preload(is_preload_)
     , preload_level(preload_level_)
     , marks_loader(
           data_part->volume->getDisk(),
@@ -82,15 +80,9 @@ String PartFileDiskCacheSegment::getMarkName() const
         UUIDHelpers::UUIDToString(storage->getStorageUUID()), data_part->getUniquePartName(), stream_name, 0, MARKS_FILE_EXTENSION);
 }
 
-void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
+void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_exception)
 {
     Poco::Logger * log = disk_cache.getLogger();
-
-    if (is_preload && preload_level == PreloadLevelSettings::ClosePreload)
-    {
-        //LOG_TRACE(log, "skip cache data preload = " << preload_level << " is_preload = " << is_preload);
-        return;
-    }
 
     try
     {
@@ -123,44 +115,46 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
         }
 
         size_t cache_data_bytes = cache_data_right_offset - cache_data_left_offset;
-        LOG_DEBUG(
+        LOG_TRACE(
             log,
-            "cache data file: `{}` mark range [{}, {}), offset: {}, bytes: {}",
+            "cache data file: `{}` mark range [{}, {}), offset: {}, bytes: {}, preload_level: {}",
             stream_name + extension,
             left_mark,
             right_mark,
             cache_data_left_offset,
-            cache_data_bytes);
+            cache_data_bytes,
+            preload_level);
 
         String data_path = data_part->getFullRelativePath() + "data";
         auto disk = data_part->volume->getDisk();
         auto data_file = disk->readFile(data_path, read_settings);
 
         /// cache data segment
-        LOG_DEBUG(disk_cache.getLogger(), "level: {}, cache data: {}, cache mark: {} ", preload_level, preload_level & PreloadLevelSettings::DataPreload, preload_level & PreloadLevelSettings::MetaPreload);
-        if (!is_preload || (preload_level & PreloadLevelSettings::DataPreload) == PreloadLevelSettings::DataPreload)
+        if (!preload_level || (preload_level & PreloadLevelSettings::DataPreload) == PreloadLevelSettings::DataPreload)
         {
             data_file->seek(stream_file_pos.file_offset + cache_data_left_offset);
             LimitReadBuffer segment_value(*data_file, cache_data_bytes, false);
             disk_cache.set(getSegmentName(), segment_value, cache_data_bytes);
-            LOG_DEBUG(disk_cache.getLogger(), "cache data file: {}, is_preload: {}", getSegmentName(), is_preload);
+            LOG_TRACE(disk_cache.getLogger(), "cached data file: {}, preload_level: {}", getSegmentName(), preload_level);
         }
 
         /// cache mark segment
-        if (!is_preload || (preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
+        if (!preload_level || (preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
         {
             data_file->seek(mrk_file_pos.file_offset);
             LimitReadBuffer marks_value(*data_file, mrk_file_pos.file_size, false);
             String marks_key = getMarkName();
             disk_cache.set(marks_key, marks_value, mrk_file_pos.file_size);
-            LOG_DEBUG(disk_cache.getLogger(), "cache mark file: {}, is_preload: {}", marks_key, is_preload);
+            LOG_TRACE(disk_cache.getLogger(), "cached mark file: {}, preload_level: {}", marks_key, preload_level);
         }
         
     }
-    catch (...)
+    catch (const Exception & e)
     {
         LOG_ERROR(log, "Failed to cache segment to local disk.");
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        if (throw_exception)
+            throw Exception(e);
     }
 }
 }

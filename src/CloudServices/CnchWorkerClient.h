@@ -84,7 +84,17 @@ public:
         const ServerDataPartsVector & parts,
         const ExceptionHandlerPtr & handler,
         bool enable_parts_sync_preload,
-        UInt64 parts_preload_level);
+        UInt64 parts_preload_level,
+        UInt64 submit_ts);
+
+    brpc::CallId dropPartDiskCache(
+        const ContextPtr & context,
+        const TxnTimestamp & txn_id,
+        const IStorage & storage,
+        const String & create_local_table_query,
+        const ServerDataPartsVector & parts,
+        bool sync,
+        bool drop_vw_disk_cache);
 
     brpc::CallId sendOffloadingInfo(
         const ContextPtr & context,

@@ -34,7 +34,7 @@ public:
 
     virtual String getSegmentName() const = 0;
     virtual String getMarkName() const {return {};}
-    virtual void cacheToDisk(IDiskCache & diskcache) = 0;
+    virtual void cacheToDisk(IDiskCache & diskcache, bool throw_exception = false) = 0;
 
     static String formatSegmentName(
         const String & uuid, const String & part_name, const String & column_name, UInt32 segment_number, const String & extension);
