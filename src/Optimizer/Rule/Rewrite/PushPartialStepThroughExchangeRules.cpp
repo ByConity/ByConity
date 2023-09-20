@@ -240,7 +240,9 @@ TransformResult PushPartialAggThroughUnion::transformImpl(PlanNodePtr node, cons
 
 
     return PlanNodeBase::createPlanNode(
-        context.context->nextNodeId(), std::make_shared<UnionStep>(union_inputs, output, union_step->isLocal()), partials);
+        context.context->nextNodeId(),
+        std::make_shared<UnionStep>(union_inputs, output, OutputToInputs{}, union_step->getMaxThreads(), union_step->isLocal()),
+        partials);
 }
 
 PatternPtr PushPartialSortingThroughExchange::getPattern() const

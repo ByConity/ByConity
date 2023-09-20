@@ -1,16 +1,16 @@
-#include <Common/typeid_cast.h>
-#include <Columns/IColumn.h>
-#include <Columns/ColumnArray.h>
-#include <DataTypes/DataTypeArray.h>
-#include <DataTypes/DataTypeMap.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnMap.h>
 #include <Columns/ColumnNullable.h>
+#include <Columns/IColumn.h>
+#include <DataTypes/DataTypeArray.h>
+#include <DataTypes/DataTypeMap.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/ArrayJoinAction.h>
+#include <Interpreters/Context.h>
+#include <Protos/plan_node_utils.pb.h>
+#include <Common/typeid_cast.h>
 
 namespace DB
 {
@@ -220,4 +220,22 @@ void ArrayJoinAction::execute(Block & block)
     }
 }
 
+void ArrayJoinAction::toProto(Protos::ArrayJoinAction & proto) const
+{
+    for (const auto & element : columns)
+        proto.add_columns(element);
+    std::sort(proto.mutable_columns()->begin(), proto.mutable_columns()->end());
+    proto.set_is_left(is_left);
+}
+
+std::shared_ptr<ArrayJoinAction> ArrayJoinAction::fromProto(const Protos::ArrayJoinAction & proto, ContextPtr context)
+{
+    std::unordered_set<String> columns;
+    for (const auto & element : proto.columns())
+        columns.emplace(element);
+    auto is_left = proto.is_left();
+    auto step = std::make_shared<ArrayJoinAction>(columns, is_left, context);
+
+    return step;
+}
 }

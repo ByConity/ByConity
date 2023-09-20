@@ -47,36 +47,30 @@ QueryPipelinePtr ExchangeStep::updatePipeline(QueryPipelines pipelines, const Bu
     return std::move(pipelines[0]);
 }
 
-void ExchangeStep::serialize(WriteBuffer & buf) const
+std::shared_ptr<ExchangeStep> ExchangeStep::fromProto(const Protos::ExchangeStep & proto, ContextPtr)
 {
-    writeBinary(input_streams.size(), buf);
-    for (const auto & input_stream : input_streams)
-        serializeDataStream(input_stream, buf);
-    serializeEnum(exchange_type, buf);
-    schema.serialize(buf);
-    writeBinary(keep_order, buf);
+    DataStreams input_streams;
+    for (const auto & proto_element : proto.input_streams())
+    {
+        DataStream element;
+        element.fillFromProto(proto_element);
+        input_streams.emplace_back(std::move(element));
+    }
+    auto exchange_type = ExchangeModeConverter::fromProto(proto.exchange_type());
+    auto schema = Partitioning::fromProto(proto.schema());
+    auto keep_order = proto.keep_order();
+    auto step = std::make_shared<ExchangeStep>(input_streams, exchange_type, schema, keep_order);
+
+    return step;
 }
 
-QueryPlanStepPtr ExchangeStep::deserialize(ReadBuffer & buf, ContextPtr &)
+void ExchangeStep::toProto(Protos::ExchangeStep & proto, bool) const
 {
-    size_t size;
-    readBinary(size, buf);
-
-    DataStreams input_streams(size);
-    for (size_t i = 0; i < size; ++i)
-        input_streams[i] = deserializeDataStream(buf);
-
-    ExchangeMode exchange_type;
-    deserializeEnum(exchange_type, buf);
-
-    Partitioning schema;
-    schema.deserialize(buf);
-
-    bool keep_order;
-    readBinary(keep_order, buf);
-
-    auto step = std::make_unique<ExchangeStep>(input_streams, exchange_type, schema, keep_order);
-    return step;
+    for (const auto & element : input_streams)
+        element.toProto(*proto.add_input_streams());
+    proto.set_exchange_type(ExchangeModeConverter::toProto(exchange_type));
+    schema.toProto(*proto.mutable_schema());
+    proto.set_keep_order(keep_order);
 }
 
 std::shared_ptr<IQueryPlanStep> ExchangeStep::copy(ContextPtr) const

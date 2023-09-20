@@ -133,39 +133,29 @@ void DistinctStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Columns", std::move(columns_array));
 }
 
-void DistinctStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<DistinctStep> DistinctStep::fromProto(const Protos::DistinctStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    set_size_limits.serialize(buffer);
-    writeBinary(limit_hint, buffer);
-    serializeStrings(columns, buffer);
-    writeBinary(pre_distinct, buffer);
-}
-
-QueryPlanStepPtr DistinctStep::deserialize(ReadBuffer & buffer, ContextPtr )
-{
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
-    SizeLimits size_limits;
-    size_limits.deserialize(buffer);
-
-    UInt64 limit_hint;
-    readBinary(limit_hint, buffer);
-
-    Names columns;
-    columns = deserializeStrings(buffer);
-
-    UInt8 pre_distinct;
-    readBinary(pre_distinct, buffer);
-
-    auto step = std::make_unique<DistinctStep>(input_stream, size_limits, limit_hint, columns, bool(pre_distinct));
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    SizeLimits set_size_limits;
+    set_size_limits.fillFromProto(proto.set_size_limits());
+    auto limit_hint = proto.limit_hint();
+    std::vector<String> columns;
+    for (const auto & element : proto.columns())
+        columns.emplace_back(element);
+    auto pre_distinct = proto.pre_distinct();
+    auto step = std::make_shared<DistinctStep>(base_input_stream, set_size_limits, limit_hint, columns, pre_distinct);
     step->setStepDescription(step_description);
     return step;
+}
+
+void DistinctStep::toProto(Protos::DistinctStep & proto, bool) const
+{
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    set_size_limits.toProto(*proto.mutable_set_size_limits());
+    proto.set_limit_hint(limit_hint);
+    for (const auto & element : columns)
+        proto.add_columns(element);
+    proto.set_pre_distinct(pre_distinct);
 }
 
 std::shared_ptr<IQueryPlanStep> DistinctStep::copy(ContextPtr) const

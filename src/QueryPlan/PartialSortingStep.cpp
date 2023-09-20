@@ -118,35 +118,31 @@ void PartialSortingStep::describeActions(JSONBuilder::JSONMap & map) const
         map.add("Limit", limit);
 }
 
-void PartialSortingStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<PartialSortingStep> PartialSortingStep::fromProto(const Protos::PartialSortingStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    serializeItemVector<SortColumnDescription>(sort_description, buffer);
-    writeBinary(limit, buffer);
-    size_limits.serialize(buffer);
-}
-
-QueryPlanStepPtr PartialSortingStep::deserialize(ReadBuffer & buffer, ContextPtr )
-{
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
     SortDescription sort_description;
-    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
-
-    UInt64 limit;
-    readBinary(limit, buffer);
-
+    for (const auto & proto_element : proto.sort_description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        sort_description.emplace_back(std::move(element));
+    }
+    auto limit = proto.limit();
     SizeLimits size_limits;
-    size_limits.deserialize(buffer);
-
-    auto step = std::make_unique<PartialSortingStep>(input_stream, sort_description, limit, size_limits);
-
+    size_limits.fillFromProto(proto.size_limits());
+    auto step = std::make_shared<PartialSortingStep>(base_input_stream, sort_description, limit, size_limits);
     step->setStepDescription(step_description);
     return step;
+}
+
+void PartialSortingStep::toProto(Protos::PartialSortingStep & proto, bool) const
+{
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    for (const auto & element : sort_description)
+        element.toProto(*proto.add_sort_description());
+    proto.set_limit(limit);
+    size_limits.toProto(*proto.mutable_size_limits());
 }
 
 std::shared_ptr<IQueryPlanStep> PartialSortingStep::copy(ContextPtr) const

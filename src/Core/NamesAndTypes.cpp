@@ -26,11 +26,12 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/MapHelpers.h>
 #include <IO/ReadBuffer.h>
-#include <IO/WriteBuffer.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
 #include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
+#include <Protos/plan_node_utils.pb.h>
 #include <sparsehash/dense_hash_map>
 
 
@@ -96,6 +97,24 @@ void NameAndTypePair::deserialize(ReadBuffer & buf)
         readBinary(subcolumn_tmp, buf);
         subcolumn_delimiter_position = subcolumn_tmp;
     }
+}
+
+void NameAndTypePair::toProto(Protos::NameAndTypePair & proto) const
+{
+    proto.set_name(name);
+    serializeDataTypeToProto(type, *proto.mutable_type());
+    serializeDataTypeToProto(type_in_storage, *proto.mutable_type_in_storage());
+    if (subcolumn_delimiter_position.has_value())
+        proto.set_subcolumn_delimiter_position(subcolumn_delimiter_position.value());
+}
+
+void NameAndTypePair::fillFromProto(const Protos::NameAndTypePair & proto)
+{
+    name = proto.name();
+    type = deserializeDataTypeFromProto(proto.type());
+    type_in_storage = deserializeDataTypeFromProto(proto.type_in_storage());
+    if (proto.has_subcolumn_delimiter_position())
+        subcolumn_delimiter_position = proto.subcolumn_delimiter_position();
 }
 
 void NamesAndTypesList::readText(ReadBuffer & buf)
@@ -387,23 +406,5 @@ size_t NamesAndTypesList::getPosByName(const std::string &name) const noexcept
     return pos;
 }
 
-void NamesAndTypesList::serialize(WriteBuffer & buf) const
-{
-    writeBinary(size(), buf);
-    for (auto & elem : *this)
-        elem.serialize(buf);
-}
-
-void NamesAndTypesList::deserialize(ReadBuffer & buf)
-{
-    size_t size;
-    readBinary(size, buf);
-    for (size_t i = 0; i < size; ++i)
-    {
-        NameAndTypePair pair;
-        pair.deserialize(buf);
-        this->push_back(pair);
-    }
-}
 
 }

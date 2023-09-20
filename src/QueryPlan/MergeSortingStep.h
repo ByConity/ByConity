@@ -61,8 +61,8 @@ public:
     /// Add limit or change it to lower value.
     void updateLimit(size_t limit_);
 
-    void serialize(WriteBuffer &) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+    void toProto(Protos::MergeSortingStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<MergeSortingStep> fromProto(const Protos::MergeSortingStep & proto, ContextPtr context);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
 

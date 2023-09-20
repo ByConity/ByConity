@@ -1687,20 +1687,6 @@ Block HashJoin::prepareRightBlock(const Block & block) const
     return prepareRightBlock(block, savedBlockSample());
 }
 
-void HashJoin::serialize(WriteBuffer & buf) const
-{
-    table_join->serialize(buf);
-    serializeBlock(right_sample_block, buf);
-}
-
-JoinPtr HashJoin::deserialize(ReadBuffer & buf, ContextPtr context)
-{
-    auto table_join = TableJoin::deserialize(buf, context);
-    auto right_sample_block = deserializeBlock(buf);
-
-    return std::make_shared<HashJoin>(table_join, right_sample_block);
-}
-
 bool HashJoin::isEqualNull(const String & name) const
 {
     const auto *null_safe_columns = table_join->keyIdsNullSafe();

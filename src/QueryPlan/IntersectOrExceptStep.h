@@ -8,9 +8,10 @@ namespace DB
 
 class IntersectOrExceptStep : public IQueryPlanStep
 {
-using Operator = ASTSelectIntersectExceptQuery::Operator;
-
 public:
+    using Operator = ASTSelectIntersectExceptQuery::Operator;
+    using OperatorConverter = ASTSelectIntersectExceptQuery::OperatorConverter;
+
     /// max_threads is used to limit the number of threads for result pipeline.
     IntersectOrExceptStep(DataStreams input_streams_, Operator operator_, size_t max_threads_ = 0);
 
@@ -24,9 +25,10 @@ public:
 
     QueryPipelinePtr updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & settings) override;
 
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr context);
-    
+
+    void toProto(Protos::IntersectOrExceptStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<IntersectOrExceptStep> fromProto(const Protos::IntersectOrExceptStep & proto, ContextPtr context);
+
     void describePipeline(FormatSettings & settings) const override;
     
     String getOperator() const;

@@ -72,16 +72,6 @@ DataTypePtr ApplyStep::getAssignmentDataType() const
     }
 }
 
-void ApplyStep::serialize(WriteBuffer &) const
-{
-    throw Exception("ApplyStep should be rewritten into JoinStep", ErrorCodes::NOT_IMPLEMENTED);
-}
-
-QueryPlanStepPtr ApplyStep::deserialize(ReadBuffer &, ContextPtr)
-{
-    throw Exception("ApplyStep should be rewritten into JoinStep", ErrorCodes::NOT_IMPLEMENTED);
-}
-
 QueryPipelinePtr ApplyStep::updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &)
 {
     throw Exception("ApplyStep should be rewritten into JoinStep", ErrorCodes::NOT_IMPLEMENTED);

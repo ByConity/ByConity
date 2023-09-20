@@ -31,14 +31,14 @@ public:
 
     ASTPtr clone() const override;
 
-    enum class Operator
-    {
-        UNKNOWN,
-        EXCEPT_ALL,
-        EXCEPT_DISTINCT,
-        INTERSECT_ALL,
-        INTERSECT_DISTINCT,
-    };
+    ENUM_WITH_PROTO_CONVERTER(
+        Operator, // enum name
+        Protos::IntersectExceptOperator, // proto enum message
+        (UNKNOWN, 0),
+        (EXCEPT_ALL, 1),
+        (EXCEPT_DISTINCT, 2),
+        (INTERSECT_ALL, 3),
+        (INTERSECT_DISTINCT, 4));
 
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
 

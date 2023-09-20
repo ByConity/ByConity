@@ -68,27 +68,19 @@ void OffsetStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Offset", offset);
 }
 
-void OffsetStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<OffsetStep> OffsetStep::fromProto(const Protos::OffsetStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    writeBinary(offset, buffer);
-}
-
-QueryPlanStepPtr OffsetStep::deserialize(ReadBuffer & buffer, ContextPtr )
-{
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
-    size_t offset;
-    readBinary(offset, buffer);
-
-    auto step = std::make_unique<OffsetStep>(input_stream, offset);
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto offset = proto.offset();
+    auto step = std::make_shared<OffsetStep>(base_input_stream, offset);
     step->setStepDescription(step_description);
     return step;
+}
+
+void OffsetStep::toProto(Protos::OffsetStep & proto, bool) const
+{
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    proto.set_offset(offset);
 }
 
 std::shared_ptr<IQueryPlanStep> OffsetStep::copy(ContextPtr) const

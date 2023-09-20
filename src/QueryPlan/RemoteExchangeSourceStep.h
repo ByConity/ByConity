@@ -29,6 +29,13 @@ using PlanSegmentInputPtr = std::shared_ptr<PlanSegmentInput>;
 using PlanSegmentInputs = std::vector<PlanSegmentInputPtr>;
 
 class PlanSegment;
+
+class RemoteExchangeSourceStepXXX
+{
+    DataStream input_stream;
+    String step_description;
+    PlanSegmentInputs inputs;
+};
 class RemoteExchangeSourceStep : public ISourceStep
 {
 public:
@@ -45,8 +52,8 @@ public:
     PlanSegment * getPlanSegment() const { return plan_segment; }
     size_t getPlanSegmentId() const { return plan_segment_id; }
 
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
+    void toProto(Protos::RemoteExchangeSourceStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<RemoteExchangeSourceStep> fromProto(const Protos::RemoteExchangeSourceStep & proto, ContextPtr context);
 
     void describePipeline(FormatSettings & settings) const override;
 

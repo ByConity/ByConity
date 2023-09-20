@@ -49,8 +49,8 @@ public:
     void describeActions(JSONBuilder::JSONMap & map) const override;
     void describeActions(FormatSettings & settings) const override;
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
-    void serialize(WriteBuffer & buffer) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
+    void toProto(Protos::WindowStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<WindowStep> fromProto(const Protos::WindowStep & proto, ContextPtr context);
     void setInputStreams(const DataStreams & input_streams_) override;
 
     const WindowDescription & getWindowDescription() const { return window_description; }

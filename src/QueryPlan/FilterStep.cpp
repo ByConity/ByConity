@@ -161,69 +161,25 @@ void FilterStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Expression", expression->toTree());
 }
 
-void FilterStep::serialize(WriteBuffer & buf) const
+std::shared_ptr<FilterStep> FilterStep::fromProto(const Protos::FilterStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buf);
-
-    if (!actions_dag)
-    {
-        writeBinary(false, buf);
-        if (filter)
-        {
-            serializeAST(filter, buf);
-        }
-        else
-        {
-            throw Exception("ActionsDAG cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
-        }
-    }
-    else
-    {
-        writeBinary(true, buf);
-        actions_dag->serialize(buf);
-    }
-
-    writeBinary(filter_column_name, buf);
-    writeBinary(remove_filter_column, buf);
-}
-
-QueryPlanStepPtr FilterStep::deserialize(ReadBuffer & buf, ContextPtr context)
-{
-    String step_description;
-    readBinary(step_description, buf);
-
-    DataStream input_stream = deserializeDataStream(buf);
-    bool has_actions;
-    readBinary(has_actions, buf);
-
-    ActionsDAGPtr actions_dag;
-    ASTPtr filter;
-    if (has_actions)
-    {
-        actions_dag = ActionsDAG::deserialize(buf, context);
-    }
-    else
-    {
-        filter = deserializeAST(buf);
-    }
-
-    String filter_column_name;
-    readBinary(filter_column_name, buf);
-
-    bool remove_filter_column;
-    readBinary(remove_filter_column, buf);
-    QueryPlanStepPtr step;
-    if (actions_dag)
-    {
-        step = std::make_unique<FilterStep>(input_stream, std::move(actions_dag), filter_column_name, remove_filter_column);
-    }
-    else
-    {
-        step = std::make_unique<FilterStep>(input_stream, filter, remove_filter_column);
-    }
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto filter = deserializeASTFromProto(proto.filter());
+    auto remove_filter_column = proto.remove_filter_column();
+    auto step = std::make_shared<FilterStep>(base_input_stream, filter, remove_filter_column);
     step->setStepDescription(step_description);
     return step;
+}
+
+void FilterStep::toProto(Protos::FilterStep & proto, bool) const
+{
+    if (actions_dag)
+    {
+        throw Exception("actions dag is not supported in protobuf", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    serializeASTToProto(filter, *proto.mutable_filter());
+    proto.set_remove_filter_column(remove_filter_column);
 }
 
 std::shared_ptr<IQueryPlanStep> FilterStep::copy(ContextPtr) const

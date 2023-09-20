@@ -33,8 +33,8 @@ public:
     Type getType() const override { return Type::Intersect; }
 
     QueryPipelinePtr updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & context) override;
-    void serialize(WriteBuffer & buffer) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buffer, ContextPtr context);
+    void toProto(Protos::IntersectStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<IntersectStep> fromProto(const Protos::IntersectStep & proto, ContextPtr context);
 
     bool isDistinct() const;
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;

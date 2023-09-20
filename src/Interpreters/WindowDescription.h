@@ -21,13 +21,14 @@
 
 #pragma once
 
-#include <Core/Field.h>
-#include <Parsers/IAST_fwd.h>
 #include <AggregateFunctions/IAggregateFunction.h>
-#include <Core/SortDescription.h>
-#include <DataTypes/IDataType.h>
+#include <Core/Field.h>
 #include <Core/Names.h>
+#include <Core/SortDescription.h>
 #include <Core/Types.h>
+#include <DataTypes/IDataType.h>
+#include <Parsers/IAST_fwd.h>
+#include <Protos/plan_node_utils.pb.h>
 
 namespace DB
 {
@@ -45,15 +46,34 @@ struct WindowFunctionDescription
 
     std::string dump() const;
 
-    void serialize(WriteBuffer & buffer) const;
-    void deserialize(ReadBuffer & buffer);
+    void toProto(Protos::WindowFunctionDescription & proto) const;
+    void fillFromProto(const Protos::WindowFunctionDescription & proto);
 };
+
 
 struct WindowFrame
 {
-    enum class FrameType { Rows, Groups, Range };
-    enum class BoundaryType { Unbounded, Current, Offset };
-    enum class ExcludeType { NoOthers, CurrentRow, Group, Tie};
+    ENUM_WITH_PROTO_CONVERTER(
+        FrameType, // enum name
+        Protos::WindowFrame::FrameType, // proto enum message
+        (Rows),
+        (Groups),
+        (Range));
+
+    ENUM_WITH_PROTO_CONVERTER(
+        BoundaryType, // enum name
+        Protos::WindowFrame::BoundaryType, // proto enum message
+        (Unbounded),
+        (Current),
+        (Offset));
+
+    ENUM_WITH_PROTO_CONVERTER(
+        ExcludeType, // enum name
+        Protos::WindowFrame::ExcludeType, // proto enum message
+        (NoOthers),
+        (CurrentRow),
+        (Group),
+        (Tie));
 
     // This flag signifies that the frame properties were not set explicitly by
     // user, but the fields of this structure still have to contain proper values
@@ -133,8 +153,8 @@ struct WindowFrame
         return "<unknown frame boundary>";
     }
 
-    void serialize(WriteBuffer & buffer) const;
-    void deserialize(ReadBuffer & buffer);
+    void toProto(Protos::WindowFrame & proto) const;
+    void fillFromProto(const Protos::WindowFrame & proto);
 };
 
 struct WindowDescription
@@ -161,8 +181,8 @@ struct WindowDescription
     std::string dump() const;
 
     void checkValid() const;
-    void serialize(WriteBuffer & buffer) const;
-    void deserialize(ReadBuffer & buffer);
+    void toProto(Protos::WindowDescription & proto) const;
+    void fillFromProto(const Protos::WindowDescription & proto);
 };
 
 using WindowFunctionDescriptions = std::vector<WindowFunctionDescription>;

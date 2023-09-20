@@ -131,51 +131,6 @@ void TotalsHavingStep::describeActions(JSONBuilder::JSONMap & map) const
     }
 }
 
-void TotalsHavingStep::serialize(WriteBuffer & buf) const
-{
-    IQueryPlanStep::serializeImpl(buf);
-    writeBinary(overflow_row, buf);
-
-    if (!actions_dag)
-        throw Exception("ActionsDAG cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
-    actions_dag->serialize(buf);
-
-    writeBinary(filter_column_name, buf);
-    serializeEnum(totals_mode, buf);
-    writeBinary(auto_include_threshold, buf);
-    writeBinary(final, buf);
-}
-
-QueryPlanStepPtr TotalsHavingStep::deserialize(ReadBuffer & buf, ContextPtr context)
-{
-    String step_description;
-    readBinary(step_description, buf);
-
-    DataStream input_stream = deserializeDataStream(buf);
-
-    bool overflow_row;
-    readBinary(overflow_row, buf);
-
-    ActionsDAGPtr actions_dag = ActionsDAG::deserialize(buf, context);
-
-    String filter_column_name;
-    readBinary(filter_column_name, buf);
-
-    TotalsMode totals_mode;
-    deserializeEnum(totals_mode, buf);
-
-    double auto_include_threshold;
-    readBinary(auto_include_threshold, buf);
-
-    bool final;
-    readBinary(final, buf);
-
-    auto step = std::make_unique<TotalsHavingStep>(input_stream, overflow_row, std::move(actions_dag), filter_column_name, totals_mode, auto_include_threshold, final);
-
-    step->setStepDescription(step_description);
-    return step;
-}
-
 std::shared_ptr<IQueryPlanStep> TotalsHavingStep::copy(ContextPtr) const
 {
     return std::make_shared<TotalsHavingStep>(

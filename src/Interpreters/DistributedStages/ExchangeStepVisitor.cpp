@@ -171,8 +171,8 @@ void ExchangeStepVisitor::addGather(QueryPlan & query_plan, ExchangeStepContext 
     if (!exchange_context.has_gathered)
     {
         DataStreams data_streams = {query_plan.getCurrentDataStream()};
-        auto max_threads = exchange_context.context->getSettingsRef().max_threads;
-        auto union_step = std::make_unique<UnionStep>(std::move(data_streams), max_threads);
+        UInt64 max_threads = exchange_context.context->getSettingsRef().max_threads;
+        auto union_step = std::make_unique<UnionStep>(std::move(data_streams), DataStream{}, OutputToInputs{}, max_threads, false);
         query_plan.addStep(std::move(union_step));
 
         addExchange(query_plan.getRoot(), ExchangeMode::GATHER, Partitioning(Names{}), exchange_context);

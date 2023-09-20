@@ -86,6 +86,8 @@ if (COMPILER_CLANG)
         no_warning(vla)
         no_warning(weak-template-vtables)
         no_warning(weak-vtables)
+        no_warning(covered-switch-default)
+        no_warning(missing-noreturn)
 
         # XXX: libstdc++ has some of these for 3way compare
         if (NOT USE_LIBCXX)

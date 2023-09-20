@@ -35,6 +35,7 @@ class CTERefStep : public ISourceStep
 {
 public:
     CTERefStep(DataStream output_, CTEId id_, std::unordered_map<String, String> output_columns_, bool has_filter_);
+    CTERefStep(Block header, CTEId id_, std::unordered_map<String, String> output_columns_, bool has_filter_);
 
     CTEId getId() const { return id; }
     const std::unordered_map<String, String> & getOutputColumns() const { return output_columns; }
@@ -49,8 +50,8 @@ public:
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr context) const override;
     bool hasFilter() const { return has_filter; }
     void setFilter(bool has_filter_) { has_filter = has_filter_;}
-    void serialize(WriteBuffer &) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buffer, ContextPtr context);
+    void toProto(Protos::CTERefStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<CTERefStep> fromProto(const Protos::CTERefStep & proto, ContextPtr context);
 
     std::shared_ptr<ProjectionStep> toProjectionStep() const;
     std::shared_ptr<ProjectionStep> toProjectionStepWithNewSymbols(SymbolMapper & mapper) const;

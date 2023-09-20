@@ -29,13 +29,12 @@ public:
     Type getType() const override { return Type::Any; }
 
     QueryPipelinePtr updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & context) override;
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr context);
 
     GroupId getGroupId() const { return group_id; }
 
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr context) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+
 
 private:
     GroupId group_id;

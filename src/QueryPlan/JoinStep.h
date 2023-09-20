@@ -24,12 +24,12 @@
 namespace DB
 {
 
-enum class DistributionType : UInt8
-{
-    UNKNOWN = 0,
-    REPARTITION,
-    BROADCAST
-};
+ENUM_WITH_PROTO_CONVERTER(
+    DistributionType, // enum name
+    Protos::DistributionType, // proto enum message
+    (UNKNOWN, 0),
+    (REPARTITION),
+    (BROADCAST));
 
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
@@ -149,13 +149,12 @@ public:
 
     bool enforceGraceHashJoin() const;
 
-    void serialize(WriteBuffer & buf) const override;
-    void serialize(WriteBuffer & buffer, bool with_output) const;
+    void toProto(Protos::JoinStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<JoinStep> fromProto(const Protos::JoinStep & proto, ContextPtr context);
 
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
-    String serializeToString() const override;
+    // TODO(gouguilin): protobuf serde
 
     const LinkedHashMap<String, RuntimeFilterBuildInfos> & getRuntimeFilterBuilders() const { return runtime_filter_builders; }
     RuntimeFilterBuilderPtr createRuntimeFilterBuilder(ContextPtr context) const;
@@ -176,7 +175,7 @@ private:
     /**
      * Non-equals predicate
      *
-     * For example：
+     * For example:
      *
      * LEFT JOIN orders ON (c_custkey = o_custkey) AND (o_comment NOT LIKE '%special%requests%')
      */
@@ -224,10 +223,19 @@ public:
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+    void toProto(Protos::FilledJoinStep & proto, bool for_hash_equals = false) const
+    {
+        (void)proto;
+        (void)for_hash_equals;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+    static std::shared_ptr<FilledJoinStep> fromProto(const Protos::FilledJoinStep & proto, ContextPtr)
+    {
+        (void)proto;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
 
 private:
     JoinPtr join;

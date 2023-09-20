@@ -32,7 +32,7 @@
 
 namespace DB
 {
-using namespace Statistics;
+using Statistics::StatisticsTag;
 StatisticsTag StatisticsTagFromString(const String & tag_string);
 String StatisticsTagToString(StatisticsTag tag);
 PVar tableJson(ContextPtr context, const String & db_name, const String & table_name);

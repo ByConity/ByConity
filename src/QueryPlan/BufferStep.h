@@ -1,6 +1,7 @@
 #pragma once
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/BufferTransform.h>
+#include <Protos/plan_node.pb.h>
 #include <QueryPlan/ITransformingStep.h>
 
 namespace DB
@@ -9,19 +10,11 @@ namespace DB
 class BufferStep : public ITransformingStep
 {
 public:
-    explicit BufferStep(const DataStream & input_stream_) : ITransformingStep(input_stream_, input_stream_.header, Traits{})
-    {
-    }
+    explicit BufferStep(const DataStream & input_stream_) : ITransformingStep(input_stream_, input_stream_.header, Traits{}) { }
 
-    String getName() const override
-    {
-        return "Buffer";
-    }
+    String getName() const override { return "Buffer"; }
 
-    Type getType() const override
-    {
-        return Type::Buffer;
-    }
+    Type getType() const override { return Type::Buffer; }
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override
     {
@@ -31,28 +24,21 @@ public:
         });
     }
 
-    void serialize(WriteBuffer & buffer) const override
+    std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override { return std::make_shared<BufferStep>(input_streams[0]); }
+
+    void toProto(Protos::BufferStep & proto, bool for_hash_equals = false) const
     {
-        IQueryPlanStep::serializeImpl(buffer);
+        (void)for_hash_equals;
+        ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
     }
 
-    static QueryPlanStepPtr deserialize(ReadBuffer & buffer, ContextPtr)
+
+    static std::shared_ptr<BufferStep> fromProto(const Protos::BufferStep & proto, ContextPtr)
     {
-        String step_description;
-        readBinary(step_description, buffer);
-
-        DataStream input_stream;
-        input_stream = deserializeDataStream(buffer);
-
-        auto step = std::make_unique<BufferStep>(input_stream);
-
+        auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+        auto step = std::make_shared<BufferStep>(base_input_stream);
         step->setStepDescription(step_description);
         return step;
-    }
-
-    std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override
-    {
-        return std::make_shared<BufferStep>(input_streams[0]);
     }
 
     void setInputStreams(const DataStreams & input_streams_) override

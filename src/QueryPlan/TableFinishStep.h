@@ -22,8 +22,6 @@ public:
 
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings) override;
-    void serialize(WriteBuffer & buffer) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buffer, ContextPtr & context);
     void setInputStreams(const DataStreams & input_streams_) override
     {
         input_streams = input_streams_;
@@ -34,6 +32,9 @@ public:
     {
         return target;
     }
+
+    void toProto(Protos::TableFinishStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<TableFinishStep> fromProto(const Protos::TableFinishStep & proto, ContextPtr context);
 
 private:
     TableWriteStep::TargetPtr target;

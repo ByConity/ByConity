@@ -50,10 +50,10 @@ SortingStep::SortingStep(
     bool partial_,
     SortDescription prefix_description_)
     : ITransformingStep(input_stream_, input_stream_.header, getTraits(limit_, !partial_))
-    , prefix_description(prefix_description_)
     , result_description(result_description_)
     , limit(limit_)
     , partial(partial_)
+    , prefix_description(prefix_description_)
 {
     /// TODO: check input_stream is partially sorted by the same description.
     output_stream->sort_description = result_description;
@@ -189,45 +189,39 @@ void SortingStep::describeActions(JSONBuilder::JSONMap & map) const
         map.add("Limit", limit);
 }
 
-void SortingStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<SortingStep> SortingStep::fromProto(const Protos::SortingStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    serializeItemVector<SortColumnDescription>(result_description, buffer);
-    writeBinary(limit, buffer);
-    writeBinary(partial, buffer);
-    serializeItemVector<SortColumnDescription>(prefix_description, buffer);
-
-}
-
-QueryPlanStepPtr SortingStep::deserialize(ReadBuffer & buffer, ContextPtr)
-{
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
-    SortDescription sort_description;
-    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
-
-    UInt64 limit;
-    readBinary(limit, buffer);
-
-    bool partial;
-    readVarUInt(partial, buffer);
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    SortDescription result_description;
+    for (const auto & proto_element : proto.result_description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        result_description.emplace_back(std::move(element));
+    }
+    auto limit = proto.limit();
+    auto partial = proto.partial();
     SortDescription prefix_description;
-    prefix_description = deserializeItemVector<SortColumnDescription>(buffer);
-
-    auto step = std::make_unique<SortingStep>(
-        input_stream,
-        sort_description,
-        limit,
-        partial,
-        prefix_description);
-
+    for (const auto & proto_element : proto.prefix_description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        prefix_description.emplace_back(std::move(element));
+    }
+    auto step = std::make_shared<SortingStep>(base_input_stream, result_description, limit, partial, prefix_description);
     step->setStepDescription(step_description);
     return step;
+}
+
+void SortingStep::toProto(Protos::SortingStep & proto, bool) const
+{
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    for (const auto & element : result_description)
+        element.toProto(*proto.add_result_description());
+    proto.set_limit(limit);
+    proto.set_partial(partial);
+    for (const auto & element : prefix_description)
+        element.toProto(*proto.add_prefix_description());
 }
 
 std::shared_ptr<IQueryPlanStep> SortingStep::copy(ContextPtr) const

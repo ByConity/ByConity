@@ -78,27 +78,26 @@ void FillingStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Sort Description", explainSortDescription(sort_description, input_streams.front().header));
 }
 
-void FillingStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<FillingStep> FillingStep::fromProto(const Protos::FillingStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    serializeItemVector<SortColumnDescription>(sort_description, buffer);
-}
-
-QueryPlanStepPtr FillingStep::deserialize(ReadBuffer & buffer, ContextPtr )
-{
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
     SortDescription sort_description;
-    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
-
-    auto step = std::make_unique<FillingStep>(input_stream, sort_description);
-
+    for (const auto & proto_element : proto.sort_description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        sort_description.emplace_back(std::move(element));
+    }
+    auto step = std::make_shared<FillingStep>(base_input_stream, sort_description);
     step->setStepDescription(step_description);
     return step;
+}
+
+void FillingStep::toProto(Protos::FillingStep & proto, bool) const
+{
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    for (const auto & element : sort_description)
+        element.toProto(*proto.add_sort_description());
 }
 
 std::shared_ptr<IQueryPlanStep> FillingStep::copy(ContextPtr) const

@@ -261,9 +261,6 @@ public:
 
     String renamedRightColumnName(const String & name) const;
 
-    void serialize(WriteBuffer & buf) const;
-    void deserializeImpl(ReadBuffer & buf, ContextPtr context);
-    static std::shared_ptr<TableJoin> deserialize(ReadBuffer & buf, ContextPtr context);
     void fixRFParallel(size_t parallel) {runtimeFilterConsumer->fixParallel(parallel);}
 
     std::shared_ptr<RuntimeFilterConsumer> getRuntimeFilterConsumer() const { return runtimeFilterConsumer; }

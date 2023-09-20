@@ -22,6 +22,11 @@
 namespace DB
 {
 
+namespace Protos
+{
+    class DataType;
+}
+
 class ReadBuffer;
 class WriteBuffer;
 
@@ -35,5 +40,6 @@ DataTypePtr deserializeDataType(ReadBuffer & buf);
 
 void serializeDataTypes(const DataTypes & data_types, WriteBuffer & buf);
 DataTypes deserializeDataTypes(ReadBuffer & buf);
-
+void serializeDataTypeToProto(const DataTypePtr & data_type, Protos::DataType & proto);
+DataTypePtr deserializeDataTypeFromProto(const Protos::DataType & proto);
 }

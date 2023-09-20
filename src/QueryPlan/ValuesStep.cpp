@@ -45,36 +45,28 @@ void ValuesStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPi
         processors.emplace_back(processor);
 }
 
-void ValuesStep::serialize(WriteBuffer & buffer) const
+void ValuesStep::toProto(Protos::ValuesStep & proto, bool) const
 {
-    serializeDataStream(output_stream.value(), buffer);
-    writeVarUInt(fields.size(), buffer);
-    for (auto & item : fields)
-    {
-        writeFieldBinary(item, buffer);
-    }
-    writeVarUInt(rows, buffer);
-    writeVarInt(unique_id, buffer);
+    ISourceStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    for (const auto & element : fields)
+        element.toProto(*proto.add_fields());
+    proto.set_rows(rows);
 }
 
-QueryPlanStepPtr ValuesStep::deserialize(ReadBuffer & buffer, ContextPtr)
+std::shared_ptr<ValuesStep> ValuesStep::fromProto(const Protos::ValuesStep & proto, ContextPtr)
 {
-    DataStream input_stream = deserializeDataStream(buffer);
-    size_t size;
-    readVarUInt(size, buffer);
+    auto base_output_header = ISourceStep::deserializeFromProtoBase(proto.query_plan_base());
     Fields fields;
-    for (size_t i = 0; i < size; ++i)
+    for (const auto & proto_element : proto.fields())
     {
-        Field field;
-        readFieldBinary(field, buffer);
-        fields.emplace_back(field);
+        Field element;
+        element.fillFromProto(proto_element);
+        fields.emplace_back(std::move(element));
     }
+    auto rows = proto.rows();
+    auto step = std::make_shared<ValuesStep>(base_output_header, fields, rows);
 
-    size_t rows;
-    readVarUInt(rows, buffer);
-    Int32 unique_id;
-    readVarInt(unique_id, buffer);
-    return std::make_shared<ValuesStep>(input_stream.header, fields, rows);
+    return step;
 }
 
 std::shared_ptr<IQueryPlanStep> ValuesStep::copy(ContextPtr) const

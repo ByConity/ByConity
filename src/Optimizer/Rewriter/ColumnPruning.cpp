@@ -551,7 +551,8 @@ PlanNodePtr ColumnPruningVisitor::visitUnionNode(UnionNode & node, NameSet & req
         children.emplace_back(new_child);
     }
 
-    auto union_step = std::make_shared<UnionStep>(std::move(children_streams), std::move(output_stream), std::move(output_to_inputs),  step->getMaxThreads(), step->isLocal());
+    auto union_step
+        = std::make_shared<UnionStep>(children_streams, output_stream, output_to_inputs, step->getMaxThreads(), step->isLocal());
     auto union_node = UnionNode::createPlanNode(context->nextNodeId(), std::move(union_step), children, node.getStatistics());
     return union_node;
 }

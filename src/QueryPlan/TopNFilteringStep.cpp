@@ -36,35 +36,30 @@ void TopNFilteringStep::describeActions(JSONBuilder::JSONMap &) const
 {
 }
 
-void TopNFilteringStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<TopNFilteringStep> TopNFilteringStep::fromProto(const Protos::TopNFilteringStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    serializeSortDescription(sort_description, buffer);
-    writeBinary(size, buffer);
-    serializeEnum(model, buffer);
-}
-
-QueryPlanStepPtr TopNFilteringStep::deserialize(ReadBuffer & buffer, ContextPtr)
-{
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
     SortDescription sort_description;
-    deserializeSortDescription(sort_description, buffer);
-
-    UInt64 size;
-    readBinary(size, buffer);
-
-    TopNModel model;
-    deserializeEnum(model, buffer);
-
-    auto step = std::make_shared<TopNFilteringStep>(input_stream, std::move(sort_description), size, model);
-
+    for (const auto & proto_element : proto.sort_description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        sort_description.emplace_back(std::move(element));
+    }
+    auto size = proto.size();
+    auto model = TopNModelConverter::fromProto(proto.model());
+    auto step = std::make_shared<TopNFilteringStep>(base_input_stream, sort_description, size, model);
     step->setStepDescription(step_description);
     return step;
+}
+
+void TopNFilteringStep::toProto(Protos::TopNFilteringStep & proto, bool) const
+{
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    for (const auto & element : sort_description)
+        element.toProto(*proto.add_sort_description());
+    proto.set_size(size);
+    proto.set_model(TopNModelConverter::toProto(model));
 }
 
 std::shared_ptr<IQueryPlanStep> TopNFilteringStep::copy(ContextPtr) const

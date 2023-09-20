@@ -51,8 +51,6 @@ public:
 
     BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size) const override;
 
-    void serialize(WriteBuffer & buf) const override;
-    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
     void tryBuildRuntimeFilters(size_t total_rows) const override;
 
 private:

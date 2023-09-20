@@ -58,58 +58,23 @@ void ProjectionStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
     projection(pipeline, output_stream->header, settings);
 }
 
-void ProjectionStep::serialize(WriteBuffer & buf) const
+void ProjectionStep::toProto(Protos::ProjectionStep & proto, bool) const
 {
-    IQueryPlanStep::serializeImpl(buf);
-
-    writeVarUInt(assignments.size(), buf);
-    for (const auto & item : assignments)
-    {
-        writeStringBinary(item.first, buf);
-        serializeAST(item.second, buf);
-    }
-
-    writeVarUInt(name_to_type.size(), buf);
-    for (const auto & item : name_to_type)
-    {
-        writeStringBinary(item.first, buf);
-        serializeDataType(item.second, buf);
-    }
-
-    writeBinary(final_project, buf);
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    serializeAssignmentsToProto(assignments, *proto.mutable_assignments());
+    serializeOrderedMapToProto(name_to_type, *proto.mutable_name_to_type());
+    proto.set_final_project(final_project);
 }
 
-QueryPlanStepPtr ProjectionStep::deserialize(ReadBuffer & buf, ContextPtr)
+std::shared_ptr<ProjectionStep> ProjectionStep::fromProto(const Protos::ProjectionStep & proto, ContextPtr)
 {
-    String step_description;
-    readBinary(step_description, buf);
-
-    DataStream input_stream = deserializeDataStream(buf);
-    size_t size;
-    readVarUInt(size, buf);
-    Assignments assignments;
-    for (size_t index = 0; index < size; ++index)
-    {
-        String name;
-        readStringBinary(name, buf);
-        auto ast = deserializeAST(buf);
-        assignments.emplace_back(name, ast);
-    }
-
-    readVarUInt(size, buf);
-    NameToType name_to_type;
-    for (size_t index = 0; index < size; ++index)
-    {
-        String name;
-        readStringBinary(name, buf);
-        auto data_type = deserializeDataType(buf);
-        name_to_type[name] = data_type;
-    }
-
-    bool final_project;
-    readBinary(final_project, buf);
-
-    return std::make_shared<ProjectionStep>(input_stream, assignments, name_to_type, final_project);
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto assignments = deserializeAssignmentsFromProto(proto.assignments());
+    auto name_to_type = deserializeOrderedMapFromProto<String, DataTypePtr>(proto.name_to_type());
+    auto final_project = proto.final_project();
+    auto step = std::make_shared<ProjectionStep>(base_input_stream, assignments, name_to_type, final_project);
+    step->setStepDescription(step_description);
+    return step;
 }
 
 std::shared_ptr<IQueryPlanStep> ProjectionStep::copy(ContextPtr) const

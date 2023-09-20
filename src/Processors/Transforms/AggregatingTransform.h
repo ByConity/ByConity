@@ -29,6 +29,11 @@
 namespace DB
 {
 
+namespace Protos
+{
+    class AggregatingTransformParams;
+}
+
 class AggregatedArenasChunkInfo : public ChunkInfo
 {
 public:
@@ -101,6 +106,9 @@ struct AggregatingTransformParams
     Block getHeader() const { return aggregator.getHeader(final); }
 
     Block getCustomHeader(bool final_) const { return aggregator.getHeader(final_); }
+
+    void toProto(Protos::AggregatingTransformParams & proto) const;
+    static std::shared_ptr<AggregatingTransformParams> fromProto(const Protos::AggregatingTransformParams & proto, ContextPtr context);
 };
 
 struct ManyAggregatedData

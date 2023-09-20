@@ -32,10 +32,10 @@
 #include <QueryPlan/PlanSerDerHelper.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/TableScanStep.h>
-#include <common/logger_useful.h>
 #include <Common/JSONBuilder.h>
 #include <Common/Stopwatch.h>
 #include <common/logger_useful.h>
+#include "PlanSerDerHelper.h"
 
 namespace DB
 {

@@ -33,6 +33,13 @@ class Collator;
 namespace DB
 {
 
+namespace Protos
+{
+    class FillColumnDescription;
+    class SortColumnDescription;
+    class SortDescription;
+}
+
 namespace JSONBuilder
 {
     class JSONMap;
@@ -52,8 +59,8 @@ struct FillColumnDescription
     Field fill_to;          /// Fill value + STEP < FILL_TO
     Field fill_step;        /// Default = 1 or -1 according to direction
 
-    void serialize(WriteBuffer & buffer) const;
-    void deserialize(ReadBuffer & buffer);
+    void toProto(Protos::FillColumnDescription & proto) const;
+    void fillFromProto(const Protos::FillColumnDescription & proto);
 };
 
 /// Description of the sorting rule by one column.
@@ -105,8 +112,8 @@ struct SortColumnDescription
     /// It seems that the current construction of SortColumnDescription only uses the first four fields,
     /// so this time will temporarily ignore the serialize/deserialize of field collator/with_fill/fill_description
 
-    void serialize(WriteBuffer & buffer) const;
-    void deserialize(ReadBuffer & buffer);
+    void toProto(Protos::SortColumnDescription & proto) const;
+    void fillFromProto(const Protos::SortColumnDescription & proto);
 };
 
 /// Description of the sorting rule for several columns.
@@ -118,8 +125,5 @@ void dumpSortDescription(const SortDescription & description, const Block & head
 std::string dumpSortDescription(const SortDescription & description);
 
 JSONBuilder::ItemPtr explainSortDescription(const SortDescription & description, const Block & header);
-
-void serializeSortDescription(const SortDescription & sort_descriptions, WriteBuffer & buffer);
-void deserializeSortDescription(SortDescription & sort_descriptions, ReadBuffer & buffer);
 
 }

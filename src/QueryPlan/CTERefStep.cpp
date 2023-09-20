@@ -36,51 +36,34 @@ CTERefStep::CTERefStep(DataStream output_, CTEId id_, std::unordered_map<String,
 {
 }
 
+CTERefStep::CTERefStep(Block header_, CTEId id_, std::unordered_map<String, String> output_columns_, bool has_filter_)
+    : ISourceStep(DataStream{.header = header_}), id(id_), output_columns(std::move(output_columns_)), has_filter(has_filter_)
+{
+}
+
 std::shared_ptr<IQueryPlanStep> CTERefStep::copy(ContextPtr) const
 {
     return std::make_shared<CTERefStep>(output_stream.value(), id, output_columns, has_filter);
 }
 
-void CTERefStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<CTERefStep> CTERefStep::fromProto(const Protos::CTERefStep & proto, ContextPtr)
 {
-    serializeDataStream(output_stream.value(), buffer);
-    writeBinary(id, buffer);
+    auto base_output_header = ISourceStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto id = proto.id();
+    auto output_columns = deserializeMapFromProto<String, String>(proto.output_columns());
+    auto has_filter = proto.has_filter();
+    auto step = std::make_shared<CTERefStep>(base_output_header, id, output_columns, has_filter);
 
-    writeVarUInt(output_columns.size(), buffer);
-    for (const auto & item : output_columns)
-    {
-        writeStringBinary(item.first, buffer);
-        writeStringBinary(item.second, buffer);
-    }
-
-    writeBinary(has_filter, buffer);
+    return step;
 }
 
-QueryPlanStepPtr CTERefStep::deserialize(ReadBuffer & buffer, ContextPtr)
+void CTERefStep::toProto(Protos::CTERefStep & proto, bool) const
 {
-    DataStream output_tmp = deserializeDataStream(buffer);
-    
-    CTEId id_tmp;
-    readBinary(id_tmp, buffer);
-
-    UInt64 output_columns_num;
-    readVarUInt(output_columns_num, buffer);
-    
-    std::unordered_map<String, String> output_columns_tmp;
-    for (size_t i = 0 ; i < output_columns_num ; ++i)
-    {
-        String elem1, elem2;
-        readStringBinary(elem1, buffer);
-        readStringBinary(elem2, buffer);
-        output_columns_tmp[elem1] = elem2;
-    }
-
-    bool has_filter;
-    readBinary(has_filter, buffer);
-
-    return std::make_shared<CTERefStep>(output_tmp, id_tmp, output_columns_tmp, has_filter);
+    ISourceStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    proto.set_id(id);
+    serializeMapToProto(output_columns, *proto.mutable_output_columns());
+    proto.set_has_filter(has_filter);
 }
-
 
 std::shared_ptr<ProjectionStep> CTERefStep::toProjectionStep() const
 {

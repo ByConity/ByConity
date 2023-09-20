@@ -1,0 +1,159 @@
+syntax = "proto2";
+package DB.Protos;
+
+message DistributionType {
+  enum Enum {
+    UNKNOWN = 0;
+    REPARTITION = 1;
+    BROADCAST = 2;
+  }
+}
+
+message TopNModel {
+  enum Enum {
+    ROW_NUMBER = 0;
+    RANKER = 1;
+    DENSE_RANK = 2;
+  }
+}
+
+message SortOrder {
+  enum Enum {
+    ASC_NULLS_FIRST = 0;
+    ASC_NULLS_LAST = 1;
+    DESC_NULLS_FIRST = 2;
+    DESC_NULLS_LAST = 3;
+    ANY = 4;
+    UNKNOWN = 5;
+  }
+}
+
+message OverflowMode {
+  enum Enum {
+    THROW = 0;
+    BREAK = 1;
+    ANY = 2;
+  }
+}
+
+message DynamicFilterType {
+  enum Enum {
+    Range = 0;
+    BloomFilter = 1;
+  }
+}
+
+message ExchangeMode {
+  enum Enum {
+    UNKNOWN = 0;
+    LOCAL_NO_NEED_REPARTITION = 1;
+    LOCAL_MAY_NEED_REPARTITION = 2;
+    REPARTITION = 3;
+    BROADCAST = 4;
+    GATHER = 5;
+  }
+}
+
+message JoinAlgorithm {
+  enum Enum {
+    AUTO = 0;
+    HASH = 1;
+    PARTIAL_MERGE = 2;
+    PREFER_PARTIAL_MERGE = 3;
+    NESTED_LOOP_JOIN = 4;
+    PARALLEL_HASH = 5;
+    GRACE_HASH = 6;
+  }
+}
+
+// TODO: when need to serialize AST, move to ast.proto
+message ASTTableJoin {
+  message Strictness {
+    enum Enum {
+      Unspecified = 0;
+      RightAny = 1;
+      Any = 2;
+      All = 3;
+      Asof = 4;
+      Semi = 5;
+      Anti = 6;
+    }
+  }
+
+  message Kind {
+    enum Enum {
+      Inner = 0;
+      Left = 1;
+      Right = 2;
+      Full = 3;
+      Cross = 4;
+      Comma = 5;
+    }
+  }
+}
+
+message ASOF {
+  message Inequality {
+    enum Enum {
+      None = 0;
+      Less = 1;
+      Greater = 2;
+      LessOrEquals = 3;
+      GreaterOrEquals = 4;
+    }
+  }
+}
+
+message PlanSegmentType {
+  enum Enum {
+    UNKNOWN = 0;
+    SOURCE = 1;
+    EXCHANGE = 2;
+    OUTPUT = 3;
+  }
+}
+
+message FieldType {
+  enum Enum {
+    Null = 0;
+    UInt64 = 1;
+    Int64 = 2;
+    Float64 = 3;
+    UInt128 = 4;
+    Int128 = 5;
+    String = 16;
+    Array = 17;
+    Tuple = 18;
+    Decimal32 = 19;
+    Decimal64 = 20;
+    Decimal128 = 21;
+    AggregateFunctionState = 22;
+    Decimal256 = 23;
+    UInt256 = 24;
+    Int256 = 25;
+    Map = 26;
+    UUID = 27;
+    ByteMap = 28;
+    BitMap64 = 29;
+    SketchBinary = 30;
+    NegativeInfinity = 254;
+    PositiveInfinity = 255;
+  }
+}
+
+message IntersectExceptOperator {
+  enum Enum {
+    UNKNOWN = 0;
+    EXCEPT_ALL = 1;
+    EXCEPT_DISTINCT = 2;
+    INTERSECT_ALL = 3;
+    INTERSECT_DISTINCT = 4;
+  }
+}
+
+message RuntimeFilterDistribution {
+  enum Enum {
+    Local = 0;
+    Distributed = 1;
+  }
+}

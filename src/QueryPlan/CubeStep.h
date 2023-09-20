@@ -14,9 +14,9 @@
  */
 
 #pragma once
-#include <QueryPlan/ITransformingStep.h>
 #include <DataStreams/SizeLimits.h>
 #include <Interpreters/Aggregator.h>
+#include <QueryPlan/ITransformingStep.h>
 
 namespace DB
 {
@@ -39,10 +39,19 @@ public:
     const AggregatingTransformParamsPtr getAggParams() const { return params; }
     const Aggregator::Params & getParams() const;
 
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+    void toProto(Protos::CubeStep & proto, bool for_hash_equals = false) const
+    {
+        (void)proto;
+        (void)for_hash_equals;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+    static std::shared_ptr<CubeStep> fromProto(const Protos::CubeStep & proto, ContextPtr)
+    {
+        (void)proto;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
 
 private:
     size_t keys_size;

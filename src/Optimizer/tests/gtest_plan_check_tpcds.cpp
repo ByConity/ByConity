@@ -563,4 +563,5 @@ TEST_F(PlanCheckTpcds, summary)
     std::cout << "rule call times:" << std::endl;
     for (const auto & x: IterativeRewriter::getRuleCallTimes())
         std::cout << x.first << ": " << x.second << std::endl;
+    std::cout << tester->printMetric() << std::endl;
 }

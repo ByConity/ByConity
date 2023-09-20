@@ -53,8 +53,9 @@ public:
 
     ActionsDAGPtr createActions(ContextPtr context, const ASTPtr & rewrite_filter) const;
 
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
+    void toProto(Protos::FilterStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<FilterStep> fromProto(const Protos::FilterStep & proto, ContextPtr context);
+
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
 

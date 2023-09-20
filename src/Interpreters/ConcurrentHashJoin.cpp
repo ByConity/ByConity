@@ -220,24 +220,6 @@ Blocks ConcurrentHashJoin::dispatchBlock(const Strings & key_columns_names, cons
     return result;
 }
 
-void ConcurrentHashJoin::serialize(WriteBuffer & buf) const
-{
-    table_join->serialize(buf);
-    serializeBlock(right_sample_block, buf);
-    writeBinary(slots, buf);
-}
-
-JoinPtr ConcurrentHashJoin::deserialize(ReadBuffer & buf, ContextPtr context)
-{
-    auto table_join = TableJoin::deserialize(buf, context);
-    auto right_sample_block = deserializeBlock(buf);
-
-    size_t slots;
-    readBinary(slots, buf);
-
-    return std::make_shared<ConcurrentHashJoin>(table_join, slots, right_sample_block);
-}
-
 void ConcurrentHashJoin::tryBuildRuntimeFilters(size_t total_rows) const
 {
     total_rows = 0;

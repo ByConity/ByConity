@@ -14,9 +14,9 @@
  */
 
 #include <Columns/ColumnConst.h>
+#include <DataTypes/Serializations/ISerialization.h>
 #include <Optimizer/Utils.h>
 #include <QueryPlan/SetOperationStep.h>
-#include <DataTypes/Serializations/ISerialization.h>
 
 namespace DB
 {
@@ -62,8 +62,7 @@ ColumnPtr getCommonColumnForUnion(const std::vector<const ColumnWithTypeAndName 
     return column;
 }
 
-SetOperationStep::SetOperationStep(
-    DataStreams input_streams_, DataStream output_stream_, std::unordered_map<String, std::vector<String>> output_to_inputs_)
+SetOperationStep::SetOperationStep(DataStreams input_streams_, DataStream output_stream_, OutputToInputs output_to_inputs_)
     : output_to_inputs(std::move(output_to_inputs_))
 {
     input_streams = std::move(input_streams_);
@@ -82,7 +81,7 @@ SetOperationStep::SetOperationStep(
         ColumnWithTypeAndName & result_elem = output_stream->header.getByPosition(column_num);
         for (size_t i = 0; i < num_selects; ++i)
         {
-            if(output_to_inputs.contains(result_elem.name))
+            if (output_to_inputs.contains(result_elem.name))
             {
                 for (auto & input_name : output_to_inputs[result_elem.name])
                 {
@@ -136,9 +135,35 @@ void SetOperationStep::setInputStreams(const DataStreams & input_streams_)
     input_streams = input_streams_;
 }
 
-const std::unordered_map<String, std::vector<String>> & SetOperationStep::getOutToInputs() const
+const OutputToInputs & SetOperationStep::getOutToInputs() const
 {
     return output_to_inputs;
 }
 
+void SetOperationStep::serializeToProtoBase(Protos::SetOperationStep & proto) const
+{
+    for (const auto & element : input_streams)
+        element.toProto(*proto.add_input_streams());
+    if (!output_stream.has_value())
+        throw Exception("empty output stream", ErrorCodes::LOGICAL_ERROR);
+    output_stream.value().toProto(*proto.mutable_output_stream());
+    serializeMapToProto(output_to_inputs, *proto.mutable_output_to_inputs());
+}
+
+std::tuple<DataStreams, DataStream, std::unordered_map<String, std::vector<String>>>
+SetOperationStep::deserializeFromProtoBase(const Protos::SetOperationStep & proto)
+{
+    DataStreams input_streams;
+    for (const auto & proto_element : proto.input_streams())
+    {
+        DataStream element;
+        element.fillFromProto(proto_element);
+        input_streams.emplace_back(std::move(element));
+    }
+    DataStream output_stream;
+    output_stream.fillFromProto(proto.output_stream());
+    auto output_to_inputs = deserializeMapFromProto<String, std::vector<String>>(proto.output_to_inputs());
+
+    return std::make_tuple(input_streams, output_stream, output_to_inputs);
+}
 }

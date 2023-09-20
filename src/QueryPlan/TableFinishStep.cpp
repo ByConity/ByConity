@@ -37,22 +37,22 @@ void TableFinishStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
     pipeline.addTransform(std::make_shared<TableFinishTransform>(getInputStreams()[0].header, target->getStorage(), settings.context));
 }
 
-void TableFinishStep::serialize(WriteBuffer & buffer) const
+void TableFinishStep::toProto(Protos::TableFinishStep & proto, bool) const
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    target->serialize(buffer);
-    writeStringBinary(output_affected_row_count_symbol, buffer);
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    if (!target)
+        throw Exception("Target cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
+    target->toProto(*proto.mutable_target());
+    proto.set_output_affected_row_count_symbol(output_affected_row_count_symbol);
 }
 
-QueryPlanStepPtr TableFinishStep::deserialize(ReadBuffer & buffer, ContextPtr & context)
+std::shared_ptr<TableFinishStep> TableFinishStep::fromProto(const Protos::TableFinishStep & proto, ContextPtr context)
 {
-    String step_description;
-    readBinary(step_description, buffer);
-    DataStream input_stream = deserializeDataStream(buffer);
-    TableWriteStep::TargetPtr target = TableWriteStep::Target::deserialize(buffer, context);
-
-    String output_affected_row_count_symbol;
-    readStringBinary(output_affected_row_count_symbol, buffer);
-    return std::make_shared<TableFinishStep>(input_stream, target, output_affected_row_count_symbol);
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto target = TableWriteStep::Target::fromProto(proto.target(), context);
+    auto output_affected_row_count_symbol = proto.output_affected_row_count_symbol();
+    auto step = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol);
+    step->setStepDescription(step_description);
+    return step;
 }
 }

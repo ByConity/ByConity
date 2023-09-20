@@ -17,15 +17,17 @@
 
 #include <Functions/FunctionsHashing.h>
 #include <IO/Operators.h>
-#include <Parsers/ASTExpressionList.h>
 #include <Interpreters/ActionsDAG.h>
 #include <Interpreters/ActionsVisitor.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Processors/Exchange/ExchangeSource.h>
 #include <Processors/IProcessor.h>
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/ExpressionTransform.h>
-#include <Processors/Exchange/ExchangeSource.h>
+#include <Protos/plan_node_utils.pb.h>
 #include <QueryPlan/Hints/PlanHintFactory.h>
+#include "QueryPlan/PlanSerDerHelper.h"
 
 namespace DB
 {
@@ -33,6 +35,33 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+}
+
+void DataStream::toProto(Protos::DataStream & proto) const
+{
+    serializeBlockToProto(header, *proto.mutable_header());
+    for (const auto & element : distinct_columns)
+        proto.add_distinct_columns(element);
+    std::sort(proto.mutable_distinct_columns()->begin(), proto.mutable_distinct_columns()->end());
+    proto.set_has_single_port(has_single_port);
+    for (const auto & element : sort_description)
+        element.toProto(*proto.add_sort_description());
+    proto.set_sort_mode(DataStream::SortModeConverter::toProto(sort_mode));
+}
+
+void DataStream::fillFromProto(const Protos::DataStream & proto)
+{
+    header = deserializeBlockFromProto(proto.header());
+    for (const auto & element : proto.distinct_columns())
+        distinct_columns.emplace(element);
+    has_single_port = proto.has_single_port();
+    for (const auto & proto_element : proto.sort_description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        sort_description.emplace_back(std::move(element));
+    }
+    sort_mode = DataStream::SortModeConverter::fromProto(proto.sort_mode());
 }
 
 const DataStream & IQueryPlanStep::getOutputStream() const
@@ -140,12 +169,6 @@ void IQueryPlanStep::describePipeline(const Processors & processors, FormatSetti
         doDescribeProcessor(*prev, count, settings);
 }
 
-void IQueryPlanStep::serializeImpl(WriteBuffer & buf) const
-{
-    writeBinary(step_description, buf);
-
-    serializeDataStreamFromDataStreams(input_streams, buf);
-}
 
 ActionsDAGPtr IQueryPlanStep::createExpressionActions(
     ContextPtr context, const NamesAndTypesList & source, const NamesWithAliases & output, const ASTPtr & ast, bool add_project)
@@ -247,8 +270,7 @@ String IQueryPlanStep::toString(Type type)
 
 size_t IQueryPlanStep::hash() const
 {
-    auto str = serializeToString();
-    return MurmurHash3Impl64::apply(str.c_str(), str.size());
+    return hashPlanStep(*this);
 }
 
 }

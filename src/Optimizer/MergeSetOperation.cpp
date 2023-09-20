@@ -137,8 +137,8 @@ PlanNodePtr SetOperationMerge::mergeFirstSource()
 
     if (node->getStep()->getType() == IQueryPlanStep::Type::Union)
     {
-        auto union_step = std::make_unique<UnionStep>(std::move(input_stream), std::move(output), false);
-        PlanNodePtr union_node = std::make_shared<UnionNode>(context.nextNodeId(), std::move(union_step), std::move(new_sources));
+        auto union_step = std::make_unique<UnionStep>(input_stream, output);
+        PlanNodePtr union_node = std::make_shared<UnionNode>(context.nextNodeId(), std::move(union_step), new_sources);
         return union_node;
     }
     if (node->getStep()->getType() == IQueryPlanStep::Type::Intersect)

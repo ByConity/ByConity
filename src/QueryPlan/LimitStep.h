@@ -61,8 +61,9 @@ public:
     bool withTies() const { return with_ties; }
     bool isPartial() const { return partial; }
 
-    void serialize(WriteBuffer &) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+    void toProto(Protos::LimitStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<LimitStep> fromProto(const Protos::LimitStep & proto, ContextPtr);
+
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
 

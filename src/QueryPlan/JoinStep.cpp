@@ -14,6 +14,7 @@
  */
 
 #include <memory>
+#include <Core/SettingsEnums.h>
 #include <Interpreters/ConcurrentHashJoin.h>
 #include <Interpreters/GraceHashJoin.h>
 #include <Interpreters/HashJoin.h>
@@ -30,6 +31,7 @@
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <QueryPlan/JoinStep.h>
+#include "Common/ErrorCodes.h"
 
 namespace DB
 {
@@ -39,7 +41,7 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-JoinPtr JoinStep::makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterConsumer>&& consumer)
+JoinPtr JoinStep::makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterConsumer> && consumer)
 {
     const auto & settings = context->getSettingsRef();
     auto table_join = std::make_shared<TableJoin>(settings, context->getTemporaryVolume());
@@ -146,8 +148,20 @@ JoinPtr JoinStep::makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterCons
     return std::make_shared<JoinSwitcher>(table_join, sample_block);
 }
 
-JoinStep::JoinStep(const DataStream & left_stream_, const DataStream & right_stream_, JoinPtr join_, size_t max_block_size_, size_t max_streams_, bool keep_left_read_in_order_, bool is_ordered_, PlanHints hints_)
-    : join(std::move(join_)), max_block_size(max_block_size_), max_streams(max_streams_), keep_left_read_in_order(keep_left_read_in_order_), is_ordered(is_ordered_)
+JoinStep::JoinStep(
+    const DataStream & left_stream_,
+    const DataStream & right_stream_,
+    JoinPtr join_,
+    size_t max_block_size_,
+    size_t max_streams_,
+    bool keep_left_read_in_order_,
+    bool is_ordered_,
+    PlanHints hints_)
+    : join(std::move(join_))
+    , max_block_size(max_block_size_)
+    , max_streams(max_streams_)
+    , keep_left_read_in_order(keep_left_read_in_order_)
+    , is_ordered(is_ordered_)
 {
     input_streams = {left_stream_, right_stream_};
     output_stream = DataStream{
@@ -228,10 +242,16 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
         max_block_size = settings.context->getSettingsRef().max_block_size;
     }
 
-    auto pipeline = QueryPipeline::joinPipelines(std::move(pipelines[0]), std::move(pipelines[1]), join,
-                                                 max_block_size, max_streams, keep_left_read_in_order,
-                                                 settings.context->getSettingsRef().join_parallel_left_right,
-                                                 &processors, need_build_runtime_filter);
+    auto pipeline = QueryPipeline::joinPipelines(
+        std::move(pipelines[0]),
+        std::move(pipelines[1]),
+        join,
+        max_block_size,
+        max_streams,
+        keep_left_read_in_order,
+        settings.context->getSettingsRef().join_parallel_left_right,
+        &processors,
+        need_build_runtime_filter);
 
     // if NestLoopJoin is choose, no need to add filter stream.
     if (filter && !PredicateUtils::isTruePredicate(filter) && join->getType() != JoinType::NestedLoop)
@@ -297,211 +317,108 @@ void JoinStep::describePipeline(FormatSettings & settings) const
     IQueryPlanStep::describePipeline(processors, settings);
 }
 
-void JoinStep::serialize(WriteBuffer & buf) const
+void JoinStep::toProto(Protos::JoinStep & proto, bool for_hash_equals) const
 {
-    serialize(buf, true);
-}
-
-void JoinStep::serialize(WriteBuffer & buf, bool with_output) const
-{
-    writeBinary(step_description, buf);
-
-    if (input_streams.size() < 2)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "JoinStep expect two input streams");
-
-    serializeDataStream(input_streams[0], buf);
-    serializeDataStream(input_streams[1], buf);
-
-    if (join)
+    for (const auto & element : input_streams)
+        element.toProto(*proto.add_input_streams());
+    if (for_hash_equals)
     {
-        writeBinary(true, buf);
-        serializeEnum(join->getType(), buf);
-        join->serialize(buf);
-        writeBinary(max_block_size, buf);
-        writeBinary(max_streams, buf);
-        writeBinary(keep_left_read_in_order, buf);
+        // skip
     }
+    else if (output_stream.has_value())
+        output_stream->toProto(*proto.mutable_output_stream());
     else
+        throw Exception("required to have output stream", ErrorCodes::PROTOBUF_BAD_CAST);
+
+    proto.set_step_description(step_description);
+    proto.set_kind(ASTTableJoin::KindConverter::toProto(kind));
+    proto.set_strictness(ASTTableJoin::StrictnessConverter::toProto(strictness));
+    proto.set_max_streams(max_streams);
+    proto.set_keep_left_read_in_order(keep_left_read_in_order);
+    for (const auto & element : left_keys)
+        proto.add_left_keys(element);
+    for (const auto & element : right_keys)
+        proto.add_right_keys(element);
+    serializeASTToProto(filter, *proto.mutable_filter());
+    proto.set_has_using(has_using);
+    proto.set_flag_require_right_keys(require_right_keys.has_value());
+    if (require_right_keys.has_value())
+        for (bool element : require_right_keys.value())
+            proto.add_require_right_keys(element);
+    proto.set_asof_inequality(ASOF::InequalityConverter::toProto(asof_inequality));
+    proto.set_distribution_type(DistributionTypeConverter::toProto(distribution_type));
+    proto.set_join_algorithm(JoinAlgorithmConverter::toProto(join_algorithm));
+    proto.set_is_magic(is_magic);
+    proto.set_is_ordered(is_ordered);
+    for (const auto & [k, v] : runtime_filter_builders)
     {
-        writeBinary(false, buf);
-        if (with_output)
-            serializeDataStream(output_stream.value(), buf);
-        SERIALIZE_ENUM(kind, buf)
-        SERIALIZE_ENUM(strictness, buf)
-
-        writeBinary(max_streams, buf);
-        writeBinary(keep_left_read_in_order, buf);
-
-        writeVectorBinary(left_keys, buf);
-        writeVectorBinary(right_keys, buf);
-
-        serializeAST(filter, buf);
-        writeBinary(has_using, buf);
-
-        writeBinary(require_right_keys.has_value(), buf);
-        if (require_right_keys)
-        {
-            std::vector<UInt8> uint8_vec;
-            std::transform(require_right_keys->begin(), require_right_keys->end(), std::back_inserter(uint8_vec), [](bool x) {
-                return static_cast<UInt8>(x);
-            });
-            writeVectorBinary(uint8_vec, buf);
-        }
-        SERIALIZE_ENUM(asof_inequality, buf)
-        SERIALIZE_ENUM(distribution_type, buf)
-        SERIALIZE_ENUM(join_algorithm, buf)
-
-        writeBinary(is_magic, buf);
-
-        writeBinary(is_ordered, buf);
-
-        writeVarUInt(runtime_filter_builders.size(), buf);
-        for (const auto & item : runtime_filter_builders)
-        {
-            writeBinary(item.first, buf);
-            writeBinary(item.second.id, buf);
-            writeBinary(static_cast<UInt8>(item.second.distribution), buf);
-        }
+        auto proto_element = proto.add_runtime_filter_builders();
+        proto_element->set_key(k);
+        v.toProto(*proto_element->mutable_value());
     }
 }
 
-String JoinStep::serializeToString() const
+std::shared_ptr<JoinStep> JoinStep::fromProto(const Protos::JoinStep & proto, ContextPtr)
 {
-    WriteBufferFromOwnString buffer;
-    serialize(buffer, false);
-    return buffer.str();
-}
-
-QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
-{
-    String step_description;
-    readBinary(step_description, buf);
-
-    DataStream left_stream = deserializeDataStream(buf);
-    DataStream right_stream = deserializeDataStream(buf);
-
-    JoinPtr join = nullptr;
-    bool has_join;
-    readBinary(has_join, buf);
-    QueryPlanStepPtr step;
-    if (has_join)
+    DataStreams input_streams;
+    for (const auto & proto_element : proto.input_streams())
     {
-        JoinType type;
-        deserializeEnum(type, buf);
-        switch (type)
-        {
-            case JoinType::Hash:
-                join = HashJoin::deserialize(buf, context);
-                break;
-            case JoinType::Merge:
-                join = MergeJoin::deserialize(buf, context);
-                break;
-            case JoinType::NestedLoop:
-                join = NestedLoopJoin::deserialize(buf, context);
-                break;
-            case JoinType::Switcher:
-                join = JoinSwitcher::deserialize(buf, context);
-                break;
-            case JoinType::PARALLEL_HASH:
-                join = ConcurrentHashJoin::deserialize(buf, context);
-                break;
-            case JoinType::GRACE_HASH:
-                join = GraceHashJoin::deserialize(buf, context);
-                break;
-        }
-
-        size_t max_block_size;
-        readBinary(max_block_size, buf);
-        size_t max_streams;
-        readBinary(max_streams, buf);
-        bool keep_left_read_in_order;
-        readBinary(keep_left_read_in_order, buf);
-
-        step = std::make_unique<JoinStep>(left_stream, right_stream, std::move(join), max_block_size, max_streams, keep_left_read_in_order);
+        DataStream element;
+        element.fillFromProto(proto_element);
+        input_streams.emplace_back(std::move(element));
     }
+    DataStream output_stream;
+    if (proto.has_output_stream())
+        output_stream.fillFromProto(proto.output_stream());
     else
+        throw Exception("required to have output stream", ErrorCodes::PROTOBUF_BAD_CAST);
+    auto step_description = proto.step_description();
+    auto kind = ASTTableJoin::KindConverter::fromProto(proto.kind());
+    auto strictness = ASTTableJoin::StrictnessConverter::fromProto(proto.strictness());
+    auto max_streams = proto.max_streams();
+    auto keep_left_read_in_order = proto.keep_left_read_in_order();
+    std::vector<String> left_keys;
+    for (const auto & element : proto.left_keys())
+        left_keys.emplace_back(element);
+    std::vector<String> right_keys;
+    for (const auto & element : proto.right_keys())
+        right_keys.emplace_back(element);
+    auto filter = deserializeASTFromProto(proto.filter());
+    auto has_using = proto.has_using();
+    std::optional<std::vector<bool>> require_right_keys;
+    if (proto.flag_require_right_keys())
+        require_right_keys = std::vector<bool>(proto.require_right_keys().begin(), proto.require_right_keys().end());
+    auto asof_inequality = ASOF::InequalityConverter::fromProto(proto.asof_inequality());
+    auto distribution_type = DistributionTypeConverter::fromProto(proto.distribution_type());
+    auto join_algorithm = JoinAlgorithmConverter::fromProto(proto.join_algorithm());
+    auto is_magic = proto.is_magic();
+    auto is_ordered = proto.is_ordered();
+
+    LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders;
+    for (const auto & element : proto.runtime_filter_builders())
     {
-        // todo output diff
-        DataStream output = deserializeDataStream(buf);
-
-        DESERIALIZE_ENUM(ASTTableJoin::Kind, kind, buf)
-        DESERIALIZE_ENUM(ASTTableJoin::Strictness, strictness, buf)
-
-        size_t max_streams;
-        readBinary(max_streams, buf);
-        bool keep_left_read_in_order;
-        readBinary(keep_left_read_in_order, buf);
-
-        Names left_keys;
-        readVectorBinary(left_keys, buf);
-        Names right_keys;
-        readVectorBinary(right_keys, buf);
-
-
-        auto filter = deserializeAST(buf);
-
-        bool has_using;
-        readBinary(has_using, buf);
-
-        bool has_require_right_keys;
-        std::vector<bool> require_right_keys;
-        readBinary(has_require_right_keys, buf);
-        if (has_require_right_keys)
-        {
-            std::vector<UInt8> uint8_vec;
-            readVectorBinary(uint8_vec, buf);
-            std::transform(
-                uint8_vec.begin(), uint8_vec.end(), std::back_inserter(require_right_keys), [](UInt8 x) { return static_cast<bool>(x); });
-        }
-
-        DESERIALIZE_ENUM(ASOF::Inequality, asof_inequality, buf)
-        DESERIALIZE_ENUM(DistributionType, distribution_type, buf)
-        DESERIALIZE_ENUM(JoinAlgorithm, join_algorithm, buf)
-
-        bool is_magic;
-        readBinary(is_magic, buf);
-
-        bool is_ordered;
-        readBinary(is_ordered, buf);
-
-        size_t runtime_filter_builders_size;
-        readVarUInt(runtime_filter_builders_size, buf);
-        LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders;
-        for (size_t i = 0; i < runtime_filter_builders_size; i++)
-        {
-            String symbol;
-            readBinary(symbol, buf);
-            RuntimeFilterId id;
-            readBinary(id, buf);
-            UInt8 distribution;
-            readBinary(distribution, buf);
-            runtime_filter_builders.emplace(symbol, RuntimeFilterBuildInfos{
-                id,
-                static_cast<RuntimeFilterDistribution>(distribution)});
-        }
-
-        DataStreams inputs = {left_stream, right_stream};
-
-        step = std::make_shared<JoinStep>(
-            inputs,
-            output,
-            kind,
-            strictness,
-            max_streams,
-            keep_left_read_in_order,
-            left_keys,
-            right_keys,
-            filter,
-            has_using,
-            require_right_keys,
-            asof_inequality,
-            distribution_type,
-            join_algorithm,
-            is_magic,
-            is_ordered,
-            runtime_filter_builders);
+        auto key = element.key();
+        auto value = RuntimeFilterBuildInfos::fromProto(element.value());
+        runtime_filter_builders.emplace(key, value);
     }
-
+    auto step = std::make_shared<JoinStep>(
+        input_streams,
+        output_stream,
+        kind,
+        strictness,
+        max_streams,
+        keep_left_read_in_order,
+        left_keys,
+        right_keys,
+        filter,
+        has_using,
+        require_right_keys,
+        asof_inequality,
+        distribution_type,
+        join_algorithm,
+        is_magic,
+        is_ordered,
+        runtime_filter_builders);
     step->setStepDescription(step_description);
     return step;
 }
@@ -535,7 +452,7 @@ void FilledJoinStep::setInputStreams(const DataStreams & input_streams_)
     output_stream->header = JoiningTransform::transformHeader(input_streams_[0].header, join);
 }
 
-void FilledJoinStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &settings)
+void FilledJoinStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)
 {
     bool default_totals = false;
     if (!pipeline.hasTotals() && join->getTotals())
@@ -549,70 +466,9 @@ void FilledJoinStep::transformPipeline(QueryPipeline & pipeline, const BuildQuer
     pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) {
         bool on_totals = stream_type == QueryPipeline::StreamType::Totals;
         auto counter = on_totals ? nullptr : finish_counter;
-        return std::make_shared<JoiningTransform>(header, join, max_block_size, on_totals, default_totals, settings.context->getSettingsRef().join_parallel_left_right, counter);
+        return std::make_shared<JoiningTransform>(
+            header, join, max_block_size, on_totals, default_totals, settings.context->getSettingsRef().join_parallel_left_right, counter);
     });
-}
-
-void FilledJoinStep::serialize(WriteBuffer & buf) const
-{
-    IQueryPlanStep::serializeImpl(buf);
-
-    if (join)
-    {
-        writeBinary(true, buf);
-        serializeEnum(join->getType(), buf);
-        join->serialize(buf);
-    }
-    else
-        writeBinary(false, buf);
-
-    writeBinary(max_block_size, buf);
-}
-
-QueryPlanStepPtr FilledJoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
-{
-    String step_description;
-    readBinary(step_description, buf);
-
-    DataStream input_stream = deserializeDataStream(buf);
-
-    JoinPtr join = nullptr;
-    bool has_join;
-    readBinary(has_join, buf);
-    if (has_join)
-    {
-        JoinType type;
-        deserializeEnum(type, buf);
-        switch (type)
-        {
-            case JoinType::Hash:
-                join = HashJoin::deserialize(buf, context);
-                break;
-            case JoinType::Merge:
-                join = MergeJoin::deserialize(buf, context);
-                break;
-            case JoinType::NestedLoop:
-                join = NestedLoopJoin::deserialize(buf, context);
-                break;
-            case JoinType::Switcher:
-                join = JoinSwitcher::deserialize(buf, context);
-                break;
-            case JoinType::PARALLEL_HASH:
-                join = ConcurrentHashJoin::deserialize(buf, context);
-                break;
-            case JoinType::GRACE_HASH:
-                join = GraceHashJoin::deserialize(buf, context);
-                break;
-        }
-    }
-
-    bool max_block_size;
-    readBinary(max_block_size, buf);
-
-    auto step = std::make_unique<FilledJoinStep>(input_stream, std::move(join), max_block_size);
-
-    step->setStepDescription(step_description);
-    return step;
 }
 
 std::shared_ptr<IQueryPlanStep> JoinStep::copy(ContextPtr) const

@@ -36,9 +36,9 @@ public:
 
     QueryPipelinePtr updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & context) override;
 
-    void serialize(WriteBuffer & buf) const override;
+    void toProto(Protos::ExchangeStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<ExchangeStep> fromProto(const Protos::ExchangeStep & proto, ContextPtr context);
 
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr & context);
 
     const ExchangeMode & getExchangeMode() const { return exchange_type; }
 

@@ -1,33 +1,35 @@
 #pragma once
 #include <string>
+#include <Protos/EnumMacros.h>
+#include <Protos/enum.pb.h>
 
 namespace DB
 {
 namespace ASOF
 {
 
-enum class Inequality
-{
-    None = 0,
-    Less,
-    Greater,
-    LessOrEquals,
-    GreaterOrEquals,
-};
+    ENUM_WITH_PROTO_CONVERTER(
+        Inequality, // enum name
+        Protos::ASOF::Inequality, // proto enum message
+        (None, 0),
+        (Less),
+        (Greater),
+        (LessOrEquals),
+        (GreaterOrEquals));
 
-inline Inequality getInequality(const std::string & func_name)
-{
-    Inequality inequality{Inequality::None};
-    if (func_name == "less")
-        inequality = Inequality::Less;
-    else if (func_name == "greater")
-        inequality = Inequality::Greater;
-    else if (func_name == "lessOrEquals")
-        inequality = Inequality::LessOrEquals;
-    else if (func_name == "greaterOrEquals")
-        inequality = Inequality::GreaterOrEquals;
-    return inequality;
-}
+    inline Inequality getInequality(const std::string & func_name)
+    {
+        Inequality inequality{Inequality::None};
+        if (func_name == "less")
+            inequality = Inequality::Less;
+        else if (func_name == "greater")
+            inequality = Inequality::Greater;
+        else if (func_name == "lessOrEquals")
+            inequality = Inequality::LessOrEquals;
+        else if (func_name == "greaterOrEquals")
+            inequality = Inequality::GreaterOrEquals;
+        return inequality;
+    }
 
 inline Inequality reverseInequality(Inequality inequality)
 {

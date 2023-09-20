@@ -231,88 +231,89 @@ void WindowDescription::checkValid() const
     }
 }
 
-void WindowFrame::serialize(WriteBuffer & buffer) const
+void WindowFrame::toProto(Protos::WindowFrame & proto) const
 {
-    writeBinary(is_default, buffer);
-    serializeEnum(type, buffer);
-
-    serializeEnum(begin_type, buffer);
-    writeFieldBinary(begin_offset, buffer);
-    writeBinary(begin_preceding, buffer);
-
-    serializeEnum(end_type, buffer);
-    writeFieldBinary(end_offset, buffer);
-    writeBinary(end_preceding, buffer);
+    proto.set_is_default(is_default);
+    proto.set_type(WindowFrame::FrameTypeConverter::toProto(type));
+    proto.set_begin_type(WindowFrame::BoundaryTypeConverter::toProto(begin_type));
+    begin_offset.toProto(*proto.mutable_begin_offset());
+    proto.set_begin_preceding(begin_preceding);
+    proto.set_end_type(WindowFrame::BoundaryTypeConverter::toProto(end_type));
+    end_offset.toProto(*proto.mutable_end_offset());
+    proto.set_end_preceding(end_preceding);
 }
 
-void WindowFrame::deserialize(ReadBuffer & buffer)
+void WindowFrame::fillFromProto(const Protos::WindowFrame & proto)
 {
-    readBinary(is_default, buffer);
-    deserializeEnum(type, buffer);
-
-    deserializeEnum(begin_type, buffer);
-    readFieldBinary(begin_offset, buffer);
-    readBinary(begin_preceding, buffer);
-
-    deserializeEnum(end_type, buffer);
-    readFieldBinary(end_offset, buffer);
-    readBinary(end_preceding, buffer);
+    is_default = proto.is_default();
+    type = FrameTypeConverter::fromProto(proto.type());
+    begin_type = BoundaryTypeConverter::fromProto(proto.begin_type());
+    begin_offset.fillFromProto(proto.begin_offset());
+    begin_preceding = proto.begin_preceding();
+    end_type = BoundaryTypeConverter::fromProto(proto.end_type());
+    end_offset.fillFromProto(proto.end_offset());
+    end_preceding = proto.end_preceding();
 }
 
-void WindowFunctionDescription::serialize(WriteBuffer & buffer) const
+void WindowFunctionDescription::toProto(Protos::WindowFunctionDescription & proto) const
 {
-    writeBinary(column_name, buffer);
+    proto.set_column_name(column_name);
+    serializeAggregateFunctionToProto(aggregate_function, function_parameters, argument_types, *proto.mutable_aggregate_function());
 
-    writeBinary(aggregate_function->getName(), buffer);
-    writeBinary(function_parameters, buffer);
-    serializeDataTypes(argument_types, buffer);
-    serializeStrings(argument_names, buffer);
+    for (const auto & element : argument_names)
+        proto.add_argument_names(element);
 }
 
-void WindowFunctionDescription::deserialize(ReadBuffer & buffer)
+void WindowFunctionDescription::fillFromProto(const Protos::WindowFunctionDescription & proto)
 {
-    readBinary(column_name, buffer);
+    column_name = proto.column_name();
+    std::tie(aggregate_function, function_parameters, argument_types) = deserializeAggregateFunctionFromProto(proto.aggregate_function());
 
-    String func_name;
-    readBinary(func_name, buffer);
-    readBinary(function_parameters, buffer);
-    argument_types = deserializeDataTypes(buffer);
-    argument_names = deserializeStrings(buffer);
-    AggregateFunctionProperties properties;
-    aggregate_function = AggregateFunctionFactory::instance().get(func_name, argument_types, function_parameters, properties);
+    for (const auto & element : proto.argument_names())
+        argument_names.emplace_back(element);
 }
 
-void WindowDescription::serialize(WriteBuffer & buffer) const
+void WindowDescription::toProto(Protos::WindowDescription & proto) const
 {
-    writeBinary(window_name, buffer);
-    serializeSortDescription(partition_by, buffer);
-    serializeSortDescription(order_by, buffer);
-    serializeSortDescription(full_sort_description, buffer);
-
-    frame.serialize(buffer);
-
-    writeBinary(window_functions.size(), buffer);
-    for (const auto & item : window_functions)
-        item.serialize(buffer);
+    proto.set_window_name(window_name);
+    for (const auto & element : partition_by)
+        element.toProto(*proto.add_partition_by());
+    for (const auto & element : order_by)
+        element.toProto(*proto.add_order_by());
+    for (const auto & element : full_sort_description)
+        element.toProto(*proto.add_full_sort_description());
+    frame.toProto(*proto.mutable_frame());
+    for (const auto & element : window_functions)
+        element.toProto(*proto.add_window_functions());
 }
 
-void WindowDescription::deserialize(ReadBuffer & buffer)
+void WindowDescription::fillFromProto(const Protos::WindowDescription & proto)
 {
-    readBinary(window_name, buffer);
-    deserializeSortDescription(partition_by, buffer);
-    deserializeSortDescription(order_by, buffer);
-    deserializeSortDescription(full_sort_description, buffer);
-
-    frame.deserialize(buffer);
-
-    size_t size;
-    readBinary(size, buffer);
-    for (size_t index = 0; index < size; ++index)
+    window_name = proto.window_name();
+    for (const auto & proto_element : proto.partition_by())
     {
-        WindowFunctionDescription desc;
-        desc.deserialize(buffer);
-        window_functions.emplace_back(desc);
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        partition_by.emplace_back(std::move(element));
+    }
+    for (const auto & proto_element : proto.order_by())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        order_by.emplace_back(std::move(element));
+    }
+    for (const auto & proto_element : proto.full_sort_description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        full_sort_description.emplace_back(std::move(element));
+    }
+    frame.fillFromProto(proto.frame());
+    for (const auto & proto_element : proto.window_functions())
+    {
+        WindowFunctionDescription element;
+        element.fillFromProto(proto_element);
+        window_functions.emplace_back(std::move(element));
     }
 }
-
 }

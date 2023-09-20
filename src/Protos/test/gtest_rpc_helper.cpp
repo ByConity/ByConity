@@ -29,5 +29,4 @@ TEST(RPCHelperTest, UUIDTest)
     EXPECT_EQ(uuid_output, uuid_input);
 }
 
-
 }

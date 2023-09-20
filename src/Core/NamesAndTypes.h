@@ -36,6 +36,11 @@
 namespace DB
 {
 
+namespace Protos
+{
+    class NameAndTypePair;
+}
+
 struct NameAndTypePair
 {
 public:
@@ -67,6 +72,8 @@ public:
 
     void serialize(WriteBuffer & buf) const;
     void deserialize(ReadBuffer & buf);
+    void toProto(Protos::NameAndTypePair & proto) const;
+    void fillFromProto(const Protos::NameAndTypePair & proto);
 
 private:
     DataTypePtr type_in_storage;
@@ -138,9 +145,6 @@ public:
 
     /// Try to get column position by name, returns number of columns if column isn't found
     size_t getPosByName(const std::string & name) const noexcept;
-
-    void serialize(WriteBuffer & buf) const;
-    void deserialize(ReadBuffer & buf);
 };
 
 using NamesAndTypesListPtr = std::shared_ptr<NamesAndTypesList>;
