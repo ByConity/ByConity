@@ -225,7 +225,7 @@ int mainEntryClickhouseS3RenameTool(int argc, char ** argv)
         ("thread_number", po::value<int>()->default_value(1), "using how many threads, default 1")
         ("need_delete", po::value<bool>()->default_value(true), "whether delete origin file, default true")
         ("uuid_check", po::value<bool>()->default_value(true), "whether check uuid is valid or not, default true")
-        ("enable_logging", "Enable logging output")
+        ("enable_logging", po::value<bool>()->default_value(true),"Enable logging output")
         ("logging_level", po::value<String>()->default_value("information"), "logging level")
     ;
 
