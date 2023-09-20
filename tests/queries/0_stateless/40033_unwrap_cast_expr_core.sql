@@ -1,5 +1,4 @@
 SET enable_optimizer = 1;
-SET enable_optimizer_white_list = 0;
 
 DROP TABLE IF EXISTS unwrap_cast_expr_core_local;
 DROP TABLE IF EXISTS unwrap_cast_expr_core;

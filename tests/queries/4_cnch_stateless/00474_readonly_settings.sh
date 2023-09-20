@@ -20,8 +20,6 @@ RAW_URL=`echo "${RAW_URL}" | sed "s@enable_optimizer=1&@@g"`
 RAW_URL=`echo "${RAW_URL}" | sed "s@enable_optimizer=0&@@g"`
 RAW_URL=`echo "${RAW_URL}" | sed "s@enable_optimizer_fallback=1&@@g"`
 RAW_URL=`echo "${RAW_URL}" | sed "s@enable_optimizer_fallback=0&@@g"`
-RAW_URL=`echo "${RAW_URL}" | sed "s@enable_optimizer_white_list=0&@@g"`
-RAW_URL=`echo "${RAW_URL}" | sed "s@enable_optimizer_white_list=1&@@g"`
 
 ${CLICKHOUSE_CURL} -sS "${RAW_URL}&session_id=readonly&session_timeout=3600" -d 'SET readonly = 1'
 ${CLICKHOUSE_CURL} -sS "${RAW_URL}&session_id=readonly&query=SELECT+toUInt64(pow(2,+63))+as+value+format+JSON&output_format_json_quote_64bit_integers=1" 2>&1 | grep -o "value\|Cannot modify 'output_format_json_quote_64bit_integers' setting in readonly mode"

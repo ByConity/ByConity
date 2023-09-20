@@ -1,5 +1,4 @@
 set enable_optimizer=1;
-set enable_optimizer_white_list = 0;
 
 SELECT x,arr FROM (SELECT arrayJoin(['Hello', 'Goodbye']) AS x, [1, 2, 3] AS arr) ARRAY JOIN arr;
 

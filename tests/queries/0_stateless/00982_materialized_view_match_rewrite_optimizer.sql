@@ -1,5 +1,4 @@
 set enable_optimizer=1;
-set enable_optimizer_white_list=0;
 
 USE test;
 
