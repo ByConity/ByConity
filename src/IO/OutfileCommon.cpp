@@ -16,11 +16,6 @@
 #include <memory>
 #include <string>
 
-#if USE_LASFS
-#    include <IO/LasfsCommon.h>
-#    include <IO/WriteBufferFromLasfs.h>
-#endif
-
 #if USE_AWS_S3
 #    include <IO/WriteBufferFromS3.h>
 #    include <IO/S3Common.h>
@@ -71,32 +66,20 @@ WriteBuffer * OutfileTarget::getOutfileBuffer(const ContextPtr & context, bool a
     }
 #if USE_HDFS
     else if (DB::isHdfsOrCfsScheme(scheme))
-    {   
+    {
         out_buf_raw = std::make_unique<WriteBufferFromHDFS>(
             uri, context->getHdfsConnectionParams(), context->getSettingsRef().max_hdfs_write_buffer_size);
 
         // hdfs always use CompressionMethod::Gzip default
         if (compression_method_str.empty())
-        {   
+        {
             compression_method = CompressionMethod::Gzip;
         }
     }
 #endif
-#if USE_LASFS
-    else if (scheme == "lasfs")
-    {
-        LasfsSettings lasfs_settings;
-        refreshCurrentLasfsSettings(lasfs_settings, context);
-
-        out_buf_raw = std::make_unique<WriteBufferFromLasfs>(lasfs_settings, "lasfs:/" + out_uri.getHost() + out_uri.getPath());
-
-        // lasfs maybe not support compreission
-        compression_method = CompressionMethod::None;
-    }
-#endif
 #if USE_AWS_S3
     else if (scheme == "vetos")
-    {   
+    {
         VETosConnectionParams vetos_connect_params = VETosConnectionParams::getVETosSettingsFromContext(context);
         auto tos_uri = verifyTosURI(uri);
         std::string bucket = tos_uri.getHost();
