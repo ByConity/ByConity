@@ -1,7 +1,6 @@
 # need to install Github python package
 
 from github import Github
-from datetime import datetime
 import os
 
 feat_list = []
@@ -22,21 +21,17 @@ g = Github(access_token)
 
 repo = g.get_repo("ByConity/ByConity")
 
-# setup the datatime of last release
-last_relase_date = datetime(2023, 5, 24)
-
+# TODO need to find a way to address the version problem
 pulls = repo.get_pulls(state='close', sort='created', base='master')
 for pr in pulls:
-    # Filter the PRs which is new for this release
-    if pr.updated_at > last_relase_date:
-        # Checkout the PR title with prefix
-        index = pr.title.find(': ')
-        if index > -1:
-            title = pr.title[index + 2:]
-            cat = pr.title[:index]
-            cat_list = cats_dict.get(cat)
-            if cat_list is not None:
-                cat_list.append('[' + title + ']' + '(' + pr.html_url + ')')
+    # Checkout the PR title with prefix
+    index = pr.title.find(': ')
+    if index > -1:
+        title = pr.title[index + 2:]
+        cat = pr.title[:index]
+        cat_list = cats_dict.get(cat)
+        if cat_list is not None:
+            cat_list.append('[' + title + ']' + '(' + pr.html_url + ')')
 
 # Print all the items in a markdown format
 for k in cats_dict.keys():
