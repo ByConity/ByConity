@@ -77,6 +77,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_TYPE_OF_COLUMN_FOR_FILTER;
     extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
     extern const int EMPTY_NESTED_TABLE;
+    extern const int ILLEGAL_COLUMN;
 }
 
 class QueryAnalyzerVisitor : public ASTVisitor<Void, const Void>
@@ -209,8 +210,17 @@ Void QueryAnalyzerVisitor::visitASTInsertQuery(ASTPtr & node, const Void &)
             const auto & column_name = column_ast->as<ASTIdentifier &>().name();
             if (!insert_columns_set.emplace(column_name).second)
                 throw Exception("Duplicate column " + column_name + " in INSERT query", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
-            auto column = table_columns.getPhysical(column_name);
-            insert_columns.emplace_back(NameAndTypePair{column.name, column.type});
+            auto column = table_columns.tryGetPhysical(column_name);
+            if (!column)
+            {
+                if (const auto & func_columns = storage_metadata->getFuncColumns();
+                    !func_columns.empty() && func_columns.begin()->name == column_name)
+                    column = *func_columns.begin();
+                else
+                    throw Exception(
+                        fmt::format("Cannot find column {} when insert-select on optimizer mode", column_name), ErrorCodes::ILLEGAL_COLUMN);
+            }
+            insert_columns.emplace_back(NameAndTypePair{(*column).name, (*column).type});
         }
     }
     else

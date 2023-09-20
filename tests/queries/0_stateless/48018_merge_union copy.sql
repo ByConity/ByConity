@@ -1,5 +1,4 @@
 set enable_optimizer=1;
-set enable_optimizer_white_list=0;
 
 DROP TABLE IF EXISTS with_union;
 DROP TABLE IF EXISTS with_union_local;

@@ -1,7 +1,6 @@
 use test;
 drop table if exists test1;
 set optimize_trivial_count_query = 1;
-set enable_optimizer_white_list = 0;
 set enable_optimizer = 1;
 create table test1(p DateTime, i int, j int) ENGINE = CnchMergeTree() partition by (toDate(p), i) order by j;
 insert into test1 values ('2020-09-01 00:01:02', 1, 2), ('2020-09-01 00:01:03', 2, 3), ('2020-09-02 00:01:03', 3, 4);

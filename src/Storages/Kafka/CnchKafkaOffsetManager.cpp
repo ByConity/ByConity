@@ -127,7 +127,7 @@ void CnchKafkaOffsetManager::resetOffsetImpl(const cppkafka::TopicPartitionList 
                    });
 
         txn->setKafkaTpl(kafka_table->getGroupForBytekv(), tpl);
-        txn->setMainTableUUID(target_table->getStorageUUID());
+        txn->setMainTableUUID(kafka_table->getStorageUUID());
 
         try {
             txn_co.commitV2(txn);

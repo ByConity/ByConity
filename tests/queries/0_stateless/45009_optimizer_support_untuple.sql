@@ -2,7 +2,6 @@ drop table if exists tuple_test_local;
 drop table if exists tuple_test;
 
 set enable_optimizer = 1;
-set enable_optimizer_white_list = 0;
 
 select tuple(1,'2','2022-10-12',(1,2)) as x, untuple(x);
 select argMax(untuple(x)) from (select (number, number + 1) as x from numbers(10));

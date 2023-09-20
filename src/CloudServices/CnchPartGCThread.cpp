@@ -508,6 +508,19 @@ void CnchPartGCThread::pushToRemovingQueue(
         batch_remove(start, end);
     }
 
+    if (storage_settings->enable_gc_evict_disk_cache)
+    {
+        try
+        {
+            ContextPtr ctx = storage.getContext();
+            storage.sendDropDiskCacheTasks(ctx, parts);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "Fail to drop disk cache for " + storage.getStorageID().getNameForLogs());
+        }
+    }
+
     remove_pool.wait();
 }
 

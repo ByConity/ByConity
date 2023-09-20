@@ -171,6 +171,8 @@
 #include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Storages/StorageS3Settings.h>
 
+#include <IO/VETosCommon.h>
+
 namespace fs = std::filesystem;
 
 namespace ProfileEvents
@@ -308,6 +310,9 @@ struct ContextSharedPart
     String hdfs_nn_proxy; // libhdfs3 namenode proxy
     HDFSConnectionParams hdfs_connection_params;
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaries. Have lazy initialization.
+    
+    VETosConnectionParams vetos_connection_params;
+
     mutable std::optional<CnchCatalogDictionaryCache> cnch_catalog_dict_cache;
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
     mutable std::optional<ExternalModelsLoader> external_models_loader;
@@ -4144,6 +4149,26 @@ void Context::setHdfsConnectionParams(const HDFSConnectionParams & params)
 HDFSConnectionParams Context::getHdfsConnectionParams() const
 {
     return shared->hdfs_connection_params;
+}
+    
+void Context::setLasfsConnectionParams(const Poco::Util::AbstractConfiguration & config) {
+    if(config.has("lasfs_config")){
+        setSetting("lasfs_service_name",config.getString("lasfs_config.lasfs_service_name",""));
+        setSetting("lasfs_endpoint",config.getString("lasfs_config.lasfs_endpoint",""));
+        setSetting("lasfs_region",config.getString("lasfs_config.lasfs_region",""));
+    }
+}
+
+void Context::setVETosConnectParams(const VETosConnectionParams & connect_params)
+{
+    auto lock = getLock();
+    shared->vetos_connection_params = connect_params;
+}
+
+const VETosConnectionParams & Context::getVETosConnectParams() const
+{
+    auto lock = getLock();
+    return shared->vetos_connection_params;
 }
 
 void Context::setUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)

@@ -1,4 +1,3 @@
-SET enable_optimizer_white_list = 0;
 SET transform_null_in = 0;
 
 select nullIn(null, tuple(1, 2, null));

@@ -141,6 +141,7 @@ message SubmitPreloadTaskReq {
   optional string table = 2;
   optional UUID uuid = 3;
   repeated DataModelPart parts = 4;
+  optional uint64 ts = 5;
 }
 
 message SubmitPreloadTaskResp {

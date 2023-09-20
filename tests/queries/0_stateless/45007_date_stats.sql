@@ -1,6 +1,5 @@
 set enable_optimizer=1;
 set dialect_type='ANSI';
-set enable_optimizer_white_list=0;
 set create_stats_time_output=0;
 drop table if exists test_date_opt;
 drop table if exists test_date_opt_local;

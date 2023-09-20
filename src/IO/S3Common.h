@@ -6,18 +6,19 @@
 
 #if USE_AWS_S3
 
-#include <IO/BufferBase.h>
-#include <IO/S3/PocoHTTPClient.h>
-#include <aws/core/Aws.h> // Y_IGNORE
-#include <aws/core/auth/AWSCredentialsProviderChain.h>
+#include <common/types.h>
+#include <aws/core/auth/AWSCredentials.h>
+#include <Common/ThreadPool.h>
+#include <aws/core/Aws.h>  // Y_IGNORE
 #include <aws/core/client/ClientConfiguration.h> // Y_IGNORE
 #include <aws/s3/S3Errors.h>
-#include <aws/s3/model/GetObjectResult.h>
 #include <aws/s3/model/HeadObjectResult.h>
+#include <aws/s3/model/GetObjectResult.h>
+#include <IO/S3/PocoHTTPClient.h>
+#include <IO/BufferBase.h>
 #include <Poco/URI.h>
 #include <Common/HeaderCollection.h>
-#include <Common/ThreadPool.h>
-#include <common/types.h>
+#include <aws/core/auth/AWSCredentialsProviderChain.h>
 namespace Aws::S3
 {
     class S3Client;
@@ -31,6 +32,8 @@ namespace DB
     {
         return strcasecmp(scheme.c_str(), "s3") == 0;
     }
+
+    bool isS3URIScheme(const String& scheme);
 }
 
 namespace DB::S3
@@ -128,7 +131,7 @@ public:
 
     S3Config(const String& endpoint_, const String& region_, const String& bucket_,
         const String& ak_id_, const String& ak_secret_, const String& root_prefix_,
-        bool is_virtual_hosted_style_ = false,
+        const String & session_token_ = "", bool is_virtual_hosted_style_ = false,
         int connect_timeout_ms_ = 10000, int request_timeout_ms_ = 30000,
         int max_redirects_ = 10, int max_connections_ = 100, uint32_t http_keep_alive_timeout_ms_ = 5000,
         size_t http_connection_pool_size_ = 1024):
@@ -136,7 +139,7 @@ public:
             request_timeout_ms(request_timeout_ms_), max_connections(max_connections_),
             endpoint(endpoint_), region(region_), bucket(bucket_), ak_id(ak_id_),
             ak_secret(ak_secret_), root_prefix(root_prefix_),
-            is_virtual_hosted_style(is_virtual_hosted_style_),
+            session_token(session_token_), is_virtual_hosted_style(is_virtual_hosted_style_),
             http_keep_alive_timeout_ms(http_keep_alive_timeout_ms_),
             http_connection_pool_size(http_connection_pool_size_) {}
 
@@ -156,6 +159,7 @@ public:
     String ak_id;
     String ak_secret;
     String root_prefix;
+    String session_token;
     bool is_virtual_hosted_style;
     uint32_t http_keep_alive_timeout_ms;
     size_t http_connection_pool_size;
@@ -230,7 +234,7 @@ public:
     S3LazyCleaner(const S3::S3Util& s3_util_,
         const std::function<bool(const S3::S3Util&, const String&)>& filter_,
         size_t max_threads_, size_t batch_clean_size_ = S3_DEFAULT_BATCH_CLEAN_SIZE);
-    ~S3LazyCleaner();
+    ~S3LazyCleaner() noexcept;
 
     void push(const String& key_);
     void finalize();

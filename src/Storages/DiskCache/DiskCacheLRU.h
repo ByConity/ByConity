@@ -72,6 +72,7 @@ public:
     void set(const String& seg_name, ReadBuffer& value, size_t weight_hint) override;
     std::pair<DiskPtr, String> get(const String& seg_name) override;
     void load() override;
+    size_t drop(const String & part_name) override;
 
     size_t getKeyCount() const override { return containers.count(); }
     size_t getCachedSize() const override { return containers.weight(); }
@@ -99,7 +100,7 @@ private:
             DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk_, int min_depth_parallel_, int max_depth_parallel_);
         virtual ~DiskIterator() = default;
 
-        void exec(std::filesystem::path entry_path);
+        virtual void exec(std::filesystem::path entry_path);
         virtual void iterateDirectory(std::filesystem::path rel_path, size_t depth);
         virtual void iterateFile(std::filesystem::path file_path, size_t file_size) = 0;
 
@@ -143,8 +144,20 @@ private:
         std::atomic_size_t total_migrated = 0;
     };
 
+    struct DiskCacheDeleter : DiskIterator
+    {
+        explicit DiskCacheDeleter(
+            DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk, int min_depth_parallel, int max_depth_parallel);
+        ~DiskCacheDeleter() override;
+        void exec(std::filesystem::path entry_path) override;
+        void iterateFile(std::filesystem::path file_path, size_t file_size) override;
+
+        size_t delete_file_size{0};
+    };
+
     ThrottlerPtr set_rate_throttler;
     IDiskCacheStrategyPtr strategy;
+    std::atomic<bool> is_droping{false};
     Poco::Logger * log {&Poco::Logger::get("DiskCacheLRU")};
     ShardCache<KeyType, UInt128Hash, BucketLRUCache<KeyType, DiskCacheMeta, UInt128Hash, DiskCacheWeightFunction>> containers;
 };

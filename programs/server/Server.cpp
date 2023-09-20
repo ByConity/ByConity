@@ -166,6 +166,8 @@
 #    include <jemalloc/jemalloc.h>
 #endif
 
+#include <IO/VETosCommon.h>
+
 namespace CurrentMetrics
 {
     extern const Metric Revision;
@@ -1144,6 +1146,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getCnchConfigRef());
     global_context->setHdfsConnectionParams(hdfs_params);
 #endif
+    auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
+    global_context->setVETosConnectParams(vetos_params);
 
     // Clear old store data in the background
     ThreadFromGlobalPool clear_old_data;

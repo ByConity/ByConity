@@ -287,6 +287,11 @@ using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
 struct QeueueThrottlerDeleter;
 using QueueThrottlerDeleterPtr = std::shared_ptr<QeueueThrottlerDeleter>;
 
+class VWCustomizedSettings;
+using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
+
+class VETosConnectionParams;
+
 enum class ServerType
 {
     standalone,
@@ -623,6 +628,11 @@ public:
 
     void setHdfsConnectionParams(const HDFSConnectionParams & hdfs_params);
     HDFSConnectionParams getHdfsConnectionParams() const;
+
+    void setLasfsConnectionParams(const Poco::Util::AbstractConfiguration & config);
+
+    void setVETosConnectParams(const VETosConnectionParams & connect_params);
+    const VETosConnectionParams & getVETosConnectParams() const;
 
     /// create backgroud task to synchronize metadata table by table
     void setMetaChecker();

@@ -661,6 +661,8 @@ void CnchServerClient::submitPreloadTask(const MergeTreeMetaBase & storage, cons
 
     brpc::Controller cntl;
     Protos::SubmitPreloadTaskReq request;
+    request.set_ts(time(nullptr));
+
     Protos::SubmitPreloadTaskResp response;
     if (timeout_ms)
         cntl.set_timeout_ms(timeout_ms);

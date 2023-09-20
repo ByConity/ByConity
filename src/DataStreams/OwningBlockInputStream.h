@@ -24,7 +24,7 @@ public:
 
     Block getHeader() const override { return children.at(0)->getHeader(); }
 
-    ~OwningBlockInputStream()
+    ~OwningBlockInputStream() override
     {
         children.clear();
         if (stream.use_count() > 1)

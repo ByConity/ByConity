@@ -9,7 +9,6 @@ CREATE TABLE t AS t_local ENGINE = Distributed(test_shard_localhost, currentData
 -- 'select -a as a from t_local order by a;' have a difference output with query
 -- 'select -a as a from t order by a;'
 set enable_optimizer=1;
-set enable_optimizer_white_list=0;
 
 SELECT t.a AS origin_a, t.b AS origin_b, -a AS a
 FROM t

@@ -78,6 +78,7 @@
 
 #include "AsyncQueryManager.h"
 #include "Core/Protocol.h"
+#include "IO/OutfileCommon.h"
 #include "Interpreters/Context_fwd.h"
 #include "TCPHandler.h"
 #include "Transaction/CnchWorkerTransaction.h"
@@ -474,7 +475,15 @@ void TCPHandler::runImpl()
             else
             {
                 if (!state.plan_segment)
+                {
                     state.io = executeQuery(state.query, query_context, false, state.stage, may_have_embedded_data);
+                    
+                    if (OutfileTarget::checkOutfileWithTcpOnServer(query_context))
+                    {   
+                        sendEndOfStream();
+                        return; // all data already outfile in executequery()
+                    }
+                }
                 unknown_packet_in_send_data = query_context->getSettingsRef().unknown_packet_in_send_data;
 
                 after_check_cancelled.restart();

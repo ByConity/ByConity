@@ -1,3 +1,5 @@
+#include <memory>
+#include <IO/S3Common.h>
 #include <Common/config.h>
 
 #if USE_AWS_S3
@@ -542,6 +544,10 @@ namespace ErrorCodes
     extern const int UNKNOWN_ELEMENT_IN_CONFIG;
 }
 
+bool isS3URIScheme(const String& scheme) {
+    return (strcasecmp(scheme.c_str(), "s3") == 0) || (strcasecmp(scheme.c_str(), "http") == 0) || (strcasecmp(scheme.c_str(), "https") == 0);
+}
+
 namespace S3
 {
     S3Exception::S3Exception(const Aws::S3::S3Error & s3_err, const String & extra_msg)
@@ -671,7 +677,7 @@ namespace S3
             bucket = uri.getAuthority();
             validateBucket(bucket, uri);
             if (uri.getPath().length() <= 1)
-                throw Exception ("Invalid S3 URI: no key: " + uri.toString(), ErrorCodes::BAD_ARGUMENTS);
+                throw Exception("Invalid S3 URI: no key: " + uri.toString(), ErrorCodes::BAD_ARGUMENTS);
             key = uri.getPath().substr(1);
             is_virtual_hosted_style = false;
             return;
@@ -827,8 +833,14 @@ namespace S3
         client_cfg.maxConnections = max_connections;
         client_cfg.enableTcpKeepAlive = true;
 
+        if (!session_token.empty()) {
+            Aws::Auth::AWSCredentials credential(ak_id, ak_secret, session_token);
+            return std::make_shared<Aws::S3::S3Client>(credential, std::move(client_cfg),
+                Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never, is_virtual_hosted_style);
+        }
+
         return S3::ClientFactory::instance().create(client_cfg, is_virtual_hosted_style,
-            ak_id, ak_secret, "", {}, false, false);
+                    ak_id, ak_secret, "", {}, false, false);
     }
 
 
@@ -1221,7 +1233,7 @@ namespace S3
     {
     }
 
-    S3LazyCleaner::~S3LazyCleaner()
+    S3LazyCleaner::~S3LazyCleaner() noexcept
     {
         if (clean_pool != nullptr)
             clean_pool->wait();
@@ -1260,6 +1272,8 @@ namespace S3
         }
         else
         {
+            /// In case of out-of-order schedule.
+            clean_pool->wait();
             clean_pool->scheduleOrThrow(createExceptionHandledJob([this]() { lazyRemove(std::nullopt); }, except_hdl));
             clean_pool->wait();
         }

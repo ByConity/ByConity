@@ -1833,7 +1833,6 @@ enum PreloadLevelSettings : UInt64
 \
     /** Optimizer relative settings */ \
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
-    M(Bool, enable_optimizer_white_list, false, "Whether enable query optimizer whilte list inorder to only support join and agg", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
     M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \
@@ -2040,8 +2039,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, cnch_atomic_attach_part, true, "Whether to ATTACH PARTITION/PARTS in atomic way", 0) \
     M(Bool, cnch_atomic_attach_part_preemtive_lock_acquire, false, "Whether to acquire lock preemptively during atomic attach part", 0) \
     M(Bool, allow_full_scan_txn_records, false, "Whether to allow full scan of all transaction records on catalog", 0) \
-\
+    \
     /* Outfile related Settings */ \
+    M(Bool, outfile_in_server_with_tcp, false, "Out file in sever with tcp and return client empty block", 0) \
     M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \
     M(String, tos_access_key, "", "The access_key set by user when accessing ve tos.", 0) \
     M(String, tos_secret_key, "", "The secret_key set by user when accessing ve tos.", 0) \
@@ -2055,15 +2055,12 @@ enum PreloadLevelSettings : UInt64
     M(String, lasfs_service_name, "", "the service_name set by user when accessing lasfs", 0) \
     M(String, lasfs_endpoint, "", "the endpoint set by user when accessing lasfs", 0) \
     M(String, lasfs_region, "", "the region set by user when accessing lasfs", 0) \
-    M(String, lasfs_overwrite, "false", "pass true if user want to overwrite when the file exists", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
-\
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
     M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel", 0) \
-    M(Bool, parquet_parallel_read, false, "whether to read parquet in parallel", 0)
-
+    M(Bool, parquet_parallel_read, false, "whether to read parquet in parallel", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
