@@ -1954,6 +1954,9 @@ void Context::setCurrentDatabase(const String & name, ContextPtr local_context)
         {
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "catalog {} does not exist", catalog_name);
         }
+    } else 
+    {
+        use_cnch_catalog = true;
     }
 
     auto db_name_with_tenant_id = appendTenantIdOnly(database_opt.value());
