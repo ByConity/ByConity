@@ -163,6 +163,25 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     if (!parse_format())
         return false;
 
+    // [ COMPRESSION "compression_method_vaule" [LEVEL compression_level_value] ]
+    ParserKeyword s_compression_method("COMPRESSION");
+    if (s_compression_method.ignore(pos, expected))
+    {
+        ParserStringLiteral compression_method_p;
+        if (!compression_method_p.parse(pos, query_with_output.compression_method, expected))
+            return false;
+        query_with_output.children.push_back(query_with_output.compression_method);
+
+        ParserKeyword s_compression_level("LEVEL");
+        if (s_compression_level.ignore(pos, expected))
+        {
+            ParserNumber compression_level_p;
+            if (!compression_level_p.parse(pos, query_with_output.compression_level, expected))
+                return false;
+            query_with_output.children.push_back(query_with_output.compression_level);
+        }
+    }
+
     // SETTINGS key1 = value1, key2 = value2, ...
     ParserKeyword s_settings("SETTINGS");
     if (s_settings.ignore(pos, expected))

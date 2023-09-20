@@ -291,7 +291,7 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context, const 
             &Poco::Logger::get("PlanOptimizer"), "optimizer rule run time: {}, {} ms", rewriter->name(), single_rewriter_duration);
 
         if (single_rewriter_duration >= 1000)
-            LOG_WARNING(
+            LOG_INFO(
                 &Poco::Logger::get("PlanOptimizer"),
                 "the execute time of " + rewriter->name() + " rewriter greater than or equal to 1 second");
 
