@@ -383,6 +383,7 @@ bool ParserFunction::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     /// TRIM(BOTH|LEADING|TRAILING x FROM y)
     /// SUBSTRING(x FROM a)
     /// SUBSTRING(x FROM a FOR b)
+    /// GROUP_CONCAT([DISTINCT] x [ORDER_BY y [ASC | DESC]] [SEPARATOR str])
 
     String function_name = getIdentifierName(identifier);
     String function_name_lowercase = Poco::toLower(function_name);
@@ -1191,6 +1192,82 @@ bool ParserSubstringExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     func_node->children.push_back(func_node->arguments);
 
     node = std::move(func_node);
+    return true;
+}
+
+bool ParserGroupConcatExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    /// There are 2 syntaxes for GROUP_CONCAT/groupConcat
+    /// 1. ClickHouse version: GROUP_CONCAT[(str_val)](col_name)
+    /// 2. MySQL: GROUP_CONCAT([DISTINCT] col_name [ORDER BY col_name_2 [ASC | DESC]] [SEPARATOR str_val])
+    /// Note: arguments that are square-bracketed [] are optional
+    /// This parser is dedicated for the second syntax because the first syntax is already handled by default
+
+    ParserKeyword s_distinct("DISTINCT");
+    ParserKeyword s_order_by("ORDER BY");
+    ParserKeyword s_separator("SEPARATOR");
+    ParserNotEmptyExpressionList column_elem(false, dt);
+    ParserOrderByExpressionList columns_order_by(dt);
+    ParserExpressionList separator_elem(false, dt);
+
+    bool has_distinct = false;
+
+    ASTPtr expr_list_args;
+    ASTPtr expr_list_params;
+
+    if (!ParserKeyword("GROUP_CONCAT").ignore(pos, expected) && !ParserKeyword("groupConcat").ignore(pos, expected))
+        return false;
+    
+    if (pos->type != TokenType::OpeningRoundBracket)
+        return false;
+    ++pos;
+
+    if (s_distinct.ignore(pos, expected))
+        has_distinct = true;
+
+    if (!column_elem.parse(pos, expr_list_args, expected))
+        return false;
+
+    if (s_order_by.ignore(pos, expected))
+    {
+        ASTPtr order_by_ast;
+
+        if (!columns_order_by.parse(pos, order_by_ast, expected))
+            return false;
+        
+        // TODO: order the data by the column specified BEFORE aggregating
+    }
+
+    if (s_separator.ignore(pos, expected))
+    {
+        if (!separator_elem.parse(pos, expr_list_params, expected))
+            return false;
+    }
+
+    if (pos->type != TokenType::ClosingRoundBracket)
+        return false;
+    ++pos;
+
+    if (pos->type == TokenType::OpeningRoundBracket)
+        // It's not the second syntax. Maybe the first or maybe a syntax error
+        return false;
+
+    auto function_node = std::make_shared<ASTFunction>();
+
+    function_node->name = "groupConcat";
+    if (has_distinct)
+        function_node->name += "Distinct";
+
+    function_node->arguments = expr_list_args;
+    function_node->children.push_back(function_node->arguments);
+
+    if (expr_list_params)
+    {
+        function_node->parameters = expr_list_params;
+        function_node->children.push_back(function_node->parameters);
+    }
+
+    node = std::move(function_node);
     return true;
 }
 
@@ -2428,6 +2505,7 @@ bool ParserExpressionElement::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
         || ParserDateAddExpression(dt).parse(pos, node, expected)
         || ParserDateDiffExpression(dt).parse(pos, node, expected)
         || ParserSubstringExpression(dt).parse(pos, node, expected)
+        || ParserGroupConcatExpression(dt).parse(pos, node, expected)
         || ParserTrimExpression(dt).parse(pos, node, expected)
         || ParserLeftExpression(dt).parse(pos, node, expected)
         || ParserRightExpression(dt).parse(pos, node, expected)

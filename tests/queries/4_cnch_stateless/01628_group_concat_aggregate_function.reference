@@ -1,0 +1,10 @@
+Anna,Bob,Charlie,Dan,Eve,Frans,Anna
+Anna,Bob,Charlie
+Dan,Eve
+Frans
+Anna
+Anna#Bob#Charlie#Dan#Eve#Frans#Anna
+Dan+Anna+Charlie+Eve+Bob+Frans
+#,#,#,#,#,#,#
+#
+Dan#Anna#Charlie#Eve#Bob#Frans
