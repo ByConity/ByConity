@@ -98,11 +98,11 @@ public:
 
     static String prettyNum(size_t num);
     static String prettyBytes(size_t bytes);
-private:
     static String prettySeconds(size_t seconds);
     static String printPrefix(PlanNodeBase & plan);
     String printSuffix(PlanNodeBase & plan);
-    static String printQError(PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles);
+    static String printQError(const PlanNodeBase & plan, const StepAggregatedOperatorProfiles & profiles);
+private:
     String printDetail(QueryPlanStepPtr plan, const TextPrinterIntent & intent) const;
     String printStatistics(const PlanNodeBase & plan, const TextPrinterIntent & intent = {}) const;
     static String printOperatorProfiles(PlanNodeBase & plan, const TextPrinterIntent & intent = {}, const StepAggregatedOperatorProfiles & profiles = {}) ;

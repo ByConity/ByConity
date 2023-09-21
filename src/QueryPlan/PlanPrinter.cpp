@@ -384,9 +384,10 @@ String PlanPrinter::TextPrinter::printLogicalPlan(PlanNodeBase & plan, const Tex
             out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan);
             if (print_stats)
                 out << intent.detailIntent() << printStatistics(plan, intent);
-            out << printOperatorProfiles(plan, intent, profiles)
-                << printQError(plan, intent, profiles)
-                << printDetail(plan.getStep(), intent) << "\n";
+            out << printOperatorProfiles(plan, intent, profiles);
+            if (profiles.count(plan.getId()))
+                out << intent.detailIntent() << printQError(plan, profiles);
+            out << printDetail(plan.getStep(), intent) << "\n";
         }
         else
         {
@@ -434,9 +435,9 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(PlanNodeBase & plan, cons
     {
         const auto & profile = profiles.at(step_id);
         std::stringstream out;
-        out << intent.detailIntent() << "Act. Output " << prettyNum(profile->output_rows) << " rows (" << prettyBytes(profile->output_bytes) << ")";
-        out << ", Output wait Time: " << prettySeconds(profile->max_output_wait_elapsed_us);
-        out << ", Wall Time: " << prettySeconds(profile->max_elapsed_us);
+        out << intent.detailIntent() << "Act. Output: " << prettyNum(profile->output_rows) << " rows (" << prettyBytes(profile->output_bytes) << ")"
+            << ", Wait Time: " << prettySeconds(profile->max_output_wait_elapsed_us)
+            << ", Wall Time: " << prettySeconds(profile->max_elapsed_us);
 
         int num = 1;
         if (!plan.getChildren().empty() && profile->inputs_profile.contains(plan.getChildren()[0]->getId()))
@@ -445,15 +446,15 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(PlanNodeBase & plan, cons
             {
                 auto input_profile = profile->inputs_profile[child->getId()];
                 if (num == 1)
-                    out << intent.detailIntent() << "Input. " ;
+                    out << intent.detailIntent() << "     Input: ";
                 else
-                    out << intent.detailIntent() << "       ";
+                    out << intent.detailIntent() << "            ";
 
                 if (plan.getChildren().size() > 1)
                     out << "source [" << num << "] : ";
 
                 out <<  prettyNum(input_profile.input_rows) << " rows (" << prettyBytes(input_profile.input_bytes) << ")";
-                out << ", Input wait Time: " << prettySeconds(input_profile.input_wait_elapsed_us);
+                out << ", Wait Time: " << prettySeconds(input_profile.input_wait_elapsed_us);
                 ++num;
             }
         }
@@ -462,14 +463,14 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(PlanNodeBase & plan, cons
             for (auto & [id, input_metrics] : profile->inputs_profile)
             {
                 if (num == 1)
-                    out << intent.detailIntent() << "Input. " ;
+                    out << intent.detailIntent() << "     Input: ";
                 else
-                    out << intent.detailIntent() << "       ";
+                    out << intent.detailIntent() << "            ";
 
                 if (plan.getChildren().size() > 1)
                     out << "source [" << num << "] : ";
 
-                out << "Input wait Time: " << prettySeconds(input_metrics.input_wait_elapsed_us);
+                out << "Wait Time: " << prettySeconds(input_metrics.input_wait_elapsed_us);
                 ++num;
             }
         }
@@ -530,7 +531,7 @@ String PlanPrinter::TextPrinter::prettyBytes(size_t bytes)
     return out.str();
 }
 
-String PlanPrinter::TextPrinter::printQError(PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles)
+String PlanPrinter::TextPrinter::printQError(const PlanNodeBase & plan, const StepAggregatedOperatorProfiles & profiles)
 {
     const auto & stats = plan.getStatistics();
     std::stringstream out;
@@ -539,11 +540,10 @@ String PlanPrinter::TextPrinter::printQError(PlanNodeBase & plan, const TextPrin
     if (profiles.count(step_id))
     {
         const auto& profile = profiles.at(step_id);
-        out << intent.detailIntent();
         if (plan.getChildren().size() > 1)
         {
             size_t max_input_rows = 0;
-            for (auto & p : plan.getChildren())
+            for (const auto & p : plan.getChildren())
             {
                 if (profiles.count(p->getId()) == 0)
                     continue;
