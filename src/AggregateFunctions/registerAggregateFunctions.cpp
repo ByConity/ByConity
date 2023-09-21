@@ -115,6 +115,7 @@ void registerAggregateFunctionRegAuc(AggregateFunctionFactory &);
 void registerAggregateFunctionRegAucV2(AggregateFunctionFactory &);
 void registerAggregateFunctionDebiasAuc(AggregateFunctionFactory &);
 void registerAggregateFunctionEcpmAuc(AggregateFunctionFactory &);
+void registerAggregateFunctionNdcg(AggregateFunctionFactory &);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -229,6 +230,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionRegAucV2(factory);
         registerAggregateFunctionDebiasAuc(factory);
         registerAggregateFunctionEcpmAuc(factory);
+        registerAggregateFunctionNdcg(factory);
     }
 
     {
