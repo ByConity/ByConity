@@ -108,7 +108,8 @@ DECLARE_CONFIG_DATA(RootConfigurationData, ROOT_CONFIG_FIELDS_LIST)
 #define QM_CONFIG_FIELDS_LIST(M) \
     M(MutableUInt64, max_vw_parallelize_size, "max_vw_parallelize_size", 20, ConfigFlag::Default, "")  \
     M(MutableUInt64, batch_size, "batch_size", 2, ConfigFlag::Default, "") \
-    M(MutableUInt64, query_queue_size, "query_queue_size", 100, ConfigFlag::Default, "") 
+    M(MutableUInt64, query_queue_size, "query_queue_size", 100, ConfigFlag::Default, "")  \
+    M(MutableUInt64, trigger_interval, "trigger_interval", 100, ConfigFlag::Default, "") 
 
 DECLARE_CONFIG_DATA(QMConfigurationData, QM_CONFIG_FIELDS_LIST)
 struct QMConfiguration final : public QMConfigurationData

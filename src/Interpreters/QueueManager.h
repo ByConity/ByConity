@@ -11,6 +11,7 @@
 #include <bthread/mutex.h>
 #include <Common/Configurations.h>
 #include <common/types.h>
+#include <Common/Stopwatch.h>
 namespace DB
 {
 
@@ -39,6 +40,7 @@ struct QueueInfo
         : query_id(qid), vw_name(vw_name_), wg_name(wg_name_), context(context_)
     {
         vw = vw_name + "." + wg_name;
+        enqueue_time = time(nullptr);
     }
     QueueInfo() = default;
     String query_id;
@@ -48,6 +50,8 @@ struct QueueInfo
     std::atomic<QueueResultStatus> result{QueueResultStatus::QueueSuccess};
     bthread::ConditionVariable cv;
     ContextMutablePtr context;
+    time_t enqueue_time{};
+    Stopwatch sw;
 };
 using QueueInfoPtr = std::shared_ptr<QueueInfo>;
 using QueryQueue = std::deque<QueueInfoPtr>;
@@ -59,11 +63,12 @@ public:
 
     void start() { task->activateAndSchedule(); }
     void stop() { task->deactivate(); }
+    void setInterval(UInt64 _interval) { interval = _interval; }
     ~QueueManagerTriggerTask();
     void threadFunc();
 
 private:
-    UInt64 interval; /// in ms;
+    std::atomic<UInt64> interval; /// in ms;
     BackgroundSchedulePool::TaskHolder task;
     QueueManager * queue_manager{nullptr};
 };
@@ -128,6 +133,19 @@ public:
     bool isStop() const { return is_stop; }
     size_t getVWParallelizeSize() { return vw_parallelize_size; }
     void stop() { is_stop = true; }
+
+    template <class Callback>
+    void getQueueInfo(Callback && callback)
+    {
+        std::lock_guard lg(mutex);
+        for (const auto & [_, queue] : query_queues)
+        {
+            for (const auto & queue_info_ptr : queue)
+            {
+                callback(queue_info_ptr);
+            }
+        }
+    }
 
 private:
     bthread::Mutex mutex;
