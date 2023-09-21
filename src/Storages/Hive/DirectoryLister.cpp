@@ -26,22 +26,6 @@ namespace ErrorCodes
     extern const int UNKNOWN_STORAGE;
 }
 
-std::shared_ptr<IDirectoryLister> IDirectoryLister::get(
-    const StorageCnchHive & storage,
-    const ContextPtr & local_context)
-{
-    auto disk = HiveUtil::getDiskFromURI(storage.hive_table->sd.location, local_context, *storage.storage_settings);
-    const auto & input_format = storage.hive_table->sd.inputFormat;
-    if (input_format == "org.apache.hudi.hadoop.HoodieParquetInputFormat")
-    {
-        return std::make_shared<HudiCowDirectoryLister>(disk);
-    }
-    else
-    {
-        return std::make_shared<DiskDirectoryLister>(disk);
-    }
-}
-
 namespace HiveUtil
 {
 String getPath(const String & path)

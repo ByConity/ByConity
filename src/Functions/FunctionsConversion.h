@@ -1525,7 +1525,7 @@ struct ConvertThroughParsing
             }
             else
             {
-                bool parsed;
+                bool parsed {};
 
                 if constexpr (parsing_mode == ConvertFromStringParsingMode::BestEffort)
                 {

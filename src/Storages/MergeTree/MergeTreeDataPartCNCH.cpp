@@ -525,7 +525,7 @@ void MergeTreeDataPartCNCH::checkConsistency([[maybe_unused]] bool require_part_
 {
 }
 
-MergeTreeDataPartCNCH::IndexPtr MergeTreeDataPartCNCH::loadIndex()
+void MergeTreeDataPartCNCH::loadIndex()
 {
     // each projection always has the primary index in the current part
     if (!parent_part && isPartial())
@@ -533,7 +533,7 @@ MergeTreeDataPartCNCH::IndexPtr MergeTreeDataPartCNCH::loadIndex()
         /// Partial parts may not have index; primary columns never get altered, so getting index from base parts
         auto base_part = getBasePart();
         index = base_part->getIndex();
-        return index;
+        return;
     }
 
     /// It can be empty in case of mutations
@@ -548,7 +548,7 @@ MergeTreeDataPartCNCH::IndexPtr MergeTreeDataPartCNCH::loadIndex()
     size_t key_size = primary_key.column_names.size();
 
     if (!key_size)
-        return index;
+        return;
 
     if (enableDiskCache())
     {
@@ -563,7 +563,7 @@ MergeTreeDataPartCNCH::IndexPtr MergeTreeDataPartCNCH::loadIndex()
                 LOG_DEBUG(storage.log, "has index disk cache {}", segment_path);
                 auto cache_buf = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
                 index = loadIndexFromBuffer(*cache_buf, primary_key);
-                return index;
+                return;
             }
             catch (...)
             {
@@ -590,8 +590,6 @@ MergeTreeDataPartCNCH::IndexPtr MergeTreeDataPartCNCH::loadIndex()
         auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
         disk_cache->cacheSegmentsToLocalDisk({std::move(index_seg)});
     }
-
-    return index;
 }
 
 IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_unused]] bool require)

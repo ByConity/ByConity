@@ -220,12 +220,8 @@ void PocoHTTPClient::makeRequestInternal(
             }
             else
             {
-                pooled_session = makePooledHTTPSession(target_uri, timeouts, 512);
+                pooled_session = makePooledHTTPSession(target_uri, timeouts, http_connection_pool_size, wait_on_pool_size_limit, false);
                 session = &(*pooled_session);
-            }
-
-            if (is_get_req) {
-                ProfileEvents::increment(ProfileEvents::PocoHTTPS3GetSessionTime, session_watch.elapsedMicroseconds());
             }
 
             Poco::Net::HTTPRequest poco_request(Poco::Net::HTTPRequest::HTTP_1_1);

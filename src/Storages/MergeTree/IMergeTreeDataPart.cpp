@@ -917,7 +917,7 @@ IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::loadIndexFromBuffer(ReadBuffer 
     return {};
 }
 
-IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::loadIndex()
+void IMergeTreeDataPart::loadIndex()
 {
     /// It can be empty in case of mutations
     if (!index_granularity.isInitialized())
@@ -939,8 +939,6 @@ IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::loadIndex()
             index = loadIndexFromBuffer(*index_file, primary_key);
         }
     }
-
-    return index;
 }
 
 NameSet IMergeTreeDataPart::getFileNamesWithoutChecksums() const
