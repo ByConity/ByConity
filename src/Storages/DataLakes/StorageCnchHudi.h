@@ -21,7 +21,8 @@ public:
         const String & hive_table_name_,
         StorageInMemoryMetadata metadata_,
         ContextPtr context_,
-        std::shared_ptr<CnchHiveSettings> settings_);
+        std::shared_ptr<CnchHiveSettings> settings_,
+        IMetaClientPtr client_from_catalog = nullptr);
 
     virtual std::shared_ptr<IDirectoryLister> getDirectoryLister() override;
 

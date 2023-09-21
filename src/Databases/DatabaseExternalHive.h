@@ -43,6 +43,8 @@ public:
 
     void shutdown() override;
 
+protected:
+    ASTPtr getCreateTableQueryImpl(const String & name, ContextPtr local_context, bool throw_on_error) const override;
 
 private:
     String hive_catalog_name;

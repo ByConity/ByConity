@@ -300,6 +300,17 @@ ASTCreateQuery HiveSchemaConverter::createQueryAST(const std::string & catalog_n
     auto engine = std::make_shared<ASTFunction>();
     {
         engine->name = "CnchHive";
+        const auto & input_format = hive_table->sd.inputFormat;
+        if (input_format == "org.apache.hudi.hadoop.HoodieParquetInputFormat")
+        {
+            engine->name = "CnchHudi";
+        }
+#if USE_JAVA_EXTENSIONS
+        else if (input_format == "org.apache.hudi.hadoop.realtime.HoodieParquetRealtimeInputFormat")
+        {
+            engine->name = "CnchHudi";
+        }
+#endif
         engine->arguments = std::make_shared<ASTExpressionList>();
         // We just fill a dummy str for psm field.
         engine->arguments->children.push_back(std::make_shared<ASTIdentifier>(catalog_name));

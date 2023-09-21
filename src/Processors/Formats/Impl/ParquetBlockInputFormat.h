@@ -85,7 +85,8 @@ public:
     const BlockMissingValues & getMissingValues() const override;
 
     size_t getApproxBytesReadForChunk() const { return previous_approx_bytes_read_for_chunk; }
-    static std::vector<int> getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header);
+    static std::vector<int>
+    getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header, const FormatSettings & format_settings);
 
 
 private:

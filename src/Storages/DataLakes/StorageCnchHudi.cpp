@@ -26,8 +26,9 @@ StorageCnchHudi::StorageCnchHudi(
     const String & hive_table_name_,
     StorageInMemoryMetadata metadata_,
     ContextPtr context_,
-    std::shared_ptr<CnchHiveSettings> settings_)
-    : StorageCnchHive(table_id_, hive_metastore_url_, hive_db_name_, hive_table_name_, metadata_, context_, settings_)
+    std::shared_ptr<CnchHiveSettings> settings_,
+    IMetaClientPtr client_from_catalog)
+    : StorageCnchHive(table_id_, hive_metastore_url_, hive_db_name_, hive_table_name_, metadata_, context_, settings_, client_from_catalog)
 {
     log = &Poco::Logger::get("CnchHudi");
 }
@@ -117,7 +118,8 @@ void registerStorageHudi(StorageFactory & factory)
             hive_table,
             std::move(metadata),
             args.getContext(),
-            hive_settings);
+            hive_settings,
+            args.hive_client);
     },
     features);
 }

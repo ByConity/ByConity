@@ -1979,9 +1979,37 @@ void Context::setCurrentDatabase(const String & name)
 
 void Context::setCurrentDatabase(const String & name, ContextPtr local_context)
 {
+    bool use_cnch_catalog = false;
+    auto [catalog_opt, database_opt] = getCatalogNameAndDatabaseName(name);
     DatabaseCatalog::instance().assertDatabaseExists(name, local_context);
+
+    if (catalog_opt.has_value())
+    {
+        auto catalog_name = catalog_opt.value();
+        if (catalog_name.empty() || getOriginalDatabaseName(catalog_name) == "cnch")
+        {
+            use_cnch_catalog = true;
+        }
+        else if (!(ExternalCatalog::Mgr::instance().isCatalogExist(catalog_name)))
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "catalog {} does not exist", catalog_name);
+        }
+    } else 
+    {
+        use_cnch_catalog = true;
+    }
+
+    auto db_name_with_tenant_id = appendTenantIdOnly(database_opt.value());
     auto lock = getLock();
-    current_database = name;
+    if(use_cnch_catalog){
+        current_catalog = "";
+        current_database = db_name_with_tenant_id;
+        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "use cnch catalog, db_name: {}", db_name_with_tenant_id);
+    } else {
+        current_catalog = catalog_opt.value();
+        current_database =  database_opt.value();
+        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "use external catalog, catalog_name: {}, db_name: {}", current_catalog, current_database);
+    }
     calculateAccessRights();
 }
 
@@ -1989,7 +2017,9 @@ void Context::setCurrentCatalog(const String & catalog_name)
 {
     if (catalog_name == "" || catalog_name == "cnch")
     {
+        auto lock = getLock();
         current_catalog = "";
+        current_database = "";
         return;
     }
     bool exists = ExternalCatalog::Mgr::instance().isCatalogExist(catalog_name);
@@ -1999,6 +2029,7 @@ void Context::setCurrentCatalog(const String & catalog_name)
     }
     auto lock = getLock();
     current_catalog = catalog_name;
+    current_database = "default";
 }
 
 

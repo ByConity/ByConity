@@ -27,8 +27,8 @@ namespace DB
 {
 
 class FunctionFactory;
-
 void registerFunctionCurrentDatabase(FunctionFactory &);
+void registerFunctionCurrentCatalog(FunctionFactory &);
 void registerFunctionCurrentUser(FunctionFactory &);
 void registerFunctionHostName(FunctionFactory &);
 void registerFunctionHost(FunctionFactory &);
@@ -110,6 +110,7 @@ void registerFunctionConvertCharset(FunctionFactory &);
 void registerFunctionsMiscellaneous(FunctionFactory & factory)
 {
     registerFunctionCurrentDatabase(factory);
+    registerFunctionCurrentCatalog(factory);
     registerFunctionCurrentUser(factory);
     registerFunctionHostName(factory);
     registerFunctionHost(factory);

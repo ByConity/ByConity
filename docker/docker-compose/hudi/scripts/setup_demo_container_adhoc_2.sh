@@ -16,8 +16,8 @@
 # specific language governing permissions and limitations
 # under the License.
 
-echo "Copying spark default config and setting up configs"
-cp /var/scripts/config/spark-defaults.conf $SPARK_CONF_DIR/.
+echo "Copying spark default_hive config and setting up configs"
+cp /var/scripts/config/spark-default_hives.conf $SPARK_CONF_DIR/.
 cp /var/scripts/config/log4j2.properties $SPARK_CONF_DIR/.
 echo "sleep 10, wait hdfs start"
 sleep 10
@@ -41,7 +41,7 @@ echo "Start synchronizing the stock_ticks_cow table"
   --pass hive \
   --partitioned-by date \
   --base-path /user/hive/warehouse/stock_ticks_cow \
-  --database default \
+  --database default_hive \
   --table stock_ticks_cow \
   --partition-value-extractor org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 
@@ -52,7 +52,7 @@ echo "Start synchronizing the stock_ticks_mor table"
   --pass hive \
   --partitioned-by date \
   --base-path /user/hive/warehouse/stock_ticks_mor \
-  --database default \
+  --database default_hive \
   --table stock_ticks_mor \
   --partition-value-extractor org.apache.hudi.hive.SlashEncodedDayPartitionValueExtractor
 
@@ -63,7 +63,7 @@ echo "Start synchronizing the hudi_cow_pt_tbl table"
   --pass hive \
   --partitioned-by dt \
   --base-path /user/hive/warehouse/hudi_cow_pt_tbl \
-  --database default \
+  --database default_hive \
   --table hudi_cow_pt_tbl \
   --partition-value-extractor org.apache.hudi.hive.HiveStylePartitionValueExtractor
 
@@ -73,5 +73,5 @@ echo "Start synchronizing the hudi_non_part_cow table"
   --user hive \
   --pass hive \
   --base-path /user/hive/warehouse/hudi_non_part_cow \
-  --database default \
+  --database default_hive \
   --table hudi_non_part_cow \
