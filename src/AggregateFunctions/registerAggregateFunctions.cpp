@@ -30,6 +30,7 @@ namespace DB
 struct Settings;
 
 class AggregateFunctionFactory;
+void registerAggregateFunctionArbitrary(AggregateFunctionFactory &);
 void registerAggregateFunctionAvg(AggregateFunctionFactory &);
 void registerAggregateFunctionAvgWeighted(AggregateFunctionFactory &);
 void registerAggregateFunctionCount(AggregateFunctionFactory &);
@@ -139,6 +140,7 @@ void registerAggregateFunctions()
     {
         auto & factory = AggregateFunctionFactory::instance();
 
+        registerAggregateFunctionArbitrary(factory);
         registerAggregateFunctionAvg(factory);
         registerAggregateFunctionAvgWeighted(factory);
         registerAggregateFunctionCount(factory);
