@@ -148,60 +148,67 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
         request.WithPrefix(rootPrefix);
     }
 
-    auto outcome = client.ListObjects(request);
+    boost::asio::thread_pool thread_pool(threadNum);
+    bool is_done = false;
+    while (!is_done) {
+        auto outcome = client.ListObjects(request);
+        if (!outcome.IsSuccess()) {
+            const S3::S3Error &err = outcome.GetError();
+            LOG_WARNING(&Poco::Logger::get("RenameS3Tool"), "Error: ListObjects: {}: {}", 
+                err.GetExceptionName() , err.GetMessage());
+            return false;
+        }
+        else {
+            Vector<S3::Model::Object> objects = outcome.GetResult().GetContents();
+            for (S3::Model::Object &object: objects) {
+                // root_prefix/table_uuid/part_uuid/name
+                String from_key = object.GetKey();
+                Vector<String> split_parts;
+                boost::split(split_parts, from_key, boost::is_any_of("/"));
 
-    if (!outcome.IsSuccess()) {
-        const S3::S3Error &err = outcome.GetError();
-        LOG_WARNING(&Poco::Logger::get("RenameS3Tool"), "Error: ListObjects: {}: {}", 
-            err.GetExceptionName() , err.GetMessage());
-        return false;
-    }
-    else {
-        Vector<S3::Model::Object> objects = outcome.GetResult().GetContents();
-        boost::asio::thread_pool thread_pool(threadNum);
-        for (S3::Model::Object &object: objects) {
-            // root_prefix/table_uuid/part_uuid/name
-            String from_key = object.GetKey();
-            Vector<String> split_parts;
-            boost::split(split_parts, from_key, boost::is_any_of("/"));
+                size_t index = 0;
+                while (index < split_parts.size()) {
+                    if (rootPrefix.find(split_parts[index]) != std::string::npos) {
+                        index++;
+                    } else {
+                        break;
+                    }
+                }
 
-            size_t index = 0;
-            while (index < split_parts.size()) {
-                if (rootPrefix.find(split_parts[index]) != std::string::npos) {
-                    index++;
-                } else {
-                    break;
+                if (split_parts.size() - index == 3) {
+                    if (checkUUid) {
+                        DB::UUID uuid;
+                        DB::ReadBufferFromString table_buffer(split_parts[index]);
+                        DB::ReadBufferFromString part_buffer(split_parts[index + 1]);
+                        if (!DB::tryReadUUIDText(uuid, table_buffer) || !DB::tryReadUUIDText(uuid, part_buffer)) {
+                            continue;
+                        }
+                    }
+                    String to_key = rootPrefix + "/" + split_parts[index + 1] + "/" + split_parts[index + 2];
+                    int64_t object_size = object.GetSize();
+                    // submit copy task
+                    boost::asio::post(thread_pool, [=, &client]() {
+                        bool copy_result = false;
+                        if (object_size >= MAX_OBJECT_SIZE) {
+                            copy_result = UploadPartCopy(fromBucket, from_key, toBucket, to_key, object_size, client);
+                        } else {
+                            copy_result = CopyObject(fromBucket, from_key, toBucket, to_key, client); 
+                        }
+                        if (copy_result && needDelete) {
+                            DeleteObject(from_key, fromBucket, client);
+                        }
+                    });
                 }
             }
-
-            if (split_parts.size() - index == 3) {
-                if (checkUUid) {
-                    DB::UUID uuid;
-                    DB::ReadBufferFromString table_buffer(split_parts[index]);
-                    DB::ReadBufferFromString part_buffer(split_parts[index + 1]);
-                    if (!DB::tryReadUUIDText(uuid, table_buffer) || !DB::tryReadUUIDText(uuid, part_buffer)) {
-                        continue;
-                    }
-                }
-                String to_key = rootPrefix + "/" + split_parts[index + 1] + "/" + split_parts[index + 2];
-                int64_t object_size = object.GetSize();
-                // submit copy task
-                boost::asio::post(thread_pool, [=, &client]() {
-                    bool copy_result = false;
-                    if (object_size >= MAX_OBJECT_SIZE) {
-                        copy_result = UploadPartCopy(fromBucket, from_key, toBucket, to_key, object_size, client);
-                    } else {
-                        copy_result = CopyObject(fromBucket, from_key, toBucket, to_key, client); 
-                    }
-                    if (copy_result && needDelete) {
-                        DeleteObject(from_key, fromBucket, client);
-                    }
-                });
+            
+            is_done = !outcome.GetResult().GetIsTruncated();
+            if (!is_done) {
+                request.SetMarker(objects.back().GetKey());
             }
         }
-        thread_pool.join();
-        return true;
     }
+    thread_pool.join();
+    return true;
 }
 
 namespace po = boost::program_options;
