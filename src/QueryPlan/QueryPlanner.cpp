@@ -420,7 +420,7 @@ RelationPlan QueryPlannerVisitor::visitASTExplainQuery(ASTPtr & node, const Void
     auto plan = process(query.getExplainedQuery());
     auto analyze_node = PlanNodeBase::createPlanNode(
         context->nextNodeId(),
-        std::make_shared<ExplainAnalyzeStep>(plan.getRoot()->getCurrentDataStream(), query.getKind(), context),
+        std::make_shared<ExplainAnalyzeStep>(plan.getRoot()->getCurrentDataStream(), query.getKind(), context, nullptr, query.print_stats, query.print_profile),
         {plan.getRoot()});
 
     return {analyze_node, {{"Explain Analyze"}}};

@@ -57,9 +57,10 @@ String PlanPrinter::textLogicalPlan(
     bool print_stats,
     bool verbose,
     PlanCostMap costs,
-    const StepAggregatedOperatorProfiles & profiles)
+    const StepAggregatedOperatorProfiles & profiles,
+    bool print_profile)
 {
-    TextPrinter printer{print_stats, verbose, costs};
+    TextPrinter printer{print_stats, verbose, costs, false, {}, print_profile};
     bool has_children = !plan.getPlanNode()->getChildren().empty();
     auto output = printer.printLogicalPlan(*plan.getPlanNode(), TextPrinterIntent{0, has_children}, profiles);
 
@@ -144,7 +145,8 @@ String PlanPrinter::textDistributedPlan(
     bool verbose,
     const std::unordered_map<PlanNodeId, double> & costs,
     const StepAggregatedOperatorProfiles & profiles,
-    const QueryPlan & query_plan
+    const QueryPlan & query_plan,
+    bool print_profile
 )
 {
     auto id_to_node = getPlanNodeMap(query_plan);
@@ -239,7 +241,7 @@ String PlanPrinter::textDistributedPlan(
         if (analyze_node)
         {
             os << TextPrinter::printOutputColumns(*analyze_node.value()->getChildren()[0], TextPrinterIntent{3, false});
-            TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment};
+            TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment, print_profile};
             bool has_children = !analyze_node.value()->getChildren().empty();
             if ((analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::CTERef || analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::Exchange))
                 has_children = false;
@@ -251,7 +253,7 @@ String PlanPrinter::textDistributedPlan(
         {
             auto plan_root = segment_ptr->plan_node;
             os << TextPrinter::printOutputColumns(*segment_ptr->plan_node, TextPrinterIntent{3, false});
-            TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment};
+            TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment, print_profile};
             bool has_children = !plan_root->getChildren().empty();
             if ((plan_root->getStep()->getType() == IQueryPlanStep::Type::CTERef || plan_root->getStep()->getType() == IQueryPlanStep::Type::Exchange))
                 has_children = false;
@@ -377,11 +379,24 @@ String PlanPrinter::TextPrinter::printLogicalPlan(PlanNodeBase & plan, const Tex
     }
     else
     {
-        out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan)
-            << intent.detailIntent() << printStatistics(plan, intent)
-            << printOperatorProfiles(plan, intent, profiles)
-            << printQError(plan, intent, profiles)
-            << printDetail(plan.getStep(), intent) << "\n";
+        if (print_profile)
+        {
+            out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan);
+            if (print_stats)
+                out << intent.detailIntent() << printStatistics(plan, intent);
+            out << printOperatorProfiles(plan, intent, profiles);
+            if (profiles.count(plan.getId()))
+                out << intent.detailIntent() << printQError(plan, profiles);
+            out << printDetail(plan.getStep(), intent) << "\n";
+        }
+        else
+        {
+            out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan);
+            if (print_stats)
+                out << intent.detailIntent() << printStatistics(plan, intent);
+            out << printDetail(plan.getStep(), intent) << "\n";
+        }
+        
     }
 
     if ((step->getType() == IQueryPlanStep::Type::CTERef || step->getType() == IQueryPlanStep::Type::Exchange) && is_distributed)
@@ -420,9 +435,9 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(PlanNodeBase & plan, cons
     {
         const auto & profile = profiles.at(step_id);
         std::stringstream out;
-        out << intent.detailIntent() << "Act. Output " << prettyNum(profile->output_rows) << " rows (" << prettyBytes(profile->output_bytes) << ")";
-        out << ", Output wait Time: " << prettySeconds(profile->max_output_wait_elapsed_us);
-        out << ", Wall Time: " << prettySeconds(profile->max_elapsed_us);
+        out << intent.detailIntent() << "Act. Output: " << prettyNum(profile->output_rows) << " rows (" << prettyBytes(profile->output_bytes) << ")"
+            << ", Wait Time: " << prettySeconds(profile->max_output_wait_elapsed_us)
+            << ", Wall Time: " << prettySeconds(profile->max_elapsed_us);
 
         int num = 1;
         if (!plan.getChildren().empty() && profile->inputs_profile.contains(plan.getChildren()[0]->getId()))
@@ -431,15 +446,15 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(PlanNodeBase & plan, cons
             {
                 auto input_profile = profile->inputs_profile[child->getId()];
                 if (num == 1)
-                    out << intent.detailIntent() << "Input. " ;
+                    out << intent.detailIntent() << "     Input: ";
                 else
-                    out << intent.detailIntent() << "       ";
+                    out << intent.detailIntent() << "            ";
 
                 if (plan.getChildren().size() > 1)
                     out << "source [" << num << "] : ";
 
                 out <<  prettyNum(input_profile.input_rows) << " rows (" << prettyBytes(input_profile.input_bytes) << ")";
-                out << ", Input wait Time: " << prettySeconds(input_profile.input_wait_elapsed_us);
+                out << ", Wait Time: " << prettySeconds(input_profile.input_wait_elapsed_us);
                 ++num;
             }
         }
@@ -448,14 +463,14 @@ String PlanPrinter::TextPrinter::printOperatorProfiles(PlanNodeBase & plan, cons
             for (auto & [id, input_metrics] : profile->inputs_profile)
             {
                 if (num == 1)
-                    out << intent.detailIntent() << "Input. " ;
+                    out << intent.detailIntent() << "     Input: ";
                 else
-                    out << intent.detailIntent() << "       ";
+                    out << intent.detailIntent() << "            ";
 
                 if (plan.getChildren().size() > 1)
                     out << "source [" << num << "] : ";
 
-                out << "Input wait Time: " << prettySeconds(input_metrics.input_wait_elapsed_us);
+                out << "Wait Time: " << prettySeconds(input_metrics.input_wait_elapsed_us);
                 ++num;
             }
         }
@@ -516,7 +531,7 @@ String PlanPrinter::TextPrinter::prettyBytes(size_t bytes)
     return out.str();
 }
 
-String PlanPrinter::TextPrinter::printQError(PlanNodeBase & plan, const TextPrinterIntent & intent, const StepAggregatedOperatorProfiles & profiles)
+String PlanPrinter::TextPrinter::printQError(const PlanNodeBase & plan, const StepAggregatedOperatorProfiles & profiles)
 {
     const auto & stats = plan.getStatistics();
     std::stringstream out;
@@ -525,11 +540,10 @@ String PlanPrinter::TextPrinter::printQError(PlanNodeBase & plan, const TextPrin
     if (profiles.count(step_id))
     {
         const auto& profile = profiles.at(step_id);
-        out << intent.detailIntent();
         if (plan.getChildren().size() > 1)
         {
             size_t max_input_rows = 0;
-            for (auto & p : plan.getChildren())
+            for (const auto & p : plan.getChildren())
             {
                 if (profiles.count(p->getId()) == 0)
                     continue;

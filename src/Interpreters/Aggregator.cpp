@@ -259,7 +259,6 @@ void initDataVariantsWithSizeHint(
                     /*result_size_bytes*/ 0))
                 method_chosen = convertToTwoLevelTypeIfPossible(method_chosen);
             result.init(method_chosen, adjusted);
-            ProfileEvents::increment(ProfileEvents::AggregationHashTablesInitializedAsTwoLevel, result.isTwoLevel());
             return;
         }
     }
@@ -318,7 +317,6 @@ auto constructWithReserveIfPossible(size_t size_hint)
 {
     if constexpr (HasConstructorOfNumberOfElements<typename Method::Data>::value)
     {
-        ProfileEvents::increment(ProfileEvents::AggregationPreallocatedElementsInHashTables, size_hint);
         return std::make_unique<Method>(size_hint);
     }
     else

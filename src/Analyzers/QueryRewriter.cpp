@@ -460,12 +460,13 @@ namespace
             result.analyzed_join->setColumnsFromJoinedTable(cols_from_joined);
 
             result.analyzed_join->deduplicateAndQualifyColumnNames(
-                result.source_columns_set, right_table.table.getQualifiedNamePrefix());
+                result.source_columns_set, right_table.table.getQualifiedNamePrefix(), settings.check_identifier_begin_valid);
         }
 
         // 2. Rewrite qualified names
         {
-            TranslateQualifiedNamesVisitor::Data visitor_data(result.source_columns_set, tables_with_columns);
+            TranslateQualifiedNamesVisitor::Data visitor_data(
+                result.source_columns_set, tables_with_columns, true, {}, false, settings.check_identifier_begin_valid);
             TranslateQualifiedNamesVisitor visitor(visitor_data);
             visitor.visit(node);
         }
@@ -590,11 +591,11 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
         rewrite_query(query);
     }
 
-    if (query->as<ASTExplainQuery>())
-    {
-        auto & explain = query->as<ASTExplainQuery &>();
-        explain.getExplainedQuery() = explain.children[0];
-    }
+    // if (query->as<ASTExplainQuery>())
+    // {
+    //     auto & explain = query->as<ASTExplainQuery &>();
+    //     explain.getExplainedQuery() = explain.getExplainedQuery();
+    // }
 
     GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-done");
 

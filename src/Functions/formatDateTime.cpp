@@ -931,10 +931,10 @@ namespace
                             if constexpr (std::is_same_v<FromDataType, DataTypeInt64> || std::is_same_v<FromDataType, DataTypeUInt64>)
                             {
                                 if (adaptive_cast)
-                                    res = ConvertImpl<FromDataType, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, true>::execute(
+                                    res = ConvertImpl<FromDataType, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, ConvertExceptionMode::Throw, true>::execute(
                                         converted, result_type, input_rows_count);
                                 else
-                                    res = ConvertImpl<FromDataType, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, false>::execute(
+                                    res = ConvertImpl<FromDataType, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, ConvertExceptionMode::Throw, false>::execute(
                                         converted, result_type, input_rows_count);
                             }
                             else

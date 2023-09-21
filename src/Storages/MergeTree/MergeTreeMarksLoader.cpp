@@ -168,7 +168,9 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
         }
 
         if (i * mark_size != mark_file_size)
-            throw Exception("Cannot read all marks from file " + mrk_path, ErrorCodes::CANNOT_READ_ALL_DATA);
+            throw Exception(ErrorCodes::CANNOT_READ_ALL_DATA,
+                "Cannot read all marks from file {}, marks expected {} (bytes size {}), marks read {} (bytes size{})",
+                mrk_path, marks_count, mark_file_size, i, buffer->count());
     }
     res->protect();
     return res;

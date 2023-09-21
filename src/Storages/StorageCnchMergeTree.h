@@ -43,7 +43,7 @@ public:
     bool supportsIndexForIn() const override { return true; }
     bool supportsMapImplicitColumn() const override { return true; }
     bool supportsTrivialCount() const override { return true; }
-    
+
     /// Whether support DELETE FROM. We only support for Unique MergeTree for now.
     bool supportsLightweightDelete() const override { return getInMemoryMetadataPtr()->hasUniqueKey(); }
 
@@ -191,14 +191,8 @@ public:
     ServerDataPartsVector
     getServerPartsByPredicate(const ASTPtr & predicate, const std::function<ServerDataPartsVector()> & get_parts, ContextPtr local_context);
 
-    void sendPreloadTasks(
-        ContextPtr local_context,
-        ServerDataPartsVector parts,
-        bool enable_parts_sync_preload = true,
-        UInt64 parts_preload_level = 0,
-        UInt64 ts = {});
-    void sendDropDiskCacheTasks(
-        ContextPtr local_context, const ServerDataPartsVector & parts, bool sync = false, bool drop_vw_disk_cache = false);
+    void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload = true, UInt64 parts_preload_level = 0, UInt64 ts = {});
+    void sendDropDiskCacheTasks(ContextPtr local_context, const ServerDataPartsVector & parts, bool sync = false, bool drop_vw_disk_cache = false);
 
     Strings getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context);
 

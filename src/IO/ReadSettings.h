@@ -40,6 +40,7 @@ struct ReadSettings
     size_t remote_read_min_bytes_for_seek = DBMS_DEFAULT_BUFFER_SIZE;
     DiskCacheMode disk_cache_mode {DiskCacheMode::AUTO};
     bool s3_use_read_ahead {true};
+
     bool parquet_parallel_read = false;
     size_t parquet_decode_threads = 48;
 };

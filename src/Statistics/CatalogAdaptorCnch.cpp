@@ -19,10 +19,12 @@
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/HiveConverter.h>
+#include <Statistics/StatisticsCollectorObjects.h>
 #include <Statistics/SubqueryHelper.h>
 #include <Statistics/TypeUtils.h>
 #include <Storages/Hive/StorageCnchHive.h>
 #include <boost/algorithm/string.hpp>
+
 namespace DB::Statistics
 {
 using Catalog::CatalogPtr;
@@ -205,7 +207,7 @@ void CatalogAdaptorCnch::dropStatsDataAll(const String & database_name)
 std::vector<StatsTableIdentifier> CatalogAdaptorCnch::getAllTablesID(const String & database_name) const
 {
     auto db = DatabaseCatalog::instance().getDatabase(database_name, context);
-    if (!db) 
+    if (!db)
     {
         return {};
     }
@@ -260,6 +262,7 @@ bool CatalogAdaptorCnch::isTableCollectable(const StatsTableIdentifier & identif
     static std::set<String> allowed_storage_names = {
         "CnchMergeTree",
         "CloudMergeTree",
+        "CnchHive",
         "Log",
         "TinyLog",
         "Memory",

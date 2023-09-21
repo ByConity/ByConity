@@ -30,12 +30,14 @@ namespace DB
 struct Settings;
 
 class AggregateFunctionFactory;
+void registerAggregateFunctionArbitrary(AggregateFunctionFactory &);
 void registerAggregateFunctionAvg(AggregateFunctionFactory &);
 void registerAggregateFunctionAvgWeighted(AggregateFunctionFactory &);
 void registerAggregateFunctionCount(AggregateFunctionFactory &);
 void registerAggregateFunctionDeltaSum(AggregateFunctionFactory &);
 void registerAggregateFunctionDeltaSumTimestamp(AggregateFunctionFactory &);
 void registerAggregateFunctionGroupArray(AggregateFunctionFactory &);
+void registerAggregateFunctionGroupConcat(AggregateFunctionFactory &);
 void registerAggregateFunctionGroupUniqArray(AggregateFunctionFactory &);
 void registerAggregateFunctionGroupArrayInsertAt(AggregateFunctionFactory &);
 void registerAggregateFunctionsQuantile(AggregateFunctionFactory &);
@@ -115,6 +117,7 @@ void registerAggregateFunctionRegAuc(AggregateFunctionFactory &);
 void registerAggregateFunctionRegAucV2(AggregateFunctionFactory &);
 void registerAggregateFunctionDebiasAuc(AggregateFunctionFactory &);
 void registerAggregateFunctionEcpmAuc(AggregateFunctionFactory &);
+void registerAggregateFunctionNdcg(AggregateFunctionFactory &);
 
 class AggregateFunctionCombinatorFactory;
 void registerAggregateFunctionCombinatorIf(AggregateFunctionCombinatorFactory &);
@@ -138,12 +141,14 @@ void registerAggregateFunctions()
     {
         auto & factory = AggregateFunctionFactory::instance();
 
+        registerAggregateFunctionArbitrary(factory);
         registerAggregateFunctionAvg(factory);
         registerAggregateFunctionAvgWeighted(factory);
         registerAggregateFunctionCount(factory);
         registerAggregateFunctionDeltaSum(factory);
         registerAggregateFunctionDeltaSumTimestamp(factory);
         registerAggregateFunctionGroupArray(factory);
+        registerAggregateFunctionGroupConcat(factory);
         registerAggregateFunctionGroupUniqArray(factory);
         registerAggregateFunctionGroupArrayInsertAt(factory);
         registerAggregateFunctionsQuantile(factory);
@@ -229,6 +234,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionRegAucV2(factory);
         registerAggregateFunctionDebiasAuc(factory);
         registerAggregateFunctionEcpmAuc(factory);
+        registerAggregateFunctionNdcg(factory);
     }
 
     {

@@ -3,6 +3,7 @@
 #include <Common/ShellCommand.h>
 #include <Poco/Net/IPAddress.h>
 #include <IO/ReadHelpers.h>
+#include <sstream>
 
 
 TEST(LocalAddress, SmokeTest)
@@ -13,9 +14,15 @@ TEST(LocalAddress, SmokeTest)
     cmd->wait();
     std::cerr << "Got Address: " << address_str << std::endl;
 
-    Poco::Net::IPAddress address(address_str);
-
-    EXPECT_TRUE(DB::isLocalAddress(address));
+    std::istringstream ss(address_str);
+    std::string address_line;
+    bool result = true;
+    while (getline(ss, address_line, ' '))
+    {
+        Poco::Net::IPAddress address(address_line);
+        result &= DB::isLocalAddress(address);
+    }
+    EXPECT_TRUE(result);
 }
 
 TEST(LocalAddress, Localhost)

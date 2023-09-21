@@ -34,7 +34,7 @@ class InterpreterSelectQueryUseOptimizer : public IInterpreter
 {
 public:
     InterpreterSelectQueryUseOptimizer(const ASTPtr & query_ptr_, ContextMutablePtr & context_, const SelectQueryOptions & options_)
-        : query_ptr(query_ptr_), context(context_), options(options_), log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
+        : query_ptr(query_ptr_->clone()), context(context_), options(options_), log(&Poco::Logger::get("InterpreterSelectQueryUseOptimizer"))
     {
         interpret_sub_query = false;
     }

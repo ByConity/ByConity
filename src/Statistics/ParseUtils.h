@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <type_traits>
 #include <Statistics/BucketBounds.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/CollectorSettings.h>
@@ -51,24 +52,18 @@ inline ColumnCollectConfig getColumnConfig(const CollectorSettings & settings, c
     config.need_count = true;
     config.need_ndv = true;
     config.need_histogram = true;
-    config.need_minmax = true;
+    config.need_minmax = false;
 
     if (!settings.collect_histogram)
     {
         config.need_histogram = false;
-    }
-    else if (!settings.collect_floating_histogram)
-    {
-        if (isFloat(type) || isDecimal(type))
-        {
-            config.need_histogram = false;
-        }
+        config.need_minmax = true;
     }
 
     if (isString(type))
     {
         config.wrapper_kind = WrapperKind::StringToHash64;
-    } 
+    }
     else if (isFixedString(type))
     {
         config.wrapper_kind = WrapperKind::FixedStringToHash64;
@@ -98,6 +93,20 @@ inline T getSingleValue(const Block & block, size_t index)
     else if constexpr (std::is_integral_v<T> && std::is_unsigned_v<T>)
     {
         return col->getUInt(0);
+    }
+    else if constexpr (std::is_same_v<T, double>)
+    {
+        if (col->isNullAt(0))
+        {
+            return std::numeric_limits<double>::quiet_NaN();
+        }
+        union
+        {
+            Float64 f64;
+            UInt64 u64;
+        } x;
+        x.u64 = col->get64(0);
+        return x.f64;
     }
     else
     {

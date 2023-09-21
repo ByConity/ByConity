@@ -74,7 +74,7 @@ ParquetBlockInputFormat::ParquetBlockInputFormat(
     , skip_row_groups(format_settings.parquet.skip_row_groups)
     , max_decoding_threads(max_decoding_threads_)
     , min_bytes_for_seek(min_bytes_for_seek_)
-    , pending_chunks(PendingChunk::Compare{.row_group_first = format_settings_.parquet.preserve_order})
+    , pending_chunks(PendingChunk::Compare { .row_group_first = format_settings_.parquet.preserve_order })
 {
     if (max_decoding_threads > 1 && format_settings.parquet.file_size > 0)
         pool = std::make_unique<ThreadPool>(max_decoding_threads);
@@ -121,10 +121,9 @@ void ParquetBlockInputFormat::initializeIfNeeded()
     column_indices = field_util.findRequiredIndices(getPort().getHeader(), *schema);
 }
 
-std::vector<int> ParquetBlockInputFormat::getColumnIndices(
-    const std::shared_ptr<arrow::Schema> & schema, const Block & header, const FormatSettings & format_settings)
+std::vector<int> ParquetBlockInputFormat::getColumnIndices(const std::shared_ptr<arrow::Schema> & schema, const Block & header)
 {
-    ArrowFieldIndexUtil field_util(format_settings.parquet.case_insensitive_column_matching, format_settings.parquet.allow_missing_columns);
+    ArrowFieldIndexUtil field_util(false, false);
     return field_util.findRequiredIndices(header, *schema);
 }
 
@@ -410,7 +409,7 @@ const BlockMissingValues & ParquetBlockInputFormat::getMissingValues() const
 }
 
 
-// TODO(RENMING):: fix this. 
+// TODO(RENMING):: fix this.
 void registerInputFormatProcessorParquet(FormatFactory &factory)
 {
     factory.registerInputFormatProcessor(

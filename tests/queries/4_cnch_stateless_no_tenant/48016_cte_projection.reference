@@ -1,0 +1,50 @@
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Left Join Est. ? rows
+            │     Condition: expr#cast(p_date, \'Nullable(Date)\')_1 == expr#toDate(hdfs_par)_1
+            ├─ Repartition Exchange Est. ? rows
+            │  │     Partition by: {expr#cast(p_date, \'Nullable(Date)\')_1}
+            │  └─ Projection Est. ? rows
+            │     │     Expressions: expr#cast(p_date, \'Nullable(Date)\')_1:=cast(p_date, \'Nullable(Date)\')
+            │     └─ Left Join Est. ? rows
+            │        │     Condition: user_id == user_id_1, expr#cast(p_date, \'Nullable(Date)\') == expr#toDate(hdfs_par)
+            │        ├─ Repartition Exchange Est. ? rows
+            │        │  │     Partition by: {expr#cast(p_date, \'Nullable(Date)\'), user_id}
+            │        │  └─ Projection Est. ? rows
+            │        │     │     Expressions: [p_date, user_id], expr#cast(p_date, \'Nullable(Date)\'):=cast(p_date, \'Nullable(Date)\')
+            │        │     └─ Filter Est. ? rows
+            │        │        │     Condition: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
+            │        │        └─ TableScan test.idm_ana_xz_rpt_user_evt Est. ? rows
+            │        │                 Where: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
+            │        │                 Outputs: [channel, p_date, user_id]
+            │        └─ MergingAggregated Est. ? rows
+            │           └─ Repartition Exchange Est. ? rows
+            │              │     Partition by: {expr#toDate(hdfs_par), user_id_1}
+            │              └─ Aggregating Est. ? rows
+            │                 │     Group by: {expr#toDate(hdfs_par), user_id_1}
+            │                 └─ Projection Est. ? rows
+            │                    │     Expressions: [user_id_1], expr#toDate(hdfs_par):=toDate(hdfs_par)
+            │                    └─ Filter Est. ? rows
+            │                       │     Condition: toDate(hdfs_par) >= \'2020-04-07\'
+            │                       └─ TableScan test.idm_ods_ods_inst_user_tags Est. ? rows
+            │                                Where: toDate(hdfs_par) >= \'2020-04-07\'
+            │                                Outputs: [hdfs_par], user_id_1:=user_id
+            └─ Repartition Exchange Est. ? rows
+               │     Partition by: {expr#toDate(hdfs_par)_1}
+               └─ MergingAggregated Est. ? rows
+                  └─ Repartition Exchange Est. ? rows
+                     │     Partition by: {expr#toDate(hdfs_par)_1, user_id_2}
+                     └─ Aggregating Est. ? rows
+                        │     Group by: {expr#toDate(hdfs_par)_1, user_id_2}
+                        └─ Projection Est. ? rows
+                           │     Expressions: [user_id_2], expr#toDate(hdfs_par)_1:=toDate(hdfs_par_1)
+                           └─ Filter Est. ? rows
+                              │     Condition: toDate(hdfs_par_1) >= \'2020-04-07\'
+                              └─ TableScan test.idm_ods_ods_inst_user_tags Est. ? rows
+                                       Where: toDate(hdfs_par) >= \'2020-04-07\'
+                                       Outputs: hdfs_par_1:=hdfs_par, user_id_2:=user_id

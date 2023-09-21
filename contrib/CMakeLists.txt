@@ -278,12 +278,14 @@ if (USE_INTERNAL_AWS_S3_LIBRARY)
     # The library is large - avoid bloat.
     target_compile_options (aws_s3 PRIVATE -g0)
 endif ()
+message(STATUS "USE_INTERNAL_AWS_GLUE_LIBRARY = ${USE_INTERNAL_AWS_GLUE_LIBRARY}")
 if (USE_INTERNAL_AWS_GLUE_LIBRARY)
     add_subdirectory(aws-glue-cmake)
 
     # The library is large - avoid bloat.
     target_compile_options (aws_glue PRIVATE -g0)
 endif ()
+
 
 if (USE_BASE64)
     add_subdirectory (base64-cmake)

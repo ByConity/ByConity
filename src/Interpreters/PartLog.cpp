@@ -18,16 +18,19 @@ namespace DB
 
 NamesAndTypesList PartLogElement::getNamesAndTypes()
 {
-    auto event_type_datatype = std::make_shared<DataTypeEnum8>(DataTypeEnum8::Values{
-        {"NewPart", static_cast<Int8>(NEW_PART)},
-        {"MergeParts", static_cast<Int8>(MERGE_PARTS)},
-        {"DownloadPart", static_cast<Int8>(DOWNLOAD_PART)},
-        {"RemovePart", static_cast<Int8>(REMOVE_PART)},
-        {"MutatePart", static_cast<Int8>(MUTATE_PART)},
-        {"MovePart", static_cast<Int8>(MOVE_PART)},
-        {"PreloadPart", static_cast<Int8>(PRELOAD_PART)},
-        {"DROPCACHE_PART", static_cast<Int8>(DROPCACHE_PART)},
-    });
+    auto event_type_datatype = std::make_shared<DataTypeEnum8>(
+        DataTypeEnum8::Values
+        {
+            {"NewPart",       static_cast<Int8>(NEW_PART)},
+            {"MergeParts",    static_cast<Int8>(MERGE_PARTS)},
+            {"DownloadPart",  static_cast<Int8>(DOWNLOAD_PART)},
+            {"RemovePart",    static_cast<Int8>(REMOVE_PART)},
+            {"MutatePart",    static_cast<Int8>(MUTATE_PART)},
+            {"MovePart",      static_cast<Int8>(MOVE_PART)},
+            {"PreloadPart",   static_cast<Int8>(PRELOAD_PART)},
+            {"DROPCACHE_PART", static_cast<Int8>(DROPCACHE_PART)},
+        }
+    );
 
     ColumnsWithTypeAndName columns_with_type_and_name;
 
@@ -178,13 +181,7 @@ bool PartLog::addNewParts(
     return true;
 }
 
-PartLogElement PartLog::createElement(
-    PartLogElement::Type event_type,
-    const IMergeTreeDataPartPtr & part,
-    UInt64 elapsed_ns,
-    const String & exception,
-    UInt64 submit_ts,
-    UInt64 segments)
+PartLogElement PartLog::createElement(PartLogElement::Type event_type, const IMergeTreeDataPartPtr & part, UInt64 elapsed_ns, const String & exception, UInt64 submit_ts, UInt64 segments)
 {
     PartLogElement elem;
 
@@ -201,7 +198,7 @@ PartLogElement PartLog::createElement(
     elem.rows = part->rows_count;
     elem.segments = segments;
     elem.bytes_compressed_on_disk = part->bytes_on_disk;
-    
+
     elem.exception = exception;
 
     return elem;

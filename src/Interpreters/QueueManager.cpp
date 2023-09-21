@@ -50,7 +50,7 @@ void QueueManagerTriggerTask::threadFunc()
     if (!queue_manager->isStop())
     {
         queue_manager->trigger();
-        task->scheduleAfter(interval);
+        task->scheduleAfter(interval.load(std::memory_order_relaxed));
     }
 }
 
@@ -202,5 +202,6 @@ void QueueManager::loadConfig(const QMConfiguration & qm_config)
     vw_parallelize_size = qm_config.max_vw_parallelize_size.safeGet();
     batch_size = qm_config.batch_size.safeGet();
     query_queue_size = qm_config.query_queue_size.safeGet();
+    queue_manager_trigger_task->setInterval(qm_config.trigger_interval.safeGet());
 }
 } // DB

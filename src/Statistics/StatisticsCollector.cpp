@@ -21,11 +21,13 @@
 #include <Statistics/CacheManager.h>
 #include <Statistics/CachedStatsProxy.h>
 #include <Statistics/CollectStep.h>
+#include <Statistics/HiveConverter.h>
 #include <Statistics/SimplifyHistogram.h>
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsNdvBucketsImpl.h>
 #include <Statistics/SubqueryHelper.h>
 #include <Statistics/TypeUtils.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <boost/algorithm/string/join.hpp>
 #include <common/logger_useful.h>
 
@@ -68,13 +70,8 @@ void StatisticsCollector::writeToCatalog()
 
 void StatisticsCollector::readAllFromCatalog()
 {
-    auto proxy = createCachedStatsProxy(catalog, settings.cache_policy);
-    auto data = proxy->get(table_info);
-    table_stats.readFromCollection(data.table_stats);
-    for (auto & [name, stats] : data.column_stats)
-    {
-        columns_stats[name].readFromCollection(stats);
-    }
+    auto cols = catalog->getCollectableColumns(table_info);
+    readFromCatalogImpl(cols);
 }
 
 void StatisticsCollector::readFromCatalog(const std::vector<String> & cols_name)
@@ -87,6 +84,7 @@ void StatisticsCollector::readFromCatalogImpl(const ColumnDescVector & cols_desc
 {
     auto proxy = createCachedStatsProxy(catalog, settings.cache_policy);
     auto data = proxy->get(table_info, true, cols_desc);
+
     if (data.table_stats.empty() && data.column_stats.empty())
     {
         // no stats collected, do nothing
@@ -137,10 +135,9 @@ std::optional<PlanNodeStatisticsPtr> StatisticsCollector::toPlanNodeStatistics()
     auto result = std::make_shared<PlanNodeStatistics>();
     auto table_row_count = table_stats.basic->getRowCount();
     result->updateRowCount(table_row_count);
-    // whether to construct single bucket histogram from min/max if there is no histogram
-    auto storage = catalog->getStorageByTableId(table_info);
 
-    for (const auto & [col, stats] : columns_stats)
+    // whether to construct single bucket histogram from min/max if there is no histogram
+    for (auto & [col, stats] : columns_stats)
     {
         auto symbol = std::make_shared<SymbolStatistics>();
 

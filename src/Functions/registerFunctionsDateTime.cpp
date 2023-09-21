@@ -69,6 +69,7 @@ void registerFunctionToTime(FunctionFactory &);
 void registerFunctionNow(FunctionFactory &);
 void registerFunctionNow64(FunctionFactory &);
 void registerFunctionConvertTz(FunctionFactory &);
+void registerFunctionConvertCombinedIntervals(FunctionFactory &);
 void registerFunctionCurrentTime(FunctionFactory &);
 void registerFunctionToday(FunctionFactory &);
 void registerFunctionYesterday(FunctionFactory &);
@@ -164,6 +165,7 @@ void registerFunctionsDateTime(FunctionFactory & factory)
     registerFunctionNow(factory);
     registerFunctionNow64(factory);
     registerFunctionConvertTz(factory);
+    registerFunctionConvertCombinedIntervals(factory);
     registerFunctionCurrentTime(factory);
     registerFunctionToday(factory);
     registerFunctionYesterday(factory);

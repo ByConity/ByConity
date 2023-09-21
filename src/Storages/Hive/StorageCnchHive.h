@@ -11,7 +11,9 @@
 namespace Apache::Hadoop::Hive
 {
     class Table;
+    class TableStatsResult;
 }
+namespace ApacheHive = Apache::Hadoop::Hive;
 
 namespace DB
 {
@@ -77,6 +79,7 @@ public:
 
     std::pair<UInt64, ApacheHive::TableStatsResult> getTableStats(const Strings & col_names, ContextPtr local_context);
 
+protected:
     void collectResource(ContextPtr local_context, PrepareContextResult & result);
 
     HivePartitions selectPartitions(

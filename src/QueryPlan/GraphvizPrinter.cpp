@@ -501,7 +501,7 @@ void PlanNodePrinter::printNode(
     if (node.getStatistics().isDerived())
     {
         out << "|";
-        out << "Stats \\n";
+        out << "Estimate Stats \\n";
         const auto & statistics = node.getStatistics();
         if (statistics)
             out << escapeSpecialCharacters(statistics.value()->toString());
@@ -514,8 +514,11 @@ void PlanNodePrinter::printNode(
         const auto & profile = profiles.at(node.getId());
         out << "|";
         out << "Actual Stats \\n";
-        out << "Output " << PlanPrinter::TextPrinter::prettyNum(profile->output_rows) << " rows \\n";
-
+        out << "Output: " << PlanPrinter::TextPrinter::prettyNum(profile->output_rows) << " rows("
+            << PlanPrinter::TextPrinter::prettyBytes(profile->output_bytes) << "). "
+            << " Wait Time: " << PlanPrinter::TextPrinter::prettySeconds(profile->max_output_wait_elapsed_us)
+            << " Wall Time: " << PlanPrinter::TextPrinter::prettySeconds(profile->max_elapsed_us)
+            << " \\n";
         if (!node.getChildren().empty() && profile->inputs_profile.contains(node.getChildren()[0]->getId()))
         {
             if (node.getChildren().size() == 1)

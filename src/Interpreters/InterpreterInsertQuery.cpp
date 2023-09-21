@@ -635,41 +635,6 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
     String scheme = uri.getScheme();
 
     BlockInputStreams inputs;
-    // For HDFS inputs with fuzzname, let ReadBufferFromByteHDFS to handle multiple files
-#if USE_HDFS
-    if (DB::isHdfsOrCfsScheme(scheme))
-    {
-        std::unique_ptr<ReadBuffer> read_buf = std::make_unique<ReadBufferFromByteHDFS>(
-            source_uri,
-            false,
-            context_ptr->getHdfsConnectionParams(),
-            DBMS_DEFAULT_BUFFER_SIZE,
-            nullptr,
-            0,
-            false,
-            context_ptr->getProcessList().getHDFSDownloadThrottler());
-        // snappy compression suport
-        if (endsWith(source_uri, "snappy"))
-        {
-            if (settings.snappy_format_blocked)
-            {
-                read_buf = std::make_unique<SnappyReadBuffer<true>>(std::move(read_buf));
-            }
-            else
-            {
-                read_buf = std::make_unique<SnappyReadBuffer<false>>(std::move(read_buf));
-            }
-        }
-        inputs.emplace_back(std::make_shared<OwningBlockInputStream<ReadBuffer>>(
-            context_ptr->getInputFormat(
-                format,
-                *read_buf,
-                sample, // sample_block
-                settings.max_insert_block_size),
-            std::move(read_buf)));
-    }
-    else
-#endif
     {
         std::vector<String> fuzzyNameList
             = parseDescription(fuzzyFileNames, 0, fuzzyFileNames.length(), ',', 100 /* hard coded max files */);
@@ -690,15 +655,7 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
 #if USE_HDFS
                 else if (DB::isHdfsOrCfsScheme(scheme))
                 {
-                    read_buf = std::make_unique<ReadBufferFromByteHDFS>(
-                        uriPrefix + name,
-                        false,
-                        context_ptr->getHdfsConnectionParams(),
-                        DBMS_DEFAULT_BUFFER_SIZE,
-                        nullptr,
-                        0,
-                        false,
-                        context_ptr->getProcessList().getHDFSDownloadThrottler());
+                    read_buf = std::make_unique<ReadBufferFromByteHDFS>(uriPrefix + name, context_ptr->getHdfsConnectionParams(), false, DBMS_DEFAULT_BUFFER_SIZE, nullptr, 0, context_ptr->getProcessList().getHDFSDownloadThrottler());
                 }
 #endif
 #if USE_AWS_S3

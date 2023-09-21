@@ -34,9 +34,9 @@ namespace DB::Statistics
 class ColumnHandlerBase
 {
 public:
-    virtual std::vector<String> getSqls() = 0;
+    virtual const std::vector<String> & getSqls() = 0;
     virtual void parse(const Block & block, size_t index_offset) = 0;
-    virtual size_t size() = 0;
+    size_t size() { return getSqls().size(); }
     virtual ~ColumnHandlerBase() = default;
 };
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <Parsers/ASTFunction.h>
 #include <Parsers/IParserBase.h>
 
 namespace DB
@@ -104,8 +105,9 @@ public:
 protected:
     const char * getName() const override { return "interval"; }
 
-    bool parseImpl(Pos & pos, ASTPtr & /*node*/, Expected & expected) override
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
     {
+        auto convert_node = std::make_shared<ASTFunction>();
         if (ParserKeyword("SECOND").ignore(pos, expected) || ParserKeyword("SQL_TSI_SECOND").ignore(pos, expected)
             || ParserKeyword("SS").ignore(pos, expected) || ParserKeyword("S").ignore(pos, expected))
             interval_kind = IntervalKind::Second;
@@ -137,8 +139,53 @@ protected:
             ParserKeyword("YEAR").ignore(pos, expected) || ParserKeyword("SQL_TSI_YEAR").ignore(pos, expected)
             || ParserKeyword("YYYY").ignore(pos, expected) || ParserKeyword("YY").ignore(pos, expected))
             interval_kind = IntervalKind::Year;
+        else if (
+            ParserKeyword("MINUTE_SECOND").ignore(pos, expected) || ParserKeyword("MINUTESECOND").ignore(pos, expected))
+        {
+            interval_kind = IntervalKind::Second;
+            convert_node->name = "convertMinuteSecondToSecond";
+        }
+        else if (
+            ParserKeyword("HOUR_SECOND").ignore(pos, expected) || ParserKeyword("HOURSECOND").ignore(pos, expected))
+        {
+            interval_kind = IntervalKind::Second;
+            convert_node->name = "convertHourSecondToSecond";
+        }
+        else if (
+            ParserKeyword("HOUR_MINUTE").ignore(pos, expected) || ParserKeyword("HOURMINUTE").ignore(pos, expected))
+        {
+            interval_kind = IntervalKind::Minute;
+            convert_node->name = "convertHourMinuteToMinute";
+        }
+        else if (
+            ParserKeyword("DAY_SECOND").ignore(pos, expected) || ParserKeyword("DAYSECOND").ignore(pos, expected))
+        {
+            interval_kind = IntervalKind::Second;
+            convert_node->name = "convertDaySecondToSecond";
+        }
+        else if (
+            ParserKeyword("DAY_MINUTE").ignore(pos, expected) || ParserKeyword("DAYMINUTE").ignore(pos, expected))
+        {
+            interval_kind = IntervalKind::Minute;
+            convert_node->name = "convertDayMinuteToMinute";
+        }
+        else if (
+            ParserKeyword("DAY_HOUR").ignore(pos, expected) || ParserKeyword("DAYHOUR").ignore(pos, expected))
+        {
+            interval_kind = IntervalKind::Hour;
+            convert_node->name = "convertDayHourToHour";
+        }
+        else if (
+            ParserKeyword("YEAR_MONTH").ignore(pos, expected) || ParserKeyword("YEARMONTH").ignore(pos, expected))
+        {
+            interval_kind = IntervalKind::Month;
+            convert_node->name = "convertYearMonthToMonth";
+        }
         else
             interval_kind = IntervalKind::Incorrect;
+        
+        if (!convert_node->name.empty())
+            node = std::move(convert_node);
 
         if (interval_kind == IntervalKind::Incorrect)
         {

@@ -1,0 +1,27 @@
+SELECT 'hello' LIKE 'hello';
+SELECT 'hello' NOT LIKE 'hello';
+SELECT arrayJoin(['hello', 'world']) LIKE 'hello';
+SELECT arrayJoin(['hello', 'world']) LIKE '%hello%';
+SELECT arrayJoin(['hello', 'world']) LIKE 'hell_';
+SELECT '_hello' LIKE '\_hello';
+SELECT '%hello' LIKE '\%hello';
+SELECT arrayJoin(['hello', 'world']) NOT LIKE 'hello';
+SELECT arrayJoin(['hello', 'world']) NOT LIKE '%hello%';
+SELECT arrayJoin(['hello', 'world']) NOT LIKE 'hell_';
+SELECT '_hello' NOT LIKE '\_hello';
+SELECT '%hello' NOT LIKE '\%hello';
+
+set enable_optimizer=1;
+set rewrite_like_function=1;
+EXPLAIN SYNTAX SELECT arrayJoin(['hello', 'world']) LIKE 'hello';
+EXPLAIN SYNTAX SELECT arrayJoin(['hello', 'world']) LIKE '%hello%';
+EXPLAIN SYNTAX SELECT arrayJoin(['hello', 'world']) LIKE 'hell_';
+EXPLAIN SYNTAX SELECT '_hello' LIKE '\_hello';
+EXPLAIN SYNTAX SELECT '%hello' LIKE '\%hello';
+EXPLAIN SYNTAX SELECT 'hello' LIKE 'hello';
+EXPLAIN SYNTAX SELECT arrayJoin(['hello', 'world']) NOT LIKE 'hello';
+EXPLAIN SYNTAX SELECT arrayJoin(['hello', 'world']) NOT LIKE '%hello%';
+EXPLAIN SYNTAX SELECT arrayJoin(['hello', 'world']) NOT LIKE 'hell_';
+EXPLAIN SYNTAX SELECT '_hello' NOT LIKE '\_hello';
+EXPLAIN SYNTAX SELECT '%hello' NOT LIKE '\%hello';
+EXPLAIN SYNTAX SELECT 'hello' NOT LIKE 'hello';

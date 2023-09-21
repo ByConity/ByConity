@@ -24,6 +24,8 @@ namespace DB
 class MergeScheduler;
 class MergeTreeMetaBase;
 
+#define MERGE_MAX_PARTS_TO_BREAK 10000
+
 #define LIST_OF_DANCE_MERGE_SELECTOR_SETTINGS(M) \
     M(Bool, enable_batch_select, false, "", 0) \
     M(UInt64, max_parts_to_merge_base, 100, "", 0) \
@@ -46,7 +48,7 @@ class MergeTreeMetaBase;
     /** Too large part has no advantage since we cannot utilize parallelism. We set max_total_rows_to_merge as 2147483647 **/ \
     M(UInt64, max_total_rows_to_merge, 2147483647, "", 0) \
 \
-    M(UInt64, max_parts_to_break, 10000, "", 0)
+    M(UInt64, max_parts_to_break, MERGE_MAX_PARTS_TO_BREAK, "", 0)
 
 DECLARE_SETTINGS_TRAITS(DanceMergeSelectorSettingsTraits, LIST_OF_DANCE_MERGE_SELECTOR_SETTINGS)
 

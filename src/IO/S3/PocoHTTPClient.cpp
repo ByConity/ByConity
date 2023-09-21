@@ -206,7 +206,12 @@ void PocoHTTPClient::makeRequestInternal(
 
                 bool use_tunnel = request_configuration.proxyScheme == Aws::Http::Scheme::HTTP && target_uri.getScheme() == "https";
 
-                volatile_session->setProxy(
+                /// Reverse proxy can replace host header with resolved ip address instead of host name.
+                /// This can lead to request signature difference on S3 side.
+                volatile_session = makeHTTPSession(target_uri, timeouts, false, true);
+                session = volatile_session.get();
+
+                session->setProxy(
                     request_configuration.proxyHost,
                     request_configuration.proxyPort,
                     Aws::Http::SchemeMapper::ToString(request_configuration.proxyScheme),
@@ -332,7 +337,7 @@ void PocoHTTPClient::makeRequestInternal(
                 ProfileEvents::increment(select_metric(S3MetricType::Errors));
             }
 
-            if (volatile_session != nullptr)
+            if (pooled_session.isNull())
             {
                 response->SetResponseBody(response_body_stream, volatile_session);
             }
