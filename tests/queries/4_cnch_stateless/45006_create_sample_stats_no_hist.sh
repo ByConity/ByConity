@@ -9,7 +9,7 @@ ${CLICKHOUSE_CLIENT} --query="CREATE TABLE test_stats(x UInt64, id UInt64) Engin
 ${CLICKHOUSE_CLIENT} --query="insert into test_stats select cityHash64(intDiv(number, 10)), number from system.numbers limit 10000000"
 
 echo "create stats1"
-${CLICKHOUSE_CLIENT} --query="create stats test_stats with sample 0.01 ratio 10 rows settings create_stats_time_output=0"
+${CLICKHOUSE_CLIENT} --query="create stats test_stats with sample 0.01 ratio 10 rows settings create_stats_time_output=0, statistics_collect_histogram=0"
 INPUT=`${CLICKHOUSE_CLIENT} --query="show stats test_stats"`
 
 
@@ -38,7 +38,7 @@ echo "BAD NDV ${DATA[4]} for id"
 fi
 
 echo "create stats2"
-${CLICKHOUSE_CLIENT} --query="create stats test_stats with sample 0.0000001 ratio 100000 rows settings create_stats_time_output=0"
+${CLICKHOUSE_CLIENT} --query="create stats test_stats with sample 0.0000001 ratio 100000 rows settings create_stats_time_output=0, statistics_collect_histogram=0"
 INPUT=`${CLICKHOUSE_CLIENT} --query="show stats test_stats"`
 
 

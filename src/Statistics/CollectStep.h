@@ -29,8 +29,11 @@ class StatisticsCollector;
 struct HandlerColumnData
 {
     double nonnull_count = 0;
-    // when scaleNdv output unreliable result, this is null
-    std::optional<double> ndv_value_opt = std::nullopt;
+
+    // when scaleNdv output unreliable result, this is false
+    bool is_ndv_reliable = false;
+    double ndv_value = 0;
+
     double min_as_double = 0;
     double max_as_double = 0;
     std::shared_ptr<BucketBounds> bucket_bounds; // RowCountHandler will write this
@@ -51,19 +54,19 @@ struct HandlerContext : boost::noncopyable
 class RowCountHandler : public ColumnHandlerBase
 {
 public:
-    RowCountHandler(HandlerContext & handler_context_) : handler_context(handler_context_) { }
+    RowCountHandler(HandlerContext & handler_context_) : handler_context(handler_context_), sqls({"count(*)"}) { }
 
-    std::vector<String> getSqls() override { return {"count(*)"}; }
+    const std::vector<String> & getSqls() override { return sqls; }
+
     void parse(const Block & block, size_t index_offset) override
     {
         auto result = block.getByPosition(index_offset).column->getUInt(0);
         handler_context.query_row_count = result;
     }
 
-    size_t size() override { return 1; }
-
 private:
     HandlerContext & handler_context;
+    std::vector<String> sqls;
 };
 
 class CollectStep
