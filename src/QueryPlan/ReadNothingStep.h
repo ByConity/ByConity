@@ -31,8 +31,8 @@ public:
 
     void initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
-    void serialize(WriteBuffer &) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+    void toProto(Protos::ReadNothingStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<ReadNothingStep> fromProto(const Protos::ReadNothingStep & proto, ContextPtr context);
     void setUniqueId(Int32 unique_id_) { unique_id = unique_id_; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
 

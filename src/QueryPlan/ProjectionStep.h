@@ -41,8 +41,8 @@ public:
     Type getType() const override { return Type::Projection; }
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr context);
+    void toProto(Protos::ProjectionStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<ProjectionStep> fromProto(const Protos::ProjectionStep & proto, ContextPtr context);
 
     ActionsDAGPtr createActions(ContextPtr context) const;
     const Assignments & getAssignments() const { return assignments; }

@@ -792,19 +792,18 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
 }
 
 TableScanStep::TableScanStep(
-    ContextPtr /*context*/,
-    StoragePtr storage_,
+    ContextPtr context,
+    StorageID storage_id_,
     const NamesWithAliases & column_alias_,
     const SelectQueryInfo & query_info_,
     size_t max_block_size_,
     String alias_,
     PlanHints hints_,
-    QueryPlanStepPtr aggregation_,
-    QueryPlanStepPtr projection_,
-    QueryPlanStepPtr filter_)
+    std::shared_ptr<AggregatingStep> aggregation_,
+    std::shared_ptr<ProjectionStep> projection_,
+    std::shared_ptr<FilterStep> filter_)
     : ISourceStep(DataStream{}, hints_)
-    , storage(storage_)
-    , storage_id(storage->getStorageID())
+    , storage_id(storage_id_)
     , column_alias(column_alias_)
     , query_info(query_info_)
     , max_block_size(max_block_size_)
@@ -823,6 +822,7 @@ TableScanStep::TableScanStep(
     // order sensitive
     Names require_column_list = column_names;
     NameSet require_columns{column_names.begin(), column_names.end()};
+    storage = DatabaseCatalog::instance().getTable(storage_id, context);
 
     //    QueryPlan tmp_query_plan;
     //    storage->read(tmp_query_plan, require_column_list, storage->getInMemoryMetadataPtr(), query_info, context, processing_stage, max_block_size, max_streams, true);
@@ -863,31 +863,6 @@ TableScanStep::TableScanStep(
     }
 
     formatOutputStream();
-}
-
-TableScanStep::TableScanStep(
-    ContextPtr context,
-    StorageID storage_id_,
-    const NamesWithAliases & column_alias_,
-    const SelectQueryInfo & query_info_,
-    size_t max_block_size_,
-    String alias_,
-    PlanHints hints_,
-    QueryPlanStepPtr aggregation_,
-    QueryPlanStepPtr projection_,
-    QueryPlanStepPtr filter_)
-    : TableScanStep(
-        context,
-        DatabaseCatalog::instance().getTable(storage_id_, context),
-        column_alias_,
-        query_info_,
-        max_block_size_,
-        alias_,
-        hints_,
-        aggregation_,
-        projection_,
-        filter_)
-{
 }
 
 void TableScanStep::formatOutputStream()
@@ -1429,67 +1404,69 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     LOG_DEBUG(log, "init pipeline total run time: {} ms, table scan descriptiion: {}", total_watch.elapsedMillisecondsAsDouble(), step_desc.str());
 }
 
-void TableScanStep::serialize(WriteBuffer & buffer) const
+void TableScanStep::toProto(Protos::TableScanStep & proto, bool) const
 {
-    writeBinary(step_description, buffer);
-    serializeBlock(output_stream->header, buffer);
+    storage_id.toProto(*proto.mutable_storage_id());
+    for (auto & [name, alias] : column_alias)
+    {
+        auto proto_element = proto.add_column_alias();
+        proto_element->set_name(name);
+        proto_element->set_alias(alias);
+    }
 
-    storage_id.serialize(buffer);
-    query_info.serialize(buffer);
-    serializeStrings(column_names, buffer);
-    writeBinary(column_alias, buffer);
-    writeBinary(max_block_size, buffer);
+    query_info.toProto(*proto.mutable_query_info());
+    proto.set_max_block_size(max_block_size);
 
-    writeBinary(pushdown_aggregation != nullptr, buffer);
-    if (pushdown_aggregation != nullptr)
-        serializePlanStep(pushdown_aggregation, buffer);
-
-    writeBinary(pushdown_projection != nullptr, buffer);
-    if (pushdown_projection != nullptr)
-        serializePlanStep(pushdown_projection, buffer);
-
-    writeBinary(pushdown_filter != nullptr, buffer);
-    if (pushdown_filter != nullptr)
-        serializePlanStep(pushdown_filter, buffer);
+    if (pushdown_aggregation)
+    {
+        pushdown_aggregation->toProto(*proto.mutable_pushdown_aggregation());
+    }
+    if (pushdown_projection)
+    {
+        pushdown_projection->toProto(*proto.mutable_pushdown_projection());
+    }
+    if (pushdown_filter)
+    {
+        pushdown_filter->toProto(*proto.mutable_pushdown_filter());
+    }
 }
 
-QueryPlanStepPtr TableScanStep::deserialize(ReadBuffer & buffer, ContextPtr context)
+std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanStep & proto, ContextPtr context)
 {
-    String step_description;
+    auto storage_id = StorageID::fromProto(proto.storage_id(), context);
+    NamesWithAliases column_alias;
+    for (auto & proto_element : proto.column_alias())
+    {
+        auto name = proto_element.name();
+        auto alias = proto_element.alias();
+        column_alias.emplace_back(name, alias);
+    }
     SelectQueryInfo query_info;
+    query_info.fillFromProto(proto.query_info());
+    auto max_block_size = proto.max_block_size();
 
-    readBinary(step_description, buffer);
-    auto header = deserializeBlock(buffer);
-    StorageID storage_id = StorageID::deserialize(buffer, context);
-    query_info.deserialize(buffer);
+    std::shared_ptr<AggregatingStep> pushdown_aggregation;
+    std::shared_ptr<ProjectionStep> pushdown_projection;
+    std::shared_ptr<FilterStep> pushdown_filter;
+    if (proto.has_pushdown_aggregation())
+        pushdown_aggregation = AggregatingStep::fromProto(proto.pushdown_aggregation(), context);
 
-    size_t max_block_size;
-
-    Names column_names = deserializeStrings(buffer);
-    NamesWithAliases columns;
-    readBinary(columns, buffer);
-    readBinary(max_block_size, buffer);
-
-    bool has_aggregation;
-    readBinary(has_aggregation, buffer);
-    QueryPlanStepPtr aggregation;
-    if (has_aggregation)
-        aggregation = deserializePlanStep(buffer, context);
-
-    bool has_projection;
-    readBinary(has_projection, buffer);
-    QueryPlanStepPtr projection;
-    if (has_projection)
-        projection = deserializePlanStep(buffer, context);
-
-    bool has_filter;
-    readBinary(has_filter, buffer);
-    QueryPlanStepPtr filter;
-    if (has_filter)
-        filter = deserializePlanStep(buffer, context);
-
-    return std::make_unique<TableScanStep>(context, storage_id, columns, query_info, max_block_size,
-                                           String{}/*alias*/, PlanHints{}, aggregation, projection, filter);
+    if (proto.has_pushdown_projection())
+        pushdown_projection = ProjectionStep::fromProto(proto.pushdown_projection(), context);
+    if (proto.has_pushdown_filter())
+        pushdown_filter = FilterStep::fromProto(proto.pushdown_filter(), context);
+    auto step = std::make_shared<TableScanStep>(
+        context,
+        storage_id,
+        column_alias,
+        query_info,
+        max_block_size,
+        String{} /*alias*/,
+        PlanHints{},
+        pushdown_aggregation,
+        pushdown_projection,
+        pushdown_filter);
+    return step;
 }
 
 std::shared_ptr<IQueryPlanStep> TableScanStep::copy(ContextPtr /*context*/) const

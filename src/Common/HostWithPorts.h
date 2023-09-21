@@ -151,7 +151,10 @@ public:
           exchange_port{rpc_port_},
           exchange_status_port{rpc_port_},
           host{removeBracketsIfIpv6(host_)}
-    {}
+    {
+        (void)exchange_port_;
+        (void)exchange_status_port_;
+    }
 
     std::string id;
     uint16_t rpc_port{0};

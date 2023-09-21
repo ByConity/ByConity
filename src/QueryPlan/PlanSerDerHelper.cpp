@@ -15,6 +15,7 @@
 
 #include <QueryPlan/PlanSerDerHelper.h>
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
 #include <DataTypes/DataTypeHelper.h>
@@ -22,8 +23,12 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/JoinedTables.h>
 #include <Interpreters/TableJoin.h>
+#include <Parsers/ASTSerDerHelper.h>
 #include <Parsers/queryToString.h>
 #include <Processors/Transforms/AggregatingTransform.h>
+#include <Protos/ReadWriteProtobuf.h>
+#include <Protos/plan_node.pb.h>
+#include <Protos/plan_node_utils.pb.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/ArrayJoinStep.h>
@@ -76,52 +81,16 @@
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/ValuesStep.h>
 #include <QueryPlan/WindowStep.h>
+#include <google/protobuf/util/message_differencer.h>
+#include "Common/SipHash.h"
 #include <Common/ClickHouseRevision.h>
+#include "IO/ReadBufferFromString.h"
+#include "IO/WriteBuffer.h"
+#include "IO/WriteBufferFromString.h"
+#include "QueryPlan/Assignment.h"
 
 namespace DB
 {
-
-void serializeStrings(const Strings & strings, WriteBuffer & buf)
-{
-    writeBinary(strings.size(), buf);
-    for (auto & s : strings)
-        writeBinary(s, buf);
-}
-
-Strings deserializeStrings(ReadBuffer & buf)
-{
-    size_t s_size;
-    readBinary(s_size, buf);
-
-    Strings strings(s_size);
-    for (size_t i = 0; i < s_size; ++i)
-        readBinary(strings[i], buf);
-
-    return strings;
-}
-
-void serializeStringSet(const NameSet & stringSet, WriteBuffer & buf)
-{
-    writeBinary(stringSet.size(), buf);
-    for (const auto & str : stringSet)
-        writeBinary(str, buf);
-}
-
-NameSet deserializeStringSet(ReadBuffer & buf)
-{
-    size_t s_size;
-    readBinary(s_size, buf);
-
-    NameSet stringSet;
-    for (size_t i = 0; i < s_size; ++i)
-    {
-        String str;
-        readBinary(str, buf);
-        stringSet.emplace(str);
-    }
-
-    return stringSet;
-}
 
 void serializeColumn(const ColumnPtr & column, const DataTypePtr & data_type, WriteBuffer & buf)
 {
@@ -204,127 +173,210 @@ Block deserializeBlock(ReadBuffer & buf)
     return block_in->read();
 }
 
-void serializeDataStream(const DataStream & data_stream, WriteBuffer & buf)
+void serializeBlockToProto(const Block & block, Protos::Block & proto)
 {
-    serializeBlock(data_stream.header, buf);
-    serializeStringSet(data_stream.distinct_columns, buf);
-    writeBinary(data_stream.has_single_port, buf);
-    serializeItemVector<SortColumnDescription>(data_stream.sort_description, buf);
-    writeBinary(UInt8(data_stream.sort_mode), buf);
+    WriteBufferFromOwnString buf;
+    serializeBlock(block, buf);
+    proto.set_blob(std::move(buf.str()));
 }
 
-DataStream deserializeDataStream(ReadBuffer & buf)
+Block deserializeBlockFromProto(const Protos::Block & proto)
 {
-    Block header;
-    header = deserializeBlock(buf);
-
-    NameSet distinct_columns = {};
-    distinct_columns = deserializeStringSet(buf);
-
-    bool has_single_port = false;
-    readBinary(has_single_port, buf);
-
-    SortDescription sort_description;
-    sort_description = deserializeItemVector<SortColumnDescription>(buf);
-
-    UInt8 sort_mode;
-    readBinary(sort_mode, buf);
-
-    return DataStream{
-        .header = std::move(header),
-        .distinct_columns = std::move(distinct_columns),
-        .has_single_port = has_single_port,
-        .sort_description = std::move(sort_description),
-        .sort_mode = DataStream::SortMode(sort_mode)};
+    ReadBufferFromString buf(proto.blob());
+    return deserializeBlock(buf);
 }
 
-void serializeDataStreamFromDataStreams(const DataStreams & data_streams, WriteBuffer & buf)
-{
-    DataStream stream{.header = Block()};
-    if (!data_streams.empty())
-        stream = data_streams.front();
-
-    serializeDataStream(stream, buf);
-}
-
-void serializeAggregatingTransformParams(const AggregatingTransformParamsPtr & params, WriteBuffer & buf)
-{
-    if (!params)
-        throw Exception("Params cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
-
-    params->params.serialize(buf);
-    writeBinary(params->final, buf);
-}
-
-AggregatingTransformParamsPtr deserializeAggregatingTransformParams(ReadBuffer & buf, ContextPtr context)
-{
-    Aggregator::Params params = Aggregator::Params::deserialize(buf, context);
-
-    bool final;
-    readBinary(final, buf);
-
-    return std::make_shared<AggregatingTransformParams>(params, final);
-}
-
-void serializeArrayJoinAction(const ArrayJoinActionPtr & array_join, WriteBuffer & buf)
-{
-    if (!array_join)
-    {
-        writeBinary(false, buf);
-        return;
-    }
-
-    writeBinary(true, buf);
-    serializeStringSet(array_join->columns, buf);
-    writeBinary(array_join->is_left, buf);
-}
-
-ArrayJoinActionPtr deserializeArrayJoinAction(ReadBuffer & buf, ContextPtr context)
-{
-    bool has_array_join = false;
-    readBinary(has_array_join, buf);
-    if (!has_array_join)
-        return nullptr;
-
-    NameSet columns = deserializeStringSet(buf);
-
-    bool is_left;
-    readBinary(is_left, buf);
-
-    return std::make_shared<ArrayJoinAction>(columns, is_left, context);
-}
 
 QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context)
 {
-    IQueryPlanStep::Type type;
-    {
-        UInt8 tmp;
-        readBinary(tmp, buf);
-        type = IQueryPlanStep::Type(tmp);
-    }
-
-    switch (type)
-    {
-#define DESERIALIZE_STEP(TYPE) \
-    case IQueryPlanStep::Type::TYPE: \
-        return TYPE##Step::deserialize(buf, context);
-
-        APPLY_STEP_TYPES(DESERIALIZE_STEP)
-
-#undef DESERIALIZE_STEP
-        default:
-            break;
-    }
-
-    return nullptr;
+    String blob;
+    readBinary(blob, buf);
+    Protos::QueryPlanStep proto;
+    proto.ParseFromString(blob);
+    auto step = deserializeQueryPlanStepFromProto(proto, context);
+    return step;
 }
 
 void serializePlanStep(const QueryPlanStepPtr & step, WriteBuffer & buf)
 {
-    auto num = UInt8(step->getType());
-    writeBinary(num, buf);
-    step->serialize(buf);
+    Protos::QueryPlanStep proto;
+    serializeQueryPlanStepToProto(step, proto);
+    String blob;
+    proto.SerializeToString(&blob);
+    writeBinary(blob, buf);
 }
 
 
+void serializeAssignmentsToProto(const Assignments & assignments, Protos::Assignments & proto)
+{
+    for (const auto & [k, v] : assignments)
+    {
+        auto pair = proto.add_pairs();
+        pair->set_key(k);
+        serializeASTToProto(v, *pair->mutable_value());
+    }
+}
+
+Assignments deserializeAssignmentsFromProto(const Protos::Assignments & proto)
+{
+    Assignments res;
+    for (const auto & pair : proto.pairs())
+    {
+        auto k = pair.key();
+        auto v = deserializeASTFromProto(pair.value());
+        res.emplace_back(k, v);
+    }
+    return res;
+}
+void serializeAggregateFunctionToProto(
+    AggregateFunctionPtr function, const Array & parameters, const DataTypes & arg_types, Protos::AggregateFunction & proto)
+{
+    proto.set_func_name(function->getName());
+    for (const auto & arg_type : arg_types)
+        serializeDataTypeToProto(arg_type, *proto.add_arg_types());
+    serializeFieldVectorToProto(parameters, *proto.mutable_parameters());
+}
+
+void serializeAggregateFunctionToProto(AggregateFunctionPtr function, const Array & parameters, Protos::AggregateFunction & proto)
+{
+    // use arg type in agg_func
+    // removal of low_card info is possible
+    serializeAggregateFunctionToProto(function, parameters, function->getArgumentTypes(), proto);
+}
+
+std::tuple<AggregateFunctionPtr, Array, DataTypes> deserializeAggregateFunctionFromProto(const Protos::AggregateFunction & proto)
+{
+    auto func_name = proto.func_name();
+    DataTypes arg_types;
+    for (auto & proto_element : proto.arg_types())
+    {
+        auto element = deserializeDataTypeFromProto(proto_element);
+        arg_types.emplace_back(element);
+    }
+
+    auto parameters = deserializeFieldVectorFromProto<Array>(proto.parameters());
+
+    AggregateFunctionProperties properties;
+    auto function = AggregateFunctionFactory::instance().get(func_name, arg_types, parameters, properties);
+    return {std::move(function), std::move(parameters), std::move(arg_types)};
+}
+
+template <typename Step, typename ProtoType>
+inline void serializeQueryPlanStepToProtoImpl(const QueryPlanStepPtr & origin_step, ProtoType & proto)
+{
+    auto step = std::dynamic_pointer_cast<Step>(origin_step);
+    if (!step)
+    {
+        auto err_msg = fmt::format("step type unmatched");
+        throw Exception(err_msg, ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+    step->toProto(proto);
+}
+
+void serializeQueryPlanStepToProto(const QueryPlanStepPtr & step, Protos::QueryPlanStep & proto)
+{
+    switch (step->getType())
+    {
+#define CASE_DEF(TYPE, VAR_NAME) \
+    case IQueryPlanStep::Type::TYPE: { \
+        serializeQueryPlanStepToProtoImpl<TYPE##Step, Protos::TYPE##Step>(step, *proto.mutable_##VAR_NAME##_step()); \
+        return; \
+    }
+
+        APPLY_STEP_PROTOBUF_TYPES_AND_NAME(CASE_DEF)
+#undef CASE_DEF
+
+        default: {
+            auto err_msg = fmt::format(FMT_STRING("not implemented step: {}"), static_cast<int>(step->getType()));
+            throw Exception(err_msg, ErrorCodes::PROTOBUF_BAD_CAST);
+        }
+    }
+}
+
+template <typename Step, typename ProtoType>
+inline QueryPlanStepPtr deserializeQueryPlanStepFromProtoImpl(const ProtoType & proto, ContextPtr context)
+{
+    auto step = Step::fromProto(proto, context);
+    return step;
+}
+
+QueryPlanStepPtr deserializeQueryPlanStepFromProto(const Protos::QueryPlanStep & proto, ContextPtr context)
+{
+    switch (proto.step_case())
+    {
+#define CASE_DEF(TYPE, VAR_NAME) \
+    case Protos::QueryPlanStep::StepCase::k##TYPE##Step: { \
+        return deserializeQueryPlanStepFromProtoImpl<TYPE##Step, Protos::TYPE##Step>(proto.VAR_NAME##_step(), context); \
+    }
+        APPLY_STEP_PROTOBUF_TYPES_AND_NAME(CASE_DEF)
+#undef CASE_DEF
+
+        default: {
+            auto err_msg = fmt::format(FMT_STRING("not implemented protobuf step: {}"), static_cast<int>(proto.step_case()));
+            throw Exception(err_msg, ErrorCodes::PROTOBUF_BAD_CAST);
+        }
+    }
+}
+
+template <typename StepType, typename ProtoType>
+bool isPlanStepEqualImpl(const IQueryPlanStep & a, const IQueryPlanStep & b)
+{
+    const auto & sa = reinterpret_cast<const StepType &>(a);
+    const auto & sb = reinterpret_cast<const StepType &>(b);
+    ProtoType pb_a;
+    ProtoType pb_b;
+    sa.toProto(pb_a, true);
+    sb.toProto(pb_b, true);
+
+    auto is_equal = google::protobuf::util::MessageDifferencer::Equals(pb_a, pb_b);
+    return is_equal;
+}
+
+bool isPlanStepEqual(const IQueryPlanStep & a, const IQueryPlanStep & b)
+{
+    if (a.getType() != b.getType())
+        return true;
+
+    switch (a.getType())
+    {
+#define CASE_DEF(TYPE, VAR_NAME) \
+    case IQueryPlanStep::Type::TYPE: { \
+        return isPlanStepEqualImpl<TYPE##Step, Protos::TYPE##Step>(a, b); \
+    }
+
+        APPLY_STEP_PROTOBUF_TYPES_AND_NAME(CASE_DEF)
+
+        default:
+            throw Exception("unsupported step", ErrorCodes::PROTOBUF_BAD_CAST);
+#undef CASE_DEF
+    }
+}
+
+template <typename StepType, typename ProtoType>
+UInt64 hashPlanStepImpl(const IQueryPlanStep & raw_step)
+{
+    const auto & step = reinterpret_cast<const StepType &>(raw_step);
+    ProtoType proto;
+    step.toProto(proto, true);
+
+    auto res = sipHash64Protobuf(proto);
+    return res;
+}
+
+UInt64 hashPlanStep(const IQueryPlanStep & step)
+{
+    switch (step.getType())
+    {
+#define CASE_DEF(TYPE, VAR_NAME) \
+    case IQueryPlanStep::Type::TYPE: { \
+        return hashPlanStepImpl<TYPE##Step, Protos::TYPE##Step>(step); \
+    }
+
+        APPLY_STEP_PROTOBUF_TYPES_AND_NAME(CASE_DEF)
+
+        default:
+            throw Exception("unsupported step", ErrorCodes::PROTOBUF_BAD_CAST);
+#undef CASE_DEF
+    }
+}
 }

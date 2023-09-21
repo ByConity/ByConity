@@ -61,31 +61,8 @@ public:
         map.add("max_chunk_size", max_chunk_size);
     }
 
-    void serialize(WriteBuffer & buffer) const override
-    {
-        IQueryPlanStep::serializeImpl(buffer);
-        writeBinary(sample_size, buffer);
-        writeBinary(max_chunk_size, buffer);
-    }
-
-    static QueryPlanStepPtr deserialize(ReadBuffer & buffer, ContextPtr /*context_*/)
-    {
-        String step_description;
-        readBinary(step_description, buffer);
-
-        DataStream input_stream;
-        input_stream = deserializeDataStream(buffer);
-
-        size_t sample_size_;
-        size_t max_chunk_size_;
-        readBinary(sample_size_, buffer);
-        readBinary(max_chunk_size_, buffer);
-
-        auto step = std::make_unique<FinalSampleStep>(input_stream, sample_size_, max_chunk_size_);
-
-        step->setStepDescription(step_description);
-        return std::move(step);
-    }
+    void toProto(Protos::FinalSampleStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<FinalSampleStep> fromProto(const Protos::FinalSampleStep & proto, ContextPtr context);
 
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override
     {

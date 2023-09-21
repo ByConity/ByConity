@@ -53,18 +53,17 @@ void EnforceSingleRowStep::makeOutputNullable()
     output_stream = DataStream{.header = {nullable_output_header}};
 }
 
-void EnforceSingleRowStep::serialize(WriteBuffer & buf) const
+std::shared_ptr<EnforceSingleRowStep> EnforceSingleRowStep::fromProto(const Protos::EnforceSingleRowStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buf);
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto step = std::make_shared<EnforceSingleRowStep>(base_input_stream);
+    step->setStepDescription(step_description);
+    return step;
 }
 
-QueryPlanStepPtr EnforceSingleRowStep::deserialize(ReadBuffer & buf, ContextPtr)
+void EnforceSingleRowStep::toProto(Protos::EnforceSingleRowStep & proto, bool) const
 {
-    String step_description;
-    readBinary(step_description, buf);
-
-    DataStream input_stream = deserializeDataStream(buf);
-    return std::make_unique<EnforceSingleRowStep>(input_stream);
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
 }
 
 std::shared_ptr<IQueryPlanStep> EnforceSingleRowStep::copy(ContextPtr) const

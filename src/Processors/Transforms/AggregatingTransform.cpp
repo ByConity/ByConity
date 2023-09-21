@@ -22,10 +22,11 @@
 #include <Processors/Transforms/AggregatingTransform.h>
 
 #include <DataStreams/NativeBlockInputStream.h>
+#include <DataStreams/materializeBlock.h>
 #include <Processors/ISource.h>
 #include <Processors/Pipe.h>
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
-#include <DataStreams/materializeBlock.h>
+#include <Protos/plan_node_utils.pb.h>
 
 namespace ProfileEvents
 {
@@ -433,6 +434,22 @@ AggregatingTransform::AggregatingTransform(
     , max_threads(std::min(many_data->variants.size(), max_threads_))
     , temporary_data_merge_threads(temporary_data_merge_threads_)
 {
+}
+
+void AggregatingTransformParams::toProto(Protos::AggregatingTransformParams & proto) const
+{
+    params.toProto(*proto.mutable_params());
+    proto.set_final(final);
+}
+
+std::shared_ptr<AggregatingTransformParams>
+AggregatingTransformParams::fromProto(const Protos::AggregatingTransformParams & proto, ContextPtr context)
+{
+    auto params = Aggregator::Params::fromProto(proto.params(), context);
+    auto final = proto.final();
+    auto step = std::make_shared<AggregatingTransformParams>(params, final);
+
+    return step;
 }
 
 AggregatingTransform::~AggregatingTransform() = default;

@@ -96,8 +96,6 @@ public:
 
     virtual BlockInputStreamPtr createStreamWithNonJoinedRows(const Block &, UInt64) const { return {}; }
 
-    virtual void serialize(WriteBuffer &) const { throw Exception("Not implement join serialize", ErrorCodes::NOT_IMPLEMENTED); }
-    static JoinPtr deserialize(ReadBuffer &, ContextPtr) { throw Exception("Not implement join deserialize", ErrorCodes::NOT_IMPLEMENTED); }
     virtual void tryBuildRuntimeFilters(size_t  /*total_rows*/ = 0) const { throw Exception("Not implement runtime filter build", ErrorCodes::NOT_IMPLEMENTED); }
 
     /// Peek next stream of delayed joined blocks.

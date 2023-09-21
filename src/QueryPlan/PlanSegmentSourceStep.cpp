@@ -83,61 +83,6 @@ QueryPlanStepPtr PlanSegmentSourceStep::generateStep()
         return std::make_unique<ReadFromStorageStep>(std::move(pipe), step_description);
 }
 
-void PlanSegmentSourceStep::serialize(WriteBuffer & buffer) const
-{
-    writeBinary(step_description, buffer);
-    serializeBlock(output_stream->header, buffer);
-
-    storage_id.serialize(buffer);
-    query_info.serialize(buffer);
-    serializeStrings(column_names, buffer);
-    writeBinary(UInt8(processed_stage), buffer);
-    writeBinary(max_block_size, buffer);
-    writeBinary(num_streams, buffer);
-}
-
-QueryPlanStepPtr PlanSegmentSourceStep::deserialize(ReadBuffer & buffer, ContextPtr context)
-{
-    String step_description;
-    SelectQueryInfo query_info;
-
-    readBinary(step_description, buffer);
-    auto header = deserializeBlock(buffer);
-    StorageID storage_id = StorageID::deserialize(buffer, context);
-    query_info.deserialize(buffer);
-
-    // std::cout<<" << ReadFromSource: " << queryToString(query_info.query) << std::endl;
-
-    /**
-     * reconstuct query level info based on query
-     */
-    SelectQueryOptions options;
-    auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, context, options.distributedStages());
-    interpreter->execute();
-    query_info = interpreter->getQueryInfo();
-
-    UInt8 binary_stage;
-    size_t max_block_size;
-    unsigned num_streams;
-
-    Names column_names = deserializeStrings(buffer);
-    readBinary(binary_stage, buffer);
-    auto processed_stage = QueryProcessingStage::Enum(binary_stage);
-    readBinary(max_block_size, buffer);
-    readBinary(num_streams, buffer);
-
-    auto source_step = std::make_unique<PlanSegmentSourceStep>(header,
-                                                               storage_id,
-                                                               query_info,
-                                                               column_names,
-                                                               processed_stage,
-                                                               max_block_size,
-                                                               num_streams,
-                                                               context);
-
-    return source_step->generateStep();
-}
-
 std::shared_ptr<IQueryPlanStep> PlanSegmentSourceStep::copy(ContextPtr) const
 {
     throw Exception("PlanSegmentSourceStep can not copy", ErrorCodes::NOT_IMPLEMENTED);

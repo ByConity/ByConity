@@ -53,9 +53,6 @@ public:
     size_t getTotalRowCount() const override;
     size_t getTotalByteCount() const override;
 
-    void serialize(WriteBuffer & buf) const override;
-    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
-
 private:
     Poco::Logger * log = &Poco::Logger::get("NestedLoopJoin");
 

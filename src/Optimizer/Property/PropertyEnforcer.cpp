@@ -120,7 +120,7 @@ PropertyEnforcer::enforceStreamPartitioning(QueryPlanStepPtr step, const Propert
 
     if (required.getStreamPartitioning().getPartitioningHandle() == Partitioning::Handle::SINGLE)
     {
-        QueryPlanStepPtr step_ptr = std::make_unique<UnionStep>(streams, 0, true);
+        QueryPlanStepPtr step_ptr = std::make_unique<UnionStep>(streams, DataStream{}, OutputToInputs{}, 0, true);
         return step_ptr;
     }
     throw Exception("Property Enforce error", ErrorCodes::ILLEGAL_ENFORCE);

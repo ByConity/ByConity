@@ -21,22 +21,28 @@
 
 #pragma once
 
+#include <Protos/EnumMacros.h>
+#include <Protos/enum.pb.h>
 #include <common/types.h>
 
 namespace DB
 {
 
-/// What to do if the limit is exceeded.
-enum class OverflowMode
+namespace Protos
 {
-    THROW     = 0,    /// Throw exception.
-    BREAK     = 1,    /// Abort query execution, return what is.
+    class SizeLimits;
+}
 
+/// What to do if the limit is exceeded.
+ENUM_WITH_PROTO_CONVERTER(
+    OverflowMode, // enum name
+    Protos::OverflowMode, // proto enum message
+    (THROW, 0), /// Throw exception.
+    (BREAK, 1), /// Abort query execution, return what is.
     /** Only for GROUP BY: do not add new rows to the set,
       * but continue to aggregate for keys that are already in the set.
       */
-    ANY       = 2,
-};
+    (ANY, 2));
 
 class ReadBuffer;
 class WriteBuffer;
@@ -63,6 +69,8 @@ struct SizeLimits
 
     void serialize(WriteBuffer & buffer) const;
     void deserialize(ReadBuffer & buffer);
+    void toProto(Protos::SizeLimits & proto) const;
+    void fillFromProto(const Protos::SizeLimits & proto);
 };
 
 }

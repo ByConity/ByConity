@@ -21,13 +21,13 @@ namespace DB
 {
 SerdeDataType SerdeDataTypeFromString(const String & tag_string)
 {
-    const google::protobuf::EnumDescriptor * descriptor = Protos::SerdeDataType_descriptor();
+    const google::protobuf::EnumDescriptor * descriptor = Statistics::Protos::SerdeDataType_descriptor();
     return static_cast<SerdeDataType>(descriptor->FindValueByName(tag_string)->number());
 }
 
 String SerdeDataTypeToString(SerdeDataType tag)
 {
-    const google::protobuf::EnumDescriptor * descriptor = Protos::SerdeDataType_descriptor();
+    const google::protobuf::EnumDescriptor * descriptor = Statistics::Protos::SerdeDataType_descriptor();
     return descriptor->FindValueByNumber(tag)->name();
 }
 //Set to true if enum is string, set to false if enum is int

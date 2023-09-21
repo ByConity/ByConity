@@ -18,6 +18,7 @@
 #include <DataStreams/SizeLimits.h>
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/Context_fwd.h>
+#include <Protos/plan_node_utils.pb.h>
 #include <QueryPlan/ITransformingStep.h>
 #include <Storages/SelectQueryInfo.h>
 
@@ -45,6 +46,10 @@ struct GroupingSetsParams
 
     ColumnNumbers used_keys;
     ColumnNumbers missing_keys;
+
+public:
+    void toProto(Protos::GroupingSetsParams & proto) const;
+    void fillFromProto(const Protos::GroupingSetsParams & proto);
 };
 
 using GroupingSetsParamsList = std::vector<GroupingSetsParams>;
@@ -53,6 +58,10 @@ struct GroupingDescription
 {
     Names argument_names;
     String output_name;
+
+public:
+    void toProto(Protos::GroupingDescription & proto) const;
+    void fillFromProto(const Protos::GroupingDescription & proto);
 };
 
 using GroupingDescriptions = std::vector<GroupingDescription>;
@@ -173,8 +182,8 @@ public:
 
     bool isNormal() const { return final && !isGroupingSet() /*&& !totals && !having*/ && groupings.empty(); }
 
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
+    void toProto(Protos::AggregatingStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<AggregatingStep> fromProto(const Protos::AggregatingStep & proto, ContextPtr context);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
     static Aggregator::Params createParams(Block header_before_aggregation, AggregateDescriptions aggregates, Names group_by_keys);

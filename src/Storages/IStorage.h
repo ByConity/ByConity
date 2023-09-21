@@ -667,9 +667,6 @@ public:
     /// Does not takes underlying Storage (if any) into account.
     virtual std::optional<UInt64> lifetimeBytes() const { return {}; }
 
-    void serialize(WriteBuffer & buf) const;
-    static StoragePtr deserialize(ReadBuffer & buf, const ContextPtr & context);
-
     bool is_detached{false};
 
     TxnTimestamp commit_time;

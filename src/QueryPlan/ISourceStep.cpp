@@ -1,5 +1,6 @@
-#include <QueryPlan/ISourceStep.h>
 #include <Processors/QueryPipeline.h>
+#include <QueryPlan/ISourceStep.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 namespace DB
 {
@@ -25,4 +26,16 @@ void ISourceStep::describePipeline(FormatSettings & settings) const
     IQueryPlanStep::describePipeline(processors, settings);
 }
 
+// this won't be override, so use a different name
+void ISourceStep::serializeToProtoBase(Protos::ISourceStep & proto) const
+{
+    serializeBlockToProto(output_stream->header, *proto.mutable_output_header());
+}
+
+// return base_output_stream and step_description
+Block ISourceStep::deserializeFromProtoBase(const Protos::ISourceStep & proto)
+{
+    Block output_header = deserializeBlockFromProto(proto.output_header());
+    return output_header;
+}
 }

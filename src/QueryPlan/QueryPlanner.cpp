@@ -2191,7 +2191,7 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
     {
         case ASTSelectWithUnionQuery::Mode::UNION_ALL:
         case ASTSelectWithUnionQuery::Mode::UNION_DISTINCT:
-            set_operation_step = std::make_shared<UnionStep>(input_streams, output_stream, false);
+            set_operation_step = std::make_shared<UnionStep>(input_streams, output_stream);
             break;
         case ASTSelectWithUnionQuery::Mode::INTERSECT_ALL:
             set_operation_step = std::make_shared<IntersectStep>(input_streams, output_stream, false);

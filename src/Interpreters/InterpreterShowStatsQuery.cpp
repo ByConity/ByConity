@@ -38,7 +38,11 @@ namespace ErrorCodes
     extern const int UNKNOWN_TABLE;
     extern const int FILE_NOT_FOUND;
 }
+using Statistics::Protos::DbStats;
+using Statistics::Protos::DbStats_Version_V1;
+using Statistics::Protos::DbStats_Version_V2;
 using namespace Statistics;
+
 
 std::vector<FormattedOutputData> getTableFormattedOutput(
     ContextPtr context,
@@ -110,7 +114,7 @@ std::vector<FormattedOutputData> getTableFormattedOutput(
 
 void writeDbStats(ContextPtr context, const String & db_name, const String & path)
 {
-    Protos::DbStats db_stats;
+    DbStats db_stats;
     db_stats.set_db_name(db_name);
     db_stats.set_version(PROTO_VERSION);
     auto catalog = createCatalogAdaptor(context);
@@ -151,7 +155,7 @@ void writeDbStats(ContextPtr context, const String & db_name, const String & pat
 }
 void writeDbStatsToJson(ContextPtr context, const String & db_name, const String & path)
 {
-    Protos::DbStats db_stats;
+    DbStats db_stats;
     db_stats.set_db_name(db_name);
     db_stats.set_version(PROTO_VERSION);
     auto catalog = createCatalogAdaptor(context);
@@ -172,13 +176,13 @@ void writeDbStatsToJson(ContextPtr context, const String & db_name, const String
 void readDbStats(ContextPtr context, const String & original_db_name, const String & path)
 {
     std::ifstream fin(path, std::ios::binary);
-    Protos::DbStats db_stats;
+    DbStats db_stats;
     db_stats.ParseFromIstream(&fin);
 
-    auto version = db_stats.has_version() ? db_stats.version() : Protos::DbStats_Version_V1;
-    if (version == Protos::DbStats_Version_V1)
+    auto version = db_stats.has_version() ? db_stats.version() : DbStats_Version_V1;
+    if (version == DbStats_Version_V1)
     {
-        version = Protos::DbStats_Version_V2;
+        version = DbStats_Version_V2;
     }
     if (version != PROTO_VERSION)
     {

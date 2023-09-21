@@ -14,8 +14,8 @@
  */
 
 #pragma once
-#include <QueryPlan/ITransformingStep.h>
 #include <DataStreams/SizeLimits.h>
+#include <QueryPlan/ITransformingStep.h>
 
 namespace DB
 {
@@ -36,10 +36,21 @@ public:
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+
+    void toProto(Protos::RollupStep & proto, bool for_hash_equals = false) const
+    {
+        (void)proto;
+        (void)for_hash_equals;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+
+    static std::shared_ptr<RollupStep> fromProto(const Protos::RollupStep & proto, ContextPtr)
+    {
+        (void)proto;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
 
 private:
     size_t keys_size;

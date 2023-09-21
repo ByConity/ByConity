@@ -90,9 +90,6 @@ public:
         join->tryBuildRuntimeFilters(total_rows);
     }
 
-    void serialize(WriteBuffer & buf) const override;
-    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
-
 private:
     JoinPtr join;
     SizeLimits limits;

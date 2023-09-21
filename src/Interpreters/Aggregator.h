@@ -905,6 +905,10 @@ using ContextPtr = std::shared_ptr<const Context>;
 
 /** Aggregates the source of the blocks.
   */
+namespace Protos
+{
+    class AggregatorParams;
+}
 class Aggregator final
 {
 public:
@@ -1033,8 +1037,8 @@ public:
         void explain(WriteBuffer & out, size_t indent) const;
         void explain(JSONBuilder::JSONMap & map) const;
 
-        void serialize(WriteBuffer & buf) const;
-        static Params deserialize(ReadBuffer & buf, const ContextPtr & context);
+        void toProto(Protos::AggregatorParams & proto) const;
+        static Aggregator::Params fromProto(const Protos::AggregatorParams & proto, ContextPtr context);
     };
 
     explicit Aggregator(const Params & params_);

@@ -367,8 +367,6 @@ public:
 
     bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
 
-    void serialize(WriteBuffer & buf) const override;
-    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
     bool isEqualNull(const String& name) const;
     void tryBuildRuntimeFilters(size_t total_rows) const override;
     void bypassRuntimeFilters(BypassType type) const;

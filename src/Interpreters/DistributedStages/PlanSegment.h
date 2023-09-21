@@ -17,13 +17,15 @@
 
 #include <cstddef>
 #include <optional>
-#include <Core/Types.h>
 #include <Core/Block.h>
-#include <QueryPlan/QueryPlan.h>
+#include <Core/Types.h>
 #include <Interpreters/Context_fwd.h>
-#include <Interpreters/StorageID.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
+#include <Interpreters/StorageID.h>
+#include <Protos/EnumMacros.h>
+#include <Protos/enum.pb.h>
+#include <QueryPlan/QueryPlan.h>
 
 namespace DB
 {
@@ -34,13 +36,19 @@ using RuntimeFilterId = UInt32;
  * EXCHANGE always marking the plan that need to repartiton the data.
  * OUTPUT is only used in PlanSegmentOutput and its output is client, which means we should output the results.
  */
-enum class PlanSegmentType : UInt8
+ENUM_WITH_PROTO_CONVERTER(
+    PlanSegmentType, // enum name
+    Protos::PlanSegmentType, // proto enum message
+    (UNKNOWN, 0),
+    (SOURCE),
+    (EXCHANGE),
+    (OUTPUT));
+
+namespace Protos
 {
-    UNKNOWN = 0,
-    SOURCE,
-    EXCHANGE,
-    OUTPUT
-};
+    class IPlanSegment;
+    class PlanSegmentInput;
+}
 
 String planSegmentTypeToString(const PlanSegmentType & type);
 
@@ -102,6 +110,9 @@ public:
 
     virtual String toString(size_t indent = 0) const;
 
+    void toProtoBase(Protos::IPlanSegment & proto) const;
+    void fromProtoBase(const Protos::IPlanSegment & proto);
+
 protected:
     Block header;
     PlanSegmentType type = PlanSegmentType::UNKNOWN;
@@ -145,6 +156,9 @@ public:
     void serialize(WriteBuffer & buf) const override;
 
     void deserialize(ReadBuffer & buf, ContextPtr context) override;
+
+    void toProto(Protos::PlanSegmentInput & proto) const;
+    void fillFromProto(const Protos::PlanSegmentInput & proto, ContextPtr context);
 
     String toString(size_t indent = 0) const override;
 

@@ -42,9 +42,8 @@ public:
 
     void allocate(const ContextPtr & context);
 
-    void serialize(WriteBuffer & buffer) const override;
-
-    static QueryPlanStepPtr deserialize(ReadBuffer & buffer, ContextPtr & context);
+    void toProto(Protos::TableWriteStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<TableWriteStep> fromProto(const Protos::TableWriteStep & proto, ContextPtr context);
 
 private:
     Block getHeader(const NamesAndTypes & input_columns);
@@ -64,14 +63,13 @@ class TableWriteStep::Target
 {
 public:
     virtual ~Target() = default;
-    virtual TargetType getTargeType() const = 0;
-    virtual void serializeImpl(WriteBuffer &) const = 0;
+    virtual TargetType getTargetType() const = 0;
     virtual String toString() const = 0;
     virtual StoragePtr getStorage() const = 0;
     virtual NameToNameMap getTableColumnToInputColumnMap(const Names & input_columns) const = 0;
 
-    void serialize(WriteBuffer &) const;
-    static TargetPtr deserialize(ReadBuffer &, ContextPtr &);
+    void toProto(Protos::TableWriteStep::Target & proto) const;
+    static TargetPtr fromProto(const Protos::TableWriteStep::Target & proto, ContextPtr context);
 };
 
 class TableWriteStep::InsertTarget : public TableWriteStep::Target
@@ -82,11 +80,7 @@ public:
     {
     }
 
-    TargetType getTargeType() const override
-    {
-        return TargetType::INSERT;
-    }
-    void serializeImpl(WriteBuffer &) const override;
+    TargetType getTargetType() const override { return TargetType::INSERT; }
     String toString() const override;
     StoragePtr getStorage() const override
     {
@@ -103,7 +97,8 @@ public:
         return storage_id;
     }
 
-    static std::shared_ptr<InsertTarget> deserialize(ReadBuffer &, ContextPtr &);
+    void toProtoImpl(Protos::TableWriteStep::InsertTarget & proto) const;
+    static std::shared_ptr<InsertTarget> createFromProtoImpl(const Protos::TableWriteStep::InsertTarget & proto, ContextPtr context);
 
 private:
     StoragePtr storage;

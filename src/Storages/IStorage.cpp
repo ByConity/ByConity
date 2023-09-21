@@ -258,21 +258,6 @@ NameDependencies IStorage::getDependentViewsByColumn(ContextPtr context) const
     return name_deps;
 }
 
-void IStorage::serialize(WriteBuffer & buf) const
-{
-    writeBinary(storage_id.database_name, buf);
-    writeBinary(storage_id.table_name, buf);
-}
-
-StoragePtr IStorage::deserialize(ReadBuffer & buf, const ContextPtr & context)
-{
-    String database_name;
-    String table_name;
-    readBinary(database_name, buf);
-    readBinary(table_name, buf);
-    return DatabaseCatalog::instance().getTable({database_name, table_name}, context);
-}
-
 NamesAndTypesListPtr IStorage::getPartColumns(const UInt64 &columns_commit_time) const
 {
     if (columns_commit_time == commit_time.toUInt64())

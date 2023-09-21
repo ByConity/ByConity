@@ -62,7 +62,7 @@ public:
         return static_cast<const ColumnConst &>(*column).getField().get<String>();
     }
 
-    enum Protocol
+    enum class Protocol
     {
         TCP,
         HTTP,
@@ -73,14 +73,14 @@ public:
         String database = getStringFromConstColumn(arguments[0].column);
         String table = getStringFromConstColumn(arguments[1].column);
 
-        Protocol protocol = TCP;
+        Protocol protocol = Protocol::TCP;
         if (arguments.size() == 3)
         {
             auto s_protocol = Poco::toLower(getStringFromConstColumn(arguments[2].column));
             if (s_protocol == "tcp")
-                protocol = TCP;
+                protocol = Protocol::TCP;
             else if (s_protocol == "http")
-                protocol = HTTP;
+                protocol = Protocol::HTTP;
             else
                 throw Exception("Expected tcp or http in 3rd argument of function " + getName(), ErrorCodes::BAD_ARGUMENTS);
         }
@@ -92,7 +92,7 @@ public:
         {
             Array res;
             for (auto & host_ports : host_ports_vec)
-                res.push_back((protocol == TCP) ? host_ports.getTCPAddress() : host_ports.getHTTPAddress());
+                res.push_back((protocol == Protocol::TCP) ? host_ports.getTCPAddress() : host_ports.getHTTPAddress());
 
             return result_type->createColumnConst(input_rows_count, res)->convertToFullColumnIfConst();
         }
@@ -104,7 +104,7 @@ public:
                 std::uniform_int_distribution dist;
                 size_t i = dist(thread_local_rng) % host_ports_vec.size();
                 auto host_ports = host_ports_vec[i];
-                res = (protocol == TCP) ? host_ports.getTCPAddress() : host_ports.getHTTPAddress();
+                res = (protocol == Protocol::TCP) ? host_ports.getTCPAddress() : host_ports.getHTTPAddress();
             }
             return result_type->createColumnConst(input_rows_count, res)->convertToFullColumnIfConst();
         }

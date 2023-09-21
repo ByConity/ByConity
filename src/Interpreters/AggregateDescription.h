@@ -29,6 +29,11 @@
 namespace DB
 {
 
+namespace Protos
+{
+    class AggregateDescription;
+}
+
 namespace JSONBuilder { class JSONMap; }
 
 class ReadBuffer;
@@ -46,8 +51,8 @@ struct AggregateDescription
     void explain(WriteBuffer & out, size_t indent) const; /// Get description for EXPLAIN query.
     void explain(JSONBuilder::JSONMap & map) const;
 
-    void serialize(WriteBuffer & buf) const;
-    void deserialize(ReadBuffer & buf);
+    void toProto(Protos::AggregateDescription & proto) const;
+    void fillFromProto(const Protos::AggregateDescription & proto);
 };
 
 using AggregateDescriptions = std::vector<AggregateDescription>;

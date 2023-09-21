@@ -18,16 +18,21 @@
 
 namespace DB
 {
+using OutputToInputs = std::unordered_map<String, std::vector<String>>;
+
 class SetOperationStep : public IQueryPlanStep
 {
 public:
-    SetOperationStep(
-        DataStreams input_streams_, DataStream output_stream_, std::unordered_map<String, std::vector<String>> output_to_inputs_);
-    const std::unordered_map<String, std::vector<String>> & getOutToInputs() const;
+    SetOperationStep(DataStreams input_streams_, DataStream output_stream_, OutputToInputs output_to_inputs_);
+    const OutputToInputs & getOutToInputs() const;
     void setInputStreams(const DataStreams & input_streams_) override;
 
+    void serializeToProtoBase(Protos::SetOperationStep & proto) const;
+    static std::tuple<DataStreams, DataStream, std::unordered_map<String, std::vector<String>>>
+    deserializeFromProtoBase(const Protos::SetOperationStep & proto);
+
 protected:
-    std::unordered_map<String, std::vector<String>> output_to_inputs;
+    OutputToInputs output_to_inputs;
 };
 
 }

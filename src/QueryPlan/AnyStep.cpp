@@ -22,16 +22,6 @@ QueryPipelinePtr AnyStep::updatePipeline(QueryPipelines, const BuildQueryPipelin
     throw Exception("AnyStep is a fake step", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void AnyStep::serialize(WriteBuffer &) const
-{
-    throw Exception("AnyStep is a fake step", ErrorCodes::NOT_IMPLEMENTED);
-}
-
-QueryPlanStepPtr AnyStep::deserialize(ReadBuffer &, ContextPtr)
-{
-    throw Exception("AnyStep is a fake step", ErrorCodes::NOT_IMPLEMENTED);
-}
-
 std::shared_ptr<IQueryPlanStep> AnyStep::copy(ContextPtr) const
 {
     return std::make_unique<AnyStep>(output_stream.value(), group_id);

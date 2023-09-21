@@ -106,18 +106,5 @@ void JoinSwitcher::switchJoin()
     switched = true;
 }
 
-void JoinSwitcher::serialize(WriteBuffer & buf) const
-{
-    table_join->serialize(buf);
-    serializeBlock(right_sample_block, buf);
-}
-
-JoinPtr JoinSwitcher::deserialize(ReadBuffer & buf, ContextPtr context)
-{
-    auto table_join = TableJoin::deserialize(buf, context);
-    auto right_sample_block = deserializeBlock(buf);
-
-    return std::make_shared<JoinSwitcher>(table_join, right_sample_block);
-}
 
 }

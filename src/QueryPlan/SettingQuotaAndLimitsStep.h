@@ -51,9 +51,18 @@ public:
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
-    void serialize(WriteBuffer & buf) const override;
+    void toProto(Protos::SettingQuotaAndLimitsStep & proto, bool for_hash_equals = false) const
+    {
+        (void)proto;
+        (void)for_hash_equals;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+    static std::shared_ptr<SettingQuotaAndLimitsStep> fromProto(const Protos::SettingQuotaAndLimitsStep & proto, ContextPtr)
+    {
+        (void)proto;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
 
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr context);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
 

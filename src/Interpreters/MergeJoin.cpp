@@ -202,7 +202,6 @@ struct MergeJoinEqualRange
     bool empty() const { return !left_length && !right_length; }
 };
 
-using Range = MergeJoinEqualRange;
 
 
 class MergeJoinCursor
@@ -233,7 +232,7 @@ public:
         }
     }
 
-    Range getNextEqualRange(MergeJoinCursor & rhs, const std::vector<bool> *null_safe_keys)
+    MergeJoinEqualRange getNextEqualRange(MergeJoinCursor & rhs, const std::vector<bool> * null_safe_keys)
     {
         if (has_left_nullable && has_right_nullable)
             return getNextEqualRangeImpl<true, true>(rhs, null_safe_keys);
@@ -278,7 +277,7 @@ private:
     bool has_right_nullable = false;
 
     template <bool left_nulls, bool right_nulls>
-    Range getNextEqualRangeImpl(MergeJoinCursor & rhs, const std::vector<bool> *null_safe_keys)
+    MergeJoinEqualRange getNextEqualRangeImpl(MergeJoinCursor & rhs, const std::vector<bool> * null_safe_keys)
     {
         while (!atEnd() && !rhs.atEnd())
         {
@@ -288,10 +287,10 @@ private:
             else if (cmp > 0)
                 rhs.impl.next();
             else if (!cmp)
-                return Range{impl.getRow(), rhs.impl.getRow(), getEqualLength(), rhs.getEqualLength()};
+                return MergeJoinEqualRange{impl.getRow(), rhs.impl.getRow(), getEqualLength(), rhs.getEqualLength()};
         }
 
-        return Range{impl.getRow(), rhs.impl.getRow(), 0, 0};
+        return MergeJoinEqualRange{impl.getRow(), rhs.impl.getRow(), 0, 0};
     }
 
     template <bool left_nulls, bool right_nulls>
@@ -386,14 +385,21 @@ void copyRightRange(const Block & right_block, const Block & right_columns_to_ad
     }
 }
 
-void joinEqualsAnyLeft(const Block & right_block, const Block & right_columns_to_add, MutableColumns & right_columns, const Range & range)
+void joinEqualsAnyLeft(
+    const Block & right_block, const Block & right_columns_to_add, MutableColumns & right_columns, const MergeJoinEqualRange & range)
 {
     copyRightRange(right_block, right_columns_to_add, right_columns, range.right_start, range.left_length);
 }
 
 template <bool is_all>
-bool joinEquals(const Block & left_block, const Block & right_block, const Block & right_columns_to_add,
-                MutableColumns & left_columns, MutableColumns & right_columns, Range & range, size_t max_rows [[maybe_unused]])
+bool joinEquals(
+    const Block & left_block,
+    const Block & right_block,
+    const Block & right_columns_to_add,
+    MutableColumns & left_columns,
+    MutableColumns & right_columns,
+    MergeJoinEqualRange & range,
+    size_t max_rows [[maybe_unused]])
 {
     bool one_more = true;
 
@@ -820,7 +826,7 @@ bool MergeJoin::leftJoin(MergeJoinCursor & left_cursor, const Block & left_block
         size_t left_unequal_position = left_cursor.position() + left_key_tail;
         left_key_tail = 0;
 
-        Range range = left_cursor.getNextEqualRange(right_cursor, table_join->keyIdsNullSafe());
+        MergeJoinEqualRange range = left_cursor.getNextEqualRange(right_cursor, table_join->keyIdsNullSafe());
 
         joinInequalsLeft<is_all>(left_block, left_columns, right_columns_to_add, right_columns, left_unequal_position, range.left_start);
 
@@ -873,7 +879,7 @@ bool MergeJoin::allInnerJoin(MergeJoinCursor & left_cursor, const Block & left_b
 
     while (!left_cursor.atEnd() && !right_cursor.atEnd())
     {
-        Range range = left_cursor.getNextEqualRange(right_cursor, table_join->keyIdsNullSafe());
+        MergeJoinEqualRange range = left_cursor.getNextEqualRange(right_cursor, table_join->keyIdsNullSafe());
         if (range.empty())
             break;
 
@@ -911,7 +917,7 @@ bool MergeJoin::semiLeftJoin(MergeJoinCursor & left_cursor, const Block & left_b
 
     while (!left_cursor.atEnd() && !right_cursor.atEnd())
     {
-        Range range = left_cursor.getNextEqualRange(right_cursor, table_join->keyIdsNullSafe());
+        MergeJoinEqualRange range = left_cursor.getNextEqualRange(right_cursor, table_join->keyIdsNullSafe());
         if (range.empty())
             break;
 
@@ -1122,18 +1128,5 @@ void MergeJoin::RightBlockInfo::setUsed(size_t start, size_t length)
     }
 }
 
-void MergeJoin::serialize(WriteBuffer & buf) const
-{
-    table_join->serialize(buf);
-    serializeBlock(right_sample_block, buf);
-}
-
-JoinPtr MergeJoin::deserialize(ReadBuffer & buf, ContextPtr context)
-{
-    auto table_join = TableJoin::deserialize(buf, context);
-    auto right_sample_block = deserializeBlock(buf);
-
-    return std::make_shared<MergeJoin>(table_join, right_sample_block);
-}
 
 }

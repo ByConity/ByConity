@@ -66,9 +66,9 @@ public:
     size_t getMaxThreads() const { return max_threads; }
     size_t getMemoryEfficientMergeThreads() const { return memory_efficient_merge_threads; }
     bool ShouldProduceResultsInOrderOfBucketNumber() const { return should_produce_results_in_order_of_bucket_number; }
-    
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
+
+    void toProto(Protos::MergingAggregatedStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<MergingAggregatedStep> fromProto(const Protos::MergingAggregatedStep & proto, ContextPtr context);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
 

@@ -19,15 +19,16 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
-#include <Interpreters/AggregateDescription.h>
-#include <Common/FieldVisitorToString.h>
-#include <Common/JSONBuilder.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <DataTypes/DataTypeHelper.h>
 #include <IO/Operators.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <DataTypes/DataTypeHelper.h>
-#include <AggregateFunctions/AggregateFunctionFactory.h>
-
+#include <Interpreters/AggregateDescription.h>
+#include <Protos/plan_node_utils.pb.h>
+#include <QueryPlan/PlanSerDerHelper.h>
+#include <Common/FieldVisitorToString.h>
+#include <Common/JSONBuilder.h>
 
 namespace DB
 {
@@ -38,8 +39,7 @@ void AggregateDescription::explain(WriteBuffer & out, size_t indent) const
 
     out << prefix << column_name << '\n';
 
-    auto dump_params = [&](const Array & arr)
-    {
+    auto dump_params = [&](const Array & arr) {
         bool first = true;
         for (const auto & param : arr)
         {
@@ -172,42 +172,29 @@ void AggregateDescription::explain(JSONBuilder::JSONMap & map) const
     }
 }
 
-void AggregateDescription::serialize(WriteBuffer & buf) const
+void AggregateDescription::toProto(Protos::AggregateDescription & proto) const
 {
-    writeBinary(function->getName(), buf);
-    writeBinary(function->getArgumentTypes().size(), buf);
-    for (const auto & type : function->getArgumentTypes())
-    {
-        serializeDataType(type, buf);
-    }
+    serializeAggregateFunctionToProto(function, parameters, *proto.mutable_function());
 
-    writeBinary(parameters, buf);
-    writeBinary(arguments, buf);
-    writeBinary(argument_names, buf);
-    writeBinary(column_name, buf);
-    writeBinary(mask_column, buf);
+    for (const auto & element : arguments)
+        proto.add_arguments(element);
+    for (const auto & element : argument_names)
+        proto.add_argument_names(element);
+    proto.set_column_name(column_name);
+    proto.set_mask_column(mask_column);
 }
 
-void AggregateDescription::deserialize(ReadBuffer & buf)
+void AggregateDescription::fillFromProto(const Protos::AggregateDescription & proto)
 {
-    String func_name;
-    readBinary(func_name, buf);
-    DataTypes data_types;
-    size_t type_size;
-    readBinary(type_size, buf);
-    data_types.resize(type_size);
+    DataTypes arg_types;
+    std::tie(function, parameters, arg_types) = deserializeAggregateFunctionFromProto(proto.function());
+    (void)arg_types;
 
-    for (size_t i = 0; i < type_size; ++i)
-        data_types[i] = deserializeDataType(buf);
-
-    readBinary(parameters, buf);
-    readBinary(arguments, buf);
-    readBinary(argument_names, buf);
-    readBinary(column_name, buf);
-    readBinary(mask_column, buf);
-
-    AggregateFunctionProperties properties;
-    function = AggregateFunctionFactory::instance().get(func_name, data_types, parameters, properties);
+    for (const auto & element : proto.arguments())
+        arguments.emplace_back(element);
+    for (const auto & element : proto.argument_names())
+        argument_names.emplace_back(element);
+    column_name = proto.column_name();
+    mask_column = proto.mask_column();
 }
-
 }

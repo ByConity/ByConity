@@ -40,21 +40,19 @@ void AssignUniqueIdStep::transformPipeline(QueryPipeline & pipeline, const Build
     pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<AssignUniqueIdTransform>(header, unique_id); });
 }
 
-void AssignUniqueIdStep::serialize(WriteBuffer & buf) const
+std::shared_ptr<AssignUniqueIdStep> AssignUniqueIdStep::fromProto(const Protos::AssignUniqueIdStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buf);
-    writeStringBinary(unique_id, buf);
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto unique_id = proto.unique_id();
+    auto step = std::make_shared<AssignUniqueIdStep>(base_input_stream, unique_id);
+    step->setStepDescription(step_description);
+    return step;
 }
 
-QueryPlanStepPtr AssignUniqueIdStep::deserialize(ReadBuffer & buf, ContextPtr)
+void AssignUniqueIdStep::toProto(Protos::AssignUniqueIdStep & proto, bool) const
 {
-    String step_description;
-    readBinary(step_description, buf);
-
-    DataStream input_stream = deserializeDataStream(buf);
-    String unique_id;
-    readStringBinary(unique_id, buf);
-    return std::make_unique<AssignUniqueIdStep>(input_stream, unique_id);
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    proto.set_unique_id(unique_id);
 }
 
 std::shared_ptr<IQueryPlanStep> AssignUniqueIdStep::copy(ContextPtr) const

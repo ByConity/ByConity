@@ -46,9 +46,11 @@
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
 #include <Core/Field.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <Protos/EnumMacros.h>
+#include <Protos/plan_node_utils.pb.h>
 
 
 namespace DB
@@ -382,6 +384,17 @@ DataTypePtr deserializeDataType(ReadBuffer & buf)
     String type_name;
     readBinary(type_name, buf);
     return data_type_factory.get(type_name);
+}
+
+void serializeDataTypeToProto(const DataTypePtr & data_type, Protos::DataType & proto)
+{
+    proto.set_type_name(data_type->getName());
+}
+
+DataTypePtr deserializeDataTypeFromProto(const Protos::DataType & proto)
+{
+    const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
+    return data_type_factory.get(proto.type_name());
 }
 
 void serializeDataTypes(const DataTypes & data_types, WriteBuffer & buf)

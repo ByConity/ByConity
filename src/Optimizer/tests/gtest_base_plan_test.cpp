@@ -97,7 +97,8 @@ QueryPlanPtr BasePlanTest::plan(const String & query, ContextMutablePtr query_co
     auto ast = parse(query, query_context);
 
     {
-        SelectIntersectExceptQueryVisitor::Data data{query_context->getSettingsRef().intersect_default_mode, query_context->getSettingsRef().except_default_mode};
+        SelectIntersectExceptQueryVisitor::Data data{
+            query_context->getSettingsRef().intersect_default_mode, query_context->getSettingsRef().except_default_mode};
         SelectIntersectExceptQueryVisitor{data}.visit(ast);
     }
 
@@ -205,6 +206,7 @@ std::string AbstractPlanTestSuite::explain(const std::string & name)
         if (sql.second->getType() == DB::ASTType::ASTSelectQuery || sql.second->getType() == DB::ASTType::ASTSelectWithUnionQuery)
         {
             auto query_plan = plan(sql.first, context);
+
             CardinalityEstimator::estimate(*query_plan, context);
             explain += DB::PlanPrinter::textLogicalPlan(*query_plan, session_context, show_statistics, true);
         }

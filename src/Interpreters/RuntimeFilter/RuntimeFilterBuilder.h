@@ -10,9 +10,10 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterTypes.h>
 #include <Parsers/IAST.h>
+#include <Protos/enum.pb.h>
 #include <Common/LinkedHashMap.h>
 #include <common/logger_useful.h>
-
+#include "Protos/EnumMacros.h"
 
 namespace DB
 {
@@ -20,11 +21,16 @@ using RuntimeFilterId = UInt32;
 using BloomFilterWithRangePtr = std::shared_ptr<BloomFilterWithRange>;
 using ValueSetWithRangePtr = std::shared_ptr<ValueSetWithRange>;
 
-enum class RuntimeFilterDistribution : UInt8
+namespace Protos
 {
-    Local,
-    Distributed,
-};
+    class RuntimeFilterBuildInfos;
+}
+
+ENUM_WITH_PROTO_CONVERTER(
+    RuntimeFilterDistribution, // enum name
+    Protos::RuntimeFilterDistribution, // proto enum message
+    (Local),
+    (Distributed));
 
 enum class BypassType : UInt8
 {
@@ -50,6 +56,9 @@ struct RuntimeFilterBuildInfos
 {
     RuntimeFilterId id;
     RuntimeFilterDistribution distribution;
+
+    void toProto(Protos::RuntimeFilterBuildInfos & proto) const;
+    static RuntimeFilterBuildInfos fromProto(const Protos::RuntimeFilterBuildInfos & proto);
 
     RuntimeFilterBuildInfos(RuntimeFilterId id_, RuntimeFilterDistribution distribution_) : id(id_), distribution(distribution_) { }
 };

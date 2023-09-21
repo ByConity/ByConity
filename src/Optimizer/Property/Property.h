@@ -23,9 +23,15 @@
 #include <Optimizer/Equivalences.h>
 #include <Optimizer/FunctionInvoker.h>
 #include <Parsers/IAST_fwd.h>
+#include <Protos/EnumMacros.h>
+#include <Protos/plan_node_utils.pb.h>
 
 namespace DB
 {
+namespace Protos
+{
+    class Partitioning;
+}
 class Property;
 using PropertySet = std::vector<Property>;
 using PropertySets = std::vector<PropertySet>;
@@ -43,26 +49,26 @@ using CTEId = UInt32;
 class Partitioning
 {
 public:
-    enum class Handle : UInt8
-    {
-        SINGLE = 0,
-        COORDINATOR,
-        FIXED_HASH,
-        FIXED_ARBITRARY,
-        FIXED_BROADCAST,
-        SCALED_WRITER,
-        BUCKET_TABLE,
-        ARBITRARY,
-        FIXED_PASSTHROUGH,
-        UNKNOWN
-    };
+    ENUM_WITH_PROTO_CONVERTER(
+        Handle, // enum name
+        Protos::Partitioning::Handle, // proto enum message
+        (SINGLE, 0),
+        (COORDINATOR, 1),
+        (FIXED_HASH, 2),
+        (FIXED_ARBITRARY, 3),
+        (FIXED_BROADCAST, 4),
+        (SCALED_WRITER, 5),
+        (BUCKET_TABLE, 6),
+        (ARBITRARY, 7),
+        (FIXED_PASSTHROUGH, 8),
+        (UNKNOWN, 9));
 
-    enum class Component : UInt8
-    {
-        ANY,
-        COORDINATOR,
-        WORKER,
-    };
+    ENUM_WITH_PROTO_CONVERTER(
+        Component, // enum name
+        Protos::Partitioning::Component, // proto enum message
+        (ANY, 0),
+        (COORDINATOR, 1),
+        (WORKER, 2));
 
 
     Partitioning(const Names & columns_) : Partitioning(Handle::FIXED_HASH, columns_) { }
@@ -109,8 +115,9 @@ public:
 
     size_t hash() const;
     String toString() const;
-    void serialize(WriteBuffer & buf) const;
-    void deserialize(ReadBuffer & buf);
+
+    void toProto(Protos::Partitioning & proto) const;
+    static Partitioning fromProto(const Protos::Partitioning & proto);
 
 private:
     enum Handle handle;
@@ -122,15 +129,15 @@ private:
     bool exactly_match;
 };
 
-enum class SortOrder : UInt8
-{
-    ASC_NULLS_FIRST,
-    ASC_NULLS_LAST,
-    DESC_NULLS_FIRST,
-    DESC_NULLS_LAST,
-    ANY, // for tablescan
-    UNKNOWN
-};
+ENUM_WITH_PROTO_CONVERTER(
+    SortOrder, // enum name
+    Protos::SortOrder, // proto enum message
+    (ASC_NULLS_FIRST),
+    (ASC_NULLS_LAST),
+    (DESC_NULLS_FIRST),
+    (DESC_NULLS_LAST),
+    (ANY),
+    (UNKNOWN));
 
 class SortColumn
 {

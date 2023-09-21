@@ -27,9 +27,8 @@ public:
 
     void initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
-    void serialize(WriteBuffer &) const override;
-
-    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_);
+    void toProto(Protos::ReadStorageRowCountStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<ReadStorageRowCountStep> fromProto(const Protos::ReadStorageRowCountStep & proto, ContextPtr context);
 
     std::shared_ptr<Cluster> getOptimizedCluster() { return optimized_cluster; }
 

@@ -24,6 +24,8 @@
 #include <Core/SettingsFields.h>
 #include <DataStreams/SizeLimits.h>
 #include <Formats/FormatSettings.h>
+#include <Protos/EnumMacros.h>
+#include <Protos/enum.pb.h>
 
 
 namespace DB
@@ -59,16 +61,16 @@ enum class JoinStrictness
 
 DECLARE_SETTING_ENUM(JoinStrictness)
 
-enum class JoinAlgorithm
-{
-    AUTO = 0,
-    HASH,
-    PARTIAL_MERGE,
-    PREFER_PARTIAL_MERGE,
-    NESTED_LOOP_JOIN,
-    PARALLEL_HASH,
-    GRACE_HASH,
-};
+ENUM_WITH_PROTO_CONVERTER(
+    JoinAlgorithm, // enum name
+    Protos::JoinAlgorithm, // proto enum message
+    (AUTO, 0),
+    (HASH),
+    (PARTIAL_MERGE),
+    (PREFER_PARTIAL_MERGE),
+    (NESTED_LOOP_JOIN),
+    (PARALLEL_HASH),
+    (GRACE_HASH));
 
 DECLARE_SETTING_ENUM(JoinAlgorithm)
 

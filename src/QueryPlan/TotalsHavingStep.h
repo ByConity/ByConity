@@ -54,10 +54,21 @@ public:
 
     const ActionsDAGPtr & getActions() const { return actions_dag; }
 
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+
+    void toProto(Protos::TotalsHavingStep & proto, bool for_hash_equals = false) const
+    {
+        (void)proto;
+        (void)for_hash_equals;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+
+    static std::shared_ptr<TotalsHavingStep> fromProto(const Protos::TotalsHavingStep & proto, ContextPtr)
+    {
+        (void)proto;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
 
 private:
     bool overflow_row;

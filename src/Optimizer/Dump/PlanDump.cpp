@@ -27,14 +27,15 @@
 
 namespace DB
 {
+using namespace Statistics;
 StatisticsTag StatisticsTagFromString(const String & tag_string)
 {
-    const google::protobuf::EnumDescriptor * descriptor = Protos::StatisticsType_descriptor();
+    const google::protobuf::EnumDescriptor * descriptor = Statistics::Protos::StatisticsType_descriptor();
     return static_cast<StatisticsTag>(descriptor->FindValueByName(tag_string)->number());
 }
 String StatisticsTagToString(StatisticsTag tag)
 {
-    const google::protobuf::EnumDescriptor * descriptor = Protos::StatisticsType_descriptor();
+    const google::protobuf::EnumDescriptor * descriptor = Statistics::Protos::StatisticsType_descriptor();
     return descriptor->FindValueByNumber(static_cast<int>(tag))->name();
 }
 PVar tableJson(ContextPtr context, const String & db_name, const String & table_name)

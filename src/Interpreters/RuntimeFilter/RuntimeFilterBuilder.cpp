@@ -3,6 +3,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterBuilder.h>
 #include <Parsers/ASTIdentifier.h>
+#include <Protos/plan_node_utils.pb.h>
 #include <QueryPlan/Assignment.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/PlanSerDerHelper.h>
@@ -211,7 +212,7 @@ void RuntimeFilterVal::serialize(WriteBuffer & buf) const
 
 String RuntimeFilterVal::dump() const
 {
-    return "is_bf:" + is_bf ? "true" : "false";
+    return "is_bf:" + std::string(is_bf ? "true" : "false");
 }
 
 void RuntimeFilterData::deserialize(ReadBuffer & buf)
@@ -257,5 +258,16 @@ String RuntimeFilterData::dump() const
     return "total rfs:" +  std::to_string(runtime_filters.size());
 }
 
+void RuntimeFilterBuildInfos::toProto(Protos::RuntimeFilterBuildInfos & proto) const
+{
+    proto.set_id(id);
+    proto.set_distribution(RuntimeFilterDistributionConverter::toProto(distribution));
+}
 
+RuntimeFilterBuildInfos RuntimeFilterBuildInfos::fromProto(const Protos::RuntimeFilterBuildInfos & proto)
+{
+    auto id = proto.id();
+    auto distribution = RuntimeFilterDistributionConverter::fromProto(proto.distribution());
+    return RuntimeFilterBuildInfos(id, distribution);
+}
 }

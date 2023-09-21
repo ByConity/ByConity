@@ -20,11 +20,11 @@
  */
 
 #include <DataStreams/SizeLimits.h>
-#include <Common/formatReadable.h>
-#include <Common/Exception.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <string>
+#include <Protos/plan_node_utils.pb.h>
+#include <Common/Exception.h>
+#include <Common/formatReadable.h>
 
 
 namespace DB
@@ -79,4 +79,17 @@ void SizeLimits::deserialize(ReadBuffer & buffer)
     overflow_mode = OverflowMode(mode);
 }
 
+void SizeLimits::toProto(Protos::SizeLimits & proto) const
+{
+    proto.set_max_rows(max_rows);
+    proto.set_max_bytes(max_bytes);
+    proto.set_overflow_mode(OverflowModeConverter::toProto(overflow_mode));
+}
+
+void SizeLimits::fillFromProto(const Protos::SizeLimits & proto)
+{
+    max_rows = proto.max_rows();
+    max_bytes = proto.max_bytes();
+    overflow_mode = OverflowModeConverter::fromProto(proto.overflow_mode());
+}
 }
