@@ -55,6 +55,9 @@ ServerSelectPartsDecision selectPartsToMerge(
 
     size_t parts_selected_precondition = 0;
 
+    const auto & config = data.getContext()->getConfigRef();
+    size_t max_parts_to_break = config.getInt64("dance_merge_selector.max_parts_to_break", MERGE_MAX_PARTS_TO_BREAK);
+
     // split parts into buckets if current table is bucket table.
     std::unordered_map<Int64, ServerDataPartsVector> buckets;
     if (data.isBucketTable())
@@ -76,7 +79,9 @@ ServerSelectPartsDecision selectPartsToMerge(
         {
             const String & partition_id = part->info().partition_id;
 
-            if (!prev_partition_id || partition_id != *prev_partition_id)
+            if (!prev_partition_id
+                || partition_id != *prev_partition_id
+                || (!parts_ranges.empty() && parts_ranges.back().size() >= max_parts_to_break))
             {
                 if (parts_ranges.empty() || !parts_ranges.back().empty())
                     parts_ranges.emplace_back();
@@ -194,7 +199,6 @@ ServerSelectPartsDecision selectPartsToMerge(
     */
 
     std::unique_ptr<IMergeSelector> merge_selector;
-    const auto & config = data.getContext()->getConfigRef();
     auto merge_selector_str = config.getString("merge_selector", "dance");
     if (merge_selector_str == "dance")
     {
