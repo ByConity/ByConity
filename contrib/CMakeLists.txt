@@ -273,17 +273,18 @@ if (USE_INTERNAL_AWS_S3_LIBRARY OR USE_INTERNAL_AWS_GLUE_LIBRARY)
 endif ()
 
 if (USE_INTERNAL_AWS_S3_LIBRARY)
+    add_subdirectory(aws-core-cmake)
     add_subdirectory(aws-s3-cmake)
 
     # The library is large - avoid bloat.
     target_compile_options (aws_s3 PRIVATE -g0)
-endif ()
-if (USE_INTERNAL_AWS_GLUE_LIBRARY)
-    add_subdirectory(aws-glue-cmake)
+    target_compile_options (aws_core PRIVATE -g0)
+    target_compile_options (aws_checksums PRIVATE -g0)
 
     # The library is large - avoid bloat.
     target_compile_options (aws_glue PRIVATE -g0)
 endif ()
+
 
 if (USE_BASE64)
     add_subdirectory (base64-cmake)
