@@ -785,7 +785,7 @@ void MergeTreeDataPartCNCH::getUniqueKeyIndexFilePosAndSize(const IMergeTreeData
     String data_rel_path = fs::path(part->getFullRelativePath()) / "data";
     String data_full_path = fs::path(part->getFullPath()) / "data";
 
-    auto reader = openForReading(volume->getDisk(), data_rel_path, MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE);
+    std::unique_ptr<ReadBufferFromFileBase> reader = volume->getDisk()->readFile(data_rel_path);
     size_t data_file_size = volume->getDisk()->getFileSize(data_rel_path);
     reader->seek(data_file_size - MERGE_TREE_STORAGE_CNCH_DATA_FOOTER_SIZE + 3 * (2 * sizeof(size_t) + sizeof(CityHash_v1_0_2::uint128)));
     readIntBinary(off, *reader);
@@ -1068,6 +1068,8 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
 
     LOG_TRACE(storage.log, "Start preload part: {}", name);
 
+    LOG_TRACE(storage.log, "Start preload part: {}", name);
+
     Stopwatch watch;
 
     auto cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
@@ -1080,25 +1082,20 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                             const NameAndTypePair & real_column,
                             const std::function<String(const String &, const ISerialization::SubstreamPath &)> & file_name_getter) {
         ISerialization::StreamCallback callback = [&](const ISerialization::SubstreamPath & substream_path) {
+
             String stream_name = ISerialization::getFileNameForStream(real_column, substream_path);
             String file_name = file_name_getter(stream_name, substream_path);
             ChecksumsPtr checksums = getChecksums();
             if (!checksums->files.count(file_name + DATA_FILE_EXTENSION))
             {
-                LOG_WARNING(
-                    storage.log,
-                    "Can't find {} in checksum info and skip cache it: column = {}, stream = {}",
-                    real_column.name,
-                    stream_name,
-                    file_name + DATA_FILE_EXTENSION);
+                LOG_WARNING(storage.log, "Can't find {} in checksum info and skip cache it: column = {}, stream = {}", real_column.name, stream_name, file_name + DATA_FILE_EXTENSION);
                 return;
             }
 
             String mark_file_name = index_granularity_info.getMarksFilePath(stream_name);
             String data_file_name = stream_name + DATA_FILE_EXTENSION;
 
-            IMergeTreeDataPartPtr source_data_part
-                = isProjectionPart() ? shared_from_this() : getMvccDataPart(stream_name + DATA_FILE_EXTENSION);
+            IMergeTreeDataPartPtr source_data_part = isProjectionPart() ? shared_from_this() : getMvccDataPart(stream_name + DATA_FILE_EXTENSION);
             auto seg = strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
                 all_mark_ranges,
                 source_data_part,
@@ -1149,7 +1146,9 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
         }
         else if (column.name != "_part_row_number")
         {
-            add_segments(column, [](const String & stream_name, const ISerialization::SubstreamPath &) { return stream_name; });
+            add_segments(column, [](const String & stream_name, const ISerialization::SubstreamPath &) {
+                return stream_name;
+            });
         }
     }
 
@@ -1166,8 +1165,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
     if (auto part_log = storage.getContext()->getPartLog(storage.getDatabaseName()))
     {
         callback = [w = watch, part_log, part = shared_from_this(), submit_ts](const String & exception, const int & segments_count) {
-            part_log->add(
-                PartLog::createElement(PartLogElement::PRELOAD_PART, part, w.elapsedNanoseconds(), exception, submit_ts, segments_count));
+            part_log->add(PartLog::createElement(PartLogElement::PRELOAD_PART, part, w.elapsedNanoseconds(), exception, submit_ts, segments_count));
         };
     }
 
@@ -1186,24 +1184,25 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                     {
                         if (disk_cache->get(mark_key).second.empty())
                         {
-                            segment->cacheToDisk(*disk_cache);
-                            real_cache_segments_count++;
+                             segment->cacheToDisk(*disk_cache);
+                             real_cache_segments_count++;
                         }
+
                     }
                     else if (level == PreloadLevelSettings::DataPreload)
                     {
                         if (disk_cache->get(seg_key).second.empty())
                         {
-                            segment->cacheToDisk(*disk_cache);
-                            real_cache_segments_count++;
+                             segment->cacheToDisk(*disk_cache);
+                             real_cache_segments_count++;
                         }
                     }
                     else
                     {
                         if (disk_cache->get(seg_key).second.empty() || disk_cache->get(mark_key).second.empty())
                         {
-                            segment->cacheToDisk(*disk_cache);
-                            real_cache_segments_count++;
+                             segment->cacheToDisk(*disk_cache);
+                             real_cache_segments_count++;
                         }
                     }
                 }
@@ -1226,16 +1225,9 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
         if (cb)
             cb(last_exception, real_cache_segments_count);
 
-        LOG_TRACE(
-            storage.log,
-            "Preloaded part: {}, marks_count: {}, segments_count: {}, cached_count: {} ",
-            name,
-            getMarksCount(),
-            segments.size(),
-            real_cache_segments_count);
+        LOG_TRACE(storage.log, "Preloaded part: {}, marks_count: {}, segments_count: {}, cached_count: {} ", name, getMarksCount(), segments.size(), real_cache_segments_count);
     });
 }
-
 
 void MergeTreeDataPartCNCH::dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache) const
 {

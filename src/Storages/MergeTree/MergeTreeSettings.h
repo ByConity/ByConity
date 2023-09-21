@@ -515,9 +515,9 @@ struct Settings;
     M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
     M(UInt64, parts_preload_level, 0, "0=close preload;1=preload meta;2=preload data;3=preload meta&data", 0) \
     M(Bool, enable_parts_sync_preload, 0, "Enable sync preload parts", 0) \
-    M(Bool, enable_gc_evict_disk_cache, false, "Enable gc evict disk cache", 0) \
-\
-    /* Renamed settings - cannot be ignored */ \
+    M(Bool, enable_gc_evict_disk_cache, false, "Enable gc evict disk cache", 0)      \
+    \
+    /* Renamed settings - cannot be ignored */\
     M(Bool, enable_nullable_sorting_key, false, "Alias of `allow_nullable_key`", 0) \
 \
     /*************************************************************************************/ \

@@ -57,6 +57,11 @@ namespace ProfileEvents
 extern const Event PreloadExecTotalOps;
 }
 
+namespace ProfileEvents
+{
+extern const Event PreloadExecTotalOps;
+}
+
 namespace DB
 {
 namespace ErrorCodes
@@ -379,7 +384,7 @@ void CnchWorkerServiceImpl::sendCnchFileDataParts(
     google::protobuf::Closure * done)
 {
     brpc::ClosureGuard done_guard(done);
-    try 
+    try
     {
         auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
         const auto & query_context = session->context;
@@ -394,7 +399,7 @@ void CnchWorkerServiceImpl::sendCnchFileDataParts(
         cnchfile_table.loadDataParts(data_parts);
 
         LOG_DEBUG(log, "Received and loaded {} file parts.", data_parts.size());
-    } 
+    }
     catch (...)
     {
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
@@ -654,8 +659,7 @@ void CnchWorkerServiceImpl::sendResources(
                         "Received and loaded {} parts for table {}(txn_id: {}), disk_cache_mode {}",
                         data.server_parts_size(),
                         cloud_merge_tree->getStorageID().getNameForLogs(),
-                        request->txn_id(),
-                        request->disk_cache_mode());
+                        request->txn_id(), request->disk_cache_mode());
                 }
 
                 std::set<Int64> required_bucket_numbers;

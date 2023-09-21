@@ -32,11 +32,7 @@ ChecksumsDiskCacheSegment::ChecksumsDiskCacheSegment(IMergeTreeDataPartPtr data_
     , data_part(std::move(data_part_))
     , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
-          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()),
-          data_part->getUniquePartName(),
-          "",
-          segment_number,
-          "checksums.txt"))
+          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->getUniquePartName(), "", segment_number, "checksums.txt"))
     , preload_level(preload_level_)
 {
 }
@@ -67,11 +63,7 @@ PrimaryIndexDiskCacheSegment::PrimaryIndexDiskCacheSegment(IMergeTreeDataPartPtr
     , data_part(std::move(data_part_))
     , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
-          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()),
-          data_part->getUniquePartName(),
-          "",
-          segment_number,
-          "primary.idx"))
+          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->getUniquePartName(), "", segment_number, "primary.idx"))
     , preload_level(preload_level_)
 {
 }
@@ -121,11 +113,7 @@ MetaInfoDiskCacheSegment::MetaInfoDiskCacheSegment(IMergeTreeDataPartPtr data_pa
     , data_part(std::move(data_part_))
     , storage(data_part->storage.shared_from_this())
     , segment_name(formatSegmentName(
-          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()),
-          data_part->getUniquePartName(),
-          "",
-          segment_number,
-          "metainfo.txt"))
+          UUIDHelpers::UUIDToString(data_part->storage.getStorageUUID()), data_part->getUniquePartName(), "", segment_number, "metainfo.txt"))
     , preload_level(preload_level_)
 {
 }
