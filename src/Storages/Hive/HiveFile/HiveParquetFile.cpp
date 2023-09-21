@@ -1,6 +1,5 @@
 #include "Storages/Hive/HiveFile/HiveParquetFile.h"
 #include <memory>
-#include <Poco/Logger.h>
 #if USE_HIVE
 
 #include "Processors/Formats/Impl/ArrowBufferedStreams.h"
@@ -145,7 +144,7 @@ void HiveParquetFile::loadSplitMinMaxIndex(const NamesAndTypesList & index_names
 
 SourcePtr HiveParquetFile::getReader(const Block & block, const std::shared_ptr<IHiveFile::ReadParams> & params)
 {
-    if (params->read_settings.parquet_parallel_read) 
+    if (params->read_settings.parquet_parallel_read)
     {
         if (!params->read_buf)
         {
@@ -161,7 +160,7 @@ SourcePtr HiveParquetFile::getReader(const Block & block, const std::shared_ptr<
             params->read_settings.remote_read_min_bytes_for_seek);
 
         return parquet_format;
-    }    
+    }
 
     openFile();
 
