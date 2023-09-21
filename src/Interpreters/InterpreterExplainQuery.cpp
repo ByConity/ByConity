@@ -238,7 +238,7 @@ struct QueryPipelineSettings
             {"compact", compact},
             {"stats", stats}
     };
-}
+};
 
 template <typename Settings>
 struct ExplainSettings : public Settings
