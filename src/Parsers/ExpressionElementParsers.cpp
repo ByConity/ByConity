@@ -1486,6 +1486,7 @@ bool ParserDateAddExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
     const char * function_name = nullptr;
     ASTPtr timestamp_node;
     ASTPtr offset_node;
+    ASTPtr convert_node;
 
     if (ParserKeyword("DATEADD").ignore(pos, expected) || ParserKeyword("DATE_ADD").ignore(pos, expected)
         || ParserKeyword("ADDDATE").ignore(pos, expected) || ParserKeyword("TIMESTAMPADD").ignore(pos, expected)
@@ -1504,7 +1505,7 @@ bool ParserDateAddExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
     ++pos;
 
     ParserInterval interval_parser;
-    if (interval_parser.ignore(pos, expected))
+    if (interval_parser.parse(pos, convert_node, expected))
     {
         /// function(unit, offset, timestamp)
         if (pos->type != TokenType::Comma)
@@ -1537,7 +1538,8 @@ bool ParserDateAddExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
         if (!ParserExpression(dt).parse(pos, offset_node, expected))
             return false;
 
-        interval_parser.ignore(pos, expected);
+        interval_parser.parse(pos, convert_node, expected);
+
     }
     if (pos->type != TokenType::ClosingRoundBracket)
         return false;
@@ -1548,6 +1550,19 @@ bool ParserDateAddExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & exp
         return false;
 
     auto interval_expr_list_args = std::make_shared<ASTExpressionList>();
+
+    if (convert_node != nullptr)
+    {
+        auto convert_expr_list_args = std::make_shared<ASTExpressionList>();
+        convert_expr_list_args->children = {offset_node};
+
+        ASTFunction & convert = dynamic_cast<ASTFunction &>(*convert_node);
+        convert.arguments = std::move(convert_expr_list_args);
+        convert.children.push_back(convert.arguments);
+        
+        offset_node = std::move(convert_node);
+    }
+
     interval_expr_list_args->children = {offset_node};
 
     auto interval_func_node = std::make_shared<ASTFunction>();

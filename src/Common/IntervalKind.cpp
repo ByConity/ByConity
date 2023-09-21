@@ -54,11 +54,17 @@ Int32 IntervalKind::toAvgSeconds() const
         case IntervalKind::Quarter: return 7889238; /// Exactly 1/4 of a year.
         case IntervalKind::Year: return 31556952;   /// The average length of a Gregorian year is equal to 365.2425 days
         case IntervalKind::MinuteSecond:
+            [[fallthrough]];
         case IntervalKind::HourSecond:
+            [[fallthrough]];
         case IntervalKind::HourMinute:
+            [[fallthrough]];
         case IntervalKind::DaySecond:
+            [[fallthrough]];
         case IntervalKind::DayMinute:
+            [[fallthrough]];
         case IntervalKind::DayHour:
+            [[fallthrough]];
         case IntervalKind::YearMonth:
             throw Exception("The method toAvgSeconds is not supported for {}", kind, ErrorCodes::UNSUPPORTED_METHOD);
     }
@@ -211,19 +217,19 @@ const char * IntervalKind::toNameOfFunctionToIntervalDataType() const
         case IntervalKind::Year:
             return "toIntervalYear";
         case IntervalKind::MinuteSecond:
-            return "toIntervalMinuteSecond";
+            [[fallthrough]];
         case IntervalKind::HourSecond:
-            return "toIntervalHourSecond";
+            [[fallthrough]];
         case IntervalKind::HourMinute:
-            return "toIntervalHourMinute";
+            [[fallthrough]];
         case IntervalKind::DaySecond:
-            return "toIntervalDaySecond";
+            [[fallthrough]];
         case IntervalKind::DayMinute:
-            return "toIntervalDay_Minute";
+            [[fallthrough]];
         case IntervalKind::DayHour:
-            return "toIntervalDay_Hour";
+            [[fallthrough]];
         case IntervalKind::YearMonth:
-            return "toIntervalYear_Month";
+            throw Exception("The method toIntervalDataType is not supported for {}", kind, ErrorCodes::UNSUPPORTED_METHOD);
     }
     __builtin_unreachable();
 }
