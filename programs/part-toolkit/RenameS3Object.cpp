@@ -203,7 +203,7 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
             
             is_done = !outcome.GetResult().GetIsTruncated();
             if (!is_done) {
-                request.SetMarker(outcome.GetResult().GetNextMarker());
+                request.SetMarker(objects.back().GetKey());
             }
         }
     }
