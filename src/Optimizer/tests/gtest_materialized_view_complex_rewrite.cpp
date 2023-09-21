@@ -173,7 +173,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
                                     "               └─ Filter\n"
                                     "                  │     Condition: deptno > 10\n"
                                     "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Condition : deptno > 10.\n"
+                                    "                           Where: deptno > 10\n"
                                     "                           Outputs: [deptno]")
         .ok();
 }
@@ -286,7 +286,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
                                     "               └─ Filter\n"
                                     "                  │     Condition: deptno > 10\n"
                                     "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Condition : deptno > 10.\n"
+                                    "                           Where: deptno > 10\n"
                                     "                           Outputs: [deptno, s]")
         .ok();
 }
@@ -313,7 +313,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
             "               └─ Filter\n"
             "                  │     Condition: deptno > 10\n"
             "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-            "                           Condition : deptno > 10.\n"
+            "                           Where: deptno > 10\n"
             "                           Outputs: [deptno, s]")
         .ok();
 }
@@ -347,7 +347,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
                                     "               └─ Filter\n"
                                     "                  │     Condition: deptno > 10\n"
                                     "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                           Condition : deptno > 10.\n"
+                                    "                           Where: deptno > 10\n"
                                     "                           Outputs: [deptno, s]")
         .ok();
 }

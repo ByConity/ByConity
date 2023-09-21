@@ -13,7 +13,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: event_date = cast(19359, \'Date\')
                   └─ TableScan test.target40045 Est. ? rows
-                           Condition : event_date = cast(19359, \'Date\').
+                           Where: event_date = cast(19359, \'Date\')
                            Outputs: [event_date, server_time_hour, sum_click, uid]
 note: Materialized Views is applied for 1 times: test.mv40045.
 case 2, expect hit mv
@@ -31,7 +31,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: event_date > cast(19358, \'Date\')
                   └─ TableScan test.target40045 Est. ? rows
-                           Condition : event_date > cast(19358, \'Date\').
+                           Where: event_date > cast(19358, \'Date\')
                            Outputs: [event_date, server_time_hour, sum_click, uid]
 note: Materialized Views is applied for 1 times: test.mv40045.
 case 3, expect not hit mv
@@ -49,7 +49,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: event_date >= cast(18993, \'Date\')
                   └─ TableScan test.base40045 Est. ? rows
-                           Condition : event_date >= cast(18993, \'Date\').
+                           Where: event_date >= cast(18993, \'Date\')
                            Outputs: [click, event_date, server_time, uid]
 case 4, expect not hit mv
 Projection Est. ? rows
@@ -80,7 +80,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: event_date IN (cast(19358, \'Date\'), cast(19359, \'Date\'))
                   └─ TableScan test.target40045 Est. ? rows
-                           Condition : event_date IN (cast(19358, \'Date\'), cast(19359, \'Date\')).
+                           Where: event_date IN (cast(19358, \'Date\'), cast(19359, \'Date\'))
                            Outputs: [event_date, server_time_hour, sum_click, uid]
 note: Materialized Views is applied for 1 times: test.mv40045.
 case 6, expect hit mv
@@ -98,7 +98,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: (event_date IN (cast(19358, \'Date\'), cast(19359, \'Date\'))) AND (uid = \'xxx\')
                   └─ TableScan test.target40045 Est. ? rows
-                           Condition : (event_date IN (cast(19358, \'Date\'), cast(19359, \'Date\'))) AND (uid = \'xxx\').
+                           Where: (event_date IN (cast(19358, \'Date\'), cast(19359, \'Date\'))) AND (uid = \'xxx\')
                            Outputs: [event_date, server_time_hour, sum_click, uid]
 note: Materialized Views is applied for 1 times: test.mv40045.
 case 7, expect hit mv
@@ -116,6 +116,6 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: server_time_hour = 2
                   └─ TableScan test.target40045 Est. ? rows
-                           Condition : server_time_hour = 2.
+                           Where: server_time_hour = 2
                            Outputs: [event_date, server_time_hour, sum_click, uid]
 note: Materialized Views is applied for 1 times: test.mv40045.

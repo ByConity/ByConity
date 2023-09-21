@@ -58,6 +58,7 @@ namespace ErrorCodes
 {
     extern const int TSO_INTERNAL_ERROR;
     extern const int NETWORK_ERROR;
+    extern const int TSO_OPERATION_ERROR;
 }
 
 namespace
@@ -105,7 +106,7 @@ namespace TSO
 {
 
 TSOServer::TSOServer()
-    : LeaderElectionBase(config().getInt64("tos_server.election_check_ms", 100))
+    : LeaderElectionBase(config().getInt64("tso_service.election_check_ms", 100))
     , timer(0, TSO_UPDATE_INTERVAL)
     , callback(*this, &TSOServer::updateTSO)
 {
@@ -182,8 +183,7 @@ void TSOServer::syncTSO()
         proxy_ptr->setTimestamp(t_last);
         /// sync to tso service
         tso_service->setPhysicalTime(t_next);
-        bool is_leader = tso_service->getIsLeader();
-        LOG_TRACE(log, "This node ({}) has called updateTSO. Current status: [is_leader = {}], [t_now = {}], [t_next = {}], [t_last = {}],", host_port, is_leader, t_now, t_next, t_last);
+        LOG_TRACE(log, "This node ({}) has called syncTSO. Current status: [t_now = {}], [t_next = {}], [t_last = {}],", host_port, t_now, t_next, t_last);
     }
     catch (...)
     {
@@ -200,9 +200,7 @@ void TSOServer::updateTSO(Poco::Timer &)
         milliseconds ms = duration_cast<milliseconds>(system_clock::now().time_since_epoch());
         UInt64 t_now = ms.count();
         TSOClock cur_ts = tso_service->getClock();
-        bool is_leader = tso_service->getIsLeader();
 
-        LOG_TRACE(log, "This node ({}) has retrieved values of atomic variables. Current status: [is_leader = {}], [t_now = {}]", host_port, is_leader, t_now);
 
         if (t_now > t_next + 1)  /// machine time is larger than physical time, keep physical time close to machine time
         {
@@ -216,7 +214,7 @@ void TSOServer::updateTSO(Poco::Timer &)
         else
         {
             /// No update for physical time
-            LOG_TRACE(log, "No update for physical time: [is_leader = {}], [t_now = {}], [t_next = {}], [t_last = {}], [cur_ts.physical = {}], [cur_ts.logical = {}]", host_port, is_leader, t_now, t_next, t_last, cur_ts.physical, cur_ts.logical);
+            LOG_INFO(log, "No update for physical time: [t_now = {}], [t_next = {}], [t_last = {}], [cur_ts.physical = {}], [cur_ts.logical = {}]", host_port, t_now, t_next, t_last, cur_ts.physical, cur_ts.logical);
             return;
         }
 
@@ -224,15 +222,15 @@ void TSOServer::updateTSO(Poco::Timer &)
         {
             t_last = t_next + tso_window;
             /// save to KV
-            LOG_TRACE(log, "This node ({}) is about to call proxy_ptr->setTimestamp(t_last). Current status: [is_leader = {}], [t_now = {}]", host_port, is_leader, t_now);
             proxy_ptr->setTimestamp(t_last);
-            LOG_TRACE(log, "This node ({}) has called proxy_ptr->setTimestamp(t_last) successfully. Current status: [is_leader = {}], [t_now = {}]", host_port, is_leader, t_now);
+            tso_service->setIsKvDown(false);
         }
         tso_service->setPhysicalTime(t_next);
-        LOG_TRACE(log, "This node ({}) has called updateTSO. Current status: [is_leader = {}], [t_now = {}], [t_next = {}], [t_last = {}], [cur_ts.physical = {}], [cur_ts.logical = {}]", host_port, is_leader, t_now, t_next, t_last, cur_ts.physical, cur_ts.logical);
     }
     catch (Exception & e)
     {
+        if (e.code() == ErrorCodes::TSO_OPERATION_ERROR)
+            tso_service->setIsKvDown(true);
         LOG_ERROR(log, "Exception!{}", e.message());
     }
     catch (...)
@@ -302,12 +300,13 @@ Poco::Net::SocketAddress TSOServer::socketBindListen(Poco::Net::ServerSocket & s
 
 void TSOServer::onLeader()
 {
+
+    /// wait for exit old leader before calling syncTSO()
+    auto sleep_time = config().getInt64("tso_service.election_check_ms", 100);
+    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
+
     syncTSO();
     timer.start(callback);
-
-    /// wait for exit old leader
-    auto sleep_time = config().getInt64("tos_server.election_check_ms", 100);
-    std::this_thread::sleep_for(std::chrono::milliseconds(sleep_time));
 
     LOG_INFO(log, "Current node {} become leader", host_port);
     tso_service->setIsLeader(true);

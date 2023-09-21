@@ -57,6 +57,7 @@ TransformResult LeftJoinToRightJoin::transformImpl(PlanNodePtr node, const Captu
         JoinAlgorithm::AUTO,
         false,
         step.isOrdered(),
+        step.getRuntimeFilterBuilders(),
         step.getHints());
     PlanNodePtr join_node = std::make_shared<JoinNode>(
         rule_context.context->nextNodeId(), std::move(join_step), PlanNodes{node->getChildren()[1], node->getChildren()[0]});

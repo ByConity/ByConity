@@ -21,26 +21,21 @@
 
 using namespace DB;
 
-static constexpr bool WITH_STATISTICS = true;
-
 class PlanCheckTpcds : public ::testing::Test
 {
 public:
     static void SetUpTestSuite()
     {
         std::unordered_map<std::string, DB::Field> settings;
-        settings.emplace("iterative_optimizer_timeout", "30000000");
 #ifndef NDEBUG
         // debug mode may time out.
-        settings.emplace("cascades_optimizer_timeout", "300000");
-#else
-        settings.emplace("cascades_optimizer_timeout", "10000");
+        settings.emplace("iterative_optimizer_timeout", "30000000");
+        settings.emplace("cascades_optimizer_timeout", "30000000");
 #endif
-
         settings.emplace("cte_mode", "AUTO");
         settings.emplace("enable_left_join_to_right_join", "false");
         settings.emplace("enable_execute_uncorrelated_subquery", 0);
-        tester = std::make_shared<DB::BaseTpcdsPlanTest>(WITH_STATISTICS, settings);
+        tester = std::make_shared<DB::BaseTpcdsPlanTest>(settings);
     }
 
     static std::string explain(const std::string & name)

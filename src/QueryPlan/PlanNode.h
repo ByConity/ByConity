@@ -22,6 +22,7 @@
 #include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/ArrayJoinStep.h>
 #include <QueryPlan/AssignUniqueIdStep.h>
+#include <QueryPlan/BufferStep.h>
 #include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/CreatingSetsStep.h>
 #include <QueryPlan/CubeStep.h>
@@ -29,16 +30,16 @@
 #include <QueryPlan/EnforceSingleRowStep.h>
 #include <QueryPlan/ExceptStep.h>
 #include <QueryPlan/ExchangeStep.h>
+#include <QueryPlan/ExplainAnalyzeStep.h>
 #include <QueryPlan/ExpressionStep.h>
 #include <QueryPlan/ExtremesStep.h>
-#include <QueryPlan/ExplainAnalyzeStep.h>
 #include <QueryPlan/FillingStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/FinalSampleStep.h>
 #include <QueryPlan/FinishSortingStep.h>
 #include <QueryPlan/IQueryPlanStep.h>
-#include <QueryPlan/IntersectStep.h>
 #include <QueryPlan/IntersectOrExceptStep.h>
+#include <QueryPlan/IntersectStep.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/LimitByStep.h>
 #include <QueryPlan/LimitStep.h>
@@ -53,8 +54,8 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/ReadFromMergeTree.h>
 #include <QueryPlan/ReadFromPreparedSource.h>
-#include <QueryPlan/ReadStorageRowCountStep.h>
 #include <QueryPlan/ReadNothingStep.h>
+#include <QueryPlan/ReadStorageRowCountStep.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
 #include <QueryPlan/RollupStep.h>
 #include <QueryPlan/SettingQuotaAndLimitsStep.h>

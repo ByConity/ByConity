@@ -27,7 +27,7 @@ Projection Est. 60525 rows
                         │     │  │           Outputs: [l_discount, l_extendedprice, l_orderkey, l_partkey, l_quantity, l_suppkey]
                         │     │  └─ Repartition Exchange Est. 359998 rows
                         │     │     │     Partition by: {p_partkey, ps_suppkey}
-                        │     │     └─ Inner Join Est. 359998 rows
+                        │     │     └─ Inner Join Est. 719996 rows
                         │     │        │     Condition: ps_partkey == p_partkey
                         │     │        ├─ Repartition Exchange Est. 800000 rows
                         │     │        │  │     Partition by: {ps_partkey}
@@ -38,7 +38,7 @@ Projection Est. 60525 rows
                         │     │           └─ Filter Est. 180000 rows
                         │     │              │     Condition: p_name LIKE '%green%'
                         │     │              └─ TableScan tpch.part Est. 200000 rows
-                        │     │                       Condition : p_name LIKE '%green%'.
+                        │     │                       Where: p_name LIKE '%green%'
                         │     │                       Outputs: [p_name, p_partkey]
                         │     └─ Broadcast Exchange Est. 10000 rows
                         │        └─ Inner Join Est. 10000 rows

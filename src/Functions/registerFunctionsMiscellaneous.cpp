@@ -49,6 +49,7 @@ void registerFunctionNeighbor(FunctionFactory &);
 void registerFunctionSleep(FunctionFactory &);
 void registerFunctionSleepEachRow(FunctionFactory &);
 void registerFunctionInvalidateStatsCache(FunctionFactory &);
+void registerFunctionUpdateBindingCache(FunctionFactory &);
 void registerFunctionMaterialize(FunctionFactory &);
 void registerFunctionIgnore(FunctionFactory &);
 void registerFunctionIndexHint(FunctionFactory &);
@@ -129,6 +130,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionSleep(factory);
     registerFunctionSleepEachRow(factory);
     registerFunctionInvalidateStatsCache(factory);
+    registerFunctionUpdateBindingCache(factory);
     registerFunctionMaterialize(factory);
     registerFunctionIgnore(factory);
     registerFunctionIndexHint(factory);

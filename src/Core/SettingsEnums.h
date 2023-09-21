@@ -245,6 +245,7 @@ enum class CTEMode
     INLINED,
     SHARED,
     AUTO,
+    ENFORCED,
 };
 
 DECLARE_SETTING_ENUM(CTEMode)

@@ -77,6 +77,7 @@ TransformResult PushDownApplyThroughJoin::transformImpl(PlanNodePtr node, const 
                 step->getJoinAlgorithm(),
                 step->isMagic(),
                 step->isOrdered(),
+                step->getRuntimeFilterBuilders(),
                 step->getHints());
 
             return PlanNodeBase::createPlanNode(join->getId(), new_step, join_children);

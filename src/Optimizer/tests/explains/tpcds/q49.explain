@@ -26,27 +26,29 @@ Projection Est. 100 rows
             │                             │     Expressions: [ws_item_sk], expr#coalesce(wr.wr_return_amt, 0):=coalesce(wr_return_amt, 0), expr#coalesce(wr.wr_return_quantity, 0):=coalesce(wr_return_quantity, 0), expr#coalesce(ws.ws_net_paid, 0):=coalesce(ws_net_paid, 0), expr#coalesce(ws.ws_quantity, 0):=coalesce(ws_quantity, 0)
             │                             └─ Inner Join Est. 320737 rows
             │                                │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
+            │                                │     Runtime Filters Builder: {wr_item_sk,wr_order_number}
             │                                ├─ Repartition Exchange Est. 11684952 rows
             │                                │  │     Partition by: {ws_item_sk, ws_order_number}
             │                                │  └─ Inner Join Est. 11684952 rows
             │                                │     │     Condition: ws_sold_date_sk == d_date_sk
+            │                                │     │     Runtime Filters Builder: {d_date_sk}
             │                                │     ├─ Filter Est. 276933386 rows
-            │                                │     │  │     Condition: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0)
+            │                                │     │  │     Condition: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
             │                                │     │  └─ TableScan tpcds.web_sales Est. 720000376 rows
-            │                                │     │           Condition : (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0).
+            │                                │     │           Where: (ws_net_profit > 1.) AND (ws_net_paid > 0.) AND (ws_quantity > 0) Runtime Filters: {ws_item_sk, ws_order_number, ws_sold_date_sk}
             │                                │     │           Outputs: [ws_item_sk, ws_net_paid, ws_net_profit, ws_order_number, ws_quantity, ws_sold_date_sk]
             │                                │     └─ Broadcast Exchange Est. 30 rows
             │                                │        └─ Filter Est. 30 rows
             │                                │           │     Condition: (d_moy = 12) AND (d_year = 2001)
             │                                │           └─ TableScan tpcds.date_dim Est. 73049 rows
-            │                                │                    Condition : (d_moy = 12) AND (d_year = 2001).
+            │                                │                    Where: (d_moy = 12) AND (d_year = 2001)
             │                                │                    Outputs: [d_date_sk, d_moy, d_year]
             │                                └─ Repartition Exchange Est. 633592 rows
             │                                   │     Partition by: {wr_item_sk, wr_order_number}
             │                                   └─ Filter Est. 633592 rows
             │                                      │     Condition: wr_return_amt > 10000.
             │                                      └─ TableScan tpcds.web_returns Est. 71997522 rows
-            │                                               Condition : wr_return_amt > 10000..
+            │                                               Where: wr_return_amt > 10000.
             │                                               Outputs: [wr_item_sk, wr_order_number, wr_return_amt, wr_return_quantity]
             ├─ Projection Est. 103715 rows
             │  │     Expressions: [cs_item_sk, expr#divide(CAST(sum(coalesce(cr.cr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(cs.cs_quantity, 0)), 'decimal(15, 4)')), expr#rank() OVER (ORDER BY currency_ratio ASC)_1, expr#rank() OVER (ORDER BY return_ratio ASC)_1], expr#'catalog':='catalog'
@@ -67,27 +69,29 @@ Projection Est. 100 rows
             │                             │     Expressions: [cs_item_sk], expr#coalesce(cr.cr_return_amount, 0):=coalesce(cr_return_amount, 0), expr#coalesce(cr.cr_return_quantity, 0):=coalesce(cr_return_quantity, 0), expr#coalesce(cs.cs_net_paid, 0):=coalesce(cs_net_paid, 0), expr#coalesce(cs.cs_quantity, 0):=coalesce(cs_quantity, 0)
             │                             └─ Inner Join Est. 479808 rows
             │                                │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
+            │                                │     Runtime Filters Builder: {cr_item_sk,cr_order_number}
             │                                ├─ Repartition Exchange Est. 23207765 rows
             │                                │  │     Partition by: {cs_item_sk, cs_order_number}
             │                                │  └─ Inner Join Est. 23207765 rows
             │                                │     │     Condition: cs_sold_date_sk == d_date_sk_1
+            │                                │     │     Runtime Filters Builder: {d_date_sk_1}
             │                                │     ├─ Filter Est. 553892004 rows
-            │                                │     │  │     Condition: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0)
+            │                                │     │  │     Condition: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
             │                                │     │  └─ TableScan tpcds.catalog_sales Est. 1439980416 rows
-            │                                │     │           Condition : (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0).
+            │                                │     │           Where: (cs_net_profit > 1.) AND (cs_net_paid > 0.) AND (cs_quantity > 0) Runtime Filters: {cs_item_sk, cs_order_number, cs_sold_date_sk}
             │                                │     │           Outputs: [cs_item_sk, cs_net_paid, cs_net_profit, cs_order_number, cs_quantity, cs_sold_date_sk]
             │                                │     └─ Broadcast Exchange Est. 30 rows
             │                                │        └─ Filter Est. 30 rows
             │                                │           │     Condition: (d_year_1 = 2001) AND (d_moy_1 = 12)
             │                                │           └─ TableScan tpcds.date_dim Est. 73049 rows
-            │                                │                    Condition : (d_year = 2001) AND (d_moy = 12).
+            │                                │                    Where: (d_year = 2001) AND (d_moy = 12)
             │                                │                    Outputs: d_date_sk_1:=d_date_sk, d_moy_1:=d_moy, d_year_1:=d_year
             │                                └─ Repartition Exchange Est. 1272788 rows
             │                                   │     Partition by: {cr_item_sk, cr_order_number}
             │                                   └─ Filter Est. 1272788 rows
             │                                      │     Condition: cr_return_amount > 10000.
             │                                      └─ TableScan tpcds.catalog_returns Est. 143996756 rows
-            │                                               Condition : cr_return_amount > 10000..
+            │                                               Where: cr_return_amount > 10000.
             │                                               Outputs: [cr_item_sk, cr_order_number, cr_return_amount, cr_return_quantity]
             └─ Projection Est. 68936 rows
                │     Expressions: [expr#divide(CAST(sum(coalesce(sr.sr_return_quantity, 0)), 'decimal(15, 4)'), CAST(sum(coalesce(sts.ss_quantity, 0)), 'decimal(15, 4)')), expr#rank() OVER (ORDER BY currency_ratio ASC)_2, expr#rank() OVER (ORDER BY return_ratio ASC)_2, ss_item_sk], expr#'store':='store'
@@ -108,25 +112,28 @@ Projection Est. 100 rows
                                           │     Expressions: [ss_item_sk], expr#coalesce(sr.sr_return_amt, 0):=coalesce(sr_return_amt, 0), expr#coalesce(sr.sr_return_quantity, 0):=coalesce(sr_return_quantity, 0), expr#coalesce(sts.ss_net_paid, 0):=coalesce(ss_net_paid, 0), expr#coalesce(sts.ss_quantity, 0):=coalesce(ss_quantity, 0)
                                           └─ Inner Join Est. 557253 rows
                                              │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                                             │     Runtime Filters Builder: {sr_item_sk,sr_ticket_number}
                                              ├─ Repartition Exchange Est. 46701324 rows
                                              │  │     Partition by: {ss_item_sk, ss_ticket_number}
                                              │  └─ Inner Join Est. 46701324 rows
                                              │     │     Condition: ss_sold_date_sk == d_date_sk_2
+                                             │     │     Runtime Filters Builder: {d_date_sk_2}
                                              │     ├─ Filter Est. 736324221 rows
-                                             │     │  │     Condition: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0)
+                                             │     │  │     Condition: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
                                              │     │  └─ TableScan tpcds.store_sales Est. 2879987999 rows
-                                             │     │           Condition : (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0).
+                                             │     │           Where: (ss_net_profit > 1.) AND (ss_net_paid > 0.) AND (ss_quantity > 0) Runtime Filters: {ss_item_sk, ss_sold_date_sk, ss_ticket_number}
                                              │     │           Outputs: [ss_item_sk, ss_net_paid, ss_net_profit, ss_quantity, ss_sold_date_sk, ss_ticket_number]
                                              │     └─ Broadcast Exchange Est. 30 rows
                                              │        └─ Filter Est. 30 rows
                                              │           │     Condition: (d_moy_2 = 12) AND (d_year_2 = 2001)
                                              │           └─ TableScan tpcds.date_dim Est. 73049 rows
-                                             │                    Condition : (d_moy = 12) AND (d_year = 2001).
+                                             │                    Where: (d_moy = 12) AND (d_year = 2001)
                                              │                    Outputs: d_date_sk_2:=d_date_sk, d_moy_2:=d_moy, d_year_2:=d_year
                                              └─ Repartition Exchange Est. 732503 rows
                                                 │     Partition by: {sr_item_sk, sr_ticket_number}
                                                 └─ Filter Est. 732503 rows
                                                    │     Condition: sr_return_amt > 10000.
                                                    └─ TableScan tpcds.store_returns Est. 287999764 rows
-                                                            Condition : sr_return_amt > 10000..
+                                                            Where: sr_return_amt > 10000.
                                                             Outputs: [sr_item_sk, sr_return_amt, sr_return_quantity, sr_ticket_number]
+note: Runtime Filter is applied for 9 times.

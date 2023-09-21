@@ -1,0 +1,48 @@
+Projection
+│     Expressions: sum(ss_quantity):=`expr#sum(ss_quantity)`
+└─ MergingAggregated
+   └─ Gather Exchange
+      └─ Aggregating
+         │     Group by: {}
+         │     Aggregates: expr#sum(ss_quantity):=AggNull(sum)(ss_quantity)
+         └─ Inner Join
+            │     Condition: ss_store_sk == s_store_sk
+            ├─ Inner Join
+            │  │     Condition: ss_cdemo_sk == cd_demo_sk
+            │  │     Filter: ((cd_marital_status = 'M') AND (cd_education_status = '4 yr Degree') AND (ss_sales_price >= '100.00') AND (ss_sales_price <= '150.00')) OR ((cd_marital_status = 'D') AND (cd_education_status = '2 yr Degree') AND (ss_sales_price >= '50.00') AND (ss_sales_price <= '100.00')) OR ((cd_marital_status = 'S') AND (cd_education_status = 'College') AND (ss_sales_price >= '150.00') AND (ss_sales_price <= '200.00'))
+            │  ├─ Repartition Exchange
+            │  │  │     Partition by: {ss_cdemo_sk}
+            │  │  └─ Inner Join
+            │  │     │     Condition: ss_addr_sk == ca_address_sk
+            │  │     │     Filter: ((ca_state IN ('CO', 'OH', 'TX')) AND (ss_net_profit >= 0) AND (ss_net_profit <= 2000)) OR ((ca_state IN ('OR', 'MN', 'KY')) AND (ss_net_profit >= 150) AND (ss_net_profit <= 3000)) OR ((ca_state IN ('VA', 'CA', 'MS')) AND (ss_net_profit >= 50) AND (ss_net_profit <= 25000))
+            │  │     ├─ Repartition Exchange
+            │  │     │  │     Partition by: {ss_addr_sk}
+            │  │     │  └─ Inner Join
+            │  │     │     │     Condition: ss_sold_date_sk == d_date_sk
+            │  │     │     │     Runtime Filters Builder: {d_date_sk}
+            │  │     │     ├─ Filter
+            │  │     │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+            │  │     │     │  └─ TableScan tpcds100.store_sales
+            │  │     │     │           Where: Runtime Filters: {ss_sold_date_sk}
+            │  │     │     │           Outputs: [ss_addr_sk, ss_cdemo_sk, ss_net_profit, ss_quantity, ss_sales_price, ss_sold_date_sk, ss_store_sk]
+            │  │     │     └─ Broadcast Exchange
+            │  │     │        └─ Filter
+            │  │     │           │     Condition: d_year = 2000
+            │  │     │           └─ TableScan tpcds100.date_dim
+            │  │     │                    Where: d_year = 2000
+            │  │     │                    Outputs: [d_date_sk, d_year]
+            │  │     └─ Repartition Exchange
+            │  │        │     Partition by: {ca_address_sk}
+            │  │        └─ Filter
+            │  │           │     Condition: ca_country = 'United States'
+            │  │           └─ TableScan tpcds100.customer_address
+            │  │                    Where: ca_country = 'United States'
+            │  │                    Outputs: [ca_address_sk, ca_country, ca_state]
+            │  └─ Repartition Exchange
+            │     │     Partition by: {cd_demo_sk}
+            │     └─ TableScan tpcds100.customer_demographics
+            │              Outputs: [cd_demo_sk, cd_education_status, cd_marital_status]
+            └─ Broadcast Exchange
+               └─ TableScan tpcds100.store
+                        Outputs: [s_store_sk]
+note: Runtime Filter is applied for 1 times.

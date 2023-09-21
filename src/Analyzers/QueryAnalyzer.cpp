@@ -315,9 +315,9 @@ Void QueryAnalyzerVisitor::visitASTSubquery(ASTPtr & node, const Void &)
         analysis.registerCTE(subquery);
 
         // CTE has been analyzed
-        if (analysis.isSharableCTE(subquery))
+        if (auto cte_analysis = analysis.tryGetCTEAnalysis(subquery); cte_analysis->isSharable())
         {
-            auto * representative = analysis.getCTEAnalysis(subquery).representative;
+            auto * representative = cte_analysis->representative;
             analysis.setOutputDescription(subquery, analysis.getOutputDescription(*representative));
             return {};
         }

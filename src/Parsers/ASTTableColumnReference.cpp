@@ -17,6 +17,7 @@
 
 #include <Storages/IStorage.h>
 #include <IO/WriteHelpers.h>
+#include <Parsers/ASTSerDerHelper.h>
 
 namespace DB
 {
@@ -38,7 +39,7 @@ void ASTTableColumnReference::appendColumnName(WriteBuffer & buffer) const
 }
 
 void ASTTableColumnReference::formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const {
-    settings.ostr << getID('.');
+    writeString(getID('.'), settings.ostr);
 }
 
 }

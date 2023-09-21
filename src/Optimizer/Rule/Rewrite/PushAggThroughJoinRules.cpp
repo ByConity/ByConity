@@ -317,6 +317,7 @@ TransformResult PushAggThroughOuterJoin::transformImpl(PlanNodePtr aggregation, 
             join_step->getJoinAlgorithm(),
             join_step->isMagic(),
             join_step->isOrdered(),
+            join_step->getRuntimeFilterBuilders(),
             join_step->getHints());
         rewritten_join = PlanNodeBase::createPlanNode(
             context.context->nextNodeId(), std::move(rewritten_join_step), {join->getChildren()[0], rewritten_agg_node});
@@ -346,6 +347,7 @@ TransformResult PushAggThroughOuterJoin::transformImpl(PlanNodePtr aggregation, 
             join_step->getJoinAlgorithm(),
             join_step->isMagic(),
             join_step->isOrdered(),
+            join_step->getRuntimeFilterBuilders(),
             join_step->getHints());
         rewritten_join = PlanNodeBase::createPlanNode(
             context.context->nextNodeId(), std::move(rewritten_join_step), {rewritten_agg_node, join->getChildren()[1]});
@@ -476,6 +478,7 @@ TransformResult PushAggThroughInnerJoin::transformImpl(PlanNodePtr aggregation, 
         join_step->getJoinAlgorithm(),
         join_step->isMagic(),
         join_step->isOrdered(),
+        join_step->getRuntimeFilterBuilders(),
         join_step->getHints());
     auto rewritten_join
         = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(rewritten_join_step), {left_agg_node, right_agg_node});

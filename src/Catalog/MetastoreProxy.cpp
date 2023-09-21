@@ -1812,6 +1812,76 @@ void MetastoreProxy::removeColumnStatistics(
     metastore_ptr->batchWrite(batch_write, resp);
 }
 
+void MetastoreProxy::updateSQLBinding(const String & name_space, const SQLBindingItemPtr& data)
+{
+    BatchCommitRequest batch_write;
+
+    Protos::SQLBinding sql_binding;
+    sql_binding.set_is_regular_expression(data->is_regular_expression);
+    RPCHelpers::fillUUID(data->uuid, *sql_binding.mutable_uuid());
+    sql_binding.set_pattern(data->pattern);
+    sql_binding.set_serialized_ast(data->serialized_ast);
+    sql_binding.set_timestamp(data->timestamp);
+    batch_write.AddPut(SinglePutRequest(SQLBindingKey(name_space, UUIDHelpers::UUIDToString(data->uuid), data->is_regular_expression), sql_binding.SerializeAsString()));
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
+}
+
+SQLBindings MetastoreProxy::getSQLBindings(const String & name_space)
+{
+    SQLBindings res;
+    auto binding_prefix = SQLBindingPrefix(name_space);
+    auto it = metastore_ptr->getByPrefix(binding_prefix);
+    while (it->next())
+    {
+        Protos::SQLBinding sql_binding;
+        sql_binding.ParseFromString(it->value());
+        SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp());
+        res.emplace_back(binding);
+    }
+
+    return res;
+}
+
+SQLBindings MetastoreProxy::getReSQLBindings(const String & name_space, const bool & is_re_expression)
+{
+    SQLBindings res;
+    auto binding_prefix = SQLBindingRePrefix(name_space, is_re_expression);
+    auto it = metastore_ptr->getByPrefix(binding_prefix);
+    while (it->next())
+    {
+        Protos::SQLBinding sql_binding;
+        sql_binding.ParseFromString(it->value());
+        SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp());
+        res.emplace_back(binding);
+    }
+
+    return res;
+}
+
+SQLBindingItemPtr MetastoreProxy::getSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression)
+{
+    String value;
+    auto binding_key = SQLBindingKey(name_space, uuid, is_re_expression);
+    metastore_ptr->get(binding_key, value);
+
+    if (value.empty())
+        return nullptr;
+
+    Protos::SQLBinding sql_binding;
+    sql_binding.ParseFromString(value);
+    SQLBindingItemPtr binding = std::make_shared<SQLBindingItem>(RPCHelpers::createUUID(sql_binding.uuid()), sql_binding.pattern(), sql_binding.serialized_ast(), sql_binding.is_regular_expression(), sql_binding.timestamp());
+    return binding;
+}
+
+void MetastoreProxy::removeSQLBinding(const String & name_space, const String & uuid, const bool & is_re_expression)
+{
+    BatchCommitRequest batch_write;
+    batch_write.AddDelete(SQLBindingKey(name_space, uuid, is_re_expression));
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
+}
+
 void MetastoreProxy::createVirtualWarehouse(const String & name_space, const String & vw_name, const VirtualWarehouseData & data)
 {
     auto vw_key = VWKey(name_space, vw_name);

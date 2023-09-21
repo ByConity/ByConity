@@ -355,6 +355,15 @@ message ColumnStatistic
     required bytes blob = 4;
 }
 
+message SQLBinding
+{
+    required bool is_regular_expression = 1;
+    required UUID uuid = 2;
+    required string pattern = 3;
+    required string serialized_ast = 4;
+    required uint64 timestamp = 5;
+}
+
 message VirtualWarehouseSettings
 {
     /// basic information ///

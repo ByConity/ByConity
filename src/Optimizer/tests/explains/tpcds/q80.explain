@@ -36,21 +36,26 @@ Projection Est. 100 rows
                      │                    │     │  │     Condition: ss_store_sk == s_store_sk
                      │                    │     │  ├─ Inner Join Est. 1293860 rows
                      │                    │     │  │  │     Condition: ss_item_sk == i_item_sk
+                     │                    │     │  │  │     Runtime Filters Builder: {i_item_sk}
                      │                    │     │  │  ├─ Inner Join Est. 23338638 rows
                      │                    │     │  │  │  │     Condition: ss_sold_date_sk == d_date_sk
-                     │                    │     │  │  │  ├─ TableScan tpcds.store_sales Est. 2879987999 rows
-                     │                    │     │  │  │  │        Outputs: [ss_ext_sales_price, ss_item_sk, ss_net_profit, ss_promo_sk, ss_sold_date_sk, ss_store_sk, ss_ticket_number]
+                     │                    │     │  │  │  │     Runtime Filters Builder: {d_date_sk}
+                     │                    │     │  │  │  ├─ Filter Est. 2879987999 rows
+                     │                    │     │  │  │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
+                     │                    │     │  │  │  │  └─ TableScan tpcds.store_sales Est. 2879987999 rows
+                     │                    │     │  │  │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
+                     │                    │     │  │  │  │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_net_profit, ss_promo_sk, ss_sold_date_sk, ss_store_sk, ss_ticket_number]
                      │                    │     │  │  │  └─ Broadcast Exchange Est. 30 rows
                      │                    │     │  │  │     └─ Filter Est. 30 rows
                      │                    │     │  │  │        │     Condition: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                      │                    │     │  │  │        └─ TableScan tpcds.date_dim Est. 73049 rows
-                     │                    │     │  │  │                 Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                     │                    │     │  │  │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                      │                    │     │  │  │                 Outputs: [d_date, d_date_sk]
                      │                    │     │  │  └─ Broadcast Exchange Est. 16631 rows
                      │                    │     │  │     └─ Filter Est. 16631 rows
                      │                    │     │  │        │     Condition: i_current_price > 50.
                      │                    │     │  │        └─ TableScan tpcds.item Est. 300000 rows
-                     │                    │     │  │                 Condition : i_current_price > 50..
+                     │                    │     │  │                 Where: i_current_price > 50.
                      │                    │     │  │                 Outputs: [i_current_price, i_item_sk]
                      │                    │     │  └─ Broadcast Exchange Est. 1002 rows
                      │                    │     │     └─ TableScan tpcds.store Est. 1002 rows
@@ -59,7 +64,7 @@ Projection Est. 100 rows
                      │                    │        └─ Filter Est. 1500 rows
                      │                    │           │     Condition: p_channel_tv = 'N'
                      │                    │           └─ TableScan tpcds.promotion Est. 1500 rows
-                     │                    │                    Condition : p_channel_tv = 'N'.
+                     │                    │                    Where: p_channel_tv = 'N'
                      │                    │                    Outputs: [p_channel_tv, p_promo_sk]
                      │                    └─ Repartition Exchange Est. 287999764 rows
                      │                       │     Partition by: {sr_item_sk, sr_ticket_number}
@@ -90,27 +95,32 @@ Projection Est. 100 rows
                      │                    │     │     │     Condition: cs_promo_sk == p_promo_sk_1
                      │                    │     │     ├─ Inner Join Est. 642756 rows
                      │                    │     │     │  │     Condition: cs_item_sk == i_item_sk_1
+                     │                    │     │     │  │     Runtime Filters Builder: {i_item_sk_1}
                      │                    │     │     │  ├─ Inner Join Est. 11594045 rows
                      │                    │     │     │  │  │     Condition: cs_sold_date_sk == d_date_sk_1
-                     │                    │     │     │  │  ├─ TableScan tpcds.catalog_sales Est. 1439980416 rows
-                     │                    │     │     │  │  │        Outputs: [cs_catalog_page_sk, cs_ext_sales_price, cs_item_sk, cs_net_profit, cs_order_number, cs_promo_sk, cs_sold_date_sk]
+                     │                    │     │     │  │  │     Runtime Filters Builder: {d_date_sk_1}
+                     │                    │     │     │  │  ├─ Filter Est. 1439980416 rows
+                     │                    │     │     │  │  │  │     Condition: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
+                     │                    │     │     │  │  │  └─ TableScan tpcds.catalog_sales Est. 1439980416 rows
+                     │                    │     │     │  │  │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
+                     │                    │     │     │  │  │           Outputs: [cs_catalog_page_sk, cs_ext_sales_price, cs_item_sk, cs_net_profit, cs_order_number, cs_promo_sk, cs_sold_date_sk]
                      │                    │     │     │  │  └─ Broadcast Exchange Est. 30 rows
                      │                    │     │     │  │     └─ Filter Est. 30 rows
                      │                    │     │     │  │        │     Condition: (d_date_1 >= cast(11192, 'Date')) AND (d_date_1 <= cast(11222, 'Date'))
                      │                    │     │     │  │        └─ TableScan tpcds.date_dim Est. 73049 rows
-                     │                    │     │     │  │                 Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                     │                    │     │     │  │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                      │                    │     │     │  │                 Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk
                      │                    │     │     │  └─ Broadcast Exchange Est. 16631 rows
                      │                    │     │     │     └─ Filter Est. 16631 rows
                      │                    │     │     │        │     Condition: i_current_price_1 > 50.
                      │                    │     │     │        └─ TableScan tpcds.item Est. 300000 rows
-                     │                    │     │     │                 Condition : i_current_price > 50..
+                     │                    │     │     │                 Where: i_current_price > 50.
                      │                    │     │     │                 Outputs: i_current_price_1:=i_current_price, i_item_sk_1:=i_item_sk
                      │                    │     │     └─ Broadcast Exchange Est. 1500 rows
                      │                    │     │        └─ Filter Est. 1500 rows
                      │                    │     │           │     Condition: p_channel_tv_1 = 'N'
                      │                    │     │           └─ TableScan tpcds.promotion Est. 1500 rows
-                     │                    │     │                    Condition : p_channel_tv = 'N'.
+                     │                    │     │                    Where: p_channel_tv = 'N'
                      │                    │     │                    Outputs: p_channel_tv_1:=p_channel_tv, p_promo_sk_1:=p_promo_sk
                      │                    │     └─ Repartition Exchange Est. 30000 rows
                      │                    │        │     Partition by: {cp_catalog_page_sk}
@@ -143,21 +153,26 @@ Projection Est. 100 rows
                                           │     │  │     Condition: ws_web_site_sk == web_site_sk
                                           │     │  ├─ Inner Join Est. 323466 rows
                                           │     │  │  │     Condition: ws_item_sk == i_item_sk_2
+                                          │     │  │  │     Runtime Filters Builder: {i_item_sk_2}
                                           │     │  │  ├─ Inner Join Est. 5834687 rows
                                           │     │  │  │  │     Condition: ws_sold_date_sk == d_date_sk_2
-                                          │     │  │  │  ├─ TableScan tpcds.web_sales Est. 720000376 rows
-                                          │     │  │  │  │        Outputs: [ws_ext_sales_price, ws_item_sk, ws_net_profit, ws_order_number, ws_promo_sk, ws_sold_date_sk, ws_web_site_sk]
+                                          │     │  │  │  │     Runtime Filters Builder: {d_date_sk_2}
+                                          │     │  │  │  ├─ Filter Est. 720000376 rows
+                                          │     │  │  │  │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                                          │     │  │  │  │  └─ TableScan tpcds.web_sales Est. 720000376 rows
+                                          │     │  │  │  │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                                          │     │  │  │  │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_net_profit, ws_order_number, ws_promo_sk, ws_sold_date_sk, ws_web_site_sk]
                                           │     │  │  │  └─ Broadcast Exchange Est. 30 rows
                                           │     │  │  │     └─ Filter Est. 30 rows
                                           │     │  │  │        │     Condition: (d_date_2 >= cast(11192, 'Date')) AND (d_date_2 <= cast(11222, 'Date'))
                                           │     │  │  │        └─ TableScan tpcds.date_dim Est. 73049 rows
-                                          │     │  │  │                 Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date')).
+                                          │     │  │  │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                                           │     │  │  │                 Outputs: d_date_2:=d_date, d_date_sk_2:=d_date_sk
                                           │     │  │  └─ Broadcast Exchange Est. 16631 rows
                                           │     │  │     └─ Filter Est. 16631 rows
                                           │     │  │        │     Condition: i_current_price_2 > 50.
                                           │     │  │        └─ TableScan tpcds.item Est. 300000 rows
-                                          │     │  │                 Condition : i_current_price > 50..
+                                          │     │  │                 Where: i_current_price > 50.
                                           │     │  │                 Outputs: i_current_price_2:=i_current_price, i_item_sk_2:=i_item_sk
                                           │     │  └─ Broadcast Exchange Est. 54 rows
                                           │     │     └─ TableScan tpcds.web_site Est. 54 rows
@@ -166,9 +181,10 @@ Projection Est. 100 rows
                                           │        └─ Filter Est. 1500 rows
                                           │           │     Condition: p_channel_tv_2 = 'N'
                                           │           └─ TableScan tpcds.promotion Est. 1500 rows
-                                          │                    Condition : p_channel_tv = 'N'.
+                                          │                    Where: p_channel_tv = 'N'
                                           │                    Outputs: p_channel_tv_2:=p_channel_tv, p_promo_sk_2:=p_promo_sk
                                           └─ Repartition Exchange Est. 71997522 rows
                                              │     Partition by: {wr_item_sk, wr_order_number}
                                              └─ TableScan tpcds.web_returns Est. 71997522 rows
                                                       Outputs: [wr_item_sk, wr_net_loss, wr_order_number, wr_return_amt]
+note: Runtime Filter is applied for 6 times.

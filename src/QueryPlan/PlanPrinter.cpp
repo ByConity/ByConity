@@ -83,16 +83,16 @@ String PlanPrinter::textLogicalPlan(
                             .where([](auto & node) { return node.getStep()->getType() == IQueryPlanStep::Type::Filter; })
                             .findAll();
 
-    size_t dynamic_filters = 0;
+    size_t runtime_filters = 0;
     for (auto & filter : filter_nodes)
     {
         const auto * filter_step = dynamic_cast<const FilterStep *>(filter->getStep().get());
-        auto filters = DynamicFilters::extractDynamicFilters(filter_step->getFilter());
-        dynamic_filters += filters.first.size();
+        auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter_step->getFilter());
+        runtime_filters += filters.first.size();
     }
 
-    if (dynamic_filters > 0)
-        output += "note: Dynamic Filter is applied for " + std::to_string(dynamic_filters) + " times.\n";
+    if (runtime_filters > 0)
+        output += "note: Runtime Filter is applied for " + std::to_string(runtime_filters) + " times.\n";
 
     auto cte_nodes = PlanNodeSearcher::searchFrom(plan)
                          .where([](auto & node) { return node.getStep()->getType() == IQueryPlanStep::Type::CTERef; })
@@ -654,17 +654,24 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
     std::stringstream out;
     if (verbose && plan->getType() == IQueryPlanStep::Type::Join)
     {
-        const auto * join = dynamic_cast<const JoinStep *>(plan.get());
+        const auto * join_step = dynamic_cast<const JoinStep *>(plan.get());
         out << intent.detailIntent() << "Condition: ";
-        if (!join->getLeftKeys().empty())
-            out << join->getLeftKeys()[0] << " == " << join->getRightKeys()[0];
-        for (size_t i = 1; i < join->getLeftKeys().size(); i++)
-            out << ", " << join->getLeftKeys()[i] << " == " << join->getRightKeys()[i];
+        if (!join_step->getLeftKeys().empty())
+            out << join_step->getLeftKeys()[0] << " == " << join_step->getRightKeys()[0];
+        for (size_t i = 1; i < join_step->getLeftKeys().size(); i++)
+            out << ", " << join_step->getLeftKeys()[i] << " == " << join_step->getRightKeys()[i];
 
-        if (!ASTEquality::compareTree(join->getFilter(), PredicateConst::TRUE_VALUE))
+        if (!ASTEquality::compareTree(join_step->getFilter(), PredicateConst::TRUE_VALUE))
         {
             out << intent.detailIntent() << "Filter: ";
-            out << serializeAST(*join->getFilter());
+            out << serializeAST(*join_step->getFilter());
+        }
+        if (!join_step->getRuntimeFilterBuilders().empty())
+        {
+            std::set<std::string> runtime_filters;
+            for (const auto & item : join_step->getRuntimeFilterBuilders())
+                runtime_filters.emplace(item.first);
+            out << intent.detailIntent() << "Runtime Filters Builder: " << join(runtime_filters, ",", "{", "}");
         }
     }
 
@@ -727,17 +734,8 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
     if (verbose && plan->getType() == IQueryPlanStep::Type::Filter)
     {
         const auto * filter = dynamic_cast<const FilterStep *>(plan.get());
-        auto filters = DynamicFilters::extractDynamicFilters(filter->getFilter());
-        if (!filters.second.empty())
-            out << intent.detailIntent() << "Condition: " << serializeAST(*PredicateUtils::combineConjuncts(filters.second));
-        if (!filters.first.empty())
-        {
-            std::vector<std::string> dynamic_filters;
-            for (auto & item : filters.first)
-                dynamic_filters.emplace_back(DynamicFilters::toString(DynamicFilters::extractDescription(item).value()));
-            std::sort(dynamic_filters.begin(), dynamic_filters.end());
-            out << intent.detailIntent() << "Dynamic Filters: " << join(dynamic_filters, ",", "{", "}");
-        }
+        auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter->getFilter());
+        out << intent.detailIntent() << "Condition: " << printFilter(filter->getFilter());
     }
 
     if (verbose && plan->getType() == IQueryPlanStep::Type::Projection)
@@ -763,15 +761,6 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         }
 
         out << intent.detailIntent() << "Expressions: " << join(assignments, ", ");
-
-        if (!projection->getDynamicFilters().empty())
-        {
-            std::vector<std::string> dynamic_filters;
-            for (const auto & item : projection->getDynamicFilters())
-                dynamic_filters.emplace_back(item.first);
-            std::sort(dynamic_filters.begin(), dynamic_filters.end());
-            out << intent.detailIntent() << "Dynamic Filters Builder: " << join(dynamic_filters, ",", "{", "}");
-        }
     }
 
     if (verbose && plan->getType() == IQueryPlanStep::Type::TableScan)
@@ -787,42 +776,16 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
 
         auto query_info = table_scan->getQueryInfo();
         auto *query = query_info.query->as<ASTSelectQuery>();
-        if (query->getWhere() || query->getPrewhere() || query->getLimitLength())
+
+        if (auto where = query->getWhere())
+            out << intent.detailIntent() << "Where: " << printFilter(where);
+        if (auto prewhere = query->getPrewhere())
+            out << intent.detailIntent() << "Prewhere: " << printFilter(prewhere);
+        if (query->getLimitLength())
         {
-            out << intent.detailIntent();
-            if (query->getWhere())
-            {
-                auto filters = DynamicFilters::extractDynamicFilters(query->getWhere());
-                if (!filters.second.empty())
-                {
-                    out << "Condition : " << serializeAST(*PredicateUtils::combineConjuncts(filters.second));
-                    out << ".";
-                }
-                if (!filters.first.empty())
-                {
-                    std::vector<std::string> dynamic_filters;
-                    for (auto & item : filters.first)
-                        dynamic_filters.emplace_back(DynamicFilters::toString(DynamicFilters::extractDescription(item).value()));
-                    std::sort(dynamic_filters.begin(), dynamic_filters.end());
-                    out << "Dynamic Filters : " << join(dynamic_filters, ", ", "{", "}");
-                    out << ".";
-                }
-            }
-
-            if (query->getPrewhere())
-            {
-                out << "Prewhere : ";
-                out << serializeAST(*query->getPrewhere());
-                out << ".";
-            }
-
-            if (query->getLimitLength())
-            {
-                out << "Limit : ";
-                Field converted = convertFieldToType(query->refLimitLength()->as<ASTLiteral>()->value, DataTypeUInt64());
-                out << converted.safeGet<UInt64>();
-                out << ".";
-            }
+            out << intent.detailIntent() << "Limit: ";
+            Field converted = convertFieldToType(query->refLimitLength()->as<ASTLiteral>()->value, DataTypeUInt64());
+            out << converted.safeGet<UInt64>();
         }
 
         std::sort(assignments.begin(), assignments.end());
@@ -864,6 +827,32 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             out << intent.detailIntent() << table_write->getTarget()->toString();
     }
 
+    return out.str();
+}
+
+String PlanPrinter::TextPrinter::printFilter(ConstASTPtr filter)
+{
+    std::stringstream out;
+    auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
+
+    if (!filters.second.empty())
+        out << serializeAST(*PredicateUtils::combineConjuncts(filters.second));
+
+    if (!filters.first.empty())
+    {
+        std::set<String> runtime_filters;
+        for (auto & item : filters.first)
+        {
+            auto desc = RuntimeFilterUtils::extractDescription(item).value();
+            runtime_filters.emplace(serializeAST(*desc.expr->clone()));
+        }
+        if (!filters.second.empty())
+            out << " ";
+        out << "Runtime Filters: "<< join(runtime_filters, ", ", "{", "}");
+    }
+
+    if (filters.first.empty() && filters.second.empty())
+        out << "True";
     return out.str();
 }
 
@@ -971,10 +960,10 @@ void PlanPrinter::JsonPrinter::detail(Poco::JSON::Object::Ptr & json, QueryPlanS
     if (plan->getType() == IQueryPlanStep::Type::Filter)
     {
         const auto * filter = dynamic_cast<const FilterStep *>(plan.get());
-        auto filters = DynamicFilters::extractDynamicFilters(filter->getFilter());
+        auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter->getFilter());
         json->set("filter", serializeAST(*PredicateUtils::combineConjuncts(filters.second)));
         if (!filters.first.empty())
-            json->set("dynamicFilter", serializeAST(*PredicateUtils::combineConjuncts(filters.first)));
+            json->set("runtimeFilter", serializeAST(*PredicateUtils::combineConjuncts(filters.first)));
     }
 
     if (plan->getType() == IQueryPlanStep::Type::TableScan)

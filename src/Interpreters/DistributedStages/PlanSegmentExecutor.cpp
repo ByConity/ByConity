@@ -130,6 +130,9 @@ PlanSegmentExecutor::~PlanSegmentExecutor() noexcept
             query_log_element->segment_parallel_index,
             getCurrentExceptionCode());
     }
+
+    for (const auto & id : plan_segment->getRuntimeFilters())
+        RuntimeFilterManager::getInstance().removeDynamicValue(plan_segment->getQueryId(), id);
 }
 
 RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_group)

@@ -287,6 +287,9 @@ using WorkerGroupStatusPtr = std::shared_ptr<WorkerGroupStatus>;
 struct QeueueThrottlerDeleter;
 using QueueThrottlerDeleterPtr = std::shared_ptr<QeueueThrottlerDeleter>;
 
+class BindingCacheManager;
+using BindingCacheManagerPtr = std::shared_ptr<BindingCacheManager>;
+
 class VWCustomizedSettings;
 using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
 
@@ -512,6 +515,7 @@ private:
     std::shared_ptr<Statistics::StatisticsMemoryStore> stats_memory_store = nullptr;
     std::shared_ptr<OptimizerMetrics> optimizer_metrics = nullptr;
     ExcludedRulesMap exclude_rules_map;
+    mutable std::shared_ptr<BindingCacheManager> session_binding_cache_manager = nullptr;
 
     std::unordered_map<std::string, bool> function_deterministic;
 
@@ -1016,6 +1020,10 @@ public:
     SegmentSchedulerPtr getSegmentScheduler();
     SegmentSchedulerPtr getSegmentScheduler() const;
 
+    BindingCacheManagerPtr getGlobalBindingCacheManager();
+    BindingCacheManagerPtr getGlobalBindingCacheManager() const;
+    void setGlobalBindingCacheManager(std::shared_ptr<BindingCacheManager> && manager);
+
     QueueManagerPtr getQueueManager() const;
     AsyncQueryManagerPtr getAsyncQueryManager() const;
 
@@ -1316,6 +1324,8 @@ public:
 
     void createSymbolAllocator();
     std::shared_ptr<Statistics::StatisticsMemoryStore> getStatisticsMemoryStore();
+
+    std::shared_ptr<BindingCacheManager> getSessionBindingCacheManager() const;
 
     void createOptimizerMetrics();
     OptimizerMetricsPtr & getOptimizerMetrics() { return optimizer_metrics; }

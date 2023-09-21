@@ -133,6 +133,7 @@ static std::optional<PlanNodePtr> createNewJoin(
         JoinAlgorithm::AUTO,
         false,
         left_join->isOrdered(),
+        left_join->getRuntimeFilterBuilders(),
         left_join->getHints());
 
     return PlanNodeBase::createPlanNode(context.nextNodeId(), std::move(new_left_join), {new_left_node, second});

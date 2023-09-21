@@ -21,6 +21,8 @@
 #include <Interpreters/JoinSwitcher.h>
 #include <Interpreters/MergeJoin.h>
 #include <Interpreters/NestedLoopJoin.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterBuilder.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterConsumer.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <Processors/QueryPipeline.h>
@@ -28,8 +30,6 @@
 #include <Processors/Transforms/FilterTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <QueryPlan/JoinStep.h>
-#include <Interpreters/ConcurrentHashJoin.h>
-#include <Core/SettingsEnums.h>
 
 namespace DB
 {
@@ -39,10 +39,12 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-JoinPtr JoinStep::makeJoin(ContextPtr context)
+JoinPtr JoinStep::makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterConsumer>&& consumer)
 {
     const auto & settings = context->getSettingsRef();
     auto table_join = std::make_shared<TableJoin>(settings, context->getTemporaryVolume());
+    if (consumer)
+        table_join->setRuntimeFilterConsumer(std::move(consumer));
 
     // todo support storage join
     //    if (table_to_join.database_and_table_name)
@@ -56,9 +58,11 @@ JoinPtr JoinStep::makeJoin(ContextPtr context)
     //                table_join->joined_storage = table;
     //        }
     //    }
+    table_join->setColumnsFromJoinedTable(input_streams[1].header.getNamesAndTypesList());
     table_join->deduplicateAndQualifyColumnNames(input_streams[0].header.getNameSet(), "");
 
     auto using_ast = std::make_shared<ASTExpressionList>();
+    ASTs on_ast_terms;
     for (size_t index = 0; index < left_keys.size(); ++index)
     {
         ASTPtr left = std::make_shared<ASTIdentifier>(left_keys[index]);
@@ -72,12 +76,22 @@ JoinPtr JoinStep::makeJoin(ContextPtr context)
         else
         {
             table_join->addOnKeys(left, right, false);
+            // const String fn = null_safe_columns && (*null_safe_columns)[i] ? "bitEquals" : "equals";
+            const String fn = "equals";
+            on_ast_terms.emplace_back(makeASTFunction(fn, left, right));
         }
     }
 
     if (has_using)
     {
         table_join->table_join.using_expression_list = using_ast;
+    }
+    else
+    {
+        if (on_ast_terms.size() == 1)
+            table_join->table_join.on_expression = on_ast_terms.back();
+        else if (on_ast_terms.size() > 1)
+            table_join->table_join.on_expression = makeASTFunction("and", on_ast_terms);
     }
 
     for (const auto & item : output_stream->header)
@@ -159,6 +173,7 @@ JoinStep::JoinStep(
     JoinAlgorithm join_algorithm_,
     bool is_magic_,
     bool is_ordered_,
+    LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders_,
     PlanHints hints_)
     : kind(kind_)
     , strictness(strictness_)
@@ -174,6 +189,7 @@ JoinStep::JoinStep(
     , join_algorithm(join_algorithm_)
     , is_magic(is_magic_)
     , is_ordered(is_ordered_)
+    , runtime_filter_builders(std::move(runtime_filter_builders_))
 {
     input_streams = std::move(input_streams_);
     output_stream = std::move(output_stream_);
@@ -190,13 +206,32 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
     if (pipelines.size() != 2)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "JoinStep expect two input steps");
 
+    bool need_build_runtime_filter = false;
     if (!join)
     {
-        join = makeJoin(settings.context);
+        if (!runtime_filter_builders.empty() && settings.distributed_settings.is_distributed)
+        {
+            auto builder = createRuntimeFilterBuilder(settings.context);
+            std::shared_ptr<RuntimeFilterConsumer> consumer = std::make_shared<RuntimeFilterConsumer>(
+                builder,
+                settings.context->getInitialQueryId(),
+                runtime_filter_builders.size(),
+                settings.distributed_settings.parallel_size,
+                settings.distributed_settings.coordinator_address,
+                settings.distributed_settings.current_address);
+
+            join = makeJoin(settings.context, std::move(consumer));
+            need_build_runtime_filter = true;
+        }
+        else
+            join = makeJoin(settings.context, nullptr);
         max_block_size = settings.context->getSettingsRef().max_block_size;
     }
 
-    auto pipeline = QueryPipeline::joinPipelines(std::move(pipelines[0]), std::move(pipelines[1]), join, max_block_size, max_streams, keep_left_read_in_order, settings.context->getSettingsRef().join_parallel_left_right, &processors);
+    auto pipeline = QueryPipeline::joinPipelines(std::move(pipelines[0]), std::move(pipelines[1]), join,
+                                                 max_block_size, max_streams, keep_left_read_in_order,
+                                                 settings.context->getSettingsRef().join_parallel_left_right,
+                                                 &processors, need_build_runtime_filter);
 
     // if NestLoopJoin is choose, no need to add filter stream.
     if (filter && !PredicateUtils::isTruePredicate(filter) && join->getType() != JoinType::NestedLoop)
@@ -317,6 +352,16 @@ void JoinStep::serialize(WriteBuffer & buf, bool with_output) const
         SERIALIZE_ENUM(join_algorithm, buf)
 
         writeBinary(is_magic, buf);
+
+        writeBinary(is_ordered, buf);
+
+        writeVarUInt(runtime_filter_builders.size(), buf);
+        for (const auto & item : runtime_filter_builders)
+        {
+            writeBinary(item.first, buf);
+            writeBinary(item.second.id, buf);
+            writeBinary(static_cast<UInt8>(item.second.distribution), buf);
+        }
     }
 }
 
@@ -416,6 +461,25 @@ QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
         bool is_magic;
         readBinary(is_magic, buf);
 
+        bool is_ordered;
+        readBinary(is_ordered, buf);
+
+        size_t runtime_filter_builders_size;
+        readVarUInt(runtime_filter_builders_size, buf);
+        LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders;
+        for (size_t i = 0; i < runtime_filter_builders_size; i++)
+        {
+            String symbol;
+            readBinary(symbol, buf);
+            RuntimeFilterId id;
+            readBinary(id, buf);
+            UInt8 distribution;
+            readBinary(distribution, buf);
+            runtime_filter_builders.emplace(symbol, RuntimeFilterBuildInfos{
+                id,
+                static_cast<RuntimeFilterDistribution>(distribution)});
+        }
+
         DataStreams inputs = {left_stream, right_stream};
 
         step = std::make_shared<JoinStep>(
@@ -433,7 +497,9 @@ QueryPlanStepPtr JoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
             asof_inequality,
             distribution_type,
             join_algorithm,
-            is_magic);
+            is_magic,
+            is_ordered,
+            runtime_filter_builders);
     }
 
     step->setStepDescription(step_description);
@@ -568,9 +634,14 @@ std::shared_ptr<IQueryPlanStep> JoinStep::copy(ContextPtr) const
         join_algorithm,
         is_magic,
         is_ordered,
+        runtime_filter_builders,
         hints);
 }
 
+RuntimeFilterBuilderPtr JoinStep::createRuntimeFilterBuilder(ContextPtr context) const
+{
+    return std::make_shared<RuntimeFilterBuilder>(context, runtime_filter_builders);
+}
 
 bool JoinStep::mustReplicate() const
 {

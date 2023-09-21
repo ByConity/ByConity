@@ -4,5 +4,5 @@ Projection Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: isNotNull(a)
       └─ TableScan correctness.q5_t1 Est. ? rows
-               Condition : isNotNull(a).
+               Where: isNotNull(a)
                Outputs: [a, b]

@@ -106,11 +106,12 @@ public:
     }
     Void visitPlanNode(PlanNodeBase &, Void &) override;
     Void visitCTERefNode(CTERefNode & node, Void & c) override;
+    Void visitJoinNode(JoinNode & node, Void & c) override;
 
 private:
     std::stringstream & out;
     std::optional<CTEPreorderVisitHelper> cte_helper;
-    void printEdge(PlanNodeBase & from, PlanNodeBase & to);
+    void printEdge(PlanNodeBase & from, PlanNodeBase & to, std::string_view format = "");
 };
 
 class PlanSegmentNodePrinter : public NodeVisitor<Void, PrinterContext>
@@ -178,6 +179,7 @@ private:
 class StepPrinter
 {
 public:
+    static String printStep(const IQueryPlanStep & step, bool include_output = true);
     static String printProjectionStep(const ProjectionStep & step, bool include_output = true);
     static String printFilterStep(const FilterStep & step, bool include_output = true);
     static String printJoinStep(const JoinStep & step);
@@ -234,6 +236,7 @@ public:
     static void printPlanSegment(const PlanSegmentTreePtr &, const ContextMutablePtr &);
     static void printChunk(String transform, const Block & block, const Chunk & chunk);
     static void printPipeline(const Processors & processors, const ExecutingGraphPtr & graph, const ContextPtr & context, size_t segment_id, const String & host);
+    static String getColor(IQueryPlanStep::Type step);
 
 private:
     static String printAST(ASTPtr);

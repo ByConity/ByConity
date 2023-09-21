@@ -19,15 +19,15 @@
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
+#include <Optimizer/PredicateUtils.h>
+#include <Optimizer/RuntimeFilterUtils.h>
 #include <Parsers/ASTSerDerHelper.h>
+#include <Processors/Port.h>
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/FilterTransform.h>
 #include <Common/JSONBuilder.h>
-#include <Processors/Port.h>
-#include <Optimizer/DynamicFilters.h>
-#include <Functions/FunctionsInBloomFilter.h>
-#include <Optimizer/PredicateUtils.h>
 
 namespace DB
 {
@@ -102,19 +102,18 @@ void FilterStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPip
     ConstASTPtr rewrite_filter = filter;
     if (!actions_dag)
     {
-        rewrite_filter = rewriteDynamicFilter(filter, pipeline, settings);
+        rewrite_filter = rewriteRuntimeFilter(filter, pipeline, settings);
         actions_dag = createActions(settings.context, rewrite_filter->clone());
         filter_column_name = rewrite_filter->getColumnName();
-
     }
 
-    bool contains_dynamic_filter = DynamicFilters::containsDynamicFilters(rewrite_filter);
+    bool contains_runtime_filter = RuntimeFilterUtils::containsRuntimeFilters(rewrite_filter);
     auto expression = std::make_shared<ExpressionActions>(actions_dag, settings.getActionsSettings());
 
     pipeline.addSimpleTransform([&](const Block & header, QueryPipeline::StreamType stream_type) {
         bool on_totals = stream_type == QueryPipeline::StreamType::Totals;
         return std::make_shared<FilterTransform>(
-            header, expression, filter_column_name, remove_filter_column, on_totals, contains_dynamic_filter);
+            header, expression, filter_column_name, remove_filter_column, on_totals, contains_runtime_filter);
     });
 
     if (!blocksHaveEqualStructure(pipeline.getHeader(), output_stream->header))
@@ -232,27 +231,20 @@ std::shared_ptr<IQueryPlanStep> FilterStep::copy(ContextPtr) const
     return std::make_shared<FilterStep>(input_streams[0], filter, remove_filter_column);
 }
 
-ConstASTPtr FilterStep::rewriteDynamicFilter(const ConstASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context)
+ConstASTPtr
+FilterStep::rewriteRuntimeFilter(const ConstASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context)
 {
-    auto filters = DynamicFilters::extractDynamicFilters(filter);
+    auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
     if (filters.first.empty())
         return filter;
 
     std::vector<ConstASTPtr> predicates = std::move(filters.second);
-    for (auto & dynamic_filter : filters.first)
+    for (auto & runtime_filter : filters.first)
     {
-        auto description = DynamicFilters::extractDescription(dynamic_filter).value();
-        pipeline.addRuntimeFilterHolder(RuntimeFilterHolder{
-            build_context.distributed_settings.query_id, build_context.distributed_settings.plan_segment_id, description.id});
-
-        auto dynamic_filters = DynamicFilters::createDynamicFilterRuntime(
-            description,
-            build_context.context->getInitialQueryId(),
-            build_context.distributed_settings.plan_segment_id,
-            build_context.context->getSettingsRef().wait_runtime_filter_timeout_for_filter,
-            RuntimeFilterManager::getInstance(),
-            "FilterStep");
-        predicates.insert(predicates.end(), dynamic_filters.begin(), dynamic_filters.end());
+        auto description = RuntimeFilterUtils::extractDescription(runtime_filter).value();
+        auto runtime_filters = RuntimeFilterUtils::createRuntimeFilterForFilter(
+            description, build_context.context->getInitialQueryId());
+        predicates.insert(predicates.end(), runtime_filters.begin(), runtime_filters.end());
     }
 
     return PredicateUtils::combineConjuncts(predicates);

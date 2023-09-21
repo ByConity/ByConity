@@ -433,6 +433,14 @@
     M(GetAvailableColumnStatisticsTagsFailed, "") \
     M(RemoveColumnStatisticsSuccess, "") \
     M(RemoveColumnStatisticsFailed, "") \
+    M(UpdateSQLBindingFailed, "") \
+    M(UpdateSQLBindingSuccess, "") \
+    M(GetSQLBindingFailed, "") \
+    M(GetSQLBindingSuccess, "") \
+    M(GetSQLBindingsFailed, "") \
+    M(GetSQLBindingsSuccess, "") \
+    M(RemoveSQLBindingFailed, "") \
+    M(RemoveSQLBindingSuccess, "") \
     M(CreateDatabaseSuccess, "") \
     M(CreateDatabaseFailed, "") \
     M(GetDatabaseSuccess, "") \

@@ -23,22 +23,28 @@ Projection Est. 100 rows
                               │     Condition: inv_warehouse_sk == w_warehouse_sk
                               ├─ Inner Join Est. 5850551 rows
                               │  │     Condition: inv_date_sk == d_date_sk
+                              │  │     Runtime Filters Builder: {d_date_sk}
                               │  ├─ Inner Join Est. 25547409 rows
                               │  │  │     Condition: inv_item_sk == i_item_sk
-                              │  │  ├─ TableScan tpcds.inventory Est. 783000000 rows
-                              │  │  │        Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand, inv_warehouse_sk]
+                              │  │  │     Runtime Filters Builder: {i_item_sk}
+                              │  │  ├─ Filter Est. 783000000 rows
+                              │  │  │  │     Condition: Runtime Filters: {inv_date_sk, inv_item_sk}
+                              │  │  │  └─ TableScan tpcds.inventory Est. 783000000 rows
+                              │  │  │           Where: Runtime Filters: {inv_date_sk, inv_item_sk}
+                              │  │  │           Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand, inv_warehouse_sk]
                               │  │  └─ Broadcast Exchange Est. 19576 rows
                               │  │     └─ Filter Est. 19576 rows
                               │  │        │     Condition: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
                               │  │        └─ TableScan tpcds.item Est. 300000 rows
-                              │  │                 Condition : (i_current_price >= 0.99) AND (i_current_price <= 1.49).
+                              │  │                 Where: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
                               │  │                 Outputs: [i_current_price, i_item_id, i_item_sk]
                               │  └─ Broadcast Exchange Est. 60 rows
                               │     └─ Filter Est. 60 rows
                               │        │     Condition: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
                               │        └─ TableScan tpcds.date_dim Est. 73049 rows
-                              │                 Condition : (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date')).
+                              │                 Where: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
                               │                 Outputs: [d_date, d_date_sk]
                               └─ Broadcast Exchange Est. 20 rows
                                  └─ TableScan tpcds.warehouse Est. 20 rows
                                           Outputs: [w_warehouse_name, w_warehouse_sk]
+note: Runtime Filter is applied for 2 times.

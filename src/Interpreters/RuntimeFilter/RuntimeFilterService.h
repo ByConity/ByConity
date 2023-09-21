@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Interpreters/Context.h>
 #include <Protos/runtime_filter.pb.h>
 #include <brpc/stream.h>
 #include <brpc/server.h>
@@ -26,7 +27,7 @@ namespace DB
 class RuntimeFilterService : public Protos::RuntimeFilterService
 {
 public:
-    explicit RuntimeFilterService(ContextMutablePtr context_) : context(context_), log(&Poco::Logger::get("RuntimeFilterService")){}
+    explicit RuntimeFilterService(ContextMutablePtr context_) : context(context_), log(&Poco::Logger::get("RuntimeFilterService")) { }
 
     /// transfer dynamic filer (segment executor host --> coordinator host)
     void transferRuntimeFilter(
@@ -35,7 +36,7 @@ public:
         ::DB::Protos::TransferRuntimeFilterResponse * response,
         ::google::protobuf::Closure * done) override;
 
-    /// dispatch dynamic filter (coordinator host --> segment executor host)
+    /// dispatch runtime Filter (coordinator host --> segment executor host)
     void dispatchRuntimeFilter(
         ::google::protobuf::RpcController * controller,
         const ::DB::Protos::DispatchRuntimeFilterRequest * request,

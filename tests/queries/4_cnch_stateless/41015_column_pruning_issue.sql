@@ -15,7 +15,7 @@ CREATE TABLE test.aeolus_data_table_8_1014318_prod
  `c2_create_time` Nullable(String))
 ENGINE = CnchMergeTree PARTITION BY p_date ORDER BY (`row_id_kmtq3k`, intHash64(`row_id_kmtq3k`)) SAMPLE BY intHash64(`row_id_kmtq3k`) TTL p_date + toIntervalDay(31);
 
-SET enable_optimizer=1, enable_dynamic_filter=0, dialect_type = 'CLICKHOUSE';
+SET enable_optimizer=1, enable_runtime_filter=0, dialect_type = 'CLICKHOUSE';
 
 
 SELECT

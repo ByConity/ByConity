@@ -221,9 +221,17 @@ std::shared_ptr<JoinStep> SymbolMapper::map(const JoinStep & join)
         join.getJoinAlgorithm(),
         join.isMagic(),
         join.isOrdered(),
+        map(join.getRuntimeFilterBuilders()),
         join.getHints());
 }
 
+LinkedHashMap<String, RuntimeFilterBuildInfos> SymbolMapper::map(const LinkedHashMap<String, RuntimeFilterBuildInfos> & infos)
+{
+    LinkedHashMap<String, RuntimeFilterBuildInfos> res;
+    for (const auto & info : infos)
+        res.emplace(map(info.first), info.second);
+    return res;
+}
 
 AggregateDescription SymbolMapper::map(const AggregateDescription & desc)
 {
@@ -586,17 +594,11 @@ std::shared_ptr<PartialSortingStep> SymbolMapper::map(const PartialSortingStep &
 
 std::shared_ptr<ProjectionStep> SymbolMapper::map(const ProjectionStep & projection)
 {
-    std::unordered_map<String, DynamicFilterBuildInfo> dynamic_filters;
-    for(auto & [name, info] : projection.getDynamicFilters())
-    {
-        dynamic_filters.emplace(map(name), DynamicFilterBuildInfo{info.id, map(info.original_symbol), info.types});
-    }
     return std::make_shared<ProjectionStep> (
             map(projection.getInputStreams()[0]),
             map(projection.getAssignments()),
             map(projection.getNameToType()),
             projection.isFinalProject(),
-            std::move(dynamic_filters),
             projection.getHints());
 }
 

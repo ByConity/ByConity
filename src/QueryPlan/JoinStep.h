@@ -19,6 +19,7 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Interpreters/asof.h>
 #include <Optimizer/PredicateConst.h>
+#include <Optimizer/RuntimeFilterUtils.h>
 
 namespace DB
 {
@@ -32,6 +33,7 @@ enum class DistributionType : UInt8
 
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
+class RuntimeFilterConsumer;
 
 /// Join two data streams.
 class JoinStep : public IQueryPlanStep
@@ -46,7 +48,7 @@ public:
         bool keep_left_read_in_order_,
         bool is_ordered_ = false,
         PlanHints hints_ = {});
-    
+
     JoinStep(
         DataStreams input_streams_,
         DataStream output_stream_,
@@ -64,8 +66,9 @@ public:
         JoinAlgorithm join_algorithm = JoinAlgorithm::AUTO,
         bool magic_set_ = false,
         bool is_ordered_ = false,
+        LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders = {},
         PlanHints hints_ = {});
-    
+
 
     String getName() const override { return "Join"; }
 
@@ -83,7 +86,7 @@ public:
 
     size_t getMaxStreams() const { return max_streams; }
     bool getKeepLeftReadInOrder() const { return keep_left_read_in_order; }
-    
+
     const Names & getLeftKeys() const { return left_keys; }
     const Names & getRightKeys() const { return right_keys; }
     const ConstASTPtr & getFilter() const { return filter; }
@@ -142,7 +145,7 @@ public:
         return isRightOrFull(kind);
     }
 
-    JoinPtr makeJoin(ContextPtr context);
+    JoinPtr makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterConsumer>&& consumer);
 
     bool enforceGraceHashJoin() const;
 
@@ -154,6 +157,9 @@ public:
     void setInputStreams(const DataStreams & input_streams_) override;
     String serializeToString() const override;
 
+    const LinkedHashMap<String, RuntimeFilterBuildInfos> & getRuntimeFilterBuilders() const { return runtime_filter_builders; }
+    RuntimeFilterBuilderPtr createRuntimeFilterBuilder(ContextPtr context) const;
+
 private:
     JoinPtr join;
     size_t max_block_size;
@@ -163,7 +169,7 @@ private:
 
     size_t max_streams;
     bool keep_left_read_in_order;
-    
+
     Names left_keys;
     Names right_keys;
 
@@ -201,6 +207,8 @@ private:
     bool is_magic;
     Processors processors;
     bool is_ordered;
+
+    LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders;
 };
 
 /// Special step for the case when Join is already filled.

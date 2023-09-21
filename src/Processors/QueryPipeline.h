@@ -53,7 +53,7 @@ struct ExpressionActionsSettings;
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
 
-using RuntimeFilterId = UInt64;
+using RuntimeFilterId = UInt32;
 
 class QueryPipeline
 {
@@ -129,7 +129,8 @@ public:
         size_t max_streams,
         bool keep_left_read_in_order,
         bool join_parallel_left_right,
-        Processors * collected_processors = nullptr);
+        Processors * collected_processors = nullptr,
+        bool need_build_runtime_filter = false);
 
     /// Add other pipeline and execute it before current one.
     /// Pipeline must have empty header, it should not generate any chunk.
@@ -148,7 +149,6 @@ public:
     void addTableLock(TableLockHolder lock) { pipe.addTableLock(std::move(lock)); }
     void addInterpreterContext(std::shared_ptr<const Context> context) { pipe.addInterpreterContext(std::move(context)); }
     void addStorageHolder(StoragePtr storage) { pipe.addStorageHolder(std::move(storage)); }
-    void addRuntimeFilterHolder(RuntimeFilterHolder rf_holder) { pipe.addRuntimeFilterHolder(std::move(rf_holder)); }
     void addQueryPlan(std::unique_ptr<QueryPlan> plan) { pipe.addQueryPlan(std::move(plan)); }
     void setLimits(const StreamLocalLimits & limits) { pipe.setLimits(limits); }
     void setLeafLimits(const SizeLimits & limits) { pipe.setLeafLimits(limits); }

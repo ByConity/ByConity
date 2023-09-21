@@ -269,20 +269,15 @@ void Analysis::registerCTE(ASTSubquery & subquery)
         iter->second.ref_count++;
 }
 
-bool Analysis::isSharableCTE(ASTSubquery & subquery)
+std::optional<CTEAnalysis> Analysis::tryGetCTEAnalysis(ASTSubquery & subquery)
 {
     auto clone = std::make_shared<ASTSubquery>(subquery);
     clone->alias.clear();
-    if (auto iter = common_table_expressions.find(clone); iter != common_table_expressions.end())
-        return iter->second.ref_count >= 2;
-    return false;
-}
 
-CTEAnalysis & Analysis::getCTEAnalysis(ASTSubquery & subquery)
-{
-    auto clone = std::make_shared<ASTSubquery>(subquery);
-    clone->alias.clear();
-    MAP_GET(common_table_expressions, clone);
+    if (auto it = common_table_expressions.find(clone); it != common_table_expressions.end())
+        return it->second;
+
+    return std::nullopt;
 }
 
 ASTs & Analysis::getSelectExpressions(ASTSelectQuery & select_query)

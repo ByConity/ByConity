@@ -30,7 +30,7 @@ namespace DB
  * - Sideways Information Passing for Push-Style Query Processing
  *
  * todo
- * - magic set work with dynamic filter.
+ * - magic set work with runtime Filter.
  * - magic set work with CTE.
  * - implement more push down rules if needed.
  */

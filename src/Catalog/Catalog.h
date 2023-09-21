@@ -98,6 +98,16 @@ public:
     void removeColumnStatistics(const String & uuid, const String & column, const std::unordered_set<StatisticsTag> & tags);
     //////////////
 
+    void updateSQLBinding(const SQLBindingItemPtr data);
+
+    SQLBindings getSQLBindings();
+
+    SQLBindings getReSQLBindings(const bool & is_re_expression);
+
+    SQLBindingItemPtr getSQLBinding(const String & uuid, const bool & is_re_expression);
+
+    void removeSQLBinding(const String & uuid, const bool & is_re_expression);
+
     ///database related interface
     void createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts);
 

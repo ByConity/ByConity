@@ -95,11 +95,15 @@ public:
     static bool enforce_regenerate();
     static int regenerate_task_thread_size();
 
+    void setShowStatistics(bool show_statistics_) { show_statistics = show_statistics_; }
+
 protected:
     virtual std::vector<std::filesystem::path> getTableDDLFiles() = 0;
     virtual std::filesystem::path getStatisticsFile() = 0;
     virtual std::filesystem::path getQueriesDir() = 0;
     virtual std::filesystem::path getExpectedExplainDir() = 0;
+
+    bool show_statistics = true;
 
     static std::vector<std::string> loadFile(const std::filesystem::path & path, char sep = {});
 };

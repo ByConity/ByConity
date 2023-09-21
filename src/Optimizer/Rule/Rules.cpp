@@ -87,7 +87,7 @@ std::vector<RulePtr> Rules::pushPartialStepRules()
         std::make_shared<PushPartialSortingThroughExchange>(),
         std::make_shared<PushPartialLimitThroughExchange>(),
         std::make_shared<FilterWindowToPartitionTopN>(),
-        std::make_shared<PushDynamicFilterBuilderThroughExchange>(),
+//        std::make_shared<PushRuntimeFilterBuilderThroughExchange>(),
         std::make_shared<PushPartialDistinctThroughExchange>()};
 }
 

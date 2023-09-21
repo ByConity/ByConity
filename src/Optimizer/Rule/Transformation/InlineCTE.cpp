@@ -57,7 +57,7 @@ TransformResult InlineCTEWithFilter::transformImpl(PlanNodePtr node, const Captu
 PlanNodePtr InlineCTEWithFilter::predicatePushDown(const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context)
 {
     static Rewriters rewriters
-        = {std::make_shared<PredicatePushdown>(),
+        = {std::make_shared<PredicatePushdown>(false, true),
            std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
            std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
            std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), "SwapPredicate"),

@@ -16,5 +16,5 @@ Projection Est. 133 rows
                      └─ Filter Est. 47765028 rows
                         │     Condition: (P_CATEGORY = 'MFGR#12') AND (S_REGION = 'AMERICA')
                         └─ TableScan ssb.lineorder_flat Est. 5999989813 rows
-                                 Condition : (P_CATEGORY = 'MFGR#12') AND (S_REGION = 'AMERICA').
+                                 Where: (P_CATEGORY = 'MFGR#12') AND (S_REGION = 'AMERICA')
                                  Outputs: [LO_ORDERDATE, LO_REVENUE, P_BRAND, P_CATEGORY, S_REGION]

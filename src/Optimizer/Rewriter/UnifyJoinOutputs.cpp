@@ -170,6 +170,7 @@ PlanNodePtr UnifyJoinOutputs::Rewriter::visitJoinNode(JoinNode & node, std::set<
         step->getJoinAlgorithm(),
         step->isMagic(),
         step->isOrdered(),
+        step->getRuntimeFilterBuilders(),
         step->getHints());
     return PlanNodeBase::createPlanNode(node.getId(), new_step, PlanNodes{left, right});
 }

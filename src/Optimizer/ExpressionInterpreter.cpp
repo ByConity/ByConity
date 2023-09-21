@@ -23,7 +23,7 @@
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsLogical.h>
-#include <Functions/InternalFunctionsDynamicFilter.h>
+#include <Functions/InternalFunctionRuntimeFilter.h>
 #include <Optimizer/FunctionInvoker.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Utils.h>
@@ -414,7 +414,7 @@ InterpretIMResult ExpressionInterpreter::visit(const ConstASTPtr & node) const
             "arraySetGet",
             "arraySetGetAny",
 
-            InternalFunctionDynamicFilter::name,
+                InternalFunctionRuntimeFilter::name,
 
             "str_to_map",
             "getMapKeys",

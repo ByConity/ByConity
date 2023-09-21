@@ -4,6 +4,7 @@
 #define TPCDS_QUERIES_DIR "${CMAKE_SOURCE_DIR}/tests/optimizers/tpcds/queries/"
 #define TPCDS_TABLE_DDL_FILE "${CMAKE_SOURCE_DIR}/tests/optimizers/tpcds/sql/create_table.sql"
 #define TPCDS_TABLE_STATISTICS_FILE "${CMAKE_SOURCE_DIR}/tests/optimizers/tpcds/tpcds.bin"
+#define TPCDS_100_TABLE_STATISTICS_FILE "${CMAKE_SOURCE_DIR}/tests/optimizers/tpcds/tpcds100.bin"
 #define TPCDS_EXPECTED_EXPLAIN_RESULT "${CMAKE_CURRENT_SOURCE_DIR}/explains/"
 
 #define TPCH_QUERIES_DIR "${CMAKE_SOURCE_DIR}/tests/optimizers/tpch/queries/"

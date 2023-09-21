@@ -19,19 +19,23 @@ Projection Est. 100 rows
                         │     Expressions: [ss_customer_sk], expr#multiIf(isNotNull(sr_return_quantity), multiply(minus(ss_quantity, sr_return_quantity), ss_sales_price), multiply(ss_quantity, ss_sales_price)):=multiIf(isNotNull(sr_return_quantity), (ss_quantity - sr_return_quantity) * ss_sales_price, ss_quantity * ss_sales_price)
                         └─ Inner Join Est. 53144886 rows
                            │     Condition: sr_reason_sk == r_reason_sk
-                           ├─ Left Join Est. 3454417601 rows
-                           │  │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
-                           │  ├─ Repartition Exchange Est. 2879987999 rows
-                           │  │  │     Partition by: {ss_item_sk, ss_ticket_number}
-                           │  │  └─ TableScan tpcds.store_sales Est. 2879987999 rows
-                           │  │           Outputs: [ss_customer_sk, ss_item_sk, ss_quantity, ss_sales_price, ss_ticket_number]
-                           │  └─ Repartition Exchange Est. 287999764 rows
-                           │     │     Partition by: {sr_item_sk, sr_ticket_number}
-                           │     └─ TableScan tpcds.store_returns Est. 287999764 rows
-                           │              Outputs: [sr_item_sk, sr_reason_sk, sr_return_quantity, sr_ticket_number]
+                           │     Runtime Filters Builder: {r_reason_sk}
+                           ├─ Filter Est. 3108975840 rows
+                           │  │     Condition: Runtime Filters: {sr_reason_sk}
+                           │  └─ Left Join Est. 3454417601 rows
+                           │     │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                           │     ├─ Repartition Exchange Est. 2879987999 rows
+                           │     │  │     Partition by: {ss_item_sk, ss_ticket_number}
+                           │     │  └─ TableScan tpcds.store_sales Est. 2879987999 rows
+                           │     │           Outputs: [ss_customer_sk, ss_item_sk, ss_quantity, ss_sales_price, ss_ticket_number]
+                           │     └─ Repartition Exchange Est. 287999764 rows
+                           │        │     Partition by: {sr_item_sk, sr_ticket_number}
+                           │        └─ TableScan tpcds.store_returns Est. 287999764 rows
+                           │                 Outputs: [sr_item_sk, sr_reason_sk, sr_return_quantity, sr_ticket_number]
                            └─ Broadcast Exchange Est. 1 rows
                               └─ Filter Est. 1 rows
                                  │     Condition: r_reason_desc = 'reason 28'
                                  └─ TableScan tpcds.reason Est. 65 rows
-                                          Condition : r_reason_desc = 'reason 28'.
+                                          Where: r_reason_desc = 'reason 28'
                                           Outputs: [r_reason_desc, r_reason_sk]
+note: Runtime Filter is applied for 1 times.

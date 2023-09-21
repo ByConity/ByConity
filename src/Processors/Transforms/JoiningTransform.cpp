@@ -219,9 +219,9 @@ Block JoiningTransform::readExecute(Chunk & chunk)
     return res;
 }
 
-FillingRightJoinSideTransform::FillingRightJoinSideTransform(Block input_header, JoinPtr join_)
+FillingRightJoinSideTransform::FillingRightJoinSideTransform(Block input_header, JoinPtr join_, JoiningTransform::FinishCounterPtr finish_counter_)
     : IProcessor({input_header}, {Block()})
-    , join(std::move(join_))
+    , join(std::move(join_)), finish_counter(std::move(finish_counter_))
 {}
 
 InputPort * FillingRightJoinSideTransform::addTotalsPort()
@@ -241,6 +241,13 @@ IProcessor::Status FillingRightJoinSideTransform::prepare()
     {
         for (auto & input : inputs)
             input.close();
+
+        if (!build_rf && finish_counter && finish_counter->isLast())
+        {
+            build_rf = true;
+            return Status::Ready;
+        }
+
         return Status::Finished;
     }
 
@@ -290,12 +297,24 @@ IProcessor::Status FillingRightJoinSideTransform::prepare()
         return Status::Ready;
     }
 
+    if (!build_rf && finish_counter && finish_counter->isLast())
+    {
+        build_rf = true;
+        return Status::Ready;
+    }
+
     output.finish();
     return Status::Finished;
 }
 
 void FillingRightJoinSideTransform::work()
 {
+    if (build_rf)
+    {
+        join->tryBuildRuntimeFilters();
+        return;
+    }
+
     auto block = inputs.front().getHeader().cloneWithColumns(chunk.detachColumns());
 
     if (for_totals)

@@ -62,6 +62,8 @@ TableJoin::TableJoin(const Settings & settings, VolumePtr tmp_volume_)
     , max_files_to_merge(settings.join_on_disk_max_files_to_merge)
     , temporary_files_codec(settings.temporary_files_codec)
     , allow_extended_conversion(settings.allow_extended_type_conversion)
+    , runtime_filter_bloom_build_threshold(settings.runtime_filter_bloom_build_threshold)
+    , runtime_filter_in_build_threshold(settings.runtime_filter_in_build_threshold)
     , tmp_volume(tmp_volume_)
 {
 }

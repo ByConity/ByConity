@@ -40,6 +40,7 @@ public:
 
     JoinType getType() const override { return JoinType::PARALLEL_HASH; }
     const TableJoin & getTableJoin() const override { return *table_join; }
+    TableJoin & getTableJoin() override { return *table_join; }
     void checkTypesOfKeys(const Block & block) const;
     void setTotals(const Block & block) override;
     const Block & getTotals() const override;
@@ -52,6 +53,7 @@ public:
 
     void serialize(WriteBuffer & buf) const override;
     static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
+    void tryBuildRuntimeFilters(size_t total_rows) const override;
 
 private:
     struct InternalHashJoin

@@ -90,6 +90,9 @@
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <Parsers/ASTWithElement.h>
+#include <Parsers/ASTQuantifiedComparison.h>
+#include <Parsers/ASTAlterDiskCacheQuery.h>
+#include <Parsers/ASTSQLBinding.h>
 
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>

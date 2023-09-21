@@ -19,17 +19,22 @@ Projection Est. 16 rows
                         │     Condition: ss_sold_date_sk == d_date_sk
                         ├─ Inner Join Est. 2557058 rows
                         │  │     Condition: ss_item_sk == i_item_sk
-                        │  ├─ TableScan tpcds.store_sales Est. 2879987999 rows
-                        │  │        Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
+                        │  │     Runtime Filters Builder: {i_item_sk}
+                        │  ├─ Filter Est. 2879987999 rows
+                        │  │  │     Condition: Runtime Filters: {ss_item_sk}
+                        │  │  └─ TableScan tpcds.store_sales Est. 2879987999 rows
+                        │  │           Where: Runtime Filters: {ss_item_sk}
+                        │  │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
                         │  └─ Broadcast Exchange Est. 533 rows
                         │     └─ Filter Est. 533 rows
                         │        │     Condition: i_manufact_id = 128
                         │        └─ TableScan tpcds.item Est. 300000 rows
-                        │                 Condition : i_manufact_id = 128.
+                        │                 Where: i_manufact_id = 128
                         │                 Outputs: [i_brand, i_brand_id, i_item_sk, i_manufact_id]
                         └─ Broadcast Exchange Est. 6000 rows
                            └─ Filter Est. 6000 rows
                               │     Condition: d_moy = 11
                               └─ TableScan tpcds.date_dim Est. 73049 rows
-                                       Condition : d_moy = 11.
+                                       Where: d_moy = 11
                                        Outputs: [d_date_sk, d_moy, d_year]
+note: Runtime Filter is applied for 1 times.

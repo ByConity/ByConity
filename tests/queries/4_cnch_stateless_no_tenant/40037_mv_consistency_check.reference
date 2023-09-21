@@ -25,7 +25,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: event_date = cast(19358, \'Date\')
                   └─ TableScan test.target40037 Est. ? rows
-                           Condition : event_date = cast(19358, \'Date\').
+                           Where: event_date = cast(19358, \'Date\')
                            Outputs: [event_date, server_time_hour, sum_click, uid]
 note: Materialized Views is applied for 1 times: test.mv40037.
 Projection Est. ? rows
@@ -42,7 +42,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: toHour(toDateTime(server_time)) = 8
                   └─ TableScan test.base40037 Est. ? rows
-                           Condition : toHour(toDateTime(server_time)) = 8.
+                           Where: toHour(toDateTime(server_time)) = 8
                            Outputs: [click, event_date, server_time, uid]
 Projection Est. ? rows
 │     Expressions: [event_date, uid], server_time_hour:=`expr#toHour(toDateTime(server_time))`, sum_click:=`expr#sum(click)`
@@ -58,7 +58,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: (event_date >= cast(19358, \'Date\')) AND (event_date <= cast(19367, \'Date\'))
                   └─ TableScan test.base40037 Est. ? rows
-                           Condition : (event_date >= cast(19358, \'Date\')) AND (event_date <= cast(19367, \'Date\')).
+                           Where: (event_date >= cast(19358, \'Date\')) AND (event_date <= cast(19367, \'Date\'))
                            Outputs: [click, event_date, server_time, uid]
 Projection Est. ? rows
 │     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
@@ -74,6 +74,6 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: server_time_hour IN (9, 10, 11)
                   └─ TableScan test.target40037 Est. ? rows
-                           Condition : server_time_hour IN (9, 10, 11).
+                           Where: server_time_hour IN (9, 10, 11)
                            Outputs: [event_date, server_time_hour, sum_click, uid]
 note: Materialized Views is applied for 1 times: test.mv40037.

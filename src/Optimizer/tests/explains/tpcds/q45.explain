@@ -31,13 +31,17 @@ Projection Est. 100 rows
                               │  │     │  │     Partition by: {ws_bill_customer_sk}
                               │  │     │  └─ Inner Join Est. 17504061 rows
                               │  │     │     │     Condition: ws_sold_date_sk == d_date_sk
-                              │  │     │     ├─ TableScan tpcds.web_sales Est. 720000376 rows
-                              │  │     │     │        Outputs: [ws_bill_customer_sk, ws_item_sk, ws_sales_price, ws_sold_date_sk]
+                              │  │     │     │     Runtime Filters Builder: {d_date_sk}
+                              │  │     │     ├─ Filter Est. 720000376 rows
+                              │  │     │     │  │     Condition: Runtime Filters: {ws_sold_date_sk}
+                              │  │     │     │  └─ TableScan tpcds.web_sales Est. 720000376 rows
+                              │  │     │     │           Where: Runtime Filters: {ws_sold_date_sk}
+                              │  │     │     │           Outputs: [ws_bill_customer_sk, ws_item_sk, ws_sales_price, ws_sold_date_sk]
                               │  │     │     └─ Broadcast Exchange Est. 90 rows
                               │  │     │        └─ Filter Est. 90 rows
                               │  │     │           │     Condition: (d_qoy = 2) AND (d_year = 2001)
                               │  │     │           └─ TableScan tpcds.date_dim Est. 73049 rows
-                              │  │     │                    Condition : (d_qoy = 2) AND (d_year = 2001).
+                              │  │     │                    Where: (d_qoy = 2) AND (d_year = 2001)
                               │  │     │                    Outputs: [d_date_sk, d_qoy, d_year]
                               │  │     └─ Repartition Exchange Est. 12000000 rows
                               │  │        │     Partition by: {c_customer_sk}
@@ -68,5 +72,6 @@ Projection Est. 100 rows
                                                 └─ Filter Est. 10 rows
                                                    │     Condition: i_item_sk_1 IN (2, 3, 5, 7, 11, 13, 17, 19, 23, 29)
                                                    └─ TableScan tpcds.item Est. 300000 rows
-                                                            Condition : i_item_sk IN (2, 3, 5, 7, 11, 13, 17, 19, 23, 29).
+                                                            Where: i_item_sk IN (2, 3, 5, 7, 11, 13, 17, 19, 23, 29)
                                                             Outputs: i_item_id_1:=i_item_id, i_item_sk_1:=i_item_sk
+note: Runtime Filter is applied for 1 times.

@@ -25,7 +25,7 @@ Projection Est. 134270 rows
                            │     ├─ Filter Est. 150000 rows
                            │     │  │     Condition: substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')
                            │     │  └─ TableScan tpch.customer Est. 150000 rows
-                           │     │           Condition : substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17').
+                           │     │           Where: substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')
                            │     │           Outputs: [c_acctbal, c_custkey, c_phone]
                            │     └─ Broadcast Exchange Est. 1 rows
                            │        └─ MergingAggregated Est. 1 rows
@@ -36,7 +36,7 @@ Projection Est. 134270 rows
                            │                 └─ Filter Est. 136306 rows
                            │                    │     Condition: (c_acctbal_1 > '0.00') AND (substring(c_phone_1, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
                            │                    └─ TableScan tpch.customer Est. 150000 rows
-                           │                             Condition : (c_acctbal > '0.00') AND (substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17')).
+                           │                             Where: (c_acctbal > '0.00') AND (substring(c_phone, 1, 2) IN ('13', '31', '23', '29', '30', '18', '17'))
                            │                             Outputs: c_acctbal_1:=c_acctbal, c_phone_1:=c_phone
                            └─ Projection Est. 102536 rows
                               │     Expressions: [o_custkey], build_side_non_null_symbol:=1

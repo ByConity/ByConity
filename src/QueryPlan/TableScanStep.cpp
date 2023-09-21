@@ -13,10 +13,11 @@
  * limitations under the License.
  */
 
+#include <Processors/MergeTreeSelectPrepareProcessor.h>
+#include <Processors/ResizeProcessor.h>
 #include <QueryPlan/TableScanStep.h>
 
 #include <Formats/FormatSettings.h>
-#include <Functions/FunctionsInBloomFilter.h>
 #include <Interpreters/ActionsVisitor.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/TableJoin.h>
@@ -24,7 +25,7 @@
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/misc.h>
 #include <MergeTreeCommon/CnchBucketTableCommon.h>
-#include <Optimizer/DynamicFilters.h>
+#include <Optimizer/RuntimeFilterUtils.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SymbolTransformMap.h>
 #include <Optimizer/Rule/Rewrite/PushIntoTableScanRules.h>
@@ -51,6 +52,10 @@
 #include <Common/FieldVisitorToString.h>
 #include "Interpreters/DatabaseCatalog.h"
 #include <Common/Stopwatch.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/planning_common.h>
+
 #include <fmt/format.h>
 
 namespace DB
@@ -976,8 +981,91 @@ void TableScanStep::rewriteInForBucketTable(ContextPtr context) const
     LOG_TRACE(log, "After rewriteInForBucketTable:\n: {}", query->dumpTree());
 }
 
+bool TableScanStep::rewriteDynamicFilterIntoPrewhere(ASTSelectQuery * query)
+{
+    if (auto filter = query->getWhere())
+    {
+        auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
+        if (filters.first.empty())
+            return false;
+
+        std::vector<ConstASTPtr> prewhere_predicates;
+        std::vector<ConstASTPtr> where_predicates{filters.second.begin(), filters.second.end()};
+        std::vector<RuntimeFilterDescription> descriptions;
+        for (const auto & predicate : filters.first)
+            descriptions.emplace_back(RuntimeFilterUtils::extractDescription(predicate).value());
+
+        auto it = std::max_element(descriptions.begin(), descriptions.end(),
+                                   [](const auto & lhs, const auto & rhs) {
+            return lhs.filter_factor < rhs.filter_factor;
+        });
+
+        for (size_t i = 0; i < filters.first.size(); ++i)
+        {
+            if (ASTEquality::compareTree(descriptions[i].expr, it->expr))
+            {
+                prewhere_predicates.emplace_back(filters.first[i]);
+                continue;
+            }
+
+            where_predicates.emplace_back(filters.first[i]);
+        }
+
+        if (auto prewhere = query->getPrewhere())
+            prewhere_predicates.emplace_back(prewhere);
+
+        if (!prewhere_predicates.empty())
+        {
+            auto prewhere = PredicateUtils::combineConjuncts(prewhere_predicates);
+            LOG_DEBUG(log, "after rewrite runtime filter into prewhere, query prewhere: {}", prewhere->getColumnName());
+            query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(prewhere));
+        }
+        else
+        {
+            LOG_DEBUG(log, "after rewrite runtime filter into prewhere, query prewhere: nullptr");
+            query->setExpression(ASTSelectQuery::Expression::PREWHERE, nullptr);
+        }
+
+        if (!where_predicates.empty())
+        {
+            auto where = PredicateUtils::combineConjuncts(where_predicates);
+            LOG_DEBUG(log, "after rewrite runtime filter into praewhere, query where: {}", where->getColumnName());
+            query->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where));
+        }
+        else
+        {
+            LOG_DEBUG(log, "after rewrite runtime filter into prewhere, query where: nullptr");
+            query->setExpression(ASTSelectQuery::Expression::WHERE, nullptr);
+        }
+
+        return true;
+    }
+    return false;
+}
+
 void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context)
 {
+    auto * query = query_info.query->as<ASTSelectQuery>();
+    bool use_expand_pipe = build_context.is_expand;
+    if (!build_context.is_expand && query->getWhere()
+        && build_context.context->getSettingsRef().enable_runtime_filter_pipeline_poll)
+    {
+        auto && ids = RuntimeFilterUtils::extractRuntimeFilterId(query->getWhere());
+        if (!ids.empty())
+        {
+            Pipe pipe(std::make_shared<MergeTreeSelectPrepareProcessor>(
+                *this,
+                build_context,
+                table_output_stream.header,
+                std::move(ids),
+                build_context.context->getSettingsRef().wait_runtime_filter_timeout));
+            pipeline.init(std::move(pipe));
+            pipeline.addTransform(std::make_shared<ResizeProcessor>(
+                table_output_stream.header, 1, build_context.context->getSettingsRef().max_threads));
+            return;
+        }
+    }
+
     Stopwatch stage_watch, total_watch;
     total_watch.start();
     storage = DatabaseCatalog::instance().getTable(storage_id, build_context.context);
@@ -1002,15 +1090,33 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 
     bool use_optimizer_projection_selection =
         build_context.context->getSettingsRef().optimizer_projection_support &&
-        dynamic_cast<MergeTreeMetaBase *>(storage.get()) &&
-        (!pushdown_projection || !getPushdownProjectionCast()->hasDynamicFilters());
+        dynamic_cast<MergeTreeMetaBase *>(storage.get()) && !pushdown_projection;
 
     rewriteInForBucketTable(build_context.context);
-    auto * query = query_info.query->as<ASTSelectQuery>();
-    if (auto where = query->getWhere())
-        query->setExpression(ASTSelectQuery::Expression::WHERE, rewriteDynamicFilter(where, pipeline, build_context));
-    if (auto prewhere = query->getPrewhere())
-        query->setExpression(ASTSelectQuery::Expression::PREWHERE, rewriteDynamicFilter(prewhere, pipeline, build_context));
+    stage_watch.start();
+    bool need_rw = rewriteDynamicFilterIntoPrewhere(query);
+    if (need_rw)
+    {
+        const auto & setting = build_context.context->getSettingsRef();
+        size_t wait_ms = use_expand_pipe ? 0 : setting.wait_runtime_filter_timeout;
+        if (auto where = query->getWhere())
+            query->setExpression(
+                ASTSelectQuery::Expression::WHERE,
+                rewriteRuntimeFilter(
+                    where, build_context.distributed_settings.query_id, wait_ms, false, false, setting.enable_range_cover));
+
+        if (auto prewhere = query->getPrewhere())
+            query->setExpression(
+                ASTSelectQuery::Expression::PREWHERE,
+                rewriteRuntimeFilter(
+                    prewhere,
+                    build_context.distributed_settings.query_id,
+                    wait_ms,
+                    true,
+                    setting.runtime_filter_rewrite_bloom_filter_into_prewhere,
+                    setting.enable_range_cover));
+        LOG_DEBUG(log, "init pipeline stage wait runtime filter cost {} ms", stage_watch.elapsedMillisecondsAsDouble());
+    }
 
     // todo support _shard_num rewrite
     // if ()
@@ -1026,8 +1132,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     if (use_optimizer_projection_selection)
         options.ignoreProjections();
 
-    stage_watch.start();
-    auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, build_context.context, storage, storage->getInMemoryMetadataPtr(), options);
+    stage_watch.restart();
+    auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, build_context.context, options);
     interpreter->execute();
     query_info = interpreter->getQueryInfo();
     query_info = fillQueryInfo(build_context.context);
@@ -1073,160 +1179,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             source->initializePipeline(pipeline, build_context);
 
         aliasColumns(pipeline, build_context);
-
-        //    rewriteInForBucketTable(build_context.context);
-        //
-        //    ASTPtr new_prewhere = rewriteDynamicFilter(prewhere, build_context);
-        //
-        //    if (auto query_prewhere = new_query_info.query->as<ASTSelectQuery>()->getPrewhere())
-        //        new_query_info.query->as<ASTSelectQuery>()->refPrewhere() = rewriteDynamicFilter(query_prewhere, build_context);
-        //
-        //    if (auto query_where = new_query_info.query->as<ASTSelectQuery>()->getWhere())
-        //        new_query_info.query->as<ASTSelectQuery>()->refWhere() = rewriteDynamicFilter(query_where, build_context);
-        //
-        //    std::tie(new_query_info, new_prewhere) = fillPrewhereInfo(build_context.context, new_query_info, new_prewhere);
-        //
-        //    // order sensitive
-        //    Names require_column_list = column_names;
-        //    NameSet require_columns{column_names.begin(), column_names.end()};
-        //
-        //    if (new_query_info.prewhere_info)
-        //    {
-        //        if (new_query_info.prewhere_info->alias_actions)
-        //        {
-        //            auto alias_require = new_query_info.prewhere_info->alias_actions->getRequiredColumns();
-        //            require_columns.insert(alias_require.begin(), alias_require.end());
-        //        }
-        //        if (new_query_info.prewhere_info->prewhere_actions)
-        //        {
-        //            auto prewhere_require = new_query_info.prewhere_info->prewhere_actions->getRequiredColumns();
-        //            require_columns.insert(prewhere_require.begin(), prewhere_require.end());
-        //        }
-        //    }
-        //
-        //    auto all_columns = storage->getColumns().getAllPhysical();
-        //    auto virtual_col = storage->getVirtuals();
-        //    all_columns.insert(all_columns.end(), virtual_col.begin(), virtual_col.end());
-        //    for (const auto & item : all_columns)
-        //        if (std::find(require_column_list.begin(), require_column_list.end(), item.name) == require_column_list.end()
-        //            && require_columns.contains(item.name))
-        //            require_column_list.push_back(item.name);
-        //
-        //
-        //    NamesAndTypes new_header;
-        //    {
-        //        auto header = storage->getSampleBlockForColumns(require_column_list);
-        //
-        //        if (new_query_info.prewhere_info)
-        //        {
-        //            if (new_query_info.prewhere_info->alias_actions)
-        //                new_query_info.prewhere_info->alias_actions->execute(header);
-        //
-        //            new_query_info.prewhere_info->prewhere_actions->execute(header);
-        //            if (new_query_info.prewhere_info->remove_prewhere_column)
-        //                header.erase(new_query_info.prewhere_info->prewhere_column_name);
-        //
-        //            if (new_query_info.prewhere_info->remove_columns_actions)
-        //                new_query_info.prewhere_info->remove_columns_actions->execute(header);
-        //
-        //            auto check_actions = [](const ExpressionActionsPtr & actions) {
-        //                if (actions)
-        //                    for (const auto & action : actions->getActions())
-        //                        if (action.type == ExpressionAction::Type::JOIN || action.type == ExpressionAction::Type::ARRAY_JOIN)
-        //                            throw Exception("PREWHERE cannot contain ARRAY JOIN or JOIN action", ErrorCodes::ILLEGAL_PREWHERE);
-        //            };
-        //
-        //            check_actions(new_query_info.prewhere_info->prewhere_actions);
-        //            check_actions(new_query_info.prewhere_info->alias_actions);
-        //            check_actions(new_query_info.prewhere_info->remove_columns_actions);
-        //        }
-        //
-        //        NameToNameMap name_to_name_map;
-        //        for (auto & item : column_alias)
-        //        {
-        //            name_to_name_map[item.first] = item.second;
-        //        }
-        //        for (const auto & item : header)
-        //        {
-        //            if (name_to_name_map.contains(item.name))
-        //            {
-        //                new_header.emplace_back(name_to_name_map[item.name], item.type);
-        //            }
-        //            else
-        //            {
-        //                // additional columns may be generated. e.g. alias columns in PREWHERE clause:
-        //                // DDL: CREATE TABLE test.prewhere_alias(`a` Int32, `b` Int32, `c` ALIAS a + b)
-        //                // query: select a, (c + toInt32(1)) * 2 from test.prewhere_alias prewhere (c + toInt32(1)) * 2 = 6;
-        //                new_header.emplace_back(item.name, item.type);
-        //            }
-        //        }
-        //    }
-        //
-        //    size_t max_streams = build_context.max_streams;
-        //    if (max_block_size < build_context.context.getSettingsRef().max_block_size)
-        //        max_streams = 1; // single block single stream.
-        //
-        //    if (max_streams > 1 && !storage->isRemote())
-        //        max_streams *= build_context.context.getSettingsRef().max_streams_to_max_threads_ratio;
-        //
-        //    if (dynamic_cast<StorageCloudMergeTree *>(storage.get()))
-        //        build_context.context.setNameNode();
-        //
-        //    // for arraySetCheck function, it requires source_columns.
-        //    if (new_query_info.syntax_analyzer_result == nullptr)
-        //    {
-        //        SyntaxAnalyzerResult result;
-        //        result.source_columns = all_columns;
-        //        new_query_info.syntax_analyzer_result = std::make_shared<const SyntaxAnalyzerResult>(result);
-        //    }
-        //
-        //    auto streams = storage->read(require_column_list, new_query_info, build_context.context, processing_stage, max_block_size, max_streams);
-        //    if (!original_table.empty())
-        //    {
-        //        auto mem_buffer_table = build_context.context.tryGetTable(database, original_table);
-        //        if (mem_buffer_table)
-        //        {
-        //            auto mem_streams = mem_buffer_table->read(
-        //                require_column_list, new_query_info, build_context.context, processing_stage, max_block_size, max_streams);
-        //            streams.insert(streams.end(), mem_streams.begin(), mem_streams.end());
-        //            LOG_DEBUG(log, "create memory buffer streams for " << database << '.' << original_table << " size " << mem_streams.size());
-        //        }
-        //    }
-        //
-        //    if (streams.empty())
-        //    {
-        //        Block header;
-        //        for (const auto & item : new_header)
-        //            header.insert(ColumnWithTypeAndName{item.type->createColumn(), item.type, item.name});
-        //        pipeline.streams.emplace_back(std::make_shared<NullBlockInputStream>(header));
-        //        return;
-        //    }
-        //
-        //    pipeline.streams.insert(pipeline.streams.end(), streams.begin(), streams.end());
-        //
-        //
-
         setQuotaAndLimits(pipeline, options, build_context);
-
-        //
-        //    NameToNameMap name_to_name_map;
-        //    for (auto & item : column_alias)
-        //    {
-        //        name_to_name_map[item.second] = item.first;
-        //    }
-        //    NamesWithAliases outputs;
-        //    ASTPtr select = std::make_shared<ASTExpressionList>();
-        //    for (const auto & column : new_header)
-        //    {
-        //        select->children.emplace_back(std::make_shared<ASTIdentifier>(column.name));
-        //        if (name_to_name_map.contains(column.name))
-        //        {
-        //            outputs.emplace_back(name_to_name_map[column.name], column.name);
-        //        }
-        //    }
-        //    auto action
-        //        = createExpressionActions(build_context.context, pipeline.firstStream()->getHeader().getNamesAndTypesList(), outputs, select);
-        //    pipeline.transform([&](auto & stream) { stream = std::make_shared<ExpressionBlockInputStream>(stream, action); });
 
         if (auto * filter_step = getPushdownFilterCast())
             filter_step->transformPipeline(pipeline, build_context);
@@ -1698,37 +1651,32 @@ size_t TableScanStep::getMaxBlockSize() const
     return max_block_size;
 }
 
-ASTPtr
-TableScanStep::rewriteDynamicFilter(const ASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context)
+ASTPtr TableScanStep::rewriteRuntimeFilter(
+    const ASTPtr & filter, const String & query_id, size_t wait_ms, bool is_prewhere, bool enable_bf, bool range_cover)
 {
     if (!filter)
         return nullptr;
 
-    auto filters = DynamicFilters::extractDynamicFilters(filter);
+    Stopwatch timer{CLOCK_MONOTONIC_COARSE};
+    timer.start();
+
+    auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
     if (filters.first.empty())
         return filter;
 
-    std::vector<ConstASTPtr> predicates = std::move(filters.second);
-    for (auto & dynamic_filter : filters.first)
-    {
-        auto description = DynamicFilters::extractDescription(dynamic_filter).value();
-        pipeline.addRuntimeFilterHolder(RuntimeFilterHolder{
-            build_context.distributed_settings.query_id, build_context.distributed_settings.plan_segment_id, description.id});
+    LOG_DEBUG(log, "runtime filter {} before rewrite: {}", is_prewhere ? "prewhere" : "where", filter->getColumnName());
 
-        if (description.type == DynamicFilterType::Range)
-        {
-            auto dynamic_filters = DynamicFilters::createDynamicFilterRuntime(
-                description,
-                build_context.context->getInitialQueryId(),
-                build_context.distributed_settings.plan_segment_id,
-                build_context.context->getSettingsRef().wait_runtime_filter_timeout,
-                RuntimeFilterManager::getInstance(),
-                "TableScan");
-            predicates.insert(predicates.end(), dynamic_filters.begin(), dynamic_filters.end());
-        }
+    std::vector<ConstASTPtr> predicates = std::move(filters.second);
+    for (auto & runtime_filter : filters.first)
+    {
+        auto description = RuntimeFilterUtils::extractDescription(runtime_filter).value();
+        auto runtime_filters = RuntimeFilterUtils::createRuntimeFilterForTableScan(description, query_id, wait_ms, enable_bf, range_cover);
+        predicates.insert(predicates.end(), runtime_filters.begin(), runtime_filters.end());
     }
 
-    return PredicateUtils::combineConjuncts(predicates);
+    auto res = PredicateUtils::combineConjuncts(predicates);
+    LOG_DEBUG(log, "runtime filter {} after rewrite: {}. with {} ms", is_prewhere ? "prewhere" : "where", res->getColumnName(), timer.elapsedMilliseconds());
+    return res;
 }
 
 void TableScanStep::aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context)

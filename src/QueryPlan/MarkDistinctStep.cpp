@@ -3,7 +3,7 @@
 #include <DataTypes/DataTypeHelper.h>
 #include <IO/Operators.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/RuntimeFilter/BuildRuntimeFilterTransform.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterConsumer.h>
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/MarkDistinctTransform.h>
 

@@ -262,6 +262,9 @@ void PlanSegment::serialize(WriteBuffer & buf) const
     writeBinary(cluster_name, buf);
     writeBinary(parallel, buf);
     writeBinary(exchange_parallel_size, buf);
+    writeBinary(runtime_filters.size(), buf);
+    for (const auto & id : runtime_filters)
+        writeBinary(id, buf);
 }
 
 void PlanSegment::deserialize(ReadBuffer & buf)
@@ -296,6 +299,15 @@ void PlanSegment::deserialize(ReadBuffer & buf)
     readBinary(cluster_name, buf);
     readBinary(parallel, buf);
     readBinary(exchange_parallel_size, buf);
+
+    size_t runtime_filters_size;
+    readBinary(runtime_filters_size, buf);
+    for (size_t i = 0; i < runtime_filters_size; ++i)
+    {
+        RuntimeFilterId id;
+        readBinary(id, buf);
+        runtime_filters.emplace(id);
+    }
 }
 
 /**
@@ -352,7 +364,6 @@ PlanSegmentDescriptionPtr PlanSegment::getPlanSegmentDescription()
     plan_segment_desc->cluster_name = cluster_name;
     plan_segment_desc->parallel = parallel;
     plan_segment_desc->exchange_parallel_size = exchange_parallel_size;
-    // plan_segment_desc->shard_num = shard_num;
     plan_segment_desc->shuffle_keys = getPlanSegmentOutput()->getShufflekeys();
     plan_segment_desc->mode = getPlanSegmentOutput()->getExchangeMode();
     plan_segment_desc->is_source = getPlanSegmentInputs().empty();
@@ -372,7 +383,6 @@ void PlanSegment::getRemoteSegmentId(const QueryPlan::Node * node, std::unordere
     for (const auto & child : node->children)
         getRemoteSegmentId(child, exchange_to_segment);
 }
-
 
 size_t PlanSegment::getParallelIndex() const
 {

@@ -32,6 +32,7 @@ struct BuildQueryPipelineSettings
     ExpressionActionsSettings actions_settings;
     DistributedPipelineSettings distributed_settings;
     ContextPtr context;
+    bool is_expand = false;
 
     const ExpressionActionsSettings & getActionsSettings() const { return actions_settings; }
 

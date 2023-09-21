@@ -153,7 +153,7 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testAggDistinctInMvGrouping3)
           "            └─ Filter\n"
           "               │     Condition: empid = 5\n"
           "               └─ TableScan test_mview.MV0_MV_DATA\n"
-          "                        Condition : empid = 5.\n"
+          "                        Where: empid = 5\n"
           "                        Outputs: [cd, empid]")
       .ok();
 }
@@ -212,7 +212,7 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testEmptyGrouping2)
                                   "            └─ Filter\n"
                                   "               │     Condition: (deptno = 1) AND (empid = 2)\n"
                                   "               └─ TableScan test_mview.MV0_MV_DATA\n"
-                                  "                        Condition : (deptno = 1) AND (empid = 2).\n"
+                                  "                        Where: (deptno = 1) AND (empid = 2)\n"
                                   "                        Outputs: [count, deptno, empid]\n")
       .ok();
 }

@@ -30,32 +30,38 @@ Projection Est. 1 rows
                         │           │     │     Partition by: {cs_order_number}
                         │           │     └─ Inner Join Est. 52795 rows
                         │           │        │     Condition: cs_ship_addr_sk == ca_address_sk
+                        │           │        │     Runtime Filters Builder: {ca_address_sk}
                         │           │        ├─ Repartition Exchange Est. 1058186 rows
                         │           │        │  │     Partition by: {cs_ship_addr_sk}
                         │           │        │  └─ Inner Join Est. 1058186 rows
                         │           │        │     │     Condition: cs_call_center_sk == cc_call_center_sk
+                        │           │        │     │     Runtime Filters Builder: {cc_call_center_sk}
                         │           │        │     ├─ Inner Join Est. 22221920 rows
                         │           │        │     │  │     Condition: cs_ship_date_sk == d_date_sk
-                        │           │        │     │  ├─ TableScan tpcds.catalog_sales Est. 1439980416 rows
-                        │           │        │     │  │        Outputs: [cs_call_center_sk, cs_ext_ship_cost, cs_net_profit, cs_order_number, cs_ship_addr_sk, cs_ship_date_sk, cs_warehouse_sk]
+                        │           │        │     │  │     Runtime Filters Builder: {d_date_sk}
+                        │           │        │     │  ├─ Filter Est. 1439980416 rows
+                        │           │        │     │  │  │     Condition: Runtime Filters: {cs_call_center_sk, cs_ship_addr_sk, cs_ship_date_sk}
+                        │           │        │     │  │  └─ TableScan tpcds.catalog_sales Est. 1439980416 rows
+                        │           │        │     │  │           Where: Runtime Filters: {cs_call_center_sk, cs_ship_addr_sk, cs_ship_date_sk}
+                        │           │        │     │  │           Outputs: [cs_call_center_sk, cs_ext_ship_cost, cs_net_profit, cs_order_number, cs_ship_addr_sk, cs_ship_date_sk, cs_warehouse_sk]
                         │           │        │     │  └─ Broadcast Exchange Est. 60 rows
                         │           │        │     │     └─ Filter Est. 60 rows
                         │           │        │     │        │     Condition: (d_date >= cast(11719, 'Date')) AND (d_date <= cast(11779, 'Date'))
                         │           │        │     │        └─ TableScan tpcds.date_dim Est. 73049 rows
-                        │           │        │     │                 Condition : (d_date >= cast(11719, 'Date')) AND (d_date <= cast(11779, 'Date')).
+                        │           │        │     │                 Where: (d_date >= cast(11719, 'Date')) AND (d_date <= cast(11779, 'Date'))
                         │           │        │     │                 Outputs: [d_date, d_date_sk]
                         │           │        │     └─ Broadcast Exchange Est. 2 rows
                         │           │        │        └─ Filter Est. 2 rows
                         │           │        │           │     Condition: cc_county = 'Williamson County'
                         │           │        │           └─ TableScan tpcds.call_center Est. 42 rows
-                        │           │        │                    Condition : cc_county = 'Williamson County'.
+                        │           │        │                    Where: cc_county = 'Williamson County'
                         │           │        │                    Outputs: [cc_call_center_sk, cc_county]
                         │           │        └─ Repartition Exchange Est. 307020 rows
                         │           │           │     Partition by: {ca_address_sk}
                         │           │           └─ Filter Est. 307020 rows
                         │           │              │     Condition: ca_state = 'GA'
                         │           │              └─ TableScan tpcds.customer_address Est. 6000000 rows
-                        │           │                       Condition : ca_state = 'GA'.
+                        │           │                       Where: ca_state = 'GA'
                         │           │                       Outputs: [ca_address_sk, ca_state]
                         │           └─ Repartition Exchange Est. 1439980416 rows
                         │              │     Partition by: {cs_order_number_1}
@@ -72,3 +78,4 @@ Projection Est. 1 rows
                                     │     Group by: {cr_order_number}
                                     └─ TableScan tpcds.catalog_returns Est. 143996756 rows
                                              Outputs: [cr_order_number]
+note: Runtime Filter is applied for 3 times.

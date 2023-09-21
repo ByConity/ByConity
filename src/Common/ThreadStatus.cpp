@@ -45,7 +45,7 @@ static const int page_size = getPageSize();
 struct ThreadStack
 {
     ThreadStack()
-        : data(aligned_alloc(page_size > 0 ? page_size : 4096, size))
+        : data(aligned_alloc(page_size > 0 ? page_size : 4096, getSize()))
     {
         /// Add a guard page
         /// (and since the stack grows downward, we need to protect the first page).
@@ -61,12 +61,11 @@ struct ThreadStack
         free(data);
     }
 
-    static size_t getSize() { return size; }
+    static size_t getSize() { return std::max<size_t>(16 << 10, MINSIGSTKSZ); }
     void * getData() const { return data; }
 
 private:
     /// 16 KiB - not too big but enough to handle error.
-    static constexpr size_t size = std::max<size_t>(16 << 10, MINSIGSTKSZ);
     void * data;
 };
 

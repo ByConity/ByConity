@@ -237,6 +237,75 @@ struct HashTableCell
 
 };
 
+template <typename Key, typename Hash, typename TState = HashTableNoState>
+struct HashTableCellNoZero
+{
+    using State = TState;
+
+    using key_type = Key;
+    using value_type = Key;
+    using mapped_type = VoidMapped;
+
+    Key key;
+
+    HashTableCellNoZero() {}
+
+    /// Create a cell with the given key / key and value.
+    HashTableCellNoZero(const Key & key_, const State &) : key(key_) {}
+
+    /// Get the key (externally).
+    const Key & getKey() const { return key; }
+    VoidMapped getMapped() const { return {}; }
+    const value_type & getValue() const { return key; }
+
+    /// Get the key (internally).
+    static const Key & getKey(const value_type & value) { return value; }
+
+    /// Are the keys at the cells equal?
+    bool keyEquals(const Key & key_) const { return bitEquals(key, key_); }
+    bool keyEquals(const Key & key_, size_t /*hash_*/) const { return bitEquals(key, key_); }
+    bool keyEquals(const Key & key_, size_t /*hash_*/, const State & /*state*/) const { return bitEquals(key, key_); }
+
+    /// If the cell can remember the value of the hash function, then remember it.
+    void setHash(size_t /*hash_value*/) {}
+
+    /// If the cell can store the hash value in itself, then return the stored value.
+    /// It must be at least once calculated before.
+    /// If storing the hash value is not provided, then just compute the hash.
+    size_t getHash(const Hash & hash) const { return hash(key); }
+
+    /// Whether the key is zero. In the main buffer, cells with a zero key are considered empty.
+    /// If zero keys can be inserted into the table, then the cell for the zero key is stored separately, not in the main buffer.
+    /// Zero keys must be such that the zeroed-down piece of memory is a zero key.
+    bool isZero(const State & state) const { return isZero(key, state); }
+    static bool isZero(const Key & key, const State & /*state*/) { return ZeroTraits::check(key); }
+
+    /// Set the key value to zero.
+    void setZero() { ZeroTraits::set(key); }
+
+    /// Do the hash table need to store the zero key separately (that is, can a zero key be inserted into the hash table).
+    static constexpr bool need_zero_value_storage = false;
+
+    /// Set the mapped value, if any (for HashMap), to the corresponding `value`.
+    void setMapped(const value_type & /*value*/) {}
+
+    /// Serialization, in binary and text form.
+    void write(DB::WriteBuffer & wb) const         { DB::writeBinary(key, wb); }
+    void writeText(DB::WriteBuffer & wb) const     { DB::writeDoubleQuoted(key, wb); }
+
+    /// Deserialization, in binary and text form.
+    void read(DB::ReadBuffer & rb)        { DB::readBinary(key, rb); }
+    void read(DB::ReadBuffer & rb, DB::Arena & arena)        { DB::readBinary(key, rb, arena); }
+    void readText(DB::ReadBuffer & rb)    { DB::readDoubleQuoted(key, rb); }
+
+    /// When cell pointer is moved during erase, reinsert or resize operations
+
+    static constexpr bool need_to_notify_cell_during_move = false;
+
+    static void move(HashTableCellNoZero * /* old_location */, HashTableCellNoZero * /* new_location */) {}
+
+};
+
 /**
   * A helper function for HashTable::insert() to set the "mapped" value.
   * Overloaded on the mapped type, does nothing if it's VoidMapped.

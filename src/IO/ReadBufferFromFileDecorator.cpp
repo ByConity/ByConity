@@ -43,6 +43,8 @@ bool ReadBufferFromFileDecorator::nextImpl()
     swap(*impl);
     auto result = impl->next();
     swap(*impl);
+    /// pos will be set again in ReadBuffer::next, so we must set nextimpl_working_buffer_offset correctly
+    nextimpl_working_buffer_offset = pos - working_buffer.begin();
     return result;
 }
 

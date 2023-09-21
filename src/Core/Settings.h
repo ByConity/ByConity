@@ -1902,6 +1902,8 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
     M(Bool, add_parallel_before_agg, false, "Add parallel before agg", 0) \
+    M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
+    M(Bool, enable_wait_cancel_rpc, false, "Whether wait rpcs of cancel worker to finish", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
     M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
@@ -1910,19 +1912,13 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
     M(Bool, enable_single_distinct_to_group_by, true, "Whether enable convert single count distinct to group by", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
-    M(Bool, enable_dynamic_filter, true, "Whether enable dynamic filter for join", 0) \
-    M(UInt64, dynamic_filter_min_filter_rows, 10000, "Set minimum row to enable dynamic filter", 0) \
-    M(Float, dynamic_filter_max_filter_factor, 0.7, "Set maximal filter factor to enable dynamic filter", 0) \
-    M(Bool, enable_dynamic_filter_for_bloom_filter, true, "Whether enable dynamic filter for bloom filter", 0) \
-    M(Bool, enable_dynamic_filter_for_join, true, "Whether enable dynamic filter for join", 0) \
-    M(UInt64, dynamic_filter_default_bytes, 1024 * 256, "Whether enable dynamic filter for join", 0) \
-    M(UInt64, dynamic_filter_default_hashes, 4, "Whether enable dynamic filter for join", 0) \
-    M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO", 0) \
+    M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO|ENFORCED", 0) \
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
     M(UInt64, max_graph_reorder_size, 4, "Max tables join order enum on graph", 0) \
     M(Bool, enable_join_graph_support_filter, true, "Whether enable join graph support filter", 0) \
-    M(Float, enable_partial_aggregate_ratio, 0.9, "Enable partial aggregate ratio : group by keys ndv / total row count", 0) \
+    M(Bool, enable_join_reorder, true, "Whether enable join reorder", 0) \
+    M(Float, enable_partial_aggregate_ratio , 0.9, "Enable partial aggregate ratio : group by keys ndv / total row count", 0) \
     M(Bool, enable_simplify_expression, true, "Whether enable simplify predicates", 0) \
     M(Bool, enable_unwarp_cast_in, true, "Whether enable unwrap cast function", 0) \
     M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
@@ -1935,27 +1931,14 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \
     M(Bool, enforce_all_join_to_any_join, false, "Whether enforce all join to any join", 0) \
     M(Bool, enable_implicit_type_conversion, true, "Whether enable implicit type conversion for JOIN, Set operation, IN subquery", 0) \
-    M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
     M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
     M(Bool, enable_materialized_view_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_empty_grouping_rewriting, true, "Whether enable materialized view based rewriter for query", 0) \
-    M(Bool, \
-      enable_materialized_view_join_rewriting, \
-      false, \
-      "Whether enable materialized view based rewriter for query using join materialized views", \
-      0) \
-    M(Bool, \
-      enable_materialized_view_rewrite_match_range_filter, \
-      false, \
-      "Whether enable materialized view based rewriter matching range filter by its allowable value Domain", \
-      0) \
-    M(MaterializedViewConsistencyCheckMethod, \
-      materialized_view_consistency_check_method, \
-      MaterializedViewConsistencyCheckMethod::NONE, \
-      "The method to check whether a materialized view is consistent with the base table for a query", \
-      0) \
+    M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
+    M(Bool, enable_materialized_view_rewrite_match_range_filter, false, "Whether enable materialized view based rewriter matching range filter by its allowable value Domain", 0) \
+    M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::PARTITION, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
     M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \
@@ -1967,6 +1950,10 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, execute_uncorrelated_in_subquery_size, 10000, "Size of execute uncorrelated in subquery", 0) \
     M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
     M(Float, pk_selectivity, 0.5, "PK selectivity for join estimation", 0) \
+    M(Bool, use_sql_binding, false, "Whether use SQL binding", 0) \
+    M(UInt64, global_bindings_update_time, 60*60, "Interval to update global binding cache from catalog, in seconds.", 0) \
+    M(Bool, enable_execute_query, true, "Whether to execute this query", 0) \
+    M(Bool, enable_buffer_for_deadlock_cte, true, "Whether to buffer data for deadlock cte", 0) \
     /** Exchange settings */ \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
@@ -1995,12 +1982,20 @@ enum PreloadLevelSettings : UInt64
     M(Bool, exchange_force_use_buffer, false, "Force exchange use buffer as possible", 0) \
     M(UInt64, distributed_query_wait_exception_ms, 1000, "Wait final planSegment exception from segmentScheduler.", 0) \
     M(UInt64, distributed_max_parallel_size, false, "Max distributed execution parallel size", 0) \
-\
-    /** Dynamic Filter settings */ \
-    M(UInt64, wait_runtime_filter_timeout, 1000, "Execute filter wait for runtime filter timeout ms", 0) \
-    M(UInt64, wait_runtime_filter_timeout_for_filter, 0, "Execute filter wait for runtime filter timeout ms", 0) \
-    M(Bool, runtime_filter_dynamic_mode, false, "Whether enable bloom runtime filter", 0) \
-\
+    \
+    /** Runtime Filter settings */ \
+    M(UInt64, wait_runtime_filter_timeout, 500, "Execute filter wait for runtime filter timeout ms", 0) \
+    M(Bool, enable_runtime_filter, true, "Whether enable runtime filter for join", 0) \
+    M(Bool, enable_runtime_filter_cost, false, "Whether enable runtime filter cost", 0) \
+    M(Bool, enable_local_runtime_filter, true, "Whether enable runtime filter in local mode", 0) \
+    M(UInt64, runtime_filter_min_filter_rows, 10000, "Set minimum row to enable runtime filter", 0) \
+    M(Float, runtime_filter_min_filter_factor, 0.3, "Set minimum filter factor to enable runtime filter", 0) \
+    M(Bool, enable_range_cover, true, "Whether use range rather than bloom or values set for runtime filter", 0) \
+    M(Bool, runtime_filter_rewrite_bloom_filter_into_prewhere, true, "Whether enable pushdown runtime filter to prewhere for join", 0) \
+    M(UInt64, runtime_filter_bloom_build_threshold, 2048000, "The threshold of right table to build bloom filter", 0) \
+    M(UInt64, runtime_filter_in_build_threshold, 1024, "The threshold of right table to build value set filter", 0) \
+    M(Bool, enable_runtime_filter_pipeline_poll, true, "No additional segment needed for the left side during broadcast join, polling time bounded", 0) \
+    \
     /** ip2geo settings */ \
     M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0) \
     M(String, ip2geo_local_path_oversea, "/data01/clickhouse/data/geo_db/oversea/", "Local path for IP Database files for oversea", 0) \
@@ -2274,7 +2269,6 @@ enum PreloadLevelSettings : UInt64
     M(String, s3_endpoint, "", "The endpoint set by user when accessing ve s3.", 0) \
 \
     M(Bool, enable_cache_reader_buffer_reuse, false, "Decpreated settings, only a place holder", 0) \
-\
     M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
     M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \
     M(String, default_catalog, "", "current catalog", 0)
