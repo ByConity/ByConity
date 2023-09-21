@@ -1,0 +1,31 @@
+Gather Exchange
+└─ Aggregating
+   │     Group by: {id_2}
+   └─ Union
+      ├─ MergingAggregated
+      │  └─ Repartition Exchange
+      │     │     Partition by: {id}
+      │     └─ Aggregating
+      │        │     Group by: {id}
+      │        └─ TableScan analyze.unique_1
+      │                 Outputs: [id]
+      └─ MergingAggregated
+         └─ Repartition Exchange
+            │     Partition by: {id_1}
+            └─ Aggregating
+               │     Group by: {id_1}
+               └─ TableScan analyze.unique_2
+                        Outputs: id_1:=id
+Gather Exchange
+└─ Aggregating
+   │     Group by: {id}
+   └─ Inner Join
+      │     Condition: id == id_1
+      ├─ Repartition Exchange
+      │  │     Partition by: {id}
+      │  └─ TableScan analyze.unique_1
+      │           Outputs: [id]
+      └─ Repartition Exchange
+         │     Partition by: {id_1}
+         └─ TableScan analyze.unique_2
+                  Outputs: id_1:=id

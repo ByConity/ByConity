@@ -129,6 +129,7 @@ BlockIO InterpreterExplainQuery::execute()
         {
             if (getContext()->getProcessorProfileElementConsumer())
                 getContext()->getProcessorProfileElementConsumer()->finish();
+            throw;
         }
 
         return res;
@@ -193,111 +194,119 @@ void InterpreterExplainQuery::fillColumn(IColumn & column, const std::string & s
 
 namespace
 {
-    /// Settings. Different for each explain type.
 
-    struct QueryPlanSettings
+/// Settings. Different for each explain type.
+
+struct QueryPlanSettings
+{
+    QueryPlan::ExplainPlanOptions query_plan_options;
+
+    /// Apply query plan optimizations.
+    bool optimize = true;
+    bool json = false;
+    bool stats = true;
+    bool profile = true;
+
+    constexpr static char name[] = "PLAN";
+
+    std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings =
     {
-        QueryPlan::ExplainPlanOptions query_plan_options;
-
-        /// Apply query plan optimizations.
-        bool optimize = true;
-        bool json = false;
-        bool stats = true;
-
-        constexpr static char name[] = "PLAN";
-
-        std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings
-            = {{"header", query_plan_options.header},
-               {"description", query_plan_options.description},
-               {"actions", query_plan_options.actions},
-               {"indexes", query_plan_options.indexes},
-               {"optimize", optimize},
-               {"json", json},
-               {"stats", stats}};
+            {"header", query_plan_options.header},
+            {"description", query_plan_options.description},
+            {"actions", query_plan_options.actions},
+            {"indexes", query_plan_options.indexes},
+            {"optimize", optimize},
+            {"json", json},
+            {"stats", stats},
+            {"profile", profile}
     };
+};
 
-    struct QueryPipelineSettings
+struct QueryPipelineSettings
+{
+    QueryPlan::ExplainPipelineOptions query_pipeline_options;
+    bool graph = false;
+    bool compact = true;
+    bool stats = true;
+
+    constexpr static char name[] = "PIPELINE";
+
+    std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings =
     {
-        QueryPlan::ExplainPipelineOptions query_pipeline_options;
-        bool graph = false;
-        bool compact = true;
-
-        constexpr static char name[] = "PIPELINE";
-
-        std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings = {
             {"header", query_pipeline_options.header},
             {"graph", graph},
             {"compact", compact},
-        };
+            {"stats", stats}
     };
+}
 
-    template <typename Settings>
-    struct ExplainSettings : public Settings
+template <typename Settings>
+struct ExplainSettings : public Settings
+{
+    using Settings::boolean_settings;
+
+    bool has(const std::string & name_) const { return boolean_settings.count(name_) > 0; }
+
+    void setBooleanSetting(const std::string & name_, bool value)
     {
-        using Settings::boolean_settings;
+        auto it = boolean_settings.find(name_);
+        if (it == boolean_settings.end())
+            throw Exception("Unknown setting for ExplainSettings: " + name_, ErrorCodes::LOGICAL_ERROR);
 
-        bool has(const std::string & name_) const { return boolean_settings.count(name_) > 0; }
-
-        void setBooleanSetting(const std::string & name_, bool value)
-        {
-            auto it = boolean_settings.find(name_);
-            if (it == boolean_settings.end())
-                throw Exception("Unknown setting for ExplainSettings: " + name_, ErrorCodes::LOGICAL_ERROR);
-
-            it->second.get() = value;
-        }
-
-        std::string getSettingsList() const
-        {
-            std::string res;
-            for (const auto & setting : boolean_settings)
-            {
-                if (!res.empty())
-                    res += ", ";
-
-                res += setting.first;
-            }
-
-            return res;
-        }
-    };
-
-    template <typename Settings>
-    ExplainSettings<Settings> checkAndGetSettings(const ASTPtr & ast_settings)
-    {
-        if (!ast_settings)
-            return {};
-
-        ExplainSettings<Settings> settings;
-        const auto & set_query = ast_settings->as<ASTSetQuery &>();
-
-        for (const auto & change : set_query.changes)
-        {
-            if (!settings.has(change.name))
-                throw Exception(
-                    "Unknown setting \"" + change.name + "\" for EXPLAIN " + Settings::name
-                        + " query. "
-                          "Supported settings: "
-                        + settings.getSettingsList(),
-                    ErrorCodes::UNKNOWN_SETTING);
-
-            if (change.value.getType() != Field::Types::UInt64)
-                throw Exception(
-                    "Invalid type " + std::string(change.value.getTypeName()) + " for setting \"" + change.name
-                        + "\" only boolean settings are supported",
-                    ErrorCodes::INVALID_SETTING_VALUE);
-
-            auto value = change.value.get<UInt64>();
-            if (value > 1)
-                throw Exception(
-                    "Invalid value " + std::to_string(value) + " for setting \"" + change.name + "\". Only boolean settings are supported",
-                    ErrorCodes::INVALID_SETTING_VALUE);
-
-            settings.setBooleanSetting(change.name, value);
-        }
-
-        return settings;
+        it->second.get() = value;
     }
+
+    std::string getSettingsList() const
+    {
+        std::string res;
+        for (const auto & setting : boolean_settings)
+        {
+            if (!res.empty())
+                res += ", ";
+
+            res += setting.first;
+        }
+
+        return res;
+    }
+};
+
+template <typename Settings>
+ExplainSettings<Settings> checkAndGetSettings(const ASTPtr & ast_settings)
+{
+    if (!ast_settings)
+        return {};
+
+    ExplainSettings<Settings> settings;
+    const auto & set_query = ast_settings->as<ASTSetQuery &>();
+
+    for (const auto & change : set_query.changes)
+    {
+        if (!settings.has(change.name))
+            throw Exception(
+                "Unknown setting \"" + change.name + "\" for EXPLAIN " + Settings::name
+                    + " query. "
+                      "Supported settings: "
+                    + settings.getSettingsList(),
+                ErrorCodes::UNKNOWN_SETTING);
+
+        if (change.value.getType() != Field::Types::UInt64)
+            throw Exception(
+                "Invalid type " + std::string(change.value.getTypeName()) + " for setting \"" + change.name
+                    + "\" only boolean settings are supported",
+                ErrorCodes::INVALID_SETTING_VALUE);
+
+        auto value = change.value.get<UInt64>();
+        if (value > 1)
+            throw Exception(
+                "Invalid value " + std::to_string(value) + " for setting \"" + change.name + "\". Only boolean settings are supported",
+                ErrorCodes::INVALID_SETTING_VALUE);
+
+        settings.setBooleanSetting(change.name, value);
+    }
+
+    return settings;
+}
 
 }
 
@@ -813,8 +822,14 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
 
 BlockIO InterpreterExplainQuery::explainAnalyze()
 {
+    auto & ast = query->as<ASTExplainQuery &>();
+    auto settings = checkAndGetSettings<QueryPlanSettings>(ast.getSettings());
+
+    ast.print_stats = settings.stats;
+    ast.print_profile = settings.profile;
+
     auto contxt = getContext();
-    auto interpreter = std::make_unique<InterpreterSelectQueryUseOptimizer>(query->clone(), contxt, options);
+    auto interpreter = std::make_unique<InterpreterSelectQueryUseOptimizer>(query, contxt, options);
     return interpreter->execute();
 }
 
@@ -826,11 +841,11 @@ void InterpreterExplainQuery::explainPlanWithOptimizer(
     PlanCostMap costs = CostCalculator::calculate(plan, *contextptr);
     if (settings.json)
     {
-        buffer << PlanPrinter::jsonLogicalPlan(plan, true, true);
+        buffer << PlanPrinter::jsonLogicalPlan(plan, settings.stats, true);
         single_line = true;
     }
     else
-        buffer << PlanPrinter::textLogicalPlan(plan, contextptr, true, true, costs);
+        buffer << PlanPrinter::textLogicalPlan(plan, contextptr, settings.stats, true, costs);
 }
 
 void InterpreterExplainQuery::explainDistributedWithOptimizer(
@@ -985,7 +1000,7 @@ void InterpreterExplainQuery::explainPipelineWithOptimizer(
     ClusterInfoContext cluster_info_context{.query_plan = query_plan, .context = contextptr, .plan_segment_tree = plan_segment_tree};
     PlanSegmentContext plan_segment_context = ClusterInfoFinder::find(plan, cluster_info_context);
 
-    query_plan.allocateLocalTable(contextptr);
+    // query_plan.allocateLocalTable(contextptr);
     PlanSegmentSplitter::split(query_plan, plan_segment_context);
     auto & plan_segments = plan_segment_tree->getNodes();
     GraphvizPrinter::printPlanSegment(plan_segment_tree, contextptr);

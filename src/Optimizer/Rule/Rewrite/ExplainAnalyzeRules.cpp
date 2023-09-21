@@ -25,7 +25,9 @@ TransformResult ExplainAnalyze::transformImpl(PlanNodePtr node, const Captures &
         explain_step.getInputStreams()[0],
         explain_step.getKind(),
         rule_context.context,
-        original_query_plan_ptr
+        original_query_plan_ptr,
+        explain_step.isPrintStats(),
+        explain_step.isPrintProfile()
     );
 
     return PlanNodeBase::createPlanNode(

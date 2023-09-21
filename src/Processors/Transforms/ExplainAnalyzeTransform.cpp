@@ -15,12 +15,17 @@ ExplainAnalyzeTransform::ExplainAnalyzeTransform(
     ASTExplainQuery::ExplainKind kind_,
     std::shared_ptr<QueryPlan> query_plan_ptr_,
     ContextMutablePtr context_,
-    PlanSegmentDescriptions & segment_descriptions_)
+    PlanSegmentDescriptions & segment_descriptions_,
+    bool print_stats_,
+    bool print_profile_
+    )
     : ISimpleTransform(header_, {{std::make_shared<DataTypeString>(),"Explain Analyze"}}, true)
     , kind(kind_)
     , context(context_)
     , query_plan_ptr(std::move(query_plan_ptr_))
     , segment_descriptions(segment_descriptions_)
+    , print_stats(print_stats_)
+    , print_profile(print_profile_)
 {}
 
 void ExplainAnalyzeTransform::transform(Chunk & chunk)
@@ -62,11 +67,11 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
     String explain;
     if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
     {
-        explain = PlanPrinter::textLogicalPlan(*query_plan_ptr, context, true, true, costs, step_agg_operator_profiles);
+        explain = PlanPrinter::textLogicalPlan(*query_plan_ptr, context, print_stats, true, costs, step_agg_operator_profiles, print_profile);
     }
     else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze)
     {
-        explain = PlanPrinter::textDistributedPlan(segment_descriptions, true, true, costs, step_agg_operator_profiles, *query_plan_ptr);
+        explain = PlanPrinter::textDistributedPlan(segment_descriptions, print_stats, true, costs, step_agg_operator_profiles, *query_plan_ptr, print_profile);
     }
 
     GraphvizPrinter::printLogicalPlan(*query_plan_ptr, context, "3999_explain_analyze", step_agg_operator_profiles);
@@ -82,7 +87,7 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
 
 ISimpleTransform::Status ExplainAnalyzeTransform::prepare()
 {
-    if (!has_input && input.isFinished() && has_final_transform)
+    if (((!has_input && input.isFinished()) || output.isFinished()) && has_final_transform)
     {
         return Status::Ready;
     }

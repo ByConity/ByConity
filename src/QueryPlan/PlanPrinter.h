@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <type_traits>
 #include <QueryPlan/PlanVisitor.h>
 #include <Optimizer/CostModel/PlanNodeCost.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
@@ -37,7 +38,8 @@ public:
         bool print_stats,
         bool verbose,
         PlanCostMap costs = {},
-        const StepAggregatedOperatorProfiles & profiles = {});
+        const StepAggregatedOperatorProfiles & profiles = {},
+        bool print_profile = true);
     static String jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool verbose, const PlanNodeCost & plan_cost = {});
     static String textDistributedPlan(
         PlanSegmentDescriptions & segments_desc,
@@ -45,7 +47,8 @@ public:
         bool verbose,
         const std::unordered_map<PlanNodeId, double> & costs = {},
         const StepAggregatedOperatorProfiles & profiles = {},
-        const QueryPlan & query_plan = {});
+        const QueryPlan & query_plan = {},
+        bool print_profile = true);
     static void getPlanNodes(const PlanNodePtr & parent, std::unordered_map<PlanNodeId, PlanNodePtr> & id_to_node);
     static std::unordered_map<PlanNodeId, PlanNodePtr>  getPlanNodeMap(const QueryPlan & query_plan);
     static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
@@ -86,8 +89,8 @@ private:
 class PlanPrinter::TextPrinter
 {
 public:
-    TextPrinter(bool print_stats_, bool verbose_, const std::unordered_map<PlanNodeId, double> & costs_, bool is_distributed_ = false, const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment_ = {})
-        : print_stats(print_stats_), verbose(verbose_), costs(costs_), is_distributed(is_distributed_), exchange_to_segment(exchange_to_segment_)
+    TextPrinter(bool print_stats_, bool verbose_, const std::unordered_map<PlanNodeId, double> & costs_, bool is_distributed_ = false, const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment_ = {}, bool print_profile_ = true)
+        : print_stats(print_stats_), verbose(verbose_), costs(costs_), is_distributed(is_distributed_), exchange_to_segment(exchange_to_segment_), print_profile(print_profile_)
     {
     }
     static String printOutputColumns(PlanNodeBase & plan_node, const TextPrinterIntent & intent = {});
@@ -110,6 +113,7 @@ private:
     const std::unordered_map<PlanNodeId, double> & costs;
     bool is_distributed;
     const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment;
+    const bool print_profile; 
 };
 
 class PlanPrinter::JsonPrinter

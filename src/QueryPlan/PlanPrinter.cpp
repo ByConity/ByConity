@@ -57,9 +57,10 @@ String PlanPrinter::textLogicalPlan(
     bool print_stats,
     bool verbose,
     PlanCostMap costs,
-    const StepAggregatedOperatorProfiles & profiles)
+    const StepAggregatedOperatorProfiles & profiles,
+    bool print_profile)
 {
-    TextPrinter printer{print_stats, verbose, costs};
+    TextPrinter printer{print_stats, verbose, costs, false, {}, print_profile};
     bool has_children = !plan.getPlanNode()->getChildren().empty();
     auto output = printer.printLogicalPlan(*plan.getPlanNode(), TextPrinterIntent{0, has_children}, profiles);
 
@@ -144,7 +145,8 @@ String PlanPrinter::textDistributedPlan(
     bool verbose,
     const std::unordered_map<PlanNodeId, double> & costs,
     const StepAggregatedOperatorProfiles & profiles,
-    const QueryPlan & query_plan
+    const QueryPlan & query_plan,
+    bool print_profile
 )
 {
     auto id_to_node = getPlanNodeMap(query_plan);
@@ -239,7 +241,7 @@ String PlanPrinter::textDistributedPlan(
         if (analyze_node)
         {
             os << TextPrinter::printOutputColumns(*analyze_node.value()->getChildren()[0], TextPrinterIntent{3, false});
-            TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment};
+            TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment, print_profile};
             bool has_children = !analyze_node.value()->getChildren().empty();
             if ((analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::CTERef || analyze_node.value()->getStep()->getType() == IQueryPlanStep::Type::Exchange))
                 has_children = false;
@@ -251,7 +253,7 @@ String PlanPrinter::textDistributedPlan(
         {
             auto plan_root = segment_ptr->plan_node;
             os << TextPrinter::printOutputColumns(*segment_ptr->plan_node, TextPrinterIntent{3, false});
-            TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment};
+            TextPrinter printer{print_stats, verbose, costs, true, segment_ptr->exchange_to_segment, print_profile};
             bool has_children = !plan_root->getChildren().empty();
             if ((plan_root->getStep()->getType() == IQueryPlanStep::Type::CTERef || plan_root->getStep()->getType() == IQueryPlanStep::Type::Exchange))
                 has_children = false;
@@ -377,11 +379,23 @@ String PlanPrinter::TextPrinter::printLogicalPlan(PlanNodeBase & plan, const Tex
     }
     else
     {
-        out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan)
-            << intent.detailIntent() << printStatistics(plan, intent)
-            << printOperatorProfiles(plan, intent, profiles)
-            << printQError(plan, intent, profiles)
-            << printDetail(plan.getStep(), intent) << "\n";
+        if (print_profile)
+        {
+            out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan);
+            if (print_stats)
+                out << intent.detailIntent() << printStatistics(plan, intent);
+            out << printOperatorProfiles(plan, intent, profiles)
+                << printQError(plan, intent, profiles)
+                << printDetail(plan.getStep(), intent) << "\n";
+        }
+        else
+        {
+            out << intent.print() << printPrefix(plan) << step->getName() << printSuffix(plan);
+            if (print_stats)
+                out << intent.detailIntent() << printStatistics(plan, intent);
+            out << printDetail(plan.getStep(), intent) << "\n";
+        }
+        
     }
 
     if ((step->getType() == IQueryPlanStep::Type::CTERef || step->getType() == IQueryPlanStep::Type::Exchange) && is_distributed)

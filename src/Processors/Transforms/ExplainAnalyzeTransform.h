@@ -18,7 +18,10 @@ public:
                             ASTExplainQuery::ExplainKind kind_,
                             std::shared_ptr<QueryPlan> query_plan_ptr_,
                             ContextMutablePtr context_,
-                            PlanSegmentDescriptions & segment_descriptions_);
+                            PlanSegmentDescriptions & segment_descriptions_,
+                            bool print_stats_ = true,
+                            bool print_profile_ = true
+                            );
 
     String getName() const override { return "ExplainAnalyzeTransform"; }
 protected:
@@ -32,6 +35,8 @@ private:
     ContextMutablePtr context;
     std::shared_ptr<QueryPlan> query_plan_ptr;
     PlanSegmentDescriptions segment_descriptions;
-    bool has_final_transform = false;
+    bool has_final_transform = true;
+    bool print_stats;
+    bool print_profile;
 };
 }

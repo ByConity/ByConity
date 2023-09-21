@@ -1174,7 +1174,7 @@ TreeRewriterResultPtr TreeRewriter::analyzeSelect(
         cols_from_joined.insert(cols_from_joined.end(), right_table.hidden_columns.begin(), right_table.hidden_columns.end());
 
         result.analyzed_join->deduplicateAndQualifyColumnNames(
-            source_columns_set, right_table.table.getQualifiedNamePrefix());
+            source_columns_set, right_table.table.getQualifiedNamePrefix(), settings.check_identifier_begin_valid);
     }
 
     translateQualifiedNames(query, *select_query, source_columns_set, tables_with_columns, settings.check_identifier_begin_valid);

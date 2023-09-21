@@ -51,6 +51,9 @@ public:
         Analysis, // 'EXPLAIN ANALYSIS...'
     };
 
+    bool print_stats = true;
+    bool print_profile = true;
+
     explicit ASTExplainQuery(ExplainKind kind_) : kind(kind_) {}
 
     String getID(char delim) const override { return "Explain" + (delim + toString(kind)); }
@@ -58,8 +61,11 @@ public:
     ASTPtr clone() const override
     {
         auto res = std::make_shared<ASTExplainQuery>(*this);
+
         res->children.clear();
-        res->children.push_back(children[0]->clone());
+        if (ast_settings)
+            res->setSettings(ast_settings->clone());
+        res->setExplainedQuery(query->clone());
         cloneOutputOptions(*res);
         return res;
     }

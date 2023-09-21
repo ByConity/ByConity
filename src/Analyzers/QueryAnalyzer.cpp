@@ -159,7 +159,8 @@ private:
 };
 
 static NameSet collectNames(ScopePtr scope);
-static String qualifyJoinedName(const String & name, const String & table_qualifier, const NameSet & source_names);
+static String
+qualifyJoinedName(const String & name, const String & table_qualifier, const NameSet & source_names, bool check_identifier_begin_valid);
 
 AnalysisPtr QueryAnalyzer::analyze(ASTPtr & ast, ContextMutablePtr context)
 {
@@ -950,11 +951,12 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
         auto source_columns = collectNames(left_scope);
         auto required_columns = columns_context.requiredColumns();
         require_right_keys.resize(right_join_fields.size(), false);
+        bool check_identifier_begin_valid = context->getSettingsRef().check_identifier_begin_valid;
 
         for (size_t i = 0; i < right_scope->size(); ++i)
         {
             const auto & input_field = right_scope->at(i);
-            auto new_name = qualifyJoinedName(input_field.name, right_table_qualifier, source_columns);
+            auto new_name = qualifyJoinedName(input_field.name, right_table_qualifier, source_columns, check_identifier_begin_valid);
 
             if (!right_join_field_reverse_map.count(i))
             {
@@ -999,10 +1001,11 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
                 output_fields.emplace_back(f);
 
             auto source_names = collectNames(left_scope);
+            bool check_identifier_begin_valid = context->getSettingsRef().check_identifier_begin_valid;
 
             for (const auto & f: right_scope->getFields())
             {
-                auto new_name = qualifyJoinedName(f.name, right_table_qualifier, source_names);
+                auto new_name = qualifyJoinedName(f.name, right_table_qualifier, source_names, check_identifier_begin_valid);
                 output_fields.emplace_back(f.withNewName(new_name));
             }
         }
@@ -1894,9 +1897,10 @@ NameSet collectNames(ScopePtr scope)
     return result;
 }
 
-String qualifyJoinedName(const String & name, const String & table_qualifier, const NameSet & source_names)
+String
+qualifyJoinedName(const String & name, const String & table_qualifier, const NameSet & source_names, bool check_identifier_begin_valid)
 {
-    if (source_names.count(name) || !isValidIdentifierBegin(name.at(0)))
+    if (source_names.count(name) || (check_identifier_begin_valid && !isValidIdentifierBegin(name.at(0))))
         return table_qualifier + name;
 
     return name;
