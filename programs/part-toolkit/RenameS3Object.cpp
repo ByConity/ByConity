@@ -201,7 +201,7 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
                 }
             }
 
-            if (objects.size() == request.GetMaxKeys()) {
+            if (objects.size() == static_cast<Vector<S3::Model::Object>::size_type>(request.GetMaxKeys())) {
                 request.SetMarker(objects[objects.size() - 1].GetKey());
             } else {
                 truncated = false;
