@@ -25,13 +25,17 @@ namespace DB
 class PredicatePushdown : public Rewriter
 {
 public:
-    explicit PredicatePushdown(bool pushdown_filter_into_cte_ = false) : pushdown_filter_into_cte(pushdown_filter_into_cte_) { }
+    explicit PredicatePushdown(bool pushdown_filter_into_cte_ = false, bool simplify_common_filter_ = false)
+        : pushdown_filter_into_cte(pushdown_filter_into_cte_), simplify_common_filter(simplify_common_filter_)
+    {
+    }
 
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "PredicatePushdown"; }
 
 private:
     const bool pushdown_filter_into_cte;
+    const bool simplify_common_filter;
 };
 
 struct PredicateContext
@@ -49,10 +53,12 @@ class PredicateVisitor : public PlanNodeVisitor<PlanNodePtr, PredicateContext>
 public:
     PredicateVisitor(
         bool pushdown_filter_into_cte_,
+        bool simplify_common_filter_,
         ContextMutablePtr context_,
         CTEInfo & cte_info_,
         const std::unordered_map<CTEId, UInt64> & cte_reference_counts_)
         : pushdown_filter_into_cte(pushdown_filter_into_cte_)
+        , simplify_common_filter(simplify_common_filter_)
         , context(context_)
         , cte_info(cte_info_)
         , cte_reference_counts(cte_reference_counts_)
@@ -76,6 +82,7 @@ public:
 
 private:
     const bool pushdown_filter_into_cte;
+    const bool simplify_common_filter;
     ContextMutablePtr context;
     CTEInfo & cte_info;
     const std::unordered_map<CTEId, UInt64> & cte_reference_counts;
@@ -99,13 +106,6 @@ private:
         std::set<String> & outer_symbols,
         std::set<String> & inner_symbols,
         ContextMutablePtr & context);
-
-    struct DynamicFilterResult
-    {
-        std::unordered_map<String, DynamicFilterBuildInfo> dynamic_filters;
-        std::vector<ConstASTPtr> executors;
-    };
-    DynamicFilterResult createDynamicFilters(const JoinStep & join) const;
 
     // utils of outer join to inner join
     static void tryNormalizeOuterToInnerJoin(JoinNode & node, const ConstASTPtr & inherited_predicate, ContextMutablePtr context);

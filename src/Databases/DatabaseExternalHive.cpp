@@ -105,4 +105,55 @@ void DatabaseExternalHive::shutdown()
 {
 }
 
+ASTPtr DatabaseExternalHive::getCreateTableQueryImpl(const String & name, ContextPtr local_context, bool throw_on_error) const
+{
+    StoragePtr storage = nullptr;
+    try
+    {
+        storage = tryGetTable(name, local_context);
+    }
+    catch (...)
+    {
+        LOG_DEBUG(
+            log,
+            "Fail to try to get create query for external table {} in database {} query id {}",
+            name,
+            getDatabaseName(),
+            local_context->getCurrentQueryId());
+    }
+
+    if (storage == nullptr && throw_on_error)
+    {
+        throw Exception("Table " + getDatabaseName() + "." + name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
+    }
+    if (storage == nullptr)
+        return nullptr;
+
+    String create_table_query = storage->getCreateTableSql();
+    ParserCreateQuery p_create_query;
+    ASTPtr ast{};
+    try
+    {
+        ast = parseQuery(
+            p_create_query,
+            create_table_query,
+            local_context->getSettingsRef().max_query_size,
+            local_context->getSettingsRef().max_parser_depth);
+    }
+    catch (...)
+    {
+        if (throw_on_error)
+            throw;
+        else
+            LOG_DEBUG(
+                log,
+                "Fail to parseQuery for external table {} in database {} query id {}, create query {}",
+                name,
+                getDatabaseName(),
+                local_context->getCurrentQueryId(),
+                create_table_query);
+    }
+
+    return ast;
+}
 }

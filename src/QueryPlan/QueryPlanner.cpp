@@ -79,17 +79,12 @@ namespace ErrorCodes
 class QueryPlannerVisitor : public ASTVisitor<RelationPlan, const Void>
 {
 public:
-    QueryPlannerVisitor(
-        ContextMutablePtr context_,
-        CTERelationPlans & cte_plans_,
-        Analysis & analysis_,
-        TranslationMapPtr outer_context_)
+    QueryPlannerVisitor(ContextMutablePtr context_, CTERelationPlans & cte_plans_, Analysis & analysis_, TranslationMapPtr outer_context_)
         : context(std::move(context_))
         , cte_plans(cte_plans_)
         , analysis(analysis_)
         , outer_context(std::move(outer_context_))
         , use_ansi_semantic(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
-        , enable_shared_cte(context->getSettingsRef().cte_mode != CTEMode::INLINED)
         , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
         , enable_subcolumn_optimization_through_union(context->getSettingsRef().enable_subcolumn_optimization_through_union)
     {
@@ -110,7 +105,6 @@ private:
     Analysis & analysis;
     TranslationMapPtr outer_context;
     const bool use_ansi_semantic;
-    const bool enable_shared_cte;
     const bool enable_implicit_type_conversion;
     const bool enable_subcolumn_optimization_through_union;
 
@@ -383,35 +377,38 @@ RelationPlan QueryPlannerVisitor::visitASTSelectQuery(ASTPtr & node, const Void 
 
 RelationPlan QueryPlannerVisitor::visitASTSubquery(ASTPtr & node, const Void &)
 {
-    auto subquery = node->as<ASTSubquery &>();
-    if (enable_shared_cte && analysis.isSharableCTE(subquery))
+    auto & subquery = node->as<ASTSubquery &>();
+    if (auto cte_analysis = analysis.tryGetCTEAnalysis(subquery))
     {
-        auto & cte_analysis = analysis.getCTEAnalysis(subquery);
-        auto cte_id = cte_analysis.id;
-        RelationPlan cte_ref;
-        if (!cte_plans.contains(cte_id))
+        if (cte_analysis->isSharable() || context->getSettingsRef().cte_mode == CTEMode::ENFORCED)
         {
-            cte_ref = process(node->children.front());
-            cte_plans.emplace(cte_id, cte_ref);
-        }
-        else
-            cte_ref = cte_plans.at(cte_id);
+            auto cte_id = cte_analysis->id;
+            RelationPlan cte_ref;
+            if (!cte_plans.contains(cte_id))
+            {
+                assert(&subquery == cte_analysis->representative);
+                cte_ref = process(node->children.front());
+                cte_plans.emplace(cte_id, cte_ref);
+            }
+            else
+                cte_ref = cte_plans.at(cte_id);
 
-        std::unordered_map<String, String> output_columns;
-        NamesAndTypes mapped_name_and_types;
-        FieldSymbolInfos field_symbol_infos;
-        for (const auto & name_and_type : cte_ref.getRoot()->getCurrentDataStream().header.getNamesAndTypes())
-        {
-            auto new_name = context->getSymbolAllocator()->newSymbol(name_and_type.name);
-            output_columns.emplace(new_name, name_and_type.name);
-            mapped_name_and_types.emplace_back(new_name, name_and_type.type);
-            field_symbol_infos.emplace_back(FieldSymbolInfo{new_name});
-        }
+            std::unordered_map<String, String> output_columns;
+            NamesAndTypes mapped_name_and_types;
+            FieldSymbolInfos field_symbol_infos;
+            for (const auto & name_and_type : cte_ref.getRoot()->getCurrentDataStream().header.getNamesAndTypes())
+            {
+                auto new_name = context->getSymbolAllocator()->newSymbol(name_and_type.name);
+                output_columns.emplace(new_name, name_and_type.name);
+                mapped_name_and_types.emplace_back(new_name, name_and_type.type);
+                field_symbol_infos.emplace_back(FieldSymbolInfo{new_name});
+            }
 
-        PlanNodePtr plan = PlanNodeBase::createPlanNode(
-            context->nextNodeId(), std::make_shared<CTERefStep>(DataStream{mapped_name_and_types}, cte_id, output_columns, false));
-        PRINT_PLAN(plan, plan_cte);
-        return RelationPlan{plan, field_symbol_infos};
+            PlanNodePtr plan = PlanNodeBase::createPlanNode(
+                context->nextNodeId(), std::make_shared<CTERefStep>(DataStream{mapped_name_and_types}, cte_id, output_columns, false));
+            PRINT_PLAN(plan, plan_cte);
+            return RelationPlan{plan, field_symbol_infos};
+        }
     }
 
     return process(node->children.front());
@@ -549,6 +546,10 @@ PlanBuilder QueryPlannerVisitor::planTableSubquery(ASTSubquery & subquery, ASTPt
 
 void QueryPlannerVisitor::planJoin(ASTTableJoin & table_join, PlanBuilder & left_builder, PlanBuilder & right_builder)
 {
+    if (table_join.strictness == ASTTableJoin::Strictness::Any)
+        if (table_join.kind == ASTTableJoin::Kind::Full)
+            throw Exception("ANY FULL JOINs are not implemented.", ErrorCodes::NOT_IMPLEMENTED);
+
     if (isCrossJoin(table_join))
         planCrossJoin(table_join, left_builder, right_builder);
     else if (table_join.using_expression_list)
@@ -2190,7 +2191,7 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
     {
         case ASTSelectWithUnionQuery::Mode::UNION_ALL:
         case ASTSelectWithUnionQuery::Mode::UNION_DISTINCT:
-            set_operation_step = std::make_shared<UnionStep>(input_streams, output_stream, false);
+            set_operation_step = std::make_shared<UnionStep>(input_streams, output_stream);
             break;
         case ASTSelectWithUnionQuery::Mode::INTERSECT_ALL:
             set_operation_step = std::make_shared<IntersectStep>(input_streams, output_stream, false);

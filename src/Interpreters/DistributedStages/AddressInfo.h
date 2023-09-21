@@ -22,6 +22,11 @@
 
 namespace DB
 {
+namespace Protos
+{
+    class AddressInfo;
+}
+
     class WriteBuffer;
     class ReadBuffer;
 
@@ -35,6 +40,8 @@ namespace DB
 
         void serialize(WriteBuffer &) const;
         void deserialize(ReadBuffer &);
+        void toProto(Protos::AddressInfo & proto) const;
+        void fillFromProto(const Protos::AddressInfo & proto);
 
         const String & getHostName() const { return host_name; }
         UInt16 getPort() const { return port; }

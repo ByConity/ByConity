@@ -32,7 +32,7 @@
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/PartialSortingStep.h>
 #include <QueryPlan/QueryPlan.h>
-#include <Functions/InternalFunctionsDynamicFilter.h>
+#include <Functions/InternalFunctionRuntimeFilter.h>
 
 
 namespace DB
@@ -359,7 +359,7 @@ PlanNodeStatisticsPtr PlanCardinalityVisitor::visitPlanNode(PlanNodeBase & node,
             for (auto & conjunct : PredicateUtils::extractConjuncts(step->getFilter()))
             {
                 // $runtimeFilter(1265, `ws_sold_date_sk`, 0.8028399781540142)
-                if (conjunct->getColumnName().find(InternalFunctionDynamicFilter::name) == std::string::npos)
+                if (conjunct->getColumnName().find(InternalFunctionRuntimeFilter::name) == std::string::npos)
                 {
                     all_runtime_filters = false;
                 }

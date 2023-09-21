@@ -157,6 +157,11 @@ struct CTEAnalysis
     CTEId id;
     ASTSubquery * representative;
     UInt64 ref_count;
+
+    bool isSharable() const
+    {
+        return ref_count >= 2;
+    }
 };
 
 using SubColumnIDSet = std::unordered_set<SubColumnID, SubColumnID::Hash>;
@@ -317,8 +322,7 @@ struct Analysis
     // CTE(common table expressions)
     ASTMap<CTEAnalysis> common_table_expressions;
     void registerCTE(ASTSubquery & subquery);
-    bool isSharableCTE(ASTSubquery & subquery);
-    CTEAnalysis & getCTEAnalysis(ASTSubquery & subquery);
+    std::optional<CTEAnalysis> tryGetCTEAnalysis(ASTSubquery & subquery);
 
     /// Join
     std::unordered_map<ASTTableJoin *, JoinUsingAnalysis> join_using_results;
@@ -398,7 +402,7 @@ struct Analysis
 
     std::unordered_map<ASTSelectQuery *, ArrayJoinAnalysis> array_join_analysis;
     ArrayJoinAnalysis & getArrayJoinAnalysis(ASTSelectQuery & select_query);
-    
+
     /// Insert
     std::optional<InsertAnalysis> insert_analysis;
     std::optional<InsertAnalysis> & getInsert()

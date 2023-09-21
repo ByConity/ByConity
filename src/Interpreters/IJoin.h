@@ -63,6 +63,7 @@ public:
     virtual JoinType getType() const = 0;
 
     virtual const TableJoin & getTableJoin() const = 0;
+    virtual TableJoin & getTableJoin() = 0;
 
     /// Add block of data from right hand of JOIN.
     /// @returns false, if some limit was exceeded and you should not insert more data.
@@ -95,8 +96,7 @@ public:
 
     virtual BlockInputStreamPtr createStreamWithNonJoinedRows(const Block &, UInt64) const { return {}; }
 
-    virtual void serialize(WriteBuffer &) const { throw Exception("Not implement join serialize", ErrorCodes::NOT_IMPLEMENTED); }
-    static JoinPtr deserialize(ReadBuffer &, ContextPtr) { throw Exception("Not implement join deserialize", ErrorCodes::NOT_IMPLEMENTED); }
+    virtual void tryBuildRuntimeFilters(size_t  /*total_rows*/ = 0) const { throw Exception("Not implement runtime filter build", ErrorCodes::NOT_IMPLEMENTED); }
 
     /// Peek next stream of delayed joined blocks.
     virtual IBlocksStreamPtr getDelayedBlocks() { return nullptr; }

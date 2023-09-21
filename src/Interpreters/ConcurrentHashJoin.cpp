@@ -220,22 +220,34 @@ Blocks ConcurrentHashJoin::dispatchBlock(const Strings & key_columns_names, cons
     return result;
 }
 
-void ConcurrentHashJoin::serialize(WriteBuffer & buf) const
+void ConcurrentHashJoin::tryBuildRuntimeFilters(size_t total_rows) const
 {
-    table_join->serialize(buf);
-    serializeBlock(right_sample_block, buf);
-    writeBinary(slots, buf);
-}
+    total_rows = 0;
+    for (const auto & hash_join : hash_joins)
+    {
+        total_rows += hash_join->data->getTotalRowCount();
+    }
 
-JoinPtr ConcurrentHashJoin::deserialize(ReadBuffer & buf, ContextPtr context)
-{
-    auto table_join = TableJoin::deserialize(buf, context);
-    auto right_sample_block = deserializeBlock(buf);
+    if (total_rows == 0)
+    {
+        // need bypass
+        hash_joins.front()->data->bypassRuntimeFilters(BypassType::BYPASS_EMPTY_HT);
+        return ;
+    }
 
-    size_t slots;
-    readBinary(slots, buf);
+    if (total_rows > table_join->getInBuildThreshold() && total_rows > table_join->getBloomBuildThreshold())
+    {
+        // need bypass
+        hash_joins.front()->data->bypassRuntimeFilters(BypassType::BYPASS_LARGE_HT);
+        return ;
+    }
 
-    return std::make_shared<ConcurrentHashJoin>(table_join, slots, right_sample_block);
+    table_join->fixRFParallel(hash_joins.size());
+
+    for (const auto & hash_join : hash_joins)
+    {
+        hash_join->data->tryBuildRuntimeFilters(total_rows);
+    }
 }
 
 }

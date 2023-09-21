@@ -126,19 +126,6 @@ InlineProjections::inlineProjections(PlanNodePtr & parent_node, PlanNodePtr & ch
         }
     }
 
-    // merge dynamic filters
-    auto new_dynamic_filters = parent_step.getDynamicFilters();
-    for (const auto & dynamic_filter : child_step.getDynamicFilters())
-    {
-        const auto & name = dynamic_filter.first;
-        new_dynamic_filters.emplace(dynamic_filter);
-        if (!new_parent_types.contains(name))
-        {
-            new_parent_assignments.emplace_back(Assignment{name, std::make_shared<ASTIdentifier>(name)});
-            new_parent_types.emplace(name, new_child_types.at(name));
-        }
-    }
-
     PlanNodePtr new_child_node;
     if (Utils::isIdentity(new_child_assignments))
     {
@@ -155,7 +142,7 @@ InlineProjections::inlineProjections(PlanNodePtr & parent_node, PlanNodePtr & ch
         new_child_node->getStep()->getOutputStream(),
         new_parent_assignments,
         new_parent_types,
-        parent_step.isFinalProject() /*, new_dynamic_filters*/);
+        parent_step.isFinalProject());
     return std::make_shared<ProjectionNode>(parent->getId(), std::move(new_parent_step), PlanNodes{new_child_node});
 }
 
@@ -327,6 +314,7 @@ TransformResult InlineProjectionIntoJoin::transformImpl(PlanNodePtr node, const 
         join_step.getJoinAlgorithm(),
         join_step.isMagic(),
         join_step.isOrdered(),
+        join_step.getRuntimeFilterBuilders(),
         join_step.getHints());
     PlanNodePtr new_join_node = std::make_shared<JoinNode>(context.context->nextNodeId(), std::move(new_join_step), PlanNodes{left, right});
     return new_join_node;
@@ -361,6 +349,7 @@ TransformResult InlineProjectionOnJoinIntoJoin::transformImpl(PlanNodePtr node, 
         join_step->getJoinAlgorithm(),
         join_step->isMagic(),
         join_step->isOrdered(),
+        join_step->getRuntimeFilterBuilders(),
         join_step->getHints());
 
     return {PlanNodeBase::createPlanNode(context.context->nextNodeId(), new_join_step, node->getChildren()[0]->getChildren())};

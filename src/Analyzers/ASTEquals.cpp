@@ -86,6 +86,10 @@ bool compareNode(const ASTTableColumnReference & left, const ASTTableColumnRefer
     return left.storage == right.storage && left.unique_id == right.unique_id && left.column_name == right.column_name;
 }
 
+bool compareNode(const ASTTableIdentifier & left, const ASTTableIdentifier & right)
+{
+    return left.getTableId() == right.getTableId();
+}
 
 bool compareTree(const ASTPtr & left, const ASTPtr & right, const SubtreeComparator & comparator)
 {
@@ -137,8 +141,11 @@ bool compareTree(const ASTPtr & left, const ASTPtr & right, const SubtreeCompara
         case ASTType::ASTTableColumnReference:
             node_equals = compareNode(left->as<ASTTableColumnReference &>(), right->as<ASTTableColumnReference &>());
             break;
+        case ASTType::ASTTableIdentifier:
+            node_equals = compareNode(left->as<ASTTableIdentifier &>(), right->as<ASTTableIdentifier &>());
+            break;
         default:
-            node_equals = true;
+            node_equals = left->getID() == right->getID(); // align with ScopeAwareHash
     }
 
     if (!node_equals)

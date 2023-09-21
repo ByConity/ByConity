@@ -142,7 +142,6 @@ void addCreateQuerySettings(ASTCreateQuery & create_query, PlainConfigsPtr confi
 
     std::vector<std::pair<std::string, std::string>> settings_map = {
         {"endpoint", "aws.s3.endpoint"}, {"ak_id", "aws.s3.access_key"}, {"ak_secret", "aws.s3.secret_key"}, {"region", "aws.s3.region"}};
-
     for (const auto & p : settings_map)
     {
         if (configs->has(p.second))

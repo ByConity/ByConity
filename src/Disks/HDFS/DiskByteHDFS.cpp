@@ -33,6 +33,7 @@ namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
     extern const int INCORRECT_DISK_INDEX;
+    extern const int UNKNOWN_ELEMENT_IN_CONFIG;
 }
 
 DiskPtr DiskByteHDFSReservation::getDisk(size_t i) const
@@ -276,6 +277,8 @@ void registerDiskByteHDFS(DiskFactory & factory)
                       const String & config_prefix,
                       ContextPtr context_) -> DiskPtr {
         String path = config.getString(config_prefix + ".path");
+        if (path.empty())
+            throw Exception("Disk path can not be empty. Disk " + name, ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG);
         if (!path.ends_with("/"))
         {
             path.push_back('/');

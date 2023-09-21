@@ -181,7 +181,7 @@ MergeTreeData::MergeTreeData(
         settings->sanityCheck(getContext()->getSettingsRef());
 
     MergeTreeDataFormatVersion min_format_version(0);
-    if (!date_column_name.empty())
+    if (date_column_name.empty())
         min_format_version = MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING;
 
     /// format_file always contained on any data path
@@ -249,10 +249,11 @@ MergeTreeData::MergeTreeData(
 
     if (format_version < min_format_version)
     {
-        if (min_format_version == MERGE_TREE_DATA_MIN_FORMAT_VERSION_WITH_CUSTOM_PARTITIONING.toUnderType())
-            throw Exception(
-                "MergeTree data format version on disk doesn't support custom partitioning",
-                ErrorCodes::METADATA_MISMATCH);
+        LOG_WARNING(
+            log,
+            "data format version on disk {} is too old, keep it for compatibility "
+            "but you'd better re-create the table",
+            format_version.toUnderType());
     }
     String reason;
     if (!canUsePolymorphicParts(*settings, &reason) && !reason.empty())

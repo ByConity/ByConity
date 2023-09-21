@@ -19,19 +19,21 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Interpreters/asof.h>
 #include <Optimizer/PredicateConst.h>
+#include <Optimizer/RuntimeFilterUtils.h>
 
 namespace DB
 {
 
-enum class DistributionType : UInt8
-{
-    UNKNOWN = 0,
-    REPARTITION,
-    BROADCAST
-};
+ENUM_WITH_PROTO_CONVERTER(
+    DistributionType, // enum name
+    Protos::DistributionType, // proto enum message
+    (UNKNOWN, 0),
+    (REPARTITION),
+    (BROADCAST));
 
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
+class RuntimeFilterConsumer;
 
 /// Join two data streams.
 class JoinStep : public IQueryPlanStep
@@ -46,7 +48,7 @@ public:
         bool keep_left_read_in_order_,
         bool is_ordered_ = false,
         PlanHints hints_ = {});
-    
+
     JoinStep(
         DataStreams input_streams_,
         DataStream output_stream_,
@@ -64,8 +66,9 @@ public:
         JoinAlgorithm join_algorithm = JoinAlgorithm::AUTO,
         bool magic_set_ = false,
         bool is_ordered_ = false,
+        LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders = {},
         PlanHints hints_ = {});
-    
+
 
     String getName() const override { return "Join"; }
 
@@ -83,7 +86,7 @@ public:
 
     size_t getMaxStreams() const { return max_streams; }
     bool getKeepLeftReadInOrder() const { return keep_left_read_in_order; }
-    
+
     const Names & getLeftKeys() const { return left_keys; }
     const Names & getRightKeys() const { return right_keys; }
     const ConstASTPtr & getFilter() const { return filter; }
@@ -142,17 +145,19 @@ public:
         return isRightOrFull(kind);
     }
 
-    JoinPtr makeJoin(ContextPtr context);
+    JoinPtr makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterConsumer>&& consumer);
 
     bool enforceGraceHashJoin() const;
 
-    void serialize(WriteBuffer & buf) const override;
-    void serialize(WriteBuffer & buffer, bool with_output) const;
+    void toProto(Protos::JoinStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<JoinStep> fromProto(const Protos::JoinStep & proto, ContextPtr context);
 
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
-    String serializeToString() const override;
+    // TODO(gouguilin): protobuf serde
+
+    const LinkedHashMap<String, RuntimeFilterBuildInfos> & getRuntimeFilterBuilders() const { return runtime_filter_builders; }
+    RuntimeFilterBuilderPtr createRuntimeFilterBuilder(ContextPtr context) const;
 
 private:
     JoinPtr join;
@@ -163,14 +168,14 @@ private:
 
     size_t max_streams;
     bool keep_left_read_in_order;
-    
+
     Names left_keys;
     Names right_keys;
 
     /**
      * Non-equals predicate
      *
-     * For example：
+     * For example:
      *
      * LEFT JOIN orders ON (c_custkey = o_custkey) AND (o_comment NOT LIKE '%special%requests%')
      */
@@ -201,6 +206,8 @@ private:
     bool is_magic;
     Processors processors;
     bool is_ordered;
+
+    LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders;
 };
 
 /// Special step for the case when Join is already filled.
@@ -216,10 +223,19 @@ public:
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+    void toProto(Protos::FilledJoinStep & proto, bool for_hash_equals = false) const
+    {
+        (void)proto;
+        (void)for_hash_equals;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+    static std::shared_ptr<FilledJoinStep> fromProto(const Protos::FilledJoinStep & proto, ContextPtr)
+    {
+        (void)proto;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
 
 private:
     JoinPtr join;

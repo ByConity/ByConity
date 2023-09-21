@@ -85,6 +85,7 @@ void DedupWorkerManager::assignDeduperToWorker(StoragePtr & storage)
         replaceCnchWithCloud(
             *create_ast, worker_storage_id.table_name, storage->getStorageID().getDatabaseName(), storage->getStorageID().getTableName());
         modifyOrAddSetting(*create_ast, "cloud_enable_dedup_worker", Field(UInt64(1)));
+        modifyOrAddSetting(*create_ast, "allow_nullable_key", Field(UInt64(1)));
         String create_query = getTableDefinitionFromCreateQuery(static_pointer_cast<IAST>(create_ast), false);
         LOG_TRACE(log, "Create table query of dedup worker: {}", create_query);
 

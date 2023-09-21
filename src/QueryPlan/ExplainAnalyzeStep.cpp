@@ -36,16 +36,6 @@ void ExplainAnalyzeStep::setInputStreams(const DataStreams & input_streams_)
     output_stream->header = Block{{std::make_shared<DataTypeString>(),"Explain Analyze"}};
 }
 
-void ExplainAnalyzeStep::serialize(WriteBuffer &) const
-{
-    // do nothing
-}
-
-QueryPlanStepPtr ExplainAnalyzeStep::deserialize(ReadBuffer &, ContextPtr)
-{
-    throw Exception("ExplainAnalyzeStep doesn't support deserialize yet", ErrorCodes::NOT_IMPLEMENTED);
-}
-
 std::shared_ptr<IQueryPlanStep> ExplainAnalyzeStep::copy(ContextPtr) const
 {
     return std::make_shared<ExplainAnalyzeStep>(input_streams[0], kind, context, query_plan_ptr);

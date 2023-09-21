@@ -17,15 +17,25 @@
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
 #include <Parsers/IAST_fwd.h>
-#include <QueryPlan/PlanSerDerHelper.h>
+#include <Protos/EnumMacros.h>
+#include <Protos/plan_node.pb.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/Hints/IPlanHint.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 
-namespace JSONBuilder { class JSONMap; }
+namespace JSONBuilder
+{
+class JSONMap;
+}
 
 namespace DB
 {
+
+namespace Protos
+{
+    class DataStream;
+}
 
 class QueryPipeline;
 using QueryPipelinePtr = std::unique_ptr<QueryPipeline>;
@@ -38,7 +48,10 @@ using Processors = std::vector<ProcessorPtr>;
 class ActionsDAG;
 using ActionsDAGPtr = std::shared_ptr<ActionsDAG>;
 
-namespace JSONBuilder { class JSONMap; }
+namespace JSONBuilder
+{
+    class JSONMap;
+}
 
 /// Description of data stream.
 /// Single logical data stream may relate to many ports of pipeline.
@@ -56,12 +69,13 @@ public:
     bool has_single_port = false;
 
     /// How data is sorted.
-    enum class SortMode
-    {
-        Chunk, /// Separate chunks are sorted
-        Port, /// Data from each port is sorted
-        Stream, /// Data is globally sorted
-    };
+    ENUM_WITH_PROTO_CONVERTER(
+        SortMode, // enum name
+        Protos::DataStream::SortMode, // proto enum message
+        (Chunk, 0), /// Separate chunks are sorted
+        (Port, 1), /// Data from each port is sorted
+        (Stream, 2) /// Data is globally sorted
+    );
 
     /// It is not guaranteed that header has columns from sort_description.
     SortDescription sort_description = {};
@@ -74,26 +88,18 @@ public:
 
     bool hasEqualPropertiesWith(const DataStream & other) const
     {
-        return distinct_columns == other.distinct_columns
-            && has_single_port == other.has_single_port
-            && sort_description == other.sort_description
-            && (sort_description.empty() || sort_mode == other.sort_mode);
+        return distinct_columns == other.distinct_columns && has_single_port == other.has_single_port
+            && sort_description == other.sort_description && (sort_description.empty() || sort_mode == other.sort_mode);
     }
 
-    bool hasEqualHeaderWith(const DataStream & other) const
-    {
-        return blocksHaveEqualStructure(header, other.header);
-    }
+    bool hasEqualHeaderWith(const DataStream & other) const { return blocksHaveEqualStructure(header, other.header); }
 
-    NamesAndTypes getNamesAndTypes() const
-    {
-        return header.getNamesAndTypes();
-    }
+    NamesAndTypes getNamesAndTypes() const { return header.getNamesAndTypes(); }
 
-    NameToType getNamesToTypes() const
-    {
-        return header.getNamesToTypes();
-    }
+    NameToType getNamesToTypes() const { return header.getNamesToTypes(); }
+
+    void toProto(Protos::DataStream & proto) const;
+    void fillFromProto(const Protos::DataStream & proto);
 };
 
 using DataStreams = std::vector<DataStream>;
@@ -109,63 +115,78 @@ using PlanHints = std::vector<PlanHintPtr>;
 class IQueryPlanStep
 {
 public:
-#define APPLY_STEP_TYPES(M) \
-        M(Aggregating) \
-        M(Apply) \
-        M(ArrayJoin) \
-        M(AssignUniqueId) \
-        M(CreatingSet) \
-        M(CreatingSets) \
-        M(Cube) \
-        M(Distinct) \
-        M(EnforceSingleRow) \
-        M(Expression) \
-        M(Extremes) \
-        M(Except) \
-        M(Exchange) \
-        M(ExplainAnalyze) \
-        M(Filling) \
-        M(FilledJoin) \
-        M(Filter) \
-        M(FinalSample) \
-        M(FinishSorting) \
-        M(ISource) \
-        M(ITransforming) \
-        M(Intersect) \
-        M(Join) \
-        M(LimitBy) \
-        M(Limit) \
-        M(MergeSorting) \
-        M(Sorting) \
-        M(MergingAggregated) \
-        M(MergingSorted) \
-        M(Offset) \
-        M(PartitionTopN) \
-        M(PartialSorting) \
-        M(PlanSegmentSource) \
-        M(Projection) \
-        M(ReadFromStorage) \
-        M(ReadNothing) \
-        M(RemoteExchangeSource) \
-        M(Rollup) \
-        M(SettingQuotaAndLimits) \
-        M(TotalsHaving) \
-        M(TableScan) \
-        M(TableWrite) \
-        M(TableFinish) \
-        M(Union) \
-        M(Values) \
-        M(Window) \
-        M(CTERef) \
-        M(TopNFiltering) \
-        M(MarkDistinct) \
-        M(IntersectOrExcept)\
-        M(ReadStorageRowCount)
+// this must match protobuf message QueryPlanStep
+// in src/Protos/plan_node.proto
+// where Step/_step postfix is attached.
+#define APPLY_STEP_PROTOBUF_TYPES_AND_NAME(MM) \
+    MM(Aggregating, aggregating) \
+    MM(ArrayJoin, array_join) \
+    MM(AssignUniqueId, assign_unique_id) \
+    MM(CTERef, c_t_e_ref) \
+    MM(Distinct, distinct) \
+    MM(EnforceSingleRow, enforce_single_row) \
+    MM(Except, except) \
+    MM(Exchange, exchange) \
+    MM(Extremes, extremes) \
+    MM(Filling, filling) \
+    MM(Filter, filter) \
+    MM(FinalSample, final_sample) \
+    MM(FinishSorting, finish_sorting) \
+    MM(Intersect, intersect) \
+    MM(Join, join) \
+    MM(LimitBy, limit_by) \
+    MM(Limit, limit) \
+    MM(MarkDistinct, mark_distinct) \
+    MM(MergeSorting, merge_sorting) \
+    MM(MergingAggregated, merging_aggregated) \
+    MM(MergingSorted, merging_sorted) \
+    MM(Offset, offset) \
+    MM(PartialSorting, partial_sorting) \
+    MM(PartitionTopN, partition_top_n) \
+    MM(Projection, projection) \
+    MM(ReadNothing, read_nothing) \
+    MM(ReadStorageRowCount, read_storage_row_count) \
+    MM(RemoteExchangeSource, remote_exchange_source) \
+    MM(Sorting, sorting) \
+    MM(TableFinish, table_finish) \
+    MM(TableScan, table_scan) \
+    MM(TableWrite, table_write) \
+    MM(TopNFiltering, top_n_filtering) \
+    MM(Union, union) \
+    MM(Window, window) \
+    MM(Values, values) \
+    MM(IntersectOrExcept, intersect_or_except) \
+    MM(Buffer, buffer) \
+    MM(Apply, apply) \
+    MM(CreatingSet, creating_set) \
+    MM(CreatingSets, creating_sets) \
+    MM(Cube, cube) \
+    MM(Expression, expression) \
+    MM(ExplainAnalyze, explain_analyze) \
+    MM(FilledJoin, filled_join) \
+    MM(PlanSegmentSource, plan_segment_source) \
+    MM(ReadFromStorage, read_from_storage) \
+    MM(Rollup, rollup) \
+    MM(SettingQuotaAndLimits, setting_quota_and_limits) \
+    MM(TotalsHaving, totals_having)
+
+// macro helpers to convert MM(x, y) to M(x)
+#define IMPL_TUPLE_TO_FIRST(_x, _y) (_x)
+#define IMPL_STEPS_PROTOBUF_TYPES APPLY_STEP_PROTOBUF_TYPES_AND_NAME(IMPL_TUPLE_TO_FIRST)
+#define IMPL_MACRO_FUNCTION_APPLY(_r, _data, _elem) _data(_elem)
+
+// apply unary macro
+// M(Apply) M(Join) M(Aggregating)...
+#define APPLY_STEP_TYPES(M) BOOST_PP_SEQ_FOR_EACH(IMPL_MACRO_FUNCTION_APPLY, M, IMPL_STEPS_PROTOBUF_TYPES)
+
+
 #define ENUM_DEF(ITEM) ITEM,
 
     enum class Type
     {
         Any = 0,
+        // change this when order is changed to avoid conflicts
+        StepBegin = 100,
         APPLY_STEP_TYPES(ENUM_DEF) UNDEFINED,
         ReadFromMergeTree,
         ReadFromCnchHive,
@@ -230,19 +251,25 @@ public:
     };
 
     /// Get detailed description of step actions. This is shown in EXPLAIN query with options `actions = 1`.
-    virtual void describeActions(JSONBuilder::JSONMap & /*map*/) const {}
-    virtual void describeActions(FormatSettings & /*settings*/) const {}
+    virtual void describeActions(JSONBuilder::JSONMap & /*map*/) const
+    {
+    }
+    virtual void describeActions(FormatSettings & /*settings*/) const
+    {
+    }
 
     /// Get detailed description of read-from-storage step indexes (if any). Shown in with options `indexes = 1`.
-    virtual void describeIndexes(JSONBuilder::JSONMap & /*map*/) const {}
-    virtual void describeIndexes(FormatSettings & /*settings*/) const {}
+    virtual void describeIndexes(JSONBuilder::JSONMap & /*map*/) const
+    {
+    }
+    virtual void describeIndexes(FormatSettings & /*settings*/) const
+    {
+    }
 
     /// Get description of processors added in current step. Should be called after updatePipeline().
-    virtual void describePipeline(FormatSettings & /*settings*/) const {}
-
-    virtual void serializeImpl(WriteBuffer & buf) const;
-    virtual void serialize(WriteBuffer &) const { throw Exception("Not supported serialize.", ErrorCodes::NOT_IMPLEMENTED); }
-    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr) { throw Exception("Not supported deserialize.", ErrorCodes::NOT_IMPLEMENTED); }
+    virtual void describePipeline(FormatSettings & /*settings*/) const
+    {
+    }
 
     virtual bool isPhysical() const { return true; }
     virtual bool isLogical() const { return true; }
@@ -251,7 +278,10 @@ public:
 
     size_t hash() const;
 
-    bool operator==(const IQueryPlanStep & r) const { return serializeToString() == r.serializeToString(); }
+    bool operator==(const IQueryPlanStep & r) const
+    {
+        return isPlanStepEqual(*this, r);
+    }
     static String toString(Type type);
 
 protected:
@@ -263,14 +293,12 @@ protected:
     PlanHints hints;
 
     static void describePipeline(const Processors & processors, FormatSettings & settings);
-
-private:
-    virtual String serializeToString() const
-    {
-        WriteBufferFromOwnString buffer;
-        serialize(buffer);
-        return buffer.str();
-    }
 };
 
+namespace Protos
+{
+#define CASE_DEF(TYPE) class TYPE##Step;
+    APPLY_STEP_TYPES(CASE_DEF)
+#undef CASE_DEF
+}
 }

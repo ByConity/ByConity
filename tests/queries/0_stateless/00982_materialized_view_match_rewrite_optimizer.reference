@@ -39,7 +39,7 @@ Projection Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: deptno = 10
       └─ TableScan test.mv_data Est. ? rows
-               Condition : deptno = 10.
+               Where: deptno = 10
                Outputs: [deptno, empid, name]
 note: Materialized Views is applied for 1 times: test.mv_define.
 100	Bill
@@ -52,7 +52,7 @@ Projection Est. ? rows
    └─ Filter Est. ? rows
       │     Condition: empid > 120
       └─ TableScan test.mv_data Est. ? rows
-               Condition : empid > 120.
+               Where: empid > 120
                Outputs: [empid, name]
 note: Materialized Views is applied for 1 times: test.mv_define.
 150	Sebastian
@@ -123,7 +123,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: empid = 150
                   └─ TableScan test.mv_data Est. ? rows
-                           Condition : empid = 150.
+                           Where: empid = 150
                            Outputs: [a, c, deptno, empid]
 note: Materialized Views is applied for 1 times: test.mv_define.
 1	7000	150	10
@@ -142,7 +142,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: empid = 150
                   └─ TableScan test.mv_data Est. ? rows
-                           Condition : empid = 150.
+                           Where: empid = 150
                            Outputs: [a, c, deptno, empid]
 note: Materialized Views is applied for 1 times: test.mv_define.
 1	7000	10
@@ -161,7 +161,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: empid = 150
                   └─ TableScan test.mv_data Est. ? rows
-                           Condition : empid = 150.
+                           Where: empid = 150
                            Outputs: [a, c, empid]
 note: Materialized Views is applied for 1 times: test.mv_define.
 1	7000	150

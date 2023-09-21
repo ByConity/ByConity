@@ -24,15 +24,12 @@ class UnionStep : public SetOperationStep
 {
 public:
     /// max_threads is used to limit the number of threads for result pipeline.
-    UnionStep(
-        DataStreams input_streams_,
-        DataStream output_stream_,
-        std::unordered_map<String, std::vector<String>> output_to_inputs_,
-        size_t max_threads_ = 0,
-        bool local_ = false);
+    UnionStep(DataStreams input_streams_, DataStream output_stream_, OutputToInputs output_to_inputs_, size_t max_threads_, bool local_);
 
-    explicit UnionStep(DataStreams input_streams_, size_t max_threads_ = 0, bool local_ = false) : UnionStep(input_streams_, DataStream{}, {}, max_threads_, local_) { }
-    UnionStep(DataStreams input_streams_, DataStream output_stream_, size_t max_threads_ = 0, bool local_ = false) : UnionStep(input_streams_, output_stream_, {}, max_threads_, local_) { }
+    explicit UnionStep(DataStreams input_streams_, DataStream output_stream_ = {}, OutputToInputs output_to_inputs_ = {})
+        : UnionStep(std::move(input_streams_), std::move(output_stream_), std::move(output_to_inputs_), 0, false)
+    {
+    }
 
     String getName() const override { return "Union"; }
 
@@ -45,8 +42,9 @@ public:
     size_t getMaxThreads() const { return max_threads; }
     bool isLocal() const { return local; }
 
-    void serialize(WriteBuffer &) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+    void toProto(Protos::UnionStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<UnionStep> fromProto(const Protos::UnionStep & proto, ContextPtr context);
+
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
 
 private:

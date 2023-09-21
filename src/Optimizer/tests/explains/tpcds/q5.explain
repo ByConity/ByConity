@@ -28,24 +28,31 @@ Projection Est. 100 rows
                      │                 │     Condition: ss_store_sk_1 == s_store_sk
                      │                 ├─ Inner Join Est. 11466346 rows
                      │                 │  │     Condition: ss_sold_date_sk_1 == d_date_sk
+                     │                 │  │     Runtime Filters Builder: {d_date_sk}
                      │                 │  ├─ Union Est. 3167987763 rows
                      │                 │  │  ├─ Projection Est. 2879987999 rows
                      │                 │  │  │  │     Expressions: [ss_ext_sales_price, ss_net_profit, ss_sold_date_sk, ss_store_sk], expr#CAST(0, 'decimal(7, 2)'):=cast(`expr#CAST(0, 'decimal(7, 2)')`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_1:=cast(`expr#CAST(0, 'decimal(7, 2)')`, 'Nullable(Float64)')
                      │                 │  │  │  └─ Projection Est. 2879987999 rows
                      │                 │  │  │     │     Expressions: [ss_ext_sales_price, ss_net_profit, ss_sold_date_sk, ss_store_sk], expr#CAST(0, 'decimal(7, 2)'):=cast('0.00', 'Decimal(7, 2)')
-                     │                 │  │  │     └─ TableScan tpcds.store_sales Est. 2879987999 rows
-                     │                 │  │  │              Outputs: [ss_ext_sales_price, ss_net_profit, ss_sold_date_sk, ss_store_sk]
+                     │                 │  │  │     └─ Filter Est. 2879987999 rows
+                     │                 │  │  │        │     Condition: Runtime Filters: {ss_sold_date_sk}
+                     │                 │  │  │        └─ TableScan tpcds.store_sales Est. 2879987999 rows
+                     │                 │  │  │                 Where: Runtime Filters: {ss_sold_date_sk}
+                     │                 │  │  │                 Outputs: [ss_ext_sales_price, ss_net_profit, ss_sold_date_sk, ss_store_sk]
                      │                 │  │  └─ Projection Est. 287999764 rows
                      │                 │  │     │     Expressions: [sr_net_loss, sr_return_amt, sr_returned_date_sk, sr_store_sk], expr#CAST(0, 'decimal(7, 2)')_2:=cast(`expr#CAST(0, 'decimal(7, 2)')_2`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_3:=cast(`expr#CAST(0, 'decimal(7, 2)')_2`, 'Nullable(Float64)')
                      │                 │  │     └─ Projection Est. 287999764 rows
                      │                 │  │        │     Expressions: [sr_net_loss, sr_return_amt, sr_returned_date_sk, sr_store_sk], expr#CAST(0, 'decimal(7, 2)')_2:=cast('0.00', 'Decimal(7, 2)')
-                     │                 │  │        └─ TableScan tpcds.store_returns Est. 287999764 rows
-                     │                 │  │                 Outputs: [sr_net_loss, sr_return_amt, sr_returned_date_sk, sr_store_sk]
+                     │                 │  │        └─ Filter Est. 287999764 rows
+                     │                 │  │           │     Condition: Runtime Filters: {sr_returned_date_sk}
+                     │                 │  │           └─ TableScan tpcds.store_returns Est. 287999764 rows
+                     │                 │  │                    Where: Runtime Filters: {sr_returned_date_sk}
+                     │                 │  │                    Outputs: [sr_net_loss, sr_return_amt, sr_returned_date_sk, sr_store_sk]
                      │                 │  └─ Broadcast Exchange Est. 14 rows
                      │                 │     └─ Filter Est. 14 rows
                      │                 │        │     Condition: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
                      │                 │        └─ TableScan tpcds.date_dim Est. 73049 rows
-                     │                 │                 Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date')).
+                     │                 │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
                      │                 │                 Outputs: [d_date, d_date_sk]
                      │                 └─ Broadcast Exchange Est. 1002 rows
                      │                    └─ TableScan tpcds.store Est. 1002 rows
@@ -65,24 +72,31 @@ Projection Est. 100 rows
                      │                 │     Condition: cs_catalog_page_sk_1 == cp_catalog_page_sk
                      │                 ├─ Inner Join Est. 5571778 rows
                      │                 │  │     Condition: cs_sold_date_sk_1 == d_date_sk_1
+                     │                 │  │     Runtime Filters Builder: {d_date_sk_1}
                      │                 │  ├─ Union Est. 1583977172 rows
                      │                 │  │  ├─ Projection Est. 1439980416 rows
                      │                 │  │  │  │     Expressions: [cs_catalog_page_sk, cs_ext_sales_price, cs_net_profit, cs_sold_date_sk], expr#CAST(0, 'decimal(7, 2)')_6:=cast(`expr#CAST(0, 'decimal(7, 2)')_6`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_7:=cast(`expr#CAST(0, 'decimal(7, 2)')_6`, 'Nullable(Float64)')
                      │                 │  │  │  └─ Projection Est. 1439980416 rows
                      │                 │  │  │     │     Expressions: [cs_catalog_page_sk, cs_ext_sales_price, cs_net_profit, cs_sold_date_sk], expr#CAST(0, 'decimal(7, 2)')_6:=cast('0.00', 'Decimal(7, 2)')
-                     │                 │  │  │     └─ TableScan tpcds.catalog_sales Est. 1439980416 rows
-                     │                 │  │  │              Outputs: [cs_catalog_page_sk, cs_ext_sales_price, cs_net_profit, cs_sold_date_sk]
+                     │                 │  │  │     └─ Filter Est. 1439980416 rows
+                     │                 │  │  │        │     Condition: Runtime Filters: {cs_sold_date_sk}
+                     │                 │  │  │        └─ TableScan tpcds.catalog_sales Est. 1439980416 rows
+                     │                 │  │  │                 Where: Runtime Filters: {cs_sold_date_sk}
+                     │                 │  │  │                 Outputs: [cs_catalog_page_sk, cs_ext_sales_price, cs_net_profit, cs_sold_date_sk]
                      │                 │  │  └─ Projection Est. 143996756 rows
                      │                 │  │     │     Expressions: [cr_catalog_page_sk, cr_net_loss, cr_return_amount, cr_returned_date_sk], expr#CAST(0, 'decimal(7, 2)')_8:=cast(`expr#CAST(0, 'decimal(7, 2)')_8`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_9:=cast(`expr#CAST(0, 'decimal(7, 2)')_8`, 'Nullable(Float64)')
                      │                 │  │     └─ Projection Est. 143996756 rows
                      │                 │  │        │     Expressions: [cr_catalog_page_sk, cr_net_loss, cr_return_amount, cr_returned_date_sk], expr#CAST(0, 'decimal(7, 2)')_8:=cast('0.00', 'Decimal(7, 2)')
-                     │                 │  │        └─ TableScan tpcds.catalog_returns Est. 143996756 rows
-                     │                 │  │                 Outputs: [cr_catalog_page_sk, cr_net_loss, cr_return_amount, cr_returned_date_sk]
+                     │                 │  │        └─ Filter Est. 143996756 rows
+                     │                 │  │           │     Condition: Runtime Filters: {cr_returned_date_sk}
+                     │                 │  │           └─ TableScan tpcds.catalog_returns Est. 143996756 rows
+                     │                 │  │                    Where: Runtime Filters: {cr_returned_date_sk}
+                     │                 │  │                    Outputs: [cr_catalog_page_sk, cr_net_loss, cr_return_amount, cr_returned_date_sk]
                      │                 │  └─ Broadcast Exchange Est. 14 rows
                      │                 │     └─ Filter Est. 14 rows
                      │                 │        │     Condition: (d_date_1 >= cast(11192, 'Date')) AND (d_date_1 <= cast(11206, 'Date'))
                      │                 │        └─ TableScan tpcds.date_dim Est. 73049 rows
-                     │                 │                 Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date')).
+                     │                 │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
                      │                 │                 Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk
                      │                 └─ Broadcast Exchange Est. 30000 rows
                      │                    └─ TableScan tpcds.catalog_page Est. 30000 rows
@@ -102,13 +116,17 @@ Projection Est. 100 rows
                                        │     Condition: ws_web_site_sk_2 == web_site_sk
                                        ├─ Inner Join Est. 5482936 rows
                                        │  │     Condition: ws_sold_date_sk_1 == d_date_sk_2
+                                       │  │     Runtime Filters Builder: {d_date_sk_2}
                                        │  ├─ Union Est. 1583785302 rows
                                        │  │  ├─ Projection Est. 720000376 rows
                                        │  │  │  │     Expressions: [ws_ext_sales_price, ws_net_profit, ws_sold_date_sk, ws_web_site_sk], expr#CAST(0, 'decimal(7, 2)')_12:=cast(`expr#CAST(0, 'decimal(7, 2)')_12`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_13:=cast(`expr#CAST(0, 'decimal(7, 2)')_12`, 'Nullable(Float64)')
                                        │  │  │  └─ Projection Est. 720000376 rows
                                        │  │  │     │     Expressions: [ws_ext_sales_price, ws_net_profit, ws_sold_date_sk, ws_web_site_sk], expr#CAST(0, 'decimal(7, 2)')_12:=cast('0.00', 'Decimal(7, 2)')
-                                       │  │  │     └─ TableScan tpcds.web_sales Est. 720000376 rows
-                                       │  │  │              Outputs: [ws_ext_sales_price, ws_net_profit, ws_sold_date_sk, ws_web_site_sk]
+                                       │  │  │     └─ Filter Est. 720000376 rows
+                                       │  │  │        │     Condition: Runtime Filters: {ws_sold_date_sk}
+                                       │  │  │        └─ TableScan tpcds.web_sales Est. 720000376 rows
+                                       │  │  │                 Where: Runtime Filters: {ws_sold_date_sk}
+                                       │  │  │                 Outputs: [ws_ext_sales_price, ws_net_profit, ws_sold_date_sk, ws_web_site_sk]
                                        │  │  └─ Projection Est. 863784926 rows
                                        │  │     │     Expressions: [wr_net_loss, wr_return_amt, wr_returned_date_sk, ws_web_site_sk_1], expr#CAST(0, 'decimal(7, 2)')_14:=cast(`expr#CAST(0, 'decimal(7, 2)')_14`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_15:=cast(`expr#CAST(0, 'decimal(7, 2)')_14`, 'Nullable(Float64)')
                                        │  │     └─ Projection Est. 863784926 rows
@@ -117,8 +135,11 @@ Projection Est. 100 rows
                                        │  │           │     Condition: wr_item_sk == ws_item_sk, wr_order_number == ws_order_number
                                        │  │           ├─ Repartition Exchange Est. 71997522 rows
                                        │  │           │  │     Partition by: {wr_item_sk, wr_order_number}
-                                       │  │           │  └─ TableScan tpcds.web_returns Est. 71997522 rows
-                                       │  │           │           Outputs: [wr_item_sk, wr_net_loss, wr_order_number, wr_return_amt, wr_returned_date_sk]
+                                       │  │           │  └─ Filter Est. 71997522 rows
+                                       │  │           │     │     Condition: Runtime Filters: {wr_returned_date_sk}
+                                       │  │           │     └─ TableScan tpcds.web_returns Est. 71997522 rows
+                                       │  │           │              Where: Runtime Filters: {wr_returned_date_sk}
+                                       │  │           │              Outputs: [wr_item_sk, wr_net_loss, wr_order_number, wr_return_amt, wr_returned_date_sk]
                                        │  │           └─ Repartition Exchange Est. 720000376 rows
                                        │  │              │     Partition by: {ws_item_sk, ws_order_number}
                                        │  │              └─ TableScan tpcds.web_sales Est. 720000376 rows
@@ -127,8 +148,9 @@ Projection Est. 100 rows
                                        │     └─ Filter Est. 14 rows
                                        │        │     Condition: (d_date_2 >= cast(11192, 'Date')) AND (d_date_2 <= cast(11206, 'Date'))
                                        │        └─ TableScan tpcds.date_dim Est. 73049 rows
-                                       │                 Condition : (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date')).
+                                       │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11206, 'Date'))
                                        │                 Outputs: d_date_2:=d_date, d_date_sk_2:=d_date_sk
                                        └─ Broadcast Exchange Est. 54 rows
                                           └─ TableScan tpcds.web_site Est. 54 rows
                                                    Outputs: [web_site_id, web_site_sk]
+note: Runtime Filter is applied for 6 times.

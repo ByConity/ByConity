@@ -1,7 +1,7 @@
 #pragma once
 
 #include <Core/NameToType.h>
-#include <Optimizer/DynamicFilters.h>
+#include <Optimizer/RuntimeFilterUtils.h>
 #include <QueryPlan/Assignment.h>
 #include <QueryPlan/ITransformingStep.h>
 
@@ -22,8 +22,8 @@ public:
     Type getType() const override { return Type::MarkDistinct; }
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
-    void serialize(WriteBuffer & buf) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr context);
+    void toProto(Protos::MarkDistinctStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<MarkDistinctStep> fromProto(const Protos::MarkDistinctStep & proto, ContextPtr);
 
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;

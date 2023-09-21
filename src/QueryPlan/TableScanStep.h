@@ -16,13 +16,14 @@
 #pragma once
 #include <Core/QueryProcessingStage.h>
 #include <Core/SortDescription.h>
-#include <QueryPlan/ISourceStep.h>
+#include <Interpreters/SelectQueryOptions.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/FilterStep.h>
+#include <QueryPlan/ISourceStep.h>
 #include <QueryPlan/ProjectionStep.h>
-#include <Interpreters/SelectQueryOptions.h>
 #include <Storages/IStorage.h>
 #include <Storages/SelectQueryInfo.h>
+#include "QueryPlan/QueryPlan.h"
 
 
 namespace DB
@@ -33,28 +34,15 @@ class TableScanStep : public ISourceStep
 public:
     TableScanStep(
         ContextPtr context,
-        StoragePtr storage_,
-        const NamesWithAliases & column_alias_,
-        const SelectQueryInfo & query_info_,
-        size_t max_block_size_,
-        String alias_ = "",
-        PlanHints hints_ = {},
-        QueryPlanStepPtr aggregation_ = nullptr,
-        QueryPlanStepPtr projection_ = nullptr,
-        QueryPlanStepPtr filter_ = nullptr);
-
-    TableScanStep(
-        ContextPtr context,
         StorageID storage_id_,
         const NamesWithAliases & column_alias_,
         const SelectQueryInfo & query_info_,
         size_t max_block_size_,
         String alias_ = "",
         PlanHints hints_ = {},
-        QueryPlanStepPtr aggregation_ = nullptr,
-        QueryPlanStepPtr projection_ = nullptr,
-        QueryPlanStepPtr filter_ = nullptr);
-
+        std::shared_ptr<AggregatingStep> aggregation_ = nullptr,
+        std::shared_ptr<ProjectionStep> projection_ = nullptr,
+        std::shared_ptr<FilterStep> filter_ = nullptr);
 
     TableScanStep(
         DataStream output,
@@ -67,9 +55,9 @@ public:
         size_t max_block_size_,
         String alias_,
         PlanHints hints_,
-        QueryPlanStepPtr aggregation_,
-        QueryPlanStepPtr projection_,
-        QueryPlanStepPtr filter_,
+        std::shared_ptr<AggregatingStep> aggregation_,
+        std::shared_ptr<ProjectionStep> projection_,
+        std::shared_ptr<FilterStep> filter_,
         DataStream table_output_stream_)
         : ISourceStep(std::move(output), hints_)
         , storage(storage_)
@@ -92,8 +80,8 @@ public:
     Type getType() const override { return Type::TableScan; }
 
     void initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
-    void serialize(WriteBuffer & buffer) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buf, ContextPtr context);
+    void toProto(Protos::TableScanStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<TableScanStep> fromProto(const Protos::TableScanStep & proto, ContextPtr context);
 
     const String & getDatabase() const { return storage_id.database_name; }
     const String & getTable() const { return storage_id.table_name; }
@@ -106,12 +94,18 @@ public:
     QueryProcessingStage::Enum getProcessedStage() const;
     size_t getMaxBlockSize() const;
 
-    void setPushdownAggregation(QueryPlanStepPtr aggregation_) { pushdown_aggregation = std::move(aggregation_); }
-    void setPushdownProjection(QueryPlanStepPtr projection_) { pushdown_projection = std::move(projection_); }
-    void setPushdownFilter(QueryPlanStepPtr filter_) { pushdown_filter = std::move(filter_); }
-    const QueryPlanStepPtr & getPushdownAggregation() const { return pushdown_aggregation; }
-    const QueryPlanStepPtr & getPushdownProjection() const { return pushdown_projection; }
-    const QueryPlanStepPtr & getPushdownFilter() const { return pushdown_filter; }
+    void setPushdownAggregation(QueryPlanStepPtr aggregation_)
+    {
+        pushdown_aggregation = std::dynamic_pointer_cast<AggregatingStep>(aggregation_);
+    }
+    void setPushdownProjection(QueryPlanStepPtr projection_)
+    {
+        pushdown_projection = std::dynamic_pointer_cast<ProjectionStep>(projection_);
+    }
+    void setPushdownFilter(QueryPlanStepPtr filter_) { pushdown_filter = std::dynamic_pointer_cast<FilterStep>(filter_); }
+    std::shared_ptr<AggregatingStep> getPushdownAggregation() const { return pushdown_aggregation; }
+    std::shared_ptr<ProjectionStep> getPushdownProjection() const { return pushdown_projection; }
+    std::shared_ptr<FilterStep> getPushdownFilter() const { return pushdown_filter; }
     const AggregatingStep * getPushdownAggregationCast() const { return dynamic_cast<AggregatingStep *>(pushdown_aggregation.get()); }
     const ProjectionStep * getPushdownProjectionCast() const { return dynamic_cast<ProjectionStep *>(pushdown_projection.get()); }
     const FilterStep * getPushdownFilterCast() const { return dynamic_cast<FilterStep *>(pushdown_filter.get()); }
@@ -158,9 +152,9 @@ private:
     // with structure `Partial Aggregate->Projection->Filter->ReadTable`. And we are able to use
     // **clickhouse projection** to optimize its execution.
     // TODO: better to use a new kind of IQueryPlanStep
-    QueryPlanStepPtr pushdown_aggregation;
-    QueryPlanStepPtr pushdown_projection;
-    QueryPlanStepPtr pushdown_filter;
+    std::shared_ptr<AggregatingStep> pushdown_aggregation;
+    std::shared_ptr<ProjectionStep> pushdown_projection;
+    std::shared_ptr<FilterStep> pushdown_filter;
     DataStream table_output_stream;
 
     // just for cascades, in order to distinguish between the same tables.
@@ -170,7 +164,9 @@ private:
 
     // Optimises the where clauses for a bucket table by rewriting the IN clause and hence reducing the IN set size
     void rewriteInForBucketTable(ContextPtr context) const;
-    static ASTPtr rewriteDynamicFilter(const ASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context);
+    ASTPtr rewriteRuntimeFilter(
+        const ASTPtr & filter, const String & query_id, size_t wait_ms, bool is_prewhere, bool enable_bf, bool range_cover);
+    bool rewriteDynamicFilterIntoPrewhere(ASTSelectQuery * query);
     void aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings &);
     void setQuotaAndLimits(QueryPipeline & pipeline, const SelectQueryOptions & options, const BuildQueryPipelineSettings &);
 };

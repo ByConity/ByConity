@@ -45,6 +45,7 @@ class ASTStorage;
     M(UInt64, max_block_size, 65536, "Number of row collected by poll(s) for flushing data from Kafka.", 0) \
     /* default is stream_flush_interval_ms */ \
     M(Milliseconds, max_poll_interval_ms, 8000, "Timeout for flushing data from Kafka.", 0) \
+    M(Seconds, max_write_execution_second, 0, "Timeout for writing view table of Kafka task; 0 means no limit", 0) \
     /* those are mapped to format factory settings */ \
     M(String, format, "", "The message format for Kafka engine.", 0) \
     M(Char, row_delimiter, '\0', "The character to be considered as a delimiter in Kafka message.", 0) \

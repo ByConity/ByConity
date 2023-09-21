@@ -50,6 +50,9 @@ public:
     void setIsLeader(bool is_leader_) { is_leader.store(is_leader_, std::memory_order_release); }
     bool getIsLeader() { return is_leader.load(std::memory_order_acquire); }
 
+    void setIsKvDown(bool is_kv_down_) { is_kv_down.store(is_kv_down_, std::memory_order_release); }
+    bool getIsKvDown() { return is_kv_down.load(std::memory_order_relaxed); }
+
     TSOClock getClock() const
     {
         UInt64 timestamp = ts.load(std::memory_order_acquire);
@@ -74,6 +77,7 @@ public:
 private:
     std::atomic<UInt64> ts = 0;
     std::atomic_bool is_leader{false};
+    std::atomic_bool is_kv_down{false};
     Poco::Logger * log = &Poco::Logger::get("TSOImpl");
     std::atomic<bool> logical_clock_checking {false};
     std::function<void()> exitLeaderElection;

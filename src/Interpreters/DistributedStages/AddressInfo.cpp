@@ -13,8 +13,9 @@
  * limitations under the License.
  */
 
-#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <IO/ReadHelpers.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Protos/plan_node_utils.pb.h>
 
 
 namespace DB
@@ -30,6 +31,7 @@ AddressInfo::AddressInfo(const String &host_name_, UInt16 port_, const String &u
 
 void AddressInfo::serialize(WriteBuffer &buf) const
 {
+    // TODO: remove this when PlanSegment Protobuf is ready
     writeBinary(host_name, buf);
     writeBinary(port, buf);
     writeBinary(user, buf);
@@ -40,12 +42,33 @@ void AddressInfo::serialize(WriteBuffer &buf) const
 
 void AddressInfo::deserialize(ReadBuffer &buf)
 {
+    // TODO: remove this when PlanSegment Protobuf is ready
     readBinary(host_name, buf);
     readBinary(port, buf);
     readBinary(user, buf);
     readBinary(password, buf);
     readBinary(exchange_port, buf);
     readBinary(exchange_status_port, buf);
+}
+
+void AddressInfo::toProto(Protos::AddressInfo & proto) const
+{
+    proto.set_host_name(host_name);
+    proto.set_port(port);
+    proto.set_user(user);
+    proto.set_password(password);
+    proto.set_exchange_port(exchange_port);
+    proto.set_exchange_status_port(exchange_status_port);
+}
+
+void AddressInfo::fillFromProto(const Protos::AddressInfo & proto)
+{
+    host_name = proto.host_name();
+    port = proto.port();
+    user = proto.user();
+    password = proto.password();
+    exchange_port = proto.exchange_port();
+    exchange_status_port = proto.exchange_status_port();
 }
 
 std::vector<String> extractHostPorts(const AddressInfos &addresses)

@@ -105,20 +105,9 @@ bool PushQueryInfoFilterIntoTableScan::pushQueryInfoFilter(TableScanStep & table
 std::vector<ConstASTPtr> PushQueryInfoFilterIntoTableScan::extractPushDownFilter(const std::vector<ConstASTPtr> & conjuncts, ContextPtr context)
 {
     std::vector<ConstASTPtr> filters;
-    for (auto & conjunct : conjuncts)
-    {
-        if (auto dynamic_filter = DynamicFilters::extractDescription(conjunct))
-        {
-            auto & description = dynamic_filter.value();
-            if (!DynamicFilters::isSupportedForTableScan(description))
-                continue;
-        }
-
-        if (!ExpressionDeterminism::isDeterministic(conjunct, context))
-            continue;
-
+    for (const auto & conjunct : conjuncts)
+        if (ExpressionDeterminism::isDeterministic(conjunct, context))
         filters.emplace_back(conjunct);
-    }
     return filters;
 }
 

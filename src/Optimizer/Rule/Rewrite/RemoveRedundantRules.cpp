@@ -120,7 +120,8 @@ TransformResult RemoveRedundantUnion::transformImpl(PlanNodePtr node, const Capt
 
     if (children.size() != node->getChildren().size())
     {
-        auto union_step = std::make_unique<UnionStep>(inputs, step->getOutputStream(), step->isLocal());
+        auto union_step
+            = std::make_unique<UnionStep>(inputs, step->getOutputStream(), OutputToInputs{}, step->getMaxThreads(), step->isLocal());
         return PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(union_step), children, node->getStatistics());
     }
 

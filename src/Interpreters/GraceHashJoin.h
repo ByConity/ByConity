@@ -62,7 +62,7 @@ public:
     ~GraceHashJoin() override;
 
     const TableJoin & getTableJoin() const override { return *table_join; }
-    // TableJoin & getTableJoin() override { return *table_join; }
+    TableJoin & getTableJoin() override { return *table_join; }
 
     void initialize(const Block & sample_block) override;
 
@@ -89,9 +89,6 @@ public:
     static bool isSupported(const std::shared_ptr<TableJoin> & table_join);
 
     JoinType getType() const override { return JoinType::GRACE_HASH; }
-
-    void serialize(WriteBuffer & buf) const override;
-    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
 
 private:
     void initBuckets();

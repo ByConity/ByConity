@@ -27,18 +27,24 @@
 #include <type_traits>
 #include <functional>
 
-#include <Common/Exception.h>
-#include <Common/AllocatorWithMemoryTracking.h>
-#include <Core/Types.h>
-#include <Core/Defines.h>
 #include <Core/DecimalFunctions.h>
+#include <Core/Defines.h>
+#include <Core/Types.h>
 #include <Core/UUID.h>
+#include <Protos/EnumMacros.h>
+#include <Protos/enum.pb.h>
+#include <Common/AllocatorWithMemoryTracking.h>
+#include <Common/Exception.h>
 #include <common/DayNum.h>
 #include <common/strong_typedef.h>
 
-
 namespace DB
 {
+
+namespace Protos
+{
+    class Field;
+}
 
 namespace ErrorCodes
 {
@@ -274,67 +280,35 @@ public:
     struct Types
     {
         /// Type tag.
-        enum Which
-        {
-            Null    = 0,
-            UInt64  = 1,
-            Int64   = 2,
-            Float64 = 3,
-            UInt128 = 4,
-            Int128  = 5,
-
-            String  = 16,
-            Array   = 17,
-            Tuple   = 18,
-            Decimal32  = 19,
-            Decimal64  = 20,
-            Decimal128 = 21,
-            AggregateFunctionState = 22,
-            Decimal256 = 23,
-            UInt256 = 24,
-            Int256  = 25,
-            Map = 26,
-            UUID = 27,
-            ByteMap = 28,
-            BitMap64 = 29,
-            SketchBinary  = 30,
-
+        ENUM_WITH_PROTO_CONVERTER_C_STYLE(
+            Which, // enum name
+            Protos::FieldType, // proto enum message
+            (Null, 0),
+            (UInt64, 1),
+            (Int64, 2),
+            (Float64, 3),
+            (UInt128, 4),
+            (Int128, 5),
+            (String, 16),
+            (Array, 17),
+            (Tuple, 18),
+            (Decimal32, 19),
+            (Decimal64, 20),
+            (Decimal128, 21),
+            (AggregateFunctionState, 22),
+            (Decimal256, 23),
+            (UInt256, 24),
+            (Int256, 25),
+            (Map, 26),
+            (UUID, 27),
+            (ByteMap, 28),
+            (BitMap64, 29),
+            (SketchBinary, 30),
             // Special types for index analysis
-            NegativeInfinity = 254,
-            PositiveInfinity = 255,
-        };
+            (NegativeInfinity, 254),
+            (PositiveInfinity, 255));
 
-        static const char * toString(Which which)
-        {
-            switch (which)
-            {
-                case Null:    return "Null";
-                case NegativeInfinity: return "-Inf";
-                case PositiveInfinity: return "+Inf";
-                case UInt64:  return "UInt64";
-                case UInt128: return "UInt128";
-                case UInt256: return "UInt256";
-                case Int64:   return "Int64";
-                case Int128:  return "Int128";
-                case Int256:  return "Int256";
-                case UUID:    return "UUID";
-                case Float64: return "Float64";
-                case String:  return "String";
-                case Array:   return "Array";
-                case Tuple:   return "Tuple";
-                case Map:     return "Map";
-                case ByteMap:     return "Map";
-                case Decimal32:  return "Decimal32";
-                case Decimal64:  return "Decimal64";
-                case Decimal128: return "Decimal128";
-                case Decimal256: return "Decimal256";
-                case AggregateFunctionState: return "AggregateFunctionState";
-                case BitMap64: return "BitMap64";
-                case SketchBinary: return "SketchBinary";
-            }
-
-            throw Exception("Bad type of Field", ErrorCodes::BAD_TYPE_OF_FIELD);
-        }
+        static const char * toString(Which which);
     };
 
 
@@ -402,6 +376,9 @@ public:
         }
     }
 
+    void toProto(Protos::Field & proto) const;
+    void fillFromProto(const Protos::Field & proto);
+
     Field & operator= (const Field & rhs)
     {
         if (this != &rhs)
@@ -444,7 +421,13 @@ public:
     Field & operator= (const std::string_view & str);
     Field & operator= (const String & str) { return *this = std::string_view{str}; }
     Field & operator= (String && str);
-    Field & operator= (const char * str) { return *this = std::string_view{str}; }
+    Field & operator= (const char * str)
+    {
+        if (!str)
+            return *this = Null{};
+        else
+            return *this = std::string_view{str};
+    }
 
     ~Field()
     {

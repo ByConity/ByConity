@@ -16,5 +16,5 @@ Projection Est. 2 rows
                      └─ Filter Est. 5916531 rows
                         │     Condition: l_shipdate <= cast(10471, 'Date')
                         └─ TableScan tpch.lineitem Est. 6001215 rows
-                                 Condition : l_shipdate <= cast(10471, 'Date').
+                                 Where: l_shipdate <= cast(10471, 'Date')
                                  Outputs: [l_discount, l_extendedprice, l_linestatus, l_quantity, l_returnflag, l_shipdate, l_tax]

@@ -24,21 +24,21 @@ Projection Est. 10 rows, cost 2.388000e+01
                            │  └─ Limit Est. 30 rows, cost 0.000000e+00
                            │     │     Limit: 30
                            │     └─ TableScan system.numbers Est. ? rows, cost 0.000000e+00
-                           │              Limit : 30.
+                           │              Limit: 30
                            │              Outputs: [number]
                            ├─ Filter Est. 30 rows, cost 2.220000e+00
                            │  │     Condition: (number_1 % 3) = 0
                            │  └─ Limit Est. 30 rows, cost 0.000000e+00
                            │     │     Limit: 30
                            │     └─ TableScan system.numbers Est. ? rows, cost 0.000000e+00
-                           │              Limit : 30.
+                           │              Limit: 30
                            │              Outputs: number_1:=number
                            └─ Filter Est. 30 rows, cost 2.220000e+00
                               │     Condition: (number_2 % 5) = 0
                               └─ Limit Est. 30 rows, cost 0.000000e+00
                                  │     Limit: 30
                                  └─ TableScan system.numbers Est. ? rows, cost 0.000000e+00
-                                          Limit : 30.
+                                          Limit: 30
                                           Outputs: number_2:=number
 0	3
 2	1
@@ -75,5 +75,5 @@ Projection Est. 10 rows, cost 2.820000e+00
                            └─ Filter Est. ? rows, cost 0.000000e+00
                               │     Condition: (block_number > 10000000) AND (block_number < 20000000)
                               └─ TableScan test.polygon_tx_v87 Est. ? rows, cost 0.000000e+00
-                                       Condition : (block_number > 10000000) AND (block_number < 20000000).
+                                       Where: (block_number > 10000000) AND (block_number < 20000000)
                                        Outputs: [block_number, gas, gas_price]

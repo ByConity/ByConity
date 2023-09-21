@@ -24,7 +24,7 @@
 #include <Poco/JSON/Parser.h>
 namespace DB
 {
-using SerdeDataType = Protos::SerdeDataType;
+using SerdeDataType = Statistics::Protos::SerdeDataType;
 SerdeDataType SerdeDataTypeFromString(const String & tag_string);
 String SerdeDataTypeToString(SerdeDataType tag);
 using PArray = Poco::JSON::Array;

@@ -125,7 +125,7 @@ void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments,
         }
 
         if (cb)
-            cb(last_exception);
+            cb(last_exception, segments.size());
     });
 }
 

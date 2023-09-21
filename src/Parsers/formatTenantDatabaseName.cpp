@@ -148,11 +148,20 @@ void popTenantId()
     CurrentThread::get().popTenantId();
 }
 
+bool catalogIsCnch(const String & catalog_name)
+{
+    return catalog_name.empty() || catalog_name == "cnch";
+}
 
 String formatCatalogDatabaseName(const String & database_name, const String catalog_name)
 {
-    if (isInternalDatabaseName(database_name))
+    if (isInternalDatabaseName(database_name) && database_name != "default")
         return database_name;
+    
+    // the hive also has "default" database;
+    if (database_name == "default" && catalogIsCnch(catalog_name))
+        return database_name;
+
     String original_db = getOriginalDatabaseName(database_name);
     String formatted_catalog = formatTenantDatabaseNameImpl(catalog_name);
     String result;

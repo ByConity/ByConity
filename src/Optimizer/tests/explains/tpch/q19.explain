@@ -15,12 +15,12 @@ Projection Est. 1 rows
                │  └─ Filter Est. 214489 rows
                │     │     Condition: (l_shipinstruct = 'DELIVER IN PERSON') AND (l_shipmode IN ('AIR', 'AIR REG'))
                │     └─ TableScan tpch.lineitem Est. 6001215 rows
-               │              Condition : (l_shipinstruct = 'DELIVER IN PERSON') AND (l_shipmode IN ('AIR', 'AIR REG')).
+               │              Where: (l_shipinstruct = 'DELIVER IN PERSON') AND (l_shipmode IN ('AIR', 'AIR REG'))
                │              Outputs: [l_discount, l_extendedprice, l_partkey, l_quantity, l_shipinstruct, l_shipmode]
                └─ Repartition Exchange Est. 200000 rows
                   │     Partition by: {p_partkey}
                   └─ Filter Est. 200000 rows
                      │     Condition: p_size >= 1
                      └─ TableScan tpch.part Est. 200000 rows
-                              Condition : p_size >= 1.
+                              Where: p_size >= 1
                               Outputs: [p_brand, p_container, p_partkey, p_size]

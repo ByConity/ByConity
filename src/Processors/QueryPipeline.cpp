@@ -295,7 +295,8 @@ std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
     size_t max_streams,
     bool keep_left_read_in_order,
     bool join_parallel_left_right,
-    Processors * collected_processors)
+    Processors * collected_processors,
+    bool need_build_runtime_filter)
 {
     left->checkInitializedAndNotCompleted();
     right->checkInitializedAndNotCompleted();
@@ -336,12 +337,16 @@ std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
         }
 
         right->resize(max_streams);
+        std::shared_ptr<JoiningTransform::FinishCounter> finish_counter;
+        if (need_build_runtime_filter)
+            finish_counter = std::make_shared<JoiningTransform::FinishCounter>(max_streams);
+
         auto concurrent_right_filling_transform = [&](OutputPortRawPtrs outports)
         {
             Processors processors;
             for (auto & outport : outports)
             {
-                auto adding_joined = std::make_shared<FillingRightJoinSideTransform>(right->getHeader(), join);
+                auto adding_joined = std::make_shared<FillingRightJoinSideTransform>(right->getHeader(), join, finish_counter);
                 connect(*outport, adding_joined->getInputs().front());
                 processors.emplace_back(adding_joined);
             }
@@ -353,8 +358,11 @@ std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
     else
     {
         right->resize(1);
+        std::shared_ptr<JoiningTransform::FinishCounter> finish_counter;
+        if (need_build_runtime_filter)
+            finish_counter = std::make_shared<JoiningTransform::FinishCounter>(1);
 
-        auto adding_joined = std::make_shared<FillingRightJoinSideTransform>(right->getHeader(), join);
+        auto adding_joined = std::make_shared<FillingRightJoinSideTransform>(right->getHeader(), join, finish_counter);
         InputPort * totals_port = nullptr;
         if (right->hasTotals())
             totals_port = adding_joined->addTotalsPort();

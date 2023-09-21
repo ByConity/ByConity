@@ -85,58 +85,19 @@ QueryPipelinePtr ExceptStep::updatePipeline(QueryPipelines pipelines, const Buil
     #endif
 }
 
-void ExceptStep::serialize(WriteBuffer & buffer) const
+void ExceptStep::toProto(Protos::ExceptStep & proto, bool) const
 {
-    writeBinary(input_streams.size(), buffer);
-    for (const auto & input_stream : input_streams)
-        serializeDataStream(input_stream, buffer);
-
-    serializeDataStream(output_stream.value(), buffer);
-
-    writeBinary(distinct, buffer);
-
-    writeVarUInt(output_to_inputs.size(), buffer);
-    for (const auto & item : output_to_inputs)
-    {
-        writeStringBinary(item.first, buffer);
-        writeVarUInt(item.second.size(), buffer);
-        for (const auto & str : item.second)
-        {
-            writeStringBinary(str, buffer);
-        }
-    }
+    SetOperationStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    proto.set_distinct(distinct);
 }
 
-QueryPlanStepPtr ExceptStep::deserialize(ReadBuffer & buffer, ContextPtr)
+std::shared_ptr<ExceptStep> ExceptStep::fromProto(const Protos::ExceptStep & proto, ContextPtr)
 {
-    size_t size;
-    readBinary(size, buffer);
+    auto [base_input_streams, base_output_stream, output_to_inputs] = SetOperationStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto distinct = proto.distinct();
+    auto step = std::make_shared<ExceptStep>(base_input_streams, base_output_stream, output_to_inputs, distinct);
 
-    DataStreams input_streams(size);
-    for (size_t i = 0; i < size; ++i)
-        input_streams[i] = deserializeDataStream(buffer);
-
-    auto output_stream = deserializeDataStream(buffer);
-
-    bool distinct;
-    readBinary(distinct, buffer);
-
-    std::unordered_map<String, std::vector<String>> output_to_inputs;
-    readVarUInt(size, buffer);
-    for (size_t index = 0; index < size; index++)
-    {
-        String output;
-        readStringBinary(output, buffer);
-        size_t count;
-        readVarUInt(count, buffer);
-        for (size_t i = 0; i < count; i++)
-        {
-            String str;
-            readStringBinary(str, buffer);
-            output_to_inputs[output].emplace_back(str);
-        }
-    }
-    return std::make_unique<ExceptStep>(input_streams, output_stream, output_to_inputs, distinct);
+    return step;
 }
 
 bool ExceptStep::isDistinct() const

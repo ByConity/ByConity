@@ -16,5 +16,5 @@ Projection Est. 4 rows
                      └─ Filter Est. 391206 rows
                         │     Condition: (C_CITY IN ('UNITED KI1', 'UNITED KI5')) AND (S_CITY IN ('UNITED KI1', 'UNITED KI5')) AND (toYYYYMM(LO_ORDERDATE) = 199712)
                         └─ TableScan ssb.lineorder_flat Est. 5999989813 rows
-                                 Condition : (C_CITY IN ('UNITED KI1', 'UNITED KI5')) AND (S_CITY IN ('UNITED KI1', 'UNITED KI5')) AND (toYYYYMM(LO_ORDERDATE) = 199712).
+                                 Where: (C_CITY IN ('UNITED KI1', 'UNITED KI5')) AND (S_CITY IN ('UNITED KI1', 'UNITED KI5')) AND (toYYYYMM(LO_ORDERDATE) = 199712)
                                  Outputs: [C_CITY, LO_ORDERDATE, LO_REVENUE, S_CITY]

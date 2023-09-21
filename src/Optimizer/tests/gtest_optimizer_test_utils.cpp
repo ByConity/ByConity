@@ -135,7 +135,7 @@ createAggregatingNode(std::string key, std::string aggregator, bool final, std::
 std::shared_ptr<PlanNode<UnionStep>> createUnionNode(std::optional<DataStream> output_stream_, DB::PlanNodes children)
 {
     DataStreams input_stream_ = collectInputStreams(children);
-    auto step = std::make_unique<UnionStep>(input_stream_, output_stream_ ? *output_stream_ : DataStream{}, false);
+    auto step = std::make_unique<UnionStep>(input_stream_, output_stream_ ? *output_stream_ : DataStream{});
     return std::make_shared<PlanNode<UnionStep>>(id_allocator->nextId(), std::move(step), children);
 }
 

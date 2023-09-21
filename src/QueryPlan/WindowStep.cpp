@@ -221,40 +221,39 @@ std::shared_ptr<IQueryPlanStep> WindowStep::copy(ContextPtr) const
 {
     return std::make_shared<WindowStep>(input_streams[0], window_description, window_functions, need_sort);
 }
-void WindowStep::serialize(WriteBuffer & buffer) const
+
+void WindowStep::toProto(Protos::WindowStep & proto, bool) const
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    window_description.serialize(buffer);
-    writeBinary(window_functions.size(), buffer);
-    for (const auto & item : window_functions)
-        item.serialize(buffer);
-    writeBinary(need_sort, buffer);
-    serializeItemVector<SortColumnDescription>(prefix_description, buffer);
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    window_description.toProto(*proto.mutable_window_description());
+    for (const auto & element : window_functions)
+        element.toProto(*proto.add_window_functions());
+    proto.set_need_sort(need_sort);
+    for (const auto & element : prefix_description)
+        element.toProto(*proto.add_prefix_description());
 }
 
-QueryPlanStepPtr WindowStep::deserialize(ReadBuffer & buf, ContextPtr)
+std::shared_ptr<WindowStep> WindowStep::fromProto(const Protos::WindowStep & proto, ContextPtr)
 {
-    String step_description;
-    readBinary(step_description, buf);
-
-    DataStream input_stream = deserializeDataStream(buf);
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
     WindowDescription window_description;
+    window_description.fillFromProto(proto.window_description());
     std::vector<WindowFunctionDescription> window_functions;
-
-    window_description.deserialize(buf);
-    size_t size;
-    readBinary(size, buf);
-    for (size_t index = 0; index < size; ++index)
+    for (const auto & proto_element : proto.window_functions())
     {
-        WindowFunctionDescription desc;
-        desc.deserialize(buf);
-        window_functions.emplace_back(desc);
+        WindowFunctionDescription element;
+        element.fillFromProto(proto_element);
+        window_functions.emplace_back(std::move(element));
     }
-    bool need_sort;
-    readBinary(need_sort, buf);
+    auto need_sort = proto.need_sort();
     SortDescription prefix_description;
-    prefix_description = deserializeItemVector<SortColumnDescription>(buf);
-    auto step = std::make_shared<WindowStep>(input_stream, window_description, window_functions, need_sort, prefix_description);
+    for (const auto & proto_element : proto.prefix_description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        prefix_description.emplace_back(std::move(element));
+    }
+    auto step = std::make_shared<WindowStep>(base_input_stream, window_description, window_functions, need_sort, prefix_description);
     step->setStepDescription(step_description);
     return step;
 }

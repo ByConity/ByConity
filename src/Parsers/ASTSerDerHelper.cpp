@@ -63,6 +63,7 @@
 #include <Parsers/ASTReproduceQuery.h>
 #include <Parsers/ASTRolesOrUsersSet.h>
 #include <Parsers/ASTRowPolicyName.h>
+#include <Parsers/ASTSQLBinding.h>
 #include <Parsers/ASTSampleRatio.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTSelectQuery.h>
@@ -106,8 +107,8 @@ ASTPtr createWithASTType(ASTType type, ReadBuffer & buf)
     switch (type)
     {
 #define DISPATCH(TYPE) \
-        case ASTType::TYPE: \
-            return TYPE::deserialize(buf);
+    case ASTType::TYPE: \
+        return TYPE::deserialize(buf);
         APPLY_AST_TYPES(DISPATCH)
 #undef DISPATCH
         default:
@@ -164,6 +165,31 @@ ASTPtr deserializeAST(ReadBuffer & buf)
         return nullptr;
 }
 
+void serializeASTToProto(const IAST & ast, Protos::AST & proto)
+{
+    WriteBufferFromOwnString buf;
+    serializeAST(ast, buf);
+    proto.set_blob(std::move(buf.str()));
+}
+
+void serializeASTToProto(const ConstASTPtr & ast, Protos::AST & proto)
+{
+    if (ast)
+        serializeASTToProto(*ast, proto);
+    else
+        proto.set_blob("");
+}
+
+ASTPtr deserializeASTFromProto(const Protos::AST & proto)
+{
+    if (proto.blob().size() == 0)
+        return nullptr;
+
+    ReadBufferFromString buf(proto.blob());
+    auto ast = deserializeAST(buf);
+    return ast;
+}
+
 void serializeASTs(const ASTs & asts, WriteBuffer & buf)
 {
     writeVarUInt(asts.size(), buf);
@@ -197,4 +223,3 @@ ASTPtr deserializeASTWithChildren(ASTs & children, ReadBuffer & buf)
 }
 
 }
-

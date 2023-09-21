@@ -71,6 +71,8 @@ public:
     /// initialize disk cache from local disk
     virtual void load() = 0;
 
+    virtual size_t drop(const String & part_name) = 0;
+
     /// get number of keys
     virtual size_t getKeyCount() const = 0;
 
@@ -79,7 +81,7 @@ public:
 
     virtual IDiskCacheStrategyPtr getStrategy() const = 0;
 
-    using CacheSegmentsCallback = std::function<void(const String &)>;
+    using CacheSegmentsCallback = std::function<void(const String &, const int &)>;
     void cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments, CacheSegmentsCallback callback = {});
 
     VolumePtr getStorageVolume() const { return volume; }

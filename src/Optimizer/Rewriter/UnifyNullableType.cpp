@@ -68,7 +68,7 @@ PlanNodePtr UnifyNullableVisitor::visitProjectionNode(ProjectionNode & node, Voi
     }
 
     auto expression_step = std::make_shared<ProjectionStep>(
-        child->getStep()->getOutputStream(), assignments, set_nullable, step.isFinalProject(), step.getDynamicFilters());
+        child->getStep()->getOutputStream(), assignments, set_nullable, step.isFinalProject());
     return ProjectionNode::createPlanNode(context->nextNodeId(), std::move(expression_step), PlanNodes{child}, node.getStatistics());
 }
 
@@ -154,6 +154,7 @@ PlanNodePtr UnifyNullableVisitor::visitJoinNode(JoinNode & node, Void & v)
         join_step.getJoinAlgorithm(),
         join_step.isMagic(),
         join_step.isOrdered(),
+        join_step.getRuntimeFilterBuilders(),
         join_step.getHints());
     return JoinNode::createPlanNode(context->nextNodeId(), std::move(join_step_set_null), children, node.getStatistics());
 }

@@ -20,6 +20,7 @@
 #include <IO/WriteHelpers.h>
 #include <Optimizer/SymbolEquivalencesDeriver.h>
 #include <Parsers/ASTSerDerHelper.h>
+#include <Protos/plan_node_utils.pb.h>
 #include <QueryPlan/PlanSerDerHelper.h>
 
 namespace DB
@@ -58,7 +59,7 @@ bool Partitioning::satisfy(const Partitioning & requirement, const Constants & c
                 return false;
             }
             break;
-        };
+        }
         case Component::WORKER: {
             if (component == Component::COORDINATOR)
             {
@@ -136,24 +137,28 @@ Partitioning Partitioning::translate(const std::unordered_map<String, String> & 
 }
 
 
-void Partitioning::serialize(WriteBuffer & buf) const
+void Partitioning::toProto(Protos::Partitioning & proto) const
 {
-    serializeEnum(handle, buf);
-    serializeStrings(columns, buf);
-    writeBinary(require_handle, buf);
-    writeBinary(buckets, buf);
-    writeBinary(enforce_round_robin, buf);
-    serializeEnum(component, buf);
+    proto.set_handle(Partitioning::HandleConverter::toProto(handle));
+    for (const auto & element : columns)
+        proto.add_columns(element);
+    proto.set_require_handle(require_handle);
+    proto.set_buckets(buckets);
+    proto.set_enforce_round_robin(enforce_round_robin);
+    proto.set_component(Partitioning::ComponentConverter::toProto(component));
 }
 
-void Partitioning::deserialize(ReadBuffer & buf)
+Partitioning Partitioning::fromProto(const Protos::Partitioning & proto)
 {
-    deserializeEnum(handle, buf);
-    columns = deserializeStrings(buf);
-    readBinary(require_handle, buf);
-    readBinary(buckets, buf);
-    readBinary(enforce_round_robin, buf);
-    deserializeEnum(component, buf);
+    auto handle = Partitioning::HandleConverter::fromProto(proto.handle());
+    std::vector<String> columns;
+    for (const auto & element : proto.columns())
+        columns.emplace_back(element);
+    auto require_handle = proto.require_handle();
+    auto buckets = proto.buckets();
+    auto enforce_round_robin = proto.enforce_round_robin();
+    auto component = Partitioning::ComponentConverter::fromProto(proto.component());
+    return Partitioning(handle, columns, require_handle, buckets, enforce_round_robin, component);
 }
 
 String Partitioning::toString() const

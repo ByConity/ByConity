@@ -62,7 +62,7 @@ String createCloudMergeTreeCreateQuery(
     String database_name = table.getDatabaseName() + '_' + suffix;
     return table.getCreateQueryForCloudTable(
         table.getCreateTableSql(),
-        table_name, database_name);
+        table_name, nullptr, false, std::nullopt, Strings{}, database_name);
 }
 
 WorkerGroupHandle getWorkerGroup(const StorageCnchMergeTree & cnch_table, ContextPtr context)

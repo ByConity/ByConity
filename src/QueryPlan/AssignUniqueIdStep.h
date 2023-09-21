@@ -28,11 +28,11 @@ public:
 
     void setInputStreams(const DataStreams & input_streams_) override;
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
-    void serialize(WriteBuffer & buffer) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer & buffer, ContextPtr context);
 
     String getUniqueId() const { return unique_id; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;
+    void toProto(Protos::AssignUniqueIdStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<AssignUniqueIdStep> fromProto(const Protos::AssignUniqueIdStep & proto, ContextPtr);
 
 private:
     String unique_id;

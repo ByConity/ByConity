@@ -10,7 +10,7 @@ Projection Est. 1 rows, cost 2.836000e+00
    └─ Filter Est. 1 rows, cost 2.442000e+00
       │     Condition: id > 1
       └─ TableScan default.test_ip_opt Est. 3 rows, cost 2.220000e+00
-               Condition : id > 1.
+               Where: id > 1
                Outputs: [b, fxstr, id, ipv4, ipv6]
 Projection Est. 2 rows, cost 3.070000e+00
 │     Expressions: [b, fxstr, id, ipv4, ipv6]
@@ -18,7 +18,7 @@ Projection Est. 2 rows, cost 3.070000e+00
    └─ Filter Est. 2 rows, cost 2.442000e+00
       │     Condition: id >= 1
       └─ TableScan default.test_ip_opt Est. 3 rows, cost 2.220000e+00
-               Condition : id >= 1.
+               Where: id >= 1
                Outputs: [b, fxstr, id, ipv4, ipv6]
 *** test ipv4
 Projection Est. 2 rows, cost 3.070000e+00
@@ -27,7 +27,7 @@ Projection Est. 2 rows, cost 3.070000e+00
    └─ Filter Est. 2 rows, cost 2.442000e+00
       │     Condition: ipv4 = 3232235777
       └─ TableScan default.test_ip_opt Est. 3 rows, cost 2.220000e+00
-               Condition : ipv4 = 3232235777.
+               Where: ipv4 = 3232235777
                Outputs: [b, fxstr, id, ipv4, ipv6]
 Projection Est. 1 rows, cost 2.836000e+00
 │     Expressions: [b, fxstr, id, ipv4, ipv6]
@@ -35,7 +35,7 @@ Projection Est. 1 rows, cost 2.836000e+00
    └─ Filter Est. 1 rows, cost 2.442000e+00
       │     Condition: ipv4 = 3232235778
       └─ TableScan default.test_ip_opt Est. 3 rows, cost 2.220000e+00
-               Condition : ipv4 = 3232235778.
+               Where: ipv4 = 3232235778
                Outputs: [b, fxstr, id, ipv4, ipv6]
 *** test ipv6
 Projection Est. 2 rows, cost 3.070000e+00
@@ -44,7 +44,7 @@ Projection Est. 2 rows, cost 3.070000e+00
    └─ Filter Est. 2 rows, cost 2.442000e+00
       │     Condition: ipv6 = cast(\'\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\', \'IPv6\')
       └─ TableScan default.test_ip_opt Est. 3 rows, cost 2.220000e+00
-               Condition : ipv6 = cast(\'\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\', \'IPv6\').
+               Where: ipv6 = cast(\'\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\', \'IPv6\')
                Outputs: [b, fxstr, id, ipv4, ipv6]
 Projection Est. 1 rows, cost 2.836000e+00
 │     Expressions: [b, fxstr, id, ipv4, ipv6]
@@ -52,7 +52,7 @@ Projection Est. 1 rows, cost 2.836000e+00
    └─ Filter Est. 1 rows, cost 2.442000e+00
       │     Condition: ipv6 = cast(\'""""""""""""""""\', \'IPv6\')
       └─ TableScan default.test_ip_opt Est. 3 rows, cost 2.220000e+00
-               Condition : ipv6 = cast(\'""""""""""""""""\', \'IPv6\').
+               Where: ipv6 = cast(\'""""""""""""""""\', \'IPv6\')
                Outputs: [b, fxstr, id, ipv4, ipv6]
 *** test fixed string
 Projection Est. 2 rows, cost 3.070000e+00
@@ -61,7 +61,7 @@ Projection Est. 2 rows, cost 3.070000e+00
    └─ Filter Est. 2 rows, cost 2.442000e+00
       │     Condition: fxstr = \'123\'
       └─ TableScan default.test_ip_opt Est. 3 rows, cost 2.220000e+00
-               Condition : fxstr = \'123\'.
+               Where: fxstr = \'123\'
                Outputs: [b, fxstr, id, ipv4, ipv6]
 Projection Est. 1 rows, cost 2.836000e+00
 │     Expressions: [b, fxstr, id, ipv4, ipv6]
@@ -69,7 +69,7 @@ Projection Est. 1 rows, cost 2.836000e+00
    └─ Filter Est. 1 rows, cost 2.442000e+00
       │     Condition: fxstr = \'456\'
       └─ TableScan default.test_ip_opt Est. 3 rows, cost 2.220000e+00
-               Condition : fxstr = \'456\'.
+               Where: fxstr = \'456\'
                Outputs: [b, fxstr, id, ipv4, ipv6]
 *** test bool
 Projection Est. 2 rows, cost 3.070000e+00
@@ -78,7 +78,7 @@ Projection Est. 2 rows, cost 3.070000e+00
    └─ Filter Est. 2 rows, cost 2.442000e+00
       │     Condition: b = 1
       └─ TableScan default.test_ip_opt Est. 3 rows, cost 2.220000e+00
-               Condition : b = 1.
+               Where: b = 1
                Outputs: [b, fxstr, id, ipv4, ipv6]
 Projection Est. 1 rows, cost 2.836000e+00
 │     Expressions: [b, fxstr, id, ipv4, ipv6]
@@ -86,5 +86,5 @@ Projection Est. 1 rows, cost 2.836000e+00
    └─ Filter Est. 1 rows, cost 2.442000e+00
       │     Condition: b = 0
       └─ TableScan default.test_ip_opt Est. 3 rows, cost 2.220000e+00
-               Condition : b = 0.
+               Where: b = 0
                Outputs: [b, fxstr, id, ipv4, ipv6]

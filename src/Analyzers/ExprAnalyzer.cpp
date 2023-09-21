@@ -402,7 +402,8 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
         {
             const auto & resolved_field = column_reference->getFieldDescription();
-            if (const auto map_type = std::dynamic_pointer_cast<const DataTypeMap>(resolved_field.type))
+            auto type_id = resolved_field.type->getTypeId();
+            if (type_id == TypeIndex::Map || type_id == TypeIndex::ByteMap)
             {
                 if (resolved_field.hasOriginInfo() && !resolved_field.type->isMapKVStore()
                     && check_subcolumn(

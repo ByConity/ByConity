@@ -31,6 +31,7 @@
 #include <Interpreters/IJoin.h>
 #include <Interpreters/AggregationCommon.h>
 #include <Interpreters/RowRefs.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterBuilder.h>
 
 #include <Common/Arena.h>
 #include <Common/ColumnsHashing.h>
@@ -50,7 +51,7 @@ namespace DB
 
 class TableJoin;
 class DictionaryReader;
-
+class RuntimeFilterConsumer;
 namespace JoinStuff
 {
 
@@ -158,6 +159,7 @@ public:
     JoinType getType() const override { return JoinType::Hash; }
 
     const TableJoin & getTableJoin() const override { return *table_join; }
+    TableJoin & getTableJoin() override { return *table_join; }
 
     /** Add block of data from right hand of JOIN to the map.
       * Returns false, if some limit was exceeded and you should not insert more data.
@@ -365,9 +367,13 @@ public:
 
     bool isUsed(size_t off) const { return used_flags.getUsedSafe(off); }
 
-    void serialize(WriteBuffer & buf) const override;
-    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
+    bool isEqualNull(const String& name) const;
+    void tryBuildRuntimeFilters(size_t total_rows) const override;
+    void bypassRuntimeFilters(BypassType type) const;
     const Block & savedBlockSample() const { return data->sample_block; }
+    void buildBloomFilterRF(
+        const RuntimeFilterBuildInfos & rf_info, const String & name, size_t ht_size, RuntimeFilterConsumer * rf_consumer) const;
+    void buildValueSetRF(const RuntimeFilterBuildInfos & rf_info, const String & name, RuntimeFilterConsumer * rf_consumer) const;
 
 private:
     friend class NonJoinedBlockInputStream;

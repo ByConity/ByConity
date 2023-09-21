@@ -15,15 +15,23 @@ Projection Est. 2 rows
                      │     Expressions: [n_name], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
                      └─ Inner Join Est. 70866 rows
                         │     Condition: c_custkey == o_custkey, s_suppkey == l_suppkey
+                        │     Runtime Filters Builder: {o_custkey}
                         ├─ Inner Join Est. 60000000 rows
                         │  │     Condition: c_nationkey == n_nationkey
-                        │  ├─ TableScan tpch.customer Est. 150000 rows
-                        │  │        Outputs: [c_custkey, c_nationkey]
+                        │  ├─ Filter Est. 150000 rows
+                        │  │  │     Condition: Runtime Filters: {c_custkey, c_nationkey}
+                        │  │  └─ TableScan tpch.customer Est. 150000 rows
+                        │  │           Where: Runtime Filters: {c_custkey, c_nationkey}
+                        │  │           Outputs: [c_custkey, c_nationkey]
                         │  └─ Broadcast Exchange Est. 400 rows
                         │     └─ Inner Join Est. 400 rows
                         │        │     Condition: s_nationkey == n_nationkey
-                        │        ├─ TableScan tpch.supplier Est. 10000 rows
-                        │        │        Outputs: [s_nationkey, s_suppkey]
+                        │        │     Runtime Filters Builder: {n_nationkey}
+                        │        ├─ Filter Est. 10000 rows
+                        │        │  │     Condition: Runtime Filters: {s_nationkey}
+                        │        │  └─ TableScan tpch.supplier Est. 10000 rows
+                        │        │           Where: Runtime Filters: {s_nationkey}
+                        │        │           Outputs: [s_nationkey, s_suppkey]
                         │        └─ Broadcast Exchange Est. 2 rows
                         │           └─ Inner Join Est. 2 rows
                         │              │     Condition: n_regionkey == r_regionkey
@@ -36,19 +44,24 @@ Projection Est. 2 rows
                         │                 └─ Filter Est. 1 rows
                         │                    │     Condition: r_name = 'ASIA'
                         │                    └─ TableScan tpch.region Est. 5 rows
-                        │                             Condition : r_name = 'ASIA'.
+                        │                             Where: r_name = 'ASIA'
                         │                             Outputs: [r_name, r_regionkey]
                         └─ Broadcast Exchange Est. 454651 rows
                            └─ Inner Join Est. 454651 rows
                               │     Condition: l_orderkey == o_orderkey
+                              │     Runtime Filters Builder: {o_orderkey}
                               ├─ Repartition Exchange Est. 6001215 rows
                               │  │     Partition by: {l_orderkey}
-                              │  └─ TableScan tpch.lineitem Est. 6001215 rows
-                              │           Outputs: [l_discount, l_extendedprice, l_orderkey, l_suppkey]
+                              │  └─ Filter Est. 6001215 rows
+                              │     │     Condition: Runtime Filters: {l_orderkey}
+                              │     └─ TableScan tpch.lineitem Est. 6001215 rows
+                              │              Where: Runtime Filters: {l_orderkey}
+                              │              Outputs: [l_discount, l_extendedprice, l_orderkey, l_suppkey]
                               └─ Repartition Exchange Est. 227563 rows
                                  │     Partition by: {o_orderkey}
                                  └─ Filter Est. 227563 rows
                                     │     Condition: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date'))
                                     └─ TableScan tpch.orders Est. 1500000 rows
-                                             Condition : (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')).
+                                             Where: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date'))
                                              Outputs: [o_custkey, o_orderdate, o_orderkey]
+note: Runtime Filter is applied for 4 times.

@@ -43,6 +43,7 @@ public:
     JoinType getType() const override { return JoinType::Switcher; }
 
     const TableJoin & getTableJoin() const override { return *table_join; }
+    TableJoin & getTableJoin() override { return *table_join; }
 
     /// Add block of data from right hand of JOIN into current join object.
     /// If join-in-memory memory limit exceeded switches to join-on-disk and continue with it.
@@ -84,8 +85,10 @@ public:
         return join->createStreamWithNonJoinedRows(block, max_block_size);
     }
 
-    void serialize(WriteBuffer & buf) const override;
-    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
+    void tryBuildRuntimeFilters(size_t total_rows) const override
+    {
+        join->tryBuildRuntimeFilters(total_rows);
+    }
 
 private:
     JoinPtr join;

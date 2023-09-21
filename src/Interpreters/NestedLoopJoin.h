@@ -48,11 +48,10 @@ public:
     void setTotals(const Block &) override;
     const Block & getTotals() const override;
     const TableJoin & getTableJoin() const override { return *table_join; }
+    TableJoin & getTableJoin() override { return *table_join; }
+
     size_t getTotalRowCount() const override;
     size_t getTotalByteCount() const override;
-
-    void serialize(WriteBuffer & buf) const override;
-    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
 
 private:
     Poco::Logger * log = &Poco::Logger::get("NestedLoopJoin");

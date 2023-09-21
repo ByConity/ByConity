@@ -258,7 +258,8 @@ size_t tryPushDownFilter(QueryPlan::Node * parent_node, QueryPlan::Nodes & nodes
         /// Filter - Union - Something
         ///                - Something
 
-        child = std::make_unique<UnionStep>(union_input_streams, union_step->getMaxThreads());
+        child = std::make_unique<UnionStep>(
+            union_input_streams, DataStream{}, OutputToInputs{}, union_step->getMaxThreads(), union_step->isLocal());
 
         std::swap(parent, child);
         std::swap(parent_node->children, child_node->children);

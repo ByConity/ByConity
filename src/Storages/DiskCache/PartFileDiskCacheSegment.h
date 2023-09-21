@@ -48,8 +48,7 @@ public:
         const String & stream_name_,
         const String & extension_,
         const FileOffsetAndSize & stream_file_pos,
-        bool is_preload_ = false,
-        UInt64 preload_level_ = 1);
+        UInt64 preload_level_ = 0);
 
     static String
     getSegmentKey(const StorageID& storage_id, const String& part_name,
@@ -57,7 +56,7 @@ public:
 
     String getSegmentName() const override;
     String getMarkName() const override;
-    void cacheToDisk(IDiskCache & cache) override;
+    void cacheToDisk(IDiskCache & cache, bool throw_exception) override;
 
 private:
     IMergeTreeDataPartPtr data_part;
@@ -70,7 +69,6 @@ private:
     String stream_name;
     String extension;
     FileOffsetAndSize stream_file_pos;
-    bool is_preload;
     UInt64 preload_level;
 
     MergeTreeMarksLoader marks_loader;

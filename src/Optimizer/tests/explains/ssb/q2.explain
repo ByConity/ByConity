@@ -10,5 +10,5 @@ Projection Est. 1 rows
             └─ Filter Est. 327270489 rows
                │     Condition: (LO_DISCOUNT >= 4) AND (LO_DISCOUNT <= 6) AND (LO_QUANTITY >= 26) AND (LO_QUANTITY <= 35) AND (toYYYYMM(LO_ORDERDATE) = 199401)
                └─ TableScan ssb.lineorder Est. 5999989813 rows
-                        Condition : (LO_DISCOUNT >= 4) AND (LO_DISCOUNT <= 6) AND (LO_QUANTITY >= 26) AND (LO_QUANTITY <= 35) AND (toYYYYMM(LO_ORDERDATE) = 199401).
+                        Where: (LO_DISCOUNT >= 4) AND (LO_DISCOUNT <= 6) AND (LO_QUANTITY >= 26) AND (LO_QUANTITY <= 35) AND (toYYYYMM(LO_ORDERDATE) = 199401)
                         Outputs: [LO_DISCOUNT, LO_EXTENDEDPRICE, LO_ORDERDATE, LO_QUANTITY]

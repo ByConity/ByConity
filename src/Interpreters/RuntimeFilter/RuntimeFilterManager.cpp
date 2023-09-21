@@ -15,27 +15,95 @@
 
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 
-#include <Optimizer/DynamicFilters.h>
-#include <Optimizer/PlanNodeSearcher.h>
+#include <Optimizer/RuntimeFilterUtils.h>
+#include <Optimizer/Equivalences.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/IQueryPlanStep.h>
-#include <QueryPlan/ProjectionStep.h>
+#include <QueryPlan/JoinStep.h>
 #include <QueryPlan/QueryPlan.h>
+#include <QueryPlan/TableScanStep.h>
 
 namespace DB
 {
-size_t PartialRuntimeFilter::merge(RuntimeFilterPtr runtime_filter_, const String & address)
+
+namespace
+{
+    class RuntimeFilterCollector
+    {
+    public:
+        void visit(PlanSegmentTree::Node & plan_segment_node)
+        {
+            auto * plan_segment = plan_segment_node.getPlanSegment();
+            if (!visited.emplace(plan_segment).second)
+                return;
+
+            auto collect_runtime_filters = [&](const ConstASTPtr & filter) {
+                for (const auto & runtime_filter : RuntimeFilterUtils::extractRuntimeFilters(filter).first)
+                {
+                    auto id = RuntimeFilterUtils::extractId(runtime_filter);
+                    runtime_filter_probes[id].emplace(plan_segment);
+                }
+            };
+
+            for (auto & node : plan_segment->getQueryPlan().getNodes())
+            {
+                if (node.step->getType() == IQueryPlanStep::Type::Join)
+                {
+                    const auto & join_step = static_cast<const JoinStep &>(*node.step);
+                    for (const auto & runtime_filter : join_step.getRuntimeFilterBuilders())
+                    {
+                        runtime_filter_builds.emplace(runtime_filter.second.id, std::make_pair(plan_segment, &node));
+                        if (runtime_filter.second.distribution == RuntimeFilterDistribution::Distributed)
+                            remote_runtime_filter_builds.emplace(runtime_filter.second.id);
+                        else
+                            local_runtime_filter_builds.emplace(runtime_filter.second.id);
+                    }
+                }
+
+                if (node.step->getType() == IQueryPlanStep::Type::Filter)
+                {
+                    const auto & filter_step = dynamic_cast<const FilterStep &>(*node.step);
+                    collect_runtime_filters(filter_step.getFilter());
+                }
+                else if (node.step->getType() == IQueryPlanStep::Type::TableScan)
+                {
+                    const auto & table_step = dynamic_cast<const TableScanStep &>(*node.step);
+                    if (const auto * filter = table_step.getPushdownFilterCast())
+                        collect_runtime_filters(filter->getFilter());
+                    auto * query = table_step.getQueryInfo().query->as<ASTSelectQuery>();
+                    if (auto query_filter = query->getWhere())
+                        collect_runtime_filters(query_filter);
+                    if (auto query_filter = query->prewhere())
+                        collect_runtime_filters(query_filter);
+                }
+            }
+
+            for (auto * child : plan_segment_node.children)
+                visit(*child);
+        }
+
+        std::unordered_map<RuntimeFilterId, std::pair<PlanSegment *, QueryPlan::Node *>> runtime_filter_builds;
+        std::unordered_map<RuntimeFilterId, std::unordered_set<PlanSegment *>> runtime_filter_probes;
+
+        std::unordered_set<RuntimeFilterId> remote_runtime_filter_builds;
+        std::unordered_set<RuntimeFilterId> local_runtime_filter_builds;
+
+        std::unordered_set<PlanSegment *> visited;
+    };
+}
+
+size_t RuntimeFilterCollection::add(RuntimeFilterData data, const String & address)
 {
     std::lock_guard guard(mutex);
-    if (runtime_filter_)
-    {
-        if (!runtime_filter)
-            runtime_filter = std::move(runtime_filter_);
-        else
-            runtime_filter->merge(*runtime_filter_);
-        merged_address_set.emplace(address);
-    }
+    rf_data.emplace_back(std::move(data));
+    merged_address_set.emplace(address);
     return merged_address_set.size();
+}
+
+
+std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterCollection::finalize()
+{
+    return builder->extractValues(std::move(builder->merge(rf_data)));
 }
 
 RuntimeFilterManager & RuntimeFilterManager::getInstance()
@@ -44,128 +112,139 @@ RuntimeFilterManager & RuntimeFilterManager::getInstance()
     return ret;
 }
 
-static String toString(const PartialRuntimeFilters & filters)
+void RuntimeFilterManager::registerQuery(const String & query_id, PlanSegmentTree & plan_segment_tree, ContextPtr context)
 {
-    std::ostringstream ss;
-    for (const auto & item : filters)
-    {
-        ss << "" << item.first << ": [";
-        auto it = item.second->getExecuteSegmentIds().begin();
-        auto end = item.second->getExecuteSegmentIds().end();
-        if (it != end)
-            ss << *it;
-        for (it++; it != end; it++)
-            ss << ", " << *it;
-        ss << "]; ";
-    }
-    return ss.str();
-}
+    RuntimeFilterCollector collector;
+    collector.visit(*plan_segment_tree.getRoot());
 
-void RuntimeFilterManager::registerQuery(const String & query_id, PlanSegmentTree & plan_segment_tree)
-{
-    std::unordered_map<DynamicFilterId, size_t> id_to_parallel_size_map;
-    std::unordered_map<DynamicFilterId, std::unordered_set<size_t>> id_to_execute_plan_segments_map;
-    for (auto & plan_segment_node : plan_segment_tree.getNodes())
-    {
-        auto & plan_segment = *plan_segment_node.getPlanSegment();
-        auto segment_id = plan_segment.getPlanSegmentId();
-        auto parallel_size = plan_segment.getParallelSize();
-
-        for (const auto & node : plan_segment.getQueryPlan().getNodes())
-        {
-            if (node.step->getType() == IQueryPlanStep::Type::Projection)
-            {
-                const auto & projection_step = static_cast<const ProjectionStep &>(*node.step);
-                for (const auto & item : projection_step.getDynamicFilters())
-                {
-                    auto it = id_to_parallel_size_map.find(item.second.id);
-                    if (it == id_to_parallel_size_map.end())
-                        id_to_parallel_size_map[item.second.id] = parallel_size;
-                }
-            }
-            else if (node.step->getType() == IQueryPlanStep::Type::Filter)
-            {
-                const auto & filter_step = static_cast<const FilterStep &>(*node.step);
-                if (filter_step.getFilter())
-                {
-                    auto filters = DynamicFilters::extractDynamicFilters(filter_step.getFilter());
-                    for (const auto & dynamic_filter : filters.first)
-                    {
-                        auto dynamic_filter_id = DynamicFilters::extractId(dynamic_filter);
-                        id_to_execute_plan_segments_map[dynamic_filter_id].emplace(segment_id);
-                    }
-                }
-            }
-        }
+    // register remote runtime filters in probe plan segment for resource release
+    for (const auto & [id, plan_segments] : collector.runtime_filter_probes) {
+        for (const auto & plan_segment : plan_segments)
+            plan_segment->addRuntimeFilter(id);
     }
 
-    PartialRuntimeFilters runtime_filters;
-    for (auto & item : id_to_parallel_size_map)
-    {
-        auto & plan_segments = id_to_execute_plan_segments_map[item.first];
-        std::vector<size_t> plan_segment_ids{plan_segments.begin(), plan_segments.end()};
-        runtime_filters.emplace(item.first, std::make_shared<PartialRuntimeFilter>(item.second, plan_segment_ids));
+    // register local runtime filters in build plan segment for resource release
+    for (const auto & id : collector.local_runtime_filter_builds) {
+        const auto & runtime_filter_build = collector.runtime_filter_builds[id];
+        runtime_filter_build.first->addRuntimeFilter(id);
     }
-    LOG_DEBUG(log, "Register query {}. {}", query_id, toString(runtime_filters));
 
-    partial_runtime_filters.put(query_id, std::make_shared<PartialRuntimeFilters>(std::move(runtime_filters)));
+    std::unordered_map<RuntimeFilterBuilderId, RuntimeFilterCollectionPtr> builders;
+    std::unordered_map<RuntimeFilterId, std::unordered_set<size_t>> targets;
+
+    // register remote runtime filters information in coordinator
+    for (const auto & id : collector.remote_runtime_filter_builds) {
+        const auto & runtime_filter_build = collector.runtime_filter_builds[id];
+        const auto * plan_segment = runtime_filter_build.first;
+        auto * join_step = dynamic_cast<JoinStep *>(runtime_filter_build.second->step.get());
+        auto builder = join_step->createRuntimeFilterBuilder(context);
+        builders.emplace(builder->getId(), std::make_shared<RuntimeFilterCollection>(builder, plan_segment->getParallelSize()));
+        for (const auto * probe_plan_segment : collector.runtime_filter_probes[id])
+            targets[id].emplace(probe_plan_segment->getPlanSegmentId());
+
+    }
+    auto runtime_filter_collection_context = std::make_shared<RuntimeFilterCollectionContext>(std::move(builders), std::move(targets));
+    runtime_filter_collection_contexts.put(query_id, runtime_filter_collection_context);
 }
 
 void RuntimeFilterManager::removeQuery(const String & query_id)
 {
-    partial_runtime_filters.remove(query_id);
+    runtime_filter_collection_contexts.remove(query_id);
 }
 
-PartialRuntimeFilterPtr RuntimeFilterManager::getPartialRuntimeFilter(const String & query_id, RuntimeFilterId filter_id)
+void RuntimeFilterManager::addDynamicValue(
+    const String & query_id, RuntimeFilterId filter_id, DynamicData && dynamic_value, UInt32 ref_segment)
 {
-    auto partial_runtime_filter_map = partial_runtime_filters.get(query_id);
-    auto partial_runtime_filter = partial_runtime_filter_map->find(filter_id);
-    if (partial_runtime_filter == partial_runtime_filter_map->end())
-        throw Exception();
-    return partial_runtime_filter->second;
-}
-
-void RuntimeFilterManager::putRuntimeFilter(
-    const String & query_id, size_t segment_id, RuntimeFilterId filter_id, RuntimeFilterPtr & runtime_filter)
-{
+    // std::cerr <<" addDynamicValue:" << filter_id << " " << dynamic_value.dump() << " \n";
     complete_runtime_filters
         .compute(
-            makeKey(query_id, segment_id, filter_id),
-            [](const auto &, CompleteRuntimeFilterPtr value) {
+            makeKey(query_id, filter_id),
+            [](const auto &, DynamicValuePtr value) {
                 if (!value)
-                    return std::make_shared<CompleteRuntimeFilter>();
+                    return std::make_shared<DynamicValue>();
                 return value;
             })
-        ->set(runtime_filter);
+        ->set(std::move(dynamic_value), ref_segment);
 }
 
-RuntimeFilterPtr
-RuntimeFilterManager::getRuntimeFilter(const String & query_id, size_t segment_id, RuntimeFilterId filter_id, size_t timeout_ms)
+DynamicValuePtr RuntimeFilterManager::getDynamicValue(const String & query_id, RuntimeFilterId filter_id)
 {
-    return getRuntimeFilter(makeKey(query_id, segment_id, filter_id), timeout_ms);
+    return getDynamicValue(makeKey(query_id, filter_id));
 }
 
-RuntimeFilterPtr RuntimeFilterManager::getRuntimeFilter(const String & key, size_t timeout_ms)
+DynamicValuePtr RuntimeFilterManager::getDynamicValue(const String & key)
 {
-    return complete_runtime_filters
-        .compute(
-            key,
-            [](const auto &, CompleteRuntimeFilterPtr value) {
-                if (!value)
-                    return std::make_shared<CompleteRuntimeFilter>();
-                return value;
-            })
-        ->get(timeout_ms);
+    return complete_runtime_filters.compute(key, [](const auto &, DynamicValuePtr value) {
+        if (!value)
+            return std::make_shared<DynamicValue>();
+        return value;
+    });
 }
 
-void RuntimeFilterManager::removeRuntimeFilter(const String & query_id, size_t segment_id, RuntimeFilterId filter_id)
+void RuntimeFilterManager::removeDynamicValue(const String & query_id, RuntimeFilterId filter_id)
 {
-    complete_runtime_filters.remove(makeKey(query_id, segment_id, filter_id));
+    auto key = makeKey(query_id, filter_id);
+    auto ref = getDynamicValue(makeKey(query_id, filter_id))->unref();
+    if (ref <= 0) {
+        complete_runtime_filters.remove(key);
+    }
 }
 
-String RuntimeFilterManager::makeKey(const String & query_id, size_t segment_id, RuntimeFilterId filter_id)
+String RuntimeFilterManager::makeKey(const String & query_id, RuntimeFilterId filter_id)
 {
-    return query_id + "_" + std::to_string(segment_id) + "_" + std::to_string(filter_id);
+    return query_id + "_" + std::to_string(filter_id);
+}
+
+const DynamicData & DynamicValue::get(size_t timeout_ms)
+{
+    if (timeout_ms == 0 || ready)
+    {
+        return value;
+    }
+    else
+    {
+        auto wait_duration = std::chrono::milliseconds(1);
+        int left = timeout_ms;
+        while (!ready && left > 0)
+        {
+            std::this_thread::sleep_for(wait_duration);
+            left-- ;
+        }
+
+        return value;
+    }
+}
+
+void DynamicValue::set(DynamicData&& value_, UInt32 ref)
+{
+    value = std::move(value_);
+    ref_count = ref;
+    ready = true;
+}
+
+bool DynamicValue::isReady()
+{
+    return ready;
+}
+
+String DynamicValue::dump()
+{
+    if (!isReady())
+        return "(not ready)";
+    else
+    {
+        auto const & data = get(0);
+        if (data.is_local)
+        {
+            auto const & d = std::get<RuntimeFilterVal>(data.data);
+            return d.dump();
+        }
+        else
+        {
+            auto const & d = std::get<InternalDynamicData>(data.data);
+            return "bf:" + d.bf.dump() + " set:" + d.set.dump() + " range:" + d.range.dump();
+        }
+    }
 }
 
 }

@@ -1,7 +1,6 @@
 set enable_optimizer=1;
 set dialect_type='ANSI';
 set create_stats_time_output=0;
-set enable_optimizer_white_list=0;
 drop table if exists test_ip_opt;
 drop table if exists test_ip_opt_local;
 create table test_ip_opt_local(

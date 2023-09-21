@@ -139,7 +139,7 @@ PlanNodePtr SetOperationNodeTranslator::unionNodes(const PlanNodes & children, c
     {
         output.header.insert(ColumnWithTypeAndName{col.type, col.name});
     }
-    auto union_step = std::make_unique<UnionStep>(input_stream, output, false);
+    auto union_step = std::make_unique<UnionStep>(input_stream, output);
 
     PlanNodePtr union_node = std::make_shared<UnionNode>(context.nextNodeId(), std::move(union_step), children);
     return union_node;

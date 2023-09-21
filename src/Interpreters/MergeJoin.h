@@ -47,6 +47,8 @@ public:
     JoinType getType() const override { return JoinType::Merge; }
 
     const TableJoin & getTableJoin() const override { return *table_join; }
+    TableJoin & getTableJoin() override { return *table_join; }
+
     bool addJoinedBlock(const Block & block, bool check_limits) override;
     void joinBlock(Block &, ExtraBlockPtr & not_processed) override;
 
@@ -57,9 +59,6 @@ public:
     size_t getTotalByteCount() const override { return right_blocks.bytes; }
 
     BlockInputStreamPtr createStreamWithNonJoinedRows(const Block & result_sample_block, UInt64 max_block_size) const override;
-
-    void serialize(WriteBuffer & buf) const override;
-    static JoinPtr deserialize(ReadBuffer & buf, ContextPtr context);
 
 private:
     friend class NonMergeJoinedBlockInputStream;

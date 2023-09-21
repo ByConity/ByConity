@@ -49,9 +49,6 @@ struct StreamLocalLimits
     ExecutionSpeedLimits speed_limits;
 
     OverflowMode timeout_overflow_mode = OverflowMode::THROW;
-
-    void serialize(WriteBuffer & buf) const;
-    void deserialize(ReadBuffer & buf);
 };
 
 }

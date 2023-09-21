@@ -52,6 +52,11 @@
 #include <Storages/RemoteFile/IStorageCloudFile.h>
 #include <Storages/Hive/StorageCloudHive.h>
 
+namespace ProfileEvents
+{
+extern const Event PreloadExecTotalOps;
+}
+
 namespace DB
 {
 namespace ErrorCodes
@@ -395,7 +400,6 @@ void CnchWorkerServiceImpl::sendCnchFileDataParts(
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
         RPCHelpers::handleException(response->mutable_exception());
     }
-
 }
 
 void CnchWorkerServiceImpl::checkDataParts(
@@ -466,13 +470,28 @@ void CnchWorkerServiceImpl::preloadDataParts(
     brpc::ClosureGuard done_guard(done);
     try
     {
+        SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::PreloadExecTotalOps); });
+
         Stopwatch watch;
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         StoragePtr storage = createStorageFromQuery(request->create_table_query(), rpc_context);
         auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
         auto data_parts = createPartVectorFromModelsForSend<MutableMergeTreeDataPartCNCHPtr>(cloud_merge_tree, request->parts());
 
-        LOG_TRACE(log, "Receiving preload parts task level = {}, sync = {}", request->preload_level(), request->sync());
+        LOG_TRACE(
+            log,
+            "Receiving preload parts task level = {}, sync = {}, current table preload setting: parts_preload_level = {}, "
+            "enable_preload_parts = {}, enable_parts_sync_preload = {}, enable_local_disk_cache = {}",
+            request->preload_level(),
+            request->sync(),
+            cloud_merge_tree.getSettings()->parts_preload_level.value,
+            cloud_merge_tree.getSettings()->enable_preload_parts.value,
+            cloud_merge_tree.getSettings()->enable_parts_sync_preload,
+            cloud_merge_tree.getSettings()->enable_local_disk_cache);
+
+        if (!request->preload_level()
+            || (!cloud_merge_tree.getSettings()->parts_preload_level && !cloud_merge_tree.getSettings()->enable_preload_parts))
+            return;
 
         std::unique_ptr<ThreadPool> pool;
         ThreadPool * pool_ptr;
@@ -486,7 +505,7 @@ void CnchWorkerServiceImpl::preloadDataParts(
 
         for (const auto & part : data_parts)
         {
-            part->preload(request->preload_level(), *pool_ptr);
+            part->preload(request->preload_level(), *pool_ptr, request->submit_ts());
         }
 
         if (request->sync())
@@ -498,6 +517,54 @@ void CnchWorkerServiceImpl::preloadDataParts(
             watch.elapsedMilliseconds(),
             request->preload_level(),
             request->sync());
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchWorkerServiceImpl::dropPartDiskCache(
+    [[maybe_unused]] google::protobuf::RpcController * cntl,
+    const Protos::DropPartDiskCacheReq * request,
+    Protos::DropPartDiskCacheResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+        StoragePtr storage = createStorageFromQuery(request->create_table_query(), rpc_context);
+        auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
+        auto data_parts = createPartVectorFromModelsForSend<MutableMergeTreeDataPartCNCHPtr>(cloud_merge_tree, request->parts());
+
+        std::unique_ptr<ThreadPool> pool;
+        ThreadPool * pool_ptr;
+        if (request->sync())
+        {
+            pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), 16UL));
+            pool_ptr = pool.get();
+        }
+        else
+            pool_ptr = &(IDiskCache::getThreadPool());
+
+
+        for (const auto & part : data_parts)
+        {
+            part->dropDiskCache(*pool_ptr, request->drop_vw_disk_cache());
+            // Just need one part drop all disk cache if drop_vw_disk_cache = true
+            if (request->drop_vw_disk_cache())
+            {
+                LOG_WARNING(log, "You now drop all vw {} cache!", cloud_merge_tree.getCnchStorageID().server_vw_name);
+                break;
+            }
+        }
+
+
+        if (pool)
+            pool->wait();
     }
     catch (...)
     {
@@ -584,10 +651,11 @@ void CnchWorkerServiceImpl::sendResources(
 
                     LOG_DEBUG(
                         log,
-                        "Received and loaded  {} parts for table {}(txn_id: {})",
+                        "Received and loaded {} parts for table {}(txn_id: {}), disk_cache_mode {}",
                         data.server_parts_size(),
                         cloud_merge_tree->getStorageID().getNameForLogs(),
-                        request->txn_id());
+                        request->txn_id(),
+                        request->disk_cache_mode());
                 }
 
                 std::set<Int64> required_bucket_numbers;
@@ -607,7 +675,11 @@ void CnchWorkerServiceImpl::sendResources(
                 auto data_parts = createCnchFileDataParts(getContext(), data.file_parts());
                 cloud_file_table->loadDataParts(data_parts);
 
-                LOG_DEBUG(log, "Received and loaded {}  cloud file parts for table {}", data_parts.size(), cloud_file_table->getStorageID().getNameForLogs());
+                LOG_DEBUG(
+                    log,
+                    "Received and loaded {}  cloud file parts for table {}",
+                    data_parts.size(),
+                    cloud_file_table->getStorageID().getNameForLogs());
             }
             else
                 throw Exception("Unknown table engine: " + storage->getName(), ErrorCodes::UNKNOWN_TABLE);

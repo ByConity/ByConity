@@ -190,8 +190,8 @@ SourcePtr HiveORCFile::getReader(const Block & block, const std::shared_ptr<IHiv
     auto arrow_column_to_ch_column = std::make_unique<ArrowColumnToCHColumn>(
         block,
         schema,
-        "Parquet",
-        params->format_settings.parquet.allow_missing_columns,
+        "ORC",
+        params->format_settings.orc.allow_missing_columns,
         params->format_settings.null_as_default);
 
     std::vector<int> column_indices = ORCBlockInputFormat::getColumnIndices(schema, block);

@@ -11,7 +11,11 @@ PROTOBUF_GENERATE_CPP(dbms_proto_srcs dbms_proto_headers
     tso.proto
     optimizer_statistics.proto
     runtime_filter.proto
-    daemon_manager_rpc.proto)
+    daemon_manager_rpc.proto
+    plan_node_utils.proto
+    plan_node.proto
+    enum.proto
+    )
 
 
 # Disable clang-tidy for protobuf-generated *.pb.h and *.pb.cpp files.

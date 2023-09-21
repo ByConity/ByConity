@@ -71,4 +71,27 @@ void ITransformingStep::describePipeline(FormatSettings & settings) const
     IQueryPlanStep::describePipeline(processors, settings);
 }
 
+// this won't be override, so use a different name
+void ITransformingStep::serializeToProtoBase(Protos::ITransformingStep & proto) const
+{
+    proto.set_step_description(step_description);
+    if (input_streams.empty())
+    {
+        DataStream stream{.header = Block()};
+        stream.toProto(*proto.mutable_input_stream());
+    }
+    else
+    {
+        input_streams.front().toProto(*proto.mutable_input_stream());
+    }
+}
+
+// return base_input_stream and step_description
+std::pair<String, DataStream> ITransformingStep::deserializeFromProtoBase(const Protos::ITransformingStep & proto)
+{
+    auto step_description = proto.step_description();
+    DataStream input_stream;
+    input_stream.fillFromProto(proto.input_stream());
+    return std::make_pair(std::move(step_description), std::move(input_stream));
+}
 }

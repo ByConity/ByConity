@@ -42,14 +42,24 @@ public:
 
     void initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;
 
-    void serialize(WriteBuffer &) const override;
 
-    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
 
     QueryPlanStepPtr generateStep();
 
     StorageID getStorageID() const { return storage_id; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
+
+    void toProto(Protos::PlanSegmentSourceStep & proto, bool for_hash_equals = false) const
+    {
+        (void)proto;
+        (void)for_hash_equals;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+    static std::shared_ptr<PlanSegmentSourceStep> fromProto(const Protos::PlanSegmentSourceStep & proto, ContextPtr)
+    {
+        (void)proto;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
 
 private:
 

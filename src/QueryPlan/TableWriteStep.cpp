@@ -106,7 +106,7 @@ BlockOutputStreams TableWriteStep::createOutputStream(
 
 void TableWriteStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)
 {
-    switch (target->getTargeType())
+    switch (target->getTargetType())
     {
         case TargetType::INSERT: {
             auto * insert_target = dynamic_cast<TableWriteStep::InsertTarget *>(target.get());
@@ -161,21 +161,22 @@ std::shared_ptr<IQueryPlanStep> TableWriteStep::copy(ContextPtr) const
     return std::make_shared<TableWriteStep>(input_streams[0], target);
 }
 
-void TableWriteStep::serialize(WriteBuffer & buffer) const
+void TableWriteStep::toProto(Protos::TableWriteStep & proto, bool) const
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    target->serialize(buffer);
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+
+    if (!target)
+        throw Exception("Target cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
+    target->toProto(*proto.mutable_target());
 }
 
-QueryPlanStepPtr TableWriteStep::deserialize(ReadBuffer & buffer, ContextPtr & context)
+std::shared_ptr<TableWriteStep> TableWriteStep::fromProto(const Protos::TableWriteStep & proto, ContextPtr context)
 {
-    String step_description;
-    readBinary(step_description, buffer);
-    DataStream input_stream = deserializeDataStream(buffer);
-
-    TargetPtr target = Target::deserialize(buffer, context);
-
-    return std::make_shared<TableWriteStep>(input_stream, target);
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto target = TableWriteStep::Target::fromProto(proto.target(), context);
+    auto step = std::make_shared<TableWriteStep>(base_input_stream, target);
+    step->setStepDescription(step_description);
+    return step;
 }
 
 void TableWriteStep::allocate(const ContextPtr & context)
@@ -191,20 +192,29 @@ void TableWriteStep::allocate(const ContextPtr & context)
     }
 }
 
-void TableWriteStep::Target::serialize(WriteBuffer & buffer) const
+void TableWriteStep::Target::toProto(Protos::TableWriteStep::Target & proto) const
 {
-    writeBinary(static_cast<UInt8>(getTargeType()), buffer);
-    serializeImpl(buffer);
+    switch (getTargetType())
+    {
+        case TargetType::INSERT: {
+            auto ptr = dynamic_cast<const TableWriteStep::InsertTarget *>(this);
+            ptr->toProtoImpl(*proto.mutable_insert_target());
+            return;
+        }
+
+        default:
+            throw Exception(fmt::format("unknown TableWrite::Target {}", static_cast<int>(getTargetType())), ErrorCodes::LOGICAL_ERROR);
+    }
 }
 
-TableWriteStep::TargetPtr TableWriteStep::Target::deserialize(ReadBuffer & buffer, ContextPtr & context)
+TableWriteStep::TargetPtr TableWriteStep::Target::fromProto(const Protos::TableWriteStep::Target & proto, ContextPtr context)
 {
-    UInt8 type;
-    readBinary(type, buffer);
-    switch (static_cast<TargetType>(type))
+    switch (proto.target_case())
     {
-        case TargetType::INSERT:
-            return TableWriteStep::InsertTarget::deserialize(buffer, context);
+        case Protos::TableWriteStep::Target::TargetCase::kInsertTarget:
+            return TableWriteStep::InsertTarget::createFromProtoImpl(proto.insert_target(), context);
+        default:
+            throw Exception(fmt::format("unknown TableWrite::Target {}", static_cast<int>(proto.target_case())), ErrorCodes::LOGICAL_ERROR);
     }
 }
 
@@ -213,24 +223,28 @@ void TableWriteStep::InsertTarget::setTable(const String & table_)
     storage_id.table_name = table_;
 }
 
-void TableWriteStep::InsertTarget::serializeImpl(WriteBuffer & buffer) const
+void TableWriteStep::InsertTarget::toProtoImpl(Protos::TableWriteStep::InsertTarget & proto) const
 {
-    storage_id.serialize(buffer);
-    writeBinary(columns.size(), buffer);
-    for (const auto & column : columns)
-        column.serialize(buffer);
+    storage_id.toProto(*proto.mutable_storage_id());
+    for (const auto & element : columns)
+        element.toProto(*proto.add_columns());
 }
 
-std::shared_ptr<TableWriteStep::InsertTarget> TableWriteStep::InsertTarget::deserialize(ReadBuffer & buffer, ContextPtr & context)
+std::shared_ptr<TableWriteStep::InsertTarget>
+TableWriteStep::InsertTarget::createFromProtoImpl(const Protos::TableWriteStep::InsertTarget & proto, ContextPtr context)
 {
-    auto storage_id = StorageID::deserialize(buffer, context);
+    auto storage_id = StorageID::fromProto(proto.storage_id(), context);
     auto storage = DatabaseCatalog::instance().getTable(storage_id, context);
-    size_t column_size;
-    readBinary(column_size, buffer);
-    NamesAndTypes columns(column_size);
-    for (size_t i = 0; i < column_size; i++)
-        columns[i].deserialize(buffer);
-    return std::make_shared<InsertTarget>(storage, storage_id, columns);
+    NamesAndTypes columns;
+    for (const auto & proto_element : proto.columns())
+    {
+        NameAndTypePair element;
+        element.fillFromProto(proto_element);
+        columns.emplace_back(std::move(element));
+    }
+    auto step = std::make_shared<TableWriteStep::InsertTarget>(storage, storage_id, columns);
+
+    return step;
 }
 
 String TableWriteStep::InsertTarget::toString() const
@@ -247,6 +261,4 @@ NameToNameMap TableWriteStep::InsertTarget::getTableColumnToInputColumnMap(const
         name_to_name_map.emplace(columns[i].name, input_columns[i]);
     return name_to_name_map;
 }
-
-
 }

@@ -756,7 +756,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTas
 
     /// Create transaction
     future_task.prepareTransaction();
-    auto & transaction = task_record.transaction;
+    auto transaction = task_record.transaction;
     auto transaction_id = transaction->getTransactionID();
 
     /// acquire lock to prevent conflict with upsert query

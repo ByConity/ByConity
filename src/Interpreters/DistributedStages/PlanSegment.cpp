@@ -13,21 +13,24 @@
  * limitations under the License.
  */
 
-#include <Interpreters/DistributedStages/PlanSegment.h>
-#include <IO/WriteBufferFromString.h>
-#include <IO/WriteHelpers.h>
-#include <IO/ReadHelpers.h>
-#include <Interpreters/Context.h>
+#include <Core/ColumnNumbers.h>
+#include <Core/ColumnWithTypeAndName.h>
+#include <DataStreams/NativeBlockInputStream.h>
+#include <DataStreams/NativeBlockOutputStream.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
-#include <Core/ColumnWithTypeAndName.h>
-#include <Core/ColumnNumbers.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteBufferFromString.h>
+#include <IO/WriteHelpers.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Parsers/IAST.h>
-#include <DataStreams/NativeBlockOutputStream.h>
-#include <DataStreams/NativeBlockInputStream.h>
 #include <Parsers/queryToString.h>
+#include <Protos/RPCHelpers.h>
+#include <Protos/plan_node_utils.pb.h>
 #include <QueryPlan/PlanSerDerHelper.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
+#include "QueryPlan/QueryPlan.h"
 
 #include <sstream>
 
@@ -101,6 +104,32 @@ void IPlanSegment::deserialize(ReadBuffer & buf, ContextPtr)
         readBinary(shuffle_keys[i], buf);
 }
 
+void IPlanSegment::toProtoBase(Protos::IPlanSegment & proto) const
+{
+    serializeBlockToProto(header, *proto.mutable_header());
+    proto.set_type(PlanSegmentTypeConverter::toProto(type));
+    proto.set_exchange_mode(ExchangeModeConverter::toProto(exchange_mode));
+    proto.set_exchange_id(exchange_id);
+    proto.set_exchange_parallel_size(exchange_parallel_size);
+    proto.set_name(name);
+    proto.set_segment_id(segment_id);
+    for (const auto & element : shuffle_keys)
+        proto.add_shuffle_keys(element);
+}
+
+void IPlanSegment::fromProtoBase(const Protos::IPlanSegment & proto)
+{
+    header = deserializeBlockFromProto(proto.header());
+    type = PlanSegmentTypeConverter::fromProto(proto.type());
+    exchange_mode = ExchangeModeConverter::fromProto(proto.exchange_mode());
+    exchange_id = proto.exchange_id();
+    exchange_parallel_size = proto.exchange_parallel_size();
+    name = proto.name();
+    segment_id = proto.segment_id();
+    for (const auto & element : proto.shuffle_keys())
+        shuffle_keys.emplace_back(element);
+}
+
 String IPlanSegment::toString(size_t indent) const
 {
     std::ostringstream ostr;
@@ -122,53 +151,51 @@ String IPlanSegment::toString(size_t indent) const
 
 void PlanSegmentInput::serialize(WriteBuffer & buf) const
 {
-    IPlanSegment::serialize(buf);
-
-    writeBinary(parallel_index, buf);
-
-    writeBinary(keep_order, buf);
-
-    writeBinary(source_addresses.size(), buf);
-    for (auto & source_address : source_addresses)
-        source_address.serialize(buf);
-
-    if (type == PlanSegmentType::SOURCE)
-    {
-        if (storage_id)
-        {
-            writeBinary(true, buf);
-            storage_id->serialize(buf);
-        }
-        else
-        {
-            writeBinary(false, buf);
-        }
-    }
+    // TODO replace plansegment* serde to protobuf
+    Protos::PlanSegmentInput proto;
+    this->toProto(proto);
+    auto str = proto.SerializeAsString();
+    writeBinary(str, buf);
 }
 
 void PlanSegmentInput::deserialize(ReadBuffer & buf, ContextPtr context)
 {
-    IPlanSegment::deserialize(buf, context);
+    // TODO replace plansegment* serde to protobuf
+    String str;
+    readBinary(str, buf);
+    Protos::PlanSegmentInput proto;
+    proto.ParseFromString(str);
+    this->fillFromProto(proto, context);
+}
 
-    readBinary(parallel_index, buf);
-
-    readBinary(keep_order, buf);
-
-    size_t addresses_size;
-    readBinary(addresses_size, buf);
-    for (size_t i = 0; i < addresses_size; ++i)
+void PlanSegmentInput::toProto(Protos::PlanSegmentInput & proto) const
+{
+    IPlanSegment::toProtoBase(*proto.mutable_base_plan_segment());
+    proto.set_parallel_index(parallel_index);
+    proto.set_keep_order(keep_order);
+    for (const auto & element : source_addresses)
+        element.toProto(*proto.add_source_addresses());
+    if (type == PlanSegmentType::SOURCE && storage_id.has_value())
     {
-        AddressInfo address;
-        address.deserialize(buf);
-        source_addresses.push_back(address);
+        storage_id.value().toProto(*proto.mutable_storage_id());
+    }
+}
+
+void PlanSegmentInput::fillFromProto(const Protos::PlanSegmentInput & proto, ContextPtr context)
+{
+    IPlanSegment::fromProtoBase(proto.base_plan_segment());
+    parallel_index = proto.parallel_index();
+    keep_order = proto.keep_order();
+    for (const auto & proto_element : proto.source_addresses())
+    {
+        AddressInfo element;
+        element.fillFromProto(proto_element);
+        source_addresses.emplace_back(std::move(element));
     }
 
-    if (type == PlanSegmentType::SOURCE)
+    if (type == PlanSegmentType::SOURCE && proto.has_storage_id())
     {
-        bool has;
-        readBinary(has, buf);
-        if (has)
-            storage_id = StorageID::deserialize(buf, context);
+        storage_id = StorageID::fromProto(proto.storage_id(), context);
     }
 }
 
@@ -262,6 +289,9 @@ void PlanSegment::serialize(WriteBuffer & buf) const
     writeBinary(cluster_name, buf);
     writeBinary(parallel, buf);
     writeBinary(exchange_parallel_size, buf);
+    writeBinary(runtime_filters.size(), buf);
+    for (const auto & id : runtime_filters)
+        writeBinary(id, buf);
 }
 
 void PlanSegment::deserialize(ReadBuffer & buf)
@@ -296,6 +326,15 @@ void PlanSegment::deserialize(ReadBuffer & buf)
     readBinary(cluster_name, buf);
     readBinary(parallel, buf);
     readBinary(exchange_parallel_size, buf);
+
+    size_t runtime_filters_size;
+    readBinary(runtime_filters_size, buf);
+    for (size_t i = 0; i < runtime_filters_size; ++i)
+    {
+        RuntimeFilterId id;
+        readBinary(id, buf);
+        runtime_filters.emplace(id);
+    }
 }
 
 /**
@@ -352,7 +391,6 @@ PlanSegmentDescriptionPtr PlanSegment::getPlanSegmentDescription()
     plan_segment_desc->cluster_name = cluster_name;
     plan_segment_desc->parallel = parallel;
     plan_segment_desc->exchange_parallel_size = exchange_parallel_size;
-    // plan_segment_desc->shard_num = shard_num;
     plan_segment_desc->shuffle_keys = getPlanSegmentOutput()->getShufflekeys();
     plan_segment_desc->mode = getPlanSegmentOutput()->getExchangeMode();
     plan_segment_desc->is_source = getPlanSegmentInputs().empty();
@@ -372,7 +410,6 @@ void PlanSegment::getRemoteSegmentId(const QueryPlan::Node * node, std::unordere
     for (const auto & child : node->children)
         getRemoteSegmentId(child, exchange_to_segment);
 }
-
 
 size_t PlanSegment::getParallelIndex() const
 {

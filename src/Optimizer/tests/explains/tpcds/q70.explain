@@ -26,13 +26,17 @@ Projection Est. 100 rows
                                     │     Condition: ss_store_sk == s_store_sk
                                     ├─ Inner Join Est. 260614797 rows
                                     │  │     Condition: ss_sold_date_sk == d_date_sk
-                                    │  ├─ TableScan tpcds.store_sales Est. 2879987999 rows
-                                    │  │        Outputs: [ss_net_profit, ss_sold_date_sk, ss_store_sk]
+                                    │  │     Runtime Filters Builder: {d_date_sk}
+                                    │  ├─ Filter Est. 2879987999 rows
+                                    │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                                    │  │  └─ TableScan tpcds.store_sales Est. 2879987999 rows
+                                    │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                                    │  │           Outputs: [ss_net_profit, ss_sold_date_sk, ss_store_sk]
                                     │  └─ Broadcast Exchange Est. 335 rows
                                     │     └─ Filter Est. 335 rows
                                     │        │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                                     │        └─ TableScan tpcds.date_dim Est. 73049 rows
-                                    │                 Condition : (d_month_seq >= 1200) AND (d_month_seq <= 1211).
+                                    │                 Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                                     │                 Outputs: [d_date_sk, d_month_seq]
                                     └─ Broadcast Exchange Est. 854 rows
                                        └─ Inner Join Est. 854 rows
@@ -42,7 +46,7 @@ Projection Est. 100 rows
                                           │  └─ Filter Est. 997 rows
                                           │     │     Condition: isNotNull(s_state)
                                           │     └─ TableScan tpcds.store Est. 1002 rows
-                                          │              Condition : isNotNull(s_state).
+                                          │              Where: isNotNull(s_state)
                                           │              Outputs: [s_county, s_state, s_store_sk]
                                           └─ Aggregating Est. 18 rows
                                              │     Group by: {s_state_1}
@@ -61,17 +65,22 @@ Projection Est. 100 rows
                                                                   │     Condition: ss_store_sk_1 == s_store_sk_1
                                                                   ├─ Inner Join Est. 260614797 rows
                                                                   │  │     Condition: ss_sold_date_sk_1 == d_date_sk_1
-                                                                  │  ├─ TableScan tpcds.store_sales Est. 2879987999 rows
-                                                                  │  │        Outputs: ss_net_profit_1:=ss_net_profit, ss_sold_date_sk_1:=ss_sold_date_sk, ss_store_sk_1:=ss_store_sk
+                                                                  │  │     Runtime Filters Builder: {d_date_sk_1}
+                                                                  │  ├─ Filter Est. 2879987999 rows
+                                                                  │  │  │     Condition: Runtime Filters: {ss_sold_date_sk_1}
+                                                                  │  │  └─ TableScan tpcds.store_sales Est. 2879987999 rows
+                                                                  │  │           Where: Runtime Filters: {ss_sold_date_sk}
+                                                                  │  │           Outputs: ss_net_profit_1:=ss_net_profit, ss_sold_date_sk_1:=ss_sold_date_sk, ss_store_sk_1:=ss_store_sk
                                                                   │  └─ Broadcast Exchange Est. 335 rows
                                                                   │     └─ Filter Est. 335 rows
                                                                   │        │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
                                                                   │        └─ TableScan tpcds.date_dim Est. 73049 rows
-                                                                  │                 Condition : (d_month_seq >= 1200) AND (d_month_seq <= 1211).
+                                                                  │                 Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                                                                   │                 Outputs: d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
                                                                   └─ Broadcast Exchange Est. 997 rows
                                                                      └─ Filter Est. 997 rows
                                                                         │     Condition: isNotNull(s_state_1)
                                                                         └─ TableScan tpcds.store Est. 1002 rows
-                                                                                 Condition : isNotNull(s_state).
+                                                                                 Where: isNotNull(s_state)
                                                                                  Outputs: s_state_1:=s_state, s_store_sk_1:=s_store_sk
+note: Runtime Filter is applied for 2 times.

@@ -34,6 +34,15 @@ public:
             return finished.fetch_add(1) + 1 >= total;
         }
 
+        bool isFinished()
+        {
+            return finished.load() >= total;
+        }
+
+        size_t getTotal() const
+        {
+            return total;
+        }
     private:
         const size_t total;
         std::atomic<size_t> finished{0};
@@ -95,7 +104,7 @@ private:
 class FillingRightJoinSideTransform : public IProcessor
 {
 public:
-    FillingRightJoinSideTransform(Block input_header, JoinPtr join_);
+    FillingRightJoinSideTransform(Block input_header, JoinPtr join_, JoiningTransform::FinishCounterPtr finish_counter_ = nullptr);
     String getName() const override { return "FillingRightJoinSide"; }
 
     InputPort * addTotalsPort();
@@ -106,9 +115,11 @@ public:
 private:
     JoinPtr join;
     Chunk chunk;
+    JoiningTransform::FinishCounterPtr finish_counter = nullptr;
     bool stop_reading = false;
     bool for_totals = false;
     bool set_totals = false;
+    bool build_rf = false; // after output finish, let's start build rf
 };
 
 class DelayedBlocksTask : public ChunkInfo

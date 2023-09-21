@@ -157,6 +157,7 @@
 #include <Storages/IndexFile/IndexFileWriter.h>
 #include <WorkerTasks/ManipulationList.h>
 
+#include <Interpreters/SQLBinding/SQLBindingCache.h>
 #include <Statistics/StatisticsMemoryStore.h>
 #include <Transaction/CnchServerTransaction.h>
 #include <Transaction/CnchWorkerTransaction.h>
@@ -170,6 +171,8 @@
 #include <Storages/RemoteFile/CnchFileCommon.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
 #include <Storages/StorageS3Settings.h>
+
+#include <IO/VETosCommon.h>
 
 namespace fs = std::filesystem;
 
@@ -308,6 +311,9 @@ struct ContextSharedPart
     String hdfs_nn_proxy; // libhdfs3 namenode proxy
     HDFSConnectionParams hdfs_connection_params;
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaries. Have lazy initialization.
+    
+    VETosConnectionParams vetos_connection_params;
+
     mutable std::optional<CnchCatalogDictionaryCache> cnch_catalog_dict_cache;
     mutable std::optional<ExternalDictionariesLoader> external_dictionaries_loader;
     mutable std::optional<ExternalModelsLoader> external_models_loader;
@@ -413,6 +419,7 @@ struct ContextSharedPart
     ConfigurationPtr clusters_config;                        /// Stores updated configs
     mutable std::mutex clusters_mutex;                       /// Guards clusters and clusters_config
     WorkerStatusManagerPtr worker_status_manager;
+    BindingCacheManagerPtr global_binding_cache_manager;
 
     mutable DeleteBitmapCachePtr delete_bitmap_cache; /// Cache of delete bitmaps
     mutable UniqueKeyIndexBlockCachePtr unique_key_index_block_cache; /// Shared block cache of unique key indexes
@@ -511,6 +518,9 @@ struct ContextSharedPart
 
             if (topology_master)
                 topology_master.reset();
+
+            if (global_binding_cache_manager)
+                global_binding_cache_manager.reset();
 
             if (cache_manager)
                 cache_manager.reset();
@@ -798,6 +808,41 @@ SegmentSchedulerPtr Context::getSegmentScheduler() const
     if (!shared->segment_scheduler)
         shared->segment_scheduler = std::make_shared<SegmentScheduler>();
     return shared->segment_scheduler;
+}
+
+BindingCacheManagerPtr Context::getGlobalBindingCacheManager() const
+{
+    auto lock = getLock();
+    if (this->shared->global_binding_cache_manager)
+        return this->shared->global_binding_cache_manager;
+    return nullptr;
+}
+
+BindingCacheManagerPtr Context::getGlobalBindingCacheManager()
+{
+    auto lock = getLock();
+    if (this->shared->global_binding_cache_manager)
+        return this->shared->global_binding_cache_manager;
+    return nullptr;
+}
+
+void Context::setGlobalBindingCacheManager(std::shared_ptr<BindingCacheManager> && manager)
+{
+    auto lock = getLock();
+    if (shared->global_binding_cache_manager)
+        throw Exception("Global binding cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+    shared->global_binding_cache_manager = std::move(manager);
+}
+
+std::shared_ptr<BindingCacheManager> Context::getSessionBindingCacheManager() const
+{
+    auto lock = getLock();
+    if (!this->session_binding_cache_manager)
+    {
+        this->session_binding_cache_manager = std::make_shared<BindingCacheManager>();
+        this->session_binding_cache_manager->initializeSessionBinding();
+    }
+    return session_binding_cache_manager;
 }
 
 QueueManagerPtr Context::getQueueManager() const
@@ -1934,9 +1979,37 @@ void Context::setCurrentDatabase(const String & name)
 
 void Context::setCurrentDatabase(const String & name, ContextPtr local_context)
 {
+    bool use_cnch_catalog = false;
+    auto [catalog_opt, database_opt] = getCatalogNameAndDatabaseName(name);
     DatabaseCatalog::instance().assertDatabaseExists(name, local_context);
+
+    if (catalog_opt.has_value())
+    {
+        auto catalog_name = catalog_opt.value();
+        if (catalog_name.empty() || getOriginalDatabaseName(catalog_name) == "cnch")
+        {
+            use_cnch_catalog = true;
+        }
+        else if (!(ExternalCatalog::Mgr::instance().isCatalogExist(catalog_name)))
+        {
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "catalog {} does not exist", catalog_name);
+        }
+    } else 
+    {
+        use_cnch_catalog = true;
+    }
+
+    auto db_name_with_tenant_id = appendTenantIdOnly(database_opt.value());
     auto lock = getLock();
-    current_database = name;
+    if(use_cnch_catalog){
+        current_catalog = "";
+        current_database = db_name_with_tenant_id;
+        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "use cnch catalog, db_name: {}", db_name_with_tenant_id);
+    } else {
+        current_catalog = catalog_opt.value();
+        current_database =  database_opt.value();
+        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "use external catalog, catalog_name: {}, db_name: {}", current_catalog, current_database);
+    }
     calculateAccessRights();
 }
 
@@ -1944,7 +2017,9 @@ void Context::setCurrentCatalog(const String & catalog_name)
 {
     if (catalog_name == "" || catalog_name == "cnch")
     {
+        auto lock = getLock();
         current_catalog = "";
+        current_database = "";
         return;
     }
     bool exists = ExternalCatalog::Mgr::instance().isCatalogExist(catalog_name);
@@ -1954,6 +2029,7 @@ void Context::setCurrentCatalog(const String & catalog_name)
     }
     auto lock = getLock();
     current_catalog = catalog_name;
+    current_database = "default";
 }
 
 
@@ -4116,6 +4192,26 @@ void Context::setHdfsConnectionParams(const HDFSConnectionParams & params)
 HDFSConnectionParams Context::getHdfsConnectionParams() const
 {
     return shared->hdfs_connection_params;
+}
+    
+void Context::setLasfsConnectionParams(const Poco::Util::AbstractConfiguration & config) {
+    if(config.has("lasfs_config")){
+        setSetting("lasfs_service_name",config.getString("lasfs_config.lasfs_service_name",""));
+        setSetting("lasfs_endpoint",config.getString("lasfs_config.lasfs_endpoint",""));
+        setSetting("lasfs_region",config.getString("lasfs_config.lasfs_region",""));
+    }
+}
+
+void Context::setVETosConnectParams(const VETosConnectionParams & connect_params)
+{
+    auto lock = getLock();
+    shared->vetos_connection_params = connect_params;
+}
+
+const VETosConnectionParams & Context::getVETosConnectParams() const
+{
+    auto lock = getLock();
+    return shared->vetos_connection_params;
 }
 
 void Context::setUniqueKeyIndexBlockCache(size_t cache_size_in_bytes)

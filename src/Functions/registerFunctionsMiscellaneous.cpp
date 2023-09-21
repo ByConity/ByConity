@@ -27,8 +27,8 @@ namespace DB
 {
 
 class FunctionFactory;
-
 void registerFunctionCurrentDatabase(FunctionFactory &);
+void registerFunctionCurrentCatalog(FunctionFactory &);
 void registerFunctionCurrentUser(FunctionFactory &);
 void registerFunctionHostName(FunctionFactory &);
 void registerFunctionHost(FunctionFactory &);
@@ -49,6 +49,7 @@ void registerFunctionNeighbor(FunctionFactory &);
 void registerFunctionSleep(FunctionFactory &);
 void registerFunctionSleepEachRow(FunctionFactory &);
 void registerFunctionInvalidateStatsCache(FunctionFactory &);
+void registerFunctionUpdateBindingCache(FunctionFactory &);
 void registerFunctionMaterialize(FunctionFactory &);
 void registerFunctionIgnore(FunctionFactory &);
 void registerFunctionIndexHint(FunctionFactory &);
@@ -109,6 +110,7 @@ void registerFunctionConvertCharset(FunctionFactory &);
 void registerFunctionsMiscellaneous(FunctionFactory & factory)
 {
     registerFunctionCurrentDatabase(factory);
+    registerFunctionCurrentCatalog(factory);
     registerFunctionCurrentUser(factory);
     registerFunctionHostName(factory);
     registerFunctionHost(factory);
@@ -129,6 +131,7 @@ void registerFunctionsMiscellaneous(FunctionFactory & factory)
     registerFunctionSleep(factory);
     registerFunctionSleepEachRow(factory);
     registerFunctionInvalidateStatsCache(factory);
+    registerFunctionUpdateBindingCache(factory);
     registerFunctionMaterialize(factory);
     registerFunctionIgnore(factory);
     registerFunctionIndexHint(factory);

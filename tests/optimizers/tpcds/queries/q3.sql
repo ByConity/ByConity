@@ -1,5 +1,5 @@
-/*+DYNAMIC_FILTER_PUSHDOWN=disabled*/select  dt.d_year
-       ,item.i_brand_id brand_id
+/*+RUNTIME_FILTER_PUSHDOWN=disabled*/select  dt.d_year
+       ,item.i_brand_id brand_id 
        ,item.i_brand brand
        ,sum(ss_ext_sales_price) sum_agg
  from  date_dim dt

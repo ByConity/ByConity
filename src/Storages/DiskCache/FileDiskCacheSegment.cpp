@@ -5,7 +5,7 @@
 namespace DB
 {
 
-void FileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache)
+void FileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool)
 {
     Poco::Logger * log = disk_cache.getLogger();
 

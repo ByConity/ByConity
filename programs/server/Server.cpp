@@ -59,6 +59,7 @@
 #include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Interpreters/loadMetadata.h>
+#include <Interpreters/SQLBinding/SQLBindingCache.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
 #include <QueryPlan/Hints/registerHints.h>
 #include <QueryPlan/PlanCache.h>
@@ -165,6 +166,8 @@
 #if USE_JEMALLOC
 #    include <jemalloc/jemalloc.h>
 #endif
+
+#include <IO/VETosCommon.h>
 
 namespace CurrentMetrics
 {
@@ -1144,6 +1147,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     HDFSConnectionParams hdfs_params = HDFSConnectionParams::parseHdfsFromConfig(global_context->getCnchConfigRef());
     global_context->setHdfsConnectionParams(hdfs_params);
 #endif
+    auto vetos_params = VETosConnectionParams::parseVeTosFromConfig(config());
+    global_context->setVETosConnectParams(vetos_params);
 
     // Clear old store data in the background
     ThreadFromGlobalPool clear_old_data;
@@ -1749,6 +1754,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (global_context->getComplexQueryActive())
         {
             Statistics::CacheManager::initialize(global_context);
+            BindingCacheManager::initializeGlobalBinding(global_context);
             PlanCacheManager::initialize(global_context);
         }
 

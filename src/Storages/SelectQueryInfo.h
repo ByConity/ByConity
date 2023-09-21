@@ -33,6 +33,12 @@
 namespace DB
 {
 
+namespace Protos
+{
+    class InputOrderInfo;
+    class SelectQueryInfo;
+}
+
 class ExpressionActions;
 using ExpressionActionsPtr = std::shared_ptr<ExpressionActions>;
 
@@ -83,9 +89,6 @@ struct PrewhereInfo
             : prewhere_actions(std::move(prewhere_actions_)), prewhere_column_name(std::move(prewhere_column_name_)) {}
 
     std::string dump() const;
-
-    void serialize(WriteBuffer & buf) const;
-    static PrewhereInfoPtr deserialize(ReadBuffer & buf, ContextPtr context);
 };
 
 /// Helper struct to store all the information about the filter expression.
@@ -124,8 +127,8 @@ struct InputOrderInfo
 
     bool operator !=(const InputOrderInfo & other) const { return !(*this == other); }
 
-    void serialize(WriteBuffer & buf) const;
-    void deserialize(ReadBuffer & buf);
+    void toProto(Protos::InputOrderInfo & proto) const;
+    static std::shared_ptr<InputOrderInfo> fromProto(const Protos::InputOrderInfo & proto, ContextPtr context);
 };
 
 class IMergeTreeDataPart;
@@ -194,8 +197,8 @@ struct SelectQueryInfo
     /// Read from local table
     bool read_local_table = true;
 
-    void serialize(WriteBuffer &) const;
-    void deserialize(ReadBuffer &);
+    void toProto(Protos::SelectQueryInfo & proto) const;
+    void fillFromProto(const Protos::SelectQueryInfo & proto);
 };
 
 }

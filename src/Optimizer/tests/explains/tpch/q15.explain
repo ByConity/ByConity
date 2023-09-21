@@ -7,8 +7,12 @@ Projection Est. 1 rows
          │     Order by: {s_suppkey asc}
          └─ Inner Join Est. 1 rows
             │     Condition: s_suppkey == l_suppkey_1
-            ├─ TableScan tpch.supplier Est. 10000 rows
-            │        Outputs: [s_address, s_name, s_phone, s_suppkey]
+            │     Runtime Filters Builder: {l_suppkey_1}
+            ├─ Filter Est. 10000 rows
+            │  │     Condition: Runtime Filters: {s_suppkey}
+            │  └─ TableScan tpch.supplier Est. 10000 rows
+            │           Where: Runtime Filters: {s_suppkey}
+            │           Outputs: [s_address, s_name, s_phone, s_suppkey]
             └─ Broadcast Exchange Est. 1 rows
                └─ Inner Join Est. 1 rows
                   │     Condition: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1 == expr#max(total_revenue)
@@ -25,7 +29,7 @@ Projection Est. 1 rows
                   │              └─ Filter Est. 226119 rows
                   │                 │     Condition: (l_shipdate_1 >= cast(9496, 'Date')) AND (l_shipdate_1 < cast(9587, 'Date'))
                   │                 └─ TableScan tpch.lineitem Est. 6001215 rows
-                  │                          Condition : (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date')).
+                  │                          Where: (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date'))
                   │                          Outputs: l_discount_1:=l_discount, l_extendedprice_1:=l_extendedprice, l_shipdate_1:=l_shipdate, l_suppkey_3:=l_suppkey
                   └─ Broadcast Exchange Est. 1 rows
                      └─ MergingAggregated Est. 1 rows
@@ -46,5 +50,6 @@ Projection Est. 1 rows
                                              └─ Filter Est. 226119 rows
                                                 │     Condition: (l_shipdate_2 >= cast(9496, 'Date')) AND (l_shipdate_2 < cast(9587, 'Date'))
                                                 └─ TableScan tpch.lineitem Est. 6001215 rows
-                                                         Condition : (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date')).
+                                                         Where: (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date'))
                                                          Outputs: l_discount_2:=l_discount, l_extendedprice_2:=l_extendedprice, l_shipdate_2:=l_shipdate, l_suppkey_4:=l_suppkey
+note: Runtime Filter is applied for 1 times.

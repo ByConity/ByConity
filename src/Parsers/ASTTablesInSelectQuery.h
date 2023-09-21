@@ -22,7 +22,8 @@
 #pragma once
 
 #include <Parsers/IAST.h>
-
+#include <Protos/EnumMacros.h>
+#include <Protos/enum.pb.h>
 
 namespace DB
 {
@@ -99,27 +100,30 @@ struct ASTTableJoin : public IAST
     };
 
     /// Allows more optimal JOIN for typical cases.
-    enum class Strictness
-    {
-        Unspecified,
-        RightAny, /// Old ANY JOIN. If there are many suitable rows in right table, use any from them to join.
-        Any,    /// Semi Join with any value from filtering table. For LEFT JOIN with Any and RightAny are the same.
-        All,    /// If there are many suitable rows to join, use all of them and replicate rows of "left" table (usual semantic of JOIN).
-        Asof,   /// For the last JOIN column, pick the latest value
-        Semi,   /// LEFT or RIGHT. SEMI LEFT JOIN filters left table by values exists in right table. SEMI RIGHT - otherwise.
-        Anti,   /// LEFT or RIGHT. Same as SEMI JOIN but filter values that are NOT exists in other table.
-    };
+    ENUM_WITH_PROTO_CONVERTER(
+        Strictness, // enum name
+        Protos::ASTTableJoin::Strictness, // proto enum message
+        (Unspecified),
+        (RightAny), /// Old ANY JOIN. If there are many suitable rows in right table, use any from them to join.
+        (Any), /// Semi Join with any value from filtering table. For LEFT JOIN with Any and RightAny are the same.
+        (All), /// If there are many suitable rows to join, use all of them and replicate rows of "left" table (usual semantic of JOIN).
+        (Asof), /// For the last JOIN column, pick the latest value
+        (Semi), /// LEFT or RIGHT. SEMI LEFT JOIN filters left table by values exists in right table. SEMI RIGHT - otherwise.
+        (Anti) /// LEFT or RIGHT. Same as SEMI JOIN but filter values that are NOT exists in other table.
+    );
 
     /// Join method.
-    enum class Kind
-    {
-        Inner, /// Leave only rows that was JOINed.
-        Left, /// If in "right" table there is no corresponding rows, use default values instead.
-        Right,
-        Full,
-        Cross, /// Direct product. Strictness and condition doesn't matter.
-        Comma /// Same as direct product. Intended to be converted to INNER JOIN with conditions from WHERE.
-    };
+    ENUM_WITH_PROTO_CONVERTER(
+        Kind, // enum name
+        Protos::ASTTableJoin::Kind, // proto enum message
+        (Inner), /// Leave only rows that was JOINed.
+        (Left), /// If in "right" table there is no corresponding rows, use default values instead.
+        (Right),
+        (Full),
+        (Cross), /// Direct product. Strictness and condition doesn't matter.
+        (Comma) /// Same as direct product. Intended to be converted to INNER JOIN with conditions from WHERE.
+    );
+
 
     Locality locality = Locality::Unspecified;
     Strictness strictness = Strictness::Unspecified;

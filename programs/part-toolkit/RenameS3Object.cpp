@@ -166,15 +166,24 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
                 Vector<String> split_parts;
                 boost::split(split_parts, from_key, boost::is_any_of("/"));
 
-                if (split_parts.size() == 4) {
-                    if (checkUUid) {
-                        DB::UUID uuid;
-                        DB::ReadBufferFromString read_buffer(split_parts[1]);
-                        if (!DB::tryReadUUIDText(uuid, read_buffer)) {
-                            continue;
-                        }
+            size_t index = 0;
+            while (index < split_parts.size()) {
+                if (rootPrefix.find(split_parts[index]) != std::string::npos) {
+                    index++;
+                } else {
+                    break;
+                }
+            }
+
+            if (split_parts.size() - index == 3) {
+                if (checkUUid) {
+                    DB::UUID uuid;
+                    DB::ReadBufferFromString table_buffer(split_parts[index]);
+                    DB::ReadBufferFromString part_buffer(split_parts[index + 1]);
+                    if (!DB::tryReadUUIDText(uuid, table_buffer) || !DB::tryReadUUIDText(uuid, part_buffer)) {
+                        continue;
                     }
-                    String to_key = split_parts[0] + "/" + split_parts[2] + "/" + split_parts[3];
+                    String to_key = rootPrefix + "/" + split_parts[index + 1] + "/" + split_parts[index + 2];
                     int64_t object_size = object.GetSize();
                     // submit copy task
                     boost::asio::post(thread_pool, [=, &client]() {
@@ -190,6 +199,7 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
                     });
                 }
             }
+
             if (objects.size() == request.GetMaxKeys()) {
                 request.SetMarker(objects[objects.size() - 1].GetKey());
             } else {
@@ -200,7 +210,6 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
     }
     thread_pool.join();
     return true;
-    
 }
 
 namespace po = boost::program_options;
@@ -224,8 +233,8 @@ int mainEntryClickhouseS3RenameTool(int argc, char ** argv)
         ("thread_number", po::value<int>()->default_value(1), "using how many threads, default 1")
         ("need_delete", po::value<bool>()->default_value(true), "whether delete origin file, default true")
         ("uuid_check", po::value<bool>()->default_value(true), "whether check uuid is valid or not, default true")
-        ("enable_logging", "Enable logging output")
-        ("logging_level", po::value<String>()->default_value("info"), "logging level")
+        ("enable_logging", po::value<bool>()->default_value(true),"Enable logging output")
+        ("logging_level", po::value<String>()->default_value("information"), "logging level")
     ;
 
     po::variables_map vm;

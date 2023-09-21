@@ -78,7 +78,8 @@ Projection Est. ? rows
          └─ Filter Est. ? rows
             │     Condition: (i > 1) AND ((i + i) < 10) AND ((j + i) < 10)
             └─ TableScan test.test1 Est. ? rows
-                     Condition : (i > 1) AND ((i + i) < 10) AND ((j + i) < 10).Prewhere : ((i AS iiii) + i) < 10.
+                     Where: (i > 1) AND ((i + i) < 10) AND ((j + i) < 10)
+                     Prewhere: ((i AS iiii) + i) < 10
                      Outputs: [i, j]
 non-optimized:
 Projection Est. ? rows
@@ -91,7 +92,7 @@ Projection Est. ? rows
          └─ Filter Est. ? rows
             │     Condition: (i + i) < 1
             └─ TableScan test.test1 Est. ? rows
-                     Condition : (i + i) < 1.
+                     Where: (i + i) < 1
                      Outputs: [i]
 non-optimized:
 Projection Est. ? rows

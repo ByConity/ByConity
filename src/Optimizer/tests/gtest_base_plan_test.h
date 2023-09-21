@@ -95,13 +95,39 @@ public:
     static bool enforce_regenerate();
     static int regenerate_task_thread_size();
 
+    void setShowStatistics(bool show_statistics_) { show_statistics = show_statistics_; }
+
+    void setTimerRounds(int n) { timer_rounds = n; }
+    String printMetric()
+    {
+        // auto str = fmt::format(
+        //     FMT_STRING("vanilla: ser {}s, deser {}s\nprotobuf:ser {}s, deser {}s"),
+        //     timers[TimerOption::VanillaSer],
+        //     timers[TimerOption::VanillaDeser],
+        //     timers[TimerOption::ProtobufSer],
+        //     timers[TimerOption::ProtobufDeser]);
+        // timers.clear();
+        return {};
+    }
+
 protected:
     virtual std::vector<std::filesystem::path> getTableDDLFiles() = 0;
     virtual std::filesystem::path getStatisticsFile() = 0;
     virtual std::filesystem::path getQueriesDir() = 0;
     virtual std::filesystem::path getExpectedExplainDir() = 0;
 
+    bool show_statistics = true;
+
     static std::vector<std::string> loadFile(const std::filesystem::path & path, char sep = {});
+    enum class TimerOption
+    {
+        VanillaSer = 0,
+        VanillaDeser = 1,
+        ProtobufSer = 2,
+        ProtobufDeser = 3,
+    };
+    int timer_rounds = 10;
+    std::unordered_map<TimerOption, double> timers;
 };
 
 #define DECLARE_GENERATE_TEST(TEST_SUITE_NAME) \

@@ -51,23 +51,17 @@ void ExtremesStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryP
     pipeline.addExtremesTransform();
 }
 
-void ExtremesStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<ExtremesStep> ExtremesStep::fromProto(const Protos::ExtremesStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buffer);
-}
-
-QueryPlanStepPtr ExtremesStep::deserialize(ReadBuffer & buffer, ContextPtr )
-{
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
-    auto step = std::make_unique<ExtremesStep>(input_stream);
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto step = std::make_shared<ExtremesStep>(base_input_stream);
     step->setStepDescription(step_description);
     return step;
+}
+
+void ExtremesStep::toProto(Protos::ExtremesStep & proto, bool) const
+{
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
 }
 
 std::shared_ptr<IQueryPlanStep> ExtremesStep::copy(ContextPtr) const

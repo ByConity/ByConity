@@ -23,6 +23,8 @@ using namespace DB;
 class PlanCheckCorrectness : public ::testing::Test
 {
 public:
+    PlanCheckCorrectness() { tester->setTimerRounds(1000); }
+    ~PlanCheckCorrectness() { std::cout << tester->printMetric() << std::endl; }
     static void SetUpTestSuite()
     {
         std::unordered_map<std::string, DB::Field> settings;

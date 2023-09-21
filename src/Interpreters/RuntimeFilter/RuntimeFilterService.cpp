@@ -18,6 +18,7 @@
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 
 namespace DB
 {
@@ -26,33 +27,18 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-static void OnDispatchRuntimeFilter(Protos::DispatchRuntimeFilterResponse * response, brpc::Controller * cntl, std::shared_ptr<RpcClient> rpc_channel)
+static void
+onDispatchRuntimeFilter(
+    Poco::Logger * log, Protos::DispatchRuntimeFilterResponse * response, brpc::Controller * cntl, std::shared_ptr<RpcClient> rpc_channel)
 {
     std::unique_ptr<Protos::DispatchRuntimeFilterResponse> response_guard(response);
     std::unique_ptr<brpc::Controller> cntl_guard(cntl);
 
     rpc_channel->checkAliveWithController(*cntl);
     if (cntl->Failed())
-    {
-        LOG_DEBUG(&Poco::Logger::get("RuntimeFilterService"), "dispatch runtime filter to worker failed, message: " + cntl->ErrorText());
-    }
+        LOG_DEBUG(log, "dispatch runtime filter to worker failed, message: " + cntl->ErrorText());
     else
-    {
-        LOG_DEBUG(&Poco::Logger::get("RuntimeFilterService"), "dispatch runtime filter to worker success");
-    }
-}
-
-static String to_string(const std::vector<size_t> & execute_segment_ids)
-{
-    if (execute_segment_ids.empty())
-        return "{}";
-    std::stringstream ss;
-    auto it = execute_segment_ids.begin();
-    ss << "{" << std::to_string(*it);
-    for (it++; it != execute_segment_ids.end(); it++)
-        ss << "," << std::to_string(*it);
-    ss << "}";
-    return ss.str();
+        LOG_DEBUG(log, "dispatch runtime filter to worker success");
 }
 
 void RuntimeFilterService::transferRuntimeFilter(
@@ -61,86 +47,76 @@ void RuntimeFilterService::transferRuntimeFilter(
     ::DB::Protos::TransferRuntimeFilterResponse * /*response*/,
     ::google::protobuf::Closure * done)
 {
+    Stopwatch timer{CLOCK_MONOTONIC_COARSE};
+    timer.start();
+
     brpc::ClosureGuard done_guard(done);
     try
     {
-        std::shared_ptr<RuntimeFilter> runtime_filter = std::make_shared<RuntimeFilter>();
+        auto segment_scheduler = context->getSegmentScheduler();
+        if (!segment_scheduler)
+            return;
+
         ReadBufferFromMemory read_buffer(request->filter_data().c_str(), request->filter_data().size());
-        runtime_filter->deserialize(read_buffer, false);
+        RuntimeFilterData data;
+        data.deserialize(read_buffer);
+
         auto & manager = RuntimeFilterManager::getInstance();
-        auto partial_runtime_filter = manager.getPartialRuntimeFilter(request->query_id(), request->filter_id());
-        size_t received = partial_runtime_filter->merge(runtime_filter, request->remote_address());
 
-        LOG_TRACE(log, "Coordinator receive query id: {}, filter id: {}, {}/{}",
-                  request->query_id(), request->filter_id(), received, request->require_parallel_size());
+        auto collection_context = manager.getRuntimeFilterCollectionContext(request->query_id());
+        auto collection = collection_context->getCollection(request->builder_id());
+        size_t received = collection->add(std::move(data), request->worker_address());
+        size_t required = collection->getParallelSize();
 
-        if (received > 0 && received == partial_runtime_filter->getRequireParallelSize() && context->getSegmentScheduler())
+        LOG_TRACE(
+            log,
+            "coordinator receive query id: {}, builder id: {}, {} / {} with {} ms",
+            request->query_id(),
+            request->builder_id(),
+            received,
+            required,
+            timer.elapsedMilliseconds());
+
+        if (received == required)
         {
-            Stopwatch timer{CLOCK_MONOTONIC_COARSE};
-            timer.start();
+            timer.restart();
+            LOG_DEBUG(
+                log,
+                "coordinator receive all runtime filters form builder workers, query id: {}, builder id: {}, "
+                "try to dispatch to execute plan segments.",
+                request->query_id(),
+                request->builder_id());
 
-            WriteBufferFromOwnString write_buffer;
-            partial_runtime_filter->getRuntimeFilter()->serialize(write_buffer, true);
-            write_buffer.next();
-
-            LOG_DEBUG(log, "Coordinator receive all partial runtime filter for query id: {}, filter id: {}, "
-                           "try to dispatch to execute plan segments: {}",
-                      request->query_id(), request->filter_id(), to_string(partial_runtime_filter->getExecuteSegmentIds()));
-
-            for (auto segment_id : partial_runtime_filter->getExecuteSegmentIds())
+            std::unordered_map<RuntimeFilterId, InternalDynamicData> && dynamic_values = collection->finalize();
+            for (const auto & [filter_id, field] : dynamic_values)
             {
+                WriteBufferFromOwnString write_buffer;
+                writeFieldBinary(field.range, write_buffer);
+                writeFieldBinary(field.bf, write_buffer);
+                writeFieldBinary(field.set, write_buffer);
+                writeBinary(UInt8(field.bypass), write_buffer);
+
+                std::map<AddressInfo, std::unordered_set<RuntimeFilterId>> send_addresses;
+                const auto & execute_segment_ids = collection_context->getExecuteSegmentIds(filter_id);
+                for (const auto & segment_id : execute_segment_ids)
+                {
+                    AddressInfos worker_addresses = segment_scheduler->getWorkerAddress(request->query_id(), segment_id);
+                    for (const auto & address : worker_addresses)
+                        send_addresses[address].emplace(segment_id);
+                }
+
                 Protos::DispatchRuntimeFilterRequest dispatch_request;
                 dispatch_request.set_query_id(request->query_id());
-                dispatch_request.set_segment_id(segment_id);
-                dispatch_request.set_filter_id(request->filter_id());
+                dispatch_request.set_filter_id(filter_id);
                 dispatch_request.set_filter_data(write_buffer.str());
 
-//                /// Get worker addresses for execute plan segment id
-//                size_t retry_count = 0;
-//                while (context.getSegmentScheduler()->getWorkerAddress(request->query_id(), segment_id).size()
-//                           != request->require_parallel_size()
-//                       && retry_count <= context.getSettingsRef().runtime_filter_get_worker_times)
-//                {
-//                    LOG_WARNING(log,
-//                        "RuntimeFilter wait for worker required count: {}, for query id: {}, filter id: {}, segment id: {}, retry count: "
-//                        "{}",
-//                        request->require_parallel_size(),
-//                        request->query_id(),
-//                        request->filter_id(),
-//                        segment_id,
-//                        retry_count);
-//
-//                    bthread_usleep(context.getSettingsRef().runtime_filter_get_worker_interval);
-//                    retry_count++;
-//                }
-
-                AddressInfos worker_addresses = context->getSegmentScheduler()->getWorkerAddress(request->query_id(), segment_id);
-//                if (retry_count >= context.getSettingsRef().runtime_filter_get_worker_times
-//                    && worker_addresses.size() != request->require_parallel_size())
-//                {
-//                    LOG_WARNING(
-//                        log,
-//                        "RuntimeFilter can not get enough worker address size {}, not equal to required count {}, "
-//                        "for query id: {}, filter id: {}, segment id: {}, due to segment scheduler not schedule this segment",
-//                        worker_addresses.size(),
-//                        request->require_parallel_size(),
-//                        request->query_id(),
-//                        request->filter_id(),
-//                        segment_id);
-//
-//                    LOG_WARNING(
-//                        log,
-//                        "RuntimeFilter get segment scheduler current dispatch status for query id: {}, status: {}",
-//                        request->query_id(),
-//                        context.getSegmentScheduler()->getCurrentDispatchStatus(request->query_id()));
-//
-//                    return;
-//                }
-
-                for (const auto & address : worker_addresses)
+                for (const auto & [address, segment_ids] : send_addresses)
                 {
+                    dispatch_request.set_ref_segment(segment_ids.size());
+
                     String host_port = extractExchangeStatusHostPort(address);
-                    std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(host_port, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+                    std::shared_ptr<RpcClient> rpc_client
+                        = RpcChannelPool::getInstance().getClient(host_port, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
                     std::shared_ptr<DB::Protos::RuntimeFilterService_Stub> command_service
                         = std::make_shared<Protos::RuntimeFilterService_Stub>(&rpc_client->getChannel());
                     auto * controller = new brpc::Controller;
@@ -149,13 +125,13 @@ void RuntimeFilterService::transferRuntimeFilter(
                         controller,
                         &dispatch_request,
                         dispatch_response,
-                        brpc::NewCallback(OnDispatchRuntimeFilter, dispatch_response, controller, rpc_client));
-                    LOG_DEBUG(
-                        log, "dispatch runtime filter query id: {}, segment id: {}, filter id: {}, host: {}", request->query_id(), segment_id, request->filter_id(), host_port);
+                        brpc::NewCallback(onDispatchRuntimeFilter, log, dispatch_response, controller, rpc_client));
+
+                    LOG_DEBUG(log, "coordinator dispatch query id: {}, filter id: {}, host: {}", request->query_id(), filter_id, host_port);
                 }
             }
 
-            LOG_DEBUG(log, "RuntimeFilter dispatch all filter to worker with {} ms", timer.elapsedMilliseconds());
+            LOG_DEBUG(log, "coordinator dispatch all runtime filters to worker with {} ms", timer.elapsedMilliseconds());
         }
     }
     catch (...)
@@ -175,13 +151,28 @@ void RuntimeFilterService::dispatchRuntimeFilter(
     {
         Stopwatch timer{CLOCK_MONOTONIC_COARSE};
         timer.start();
-        std::shared_ptr<RuntimeFilter> runtime_filter = std::make_shared<RuntimeFilter>();
         ReadBufferFromMemory read_buffer(request->filter_data().c_str(), request->filter_data().size());
-        runtime_filter->deserialize(read_buffer, true);
-        RuntimeFilterManager::getInstance().putRuntimeFilter(
-            request->query_id(), request->segment_id(), request->filter_id(), runtime_filter);
-        LOG_DEBUG(log, "Receive RuntimeFilter query id: {}, segment id: {}, filter id: {}, deserialize cost: {} ms",
-                  request->query_id(), request->segment_id(), request->filter_id(), timer.elapsedMilliseconds());
+        InternalDynamicData field;
+
+        readFieldBinary(field.range, read_buffer);
+        readFieldBinary(field.bf, read_buffer);
+        readFieldBinary(field.set, read_buffer);
+        UInt8 t;
+        readBinary(t, read_buffer);
+        field.bypass = BypassType(t);
+
+        DynamicData dynamic_data;
+        dynamic_data.bypass = field.bypass;
+        dynamic_data.data = std::move(field);
+        LOG_DEBUG(
+            log,
+            "probe worker receive runtime filter value, query id: {}, filter id: {}, deserialize cost {} ms",
+            request->query_id(),
+            request->filter_id(),
+            timer.elapsedMilliseconds());
+
+        RuntimeFilterManager::getInstance().addDynamicValue(
+            request->query_id(), request->filter_id(), std::move(dynamic_data), request->ref_segment());
     }
     catch (...)
     {

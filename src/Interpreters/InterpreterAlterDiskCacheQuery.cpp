@@ -19,11 +19,6 @@ InterpreterAlterDiskCacheQuery::InterpreterAlterDiskCacheQuery(const ASTPtr & qu
 BlockIO InterpreterAlterDiskCacheQuery::execute()
 {
     const auto & query = query_ptr->as<ASTAlterDiskCacheQuery &>();
-    if (query.type == ASTAlterDiskCacheQuery::Type::DROP)
-    {
-        throw Exception("Drop disk cache is not implemented", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
     /// apply settings
     if (query.settings_ast)
     {
@@ -47,7 +42,18 @@ BlockIO InterpreterAlterDiskCacheQuery::execute()
     }
     parts = CnchPartsHelper::calcVisibleParts(parts, false);
 
-    storage->sendPreloadTasks(getContext(), std::move(parts), query.sync, getContext()->getSettings().parts_preload_level);
+    if (query.type == ASTAlterDiskCacheQuery::Type::PRELOAD)
+    {
+        storage->sendPreloadTasks(getContext(), std::move(parts), query.sync, getContext()->getSettings().parts_preload_level);
+    }
+    else if (query.type == ASTAlterDiskCacheQuery::Type::DROP)
+    {
+        storage->sendDropDiskCacheTasks(getContext(), std::move(parts), query.sync, getContext()->getSettings().drop_vw_disk_cache);
+    }
+    else
+    {
+        throw Exception("Unknown alter disk cache query type", ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     return {};
 }

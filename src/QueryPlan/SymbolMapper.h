@@ -118,6 +118,8 @@ public:
 
     GroupingDescription map(const GroupingDescription & desc);
 
+    LinkedHashMap<String, RuntimeFilterBuildInfos> map(const LinkedHashMap<String, RuntimeFilterBuildInfos> & infos);
+
     std::shared_ptr<AggregatingStep> map(const AggregatingStep & agg);
     std::shared_ptr<ApplyStep> map(const ApplyStep & apply);
     std::shared_ptr<ArrayJoinStep> map(const ArrayJoinStep & array_join);

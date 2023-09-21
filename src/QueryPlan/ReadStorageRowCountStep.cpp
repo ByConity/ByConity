@@ -69,26 +69,26 @@ void ReadStorageRowCountStep::initializePipeline(QueryPipeline & pipeline, const
         pipeline.addInterpreterContext(context.context);
 }
 
-void ReadStorageRowCountStep::serialize(WriteBuffer & buffer) const
+void ReadStorageRowCountStep::toProto(Protos::ReadStorageRowCountStep & proto, bool) const
 {
-    serializeBlock(output_stream->header, buffer);
-    storage_id.serialize(buffer);
-    serializeAST(query, buffer);
-    agg_desc.serialize(buffer);
-    writeBinary(num_rows, buffer);
+    ISourceStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    storage_id.toProto(*proto.mutable_storage_id());
+    serializeASTToProto(query, *proto.mutable_query());
+    agg_desc.toProto(*proto.mutable_agg_desc());
+    proto.set_num_rows(num_rows);
 }
 
-QueryPlanStepPtr ReadStorageRowCountStep::deserialize(ReadBuffer & buffer, ContextPtr context_)
+std::shared_ptr<ReadStorageRowCountStep>
+ReadStorageRowCountStep::fromProto(const Protos::ReadStorageRowCountStep & proto, ContextPtr context)
 {
-    Block output_header = deserializeBlock(buffer);
-    StorageID storage_id = StorageID::deserialize(buffer, context_);
-    ASTPtr query = deserializeAST(buffer);
-    AggregateDescription desc;
-    desc.deserialize(buffer);
-    UInt64 num_rows;
-    readBinary(num_rows, buffer);
+    auto base_output_header = ISourceStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto storage_id = StorageID::fromProto(proto.storage_id(), context);
+    auto query = deserializeASTFromProto(proto.query());
+    AggregateDescription agg_desc;
+    agg_desc.fillFromProto(proto.agg_desc());
+    auto num_rows = proto.num_rows();
+    auto step = std::make_shared<ReadStorageRowCountStep>(base_output_header, storage_id, query, agg_desc, num_rows);
 
-    return std::make_unique<ReadStorageRowCountStep>( output_header, storage_id, query, desc, num_rows);
+    return step;
 }
-
 }

@@ -2,6 +2,7 @@ SET enable_optimizer = 1;
 SET enable_materialized_view_rewrite = 1;
 SET enable_materialized_view_rewrite_verbose_log = 1;
 SET enable_materialized_view_rewrite_match_range_filter = 1;
+set materialized_view_consistency_check_method='NONE';
 
 CREATE DATABASE IF NOT EXISTS test;
 USE test;

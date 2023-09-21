@@ -104,24 +104,24 @@ void ArrayJoinStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Columns", std::move(columns_array));
 }
 
-void ArrayJoinStep::serialize(WriteBuffer & buf) const
+void ArrayJoinStep::toProto(Protos::ArrayJoinStep & proto, bool) const
 {
-    IQueryPlanStep::serializeImpl(buf);
-    serializeArrayJoinAction(array_join, buf);
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+
+    if (!array_join)
+        throw Exception("ArrayJoin cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
+    array_join->toProto(*proto.mutable_array_join());
 }
 
-QueryPlanStepPtr ArrayJoinStep::deserialize(ReadBuffer & buf, ContextPtr context)
+std::shared_ptr<ArrayJoinStep> ArrayJoinStep::fromProto(const Protos::ArrayJoinStep & proto, ContextPtr context)
 {
-    String step_description;
-    readBinary(step_description, buf);
-
-    DataStream input_stream = deserializeDataStream(buf);
-    auto array_join = deserializeArrayJoinAction(buf, context);
-    auto step = std::make_unique<ArrayJoinStep>(input_stream, std::move(array_join));
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto array_join = ArrayJoinAction::fromProto(proto.array_join(), context);
+    auto step = std::make_shared<ArrayJoinStep>(base_input_stream, array_join);
     step->setStepDescription(step_description);
     return step;
 }
+
 std::shared_ptr<IQueryPlanStep> ArrayJoinStep::copy(ContextPtr) const
 {
     return std::make_shared<ArrayJoinStep>(input_streams[0], array_join);

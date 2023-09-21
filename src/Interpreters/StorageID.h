@@ -20,13 +20,14 @@
  */
 
 #pragma once
-#include <common/types.h>
-#include <Core/UUID.h>
 #include <tuple>
-#include <Parsers/IAST_fwd.h>
 #include <Core/QualifiedTableName.h>
-#include <Common/Exception.h>
+#include <Core/UUID.h>
 #include <Interpreters/Context_fwd.h>
+#include <Parsers/IAST_fwd.h>
+#include <Common/Exception.h>
+#include <common/types.h>
+#include "Interpreters/Set.h"
 
 namespace Poco
 {
@@ -51,6 +52,10 @@ class ASTTableIdentifier;
 class Context;
 class WriteBuffer;
 class ReadBuffer;
+namespace Protos
+{
+    class StorageID;
+}
 
 // TODO(ilezhankin): refactor and merge |ASTTableIdentifier|
 struct StorageID
@@ -117,9 +122,8 @@ struct StorageID
     /// ExternalDictnariesLoader::resolveDictionaryName(...) should be used to access such dictionaries by name.
     String getInternalDictionaryName() const;
 
-    void serialize(WriteBuffer & buffer) const;
-
-    static StorageID deserialize(ReadBuffer & buffer, ContextPtr context);
+    void toProto(Protos::StorageID & proto) const;
+    static StorageID fromProto(const Protos::StorageID & proto, ContextPtr context);
 
 private:
     StorageID() = default;

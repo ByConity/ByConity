@@ -613,7 +613,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         cnch_table_name = engine_args[arg_num + 1]->as<ASTIdentifier &>().name();
 
         arg_num += 2;
-        engine_args.erase(engine_args.begin(), engine_args.begin() + 2);
     }
 
     /// This merging param maybe used as part of sorting key
@@ -863,7 +862,7 @@ static StoragePtr create(const StorageFactory::Arguments & args)
         if (merging_params.mode != MergeTreeMetaBase::MergingParams::Ordinary || (!is_cnch && !is_cloud))
             throw Exception("Only CnchMergeTree and CloudMergeTree support UNIQUE KEY", ErrorCodes::BAD_ARGUMENTS);
 
-        if (engine_args.size() > 0)
+        if (arg_num < arg_cnt)
         {
             if (!engine_args.back()->as<ASTIdentifier>() && !engine_args.back()->as<ASTFunction>())
                 throw Exception("Version column must be identifier or function expression", ErrorCodes::BAD_ARGUMENTS);
@@ -893,16 +892,6 @@ static StoragePtr create(const StorageFactory::Arguments & args)
 
     if (arg_num != arg_cnt)
         throw Exception("Wrong number of engine arguments.", ErrorCodes::BAD_ARGUMENTS);
-    
-    /// In ANSI mode, allow_nullable_key must be true
-    if (args.getLocalContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
-    {
-        // If user sets allow_nullable_key=0.
-        if (storage_settings->allow_nullable_key.changed && !storage_settings->allow_nullable_key.value)
-            throw Exception("In ANSI mode, allow_nullable_key must be true.", ErrorCodes::BAD_ARGUMENTS);
-        
-        storage_settings->allow_nullable_key.value = true;
-    }
 
     /// In ANSI mode, allow_nullable_key must be true
     if (args.getLocalContext()->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)

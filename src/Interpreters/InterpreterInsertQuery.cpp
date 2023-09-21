@@ -38,8 +38,9 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <IO/ConnectionTimeoutsContext.h>
 #include <IO/SnappyReadBuffer.h>
-#include <IO//RAReadBufferFromS3.h>
 #include <Interpreters/Context.h>
+#include <IO/S3Common.h>
+#include <IO/RAReadBufferFromS3.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
 #include <Interpreters/QueryLog.h>
@@ -192,7 +193,7 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
         if (!cnch_table)
             throw Exception("Engine " + storage->getStorageID().getNameForLogs() + " doesn't support direct insertion", ErrorCodes::SUPPORT_IS_DISABLED);
 
-        auto create_query = cnch_table->getCreateQueryForCloudTable(cnch_table->getCreateTableSql(), query.table_id.database_name, query.table_id.table_name);
+        auto create_query = cnch_table->getCreateQueryForCloudTable(cnch_table->getCreateTableSql(), query.table_id.table_name, nullptr, false, std::nullopt, Strings{}, query.table_id.database_name);
         LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Worker side create query: {}" , create_query);
 
         Names view_create_sqls = genViewDependencyCreateQueries(storage, getContext());
@@ -697,6 +698,21 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
                         nullptr,
                         0,
                         false,
+                        context_ptr->getProcessList().getHDFSDownloadThrottler());
+                }
+#endif
+#if USE_AWS_S3
+                else if (isS3URIScheme(scheme))
+                {
+                    S3::URI s3_uri(Poco::URI(uriPrefix + name));
+                    String endpoint = s3_uri.endpoint.empty() ? context_ptr->getSettingsRef().s3_endpoint.toString() : s3_uri.endpoint;
+                    String bucket = s3_uri.bucket;
+                    String key = s3_uri.key;
+                    S3::S3Config s3_cfg(endpoint, context_ptr->getSettingsRef().s3_region.toString(), bucket,
+                        context_ptr->getSettingsRef().s3_ak_id.toString(), context_ptr->getSettingsRef().s3_ak_secret.toString(), "");
+                    const std::shared_ptr<Aws::S3::S3Client> client = s3_cfg.create();
+                    read_buf = std::make_unique<RAReadBufferFromS3>(client, bucket, key, 3,
+                        DBMS_DEFAULT_BUFFER_SIZE, nullptr, 0,
                         context_ptr->getProcessList().getHDFSDownloadThrottler());
                 }
 #endif

@@ -12,7 +12,8 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: uid = \'xx\'
                   └─ TableScan test.target40051 Est. ? rows
-                           Condition : uid = \'xx\'.Prewhere : uid = \'xx\'.
+                           Where: uid = \'xx\'
+                           Prewhere: uid = \'xx\'
                            Outputs: [event_date, event_type, server_time_hour, sum_click, uid]
 note: Materialized Views is applied for 1 times: test.mv40051.
 Projection Est. ? rows
@@ -29,6 +30,7 @@ Projection Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: event_type = 1
                   └─ TableScan test.target40051 Est. ? rows
-                           Condition : event_type = 1.Prewhere : event_type = 1.
+                           Where: event_type = 1
+                           Prewhere: event_type = 1
                            Outputs: [event_date, event_type, server_time_hour, sum_click, uid]
 note: Materialized Views is applied for 1 times: test.mv40051.

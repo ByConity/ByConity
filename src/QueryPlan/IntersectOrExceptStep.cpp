@@ -84,48 +84,34 @@ void IntersectOrExceptStep::describePipeline(FormatSettings & settings) const
     IQueryPlanStep::describePipeline(processors, settings);
 }
 
-void IntersectOrExceptStep::serialize(WriteBuffer & buf) const
+String IntersectOrExceptStep::getOperator() const
 {
-    writeBinary(input_streams.size(), buf);
-    for (const auto & input_stream : input_streams)
-        serializeDataStream(input_stream, buf);
-    
-    serializeEnum(current_operator, buf);
-    
-}
-
-QueryPlanStepPtr IntersectOrExceptStep::deserialize(ReadBuffer & buf, ContextPtr)
-{
-    size_t size;
-    readBinary(size, buf);
-    
-    DataStreams input_streams(size);
-    for (size_t i = 0; i < size; ++i)
-        input_streams[i] = deserializeDataStream(buf);
-
-    Operator current_operator;
-    deserializeEnum(current_operator, buf);
- 
-    return std::make_shared<IntersectOrExceptStep>(input_streams, current_operator);
-}
-
-String IntersectOrExceptStep::getOperator() const 
-{
-    if (current_operator == ASTSelectIntersectExceptQuery::Operator::INTERSECT_ALL) {
-        return "INTERSECT_ALL";
-    }
-    if (current_operator == ASTSelectIntersectExceptQuery::Operator::INTERSECT_DISTINCT) {
-        return "INTERSECT_DISTINCT";
-    }
-    if (current_operator == ASTSelectIntersectExceptQuery::Operator::EXCEPT_ALL) {
-        return "EXCEPT_ALL";
-    }
-    if (current_operator == ASTSelectIntersectExceptQuery::Operator::EXCEPT_DISTINCT) {
-        return "EXCEPT_DISTINCT";
-    }
-    if (current_operator == ASTSelectIntersectExceptQuery::Operator::UNKNOWN) {
+    const auto & name = ASTSelectIntersectExceptQuery::OperatorConverter::toString(current_operator);
+    if (name.empty())
         return "UNKNOWN";
+    return name;
+}
+
+void IntersectOrExceptStep::toProto(Protos::IntersectOrExceptStep & proto, bool) const
+{
+    for (const auto & element : input_streams)
+        element.toProto(*proto.add_input_streams());
+    proto.set_current_operator(OperatorConverter::toProto(current_operator));
+    proto.set_max_threads(max_threads);
+}
+
+std::shared_ptr<IntersectOrExceptStep> IntersectOrExceptStep::fromProto(const Protos::IntersectOrExceptStep & proto, ContextPtr)
+{
+    DataStreams input_streams;
+    for (const auto & proto_element : proto.input_streams())
+    {
+        DataStream element;
+        element.fillFromProto(proto_element);
+        input_streams.emplace_back(std::move(element));
     }
-    return "UNKNOWN";
+    auto current_operator = OperatorConverter::fromProto(proto.current_operator());
+    auto max_threads = proto.max_threads();
+    auto step = std::make_shared<IntersectOrExceptStep>(input_streams, current_operator, max_threads);
+    return step;
 }
 }

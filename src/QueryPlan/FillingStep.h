@@ -37,8 +37,8 @@ public:
 
     const SortDescription & getSortDescription() const { return sort_description; }
 
-    void serialize(WriteBuffer &) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+    void toProto(Protos::FillingStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<FillingStep> fromProto(const Protos::FillingStep & proto, ContextPtr);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
 

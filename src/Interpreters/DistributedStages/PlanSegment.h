@@ -17,30 +17,38 @@
 
 #include <cstddef>
 #include <optional>
-#include <Core/Types.h>
 #include <Core/Block.h>
-#include <QueryPlan/QueryPlan.h>
+#include <Core/Types.h>
 #include <Interpreters/Context_fwd.h>
-#include <Interpreters/StorageID.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/ExchangeMode.h>
+#include <Interpreters/StorageID.h>
+#include <Protos/EnumMacros.h>
+#include <Protos/enum.pb.h>
+#include <QueryPlan/QueryPlan.h>
 
 namespace DB
 {
-using DynamicFilterId = UInt32;
+using RuntimeFilterId = UInt32;
 
 /**
  * SOURCE means the plan is the leaf of a plan segment tree, i.g. TableScan Node.
  * EXCHANGE always marking the plan that need to repartiton the data.
  * OUTPUT is only used in PlanSegmentOutput and its output is client, which means we should output the results.
  */
-enum class PlanSegmentType : UInt8
+ENUM_WITH_PROTO_CONVERTER(
+    PlanSegmentType, // enum name
+    Protos::PlanSegmentType, // proto enum message
+    (UNKNOWN, 0),
+    (SOURCE),
+    (EXCHANGE),
+    (OUTPUT));
+
+namespace Protos
 {
-    UNKNOWN = 0,
-    SOURCE,
-    EXCHANGE,
-    OUTPUT
-};
+    class IPlanSegment;
+    class PlanSegmentInput;
+}
 
 String planSegmentTypeToString(const PlanSegmentType & type);
 
@@ -102,6 +110,9 @@ public:
 
     virtual String toString(size_t indent = 0) const;
 
+    void toProtoBase(Protos::IPlanSegment & proto) const;
+    void fromProtoBase(const Protos::IPlanSegment & proto);
+
 protected:
     Block header;
     PlanSegmentType type = PlanSegmentType::UNKNOWN;
@@ -145,6 +156,9 @@ public:
     void serialize(WriteBuffer & buf) const override;
 
     void deserialize(ReadBuffer & buf, ContextPtr context) override;
+
+    void toProto(Protos::PlanSegmentInput & proto) const;
+    void fillFromProto(const Protos::PlanSegmentInput & proto, ContextPtr context);
 
     String toString(size_t indent = 0) const override;
 
@@ -308,9 +322,9 @@ public:
 
     void update();
 
-    void addRuntimeFilter(DynamicFilterId id) { runtime_filters.emplace_back(id); }
-
-    std::vector<DynamicFilterId> & getRuntimeFilters() { return runtime_filters; }
+    // register runtime filters for resource release
+    void addRuntimeFilter(RuntimeFilterId id) { runtime_filters.emplace(id); }
+    const std::unordered_set<RuntimeFilterId> & getRuntimeFilters() const { return runtime_filters; }
 
     PlanSegmentDescriptionPtr getPlanSegmentDescription();
     static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
@@ -330,7 +344,7 @@ private:
     size_t parallel;
     size_t exchange_parallel_size;
 
-    std::vector<DynamicFilterId> runtime_filters;
+    std::unordered_set<RuntimeFilterId> runtime_filters;
 
     ContextMutablePtr context;
 };

@@ -76,7 +76,6 @@ struct MockedTableScanStep : public IQueryPlanStep
     Type getType() const override { return IQueryPlanStep::Type::TableScan; }
     QueryPipelinePtr updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &) override { return {}; }
     void setInputStreams(const DataStreams &) override { }
-    void serialize(WriteBuffer &) const override { }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override
     {
         return std::make_shared<MockedTableScanStep>(database, table, output_stream);
@@ -96,7 +95,6 @@ struct MockedFilterStep : public IQueryPlanStep
     IQueryPlanStep::Type getType() const override { return IQueryPlanStep::Type::Filter; }
     QueryPipelinePtr updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &) override { return {}; }
     void setInputStreams(const DataStreams &) override { }
-    void serialize(WriteBuffer &) const override { }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override
     {
         return std::make_shared<MockedFilterStep>(column, filter, output_stream);
@@ -115,7 +113,6 @@ struct MockedExchangeStep : public IQueryPlanStep
     IQueryPlanStep::Type getType() const override { return IQueryPlanStep::Type::Exchange; }
     QueryPipelinePtr updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &) override { return {}; }
     void setInputStreams(const DataStreams &) override { }
-    void serialize(WriteBuffer &) const override { }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override { return std::make_shared<MockedExchangeStep>(mode, output_stream); }
 };
 
@@ -132,7 +129,6 @@ struct MockedJoinStep : public IQueryPlanStep
     IQueryPlanStep::Type getType() const override { return IQueryPlanStep::Type::Join; }
     QueryPipelinePtr updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &) override { return {}; }
     void setInputStreams(const DataStreams &) override { }
-    void serialize(WriteBuffer &) const override { }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override { return std::make_shared<MockedJoinStep>(kind, keys, output_stream); }
 };
 
@@ -151,7 +147,6 @@ struct MockedAggregatingStep : public IQueryPlanStep
     IQueryPlanStep::Type getType() const override { return IQueryPlanStep::Type::Aggregating; }
     QueryPipelinePtr updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &) override { return {}; }
     void setInputStreams(const DataStreams &) override { }
-    void serialize(WriteBuffer &) const override { }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override
     {
         return std::make_shared<MockedAggregatingStep>(key, aggregator, final, output_stream);
@@ -167,7 +162,6 @@ struct MockedStepForRewriterTest : public IQueryPlanStep
     IQueryPlanStep::Type getType() const override { return IQueryPlanStep::Type::Filter; }
     QueryPipelinePtr updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &) override { return {}; }
     void setInputStreams(const DataStreams &) override { }
-    void serialize(WriteBuffer &) const override { }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override
     {
         return std::make_shared<MockedStepForRewriterTest>(i, output_stream);

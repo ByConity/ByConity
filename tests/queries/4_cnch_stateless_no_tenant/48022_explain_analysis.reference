@@ -5,3 +5,5 @@
 ['analysis2','analysis']	['test','test']	[['a','b'],['a']]	['equals','plus']	{}	[]
 ['analysis2','analysis']	['test','test']	[['a','b'],['a']]	['equals']	{'enable_optimizer':'1'}	[['test'],['analysis'],['a','b']]
 ['analysis2','analysis']	['test','test']	[['a','b'],['a']]	['equals']	{'enable_optimizer':'1'}	[['test'],['analysis2'],['a','b']]
+['analysis']	['test']	[['a','b']]	[]	{}	[]
+['analysis2','analysis']	['test','test']	[['a','b'],['a']]	[]	{}	[['test'],['analysis'],['a','b']]

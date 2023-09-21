@@ -18,10 +18,12 @@
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/Iterative/IterativeRewriter.h>
 #include <Optimizer/PlanCheck.h>
-#include <Optimizer/Rewriter/AddDynamicFilters.h>
+#include <Optimizer/Rewriter/AddBufferForDeadlockCTE.h>
 #include <Optimizer/Rewriter/AddExchange.h>
+#include <Optimizer/Rewriter/AddRuntimeFilters.h>
 #include <Optimizer/Rewriter/ColumnPruning.h>
 #include <Optimizer/Rewriter/MaterializedViewRewriter.h>
+#include <Optimizer/Rewriter/OptimizeTrivialCount.h>
 #include <Optimizer/Rewriter/PredicatePushdown.h>
 #include <Optimizer/Rewriter/RemoveApply.h>
 #include <Optimizer/Rewriter/RemoveRedundantSort.h>
@@ -37,12 +39,8 @@
 #include <QueryPlan/Hints/ImplementJoinOperationHints.h>
 #include <QueryPlan/Hints/ImplementJoinOrderHints.h>
 #include <QueryPlan/PlanPattern.h>
-#include <common/logger_useful.h>
 #include <Common/Stopwatch.h>
-#include <QueryPlan/Hints/HintsPropagator.h>
-#include <QueryPlan/Hints/ImplementJoinOperationHints.h>
-#include <QueryPlan/Hints/ImplementJoinOrderHints.h>
-#include <Optimizer/Rewriter/OptimizeTrivialCount.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -98,6 +96,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
 
         std::make_shared<OptimizeTrivialCount>(),
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
+        std::make_shared<AddBufferForDeadlockCTE>(),
 
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
     };
@@ -216,7 +215,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<RemoveUnusedCTE>(),
 
         // add runtime filters
-        std::make_shared<AddDynamicFilters>(),
+        std::make_shared<AddRuntimeFilters>(),
 
         // final UnifyNullableType, make sure type is correct.
         std::make_shared<ColumnPruning>(),
@@ -234,6 +233,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // push predicate into storage
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
         // TODO cost-based projection push down
+        std::make_shared<AddBufferForDeadlockCTE>(),
 
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
     };
@@ -291,7 +291,7 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context, const 
             &Poco::Logger::get("PlanOptimizer"), "optimizer rule run time: {}, {} ms", rewriter->name(), single_rewriter_duration);
 
         if (single_rewriter_duration >= 1000)
-            LOG_WARNING(
+            LOG_INFO(
                 &Poco::Logger::get("PlanOptimizer"),
                 "the execute time of " + rewriter->name() + " rewriter greater than or equal to 1 second");
 

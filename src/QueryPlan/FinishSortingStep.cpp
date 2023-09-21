@@ -132,39 +132,39 @@ void FinishSortingStep::describeActions(JSONBuilder::JSONMap & map) const
         map.add("Limit", limit);
 }
 
-void FinishSortingStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<FinishSortingStep> FinishSortingStep::fromProto(const Protos::FinishSortingStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    serializeItemVector<SortColumnDescription>(prefix_description, buffer);
-    serializeItemVector<SortColumnDescription>(result_description, buffer);
-    writeBinary(max_block_size, buffer);
-    writeBinary(limit, buffer);
-}
-
-QueryPlanStepPtr FinishSortingStep::deserialize(ReadBuffer & buffer, ContextPtr )
-{
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
     SortDescription prefix_description;
-    prefix_description = deserializeItemVector<SortColumnDescription>(buffer);
-
+    for (const auto & proto_element : proto.prefix_description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        prefix_description.emplace_back(std::move(element));
+    }
     SortDescription result_description;
-    result_description = deserializeItemVector<SortColumnDescription>(buffer);
-
-    size_t max_block_size;
-    readBinary(max_block_size, buffer);
-
-    UInt64 limit;
-    readBinary(limit, buffer);
-
-    auto step = std::make_unique<FinishSortingStep>(input_stream, prefix_description, result_description, max_block_size, limit);
-
+    for (const auto & proto_element : proto.result_description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        result_description.emplace_back(std::move(element));
+    }
+    auto max_block_size = proto.max_block_size();
+    auto limit = proto.limit();
+    auto step = std::make_shared<FinishSortingStep>(base_input_stream, prefix_description, result_description, max_block_size, limit);
     step->setStepDescription(step_description);
     return step;
+}
+
+void FinishSortingStep::toProto(Protos::FinishSortingStep & proto, bool) const
+{
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    for (const auto & element : prefix_description)
+        element.toProto(*proto.add_prefix_description());
+    for (const auto & element : result_description)
+        element.toProto(*proto.add_result_description());
+    proto.set_max_block_size(max_block_size);
+    proto.set_limit(limit);
 }
 
 std::shared_ptr<IQueryPlanStep> FinishSortingStep::copy(ContextPtr) const

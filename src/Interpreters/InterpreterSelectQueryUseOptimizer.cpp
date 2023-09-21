@@ -143,7 +143,8 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
         log, "Optimizer total run time: ", "PlanSegment build", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
-    context->logOptimizerProfile(log, "Optimizer total run time: ", "Optimizer Total", std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms");
+    context->logOptimizerProfile(
+        log, "Optimizer total run time: ", "Optimizer Total", std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms");
     return std::make_pair(std::move(plan_segment_tree), std::move(used_storage_ids));
 }
 
@@ -247,6 +248,39 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableScanNode(TableSca
             .plan_segment_tree = cluster_info_context.plan_segment_tree.get(),
             .health_parallel
             = worker_group_status_ptr ? std::optional<size_t>(worker_group_status_ptr->getAvaiableComputeWorkerSize()) : std::nullopt};
+        return plan_segment_context;
+    }
+    return std::nullopt;
+}
+
+std::optional<PlanSegmentContext> ClusterInfoFinder::visitTableWriteNode(TableWriteNode & node, ClusterInfoContext & cluster_info_context)
+{
+    auto child_res = ClusterInfoFinder::visitPlanNode(node, cluster_info_context);
+    if (child_res.has_value())
+    {
+        return child_res;
+    }
+
+    auto source_step = node.getStep();
+    auto storage = source_step->getTarget()->getStorage();
+    const auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    const auto * cnch_hive = dynamic_cast<StorageCnchHive *>(storage.get());
+    const auto * cnch_file = dynamic_cast<IStorageCnchFile *>(storage.get());
+
+    if (cnch_table || cnch_hive || cnch_file)
+    {
+        const auto & worker_group = cluster_info_context.context->getCurrentWorkerGroup();
+        auto worker_group_status_ptr = cluster_info_context.context->getWorkerGroupStatusPtr();
+        PlanSegmentContext plan_segment_context{
+            .context = cluster_info_context.context,
+            .query_plan = cluster_info_context.query_plan,
+            .query_id = cluster_info_context.context->getCurrentQueryId(),
+            .shard_number =  worker_group->getShardsInfo().size(),
+            .cluster_name = worker_group->getID(),
+            .plan_segment_tree = cluster_info_context.plan_segment_tree.get(),
+            .health_parallel = worker_group_status_ptr ?
+                std::optional<size_t>(worker_group_status_ptr->getAvaiableComputeWorkerSize()) : std::nullopt};
+
         return plan_segment_context;
     }
     return std::nullopt;

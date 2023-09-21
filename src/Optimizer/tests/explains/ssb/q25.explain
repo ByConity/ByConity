@@ -16,5 +16,5 @@ Projection Est. 34 rows
                      └─ Filter Est. 86313863 rows
                         │     Condition: (C_REGION = 'AMERICA') AND (S_REGION = 'AMERICA') AND ((toYear(LO_ORDERDATE) = 1997) OR (toYear(LO_ORDERDATE) = 1998)) AND ((P_MFGR = 'MFGR#1') OR (P_MFGR = 'MFGR#2'))
                         └─ TableScan ssb.lineorder_flat Est. 5999989813 rows
-                                 Condition : (C_REGION = 'AMERICA') AND (S_REGION = 'AMERICA') AND ((toYear(LO_ORDERDATE) = 1997) OR (toYear(LO_ORDERDATE) = 1998)) AND ((P_MFGR = 'MFGR#1') OR (P_MFGR = 'MFGR#2')).
+                                 Where: (C_REGION = 'AMERICA') AND (S_REGION = 'AMERICA') AND ((toYear(LO_ORDERDATE) = 1997) OR (toYear(LO_ORDERDATE) = 1998)) AND ((P_MFGR = 'MFGR#1') OR (P_MFGR = 'MFGR#2'))
                                  Outputs: [C_REGION, LO_ORDERDATE, LO_REVENUE, LO_SUPPLYCOST, P_CATEGORY, P_MFGR, S_NATION, S_REGION]

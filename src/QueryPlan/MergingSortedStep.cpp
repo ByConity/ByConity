@@ -103,35 +103,30 @@ void MergingSortedStep::describeActions(JSONBuilder::JSONMap & map) const
         map.add("Limit", limit);
 }
 
-void MergingSortedStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<MergingSortedStep> MergingSortedStep::fromProto(const Protos::MergingSortedStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    serializeItemVector<SortColumnDescription>(sort_description, buffer);
-    writeBinary(max_block_size, buffer);
-    writeBinary(limit, buffer);
-}
-
-QueryPlanStepPtr MergingSortedStep::deserialize(ReadBuffer & buffer, ContextPtr )
-{
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
     SortDescription sort_description;
-    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
-
-    size_t max_block_size;
-    readBinary(max_block_size, buffer);
-
-    UInt64 limit;
-    readBinary(limit, buffer);
-
-    auto step = std::make_unique<MergingSortedStep>(input_stream, sort_description, max_block_size, limit);
-
+    for (const auto & proto_element : proto.sort_description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        sort_description.emplace_back(std::move(element));
+    }
+    auto max_block_size = proto.max_block_size();
+    auto limit = proto.limit();
+    auto step = std::make_shared<MergingSortedStep>(base_input_stream, sort_description, max_block_size, limit);
     step->setStepDescription(step_description);
     return step;
+}
+
+void MergingSortedStep::toProto(Protos::MergingSortedStep & proto, bool) const
+{
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    for (const auto & element : sort_description)
+        element.toProto(*proto.add_sort_description());
+    proto.set_max_block_size(max_block_size);
+    proto.set_limit(limit);
 }
 
 std::shared_ptr<IQueryPlanStep> MergingSortedStep::copy(ContextPtr) const

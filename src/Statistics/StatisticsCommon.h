@@ -18,5 +18,5 @@
 
 namespace DB
 {
-constexpr auto PROTO_VERSION = Protos::DbStats_Version_V2;
+constexpr auto PROTO_VERSION = Statistics::Protos::DbStats_Version_V2;
 }

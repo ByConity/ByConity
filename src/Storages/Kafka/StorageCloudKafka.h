@@ -73,7 +73,7 @@ private:
         cppkafka::TopicPartitionList assignment;
         cppkafka::TopicPartitionList latest_offsets;
 
-        bool error_event;
+        std::atomic<bool> error_event;
 
         void reset();
     };

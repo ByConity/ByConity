@@ -38,6 +38,7 @@
 #include <IO/ZlibDeflatingWriteBuffer.h>
 #include <IO/copyData.h>
 #include <Storages/HDFS/WriteBufferFromHDFS.h>
+#include <IO/OutfileCommon.h>
 
 #include <DataStreams/BlockIO.h>
 #include <DataStreams/CountingBlockOutputStream.h>
@@ -87,13 +88,14 @@
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
 #include <Interpreters/Cache/QueryCache.h>
+#include <Interpreters/SQLBinding/SQLBindingUtils.h>
 
 #include <Common/ProfileEvents.h>
 #include <Common/RpcClientPool.h>
 
 #include <DataStreams/IBlockStream_fwd.h>
 #include <DataStreams/NullBlockOutputStream.h>
-#include <DataStreams/RemoteQueryExecutor.h>
+#include <DataStreams/OneBlockInputStream.h>
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <IO/WriteBufferFromString.h>
@@ -140,6 +142,7 @@
 #include <Optimizer/OptimizerMetrics.h>
 
 using AsyncQueryStatus = DB::Protos::AsyncQueryStatus;
+#include  <map>
 
 namespace ProfileEvents
 {
@@ -673,8 +676,23 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             ParserQuery parser(end, ParserSettings::valueOf(context->getSettings()));
             parser.setContext(context.get());
 
-            /// TODO: parser should fail early when max_query_size limit is reached.
-            ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+            if (settings.use_sql_binding && !internal)
+            {
+                try
+                {
+                    ast = SQLBindingUtils::getASTFromBindings(begin, end, context);
+                }
+                catch (...)
+                {
+                    LOG_INFO(&Poco::Logger::get("SQL Binding"), "SQL binding match error");
+                }
+            }
+
+            if (!ast)
+            {
+                /// TODO Parser should fail early when max_query_size limit is reached.
+                ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+            }
         }
         else
         {
@@ -912,7 +930,16 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             OpenTelemetrySpanHolder span("IInterpreter::execute()");
             try
             {
-                res = interpreter->execute();
+                if (!settings.enable_execute_query)
+                {
+                    Block block;
+                    auto warning_column = ColumnString::create();
+                    warning_column->insert("Do not execute this query.");
+                    block.insert({std::move(warning_column), std::make_shared<DataTypeString>(), ""});
+                    res.in = std::make_shared<OneBlockInputStream>(block);
+                }
+                else
+                    res = interpreter->execute();
             }
             catch (...)
             {
@@ -1615,6 +1642,86 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     return std::make_tuple(ast, std::move(res));
 }
 
+void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
+{
+    const ASTQueryWithOutput * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
+
+    if (ast_query_with_output == nullptr || ast_query_with_output->out_file == nullptr
+        || !OutfileTarget::checkOutfileWithTcpOnServer(context))
+    {
+        return;
+    }
+
+    try
+    {
+        WriteBuffer * out_buf;
+        String compression_method_str;
+        UInt64 compression_level = 1;
+        OutfileTargetPtr outfile_target;
+
+        String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
+            ? getIdentifierName(ast_query_with_output->format)
+            : context->getDefaultFormat();
+
+        const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
+        OutfileTarget::setOufileCompression(ast_query_with_output, compression_method_str, compression_level);
+
+        outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
+        out_buf = outfile_target->getOutfileBuffer(context);
+
+        auto & pipeline = streams.pipeline;
+
+        if (streams.in)
+        {
+            BlockOutputStreamPtr out = FormatFactory::instance().getOutputStreamParallelIfPossible(
+                format_name, *out_buf, streams.in->getHeader(), context, {});
+
+            copyData(
+                *streams.in, *out, []() { return false; }, [&out](const Block &) { out->flush(); });
+        }
+        else if (pipeline.initialized())
+        {
+            if (!pipeline.isCompleted())
+            {
+                pipeline.addSimpleTransform([](const Block & header) { return std::make_shared<MaterializingTransform>(header); });
+
+                OutputFormatPtr out = FormatFactory::instance().getOutputFormatParallelIfPossible(
+                    format_name, *out_buf, pipeline.getHeader(), context, {});
+
+                out->setAutoFlush();
+                /// Save previous progress callback if any.
+                auto previous_progress_callback = context->getProgressCallback();
+
+                /// NOTE Progress callback takes shared ownership of 'out'.
+                pipeline.setProgressCallback([out, previous_progress_callback](const Progress & progress) {
+                    if (previous_progress_callback)
+                        previous_progress_callback(progress);
+                    out->onProgress(progress);
+                });
+
+                pipeline.setOutputFormat(std::move(out));
+            }
+            else
+            {
+                pipeline.setProgressCallback(context->getProgressCallback());
+            }
+
+            {
+                auto executor = pipeline.execute();
+                executor->execute(pipeline.getNumThreads());
+            }
+        }
+
+        if (outfile_target != nullptr)
+            outfile_target->flushFile();
+    }
+    catch (...)
+    {
+        streams.onException();
+        throw;
+    }
+    streams.onFinish();
+}
 
 BlockIO
 executeQuery(const String & query, ContextMutablePtr context, bool internal, QueryProcessingStage::Enum stage, bool may_have_embedded_data)
@@ -1628,6 +1735,9 @@ executeQuery(const String & query, ContextMutablePtr context, bool internal, Que
 
     if (const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
     {
+
+        // Try to redirect streams to the target file instead of the client when outfile_in_server_with_tcp is true
+        tryOutfile(streams, ast, context);
 
         String format_name = ast_query_with_output->format ? getIdentifierName(ast_query_with_output->format) : context->getDefaultFormat();
 
@@ -1649,6 +1759,9 @@ BlockIO executeQuery(
     BlockIO streams;
     std::tie(ast, streams)
         = executeQueryImpl(query.data(), query.data() + query.size(), ast, context, internal, stage, !may_have_embedded_data, nullptr);
+
+    // Try to redirect streams to the target file instead of the client when outfile_in_server_with_tcp is true
+    tryOutfile(streams, ast, context);
 
     if (const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get()))
     {
@@ -1766,47 +1879,22 @@ void executeQuery(
             const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
 
             WriteBuffer * out_buf = &ostr;
+            OutfileTargetPtr outfile_target;
             std::optional<String> out_path;
-            std::optional<WriteBufferFromFile> out_file_buf;
-#if USE_HDFS
-            std::unique_ptr<WriteBufferFromHDFS> out_hdfs_raw;
-            std::optional<ZlibDeflatingWriteBuffer> out_hdfs_buf;
-#endif
-            if (ast_query_with_output && ast_query_with_output->out_file)
-            {
-                out_path.emplace(typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>());
-                const Poco::URI out_uri(*out_path);
-                const String & scheme = out_uri.getScheme();
-
-                if (scheme.empty())
-                {
-                    if (!allow_into_outfile)
-                        throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
-
-                    out_file_buf.emplace(*out_path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
-                    out_buf = &*out_file_buf;
-                }
-#    if USE_HDFS
-                else if (DB::isHdfsOrCfsScheme(scheme))
-                {
-                    out_hdfs_raw = std::make_unique<WriteBufferFromHDFS>(
-                        *out_path, context->getHdfsConnectionParams(), context->getSettingsRef().max_hdfs_write_buffer_size);
-                    int compression_level = Z_DEFAULT_COMPRESSION;
-                    out_hdfs_buf.emplace(std::move(out_hdfs_raw), CompressionMethod::Gzip, compression_level);
-                    out_buf = &*out_hdfs_buf;
-                }
-#    endif
-                else
-                {
-                    throw Exception(
-                        "Path: " + *out_path + " is illegal, only support write query result to local file or tos",
-                        ErrorCodes::CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING);
-                }
-            }
 
             String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
                 ? getIdentifierName(ast_query_with_output->format)
                 : context->getDefaultFormat();
+
+            if (ast_query_with_output && ast_query_with_output->out_file)
+            {
+                out_path.emplace(typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>());
+                String compression_method_str;
+                UInt64 compression_level = 1;
+                OutfileTarget::setOufileCompression(ast_query_with_output, compression_method_str, compression_level);
+                outfile_target = OutfileTarget::getOutfileTarget(*out_path, format_name, compression_method_str, compression_level);
+                out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
+            }
 
             auto out = FormatFactory::instance().getOutputStreamParallelIfPossible(
                 format_name, *out_buf, streams.in->getHeader(), context, {}, output_format_settings);
@@ -1827,26 +1915,30 @@ void executeQuery(
 
             copyData(
                 *streams.in, *out, []() { return false; }, [&out](const Block &) { out->flush(); });
+
+            if(outfile_target!=nullptr)
+                outfile_target->flushFile();
         }
         else if (pipeline.initialized())
         {
             const ASTQueryWithOutput * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
 
             WriteBuffer * out_buf = &ostr;
-            std::optional<WriteBufferFromFile> out_file_buf;
-            if (ast_query_with_output && ast_query_with_output->out_file)
-            {
-                if (!allow_into_outfile)
-                    throw Exception("INTO OUTFILE is not allowed", ErrorCodes::INTO_OUTFILE_NOT_ALLOWED);
-
-                const auto & out_file = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
-                out_file_buf.emplace(out_file, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_EXCL | O_CREAT);
-                out_buf = &*out_file_buf;
-            }
+            OutfileTargetPtr outfile_target;
 
             String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
                 ? getIdentifierName(ast_query_with_output->format)
                 : context->getDefaultFormat();
+
+            if (ast_query_with_output && ast_query_with_output->out_file)
+            {
+                const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
+                String compression_method_str;
+                UInt64 compression_level = 1;
+                OutfileTarget::setOufileCompression(ast_query_with_output, compression_method_str, compression_level);
+                outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
+                out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
+            }
 
             if (!pipeline.isCompleted())
             {
@@ -1881,6 +1973,9 @@ void executeQuery(
                 auto executor = pipeline.execute();
                 executor->execute(pipeline.getNumThreads());
             }
+
+            if (outfile_target != nullptr)
+                outfile_target->flushFile();
         }
     }
     catch (...)
@@ -2115,3 +2210,4 @@ void executeHttpQueryInAsyncMode(
 }
 
 }
+

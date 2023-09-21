@@ -13,15 +13,16 @@
  * limitations under the License.
  */
 
-#include <Interpreters/convertFieldToType.h>
-#include <Optimizer/CardinalityEstimate/LimitEstimator.h>
 #include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
-#include <Parsers/ASTSelectQuery.h>
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsTableBasic.h>
 #include <Poco/Logger.h>
 #include "Common/DefaultCatalogName.h"
 #include <common/ErrorHandlers.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Optimizer/CardinalityEstimate/LimitEstimator.h>
+#include <Interpreters/convertFieldToType.h>
+#include <DataTypes/DataTypesNumber.h>
 
 namespace DB
 {

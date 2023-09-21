@@ -3,7 +3,7 @@
 #include <DataTypes/DataTypeHelper.h>
 #include <IO/Operators.h>
 #include <Interpreters/ExpressionActions.h>
-#include <Interpreters/RuntimeFilter/BuildRuntimeFilterTransform.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterConsumer.h>
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/MarkDistinctTransform.h>
 
@@ -28,25 +28,24 @@ void MarkDistinctStep::transformPipeline(QueryPipeline & pipeline, const BuildQu
     pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<MarkDistinctTransform>(header, marker_symbol, distinct_symbols); });
 }
 
-void MarkDistinctStep::serialize(WriteBuffer & buf) const
+std::shared_ptr<MarkDistinctStep> MarkDistinctStep::fromProto(const Protos::MarkDistinctStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buf);
-    writeBinary(marker_symbol, buf);
-    writeBinary(distinct_symbols, buf);
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto marker_symbol = proto.marker_symbol();
+    std::vector<String> distinct_symbols;
+    for (const auto & element : proto.distinct_symbols())
+        distinct_symbols.emplace_back(element);
+    auto step = std::make_shared<MarkDistinctStep>(base_input_stream, marker_symbol, distinct_symbols);
+    step->setStepDescription(step_description);
+    return step;
 }
 
-QueryPlanStepPtr MarkDistinctStep::deserialize(ReadBuffer & buf, ContextPtr)
+void MarkDistinctStep::toProto(Protos::MarkDistinctStep & proto, bool) const
 {
-    String step_description;
-    readBinary(step_description, buf);
-
-    DataStream input_stream = deserializeDataStream(buf);
-    String marker_symbol;
-    readBinary(marker_symbol, buf);
-
-    std::vector<String> distinct_symbols;
-    readBinary(distinct_symbols, buf);
-    return std::make_shared<MarkDistinctStep>(input_stream, marker_symbol, distinct_symbols);
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    proto.set_marker_symbol(marker_symbol);
+    for (const auto & element : distinct_symbols)
+        proto.add_distinct_symbols(element);
 }
 
 std::shared_ptr<IQueryPlanStep> MarkDistinctStep::copy(ContextPtr) const

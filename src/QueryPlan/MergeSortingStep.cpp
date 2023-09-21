@@ -122,58 +122,6 @@ void MergeSortingStep::describeActions(JSONBuilder::JSONMap & map) const
         map.add("Limit", limit);
 }
 
-void MergeSortingStep::serialize(WriteBuffer & buffer) const
-{
-    IQueryPlanStep::serializeImpl(buffer);
-    serializeItemVector<SortColumnDescription>(description, buffer);
-    writeBinary(max_merged_block_size, buffer);
-    writeBinary(max_bytes_before_remerge, buffer);
-    writeBinary(max_bytes_before_external_sort, buffer);
-    writeBinary(min_free_disk_space, buffer);
-    writeBinary(limit, buffer);
-    writeBinary(remerge_lowered_memory_bytes_ratio, buffer);
-}
-
-QueryPlanStepPtr MergeSortingStep::deserialize(ReadBuffer & buffer, ContextPtr context)
-{
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
-    SortDescription sort_description;
-    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
-
-    size_t max_merged_block_size, max_bytes_before_remerge, max_bytes_before_external_sort, min_free_disk_space;
-    readBinary(max_merged_block_size, buffer);
-    readBinary(max_bytes_before_remerge, buffer);
-    readBinary(max_bytes_before_external_sort, buffer);
-    readBinary(min_free_disk_space, buffer);
-
-    UInt64 limit;
-    readBinary(limit, buffer);
-
-    double remerge_lowered_memory_bytes_ratio;
-    readBinary(remerge_lowered_memory_bytes_ratio, buffer);
-
-    VolumePtr tmp_volume = context ? context->getTemporaryVolume() : nullptr;
-
-    auto step =  std::make_unique<MergeSortingStep>(
-        input_stream,
-        sort_description,
-        max_merged_block_size,
-        limit,
-        max_bytes_before_remerge,
-        remerge_lowered_memory_bytes_ratio,
-        max_bytes_before_external_sort,
-        tmp_volume,
-        max_bytes_before_external_sort);
-
-    step->setStepDescription(step_description);
-    return step;
-}
-
 std::shared_ptr<IQueryPlanStep> MergeSortingStep::copy(ContextPtr) const
 {
     return std::make_shared<MergeSortingStep>(
@@ -188,4 +136,49 @@ std::shared_ptr<IQueryPlanStep> MergeSortingStep::copy(ContextPtr) const
         max_bytes_before_external_sort);
 }
 
+
+void MergeSortingStep::toProto(Protos::MergeSortingStep & proto, bool) const
+{
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    for (const auto & element : description)
+        element.toProto(*proto.add_description());
+    proto.set_max_merged_block_size(max_merged_block_size);
+    proto.set_limit(limit);
+    proto.set_max_bytes_before_remerge(max_bytes_before_remerge);
+    proto.set_remerge_lowered_memory_bytes_ratio(remerge_lowered_memory_bytes_ratio);
+    proto.set_max_bytes_before_external_sort(max_bytes_before_external_sort);
+
+    proto.set_min_free_disk_space(min_free_disk_space);
+}
+
+std::shared_ptr<MergeSortingStep> MergeSortingStep::fromProto(const Protos::MergeSortingStep & proto, ContextPtr context)
+{
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    SortDescription description;
+    for (const auto & proto_element : proto.description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        description.emplace_back(std::move(element));
+    }
+    auto max_merged_block_size = proto.max_merged_block_size();
+    auto limit = proto.limit();
+    auto max_bytes_before_remerge = proto.max_bytes_before_remerge();
+    auto remerge_lowered_memory_bytes_ratio = proto.remerge_lowered_memory_bytes_ratio();
+    auto max_bytes_before_external_sort = proto.max_bytes_before_external_sort();
+    VolumePtr tmp_volume = context ? context->getTemporaryVolume() : nullptr;
+    auto min_free_disk_space = proto.min_free_disk_space();
+    auto step = std::make_shared<MergeSortingStep>(
+        base_input_stream,
+        description,
+        max_merged_block_size,
+        limit,
+        max_bytes_before_remerge,
+        remerge_lowered_memory_bytes_ratio,
+        max_bytes_before_external_sort,
+        tmp_volume,
+        min_free_disk_space);
+    step->setStepDescription(step_description);
+    return step;
+}
 }

@@ -14,7 +14,7 @@
  */
 
 #include <DataTypes/FieldToDataType.h>
-#include <Functions/InternalFunctionsDynamicFilter.h>
+#include <Functions/InternalFunctionRuntimeFilter.h>
 #include <Optimizer/CardinalityEstimate/FilterEstimator.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Parsers/ASTFunction.h>
@@ -350,7 +350,7 @@ FilterEstimator::estimateSingleFilter(PlanNodeStatistics & stats, ConstASTPtr & 
         return estimateNotLikeFilter(stats, predicate, context);
     }
 
-    if (function.name == InternalFunctionDynamicFilter::name)
+    if (function.name == InternalFunctionRuntimeFilter::name)
     {
         return {1.0, {}};
     }

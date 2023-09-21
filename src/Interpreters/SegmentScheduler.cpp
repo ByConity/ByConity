@@ -290,17 +290,22 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
             query_id,
             extractExchangeHostPort(addr));
     }
-    for (auto & call_id : call_ids)
-        brpc::Join(call_id);
 
-    try
+    if (query_context->getSettingsRef().enable_wait_cancel_rpc)
     {
-        handler->throwIfException();
+        for (auto & call_id : call_ids)
+            brpc::Join(call_id);
+
+        try
+        {
+            handler->throwIfException();
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, "cancelWorkerPlanSegments");
+        }
     }
-    catch (...)
-    {
-        tryLogCurrentException(log, "cancelWorkerPlanSegments");
-    }
+    
 }
 
 bool SegmentScheduler::finishPlanSegments(const String & query_id)

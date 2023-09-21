@@ -57,33 +57,38 @@ RemoteExchangeSourceStep::RemoteExchangeSourceStep(PlanSegmentInputs inputs_, Da
     logger = &Poco::Logger::get("RemoteExchangeSourceStep");
 }
 
-void RemoteExchangeSourceStep::serialize(WriteBuffer & buf) const
+void RemoteExchangeSourceStep::toProto(Protos::RemoteExchangeSourceStep & proto, bool) const
 {
-    IQueryPlanStep::serializeImpl(buf);
-
-    writeBinary(inputs.size(), buf);
-    for (const auto & input : inputs)
-        input->serialize(buf);
+    // NOTE: this step is ISourceStep but not using serde of ISourceStep
+    // maybe a bug, but here just follow the original serde anyway
+    input_streams[0].toProto(*proto.mutable_input_stream());
+    proto.set_step_description(step_description);
+    for (auto & element : inputs)
+    {
+        if (!element)
+            throw Exception("PlanSegmentInput cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
+        element->toProto(*proto.add_inputs());
+    }
 }
 
-QueryPlanStepPtr RemoteExchangeSourceStep::deserialize(ReadBuffer & buf, ContextPtr context)
+std::shared_ptr<RemoteExchangeSourceStep>
+RemoteExchangeSourceStep::fromProto(const Protos::RemoteExchangeSourceStep & proto, ContextPtr context)
 {
-    String step_description;
-    readBinary(step_description, buf);
+    DataStream input_stream;
+    input_stream.fillFromProto(proto.input_stream());
+    auto step_description = proto.step_description();
 
-    auto input_stream = deserializeDataStream(buf);
-
-    size_t input_size;
-    readBinary(input_size, buf);
-    PlanSegmentInputs inputs(input_size);
-    for (size_t i = 0; i < input_size; ++i)
+    PlanSegmentInputs inputs;
+    for (auto & proto_element : proto.inputs())
     {
-        inputs[i] = std::make_shared<PlanSegmentInput>();
-        inputs[i]->deserialize(buf, context);
+        auto element = std::make_shared<PlanSegmentInput>();
+        element->fillFromProto(proto_element, context);
+        inputs.emplace_back(std::move(element));
     }
 
-    auto step = std::make_unique<RemoteExchangeSourceStep>(inputs, input_stream);
+    auto step = std::make_shared<RemoteExchangeSourceStep>(inputs, input_stream);
     step->setStepDescription(step_description);
+
     return step;
 }
 

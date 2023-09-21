@@ -1,9 +1,9 @@
 #pragma once
 
-#include <QueryPlan/ITransformingStep.h>
 #include <DataStreams/SizeLimits.h>
-#include <Interpreters/SubqueryForSet.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/SubqueryForSet.h>
+#include <QueryPlan/ITransformingStep.h>
 
 namespace DB
 {
@@ -13,11 +13,11 @@ class CreatingSetStep : public ITransformingStep, WithContext
 {
 public:
     CreatingSetStep(
-            const DataStream & input_stream_,
-            String description_,
-            SubqueryForSet subquery_for_set_,
-            SizeLimits network_transfer_limits_,
-            ContextPtr context_);
+        const DataStream & input_stream_,
+        String description_,
+        SubqueryForSet subquery_for_set_,
+        SizeLimits network_transfer_limits_,
+        ContextPtr context_);
 
     String getName() const override { return "CreatingSet"; }
 
@@ -29,6 +29,17 @@ public:
     void describeActions(FormatSettings & settings) const override;
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+    void toProto(Protos::CreatingSetStep & proto, bool for_hash_equals = false) const
+    {
+        (void)proto;
+        (void)for_hash_equals;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+    static std::shared_ptr<CreatingSetStep> fromProto(const Protos::CreatingSetStep & proto, ContextPtr)
+    {
+        (void)proto;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
 
 private:
     String description;
@@ -51,14 +62,21 @@ public:
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
 
+    void toProto(Protos::CreatingSetsStep & proto, bool for_hash_equals = false) const
+    {
+        (void)proto;
+        (void)for_hash_equals;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+    static std::shared_ptr<CreatingSetsStep> fromProto(const Protos::CreatingSetsStep & proto, ContextPtr)
+    {
+        (void)proto;
+        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
+
 private:
     Processors processors;
 };
 
-void addCreatingSetsStep(
-    QueryPlan & query_plan,
-    SubqueriesForSets subqueries_for_sets,
-    const SizeLimits & limits,
-    ContextPtr context);
-
+void addCreatingSetsStep(QueryPlan & query_plan, SubqueriesForSets subqueries_for_sets, const SizeLimits & limits, ContextPtr context);
 }

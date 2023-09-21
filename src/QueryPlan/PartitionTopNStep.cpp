@@ -65,39 +65,31 @@ void PartitionTopNStep::describeActions(JSONBuilder::JSONMap &) const
 {
 }
 
-void PartitionTopNStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<PartitionTopNStep> PartitionTopNStep::fromProto(const Protos::PartitionTopNStep & proto, ContextPtr)
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    writeBinary(partition, buffer);
-    writeBinary(order_by, buffer);
-    writeBinary(limit, buffer);
-    serializeEnum(model, buffer);
-}
-
-QueryPlanStepPtr PartitionTopNStep::deserialize(ReadBuffer & buffer, ContextPtr)
-{
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
-    Names partition;
-    readBinary(partition, buffer);
-
-    Names order_by;
-    readBinary(order_by, buffer);
-
-    UInt64 limit;
-    readBinary(limit, buffer);
-
-    TopNModel model;
-    deserializeEnum(model, buffer);
-
-    auto step = std::make_unique<PartitionTopNStep>(input_stream, partition, order_by, limit, model);
-
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    std::vector<String> partition;
+    for (const auto & element : proto.partition())
+        partition.emplace_back(element);
+    std::vector<String> order_by;
+    for (const auto & element : proto.order_by())
+        order_by.emplace_back(element);
+    auto limit = proto.limit();
+    auto model = TopNModelConverter::fromProto(proto.model());
+    auto step = std::make_shared<PartitionTopNStep>(base_input_stream, partition, order_by, limit, model);
     step->setStepDescription(step_description);
     return step;
+}
+
+void PartitionTopNStep::toProto(Protos::PartitionTopNStep & proto, bool) const
+{
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    for (const auto & element : partition)
+        proto.add_partition(element);
+    for (const auto & element : order_by)
+        proto.add_order_by(element);
+    proto.set_limit(limit);
+    proto.set_model(TopNModelConverter::toProto(model));
 }
 
 std::shared_ptr<IQueryPlanStep> PartitionTopNStep::copy(ContextPtr) const

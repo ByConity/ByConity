@@ -108,40 +108,34 @@ void LimitStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Reads All Data", always_read_till_end);
 }
 
-void LimitStep::serialize(WriteBuffer & buffer) const
+void LimitStep::toProto(Protos::LimitStep & proto, bool) const
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    writeBinary(limit, buffer);
-    writeBinary(offset, buffer);
-    writeBinary(always_read_till_end, buffer);
-    writeBinary(with_ties, buffer);
-    serializeItemVector<SortColumnDescription>(description, buffer);
-    writeBinary(partial, buffer);
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    proto.set_limit(limit);
+    proto.set_offset(offset);
+    proto.set_always_read_till_end(always_read_till_end);
+    proto.set_with_ties(with_ties);
+    for (const auto & element : description)
+        element.toProto(*proto.add_description());
+    proto.set_partial(partial);
 }
 
-QueryPlanStepPtr LimitStep::deserialize(ReadBuffer & buffer, ContextPtr )
+std::shared_ptr<LimitStep> LimitStep::fromProto(const Protos::LimitStep & proto, ContextPtr)
 {
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
-    size_t limit, offset;
-    readBinary(limit, buffer);
-    readBinary(offset, buffer);
-
-    bool always_read_till_end, with_ties;
-    readBinary(always_read_till_end, buffer);
-    readBinary(with_ties, buffer);
-
-    SortDescription sort_description;
-    sort_description = deserializeItemVector<SortColumnDescription>(buffer);
-
-    bool is_partial;
-    readBinary(is_partial, buffer);
-
-    auto step = std::make_unique<LimitStep>(input_stream, limit, offset, always_read_till_end, with_ties, sort_description, is_partial);
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto limit = proto.limit();
+    auto offset = proto.offset();
+    auto always_read_till_end = proto.always_read_till_end();
+    auto with_ties = proto.with_ties();
+    SortDescription description;
+    for (const auto & proto_element : proto.description())
+    {
+        SortColumnDescription element;
+        element.fillFromProto(proto_element);
+        description.emplace_back(std::move(element));
+    }
+    auto partial = proto.partial();
+    auto step = std::make_shared<LimitStep>(base_input_stream, limit, offset, always_read_till_end, with_ties, description, partial);
     step->setStepDescription(step_description);
     return step;
 }

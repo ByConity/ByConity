@@ -16,5 +16,5 @@ Projection Est. 96800 rows
                      └─ Filter Est. 1200136939 rows
                         │     Condition: (P_BRAND >= 'MFGR#2221') AND (P_BRAND <= 'MFGR#2228') AND (S_REGION = 'ASIA')
                         └─ TableScan ssb.lineorder_flat Est. 5999989813 rows
-                                 Condition : (P_BRAND >= 'MFGR#2221') AND (P_BRAND <= 'MFGR#2228') AND (S_REGION = 'ASIA').
+                                 Where: (P_BRAND >= 'MFGR#2221') AND (P_BRAND <= 'MFGR#2228') AND (S_REGION = 'ASIA')
                                  Outputs: [LO_ORDERDATE, LO_REVENUE, P_BRAND, S_REGION]

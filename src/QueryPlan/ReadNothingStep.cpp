@@ -30,15 +30,17 @@ void ReadNothingStep::initializePipeline(QueryPipeline & pipeline, const BuildQu
     pipeline.init(Pipe(std::make_shared<NullSource>(getOutputStream().header)));
 }
 
-void ReadNothingStep::serialize(WriteBuffer & buffer) const
+std::shared_ptr<ReadNothingStep> ReadNothingStep::fromProto(const Protos::ReadNothingStep & proto, ContextPtr)
 {
-    serializeBlock(output_stream->header, buffer);
+    auto base_output_header = ISourceStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto step = std::make_shared<ReadNothingStep>(base_output_header);
+
+    return step;
 }
 
-QueryPlanStepPtr ReadNothingStep::deserialize(ReadBuffer & buffer, ContextPtr )
+void ReadNothingStep::toProto(Protos::ReadNothingStep & proto, bool) const
 {
-    Block output_header = deserializeBlock(buffer);
-    return std::make_unique<ReadNothingStep>(output_header);
+    ISourceStep::serializeToProtoBase(*proto.mutable_query_plan_base());
 }
 
 std::shared_ptr<IQueryPlanStep> ReadNothingStep::copy(ContextPtr) const

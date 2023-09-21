@@ -3,7 +3,6 @@ drop table if exists test.test_insert_optimizer;
 create table test.test_insert_optimizer (id Int32) engine = CnchMergeTree order by id;
 
 set enable_optimizer = 1;
-set enable_optimizer_white_list = 0;
 
 insert into test.test_insert_optimizer select number from numbers(10);
 

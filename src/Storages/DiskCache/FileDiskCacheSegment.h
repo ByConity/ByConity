@@ -17,7 +17,7 @@ public:
 
     String getSegmentName() const override { return std::filesystem::path(remote_disk->getPath()) / path; }
 
-    void cacheToDisk(IDiskCache & cache) override;
+    void cacheToDisk(IDiskCache & cache, bool throw_exception) override;
 
 private:
     DiskPtr remote_disk;

@@ -146,7 +146,7 @@ Gather Exchange Est. ? rows
       │                    └─ Filter Est. ? rows
       │                       │     Condition: c = a_1
       │                       └─ TableScan test.t40047_y Est. ? rows
-      │                                Condition : c = a.
+      │                                Where: c = a
       │                                Outputs: [c], a_1:=a
       └─ MergingAggregated Est. ? rows
          └─ Repartition Exchange Est. ? rows

@@ -42,8 +42,9 @@ public:
     void describeActions(JSONBuilder::JSONMap & map) const override;
     void describeActions(FormatSettings & settings) const override;
 
-    void serialize(WriteBuffer &) const override;
-    static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
+    void toProto(Protos::PartitionTopNStep & proto, bool for_hash_equals = false) const;
+    static std::shared_ptr<PartitionTopNStep> fromProto(const Protos::PartitionTopNStep & proto, ContextPtr context);
+
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
 

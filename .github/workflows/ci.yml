@@ -67,7 +67,7 @@ jobs:
         continue-on-error: true
         run: |
           cd /CI/
-          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer_white_list=0'
+          export EXTRA_OPTIONS='enable_optimizer_fallback=0'
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
           cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
           mkdir queries
@@ -87,7 +87,7 @@ jobs:
           cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
           cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
           mkdir -p test_output
-          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer_white_list=0 enable_optimizer=1'
+          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1'
           ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 8 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_with_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
           cd ..
@@ -97,7 +97,7 @@ jobs:
         run: |
           mkdir -p ci_clickhouse_sql
           cd ci_clickhouse_sql
-          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer_white_list=0'
+          export EXTRA_OPTIONS='enable_optimizer_fallback=0'
           cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
           cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
           mkdir queries

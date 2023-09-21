@@ -105,29 +105,24 @@ void LimitByStep::describeActions(JSONBuilder::JSONMap & map) const
     map.add("Offset", group_offset);
 }
 
-void LimitByStep::serialize(WriteBuffer & buffer) const
+void LimitByStep::toProto(Protos::LimitByStep & proto, bool) const
 {
-    IQueryPlanStep::serializeImpl(buffer);
-    writeBinary(group_length, buffer);
-    writeBinary(group_offset, buffer);
-    serializeStrings(columns, buffer);
+    ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
+    proto.set_group_length(group_length);
+    proto.set_group_offset(group_offset);
+    for (const auto & element : columns)
+        proto.add_columns(element);
 }
 
-QueryPlanStepPtr LimitByStep::deserialize(ReadBuffer & buffer, ContextPtr )
+std::shared_ptr<LimitByStep> LimitByStep::fromProto(const Protos::LimitByStep & proto, ContextPtr)
 {
-    String step_description;
-    readBinary(step_description, buffer);
-
-    DataStream input_stream;
-    input_stream = deserializeDataStream(buffer);
-
-    size_t group_length, group_offset;
-    readBinary(group_length, buffer);
-    readBinary(group_offset, buffer);
-
-    Names column = deserializeStrings(buffer);
-
-    auto step = std::make_unique<LimitByStep>(input_stream, group_length, group_offset, column);
+    auto [step_description, base_input_stream] = ITransformingStep::deserializeFromProtoBase(proto.query_plan_base());
+    auto group_length = proto.group_length();
+    auto group_offset = proto.group_offset();
+    std::vector<String> columns;
+    for (const auto & element : proto.columns())
+        columns.emplace_back(element);
+    auto step = std::make_shared<LimitByStep>(base_input_stream, group_length, group_offset, columns);
     step->setStepDescription(step_description);
     return step;
 }

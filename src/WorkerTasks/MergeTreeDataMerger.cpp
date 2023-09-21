@@ -286,7 +286,7 @@ MergeAlgorithm MergeTreeDataMerger::chooseMergeAlgorithm(
 
     bool no_parts_overflow = source_data_parts.size() <= RowSourcePart::MAX_PARTS;
 
-    auto merge_alg = (is_supported_storage && enough_total_rows && enough_ordinary_cols && no_parts_overflow) 
+    auto merge_alg = (is_supported_storage && enough_total_rows && enough_ordinary_cols && no_parts_overflow)
                         ? MergeAlgorithm::Vertical : MergeAlgorithm::Horizontal;
 
     LOG_DEBUG(log, "Selected MergeAlgorithm: {}", toString(merge_alg));
@@ -327,7 +327,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
     // shall we calculate the total rows_count for projection by summing their's rows_count ?
     size_t sum_input_rows_upper_bound = parent_part ? estimateTotalRowsCount(source_data_parts) : manipulation_entry->total_rows_count;
     MergeAlgorithm merge_alg = chooseMergeAlgorithm(source_data_parts, gathering_columns, merging_params, sum_input_rows_upper_bound);
-    
+
     // choose compression codec
     // shall we specially calculate the compression_codec for projection using the corresponding proj's params?
     CompressionCodecPtr compression_codec = context->chooseCompressionCodec(
@@ -387,6 +387,8 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
     // create source input
     Pipes pipes;
     UInt64 watch_prev_elapsed = 0;
+    // since we're reading from pre-fetched files, data will be mostly in page cache
+    const bool read_with_direct_io = false;
 
     // create merge prefetcher if necessary
     std::unique_ptr<CnchMergePrefetcher> prefetcher = nullptr;
@@ -413,11 +415,10 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             metadata_snapshot,
             part,
             merging_column_names,
-            false, // read_with_direct_io: We believe source parts will be mostly in page cache
-            true, /// take_column_types_from_storage
-            false, /// quiet
-            future_files
-        );
+            read_with_direct_io,
+            /*take_column_types_from_storage*/ true,
+            /*quiet*/ false,
+            future_files);
         input->setProgressCallback(ManipulationProgressCallback(manipulation_entry, watch_prev_elapsed, horizontal_stage_progress));
 
         Pipe pipe(std::move(input));
@@ -660,12 +661,11 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
                     data,
                     metadata_snapshot,
                     source_data_parts[part_num],
-                    nullptr, // delete bitmap
                     Names{column_name},
-                    false, /// read_with_direct_io: We believe source parts will be mostly in page cache
-                    true, // take_column_types_from_storage
-                    future_files
-                );
+                    read_with_direct_io,
+                    /*take_column_types_from_storage*/ true,
+                    /*quiet*/ false,
+                    future_files);
                 column_part_source->setProgressCallback(
                     ManipulationProgressCallback(manipulation_entry, watch_prev_elapsed, column_progress));
 
@@ -732,7 +732,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             manipulation_entry->bytes_written_uncompressed.fetch_add(
                 column_gathered_stream.getProfileInfo().bytes, std::memory_order_relaxed);
             manipulation_entry->progress.store(progress_before + column_weight, std::memory_order_relaxed);
-            
+
             normal_columns_gathered += 1;
         }
 
@@ -756,7 +756,7 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
             manipulation_entry->rows_read / elapsed_seconds,
             ReadableSize(manipulation_entry->bytes_read_uncompressed / elapsed_seconds));
     }
-    
+
     for (const auto & projection : metadata_snapshot->getProjections())
     {
         MergeTreeData::DataPartsVector projection_parts;

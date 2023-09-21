@@ -86,7 +86,8 @@ TransformResult PushJoinThroughUnion::transformImpl(PlanNodePtr node, const Capt
 
     return {PlanNodeBase::createPlanNode(
         context->nextNodeId(),
-        std::make_shared<UnionStep>(std::move(input_streams), join.getOutputStream(), unionn.isLocal()),
+        std::make_shared<UnionStep>(
+            std::move(input_streams), join.getOutputStream(), OutputToInputs{}, unionn.getMaxThreads(), unionn.isLocal()),
         new_union_children)};
 }
 
