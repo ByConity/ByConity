@@ -492,6 +492,12 @@ static void doSomeReplacementForSettings(ContextMutablePtr context)
         context->setSetting("enable_optimizer", Field(1));
         context->setSetting("enable_distributed_stages", Field(0));
     }
+    if (settings.max_rows_to_read_local)
+        context->setSetting("max_rows_to_read_leaf", Field(settings.max_rows_to_read_local));
+    if (settings.max_bytes_to_read_local)
+        context->setSetting("max_bytes_to_read_leaf", Field(settings.max_bytes_to_read_local));
+    if (settings.read_overflow_mode_local != OverflowMode::THROW)
+        context->setSetting("read_overflow_mode_leaf", Field(settings.read_overflow_mode_local));
 }
 
 static void setQuerySpecificSettings(ASTPtr & ast, ContextMutablePtr context)
@@ -637,7 +643,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     assert(internal || CurrentThread::get().getQueryContext());
     assert(internal || CurrentThread::get().getQueryContext()->getCurrentQueryId() == CurrentThread::getQueryId());
 #endif
-
 
     const Settings & settings = context->getSettingsRef();
 
@@ -791,6 +796,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
         throw;
     }
+
+    doSomeReplacementForSettings(context);
 
     doSomeReplacementForSettings(context);
 

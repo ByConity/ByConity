@@ -1616,7 +1616,6 @@ struct DateTimeTransformForNullImpl
             else
                 col_to = assert_cast<typename ToDataType::ColumnType *>(mutable_result_col.get());
 
-
             WhichDataType result_data_type(nested_result_type);
             if (result_data_type.isDateTime() || result_data_type.isDateTime64())
             {

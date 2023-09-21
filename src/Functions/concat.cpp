@@ -33,6 +33,7 @@
 #include <common/map.h>
 #include <common/range.h>
 
+#include "Functions/FunctionsConversion.h"
 #include "formatString.h"
 
 namespace DB
@@ -80,28 +81,32 @@ public:
                     + ", should be at most " + std::to_string(FormatStringImpl::argument_threshold),
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
 
-        for (const auto arg_idx : collections::range(0, arguments.size()))
-        {
-            const auto * arg = arguments[arg_idx].get();
-            if (!isStringOrFixedString(arg))
-                throw Exception{"Illegal type " + arg->getName() + " of argument " + std::to_string(arg_idx + 1) + " of function "
-                                    + getName(),
-                                ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
-        }
-
         return std::make_shared<DataTypeString>();
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t input_rows_count) const override
     {
+        ColumnsWithTypeAndName args;
+
+        /// convert all columns to ColumnString.
+        auto convert = std::make_shared<FunctionToString>();
+        auto type_string = std::make_shared<DataTypeString>();
+        for (const auto & arg: arguments)
+        {
+            ColumnPtr col = arg.column;
+            if (!isStringOrFixedString(arg.type))
+                col = convert->executeImpl({arg}, type_string, input_rows_count);
+            args.emplace_back(col, type_string, arg.name);
+        }
+
         /// Format function is not proven to be faster for two arguments.
         /// Actually there is overhead of 2 to 5 extra instructions for each string for checking empty strings in FormatImpl.
         /// Though, benchmarks are really close, for most examples we saw executeBinary is slightly faster (0-3%).
         /// For 3 and more arguments FormatImpl is much faster (up to 50-60%).
         if (arguments.size() == 2)
-            return executeBinary(arguments, input_rows_count);
+            return executeBinary(args, input_rows_count);
         else
-            return executeFormatImpl(arguments, input_rows_count);
+            return executeFormatImpl(args, input_rows_count);
     }
 
 protected:
