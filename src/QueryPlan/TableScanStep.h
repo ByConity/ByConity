@@ -34,18 +34,6 @@ class TableScanStep : public ISourceStep
 public:
     TableScanStep(
         ContextPtr context,
-        StoragePtr storage_,
-        const NamesWithAliases & column_alias_,
-        const SelectQueryInfo & query_info_,
-        size_t max_block_size_,
-        String alias_ = "",
-        PlanHints hints_ = {},
-        QueryPlanStepPtr aggregation_ = nullptr,
-        QueryPlanStepPtr projection_ = nullptr,
-        QueryPlanStepPtr filter_ = nullptr);
-
-    TableScanStep(
-        ContextPtr context,
         StorageID storage_id_,
         const NamesWithAliases & column_alias_,
         const SelectQueryInfo & query_info_,
@@ -55,7 +43,6 @@ public:
         std::shared_ptr<AggregatingStep> aggregation_ = nullptr,
         std::shared_ptr<ProjectionStep> projection_ = nullptr,
         std::shared_ptr<FilterStep> filter_ = nullptr);
-
 
     TableScanStep(
         DataStream output,

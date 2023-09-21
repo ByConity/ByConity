@@ -792,8 +792,8 @@ void TableScanStep::makeSetsForIndex(const ASTPtr & node, ContextPtr context, Pr
 }
 
 TableScanStep::TableScanStep(
-    ContextPtr /*context*/,
-    StoragePtr storage_,
+    ContextPtr context,
+    StorageID storage_id_,
     const NamesWithAliases & column_alias_,
     const SelectQueryInfo & query_info_,
     size_t max_block_size_,
@@ -803,8 +803,7 @@ TableScanStep::TableScanStep(
     std::shared_ptr<ProjectionStep> projection_,
     std::shared_ptr<FilterStep> filter_)
     : ISourceStep(DataStream{}, hints_)
-    , storage(storage_)
-    , storage_id(storage->getStorageID())
+    , storage_id(storage_id_)
     , column_alias(column_alias_)
     , query_info(query_info_)
     , max_block_size(max_block_size_)
@@ -823,6 +822,7 @@ TableScanStep::TableScanStep(
     // order sensitive
     Names require_column_list = column_names;
     NameSet require_columns{column_names.begin(), column_names.end()};
+    storage = DatabaseCatalog::instance().getTable(storage_id, context);
 
     //    QueryPlan tmp_query_plan;
     //    storage->read(tmp_query_plan, require_column_list, storage->getInMemoryMetadataPtr(), query_info, context, processing_stage, max_block_size, max_streams, true);
@@ -863,31 +863,6 @@ TableScanStep::TableScanStep(
     }
 
     formatOutputStream();
-}
-
-TableScanStep::TableScanStep(
-    ContextPtr context,
-    StorageID storage_id_,
-    const NamesWithAliases & column_alias_,
-    const SelectQueryInfo & query_info_,
-    size_t max_block_size_,
-    String alias_,
-    PlanHints hints_,
-    QueryPlanStepPtr aggregation_,
-    QueryPlanStepPtr projection_,
-    QueryPlanStepPtr filter_)
-    : TableScanStep(
-        context,
-        DatabaseCatalog::instance().getTable(storage_id_, context),
-        column_alias_,
-        query_info_,
-        max_block_size_,
-        alias_,
-        hints_,
-        aggregation_,
-        projection_,
-        filter_)
-{
 }
 
 void TableScanStep::formatOutputStream()
