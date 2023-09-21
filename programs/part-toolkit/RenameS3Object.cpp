@@ -149,8 +149,8 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
     }
 
     boost::asio::thread_pool thread_pool(threadNum);
-    bool truncated = true;
-    while (truncated) {
+    bool is_done = false;
+    while (!is_done) {
         auto outcome = client.ListObjects(request);
         if (!outcome.IsSuccess()) {
             const S3::S3Error &err = outcome.GetError();
@@ -200,12 +200,10 @@ bool ListAndRenameObjects(const String &fromBucket, const String &rootPrefix, co
                     });
                 }
             }
-
-            if (objects.size() == static_cast<Vector<S3::Model::Object>::size_type>(request.GetMaxKeys())) {
-                request.SetMarker(objects[objects.size() - 1].GetKey());
-            } else {
-                truncated = false;
-                break;
+            
+            is_done = !outcome.GetResult().GetIsTruncated();
+            if (!is_done) {
+                request.SetMarker(outcome.GetResult().GetNextMarker());
             }
         }
     }
