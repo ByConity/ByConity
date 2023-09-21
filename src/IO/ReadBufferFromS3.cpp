@@ -282,7 +282,7 @@ size_t ReadBufferFromS3::readBigAt(char * to, size_t n, size_t range_begin, cons
         }
         catch (Poco::Exception & e)
         {
-            if (!last_attempt)
+            if (last_attempt)
                 throw e;
 
             sleepForMilliseconds(sleep_time_with_backoff_milliseconds);

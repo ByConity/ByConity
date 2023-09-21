@@ -257,7 +257,7 @@ void reloadFormatSchema(String remote_format_schema_path, String format_schema_p
                 Poco::File file(format_schema_path+"/chtmp_" + shortFileName);
                 if (file.exists()) file.remove(); // remove last residual file
 
-                ReadBufferFromByteHDFS reader(fileName);
+                ReadBufferFromByteHDFS reader(fileName, HDFSConnectionParams::defaultNNProxy());
                 WriteBufferFromFile writer(file.path());
                 copyData(reader, writer, nullptr);
                 if (target_file.exists()) target_file.remove();
