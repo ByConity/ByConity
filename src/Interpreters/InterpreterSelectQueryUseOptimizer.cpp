@@ -24,6 +24,8 @@
 #include <Optimizer/JoinOrderUtils.h>
 #include <Optimizer/PlanNodeSearcher.h>
 #include <Optimizer/PlanOptimizer.h>
+#include <Parsers/ASTTEALimit.h>
+#include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/PlanCache.h>
 #include <QueryPlan/QueryPlan.h>
@@ -34,6 +36,8 @@
 #include <Storages/StorageDistributed.h>
 #include <common/logger_useful.h>
 #include "QueryPlan/QueryPlan.h"
+#include <Parsers/queryToString.h>
+#include <Interpreters/executeQuery.h>
 
 namespace DB
 {
@@ -148,6 +152,171 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     return std::make_pair(std::move(plan_segment_tree), std::move(used_storage_ids));
 }
 
+QueryPipeline executeTEALimit(QueryPipeline & pipeline, ContextMutablePtr context, ASTPtr query_ptr)
+{
+    const ASTSelectWithUnionQuery & ast = query_ptr->as<ASTSelectWithUnionQuery &>();
+
+    // Create implicit storage to buffer pre tealimit results
+    NamesAndTypesList columns = pipeline.getHeader().getNamesAndTypesList();
+    auto temporary_table = TemporaryTableHolder(context->getQueryContext(), ColumnsDescription{columns}, {});
+
+    String implicit_name = "_TEALIMITDATA";
+
+    auto storage = temporary_table.getTable();
+    BlockOutputStreamPtr output = storage->write(ASTPtr(), storage->getInMemoryMetadataPtr(), context);
+
+    PullingAsyncPipelineExecutor executor(pipeline);
+    Block block;
+
+    output->writePrefix();
+    while (executor.pull(block, context->getSettingsRef().interactive_delay / 1000))
+    {
+        if (block)
+            output->write(block);
+    }
+    output->writeSuffix();
+
+    // Query level temporary table
+    context->getQueryContext()->addExternalTable(implicit_name, std::move(temporary_table));
+
+    // Construct the internal SQL
+    //
+    // select t,  g_0, g_1, ...., g_n, cnt_0 ,..., cnt_n from misc_online_all WHERE xxx group by t, g0, g_1...gn
+    // TEALIMIT N /*METRIC cnt_0, ..., cnt_n*/ GROUP (g_0, ... , g_n) ORDER EXPR(cnt_0, ... cnt_n) ASC|DESC
+    //
+    // select t, g_0, g_1, ..., cnt_0, ..., cnt_n from implicit_storage where
+    // （g_0, ..., g_n) in (select g_0, ...., g_n from implicit_storage
+    //  group by g_0, ..., g_n order by EXPR(sum(cnt_0), ..., sum(cnt_n)) ASC|DESC LIMIT N)
+    //
+    //
+    std::stringstream postQuery;
+    postQuery << "SELECT ";
+
+    auto implicit_select_expr_list = std::make_shared<ASTExpressionList>();
+    for (const auto & column : columns)
+    {
+        implicit_select_expr_list->children.emplace_back(std::make_shared<ASTIdentifier>(column.name));
+    }
+    postQuery << queryToString(*implicit_select_expr_list) << " FROM  " << implicit_name << " WHERE ";
+
+    bool tealimit_order_keep = context->getSettingsRef().tealimit_order_keep;
+
+    auto tea_limit = dynamic_cast<ASTTEALimit *>(ast.tealimit.get());
+    String g_list_str = queryToString(*tea_limit->group_expr_list);
+    postQuery << "(" << g_list_str << ") IN (";
+    // SUBQUERY
+    postQuery << "SELECT " << g_list_str << " FROM  " << implicit_name << " GROUP BY " << g_list_str;
+
+    postQuery << " ORDER BY ";
+    auto o_list = tea_limit->order_expr_list->clone(); // will rewrite
+    ASTs & elems = o_list->children;
+
+    // Check Whether order list is in group by list, if yes, we don't add implicit
+    // SUM clause
+    auto nodeInGroup = [&](ASTPtr group_expr_list, const ASTPtr & node) -> bool {
+        if (!tealimit_order_keep)
+            return false;
+
+        // special handling group (g0, g1), case where group expr is tuple function, step forward
+        // to get g0, g1
+        if (group_expr_list->children.size() == 1)
+        {
+            const auto * tupleFunc = group_expr_list->children[0]->as<ASTFunction>();
+            if (tupleFunc && tupleFunc->name == "tuple")
+            {
+                group_expr_list = group_expr_list->children[0]->children[0];
+            }
+        }
+
+        for (auto & g : group_expr_list->children)
+        {
+            if (node->getAliasOrColumnName() == g->getAliasOrColumnName())
+            {
+                return true;
+            }
+        }
+        return false;
+    };
+
+    bool comma = false;
+    for (auto & elem : elems)
+    {
+        auto orderCol = elem->children.front();
+
+        if (!nodeInGroup(tea_limit->group_expr_list, orderCol))
+        {
+            // check if orderCol is ASTFunction or ASTIdentifier, rewrite it
+            const ASTFunction * func = orderCol->as<ASTFunction>();
+            const ASTIdentifier * identifier = orderCol->as<ASTIdentifier>();
+            if (identifier)
+            {
+                auto sum_function = std::make_shared<ASTFunction>();
+                sum_function->name = "SUM";
+                sum_function->arguments = std::make_shared<ASTExpressionList>();
+                sum_function->children.push_back(sum_function->arguments);
+                sum_function->arguments->children.push_back(orderCol);
+
+                // ORDER BY SUM()
+                elem->children[0] = std::move(sum_function);
+            }
+            else if (func)
+            {
+                size_t numArgs = func->arguments->children.size();
+                for (size_t i = 0; i < numArgs; i++)
+                {
+                    auto & iArg = func->arguments->children[i];
+                    if (nodeInGroup(tea_limit->group_expr_list, iArg))
+                        continue;
+                    auto sum_function = std::make_shared<ASTFunction>();
+                    sum_function->name = "SUM";
+                    sum_function->arguments = std::make_shared<ASTExpressionList>();
+                    sum_function->children.push_back(sum_function->arguments);
+                    sum_function->arguments->children.push_back(iArg);
+
+                    // inplace replace EXPR with new argument
+                    func->arguments->children[i] = std::move(sum_function);
+                }
+            }
+            else
+            {
+                throw Exception("TEALimit unhandled " + queryToString(*elem), ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+
+        const ASTOrderByElement & order_by_elem = elem->as<ASTOrderByElement &>();
+
+        if (comma)
+            postQuery << ", ";
+        comma = true; // skip the first one
+        postQuery << serializeAST(order_by_elem, true);
+    }
+
+    postQuery << " LIMIT ";
+    if (tea_limit->limit_offset)
+    {
+        postQuery << serializeAST(*tea_limit->limit_offset, true) << ", ";
+    }
+    postQuery << serializeAST(*tea_limit->limit_value, true);
+    postQuery << ")";
+
+    //@user-profile, TEALIMIT output need respect order by info
+    if (tealimit_order_keep)
+    {
+        comma = false;
+        postQuery << " ORDER BY ";
+        for (auto & elem : tea_limit->order_expr_list->children)
+        {
+            if (comma)
+                postQuery << ", ";
+            comma = true;
+            postQuery << serializeAST(*elem, true);
+        }
+    }
+
+    // evaluate the internal SQL and get the result
+    return executeQuery(postQuery.str(), context->getQueryContext(), true).pipeline;
+}
+
 BlockIO InterpreterSelectQueryUseOptimizer::execute()
 {
     std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
@@ -155,6 +324,13 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
     auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree_and_used_storage_ids.first), context, MPPQueryOptions());
 
     BlockIO res = coodinator->execute();
+
+    if (auto * select_union = query_ptr->as<ASTSelectWithUnionQuery>())
+    {
+        if (unlikely(select_union->tealimit))
+            res.pipeline = executeTEALimit(res.pipeline, context, query_ptr);
+    }
+
     res.pipeline.addUsedStorageIDs(plan_segment_tree_and_used_storage_ids.second);
     return res;
 }

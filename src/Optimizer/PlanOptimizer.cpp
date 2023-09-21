@@ -32,6 +32,7 @@
 #include <Optimizer/Rewriter/SimplifyCrossJoin.h>
 #include <Optimizer/Rewriter/UnifyJoinOutputs.h>
 #include <Optimizer/Rewriter/UnifyNullableType.h>
+#include <Optimizer/Rewriter/RemoveRedundantAggregate.h>
 #include <Optimizer/Rewriter/UseSortingProperty.h>
 #include <Optimizer/Rule/Rules.h>
 #include <QueryPlan/GraphvizPrinter.h>
@@ -61,6 +62,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
 
         std::make_shared<ColumnPruning>(),
+        std::make_shared<RemoveRedundantDistinct>(),
 
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
@@ -70,6 +72,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
 
         // normalize plan after predicate push down
         std::make_shared<ColumnPruning>(),
+        std::make_shared<RemoveRedundantDistinct>(),
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
@@ -91,6 +94,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<AddExchange>(),
 
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
+        std::make_shared<RemoveRedundantDistinct>(),
         // use property
         std::make_shared<SortingOrderedSource>(),
 
@@ -159,6 +163,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         // predicate push down may convert outer-join to inner-join, make sure data type is correct.
         std::make_shared<ColumnPruning>(),
+        std::make_shared<RemoveRedundantDistinct>(),
         std::make_shared<UnifyNullableType>(),
 
         // Join graph requires projection inline/merge/pull up, as projection will break join graph.
@@ -183,6 +188,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
 
         // predicate push down may convert outer-join to inner-join, make sure data type is correct.
         std::make_shared<ColumnPruning>(),
+        std::make_shared<RemoveRedundantDistinct>(),
         std::make_shared<UnifyNullableType>(),
 
         // prepare for cascades
@@ -226,6 +232,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // push partial step through exchange
         // TODO cost-base partial aggregate push down
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
+        std::make_shared<RemoveRedundantDistinct>(),
         // use property
         std::make_shared<SortingOrderedSource>(),
 

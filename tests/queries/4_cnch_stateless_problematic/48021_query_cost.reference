@@ -1,0 +1,7 @@
+		"rows_read": 1,
+		"bytes_read": 16
+		"rows_read": 1,
+		"bytes_read": 16
+		"rows_read": 4,
+		"bytes_read": 64
+< X-ClickHouse-Progress: {"read_rows":"1","read_bytes":"16","total_rows":"1","disk_cache_bytes":"0"}

@@ -1870,6 +1870,7 @@ enum PreloadLevelSettings : UInt64
       "Mode of accurate sample ndv to estimate full ndv", \
       0) \
     M(UInt64, statistics_batch_max_columns, 30, "Max column size in a batch when collecting stats", 0) \
+    M(String, statistics_exclude_tables_regex, "", "regex to exclude tables for statistics operations", 0) \
     M(Bool, statistics_simplify_histogram, false, "Reduce buckets of histogram with simplifying", 0) \
     M(Float, statistics_simplify_histogram_ndv_density_threshold, 0.2, "Histogram simplifying threshold for ndv", 0) \
     M(Float, statistics_simplify_histogram_range_density_threshold, 0.2, "Histogram simplifying threshold for range", 0) \
@@ -1954,6 +1955,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, execute_uncorrelated_in_subquery_size, 10000, "Size of execute uncorrelated in subquery", 0) \
     M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
     M(Float, pk_selectivity, 0.5, "PK selectivity for join estimation", 0) \
+    M(Bool, enable_distinct_remove, true, "Whether to eliminate redundancy during execution", 0) \
     M(Bool, use_sql_binding, false, "Whether use SQL binding", 0) \
     M(UInt64, global_bindings_update_time, 60*60, "Interval to update global binding cache from catalog, in seconds.", 0) \
     M(Bool, enable_execute_query, true, "Whether to execute this query", 0) \

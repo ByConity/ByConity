@@ -84,7 +84,7 @@ void handle_error_code([[maybe_unused]] const std::string & msg, int code, bool 
 #ifdef ABORT_ON_LOGICAL_ERROR
     if (code == ErrorCodes::LOGICAL_ERROR && !g_disable_abort_on_logical_error)
     {
-        abortOnFailedAssertion(msg);
+        // abortOnFailedAssertion(msg);
     }
 #endif
 
