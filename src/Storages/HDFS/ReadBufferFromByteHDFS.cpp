@@ -238,7 +238,7 @@ off_t ReadBufferFromByteHDFS::seek(off_t offset_, int whence_)
         offset_ = getPosition() + offset_;
     else if (whence_ != SEEK_SET)
         throw Exception("Seek expects SEEK_SET or SEEK_CUR as whence", ErrorCodes::BAD_ARGUMENTS);
-    assert(offset >= 0);
+    assert(offset_ >= 0);
 
     /// new position still inside working buffer
     /// impl->getPosition() is the file position of the working buffer end
