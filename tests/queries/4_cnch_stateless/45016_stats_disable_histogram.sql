@@ -1,3 +1,4 @@
+CREATE DATABASE IF NOT EXISTS test;
 use test;
 set create_stats_time_output=0;
 drop table if exists stats_disable_hist;
