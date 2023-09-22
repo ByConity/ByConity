@@ -1741,6 +1741,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_async_execution, false, "Whether to enable async execution", 0) \
     M(Bool, drop_vw_disk_cache, false, "if drop the all disk cache of vw even pass one table.", 0) \
     M(Bool, force_grouping_standard_compatibility, true, "Make GROUPING function to return 1 when argument is not used as an aggregation key", 0) \
+    M(Bool, disable_optimize_final, true, "Disable optimize final command", 0) \
     /** Settings for hive */ \
     M(Bool, use_hive_metastore_filter, true, "", 0) \
     M(Bool, use_hive_cluster_key_filter, true, "", 0) \
