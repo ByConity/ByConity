@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <CloudServices/CnchServerResource.h>
 #include <Interpreters/InterpreterRefreshQuery.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTRefreshQuery.h>
@@ -43,6 +44,7 @@ namespace DB
             throw Exception("Table " + db_str + backQuoteIfNeed(refresh.table) +
                             " isn't a materialized view, can't be refreshed.", ErrorCodes::LOGICAL_ERROR);
         }
+        getContext()->getCnchServerResource()->skipCleanWorker();
         return {};
     }
 }
