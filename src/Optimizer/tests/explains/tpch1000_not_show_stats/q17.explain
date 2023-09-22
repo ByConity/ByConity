@@ -21,9 +21,9 @@ Projection
                ├─ Repartition Exchange
                │  │     Partition by: {p_partkey}
                │  └─ Filter
-               │     │     Condition: (p_brand = 'Brand#23') AND (p_container = 'MED BOX')
+               │     │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
                │     └─ TableScan tpch1000.part
-               │              Where: (p_brand = 'Brand#23') AND (p_container = 'MED BOX')
+               │              Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
                │              Outputs: [p_brand, p_container, p_partkey]
                └─ Aggregating
                   │     Group by: {l_partkey_1}
@@ -48,9 +48,9 @@ Projection
                                  └─ Projection
                                     │     Expressions: p_partkey_1:=p_partkey
                                     └─ Filter
-                                       │     Condition: (p_brand = 'Brand#23') AND (p_container = 'MED BOX')
+                                       │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
                                        └─ TableScan tpch1000.part
-                                                Where: (p_brand = 'Brand#23') AND (p_container = 'MED BOX')
+                                                Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
                                                 Outputs: [p_brand, p_container, p_partkey]
 note: Magic Set is applied for 1 parts.
 note: Runtime Filter is applied for 2 times.

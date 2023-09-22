@@ -67,9 +67,6 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<ColumnPruning>(),
         std::make_shared<RemoveRedundantDistinct>(),
 
-        std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
-        std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
-
         std::make_shared<RemoveRedundantSort>(),
         std::make_shared<PredicatePushdown>(),
 
@@ -82,6 +79,12 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
 
         //add reorder adjacent windows
         std::make_shared<IterativeRewriter>(Rules::swapAdjacentRules(), "SwapAdjacent"),
+        std::make_shared<ImplementJoinOrderHints>(),
+
+        // push down limit and aggregate
+        std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
+        std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
+
         std::make_shared<ImplementJoinOrderHints>(),
 
         std::make_shared<MaterializedViewRewriter>(),
@@ -150,9 +153,6 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<ColumnPruning>(),
 
         // rules after subquery removed, DO NOT change !!!.
-        std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
-        std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
-        std::make_shared<IterativeRewriter>(Rules::pushAggRules(), "PushAggregateThroughJoin"),
 
         std::make_shared<RemoveRedundantSort>(),
 
@@ -185,6 +185,13 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
         std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
+        std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), "SwapPredicate"),
+
+        // push down limit & aggregate
+        std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
+        std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
+        std::make_shared<IterativeRewriter>(Rules::pushAggRules(), "PushAggregateThroughJoin"),
+
         std::make_shared<ImplementJoinOrderHints>(),
         std::make_shared<SimpleReorderJoin>(),
         std::make_shared<PredicatePushdown>(),

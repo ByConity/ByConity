@@ -157,9 +157,9 @@ TransformResult PushLimitThroughUnion::transformImpl(PlanNodePtr node, const Cap
 
 PatternPtr PushLimitThroughOuterJoin::getPattern() const
 {
-    return Patterns::limit().withSingle(Patterns::join().matchingStep<JoinStep>([](const auto & join_step) {
-        return join_step.getKind() == ASTTableJoin::Kind::Left || join_step.getKind() == ASTTableJoin::Kind::Right;
-    })).result();
+    return Patterns::limit()
+        .withSingle(Patterns::join().matchingStep<JoinStep>([](const auto & join_step) { return join_step.isLeftOrRightOuterJoin(); }))
+        .result();
 }
 
 TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
@@ -171,7 +171,7 @@ TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const
     auto left = join->getChildren()[0];
     auto right = join->getChildren()[1];
 
-    if (join_step->getKind() == ASTTableJoin::Kind::Left && isLimitNeeded(*limit_step, left))
+    if (join_step->isLeftOuterJoin() && isLimitNeeded(*limit_step, left))
     {
         left = PlanNodeBase::createPlanNode(
             context.context->nextNodeId(),
@@ -187,7 +187,7 @@ TransformResult PushLimitThroughOuterJoin::transformImpl(PlanNodePtr node, const
         join->replaceChildren({left, right});
         return node;
     }
-    else if (join_step->getKind() == ASTTableJoin::Kind::Right && isLimitNeeded(*limit_step, right))
+    else if (join_step->isRightOuterJoin() && isLimitNeeded(*limit_step, right))
     {
         right = PlanNodeBase::createPlanNode(
             context.context->nextNodeId(),

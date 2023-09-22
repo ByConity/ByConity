@@ -112,24 +112,22 @@ Projection Est. ? rows
                   Outputs: [a]
 4
 3
-Projection Est. 1000 rows, cost 1.481600e+02
+Projection Est. 1000 rows, cost 7.416000e+01
 │     Expressions: [user_id]
-└─ Limit Est. 1000 rows, cost 7.416000e+01
+└─ Limit Est. 1000 rows, cost 1.600000e-01
    │     Limit: 1000
-   └─ Projection Est. 1000 rows, cost 7.416000e+01
-      │     Expressions: [user_id]
-      └─ Sorting Est. 1000 rows, cost 1.600000e-01
-         │     Order by: {followed_counter_td desc nulls_last}
-         │     Limit: 1000
-         └─ Gather Exchange Est. ? rows, cost 1.600000e-01
-            └─ Sorting Est. 1000 rows, cost 0.000000e+00
-               │     Order by: {followed_counter_td desc nulls_last}
-               │     Limit: 1000
-               └─ Filter Est. ? rows, cost 0.000000e+00
-                  │     Condition: date = cast(19551, \'Date\')
-                  └─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
-                           Where: date = cast(19551, \'Date\')
-                           Outputs: [date, followed_counter_td, user_id]
+   └─ Sorting Est. 1000 rows, cost 1.600000e-01
+      │     Order by: {followed_counter_td desc nulls_last}
+      │     Limit: 1000
+      └─ Gather Exchange Est. ? rows, cost 1.600000e-01
+         └─ Sorting Est. 1000 rows, cost 0.000000e+00
+            │     Order by: {followed_counter_td desc nulls_last}
+            │     Limit: 1000
+            └─ Filter Est. ? rows, cost 0.000000e+00
+               │     Condition: date = cast(19551, \'Date\')
+               └─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
+                        Where: date = cast(19551, \'Date\')
+                        Outputs: [date, followed_counter_td, user_id]
 Projection Est. 1000 rows, cost 7.496000e+01
 │     Expressions: [user_id]
 └─ Limit Est. 1000 rows, cost 9.600000e-01
