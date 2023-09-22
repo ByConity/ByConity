@@ -88,7 +88,7 @@ Projection
             ├─ Projection
             │  │     Expressions: d_moy_6:=d_moy_8, expr#avg(inv_quantity_on_hand)_6:=`expr#avg(inv_quantity_on_hand)_8`, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6:=caseWithExpression(`expr#avg(inv_quantity_on_hand)_8`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_8`), i_item_sk_6:=i_item_sk_8, w_warehouse_sk_6:=w_warehouse_sk_8
             │  └─ Filter
-            │     │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_8`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_8`) > 1) AND (((1 = d_moy_8) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_8`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_8`) > 1.5)) OR (2 = d_moy_8)) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_8`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_8`) > 1.5)
+            │     │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_8`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_8`) > 1) AND (((d_moy_8 = 1) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_8`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_8`) > 1.5)) OR (d_moy_8 = 2)) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_8`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_8`) > 1.5)
             │     └─ Aggregating
             │        │     Group by: {d_moy_8, i_item_sk_8, w_warehouse_name_8, w_warehouse_sk_8}
             │        │     Aggregates: expr#stddevSamp(inv_quantity_on_hand)_8:=AggNull(stddevSamp)(inv_quantity_on_hand_4), expr#avg(inv_quantity_on_hand)_8:=AggNull(avg)(inv_quantity_on_hand_4)
@@ -118,7 +118,7 @@ Projection
             └─ Projection
                │     Expressions: d_moy_7:=d_moy_9, expr#avg(inv_quantity_on_hand)_7:=`expr#avg(inv_quantity_on_hand)_9`, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_7:=caseWithExpression(`expr#avg(inv_quantity_on_hand)_9`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_9`), i_item_sk_7:=i_item_sk_9, w_warehouse_sk_7:=w_warehouse_sk_9
                └─ Filter
-                  │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_9`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_9`) > 1) AND (((1 = d_moy_9) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_9`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_9`) > 1.5)) OR (2 = d_moy_9))
+                  │     Condition: (caseWithExpression(`expr#avg(inv_quantity_on_hand)_9`, 0, 0, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_9`) > 1) AND (((d_moy_9 = 1) AND (caseWithExpression(`expr#avg(inv_quantity_on_hand)_9`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_9` / `expr#avg(inv_quantity_on_hand)_9`) > 1.5)) OR (d_moy_9 = 2))
                   └─ Aggregating
                      │     Group by: {d_moy_9, i_item_sk_9, w_warehouse_name_9, w_warehouse_sk_9}
                      │     Aggregates: expr#stddevSamp(inv_quantity_on_hand)_9:=AggNull(stddevSamp)(inv_quantity_on_hand_5), expr#avg(inv_quantity_on_hand)_9:=AggNull(avg)(inv_quantity_on_hand_5)
