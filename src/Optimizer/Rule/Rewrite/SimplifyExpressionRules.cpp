@@ -174,7 +174,7 @@ PatternPtr UnWarpCastInPredicateRewriteRule::getPattern() const
 TransformResult UnWarpCastInPredicateRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto & context = rule_context.context;
-    if (!context->getSettingsRef().enable_unwarp_cast_in)
+    if (!context->getSettingsRef().enable_unwrap_cast_in)
     {
         return {};
     }
