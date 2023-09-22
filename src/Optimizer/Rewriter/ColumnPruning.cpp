@@ -518,6 +518,12 @@ PlanNodePtr ColumnPruningVisitor::visitUnionNode(UnionNode & node, NameSet & req
 {
     const auto * step = node.getStep().get();
 
+    // must have one require, if there is not any columns, the children can return random columns, so the result is incorrect.
+    if (require.empty())
+    {
+        require.emplace(step->getOutputStream().header.getByPosition(0).name);
+    }
+
     std::vector<String> require_columns;
 
     DataStream output_stream;

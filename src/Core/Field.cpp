@@ -415,6 +415,12 @@ void writeFieldBinaryBlobImpl(const Field & field, Field::Types::Which type, Wri
             writeBinary(df.getScale(), buf);
             return;
         }
+        case Field::Types::Map:
+        {
+            auto df = field.get<Map>();
+            writeBinary(df, buf);
+            return;
+        }
         case Field::Types::AggregateFunctionState:
         {
             writeStringBinary(field.get<AggregateFunctionStateData>().name, buf);
@@ -540,6 +546,13 @@ void readFieldBinaryBlobImpl(Field & field, Field::Types::Which type, ReadBuffer
             readBinary(value, buf);
             readBinary(scale, buf);
             field = DecimalField<Decimal256>(value, scale);
+            return;
+        }
+        case Field::Types::Map:
+        {
+            Map value;
+            readBinary(value, buf);
+            field = value;
             return;
         }
         case Field::Types::AggregateFunctionState:

@@ -26,6 +26,7 @@
 #include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/SymbolMapper.h>
+#include <Poco/StringTokenizer.h>
 
 namespace DB
 {
@@ -162,6 +163,24 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
         if (BLOCK_AGGS.count(agg.function->getName()))
         {
             return {};
+        }
+    }
+
+    if (!context.context->getSettingsRef().enable_push_partial_block_list.value.empty())
+    {
+        Poco::StringTokenizer tokenizer(context.context->getSettingsRef().enable_push_partial_block_list, ",");
+        NameSet block_names;
+        for (const auto & name : tokenizer)
+        {
+            block_names.emplace(name);
+        }
+
+        for (const auto & agg : step->getAggregates())
+        {
+            if (block_names.count(agg.function->getName()))
+            {
+                return {};
+            }
         }
     }
 

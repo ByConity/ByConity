@@ -1,0 +1,17 @@
+Projection Est. ? rows
+│     Expressions: sum(x):=`expr#sum(x)`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#sum(x):=AggNull(sum)(x)
+         └─ TableScan test.t48025_abl Est. ? rows
+                  Outputs: [x]
+Projection Est. ? rows
+│     Expressions: sum(x):=`expr#sum(x)`
+└─ Aggregating Est. ? rows
+   │     Group by: {}
+   │     Aggregates: expr#sum(x):=AggNull(sum)(x)
+   └─ Gather Exchange Est. ? rows
+      └─ TableScan test.t48025_abl Est. ? rows
+               Outputs: [x]

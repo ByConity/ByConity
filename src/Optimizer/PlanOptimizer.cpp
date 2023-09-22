@@ -61,6 +61,9 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<IterativeRewriter>(Rules::simplifyExpressionRules(), "SimplifyExpression"),
         std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
 
+        // rules for normalize Union/Except/Intersect
+        std::make_shared<IterativeRewriter>(Rules::mergeSetRules(), "MergeSetNode"),
+
         std::make_shared<ColumnPruning>(),
         std::make_shared<RemoveRedundantDistinct>(),
 
