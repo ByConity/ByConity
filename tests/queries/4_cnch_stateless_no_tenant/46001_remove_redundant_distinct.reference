@@ -1,0 +1,195 @@
+---------test union
+Projection Est. ? rows
+│     Expressions: id:=id_2
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {id_2}
+         └─ Union Est. ? rows
+            ├─ TableScan test_distinct.unique_1 Est. ? rows
+            │        Outputs: [id]
+            └─ Aggregating Est. ? rows
+               │     Group by: {id_1}
+               └─ MergingAggregated Est. ? rows
+                  └─ Repartition Exchange Est. ? rows
+                     │     Partition by: {id_1}
+                     └─ Aggregating Est. ? rows
+                        │     Group by: {id_1}
+                        └─ TableScan test_distinct.unique_2 Est. ? rows
+                                 Outputs: id_1:=id
+---------test union2
+Projection Est. ? rows
+│     Expressions: id:=id_1
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {id_1}
+         └─ Union Est. ? rows
+            ├─ TableScan test_distinct.unique_1 Est. ? rows
+            │        Outputs: [id]
+            └─ TableScan test_distinct.unique_3 Est. ? rows
+                     Outputs: [id3]
+---------test inner join1
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: [id]
+   └─ Aggregating Est. ? rows
+      │     Group by: {id}
+      └─ Inner Join Est. ? rows
+         │     Condition: id == id_1
+         ├─ Repartition Exchange Est. ? rows
+         │  │     Partition by: {id}
+         │  └─ TableScan test_distinct.unique_1 Est. ? rows
+         │           Outputs: [id]
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {id_1}
+            └─ TableScan test_distinct.unique_2 Est. ? rows
+                     Outputs: id_1:=id
+---------test inner join2
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: [id]
+   └─ Inner Join Est. ? rows
+      │     Condition: id == id3
+      ├─ Repartition Exchange Est. ? rows
+      │  │     Partition by: {id}
+      │  └─ TableScan test_distinct.unique_1 Est. ? rows
+      │           Outputs: [id]
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {id3}
+         └─ TableScan test_distinct.unique_3 Est. ? rows
+                  Outputs: [id3]
+---------test inner join3
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: [id]
+   └─ Inner Join Est. ? rows
+      │     Condition: id == id_1, m1 == id2
+      ├─ Repartition Exchange Est. ? rows
+      │  │     Partition by: {id, m1}
+      │  └─ TableScan test_distinct.unique_1 Est. ? rows
+      │           Outputs: [id, m1]
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {id2, id_1}
+         └─ TableScan test_distinct.unique_2 Est. ? rows
+                  Outputs: [id2], id_1:=id
+---------test left join
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: [id]
+   └─ Left Join Est. ? rows
+      │     Condition: id == id3
+      ├─ Repartition Exchange Est. ? rows
+      │  │     Partition by: {id}
+      │  └─ TableScan test_distinct.unique_1 Est. ? rows
+      │           Outputs: [id]
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {id3}
+         └─ TableScan test_distinct.unique_3 Est. ? rows
+                  Outputs: [id3]
+---------test right join
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: [id3]
+   └─ Right Join Est. ? rows
+      │     Condition: id == id3
+      ├─ Repartition Exchange Est. ? rows
+      │  │     Partition by: {id}
+      │  └─ TableScan test_distinct.unique_1 Est. ? rows
+      │           Outputs: [id]
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {id3}
+         └─ TableScan test_distinct.unique_3 Est. ? rows
+                  Outputs: [id3]
+---------test full join
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: [id]
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {id}
+         └─ Aggregating Est. ? rows
+            │     Group by: {id}
+            └─ Full Join Est. ? rows
+               │     Condition: id == id3
+               ├─ Repartition Exchange Est. ? rows
+               │  │     Partition by: {id}
+               │  └─ TableScan test_distinct.unique_1 Est. ? rows
+               │           Outputs: [id]
+               └─ Repartition Exchange Est. ? rows
+                  │     Partition by: {id3}
+                  └─ TableScan test_distinct.unique_3 Est. ? rows
+                           Outputs: [id3]
+---------test cte
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: plus(id3, 10):=`expr#plus(id3, 10)`
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#plus(id3, 10)}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#plus(id3, 10)}
+            └─ Projection Est. ? rows
+               │     Expressions: expr#plus(id3, 10):=id3 + 10
+               └─ Inner Join Est. ? rows
+                  │     Condition: 
+                  │     Filter: id3 > `expr#divide(sum(avg_id), 20)`
+                  ├─ Inner Join Est. ? rows
+                  │  │     Condition: 
+                  │  │     Filter: id3 > `expr#divide(sum(avg_id), 25)`
+                  │  ├─ TableScan test_distinct.unique_3 Est. ? rows
+                  │  │        Outputs: [id3]
+                  │  └─ Broadcast Exchange Est. ? rows
+                  │     └─ Projection Est. ? rows
+                  │        │     Expressions: expr#divide(sum(avg_id), 25):=cast(`expr#sum(avg_id)` / 25, \'Nullable(Float64)\')
+                  │        └─ MergingAggregated Est. ? rows
+                  │           └─ Gather Exchange Est. ? rows
+                  │              └─ Aggregating Est. ? rows
+                  │                 │     Group by: {}
+                  │                 │     Aggregates: expr#sum(avg_id):=AggNull(sum)(id)
+                  │                 └─ TableScan test_distinct.unique_1 Est. ? rows
+                  │                          Outputs: [id]
+                  └─ Broadcast Exchange Est. ? rows
+                     └─ Projection Est. ? rows
+                        │     Expressions: expr#divide(sum(avg_id), 20):=cast(`expr#sum(avg_id)_1` / 20, \'Nullable(Float64)\')
+                        └─ MergingAggregated Est. ? rows
+                           └─ Gather Exchange Est. ? rows
+                              └─ Aggregating Est. ? rows
+                                 │     Group by: {}
+                                 │     Aggregates: expr#sum(avg_id)_1:=AggNull(sum)(id_1)
+                                 └─ TableScan test_distinct.unique_1 Est. ? rows
+                                          Outputs: id_1:=id
+---------test cte2
+Projection Est. ? rows
+│     Expressions: id:=id_2
+└─ Gather Exchange Est. ? rows
+   └─ Union Est. ? rows
+      ├─ TableScan test_distinct.unique_1 Est. ? rows
+      │        Outputs: [id]
+      └─ TableScan test_distinct.unique_1 Est. ? rows
+               Outputs: id_1:=id
+---------test groupby
+Projection Est. ? rows
+│     Expressions: [m1, m2]
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {m1, m2}
+         └─ Aggregating Est. ? rows
+            │     Group by: {m1, m2}
+            └─ Filter Est. ? rows
+               │     Condition: m1 > 1
+               └─ TableScan test_distinct.unique_1 Est. ? rows
+                        Where: m1 > 1
+                        Outputs: [m1, m2]
+---------test sipHash(64)
+Projection Est. ? rows
+│     Expressions: [id4, k3, m2]
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {id4, k3, m2}
+         └─ Aggregating Est. ? rows
+            │     Group by: {id4, k3, m2}
+            └─ TableScan test_distinct.unique_4 Est. ? rows
+                     Outputs: [id4, k3, m2]

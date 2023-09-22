@@ -24,6 +24,9 @@
 #include <Statistics/TypeUtils.h>
 #include <Storages/Hive/StorageCnchHive.h>
 #include <boost/algorithm/string.hpp>
+#include <hive_metastore_types.h>
+#include <Statistics/HiveConverter.h>
+#include <boost/regex.hpp>
 
 namespace DB::Statistics
 {
@@ -251,8 +254,27 @@ UInt64 CatalogAdaptorCnch::getUpdateTime()
 bool CatalogAdaptorCnch::isTableCollectable(const StatsTableIdentifier & identifier) const
 {
     auto storage = getStorageByTableId(identifier);
-    auto storage_name = storage->getName();
 
+    auto & pattern = context->getSettingsRef().statistics_exclude_tables_regex.value;
+    if (!pattern.empty())
+    {
+        try
+        {
+            boost::regex re(pattern);
+            boost::cmatch tmp;
+            if (boost::regex_match(identifier.getTableName().data(), tmp, re))
+            {
+                return false;
+            }
+        }
+        catch (boost::wrapexcept<boost::regex_error> & e)
+        {
+            auto err_msg = std::string("regex match error: ") + e.what();
+            throw Exception(err_msg, ErrorCodes::BAD_ARGUMENTS);
+        }
+    }
+
+    auto storage_name = storage->getName();
     if (boost::algorithm::ends_with(storage_name, "MergeTree"))
     {
         return true;

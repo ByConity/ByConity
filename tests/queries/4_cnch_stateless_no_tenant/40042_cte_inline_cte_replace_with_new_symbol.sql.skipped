@@ -1,0 +1,27 @@
+set dialect_type = 'CLICKHOUSE';
+set enable_optimizer = 1;
+set create_stats_time_output = 0;
+
+
+
+drop table if exists t40042;
+
+create table t40042 (
+  uid UInt64,
+  click UInt64
+) engine = CnchMergeTree() order by uid;
+
+create stats t40042;
+
+explain stats = 0
+with cte as
+    (
+        select
+            uid,
+            click
+        from t40042
+    )
+select sum(x.click)
+from cte as x
+inner join cte as y on x.uid = y.uid
+settings cte_mode = 'AUTO';

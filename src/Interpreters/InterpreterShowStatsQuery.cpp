@@ -28,6 +28,7 @@
 #include <Statistics/serde_extend.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <Poco/Timestamp.h>
+#include <Storages/StorageMaterializedView.h>
 
 namespace DB
 {
@@ -255,6 +256,27 @@ static std::vector<StatsTableIdentifier> getTables(ContextPtr context, const AST
             throw Exception(msg, ErrorCodes::UNKNOWN_TABLE);
         }
         tables.emplace_back(table_info_opt.value());
+    }
+    // show materialized view as target table
+    for (auto & table : tables)
+    {
+        auto storage = catalog->getStorageByTableId(table);
+        if (const auto * mv = dynamic_cast<const StorageMaterializedView *>(storage.get()))
+        {
+            auto table_opt = catalog->getTableIdByName(mv->getTargetDatabaseName(), mv->getTargetTableName());
+            if (!table_opt.has_value())
+            {
+                auto err_msg = fmt::format(
+                    FMT_STRING("mv {}.{} has invalid target table {}.{}"),
+                    mv->getDatabaseName(),
+                    mv->getTableName(),
+                    mv->getTargetDatabaseName(),
+                    mv->getTargetTableName());
+                LOG_WARNING(&Poco::Logger::get("ShowStats"), err_msg);
+                continue;
+            }
+            table = table_opt.value();
+        }
     }
     return tables;
 }

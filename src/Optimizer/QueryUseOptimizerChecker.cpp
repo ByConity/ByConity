@@ -33,6 +33,10 @@
 #include "Storages/RemoteFile/IStorageCnchFile.h"
 #include "Storages/StorageCnchMergeTree.h"
 #include "Storages/StorageMaterializedView.h"
+#include "Storages/RemoteFile/IStorageCnchFile.h"
+#include <Interpreters/executeQuery.h>
+#include <Storages/StorageCnchMergeTree.h>
+#include <Storages/StorageMaterializedView.h>
 //#include <Common/TestLog.h>
 
 namespace DB
@@ -107,7 +111,7 @@ static bool checkDatabaseAndTable(String database_name, String table_name, Conte
         || dynamic_cast<const IStorageCnchFile *>(storage_table.get());
 }
 
-bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, bool insert_select_from_table)
+bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, [[maybe_unused]] bool insert_select_from_table)
 {
     if (!node || (!context->getSettingsRef().enable_optimizer && !insert_select_from_table))
     {
@@ -185,8 +189,8 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
                 support = false;
         }
 
-        // only disable optimizer when insert
-        if (context->getSettingsRef().enable_interactive_transaction)
+        // only disable optimizer when insert in interactive session
+        if (isQueryInInteractiveSession(context, node))
             support = false;
 
         LOG_DEBUG(

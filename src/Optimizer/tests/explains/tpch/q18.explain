@@ -23,23 +23,19 @@ Projection Est. 100 rows
                   │              Outputs: [l_orderkey, l_quantity]
                   └─ Inner Join Est. 1504316 rows
                      │     Condition: l_orderkey_1 == o_orderkey
-                     ├─ Aggregating Est. 1501870 rows
-                     │  │     Group by: {l_orderkey_1}
-                     │  └─ Projection Est. 1501870 rows
-                     │     │     Expressions: [l_orderkey_1]
-                     │     └─ Filter Est. 1501870 rows
-                     │        │     Condition: `expr#sum(l_quantity)` > 300.
-                     │        └─ MergingAggregated Est. 1501870 rows
-                     │           └─ Repartition Exchange Est. 1501870 rows
-                     │              │     Partition by: {l_orderkey_1}
-                     │              └─ Aggregating Est. 1501870 rows
-                     │                 │     Group by: {l_orderkey_1}
-                     │                 │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
-                     │                 └─ Filter Est. 6001215 rows
-                     │                    │     Condition: isNotNull(l_orderkey_1)
-                     │                    └─ TableScan tpch.lineitem Est. 6001215 rows
-                     │                             Where: isNotNull(l_orderkey)
-                     │                             Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity
+                     ├─ Filter Est. 1501870 rows
+                     │  │     Condition: `expr#sum(l_quantity)` > 300.
+                     │  └─ MergingAggregated Est. 1501870 rows
+                     │     └─ Repartition Exchange Est. 1501870 rows
+                     │        │     Partition by: {l_orderkey_1}
+                     │        └─ Aggregating Est. 1501870 rows
+                     │           │     Group by: {l_orderkey_1}
+                     │           │     Aggregates: expr#sum(l_quantity):=AggNull(sum)(l_quantity_1)
+                     │           └─ Filter Est. 6001215 rows
+                     │              │     Condition: isNotNull(l_orderkey_1)
+                     │              └─ TableScan tpch.lineitem Est. 6001215 rows
+                     │                       Where: isNotNull(l_orderkey)
+                     │                       Outputs: l_orderkey_1:=l_orderkey, l_quantity_1:=l_quantity
                      └─ Repartition Exchange Est. 1500000 rows
                         │     Partition by: {o_orderkey}
                         └─ Inner Join Est. 1500000 rows

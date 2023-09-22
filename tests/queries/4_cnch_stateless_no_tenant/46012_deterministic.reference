@@ -1,0 +1,18 @@
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: [item_code]
+   └─ Inner Join Est. ? rows
+      │     Condition: item_code == expr#cast(item_code_1, \'Nullable(String)\')
+      ├─ Repartition Exchange Est. ? rows
+      │  │     Partition by: {item_code}
+      │  └─ Filter Est. ? rows
+      │     │     Condition: (toStartOfMonth(transaction_time) - toStartOfMonth(transaction_time)) = cast(31, \'Int32\')
+      │     └─ TableScan test.sales_transaction Est. ? rows
+      │              Where: (toStartOfMonth(transaction_time) - toStartOfMonth(transaction_time)) = cast(31, \'Int32\')
+      │              Outputs: [item_code, transaction_time]
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#cast(item_code_1, \'Nullable(String)\')}
+         └─ Projection Est. ? rows
+            │     Expressions: expr#cast(item_code_1, \'Nullable(String)\'):=cast(item_code_1, \'Nullable(String)\')
+            └─ TableScan test.items Est. ? rows
+                     Outputs: item_code_1:=item_code

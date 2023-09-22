@@ -1,0 +1,20 @@
+t40042	2	0
+Projection 
+│     Expressions: [sum(click)]
+└─ MergingAggregated 
+   └─ Gather Exchange 
+      └─ Aggregating 
+         │     Group by: {}
+         │     Aggregates: sum(click):=sum(click_1)
+         └─ Inner Join 
+            │     Condition: uid_1 == uid_2
+            ├─ Local Exchange 
+            │  └─ Projection 
+            │     │     Expressions: click_1:=click_9, uid_1:=uid_9
+            │     └─ TableScan t40042 
+            │              Outputs: click_9:=click, uid_9:=uid
+            └─ Broadcast Exchange 
+               └─ Projection 
+                  │     Expressions: uid_2:=uid_10
+                  └─ TableScan t40042 
+                           Outputs: uid_10:=uid

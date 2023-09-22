@@ -1,0 +1,20 @@
+Projection Est. 1.0K rows, cost 2.3e+02
+│     Expressions: _1700032088007:=`multiIf(arraySetCheck(vids, \'5847335\'), \'v1\', arraySetCheck(vids, \'5847336\'), \'v2\', arraySetCheck(vids, \'5314214\'), \'v3\', \'其它\')`, _1700032090443:=`fastAuc2(mapElement(model_pred, \'ppctr\'), CAST(greater(arrayElement(label, 23), 0), \'Nullable(Float64)\'))`
+└─ Limit Est. 1.0K rows, cost 1.6e+02
+   │     Limit: 1000
+   └─ Gather Exchange Est. 1.0K rows, cost 1.6e+02
+      └─ Limit Est. 1.0K rows, cost 3.2e-01
+         │     Limit: 1000
+         └─ MergingAggregated Est. ? rows, cost 3.2e-01
+            └─ Repartition Exchange Est. ? rows, cost 3.2e-01
+               │     Partition by: {multiIf(arraySetCheck(vids, \'5847335\'), \'v1\', arraySetCheck(vids, \'5847336\'), \'v2\', arraySetCheck(vids, \'5314214\'), \'v3\', \'其它\')}
+               └─ Aggregating Est. ? rows, cost 0.0e+00
+                  │     Group by: {multiIf(arraySetCheck(vids, \'5847335\'), \'v1\', arraySetCheck(vids, \'5847336\'), \'v2\', arraySetCheck(vids, \'5314214\'), \'v3\', \'其它\')}
+                  │     Aggregates: fastAuc2(mapElement(model_pred, \'ppctr\'), CAST(greater(arrayElement(label, 23), 0), \'Nullable(Float64)\')):=AggNull(fastAuc2)(__model_pred__\'ppctr\',CAST(greater(arrayElement(label, 23), 0), \'Nullable(Float64)\'))
+                  └─ Projection Est. ? rows, cost 0.0e+00
+                     │     Expressions: [__model_pred__\'ppctr\'], CAST(greater(arrayElement(label, 23), 0), \'Nullable(Float64)\'):=CAST(label[23] > 0, \'Nullable(Float64)\'), multiIf(arraySetCheck(vids, \'5847335\'), \'v1\', arraySetCheck(vids, \'5847336\'), \'v2\', arraySetCheck(vids, \'5314214\'), \'v3\', \'其它\'):=multiIf(`arraySetCheck(vids, \'5847335\')`, \'v1\', `arraySetCheck(vids, \'5847336\')`, \'v2\', `arraySetCheck(vids, \'5314214\')`, \'v3\', \'其它\')
+                     └─ Filter Est. ? rows, cost 0.0e+00
+                        │     Condition: (toDate(req_time) >= \'2023-03-31\') AND (toDate(req_time) <= \'2023-04-02\') AND (multiIf(label[20] > 0, 1, 0) = 1) AND `arraySetCheck(vids, tuple(\'5847335\', \'5847336\'))`
+                        └─ TableScan aeolus_data_table_5_1383533_prod Est. ? rows, cost 0.0e+00
+                                 Where: (multiIf(label[20] > 0, 1, 0) = 1) AND `arraySetCheck(vids, tuple(\'5847335\', \'5847336\'))`.Implicit Filter : (toDate(req_time) >= \'2023-03-31\') AND (toDate(req_time) <= \'2023-04-02\')
+                                 Outputs: [__model_pred__\'ppctr\', label, req_time, vids]

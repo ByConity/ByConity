@@ -1,0 +1,8 @@
+-- { echoOn }
+
+select count(*) from t1, t2 where a = b;
+1
+select count(*) from t1, t2 where toInt32(a) = toInt64(b);
+1
+select count(*) from t1, t2 where toInt32(a + 1) = toInt64(b + 1);
+1

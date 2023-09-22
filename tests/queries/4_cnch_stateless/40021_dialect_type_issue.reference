@@ -1,0 +1,17 @@
+dialect_type	ANSI
+enable_replace_group_by_literal_to_symbol	0
+---
+dialect_type	CLICKHOUSE
+enable_replace_group_by_literal_to_symbol	1
+---
+dialect_type	ANSI
+enable_replace_group_by_literal_to_symbol	0
+---
+dialect_type	CLICKHOUSE
+enable_replace_group_by_literal_to_symbol	1
+---
+dialect_type	ANSI
+enable_replace_group_by_literal_to_symbol	0
+---
+dialect_type	CLICKHOUSE
+enable_replace_group_by_literal_to_symbol	1
