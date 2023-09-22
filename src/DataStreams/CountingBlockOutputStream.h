@@ -51,6 +51,16 @@ public:
         return progress;
     }
 
+    void setConstraintsFilterStream(const BlockOutputStreamPtr & stream_)
+    {
+        constraints_filter_stream = stream_;
+    }
+
+    const BlockOutputStreamPtr & getConstraintsFilterStream() const
+    {
+        return constraints_filter_stream;
+    }
+
     Block getHeader() const override { return stream->getHeader(); }
     void write(const Block & block) override;
 
@@ -65,6 +75,7 @@ protected:
     Progress progress;
     ProgressCallback progress_callback;
     QueryStatus * process_elem = nullptr;
+    BlockOutputStreamPtr constraints_filter_stream = nullptr;
     Stopwatch stopwatch {CLOCK_MONOTONIC_COARSE};
 };
 

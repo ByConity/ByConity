@@ -555,10 +555,10 @@ bool StorageCloudKafka::streamToViews(/* required_column_names */)
         if (const auto *counting_stream = dynamic_cast<const CountingBlockOutputStream *>(block_io.out.get()))
         {
             size_t origin_bytes = in->getProfileInfo().bytes;
-            size_t written_bytes = counting_stream->getProgress().written_bytes;
+            size_t written_bytes = counting_stream->getProgress().read_bytes;
 
             size_t origin_rows = in->getProfileInfo().rows;
-            size_t written_rows = counting_stream->getProgress().written_rows;
+            size_t written_rows = counting_stream->getProgress().read_rows;
             if (origin_rows != written_rows)
             {
                 KafkaLogElement kafka_filter_log = createKafkaLog(KafkaLogElement::FILTER, assigned_consumer_index);

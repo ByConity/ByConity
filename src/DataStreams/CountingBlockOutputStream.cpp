@@ -21,6 +21,7 @@
 
 #include <DataStreams/CountingBlockOutputStream.h>
 #include <Common/ProfileEvents.h>
+#include <DataStreams/CheckConstraintsFilterBlockOutputStream.h>
 
 
 namespace ProfileEvents
@@ -39,7 +40,18 @@ void CountingBlockOutputStream::write(const Block & block)
 
     stream->write(block);
 
-    Progress local_progress(block.rows(), block.bytes(), 0, stopwatch.elapsedMilliseconds());
+    Progress local_progress(block.rows(), block.bytes(), 0);
+
+    if (constraints_filter_stream)
+    {
+        if (const auto *counting_stream = dynamic_cast<const CheckConstraintsFilterBlockOutputStream *>(constraints_filter_stream.get()))
+        {
+            const auto & written_block = counting_stream->getWrittenBlock();
+            local_progress.read_rows = written_block.rows();
+            local_progress.read_bytes = written_block.bytes();
+        }
+    }
+
     progress.incrementPiecewiseAtomically(local_progress);
 
     ProfileEvents::increment(ProfileEvents::InsertedRows, local_progress.read_rows);
