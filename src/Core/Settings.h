@@ -1871,6 +1871,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_mark_distinct_optimization, false, "Whether enable Mark distinct optimization", 0)                                            \
     M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
     M(Bool, enable_swap_predicate_rewrite, true, "Whether enable swap predicate rewrite", 0) \
+    M(Bool, rewrite_predicate_by_domain, true, "When enabled, merge predicates belonging to the same domain", 0) \
+    M(Bool, rewrite_complex_predicate_by_domain, false, "Whether enabled, extract merged predicate belonging to the same domain for complex predicate(which normally are DNFs)", 0) \
     M(Bool, enable_unwrap_cast_in, true, "Whether enable unwrap cast function", 0) \
     M(Bool, enable_windows_reorder, true, "Reorder adjacent windows to decrease exchange", 0) \
     M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \

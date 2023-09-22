@@ -334,10 +334,11 @@ PatternPtr MergePredicatesUsingDomainTranslator::getPattern() const
 TransformResult MergePredicatesUsingDomainTranslator::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto & context = rule_context.context;
-    auto * old_filter_node = dynamic_cast<FilterNode *>(node.get());
-    if (!old_filter_node)
+    const auto & settings = context->getSettingsRef();
+    if (!settings.rewrite_predicate_by_domain)
         return {};
 
+    auto * old_filter_node = dynamic_cast<FilterNode *>(node.get());
     const auto & step = *old_filter_node->getStep();
     auto predicate = step.getFilter()->clone();
 
@@ -347,7 +348,7 @@ TransformResult MergePredicatesUsingDomainTranslator::transformImpl(PlanNodePtr 
     DomainTranslator domain_translator{context};
     ExtractionReuslt rewritten = domain_translator.getExtractionResult(predicate, step.getOutputStream().header.getNamesAndTypes());
 
-    if (domain_translator.isIgnored() || predicate->getColumnName() == rewritten.remaining_expression->getColumnName())
+    if (domain_translator.isIgnored() && !context->getSettingsRef().rewrite_complex_predicate_by_domain)
         return {};
 
     ASTPtr combine_extraction_result = PredicateUtils::combineConjuncts(ASTs{
