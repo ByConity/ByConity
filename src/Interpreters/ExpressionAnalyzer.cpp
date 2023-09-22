@@ -1396,7 +1396,10 @@ bool SelectQueryExpressionAnalyzer::appendGroupBy(
 
         for (const auto &src: src_columns)
         {
-            dst_columns.emplace_back(src.column, makeNullable(src.type), src.name);
+            DataTypePtr type = src.type;
+            if (aggregation_keys.contains(src.name) && JoinCommon::canBecomeNullable(type))
+                type = JoinCommon::convertTypeToNullable(type);
+            dst_columns.emplace_back(src.column, type, src.name);
         }
 
         auto nullify_dag = ActionsDAG::makeConvertingActions(
