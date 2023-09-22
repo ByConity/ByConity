@@ -1,0 +1,55 @@
+Projection Est. 480000 rows
+│     Expressions: cust_nation:=n_name_1, l_year:=`expr#toYear(l_shipdate)`, revenue:=`expr#sum(volume)`, supp_nation:=n_name
+└─ Sorting Est. 480000 rows
+   │     Order by: {n_name asc, n_name_1 asc, expr#toYear(l_shipdate) asc}
+   └─ Gather Exchange Est. 480000 rows
+      └─ Sorting Est. 480000 rows
+         │     Order by: {n_name asc, n_name_1 asc, expr#toYear(l_shipdate) asc}
+         └─ MergingAggregated Est. 480000 rows
+            └─ Repartition Exchange Est. 480000 rows
+               │     Partition by: {expr#toYear(l_shipdate), n_name, n_name_1}
+               └─ Aggregating Est. 480000 rows
+                  │     Group by: {expr#toYear(l_shipdate), n_name, n_name_1}
+                  │     Aggregates: expr#sum(volume):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
+                  └─ Projection Est. 2552477532 rows
+                     │     Expressions: [n_name, n_name_1], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount), expr#toYear(l_shipdate):=toYear(l_shipdate)
+                     └─ Inner Join Est. 2552477532 rows
+                        │     Condition: l_orderkey == o_orderkey
+                        │     Filter: ((n_name = 'FRANCE') AND (n_name_1 = 'GERMANY')) OR ((n_name = 'GERMANY') AND (n_name_1 = 'FRANCE'))
+                        ├─ Repartition Exchange Est. 1822216215 rows
+                        │  │     Partition by: {l_orderkey}
+                        │  └─ Inner Join Est. 1822216215 rows
+                        │     │     Condition: l_suppkey == s_suppkey
+                        │     ├─ Repartition Exchange Est. 1822216215 rows
+                        │     │  │     Partition by: {l_suppkey}
+                        │     │  └─ Filter Est. 1822216215 rows
+                        │     │     │     Condition: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date'))
+                        │     │     └─ TableScan tpch1000.lineitem Est. 5999989709 rows
+                        │     │              Where: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date'))
+                        │     │              Outputs: [l_discount, l_extendedprice, l_orderkey, l_shipdate, l_suppkey]
+                        │     └─ Repartition Exchange Est. 10000000 rows
+                        │        │     Partition by: {s_suppkey}
+                        │        └─ Inner Join Est. 10000000 rows
+                        │           │     Condition: s_nationkey == n_nationkey
+                        │           ├─ TableScan tpch1000.supplier Est. 10000000 rows
+                        │           │        Outputs: [s_nationkey, s_suppkey]
+                        │           └─ Broadcast Exchange Est. 25 rows
+                        │              └─ TableScan tpch1000.nation Est. 25 rows
+                        │                       Outputs: [n_name, n_nationkey]
+                        └─ Repartition Exchange Est. 1500000000 rows
+                           │     Partition by: {o_orderkey}
+                           └─ Inner Join Est. 1500000000 rows
+                              │     Condition: o_custkey == c_custkey
+                              ├─ Repartition Exchange Est. 1500000000 rows
+                              │  │     Partition by: {o_custkey}
+                              │  └─ TableScan tpch1000.orders Est. 1500000000 rows
+                              │           Outputs: [o_custkey, o_orderkey]
+                              └─ Repartition Exchange Est. 150000000 rows
+                                 │     Partition by: {c_custkey}
+                                 └─ Inner Join Est. 150000000 rows
+                                    │     Condition: c_nationkey == n_nationkey_1
+                                    ├─ TableScan tpch1000.customer Est. 150000000 rows
+                                    │        Outputs: [c_custkey, c_nationkey]
+                                    └─ Broadcast Exchange Est. 25 rows
+                                       └─ TableScan tpch1000.nation Est. 25 rows
+                                                Outputs: n_name_1:=n_name, n_nationkey_1:=n_nationkey

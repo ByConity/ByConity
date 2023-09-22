@@ -1,0 +1,20 @@
+Projection Est. 37 rows
+│     Expressions: [C_NATION], profit:=`expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST))`, year:=`expr#toYear(LO_ORDERDATE)`
+└─ Sorting Est. 37 rows
+   │     Order by: {expr#toYear(LO_ORDERDATE) asc, C_NATION asc}
+   └─ Gather Exchange Est. 37 rows
+      └─ Sorting Est. 37 rows
+         │     Order by: {expr#toYear(LO_ORDERDATE) asc, C_NATION asc}
+         └─ MergingAggregated Est. 37 rows
+            └─ Repartition Exchange Est. 37 rows
+               │     Partition by: {C_NATION, expr#toYear(LO_ORDERDATE)}
+               └─ Aggregating Est. 37 rows
+                  │     Group by: {C_NATION, expr#toYear(LO_ORDERDATE)}
+                  │     Aggregates: expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST)):=AggNull(sum)(expr#minus(LO_REVENUE, LO_SUPPLYCOST))
+                  └─ Projection Est. 9599628 rows
+                     │     Expressions: [C_NATION], expr#minus(LO_REVENUE, LO_SUPPLYCOST):=LO_REVENUE - LO_SUPPLYCOST, expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
+                     └─ Filter Est. 9599628 rows
+                        │     Condition: (C_REGION = 'AMERICA') AND (S_REGION = 'AMERICA') AND (P_MFGR IN ('MFGR#1', 'MFGR#2'))
+                        └─ TableScan ssb100.lineorder_flat Est. 600038145 rows
+                                 Where: (C_REGION = 'AMERICA') AND (S_REGION = 'AMERICA') AND (P_MFGR IN ('MFGR#1', 'MFGR#2'))
+                                 Outputs: [C_NATION, C_REGION, LO_ORDERDATE, LO_REVENUE, LO_SUPPLYCOST, P_MFGR, S_REGION]

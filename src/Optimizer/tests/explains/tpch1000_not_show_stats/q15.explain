@@ -1,0 +1,58 @@
+Projection
+│     Expressions: [s_address, s_name, s_phone, s_suppkey], total_revenue:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1`
+└─ Sorting
+   │     Order by: {s_suppkey asc}
+   └─ Gather Exchange
+      └─ Sorting
+         │     Order by: {s_suppkey asc}
+         └─ Inner Join
+            │     Condition: s_suppkey == l_suppkey_1
+            │     Runtime Filters Builder: {l_suppkey_1}
+            ├─ Filter
+            │  │     Condition: Runtime Filters: {s_suppkey}
+            │  └─ TableScan tpch1000.supplier
+            │           Where: Runtime Filters: {s_suppkey}
+            │           Outputs: [s_address, s_name, s_phone, s_suppkey]
+            └─ Broadcast Exchange
+               └─ Inner Join
+                  │     Condition: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1 == expr#max(total_revenue)
+                  │     Runtime Filters Builder: {expr#max(total_revenue)}
+                  ├─ Projection
+                  │  │     Expressions: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_3`, l_suppkey_1:=l_suppkey_3
+                  │  └─ Filter
+                  │     │     Condition: Runtime Filters: {`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_3`}
+                  │     └─ MergingAggregated
+                  │        └─ Repartition Exchange
+                  │           │     Partition by: {l_suppkey_3}
+                  │           └─ Aggregating
+                  │              │     Group by: {l_suppkey_3}
+                  │              │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_3:=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount))_1)
+                  │              └─ Projection
+                  │                 │     Expressions: [l_suppkey_3], expr#multiply(l_extendedprice, minus(1, l_discount))_1:=l_extendedprice_1 * (1 - l_discount_1)
+                  │                 └─ Filter
+                  │                    │     Condition: (l_shipdate_1 >= cast(9496, 'Date')) AND (l_shipdate_1 < cast(9587, 'Date'))
+                  │                    └─ TableScan tpch1000.lineitem
+                  │                             Where: (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date'))
+                  │                             Outputs: l_discount_1:=l_discount, l_extendedprice_1:=l_extendedprice, l_shipdate_1:=l_shipdate, l_suppkey_3:=l_suppkey
+                  └─ Broadcast Exchange
+                     └─ MergingAggregated
+                        └─ Gather Exchange
+                           └─ Aggregating
+                              │     Group by: {}
+                              │     Aggregates: expr#max(total_revenue):=AggNull(max)(expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2)
+                              └─ Projection
+                                 │     Expressions: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_2:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_4`
+                                 └─ MergingAggregated
+                                    └─ Repartition Exchange
+                                       │     Partition by: {l_suppkey_4}
+                                       └─ Aggregating
+                                          │     Group by: {l_suppkey_4}
+                                          │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_4:=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount))_2)
+                                          └─ Projection
+                                             │     Expressions: [l_suppkey_4], expr#multiply(l_extendedprice, minus(1, l_discount))_2:=l_extendedprice_2 * (1 - l_discount_2)
+                                             └─ Filter
+                                                │     Condition: (l_shipdate_2 >= cast(9496, 'Date')) AND (l_shipdate_2 < cast(9587, 'Date'))
+                                                └─ TableScan tpch1000.lineitem
+                                                         Where: (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date'))
+                                                         Outputs: l_discount_2:=l_discount, l_extendedprice_2:=l_extendedprice, l_shipdate_2:=l_shipdate, l_suppkey_4:=l_suppkey
+note: Runtime Filter is applied for 2 times.

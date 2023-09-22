@@ -1,0 +1,29 @@
+Projection
+│     Expressions: c_count:=`expr#count(o_orderkey)`, custdist:=`expr#count()`
+└─ Sorting
+   │     Order by: {expr#count() desc nulls_last, expr#count(o_orderkey) desc nulls_last}
+   └─ Gather Exchange
+      └─ Sorting
+         │     Order by: {expr#count() desc nulls_last, expr#count(o_orderkey) desc nulls_last}
+         └─ MergingAggregated
+            └─ Repartition Exchange
+               │     Partition by: {expr#count(o_orderkey)}
+               └─ Aggregating
+                  │     Group by: {expr#count(o_orderkey)}
+                  │     Aggregates: expr#count():=AggNull(count)()
+                  └─ Projection
+                     │     Expressions: [expr#count(o_orderkey)]
+                     └─ Aggregating
+                        │     Group by: {c_custkey}
+                        │     Aggregates: expr#count(o_orderkey):=AggNull(count)(o_orderkey)
+                        └─ Left Join
+                           │     Condition: c_custkey == o_custkey
+                           │     Filter: o_comment NOT LIKE '%special%requests%'
+                           ├─ Repartition Exchange
+                           │  │     Partition by: {c_custkey}
+                           │  └─ TableScan tpch1000.customer
+                           │           Outputs: [c_custkey]
+                           └─ Repartition Exchange
+                              │     Partition by: {o_custkey}
+                              └─ TableScan tpch1000.orders
+                                       Outputs: [o_comment, o_custkey, o_orderkey]
