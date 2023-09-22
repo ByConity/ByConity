@@ -331,6 +331,8 @@ using OptimizerMetricsPtr = std::shared_ptr<OptimizerMetrics>;
 using ExcludedRules = std::unordered_set<UInt32>;
 using ExcludedRulesMap = std::unordered_map<PlanNodeId, ExcludedRules>;
 
+class PlanCacheManager;
+
 /// An empty interface for an arbitrary object that may be attached by a shared pointer
 /// to query context, when using ClickHouse as a library.
 struct IHostContext
@@ -1511,6 +1513,9 @@ public:
     void waitReadFromClientFinished() const;
 
     ReadSettings getReadSettings() const;
+
+    void setPlanCacheManager(std::unique_ptr<PlanCacheManager> && manager);
+    PlanCacheManager* getPlanCacheManager();
 
 private:
     String tenant_id;

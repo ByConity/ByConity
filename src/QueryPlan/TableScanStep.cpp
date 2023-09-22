@@ -1497,6 +1497,15 @@ std::shared_ptr<IStorage> TableScanStep::getStorage() const
     return storage;
 }
 
+void TableScanStep::cleanStorage()
+{
+    if (storage)
+    {
+        storage_id = storage->getStorageID();
+        storage = nullptr;
+    }
+}
+
 void TableScanStep::allocate(ContextPtr context)
 {
     original_table = storage_id.table_name;

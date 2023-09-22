@@ -134,6 +134,9 @@ public:
     Int32 getUniqueId() const { return unique_id; }
     void setUniqueId(Int32 unique_id_) { unique_id = unique_id_; }
 
+    // ues for plan cache
+    void cleanStorage();
+    void setStorage(ContextPtr context) { storage = DatabaseCatalog::instance().getTable(storage_id, context); }
     std::shared_ptr<IStorage> getStorage() const;
     const SelectQueryInfo & getQueryInfo() const { return query_info; }
     const StorageID & getStorageID() const { return storage_id; }

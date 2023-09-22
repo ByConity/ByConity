@@ -3,6 +3,7 @@
 #include <Interpreters/Context.h>
 #include <Poco/ExpireLRUCache.h>
 #include <Common/HashTable/Hash.h>
+#include <QueryPlan/PlanVisitor.h>
 
 namespace DB
 {
@@ -17,13 +18,18 @@ namespace PlanCacheConfig
 class PlanCacheManager
 {
 public:
-    using CacheType = Poco::ExpireLRUCache<UInt128, String>;
+    struct PlanObjectValue
+    {
+        PlanNodePtr plan_root;
+        std::unordered_map<CTEId, PlanNodePtr> cte_map;
+    };
+    using CacheType = Poco::ExpireLRUCache<UInt128, PlanObjectValue>;
 
-    static void initialize(ContextPtr context);
+    static void initialize(ContextMutablePtr context);
     // for testing
-    static void initialize(UInt64 max_size, std::chrono::seconds expire_time);
+    void initialize(UInt64 max_size, std::chrono::seconds expire_time);
 
-    static CacheType & instance()
+    CacheType & instance()
     {
         if (!cache)
         {
@@ -33,11 +39,13 @@ public:
     }
 
     // invalidate cache on current server
-    static void invalidate(const ContextPtr context);
+    void invalidate(ContextMutablePtr context);
 
     static UInt128 hash(const ASTPtr & query_ast, const Settings & settings);
+
+    static PlanNodePtr getNewPlanNode(PlanNodePtr node, ContextMutablePtr & context, bool cache_plan, PlanNodeId & max_id);
 private:
-    static std::unique_ptr<CacheType> cache;
+    std::unique_ptr<CacheType> cache;
 };
 
 

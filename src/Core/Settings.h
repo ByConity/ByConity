@@ -1847,7 +1847,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \
-    M(UInt64, max_plan_mem_size, 1024 * 16 * 16, "The max plan size (byte)", 0) \
+    M(UInt64, max_plannode_count, 200, "The max plannode count", 0) \
     M(Bool, enable_memory_catalog, false, "Enable memory catalog for unittest", 0) \
     M(UInt64, memory_catalog_worker_size, 8, "Memory catalog work size for unittest", 0) \
     M(Bool, print_graphviz, false, "Whether print graphviz", 0) \
