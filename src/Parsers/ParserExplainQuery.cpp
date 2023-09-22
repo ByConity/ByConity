@@ -28,6 +28,7 @@
 #include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/ParserSetQuery.h>
 #include <Parsers/ParserQuery.h>
+#include <Parsers/ASTSetQuery.h>
 
 namespace DB
 {
@@ -105,7 +106,17 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
         auto begin = pos;
         if (parser_settings.parse(pos, settings, expected))
+        {
+            auto settings_ast = settings->as<ASTSetQuery &>();
+            const auto & is_json = settings_ast.changes.tryGet("json");
+            if (kind == ASTExplainQuery::ExplainKind::Analysis && is_json && is_json->toString() == "1")
+            {
+
+                explain_query->format = std::make_shared<ASTIdentifier>("JSON");
+                setIdentifierSpecial(explain_query->format);
+            }
             explain_query->setSettings(std::move(settings));
+        }
         else
             pos = begin;
     }
