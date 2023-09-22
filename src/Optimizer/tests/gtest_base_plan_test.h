@@ -61,7 +61,6 @@ public:
 #endif
         settings.emplace("dialect_type", "ANSI");
         settings.emplace("enable_sharding_optimize", 1);
-        settings.emplace("cte_mode", "AUTO");
         return settings;
     }
 
