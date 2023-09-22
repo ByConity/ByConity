@@ -462,6 +462,8 @@ void QueryStatus::removePipelineExecutor(PipelineExecutor * e)
 
 void QueryStatus::dumpPipelineInfo(PipelineExecutor * e)
 {
+    //Also need lock at QueryStatus::getInfo, but it causes performance down
+    //std::lock_guard lock(executors_mutex);
     pipeline_info += e->dumpPipeline();
 }
 

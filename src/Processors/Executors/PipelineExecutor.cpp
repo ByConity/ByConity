@@ -730,8 +730,9 @@ void PipelineExecutor::finalizeExecution()
 
     LOG_TRACE(log, "Pipeline: {}", dumpPipeline());
 
-    if (process_list_element)
-        process_list_element->dumpPipelineInfo(this);
+    //This causes a performance down and has concurrency issues with QueryStatus::getInfo
+    //if (process_list_element)
+    //    process_list_element->dumpPipelineInfo(this);
 
     if (!all_processors_finished)
         throw Exception("Pipeline stuck. Current state:\n" + dumpPipeline(), ErrorCodes::LOGICAL_ERROR);
