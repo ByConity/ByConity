@@ -62,7 +62,7 @@ ContextPtr ResourceTracker::getContext() const
 void ResourceTracker::clearLostWorkers()
 {
     time_t time_now = time(nullptr);
-    size_t timeout = getContext()->getRootConfig().resource_manager.lost_worker_timeout_seconds.value;
+    size_t timeout = getContext()->getRootConfig().resource_manager.worker_heartbeat_timeout_sec.value;
     time_t timeout_threshold = time_now - timeout;
 
     std::lock_guard lock(node_mutex);

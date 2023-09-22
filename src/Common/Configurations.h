@@ -30,7 +30,7 @@ namespace DB
     M(String, resource_coordinate_mode, "", "None", ConfigFlag::Default, "None, Sharing, Scaling.") \
     M(UInt64, resource_coordinate_task_interval_ms, "", 5000, ConfigFlag::Default, "") \
     M(UInt64, worker_register_visible_granularity_sec, "", 5, ConfigFlag::Default, "change workers' state from Registering to Running every N seconds to avoid changing worker topology frequently.") \
-    M(UInt64, lost_worker_timeout_seconds, "", 10, ConfigFlag::Default, "") \
+    M(UInt64, worker_heartbeat_timeout_sec, "", 6, ConfigFlag::Default, "RM will mark a worker as outdated if don't receive its heartbeat in this timeout. And outdated workers will be removed periodcally.") \
 
 DECLARE_CONFIG_DATA(RMConfigurationData, RM_CONFIG_FIELDS_LIST)
 struct RMConfiguration final : public RMConfigurationData
