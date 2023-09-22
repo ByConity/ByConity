@@ -130,7 +130,7 @@ void PartWriter::execute()
     if (remote_disk->exists(uuid))
     {
         LOG_WARNING(log, "Remote path {} already exists. Try to remove it.", dest_path + uuid);
-        remote_disk->removeDirectory(uuid);
+        remote_disk->removeRecursive(uuid);
     }
     LOG_DEBUG(log, "Creating remote storage path {} for table.", dest_path + uuid);
     remote_disk->createDirectory(uuid);

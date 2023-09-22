@@ -97,9 +97,10 @@ public:
 
     virtual void removeFile(const String & path) override;
 
-    virtual void removeFileIfExists(const String& path) override;
+    virtual void removeFileIfExists(const String & path) override;
 
-    virtual void removeDirectory(const String& path) override { removeRecursive(path); }
+    /// Convert to no-op when there is no object under prefix `path`, otherwise throw exception
+    virtual void removeDirectory(const String & path) override;
 
     virtual void removeRecursive(const String & path) override;
 

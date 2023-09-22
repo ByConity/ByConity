@@ -38,6 +38,7 @@ namespace ErrorCodes
     extern const int INCORRECT_DISK_INDEX;
     extern const int NOT_IMPLEMENTED;
     extern const int BAD_ARGUMENTS;
+    extern const int CANNOT_RMDIR;
     extern const int PATH_ACCESS_DENIED;
 }
 
@@ -228,6 +229,14 @@ void DiskByteS3::removeFile(const String& path)
 void DiskByteS3::removeFileIfExists(const String& path)
 {
     s3_util.deleteObject(std::filesystem::path(root_prefix) / path, false);
+}
+
+void DiskByteS3::removeDirectory(const String & path)
+{
+    String prefix = std::filesystem::path(root_prefix) / path;
+    auto res = s3_util.listObjectsWithPrefix(prefix, std::nullopt, /*limit*/ 1);
+    if (!res.object_names.empty())
+        throw Exception(ErrorCodes::CANNOT_RMDIR, "Cannot remove directory {} because it's not empty", prefix);
 }
 
 void DiskByteS3::removeRecursive(const String& path)

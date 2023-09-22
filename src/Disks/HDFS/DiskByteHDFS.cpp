@@ -231,7 +231,7 @@ void DiskByteHDFS::removeFileIfExists(const String & path)
 
 void DiskByteHDFS::removeDirectory(const String & path)
 {
-    hdfs_fs.remove(absolutePath(path), true);
+    hdfs_fs.remove(absolutePath(path), false);
 }
 
 void DiskByteHDFS::removeRecursive(const String & path)
