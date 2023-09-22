@@ -50,6 +50,7 @@ namespace ErrorCodes
     extern const int UNEXPECTED_PACKET_FROM_SERVER;
     extern const int UNKNOWN_PACKET_FROM_SERVER;
     extern const int QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING;
+    extern const int QUERY_CPU_TIMEOUT_EXCEEDED;
     extern const int UNKNOWN_EXCEPTION;
     extern const int BRPC_EXCEPTION;
 }
@@ -305,7 +306,7 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
             tryLogCurrentException(log, "cancelWorkerPlanSegments");
         }
     }
-    
+
 }
 
 bool SegmentScheduler::finishPlanSegments(const String & query_id)
@@ -446,10 +447,8 @@ void SegmentScheduler::checkQueryCpuTime(const String & query_id)
         switch (overflow_mode)
         {
             case OverflowMode::THROW:
-                throw Exception(
-                    "Timeout exceeded: distribute cpu time " + toString(static_cast<double>(total_cpu_micros * 1.0 / 1000000))
-                        + " seconds, maximum: " + toString(static_cast<double>(max_cpu_seconds)),
-                    ErrorCodes::TIMEOUT_EXCEEDED);
+                throw Exception("Timeout exceeded: distribute cpu time " + toString(static_cast<double>(total_cpu_micros * 1.0 / 1000000))
+                                + " seconds, maximum: " + toString(static_cast<double>(max_cpu_seconds)), ErrorCodes::QUERY_CPU_TIMEOUT_EXCEEDED);
             case OverflowMode::BREAK:
                 break;
             default:
