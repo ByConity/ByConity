@@ -484,7 +484,7 @@ namespace Catalog
                 const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
                 if (consul_http_host != nullptr && consul_http_port != nullptr)
                 {
-                    brpc::policy::FLAGS_consul_agent_addr = "http://" + std::string(consul_http_host) + ":" + std::string(consul_http_port);
+                    brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);
                     LOG_DEBUG(log, "Using consul agent: {}", brpc::policy::FLAGS_consul_agent_addr);
                 }
 
@@ -2422,7 +2422,7 @@ namespace Catalog
                 }
                 LOG_DEBUG(
                     log,
-                    "Start write {} parts and {} delete_bitmaps and {} staged parts to bytekv for txn {}"
+                    "Start write {} parts and {} delete_bitmaps and {} staged parts to kvstore for txn {}"
                     ,commit_data.data_parts.size()
                     ,commit_data.delete_bitmaps.size()
                     ,commit_data.staged_parts.size()
@@ -2508,7 +2508,7 @@ namespace Catalog
                     std::vector<String>(staged_part_models.parts().size()));
                 LOG_DEBUG(
                     log,
-                    "Finish write parts to bytekv for txn {}, elapsed {}ms, start write part cache."
+                    "Finish write parts to kvstore for txn {}, elapsed {}ms, start write part cache."
                     ,txnID
                     ,watch.elapsedMilliseconds());
 
@@ -2678,7 +2678,7 @@ namespace Catalog
                 }
                 LOG_DEBUG(
                     log,
-                    "Finish set commit time in bytekv for txn {}, elapsed {} ms, start set commit time in part cache."
+                    "Finish set commit time in kvstore for txn {}, elapsed {} ms, start set commit time in part cache."
                     ,txn_id
                     ,watch.elapsedMilliseconds());
 
@@ -3265,7 +3265,7 @@ namespace Catalog
         DataModelTables res;
         runWithMetricSupport(
             [&] {
-                /// there may be diferrent version of the same table, we only need the latest version of it. And meta data of a table is sorted by commit time as ascending order in bytekv.
+                /// there may be diferrent version of the same table, we only need the latest version of it. And meta data of a table is sorted by commit time as ascending order in kvstore.
                 Protos::DataModelTable latest_version, table_data;
                 auto it = meta_proxy->getAllTablesMeta(name_space);
                 while (it->next())
