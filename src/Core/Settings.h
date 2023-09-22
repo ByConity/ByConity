@@ -1945,6 +1945,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_join_graph_support_filter, true, "Whether enable join graph support filter", 0) \
     M(Bool, enable_equivalences, true, "Whether enable using equivalences when property match", 0) \
     M(Bool, enable_injective_in_property, false, "Whether enable using injective function when property match", 0) \
+    M(UInt64, max_expand_join_key_size, 3, "Whether enable using equivalences when property match", 0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
     M(Float, magic_set_filter_factor, 0.5, "The minimum filter factor of magic set, used for early pruning", 0) \

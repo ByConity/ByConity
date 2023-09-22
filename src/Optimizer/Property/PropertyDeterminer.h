@@ -33,10 +33,7 @@ class DeterminerContext
 {
 public:
     DeterminerContext(Property required_, Context & context_) : required(required_), context(context_) { }
-    Property getRequired() const
-    {
-        return required;
-    }
+    Property getRequired() const { return required; }
     Context & getContext() const { return context; }
 
 private:

@@ -1,5 +1,4 @@
-DROP database if exists test;
-create database test;
+create database if not exists test;
 
 DROP TABLE IF EXISTS aeolus_data_table_5_1383533_prod;
 

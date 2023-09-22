@@ -1,6 +1,3 @@
-DROP database if exists test;
-create database test;
-
 DROP TABLE IF EXISTS events;
 CREATE TABLE events (`app_id` UInt32, `event_date` Date, `hash_uid` UInt64, `event` String, `time` UInt64) ENGINE = CnchMergeTree PARTITION BY (`app_id`, `event_date`) CLUSTER BY cityHash64(`hash_uid`) INTO 4 BUCKETS ORDER BY (`event`, `hash_uid`, `time`) SAMPLE BY `hash_uid`;
 
