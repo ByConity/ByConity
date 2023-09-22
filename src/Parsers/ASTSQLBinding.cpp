@@ -126,6 +126,11 @@ void ASTDropBinding::formatImpl(const FormatSettings & format, FormatState & sta
     }
     format.ostr  << (format.hilite ? hilite_keyword : "") << " BINDING";
 
+    if (if_exists)
+    {
+        format.ostr  << (format.hilite ? hilite_keyword : "") << " if exists ";
+    }
+
     if (!re_expression.empty())
     {
         format.ostr << format.nl_or_ws << (format.hilite ? hilite_none : "") << re_expression;
@@ -143,6 +148,4 @@ void ASTDropBinding::formatImpl(const FormatSettings & format, FormatState & sta
         --frame.indent;
     }
 }
-
-
 }

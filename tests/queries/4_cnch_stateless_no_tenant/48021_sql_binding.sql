@@ -1,6 +1,14 @@
 CREATE DATABASE IF NOT EXISTS test;
 DROP TABLE IF EXISTS test.bindings;
 use test;
+
+drop global binding if exists '^explain.*select.*from system\.one';
+drop global binding if exists select * from test.bindings;
+drop global binding if exists '^select \'bbb\'';
+drop global binding if exists select * from test.bindings order by a;
+drop global binding if exists '^select \* from test\.bindings.*';
+drop global binding if exists '^select \* from test\.bindin.*';
+
 CREATE TABLE test.bindings(a Int32, b Int32) ENGINE = CnchMergeTree() PARTITION BY `a` PRIMARY KEY `a` ORDER BY `a`;
 insert into test.bindings values(1,2)(2,3)(3,4);
 
