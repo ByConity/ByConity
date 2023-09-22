@@ -14,7 +14,7 @@ Projection Est. 100 rows
                │     Runtime Filters Builder: {s_suppkey}
                ├─ Repartition Exchange Est. 14056007 rows
                │  │     Partition by: {ps_suppkey}
-               │  └─ Inner Join Est. 14056007 rows
+               │  └─ Inner (PARALLEL_HASH) Join Est. 14056007 rows
                │     │     Condition: ps_partkey == p_partkey, ps_supplycost == expr#min(ps_supplycost)
                │     │     Runtime Filters Builder: {expr#min(ps_supplycost),p_partkey}
                │     ├─ Repartition Exchange Est. 800000000 rows
@@ -24,7 +24,7 @@ Projection Est. 100 rows
                │     │     └─ TableScan tpch1000.partsupp Est. 800000000 rows
                │     │              Where: Runtime Filters: {ps_partkey, ps_suppkey, ps_supplycost}
                │     │              Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
-               │     └─ Inner Join Est. 3596502 rows
+               │     └─ Inner (PARALLEL_HASH) Join Est. 3596502 rows
                │        │     Condition: p_partkey == ps_partkey_1
                │        ├─ Repartition Exchange Est. 3596502 rows
                │        │  │     Partition by: {p_partkey}
@@ -47,11 +47,11 @@ Projection Est. 100 rows
                │                          │     Condition: n_regionkey_1 == r_regionkey_1
                │                          ├─ Inner Join Est. 13830089 rows
                │                          │  │     Condition: s_nationkey_1 == n_nationkey_1
-               │                          │  ├─ Inner Join Est. 13830089 rows
+               │                          │  ├─ Inner (PARALLEL_HASH) Join Est. 13830089 rows
                │                          │  │  │     Condition: ps_suppkey_1 == s_suppkey_1
                │                          │  │  ├─ Repartition Exchange Est. 14056007 rows
                │                          │  │  │  │     Partition by: {ps_suppkey_1}
-               │                          │  │  │  └─ Inner Join Est. 14056007 rows
+               │                          │  │  │  └─ Inner (PARALLEL_HASH) Join Est. 14056007 rows
                │                          │  │  │     │     Condition: ps_partkey_1 == p_partkey_1
                │                          │  │  │     │     Runtime Filters Builder: {p_partkey_1}
                │                          │  │  │     ├─ Repartition Exchange Est. 800000000 rows

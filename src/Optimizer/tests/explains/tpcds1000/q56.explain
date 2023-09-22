@@ -19,7 +19,7 @@ Projection Est. 100 rows
                   │     └─ Aggregating Est. 146835 rows
                   │        │     Group by: {i_item_id}
                   │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                  │        └─ Inner Join Est. 876000 rows
+                  │        └─ Inner (PARALLEL_HASH) Join Est. 876000 rows
                   │           │     Condition: ss_addr_sk == ca_address_sk
                   │           │     Runtime Filters Builder: {ca_address_sk}
                   │           ├─ Repartition Exchange Est. 2388408 rows

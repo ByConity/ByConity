@@ -126,26 +126,31 @@ JoinPtr JoinStep::makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterCons
     bool allow_merge_join = table_join->allowMergeJoin();
 
     /// HashJoin with Dictionary optimisation
-    auto l_sample_block = input_streams[1].header;
-    auto sample_block = input_streams[1].header;
+    auto l_sample_block = input_streams[0].header;
+    auto r_sample_block = input_streams[1].header;
     String dict_name;
     String key_name;
     if (table_join->forceNestedLoopJoin())
-        return std::make_shared<NestedLoopJoin>(table_join, sample_block, context);
+        return std::make_shared<NestedLoopJoin>(table_join, r_sample_block, context);
     else if (table_join->forceHashJoin() || (table_join->preferMergeJoin() && !allow_merge_join))
     {
         if (table_join->allowParallelHashJoin() && join_algorithm == JoinAlgorithm::PARALLEL_HASH)
         {
             LOG_TRACE(&Poco::Logger::get("JoinStep::makeJoin"), "will use ConcurrentHashJoin");
-            return std::make_shared<ConcurrentHashJoin>(table_join, context->getSettings().max_threads, sample_block);
+            return std::make_shared<ConcurrentHashJoin>(table_join, context->getSettings().max_threads, r_sample_block);
         }
-        return std::make_shared<HashJoin>(table_join, sample_block);
+        else if (join_algorithm == JoinAlgorithm::GRACE_HASH)
+        {
+            table_join->join_algorithm = JoinAlgorithm::GRACE_HASH;
+            return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk());
+        }
+        return std::make_shared<HashJoin>(table_join, r_sample_block);
     }
     else if (table_join->forceMergeJoin() || (table_join->preferMergeJoin() && allow_merge_join))
-        return std::make_shared<MergeJoin>(table_join, sample_block);
-    else if (table_join->forceGraceHashLoopJoin())
-        return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, sample_block, context->getTempDataOnDisk());
-    return std::make_shared<JoinSwitcher>(table_join, sample_block);
+        return std::make_shared<MergeJoin>(table_join, r_sample_block);
+    else if (table_join->forceGraceHashLoopJoin() || join_algorithm == JoinAlgorithm::GRACE_HASH)
+        return std::make_shared<GraceHashJoin>(context, table_join, l_sample_block, r_sample_block, context->getTempDataOnDisk());
+    return std::make_shared<JoinSwitcher>(table_join, r_sample_block);
 }
 
 JoinStep::JoinStep(

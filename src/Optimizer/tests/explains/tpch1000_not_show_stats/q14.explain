@@ -7,7 +7,7 @@ Projection
          │     Aggregates: expr#sum(multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0)):=AggNull(sum)(expr#multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0)), expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
          └─ Projection
             │     Expressions: expr#multiIf(like(p_type, 'PROMO%'), multiply(l_extendedprice, minus(1, l_discount)), 0):=multiIf(p_type LIKE 'PROMO%', l_extendedprice * (1 - l_discount), 0), expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-            └─ Inner Join
+            └─ Inner (PARALLEL_HASH) Join
                │     Condition: p_partkey == l_partkey
                │     Runtime Filters Builder: {l_partkey}
                ├─ Repartition Exchange

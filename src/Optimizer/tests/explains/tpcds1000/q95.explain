@@ -39,7 +39,7 @@ Projection Est. 1 rows
                   │        │  └─ Broadcast Exchange Est. 101712 rows
                   │        │     └─ Aggregating Est. 101712 rows
                   │        │        │     Group by: {wr_order_number}
-                  │        │        └─ Inner Join Est. 22840487 rows
+                  │        │        └─ Inner (PARALLEL_HASH) Join Est. 22840487 rows
                   │        │           │     Condition: wr_order_number == ws_order_number_5
                   │        │           ├─ Repartition Exchange Est. 71997522 rows
                   │        │           │  │     Partition by: {wr_order_number}

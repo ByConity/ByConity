@@ -14,7 +14,7 @@ Projection
             │     │     Condition: ss_store_sk == s_store_sk
             │     ├─ Inner Join
             │     │  │     Condition: ss_hdemo_sk == hd_demo_sk
-            │     │  ├─ Inner Join
+            │     │  ├─ Inner (PARALLEL_HASH) Join
             │     │  │  │     Condition: ss_addr_sk == ca_address_sk
             │     │  │  │     Filter: ((ca_state IN ('TX', 'OH')) AND (ss_net_profit >= 100) AND (ss_net_profit <= 200)) OR ((ca_state IN ('OR', 'NM', 'KY')) AND (ss_net_profit >= 150) AND (ss_net_profit <= 300)) OR ((ca_state IN ('VA', 'TX', 'MS')) AND (ss_net_profit >= 50) AND (ss_net_profit <= 250))
             │     │  │  ├─ Repartition Exchange

@@ -15,7 +15,7 @@ Projection Est. 100 rows
                   └─ Aggregating Est. 39510025 rows
                      │     Group by: {i_item_desc, i_item_id, s_state}
                      │     Aggregates: expr#count(ss_quantity):=AggNull(count)(ss_quantity), expr#avg(ss_quantity):=AggNull(avg)(ss_quantity), expr#stddevSamp(ss_quantity):=AggNull(stddevSamp)(ss_quantity), expr#count(sr_return_quantity):=AggNull(count)(sr_return_quantity), expr#avg(sr_return_quantity):=AggNull(avg)(sr_return_quantity), expr#stddevSamp(sr_return_quantity):=AggNull(stddevSamp)(sr_return_quantity), expr#count(cs_quantity):=AggNull(count)(cs_quantity), expr#avg(cs_quantity):=AggNull(avg)(cs_quantity), expr#stddevSamp(cs_quantity):=AggNull(stddevSamp)(cs_quantity)
-                     └─ Inner Join Est. 39510025 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 39510025 rows
                         │     Condition: cs_bill_customer_sk == sr_customer_sk, cs_item_sk == i_item_sk
                         ├─ Repartition Exchange Est. 21185235 rows
                         │  │     Partition by: {cs_item_sk}
@@ -37,7 +37,7 @@ Projection Est. 100 rows
                            │     Condition: ss_store_sk == s_store_sk
                            ├─ Inner Join Est. 3905580 rows
                            │  │     Condition: sr_item_sk == i_item_sk
-                           │  ├─ Inner Join Est. 3905580 rows
+                           │  ├─ Inner (PARALLEL_HASH) Join Est. 3905580 rows
                            │  │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │  │  ├─ Repartition Exchange Est. 14156052 rows
                            │  │  │  │     Partition by: {ss_item_sk}

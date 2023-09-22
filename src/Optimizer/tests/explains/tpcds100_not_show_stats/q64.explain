@@ -140,7 +140,7 @@ Projection
             │                 │     │     │  │  │     │     │                                            │     Aggregates: expr#sum(cs_ext_list_price)_2:=AggNull(sum)(cs_ext_list_price_2), expr#sum(plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit))_2:=AggNull(sum)(expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit)_2)
             │                 │     │     │  │  │     │     │                                            └─ Projection
             │                 │     │     │  │  │     │     │                                               │     Expressions: [cs_ext_list_price_2, cs_item_sk_2], expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit)_2:=(cr_refunded_cash_2 + cr_reversed_charge_2) + cr_store_credit_2
-            │                 │     │     │  │  │     │     │                                               └─ Inner Join
+            │                 │     │     │  │  │     │     │                                               └─ Inner (PARALLEL_HASH) Join
             │                 │     │     │  │  │     │     │                                                  │     Condition: cs_item_sk_2 == cr_item_sk_2, cs_order_number_2 == cr_order_number_2
             │                 │     │     │  │  │     │     │                                                  ├─ Repartition Exchange
             │                 │     │     │  │  │     │     │                                                  │  │     Partition by: {cs_item_sk_2, cs_order_number_2}
@@ -325,7 +325,7 @@ Projection
                               │     │     │  │  │     │     │                                            │     Aggregates: expr#sum(cs_ext_list_price)_1:=AggNull(sum)(cs_ext_list_price_1), expr#sum(plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit))_1:=AggNull(sum)(expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit)_1)
                               │     │     │  │  │     │     │                                            └─ Projection
                               │     │     │  │  │     │     │                                               │     Expressions: [cs_ext_list_price_1, cs_item_sk_1], expr#plus(plus(cr_refunded_cash, cr_reversed_charge), cr_store_credit)_1:=(cr_refunded_cash_1 + cr_reversed_charge_1) + cr_store_credit_1
-                              │     │     │  │  │     │     │                                               └─ Inner Join
+                              │     │     │  │  │     │     │                                               └─ Inner (PARALLEL_HASH) Join
                               │     │     │  │  │     │     │                                                  │     Condition: cs_item_sk_1 == cr_item_sk_1, cs_order_number_1 == cr_order_number_1
                               │     │     │  │  │     │     │                                                  ├─ Repartition Exchange
                               │     │     │  │  │     │     │                                                  │  │     Partition by: {cs_item_sk_1, cs_order_number_1}

@@ -13,12 +13,12 @@ Projection
                   │     Aggregates: expr#sum(volume):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
                   └─ Projection
                      │     Expressions: [n_name, n_name_1], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount), expr#toYear(l_shipdate):=toYear(l_shipdate)
-                     └─ Inner Join
+                     └─ Inner (PARALLEL_HASH) Join
                         │     Condition: l_orderkey == o_orderkey
                         │     Filter: ((n_name_1 = 'GERMANY') OR (n_name = 'GERMANY')) AND ((n_name = 'FRANCE') OR (n_name_1 = 'FRANCE'))
                         ├─ Repartition Exchange
                         │  │     Partition by: {l_orderkey}
-                        │  └─ Inner Join
+                        │  └─ Inner (PARALLEL_HASH) Join
                         │     │     Condition: l_suppkey == s_suppkey
                         │     ├─ Repartition Exchange
                         │     │  │     Partition by: {l_suppkey}
@@ -38,7 +38,7 @@ Projection
                         │                       Outputs: [n_name, n_nationkey]
                         └─ Repartition Exchange
                            │     Partition by: {o_orderkey}
-                           └─ Inner Join
+                           └─ Inner (PARALLEL_HASH) Join
                               │     Condition: o_custkey == c_custkey
                               ├─ Repartition Exchange
                               │  │     Partition by: {o_custkey}

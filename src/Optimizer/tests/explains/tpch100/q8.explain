@@ -21,12 +21,12 @@ Projection Est. 730 rows
                               │     Condition: l_suppkey == s_suppkey
                               ├─ Repartition Exchange Est. 3960740 rows
                               │  │     Partition by: {l_suppkey}
-                              │  └─ Inner Join Est. 3960740 rows
+                              │  └─ Inner (PARALLEL_HASH) Join Est. 3960740 rows
                               │     │     Condition: o_custkey == c_custkey
                               │     │     Runtime Filters Builder: {c_custkey}
                               │     ├─ Repartition Exchange Est. 3960740 rows
                               │     │  │     Partition by: {o_custkey}
-                              │     │  └─ Inner Join Est. 3960740 rows
+                              │     │  └─ Inner (PARALLEL_HASH) Join Est. 3960740 rows
                               │     │     │     Condition: o_orderkey == l_orderkey
                               │     │     │     Runtime Filters Builder: {l_orderkey}
                               │     │     ├─ Repartition Exchange Est. 45570275 rows

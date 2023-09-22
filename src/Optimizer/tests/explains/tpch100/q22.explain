@@ -15,7 +15,7 @@ Projection Est. 13401538 rows
                      │     Expressions: [c_acctbal], expr#substring(c_phone, 1, 2):=substring(c_phone, 1, 2)
                      └─ Filter Est. 13500000 rows
                         │     Condition: NOT cast(coalesce(build_side_non_null_symbol, 0), 'UInt8')
-                        └─ Left Join Est. 15000000 rows
+                        └─ Left (PARALLEL_HASH) Join Est. 15000000 rows
                            │     Condition: c_custkey == o_custkey
                            ├─ Repartition Exchange Est. 15000000 rows
                            │  │     Partition by: {c_custkey}

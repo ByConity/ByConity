@@ -23,7 +23,7 @@ Projection Est. 100 rows
                   │           │     Condition: ss_item_sk == i_item_sk
                   │           ├─ Repartition Exchange Est. 17119895 rows
                   │           │  │     Partition by: {ss_item_sk}
-                  │           │  └─ Inner Join Est. 17119895 rows
+                  │           │  └─ Inner (PARALLEL_HASH) Join Est. 17119895 rows
                   │           │     │     Condition: ss_addr_sk == ca_address_sk
                   │           │     │     Runtime Filters Builder: {ca_address_sk}
                   │           │     ├─ Repartition Exchange Est. 46677277 rows
@@ -81,7 +81,7 @@ Projection Est. 100 rows
                   │           │     Condition: cs_item_sk == i_item_sk_1
                   │           ├─ Repartition Exchange Est. 8504730 rows
                   │           │  │     Partition by: {cs_item_sk}
-                  │           │  └─ Inner Join Est. 8504730 rows
+                  │           │  └─ Inner (PARALLEL_HASH) Join Est. 8504730 rows
                   │           │     │     Condition: cs_bill_addr_sk == ca_address_sk_1
                   │           │     │     Runtime Filters Builder: {ca_address_sk_1}
                   │           │     ├─ Repartition Exchange Est. 23188090 rows
@@ -139,7 +139,7 @@ Projection Est. 100 rows
                               │     Condition: ws_item_sk == i_item_sk_2
                               ├─ Repartition Exchange Est. 4279993 rows
                               │  │     Partition by: {ws_item_sk}
-                              │  └─ Inner Join Est. 4279993 rows
+                              │  └─ Inner (PARALLEL_HASH) Join Est. 4279993 rows
                               │     │     Condition: ws_bill_addr_sk == ca_address_sk_2
                               │     │     Runtime Filters Builder: {ca_address_sk_2}
                               │     ├─ Repartition Exchange Est. 11669374 rows

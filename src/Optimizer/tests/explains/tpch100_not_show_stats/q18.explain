@@ -12,7 +12,7 @@ Projection
             └─ Aggregating
                │     Group by: {c_custkey, c_name, o_orderdate, o_orderkey, o_totalprice}
                │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sum)(l_quantity)
-               └─ Inner Join
+               └─ Inner (PARALLEL_HASH) Join
                   │     Condition: l_orderkey == l_orderkey_1
                   ├─ Repartition Exchange
                   │  │     Partition by: {l_orderkey}
@@ -21,11 +21,11 @@ Projection
                   │     └─ TableScan tpch100.lineitem
                   │              Where: isNotNull(l_orderkey)
                   │              Outputs: [l_orderkey, l_quantity]
-                  └─ Inner Join
+                  └─ Inner (PARALLEL_HASH) Join
                      │     Condition: o_orderkey == l_orderkey_1
                      ├─ Repartition Exchange
                      │  │     Partition by: {o_orderkey}
-                     │  └─ Inner Join
+                     │  └─ Inner (PARALLEL_HASH) Join
                      │     │     Condition: o_custkey == c_custkey
                      │     ├─ Repartition Exchange
                      │     │  │     Partition by: {o_custkey}

@@ -17,11 +17,11 @@ Projection Est. 2646 rows
                         │     Expressions: [p_brand, p_size, p_type, ps_suppkey]
                         └─ Filter Est. 97242255 rows
                            │     Condition: if(isNull(ps_suppkey), NULL, NOT cast(multiIf(build_side_non_null_symbol = 1, 1, 0), 'UInt8'))
-                           └─ Left Join Est. 108046950 rows
+                           └─ Left (PARALLEL_HASH) Join Est. 108046950 rows
                               │     Condition: ps_suppkey == s_suppkey
                               ├─ Repartition Exchange Est. 108046950 rows
                               │  │     Partition by: {ps_suppkey}
-                              │  └─ Inner Join Est. 108046950 rows
+                              │  └─ Inner (PARALLEL_HASH) Join Est. 108046950 rows
                               │     │     Condition: ps_partkey == p_partkey
                               │     │     Runtime Filters Builder: {p_partkey}
                               │     ├─ Repartition Exchange Est. 800000000 rows

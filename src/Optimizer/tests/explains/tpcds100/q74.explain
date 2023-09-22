@@ -9,11 +9,11 @@ Projection Est. 100 rows
          └─ Sorting Est. 100 rows
             │     Order by: {c_customer_id_4 asc, c_customer_id_4 asc, c_customer_id_4 asc}
             │     Limit: 100
-            └─ Inner Join Est. 684518910800 rows
+            └─ Inner (PARALLEL_HASH) Join Est. 684518910800 rows
                │     Condition: c_customer_id_4 == c_customer_id_3
                │     Filter: multiIf(`expr#sum(ss_net_paid)_4` > 0, `expr#sum(ss_net_paid)_5` / `expr#sum(ss_net_paid)_4`, NULL) > multiIf(`expr#sum(ss_net_paid)_2` > 0, `expr#sum(ss_net_paid)_3` / `expr#sum(ss_net_paid)_2`, NULL)
                │     Runtime Filters Builder: {c_customer_id_3}
-               ├─ Inner Join Est. 4188889829 rows
+               ├─ Inner (PARALLEL_HASH) Join Est. 4188889829 rows
                │  │     Condition: c_customer_id_4 == c_customer_id_5
                │  ├─ Filter Est. 115139422 rows
                │  │  │     Condition: (`expr#'s'_3` = 's') AND (d_year_4 = 2002) Runtime Filters: {c_customer_id_4}
@@ -23,7 +23,7 @@ Projection Est. 100 rows
                │     │     Condition: (`expr#'s'_4` = 'w') AND (d_year_5 = 2001) AND (`expr#sum(ss_net_paid)_4` > 0.) Runtime Filters: {c_customer_id_5}
                │     └─ Buffer Est. 127932692 rows
                │        └─ CTERef[0] Est. 127932692 rows
-               └─ Inner Join Est. 517171988 rows
+               └─ Inner (PARALLEL_HASH) Join Est. 517171988 rows
                   │     Condition: c_customer_id_3 == c_customer_id_6
                   ├─ Filter Est. 115139422 rows
                   │  │     Condition: (`expr#'s'_2` = 's') AND (d_year_3 = 2001) AND (`expr#sum(ss_net_paid)_2` > 0.)

@@ -24,7 +24,7 @@ Projection Est. 100 rows
                               │     Aggregates: count_non_null_value_1:=AggNull(countIf)(build_side_non_null_symbol_1)
                               └─ Projection Est. 191332746 rows
                                  │     Expressions: [_exists_subquery, assign_unique_id_symbol, assign_unique_id_symbol_1, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol_1:=cast(multiIf(if((l_suppkey_2 != l_suppkey) AND (build_side_non_null_symbol_1 = 1), 1, NULL) = 1, 1, if((l_suppkey_2 != l_suppkey) AND (build_side_non_null_symbol_1 = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
-                                 └─ Right Join Est. 191332746 rows
+                                 └─ Right (PARALLEL_HASH) Join Est. 191332746 rows
                                     │     Condition: l_orderkey_2 == l_orderkey
                                     │     Runtime Filters Builder: {l_orderkey}
                                     ├─ Repartition Exchange Est. 600037902 rows
@@ -46,7 +46,7 @@ Projection Est. 100 rows
                                                 │     Aggregates: count_non_null_value:=AggNull(countIf)(build_side_non_null_symbol)
                                                 └─ Projection Est. 50926965 rows
                                                    │     Expressions: [assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol:=cast(multiIf(if((l_suppkey_1 != l_suppkey) AND (build_side_non_null_symbol = 1), 1, NULL) = 1, 1, if((l_suppkey_1 != l_suppkey) AND (build_side_non_null_symbol = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
-                                                   └─ Right Join Est. 50926965 rows
+                                                   └─ Right (PARALLEL_HASH) Join Est. 50926965 rows
                                                       │     Condition: l_orderkey_1 == l_orderkey
                                                       │     Runtime Filters Builder: {l_orderkey}
                                                       ├─ Repartition Exchange Est. 600037902 rows
@@ -59,7 +59,7 @@ Projection Est. 100 rows
                                                       │                 Where: Runtime Filters: {l_orderkey}
                                                       │                 Outputs: l_orderkey_1:=l_orderkey, l_suppkey_1:=l_suppkey
                                                       └─ AssignUniqueId Est. 12199690 rows
-                                                         └─ Inner Join Est. 12199690 rows
+                                                         └─ Inner (PARALLEL_HASH) Join Est. 12199690 rows
                                                             │     Condition: o_orderkey == l_orderkey
                                                             │     Runtime Filters Builder: {l_orderkey}
                                                             ├─ Repartition Exchange Est. 73067626 rows

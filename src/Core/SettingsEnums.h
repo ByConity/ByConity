@@ -74,7 +74,6 @@ ENUM_WITH_PROTO_CONVERTER(
 
 DECLARE_SETTING_ENUM(JoinAlgorithm)
 
-
 /// Which rows should be included in TOTALS.
 enum class TotalsMode
 {

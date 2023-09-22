@@ -21,7 +21,7 @@ Projection
                            │     Condition: ss_sold_date_sk == d_date_sk
                            ├─ Inner Join
                            │  │     Condition: ss_store_sk == s_store_sk
-                           │  ├─ Inner Join
+                           │  ├─ Inner (PARALLEL_HASH) Join
                            │  │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │  │  │     Runtime Filters Builder: {sr_customer_sk,sr_ticket_number}
                            │  │  ├─ Repartition Exchange

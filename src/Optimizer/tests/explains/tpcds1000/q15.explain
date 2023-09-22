@@ -15,7 +15,7 @@ Projection Est. 100 rows
                   └─ Aggregating Est. 9393 rows
                      │     Group by: {ca_zip}
                      │     Aggregates: expr#sum(cs_sales_price):=AggNull(sum)(cs_sales_price)
-                     └─ Inner Join Est. 68613054 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 68613054 rows
                         │     Condition: cs_bill_customer_sk == c_customer_sk
                         │     Filter: (substring(ca_zip, 1, 5) IN ('85669', '86197', '88274', '83405', '86475', '85392', '85460', '80348', '81792')) OR (ca_state IN ('CA', 'WA', 'GA')) OR (cs_sales_price > 500)
                         ├─ Repartition Exchange Est. 69564271 rows
@@ -36,7 +36,7 @@ Projection Est. 100 rows
                         │                    Outputs: [d_date_sk, d_qoy, d_year]
                         └─ Repartition Exchange Est. 12000000 rows
                            │     Partition by: {c_customer_sk}
-                           └─ Inner Join Est. 12000000 rows
+                           └─ Inner (PARALLEL_HASH) Join Est. 12000000 rows
                               │     Condition: c_current_addr_sk == ca_address_sk
                               ├─ Repartition Exchange Est. 12000000 rows
                               │  │     Partition by: {c_current_addr_sk}

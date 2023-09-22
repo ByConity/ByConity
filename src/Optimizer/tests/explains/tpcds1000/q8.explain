@@ -70,7 +70,7 @@ Projection Est. 10 rows
                                                          └─ Aggregating Est. 9393 rows
                                                             │     Group by: {ca_zip_1}
                                                             │     Aggregates: expr#count():=AggNull(count)()
-                                                            └─ Inner Join Est. 5880977 rows
+                                                            └─ Inner (PARALLEL_HASH) Join Est. 5880977 rows
                                                                │     Condition: ca_address_sk == c_current_addr_sk
                                                                │     Runtime Filters Builder: {c_current_addr_sk}
                                                                ├─ Repartition Exchange Est. 6000000 rows

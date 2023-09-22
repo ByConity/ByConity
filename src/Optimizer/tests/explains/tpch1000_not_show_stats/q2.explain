@@ -14,7 +14,7 @@ Projection
                │     Runtime Filters Builder: {s_suppkey}
                ├─ Repartition Exchange
                │  │     Partition by: {ps_suppkey}
-               │  └─ Inner Join
+               │  └─ Inner (PARALLEL_HASH) Join
                │     │     Condition: ps_partkey == p_partkey, ps_supplycost == expr#min(ps_supplycost)
                │     │     Runtime Filters Builder: {expr#min(ps_supplycost),p_partkey}
                │     ├─ Repartition Exchange
@@ -24,7 +24,7 @@ Projection
                │     │     └─ TableScan tpch1000.partsupp
                │     │              Where: Runtime Filters: {ps_partkey, ps_suppkey, ps_supplycost}
                │     │              Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
-               │     └─ Inner Join
+               │     └─ Inner (PARALLEL_HASH) Join
                │        │     Condition: p_partkey == ps_partkey_1
                │        ├─ Repartition Exchange
                │        │  │     Partition by: {p_partkey}
@@ -47,11 +47,11 @@ Projection
                │                          │     Condition: n_regionkey_1 == r_regionkey_1
                │                          ├─ Inner Join
                │                          │  │     Condition: s_nationkey_1 == n_nationkey_1
-               │                          │  ├─ Inner Join
+               │                          │  ├─ Inner (PARALLEL_HASH) Join
                │                          │  │  │     Condition: ps_suppkey_1 == s_suppkey_1
                │                          │  │  ├─ Repartition Exchange
                │                          │  │  │  │     Partition by: {ps_suppkey_1}
-               │                          │  │  │  └─ Inner Join
+               │                          │  │  │  └─ Inner (PARALLEL_HASH) Join
                │                          │  │  │     │     Condition: ps_partkey_1 == p_partkey_1
                │                          │  │  │     │     Runtime Filters Builder: {p_partkey_1}
                │                          │  │  │     ├─ Repartition Exchange

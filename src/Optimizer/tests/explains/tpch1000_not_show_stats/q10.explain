@@ -17,7 +17,7 @@ Projection
                      │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
                      └─ Projection
                         │     Expressions: [c_acctbal, c_address, c_comment, c_custkey, c_name, c_phone, n_name], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                        └─ Inner Join
+                        └─ Inner (PARALLEL_HASH) Join
                            │     Condition: l_orderkey == o_orderkey
                            │     Runtime Filters Builder: {o_orderkey}
                            ├─ Repartition Exchange
@@ -31,7 +31,7 @@ Projection
                               │     Partition by: {o_orderkey}
                               └─ Inner Join
                                  │     Condition: c_nationkey == n_nationkey
-                                 ├─ Inner Join
+                                 ├─ Inner (PARALLEL_HASH) Join
                                  │  │     Condition: c_custkey == o_custkey
                                  │  │     Runtime Filters Builder: {o_custkey}
                                  │  ├─ Repartition Exchange

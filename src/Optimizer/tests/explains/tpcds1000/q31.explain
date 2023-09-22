@@ -51,7 +51,7 @@ CTEDef [1]
          └─ Aggregating Est. 5553 rows
             │     Group by: {ca_county_4, d_qoy_4, d_year_4}
             │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-            └─ Inner Join Est. 103920168 rows
+            └─ Inner (PARALLEL_HASH) Join Est. 103920168 rows
                │     Condition: ws_bill_addr_sk == ca_address_sk_1
                ├─ Repartition Exchange Est. 106580282 rows
                │  │     Partition by: {ws_bill_addr_sk}
@@ -82,7 +82,7 @@ CTEDef [0]
          └─ Aggregating Est. 5553 rows
             │     Group by: {ca_county, d_qoy, d_year}
             │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-            └─ Inner Join Est. 415678725 rows
+            └─ Inner (PARALLEL_HASH) Join Est. 415678725 rows
                │     Condition: ss_addr_sk == ca_address_sk
                ├─ Repartition Exchange Est. 426319131 rows
                │  │     Partition by: {ss_addr_sk}

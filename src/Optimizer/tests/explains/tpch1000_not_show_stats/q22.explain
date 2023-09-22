@@ -15,7 +15,7 @@ Projection
                      │     Expressions: [c_acctbal], expr#substring(c_phone, 1, 2):=substring(c_phone, 1, 2)
                      └─ Filter
                         │     Condition: NOT cast(coalesce(build_side_non_null_symbol, 0), 'UInt8')
-                        └─ Left Join
+                        └─ Left (PARALLEL_HASH) Join
                            │     Condition: c_custkey == o_custkey
                            ├─ Repartition Exchange
                            │  │     Partition by: {c_custkey}

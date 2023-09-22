@@ -22,7 +22,7 @@ Projection Est. 100 rows
                            │     Runtime Filters Builder: {r_reason_sk}
                            ├─ Filter Est. 3108975840 rows
                            │  │     Condition: Runtime Filters: {sr_reason_sk}
-                           │  └─ Left Join Est. 3454417601 rows
+                           │  └─ Left (PARALLEL_HASH) Join Est. 3454417601 rows
                            │     │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │     ├─ Repartition Exchange Est. 2879987999 rows
                            │     │  │     Partition by: {ss_item_sk, ss_ticket_number}

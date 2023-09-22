@@ -37,6 +37,7 @@
 #include <Optimizer/Rule/Rules.h>
 #include <QueryPlan/GraphvizPrinter.h>
 #include <QueryPlan/Hints/HintsPropagator.h>
+#include <QueryPlan/Hints/ImplementJoinAlgorithmHints.h>
 #include <QueryPlan/Hints/ImplementJoinOperationHints.h>
 #include <QueryPlan/Hints/ImplementJoinOrderHints.h>
 #include <QueryPlan/PlanPattern.h>
@@ -252,6 +253,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // TODO cost-based projection push down
         std::make_shared<AddBufferForDeadlockCTE>(),
 
+        std::make_shared<ImplementJoinAlgorithmHints>(),
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
     };
 

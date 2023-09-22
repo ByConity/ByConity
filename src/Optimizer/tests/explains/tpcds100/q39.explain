@@ -5,7 +5,7 @@ Projection Est. 12822499606 rows
    └─ Gather Exchange Est. 12822499606 rows
       └─ Sorting Est. 12822499606 rows
          │     Order by: {w_warehouse_sk_1 asc, i_item_sk_1 asc, d_moy_1 asc, expr#avg(inv_quantity_on_hand)_1 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_1 asc, d_moy_2 asc, expr#avg(inv_quantity_on_hand)_2 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_2 asc}
-         └─ Inner Join Est. 12822499606 rows
+         └─ Inner (PARALLEL_HASH) Join Est. 12822499606 rows
             │     Condition: i_item_sk_1 == i_item_sk_2, w_warehouse_sk_1 == w_warehouse_sk_2
             ├─ Projection Est. 57632904 rows
             │  │     Expressions: d_moy_1:=d_moy_3, expr#avg(inv_quantity_on_hand)_1:=`expr#avg(inv_quantity_on_hand)_3`, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_1:=caseWithExpression(`expr#avg(inv_quantity_on_hand)_3`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_3` / `expr#avg(inv_quantity_on_hand)_3`), i_item_sk_1:=i_item_sk_3, w_warehouse_sk_1:=w_warehouse_sk_3
@@ -83,7 +83,7 @@ Projection Est. 6051463740 rows
    └─ Gather Exchange Est. 6051463740 rows
       └─ Sorting Est. 6051463740 rows
          │     Order by: {w_warehouse_sk_6 asc, i_item_sk_6 asc, d_moy_6 asc, expr#avg(inv_quantity_on_hand)_6 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6 asc, d_moy_7 asc, expr#avg(inv_quantity_on_hand)_7 asc, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_7 asc}
-         └─ Inner Join Est. 6051463740 rows
+         └─ Inner (PARALLEL_HASH) Join Est. 6051463740 rows
             │     Condition: i_item_sk_6 == i_item_sk_7, w_warehouse_sk_6 == w_warehouse_sk_7
             ├─ Projection Est. 28816452 rows
             │  │     Expressions: d_moy_6:=d_moy_8, expr#avg(inv_quantity_on_hand)_6:=`expr#avg(inv_quantity_on_hand)_8`, expr#caseWithExpression(mean, 0, NULL, divide(stdev, mean))_6:=caseWithExpression(`expr#avg(inv_quantity_on_hand)_8`, 0, NULL, `expr#stddevSamp(inv_quantity_on_hand)_8` / `expr#avg(inv_quantity_on_hand)_8`), i_item_sk_6:=i_item_sk_8, w_warehouse_sk_6:=w_warehouse_sk_8

@@ -21,12 +21,12 @@ Projection
                               │     Condition: l_suppkey == s_suppkey
                               ├─ Repartition Exchange
                               │  │     Partition by: {l_suppkey}
-                              │  └─ Inner Join
+                              │  └─ Inner (PARALLEL_HASH) Join
                               │     │     Condition: o_custkey == c_custkey
                               │     │     Runtime Filters Builder: {c_custkey}
                               │     ├─ Repartition Exchange
                               │     │  │     Partition by: {o_custkey}
-                              │     │  └─ Inner Join
+                              │     │  └─ Inner (PARALLEL_HASH) Join
                               │     │     │     Condition: o_orderkey == l_orderkey
                               │     │     │     Runtime Filters Builder: {l_orderkey}
                               │     │     ├─ Repartition Exchange

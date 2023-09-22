@@ -12,7 +12,7 @@ Projection Est. 100 rows
             └─ Aggregating Est. 6608210614 rows
                │     Group by: {c_custkey, c_name, o_orderdate, o_orderkey, o_totalprice}
                │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sum)(l_quantity)
-               └─ Inner Join Est. 6608210614 rows
+               └─ Inner (PARALLEL_HASH) Join Est. 6608210614 rows
                   │     Condition: l_orderkey == l_orderkey_1
                   ├─ Repartition Exchange Est. 5999989709 rows
                   │  │     Partition by: {l_orderkey}
@@ -21,11 +21,11 @@ Projection Est. 100 rows
                   │     └─ TableScan tpch1000.lineitem Est. 5999989709 rows
                   │              Where: isNotNull(l_orderkey)
                   │              Outputs: [l_orderkey, l_quantity]
-                  └─ Inner Join Est. 1416205863 rows
+                  └─ Inner (PARALLEL_HASH) Join Est. 1416205863 rows
                      │     Condition: o_orderkey == l_orderkey_1
                      ├─ Repartition Exchange Est. 1500000000 rows
                      │  │     Partition by: {o_orderkey}
-                     │  └─ Inner Join Est. 1500000000 rows
+                     │  └─ Inner (PARALLEL_HASH) Join Est. 1500000000 rows
                      │     │     Condition: o_custkey == c_custkey
                      │     ├─ Repartition Exchange Est. 1500000000 rows
                      │     │  │     Partition by: {o_custkey}

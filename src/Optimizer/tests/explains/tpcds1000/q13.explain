@@ -14,7 +14,7 @@ Projection Est. 1 rows
             │     │     Condition: ss_store_sk == s_store_sk
             │     ├─ Inner Join Est. 552122251 rows
             │     │  │     Condition: ss_hdemo_sk == hd_demo_sk
-            │     │  ├─ Inner Join Est. 553732608 rows
+            │     │  ├─ Inner (PARALLEL_HASH) Join Est. 553732608 rows
             │     │  │  │     Condition: ss_addr_sk == ca_address_sk
             │     │  │  │     Filter: ((ca_state IN ('TX', 'OH')) AND (ss_net_profit >= 100) AND (ss_net_profit <= 200)) OR ((ca_state IN ('OR', 'NM', 'KY')) AND (ss_net_profit >= 150) AND (ss_net_profit <= 300)) OR ((ca_state IN ('VA', 'TX', 'MS')) AND (ss_net_profit >= 50) AND (ss_net_profit <= 250))
             │     │  │  ├─ Repartition Exchange Est. 567906871 rows

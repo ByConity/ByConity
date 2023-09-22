@@ -13,7 +13,7 @@ Projection Est. 2 rows
                   │     Aggregates: expr#sum(multiIf(or(equals(o_orderpriority, '1-URGENT'), equals(o_orderpriority, '2-HIGH')), 1, 0)):=AggNull(sum)(expr#multiIf(or(equals(o_orderpriority, '1-URGENT'), equals(o_orderpriority, '2-HIGH')), 1, 0)), expr#sum(multiIf(and(notEquals(o_orderpriority, '1-URGENT'), notEquals(o_orderpriority, '2-HIGH')), 1, 0)):=AggNull(sum)(expr#multiIf(and(notEquals(o_orderpriority, '1-URGENT'), notEquals(o_orderpriority, '2-HIGH')), 1, 0))
                   └─ Projection Est. 25623434 rows
                      │     Expressions: [l_shipmode], expr#multiIf(and(notEquals(o_orderpriority, '1-URGENT'), notEquals(o_orderpriority, '2-HIGH')), 1, 0):=multiIf((o_orderpriority != '1-URGENT') AND (o_orderpriority != '2-HIGH'), 1, 0), expr#multiIf(or(equals(o_orderpriority, '1-URGENT'), equals(o_orderpriority, '2-HIGH')), 1, 0):=multiIf((o_orderpriority = '1-URGENT') OR (o_orderpriority = '2-HIGH'), 1, 0)
-                     └─ Inner Join Est. 25623434 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 25623434 rows
                         │     Condition: o_orderkey == l_orderkey
                         │     Runtime Filters Builder: {l_orderkey}
                         ├─ Repartition Exchange Est. 150000000 rows

@@ -21,7 +21,7 @@ Projection Est. 100 rows
                            │     Condition: ss_sold_date_sk == d_date_sk
                            ├─ Inner Join Est. 50243984 rows
                            │  │     Condition: ss_store_sk == s_store_sk
-                           │  ├─ Inner Join Est. 50243984 rows
+                           │  ├─ Inner (PARALLEL_HASH) Join Est. 50243984 rows
                            │  │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │  │  │     Runtime Filters Builder: {sr_customer_sk,sr_ticket_number}
                            │  │  ├─ Repartition Exchange Est. 2879987999 rows
