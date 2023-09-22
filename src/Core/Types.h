@@ -103,37 +103,6 @@ STRONG_TYPEDEF(UInt128, UUID)
 
 using BitMap64 = roaring::Roaring64Map;
 
-struct PairInt64
-{
-    /// This naming assumes little endian.
-    UInt64 low;
-    UInt64 high;
-
-    PairInt64() = default;
-    explicit PairInt64(const UInt64 low_, const UInt64 high_) : low(low_), high(high_) {}
-    explicit PairInt64(const UInt64 rhs) : low(rhs), high() {}
-
-    auto tuple() const { return std::tie(high, low); }
-
-    bool inline operator== (const PairInt64 rhs) const { return tuple() == rhs.tuple(); }
-    bool inline operator!= (const PairInt64 rhs) const { return tuple() != rhs.tuple(); }
-    bool inline operator<  (const PairInt64 rhs) const { return tuple() < rhs.tuple(); }
-    bool inline operator<= (const PairInt64 rhs) const { return tuple() <= rhs.tuple(); }
-    bool inline operator>  (const PairInt64 rhs) const { return tuple() > rhs.tuple(); }
-    bool inline operator>= (const PairInt64 rhs) const { return tuple() >= rhs.tuple(); }
-
-    template <typename T> bool inline operator== (const T rhs) const { return *this == PairInt64(rhs); }
-    template <typename T> bool inline operator!= (const T rhs) const { return *this != PairInt64(rhs); }
-    template <typename T> bool inline operator>= (const T rhs) const { return *this >= PairInt64(rhs); }
-    template <typename T> bool inline operator>  (const T rhs) const { return *this >  PairInt64(rhs); }
-    template <typename T> bool inline operator<= (const T rhs) const { return *this <= PairInt64(rhs); }
-    template <typename T> bool inline operator<  (const T rhs) const { return *this <  PairInt64(rhs); }
-
-    template <typename T> explicit operator T() const { return static_cast<T>(low); }
-
-    PairInt64 & operator= (const UInt64 rhs) { low = rhs; high = 0; return *this; }
-};
-
 template <typename T> constexpr const char * TypeName = "";
 
 template <> inline constexpr const char * TypeName<UInt8> = "UInt8";
