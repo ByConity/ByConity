@@ -46,8 +46,8 @@ Projection Est. 1 rows
                   │                          │     Condition: ws_sold_date_sk_1 == d_date_sk_1
                   │                          │     Runtime Filters Builder: {d_date_sk_1}
                   │                          ├─ Inner Join Est. 60338 rows
-                  │                          │  │     Condition: ws_item_sk_1 == i_item_sk_2
-                  │                          │  │     Runtime Filters Builder: {i_item_sk_2}
+                  │                          │  │     Condition: ws_item_sk_1 == i_item_sk_1
+                  │                          │  │     Runtime Filters Builder: {i_item_sk_1}
                   │                          │  ├─ Filter Est. 72001237 rows
                   │                          │  │  │     Condition: Runtime Filters: {ws_item_sk_1, ws_sold_date_sk_1}
                   │                          │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
@@ -56,11 +56,11 @@ Projection Est. 1 rows
                   │                          │  └─ Broadcast Exchange Est. 171 rows
                   │                          │     └─ MergingAggregated Est. 171 rows
                   │                          │        └─ Repartition Exchange Est. 171 rows
-                  │                          │           │     Partition by: {i_item_sk_2}
+                  │                          │           │     Partition by: {i_item_sk_1}
                   │                          │           └─ Aggregating Est. 171 rows
-                  │                          │              │     Group by: {i_item_sk_2}
+                  │                          │              │     Group by: {i_item_sk_1}
                   │                          │              └─ Projection Est. 171 rows
-                  │                          │                 │     Expressions: i_item_sk_2:=i_item_sk
+                  │                          │                 │     Expressions: i_item_sk_1:=i_item_sk
                   │                          │                 └─ Filter Est. 171 rows
                   │                          │                    │     Condition: i_manufact_id = 350
                   │                          │                    └─ TableScan tpcds100.item Est. 204000 rows

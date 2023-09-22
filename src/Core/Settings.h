@@ -1945,6 +1945,10 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_injective_in_property, false, "Whether enable using injective function when property match", 0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
+    M(Float, magic_set_filter_factor, 0.5, "The minimum filter factor of magic set, used for early pruning", 0) \
+    M(UInt64, magic_set_max_search_tree, 4, "The maximum table scans in magic set, used for early pruning", 0) \
+    M(UInt64, magic_set_source_min_rows, 10000, "The minimum rows of source node in magic set, used for early pruning", 0) \
+    M(Float, magic_set_rows_factor, 0.6, "The minimum rows of source node in magic set, used for early pruning", 0) \
     M(CTEMode, cte_mode, CTEMode::AUTO, "CTE mode: SHARED|INLINED|AUTO|ENFORCED", 0) \
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
