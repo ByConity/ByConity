@@ -16,6 +16,7 @@
 #pragma once
 #include <Core/ColumnNumbers.h>
 #include <Functions/IFunction.h>
+#include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/ExchangeBufferedSender.h>
 #include <Processors/Exchange/ExchangeOptions.h>
@@ -63,6 +64,7 @@ private:
     size_t column_num;
     ExchangeOptions options;
     ExchangeBufferedSender buffered_sender;
+    ChunkInfoPtr current_chunk_info;
     Poco::Logger * logger;
 };
 

@@ -351,12 +351,15 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
         if (total_partition_num == 0)
             throw Exception("Total partition number should not be zero", ErrorCodes::LOGICAL_ERROR);
 
+        auto sender_options = SenderProxyOptions{
+            .wait_timeout_ms = static_cast<UInt32>(
+                context->getSettingsRef().exchange_wait_accept_max_timeout_ms + context->getSettingsRef().wait_runtime_filter_timeout)};
         for (size_t i = 0; i < total_partition_num; i++)
         {
             size_t partition_id = i + 1;
             auto data_key = std::make_shared<ExchangeDataKey>(
                 plan_segment->getQueryId(), exchange_id, partition_id, coordinator_address);
-            BroadcastSenderProxyPtr sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+            BroadcastSenderProxyPtr sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key, sender_options);
             sender->accept(context, header);
             current_exchange_senders.emplace_back(std::move(sender));
         }

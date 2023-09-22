@@ -31,6 +31,7 @@
 namespace DB
 {
 class BroadcastSenderProxy;
+struct SenderProxyOptions;
 using BroadcastSenderProxyPtr = std::shared_ptr<BroadcastSenderProxy>;
 using BroadcastSenderProxyPtrs = std::vector<BroadcastSenderProxyPtr>;
 
@@ -44,6 +45,8 @@ public:
     }
 
     BroadcastSenderProxyPtr getOrCreate(ExchangeDataKeyPtr data_key);
+
+    BroadcastSenderProxyPtr getOrCreate(ExchangeDataKeyPtr data_key, SenderProxyOptions options);
 
     void remove(ExchangeDataKeyPtr data_key);
 

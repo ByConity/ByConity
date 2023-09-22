@@ -28,6 +28,11 @@
 
 namespace DB
 {
+struct SenderProxyOptions
+{
+    UInt32 wait_timeout_ms;
+};
+
 class BroadcastSenderProxy final : public IBroadcastSender, boost::noncopyable
 {
 public:
@@ -49,7 +54,7 @@ public:
 
 private:
     friend class BroadcastSenderProxyRegistry;
-    explicit BroadcastSenderProxy(ExchangeDataKeyPtr data_key_);
+    explicit BroadcastSenderProxy(ExchangeDataKeyPtr data_key_, SenderProxyOptions options);
 
     mutable bthread::Mutex mutex;
     bthread::ConditionVariable wait_become_real;

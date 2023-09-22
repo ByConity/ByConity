@@ -42,8 +42,8 @@ namespace ErrorCodes
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 
-BroadcastSenderProxy::BroadcastSenderProxy(ExchangeDataKeyPtr data_key_)
-    : data_key(std::move(data_key_)), wait_timeout_ms(5000), logger(&Poco::Logger::get("BroadcastSenderProxy"))
+BroadcastSenderProxy::BroadcastSenderProxy(ExchangeDataKeyPtr data_key_, SenderProxyOptions options)
+    : data_key(std::move(data_key_)), wait_timeout_ms(options.wait_timeout_ms), logger(&Poco::Logger::get("BroadcastSenderProxy"))
 {
 }
 
@@ -167,7 +167,7 @@ void BroadcastSenderProxy::waitBecomeRealSender(UInt32 timeout_ms)
             lock, std::chrono::milliseconds(timeout_ms), [this] { return this->real_sender.operator bool() || closed; }))
         throw Exception("Wait become real sender timeout for " + data_key->dump(), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
     else if (closed)
-        throw Exception("Interrput accept for " + data_key->dump(), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
+        throw Exception("Interrput waitBecomeRealSender for " + data_key->dump(), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
 }
 
 BroadcastSenderType BroadcastSenderProxy::getType()
