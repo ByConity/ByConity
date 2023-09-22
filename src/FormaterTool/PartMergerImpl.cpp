@@ -360,6 +360,14 @@ IMergeTreeDataPartsVector PartMergerImpl::collectSourceParts(const std::vector<S
     std::unordered_set<String> part_name_set;
     UInt64 increment{0};
 
+    /// Prepare a thread pool.
+    size_t max_threads = user_settings.count("max_merge_threads")
+        ? std::max(1ul, std::min(32ul, user_settings["max_merge_threads"].safeGet<UInt64>()))
+        : 1;
+    ExceptionHandler exception_handler;
+    ThreadPool pool(max_threads);
+    std::mutex lock;
+
     /// collect all data parts from sub directories of input path.
     for (const auto & merge_tree : merge_trees)
     {
@@ -381,14 +389,26 @@ IMergeTreeDataPartsVector PartMergerImpl::collectSourceParts(const std::vector<S
                 new_name = getNextPartName(part_name_set, part_name, merge_tree, increment);
             }
             part_name_set.emplace(new_name);
-            auto part = std::make_shared<MergeTreeDataPartCNCH>(*merge_tree, new_name, volume, part_name + '/');
-            part->loadFromFileSystem(false);
-            part->disk_cache_mode = DiskCacheMode::SKIP_DISK_CACHE;
+            pool.scheduleOrThrowOnError(createExceptionHandledJob(
+                [&merge_tree, new_name, &volume, part_name, &parts, &lock]() {
+                    auto part = std::make_shared<MergeTreeDataPartCNCH>(*merge_tree, new_name, volume, part_name + '/');
+                    part->loadFromFileSystem(false);
+                    part->disk_cache_mode = DiskCacheMode::SKIP_DISK_CACHE;
 
-            part->default_codec = CompressionCodecFactory::instance().getDefaultCodec();
-            parts.push_back(part);
+                    // See https://xxx
+                    part->default_codec = CompressionCodecFactory::instance().getDefaultCodec();
+                    {
+                        std::unique_lock<std::mutex> guard(lock);
+                        parts.push_back(part);
+                    }
+                },
+                exception_handler));
         }
     }
+
+    pool.wait();
+
+    exception_handler.throwIfException();
 
     auto visible_parts = CnchPartsHelper::calcVisibleParts(parts, true, CnchPartsHelper::LoggingOption::EnableLogging);
 
