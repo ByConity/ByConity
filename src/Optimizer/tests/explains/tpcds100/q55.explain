@@ -1,41 +1,41 @@
-Projection
+Projection Est. 100 rows
 │     Expressions: brand:=i_brand, brand_id:=i_brand_id, ext_price:=`expr#sum(ss_ext_sales_price)`
-└─ Limit
+└─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting
+   └─ Sorting Est. 100 rows
       │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, i_brand_id asc}
       │     Limit: 100
-      └─ Gather Exchange
-         └─ Sorting
+      └─ Gather Exchange Est. 192 rows
+         └─ Sorting Est. 100 rows
             │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, i_brand_id asc}
             │     Limit: 100
-            └─ MergingAggregated
-               └─ Repartition Exchange
+            └─ MergingAggregated Est. 192 rows
+               └─ Repartition Exchange Est. 192 rows
                   │     Partition by: {i_brand, i_brand_id}
-                  └─ Aggregating
+                  └─ Aggregating Est. 192 rows
                      │     Group by: {i_brand, i_brand_id}
                      │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                     └─ Inner Join
+                     └─ Inner Join Est. 78447 rows
                         │     Condition: ss_item_sk == i_item_sk
                         │     Runtime Filters Builder: {i_item_sk}
-                        ├─ Inner Join
+                        ├─ Inner Join Est. 4561394 rows
                         │  │     Condition: ss_sold_date_sk == d_date_sk
                         │  │     Runtime Filters Builder: {d_date_sk}
-                        │  ├─ Filter
+                        │  ├─ Filter Est. 287997024 rows
                         │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                        │  │  └─ TableScan tpcds100.store_sales
+                        │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                         │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                         │  │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
-                        │  └─ Broadcast Exchange
-                        │     └─ Filter
+                        │  └─ Broadcast Exchange Est. 29 rows
+                        │     └─ Filter Est. 29 rows
                         │        │     Condition: (d_year = 1999) AND (d_moy = 11)
-                        │        └─ TableScan tpcds100.date_dim
+                        │        └─ TableScan tpcds100.date_dim Est. 73049 rows
                         │                 Where: (d_year = 1999) AND (d_moy = 11)
                         │                 Outputs: [d_date_sk, d_moy, d_year]
-                        └─ Broadcast Exchange
-                           └─ Filter
+                        └─ Broadcast Exchange Est. 3618 rows
+                           └─ Filter Est. 3618 rows
                               │     Condition: i_manager_id = 28
-                              └─ TableScan tpcds100.item
+                              └─ TableScan tpcds100.item Est. 204000 rows
                                        Where: i_manager_id = 28
                                        Outputs: [i_brand, i_brand_id, i_item_sk, i_manager_id]
 note: Runtime Filter is applied for 2 times.

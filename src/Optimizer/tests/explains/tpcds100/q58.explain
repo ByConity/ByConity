@@ -1,186 +1,186 @@
-Projection
+Projection Est. 100 rows
 │     Expressions: average:=((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3, cs_dev:=(`expr#sum(cs_ext_sales_price)` / (((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3)) * 100, cs_item_rev:=`expr#sum(cs_ext_sales_price)`, item_id:=i_item_id, ss_dev:=(`expr#sum(ss_ext_sales_price)` / (((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3)) * 100, ss_item_rev:=`expr#sum(ss_ext_sales_price)`, ws_dev:=(`expr#sum(ws_ext_sales_price)` / (((`expr#sum(ss_ext_sales_price)` + `expr#sum(cs_ext_sales_price)`) + `expr#sum(ws_ext_sales_price)`) / 3)) * 100, ws_item_rev:=`expr#sum(ws_ext_sales_price)`
-└─ Limit
+└─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting
+   └─ Sorting Est. 100 rows
       │     Order by: {i_item_id asc, expr#sum(ss_ext_sales_price) asc}
       │     Limit: 100
-      └─ Gather Exchange
-         └─ Sorting
+      └─ Gather Exchange Est. 100883 rows
+         └─ Sorting Est. 100 rows
             │     Order by: {i_item_id asc, expr#sum(ss_ext_sales_price) asc}
             │     Limit: 100
-            └─ Inner Join
+            └─ Inner Join Est. 100883 rows
                │     Condition: i_item_id == i_item_id_2
                │     Filter: (`expr#sum(ss_ext_sales_price)` >= ('0.9' * `expr#sum(ws_ext_sales_price)`)) AND (`expr#sum(ss_ext_sales_price)` <= ('1.1' * `expr#sum(ws_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` >= ('0.9' * `expr#sum(ws_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` <= ('1.1' * `expr#sum(ws_ext_sales_price)`)) AND (`expr#sum(ws_ext_sales_price)` >= ('0.9' * `expr#sum(ss_ext_sales_price)`)) AND (`expr#sum(ws_ext_sales_price)` <= ('1.1' * `expr#sum(ss_ext_sales_price)`)) AND (`expr#sum(ws_ext_sales_price)` >= ('0.9' * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(ws_ext_sales_price)` <= ('1.1' * `expr#sum(cs_ext_sales_price)`))
-               ├─ Inner Join
+               ├─ Inner Join Est. 100883 rows
                │  │     Condition: i_item_id_1 == i_item_id
                │  │     Filter: (`expr#sum(ss_ext_sales_price)` >= ('0.9' * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(ss_ext_sales_price)` <= ('1.1' * `expr#sum(cs_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` >= ('0.9' * `expr#sum(ss_ext_sales_price)`)) AND (`expr#sum(cs_ext_sales_price)` <= ('1.1' * `expr#sum(ss_ext_sales_price)`))
-               │  ├─ MergingAggregated
-               │  │  └─ Repartition Exchange
+               │  ├─ MergingAggregated Est. 100883 rows
+               │  │  └─ Repartition Exchange Est. 100883 rows
                │  │     │     Partition by: {i_item_id_1}
-               │  │     └─ Aggregating
+               │  │     └─ Aggregating Est. 100883 rows
                │  │        │     Group by: {i_item_id_1}
                │  │        │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price)
-               │  │        └─ Inner Join
+               │  │        └─ Inner Join Est. 595732 rows
                │  │           │     Condition: cs_item_sk == i_item_sk_1
-               │  │           ├─ Repartition Exchange
+               │  │           ├─ Repartition Exchange Est. 595732 rows
                │  │           │  │     Partition by: {cs_item_sk}
-               │  │           │  └─ Inner Join
+               │  │           │  └─ Inner Join Est. 547220 rows
                │  │           │     │     Condition: cs_sold_date_sk == d_date_sk_1
                │  │           │     │     Runtime Filters Builder: {d_date_sk_1}
-               │  │           │     ├─ Filter
+               │  │           │     ├─ Filter Est. 143997065 rows
                │  │           │     │  │     Condition: Runtime Filters: {cs_sold_date_sk}
-               │  │           │     │  └─ TableScan tpcds100.catalog_sales
+               │  │           │     │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
                │  │           │     │           Where: Runtime Filters: {cs_sold_date_sk}
                │  │           │     │           Outputs: [cs_ext_sales_price, cs_item_sk, cs_sold_date_sk]
-               │  │           │     └─ Broadcast Exchange
-               │  │           │        └─ Inner Join
+               │  │           │     └─ Broadcast Exchange Est. 7 rows
+               │  │           │        └─ Inner Join Est. 7 rows
                │  │           │           │     Condition: d_date_3 == d_date_4
                │  │           │           │     Runtime Filters Builder: {d_date_4}
-               │  │           │           ├─ Filter
+               │  │           │           ├─ Filter Est. 73049 rows
                │  │           │           │  │     Condition: isNotNull(d_date_3) Runtime Filters: {d_date_3}
-               │  │           │           │  └─ TableScan tpcds100.date_dim
+               │  │           │           │  └─ TableScan tpcds100.date_dim Est. 73049 rows
                │  │           │           │           Where: isNotNull(d_date) Runtime Filters: {d_date}
                │  │           │           │           Outputs: d_date_3:=d_date, d_date_sk_1:=d_date_sk
-               │  │           │           └─ Broadcast Exchange
-               │  │           │              └─ MergingAggregated
-               │  │           │                 └─ Repartition Exchange
+               │  │           │           └─ Broadcast Exchange Est. 7 rows
+               │  │           │              └─ MergingAggregated Est. 7 rows
+               │  │           │                 └─ Repartition Exchange Est. 7 rows
                │  │           │                    │     Partition by: {d_date_4}
-               │  │           │                    └─ Aggregating
+               │  │           │                    └─ Aggregating Est. 7 rows
                │  │           │                       │     Group by: {d_date_4}
-               │  │           │                       └─ Inner Join
+               │  │           │                       └─ Inner Join Est. 7 rows
                │  │           │                          │     Condition: d_week_seq_2 == d_week_seq_3
                │  │           │                          │     Runtime Filters Builder: {d_week_seq_3}
-               │  │           │                          ├─ Filter
+               │  │           │                          ├─ Filter Est. 73049 rows
                │  │           │                          │  │     Condition: isNotNull(d_date_4) Runtime Filters: {d_week_seq_2}
-               │  │           │                          │  └─ TableScan tpcds100.date_dim
+               │  │           │                          │  └─ TableScan tpcds100.date_dim Est. 73049 rows
                │  │           │                          │           Where: isNotNull(d_date) Runtime Filters: {d_week_seq}
                │  │           │                          │           Outputs: d_date_4:=d_date, d_week_seq_2:=d_week_seq
-               │  │           │                          └─ Broadcast Exchange
-               │  │           │                             └─ EnforceSingleRow
-               │  │           │                                └─ Union
-               │  │           │                                   └─ Gather Exchange
-               │  │           │                                      └─ Projection
+               │  │           │                          └─ Broadcast Exchange Est. 1 rows
+               │  │           │                             └─ EnforceSingleRow Est. 1 rows
+               │  │           │                                └─ Union Est. 1 rows
+               │  │           │                                   └─ Gather Exchange Est. 1 rows
+               │  │           │                                      └─ Projection Est. 1 rows
                │  │           │                                         │     Expressions: [d_week_seq_3]
-               │  │           │                                         └─ Filter
+               │  │           │                                         └─ Filter Est. 1 rows
                │  │           │                                            │     Condition: d_date_5 = cast(10959, 'Date')
-               │  │           │                                            └─ TableScan tpcds100.date_dim
+               │  │           │                                            └─ TableScan tpcds100.date_dim Est. 73049 rows
                │  │           │                                                     Where: d_date = cast(10959, 'Date')
                │  │           │                                                     Outputs: d_date_5:=d_date, d_week_seq_3:=d_week_seq
-               │  │           └─ Repartition Exchange
+               │  │           └─ Repartition Exchange Est. 204000 rows
                │  │              │     Partition by: {i_item_sk_1}
-               │  │              └─ TableScan tpcds100.item
+               │  │              └─ TableScan tpcds100.item Est. 204000 rows
                │  │                       Outputs: i_item_id_1:=i_item_id, i_item_sk_1:=i_item_sk
-               │  └─ MergingAggregated
-               │     └─ Repartition Exchange
+               │  └─ MergingAggregated Est. 100883 rows
+               │     └─ Repartition Exchange Est. 100883 rows
                │        │     Partition by: {i_item_id}
-               │        └─ Aggregating
+               │        └─ Aggregating Est. 100883 rows
                │           │     Group by: {i_item_id}
                │           │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-               │           └─ Inner Join
+               │           └─ Inner Join Est. 1162110 rows
                │              │     Condition: ss_item_sk == i_item_sk
-               │              ├─ Repartition Exchange
+               │              ├─ Repartition Exchange Est. 1198560 rows
                │              │  │     Partition by: {ss_item_sk}
-               │              │  └─ Inner Join
+               │              │  └─ Inner Join Est. 1101026 rows
                │              │     │     Condition: ss_sold_date_sk == d_date_sk
                │              │     │     Runtime Filters Builder: {d_date_sk}
-               │              │     ├─ Filter
+               │              │     ├─ Filter Est. 287997024 rows
                │              │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
-               │              │     │  └─ TableScan tpcds100.store_sales
+               │              │     │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                │              │     │           Where: Runtime Filters: {ss_sold_date_sk}
                │              │     │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
-               │              │     └─ Broadcast Exchange
-               │              │        └─ Inner Join
+               │              │     └─ Broadcast Exchange Est. 7 rows
+               │              │        └─ Inner Join Est. 7 rows
                │              │           │     Condition: d_date == d_date_1
                │              │           │     Runtime Filters Builder: {d_date_1}
-               │              │           ├─ Filter
+               │              │           ├─ Filter Est. 73049 rows
                │              │           │  │     Condition: isNotNull(d_date) Runtime Filters: {d_date}
-               │              │           │  └─ TableScan tpcds100.date_dim
+               │              │           │  └─ TableScan tpcds100.date_dim Est. 73049 rows
                │              │           │           Where: isNotNull(d_date) Runtime Filters: {d_date}
                │              │           │           Outputs: [d_date, d_date_sk]
-               │              │           └─ Broadcast Exchange
-               │              │              └─ MergingAggregated
-               │              │                 └─ Repartition Exchange
+               │              │           └─ Broadcast Exchange Est. 7 rows
+               │              │              └─ MergingAggregated Est. 7 rows
+               │              │                 └─ Repartition Exchange Est. 7 rows
                │              │                    │     Partition by: {d_date_1}
-               │              │                    └─ Aggregating
+               │              │                    └─ Aggregating Est. 7 rows
                │              │                       │     Group by: {d_date_1}
-               │              │                       └─ Inner Join
+               │              │                       └─ Inner Join Est. 7 rows
                │              │                          │     Condition: d_week_seq == d_week_seq_1
                │              │                          │     Runtime Filters Builder: {d_week_seq_1}
-               │              │                          ├─ Filter
+               │              │                          ├─ Filter Est. 73049 rows
                │              │                          │  │     Condition: isNotNull(d_date_1) Runtime Filters: {d_week_seq}
-               │              │                          │  └─ TableScan tpcds100.date_dim
+               │              │                          │  └─ TableScan tpcds100.date_dim Est. 73049 rows
                │              │                          │           Where: isNotNull(d_date) Runtime Filters: {d_week_seq}
                │              │                          │           Outputs: [d_week_seq], d_date_1:=d_date
-               │              │                          └─ Broadcast Exchange
-               │              │                             └─ EnforceSingleRow
-               │              │                                └─ Union
-               │              │                                   └─ Gather Exchange
-               │              │                                      └─ Projection
+               │              │                          └─ Broadcast Exchange Est. 1 rows
+               │              │                             └─ EnforceSingleRow Est. 1 rows
+               │              │                                └─ Union Est. 1 rows
+               │              │                                   └─ Gather Exchange Est. 1 rows
+               │              │                                      └─ Projection Est. 1 rows
                │              │                                         │     Expressions: [d_week_seq_1]
-               │              │                                         └─ Filter
+               │              │                                         └─ Filter Est. 1 rows
                │              │                                            │     Condition: d_date_2 = cast(10959, 'Date')
-               │              │                                            └─ TableScan tpcds100.date_dim
+               │              │                                            └─ TableScan tpcds100.date_dim Est. 73049 rows
                │              │                                                     Where: d_date = cast(10959, 'Date')
                │              │                                                     Outputs: d_date_2:=d_date, d_week_seq_1:=d_week_seq
-               │              └─ Repartition Exchange
+               │              └─ Repartition Exchange Est. 204000 rows
                │                 │     Partition by: {i_item_sk}
-               │                 └─ TableScan tpcds100.item
+               │                 └─ TableScan tpcds100.item Est. 204000 rows
                │                          Outputs: [i_item_id, i_item_sk]
-               └─ MergingAggregated
-                  └─ Repartition Exchange
+               └─ MergingAggregated Est. 100883 rows
+                  └─ Repartition Exchange Est. 100883 rows
                      │     Partition by: {i_item_id_2}
-                     └─ Aggregating
+                     └─ Aggregating Est. 100883 rows
                         │     Group by: {i_item_id_2}
                         │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-                        └─ Inner Join
+                        └─ Inner Join Est. 299366 rows
                            │     Condition: ws_item_sk == i_item_sk_2
-                           ├─ Repartition Exchange
+                           ├─ Repartition Exchange Est. 299648 rows
                            │  │     Partition by: {ws_item_sk}
-                           │  └─ Inner Join
+                           │  └─ Inner Join Est. 275264 rows
                            │     │     Condition: ws_sold_date_sk == d_date_sk_2
                            │     │     Runtime Filters Builder: {d_date_sk_2}
-                           │     ├─ Filter
+                           │     ├─ Filter Est. 72001237 rows
                            │     │  │     Condition: Runtime Filters: {ws_sold_date_sk}
-                           │     │  └─ TableScan tpcds100.web_sales
+                           │     │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                            │     │           Where: Runtime Filters: {ws_sold_date_sk}
                            │     │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
-                           │     └─ Broadcast Exchange
-                           │        └─ Inner Join
+                           │     └─ Broadcast Exchange Est. 7 rows
+                           │        └─ Inner Join Est. 7 rows
                            │           │     Condition: d_date_6 == d_date_7
                            │           │     Runtime Filters Builder: {d_date_7}
-                           │           ├─ Filter
+                           │           ├─ Filter Est. 73049 rows
                            │           │  │     Condition: isNotNull(d_date_6) Runtime Filters: {d_date_6}
-                           │           │  └─ TableScan tpcds100.date_dim
+                           │           │  └─ TableScan tpcds100.date_dim Est. 73049 rows
                            │           │           Where: isNotNull(d_date) Runtime Filters: {d_date}
                            │           │           Outputs: d_date_6:=d_date, d_date_sk_2:=d_date_sk
-                           │           └─ Broadcast Exchange
-                           │              └─ MergingAggregated
-                           │                 └─ Repartition Exchange
+                           │           └─ Broadcast Exchange Est. 7 rows
+                           │              └─ MergingAggregated Est. 7 rows
+                           │                 └─ Repartition Exchange Est. 7 rows
                            │                    │     Partition by: {d_date_7}
-                           │                    └─ Aggregating
+                           │                    └─ Aggregating Est. 7 rows
                            │                       │     Group by: {d_date_7}
-                           │                       └─ Inner Join
+                           │                       └─ Inner Join Est. 7 rows
                            │                          │     Condition: d_week_seq_4 == d_week_seq_5
                            │                          │     Runtime Filters Builder: {d_week_seq_5}
-                           │                          ├─ Filter
+                           │                          ├─ Filter Est. 73049 rows
                            │                          │  │     Condition: isNotNull(d_date_7) Runtime Filters: {d_week_seq_4}
-                           │                          │  └─ TableScan tpcds100.date_dim
+                           │                          │  └─ TableScan tpcds100.date_dim Est. 73049 rows
                            │                          │           Where: isNotNull(d_date) Runtime Filters: {d_week_seq}
                            │                          │           Outputs: d_date_7:=d_date, d_week_seq_4:=d_week_seq
-                           │                          └─ Broadcast Exchange
-                           │                             └─ EnforceSingleRow
-                           │                                └─ Union
-                           │                                   └─ Gather Exchange
-                           │                                      └─ Projection
+                           │                          └─ Broadcast Exchange Est. 1 rows
+                           │                             └─ EnforceSingleRow Est. 1 rows
+                           │                                └─ Union Est. 1 rows
+                           │                                   └─ Gather Exchange Est. 1 rows
+                           │                                      └─ Projection Est. 1 rows
                            │                                         │     Expressions: [d_week_seq_5]
-                           │                                         └─ Filter
+                           │                                         └─ Filter Est. 1 rows
                            │                                            │     Condition: d_date_8 = cast(10959, 'Date')
-                           │                                            └─ TableScan tpcds100.date_dim
+                           │                                            └─ TableScan tpcds100.date_dim Est. 73049 rows
                            │                                                     Where: d_date = cast(10959, 'Date')
                            │                                                     Outputs: d_date_8:=d_date, d_week_seq_5:=d_week_seq
-                           └─ Repartition Exchange
+                           └─ Repartition Exchange Est. 204000 rows
                               │     Partition by: {i_item_sk_2}
-                              └─ TableScan tpcds100.item
+                              └─ TableScan tpcds100.item Est. 204000 rows
                                        Outputs: i_item_id_2:=i_item_id, i_item_sk_2:=i_item_sk
 note: Runtime Filter is applied for 9 times.

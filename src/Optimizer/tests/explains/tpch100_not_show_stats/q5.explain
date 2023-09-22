@@ -1,0 +1,70 @@
+Projection
+│     Expressions: [n_name], revenue:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))`
+└─ Sorting
+   │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) desc nulls_last}
+   └─ Gather Exchange
+      └─ Sorting
+         │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) desc nulls_last}
+         └─ MergingAggregated
+            └─ Repartition Exchange
+               │     Partition by: {n_name}
+               └─ Aggregating
+                  │     Group by: {n_name}
+                  │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
+                  └─ Projection
+                     │     Expressions: [n_name], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
+                     └─ Inner Join
+                        │     Condition: c_nationkey == s_nationkey, l_suppkey == s_suppkey
+                        ├─ Repartition Exchange
+                        │  │     Partition by: {c_nationkey, l_suppkey}
+                        │  └─ Inner Join
+                        │     │     Condition: l_orderkey == o_orderkey
+                        │     │     Runtime Filters Builder: {o_orderkey}
+                        │     ├─ Repartition Exchange
+                        │     │  │     Partition by: {l_orderkey}
+                        │     │  └─ Filter
+                        │     │     │     Condition: Runtime Filters: {l_orderkey}
+                        │     │     └─ TableScan tpch100.lineitem
+                        │     │              Where: Runtime Filters: {l_orderkey}
+                        │     │              Outputs: [l_discount, l_extendedprice, l_orderkey, l_suppkey]
+                        │     └─ Repartition Exchange
+                        │        │     Partition by: {o_orderkey}
+                        │        └─ Inner Join
+                        │           │     Condition: o_custkey == c_custkey
+                        │           │     Runtime Filters Builder: {c_custkey}
+                        │           ├─ Repartition Exchange
+                        │           │  │     Partition by: {o_custkey}
+                        │           │  └─ Filter
+                        │           │     │     Condition: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')) Runtime Filters: {o_custkey}
+                        │           │     └─ TableScan tpch100.orders
+                        │           │              Where: (o_orderdate >= cast(8766, 'Date')) AND (o_orderdate < cast(9131, 'Date')) Runtime Filters: {o_custkey}
+                        │           │              Outputs: [o_custkey, o_orderdate, o_orderkey]
+                        │           └─ Repartition Exchange
+                        │              │     Partition by: {c_custkey}
+                        │              └─ Inner Join
+                        │                 │     Condition: c_nationkey == n_nationkey
+                        │                 │     Runtime Filters Builder: {n_nationkey}
+                        │                 ├─ Filter
+                        │                 │  │     Condition: Runtime Filters: {c_nationkey}
+                        │                 │  └─ TableScan tpch100.customer
+                        │                 │           Where: Runtime Filters: {c_nationkey}
+                        │                 │           Outputs: [c_custkey, c_nationkey]
+                        │                 └─ Broadcast Exchange
+                        │                    └─ Inner Join
+                        │                       │     Condition: n_regionkey == r_regionkey
+                        │                       ├─ Repartition Exchange
+                        │                       │  │     Partition by: {n_regionkey}
+                        │                       │  └─ TableScan tpch100.nation
+                        │                       │           Outputs: [n_name, n_nationkey, n_regionkey]
+                        │                       └─ Repartition Exchange
+                        │                          │     Partition by: {r_regionkey}
+                        │                          └─ Filter
+                        │                             │     Condition: r_name = 'ASIA'
+                        │                             └─ TableScan tpch100.region
+                        │                                      Where: r_name = 'ASIA'
+                        │                                      Outputs: [r_name, r_regionkey]
+                        └─ Repartition Exchange
+                           │     Partition by: {s_nationkey, s_suppkey}
+                           └─ TableScan tpch100.supplier
+                                    Outputs: [s_nationkey, s_suppkey]
+note: Runtime Filter is applied for 3 times.

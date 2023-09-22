@@ -27,17 +27,33 @@ namespace DB
 class BaseTpchPlanTest : public AbstractPlanTestSuite
 {
 public:
-    explicit BaseTpchPlanTest(const std::unordered_map<String, Field> & settings = {}) : AbstractPlanTestSuite("tpch", settings)
+    explicit BaseTpchPlanTest(const std::unordered_map<String, Field> & settings = {}, int sf_ = 1000) : AbstractPlanTestSuite("tpch" + std::to_string(sf_), settings), sf(sf_)
     {
+        if (sf_ != 1000 && sf_ != 100)
+            throw Exception("sf only support 100 or 1000", ErrorCodes::BAD_ARGUMENTS);
         createTables();
         dropTableStatistics();
         loadTableStatistics();
     }
 
     std::vector<std::filesystem::path> getTableDDLFiles() override { return {TPCH_TABLE_DDL_FILE}; }
-    std::filesystem::path getStatisticsFile() override { return TPCH_TABLE_STATISTICS_FILE; }
+    std::filesystem::path getStatisticsFile() override { 
+        if(sf == 100)
+            return TPCH100_TABLE_STATISTICS_FILE;
+
+        return TPCH1000_TABLE_STATISTICS_FILE;
+    }
     std::filesystem::path getQueriesDir() override { return TPCH_QUERIES_DIR; }
-    std::filesystem::path getExpectedExplainDir() override { return std::filesystem::path(TPCH_EXPECTED_EXPLAIN_RESULT) / "tpch"; }
+    std::filesystem::path getExpectedExplainDir() override
+    {
+        std::string dir = "tpch" + std::to_string(sf) + label;
+        return std::filesystem::path(TPCH_EXPECTED_EXPLAIN_RESULT) / dir;
+    }
+
+    void setLabel(const std::string & label_) { this->label = "_" + label_; }
+
+    int sf;
+    std::string label;
 };
 
 }

@@ -237,13 +237,14 @@ public:
     static void printChunk(String transform, const Block & block, const Chunk & chunk);
     static void printPipeline(const Processors & processors, const ExecutingGraphPtr & graph, const ContextPtr & context, size_t segment_id, const String & host);
     static String getColor(IQueryPlanStep::Type step);
+    static String printSettings(const String & color, const ContextMutablePtr & context);
 
 private:
     static String printAST(ASTPtr);
     static void addID(ASTPtr & ast, std::unordered_map<ASTPtr, UInt16> & asts, std::shared_ptr<std::atomic<UInt16>> & max_node_id);
 
     static String printLogicalPlan(PlanNodeBase &, CTEInfo * cte_info = nullptr, StepAggregatedOperatorProfiles profiles = {});
-    static String printPlanSegment(const PlanSegmentTreePtr &);
+    static String printPlanSegmentNodes(const PlanSegmentTreePtr &, const ContextMutablePtr &);
     static void appendPlanSegmentNodes(
         std::stringstream & out,
         PlanSegmentTree::Node * segmentNode,

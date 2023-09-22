@@ -1,67 +1,67 @@
-Projection
+Projection Est. 100 rows
 │     Expressions: d_date:=`expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date)`, item_sk:=`expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk)`, store_cumulative:=`expr#max(store_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`, store_sales:=`expr#sum(sum(ss_sales_price)) OVER (PARTITION BY ss_item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`, web_cumulative:=`expr#max(web_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`, web_sales:=`expr#sum(sum(ws_sales_price)) OVER (PARTITION BY ws_item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`
-└─ Limit
+└─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting
+   └─ Sorting Est. 100 rows
       │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) asc, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) asc}
       │     Limit: 100
-      └─ Gather Exchange
-         └─ Sorting
+      └─ Gather Exchange Est. 2576868657 rows
+         └─ Sorting Est. 100 rows
             │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) asc, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) asc}
             │     Limit: 100
-            └─ Filter
+            └─ Filter Est. 2576868657 rows
                │     Condition: `expr#max(web_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)` > `expr#max(store_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`
-               └─ Window
-                  └─ Repartition Exchange
+               └─ Window Est. 2863187397 rows
+                  └─ Repartition Exchange Est. 2863187397 rows
                      │     Partition by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk)}
-                     └─ Projection
+                     └─ Projection Est. 2863187397 rows
                         │     Expressions: [expr#sum(sum(ss_sales_price)) OVER (PARTITION BY ss_item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), expr#sum(sum(ws_sales_price)) OVER (PARTITION BY ws_item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)], expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date):=multiIf(isNotNull(d_date), d_date, d_date_1), expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk):=multiIf(isNotNull(ws_item_sk), ws_item_sk, ss_item_sk)
-                        └─ Full Join
+                        └─ Full Join Est. 2863187397 rows
                            │     Condition: ss_item_sk == ws_item_sk, d_date_1 == d_date
-                           ├─ Window
-                           │  └─ Repartition Exchange
+                           ├─ Window Est. 52062815 rows
+                           │  └─ Repartition Exchange Est. 52062815 rows
                            │     │     Partition by: {ss_item_sk}
-                           │     └─ MergingAggregated
-                           │        └─ Repartition Exchange
+                           │     └─ MergingAggregated Est. 52062815 rows
+                           │        └─ Repartition Exchange Est. 52062815 rows
                            │           │     Partition by: {d_date_1, ss_item_sk}
-                           │           └─ Aggregating
+                           │           └─ Aggregating Est. 52062815 rows
                            │              │     Group by: {d_date_1, ss_item_sk}
                            │              │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                           │              └─ Inner Join
+                           │              └─ Inner Join Est. 52062815 rows
                            │                 │     Condition: ss_sold_date_sk == d_date_sk_1
                            │                 │     Runtime Filters Builder: {d_date_sk_1}
-                           │                 ├─ Filter
+                           │                 ├─ Filter Est. 287997024 rows
                            │                 │  │     Condition: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
-                           │                 │  └─ TableScan tpcds100.store_sales
+                           │                 │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                            │                 │           Where: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
                            │                 │           Outputs: [ss_item_sk, ss_sales_price, ss_sold_date_sk]
-                           │                 └─ Broadcast Exchange
-                           │                    └─ Filter
+                           │                 └─ Broadcast Exchange Est. 335 rows
+                           │                    └─ Filter Est. 335 rows
                            │                       │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
-                           │                       └─ TableScan tpcds100.date_dim
+                           │                       └─ TableScan tpcds100.date_dim Est. 73049 rows
                            │                                Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                            │                                Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
-                           └─ Window
-                              └─ Repartition Exchange
+                           └─ Window Est. 13016061 rows
+                              └─ Repartition Exchange Est. 13016061 rows
                                  │     Partition by: {ws_item_sk}
-                                 └─ MergingAggregated
-                                    └─ Repartition Exchange
+                                 └─ MergingAggregated Est. 13016061 rows
+                                    └─ Repartition Exchange Est. 13016061 rows
                                        │     Partition by: {d_date, ws_item_sk}
-                                       └─ Aggregating
+                                       └─ Aggregating Est. 13016061 rows
                                           │     Group by: {d_date, ws_item_sk}
                                           │     Aggregates: expr#sum(ws_sales_price):=AggNull(sum)(ws_sales_price)
-                                          └─ Inner Join
+                                          └─ Inner Join Est. 13016061 rows
                                              │     Condition: ws_sold_date_sk == d_date_sk
                                              │     Runtime Filters Builder: {d_date_sk}
-                                             ├─ Filter
+                                             ├─ Filter Est. 72001237 rows
                                              │  │     Condition: isNotNull(ws_item_sk) Runtime Filters: {ws_sold_date_sk}
-                                             │  └─ TableScan tpcds100.web_sales
+                                             │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                                              │           Where: isNotNull(ws_item_sk) Runtime Filters: {ws_sold_date_sk}
                                              │           Outputs: [ws_item_sk, ws_sales_price, ws_sold_date_sk]
-                                             └─ Broadcast Exchange
-                                                └─ Filter
+                                             └─ Broadcast Exchange Est. 335 rows
+                                                └─ Filter Est. 335 rows
                                                    │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                                   └─ TableScan tpcds100.date_dim
+                                                   └─ TableScan tpcds100.date_dim Est. 73049 rows
                                                             Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                                                             Outputs: [d_date, d_date_sk, d_month_seq]
 note: Runtime Filter is applied for 2 times.

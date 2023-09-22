@@ -1,105 +1,105 @@
-Projection
+Projection Est. 100 rows
 │     Expressions: [d_week_seq, i_item_desc, w_warehouse_name], no_promo:=`expr#sum(multiIf(isNull(p_promo_sk), 1, 0))`, promo:=`expr#sum(multiIf(isNotNull(p_promo_sk), 1, 0))`, total_cnt:=`expr#count()`
-└─ Limit
+└─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting
+   └─ Sorting Est. 100 rows
       │     Order by: {expr#count() desc nulls_last, i_item_desc asc, w_warehouse_name asc, d_week_seq asc}
       │     Limit: 100
-      └─ Gather Exchange
-         └─ Sorting
+      └─ Gather Exchange Est. 106791552 rows
+         └─ Sorting Est. 100 rows
             │     Order by: {expr#count() desc nulls_last, i_item_desc asc, w_warehouse_name asc, d_week_seq asc}
             │     Limit: 100
-            └─ MergingAggregated
-               └─ Repartition Exchange
+            └─ MergingAggregated Est. 106791552 rows
+               └─ Repartition Exchange Est. 106791552 rows
                   │     Partition by: {d_week_seq, i_item_desc, w_warehouse_name}
-                  └─ Aggregating
+                  └─ Aggregating Est. 106791552 rows
                      │     Group by: {d_week_seq, i_item_desc, w_warehouse_name}
                      │     Aggregates: expr#sum(multiIf(isNull(p_promo_sk), 1, 0)):=AggNull(sum)(expr#multiIf(isNull(p_promo_sk), 1, 0)), expr#sum(multiIf(isNotNull(p_promo_sk), 1, 0)):=AggNull(sum)(expr#multiIf(isNotNull(p_promo_sk), 1, 0)), expr#count():=AggNull(count)()
-                     └─ Projection
+                     └─ Projection Est. 18836867814 rows
                         │     Expressions: [d_week_seq, i_item_desc, w_warehouse_name], expr#multiIf(isNotNull(p_promo_sk), 1, 0):=multiIf(isNotNull(p_promo_sk), 1, 0), expr#multiIf(isNull(p_promo_sk), 1, 0):=multiIf(isNull(p_promo_sk), 1, 0)
-                        └─ Left Join
+                        └─ Left Join Est. 18836867814 rows
                            │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
-                           ├─ Repartition Exchange
+                           ├─ Repartition Exchange Est. 12352593675 rows
                            │  │     Partition by: {cs_item_sk, cs_order_number}
-                           │  └─ Left Join
+                           │  └─ Left Join Est. 12352593675 rows
                            │     │     Condition: cs_promo_sk == p_promo_sk
-                           │     ├─ Inner Join
+                           │     ├─ Inner Join Est. 12352593675 rows
                            │     │  │     Condition: inv_item_sk == cs_item_sk, inv_date_sk == d_date_sk_1
                            │     │  │     Filter: inv_quantity_on_hand < cs_quantity
-                           │     │  ├─ Repartition Exchange
+                           │     │  ├─ Repartition Exchange Est. 399330000 rows
                            │     │  │  │     Partition by: {inv_date_sk, inv_item_sk}
-                           │     │  │  └─ Inner Join
+                           │     │  │  └─ Inner Join Est. 399330000 rows
                            │     │  │     │     Condition: inv_warehouse_sk == w_warehouse_sk
-                           │     │  │     ├─ TableScan tpcds100.inventory
+                           │     │  │     ├─ TableScan tpcds100.inventory Est. 399330000 rows
                            │     │  │     │        Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand, inv_warehouse_sk]
-                           │     │  │     └─ Broadcast Exchange
-                           │     │  │        └─ TableScan tpcds100.warehouse
+                           │     │  │     └─ Broadcast Exchange Est. 15 rows
+                           │     │  │        └─ TableScan tpcds100.warehouse Est. 15 rows
                            │     │  │                 Outputs: [w_warehouse_name, w_warehouse_sk]
-                           │     │  └─ Repartition Exchange
+                           │     │  └─ Repartition Exchange Est. 6607898 rows
                            │     │     │     Partition by: {cs_item_sk, d_date_sk_1}
-                           │     │     └─ Inner Join
+                           │     │     └─ Inner Join Est. 6607898 rows
                            │     │        │     Condition: cs_item_sk == i_item_sk
-                           │     │        ├─ Repartition Exchange
+                           │     │        ├─ Repartition Exchange Est. 6607898 rows
                            │     │        │  │     Partition by: {cs_item_sk}
-                           │     │        │  └─ Inner Join
+                           │     │        │  └─ Inner Join Est. 6607898 rows
                            │     │        │     │     Condition: cs_ship_date_sk == d_date_sk_2
                            │     │        │     │     Filter: d_date_1 > (d_date + toIntervalDay(5))
-                           │     │        │     ├─ Inner Join
+                           │     │        │     ├─ Inner Join Est. 6607898 rows
                            │     │        │     │  │     Condition: cs_bill_cdemo_sk == cd_demo_sk
                            │     │        │     │  │     Runtime Filters Builder: {cd_demo_sk}
-                           │     │        │     │  ├─ Repartition Exchange
+                           │     │        │     │  ├─ Repartition Exchange Est. 33046280 rows
                            │     │        │     │  │  │     Partition by: {cs_bill_cdemo_sk}
-                           │     │        │     │  │  └─ Inner Join
+                           │     │        │     │  │  └─ Inner Join Est. 33046280 rows
                            │     │        │     │  │     │     Condition: cs_sold_date_sk == d_date_sk
                            │     │        │     │  │     │     Runtime Filters Builder: {d_date_sk}
-                           │     │        │     │  │     ├─ Inner Join
+                           │     │        │     │  │     ├─ Inner Join Est. 23685311 rows
                            │     │        │     │  │     │  │     Condition: cs_bill_hdemo_sk == hd_demo_sk
                            │     │        │     │  │     │  │     Runtime Filters Builder: {hd_demo_sk}
-                           │     │        │     │  │     │  ├─ Filter
+                           │     │        │     │  │     │  ├─ Filter Est. 143997065 rows
                            │     │        │     │  │     │  │  │     Condition: Runtime Filters: {cs_bill_cdemo_sk, cs_bill_hdemo_sk, cs_sold_date_sk}
-                           │     │        │     │  │     │  │  └─ TableScan tpcds100.catalog_sales
+                           │     │        │     │  │     │  │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
                            │     │        │     │  │     │  │           Where: Runtime Filters: {cs_bill_cdemo_sk, cs_bill_hdemo_sk, cs_sold_date_sk}
                            │     │        │     │  │     │  │           Outputs: [cs_bill_cdemo_sk, cs_bill_hdemo_sk, cs_item_sk, cs_order_number, cs_promo_sk, cs_quantity, cs_ship_date_sk, cs_sold_date_sk]
-                           │     │        │     │  │     │  └─ Broadcast Exchange
-                           │     │        │     │  │     │     └─ Filter
+                           │     │        │     │  │     │  └─ Broadcast Exchange Est. 1200 rows
+                           │     │        │     │  │     │     └─ Filter Est. 1200 rows
                            │     │        │     │  │     │        │     Condition: hd_buy_potential = '>10000'
-                           │     │        │     │  │     │        └─ TableScan tpcds100.household_demographics
+                           │     │        │     │  │     │        └─ TableScan tpcds100.household_demographics Est. 7200 rows
                            │     │        │     │  │     │                 Where: hd_buy_potential = '>10000'
                            │     │        │     │  │     │                 Outputs: [hd_buy_potential, hd_demo_sk]
-                           │     │        │     │  │     └─ Broadcast Exchange
-                           │     │        │     │  │        └─ Inner Join
+                           │     │        │     │  │     └─ Broadcast Exchange Est. 2570 rows
+                           │     │        │     │  │        └─ Inner Join Est. 2570 rows
                            │     │        │     │  │           │     Condition: d_week_seq_1 == d_week_seq
                            │     │        │     │  │           │     Runtime Filters Builder: {d_week_seq}
-                           │     │        │     │  │           ├─ Filter
+                           │     │        │     │  │           ├─ Filter Est. 73049 rows
                            │     │        │     │  │           │  │     Condition: Runtime Filters: {d_week_seq_1}
-                           │     │        │     │  │           │  └─ TableScan tpcds100.date_dim
+                           │     │        │     │  │           │  └─ TableScan tpcds100.date_dim Est. 73049 rows
                            │     │        │     │  │           │           Where: Runtime Filters: {d_week_seq}
                            │     │        │     │  │           │           Outputs: d_date_sk_1:=d_date_sk, d_week_seq_1:=d_week_seq
-                           │     │        │     │  │           └─ Broadcast Exchange
-                           │     │        │     │  │              └─ Filter
+                           │     │        │     │  │           └─ Broadcast Exchange Est. 365 rows
+                           │     │        │     │  │              └─ Filter Est. 365 rows
                            │     │        │     │  │                 │     Condition: d_year = 1999
-                           │     │        │     │  │                 └─ TableScan tpcds100.date_dim
+                           │     │        │     │  │                 └─ TableScan tpcds100.date_dim Est. 73049 rows
                            │     │        │     │  │                          Where: d_year = 1999
                            │     │        │     │  │                          Outputs: [d_date, d_date_sk, d_week_seq, d_year]
-                           │     │        │     │  └─ Repartition Exchange
+                           │     │        │     │  └─ Repartition Exchange Est. 384160 rows
                            │     │        │     │     │     Partition by: {cd_demo_sk}
-                           │     │        │     │     └─ Filter
+                           │     │        │     │     └─ Filter Est. 384160 rows
                            │     │        │     │        │     Condition: cd_marital_status = 'D'
-                           │     │        │     │        └─ TableScan tpcds100.customer_demographics
+                           │     │        │     │        └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
                            │     │        │     │                 Where: cd_marital_status = 'D'
                            │     │        │     │                 Outputs: [cd_demo_sk, cd_marital_status]
-                           │     │        │     └─ Broadcast Exchange
-                           │     │        │        └─ TableScan tpcds100.date_dim
+                           │     │        │     └─ Broadcast Exchange Est. 73049 rows
+                           │     │        │        └─ TableScan tpcds100.date_dim Est. 73049 rows
                            │     │        │                 Outputs: d_date_1:=d_date, d_date_sk_2:=d_date_sk
-                           │     │        └─ Repartition Exchange
+                           │     │        └─ Repartition Exchange Est. 204000 rows
                            │     │           │     Partition by: {i_item_sk}
-                           │     │           └─ TableScan tpcds100.item
+                           │     │           └─ TableScan tpcds100.item Est. 204000 rows
                            │     │                    Outputs: [i_item_desc, i_item_sk]
-                           │     └─ Broadcast Exchange
-                           │        └─ TableScan tpcds100.promotion
+                           │     └─ Broadcast Exchange Est. 1000 rows
+                           │        └─ TableScan tpcds100.promotion Est. 1000 rows
                            │                 Outputs: [p_promo_sk]
-                           └─ Repartition Exchange
+                           └─ Repartition Exchange Est. 14404374 rows
                               │     Partition by: {cr_item_sk, cr_order_number}
-                              └─ TableScan tpcds100.catalog_returns
+                              └─ TableScan tpcds100.catalog_returns Est. 14404374 rows
                                        Outputs: [cr_item_sk, cr_order_number]
 note: Runtime Filter is applied for 4 times.

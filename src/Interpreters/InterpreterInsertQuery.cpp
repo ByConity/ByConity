@@ -26,6 +26,7 @@
 #include <Columns/ColumnNullable.h>
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataStreams/CheckConstraintsBlockOutputStream.h>
+#include <DataStreams/CheckConstraintsFilterBlockOutputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/NullAndDoCopyBlockInputStream.h>
 #include <DataStreams/OwningBlockInputStream.h>
@@ -491,9 +492,16 @@ BlockIO InterpreterInsertQuery::execute()
             /// Note that we wrap transforms one on top of another, so we write them in reverse of data processing order.
 
             /// Checking constraints. It must be done after calculation of all defaults, so we can check them on calculated columns.
+            BlockOutputStreamPtr constraint_filter_stream = nullptr;
             if (const auto & constraints = metadata_snapshot->getConstraints(); !constraints.empty())
-                out = std::make_shared<CheckConstraintsBlockOutputStream>(
-                    query.table_id, out, out->getHeader(), metadata_snapshot->getConstraints(), getContext());
+            {
+                if (getContext()->getSettingsRef().constraint_skip_violate)
+                    constraint_filter_stream = out = std::make_shared<CheckConstraintsFilterBlockOutputStream>(
+                        query.table_id, out, out->getHeader(), metadata_snapshot->getConstraints(), getContext());
+                else
+                    out = std::make_shared<CheckConstraintsBlockOutputStream>(
+                        query.table_id, out, out->getHeader(), metadata_snapshot->getConstraints(), getContext());
+            }
 
             bool null_as_default = query.select && getContext()->getSettingsRef().insert_null_as_default;
 
@@ -519,6 +527,11 @@ BlockIO InterpreterInsertQuery::execute()
             }
 
             auto out_wrapper = std::make_shared<CountingBlockOutputStream>(out);
+            /// XXX: A tricky way to record the actual written metrics as it's hard to pass this info among streams;
+            /// Luckily, only CheckConstraintsFilterBlockOutputStream may reduce the rows, so we add this logic for it
+            if (constraint_filter_stream)
+                out_wrapper->setConstraintsFilterStream(constraint_filter_stream);
+
             out_wrapper->setProcessListElement(getContext()->getProcessListElement());
             out_streams.emplace_back(std::move(out_wrapper));
         }

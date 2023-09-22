@@ -2807,7 +2807,6 @@ void GraphvizPrinter::printPlanSegment(const PlanSegmentTreePtr & segment, const
 {
     if (context->getSettingsRef().print_graphviz)
     {
-        auto const graphviz = GraphvizPrinter::printPlanSegment(segment);
         cleanDotFiles(context);
 
         std::stringstream path;
@@ -2815,7 +2814,7 @@ void GraphvizPrinter::printPlanSegment(const PlanSegmentTreePtr & segment, const
         path << context->getExecuteSubQueryPath() + "4000-PlanSegment"
              << "-" << context->getInitialQueryId() << ".dot";
         std::ofstream out(path.str());
-        out << GraphvizPrinter::printPlanSegment(segment);
+        out << GraphvizPrinter::printPlanSegmentNodes(segment, context);
         out.close();
     }
 }
@@ -3060,13 +3059,36 @@ String GraphvizPrinter::printLogicalPlan(PlanNodeBase & node, CTEInfo * cte_info
     return out.str();
 }
 
-String GraphvizPrinter::printPlanSegment(const PlanSegmentTreePtr & segmentNode)
+String GraphvizPrinter::printSettings(const String & color, const ContextMutablePtr & context)
+{
+    std::stringstream out;
+    out << "context" << R"([label="{)" << "context info";
+
+    if (context && !context->getSettingsRef().changes().empty())
+    {
+        out << "|";
+        out << "settings \\n";
+        for (auto & setting : context->getSettingsRef().changes())
+        {
+            out << setting.name << ":" << Settings::valueToStringUtil(setting.name, setting.value) << " \\n";
+        }
+    }
+
+    String style = "rounded, filled";
+
+    out << R"(}", style=")" << style << R"(", shape=record, fillcolor=)" << color << "]"
+        << ";" << std::endl;
+    return out.str();
+}
+
+String GraphvizPrinter::printPlanSegmentNodes(const PlanSegmentTreePtr & segmentNode, const ContextMutablePtr & context)
 {
     std::stringstream out;
     out << "digraph plan_segment {\n rankdir=\"BT\" \n";
     std::unordered_map<size_t, PlanSegmentPtr &> segments = segmentNode->getPlanSegmentsMap();
     std::unordered_set<PlanSegmentTree::Node *> visited_segments;
     appendPlanSegmentNodes(out, segmentNode->getRoot(), segments, visited_segments);
+    out << printSettings("gray83", context);
     out << "}\n";
     return out.str();
 }

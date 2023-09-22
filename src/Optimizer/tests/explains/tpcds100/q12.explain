@@ -1,49 +1,49 @@
-Projection
+Projection Est. 100 rows
 │     Expressions: [i_category, i_class, i_current_price, i_item_desc, i_item_id], itemrevenue:=`expr#sum(ws_ext_sales_price)`, revenueratio:=`expr#divide(multiply(sum(ws_ext_sales_price), 100), sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class))`
-└─ Limit
+└─ Limit Est. 100 rows
    │     Limit: 100
-   └─ Sorting
+   └─ Sorting Est. 100 rows
       │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(ws_ext_sales_price), 100), sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
       │     Limit: 100
-      └─ Gather Exchange
-         └─ Sorting
+      └─ Gather Exchange Est. 341829 rows
+         └─ Sorting Est. 100 rows
             │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(ws_ext_sales_price), 100), sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
             │     Limit: 100
-            └─ Projection
+            └─ Projection Est. 341829 rows
                │     Expressions: [expr#sum(ws_ext_sales_price), i_category, i_class, i_current_price, i_item_desc, i_item_id], expr#divide(multiply(sum(ws_ext_sales_price), 100), sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)):=(`expr#sum(ws_ext_sales_price)` * 100) / `expr#sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)`
-               └─ Window
-                  └─ Repartition Exchange
+               └─ Window Est. 341829 rows
+                  └─ Repartition Exchange Est. 341829 rows
                      │     Partition by: {i_class}
-                     └─ MergingAggregated
-                        └─ Repartition Exchange
+                     └─ MergingAggregated Est. 341829 rows
+                        └─ Repartition Exchange Est. 341829 rows
                            │     Partition by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
-                           └─ Aggregating
+                           └─ Aggregating Est. 341829 rows
                               │     Group by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
                               │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-                              └─ Inner Join
+                              └─ Inner Join Est. 341829 rows
                                  │     Condition: ws_item_sk == i_item_sk
                                  │     Runtime Filters Builder: {i_item_sk}
-                                 ├─ Repartition Exchange
+                                 ├─ Repartition Exchange Est. 1140380 rows
                                  │  │     Partition by: {ws_item_sk}
-                                 │  └─ Inner Join
+                                 │  └─ Inner Join Est. 1140380 rows
                                  │     │     Condition: ws_sold_date_sk == d_date_sk
                                  │     │     Runtime Filters Builder: {d_date_sk}
-                                 │     ├─ Filter
+                                 │     ├─ Filter Est. 72001237 rows
                                  │     │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                                 │     │  └─ TableScan tpcds100.web_sales
+                                 │     │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                                  │     │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
                                  │     │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
-                                 │     └─ Broadcast Exchange
-                                 │        └─ Filter
+                                 │     └─ Broadcast Exchange Est. 30 rows
+                                 │        └─ Filter Est. 30 rows
                                  │           │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                                 │           └─ TableScan tpcds100.date_dim
+                                 │           └─ TableScan tpcds100.date_dim Est. 73049 rows
                                  │                    Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
                                  │                    Outputs: [d_date, d_date_sk]
-                                 └─ Repartition Exchange
+                                 └─ Repartition Exchange Est. 61207 rows
                                     │     Partition by: {i_item_sk}
-                                    └─ Filter
+                                    └─ Filter Est. 61207 rows
                                        │     Condition: i_category IN ('Books', 'Home', 'Sports')
-                                       └─ TableScan tpcds100.item
+                                       └─ TableScan tpcds100.item Est. 204000 rows
                                                 Where: i_category IN ('Books', 'Home', 'Sports')
                                                 Outputs: [i_category, i_class, i_current_price, i_item_desc, i_item_id, i_item_sk]
 note: Runtime Filter is applied for 2 times.
