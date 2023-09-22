@@ -26,20 +26,22 @@ namespace DB
 class PropertyDeterminer
 {
 public:
-    static PropertySets determineRequiredProperty(QueryPlanStepPtr step, const Property & property);
+    static PropertySets determineRequiredProperty(QueryPlanStepPtr step, const Property & property, Context & context);
 };
 
 class DeterminerContext
 {
 public:
-    DeterminerContext(Property required_) : required(required_){}
+    DeterminerContext(Property required_, Context & context_) : required(required_), context(context_) { }
     Property getRequired() const
     {
         return required;
     }
+    Context & getContext() const { return context; }
 
 private:
     Property required;
+    Context & context;
 };
 
 class DeterminerVisitor : public StepVisitor<PropertySets, DeterminerContext>

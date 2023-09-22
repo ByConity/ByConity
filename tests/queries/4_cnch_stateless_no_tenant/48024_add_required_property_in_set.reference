@@ -1,0 +1,98 @@
+Projection Est. ? rows
+│     Expressions: a:=`expr#uniqExact(l_partkey)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {l_suppkey}
+         └─ Aggregating Est. ? rows
+            │     Group by: {l_suppkey}
+            │     Aggregates: expr#uniqExact(l_partkey):=AggNull(count)(l_partkey)
+            └─ MergingAggregated Est. ? rows
+               └─ Repartition Exchange Est. ? rows
+                  │     Partition by: {l_partkey, l_suppkey}
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {l_partkey, l_suppkey}
+                     └─ TableScan test.test48024 Est. ? rows
+                              Outputs: [l_partkey, l_suppkey]
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: a:=`expr#10`, t2.a:=`expr#uniqExact(l_partkey)`
+   └─ Inner Join Est. ? rows
+      │     Condition: expr#cast(expr#10, \'UInt64\') == expr#uniqExact(l_partkey)
+      ├─ Repartition Exchange Est. 1 rows
+      │  │     Partition by: {expr#cast(expr#10, \'UInt64\')}
+      │  └─ Projection Est. 1 rows
+      │     │     Expressions: expr#10:=10, expr#cast(expr#10, \'UInt64\'):=cast(10, \'UInt64\')
+      │     └─ Values Est. 1 rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#uniqExact(l_partkey)}
+         └─ MergingAggregated Est. ? rows
+            └─ Repartition Exchange Est. ? rows
+               │     Partition by: {l_suppkey}
+               └─ Aggregating Est. ? rows
+                  │     Group by: {l_suppkey}
+                  │     Aggregates: expr#uniqExact(l_partkey):=AggNull(count)(l_partkey)
+                  └─ MergingAggregated Est. ? rows
+                     └─ Repartition Exchange Est. ? rows
+                        │     Partition by: {l_partkey, l_suppkey}
+                        └─ Aggregating Est. ? rows
+                           │     Group by: {l_partkey, l_suppkey}
+                           └─ TableScan test.test48024 Est. ? rows
+                                    Outputs: [l_partkey, l_suppkey]
+Projection Est. ? rows
+│     Expressions: a:=`expr#uniqExact(l_partkey)`
+└─ Gather Exchange Est. ? rows
+   └─ Aggregating Est. ? rows
+      │     Group by: {l_suppkey}
+      │     Aggregates: expr#uniqExact(l_partkey):=AggNull(count)(l_partkey)
+      └─ MergingAggregated Est. ? rows
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {l_suppkey}
+            └─ Aggregating Est. ? rows
+               │     Group by: {l_partkey, l_suppkey}
+               └─ TableScan test.test48024 Est. ? rows
+                        Outputs: [l_partkey, l_suppkey]
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: a:=`expr#10`, t2.a:=`expr#uniqExact(l_partkey)`
+   └─ Inner Join Est. ? rows
+      │     Condition: expr#cast(expr#10, \'UInt64\') == expr#uniqExact(l_partkey)
+      ├─ Repartition Exchange Est. 1 rows
+      │  │     Partition by: {expr#cast(expr#10, \'UInt64\')}
+      │  └─ Projection Est. 1 rows
+      │     │     Expressions: expr#10:=10, expr#cast(expr#10, \'UInt64\'):=cast(10, \'UInt64\')
+      │     └─ Values Est. 1 rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#uniqExact(l_partkey)}
+         └─ Aggregating Est. ? rows
+            │     Group by: {l_suppkey}
+            │     Aggregates: expr#uniqExact(l_partkey):=AggNull(count)(l_partkey)
+            └─ MergingAggregated Est. ? rows
+               └─ Repartition Exchange Est. ? rows
+                  │     Partition by: {l_suppkey}
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {l_partkey, l_suppkey}
+                     └─ TableScan test.test48024 Est. ? rows
+                              Outputs: [l_partkey, l_suppkey]
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: a:=`expr#10`, t2.a:=`expr#uniqExact(l_orderkey)`
+   └─ Inner Join Est. ? rows
+      │     Condition: expr#cast(expr#10, \'UInt64\') == expr#uniqExact(l_orderkey)
+      ├─ Repartition Exchange Est. 1 rows
+      │  │     Partition by: {expr#cast(expr#10, \'UInt64\')}
+      │  └─ Projection Est. 1 rows
+      │     │     Expressions: expr#10:=10, expr#cast(expr#10, \'UInt64\'):=cast(10, \'UInt64\')
+      │     └─ Values Est. 1 rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#uniqExact(l_orderkey)}
+         └─ Aggregating Est. ? rows
+            │     Group by: {l_suppkey}
+            │     Aggregates: expr#uniqExact(l_orderkey):=AggNull(count)(l_orderkey)
+            └─ MergingAggregated Est. ? rows
+               └─ Repartition Exchange Est. ? rows
+                  │     Partition by: {l_suppkey}
+                  └─ Aggregating Est. ? rows
+                     │     Group by: {l_orderkey, l_suppkey}
+                     └─ TableScan test.test48024 Est. ? rows
+                              Outputs: [l_orderkey, l_suppkey]

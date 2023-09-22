@@ -54,7 +54,7 @@ void AddExchange::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 ExchangeResult ExchangeVisitor::visitPlanNode(PlanNodeBase & node, ExchangeContext & cxt)
 {
     PlanNodePtr ptr = node.shared_from_this();
-    PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired())[0];
+    PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired(), *cxt.getContext())[0];
     PlanNodePtr child = ptr->getChildren()[0];
     Property preferred = required_set[0];
     ExchangeContext child_context{cxt.getContext(), preferred};
@@ -80,7 +80,7 @@ ExchangeResult ExchangeVisitor::visitFilterNode(FilterNode & node, ExchangeConte
 ExchangeResult ExchangeVisitor::visitJoinNode(JoinNode & node, ExchangeContext & cxt)
 {
     PlanNodePtr ptr = node.shared_from_this();
-    PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired())[0];
+    PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired(), *cxt.getContext())[0];
 
     PlanNodePtr left = ptr->getChildren()[0];
     PlanNodePtr right = ptr->getChildren()[1];
@@ -137,7 +137,7 @@ ExchangeResult ExchangeVisitor::visitMergingAggregatedNode(MergingAggregatedNode
 ExchangeResult ExchangeVisitor::visitUnionNode(UnionNode & node, ExchangeContext & cxt)
 {
     PlanNodePtr ptr = node.shared_from_this();
-    PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired())[0];
+    PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired(), *cxt.getContext())[0];
 
     std::vector<ExchangeResult> results;
     PlanNodes children;
@@ -348,7 +348,7 @@ ExchangeResult ExchangeVisitor::deriveProperties(const PlanNodePtr & node, Prope
 ExchangeResult ExchangeVisitor::enforceNodeAndStream(PlanNodeBase & node, ExchangeContext & cxt)
 {
     PlanNodePtr ptr = node.shared_from_this();
-    PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired())[0];
+    PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired(), *cxt.getContext())[0];
     PlanNodePtr child = ptr->getChildren()[0];
     Property preferred = required_set[0];
     ExchangeContext child_context{cxt.getContext(), preferred};
@@ -401,7 +401,7 @@ ExchangeResult ExchangeVisitor::enforceNodeAndStream(PlanNodeBase & node, Exchan
 ExchangeResult ExchangeVisitor::enforceNode(PlanNodeBase & node, ExchangeContext & cxt)
 {
     PlanNodePtr ptr = node.shared_from_this();
-    PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired())[0];
+    PropertySet required_set = PropertyDeterminer::determineRequiredProperty(node.getStep(), cxt.getRequired(), *cxt.getContext())[0];
     PlanNodePtr child = ptr->getChildren()[0];
     Property preferred = required_set[0];
     ExchangeContext child_context{cxt.getContext(), preferred};

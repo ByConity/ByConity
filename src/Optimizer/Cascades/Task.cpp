@@ -595,7 +595,7 @@ void OptimizeInput::execute()
 void OptimizeInput::initInputProperties()
 {
     // initialize input properties with default required property.
-    auto required_properties = PropertyDeterminer::determineRequiredProperty(group_expr->getStep(), context->getRequiredProp());
+    auto required_properties = PropertyDeterminer::determineRequiredProperty(group_expr->getStep(), context->getRequiredProp(), *context->getOptimizerContext().getContext());
     for (auto & properties : required_properties)
     {
         for (size_t i = 0; i < properties.size(); ++i)

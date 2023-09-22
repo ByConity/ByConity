@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <set>
 #include <Optimizer/Property/PropertyDeterminer.h>
 
 #include <Optimizer/Utils.h>
@@ -24,11 +25,11 @@
 
 namespace DB
 {
-PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step, const Property & property)
+PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step, const Property & property, Context & context)
 {
-    DeterminerContext context{property};
+    DeterminerContext contxt{property, context};
     static DeterminerVisitor visitor{};
-    PropertySets input_properties = VisitorUtil::accept(step, visitor, context);
+    PropertySets input_properties = VisitorUtil::accept(step, visitor, contxt);
     if (!property.getCTEDescriptions().empty())
     {
         for (auto & property_set : input_properties)
@@ -119,7 +120,7 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
     return {set};
 }
 
-PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & step, DeterminerContext &)
+PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & step, DeterminerContext & context)
 {
     //    if (/*step.isTotals() || */)
     //    {
@@ -135,6 +136,24 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     }
 
     PropertySets sets;
+    auto required_keys = context.getRequired().getNodePartitioning().getPartitioningColumns();
+    if (context.getContext().getSettingsRef().enable_merge_require_property && !required_keys.empty() && keys.size() > required_keys.size())
+    {
+        std::set<String> keys_set(keys.begin(), keys.end());
+        bool contain_all = true;
+        for (auto & required_key : required_keys)
+        {
+            if (!keys_set.contains(required_key))
+            {
+                contain_all = false;
+                break;
+            }
+        }
+
+        if (contain_all)
+            sets.emplace_back(
+                PropertySet{Property{context.getRequired().getNodePartitioning(), context.getRequired().getStreamPartitioning()}});
+    }
 
     sets.emplace_back(PropertySet{Property{Partitioning{
         Partitioning::Handle::FIXED_HASH,
@@ -239,7 +258,7 @@ PropertySets DeterminerVisitor::visitIntersectOrExceptStep(const IntersectOrExce
             input.header.getNames(),
         }});
     }
-    
+
     return {set};
 }
 
