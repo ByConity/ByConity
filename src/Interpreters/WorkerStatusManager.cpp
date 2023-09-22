@@ -87,10 +87,15 @@ WorkerStatusManager::WorkerStatusManager(ContextWeakMutablePtr context_)
     startHeartbeat(*schedule_pool);
 }
 
-WorkerStatusManager::~WorkerStatusManager()
+void WorkerStatusManager::shutdown()
 {
     stop();
     schedule_pool.reset();
+}
+
+WorkerStatusManager::~WorkerStatusManager()
+{
+    shutdown();
 }
 
 void WorkerStatusManager::heartbeat()

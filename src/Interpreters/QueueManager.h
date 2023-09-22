@@ -133,6 +133,7 @@ public:
     bool isStop() const { return is_stop; }
     size_t getVWParallelizeSize() { return vw_parallelize_size; }
     void stop() { is_stop = true; }
+    void shutdown();
 
     template <class Callback>
     void getQueueInfo(Callback && callback)

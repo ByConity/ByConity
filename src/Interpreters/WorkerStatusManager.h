@@ -362,6 +362,7 @@ public:
     }
     void stop() { task->deactivate(); }
     void heartbeat();
+    void shutdown();
 
 private:
     ThreadSafeMap<WorkerId, WorkerStatusExtra, WorkerIdHash, WorkerIdEqual> global_extra_workers_status;

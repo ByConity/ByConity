@@ -6,7 +6,7 @@
 
 namespace CurrentMetrics
 {
-    extern const Metric BackgroundQueueManagerSchedulePoolTask;
+extern const Metric BackgroundQueueManagerSchedulePoolTask;
 }
 
 namespace DB
@@ -159,14 +159,22 @@ QueueManager::QueueManager(ContextWeakMutablePtr context_) : WithContext(context
     throttlers.push_back(vw_concurrency_throttler);
 }
 
-QueueManager::~QueueManager()
+void QueueManager::shutdown()
 {
     std::unique_lock lk(mutex);
+    stop();
+    queue_manager_trigger_task->stop();
+    schedule_pool.reset();
     for (auto & [vw, vw_queue] : query_queues)
     {
         LOG_TRACE(log, "going to trigger vw {}", vw);
         triggerVW(vw_queue, QueueResultStatus::QueueStop, query_queue_size);
     }
+}
+
+QueueManager::~QueueManager()
+{
+    shutdown();
 }
 
 void QueueManager::trigger()
