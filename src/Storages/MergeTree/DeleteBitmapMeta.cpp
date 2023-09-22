@@ -43,7 +43,8 @@ std::shared_ptr<LocalDeleteBitmap> LocalDeleteBitmap::createBaseOrDelta(
     const MergeTreePartInfo & part_info,
     const ImmutableDeleteBitmapPtr & base_bitmap,
     const DeleteBitmapPtr & delta_bitmap,
-    UInt64 txn_id)
+    UInt64 txn_id,
+    bool force_create_base_bitmap)
 {
     if (!delta_bitmap)
         throw Exception("base_bitmap and delta_bitmap cannot be null", ErrorCodes::LOGICAL_ERROR);
@@ -52,7 +53,7 @@ std::shared_ptr<LocalDeleteBitmap> LocalDeleteBitmap::createBaseOrDelta(
     if (!base_bitmap)
         return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Base, txn_id, delta_bitmap);
 
-    if (delta_bitmap->cardinality() <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
+    if (!force_create_base_bitmap && delta_bitmap->cardinality() <= DeleteBitmapMeta::kInlineBitmapMaxCardinality)
     {
         return std::make_shared<LocalDeleteBitmap>(part_info, DeleteBitmapMetaType::Delta, txn_id, delta_bitmap);
     }
@@ -176,6 +177,20 @@ DeleteBitmapMetaPtrVector dumpDeleteBitmaps(const MergeTreeMetaBase & storage, c
         non_inline_bitmaps,
         watch.elapsedMilliseconds());
     return res;
+}
+
+DeleteBitmapMeta::~DeleteBitmapMeta()
+{
+    DeleteBitmapMetaPtrVector prev_metas;
+    DeleteBitmapMetaPtr current_meta = prev_meta;
+
+    /// Avoid destructor stack overflow with deep nested DeleteBitmapMetaPtr
+    while (current_meta)
+    {
+        prev_metas.push_back(current_meta);
+        current_meta = current_meta->prev_meta;
+        prev_metas.back()->prev_meta.reset();
+    }
 }
 
 String DeleteBitmapMeta::getNameForLogs() const

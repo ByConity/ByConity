@@ -59,7 +59,8 @@ public:
         const MergeTreePartInfo & part_info,
         const ImmutableDeleteBitmapPtr & base_bitmap,
         const DeleteBitmapPtr & delta_bitmap,
-        UInt64 txn_id);
+        UInt64 txn_id,
+        bool force_create_base_bitmap);
 
     static std::shared_ptr<LocalDeleteBitmap> createTombstone(const MergeTreePartInfo & part_info, UInt64 txn_id)
     {
@@ -109,12 +110,14 @@ public:
 
     DeleteBitmapMeta(const MergeTreeMetaBase & storage_, const DataModelDeleteBitmapPtr & model_) : storage(storage_), model(model_) { }
 
+    ~DeleteBitmapMeta();
+
     const DataModelDeleteBitmapPtr & getModel() const { return model; }
 
     void updateCommitTime(const TxnTimestamp & commit_time)
     {
         /// do not update commit time if it has been set.
-        /// this deals with the special case for merged part, whose delta bitmaps may be committed before the base bitmap,
+        /// this deals with the special case for merged part, whose delta bitmaps PImay be committed before the base bitmap,
         /// and we explicit set the base bitmap's commit time to be smaller than all delta bitmaps
         if (model->commit_time() == 0)
             model->set_commit_time(commit_time);

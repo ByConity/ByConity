@@ -233,7 +233,7 @@ void CnchPartGCThread::clearOldPartsByPartition(const StoragePtr & istorage, Sto
     auto checkpoints = getCheckpoints(storage, gc_timestamp);
     for (size_t i = 1; i < checkpoints.size(); ++i)
     {
-        collectBetweenCheckpoints(storage, visible_parts, {}, checkpoints[i - 1], checkpoints[i]);
+        collectBetweenCheckpoints(storage, visible_parts, visible_bitmaps, checkpoints[i - 1], checkpoints[i]);
     }
 }
 
