@@ -190,14 +190,14 @@ void S3PartsAttachMeta::Cleaner::clean()
 }
 
 S3PartsAttachMeta::S3PartsAttachMeta(
-    const std::shared_ptr<Aws::S3::S3Client> & client_, const String & bucket_, const String & data_prefix_, const String & generator_id_)
-    : data_key_prefix(data_prefix_), generator_id(S3ObjectMetadata::PartGeneratorID::PART_WRITER, generator_id_), s3_util(client_, bucket_)
+    const std::shared_ptr<Aws::S3::S3Client> & client_, const String & bucket_, const String & data_prefix_, const String & task_id_prefix_)
+    : data_key_prefix(data_prefix_), generator_id(S3ObjectMetadata::PartGeneratorID::PART_WRITER, task_id_prefix_), s3_util(client_, bucket_)
 {
 }
 
-String S3PartsAttachMeta::metaPrefix(const String & task_id_)
+String S3PartsAttachMeta::metaPrefix(const String & task_id_prefix_)
 {
-    return fmt::format("attach_meta/{}/", task_id_);
+    return fmt::format("attach_meta/{}/", task_id_prefix_);
 }
 
 String S3PartsAttachMeta::metaFileKey(const String & task_id_, size_t idx_)

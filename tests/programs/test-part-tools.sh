@@ -16,6 +16,13 @@
 # 1. Part-writer and Part-merger are executed without error.
 # 2. After the execution, some of the parts must be merged.
 #
+# S3 test cases are also provided:
+# Prerequisites:
+# 1. Start docker via `docker-compose -f docker/CI/s3/docker-compose.yml up -d`.
+#       Otherwise, you can choose to use a different S3 option that suits your preference.
+# 2. Set environment variables `S3_ENDPOINT`, `S3_BUCKET`, `S3_AK_ID`, `S3_AK_SECRET`.
+# 3. Run this script.
+#
 ###
 
 SCRIPT_DIR="$(dirname "$(readlink -f "$0")")"
@@ -93,21 +100,83 @@ data_multi ()
   echo $PARTITION_VALUE, "$1", "\"{'k$key':$RANDOM}\"", "\"{'k$key':$RANDOM}\"", $RANDOM_VAL_1,
 }
 
-MAX_INSERT_BLOCK_SIZE=2000
+if [[ -z $SKIP_HDFS_TEST ]]; then
+  MAX_INSERT_BLOCK_SIZE=2000
+  echo "TEST: Small blocks (Horizontal)."
+  test_writer_and_merger 20000 "(p_date Date, id Int32) ENGINE=CloudMergeTree(my_db, tmp) PARTITION BY (p_date) ORDER BY (id)" data_horizontal
 
-echo "TEST: Small blocks (Horizontal)."
-test_writer_and_merger 20000 "(p_date Date, id Int32) ENGINE=CloudMergeTree(my_db, tmp) PARTITION BY (p_date) ORDER BY (id)" data_horizontal
+  echo "TEST: Small blocks (Vertical)."
+  test_writer_and_merger 20000 "(p_date Date, id Int32, kv Map(String, Int32)) ENGINE=CloudMergeTree(my_db, tmp) PARTITION BY (p_date) ORDER BY (id)" data_basic
 
-echo "TEST: Small blocks (Vertical)."
-test_writer_and_merger 20000 "(p_date Date, id Int32, kv Map(String, Int32)) ENGINE=CloudMergeTree(my_db, tmp) PARTITION BY (p_date) ORDER BY (id)" data_basic
+  MAX_INSERT_BLOCK_SIZE=1000000
+  echo "TEST: LowCardinality"
+  test_writer_and_merger 100000 "(p_date Date, id Int32, kv Int32, lc1 LowCardinality(Int), lc2 LowCardinality(Nullable(Int))) ENGINE=CloudMergeTree(my_db, tmp) PARTITION BY (p_date) ORDER BY (id)" data_lowcardinality
 
-MAX_INSERT_BLOCK_SIZE=1000000
-echo "TEST: LowCardinality"
-test_writer_and_merger 100000 "(p_date Date, id Int32, kv Int32, lc1 LowCardinality(Int), lc2 LowCardinality(Nullable(Int))) ENGINE=CloudMergeTree(my_db, tmp) PARTITION BY (p_date) ORDER BY (id)" data_lowcardinality
+  echo "TEST: Map"
+  test_writer_and_merger 100000 "(p_date Date, id Int32, kv Map(String, Int32), kv2 Map(String, LowCardinality(Nullable(Int))), lc1 LowCardinality(Int), lc2 LowCardinality(Nullable(Int))) ENGINE=CloudMergeTree(my_db, tmp) PARTITION BY (p_date) ORDER BY (id)" data_multi
 
-echo "TEST: Map"
-test_writer_and_merger 100000 "(p_date Date, id Int32, kv Map(String, Int32), kv2 Map(String, LowCardinality(Nullable(Int))), lc1 LowCardinality(Int), lc2 LowCardinality(Nullable(Int))) ENGINE=CloudMergeTree(my_db, tmp) PARTITION BY (p_date) ORDER BY (id)" data_multi
+  echo "TEST: Large data"
+  test_writer_and_merger 2000000 "(p_date Date, id Int32, kv Map(String, Int32), kv2 Map(String, LowCardinality(Nullable(Int))), lc1 LowCardinality(Int), lc2 LowCardinality(Nullable(Int))) ENGINE=CloudMergeTree(my_db, tmp) PARTITION BY (p_date) ORDER BY (id)" data_multi
+else
+  echo "SKIP: HDFS related tests"
+fi
 
-echo "TEST: Large data"
-test_writer_and_merger 2000000 "(p_date Date, id Int32, kv Map(String, Int32), kv2 Map(String, LowCardinality(Nullable(Int))), lc1 LowCardinality(Int), lc2 LowCardinality(Nullable(Int))) ENGINE=CloudMergeTree(my_db, tmp) PARTITION BY (p_date) ORDER BY (id)" data_multi
+INI_FILE="s3-config.ini"
+S3_AK_PREFIX="test-root-prefix"
+S3_BUCKET=${S3_BUCKET:-part-tools}
 
+# Delete s3 config file.
+test_writer_s3_clean_config () {
+  rm -rf $INI_FILE
+}
+
+# After executing this function, a config file should be generated.
+test_writer_s3_generate_config () {
+  cat > $INI_FILE << EOF
+[s3]
+endpoint=$S3_ENDPOINT 
+bucket=$S3_BUCKET
+ak_id=$S3_AK_ID
+ak_secret=$S3_AK_SECRET
+root_prefix=$S3_AK_PREFIX
+EOF
+  echo 
+}
+
+# Only enable s3 related test if `S3_ENDPOINT` is provided.
+if [[ -n $S3_ENDPOINT ]]; then
+  echo "TEST: test_writer_s3 "
+
+  # Generate random ID.
+  ID=$(echo $RANDOM | md5sum | head -c 20)
+  
+  # Change dir.
+  cd "$SCRIPT_DIR" || exit
+
+  # Generate S3 config file.
+  test_writer_s3_generate_config
+  
+  # Remove old files.
+  rm $CSV_FILE 2> /dev/null
+
+  # Generate the data file.
+  DATA_ROWS="${1:-5000}"
+  for ((i=1;i<=DATA_ROWS;i++))
+  do
+    data_basic $i >> $CSV_FILE 
+  done
+
+  set -ex
+
+  LOCATION="#user#bytehouse#ci#test#$ID"
+  
+  # Test from local to S3.
+  $CLICKHOUSE_BIN part-writer "LOAD CSV file '$CSV_FILE' AS TABLE \`default\`.\`tmp\` (p_date Date, id Int32, kv Map(String, Int32)) PRIMARY KEY id ORDER BY id LOCATION '$LOCATION' SETTINGS cnch=1, max_partitions_per_insert_block=10000, max_insert_block_size=1048576, s3_output_config='$INI_FILE'"
+
+  # Test cleaner
+  $CLICKHOUSE_BIN part-writer "CLEAN S3 task all '$LOCATION' settings s3_config='$INI_FILE'"
+
+  set +ex
+else
+  echo "SKIP: S3 related tests"
+fi

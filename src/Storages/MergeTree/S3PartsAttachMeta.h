@@ -70,6 +70,8 @@ private:
     std::map<String, std::pair<DiskPtr, std::unique_ptr<S3PartsLazyCleaner>>> cleaners;
 };
 
+// Reader support read multiple task by task id prefix, but writer and cleaner
+// only support operation by single task.
 class S3PartsAttachMeta
 {
 public:
@@ -124,14 +126,14 @@ public:
         const size_t clean_thread_num;
     };
 
-    static String metaPrefix(const String & task_id_);
+    static String metaPrefix(const String & task_id_prefix_);
     static String metaFileKey(const String & task_id_, size_t idx_);
 
     S3PartsAttachMeta(
         const std::shared_ptr<Aws::S3::S3Client> & client_,
         const String & bucket_,
         const String & data_prefix_,
-        const String & generator_id_);
+        const String & task_id_prefix_);
 
     const S3ObjectMetadata::PartGeneratorID & id() const { return generator_id; }
 

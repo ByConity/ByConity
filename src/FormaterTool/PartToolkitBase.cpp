@@ -91,9 +91,18 @@ void PartToolkitBase::applySettings()
                 getContext()->setHdfsUser(change.value.safeGet<String>());
             else if (change.name == "hdfs_nnproxy")
                 getContext()->setHdfsNNProxy(change.value.safeGet<String>());
+            else if (change.name == "s3_input_config") {
+                s3_input_config = std::make_unique<S3::S3Config>(change.value.safeGet<String>());
+            } else if (change.name == "s3_output_config") {
+                s3_output_config = std::make_unique<S3::S3Config>(change.value.safeGet<String>());
+            }
             else
                 user_settings.emplace(change.name, change.value);
         }
+    }
+    if (pw_query.s3_clean_task_info) {
+        /// There is no need to initialize further in `S3 CLEAN` mode.
+        return;
     }
 
     /// Init HDFS params.
@@ -127,6 +136,14 @@ void PartToolkitBase::applySettings()
     DB::ConfigProcessor config_processor("", false, false);
     auto config = config_processor.loadConfig(default_xml_config).configuration;
     getContext()->setConfig(config);
+
+    /// Overwrite settings if `s3_input_config` is provided.
+    if (s3_input_config) {
+        settings.set("s3_endpoint", s3_input_config->endpoint);
+        settings.set("s3_ak_id", s3_input_config->ak_id);
+        settings.set("s3_ak_secret", s3_input_config->ak_secret);
+        settings.set("s3_region", s3_input_config->region);
+    }
 }
 
 StoragePtr PartToolkitBase::getTable()

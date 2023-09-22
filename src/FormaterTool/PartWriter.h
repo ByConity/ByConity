@@ -15,6 +15,7 @@
 
 #pragma once
 #include <FormaterTool/PartToolkitBase.h>
+#include <Storages/MergeTree/S3PartsAttachMeta.h>
 #include <Poco/Logger.h>
 
 namespace DB
@@ -26,6 +27,22 @@ public:
     PartWriter(const ASTPtr & query_ptr_, ContextMutablePtr context_);
     ~PartWriter() override;
     void execute() override;
+    void clean();
+
+    enum class TaskType
+    {
+        WRITE,
+        CLEAN,
+    };
+
+    TaskType getTaskType()
+    {
+        if (clean_task)
+        {
+            return TaskType::CLEAN;
+        }
+        return TaskType::WRITE;
+    }
 
 private:
     Poco::Logger * log = &Poco::Logger::get("PartWriter");
@@ -33,6 +50,8 @@ private:
     String data_format;
     String dest_path;
     String working_path;
+
+    std::shared_ptr<S3CleanTaskInfo> clean_task;
 };
 
 }

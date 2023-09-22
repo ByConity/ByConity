@@ -14,21 +14,36 @@
  */
 
 #pragma once
+#include <unordered_map>
+#include <Core/Field.h>
+#include <IO/S3Common.h>
+#include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/StorageMergeTree.h>
-#include <Interpreters/Context_fwd.h>
-#include <unordered_map>
-#include <Core/Field.h>
 
 namespace DB
 {
 
 #define PT_RELATIVE_LOCAL_PATH "data/"
 
+// Only support S3.
+class S3CleanTaskInfo
+{
+public:
+    enum CleanType
+    {
+        META = 0,
+        DATA = 1,
+        ALL = 2,
+    };
+
+    CleanType type;
+    String task_id;
+};
+
 class PartToolkitBase : public WithMutableContext
 {
-
 public:
     PartToolkitBase(const ASTPtr & query_ptr_, ContextMutablePtr context_);
 
@@ -46,9 +61,14 @@ protected:
     const ASTPtr & query_ptr;
     std::unordered_map<String, Field> user_settings;
 
+    /// Only used in S3 mode.
+    /// S3 config file for input.
+    std::unique_ptr<S3::S3Config> s3_input_config;
+    /// S3 config file for output.
+    std::unique_ptr<S3::S3Config> s3_output_config;
+
 private:
     StoragePtr storage = nullptr;
-
 };
 
 }

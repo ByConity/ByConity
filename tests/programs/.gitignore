@@ -4,3 +4,4 @@ task.log*
 *.txt
 disks
 part-merger
+*.ini
