@@ -2058,10 +2058,11 @@ enum PreloadLevelSettings : UInt64
     M(String, lasfs_region, "", "the region set by user when accessing lasfs", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
+    M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel",0) \
+    M(Bool,   parquet_parallel_read, false, "whether to read parquet in parallel",0) \
+    \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
-    M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel", 0) \
-    M(Bool, parquet_parallel_read, false, "whether to read parquet in parallel", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
@@ -2239,7 +2240,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
     M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \
     M(String, default_catalog, "", "current catalog", 0)
-
 
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

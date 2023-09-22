@@ -1069,7 +1069,7 @@ void InterpreterSystemQuery::dumpCnchServerManagerStatus()
 
 void InterpreterSystemQuery::dropCnchPartCache(ASTSystemQuery & query)
 {
-    if (!query.database.empty() && !query.table.empty())
+    if (!query.database.empty() && !query.table.empty() && getContext()->getPartCacheManager())
     {
         auto storage = DatabaseCatalog::instance().getTable(StorageID{query.database, query.table}, getContext());
         if (storage)

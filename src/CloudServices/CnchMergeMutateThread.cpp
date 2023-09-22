@@ -487,9 +487,9 @@ void CnchMergeMutateThread::writePartMergeLogElement(
         }
         lock.unlock();
 
-        auto cache_manager = local_context->getPartCacheManager();
         std::unordered_map<String, PartitionFullPtr> partition_metrics;
-        cache_manager->getTablePartitionMetrics(*istorage, partition_metrics, false);
+        if (auto cache_manager = local_context->getPartCacheManager())
+            cache_manager->getTablePartitionMetrics(*istorage, partition_metrics, false);
         for (auto & [_, p_metric] : partition_metrics)
         {
             elem.current_parts += p_metric->partition_info_ptr->metrics_ptr->total_parts_number;

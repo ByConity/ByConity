@@ -1320,9 +1320,7 @@ namespace Catalog
                     context.getServerType() == ServerType::cnch_server
                     && isLocalServer(host_with_rpc, std::to_string(context.getRPCPort())))
                 {
-                    bool can_use_cache = true;
-                    if (context.getSettingsRef().server_write_ha)
-                        can_use_cache = canUseCache(storage, session_context);
+                    bool can_use_cache = canUseCache(storage, session_context);
 
                     if (!can_use_cache)
                     {
@@ -1752,14 +1750,18 @@ namespace Catalog
 
     bool Catalog::canUseCache(const ConstStoragePtr & storage, const Context * session_context)
     {
-        UInt64 latest_nhut;
         if (!context.getPartCacheManager())
             return false;
-        if (session_context)
-            latest_nhut = const_cast<Context *>(session_context )->getNonHostUpdateTime(storage->getStorageID().uuid);
-        else
-            latest_nhut = getNonHostUpdateTimestampFromByteKV(storage->getStorageID().uuid);
-        return context.getPartCacheManager()->checkIfCacheValidWithNHUT(storage->getStorageID().uuid, latest_nhut);
+        if (context.getSettingsRef().server_write_ha)
+        {
+            UInt64 latest_nhut;
+            if (session_context)
+                latest_nhut = const_cast<Context *>(session_context )->getNonHostUpdateTime(storage->getStorageID().uuid);
+            else
+                latest_nhut = getNonHostUpdateTimestampFromByteKV(storage->getStorageID().uuid);
+            return context.getPartCacheManager()->checkIfCacheValidWithNHUT(storage->getStorageID().uuid, latest_nhut);
+        }
+        return true;
     }
 
     void Catalog::finishCommitInternal(
@@ -1864,13 +1866,10 @@ namespace Catalog
                 PartitionMap partitions;
                 if (auto * cnch_table = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
                 {
-                    bool can_use_cache = true;
-                    if (context.getSettingsRef().server_write_ha)
-                        can_use_cache = canUseCache(table, session_context);
+                    bool can_use_cache = canUseCache(table, session_context);
 
                     auto cache_manager = context.getPartCacheManager();
-
-                    if (cache_manager && can_use_cache && cache_manager->getPartitionList(*cnch_table, partition_list))
+                    if (can_use_cache && cache_manager->getPartitionList(*cnch_table, partition_list))
                         return;
                     getPartitionsFromMetastore(*cnch_table, partitions);
                 }
@@ -1890,12 +1889,10 @@ namespace Catalog
             [&] {
                 PartitionMap partitions;
 
-                bool can_use_cache = true;
-                if (context.getSettingsRef().server_write_ha)
-                    can_use_cache = canUseCache(storage, session_context);
+                bool can_use_cache = canUseCache(storage, session_context);
 
                 auto cache_manager = context.getPartCacheManager();
-                if (cache_manager && can_use_cache && cache_manager->getPartitionIDs(*storage, partition_ids))
+                if (can_use_cache && cache_manager->getPartitionIDs(*storage, partition_ids))
                     return;
                 partition_ids = getPartitionIDsFromMetastore(storage);
             },
