@@ -73,7 +73,7 @@ void run(const std::string & query, Poco::Logger * log)
     const char * end = query.data() + query.size();
 
     DB::ParserPartToolkitQuery parser(end);
-    auto ast = DB::parseQuery(parser, begin, end, "", 10000, 100);
+    auto ast = DB::parseQuery(parser, begin, end, "", 0, 0);
     const DB::ASTPartToolKit & query_ast = ast->as<DB::ASTPartToolKit &>();
 
     std::shared_ptr<DB::PartToolkitBase> executor = nullptr;

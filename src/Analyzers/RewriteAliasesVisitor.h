@@ -18,9 +18,10 @@ struct RewriteAliases
         QueryAliasesVisitor::Data aliases;
         QueryAliasesVisitor(aliases).visit(ast);
 
+        NameSet source_columns;
         QueryNormalizer::Data normalizer_data(
             aliases,
-            {},
+            source_columns,
             false,
             context->getSettingsRef(),
             true,

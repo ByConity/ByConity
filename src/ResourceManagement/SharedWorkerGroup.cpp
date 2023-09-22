@@ -44,7 +44,7 @@ std::map<String, WorkerNodePtr> SharedWorkerGroup::getWorkers() const
     return getWorkersImpl(lock);
 }
 
-std::map<String, WorkerNodePtr> SharedWorkerGroup::getWorkersImpl(std::lock_guard<std::mutex> & /*lock*/) const
+std::map<String, WorkerNodePtr> SharedWorkerGroup::getWorkersImpl(std::lock_guard<bthread::RecursiveMutex> & /*lock*/) const
 {
     std::map<String, WorkerNodePtr> res;
     if (auto linked_grp_shared_ptr = tryGetLinkedGroup())
@@ -63,15 +63,17 @@ WorkerGroupData SharedWorkerGroup::getData(bool with_metrics, bool only_running_
         {
             data = linked_group_ptr->getData(with_metrics, only_running_state);
             data.linked_id = linked_group_ptr->getID();
-            data.id = getID();
-            data.type = WorkerGroupType::Shared;
-            data.vw_uuid = getVWUUID();
-            data.vw_name = getVWName();
-            data.is_auto_linked = isAutoLinked();
             data.linked_vw_name = linked_group_ptr->getVWName();
 
         }
     }
+
+    data.id = getID();
+    data.type = WorkerGroupType::Shared;
+    data.is_auto_linked = isAutoLinked();
+    data.vw_uuid = getVWUUID();
+    /// Lock is acquired in `getVWName`.
+    data.vw_name = getVWName();
 
     return data;
 }

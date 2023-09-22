@@ -428,11 +428,11 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
 
 NamesAndTypesList MergeTreeCNCHDataDumper::getKeyColumns() const
 {
-    Names sort_key_columns_vec = data.getInMemoryMetadata().getSortingKeyColumns();
+    Names sort_key_columns_vec = data.getInMemoryMetadataPtr()->getSortingKeyColumns();
     std::set<String> key_columns(sort_key_columns_vec.cbegin(), sort_key_columns_vec.cend());
-    // no issue with data.getInMemoryMetadata().getSecondaryIndices() being a temporary variable
-    // coverity[use_invalid]
-    for (const auto & index : data.getInMemoryMetadata().getSecondaryIndices())
+
+    auto & secondary_indices = data.getInMemoryMetadataPtr()->getSecondaryIndices();
+    for (const auto & index : secondary_indices)
     {
         const auto & index_columns_vec = index.column_names;
         std::copy(index_columns_vec.cbegin(), index_columns_vec.cend(), std::inserter(key_columns, key_columns.end()));
@@ -453,7 +453,7 @@ NamesAndTypesList MergeTreeCNCHDataDumper::getKeyColumns() const
         key_columns.emplace(merging_params.sign_column);
 
     NamesAndTypesList merging_columns;
-    auto all_columns = data.getInMemoryMetadata().getColumns().getAllPhysical();
+    auto all_columns = data.getInMemoryMetadataPtr()->getColumns().getAllPhysical();
     for (const auto & column : all_columns)
     {
         if (key_columns.count(column.name))

@@ -2691,6 +2691,9 @@ public:
         context->makeGlobalContext();
         context->applySettingsChanges(cmd_settings.changes());
 
+        auto & client_info = context->getClientInfo();
+        client_info.initial_user = options["user"].as<std::string>();
+
         /// Copy settings-related program options to config.
         /// TODO: Is this code necessary?
         for (const auto & setting : context->getSettingsRef().all())

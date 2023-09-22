@@ -19,6 +19,8 @@
             <default_database_engine>Cnch</default_database_engine>
             <cnch_data_retention_time_in_sec>5</cnch_data_retention_time_in_sec>
             <background_schedule_pool_size>6</background_schedule_pool_size>
+            <min_insert_block_size_bytes>8589934592</min_insert_block_size_bytes>
+            <cnch_max_cached_storage>50000</cnch_max_cached_storage>
         </default>
 
         <!-- Profile that allows only read queries. -->

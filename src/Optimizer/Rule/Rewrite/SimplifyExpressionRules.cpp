@@ -61,6 +61,49 @@ TransformResult CommonPredicateRewriteRule::transformImpl(PlanNodePtr node, cons
     return filter_node;
 }
 
+PatternPtr CommonJoinFilterRewriteRule::getPattern() const
+{
+    return Patterns::join().matchingStep<JoinStep>([&](const JoinStep & s) { return !PredicateUtils::isTruePredicate(s.getFilter()); }).result();
+}
+
+TransformResult CommonJoinFilterRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    auto & context = rule_context.context;
+    const auto & step_ptr = node->getStep();
+    const auto & step = dynamic_cast<const JoinStep &>(*step_ptr);
+
+    auto filter = step.getFilter();
+    ConstASTPtr rewritten = CommonPredicatesRewriter::rewrite(filter, context);
+
+    if (rewritten->getColumnName() == filter->getColumnName())
+    {
+        return {};
+    }
+
+    QueryPlanStepPtr join_step = std::make_shared<JoinStep>(
+       step.getInputStreams(),
+        step.getOutputStream(),
+        step.getKind(),
+        step.getStrictness(),
+        step.getMaxStreams(),
+        step.getKeepLeftReadInOrder(),
+        step.getLeftKeys(),
+        step.getRightKeys(),
+        rewritten,
+        step.isHasUsing(),
+        step.getRequireRightKeys(),
+        step.getAsofInequality(),
+        step.getDistributionType(),
+        JoinAlgorithm::AUTO,
+        false,
+        step.isOrdered(),
+        step.getRuntimeFilterBuilders(),
+        step.getHints());
+
+    PlanNodePtr join_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(join_step), node->getChildren());
+    return join_node;
+}
+
 PatternPtr SwapPredicateRewriteRule::getPattern() const
 {
     return Patterns::filter().result();
@@ -131,7 +174,7 @@ PatternPtr UnWarpCastInPredicateRewriteRule::getPattern() const
 TransformResult UnWarpCastInPredicateRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto & context = rule_context.context;
-    if (!context->getSettingsRef().enable_unwarp_cast_in)
+    if (!context->getSettingsRef().enable_unwrap_cast_in)
     {
         return {};
     }
@@ -291,10 +334,11 @@ PatternPtr MergePredicatesUsingDomainTranslator::getPattern() const
 TransformResult MergePredicatesUsingDomainTranslator::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto & context = rule_context.context;
-    auto * old_filter_node = dynamic_cast<FilterNode *>(node.get());
-    if (!old_filter_node)
+    const auto & settings = context->getSettingsRef();
+    if (!settings.rewrite_predicate_by_domain)
         return {};
 
+    auto * old_filter_node = dynamic_cast<FilterNode *>(node.get());
     const auto & step = *old_filter_node->getStep();
     auto predicate = step.getFilter()->clone();
 
@@ -304,7 +348,7 @@ TransformResult MergePredicatesUsingDomainTranslator::transformImpl(PlanNodePtr 
     DomainTranslator domain_translator{context};
     ExtractionReuslt rewritten = domain_translator.getExtractionResult(predicate, step.getOutputStream().header.getNamesAndTypes());
 
-    if (domain_translator.isIgnored() || predicate->getColumnName() == rewritten.remaining_expression->getColumnName())
+    if (domain_translator.isIgnored() && !context->getSettingsRef().rewrite_complex_predicate_by_domain)
         return {};
 
     ASTPtr combine_extraction_result = PredicateUtils::combineConjuncts(ASTs{

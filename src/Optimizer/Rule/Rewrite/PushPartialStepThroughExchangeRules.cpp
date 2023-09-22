@@ -164,28 +164,6 @@ TransformResult PushPartialAggThroughExchange::transformImpl(PlanNodePtr node, c
             return {};
         }
     }
-    // TODO if aggregate data is almost pure distinct, then partial aggregate is useless.
-    // Consider these two cases
-    // 1: if group by keys is or contains primary key (may be need function dependency ...), then don't push partial aggregate.
-    // 2: for aggregate on base table, the statistics is accurate enough to perform cost-based push down. while other
-    // cases, we can't relay on statistics.
-    //    auto group_keys = step->getKeys();
-    //    if (!group_keys.empty())
-    //    {
-    //        PlanNodeStatisticsPtr statistics = CardinalityEstimator::estimate(node->getChildren()[0], context.context);
-    //        UInt64 row_count = statistics->getRowCount() == 0 ? 1 : statistics->getRowCount();
-    //        UInt64 group_keys_ndv = 1;
-    //        for (auto & key : group_keys)
-    //        {
-    //            SymbolStatisticsPtr symbol_stats = statistics->getSymbolStatistics(key);
-    //            group_keys_ndv = group_keys_ndv * symbol_stats->getNdv();
-    //        }
-    //        double density = (double)group_keys_ndv / row_count;
-    //        if (density > context.context.getSettingsRef().enable_partial_aggregate_ratio)
-    //        {
-    //            return {};
-    //        }
-    //    }
 
     if(step->isFinal())
         return split(node, context);

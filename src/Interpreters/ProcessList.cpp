@@ -53,6 +53,7 @@ namespace ErrorCodes
     extern const int QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING;
     extern const int LOGICAL_ERROR;
     extern const int TIMEOUT_EXCEEDED;
+    extern const int QUERY_CPU_TIMEOUT_EXCEEDED;
     extern const int QUERY_WAS_CANCELLED;
 }
 
@@ -461,6 +462,8 @@ void QueryStatus::removePipelineExecutor(PipelineExecutor * e)
 
 void QueryStatus::dumpPipelineInfo(PipelineExecutor * e)
 {
+    //Also need lock at QueryStatus::getInfo, but it causes performance down
+    //std::lock_guard lock(executors_mutex);
     pipeline_info += e->dumpPipeline();
 }
 
@@ -472,7 +475,7 @@ bool QueryStatus::checkCpuTimeLimit(String node_name)
     ContextPtr context = thread_group->query_context.lock();
     const Settings & settings = context->getSettingsRef();
     // query thread group Counters.
-    if (settings.max_query_cpu_second > 0 && thread_group != nullptr)
+    if (settings.max_query_cpu_seconds > 0 && thread_group != nullptr)
     {
         UInt64 total_query_cpu_micros = thread_group->performance_counters[ProfileEvents::SystemTimeMicroseconds]
                 + thread_group->performance_counters[ProfileEvents::UserTimeMicroseconds];
@@ -483,14 +486,14 @@ bool QueryStatus::checkCpuTimeLimit(String node_name)
         double thread_cpu_seconds = thread_cpu_micros * 1.0 / 1000000;
  
         LOG_TRACE(&Poco::Logger::get("ThreadStatus"), "node {} checkCpuTimeLimit thread cpu secs = {}, total cpu secs = {}, max = {}",
-                    node_name, thread_cpu_seconds, total_query_cpu_seconds, settings.max_query_cpu_second);
-        if (total_query_cpu_micros > settings.max_query_cpu_second * 1000000)
+                    node_name, thread_cpu_seconds, total_query_cpu_seconds, settings.max_query_cpu_seconds);
+        if (total_query_cpu_micros > settings.max_query_cpu_seconds * 1000000)
         {
             switch (overflow_mode)
             {
                 case OverflowMode::THROW:
-                    throw Exception("Timeout exceeded: elapsed " + toString(total_query_cpu_seconds)
-                                  + " seconds, maximum: " + toString(static_cast<double>(settings.max_query_cpu_second)), ErrorCodes::TIMEOUT_EXCEEDED);
+                    throw Exception("Query cpu exceeded: elapsed " + toString(total_query_cpu_seconds)
+                                  + " seconds, maximum: " + toString(static_cast<double>(settings.max_query_cpu_seconds)), ErrorCodes::QUERY_CPU_TIMEOUT_EXCEEDED);
                 case OverflowMode::BREAK:
                     return true;
                 default:

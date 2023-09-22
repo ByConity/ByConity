@@ -136,8 +136,8 @@ void VirtualWarehouseHandleImpl::tryUpdateWorkerGroups(UpdateMode update_mode)
     if (!success)
         success = updateWorkerGroupsFromPSM();
 
-    if (!success && worker_groups.empty())
-        LOG_WARNING(log, "Updating of worker groups failed");
+    if (!success || worker_groups.empty())
+        LOG_WARNING(log, "Failed to update worker groups for VW:{}", name);
 }
 
 
@@ -181,6 +181,12 @@ bool VirtualWarehouseHandleImpl::updateWorkerGroupsFromRM()
 
         for (auto & group_data : groups_data)
         {
+            if (group_data.num_workers == 0)
+            {
+                LOG_WARNING(log, "Get an empty worker group from RM:{}", group_data.id);
+                continue;
+            }
+
             if (auto it = old_groups.find(group_data.id); it == old_groups.end()) /// new worker group
                 worker_groups.try_emplace(group_data.id, std::make_shared<WorkerGroupHandleImpl>(group_data, getContext()));
             else if (!it->second->isSame(group_data)) /// replace with the new one because of diff
@@ -190,6 +196,12 @@ bool VirtualWarehouseHandleImpl::updateWorkerGroupsFromRM()
                 it->second->setMetrics(group_data.metrics);
                 worker_groups.try_emplace(group_data.id, it->second);
             }
+        }
+
+        if (worker_groups.empty())
+        {
+            LOG_WARNING(log, "Get an empty VW from RM:{}", name);
+            return false;
         }
 
         return true;

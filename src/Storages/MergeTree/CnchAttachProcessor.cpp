@@ -748,7 +748,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromSourc
 }
 
 CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3TaskMeta(
-    StorageCnchMergeTree & tbl, const String & task_id, const AttachFilter & filter, AttachContext & attach_ctx)
+    StorageCnchMergeTree & tbl, const String & task_id_prefix, const AttachFilter & filter, AttachContext & attach_ctx)
 {
     if (filter.mode != AttachFilter::PARTS)
     {
@@ -765,16 +765,16 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Tas
 
     {
         TransactionCnchPtr txn = query_ctx->getCurrentTransaction();
-        auto action = txn->createAction<S3AttachMetaFileAction>(disk_s3, task_id);
+        auto action = txn->createAction<S3AttachMetaFileAction>(disk_s3, task_id_prefix);
         txn->appendAction(action);
 
-        UndoResource attaching_mark_res(txn->getTransactionID(), UndoResourceType::S3AttachMeta, task_id);
+        UndoResource attaching_mark_res(txn->getTransactionID(), UndoResourceType::S3AttachMeta, task_id_prefix);
         attaching_mark_res.setDiskName(disk_s3->getName());
         query_ctx->getCnchCatalog()->writeUndoBuffer(
             UUIDHelpers::UUIDToString(target_tbl.getStorageUUID()), txn->getTransactionID(), {attaching_mark_res});
     }
 
-    S3PartsAttachMeta task_meta(disk_s3->getS3Client(), disk_s3->getS3Bucket(), disk_s3->getPath(), task_id);
+    S3PartsAttachMeta task_meta(disk_s3->getS3Client(), disk_s3->getS3Bucket(), disk_s3->getPath(), task_id_prefix);
 
     S3PartsAttachMeta::Reader reader(task_meta, 16);
 
@@ -794,7 +794,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Tas
         }
         else
         {
-            throw Exception("Can't parse part name: " + part_meta.first + " in task: " + task_id, ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("Can't parse part name: " + part_meta.first + " in task: " + task_id_prefix, ErrorCodes::BAD_ARGUMENTS);
         }
     }
 

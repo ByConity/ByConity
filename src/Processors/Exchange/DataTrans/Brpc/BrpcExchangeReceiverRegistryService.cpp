@@ -71,7 +71,8 @@ void BrpcExchangeReceiverRegistryService::registry(
         request->coordinator_address());
     try
     {
-        sender_proxy = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
+        sender_proxy
+            = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key, SenderProxyOptions{.wait_timeout_ms = accpet_timeout_ms});
         sender_proxy->waitAccept(accpet_timeout_ms);
     }
     catch (...)

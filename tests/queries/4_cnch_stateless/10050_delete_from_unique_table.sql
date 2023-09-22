@@ -67,7 +67,7 @@ select '';
 select 'execute DELETE FROM with customized settings';
 
 -- expect a TIMEOUT_EXCEEDED exception
-DELETE FROM unique_table_without_partitionby WHERE revenue = 400 AND sleepEachRow(1) SETTINGS max_execution_time = 1; -- { serverError 159}
+DELETE FROM unique_table_without_partitionby WHERE revenue = 400 AND sleepEachRow(3) SETTINGS max_execution_time = 1; -- { serverError 159}
 
 select '';
 select 'select unique table';

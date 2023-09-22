@@ -944,7 +944,7 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_bytes_to_read_local, 0, "Limit max reading bytes for each local shard.", 0) \
     M(OverflowMode, read_overflow_mode_local, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
     \
-    M(UInt64, max_query_cpu_second, 0, "Limit the maximum amount of CPU resources such a query segment can consume.", 0) \
+    M(UInt64, max_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a query segment can consume.", 0) \
     M(UInt64, max_distributed_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a distribute query can consume.", 0) \
 \
     M(UInt64, max_rows_to_group_by, 0, "", 0) \
@@ -1719,6 +1719,7 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(UInt64, cnch_max_cached_storage, 2048, "Cnch storage cache size.", 0) \
     M(Bool, enable_multiple_tables_for_cnch_parts, 0, "Allow to query multiple tables for system.cnch_parts", 0) \
+    M(Bool, enable_skip_non_cnch_tables_for_cnch_parts, 0, "Allow to skip non cnch tables for system.cnch_parts", 0) \
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
     M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
@@ -1834,25 +1835,61 @@ enum PreloadLevelSettings : UInt64
       "Timeout for query shard, if timeout shards beyond this threshold, then throw exception", \
       0) \
     M(Bool, enable_early_stop_metric, 0, "Whether output metrics of early stop", 0) \
-\
-    /** Optimizer relative settings */ \
-    M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
-    M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
+    \
     M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
     M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \
     M(UInt64, query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
-    M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback to clickhouse origin when failed", 0) \
-    M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \
     M(Bool, enable_concurrency_control, false, "Whether enable concurrency control", 0) \
-    M(Bool, explain_print_stats, true, "Whether print stats when explain sql", 0) \
-    M(Bool, enable_histogram, true, "Whether enable plan cache", 0) \
+    M(UInt64, operator_profile_receive_timeout, 3000, "Max waiting time for operator profile in ms", 0) \
+    /** Optimizer relative settings */ \
+    M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
+    M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback when failed", 0) \
+    M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
+    M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
+    M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \
     M(UInt64, max_plan_mem_size, 1024 * 16 * 16, "The max plan size (byte)", 0) \
     M(Bool, enable_memory_catalog, false, "Enable memory catalog for unittest", 0) \
     M(UInt64, memory_catalog_worker_size, 8, "Memory catalog work size for unittest", 0) \
-    M(Bool, enable_optimizer_explain, false, "Enable query return explain for unittest", 0) \
+    M(Bool, print_graphviz, false, "Whether print graphviz", 0) \
+    M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
+    M(Bool, print_graphviz_ast, false, "Whether print graphviz", 0) \
+    M(Bool, print_graphviz_planner, false, "Whether print graphviz", 0) \
+    M(Bool, use_sql_binding, false, "Whether use SQL binding", 0) \
+    M(UInt64, global_bindings_update_time, 60*60, "Interval to update global binding cache from catalog, in seconds.", 0) \
+    /** Optimizer relative settings, Plan build and RBO */ \
+    M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\
+    M(Bool, enforce_all_join_to_any_join, false, "Whether enforce all join to any join", 0) \
+    M(Bool, enable_implicit_type_conversion, true, "Whether enable implicit type conversion for JOIN, Set operation, IN subquery", 0) \
+    M(Bool, enable_replace_group_by_literal_to_symbol, false, "Replace group by literal to symbol", 0) \
+    M(Bool, enable_replace_order_by_literal_to_symbol, false, "Replace order by literal to symbol", 0) \
+    M(Bool, rewrite_like_function, true, "Rewrite simple pattern like function", 0) \
+    M(UInt64, iterative_optimizer_timeout, 10000, "Max running time of a single iterative optimizer in ms", 0) \
+    M(Bool, debug_iterative_optimizer, false, "If enabled, iterative optimizer will print plan after each rule application", 0) \
+    M(Bool, eliminate_cross_joins, true, "Whether eliminate cross joins", 0) \
+    M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
+    M(Bool, enable_distinct_remove, true, "Whether to eliminate redundancy during execution", 0) \
+    M(Bool, enable_single_distinct_to_group_by, true, "Whether enable convert single count distinct to group by", 0) \
+    M(Bool, enable_mark_distinct_optimization, false, "Whether enable Mark distinct optimization", 0)                                            \
+    M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
+    M(Bool, enable_swap_predicate_rewrite, true, "Whether enable swap predicate rewrite", 0) \
+    M(Bool, rewrite_predicate_by_domain, true, "When enabled, merge predicates belonging to the same domain", 0) \
+    M(Bool, rewrite_complex_predicate_by_domain, false, "Whether enabled, extract merged predicate belonging to the same domain for complex predicate(which normally are DNFs)", 0) \
+    M(Bool, enable_unwrap_cast_in, true, "Whether enable unwrap cast function", 0) \
+    M(Bool, enable_windows_reorder, true, "Reorder adjacent windows to decrease exchange", 0) \
+    M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \
+    M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
+    M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
+    M(Bool, enable_topn_filtering_optimization, false, "Whether enable TopNFilterting optimization", 0) \
+    M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \
+    M(Bool, optimizer_projection_support, false, "Use projection in optimizer mode", 0) \
+    M(Bool, enable_setoperation_to_agg, true, "Whether enable rewrite set operation to aggregation", 0)                                            \
+    M(Bool, enable_execute_uncorrelated_subquery, false, "Whether enable execute uncorrelated subquery", 0) \
+    M(UInt64, execute_uncorrelated_in_subquery_size, 10000, "Size of execute uncorrelated in subquery", 0) \
+    M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
+    M(Bool, enable_buffer_for_deadlock_cte, true, "Whether to buffer data for deadlock cte", 0) \
+    /** Optimizer relative settings, Statistics*/ \
     M(UInt64, statistics_collect_debug_level, 0, "Debug level for statistics collector", 0) \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
-    M(Bool, rewrite_like_function, true, "Rewrite simple pattern like function", 0) \
     M(Bool, statistics_collect_histogram, true, "Enable histogram collection", 0) \
     M(Bool, statistics_collect_floating_histogram, true, "Collect histogram for float/double/Decimal columns", 0) \
     M(Bool, statistics_collect_floating_histogram_ndv, true, "Collect histogram ndv for float/double/Decimal columns", 0) \
@@ -1874,11 +1911,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, statistics_simplify_histogram, false, "Reduce buckets of histogram with simplifying", 0) \
     M(Float, statistics_simplify_histogram_ndv_density_threshold, 0.2, "Histogram simplifying threshold for ndv", 0) \
     M(Float, statistics_simplify_histogram_range_density_threshold, 0.2, "Histogram simplifying threshold for range", 0) \
-    M(StatisticsCachePolicy, \
-      statistics_cache_policy, \
-      StatisticsCachePolicy::Default, \
-      "Cache policy for stats command and SQLs: (default|cache|catalog)", \
-      0) \
+    M(StatisticsCachePolicy, statistics_cache_policy, StatisticsCachePolicy::Default, "Cache policy for stats command and SQLs: (default|cache|catalog)", 0) \
+    /** Optimizer relative settings, Cost model and Estimation */ \
     M(Float, cost_calculator_table_scan_weight, 1, "Table scan cost weight for cost calculator", 0) \
     M(Float, cost_calculator_aggregating_weight, 7, "Aggregate output weight for cost calculator", 0) \
     M(Float, cost_calculator_join_probe_weight, 0.5, "Join probe side weight for cost calculator", 0) \
@@ -1888,17 +1922,12 @@ enum PreloadLevelSettings : UInt64
     M(Float, cost_calculator_cte_weight_for_join_build_side, 2.0, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
     M(Float, stats_estimator_join_filter_selectivity, 1, "Join filter selectivity", 0) \
-    M(Bool, print_graphviz, false, "Whether print graphviz", 0) \
-    M(String, graphviz_path, "/tmp/plan/", "The path of graphviz plan", 0) \
-    M(Bool, print_graphviz_ast, false, "Whether print graphviz", 0) \
-    M(Bool, print_graphviz_planner, false, "Whether print graphviz", 0) \
-    M(Bool, eliminate_cross_joins, true, "Whether eliminate cross joins", 0) \
-    M(UInt64, iterative_optimizer_timeout, 10000, "Max running time of a single iterative optimizer in ms", 0) \
-    M(Bool, debug_iterative_optimizer, false, "If enabled, iterative optimizer will print plan after each rule application", 0) \
+    M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
+    M(Float, pk_selectivity, 1, "PK selectivity for join estimation", 0) \
+    /** Optimizer relative settings, CBO/CTE/MV/RF/MS */ \
+    M(Bool, enable_join_reorder, true, "Whether enable join reorder", 0) \
     M(UInt64, cascades_optimizer_timeout, 10000, "Max running time of a single cascades optimizer in ms", 0) \
-    M(UInt64, operator_profile_receive_timeout, 3000, "Max waiting time for operator profile in ms", 0) \
-    M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
-    M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0) \
+    M(UInt64 , max_graph_reorder_size, 6, "Max tables join order enum on graph", 0) \
     M(Bool, enable_cbo, true, "Whether enable CBO", 0) \
     M(Bool, enable_cascades_pruning, false, "Whether enable cascades pruning", 0) \
     M(Bool, enum_replicate, true, "Enum replicate join", 0) \
@@ -1906,37 +1935,24 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
-    M(Bool, add_parallel_before_agg, false, "Add parallel before agg", 0) \
     M(Bool, enable_adaptive_scheduler, false, "Whether enable adaptive scheduler", 0) \
     M(Bool, enable_wait_cancel_rpc, false, "Whether wait rpcs of cancel worker to finish", 0) \
     M(Bool, add_parallel_after_join, false, "Add parallel after join", 0) \
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
-    M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
     M(Bool, enable_left_join_to_right_join, true, "Whether enable convert left join to right join", 0) \
     M(Bool, enable_shuffle_with_order, false, "Whether enable keep data order when shuffle", 0) \
-    M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
-    M(Bool, enable_single_distinct_to_group_by, true, "Whether enable convert single count distinct to group by", 0) \
-    M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
-    M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO|ENFORCED", 0) \
-    M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
-    M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
-    M(UInt64 , max_graph_reorder_size, 6, "Max tables join order enum on graph", 0) \
     M(Bool, enable_join_graph_support_filter, true, "Whether enable join graph support filter", 0) \
-    M(Bool, enable_join_reorder, true, "Whether enable join reorder", 0) \
-    M(Float, enable_partial_aggregate_ratio , 0.9, "Enable partial aggregate ratio : group by keys ndv / total row count", 0) \
-    M(Bool, enable_simplify_expression, true, "Whether enable simplify predicates", 0) \
-    M(Bool, enable_unwarp_cast_in, true, "Whether enable unwrap cast function", 0) \
-    M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
-    M(Bool, enable_windows_reorder, true, "Reorder adjacent windows to decrease exchange", 0) \
-    M(Bool, enable_swap_predicate_rewrite, true, "Whether enable swap predicate rewrite", 0) \
     M(Bool, enable_equivalences, true, "Whether enable using equivalences when property match", 0) \
     M(Bool, enable_injective_in_property, false, "Whether enable using injective function when property match", 0) \
-    M(Bool, enable_replace_group_by_literal_to_symbol, false, "Replace group by literal to symbol", 0) \
-    M(Bool, enable_replace_order_by_literal_to_symbol, false, "Replace order by literal to symbol", 0) \
-    M(Bool, enable_push_partial_agg, true, "Whether enable push partial agg", 0) \
-    M(Bool, enforce_all_join_to_any_join, false, "Whether enforce all join to any join", 0) \
-    M(Bool, enable_implicit_type_conversion, true, "Whether enable implicit type conversion for JOIN, Set operation, IN subquery", 0) \
-    M(Bool, enable_redundant_sort_removal, true, "Whether enable ignore redundant sort in subquery", 0) \
+    M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
+    M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
+    M(Float, magic_set_filter_factor, 0.5, "The minimum filter factor of magic set, used for early pruning", 0) \
+    M(UInt64, magic_set_max_search_tree, 4, "The maximum table scans in magic set, used for early pruning", 0) \
+    M(UInt64, magic_set_source_min_rows, 10000, "The minimum rows of source node in magic set, used for early pruning", 0) \
+    M(Float, magic_set_rows_factor, 0.6, "The minimum rows of source node in magic set, used for early pruning", 0) \
+    M(CTEMode, cte_mode, CTEMode::AUTO, "CTE mode: SHARED|INLINED|AUTO|ENFORCED", 0) \
+    M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
+    M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
     M(Bool, enable_materialized_view_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
@@ -1944,22 +1960,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_materialized_view_join_rewriting, false, "Whether enable materialized view based rewriter for query using join materialized views", 0) \
     M(Bool, enable_materialized_view_rewrite_match_range_filter, false, "Whether enable materialized view based rewriter matching range filter by its allowable value Domain", 0) \
     M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::PARTITION, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
-    M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
-    M(Bool, enable_filter_window_to_partition_topn, true, "Filter window to partition topn", 0) \
-    M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \
-    M(Bool, optimizer_projection_support, false, "Use projection in optimizer mode", 0) \
-    M(Bool, enable_topn_filtering_optimization, false, "Whether enable TopNFilterting optimization", 0) \
-    M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0) \
-    M(Bool, enable_setoperation_to_agg, true, "Whether enable rewrite set operation to aggregation", 0) \
-    M(Bool, enable_execute_uncorrelated_subquery, false, "Whether enable execute uncorrelated subquery", 0) \
-    M(UInt64, execute_uncorrelated_in_subquery_size, 10000, "Size of execute uncorrelated in subquery", 0) \
-    M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
-    M(Float, pk_selectivity, 1, "PK selectivity for join estimation", 0) \
-    M(Bool, enable_distinct_remove, true, "Whether to eliminate redundancy during execution", 0) \
-    M(Bool, use_sql_binding, false, "Whether use SQL binding", 0) \
-    M(UInt64, global_bindings_update_time, 60*60, "Interval to update global binding cache from catalog, in seconds.", 0) \
     M(Bool, enable_execute_query, true, "Whether to execute this query", 0) \
-    M(Bool, enable_buffer_for_deadlock_cte, true, "Whether to buffer data for deadlock cte", 0) \
     /** Exchange settings */ \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \
@@ -2058,10 +2059,11 @@ enum PreloadLevelSettings : UInt64
     M(String, lasfs_region, "", "the region set by user when accessing lasfs", 0) \
     /** The section above is for obsolete settings. Do not add anything there. */ \
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
+    M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel",0) \
+    M(Bool,   parquet_parallel_read, false, "whether to read parquet in parallel",0) \
+    \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
-    M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel", 0) \
-    M(Bool, parquet_parallel_read, false, "whether to read parquet in parallel", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
@@ -2101,60 +2103,21 @@ enum PreloadLevelSettings : UInt64
       IMPORTANT) \
     M(Bool, input_format_tsv_empty_as_default, false, "Treat empty fields in TSV input as default values.", 0) \
     M(Bool, input_format_tsv_enum_as_number, false, "Treat inserted enum values in TSV formats as enum indices \\N", 0) \
-    M(Bool, \
-      input_format_null_as_default, \
-      true, \
-      "For text input formats initialize null fields with default values if data type of this field is not nullable", \
-      0) \
-    M(Bool, \
-      input_format_protobuf_enable_multiple_message, \
-      true, \
-      "If it is set to true, allows read protobuf messages which separated by a length header consecutively.", \
-      0) \
-    M(Bool, \
-      input_format_protobuf_default_length_parser, \
-      false, \
-      "If it is set to true, use variable length header, otherwise a 8 byte fixed length header is used.", \
-      0) \
-\
-    M(DateTimeInputFormat, \
-      date_time_input_format, \
-      FormatSettings::DateTimeInputFormat::Basic, \
-      "Method to read DateTime from text input formats. Possible values: 'basic' and 'best_effort'.", \
-      0) \
-    M(DateTimeOutputFormat, \
-      date_time_output_format, \
-      FormatSettings::DateTimeOutputFormat::Simple, \
-      "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", \
-      0) \
-\
-    M(UInt64, max_hdfs_write_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to write data to hdfs.", 0) \
-    M(String, bool_true_representation, "true", "Text to represent bool value in TSV/CSV formats.", 0) \
-    M(String, bool_false_representation, "false", "Text to represent bool value in TSV/CSV formats.", 0) \
-\
-    M(Bool, \
-      input_format_values_interpret_expressions, \
-      true, \
-      "For Values format: if the field could not be parsed by streaming parser, run SQL parser and try to interpret it as SQL " \
-      "expression.", \
-      0) \
-    M(Bool, \
-      input_format_values_deduce_templates_of_expressions, \
-      true, \
-      "For Values format: if the field could not be parsed by streaming parser, run SQL parser, deduce template of the SQL expression, " \
-      "try to parse all rows using template and then interpret expression for all rows.", \
-      0) \
-    M(Bool, \
-      input_format_values_accurate_types_of_literals, \
-      true, \
-      "For Values format: when parsing and interpreting expressions using template, check actual type of literal to avoid possible " \
-      "overflow and precision issues.", \
-      0) \
-    M(Bool, \
-      input_format_avro_allow_missing_fields, \
-      false, \
-      "For Avro/AvroConfluent format: when field is not found in schema use default value instead of error", \
-      0) \
+    M(Bool, input_format_null_as_default, true, "For text input formats initialize null fields with default values if data type of this field is not nullable", 0) \
+    M(Bool, input_format_protobuf_enable_multiple_message, true, "If it is set to true, allows read protobuf messages which separated by a length header consecutively.", 0) \
+    M(Bool, input_format_protobuf_default_length_parser, false, "If it is set to true, use variable length header, otherwise a 8 byte fixed length header is used.", 0) \
+    \
+    M(DateTimeInputFormat, date_time_input_format, FormatSettings::DateTimeInputFormat::Basic, "Method to read DateTime from text input formats. Possible values: 'basic' and 'best_effort'.", 0) \
+    M(DateTimeOutputFormat, date_time_output_format, FormatSettings::DateTimeOutputFormat::Simple, "Method to write DateTime to text output. Possible values: 'simple', 'iso', 'unix_timestamp'.", 0) \
+    \
+    M(UInt64, max_hdfs_write_buffer_size, DBMS_DEFAULT_BUFFER_SIZE, "The maximum size of the buffer to write data to hdfs.",0) \
+    M(String, bool_true_representation, "1", "Text to represent bool value in TSV/CSV formats.", 0) \
+    M(String, bool_false_representation, "0", "Text to represent bool value in TSV/CSV formats.", 0) \
+    \
+    M(Bool, input_format_values_interpret_expressions, true, "For Values format: if the field could not be parsed by streaming parser, run SQL parser and try to interpret it as SQL expression.", 0) \
+    M(Bool, input_format_values_deduce_templates_of_expressions, true, "For Values format: if the field could not be parsed by streaming parser, run SQL parser, deduce template of the SQL expression, try to parse all rows using template and then interpret expression for all rows.", 0) \
+    M(Bool, input_format_values_accurate_types_of_literals, true, "For Values format: when parsing and interpreting expressions using template, check actual type of literal to avoid possible overflow and precision issues.", 0) \
+    M(Bool, input_format_avro_allow_missing_fields, false, "For Avro/AvroConfluent format: when field is not found in schema use default value instead of error", 0) \
     M(URI, format_avro_schema_registry_url, "", "For AvroConfluent format: Confluent Schema Registry URL.", 0) \
 \
     M(Bool, output_format_json_quote_64bit_integers, false, "Controls quoting of 64-bit integers in JSON output format.", 0) \
@@ -2278,7 +2241,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
     M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \
     M(String, default_catalog, "", "current catalog", 0)
-
 
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

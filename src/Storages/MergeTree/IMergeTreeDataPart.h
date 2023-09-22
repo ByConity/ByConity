@@ -561,6 +561,8 @@ public:
 
     void setDeleteBitmap(ImmutableDeleteBitmapPtr delete_bitmap_) { delete_bitmap = std::move(delete_bitmap_); }
 
+    size_t getDeleteBitmapMetaDepth() const { return std::distance(delete_bitmap_metas.begin(), delete_bitmap_metas.end()); }
+
     /// Return null if the part doesn't have delete bitmap.
     /// Otherwise load the bitmap on demand and return.
     virtual const ImmutableDeleteBitmapPtr & getDeleteBitmap([[maybe_unused]] bool allow_null = false) const

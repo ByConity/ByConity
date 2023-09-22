@@ -19,6 +19,8 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
 #include <ResourceManagement/IWorkerGroup.h>
+
+#include <bthread/mutex.h>
 #include <map>
 
 
@@ -59,7 +61,7 @@ public:
     std::vector<WorkerNodePtr> randomWorkers(size_t n, const std::unordered_set<String> & blocklist) const override;
 
 private:
-    std::map<String, WorkerNodePtr> getWorkersImpl(std::lock_guard<std::mutex> & lock) const;
+    std::map<String, WorkerNodePtr> getWorkersImpl(std::lock_guard<bthread::RecursiveMutex> & lock) const;
 
     const String psm;
     std::map<String, WorkerNodePtr> workers;

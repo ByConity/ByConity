@@ -58,7 +58,8 @@ TEST(ExchangeSink, BroadcastExchangeSinkTest)
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
     auto source_key = std::make_shared<ExchangeDataKey>("", 1, 1, "");
     auto source_channel = std::make_shared<LocalBroadcastChannel>(source_key, options, LocalBroadcastChannel::generateNameForTest());
-    BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
+    BroadcastSenderProxyPtr source_sender
+        = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key, SenderProxyOptions{.wait_timeout_ms = 2000});
     source_sender->accept(context, header);
     source_channel->registerToSenders(exchange_options.exhcange_timeout_ms);
     BroadcastReceiverPtr source_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(source_channel);

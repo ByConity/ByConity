@@ -85,20 +85,24 @@ void MultiPartitionExchangeSink::consume(Chunk chunk)
 
     if (!has_input) {
         for(size_t i = 0; i < partition_num ; ++i)
-            buffered_senders[i].flush(true);
+            buffered_senders[i].flush(true, current_chunk_info);
         finish();
         return;
     }
 
     const auto & chunk_info = chunk.getChunkInfo();
-    if (!buffered_senders[0].compareBufferChunkInfo(chunk_info))
+
+    bool chunk_info_matched
+        = ((current_chunk_info && chunk_info && *current_chunk_info == *chunk_info) || (!current_chunk_info && !chunk_info));
+
+    if (!chunk_info_matched)
     {
         for (size_t i = 0; i < partition_num; ++i)
         {
-            buffered_senders[i].updateBufferChunkInfo(chunk_info);
+            buffered_senders[i].flush(true, current_chunk_info);
         }
+        current_chunk_info = chunk_info;
     }
-
 
     IColumn::Selector partition_selector;
     RepartitionTransform::PartitionStartPoints partition_start_points;
@@ -122,7 +126,7 @@ void MultiPartitionExchangeSink::consume(Chunk chunk)
     bool has_active_sender = false;
     for (size_t i = 0; i < partition_num; ++i)
     {
-        auto status = buffered_senders[i].flush(false);
+        auto status = buffered_senders[i].flush(false, current_chunk_info);
         if (status.code == BroadcastStatusCode::RUNNING)
             has_active_sender = true;
     }

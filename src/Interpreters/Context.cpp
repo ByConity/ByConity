@@ -740,7 +740,6 @@ ReadSettings Context::getReadSettings() const
     res.remote_read_min_bytes_for_seek = settings.remote_read_min_bytes_for_seek;
     res.disk_cache_mode = settings.disk_cache_mode;
     res.skip_download_if_exceeds_query_cache = settings.skip_download_if_exceeds_query_cache;
-    res.s3_use_read_ahead = settings.s3_use_read_ahead;
     res.parquet_parallel_read= settings.parquet_parallel_read;
     res.parquet_decode_threads = settings.max_download_thread;
     return res;

@@ -484,7 +484,7 @@ namespace Catalog
                 const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
                 if (consul_http_host != nullptr && consul_http_port != nullptr)
                 {
-                    brpc::policy::FLAGS_consul_agent_addr = "http://" + std::string(consul_http_host) + ":" + std::string(consul_http_port);
+                    brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);
                     LOG_DEBUG(log, "Using consul agent: {}", brpc::policy::FLAGS_consul_agent_addr);
                 }
 
@@ -1320,9 +1320,7 @@ namespace Catalog
                     context.getServerType() == ServerType::cnch_server
                     && isLocalServer(host_with_rpc, std::to_string(context.getRPCPort())))
                 {
-                    bool can_use_cache = true;
-                    if (context.getSettingsRef().server_write_ha)
-                        can_use_cache = canUseCache(storage, session_context);
+                    bool can_use_cache = canUseCache(storage, session_context);
 
                     if (!can_use_cache)
                     {
@@ -1752,14 +1750,18 @@ namespace Catalog
 
     bool Catalog::canUseCache(const ConstStoragePtr & storage, const Context * session_context)
     {
-        UInt64 latest_nhut;
         if (!context.getPartCacheManager())
             return false;
-        if (session_context)
-            latest_nhut = const_cast<Context *>(session_context )->getNonHostUpdateTime(storage->getStorageID().uuid);
-        else
-            latest_nhut = getNonHostUpdateTimestampFromByteKV(storage->getStorageID().uuid);
-        return context.getPartCacheManager()->checkIfCacheValidWithNHUT(storage->getStorageID().uuid, latest_nhut);
+        if (context.getSettingsRef().server_write_ha)
+        {
+            UInt64 latest_nhut;
+            if (session_context)
+                latest_nhut = const_cast<Context *>(session_context )->getNonHostUpdateTime(storage->getStorageID().uuid);
+            else
+                latest_nhut = getNonHostUpdateTimestampFromByteKV(storage->getStorageID().uuid);
+            return context.getPartCacheManager()->checkIfCacheValidWithNHUT(storage->getStorageID().uuid, latest_nhut);
+        }
+        return true;
     }
 
     void Catalog::finishCommitInternal(
@@ -1864,13 +1866,10 @@ namespace Catalog
                 PartitionMap partitions;
                 if (auto * cnch_table = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
                 {
-                    bool can_use_cache = true;
-                    if (context.getSettingsRef().server_write_ha)
-                        can_use_cache = canUseCache(table, session_context);
+                    bool can_use_cache = canUseCache(table, session_context);
 
                     auto cache_manager = context.getPartCacheManager();
-
-                    if (cache_manager && can_use_cache && cache_manager->getPartitionList(*cnch_table, partition_list))
+                    if (can_use_cache && cache_manager->getPartitionList(*cnch_table, partition_list))
                         return;
                     getPartitionsFromMetastore(*cnch_table, partitions);
                 }
@@ -1890,12 +1889,10 @@ namespace Catalog
             [&] {
                 PartitionMap partitions;
 
-                bool can_use_cache = true;
-                if (context.getSettingsRef().server_write_ha)
-                    can_use_cache = canUseCache(storage, session_context);
+                bool can_use_cache = canUseCache(storage, session_context);
 
                 auto cache_manager = context.getPartCacheManager();
-                if (cache_manager && can_use_cache && cache_manager->getPartitionIDs(*storage, partition_ids))
+                if (can_use_cache && cache_manager->getPartitionIDs(*storage, partition_ids))
                     return;
                 partition_ids = getPartitionIDsFromMetastore(storage);
             },
@@ -2425,7 +2422,7 @@ namespace Catalog
                 }
                 LOG_DEBUG(
                     log,
-                    "Start write {} parts and {} delete_bitmaps and {} staged parts to bytekv for txn {}"
+                    "Start write {} parts and {} delete_bitmaps and {} staged parts to kvstore for txn {}"
                     ,commit_data.data_parts.size()
                     ,commit_data.delete_bitmaps.size()
                     ,commit_data.staged_parts.size()
@@ -2511,7 +2508,7 @@ namespace Catalog
                     std::vector<String>(staged_part_models.parts().size()));
                 LOG_DEBUG(
                     log,
-                    "Finish write parts to bytekv for txn {}, elapsed {}ms, start write part cache."
+                    "Finish write parts to kvstore for txn {}, elapsed {}ms, start write part cache."
                     ,txnID
                     ,watch.elapsedMilliseconds());
 
@@ -2681,7 +2678,7 @@ namespace Catalog
                 }
                 LOG_DEBUG(
                     log,
-                    "Finish set commit time in bytekv for txn {}, elapsed {} ms, start set commit time in part cache."
+                    "Finish set commit time in kvstore for txn {}, elapsed {} ms, start set commit time in part cache."
                     ,txn_id
                     ,watch.elapsedMilliseconds());
 
@@ -3268,7 +3265,7 @@ namespace Catalog
         DataModelTables res;
         runWithMetricSupport(
             [&] {
-                /// there may be diferrent version of the same table, we only need the latest version of it. And meta data of a table is sorted by commit time as ascending order in bytekv.
+                /// there may be diferrent version of the same table, we only need the latest version of it. And meta data of a table is sorted by commit time as ascending order in kvstore.
                 Protos::DataModelTable latest_version, table_data;
                 auto it = meta_proxy->getAllTablesMeta(name_space);
                 while (it->next())

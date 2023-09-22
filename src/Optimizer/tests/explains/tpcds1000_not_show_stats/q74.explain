@@ -40,7 +40,7 @@ CTEDef [0]
       ├─ Projection
       │  │     Expressions: [c_customer_id, c_first_name, c_last_name, d_year, expr#sum(ss_net_paid)], expr#'s':='s'
       │  └─ Filter
-      │     │     Condition: (d_year = 2002) OR (`expr#sum(ss_net_paid)` > 0.)
+      │     │     Condition: (2002 = d_year) OR (`expr#sum(ss_net_paid)` > 0.)
       │     └─ MergingAggregated
       │        └─ Repartition Exchange
       │           │     Partition by: {c_customer_id, c_first_name, c_last_name, d_year}
@@ -72,7 +72,7 @@ CTEDef [0]
       └─ Projection
          │     Expressions: [c_customer_id_1, c_first_name_1, c_last_name_1, d_year_1, expr#sum(ws_net_paid)], expr#'w':='w'
          └─ Filter
-            │     Condition: (d_year_1 = 2002) OR (`expr#sum(ws_net_paid)` > 0.)
+            │     Condition: (2002 = d_year_1) OR (`expr#sum(ws_net_paid)` > 0.)
             └─ MergingAggregated
                └─ Repartition Exchange
                   │     Partition by: {c_customer_id_1, c_first_name_1, c_last_name_1, d_year_1}

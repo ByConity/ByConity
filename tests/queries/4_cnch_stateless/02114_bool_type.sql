@@ -8,6 +8,8 @@ SHOW CREATE TABLE bool_test;
 INSERT INTO bool_test (value,f) VALUES (false, 'test'), (true , 'test'), (0, 'test'), (1, 'test'), (FALSE, 'test'), (TRUE, 'test');
 INSERT INTO bool_test (value,f) FORMAT JSONEachRow {"value":false,"f":"test"}{"value":true,"f":"test"}{"value":0,"f":"test"}{"value":1,"f":"test"}
 
+set bool_true_representation='true';
+set bool_false_representation='false';
 SELECT value,f FROM bool_test;
 SELECT value,f FROM bool_test FORMAT JSONEachRow;
 SELECT toUInt64(value),f FROM bool_test;

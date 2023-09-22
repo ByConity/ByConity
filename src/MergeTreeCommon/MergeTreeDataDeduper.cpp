@@ -480,11 +480,12 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
         return {};
 
     LocalDeleteBitmaps res;
-    auto prepare_bitmaps_to_dump = [txn_id, &res, log = this->log](
+    auto prepare_bitmaps_to_dump = [txn_id, this, &res, log = this->log](
                                        const IMergeTreeDataPartsVector & visible_parts,
                                        const IMergeTreeDataPartsVector & new_parts,
                                        const DeleteBitmapVector & bitmaps) -> size_t {
         size_t num_bitmaps = 0;
+        size_t max_delete_bitmap_meta_depth = data.getSettings()->max_delete_bitmap_meta_depth;
         for (size_t i = 0; i < bitmaps.size(); ++i)
         {
             DeleteBitmapPtr bitmap = bitmaps[i];
@@ -504,8 +505,13 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
                     visible_parts[i]->getDeleteBitmap()->cardinality(),
                     bitmap->cardinality(),
                     txn_id.toUInt64());
+                size_t bitmap_meta_depth = visible_parts[i]->getDeleteBitmapMetaDepth();
                 res.emplace_back(LocalDeleteBitmap::createBaseOrDelta(
-                    visible_parts[i]->info, visible_parts[i]->getDeleteBitmap(), bitmap, txn_id.toUInt64()));
+                    visible_parts[i]->info,
+                    visible_parts[i]->getDeleteBitmap(),
+                    bitmap,
+                    txn_id.toUInt64(),
+                    bitmap_meta_depth >= max_delete_bitmap_meta_depth));
             }
             else /// new part
             {
@@ -518,8 +524,15 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
                     bitmap->cardinality(),
                     txn_id.toUInt64());
                 if (base_bitmap)
+                {
+                    size_t bitmap_meta_depth = new_parts[i - visible_parts.size()]->getDeleteBitmapMetaDepth();
                     res.push_back(LocalDeleteBitmap::createBaseOrDelta(
-                        new_parts[i - visible_parts.size()]->info, base_bitmap, bitmap, txn_id.toUInt64()));
+                        new_parts[i - visible_parts.size()]->info,
+                        base_bitmap,
+                        bitmap,
+                        txn_id.toUInt64(),
+                        bitmap_meta_depth >= max_delete_bitmap_meta_depth));
+                }
                 else
                     res.push_back(LocalDeleteBitmap::createBase(new_parts[i - visible_parts.size()]->info, bitmap, txn_id.toUInt64()));
             }
@@ -723,14 +736,20 @@ LocalDeleteBitmaps MergeTreeDataDeduper::repairParts(TxnTimestamp txn_id, IMerge
 
     LocalDeleteBitmaps res;
     auto prepare_bitmaps_to_dump
-        = [txn_id, &res](const IMergeTreeDataPartsVector & visible_parts, const DeleteBitmapVector & delta_bitmaps) -> size_t {
+        = [txn_id, this, &res](const IMergeTreeDataPartsVector & visible_parts, const DeleteBitmapVector & delta_bitmaps) -> size_t {
         size_t num_bitmaps = 0;
+        size_t max_delete_bitmap_meta_depth = data.getSettings()->max_delete_bitmap_meta_depth;
         for (size_t i = 0; i < delta_bitmaps.size(); ++i)
         {
             if (!delta_bitmaps[i])
                 continue;
+            size_t bitmap_meta_depth = visible_parts[i]->getDeleteBitmapMetaDepth();
             res.push_back(LocalDeleteBitmap::createBaseOrDelta(
-                visible_parts[i]->info, visible_parts[i]->getDeleteBitmap(/*allow_null*/ true), delta_bitmaps[i], txn_id.toUInt64()));
+                visible_parts[i]->info,
+                visible_parts[i]->getDeleteBitmap(/*allow_null*/ true),
+                delta_bitmaps[i],
+                txn_id.toUInt64(),
+                bitmap_meta_depth >= max_delete_bitmap_meta_depth));
             num_bitmaps++;
         }
         return num_bitmaps;

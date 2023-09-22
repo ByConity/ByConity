@@ -31,6 +31,18 @@ protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
+class CommonJoinFilterRewriteRule : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::COMMON_JOIN_FILTER_REWRITE; }
+    String getName() const override { return "COMMON_JOIN_FILTER_REWRITE"; }
+
+    PatternPtr getPattern() const override;
+
+protected:
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
+
 class SwapPredicateRewriteRule : public Rule
 {
 public:

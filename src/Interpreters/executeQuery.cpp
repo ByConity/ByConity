@@ -119,7 +119,7 @@
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/InterpreterPerfectShard.h>
-
+#include <CloudServices/CnchServerResource.h>
 
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SinkToOutputStream.h>
@@ -726,13 +726,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             auto host_ports = getTargetServer(context, ast);
             LOG_DEBUG(
                 &Poco::Logger::get("executeQuery"),
-                "target server is {} and local rpc port is {}",
-                host_ports.getRPCAddress(),
-                context->getRPCPort());
+                "target server is {} and local server is {}",
+                host_ports.toDebugString(),
+                context->getHostWithPorts().toDebugString());
             if (!host_ports.empty() && !isLocalServer(host_ports.getRPCAddress(), std::to_string(context->getRPCPort())))
             {
                 LOG_DEBUG(
-                    &Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.getTCPAddress());
+                    &Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.toDebugString());
                 context->initializeExternalTablesIfSet();
                 executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn);
                 LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query execution on remote server done");
@@ -959,6 +959,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         turnOffOptimizer(context, ast);
                         auto retry_interpreter = InterpreterFactory::get(ast, context, stage);
                         res = retry_interpreter->execute();
+
+                        if (auto session_resource = context->tryGetCnchServerResource())
+                            session_resource->cleanResource();
 
                         // Used to identify 'fallback' queries in query_log
                         context->setSetting("operator_profile_receive_timeout", 3001);
@@ -2012,7 +2015,7 @@ bool isQueryInInteractiveSession(const ContextPtr & context, [[maybe_unused]] co
         && context->getSessionContext()->getCurrentTransaction() != nullptr;
 }
 
-bool isDDLQuery([[maybe_unused]] const ContextPtr & context, const ASTPtr & query)
+bool isDDLQuery( [[maybe_unused]] const ContextPtr & context, const ASTPtr & query)
 {
     auto * alter = query->as<ASTAlterQuery>();
     if (alter)
@@ -2020,8 +2023,7 @@ bool isDDLQuery([[maybe_unused]] const ContextPtr & context, const ASTPtr & quer
         auto * command_list = alter->command_list;
         /// ATTACH PARTS FROM `dir` and ATTACH DETACHED PARTITION can be considered as DML
         if (command_list && command_list->children.size() == 1
-            && (command_list->children[0]->as<ASTAlterCommand>()->attach_from_detached
-                || command_list->children[0]->as<ASTAlterCommand>()->parts))
+            && (command_list->children[0]->as<ASTAlterCommand>()->attach_from_detached || command_list->children[0]->as<ASTAlterCommand>()->parts))
             return false;
 
         /// DROP PARTITION and DROP PARTITION WHERE without DETACH can be considered as DML

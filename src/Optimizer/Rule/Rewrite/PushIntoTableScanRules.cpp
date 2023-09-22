@@ -160,8 +160,9 @@ TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Ca
 PatternPtr PushAggregationIntoTableScan::getPattern() const
 {
     return Patterns::aggregating()
-               .matchingStep<AggregatingStep>([](auto & step) { return step.isPartial() && !step.isGroupingSet(); })
-               .withSingle(Patterns::tableScan()).result();
+        .matchingStep<AggregatingStep>([](auto & step) { return !step.isGroupingSet(); })
+        .withSingle(Patterns::tableScan())
+        .result();
 }
 
 TransformResult PushAggregationIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

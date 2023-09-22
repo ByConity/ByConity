@@ -49,7 +49,14 @@ public:
     bool isSimpleChildren() const { return simple_children; }
     bool isTableScan() const { return is_table_scan; }
     bool isMagic() const { return is_magic; }
-    UInt32 getMaxTableScans() const { return max_table_scans; }
+    UInt64 getMaxTableScans() const
+    {
+        return max_table_scans;
+    }
+    UInt64 getMaxTableScanRows() const
+    {
+        return max_table_scan_rows;
+    }
 
     void setMagic(bool is_magic_) { is_magic = is_magic_; }
 
@@ -160,7 +167,8 @@ private:
 
     std::unordered_set<CTEId> cte_set;
 
-    UInt32 max_table_scans = 0;
+    UInt64 max_table_scans = 0;
+    UInt64 max_table_scan_rows = 0;
 
     SymbolEquivalencesPtr equivalences;
 

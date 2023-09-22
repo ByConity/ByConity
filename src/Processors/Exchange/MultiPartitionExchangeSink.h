@@ -70,6 +70,7 @@ private:
     const ColumnNumbers repartition_keys;
     ExchangeOptions options;
     ExchangeBufferedSenders buffered_senders;
+    ChunkInfoPtr current_chunk_info;
     Poco::Logger * logger;
     const DataTypePtr * repartition_result_type_ptr ;
 };

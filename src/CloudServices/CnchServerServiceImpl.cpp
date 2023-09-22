@@ -653,6 +653,8 @@ void CnchServerServiceImpl::getTableInfo(
             try
             {
                 auto part_cache_manager = gc->getPartCacheManager();
+                if (!part_cache_manager)
+                    return;
                 for (auto & table_id : request->table_ids())
                 {
                     UUID uuid(stringToUUID(table_id.uuid()));

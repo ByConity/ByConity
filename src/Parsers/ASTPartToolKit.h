@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <FormaterTool/PartToolkitBase.h>
 #include <Parsers/IAST.h>
 
 namespace DB
@@ -38,6 +39,7 @@ public:
     ASTPtr settings;
 
     PartToolType type = PartToolType::NOTYPE;
+    std::shared_ptr<S3CleanTaskInfo> s3_clean_task_info;
 
     String getID(char) const override;
 

@@ -101,6 +101,7 @@ public:
         void on_exit(Event const &, FSM & fsm)
         {
             LOG_TRACE(fsm.coordinator_ptr->log, "leaving: StateWaitRootCauseError");
+            fsm.coordinator_ptr->status_cv.notify_all();
         }
     };
 

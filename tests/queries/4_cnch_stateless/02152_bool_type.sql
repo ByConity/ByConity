@@ -1,3 +1,5 @@
+SET bool_true_representation = 'true';
+SET bool_false_representation = 'false';
 SELECT CAST('True', 'Bool');
 SELECT CAST('TrUe', 'Bool');
 SELECT CAST('true', 'Bool');

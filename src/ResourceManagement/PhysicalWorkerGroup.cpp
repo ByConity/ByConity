@@ -41,7 +41,7 @@ std::map<String, WorkerNodePtr> PhysicalWorkerGroup::getWorkers() const
     return getWorkersImpl(lock);
 }
 
-std::map<String, WorkerNodePtr> PhysicalWorkerGroup::getWorkersImpl(std::lock_guard<std::mutex> & /*lock*/) const
+std::map<String, WorkerNodePtr> PhysicalWorkerGroup::getWorkersImpl(std::lock_guard<bthread::RecursiveMutex> & /*lock*/) const
 {
     return workers;
 }

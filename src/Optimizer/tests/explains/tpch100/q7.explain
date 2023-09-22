@@ -15,7 +15,7 @@ Projection Est. 475000 rows
                      │     Expressions: [n_name, n_name_1], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount), expr#toYear(l_shipdate):=toYear(l_shipdate)
                      └─ Inner Join Est. 183366669 rows
                         │     Condition: l_suppkey == s_suppkey
-                        │     Filter: ((n_name = 'FRANCE') AND (n_name_1 = 'GERMANY')) OR ((n_name = 'GERMANY') AND (n_name_1 = 'FRANCE'))
+                        │     Filter: ((n_name_1 = 'GERMANY') OR (n_name = 'GERMANY')) AND ((n_name = 'FRANCE') OR (n_name_1 = 'FRANCE'))
                         ├─ Repartition Exchange Est. 183366669 rows
                         │  │     Partition by: {l_suppkey}
                         │  └─ Inner Join Est. 183366669 rows

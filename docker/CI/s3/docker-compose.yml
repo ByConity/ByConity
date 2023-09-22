@@ -1,0 +1,28 @@
+version: '3.3'
+
+services:
+  minio:
+    ports:
+        - 19000:9000
+        - 19001:9001
+    container_name: minio0
+    environment:
+        - MINIO_ROOT_USER=minio
+        - MINIO_ROOT_PASSWORD=minio123
+    image: quay.io/minio/minio
+    volumes:
+        - ./data:/data'
+    command: server /data --console-address ":9001"
+  
+  # Create a default bucket.
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc alias set myminio http://minio:9000 minio minio123;
+      /usr/bin/mc mb myminio/part-tools;
+      /usr/bin/mc policy set public myminio/part-tools;
+      exit 0;
+      "

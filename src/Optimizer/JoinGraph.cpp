@@ -223,4 +223,12 @@ JoinGraph JoinGraphVisitor::visitProjectionNode(ProjectionNode & node, NameSet &
     return visitPlanNode(node, required_columns);
 }
 
+JoinGraph JoinGraphVisitor::visitSortingNode(SortingNode & node, NameSet & required_columns)
+{
+    if (ignore_filter_and_projection)
+    {
+        return VisitorUtil::accept(node.getChildren()[0], *this, required_columns);
+    }
+    return visitPlanNode(node, required_columns);
+}
 }

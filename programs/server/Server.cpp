@@ -45,6 +45,7 @@
 #include <IO/HTTPCommon.h>
 #include <IO/Scheduler/IOScheduler.h>
 #include <IO/UseSSL.h>
+#include <IO/Scheduler/IOScheduler.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/DNSCacheUpdater.h>
@@ -1275,7 +1276,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initCnchTransactionCoordinator();
 
         /// Initialize table and part cache, only server need part cache manager and storage cache.
-        global_context->setPartCacheManager();
+        if (config().getBool("enable_cnch_part_cache", true))
+        {
+            LOG_INFO(log, "Init cnch part cache.");
+            global_context->setPartCacheManager();
+        }
+        else
+        {
+            LOG_WARNING(log, "Disable cnch part cache, which is strongly suggested for product use, since disable it may bring significant performace problem.");
+        }
         if (config().getBool("enable_cnch_storage_cache", true))
         {
             LOG_INFO(log, "Init cnch storage cache.");

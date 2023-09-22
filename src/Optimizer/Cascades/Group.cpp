@@ -46,15 +46,16 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
         if (expression->getStep()->getType() == IQueryPlanStep::Type::Join)
         {
             simple_children = false;
-            UInt32 children_table_scans = context.getMemo().getGroupById(expression->getChildrenGroups()[0])->max_table_scans
-                + context.getMemo().getGroupById(expression->getChildrenGroups()[0])->max_table_scans;
-            max_table_scans = std::max(max_table_scans, children_table_scans);
         }
 
         if (expression->getStep()->getType() == IQueryPlanStep::Type::TableScan)
         {
             is_table_scan = true;
-            max_table_scans = std::max(max_table_scans, 1u);
+            max_table_scans = std::max(max_table_scans, 1ul);
+            if (stats_derived && statistics.has_value())
+            {
+                max_table_scan_rows = std::max(max_table_scan_rows, (*statistics)->getRowCount());
+            }
         }
         if (expression->getStep()->getType() == IQueryPlanStep::Type::Projection && expression->getChildrenGroups().size() == 1)
         {
@@ -63,14 +64,28 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
 
         if (expression->getStep()->getType() == IQueryPlanStep::Type::CTERef)
         {
-            const auto & with_clause_step = dynamic_cast<const CTERefStep &>(*expression->getStep());
-            const auto & cte_def_contains_cte_ids = context.getMemo().getCTEDefGroupByCTEId(with_clause_step.getId())->getCTESet();
-            cte_set.emplace(with_clause_step.getId());
+            const auto & cte_ref_step = dynamic_cast<const CTERefStep &>(*expression->getStep());
+            auto cte_def_group = context.getMemo().getCTEDefGroupByCTEId(cte_ref_step.getId());
+            const auto & cte_def_contains_cte_ids = cte_def_group->getCTESet();
+            cte_set.emplace(cte_ref_step.getId());
             cte_set.insert(cte_def_contains_cte_ids.begin(), cte_def_contains_cte_ids.end());
+
+            max_table_scans = std::max(max_table_scans, cte_def_group->getMaxTableScans());
+            max_table_scan_rows = std::max(max_table_scan_rows, cte_def_group->getMaxTableScanRows());
         }
+
+        UInt64 children_table_scans = 0;
+        UInt64 children_table_scan_rows = 0;
         for (auto group_id : expression->getChildrenGroups())
-            for (auto cte_id : context.getMemo().getGroupById(group_id)->getCTESet())
+        {
+            auto child_group = context.getMemo().getGroupById(group_id);
+            for (auto cte_id : child_group->getCTESet())
                 cte_set.emplace(cte_id);
+            children_table_scans += child_group->getMaxTableScans();
+            children_table_scan_rows += child_group->getMaxTableScanRows();
+        }
+        max_table_scans = std::max(max_table_scans, children_table_scans);
+        max_table_scan_rows = std::max(max_table_scan_rows, children_table_scan_rows);
     }
 
     if (!stats_derived)
@@ -85,6 +100,14 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
         }
         statistics = CardinalityEstimator::estimate(
             expression->getStep(), context.getCTEInfo(), std::move(children_stats), context.getContext(), simple_children, is_table_scans);
+
+        if (expression->getStep()->getType() == IQueryPlanStep::Type::TableScan)
+        {
+            if (statistics.has_value())
+            {
+                max_table_scan_rows = std::max(max_table_scan_rows, (*statistics)->getRowCount());
+            }
+        }
 
         stats_derived = true;
     }

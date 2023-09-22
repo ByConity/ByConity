@@ -39,7 +39,7 @@ void S3AttachMetaFileAction::abort()
 void S3AttachMetaFileAction::postCommit(TxnTimestamp)
 {
     // Clean meta files
-    String meta_prefix = std::filesystem::path(disk->getPath()) / S3PartsAttachMeta::metaPrefix(task_id);
+    String meta_prefix = disk->getPath() + S3PartsAttachMeta::metaPrefix(task_id);
 
     S3::S3Util s3_util(disk->getS3Client(), disk->getS3Bucket());
     s3_util.deleteObjectsWithPrefix(meta_prefix, [](const S3::S3Util &, const String & key) { return endsWith(key, ".am"); });
@@ -54,8 +54,8 @@ void S3AttachMetaFileAction::commitByUndoBuffer(const Context & ctx, const UndoR
             continue;
         }
         DiskPtr disk = ctx.getDisk(resource.diskName());
-        String task_id = resource.placeholders(0);
-        String meta_prefix = std::filesystem::path(disk->getPath()) / S3PartsAttachMeta::metaPrefix(task_id);
+        const String& task_id = resource.placeholders(0);
+        String meta_prefix = disk->getPath() + S3PartsAttachMeta::metaPrefix(task_id);
 
         if (std::shared_ptr<DiskByteS3> disk_s3 = std::dynamic_pointer_cast<DiskByteS3>(disk); disk_s3 != nullptr)
         {
