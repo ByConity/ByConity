@@ -119,6 +119,7 @@
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/InterpreterPerfectShard.h>
+#include <CloudServices/CnchServerResource.h>
 
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SinkToOutputStream.h>
