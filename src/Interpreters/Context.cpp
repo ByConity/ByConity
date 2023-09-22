@@ -449,7 +449,6 @@ struct ContextSharedPart
     bool ready_for_query = false; /// Server is ready for incoming queries
 
     std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer;
-    bool is_explain_query = false;
 
     std::unique_ptr<PlanCacheManager> plan_cache_manager;
     ContextSharedPart()
@@ -2327,15 +2326,12 @@ std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> Context::get
 
 void Context::setIsExplainQuery(const bool & is_explain_query_)
 {
-    auto lock = getLock();
-    shared->is_explain_query = is_explain_query_;
+    is_explain_query = is_explain_query_;
 }
 
 bool Context::isExplainQuery() const
 {
-    auto lock = getLock();
-
-    return shared->is_explain_query;
+    return is_explain_query;
 }
 
 void Context::setProcessListElement(ProcessList::Element * elem)
