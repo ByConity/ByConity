@@ -2,8 +2,8 @@ SET enable_optimizer=1;
 SET optimizer_projection_support=1;
 SET force_optimize_projection=1;
 
-CREATE DATABASE IF NOT EXISTS test;
-USE test;
+CREATE DATABASE IF NOT EXISTS test_proj_support_db;
+USE test_proj_support_db;
 
 SELECT '-- 1. use projection data only';
 DROP TABLE IF EXISTS test_proj_support;

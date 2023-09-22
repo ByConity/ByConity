@@ -1,8 +1,8 @@
 SET enable_optimizer=1;
 SET optimizer_projection_support=1;
 SET force_optimize_projection=1;
-CREATE DATABASE IF NOT EXISTS test;
-USE test;
+CREATE DATABASE IF NOT EXISTS test_proj_prewhere_db;
+USE test_proj_prewhere_db;
 
 DROP TABLE IF EXISTS test_proj_prewhere;
 
