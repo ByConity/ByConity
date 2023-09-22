@@ -16,6 +16,8 @@
 #pragma once
 #include <ResourceManagement/IWorkerGroup.h>
 
+#include <bthread/mutex.h>
+
 namespace DB::ResourceManagement
 {
 
@@ -62,7 +64,7 @@ public:
     WorkerGroupPtr tryGetLinkedGroup() const;
 
 private:
-    std::map<String, WorkerNodePtr> getWorkersImpl(std::lock_guard<std::mutex> & lock) const;
+    std::map<String, WorkerNodePtr> getWorkersImpl(std::lock_guard<bthread::RecursiveMutex> & lock) const;
 
     const String linked_id;
     WorkerGroupWeakPtr linked_group;

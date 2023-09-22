@@ -205,7 +205,12 @@ WorkerGroupPtr WorkerGroupManager::createWorkerGroup(
 }
 
 WorkerGroupPtr WorkerGroupManager::createWorkerGroupImpl(
-    const std::string & id, bool if_not_exists, const std::string & vw_name, WorkerGroupData data, std::lock_guard<bthread::Mutex> * vw_lock, std::lock_guard<bthread::Mutex> * /*wg_lock*/)
+    const std::string & id,
+    bool /*if_not_exists*/,
+    const std::string & vw_name,
+    WorkerGroupData data,
+    std::lock_guard<bthread::Mutex> * vw_lock,
+    std::lock_guard<bthread::Mutex> * /*wg_lock*/)
 {
     if (!vw_lock)
         throw Exception("Virtual warehouse lock should have been obtained", ErrorCodes::LOGICAL_ERROR);
@@ -241,7 +246,11 @@ WorkerGroupPtr WorkerGroupManager::createWorkerGroupImpl(
     };
 
     auto [group, created] = getOrCreate(id, std::move(creator));
-    if (!if_not_exists && !created)
+
+    /// Even user don't pass `IF NOT EXISTS`, we need to stop the creation if it already exists.
+    /// Because it may change VW settings in the next step which will introduce inconsistent state.
+    /// See ResourceManagerController::createWorkerGroup.
+    if (!created)
         throw Exception("Worker group " + id + " already exists.", ErrorCodes::WORKER_GROUP_ALREADY_EXISTS);
 
     return group;

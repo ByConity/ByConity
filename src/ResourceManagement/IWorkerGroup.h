@@ -20,8 +20,8 @@
 #include <ResourceManagement/CommonData.h>
 
 #include <map>
-#include <mutex>
 #include <boost/noncopyable.hpp>
+#include <bthread/mutex.h>
 
 namespace DB::ResourceManagement
 {
@@ -66,7 +66,9 @@ protected:
     const String id;
     const UUID vw_uuid;
 
-    mutable std::mutex state_mutex;
+    /// Use bthread mutex to avoid brpc thread hang on a single request.
+    /// Make it recursive to avoid reentrant issue when accessing shared/physical worker group.
+    mutable bthread::RecursiveMutex state_mutex;
     std::string vw_name;
 };
 
