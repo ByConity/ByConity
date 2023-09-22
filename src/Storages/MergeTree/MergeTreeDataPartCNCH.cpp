@@ -997,6 +997,11 @@ void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const
     }
     catch (...)
     {
+        if (!disk->exists(path_on_disk)) {
+            /// Early exit if the part has already been deleted.
+            LOG_TRACE(storage.log, "the Part {} has already been removed.", fullPath(disk, path_on_disk));
+            return;
+        }
         /// Recursive directory removal does many excessive "stat" syscalls under the hood.
         LOG_ERROR(
             storage.log,
