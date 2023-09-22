@@ -102,6 +102,11 @@ protected:
         return true;
     }
 
+    bool visitSortingNode(SortingNode & node, ContextMutablePtr & context) override
+    {
+        return dynamic_cast<const SortingStep *>(node.getStep().get())->getLimit() == 0 && visitChildren(node, context);
+    }
+
 private:
     bool allow_top_aggregate_node = true;
     PlanNodePtr top_aggregate_node = nullptr;

@@ -139,6 +139,7 @@ public:
     JoinGraph visitJoinNode(JoinNode &, NameSet &) override;
     JoinGraph visitFilterNode(FilterNode &, NameSet &) override;
     JoinGraph visitProjectionNode(ProjectionNode &, NameSet &) override;
+    JoinGraph visitSortingNode(SortingNode &, NameSet &) override;
 
 private:
     JoinGraphContext & join_graph_context;

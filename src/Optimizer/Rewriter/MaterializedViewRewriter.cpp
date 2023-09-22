@@ -66,7 +66,7 @@ struct RewriterCandidate
     StorageID target_database_and_table_name;
     ASTPtr prewhere_expr;
     std::optional<PlanNodeStatisticsPtr> target_table_estimated_stats;
-    bool containsOrderedColumns;
+    bool contains_ordered_columns;
     NamesWithAliases table_output_columns;
     Assignments assignments;
     NameToType name_to_type;
@@ -81,7 +81,7 @@ struct RewriterCandidateSort
     bool operator()(const RewriterCandidate & lhs, const RewriterCandidate & rhs)
     {
         if (!lhs.target_table_estimated_stats && !rhs.target_table_estimated_stats)
-            return lhs.containsOrderedColumns && !rhs.containsOrderedColumns;
+            return lhs.contains_ordered_columns && !rhs.contains_ordered_columns;
         else if (!lhs.target_table_estimated_stats)
             return false;
         else if (!rhs.target_table_estimated_stats)
@@ -95,7 +95,7 @@ struct RewriterCandidateSort
             }
             else
             {
-                return lhs.containsOrderedColumns && !rhs.containsOrderedColumns;
+                return lhs.contains_ordered_columns && !rhs.contains_ordered_columns;
             }
         }
     }
@@ -898,6 +898,11 @@ protected:
                 it_stats = materialized_views_stats.emplace(target_storage_id.getFullTableName(), stats).first;
             }
 
+            auto storage = DatabaseCatalog::instance().getTable(target_storage_id, context);
+            auto metadata_snapshot = storage->getInMemoryMetadataPtr();
+            const auto & ordered_columns = metadata_snapshot->sorting_key.column_names;
+            bool contains_ordered_columns = !ordered_columns.empty() && columns.count(ordered_columns.front());
+
             NamesWithAliases table_columns_with_aliases;
             if (required_columns_set.empty()) {
                 required_columns_set.emplace(*view_outputs.begin());
@@ -935,15 +940,12 @@ protected:
                 }
             }
 
-            // todo getOrderBy keys
-            bool containsOrderedColumns = false;
-
             return RewriterCandidate{
                 view_storage_id,
                 target_storage_id,
                 prewhere_expr,
                 it_stats->second,
-                containsOrderedColumns,
+                contains_ordered_columns,
                 table_columns_with_aliases,
                 assignments,
                 name_to_type,
