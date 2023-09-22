@@ -61,6 +61,49 @@ TransformResult CommonPredicateRewriteRule::transformImpl(PlanNodePtr node, cons
     return filter_node;
 }
 
+PatternPtr CommonJoinFilterRewriteRule::getPattern() const
+{
+    return Patterns::join().matchingStep<JoinStep>([&](const JoinStep & s) { return !PredicateUtils::isTruePredicate(s.getFilter()); }).result();
+}
+
+TransformResult CommonJoinFilterRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    auto & context = rule_context.context;
+    const auto & step_ptr = node->getStep();
+    const auto & step = dynamic_cast<const JoinStep &>(*step_ptr);
+
+    auto filter = step.getFilter();
+    ConstASTPtr rewritten = CommonPredicatesRewriter::rewrite(filter, context);
+
+    if (rewritten->getColumnName() == filter->getColumnName())
+    {
+        return {};
+    }
+
+    QueryPlanStepPtr join_step = std::make_shared<JoinStep>(
+       step.getInputStreams(),
+        step.getOutputStream(),
+        step.getKind(),
+        step.getStrictness(),
+        step.getMaxStreams(),
+        step.getKeepLeftReadInOrder(),
+        step.getLeftKeys(),
+        step.getRightKeys(),
+        rewritten,
+        step.isHasUsing(),
+        step.getRequireRightKeys(),
+        step.getAsofInequality(),
+        step.getDistributionType(),
+        JoinAlgorithm::AUTO,
+        false,
+        step.isOrdered(),
+        step.getRuntimeFilterBuilders(),
+        step.getHints());
+
+    PlanNodePtr join_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(join_step), node->getChildren());
+    return join_node;
+}
+
 PatternPtr SwapPredicateRewriteRule::getPattern() const
 {
     return Patterns::filter().result();
