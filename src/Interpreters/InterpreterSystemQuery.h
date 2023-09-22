@@ -87,7 +87,7 @@ private:
 
     void executeDedup(const ASTSystemQuery & query);
 
-    void dumpCnchServerManagerStatus();
+    void dumpCnchServerStatus();
 
     void dropCnchPartCache(ASTSystemQuery & query);
 

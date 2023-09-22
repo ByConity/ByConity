@@ -90,7 +90,7 @@ public:
             return;
 
         String uuid_str = UUIDHelpers::UUIDToString(uuid);
-        const auto & keys = inner_container->getKeys(uuid_str);
+        const auto keys = inner_container->getKeys(uuid_str);
         for (const auto & key : keys)
             remove(key);
     }

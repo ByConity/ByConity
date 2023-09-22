@@ -89,9 +89,14 @@ uint64_t MetastoreFDBImpl::get(const String & key, String & value)
 std::vector<std::pair<String, UInt64>> MetastoreFDBImpl::multiGet(const std::vector<String> & keys)
 {
     std::vector<std::pair<String, UInt64>> res;
-    FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
-    check_fdb_op(fdb_client->CreateTransaction(tr));
-    check_fdb_op(fdb_client->MultiGet(tr, keys, res));
+    res.reserve(keys.size());
+    for (size_t i = 0; i < keys.size(); i += DEFAULT_MULTI_GET_BATCH_COUNT)
+    {
+        std::vector<String> batch_keys(keys.begin() + i, keys.begin() + std::min(i + DEFAULT_MULTI_GET_BATCH_COUNT, keys.size()));
+        FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
+        check_fdb_op(fdb_client->CreateTransaction(tr));
+        check_fdb_op(fdb_client->MultiGet(tr, batch_keys, res));
+    }
     return res;
 }
 

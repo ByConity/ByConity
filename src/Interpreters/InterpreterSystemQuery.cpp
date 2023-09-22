@@ -488,7 +488,7 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             executeDedup(query);
             break;
         case Type::DUMP_SERVER_STATUS:
-            dumpCnchServerManagerStatus();
+            dumpCnchServerStatus();
             break;
         case Type::DROP_CNCH_PART_CACHE:
             dropCnchPartCache(query);
@@ -1060,11 +1060,15 @@ void InterpreterSystemQuery::executeDedup(const ASTSystemQuery & query)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table {} is not a CnchMergeTree", table_id.getNameForLogs());
 }
 
-void InterpreterSystemQuery::dumpCnchServerManagerStatus()
+void InterpreterSystemQuery::dumpCnchServerStatus()
 {
-    bool is_leader = getContext()->getCnchServerManager()->isLeader();
-    auto current_topology = getContext()->getCnchTopologyMaster()->getCurrentTopology();
-    LOG_DEBUG(log, "\nCurrent node is leader: {};\nCurrent topology: {}", is_leader, dumpTopologies(current_topology));
+    auto context = getContext();
+    auto server_manager = context->getCnchServerManager();
+    if (server_manager)
+        server_manager->dumpServerStatus();
+    auto topology_master = context->getCnchTopologyMaster();
+    if (topology_master)
+        topology_master->dumpStatus();
 }
 
 void InterpreterSystemQuery::dropCnchPartCache(ASTSystemQuery & query)

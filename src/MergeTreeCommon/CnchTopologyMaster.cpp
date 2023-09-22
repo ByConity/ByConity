@@ -32,9 +32,15 @@ namespace ErrorCodes
 
 CnchTopologyMaster::CnchTopologyMaster(ContextPtr context_)
     : WithContext(context_)
-    , topology_fetcher(getContext()->getTopologySchedulePool().createTask("TopologyFetcher", [&]() { fetchTopologies(); }))
     , settings{context_->getSettings()}
 {
+    topology_fetcher = getContext()->getTopologySchedulePool().createTask("TopologyFetcher", [&]() {
+        bool success = fetchTopologies();
+        fetch_time = time(nullptr);
+        auto schedule_delay = success ? settings.topology_refresh_interval_ms.totalMilliseconds()
+                                      : settings.topology_retry_interval_ms.totalMilliseconds();
+        topology_fetcher->scheduleAfter(schedule_delay);
+    });
     topology_fetcher->activateAndSchedule();
 }
 
@@ -50,7 +56,7 @@ CnchTopologyMaster::~CnchTopologyMaster()
     }
 }
 
-void CnchTopologyMaster::fetchTopologies()
+bool CnchTopologyMaster::fetchTopologies()
 {
     try
     {
@@ -91,14 +97,16 @@ void CnchTopologyMaster::fetchTopologies()
         {
             /// needed for the 1st time write to kv..
             LOG_TRACE(log, "Cannot fetch topology from remote.");
+            return false;
         }
     }
     catch (...)
     {
         tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        return false;
     }
 
-    topology_fetcher->scheduleAfter(settings.topology_refresh_interval_ms.totalMilliseconds());
+    return true;
 }
 
 std::list<CnchServerTopology> CnchTopologyMaster::getCurrentTopology()
@@ -161,10 +169,15 @@ HostWithPorts CnchTopologyMaster::getTargetServerImpl(
     if (target_server.empty())
     {
         if (!allow_empty_result)
-            throw Exception("No available topology for server vw: " + server_vw_name + ", current commit time : " + std::to_string(commit_time_ms) + ". Available topology : " + dumpTopologies(current_topology), ErrorCodes::CNCH_NO_AVAILABLE_TOPOLOGY);
+            throw Exception("No available topology for server vw: " + server_vw_name 
+                + ", current commit time : " + std::to_string(commit_time_ms) 
+                + ". Available topology : " + dumpTopologies(current_topology)
+                + ". Current time : " + std::to_string(time(nullptr))
+                + ". Fetch time : " + std::to_string(fetch_time)
+                , ErrorCodes::CNCH_NO_AVAILABLE_TOPOLOGY);
         else
-            LOG_INFO(log, "No available topology for server vw: {}, current commit time : {}. Available topology : {}"
-                , server_vw_name, std::to_string(commit_time_ms), dumpTopologies(current_topology));
+            LOG_INFO(log, "No available topology for server vw: {}, current commit time : {}. Available topology : {}. Current time : {}. Fetch time : {}"
+                , server_vw_name, std::to_string(commit_time_ms), dumpTopologies(current_topology), time(nullptr), fetch_time);
     }
 
     return target_server;
@@ -191,6 +204,28 @@ void CnchTopologyMaster::shutDown()
 {
     if (topology_fetcher)
         topology_fetcher->deactivate();
+}
+
+void CnchTopologyMaster::dumpStatus() const
+{
+    std::stringstream ss;
+    ss << "[tasks info] : \n"
+       << "current_time : " << time(nullptr) << std::endl
+       << "fetch_time : " << fetch_time << std::endl
+       << "[current fetched topology] : \n";
+
+    {
+        std::unique_lock lock(mutex, std::defer_lock);
+        if (lock.try_lock_for(std::chrono::milliseconds(1000)))
+        {
+            ss << DB::dumpTopologies(topologies);
+        }
+        else
+        {
+            ss << "Failed to accquire topology master lock";
+        }
+    }
+    LOG_INFO(log, "Dump topology master status :\n{}", ss.str());
 }
 
 }
