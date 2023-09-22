@@ -179,6 +179,8 @@ ASTs TrivialCountVisitor::replaceColumnsAlias(ASTs & filters, NamesWithAliases &
 
             if (has_in)
                 conjuncts.emplace_back(mapper.map(filter));
+            else
+                conjuncts.emplace_back(filter);
         }
         auto new_filter = PredicateUtils::combineConjuncts(conjuncts);
         res.emplace_back(new_filter);

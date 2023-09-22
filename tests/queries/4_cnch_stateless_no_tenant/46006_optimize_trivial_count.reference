@@ -124,3 +124,29 @@ Projection Est. ? rows
                │     Partition by: {i_1}
                └─ TableScan test.test1 Est. ? rows
                         Outputs: i_1:=i
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Filter Est. ? rows
+            │     Condition: cityHash64(intDiv(`expr#rowNumberInAllBlocks()`, 8192)) < 0.02
+            └─ Projection Est. ? rows
+               │     Expressions: expr#rowNumberInAllBlocks():=rowNumberInAllBlocks()
+               └─ TableScan test.test1 Est. ? rows
+                        Outputs: [i]
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Filter Est. ? rows
+            │     Condition: `expr#host()` = \'xx\'
+            └─ Projection Est. ? rows
+               │     Expressions: expr#host():=host()
+               └─ TableScan test.test1 Est. ? rows
+                        Outputs: [p]

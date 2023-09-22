@@ -69,4 +69,25 @@ explain select i,count() from test1 group by i;
 select 'non-optimized:';
 explain select count() from test1 t1 left join test1 t2 on t1.i=t2.i;
 
+EXPLAIN
+SELECT count(*)
+FROM
+(
+    SELECT
+        i,
+        rowNumberInAllBlocks() AS rn
+    FROM test1
+    WHERE cityHash64(intDiv(rn, 8192)) < 0.02
+);
+
+EXPLAIN 
+SELECT count(*)
+FROM
+(
+    SELECT
+        host() as x
+    FROM test1
+    WHERE x = 'xx'
+);
+
 drop table if exists test1;
