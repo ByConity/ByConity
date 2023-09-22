@@ -55,7 +55,7 @@ template <> inline constexpr size_t max_precision<Decimal256> = 76;
 
 template <typename T0> struct NextDecimal { using Result = void; };
 template <> struct NextDecimal<Decimal32> { using Result = Decimal64; };
-template <> struct NextDecimal<Decimal64> { using Result = void; }; // not promote for Decimal64, due to the performance penalty of Int64 -> Int128
+template <> struct NextDecimal<Decimal64> { using Result = Decimal128; };
 template <> struct NextDecimal<Decimal128> { using Result = Decimal256; };
 
 template <typename T>

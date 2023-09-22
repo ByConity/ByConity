@@ -148,24 +148,21 @@ Projection
                                  └─ Inner Join
                                     │     Condition: ws_item_sk == i_item_sk_2
                                     │     Runtime Filters Builder: {i_item_sk_2}
-                                    ├─ Repartition Exchange
-                                    │  │     Partition by: {ws_item_sk}
-                                    │  └─ Inner Join
-                                    │     │     Condition: ws_sold_date_sk == d_date_sk_2
-                                    │     │     Runtime Filters Builder: {d_date_sk_2}
-                                    │     ├─ Filter
-                                    │     │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                                    │     │  └─ TableScan tpcds100.web_sales
-                                    │     │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                                    │     │           Outputs: [ws_bill_addr_sk, ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
-                                    │     └─ Broadcast Exchange
-                                    │        └─ Filter
-                                    │           │     Condition: (d_year_2 = 2001) AND (d_moy_2 = 2)
-                                    │           └─ TableScan tpcds100.date_dim
-                                    │                    Where: (d_year = 2001) AND (d_moy = 2)
-                                    │                    Outputs: d_date_sk_2:=d_date_sk, d_moy_2:=d_moy, d_year_2:=d_year
-                                    └─ Repartition Exchange
-                                       │     Partition by: {i_item_sk_2}
+                                    ├─ Inner Join
+                                    │  │     Condition: ws_sold_date_sk == d_date_sk_2
+                                    │  │     Runtime Filters Builder: {d_date_sk_2}
+                                    │  ├─ Filter
+                                    │  │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                                    │  │  └─ TableScan tpcds100.web_sales
+                                    │  │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                                    │  │           Outputs: [ws_bill_addr_sk, ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
+                                    │  └─ Broadcast Exchange
+                                    │     └─ Filter
+                                    │        │     Condition: (d_year_2 = 2001) AND (d_moy_2 = 2)
+                                    │        └─ TableScan tpcds100.date_dim
+                                    │                 Where: (d_year = 2001) AND (d_moy = 2)
+                                    │                 Outputs: d_date_sk_2:=d_date_sk, d_moy_2:=d_moy, d_year_2:=d_year
+                                    └─ Broadcast Exchange
                                        └─ Inner Join
                                           │     Condition: i_item_id_4 == i_item_id_5
                                           ├─ Repartition Exchange

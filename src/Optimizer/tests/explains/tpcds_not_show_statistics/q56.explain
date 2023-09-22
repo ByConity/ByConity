@@ -20,56 +20,56 @@ Projection
                   │        │     Group by: {i_item_id}
                   │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
                   │        └─ Inner Join
-                  │           │     Condition: ca_address_sk == ss_addr_sk
-                  │           │     Runtime Filters Builder: {ss_addr_sk}
+                  │           │     Condition: ss_addr_sk == ca_address_sk
+                  │           │     Runtime Filters Builder: {ca_address_sk}
                   │           ├─ Repartition Exchange
-                  │           │  │     Partition by: {ca_address_sk}
-                  │           │  └─ Filter
-                  │           │     │     Condition: ca_gmt_offset = -5. Runtime Filters: {ca_address_sk}
-                  │           │     └─ TableScan tpcds.customer_address
-                  │           │              Where: ca_gmt_offset = -5. Runtime Filters: {ca_address_sk}
-                  │           │              Outputs: [ca_address_sk, ca_gmt_offset]
+                  │           │  │     Partition by: {ss_addr_sk}
+                  │           │  └─ Inner Join
+                  │           │     │     Condition: ss_item_sk == i_item_sk
+                  │           │     │     Runtime Filters Builder: {i_item_sk}
+                  │           │     ├─ Inner Join
+                  │           │     │  │     Condition: ss_sold_date_sk == d_date_sk
+                  │           │     │  │     Runtime Filters Builder: {d_date_sk}
+                  │           │     │  ├─ Filter
+                  │           │     │  │  │     Condition: Runtime Filters: {ss_addr_sk, ss_item_sk, ss_sold_date_sk}
+                  │           │     │  │  └─ TableScan tpcds.store_sales
+                  │           │     │  │           Where: Runtime Filters: {ss_addr_sk, ss_item_sk, ss_sold_date_sk}
+                  │           │     │  │           Outputs: [ss_addr_sk, ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
+                  │           │     │  └─ Broadcast Exchange
+                  │           │     │     └─ Filter
+                  │           │     │        │     Condition: (d_moy = 2) AND (d_year = 2001)
+                  │           │     │        └─ TableScan tpcds.date_dim
+                  │           │     │                 Where: (d_moy = 2) AND (d_year = 2001)
+                  │           │     │                 Outputs: [d_date_sk, d_moy, d_year]
+                  │           │     └─ Broadcast Exchange
+                  │           │        └─ Inner Join
+                  │           │           │     Condition: i_item_id == i_item_id_1
+                  │           │           ├─ Repartition Exchange
+                  │           │           │  │     Partition by: {i_item_id}
+                  │           │           │  └─ Filter
+                  │           │           │     │     Condition: isNotNull(i_item_id)
+                  │           │           │     └─ TableScan tpcds.item
+                  │           │           │              Where: isNotNull(i_item_id)
+                  │           │           │              Outputs: [i_item_id, i_item_sk]
+                  │           │           └─ MergingAggregated
+                  │           │              └─ Repartition Exchange
+                  │           │                 │     Partition by: {i_item_id_1}
+                  │           │                 └─ Aggregating
+                  │           │                    │     Group by: {i_item_id_1}
+                  │           │                    └─ Projection
+                  │           │                       │     Expressions: [i_item_id_1]
+                  │           │                       └─ Filter
+                  │           │                          │     Condition: (i_color IN ('blanched', 'burnished', 'slate')) AND isNotNull(i_item_id_1)
+                  │           │                          └─ TableScan tpcds.item
+                  │           │                                   Where: (i_color IN ('blanched', 'burnished', 'slate')) AND isNotNull(i_item_id)
+                  │           │                                   Outputs: [i_color], i_item_id_1:=i_item_id
                   │           └─ Repartition Exchange
-                  │              │     Partition by: {ss_addr_sk}
-                  │              └─ Inner Join
-                  │                 │     Condition: ss_item_sk == i_item_sk
-                  │                 │     Runtime Filters Builder: {i_item_sk}
-                  │                 ├─ Inner Join
-                  │                 │  │     Condition: ss_sold_date_sk == d_date_sk
-                  │                 │  │     Runtime Filters Builder: {d_date_sk}
-                  │                 │  ├─ Filter
-                  │                 │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                  │                 │  │  └─ TableScan tpcds.store_sales
-                  │                 │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                  │                 │  │           Outputs: [ss_addr_sk, ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
-                  │                 │  └─ Broadcast Exchange
-                  │                 │     └─ Filter
-                  │                 │        │     Condition: (d_moy = 2) AND (d_year = 2001)
-                  │                 │        └─ TableScan tpcds.date_dim
-                  │                 │                 Where: (d_moy = 2) AND (d_year = 2001)
-                  │                 │                 Outputs: [d_date_sk, d_moy, d_year]
-                  │                 └─ Broadcast Exchange
-                  │                    └─ Inner Join
-                  │                       │     Condition: i_item_id == i_item_id_1
-                  │                       ├─ Repartition Exchange
-                  │                       │  │     Partition by: {i_item_id}
-                  │                       │  └─ Filter
-                  │                       │     │     Condition: isNotNull(i_item_id)
-                  │                       │     └─ TableScan tpcds.item
-                  │                       │              Where: isNotNull(i_item_id)
-                  │                       │              Outputs: [i_item_id, i_item_sk]
-                  │                       └─ MergingAggregated
-                  │                          └─ Repartition Exchange
-                  │                             │     Partition by: {i_item_id_1}
-                  │                             └─ Aggregating
-                  │                                │     Group by: {i_item_id_1}
-                  │                                └─ Projection
-                  │                                   │     Expressions: [i_item_id_1]
-                  │                                   └─ Filter
-                  │                                      │     Condition: (i_color IN ('blanched', 'burnished', 'slate')) AND isNotNull(i_item_id_1)
-                  │                                      └─ TableScan tpcds.item
-                  │                                               Where: (i_color IN ('blanched', 'burnished', 'slate')) AND isNotNull(i_item_id)
-                  │                                               Outputs: [i_color], i_item_id_1:=i_item_id
+                  │              │     Partition by: {ca_address_sk}
+                  │              └─ Filter
+                  │                 │     Condition: ca_gmt_offset = -5.
+                  │                 └─ TableScan tpcds.customer_address
+                  │                          Where: ca_gmt_offset = -5.
+                  │                          Outputs: [ca_address_sk, ca_gmt_offset]
                   ├─ MergingAggregated
                   │  └─ Repartition Exchange
                   │     │     Partition by: {i_item_id_2}

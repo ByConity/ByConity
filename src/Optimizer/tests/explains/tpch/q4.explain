@@ -11,7 +11,7 @@ Projection Est. 1 rows
                └─ Aggregating Est. 1 rows
                   │     Group by: {o_orderpriority}
                   │     Aggregates: expr#count():=AggNull(count)()
-                  └─ Inner Join Est. 57656 rows
+                  └─ Inner Join Est. 57304 rows
                      │     Condition: l_orderkey == o_orderkey
                      │     Runtime Filters Builder: {o_orderkey}
                      ├─ MergingAggregated Est. 57304 rows

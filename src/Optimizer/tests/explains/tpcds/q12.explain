@@ -5,42 +5,39 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(ws_ext_sales_price), 100), sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
       │     Limit: 100
-      └─ Gather Exchange Est. 1690291 rows
+      └─ Gather Exchange Est. 3380582 rows
          └─ Sorting Est. 100 rows
             │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(ws_ext_sales_price), 100), sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
             │     Limit: 100
-            └─ Projection Est. 1690291 rows
+            └─ Projection Est. 3380582 rows
                │     Expressions: [expr#sum(ws_ext_sales_price), i_category, i_class, i_current_price, i_item_desc, i_item_id], expr#divide(multiply(sum(ws_ext_sales_price), 100), sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)):=(`expr#sum(ws_ext_sales_price)` * 100) / `expr#sum(sum(ws_ext_sales_price)) OVER (PARTITION BY i_class)`
-               └─ Window Est. 1690291 rows
-                  └─ Repartition Exchange Est. 1690291 rows
+               └─ Window Est. 3380582 rows
+                  └─ Repartition Exchange Est. 3380582 rows
                      │     Partition by: {i_class}
-                     └─ MergingAggregated Est. 1690291 rows
-                        └─ Repartition Exchange Est. 1690291 rows
+                     └─ MergingAggregated Est. 3380582 rows
+                        └─ Repartition Exchange Est. 3380582 rows
                            │     Partition by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
-                           └─ Aggregating Est. 1690291 rows
+                           └─ Aggregating Est. 3380582 rows
                               │     Group by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
                               │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-                              └─ Inner Join Est. 1690291 rows
+                              └─ Inner Join Est. 3380582 rows
                                  │     Condition: ws_item_sk == i_item_sk
                                  │     Runtime Filters Builder: {i_item_sk}
-                                 ├─ Repartition Exchange Est. 5640197 rows
-                                 │  │     Partition by: {ws_item_sk}
-                                 │  └─ Inner Join Est. 5640197 rows
-                                 │     │     Condition: ws_sold_date_sk == d_date_sk
-                                 │     │     Runtime Filters Builder: {d_date_sk}
-                                 │     ├─ Filter Est. 720000376 rows
-                                 │     │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                                 │     │  └─ TableScan tpcds.web_sales Est. 720000376 rows
-                                 │     │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                                 │     │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
-                                 │     └─ Broadcast Exchange Est. 29 rows
-                                 │        └─ Filter Est. 29 rows
-                                 │           │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                                 │           └─ TableScan tpcds.date_dim Est. 73049 rows
-                                 │                    Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                                 │                    Outputs: [d_date, d_date_sk]
-                                 └─ Repartition Exchange Est. 89906 rows
-                                    │     Partition by: {i_item_sk}
+                                 ├─ Inner Join Est. 11280394 rows
+                                 │  │     Condition: ws_sold_date_sk == d_date_sk
+                                 │  │     Runtime Filters Builder: {d_date_sk}
+                                 │  ├─ Filter Est. 720000376 rows
+                                 │  │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                                 │  │  └─ TableScan tpcds.web_sales Est. 720000376 rows
+                                 │  │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                                 │  │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
+                                 │  └─ Broadcast Exchange Est. 29 rows
+                                 │     └─ Filter Est. 29 rows
+                                 │        │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
+                                 │        └─ TableScan tpcds.date_dim Est. 73049 rows
+                                 │                 Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
+                                 │                 Outputs: [d_date, d_date_sk]
+                                 └─ Broadcast Exchange Est. 89906 rows
                                     └─ Filter Est. 89906 rows
                                        │     Condition: i_category IN ('Books', 'Home', 'Sports')
                                        └─ TableScan tpcds.item Est. 300000 rows

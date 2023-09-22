@@ -5,25 +5,25 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
       │     Limit: 100
-      └─ Gather Exchange Est. 3358760 rows
+      └─ Gather Exchange Est. 6717520 rows
          └─ Sorting Est. 100 rows
             │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
             │     Limit: 100
-            └─ Projection Est. 3358760 rows
+            └─ Projection Est. 6717520 rows
                │     Expressions: [expr#sum(cs_ext_sales_price), i_category, i_class, i_current_price, i_item_desc, i_item_id], expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)):=(`expr#sum(cs_ext_sales_price)` * 100) / `expr#sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)`
-               └─ Window Est. 3358760 rows
-                  └─ Repartition Exchange Est. 3358760 rows
+               └─ Window Est. 6717520 rows
+                  └─ Repartition Exchange Est. 6717520 rows
                      │     Partition by: {i_class}
-                     └─ MergingAggregated Est. 3358760 rows
-                        └─ Repartition Exchange Est. 3358760 rows
+                     └─ MergingAggregated Est. 6717520 rows
+                        └─ Repartition Exchange Est. 6717520 rows
                            │     Partition by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
-                           └─ Aggregating Est. 3358760 rows
+                           └─ Aggregating Est. 6717520 rows
                               │     Group by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
                               │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price)
-                              └─ Inner Join Est. 3358760 rows
+                              └─ Inner Join Est. 6717520 rows
                                  │     Condition: cs_item_sk == i_item_sk
                                  │     Runtime Filters Builder: {i_item_sk}
-                                 ├─ Inner Join Est. 11207577 rows
+                                 ├─ Inner Join Est. 22415154 rows
                                  │  │     Condition: cs_sold_date_sk == d_date_sk
                                  │  │     Runtime Filters Builder: {d_date_sk}
                                  │  ├─ Filter Est. 1439980416 rows

@@ -43,31 +43,31 @@ CTEDef [1]
                      │     Group by: {d_moy, d_year, i_brand, i_category, s_company_name, s_store_name}
                      │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
                      └─ Inner Join
-                        │     Condition: ss_item_sk == i_item_sk
-                        ├─ Repartition Exchange
-                        │  │     Partition by: {ss_item_sk}
-                        │  └─ Inner Join
-                        │     │     Condition: ss_store_sk == s_store_sk
-                        │     ├─ Inner Join
-                        │     │  │     Condition: ss_sold_date_sk == d_date_sk
-                        │     │  │     Runtime Filters Builder: {d_date_sk}
-                        │     │  ├─ Filter
-                        │     │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
-                        │     │  │  └─ TableScan tpcds.store_sales
-                        │     │  │           Where: Runtime Filters: {ss_sold_date_sk}
-                        │     │  │           Outputs: [ss_item_sk, ss_sales_price, ss_sold_date_sk, ss_store_sk]
-                        │     │  └─ Broadcast Exchange
-                        │     │     └─ Filter
-                        │     │        │     Condition: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
-                        │     │        └─ TableScan tpcds.date_dim
-                        │     │                 Where: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
-                        │     │                 Outputs: [d_date_sk, d_moy, d_year]
-                        │     └─ Broadcast Exchange
-                        │        └─ TableScan tpcds.store
-                        │                 Outputs: [s_company_name, s_store_name, s_store_sk]
-                        └─ Repartition Exchange
-                           │     Partition by: {i_item_sk}
-                           └─ TableScan tpcds.item
-                                    Outputs: [i_brand, i_category, i_item_sk]
+                        │     Condition: ss_store_sk == s_store_sk
+                        ├─ Inner Join
+                        │  │     Condition: ss_item_sk == i_item_sk
+                        │  ├─ Repartition Exchange
+                        │  │  │     Partition by: {ss_item_sk}
+                        │  │  └─ Inner Join
+                        │  │     │     Condition: ss_sold_date_sk == d_date_sk
+                        │  │     │     Runtime Filters Builder: {d_date_sk}
+                        │  │     ├─ Filter
+                        │  │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
+                        │  │     │  └─ TableScan tpcds.store_sales
+                        │  │     │           Where: Runtime Filters: {ss_sold_date_sk}
+                        │  │     │           Outputs: [ss_item_sk, ss_sales_price, ss_sold_date_sk, ss_store_sk]
+                        │  │     └─ Broadcast Exchange
+                        │  │        └─ Filter
+                        │  │           │     Condition: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
+                        │  │           └─ TableScan tpcds.date_dim
+                        │  │                    Where: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
+                        │  │                    Outputs: [d_date_sk, d_moy, d_year]
+                        │  └─ Repartition Exchange
+                        │     │     Partition by: {i_item_sk}
+                        │     └─ TableScan tpcds.item
+                        │              Outputs: [i_brand, i_category, i_item_sk]
+                        └─ Broadcast Exchange
+                           └─ TableScan tpcds.store
+                                    Outputs: [s_company_name, s_store_name, s_store_sk]
 note: Runtime Filter is applied for 1 times.
 note: CTE(Common Table Expression) is applied for 3 times.

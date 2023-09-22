@@ -14,13 +14,13 @@ Projection Est. 1 rows
             │     └─ Aggregating Est. 1 rows
             │        │     Group by: {}
             │        │     Aggregates: expr#count():=AggNull(count)()
-            │        └─ Inner Join Est. 62393 rows
+            │        └─ Inner Join Est. 124787 rows
             │           │     Condition: ws_ship_hdemo_sk == hd_demo_sk
             │           │     Runtime Filters Builder: {hd_demo_sk}
-            │           ├─ Inner Join Est. 625757 rows
+            │           ├─ Inner Join Est. 1251515 rows
             │           │  │     Condition: ws_sold_time_sk == t_time_sk
             │           │  │     Runtime Filters Builder: {t_time_sk}
-            │           │  ├─ Inner Join Est. 7572624 rows
+            │           │  ├─ Inner Join Est. 15145249 rows
             │           │  │  │     Condition: ws_web_page_sk == wp_web_page_sk
             │           │  │  │     Runtime Filters Builder: {wp_web_page_sk}
             │           │  │  ├─ Filter Est. 720000376 rows
@@ -52,13 +52,13 @@ Projection Est. 1 rows
                      └─ Aggregating Est. 1 rows
                         │     Group by: {}
                         │     Aggregates: expr#count()_1:=AggNull(count)()
-                        └─ Inner Join Est. 62393 rows
+                        └─ Inner Join Est. 124787 rows
                            │     Condition: ws_ship_hdemo_sk_1 == hd_demo_sk_1
                            │     Runtime Filters Builder: {hd_demo_sk_1}
-                           ├─ Inner Join Est. 625757 rows
+                           ├─ Inner Join Est. 1251515 rows
                            │  │     Condition: ws_sold_time_sk_1 == t_time_sk_1
                            │  │     Runtime Filters Builder: {t_time_sk_1}
-                           │  ├─ Inner Join Est. 7572624 rows
+                           │  ├─ Inner Join Est. 15145249 rows
                            │  │  │     Condition: ws_web_page_sk_1 == wp_web_page_sk_1
                            │  │  │     Runtime Filters Builder: {wp_web_page_sk_1}
                            │  │  ├─ Filter Est. 720000376 rows

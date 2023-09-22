@@ -5,21 +5,21 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#avg(inv_quantity_on_hand) asc, i_product_name asc, i_brand asc, i_class asc, i_category asc}
       │     Limit: 100
-      └─ Gather Exchange Est. 391500000 rows
+      └─ Gather Exchange Est. 783000000 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#avg(inv_quantity_on_hand) asc, i_product_name asc, i_brand asc, i_class asc, i_category asc}
             │     Limit: 100
-            └─ MergingAggregated Est. 391500000 rows
-               └─ Repartition Exchange Est. 391500000 rows
+            └─ MergingAggregated Est. 783000000 rows
+               └─ Repartition Exchange Est. 783000000 rows
                   │     Partition by: {__grouping_set, i_brand, i_category, i_class, i_product_name}
-                  └─ Aggregating Est. 391500000 rows
+                  └─ Aggregating Est. 783000000 rows
                      │     Group by: {i_brand, i_category, i_class, i_product_name}
                      │     Aggregates: expr#avg(inv_quantity_on_hand):=AggNull(avg)(inv_quantity_on_hand)
-                     └─ Inner Join Est. 391500000 rows
+                     └─ Inner Join Est. 783000000 rows
                         │     Condition: inv_item_sk == i_item_sk
-                        ├─ Repartition Exchange Est. 391500000 rows
+                        ├─ Repartition Exchange Est. 783000000 rows
                         │  │     Partition by: {inv_item_sk}
-                        │  └─ Inner Join Est. 391500000 rows
+                        │  └─ Inner Join Est. 783000000 rows
                         │     │     Condition: inv_date_sk == d_date_sk
                         │     ├─ TableScan tpcds.inventory Est. 783000000 rows
                         │     │        Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand]

@@ -19,14 +19,10 @@ Projection
                │        │     Aggregates: expr#sum(cr_return_quantity):=AggNull(sum)(cr_return_quantity)
                │        └─ Inner Join
                │           │     Condition: i_item_sk_1 == cr_item_sk
-               │           │     Runtime Filters Builder: {cr_item_sk}
                │           ├─ Repartition Exchange
                │           │  │     Partition by: {i_item_sk_1}
-               │           │  └─ Filter
-               │           │     │     Condition: Runtime Filters: {i_item_sk_1}
-               │           │     └─ TableScan tpcds100.item
-               │           │              Where: Runtime Filters: {i_item_sk}
-               │           │              Outputs: i_item_id_1:=i_item_id, i_item_sk_1:=i_item_sk
+               │           │  └─ TableScan tpcds100.item
+               │           │           Outputs: i_item_id_1:=i_item_id, i_item_sk_1:=i_item_sk
                │           └─ Repartition Exchange
                │              │     Partition by: {cr_item_sk}
                │              └─ Inner Join
@@ -81,56 +77,56 @@ Projection
                   │        │     Group by: {i_item_id}
                   │        │     Aggregates: expr#sum(sr_return_quantity):=AggNull(sum)(sr_return_quantity)
                   │        └─ Inner Join
-                  │           │     Condition: i_item_sk == sr_item_sk
+                  │           │     Condition: sr_item_sk == i_item_sk
                   │           ├─ Repartition Exchange
-                  │           │  │     Partition by: {i_item_sk}
-                  │           │  └─ TableScan tpcds100.item
-                  │           │           Outputs: [i_item_id, i_item_sk]
+                  │           │  │     Partition by: {sr_item_sk}
+                  │           │  └─ Inner Join
+                  │           │     │     Condition: sr_returned_date_sk == d_date_sk
+                  │           │     │     Runtime Filters Builder: {d_date_sk}
+                  │           │     ├─ Filter
+                  │           │     │  │     Condition: Runtime Filters: {sr_returned_date_sk}
+                  │           │     │  └─ TableScan tpcds100.store_returns
+                  │           │     │           Where: Runtime Filters: {sr_returned_date_sk}
+                  │           │     │           Outputs: [sr_item_sk, sr_return_quantity, sr_returned_date_sk]
+                  │           │     └─ Broadcast Exchange
+                  │           │        └─ Inner Join
+                  │           │           │     Condition: d_date == d_date_1
+                  │           │           │     Runtime Filters Builder: {d_date_1}
+                  │           │           ├─ Filter
+                  │           │           │  │     Condition: isNotNull(d_date) Runtime Filters: {d_date}
+                  │           │           │  └─ TableScan tpcds100.date_dim
+                  │           │           │           Where: isNotNull(d_date) Runtime Filters: {d_date}
+                  │           │           │           Outputs: [d_date, d_date_sk]
+                  │           │           └─ Broadcast Exchange
+                  │           │              └─ MergingAggregated
+                  │           │                 └─ Repartition Exchange
+                  │           │                    │     Partition by: {d_date_1}
+                  │           │                    └─ Aggregating
+                  │           │                       │     Group by: {d_date_1}
+                  │           │                       └─ Inner Join
+                  │           │                          │     Condition: d_week_seq == d_week_seq_1
+                  │           │                          ├─ Filter
+                  │           │                          │  │     Condition: isNotNull(d_week_seq) AND isNotNull(d_date_1)
+                  │           │                          │  └─ TableScan tpcds100.date_dim
+                  │           │                          │           Where: isNotNull(d_week_seq) AND isNotNull(d_date)
+                  │           │                          │           Outputs: [d_week_seq], d_date_1:=d_date
+                  │           │                          └─ Broadcast Exchange
+                  │           │                             └─ MergingAggregated
+                  │           │                                └─ Repartition Exchange
+                  │           │                                   │     Partition by: {d_week_seq_1}
+                  │           │                                   └─ Aggregating
+                  │           │                                      │     Group by: {d_week_seq_1}
+                  │           │                                      └─ Projection
+                  │           │                                         │     Expressions: [d_week_seq_1]
+                  │           │                                         └─ Filter
+                  │           │                                            │     Condition: (d_date_2 IN (cast(11138, 'Date'), cast(11227, 'Date'), cast(11278, 'Date'))) AND isNotNull(d_week_seq_1)
+                  │           │                                            └─ TableScan tpcds100.date_dim
+                  │           │                                                     Where: (d_date IN (cast(11138, 'Date'), cast(11227, 'Date'), cast(11278, 'Date'))) AND isNotNull(d_week_seq)
+                  │           │                                                     Outputs: d_date_2:=d_date, d_week_seq_1:=d_week_seq
                   │           └─ Repartition Exchange
-                  │              │     Partition by: {sr_item_sk}
-                  │              └─ Inner Join
-                  │                 │     Condition: sr_returned_date_sk == d_date_sk
-                  │                 │     Runtime Filters Builder: {d_date_sk}
-                  │                 ├─ Filter
-                  │                 │  │     Condition: Runtime Filters: {sr_returned_date_sk}
-                  │                 │  └─ TableScan tpcds100.store_returns
-                  │                 │           Where: Runtime Filters: {sr_returned_date_sk}
-                  │                 │           Outputs: [sr_item_sk, sr_return_quantity, sr_returned_date_sk]
-                  │                 └─ Broadcast Exchange
-                  │                    └─ Inner Join
-                  │                       │     Condition: d_date == d_date_1
-                  │                       │     Runtime Filters Builder: {d_date_1}
-                  │                       ├─ Filter
-                  │                       │  │     Condition: isNotNull(d_date) Runtime Filters: {d_date}
-                  │                       │  └─ TableScan tpcds100.date_dim
-                  │                       │           Where: isNotNull(d_date) Runtime Filters: {d_date}
-                  │                       │           Outputs: [d_date, d_date_sk]
-                  │                       └─ Broadcast Exchange
-                  │                          └─ MergingAggregated
-                  │                             └─ Repartition Exchange
-                  │                                │     Partition by: {d_date_1}
-                  │                                └─ Aggregating
-                  │                                   │     Group by: {d_date_1}
-                  │                                   └─ Inner Join
-                  │                                      │     Condition: d_week_seq == d_week_seq_1
-                  │                                      ├─ Filter
-                  │                                      │  │     Condition: isNotNull(d_week_seq) AND isNotNull(d_date_1)
-                  │                                      │  └─ TableScan tpcds100.date_dim
-                  │                                      │           Where: isNotNull(d_week_seq) AND isNotNull(d_date)
-                  │                                      │           Outputs: [d_week_seq], d_date_1:=d_date
-                  │                                      └─ Broadcast Exchange
-                  │                                         └─ MergingAggregated
-                  │                                            └─ Repartition Exchange
-                  │                                               │     Partition by: {d_week_seq_1}
-                  │                                               └─ Aggregating
-                  │                                                  │     Group by: {d_week_seq_1}
-                  │                                                  └─ Projection
-                  │                                                     │     Expressions: [d_week_seq_1]
-                  │                                                     └─ Filter
-                  │                                                        │     Condition: (d_date_2 IN (cast(11138, 'Date'), cast(11227, 'Date'), cast(11278, 'Date'))) AND isNotNull(d_week_seq_1)
-                  │                                                        └─ TableScan tpcds100.date_dim
-                  │                                                                 Where: (d_date IN (cast(11138, 'Date'), cast(11227, 'Date'), cast(11278, 'Date'))) AND isNotNull(d_week_seq)
-                  │                                                                 Outputs: d_date_2:=d_date, d_week_seq_1:=d_week_seq
+                  │              │     Partition by: {i_item_sk}
+                  │              └─ TableScan tpcds100.item
+                  │                       Outputs: [i_item_id, i_item_sk]
                   └─ MergingAggregated
                      └─ Repartition Exchange
                         │     Partition by: {i_item_id_2}
@@ -192,4 +188,4 @@ Projection
                                                                            └─ TableScan tpcds100.date_dim
                                                                                     Where: (d_date IN (cast(11138, 'Date'), cast(11227, 'Date'), cast(11278, 'Date'))) AND isNotNull(d_week_seq)
                                                                                     Outputs: d_date_8:=d_date, d_week_seq_5:=d_week_seq
-note: Runtime Filter is applied for 8 times.
+note: Runtime Filter is applied for 7 times.

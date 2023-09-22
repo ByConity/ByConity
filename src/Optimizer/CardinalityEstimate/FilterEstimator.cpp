@@ -85,6 +85,7 @@ PlanNodeStatisticsPtr FilterEstimator::estimate(
             symbol_statistics.second = symbol_statistics.second->applySelectivity(selectivity);
             // NDV must less or equals to row count
             symbol_statistics.second->setNdv(std::min(filter_stats->getRowCount(), symbol_statistics.second->getNdv()));
+            symbol_statistics.second->getHistogram().clear();
         }
     }
 

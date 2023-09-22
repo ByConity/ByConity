@@ -141,7 +141,7 @@ template <> inline constexpr bool UseLeftDecimal<DataTypeDecimal<Decimal64>, Dat
 
 template <typename T> struct NextDecimal { using Result = InvalidType; };
 template <> struct NextDecimal<DataTypeDecimal<Decimal32>> { using Result = DataTypeDecimal<Decimal64>; };
-template <> struct NextDecimal<DataTypeDecimal<Decimal64>> { using Result = InvalidType; }; // not promote for Decimal64, due to the performance penalty of Int64 -> Int128
+template <> struct NextDecimal<DataTypeDecimal<Decimal64>> { using Result = DataTypeDecimal<Decimal128>; };
 template <> struct NextDecimal<DataTypeDecimal<Decimal128>> { using Result = DataTypeDecimal<Decimal256>; };
 
 template <template <typename, typename> class Operation, typename LeftDataType, typename RightDataType, bool allow_decimal_promote_storage>

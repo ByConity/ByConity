@@ -34,11 +34,11 @@ SELECT 1.2::Decimal128(20) / 0.6::Decimal128(19) SETTINGS decimal_check_overflow
 SELECT 1.2::Decimal64(2) * 0.6::Decimal64(1), toTypeName(1.2::Decimal64(2) * 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
 0.720	Decimal(18, 3)
 SELECT 1.2::Decimal64(2) * 0.6::Decimal64(1), toTypeName(1.2::Decimal64(2) * 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
-0.720	Decimal(18, 3)
+0.720	Decimal(38, 3)
 SELECT 1.2::Decimal64(2) / 0.6::Decimal64(1), toTypeName(1.2::Decimal64(2) / 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
 2.00	Decimal(18, 2)
 SELECT 1.2::Decimal64(2) / 0.6::Decimal64(1), toTypeName(1.2::Decimal64(2) / 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
-2.00	Decimal(18, 2)
+2.00	Decimal(38, 2)
 SELECT 1.2::Decimal32(2) + 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) + 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
 1.80	Decimal(9, 2)
 SELECT 1.2::Decimal32(2) + 0.6::Decimal32(1), toTypeName(1.2::Decimal32(2) + 0.6::Decimal32(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
@@ -66,11 +66,11 @@ SELECT 12::Int32 / 0.6::Decimal32(5) SETTINGS decimal_check_overflow = 1, decima
 SELECT 1.2::Decimal64(2) / 6::Int32, toTypeName(1.2::Decimal64(2) / 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 0;
 0.20	Decimal(18, 2)
 SELECT 1.2::Decimal64(2) / 6::Int32, toTypeName(1.2::Decimal64(2) / 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 1;
-0.20	Decimal(18, 2)
+0.20	Decimal(38, 2)
 SELECT 12::Int32 / 0.6::Decimal64(1), toTypeName(12::Int32 / 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 0;
 20.0	Decimal(18, 1)
 SELECT 12::Int32 / 0.6::Decimal64(1), toTypeName(12::Int32 / 0.6::Decimal64(1)) SETTINGS decimal_arithmetic_promote_storage = 1;
-20.0	Decimal(18, 1)
+20.0	Decimal(38, 1)
 SELECT 1.2::Decimal32(2) + 6::Int32, toTypeName(1.2::Decimal32(2) + 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 0;
 7.20	Decimal(9, 2)
 SELECT 1.2::Decimal32(2) + 6::Int32, toTypeName(1.2::Decimal32(2) + 6::Int32) SETTINGS decimal_arithmetic_promote_storage = 1;

@@ -21,10 +21,10 @@ Projection Est. 100 rows
                            │     Expressions: [i_item_id, w_warehouse_name], expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0):=multiIf(CAST(d_date, 'date') >= cast(11027, 'Date'), inv_quantity_on_hand, 0), expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0):=multiIf(CAST(d_date, 'date') < cast(11027, 'Date'), inv_quantity_on_hand, 0)
                            └─ Inner Join Est. 11701103 rows
                               │     Condition: inv_warehouse_sk == w_warehouse_sk
-                              ├─ Inner Join Est. 5850551 rows
+                              ├─ Inner Join Est. 11701103 rows
                               │  │     Condition: inv_date_sk == d_date_sk
                               │  │     Runtime Filters Builder: {d_date_sk}
-                              │  ├─ Inner Join Est. 25547409 rows
+                              │  ├─ Inner Join Est. 51094818 rows
                               │  │  │     Condition: inv_item_sk == i_item_sk
                               │  │  │     Runtime Filters Builder: {i_item_sk}
                               │  │  ├─ Filter Est. 783000000 rows

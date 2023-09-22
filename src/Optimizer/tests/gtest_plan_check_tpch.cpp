@@ -25,15 +25,7 @@ class PlanCheckTpch : public ::testing::Test
 public:
     static void SetUpTestSuite()
     {
-        std::unordered_map<std::string, DB::Field> settings;
-#ifndef NDEBUG
-        // debug mode may time out.
-        settings.emplace("cascades_optimizer_timeout", "300000");
-#endif
-
-        settings.emplace("cte_mode", "AUTO");
-        settings.emplace("enable_left_join_to_right_join", "false");
-        settings.emplace("enable_execute_uncorrelated_subquery", 0);
+        std::unordered_map<std::string, DB::Field> settings = BasePlanTest::getDefaultOptimizerSettings();
         tester = std::make_shared<DB::BaseTpchPlanTest>(settings);
     }
 
