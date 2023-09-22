@@ -548,7 +548,9 @@ void MergeTreeData::loadDataParts(bool skip_sanity_checks)
 
             for (const auto & [disk_name, disk] : getContext()->getDisksMap())
             {
-                if (defined_disk_names.count(disk_name) == 0 && disk->exists(getRelativeDataPath(IStorage::StorageLocation::MAIN)))
+                // Skip disk for byconity remote storage
+                if (disk->getType() != DiskType::Type::ByteHDFS && disk->getType() != DiskType::Type::ByteS3
+                    && defined_disk_names.count(disk_name) == 0 && disk->exists(getRelativeDataPath(IStorage::StorageLocation::MAIN)))
                 {
                     for (const auto it = disk->iterateDirectory(getRelativeDataPath(IStorage::StorageLocation::MAIN)); it->isValid(); it->next())
                     {
