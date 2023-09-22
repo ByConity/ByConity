@@ -106,6 +106,7 @@ FormatSettings getFormatSettings(ContextPtr context, const Settings & settings)
     format_settings.regexp.regexp = settings.format_regexp;
     format_settings.regexp.skip_unmatched = settings.format_regexp_skip_unmatched;
     format_settings.schema.format_schema = settings.format_schema;
+    /// Remember to set local format_schema_path for each table to support multi-tanants
     format_settings.schema.format_schema_path = context->getFormatSchemaPath();
     format_settings.schema.is_server = context->hasGlobalContext() && (context->getGlobalContext()->getApplicationType() == Context::ApplicationType::SERVER);
     format_settings.skip_unknown_fields = settings.input_format_skip_unknown_fields;
