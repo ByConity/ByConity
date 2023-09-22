@@ -141,11 +141,14 @@ public:
     using WorkerAction
         = std::function<std::vector<brpc::CallId>(CnchWorkerClientPtr, const std::vector<AssignedResource> &, const ExceptionHandlerPtr &)>;
     void sendResources(const ContextPtr & context, WorkerAction act);
+    void cleanResource();
 
 private:
     auto getLock() const { return std::lock_guard(mutex); }
     auto getLockForSend(const String & address) const { return SendLock{address, lock_manager}; }
     void cleanTaskInWorker(bool clean_resource = false) const;
+
+    void cleanResourceInWorker();
 
     /// move resource from assigned_table_resource to assigned_worker_resource
     void allocateResource(const ContextPtr & context, std::lock_guard<std::mutex> &);

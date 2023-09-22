@@ -120,7 +120,6 @@
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/InterpreterPerfectShard.h>
 
-
 #include <Processors/Formats/IOutputFormat.h>
 #include <Processors/Sources/SinkToOutputStream.h>
 #include <Processors/Sources/SourceFromInputStream.h>
@@ -959,6 +958,9 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         turnOffOptimizer(context, ast);
                         auto retry_interpreter = InterpreterFactory::get(ast, context, stage);
                         res = retry_interpreter->execute();
+
+                        if (auto session_resource = context->tryGetCnchServerResource())
+                            session_resource->cleanResource();
 
                         // Used to identify 'fallback' queries in query_log
                         context->setSetting("operator_profile_receive_timeout", 3001);

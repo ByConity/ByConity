@@ -87,7 +87,19 @@ void AssignedResource::addDataParts(const FileDataPartsCNCHVector & parts)
     }
 }
 
-CnchServerResource::~CnchServerResource()
+void CnchServerResource::cleanResource()
+{
+    {
+        auto lock = getLock();
+        assigned_table_resource.clear();
+        assigned_worker_resource.clear();
+        // assigned_storage_workers.clear();
+    }
+
+    cleanResourceInWorker();
+}
+
+void CnchServerResource::cleanResourceInWorker()
 {
     if (!worker_group || skip_clean_worker)
         return;
@@ -105,6 +117,19 @@ CnchServerResource::~CnchServerResource()
             tryLogCurrentException(
                 log, "Error occurs when remove WorkerResource{" + txn_id.toString() + "} in worker " + worker_client->getRPCAddress());
         }
+    }
+}
+
+
+CnchServerResource::~CnchServerResource()
+{
+    try
+    {
+        cleanResourceInWorker();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log);
     }
 }
 
