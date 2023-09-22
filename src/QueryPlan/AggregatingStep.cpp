@@ -462,10 +462,10 @@ void AggregatingStep::transformPipeline(QueryPipeline & pipeline, const BuildQue
                     transform_params->params.max_threads,
                     transform_params->params.min_free_disk_space,
                     transform_params->params.compile_aggregate_expressions,
-                    transform_params->params.min_count_to_compile_aggregate_expression,
-                    Block{},
-                    transform_params->params.stats_collecting_params
-                };
+                    transform_params->params.min_count_to_compile_aggregate_expression};
+                using TwoLevelMode = Aggregator::Params::TwoLevelMode;
+                params_for_set.two_level_mode
+                    = settings.group_by_two_level_for_grouping_set ? TwoLevelMode::ENFORCE_TWO_LEVEL : TwoLevelMode::ENFORCE_SINGLE_LEVEL;
                 auto transform_params_for_set = std::make_shared<AggregatingTransformParams>(std::move(params_for_set), final);
 
                 if (streams > 1)

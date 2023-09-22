@@ -1349,10 +1349,14 @@ bool Aggregator::executeOnBlock(Columns columns, UInt64 num_rows, AggregatedData
     bool worth_convert_to_two_level = worthConvertToTwoLevel(
         params.group_by_two_level_threshold, result_size, params.group_by_two_level_threshold_bytes, result_size_bytes);
 
-    /** Converting to a two-level data structure.
+    /** Converting to a two-level data structure. (Adaptive)
       * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
       */
-    if (result.isConvertibleToTwoLevel() && worth_convert_to_two_level)
+    if (params.two_level_mode == Params::TwoLevelMode::ADAPTIVE && result.isConvertibleToTwoLevel() && worth_convert_to_two_level)
+        result.convertToTwoLevel();
+
+    /** Converting to a two-level data structure. (Enforced) */
+    if (params.two_level_mode == Params::TwoLevelMode::ENFORCE_TWO_LEVEL && result.isConvertibleToTwoLevel())
         result.convertToTwoLevel();
 
     /// Checking the constraints.
@@ -2688,10 +2692,14 @@ bool Aggregator::mergeOnBlock(Block block, AggregatedDataVariants & result, bool
     bool worth_convert_to_two_level = worthConvertToTwoLevel(
         params.group_by_two_level_threshold, result_size, params.group_by_two_level_threshold_bytes, result_size_bytes);
 
-    /** Converting to a two-level data structure.
+    /** Converting to a two-level data structure. (Adaptive)
       * It allows you to make, in the subsequent, an effective merge - either economical from memory or parallel.
       */
-    if (result.isConvertibleToTwoLevel() && worth_convert_to_two_level)
+    if (params.two_level_mode == Params::TwoLevelMode::ADAPTIVE && result.isConvertibleToTwoLevel() && worth_convert_to_two_level)
+        result.convertToTwoLevel();
+
+    /** Converting to a two-level data structure. (Enforced) */
+    if (params.two_level_mode == Params::TwoLevelMode::ENFORCE_TWO_LEVEL && result.isConvertibleToTwoLevel())
         result.convertToTwoLevel();
 
     /// Checking the constraints.

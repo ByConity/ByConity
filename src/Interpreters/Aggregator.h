@@ -914,6 +914,13 @@ class Aggregator final
 public:
     struct Params
     {
+        enum class TwoLevelMode
+        {
+            ADAPTIVE,
+            ENFORCE_SINGLE_LEVEL,
+            ENFORCE_TWO_LEVEL,
+        };
+
         /// Data structure of source blocks.
         Block src_header;
         /// Data structure of intermediate blocks before merge.
@@ -954,24 +961,8 @@ public:
         bool compile_aggregate_expressions;
         size_t min_count_to_compile_aggregate_expression;
 
-        struct StatsCollectingParams
-        {
-            StatsCollectingParams();
-
-            StatsCollectingParams(
-                const ASTPtr & select_query_,
-                bool is_query_on_worker,
-                bool collect_hash_table_stats_during_aggregation_,
-                size_t max_entries_for_hash_table_stats_,
-                size_t max_size_to_preallocate_for_aggregation_);
-
-            bool isCollectionAndUseEnabled() const;
-
-            const UInt64 key = 0;
-            const size_t max_entries_for_hash_table_stats = 0;
-            const size_t max_size_to_preallocate_for_aggregation = 0;
-        };
-        StatsCollectingParams stats_collecting_params;
+        // this field is determined when build pipeline, thus it doesn't need to be serialized.
+        TwoLevelMode two_level_mode = TwoLevelMode::ADAPTIVE;
 
         Params(
             const Block & src_header_,
@@ -1059,7 +1050,7 @@ public:
 
     /// Used for aggregate projection.
     bool mergeOnBlock(Block block, AggregatedDataVariants & result, bool & no_more_keys) const;
-    
+
     /** Convert the aggregation data structure into a block.
       * If overflow_row = true, then aggregates for rows that are not included in max_rows_to_group_by are put in the first block.
       *
