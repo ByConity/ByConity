@@ -189,7 +189,8 @@ brpc::CallId CnchWorkerClient::preloadDataParts(
     const ExceptionHandlerPtr & handler,
     bool enable_parts_sync_preload,
     UInt64 parts_preload_level,
-    UInt64 submit_ts)
+    UInt64 submit_ts
+   )
 {
     Protos::PreloadDataPartsReq request;
     request.set_txn_id(txn_id);

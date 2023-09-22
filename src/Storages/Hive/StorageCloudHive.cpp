@@ -1,4 +1,4 @@
-#include <Interpreters/Context.h>
+#include <atomic>
 #include <Storages/Hive/StorageCloudHive.h>
 #if USE_HIVE
 
@@ -60,13 +60,13 @@ Pipe StorageCloudHive::read(
     auto block_info = std::make_shared<StorageHiveSource::BlockInfo>(
         metadata_snapshot->getSampleBlockForColumns(real_columns), need_path_colum, need_file_column, metadata_snapshot->getPartitionKey());
     auto allocator = std::make_shared<StorageHiveSource::Allocator>(std::move(hive_files));
-    
+
     if (block_info->to_read.columns() == 0)
         allocator->allow_allocate_by_slice = false;
-        
+
     if (local_context->getReadSettings().parquet_parallel_read)
         allocator->allow_allocate_by_slice = false;
-    
+
     LOG_DEBUG(log, "read with {} streams, disk_cache mode {}", num_streams, local_context->getSettingsRef().disk_cache_mode.toString());
     for (size_t i = 0; i < num_streams; ++i)
     {

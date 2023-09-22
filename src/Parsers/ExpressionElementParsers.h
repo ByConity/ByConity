@@ -279,6 +279,15 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+class ParserGroupConcatExpression : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "GROUP_CONCAT expression"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
 class ParserTrimExpression : public IParserDialectBase
 {
 protected:

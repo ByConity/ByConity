@@ -939,7 +939,11 @@ enum PreloadLevelSettings : UInt64
       "excluding the final merge stage on the root node.", \
       0) \
     M(OverflowMode, read_overflow_mode_leaf, OverflowMode::THROW, "What to do when the leaf limit is exceeded.", 0) \
-\
+    /** Just for compatible, totally the same with settings above */ \
+    M(UInt64, max_rows_to_read_local, 0, "Limit max reading rows for each local shard. The same ", 0) \
+    M(UInt64, max_bytes_to_read_local, 0, "Limit max reading bytes for each local shard.", 0) \
+    M(OverflowMode, read_overflow_mode_local, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
+    \
     M(UInt64, max_query_cpu_second, 0, "Limit the maximum amount of CPU resources such a query segment can consume.", 0) \
     M(UInt64, max_distributed_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a distribute query can consume.", 0) \
 \

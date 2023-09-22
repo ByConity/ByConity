@@ -1,4 +1,3 @@
-set enable_optimizer=1;
 DROP TABLE IF EXISTS fill;
 DROP TABLE IF EXISTS fill_local;
 CREATE TABLE fill_local (date Date, str String, val Int) ENGINE = MergeTree() partition by date order by str;

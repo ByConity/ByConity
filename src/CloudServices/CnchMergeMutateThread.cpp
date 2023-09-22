@@ -638,8 +638,8 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
                 visible_parts.end(),
                 [&merging_mutating_parts_snapshot, max_bytes, max_rows](const auto & p) {
                     return merging_mutating_parts_snapshot.erase(p->name())
-                           || p->part_model().rows_count() >= max_rows
-                           || p->part_model().size() >= max_bytes;
+                           || p->part_model().rows_count() >= max_rows * 0.9
+                           || p->part_model().size() >= max_bytes * 0.9;
                 }),
             visible_parts.end()
         );
@@ -903,6 +903,26 @@ String CnchMergeMutateThread::triggerPartMerge(
 
     auto & storage = checkAndGetCnchTable(istorage);
     auto storage_settings = storage.getSettings();
+
+    /// If selecting nonadjacent parts is allowed,
+    /// we will filter out all merging parts firstly and then only check part's columns_commit_time.
+    if (storage_settings->cnch_merge_select_nonadjacent_parts)
+    {
+        auto max_bytes = storage_settings->cnch_merge_max_total_bytes_to_merge.value;
+        auto max_rows = storage_settings->cnch_merge_max_total_rows_to_merge.value;
+        visible_parts.erase(
+            std::remove_if(
+                visible_parts.begin(),
+                visible_parts.end(),
+                [&merging_mutating_parts_snapshot, max_bytes, max_rows](const auto & p) {
+                    return merging_mutating_parts_snapshot.erase(p->name())
+                        || p->part_model().rows_count() >= max_rows * 0.9
+                        || p->part_model().rows_count() >= max_bytes * 0.9;
+                }),
+            visible_parts.end()
+        );
+    }
+
 
     std::vector<ServerDataPartsVector> res;
     [[maybe_unused]] auto decision = selectPartsToMerge(

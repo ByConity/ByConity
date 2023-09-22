@@ -413,10 +413,9 @@ void DiskCacheLRU::load()
 size_t DiskCacheLRU::drop(const String & part_name)
 {
     is_droping = true;
-    SCOPE_EXIT({ is_droping = false; });
+    SCOPE_EXIT({is_droping = false; });
 
-    auto part_base_path
-        = part_name.empty() ? fs::path(latest_disk_cache_dir) : fs::path(latest_disk_cache_dir) / getRelativePathForPart(part_name);
+    auto part_base_path = part_name.empty() ? fs::path(latest_disk_cache_dir) : fs::path(latest_disk_cache_dir) /  getRelativePathForPart(part_name);
     LOG_TRACE(log, fmt::format("start delete part {} cache {}", part_name, part_base_path.relative_path().c_str()));
 
     const Disks & disks = volume->getDisks();
@@ -710,4 +709,5 @@ void DiskCacheLRU::DiskCacheDeleter::iterateFile(std::filesystem::path file_path
     disk_cache.containers.shard(key).erase(key);
     delete_file_size += file_size;
 }
+
 }

@@ -89,7 +89,7 @@ void KeeperDispatcher::requestThread()
                     /// Waiting until previous append will be successful, or batch is big enough
                     /// has_result == false && get_result_code == OK means that our request still not processed.
                     /// Sometimes NuRaft set errorcode without setting result, so we check both here.
-                    while (prev_result && (!prev_result->has_result() && prev_result->get_result_code() == nuraft::cmd_result_code::OK) && current_batch.size() <= max_batch_size)
+                    while (prev_result && !(prev_result->has_result() || prev_result->get_result_code() == nuraft::cmd_result_code::OK) && current_batch.size() <= max_batch_size)
                     {
                         /// Trying to get batch requests as fast as possible
                         if (requests_queue->tryPop(request, 1))

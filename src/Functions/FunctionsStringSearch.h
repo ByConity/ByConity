@@ -62,7 +62,7 @@ constexpr bool isEscapeMatchImpl()
                     || std::is_same_v<Impl, EscapeMatchImpl<false, true, true>>
                     || std::is_same_v<Impl, EscapeMatchImpl<false, false, true>>);
 }
-// struct NameInstr; HIJOEYCHANCE
+struct NameInstr;
 
 template <typename Impl, typename Name>
 class FunctionsStringSearch : public IFunction

@@ -60,7 +60,11 @@ String getPathForListing(const String & path)
 
 DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const CnchHiveSettings & settings)
 {
-    Poco::URI uri(sd_url);
+    String encoded_sd_url;
+    Poco::URI::encode(sd_url, "", encoded_sd_url);
+    Poco::URI uri(encoded_sd_url);
+    auto * log = &Poco::Logger::get(__func__);
+    LOG_TRACE(log, "sd_url: {}\n encoded {}", sd_url, encoded_sd_url);
     const auto & scheme = uri.getScheme();
     if (scheme == "hdfs")
     {
@@ -80,7 +84,6 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const 
 #if USE_AWS_S3
     else if (scheme == "s3a" || scheme == "s3")
     {
-        auto * log = &Poco::Logger::get(__func__);
         LOG_DEBUG(log, "sd_url: {}", sd_url);
         uri.setScheme("s3"); /// to correctly parse uri
         if (!endsWith(uri.getPath(), "/"))

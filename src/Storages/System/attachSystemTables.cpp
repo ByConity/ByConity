@@ -63,6 +63,7 @@
 #include <Storages/System/StorageSystemProcesses.h>
 #include <Storages/System/StorageSystemProjectionParts.h>
 #include <Storages/System/StorageSystemProjectionPartsColumns.h>
+#include <Storages/System/StorageSystemQueryQueue.h>
 #include <Storages/System/StorageSystemReplicas.h>
 #include <Storages/System/StorageSystemReplicatedFetches.h>
 #include <Storages/System/StorageSystemReplicationQueue.h>
@@ -211,6 +212,7 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemDisks>(system_database, "disks");
     attach<StorageSystemStoragePolicies>(system_database, "storage_policies");
     attach<StorageSystemProcesses>(system_database, "processes");
+    attach<StorageSystemQueryQueue>(system_database, "query_queue");
     attach<StorageSystemMetrics>(system_database, "metrics");
     attach<StorageSystemMerges>(system_database, "merges");
     attach<StorageSystemMutations>(system_database, "mutations");

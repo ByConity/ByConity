@@ -1,0 +1,8 @@
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: a > 1
+      └─ TableScan test.unwrap_cast_expr_core Est. ? rows
+               Where: a > 1
+               Outputs: [a]

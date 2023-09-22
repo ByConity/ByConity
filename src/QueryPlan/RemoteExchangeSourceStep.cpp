@@ -151,7 +151,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
             size_t partition_id_start = (input->getParallelIndex() - 1) * exchange_parallel_size + 1;
             LocalChannelOptions local_options{
                 .queue_size = context->getSettingsRef().exchange_local_receiver_queue_size, .max_timeout_ms = options.exhcange_timeout_ms};
-            if (input->getSourceAddress().empty())
+            if (input->getSourceAddress().empty() && !settings.distributed_settings.is_explian)
                 throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
             bool enable_block_compress = context->getSettingsRef().exchange_enable_block_compress;
             BroadcastReceiverPtrs receivers;
@@ -206,6 +206,16 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     receivers.emplace_back(std::move(receiver));
 
                 }
+            }
+            if (settings.distributed_settings.is_explian)
+            {
+                ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(query_id, exchange_id, partition_id_start, coordinator_address);
+                String name = BrpcRemoteBroadcastReceiver::generateName(
+                            exchange_id, write_plan_segment_id, plan_segment_id, partition_id_start, coordinator_address);
+                auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(std::move(data_key), "", context, exchange_header, keep_order, name);
+                BroadcastReceiverPtr receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
+                receivers.emplace_back(std::move(receiver));
+                source_num++;
             }
             String receiver_name = MultiPathReceiver::generateName(
                 exchange_id, write_plan_segment_id, plan_segment_id, coordinator_address);
@@ -296,12 +306,16 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
     }
     LOG_DEBUG(logger, "Total exchange source : {}, keep_order: {}", source_num, keep_order);
     pipeline.setMinThreads(source_num);
+    for (const auto & processor : pipeline.getProcessors())
+        processors.emplace_back(processor);
 }
 
 
 void RemoteExchangeSourceStep::describePipeline(FormatSettings & settings) const
 {
-    // TODO
+    if (!inputs.empty())
+        settings.out << String(settings.offset, settings.indent_char) << "Source segment_id : [ " << std::to_string(inputs.back().get()->getPlanSegmentId()) << " ]\n";
+    ISourceStep::describePipeline(settings);
 }
 
 }

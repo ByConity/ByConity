@@ -714,10 +714,7 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
                 server_client->submitPreloadTask(storage, preload_parts, max_timeout);
                 LOG_DEBUG(
                     storage.getLogger(),
-                    "Finish submit preload task for {} parts to server {}, elapsed {} ms",
-                    preload_parts.size(),
-                    server_client->getRPCAddress(),
-                    timer.elapsedMilliseconds());
+                    "Finish submit preload {} task for {} parts to server {}, elapsed {} ms", typeToString(type), preload_parts.size(), server_client->getRPCAddress(), timer.elapsedMilliseconds());
             }
             // TODO: invalidate deleted part's disk cache
         }

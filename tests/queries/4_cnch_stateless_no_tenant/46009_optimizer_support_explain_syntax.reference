@@ -1,0 +1,17 @@
+SELECT
+    a,
+    count(a)
+FROM t1
+INNER JOIN t1 AS t2 ON a = t2.b
+WHERE a < 10
+GROUP BY a
+SELECT
+    a,
+    count(a)
+FROM t1
+INNER JOIN t1 AS t2 ON a = t2.b
+WHERE (a < 10) AND (a IN ((
+    SELECT b
+    FROM t1
+) AS t3))
+GROUP BY a

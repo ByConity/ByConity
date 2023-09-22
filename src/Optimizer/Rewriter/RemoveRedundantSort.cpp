@@ -31,7 +31,7 @@
 namespace DB
 {
 const std::unordered_set<String> RedundantSortVisitor::order_dependent_agg{"groupUniqArray","groupArray","groupArraySample","argMax","argMin","topK","topKWeighted","any","anyLast","anyHeavy",
-                                                                           "first_value","last_value","deltaSum","deltaSumTimestamp","groupArrayMovingSum","groupArrayMovingAvg"};
+                                                                           "first_value","last_value","deltaSum","deltaSumTimestamp","groupArrayMovingSum","groupArrayMovingAvg", "groupConcat"};
 
 void RemoveRedundantSort::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {

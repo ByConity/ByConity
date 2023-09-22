@@ -132,6 +132,20 @@ struct AccurateOrNullConvertStrategyAdditions
     UInt32 scale { 0 };
 };
 
+enum class ConvertFromStringExceptionMode
+{
+    Throw,  /// Throw exception if value cannot be parsed.
+    Zero,   /// Fill with zero or default if value cannot be parsed.
+    Null    /// Return ColumnNullable with NULLs when value cannot be parsed.
+};
+using ConvertExceptionMode = ConvertFromStringExceptionMode;
+
+enum class ConvertFromStringParsingMode
+{
+    Normal,
+    BestEffort,  /// Only applicable for DateTime. Will use sophisticated method, that is slower.
+    BestEffortUS
+};
 
 struct ConvertDefaultBehaviorTag {};
 struct ConvertReturnNullOnErrorTag {};
@@ -139,8 +153,7 @@ struct ConvertReturnNullOnErrorTag {};
 /** Conversion of number types to each other, enums to numbers, dates and datetimes to numbers and back: done by straight assignment.
   *  (Date is represented internally as number of days from some day; DateTime - as unix timestamp)
   */
-template <typename FromDataType, typename ToDataType, typename Name, typename SpecialTag = ConvertDefaultBehaviorTag,
-        bool is_adaptive = false>
+template <typename FromDataType, typename ToDataType, typename Name, typename SpecialTag = ConvertDefaultBehaviorTag, ConvertExceptionMode exception_mode = ConvertExceptionMode::Throw, bool is_adaptive = false>
 struct ConvertImpl
 {
     using FromFieldType = typename FromDataType::FieldType;
@@ -203,7 +216,11 @@ struct ConvertImpl
 
             ColumnUInt8::MutablePtr col_null_map_to;
             ColumnUInt8::Container * vec_null_map_to [[maybe_unused]] = nullptr;
-            if constexpr (std::is_same_v<Additions, AccurateOrNullConvertStrategyAdditions>)
+
+            constexpr bool need_zero_or_null = std::is_same_v<Additions, AccurateOrNullConvertStrategyAdditions> || exception_mode != ConvertExceptionMode::Throw;
+            constexpr bool need_null = std::is_same_v<Additions, AccurateOrNullConvertStrategyAdditions> || exception_mode == ConvertExceptionMode::Null;
+
+            if constexpr (need_null)
             {
                 col_null_map_to = ColumnUInt8::create(input_rows_count, false);
                 vec_null_map_to = &col_null_map_to->getData();
@@ -236,9 +253,9 @@ struct ConvertImpl
                 {
                     if constexpr (IsDataTypeDecimal<FromDataType> || IsDataTypeDecimal<ToDataType>)
                     {
-                        if constexpr (std::is_same_v<Additions, AccurateOrNullConvertStrategyAdditions>)
+                        if constexpr (need_zero_or_null)
                         {
-                            ToFieldType result;
+                            ToFieldType result{};
                             bool convert_result = false;
 
                             if constexpr (IsDataTypeDecimal<FromDataType> && IsDataTypeDecimal<ToDataType>)
@@ -253,7 +270,8 @@ struct ConvertImpl
                             else
                             {
                                 vec_to[i] = static_cast<ToFieldType>(0);
-                                (*vec_null_map_to)[i] = true;
+                                if constexpr (need_null)
+                                    (*vec_null_map_to)[i] = true;
                             }
                         }
                         else
@@ -275,10 +293,11 @@ struct ConvertImpl
                         {
                             if (!isFinite(vec_from[i]))
                             {
-                                if constexpr (std::is_same_v<Additions, AccurateOrNullConvertStrategyAdditions>)
+                                if constexpr (need_zero_or_null)
                                 {
                                     vec_to[i] = 0;
-                                    (*vec_null_map_to)[i] = true;
+                                    if constexpr (need_null)
+                                        (*vec_null_map_to)[i] = true;
                                     continue;
                                 }
                                 else
@@ -293,10 +312,11 @@ struct ConvertImpl
 
                             if (!convert_result)
                             {
-                                if (std::is_same_v<Additions, AccurateOrNullConvertStrategyAdditions>)
+                                if constexpr (need_zero_or_null)
                                 {
                                     vec_to[i] = 0;
-                                    (*vec_null_map_to)[i] = true;
+                                    if constexpr (need_null)
+                                        (*vec_null_map_to)[i] = true;
                                 }
                                 else
                                 {
@@ -318,7 +338,7 @@ struct ConvertImpl
                 }
             }
 
-            if constexpr (std::is_same_v<Additions, AccurateOrNullConvertStrategyAdditions>)
+            if constexpr (need_null)
                 return ColumnNullable::create(std::move(col_to), std::move(col_null_map_to));
             else
                 return col_to;
@@ -336,13 +356,19 @@ template <typename Name> struct ConvertImpl<DataTypeDate32, DataTypeDate, Name, 
 
 /** Conversion of DateTime to Date: throw off time component.
   */
-template <typename Name> struct ConvertImpl<DataTypeDateTime, DataTypeDate, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeDateTime, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeDateTime, DataTypeDate, ToDateImpl> {};
 
 /** Conversion of DateTime to Date32: throw off time component.
   */
-template <typename Name> struct ConvertImpl<DataTypeDateTime, DataTypeDate32, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeDateTime, DataTypeDate32, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeDateTime, DataTypeDate32, ToDate32Impl> {};
+
+
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeDateTime, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeDateTime, DataTypeDate, ToDateImpl> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeDateTime, DataTypeDate32, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeDateTime, DataTypeDate32, ToDate32Impl> {};
 
 struct ToTimeTransform
 {
@@ -392,12 +418,12 @@ struct ToTimeTransform
 
 /** Conversion of DateTime to Time: throw off date component.
   */
-template <typename Name> struct ConvertImpl<DataTypeDateTime, DataTypeTime, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeDateTime, DataTypeTime, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeDateTime, DataTypeTime, ToTimeTransform> {};
 
 /** Conversion of DateTime64 to Time: throw off date component.
   */
-template <typename Name> struct ConvertImpl<DataTypeDateTime64, DataTypeTime, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeDateTime64, DataTypeTime, Name, Tag, Mode>
 {
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, UInt16 scale)
     {
@@ -408,15 +434,24 @@ template <typename Name> struct ConvertImpl<DataTypeDateTime64, DataTypeTime, Na
     }
 };
 
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeDateTime, DataTypeTime, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeDateTime, DataTypeTime, ToTimeTransform> {};
 
-/** Conversion of Time to other temporal types which needs date
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeDateTime64, DataTypeTime, Name, Tag, ConvertExceptionMode::Null>
+{
+    static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, UInt16 scale)
+    {
+        const auto * dt64 = assert_cast<const DataTypeDateTime64 *>(arguments[0].type.get());
+        const ToTimeTransform time_trasformer(scale, dt64->getScale());
+        const TransformDateTime64<decltype(time_trasformer)> t64_transformer(dt64->getScale(), time_trasformer);
+        return DateTimeTransformForNullImpl<DataTypeDateTime64, DataTypeTime, decltype(t64_transformer)>::execute(arguments, result_type, input_rows_count, t64_transformer);
+    }
+};
+
+/** Conversion of Time to other temporal types which needs date is not valid
   */
-template <typename ToDataType, typename Name>
-struct ConvertImpl<
-    std::enable_if_t<IsDataTypeDateOrDateTime<ToDataType> && !std::is_same_v<ToDataType, DataTypeTime>, DataTypeTime>,
-    ToDataType,
-    Name,
-    ConvertDefaultBehaviorTag>
+template <typename ToDataType, typename Name, ConvertExceptionMode Mode>
+struct ConvertImpl<std::enable_if_t<IsDataTypeDateOrDateTime<ToDataType> && !std::is_same_v<ToDataType, DataTypeTime>, DataTypeTime>, ToDataType, Name, ConvertDefaultBehaviorTag, Mode>
 {
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, UInt16 = 0)
     {
@@ -520,11 +555,17 @@ struct ToDateTimeImpl
     }
 };
 
-template <typename Name> struct ConvertImpl<DataTypeDate, DataTypeDateTime, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeDate, DataTypeDateTime, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeDate, DataTypeDateTime, ToDateTimeImpl> {};
 
-template <typename Name> struct ConvertImpl<DataTypeDate32, DataTypeDateTime, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeDate32, DataTypeDateTime, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeDate32, DataTypeDateTime, ToDateTimeImpl> {};
+
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeDate, DataTypeDateTime, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeDate, DataTypeDateTime, ToDateTimeImpl> {};
+
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeDate32, DataTypeDateTime, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeDate32, DataTypeDateTime, ToDateTimeImpl> {};
 
 /// Implementation of toDate function.
 
@@ -626,38 +667,38 @@ struct ToDate32Transform8Or16Signed
   *  when user write toDate(UInt32), expecting conversion of unix timestamp to Date.
   *  (otherwise such usage would be frequent mistake).
   */
-template <typename Name> struct ConvertImpl<DataTypeUInt32, DataTypeDate, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeUInt32, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeUInt32, DataTypeDate, ToDateTransform32Or64<UInt32, UInt16>> {};
-template <typename Name> struct ConvertImpl<DataTypeUInt64, DataTypeDate, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeUInt64, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeUInt64, DataTypeDate, ToDateTransform32Or64<UInt64, UInt16>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt8, DataTypeDate, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt8, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt8, DataTypeDate, ToDateTransform8Or16Signed<Int8, UInt16>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt16, DataTypeDate, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt16, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt16, DataTypeDate, ToDateTransform8Or16Signed<Int16, UInt16>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt32, DataTypeDate, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt32, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt32, DataTypeDate, ToDateTransform32Or64Signed<Int32, UInt16>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt64, DataTypeDate, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt64, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt64, DataTypeDate, ToDateTransform32Or64Signed<Int64, UInt16>> {};
-template <typename Name> struct ConvertImpl<DataTypeFloat32, DataTypeDate, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeFloat32, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeFloat32, DataTypeDate, ToDateTransform32Or64Signed<Float32, UInt16>> {};
-template <typename Name> struct ConvertImpl<DataTypeFloat64, DataTypeDate, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeFloat64, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeFloat64, DataTypeDate, ToDateTransform32Or64Signed<Float64, UInt16>> {};
 
-template <typename Name> struct ConvertImpl<DataTypeUInt32, DataTypeDate32, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeUInt32, DataTypeDate32, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeUInt32, DataTypeDate32, ToDate32Transform32Or64<UInt32, Int32>> {};
-template <typename Name> struct ConvertImpl<DataTypeUInt64, DataTypeDate32, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeUInt64, DataTypeDate32, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeUInt64, DataTypeDate32, ToDate32Transform32Or64<UInt64, Int32>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt8, DataTypeDate32, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt8, DataTypeDate32, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt8, DataTypeDate32, ToDate32Transform8Or16Signed<Int8, Int32>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt16, DataTypeDate32, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt16, DataTypeDate32, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt16, DataTypeDate32, ToDate32Transform8Or16Signed<Int16, Int32>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt32, DataTypeDate32, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt32, DataTypeDate32, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt32, DataTypeDate32, ToDate32Transform32Or64Signed<Int32, Int32>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt64, DataTypeDate32, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt64, DataTypeDate32, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt64, DataTypeDate32, ToDate32Transform32Or64Signed<Int64, Int32>> {};
-template <typename Name> struct ConvertImpl<DataTypeFloat32, DataTypeDate32, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeFloat32, DataTypeDate32, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeFloat32, DataTypeDate32, ToDate32Transform32Or64Signed<Float32, Int32>> {};
-template <typename Name> struct ConvertImpl<DataTypeFloat64, DataTypeDate32, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeFloat64, DataTypeDate32, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeFloat64, DataTypeDate32, ToDate32Transform32Or64Signed<Float64, Int32>> {};
 
 
@@ -724,19 +765,20 @@ struct ToDateTimeTransform64Signed
   * Float64) to DateTime. If the number is negative, saturate it to unix epoch time. If the number
   * exceeds UInt32, saturate to MAX_UINT32.
   */
-template <typename Name> struct ConvertImpl<DataTypeInt8, DataTypeDateTime, Name>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt8, DataTypeDateTime, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt8, DataTypeDateTime, ToDateTimeTransformSigned<Int8, UInt32>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt16, DataTypeDateTime, Name>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt16, DataTypeDateTime, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt16, DataTypeDateTime, ToDateTimeTransformSigned<Int16, UInt32>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt32, DataTypeDateTime, Name>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt32, DataTypeDateTime, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt32, DataTypeDateTime, ToDateTimeTransformSigned<Int32, UInt32>> {};
-template <typename Name, bool Adaptive> struct ConvertImpl<DataTypeInt64, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, Adaptive>
+
+template <typename Name, typename Tag, ConvertExceptionMode Mode, bool Adaptive> struct ConvertImpl<DataTypeInt64, DataTypeDateTime, Name, Tag, Mode, Adaptive>
     : DateTimeTransformImpl<DataTypeInt64, DataTypeDateTime, ToDateTimeTransform64Signed<Int64, UInt32, Adaptive>> {};
-template <typename Name, bool Adaptive> struct ConvertImpl<DataTypeUInt64, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, Adaptive>
+template <typename Name, typename Tag, ConvertExceptionMode Mode, bool Adaptive> struct ConvertImpl<DataTypeUInt64, DataTypeDateTime, Name, Tag, Mode, Adaptive>
     : DateTimeTransformImpl<DataTypeUInt64, DataTypeDateTime, ToDateTimeTransform64<UInt64, UInt32, Adaptive>> {};
-template <typename Name, bool Adaptive> struct ConvertImpl<DataTypeFloat32, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, Adaptive>
+template <typename Name, typename Tag, ConvertExceptionMode Mode, bool Adaptive> struct ConvertImpl<DataTypeFloat32, DataTypeDateTime, Name, Tag, Mode, Adaptive>
     : DateTimeTransformImpl<DataTypeFloat32, DataTypeDateTime, ToDateTimeTransform64Signed<Float32, UInt32, Adaptive>> {};
-template <typename Name, bool Adaptive> struct ConvertImpl<DataTypeFloat64, DataTypeDateTime, Name, ConvertDefaultBehaviorTag, Adaptive>
+template <typename Name, typename Tag, ConvertExceptionMode Mode, bool Adaptive> struct ConvertImpl<DataTypeFloat64, DataTypeDateTime, Name, Tag, Mode, Adaptive>
     : DateTimeTransformImpl<DataTypeFloat64, DataTypeDateTime, ToDateTimeTransform64Signed<Float64, UInt32, Adaptive>> {};
 
 constexpr time_t LUT_MIN_TIME = -2208988800l;           //  1900-01-01 UTC
@@ -800,19 +842,19 @@ struct ToDateTime64TransformFloat
     }
 };
 
-template <typename Name> struct ConvertImpl<DataTypeInt8, DataTypeDateTime64, Name>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt8, DataTypeDateTime64, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt8, DataTypeDateTime64, ToDateTime64TransformSigned<Int8>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt16, DataTypeDateTime64, Name>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt16, DataTypeDateTime64, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt16, DataTypeDateTime64, ToDateTime64TransformSigned<Int16>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt32, DataTypeDateTime64, Name>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt32, DataTypeDateTime64, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt32, DataTypeDateTime64, ToDateTime64TransformSigned<Int32>> {};
-template <typename Name> struct ConvertImpl<DataTypeInt64, DataTypeDateTime64, Name>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt64, DataTypeDateTime64, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt64, DataTypeDateTime64, ToDateTime64TransformSigned<Int64>> {};
-template <typename Name> struct ConvertImpl<DataTypeUInt64, DataTypeDateTime64, Name>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeUInt64, DataTypeDateTime64, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeUInt64, DataTypeDateTime64, ToDateTime64TransformUnsigned<UInt64>> {};
-template <typename Name> struct ConvertImpl<DataTypeFloat32, DataTypeDateTime64, Name>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeFloat32, DataTypeDateTime64, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeFloat32, DataTypeDateTime64, ToDateTime64TransformFloat<DataTypeFloat32, Float32>> {};
-template <typename Name> struct ConvertImpl<DataTypeFloat64, DataTypeDateTime64, Name>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeFloat64, DataTypeDateTime64, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeFloat64, DataTypeDateTime64, ToDateTime64TransformFloat<DataTypeFloat64, Float64>> {};
 
 
@@ -838,10 +880,15 @@ struct FromDateTime64Transform
 
 /** Conversion of DateTime64 to Date or DateTime: discards fractional part.
  */
-template <typename Name> struct ConvertImpl<DataTypeDateTime64, DataTypeDate, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeDateTime64, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeDateTime64, DataTypeDate, TransformDateTime64<ToDateImpl>> {};
-template <typename Name> struct ConvertImpl<DataTypeDateTime64, DataTypeDateTime, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeDateTime64, DataTypeDateTime, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeDateTime64, DataTypeDateTime, TransformDateTime64<ToDateTimeImpl>> {};
+
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeDateTime64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeDateTime64, DataTypeDate, TransformDateTime64<ToDateImpl>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeDateTime64, DataTypeDateTime, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeDateTime64, DataTypeDateTime, TransformDateTime64<ToDateTimeImpl>> {};
 
 struct ToDateTime64Transform
 {
@@ -873,12 +920,19 @@ struct ToDateTime64Transform
 
 /** Conversion of Date or DateTime to DateTime64: add zero sub-second part.
   */
-template <typename Name> struct ConvertImpl<DataTypeDate, DataTypeDateTime64, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeDate, DataTypeDateTime64, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeDate, DataTypeDateTime64, ToDateTime64Transform> {};
-template <typename Name> struct ConvertImpl<DataTypeDate32, DataTypeDateTime64, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeDate32, DataTypeDateTime64, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeDate32, DataTypeDateTime64, ToDateTime64Transform> {};
-template <typename Name> struct ConvertImpl<DataTypeDateTime, DataTypeDateTime64, Name, ConvertDefaultBehaviorTag>
+template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeDateTime, DataTypeDateTime64, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeDateTime, DataTypeDateTime64, ToDateTime64Transform> {};
+
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeDate, DataTypeDateTime64, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeDate, DataTypeDateTime64, ToDateTime64Transform> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeDate32, DataTypeDateTime64, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeDate32, DataTypeDateTime64, ToDateTime64Transform> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeDateTime, DataTypeDateTime64, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeDateTime, DataTypeDateTime64, ToDateTime64Transform> {};
 
 
 /** Transformation of numbers, dates, datetimes to strings: through formatting.
@@ -958,8 +1012,8 @@ struct FormatImpl<DataTypeDecimal<FieldType>>
 
 
 /// DataTypeEnum<T> to DataType<T> free conversion
-template <typename FieldType, typename Name>
-struct ConvertImpl<DataTypeEnum<FieldType>, DataTypeNumber<FieldType>, Name, ConvertDefaultBehaviorTag>
+template <typename FieldType, typename Name, ConvertExceptionMode Mode>
+struct ConvertImpl<DataTypeEnum<FieldType>, DataTypeNumber<FieldType>, Name, ConvertDefaultBehaviorTag, Mode>
 {
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/)
     {
@@ -968,8 +1022,8 @@ struct ConvertImpl<DataTypeEnum<FieldType>, DataTypeNumber<FieldType>, Name, Con
 };
 
 
-template <typename FromDataType, typename Name>
-struct ConvertImpl<FromDataType, std::enable_if_t<!std::is_same_v<FromDataType, DataTypeString>, DataTypeString>, Name, ConvertDefaultBehaviorTag>
+template <typename FromDataType, typename Name, ConvertExceptionMode Mode>
+struct ConvertImpl<FromDataType, std::enable_if_t<!std::is_same_v<FromDataType, DataTypeString>, DataTypeString>, Name, ConvertDefaultBehaviorTag, Mode>
 {
     using FromFieldType = typename FromDataType::FieldType;
     using ColVecType = std::conditional_t<IsDecimalNumber<FromFieldType>, ColumnDecimal<FromFieldType>, ColumnVector<FromFieldType>>;
@@ -1227,19 +1281,72 @@ inline bool tryParseImpl<DataTypeUUID>(DataTypeUUID::FieldType & x, ReadBuffer &
 }
 
 
-enum class ConvertFromStringExceptionMode
-{
-    Throw,  /// Throw exception if value cannot be parsed.
-    Zero,   /// Fill with zero or default if value cannot be parsed.
-    Null    /// Return ColumnNullable with NULLs when value cannot be parsed.
-};
+/** Conversion of DateTime to Date: throw off time component.
+  */
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeUInt32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeUInt32, DataTypeDate, ToDateTransform32Or64<UInt32, UInt16>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeUInt64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeUInt64, DataTypeDate, ToDateTransform32Or64<UInt64, UInt16>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt8, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt8, DataTypeDate, ToDateTransform8Or16Signed<Int8, UInt16>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt16, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt16, DataTypeDate, ToDateTransform8Or16Signed<Int16, UInt16>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt32, DataTypeDate, ToDateTransform32Or64Signed<Int32, UInt16>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt64, DataTypeDate, ToDateTransform32Or64Signed<Int64, UInt16>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeFloat32, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeFloat32, DataTypeDate, ToDateTransform32Or64Signed<Float32, UInt16>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeFloat64, DataTypeDate, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeFloat64, DataTypeDate, ToDateTransform32Or64Signed<Float64, UInt16>> {};
 
-enum class ConvertFromStringParsingMode
-{
-    Normal,
-    BestEffort,  /// Only applicable for DateTime. Will use sophisticated method, that is slower.
-    BestEffortUS
-};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeUInt32, DataTypeDate32, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeUInt32, DataTypeDate32, ToDate32Transform32Or64<UInt32, Int32>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeUInt64, DataTypeDate32, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeUInt64, DataTypeDate32, ToDate32Transform32Or64<UInt64, Int32>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt8, DataTypeDate32, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt8, DataTypeDate32, ToDate32Transform8Or16Signed<Int8, Int32>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt16, DataTypeDate32, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt16, DataTypeDate32, ToDate32Transform8Or16Signed<Int16, Int32>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt32, DataTypeDate32, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt32, DataTypeDate32, ToDate32Transform32Or64Signed<Int32, Int32>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt64, DataTypeDate32, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt64, DataTypeDate32, ToDate32Transform32Or64Signed<Int64, Int32>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeFloat32, DataTypeDate32, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeFloat32, DataTypeDate32, ToDate32Transform32Or64Signed<Float32, Int32>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeFloat64, DataTypeDate32, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeFloat64, DataTypeDate32, ToDate32Transform32Or64Signed<Float64, Int32>> {};
+
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt8, DataTypeDateTime, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt8, DataTypeDateTime, ToDateTimeTransformSigned<Int8, UInt32>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt16, DataTypeDateTime, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt16, DataTypeDateTime, ToDateTimeTransformSigned<Int16, UInt32>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt32, DataTypeDateTime, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt32, DataTypeDateTime, ToDateTimeTransformSigned<Int32, UInt32>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeInt64, DataTypeDateTime, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeInt64, DataTypeDateTime, ToDateTimeTransform64Signed<Int64, UInt32, Adaptive>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeUInt64, DataTypeDateTime, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeUInt64, DataTypeDateTime, ToDateTimeTransform64<UInt64, UInt32, Adaptive>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeFloat32, DataTypeDateTime, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeFloat32, DataTypeDateTime, ToDateTimeTransform64Signed<Float32, UInt32, Adaptive>> {};
+template <typename Name, typename Tag, bool Adaptive> struct ConvertImpl<DataTypeFloat64, DataTypeDateTime, Name, Tag, ConvertExceptionMode::Null, Adaptive>
+    : DateTimeTransformForNullImpl<DataTypeFloat64, DataTypeDateTime, ToDateTimeTransform64Signed<Float64, UInt32, Adaptive>> {};
+
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt8, DataTypeDateTime64, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt8, DataTypeDateTime64, ToDateTime64TransformSigned<Int8>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt16, DataTypeDateTime64, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt16, DataTypeDateTime64, ToDateTime64TransformSigned<Int16>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt32, DataTypeDateTime64, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt32, DataTypeDateTime64, ToDateTime64TransformSigned<Int32>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeInt64, DataTypeDateTime64, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeInt64, DataTypeDateTime64, ToDateTime64TransformSigned<Int64>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeUInt64, DataTypeDateTime64, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeUInt64, DataTypeDateTime64, ToDateTime64TransformUnsigned<UInt64>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeFloat32, DataTypeDateTime64, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeFloat32, DataTypeDateTime64, ToDateTime64TransformFloat<DataTypeFloat32, Float32>> {};
+template <typename Name, typename Tag> struct ConvertImpl<DataTypeFloat64, DataTypeDateTime64, Name, Tag, ConvertExceptionMode::Null>
+    : DateTimeTransformForNullImpl<DataTypeFloat64, DataTypeDateTime64, ToDateTime64TransformFloat<DataTypeFloat64, Float64>> {};
+
 
 template <typename FromDataType, typename ToDataType, typename Name,
     ConvertFromStringExceptionMode exception_mode, ConvertFromStringParsingMode parsing_mode>
@@ -1418,7 +1525,7 @@ struct ConvertThroughParsing
             }
             else
             {
-                bool parsed;
+                bool parsed {};
 
                 if constexpr (parsing_mode == ConvertFromStringParsingMode::BestEffort)
                 {
@@ -1440,6 +1547,19 @@ struct ConvertThroughParsing
                     time_t res;
                     parsed = tryParseDateTimeBestEffortUS(res, read_buffer, *local_time_zone, *utc_time_zone);
                     vec_to[i] = res;
+                }
+                else if (!string_size)
+                {
+                    /*
+                    * select toDate('') ==> return toDate('1970-01-01')
+                    *
+                    * In Function toDate(Nullable(String))
+                    *     Nullable(String) will be convert to String, So Null will be convert to '',
+                    *     In this case, function will throw 'parse error'.
+                    *
+                    * TODO: fix function toDate('') throw error when parameter isn't Nullable
+                    */
+                    vec_to[i] = static_cast<typename ToDataType::FieldType>(0);
                 }
                 else
                 {
@@ -1490,20 +1610,20 @@ struct ConvertThroughParsing
 };
 
 
-template <typename ToDataType, typename Name>
-struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeString>, DataTypeString>, ToDataType, Name, ConvertDefaultBehaviorTag>
-    : ConvertThroughParsing<DataTypeString, ToDataType, Name, ConvertFromStringExceptionMode::Throw, ConvertFromStringParsingMode::Normal> {};
+template <typename ToDataType, typename Name, ConvertExceptionMode Mode>
+struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeString>, DataTypeString>, ToDataType, Name, ConvertDefaultBehaviorTag, Mode>
+    : ConvertThroughParsing<DataTypeString, ToDataType, Name, Mode, ConvertFromStringParsingMode::Normal> {};
 
-template <typename ToDataType, typename Name>
-struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeFixedString>, DataTypeFixedString>, ToDataType, Name, ConvertDefaultBehaviorTag>
-    : ConvertThroughParsing<DataTypeFixedString, ToDataType, Name, ConvertFromStringExceptionMode::Throw, ConvertFromStringParsingMode::Normal> {};
+template <typename ToDataType, typename Name, ConvertExceptionMode Mode>
+struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeFixedString>, DataTypeFixedString>, ToDataType, Name, ConvertDefaultBehaviorTag, Mode>
+    : ConvertThroughParsing<DataTypeFixedString, ToDataType, Name, Mode, ConvertFromStringParsingMode::Normal> {};
 
-template <typename ToDataType, typename Name>
-struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeString>, DataTypeString>, ToDataType, Name, ConvertReturnNullOnErrorTag>
+template <typename ToDataType, typename Name, ConvertExceptionMode Mode>
+struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeString>, DataTypeString>, ToDataType, Name, ConvertReturnNullOnErrorTag, Mode>
     : ConvertThroughParsing<DataTypeString, ToDataType, Name, ConvertFromStringExceptionMode::Null, ConvertFromStringParsingMode::Normal> {};
 
-template <typename ToDataType, typename Name>
-struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeFixedString>, DataTypeFixedString>, ToDataType, Name, ConvertReturnNullOnErrorTag>
+template <typename ToDataType, typename Name, ConvertExceptionMode Mode>
+struct ConvertImpl<std::enable_if_t<!std::is_same_v<ToDataType, DataTypeFixedString>, DataTypeFixedString>, ToDataType, Name, ConvertReturnNullOnErrorTag, Mode>
     : ConvertThroughParsing<DataTypeFixedString, ToDataType, Name, ConvertFromStringExceptionMode::Null, ConvertFromStringParsingMode::Normal> {};
 
 /// Generic conversion of any type from String. Used for complex types: Array and Tuple or types with custom serialization.
@@ -1554,18 +1674,18 @@ struct ConvertImplGenericFromString
 };
 
 
-template <>
-struct ConvertImpl<DataTypeString, DataTypeUInt32, NameToUnixTimestamp, ConvertDefaultBehaviorTag>
+template <ConvertExceptionMode Mode>
+struct ConvertImpl<DataTypeString, DataTypeUInt32, NameToUnixTimestamp, ConvertDefaultBehaviorTag, Mode>
     : ConvertImpl<DataTypeString, DataTypeDateTime, NameToUnixTimestamp, ConvertDefaultBehaviorTag> {};
 
-template <>
-struct ConvertImpl<DataTypeString, DataTypeUInt32, NameToUnixTimestamp, ConvertReturnNullOnErrorTag>
+template <ConvertExceptionMode Mode>
+struct ConvertImpl<DataTypeString, DataTypeUInt32, NameToUnixTimestamp, ConvertReturnNullOnErrorTag, Mode>
     : ConvertImpl<DataTypeString, DataTypeDateTime, NameToUnixTimestamp, ConvertReturnNullOnErrorTag> {};
 
 /** If types are identical, just take reference to column.
   */
-template <typename T, typename Name>
-struct ConvertImpl<std::enable_if_t<!T::is_parametric, T>, T, Name, ConvertDefaultBehaviorTag>
+template <typename T, typename Name, ConvertExceptionMode Mode>
+struct ConvertImpl<std::enable_if_t<!T::is_parametric, T>, T, Name, ConvertDefaultBehaviorTag, Mode>
 {
     template <typename Additions = void *>
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/,
@@ -1579,8 +1699,8 @@ struct ConvertImpl<std::enable_if_t<!T::is_parametric, T>, T, Name, ConvertDefau
 /** Conversion from FixedString to String.
   * Cutting sequences of zero bytes from end of strings.
   */
-template <typename Name>
-struct ConvertImpl<DataTypeFixedString, DataTypeString, Name, ConvertDefaultBehaviorTag>
+template <typename Name, ConvertExceptionMode Mode>
+struct ConvertImpl<DataTypeFixedString, DataTypeString, Name, ConvertDefaultBehaviorTag, Mode>
 {
     static ColumnPtr execute(const ColumnsWithTypeAndName & arguments, const DataTypePtr &, size_t /*input_rows_count*/)
     {
@@ -1636,6 +1756,55 @@ struct NameToDecimal64 { static constexpr auto name = "toDecimal64"; };
 struct NameToDecimal128 { static constexpr auto name = "toDecimal128"; };
 struct NameToDecimal256 { static constexpr auto name = "toDecimal256"; };
 
+struct NameToUInt8OrZero { static constexpr auto name = "toUInt8OrZero"; };
+struct NameToUInt16OrZero { static constexpr auto name = "toUInt16OrZero"; };
+struct NameToUInt32OrZero { static constexpr auto name = "toUInt32OrZero"; };
+struct NameToUInt64OrZero { static constexpr auto name = "toUInt64OrZero"; };
+struct NameToUInt128OrZero { static constexpr auto name = "toUInt128OrZero"; };
+struct NameToUInt256OrZero { static constexpr auto name = "toUInt256OrZero"; };
+struct NameToInt8OrZero { static constexpr auto name = "toInt8OrZero"; };
+struct NameToInt16OrZero { static constexpr auto name = "toInt16OrZero"; };
+struct NameToInt32OrZero { static constexpr auto name = "toInt32OrZero"; };
+struct NameToInt64OrZero { static constexpr auto name = "toInt64OrZero"; };
+struct NameToInt128OrZero { static constexpr auto name = "toInt128OrZero"; };
+struct NameToInt256OrZero { static constexpr auto name = "toInt256OrZero"; };
+struct NameToFloat32OrZero { static constexpr auto name = "toFloat32OrZero"; };
+struct NameToFloat64OrZero { static constexpr auto name = "toFloat64OrZero"; };
+struct NameToDateOrZero { static constexpr auto name = "toDateOrZero"; };
+struct NameToDate32OrZero { static constexpr auto name = "toDate32OrZero"; };
+struct NameToDateTimeOrZero { static constexpr auto name = "toDateTimeOrZero"; };
+struct NameToDateTime64OrZero { static constexpr auto name = "toDateTime64OrZero"; };
+struct NameToDecimal32OrZero { static constexpr auto name = "toDecimal32OrZero"; };
+struct NameToDecimal64OrZero { static constexpr auto name = "toDecimal64OrZero"; };
+struct NameToDecimal128OrZero { static constexpr auto name = "toDecimal128OrZero"; };
+struct NameToDecimal256OrZero { static constexpr auto name = "toDecimal256OrZero"; };
+struct NameToUUIDOrZero { static constexpr auto name = "toUUIDOrZero"; };
+struct NameToFixedStringOrZero { static constexpr auto name = "toFixedStringOrZero"; };
+
+struct NameToUInt8OrNull { static constexpr auto name = "toUInt8OrNull"; };
+struct NameToUInt16OrNull { static constexpr auto name = "toUInt16OrNull"; };
+struct NameToUInt32OrNull { static constexpr auto name = "toUInt32OrNull"; };
+struct NameToUInt64OrNull { static constexpr auto name = "toUInt64OrNull"; };
+struct NameToUInt128OrNull { static constexpr auto name = "toUInt128OrNull"; };
+struct NameToUInt256OrNull { static constexpr auto name = "toUInt256OrNull"; };
+struct NameToInt8OrNull { static constexpr auto name = "toInt8OrNull"; };
+struct NameToInt16OrNull { static constexpr auto name = "toInt16OrNull"; };
+struct NameToInt32OrNull { static constexpr auto name = "toInt32OrNull"; };
+struct NameToInt64OrNull { static constexpr auto name = "toInt64OrNull"; };
+struct NameToInt128OrNull { static constexpr auto name = "toInt128OrNull"; };
+struct NameToInt256OrNull { static constexpr auto name = "toInt256OrNull"; };
+struct NameToFloat32OrNull { static constexpr auto name = "toFloat32OrNull"; };
+struct NameToFloat64OrNull { static constexpr auto name = "toFloat64OrNull"; };
+struct NameToDateOrNull { static constexpr auto name = "toDateOrNull"; };
+struct NameToDate32OrNull { static constexpr auto name = "toDate32OrNull"; };
+struct NameToDateTimeOrNull { static constexpr auto name = "toDateTimeOrNull"; };
+struct NameToDateTime64OrNull { static constexpr auto name = "toDateTime64OrNull"; };
+struct NameToDecimal32OrNull { static constexpr auto name = "toDecimal32OrNull"; };
+struct NameToDecimal64OrNull { static constexpr auto name = "toDecimal64OrNull"; };
+struct NameToDecimal128OrNull { static constexpr auto name = "toDecimal128OrNull"; };
+struct NameToDecimal256OrNull { static constexpr auto name = "toDecimal256OrNull"; };
+struct NameToUUIDOrNull { static constexpr auto name = "toUUIDOrNull"; };
+struct NameToFixedStringOrNull { static constexpr auto name = "toFixedStringOrNull"; };
 
 #define DEFINE_NAME_TO_INTERVAL(INTERVAL_KIND) \
     struct NameToInterval ## INTERVAL_KIND \
@@ -1673,7 +1842,7 @@ static inline bool isDateTime64(const ColumnsWithTypeAndName & arguments)
     return false;
 }
 
-template <typename ToDataType, typename Name, typename MonotonicityImpl>
+template <typename ToDataType, typename Name, typename MonotonicityImpl, ConvertExceptionMode exception_mode = ConvertExceptionMode::Throw>
 class FunctionConvert : public IFunction
 {
 public:
@@ -1681,8 +1850,9 @@ public:
 
     static constexpr auto name = Name::name;
     static constexpr bool to_decimal =
-        std::is_same_v<Name, NameToDecimal32> || std::is_same_v<Name, NameToDecimal64>
-         || std::is_same_v<Name, NameToDecimal128> || std::is_same_v<Name, NameToDecimal256>;
+        std::is_same_v<Name, NameToDecimal32> || std::is_same_v<Name, NameToDecimal64> || std::is_same_v<Name, NameToDecimal128> || std::is_same_v<Name, NameToDecimal256>
+         || std::is_same_v<Name, NameToDecimal32OrZero> || std::is_same_v<Name, NameToDecimal64OrZero> || std::is_same_v<Name, NameToDecimal128OrZero> || std::is_same_v<Name, NameToDecimal256OrZero>
+         || std::is_same_v<Name, NameToDecimal32OrNull> || std::is_same_v<Name, NameToDecimal64OrNull> || std::is_same_v<Name, NameToDecimal128OrNull> || std::is_same_v<Name, NameToDecimal256OrNull>;
 
     static constexpr bool to_datetime64 = std::is_same_v<ToDataType, DataTypeDateTime64>;
     static constexpr bool to_time = std::is_same_v<ToDataType, DataTypeTime>;
@@ -1776,24 +1946,26 @@ public:
 
         validateFunctionArgumentTypes(*this, arguments, mandatory_args, optional_args);
 
+        DataTypePtr res;
         if constexpr (std::is_same_v<ToDataType, DataTypeInterval>)
         {
-            return std::make_shared<DataTypeInterval>(Name::kind);
+            res = std::make_shared<DataTypeInterval>(Name::kind);
         }
         else if constexpr (to_decimal)
         {
             UInt64 scale = extractToDecimalScale(arguments[1]);
 
-            if constexpr (std::is_same_v<Name, NameToDecimal32>)
-                return createDecimalMaxPrecision<Decimal32>(scale);
-            else if constexpr (std::is_same_v<Name, NameToDecimal64>)
-                return createDecimalMaxPrecision<Decimal64>(scale);
-            else if constexpr (std::is_same_v<Name, NameToDecimal128>)
-                return createDecimalMaxPrecision<Decimal128>(scale);
-            else if constexpr (std::is_same_v<Name, NameToDecimal256>)
-                return createDecimalMaxPrecision<Decimal256>(scale);
+            if constexpr (std::is_same_v<Name, NameToDecimal32> || std::is_same_v<Name, NameToDecimal32OrZero> || std::is_same_v<Name, NameToDecimal32OrNull>)
+                res = createDecimalMaxPrecision<Decimal32>(scale);
+            else if constexpr (std::is_same_v<Name, NameToDecimal64> || std::is_same_v<Name, NameToDecimal64OrZero> || std::is_same_v<Name, NameToDecimal64OrNull>)
+                res = createDecimalMaxPrecision<Decimal64>(scale);
+            else if constexpr (std::is_same_v<Name, NameToDecimal128> || std::is_same_v<Name, NameToDecimal128OrZero> || std::is_same_v<Name, NameToDecimal128OrNull>)
+                res = createDecimalMaxPrecision<Decimal128>(scale);
+            else if constexpr (std::is_same_v<Name, NameToDecimal256> || std::is_same_v<Name, NameToDecimal256OrZero> || std::is_same_v<Name, NameToDecimal256OrNull>)
+                res = createDecimalMaxPrecision<Decimal256>(scale);
 
-            throw Exception("Unexpected branch in code of conversion function: it is a bug.", ErrorCodes::LOGICAL_ERROR);
+            if (!res)
+                throw Exception("Unexpected branch in code of conversion function: it is a bug.", ErrorCodes::LOGICAL_ERROR);
         }
         else
         {
@@ -1810,10 +1982,13 @@ public:
                     scale = static_cast<UInt32>(arguments[1].column->get64(0));
 
                 if (to_datetime64 || scale != 0) /// toDateTime('xxxx-xx-xx xx:xx:xx', 0) return DateTime
-                    return std::make_shared<DataTypeDateTime64>(scale,
-                        extractTimeZoneNameFromFunctionArguments(arguments, timezone_arg_position, 0));
+                    res = std::make_shared<DataTypeDateTime64>(scale, extractTimeZoneNameFromFunctionArguments(arguments, timezone_arg_position, 0));
+                else
+                    res = std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, timezone_arg_position, 0));
 
-                return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, timezone_arg_position, 0));
+                if constexpr (exception_mode == ConvertExceptionMode::Null)
+                    res = std::make_shared<DataTypeNullable>(res);
+                return res;
             }
 
             if constexpr (to_time) {
@@ -1822,15 +1997,18 @@ public:
                     scale = static_cast<UInt32>(arguments[1].column->get64(0));
                 return std::make_shared<DataTypeTime>(scale);
             }
-
-            if constexpr (std::is_same_v<ToDataType, DataTypeDateTime>)
-                return std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, timezone_arg_position, 0));
-            else if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64>
-                                || std::is_same_v<ToDataType, DataTypeTime>)
+            else if constexpr (std::is_same_v<ToDataType, DataTypeDateTime>)
+                res = std::make_shared<DataTypeDateTime>(extractTimeZoneNameFromFunctionArguments(arguments, timezone_arg_position, 0));
+            else if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64> || std::is_same_v<ToDataType, DataTypeTime>)
                 throw Exception("Unexpected branch in code of conversion function: it is a bug.", ErrorCodes::LOGICAL_ERROR);
             else
-                return std::make_shared<ToDataType>();
+                res = std::make_shared<ToDataType>();
         }
+
+        if constexpr (exception_mode == ConvertExceptionMode::Null)
+            res = std::make_shared<DataTypeNullable>(res);
+
+        return res;
     }
 
     /// Function actually uses default implementation for nulls,
@@ -1941,22 +2119,22 @@ private:
                     scale = extractToDecimalScale(scale_column);
                 }
 
-                result_column = ConvertImpl<LeftDataType, RightDataType, Name, SpecialTag>::execute(arguments, result_type, input_rows_count, scale);
+                result_column = ConvertImpl<LeftDataType, RightDataType, Name, SpecialTag, exception_mode>::execute(arguments, result_type, input_rows_count, scale);
             }
             else if constexpr (IsDataTypeDateOrDateTime<RightDataType> && std::is_same_v<LeftDataType, DataTypeDateTime64>)
             {
                 const auto * dt64 = assert_cast<const DataTypeDateTime64 *>(arguments[0].type.get());
-                result_column = ConvertImpl<LeftDataType, RightDataType, Name, SpecialTag>::execute(arguments, result_type, input_rows_count, dt64->getScale());
+                result_column = ConvertImpl<LeftDataType, RightDataType, Name, SpecialTag, exception_mode>::execute(arguments, result_type, input_rows_count, dt64->getScale());
             }
             else if constexpr (std::is_same_v<RightDataType, DataTypeDateTime> &&
                                  (std::is_same_v<LeftDataType, DataTypeUInt64> || std::is_same_v<LeftDataType, DataTypeInt64> ||
                                   std::is_same_v<LeftDataType, DataTypeFloat32> || std::is_same_v<LeftDataType, DataTypeFloat64>))
            {
                 if (adaptive_conversion)
-                    result_column = ConvertImpl<LeftDataType, RightDataType, Name, ConvertDefaultBehaviorTag, true>::execute(
+                    result_column = ConvertImpl<LeftDataType, RightDataType, Name, ConvertDefaultBehaviorTag, exception_mode, true>::execute(
                             arguments, result_type, input_rows_count);
                 else
-                    result_column = ConvertImpl<LeftDataType, RightDataType, Name, ConvertDefaultBehaviorTag, false>::execute(
+                    result_column = ConvertImpl<LeftDataType, RightDataType, Name, ConvertDefaultBehaviorTag, exception_mode, false>::execute(
                             arguments, result_type, input_rows_count);
             }
             else if constexpr (IsDataTypeDecimalOrNumber<LeftDataType> && IsDataTypeDecimalOrNumber<RightDataType>)
@@ -1976,11 +2154,11 @@ private:
                     throw Exception("Wrong UUID conversion", ErrorCodes::CANNOT_CONVERT_TYPE);
                 }
                 else
-                    result_column = ConvertImpl<LeftDataType, RightDataType, Name, SpecialTag>::execute(arguments, result_type, input_rows_count);
+                    result_column = ConvertImpl<LeftDataType, RightDataType, Name, SpecialTag, exception_mode>::execute(arguments, result_type, input_rows_count);
             }
             else
             {
-                result_column = ConvertImpl<LeftDataType, RightDataType, Name, SpecialTag>::execute(arguments, result_type, input_rows_count);
+                result_column = ConvertImpl<LeftDataType, RightDataType, Name, SpecialTag, exception_mode>::execute(arguments, result_type, input_rows_count);
             }
 
             return true;
@@ -2010,9 +2188,7 @@ private:
         }
         else
         {
-            /// We should use ConvertFromStringExceptionMode::Null mode when converting from String (or FixedString)
-            /// to Nullable type, to avoid 'value is too short' error on attempt to parse empty string from NULL values.
-            if (to_nullable && WhichDataType(from_type).isStringOrFixedString())
+            if (exception_mode == ConvertExceptionMode::Null)
                 done = callOnIndexAndDataType<ToDataType>(from_type->getTypeId(), call, ConvertReturnNullOnErrorTag{});
             else
                 done = callOnIndexAndDataType<ToDataType>(from_type->getTypeId(), call, ConvertDefaultBehaviorTag{});
@@ -2502,103 +2678,53 @@ template <typename FieldType> struct FunctionTo<DataTypeEnum<FieldType>>
 {
 };
 
-struct NameToUInt8OrZero { static constexpr auto name = "toUInt8OrZero"; };
-struct NameToUInt16OrZero { static constexpr auto name = "toUInt16OrZero"; };
-struct NameToUInt32OrZero { static constexpr auto name = "toUInt32OrZero"; };
-struct NameToUInt64OrZero { static constexpr auto name = "toUInt64OrZero"; };
-struct NameToUInt128OrZero { static constexpr auto name = "toUInt128OrZero"; };
-struct NameToUInt256OrZero { static constexpr auto name = "toUInt256OrZero"; };
-struct NameToInt8OrZero { static constexpr auto name = "toInt8OrZero"; };
-struct NameToInt16OrZero { static constexpr auto name = "toInt16OrZero"; };
-struct NameToInt32OrZero { static constexpr auto name = "toInt32OrZero"; };
-struct NameToInt64OrZero { static constexpr auto name = "toInt64OrZero"; };
-struct NameToInt128OrZero { static constexpr auto name = "toInt128OrZero"; };
-struct NameToInt256OrZero { static constexpr auto name = "toInt256OrZero"; };
-struct NameToFloat32OrZero { static constexpr auto name = "toFloat32OrZero"; };
-struct NameToFloat64OrZero { static constexpr auto name = "toFloat64OrZero"; };
-struct NameToDateOrZero { static constexpr auto name = "toDateOrZero"; };
-struct NameToDate32OrZero { static constexpr auto name = "toDate32OrZero"; };
-struct NameToDateTimeOrZero { static constexpr auto name = "toDateTimeOrZero"; };
-struct NameToDateTime64OrZero { static constexpr auto name = "toDateTime64OrZero"; };
-struct NameToDecimal32OrZero { static constexpr auto name = "toDecimal32OrZero"; };
-struct NameToDecimal64OrZero { static constexpr auto name = "toDecimal64OrZero"; };
-struct NameToDecimal128OrZero { static constexpr auto name = "toDecimal128OrZero"; };
-struct NameToDecimal256OrZero { static constexpr auto name = "toDecimal256OrZero"; };
-struct NameToUUIDOrZero { static constexpr auto name = "toUUIDOrZero"; };
-struct NameToFixedStringOrZero { static constexpr auto name = "toFixedStringOrZero"; };
-
-using FunctionToUInt8OrZero = FunctionConvertFromString<DataTypeUInt8, NameToUInt8OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToUInt16OrZero = FunctionConvertFromString<DataTypeUInt16, NameToUInt16OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToUInt32OrZero = FunctionConvertFromString<DataTypeUInt32, NameToUInt32OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToUInt64OrZero = FunctionConvertFromString<DataTypeUInt64, NameToUInt64OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToUInt128OrZero = FunctionConvertFromString<DataTypeUInt128, NameToUInt128OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToUInt256OrZero = FunctionConvertFromString<DataTypeUInt256, NameToUInt256OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToInt8OrZero = FunctionConvertFromString<DataTypeInt8, NameToInt8OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToInt16OrZero = FunctionConvertFromString<DataTypeInt16, NameToInt16OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToInt32OrZero = FunctionConvertFromString<DataTypeInt32, NameToInt32OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToInt64OrZero = FunctionConvertFromString<DataTypeInt64, NameToInt64OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToInt128OrZero = FunctionConvertFromString<DataTypeInt128, NameToInt128OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToInt256OrZero = FunctionConvertFromString<DataTypeInt256, NameToInt256OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToFloat32OrZero = FunctionConvertFromString<DataTypeFloat32, NameToFloat32OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToFloat64OrZero = FunctionConvertFromString<DataTypeFloat64, NameToFloat64OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToDateOrZero = FunctionConvertFromString<DataTypeDate, NameToDateOrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToDate32OrZero = FunctionConvertFromString<DataTypeDate32, NameToDate32OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToDateTimeOrZero = FunctionConvertFromString<DataTypeDateTime, NameToDateTimeOrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToDateTime64OrZero = FunctionConvertFromString<DataTypeDateTime64, NameToDateTime64OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToDecimal32OrZero = FunctionConvertFromString<DataTypeDecimal<Decimal32>, NameToDecimal32OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToDecimal64OrZero = FunctionConvertFromString<DataTypeDecimal<Decimal64>, NameToDecimal64OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToDecimal128OrZero = FunctionConvertFromString<DataTypeDecimal<Decimal128>, NameToDecimal128OrZero, ConvertFromStringExceptionMode::Zero>;
-using FunctionToDecimal256OrZero = FunctionConvertFromString<DataTypeDecimal<Decimal256>, NameToDecimal256OrZero, ConvertFromStringExceptionMode::Zero>;
+using FunctionToUInt8OrZero = FunctionConvert<DataTypeUInt8, NameToUInt8OrZero, ToNumberMonotonicity<UInt8>, ConvertExceptionMode::Zero>;
+using FunctionToUInt16OrZero = FunctionConvert<DataTypeUInt16, NameToUInt16OrZero, ToNumberMonotonicity<UInt16>, ConvertExceptionMode::Zero>;
+using FunctionToUInt32OrZero = FunctionConvert<DataTypeUInt32, NameToUInt32OrZero, ToNumberMonotonicity<UInt32>, ConvertExceptionMode::Zero>;
+using FunctionToUInt64OrZero = FunctionConvert<DataTypeUInt64, NameToUInt64OrZero, ToNumberMonotonicity<UInt64>, ConvertExceptionMode::Zero>;
+using FunctionToUInt128OrZero = FunctionConvert<DataTypeUInt128, NameToUInt128OrZero, ToNumberMonotonicity<UInt128>, ConvertExceptionMode::Zero>;
+using FunctionToUInt256OrZero = FunctionConvert<DataTypeUInt256, NameToUInt256OrZero, ToNumberMonotonicity<UInt256>, ConvertExceptionMode::Zero>;
+using FunctionToInt8OrZero = FunctionConvert<DataTypeInt8, NameToInt8OrZero, ToNumberMonotonicity<Int8>, ConvertExceptionMode::Zero>;
+using FunctionToInt16OrZero = FunctionConvert<DataTypeInt16, NameToInt16OrZero, ToNumberMonotonicity<Int16>, ConvertExceptionMode::Zero>;
+using FunctionToInt32OrZero = FunctionConvert<DataTypeInt32, NameToInt32OrZero, ToNumberMonotonicity<Int32>, ConvertExceptionMode::Zero>;
+using FunctionToInt64OrZero = FunctionConvert<DataTypeInt64, NameToInt64OrZero, ToNumberMonotonicity<Int64>, ConvertExceptionMode::Zero>;
+using FunctionToInt128OrZero = FunctionConvert<DataTypeInt128, NameToInt128OrZero, ToNumberMonotonicity<Int128>, ConvertExceptionMode::Zero>;
+using FunctionToInt256OrZero = FunctionConvert<DataTypeInt256, NameToInt256OrZero, ToNumberMonotonicity<Int256>, ConvertExceptionMode::Zero>;
+using FunctionToFloat32OrZero = FunctionConvert<DataTypeFloat32, NameToFloat32OrZero, ToNumberMonotonicity<Float32>, ConvertExceptionMode::Zero>;
+using FunctionToFloat64OrZero = FunctionConvert<DataTypeFloat64, NameToFloat64OrZero, ToNumberMonotonicity<Float64>, ConvertExceptionMode::Zero>;
+using FunctionToDateOrZero = FunctionConvert<DataTypeDate, NameToDateOrZero, ToDateMonotonicity, ConvertExceptionMode::Zero>;
+using FunctionToDate32OrZero = FunctionConvert<DataTypeDate32, NameToDate32OrZero, ToDateMonotonicity, ConvertExceptionMode::Zero>;
+using FunctionToDateTimeOrZero = FunctionConvert<DataTypeDateTime, NameToDateTimeOrZero, ToDateTimeMonotonicity, ConvertExceptionMode::Zero>;
+using FunctionToDateTime64OrZero = FunctionConvert<DataTypeDateTime64, NameToDateTime64OrZero, UnknownMonotonicity, ConvertExceptionMode::Zero>;
+using FunctionToDecimal32OrZero = FunctionConvert<DataTypeDecimal<Decimal32>, NameToDecimal32OrZero, UnknownMonotonicity, ConvertExceptionMode::Zero>;
+using FunctionToDecimal64OrZero = FunctionConvert<DataTypeDecimal<Decimal64>, NameToDecimal64OrZero, UnknownMonotonicity, ConvertExceptionMode::Zero>;
+using FunctionToDecimal128OrZero = FunctionConvert<DataTypeDecimal<Decimal128>, NameToDecimal128OrZero, UnknownMonotonicity, ConvertExceptionMode::Zero>;
+using FunctionToDecimal256OrZero = FunctionConvert<DataTypeDecimal<Decimal256>, NameToDecimal256OrZero, UnknownMonotonicity, ConvertExceptionMode::Zero>;
 using FunctionToUUIDOrZero = FunctionConvertFromString<DataTypeUUID, NameToUUIDOrZero, ConvertFromStringExceptionMode::Zero>;
 using FunctionToFixedStringOrZero = FunctionToFixedStringImpl<NameToFixedStringOrZero, ConvertToFixedStringExceptionMode::Zero>;
 
-struct NameToUInt8OrNull { static constexpr auto name = "toUInt8OrNull"; };
-struct NameToUInt16OrNull { static constexpr auto name = "toUInt16OrNull"; };
-struct NameToUInt32OrNull { static constexpr auto name = "toUInt32OrNull"; };
-struct NameToUInt64OrNull { static constexpr auto name = "toUInt64OrNull"; };
-struct NameToUInt128OrNull { static constexpr auto name = "toUInt128OrNull"; };
-struct NameToUInt256OrNull { static constexpr auto name = "toUInt256OrNull"; };
-struct NameToInt8OrNull { static constexpr auto name = "toInt8OrNull"; };
-struct NameToInt16OrNull { static constexpr auto name = "toInt16OrNull"; };
-struct NameToInt32OrNull { static constexpr auto name = "toInt32OrNull"; };
-struct NameToInt64OrNull { static constexpr auto name = "toInt64OrNull"; };
-struct NameToInt128OrNull { static constexpr auto name = "toInt128OrNull"; };
-struct NameToInt256OrNull { static constexpr auto name = "toInt256OrNull"; };
-struct NameToFloat32OrNull { static constexpr auto name = "toFloat32OrNull"; };
-struct NameToFloat64OrNull { static constexpr auto name = "toFloat64OrNull"; };
-struct NameToDateOrNull { static constexpr auto name = "toDateOrNull"; };
-struct NameToDate32OrNull { static constexpr auto name = "toDate32OrNull"; };
-struct NameToDateTimeOrNull { static constexpr auto name = "toDateTimeOrNull"; };
-struct NameToDateTime64OrNull { static constexpr auto name = "toDateTime64OrNull"; };
-struct NameToDecimal32OrNull { static constexpr auto name = "toDecimal32OrNull"; };
-struct NameToDecimal64OrNull { static constexpr auto name = "toDecimal64OrNull"; };
-struct NameToDecimal128OrNull { static constexpr auto name = "toDecimal128OrNull"; };
-struct NameToDecimal256OrNull { static constexpr auto name = "toDecimal256OrNull"; };
-struct NameToUUIDOrNull { static constexpr auto name = "toUUIDOrNull"; };
-struct NameToFixedStringOrNull { static constexpr auto name = "toFixedStringOrNull"; };
-
-using FunctionToUInt8OrNull = FunctionConvertFromString<DataTypeUInt8, NameToUInt8OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToUInt16OrNull = FunctionConvertFromString<DataTypeUInt16, NameToUInt16OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToUInt32OrNull = FunctionConvertFromString<DataTypeUInt32, NameToUInt32OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToUInt64OrNull = FunctionConvertFromString<DataTypeUInt64, NameToUInt64OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToUInt128OrNull = FunctionConvertFromString<DataTypeUInt128, NameToUInt128OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToUInt256OrNull = FunctionConvertFromString<DataTypeUInt256, NameToUInt256OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToInt8OrNull = FunctionConvertFromString<DataTypeInt8, NameToInt8OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToInt16OrNull = FunctionConvertFromString<DataTypeInt16, NameToInt16OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToInt32OrNull = FunctionConvertFromString<DataTypeInt32, NameToInt32OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToInt64OrNull = FunctionConvertFromString<DataTypeInt64, NameToInt64OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToInt128OrNull = FunctionConvertFromString<DataTypeInt128, NameToInt128OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToInt256OrNull = FunctionConvertFromString<DataTypeInt256, NameToInt256OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToFloat32OrNull = FunctionConvertFromString<DataTypeFloat32, NameToFloat32OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToFloat64OrNull = FunctionConvertFromString<DataTypeFloat64, NameToFloat64OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToDateOrNull = FunctionConvertFromString<DataTypeDate, NameToDateOrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToDate32OrNull = FunctionConvertFromString<DataTypeDate32, NameToDate32OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToDateTimeOrNull = FunctionConvertFromString<DataTypeDateTime, NameToDateTimeOrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToDateTime64OrNull = FunctionConvertFromString<DataTypeDateTime64, NameToDateTime64OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToDecimal32OrNull = FunctionConvertFromString<DataTypeDecimal<Decimal32>, NameToDecimal32OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToDecimal64OrNull = FunctionConvertFromString<DataTypeDecimal<Decimal64>, NameToDecimal64OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToDecimal128OrNull = FunctionConvertFromString<DataTypeDecimal<Decimal128>, NameToDecimal128OrNull, ConvertFromStringExceptionMode::Null>;
-using FunctionToDecimal256OrNull = FunctionConvertFromString<DataTypeDecimal<Decimal256>, NameToDecimal256OrNull, ConvertFromStringExceptionMode::Null>;
+using FunctionToUInt8OrNull = FunctionConvert<DataTypeUInt8, NameToUInt8OrNull, ToNumberMonotonicity<UInt8>, ConvertExceptionMode::Null>;
+using FunctionToUInt16OrNull = FunctionConvert<DataTypeUInt16, NameToUInt16OrNull, ToNumberMonotonicity<UInt16>, ConvertExceptionMode::Null>;
+using FunctionToUInt32OrNull = FunctionConvert<DataTypeUInt32, NameToUInt32OrNull, ToNumberMonotonicity<UInt32>, ConvertExceptionMode::Null>;
+using FunctionToUInt64OrNull = FunctionConvert<DataTypeUInt64, NameToUInt64OrNull, ToNumberMonotonicity<UInt64>, ConvertExceptionMode::Null>;
+using FunctionToUInt128OrNull = FunctionConvert<DataTypeUInt128, NameToUInt128OrNull, ToNumberMonotonicity<UInt128>, ConvertExceptionMode::Null>;
+using FunctionToUInt256OrNull = FunctionConvert<DataTypeUInt256, NameToUInt256OrNull, ToNumberMonotonicity<UInt256>, ConvertExceptionMode::Null>;
+using FunctionToInt8OrNull = FunctionConvert<DataTypeInt8, NameToInt8OrNull, ToNumberMonotonicity<Int8>, ConvertExceptionMode::Null>;
+using FunctionToInt16OrNull = FunctionConvert<DataTypeInt16, NameToInt16OrNull, ToNumberMonotonicity<Int16>, ConvertExceptionMode::Null>;
+using FunctionToInt32OrNull = FunctionConvert<DataTypeInt32, NameToInt32OrNull, ToNumberMonotonicity<Int32>, ConvertExceptionMode::Null>;
+using FunctionToInt64OrNull = FunctionConvert<DataTypeInt64, NameToInt64OrNull, ToNumberMonotonicity<Int64>, ConvertExceptionMode::Null>;
+using FunctionToInt128OrNull = FunctionConvert<DataTypeInt128, NameToInt128OrNull, ToNumberMonotonicity<Int128>, ConvertExceptionMode::Null>;
+using FunctionToInt256OrNull = FunctionConvert<DataTypeInt256, NameToInt256OrNull, ToNumberMonotonicity<Int256>, ConvertExceptionMode::Null>;
+using FunctionToFloat32OrNull = FunctionConvert<DataTypeFloat32, NameToFloat32OrNull, ToNumberMonotonicity<Float32>, ConvertExceptionMode::Null>;
+using FunctionToFloat64OrNull = FunctionConvert<DataTypeFloat64, NameToFloat64OrNull, ToNumberMonotonicity<Float64>, ConvertExceptionMode::Null>;
+using FunctionToDateOrNull = FunctionConvert<DataTypeDate, NameToDateOrNull, ToDateMonotonicity, ConvertExceptionMode::Null>;
+using FunctionToDate32OrNull = FunctionConvert<DataTypeDate32, NameToDate32OrNull, ToDateMonotonicity, ConvertExceptionMode::Null>;
+using FunctionToDateTimeOrNull = FunctionConvert<DataTypeDateTime, NameToDateTimeOrNull, ToDateTimeMonotonicity, ConvertExceptionMode::Null>;
+using FunctionToDateTime64OrNull = FunctionConvert<DataTypeDateTime64, NameToDateTime64OrNull, UnknownMonotonicity, ConvertExceptionMode::Null>;
+using FunctionToDecimal32OrNull = FunctionConvert<DataTypeDecimal<Decimal32>, NameToDecimal32OrNull, UnknownMonotonicity, ConvertExceptionMode::Null>;
+using FunctionToDecimal64OrNull = FunctionConvert<DataTypeDecimal<Decimal64>, NameToDecimal64OrNull, UnknownMonotonicity, ConvertExceptionMode::Null>;
+using FunctionToDecimal128OrNull = FunctionConvert<DataTypeDecimal<Decimal128>, NameToDecimal128OrNull, UnknownMonotonicity, ConvertExceptionMode::Null>;
+using FunctionToDecimal256OrNull = FunctionConvert<DataTypeDecimal<Decimal256>, NameToDecimal256OrNull, UnknownMonotonicity, ConvertExceptionMode::Null>;
 using FunctionToUUIDOrNull = FunctionConvertFromString<DataTypeUUID, NameToUUIDOrNull, ConvertFromStringExceptionMode::Null>;
 using FunctionToFixedStringOrNull = FunctionToFixedStringImpl<NameToFixedStringOrNull, ConvertToFixedStringExceptionMode::FixedStringNull>;
 

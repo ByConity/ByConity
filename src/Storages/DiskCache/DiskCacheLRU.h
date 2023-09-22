@@ -152,7 +152,7 @@ private:
         void exec(std::filesystem::path entry_path) override;
         void iterateFile(std::filesystem::path file_path, size_t file_size) override;
 
-        size_t delete_file_size{0};
+        size_t delete_file_size {0};
     };
 
     ThrottlerPtr set_rate_throttler;

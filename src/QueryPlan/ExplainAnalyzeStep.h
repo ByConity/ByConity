@@ -14,7 +14,9 @@ public:
         const DataStream & input_stream_,
         ASTExplainQuery::ExplainKind explain_kind_,
         ContextMutablePtr context_,
-        std::shared_ptr<QueryPlan> query_plan_ptr_ = nullptr
+        std::shared_ptr<QueryPlan> query_plan_ptr_ = nullptr,
+        bool print_stats_ = true,
+        bool print_profile_ = true
     );
 
     String getName() const override { return "ExplainAnalyze"; }
@@ -26,13 +28,14 @@ public:
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     ASTExplainQuery::ExplainKind getKind() const { return kind; }
     void setInputStreams(const DataStreams & input_streams_) override;
+    bool isPrintStats() const { return print_stats; }
+    bool isPrintProfile() const { return print_profile; }
 
     void setPlanSegmentDescriptions(PlanSegmentDescriptions & descriptions) { segment_descriptions = descriptions; }
     void toProto(Protos::ExplainAnalyzeStep & proto, bool for_hash_equals = false) const
     {
         (void)proto;
         (void)for_hash_equals;
-        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
     }
     static std::shared_ptr<ExplainAnalyzeStep> fromProto(const Protos::ExplainAnalyzeStep & proto, ContextPtr)
     {
@@ -45,6 +48,8 @@ private:
     ContextMutablePtr context;
     std::shared_ptr<QueryPlan> query_plan_ptr;
     PlanSegmentDescriptions segment_descriptions;
+    bool print_stats;
+    bool print_profile;
 };
 using ExplainAnalyzeStepPtr = std::shared_ptr<ExplainAnalyzeStep>;
 

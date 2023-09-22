@@ -41,6 +41,7 @@ namespace ErrorCodes
     extern const int ILLEGAL_COLUMN;
     extern const int ILLEGAL_TYPE_OF_ARGUMENT;
     extern const int ARGUMENT_OUT_OF_BOUND;
+    extern const int UNSUPPORTED_METHOD;
 }
 
 
@@ -403,6 +404,20 @@ private:
                 return execute<FromDataType, UInt16, IntervalKind::Quarter>(from, time_column, num_units, time_zone);
             case IntervalKind::Year:
                 return execute<FromDataType, UInt16, IntervalKind::Year>(from, time_column, num_units, time_zone);
+            case IntervalKind::MinuteSecond:
+                [[fallthrough]];
+            case IntervalKind::HourSecond:
+                [[fallthrough]];
+            case IntervalKind::HourMinute:
+                [[fallthrough]];
+            case IntervalKind::DaySecond:
+                [[fallthrough]];
+            case IntervalKind::DayMinute:
+                [[fallthrough]];
+            case IntervalKind::DayHour:
+                [[fallthrough]];
+            case IntervalKind::YearMonth:
+                throw Exception("The method dispatchForIntervalColumn is not supported for {}", interval_type->getKind(), ErrorCodes::UNSUPPORTED_METHOD);
         }
 
         __builtin_unreachable();

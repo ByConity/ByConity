@@ -122,7 +122,8 @@ size_t TableJoin::rightKeyInclusion(const String & name) const
     return count;
 }
 
-void TableJoin::deduplicateAndQualifyColumnNames(const NameSet & left_table_columns, const String & right_table_prefix)
+void TableJoin::deduplicateAndQualifyColumnNames(
+    const NameSet & left_table_columns, const String & right_table_prefix, bool check_identifier_begin_valid)
 {
     NameSet joined_columns;
     NamesAndTypesList dedup_columns;
@@ -139,7 +140,7 @@ void TableJoin::deduplicateAndQualifyColumnNames(const NameSet & left_table_colu
 
         /// Also qualify unusual column names - that does not look like identifiers.
 
-        if (left_table_columns.count(column.name) || !isValidIdentifierBegin(column.name.at(0)))
+        if (left_table_columns.count(column.name) || (check_identifier_begin_valid && (!isValidIdentifierBegin(column.name.at(0)))))
             inserted.name = right_table_prefix + column.name;
 
         original_names[inserted.name] = column.name;

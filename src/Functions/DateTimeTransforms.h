@@ -26,6 +26,7 @@
 #include <Common/Exception.h>
 #include <common/DateLUTImpl.h>
 #include <common/DateLUT.h>
+#include <Columns/ColumnNullable.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/ColumnDecimal.h>
@@ -36,6 +37,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeDateTime64.h>
+#include <DataTypes/DataTypeNullable.h>
 
 
 namespace DB
@@ -1559,6 +1561,71 @@ struct DateTimeTransformImpl
             {
                 size_t time_zone_argument_position = 1;
                 if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64> || std::is_same_v<ToDataType, DataTypeTime>)
+                    time_zone_argument_position = 2;
+
+                const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, time_zone_argument_position, 0);
+                Op::vector(sources->getData(), col_to->getData(), time_zone, transform);
+            }
+
+            return mutable_result_col;
+        }
+        else
+        {
+            throw Exception("Illegal column " + arguments[0].column->getName()
+                + " of first argument of function " + Transform::name,
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+    }
+};
+
+template <typename FromDataType, typename ToDataType, typename Transform>
+struct DateTimeTransformForNullImpl
+{
+    static ColumnPtr execute(
+        const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, const Transform & transform = {})
+    {
+        using ToColumnType = typename ToDataType::ColumnType;
+        auto nested_result_type = removeNullable(result_type);
+
+        using Op = Transformer<typename FromDataType::FieldType, typename ToDataType::FieldType, Transform>;
+        
+        ColumnPtr source_col = arguments[0].column;
+
+        if (checkAndGetColumn<ColumnString>(source_col.get()))
+        {
+            auto function_overload = FunctionFactory::instance().tryGet("toDate", nullptr);
+
+            if (!function_overload)
+                throw Exception("Couldn't convert ColumnString to ColumnData since can't get function toDate", ErrorCodes::BAD_ARGUMENTS);
+
+            auto func_base = function_overload->build({arguments[0]});
+            source_col = func_base->execute(arguments, func_base->getResultType(), input_rows_count);
+        }
+
+        if (const auto * sources = checkAndGetColumn<typename FromDataType::ColumnType>(source_col.get()))
+        {
+            ToColumnType * col_to;
+            auto mutable_result_col = result_type->createColumn();
+            if (mutable_result_col->isNullable())
+            {
+                auto * nullable_column = assert_cast<ColumnNullable *>(mutable_result_col.get());
+                col_to = &assert_cast<typename ToDataType::ColumnType &>(nullable_column->getNestedColumn());
+                ColumnUInt8 & null_map = nullable_column->getNullMapColumn();
+                null_map.getData().resize_fill(sources->getData().size(), 0);     
+            }
+            else
+                col_to = assert_cast<typename ToDataType::ColumnType *>(mutable_result_col.get());
+
+            WhichDataType result_data_type(nested_result_type);
+            if (result_data_type.isDateTime() || result_data_type.isDateTime64())
+            {
+                const auto & time_zone = dynamic_cast<const TimezoneMixin &>(*nested_result_type).getTimeZone();
+                Op::vector(sources->getData(), col_to->getData(), time_zone, transform);
+            }
+            else
+            {
+                size_t time_zone_argument_position = 1;
+                if constexpr (std::is_same_v<ToDataType, DataTypeDateTime64>)
                     time_zone_argument_position = 2;
 
                 const DateLUTImpl & time_zone = extractTimeZoneFromFunctionArguments(arguments, time_zone_argument_position, 0);

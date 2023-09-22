@@ -32,7 +32,9 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/StorageInMemoryMetadata.h>
 
-#include <common/scope_guard_safe.h>
+#    include <boost/lexical_cast.hpp>
+
+#    include "common/scope_guard_safe.h"
 
 namespace DB
 {
@@ -414,7 +416,6 @@ void registerStorageCnchHive(StorageFactory & factory)
     },
     features);
 }
-
 }
 
 #endif

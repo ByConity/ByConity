@@ -203,7 +203,8 @@ public:
     NamesWithAliases getNamesWithAliases(const NameSet & required_columns) const;
     NamesWithAliases getRequiredColumns(const Block & sample, const Names & action_required_columns) const;
 
-    void deduplicateAndQualifyColumnNames(const NameSet & left_table_columns, const String & right_table_prefix);
+    void deduplicateAndQualifyColumnNames(
+        const NameSet & left_table_columns, const String & right_table_prefix, bool check_identifier_begin_valid = true);
     size_t rightKeyInclusion(const String & name) const;
     NameSet requiredRightKeys() const;
 

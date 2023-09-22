@@ -1,4 +1,8 @@
+#include <exception>
 #include <iostream>
+#include <vector>
+#include <string>
+#include <optional>
 
 #include <ThriftHiveMetastore.h>
 #include <hive_metastore_types.h>
@@ -12,7 +16,6 @@
 #include <thrift/protocol/TBinaryProtocol.h>
 #include <thrift/transport/TSocket.h>
 #include <thrift/transport/TTransportUtils.h>
-
 using namespace apache::thrift;
 using namespace apache::thrift::protocol;
 using namespace apache::thrift::transport;
@@ -36,7 +39,7 @@ po::variables_map parseOptions(int argc, char ** argv)
 }
 
 #define FOR_EACH_FIELD(f) \
-    f(binaryStats) \ 
+    f(binaryStats) \
     f(booleanStats) f(dateStats) f(stringStats) f(decimalStats) f(doubleStats) f(longStats)
 
 
@@ -45,7 +48,7 @@ po::variables_map parseOptions(int argc, char ** argv)
     { \
         std::cout << indent; \
         obj.statsData.bs.printTo(std::cout); \
-        \ 
+        \
         std::cout \
             << std::endl; \
     }
@@ -161,14 +164,13 @@ void show_stat(
 
 int main(int argc, char ** argv)
 {
-    if (argc < 3)
+    auto opts = parseOptions(argc, argv);
+    for(auto o : opts)
     {
-        std::cerr << "usage: ./hive_client host, port [database, table]" << std::endl;
-        return 0;
+        std::cout << o.first <<" " << o.second.value().type().name() << std::endl;
     }
-
-    std::string host = argv[1];
-    int port = std::stoi(argv[2]);
+    std::string host = opts["host"].as<std::string>();
+    int port = opts["port"].as<int32_t>();
 
     std::string hive_db_name;
     std::string hive_table_name;
@@ -189,29 +191,47 @@ int main(int argc, char ** argv)
     ThriftHiveMetastoreClient client(protocol);
     transport->open();
 
-    /// get all database and tables;
-    if (argc == 3)
+    if (opts.count("desc"))
     {
-        std::vector<std::string> databases;
-        client.get_all_databases(databases);
-        for (const auto & database : databases)
+        const auto & params = opts["desc"].as<std::vector<std::string>>();
+        if (params.size() != 2)
         {
-            std::cout << database << std::endl;
+            std::cout << "--desc db_name table_name" << std::endl;
+            return -1;
+        }
+        describe_table(client, params[0], params[1]);
+        return 0;
+    }
+
+    if (opts.count("list"))
+    {
+        const auto & params = opts["list"].as<std::vector<std::string>>();
+        switch (params.size())
+        {
+            case 0:
+                listAllDBs(client);
+                return 0;
+            case 1:
+                listAllTables(client, params[0]);
+                return 0;
+            default:
+                std::cout << "--list [db_name]" << std::endl;
+                return -1;
         }
     }
-    else if (argc == 4)
+
+    if (opts.count("stat"))
     {
-        std::vector<std::string> tables;
-        client.get_all_tables(tables, hive_db_name);
-        for (const auto & table : tables)
+
+        const auto & params = opts["stat"].as<std::vector<std::string>>();
+        if (params.size() != 2)
         {
-            std::cout << table << std::endl;
+            std::cout << "--stat db_name table_name" << std::endl;
+            return -1;
         }
+        show_stat(client, params[0], params[1]);
+
+        return 0;
     }
-    else if (argc == 5)
-    {
-        Table table;
-        client.get_table(table, hive_db_name, hive_table_name);
-        table.printTo(std::cout);
-    }
+
 }

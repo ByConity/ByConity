@@ -17,8 +17,8 @@ INPUT=`${CLICKHOUSE_CLIENT} --query="show stats test_stats"`
 echo "$INPUT" | grep "test_stats\.\*"
 
 DATA=(`echo "$INPUT" | grep "test_stats\.x"`)
-# echo identifier, type, nonnull_count, null_count
-echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]}
+# echo identifier, type, nonnull_count, null_count, has_histogram
+echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[7]}
 # test NDV
 if ((${DATA[4]} >= 900000 && ${DATA[4]} <= 1100000)); then
 echo "GOOD NDV for x"
@@ -28,8 +28,8 @@ fi
 
 # echo identifier, <NOTHING>, full_count
 DATA=(`echo "$INPUT" | grep "test_stats\.id"`)
-# echo identifier, type, nonnull_count, null_count
-echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]}
+# echo identifier, type, nonnull_count, null_count, has_histogram
+echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[7]}
 # test NDV
 if ((${DATA[4]} >= 9000000 && ${DATA[4]} <= 11000000)); then
 echo "GOOD NDV for id"
@@ -46,8 +46,8 @@ INPUT=`${CLICKHOUSE_CLIENT} --query="show stats test_stats"`
 echo "$INPUT" | grep "test_stats\.\*"
 
 DATA=(`echo "$INPUT" | grep "test_stats\.x"`)
-# echo identifier, type, nonnull_count, null_count
-echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]}
+# echo identifier, type, nonnull_count, null_count, has_histogram
+echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[7]}
 # test NDV
 if ((${DATA[4]} >= 900000 && ${DATA[4]} <= 1100000)); then
 echo "GOOD NDV for x"
@@ -57,8 +57,8 @@ fi
 
 # echo identifier, <NOTHING>, full_count
 DATA=(`echo "$INPUT" | grep "test_stats\.id"`)
-# echo identifier, type, nonnull_count, null_count
-echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]}
+# echo identifier, type, nonnull_count, null_count, has_histogram
+echo ${DATA[0]} ${DATA[1]} ${DATA[2]} ${DATA[3]} ${DATA[7]}
 # test NDV
 if ((${DATA[4]} >= 9000000 && ${DATA[4]} <= 11000000)); then
 echo "GOOD NDV for id"

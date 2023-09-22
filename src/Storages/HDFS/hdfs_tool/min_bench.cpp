@@ -403,8 +403,8 @@ protected:
 
             std::uniform_int_distribution<int> off_dist(0, std::max(1, file_size_ - 1024 * 1024));
 
-            DB::ReadBufferFromByteHDFS rb(file_name, true, hdfs_params_);
-            rb.seek(off_dist(generator));
+            DB::ReadBufferFromByteHDFS rb(file_name, hdfs_params_, true);
+            rb.seek(off_dist(generator), SEEK_SET);
             Stopwatch watch;
             {
                 SCOPE_EXIT({ stats->update(watch.elapsedMilliseconds()); });
@@ -498,7 +498,7 @@ protected:
 
         std::shared_ptr<ThreadTimeStatistics> stats = std::make_unique<ThreadTimeStatistics>();
         HDFSConnectionParams params =  HDFSConnectionParams::parseFromMisusedNNProxyStr(nnproxy_);
-        ReadBufferFromByteHDFS reader(bench_file_path_, true, params, step_size_);
+        ReadBufferFromByteHDFS reader(bench_file_path_, params, false, step_size_);
 
         size_t buffer_offset = 0;
 

@@ -1,0 +1,80 @@
+Hello	1
+Hello	2
+Hello	3
+Goodbye	1
+Goodbye	2
+Goodbye	3
+Hello	1
+Hello	2
+Hello	3
+Goodbye	1
+Goodbye	2
+Goodbye	3
+[1]	1
+[]	0
+[]	0
+[1]	1
+[2,3]	2
+[2,3]	3
+1	['1','2']	Hello
+2	['1','2']	Hello
+3	['3','4','5']	World
+4	['3','4','5']	World
+5	['3','4','5']	World
+1	['1','2']	Hello
+2	['1','2']	Hello
+3	['3','4','5']	World
+4	['3','4','5']	World
+5	['3','4','5']	World
+[]		Goodbye
+[1,2]	1	Hello
+[1,2]	2	Hello
+[3,4,5]	3	World
+[3,4,5]	4	World
+[3,4,5]	5	World
+[]		Goodbye
+[1,2]	1	Hello
+[1,2]	2	Hello
+[3,4,5]	3	World
+[3,4,5]	4	World
+[3,4,5]	5	World
+[1,2]	1	1	2	Hello
+[1,2]	2	2	3	Hello
+[3,4,5]	3	1	4	World
+[3,4,5]	4	2	5	World
+[3,4,5]	5	3	6	World
+1	Goodbye
+2	Goodbye
+3	Goodbye
+1	Hello
+2	Hello
+3	Hello
+1	World
+2	World
+3	World
+\N	Goodbye
+\N	Hello
+\N	World
+1	1	Hello
+2	2	Hello
+3	3	World
+4	4	World
+5	5	World
+0		Goodbye
+1	1	Hello
+2	2	Hello
+3	3	World
+4	4	World
+5	5	World
+1
+1
+1
+1
+1
+1	1	Hello
+1	1	Hello
+1	1	1
+2	2	2
+3	3	3
+4	4	4
+5	5	5

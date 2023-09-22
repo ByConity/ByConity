@@ -1,0 +1,30 @@
+1
+0
+1
+0
+1
+0
+1
+0
+1
+1
+0
+1
+0
+1
+0
+1
+0
+0
+SELECT arrayJoin([\'hello\', \'world\']) = \'hello\'
+SELECT arrayJoin([\'hello\', \'world\']) LIKE \'%hello%\'
+SELECT arrayJoin([\'hello\', \'world\']) LIKE \'hell_\'
+SELECT \'_hello\' LIKE \'\\\\_hello\'
+SELECT \'%hello\' LIKE \'\\\\%hello\'
+SELECT \'hello\' = \'hello\'
+SELECT arrayJoin([\'hello\', \'world\']) != \'hello\'
+SELECT arrayJoin([\'hello\', \'world\']) NOT LIKE \'%hello%\'
+SELECT arrayJoin([\'hello\', \'world\']) NOT LIKE \'hell_\'
+SELECT \'_hello\' NOT LIKE \'\\\\_hello\'
+SELECT \'%hello\' NOT LIKE \'\\\\%hello\'
+SELECT \'hello\' != \'hello\'

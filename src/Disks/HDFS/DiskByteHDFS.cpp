@@ -204,8 +204,8 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & pa
                 settings.buffer_size, nullptr, 0, settings.throttler);
         }
     } else {
-        return std::make_unique<ReadBufferFromByteHDFS>(file_path, settings.byte_hdfs_pread,
-            hdfs_params, settings.buffer_size);
+        return std::make_unique<ReadBufferFromByteHDFS>(file_path, hdfs_params,
+            settings.byte_hdfs_pread, settings.buffer_size);
     }
 }
 

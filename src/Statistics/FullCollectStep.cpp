@@ -34,78 +34,108 @@ public:
         col_name = col_desc.name;
         data_type = decayDataType(col_desc.type);
         config = getColumnConfig(handler_context.settings, data_type);
+        generateSqls();
     }
 
-    std::vector<String> getSqls() override
+    void generateSqls()
     {
         auto quote_col_name = backQuoteIfNeed(col_name);
         auto wrapped_col_name = getWrappedColumnName(config, quote_col_name);
 
         auto count_sql = fmt::format(FMT_STRING("count({})"), quote_col_name);
+        sqls.emplace_back(count_sql);
         auto ndv_sql = fmt::format(FMT_STRING("cpc({})"), wrapped_col_name);
-        auto histogram_sql = fmt::format(FMT_STRING("kll({})"), wrapped_col_name);
+        sqls.emplace_back(ndv_sql);
+        if (config.need_histogram)
+        {
+            auto histogram_sql = fmt::format(FMT_STRING("kll({})"), wrapped_col_name);
+            sqls.emplace_back(histogram_sql);
+        }
+
+        if (config.need_minmax)
+        {
+            auto min_sql = fmt::format(FMT_STRING("toFloat64(min({}))"), wrapped_col_name);
+            auto max_sql = fmt::format(FMT_STRING("toFloat64(max({}))"), wrapped_col_name);
+            sqls.emplace_back(min_sql);
+            sqls.emplace_back(max_sql);
+        }
+
         // to estimate ndv
         LOG_INFO(
             &Poco::Logger::get("FirstFullColumnHandler"),
             fmt::format(
                 FMT_STRING("col info: col={} && "
-                           "sqls={},{},{}"),
+                           "sqls={}"),
                 col_name,
-                count_sql,
-                ndv_sql,
-                histogram_sql));
-
-        return {count_sql, ndv_sql, histogram_sql};
+                fmt::join(sqls, ", ")));
     }
 
-    size_t size() override { return 3; }
+    const std::vector<String> & getSqls() { return sqls; }
 
-    void parse(const Block & block, size_t index_offset) override
+    void parse(const Block & block, size_t index_offset_begin) override
     {
+        auto index_offset = index_offset_begin;
         // count(col)
-        auto nonnull_count = static_cast<double>(getSingleValue<UInt64>(block, index_offset + 0));
-        // cpc(col)
-        auto ndv_blob = getSingleValue<std::string_view>(block, index_offset + 1);
-        // kll(col)
-        auto histogram_blob = getSingleValue<std::string_view>(block, index_offset + 2);
-
-        // select count(*)
-        double full_count = handler_context.full_count;
-
+        auto nonnull_count = static_cast<double>(getSingleValue<UInt64>(block, index_offset++));
         HandlerColumnData result;
+        result.nonnull_count = nonnull_count;
 
         // algorithm requires block_ndv as sample_nonnull
         if (nonnull_count != 0)
         {
-            double ndv = getNdvFromSketchBinary(ndv_blob);
-            result.nonnull_count = nonnull_count;
-            result.ndv_value_opt = std::min(ndv, nonnull_count);
-            if (!histogram_blob.empty())
-            {
-                auto histogram = createStatisticsTyped<StatsKllSketch>(StatisticsTag::KllSketch, histogram_blob);
-                result.min_as_double = histogram->minAsDouble().value_or(std::nan(""));
-                result.max_as_double = histogram->maxAsDouble().value_or(std::nan(""));
+            // select count(*)
+            double full_count = handler_context.full_count;
 
-                result.bucket_bounds = histogram->getBucketBounds();
+            // cpc(col)
+            auto ndv_blob = getSingleValue<std::string_view>(block, index_offset++);
+            double ndv = getNdvFromSketchBinary(ndv_blob);
+            result.is_ndv_reliable = true;
+            result.ndv_value = std::min(ndv, nonnull_count);
+
+            if (config.need_histogram)
+            {
+                // kll(col)
+                auto histogram_blob = getSingleValue<std::string_view>(block, index_offset++);
+
+                if (!histogram_blob.empty())
+                {
+                    auto histogram = createStatisticsTyped<StatsKllSketch>(StatisticsTag::KllSketch, histogram_blob);
+                    result.min_as_double = histogram->minAsDouble().value_or(std::nan(""));
+                    result.max_as_double = histogram->maxAsDouble().value_or(std::nan(""));
+
+                    result.bucket_bounds = histogram->getBucketBounds();
+                }
+                LOG_INFO(
+                    &Poco::Logger::get("FirstFullColumnHandler"),
+                    fmt::format(
+                        FMT_STRING("col info: col={} && "
+                                   "context raw data: full_count={} && "
+                                   "column raw data: nonnull_count={}, ndv=&& "
+                                   "cast data: result.nonnull_count={}, "
+                                   "result.is_ndv_reliable={}, "
+                                   "result.ndv_value={}"
+                                   ),
+                        col_name,
+                        full_count,
+                        nonnull_count,
+                        ndv,
+                        result.nonnull_count,
+                        result.is_ndv_reliable,
+                        result.ndv_value));
             }
-            LOG_INFO(
-                &Poco::Logger::get("FirstFullColumnHandler"),
-                fmt::format(
-                    FMT_STRING("col info: col={} && "
-                               "context raw data: full_count={} && "
-                               "column raw data: nonnull_count={}, ndv=&& "
-                               "cast data: result.nonnull_count={}, result.ndv_value={}"),
-                    col_name,
-                    full_count,
-                    nonnull_count,
-                    ndv,
-                    result.nonnull_count,
-                    result.ndv_value_opt.value_or(-1)));
+
+            if (config.need_minmax) 
+            {
+                auto min = getSingleValue<Float64>(block, index_offset++);
+                auto max = getSingleValue<Float64>(block, index_offset++);
+                result.min_as_double = min;
+                result.max_as_double = max;
+            }
         }
         else
         {
-            result.nonnull_count = 0;
-            result.ndv_value_opt = 0;
+            result.is_ndv_reliable = true;
+            result.ndv_value = 0;
             // use NaN for min/max
             result.min_as_double = std::numeric_limits<double>::quiet_NaN();
             result.max_as_double = std::numeric_limits<double>::quiet_NaN();
@@ -120,6 +150,7 @@ private:
     String col_name;
     DataTypePtr data_type;
     ColumnCollectConfig config;
+    std::vector<String> sqls;
 };
 
 class SecondFullColumnHandler : public ColumnHandlerBase
@@ -132,9 +163,10 @@ public:
         col_name = col_desc.name;
         data_type = decayDataType(col_desc.type);
         config = getColumnConfig(handler_context.settings, data_type);
+        generateSqls();
     }
 
-    std::vector<String> getSqls() override
+    void generateSqls()
     {
         auto quote_col_name = backQuoteIfNeed(col_name);
         auto wrapped_col_name = getWrappedColumnName(config, quote_col_name);
@@ -143,10 +175,10 @@ public:
 
         auto ndv_buckets_sql = fmt::format(FMT_STRING("ndv_buckets('{}')({})"), bounds_b64, wrapped_col_name);
         // to estimate ndv
-        return {ndv_buckets_sql};
+        sqls.emplace_back(ndv_buckets_sql);
     }
 
-    size_t size() override { return 1; }
+    const std::vector<String> & getSqls() { return sqls; }
 
     void parse(const Block & block, size_t index_offset) override
     {
@@ -171,6 +203,7 @@ private:
     String col_name;
     DataTypePtr data_type;
     ColumnCollectConfig config;
+    std::vector<String> sqls;
 };
 
 
@@ -205,7 +238,7 @@ public:
         for (const auto & col_desc : cols_desc)
         {
             auto & col_info = handler_context.columns_data.at(col_desc.name);
-            if (std::llround(col_info.ndv_value_opt.value()) >= 2)
+            if (std::llround(col_info.ndv_value) >= 2 && col_info.bucket_bounds)
             {
                 table_handler.registerHandler(std::make_unique<SecondFullColumnHandler>(handler_context, col_info.bucket_bounds, col_desc));
                 to_collect = true;

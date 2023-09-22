@@ -13,6 +13,7 @@
 #include "DataTypes/DataTypeDate.h"
 #include "DataTypes/DataTypeDate32.h"
 #include "DataTypes/DataTypeDateTime.h"
+#include "DataTypes/DataTypeDateTime64.h"
 #include "DataTypes/DataTypeDecimalBase.h"
 #include "DataTypes/DataTypeFixedString.h"
 #include "DataTypes/DataTypeNullable.h"
@@ -70,7 +71,8 @@ DataTypePtr HiveSchemaConverter::hiveTypeToCHType(const String & hive_type, bool
         {"boolean", std::make_shared<DataTypeUInt8>()},
         {"binary", std::make_shared<DataTypeString>()},
         {"date", std::make_shared<DataTypeDate32>()},
-        {"timestamp", std::make_shared<DataTypeDateTime>()}};
+        {"timestamp", std::make_shared<DataTypeDateTime64>(DataTypeDateTime64::default_scale)}
+    };
 
     DataTypePtr data_type;
 

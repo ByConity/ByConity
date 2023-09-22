@@ -651,7 +651,7 @@ private:
     virtual void loadIndexGranularity();
 
     /// Loads index file.
-    virtual IndexPtr loadIndex();
+    virtual void loadIndex();
 
     /// Load rows count for this part from disk (for the newer storage format version).
     /// For the older format version calculates rows count from the size of a column with a fixed size.
