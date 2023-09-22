@@ -35,13 +35,13 @@ Projection Est. 100 rows
                   │                       │     │     Expressions: [d_year_6, i_brand_id_6, i_category_id_6, i_class_id_6, i_manufact_id_6], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_2:=cs_ext_sales_price_1 - coalesce(cr_return_amount_1, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_2:=cs_quantity_1 - coalesce(cr_return_quantity_1, 0)
                   │                       │     └─ Right Join Est. 10999012 rows
                   │                       │        │     Condition: cr_item_sk_1 == cs_item_sk_1, cr_order_number_1 == cs_order_number_1
-                  │                       │        │     Runtime Filters Builder: {cs_item_sk_1,cs_order_number_1}
+                  │                       │        │     Runtime Filters Builder: {cs_item_sk_1}
                   │                       │        ├─ Repartition Exchange Est. 14404374 rows
                   │                       │        │  │     Partition by: {cr_item_sk_1, cr_order_number_1}
                   │                       │        │  └─ Filter Est. 14404374 rows
-                  │                       │        │     │     Condition: Runtime Filters: {cr_item_sk_1, cr_order_number_1}
+                  │                       │        │     │     Condition: Runtime Filters: {cr_item_sk_1}
                   │                       │        │     └─ TableScan tpcds100.catalog_returns Est. 14404374 rows
-                  │                       │        │              Where: Runtime Filters: {cr_item_sk, cr_order_number}
+                  │                       │        │              Where: Runtime Filters: {cr_item_sk}
                   │                       │        │              Outputs: cr_item_sk_1:=cr_item_sk, cr_order_number_1:=cr_order_number, cr_return_amount_1:=cr_return_amount, cr_return_quantity_1:=cr_return_quantity
                   │                       │        └─ Repartition Exchange Est. 7212786 rows
                   │                       │           │     Partition by: {cs_item_sk_1, cs_order_number_1}
@@ -166,13 +166,13 @@ Projection Est. 100 rows
                                           │     │     Expressions: [d_year_10, i_brand_id_10, i_category_id_10, i_class_id_10, i_manufact_id_10], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_4:=cs_ext_sales_price_2 - coalesce(cr_return_amount_2, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_4:=cs_quantity_2 - coalesce(cr_return_quantity_2, 0)
                                           │     └─ Right Join Est. 10999012 rows
                                           │        │     Condition: cr_item_sk_2 == cs_item_sk_2, cr_order_number_2 == cs_order_number_2
-                                          │        │     Runtime Filters Builder: {cs_item_sk_2,cs_order_number_2}
+                                          │        │     Runtime Filters Builder: {cs_item_sk_2}
                                           │        ├─ Repartition Exchange Est. 14404374 rows
                                           │        │  │     Partition by: {cr_item_sk_2, cr_order_number_2}
                                           │        │  └─ Filter Est. 14404374 rows
-                                          │        │     │     Condition: Runtime Filters: {cr_item_sk_2, cr_order_number_2}
+                                          │        │     │     Condition: Runtime Filters: {cr_item_sk_2}
                                           │        │     └─ TableScan tpcds100.catalog_returns Est. 14404374 rows
-                                          │        │              Where: Runtime Filters: {cr_item_sk, cr_order_number}
+                                          │        │              Where: Runtime Filters: {cr_item_sk}
                                           │        │              Outputs: cr_item_sk_2:=cr_item_sk, cr_order_number_2:=cr_order_number, cr_return_amount_2:=cr_return_amount, cr_return_quantity_2:=cr_return_quantity
                                           │        └─ Repartition Exchange Est. 7212786 rows
                                           │           │     Partition by: {cs_item_sk_2, cs_order_number_2}
@@ -277,4 +277,4 @@ Projection Est. 100 rows
                                                                └─ TableScan tpcds100.date_dim Est. 73049 rows
                                                                         Where: d_year = 2001
                                                                         Outputs: d_date_sk_8:=d_date_sk, d_year_12:=d_year
-note: Runtime Filter is applied for 36 times.
+note: Runtime Filter is applied for 34 times.

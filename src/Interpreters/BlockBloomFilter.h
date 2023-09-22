@@ -24,7 +24,7 @@ public:
     BlockBloomFilter() = default;
 
     explicit BlockBloomFilter(size_t ndv_) { init(ndv_); }
-    void init(size_t ndv_, bool save_hash_ = false)
+    void init(size_t ndv_)
     {
         assert(ndv_ > 0);
         ndv = ndv_;
@@ -33,9 +33,6 @@ public:
         slots = 1UL << slots_exp;
         data = std::unique_ptr<UInt8[], free_deleter>(static_cast<UInt8 *>(std::aligned_alloc(bytes_in_slot, slots * bytes_in_slot)));
         std::memset(data.get(), 0, bytes_in_slot * slots);
-        save_hash = save_hash_;
-        if (save_hash)
-            hashes.reserve(ndv);
     }
 
     void addKey(UInt64 x)
@@ -56,7 +53,7 @@ public:
     // note: one of the bloom filter will be invalidated
     static BlockBloomFilter intersect(BlockBloomFilter && left, BlockBloomFilter && right);
 
-    void mergeInplace(const BlockBloomFilter & bf);
+    void mergeInplace(BlockBloomFilter && bf);
 
     void deserialize(ReadBuffer & istr);
     void serializeToBuffer(WriteBuffer & ostr);
@@ -73,7 +70,6 @@ public:
     UInt64 ndv;
     UInt64 slots;
     std::unique_ptr<UInt8[], free_deleter> data;
-    bool save_hash;
     std::vector<UInt64> hashes;
 };
 }

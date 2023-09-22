@@ -20,14 +20,10 @@ Projection
                │        │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price)
                │        └─ Inner Join
                │           │     Condition: i_item_sk_1 == cs_item_sk
-               │           │     Runtime Filters Builder: {cs_item_sk}
                │           ├─ Repartition Exchange
                │           │  │     Partition by: {i_item_sk_1}
-               │           │  └─ Filter
-               │           │     │     Condition: Runtime Filters: {i_item_sk_1}
-               │           │     └─ TableScan tpcds1000.item
-               │           │              Where: Runtime Filters: {i_item_sk}
-               │           │              Outputs: i_item_id_1:=i_item_id, i_item_sk_1:=i_item_sk
+               │           │  └─ TableScan tpcds1000.item
+               │           │           Outputs: i_item_id_1:=i_item_id, i_item_sk_1:=i_item_sk
                │           └─ Repartition Exchange
                │              │     Partition by: {cs_item_sk}
                │              └─ Inner Join
@@ -191,4 +187,4 @@ Projection
                                                                            └─ TableScan tpcds1000.date_dim
                                                                                     Where: d_date = cast(10959, 'Date')
                                                                                     Outputs: d_date_8:=d_date, d_week_seq_5:=d_week_seq
-note: Runtime Filter is applied for 11 times.
+note: Runtime Filter is applied for 10 times.

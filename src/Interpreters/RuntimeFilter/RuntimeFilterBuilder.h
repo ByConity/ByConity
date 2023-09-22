@@ -39,6 +39,8 @@ enum class BypassType : UInt8
     BYPASS_LARGE_HT, /// Too large to build runtime filter, same as the runtime filter abort
 };
 
+String bypassTypeToString(BypassType type);
+
 struct InternalDynamicData
 {
     Field range{};
@@ -48,7 +50,7 @@ struct InternalDynamicData
 
     String dump() const
     {
-        return "range:" + range.dump() + " bf:" + bf.dump() + " set:" + set.dump();
+        return bypassTypeToString(bypass) + " range:" + range.dump() + " bf:" + bf.dump() + " set:" + set.dump();
     }
 };
 

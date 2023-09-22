@@ -12,6 +12,22 @@
 namespace DB
 {
 
+String bypassTypeToString(BypassType type)
+{
+    switch (type)
+    {
+        case BypassType::NO_BYPASS:
+            return "NO_BYPASS";
+        case BypassType::BYPASS_EMPTY_HT:
+            return "BYPASS_EMPTY_HT";
+        case BypassType::BYPASS_LARGE_HT:
+            return "BYPASS_LARGE_HT";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+
 RuntimeFilterBuilder::RuntimeFilterBuilder(ContextPtr context, const LinkedHashMap<String, RuntimeFilterBuildInfos> & runtime_filters_)
     : runtime_filters(runtime_filters_), enable_range_cover(context->getSettingsRef().enable_range_cover)
 {
@@ -66,7 +82,7 @@ RuntimeFilterData RuntimeFilterBuilder::merge(std::vector<RuntimeFilterData> & d
 
                 if (rfs.second.is_bf)
                 {
-                    res.runtime_filters[rfs.first].bloom_filter->mergeInplace(*rfs.second.bloom_filter);
+                    res.runtime_filters[rfs.first].bloom_filter->mergeInplace(std::move(*rfs.second.bloom_filter));
                 }
                 else
                 {
@@ -140,7 +156,7 @@ std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::e
                 WriteBufferFromOwnString buffer;
                 data.runtime_filters[id].bloom_filter->serializeToBuffer(buffer);
                 filter.bf = std::move(buffer.str());
-                if (data.runtime_filters[id].bloom_filter->has_min_max)
+                if (!enable_range_cover && data.runtime_filters[id].bloom_filter->has_min_max)
                 {
                     Array array;
                     array.emplace_back(data.runtime_filters[id].bloom_filter->Min());
@@ -168,7 +184,7 @@ std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::e
                 }
                 filter.set = std::move(array);
 
-                if (data.runtime_filters[id].values_set->has_min_max)
+                if (!enable_range_cover && data.runtime_filters[id].values_set->has_min_max)
                 {
                     Array array;
                     array.emplace_back(data.runtime_filters[id].values_set->min);
