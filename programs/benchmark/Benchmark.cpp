@@ -121,6 +121,10 @@ public:
         global_context->makeGlobalContext();
         global_context->setSettings(settings);
 
+        auto & client_info = global_context->getClientInfo();
+        client_info.client_name = "benchmark";
+        client_info.initial_user = user_;
+
         std::cerr << std::fixed << std::setprecision(3);
 
         /// This is needed to receive blocks with columns of AggregateFunction data type
