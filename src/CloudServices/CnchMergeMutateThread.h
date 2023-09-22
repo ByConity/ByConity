@@ -195,7 +195,7 @@ private:
 
     bool tryMergeParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
     bool trySelectPartsToMerge(StoragePtr & istorage, StorageCnchMergeTree & storage, MergeSelectionMetrics & metrics);
-    String submitFutureManipulationTask(FutureManipulationTask & future_task, bool maybe_sync_task = false);
+    String submitFutureManipulationTask(const StorageCnchMergeTree & storage, FutureManipulationTask & future_task, bool maybe_sync_task = false);
 
     // Mutate
     bool tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage);

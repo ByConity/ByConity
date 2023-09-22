@@ -535,7 +535,7 @@ bool CnchMergeMutateThread::tryMergeParts(StoragePtr & istorage, StorageCnchMerg
         part_merge_log_elem.new_tasks += 1;
         part_merge_log_elem.source_parts_in_new_tasks += future_task->record->parts.size();
 
-        submitFutureManipulationTask(*future_task);
+        submitFutureManipulationTask(storage, *future_task);
     }
 
     try
@@ -747,7 +747,10 @@ Strings CnchMergeMutateThread::removeLockedPartition(const Strings & partitions)
     return res;
 }
 
-String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTask & future_task, bool maybe_sync_task)
+String CnchMergeMutateThread::submitFutureManipulationTask(
+    const StorageCnchMergeTree & storage,
+    FutureManipulationTask & future_task,
+    bool maybe_sync_task)
 {
     auto local_context = getContext();
 
@@ -764,6 +767,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(FutureManipulationTas
     LockInfoPtr partition_lock = std::make_shared<LockInfo>(transaction_id);
     partition_lock->setMode(LockMode::X);
     partition_lock->setTablePrefix(LockInfo::task_domain + UUIDHelpers::UUIDToString(getStorageID().uuid));
+    partition_lock->setTimeout(storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds());
 
     /*
     if (type == ManipulationType::Merge)
@@ -948,7 +952,11 @@ String CnchMergeMutateThread::triggerPartMerge(
         }
 
         return submitFutureManipulationTask(
-            FutureManipulationTask(*this, ManipulationType::Merge).setTryExecute(try_execute).assignSourceParts(std::move(res.front())), true);
+            storage,
+            FutureManipulationTask(*this, ManipulationType::Merge)
+                .setTryExecute(try_execute)
+                .assignSourceParts(std::move(res.front())),
+            true);
     }
 
     return {};
@@ -1213,7 +1221,10 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
                 if (alter_parts.size() >= max_mutate_part_num || curr_mutate_part_size >= max_mutate_part_size)
                 {
                     submitFutureManipulationTask(
-                        FutureManipulationTask(*this, type).setMutationEntry(*current_mutate_entry).assignSourceParts(std::move(alter_parts)));
+                        storage,
+                        FutureManipulationTask(*this, type)
+                            .setMutationEntry(*current_mutate_entry)
+                            .assignSourceParts(std::move(alter_parts)));
 
                     alter_parts.clear();
                     curr_mutate_part_size = 0;
@@ -1226,7 +1237,10 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
         if (!alter_parts.empty())
         {
             submitFutureManipulationTask(
-                FutureManipulationTask(*this, type).setMutationEntry(*current_mutate_entry).assignSourceParts(std::move(alter_parts)));
+                storage,
+                FutureManipulationTask(*this, type)
+                    .setMutationEntry(*current_mutate_entry)
+                    .assignSourceParts(std::move(alter_parts)));
         }
         else if (alter_parts.empty() && type == ManipulationType::Clustering)
         {
