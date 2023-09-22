@@ -15,11 +15,11 @@ Projection Est. 100 rows
                   └─ Aggregating Est. 1305 rows
                      │     Group by: {s_store_id, s_store_name}
                      │     Aggregates: expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))
-                     └─ Projection Est. 284731390 rows
+                     └─ Projection Est. 569462781 rows
                         │     Expressions: [s_store_id, s_store_name], expr#multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Friday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Monday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Saturday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Sunday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Thursday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Tuesday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Wednesday', ss_sales_price, NULL)
-                        └─ Inner Join Est. 284731390 rows
+                        └─ Inner Join Est. 569462781 rows
                            │     Condition: ss_store_sk == s_store_sk
-                           ├─ Inner Join Est. 284731390 rows
+                           ├─ Inner Join Est. 569462781 rows
                            │  │     Condition: ss_sold_date_sk == d_date_sk
                            │  │     Runtime Filters Builder: {d_date_sk}
                            │  ├─ Filter Est. 2879987999 rows

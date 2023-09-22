@@ -17,24 +17,21 @@ Projection
                      │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
                      └─ Inner Join
                         │     Condition: ss_sold_date_sk == d_date_sk
-                        ├─ Repartition Exchange
-                        │  │     Partition by: {ss_sold_date_sk}
-                        │  └─ Inner Join
-                        │     │     Condition: ss_item_sk == i_item_sk
-                        │     │     Runtime Filters Builder: {i_item_sk}
-                        │     ├─ Filter
-                        │     │  │     Condition: Runtime Filters: {ss_item_sk}
-                        │     │  └─ TableScan tpcds100.store_sales
-                        │     │           Where: Runtime Filters: {ss_item_sk}
-                        │     │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
-                        │     └─ Broadcast Exchange
-                        │        └─ Filter
-                        │           │     Condition: i_manufact_id = 128
-                        │           └─ TableScan tpcds100.item
-                        │                    Where: i_manufact_id = 128
-                        │                    Outputs: [i_brand, i_brand_id, i_item_sk, i_manufact_id]
-                        └─ Repartition Exchange
-                           │     Partition by: {d_date_sk}
+                        ├─ Inner Join
+                        │  │     Condition: ss_item_sk == i_item_sk
+                        │  │     Runtime Filters Builder: {i_item_sk}
+                        │  ├─ Filter
+                        │  │  │     Condition: Runtime Filters: {ss_item_sk}
+                        │  │  └─ TableScan tpcds100.store_sales
+                        │  │           Where: Runtime Filters: {ss_item_sk}
+                        │  │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
+                        │  └─ Broadcast Exchange
+                        │     └─ Filter
+                        │        │     Condition: i_manufact_id = 128
+                        │        └─ TableScan tpcds100.item
+                        │                 Where: i_manufact_id = 128
+                        │                 Outputs: [i_brand, i_brand_id, i_item_sk, i_manufact_id]
+                        └─ Broadcast Exchange
                            └─ Filter
                               │     Condition: d_moy = 11
                               └─ TableScan tpcds100.date_dim

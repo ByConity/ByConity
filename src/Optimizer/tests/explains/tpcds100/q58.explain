@@ -134,53 +134,53 @@ Projection
                         │     Group by: {i_item_id_2}
                         │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
                         └─ Inner Join
-                           │     Condition: i_item_sk_2 == ws_item_sk
+                           │     Condition: ws_item_sk == i_item_sk_2
                            ├─ Repartition Exchange
-                           │  │     Partition by: {i_item_sk_2}
-                           │  └─ TableScan tpcds100.item
-                           │           Outputs: i_item_id_2:=i_item_id, i_item_sk_2:=i_item_sk
+                           │  │     Partition by: {ws_item_sk}
+                           │  └─ Inner Join
+                           │     │     Condition: ws_sold_date_sk == d_date_sk_2
+                           │     │     Runtime Filters Builder: {d_date_sk_2}
+                           │     ├─ Filter
+                           │     │  │     Condition: Runtime Filters: {ws_sold_date_sk}
+                           │     │  └─ TableScan tpcds100.web_sales
+                           │     │           Where: Runtime Filters: {ws_sold_date_sk}
+                           │     │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
+                           │     └─ Broadcast Exchange
+                           │        └─ Inner Join
+                           │           │     Condition: d_date_6 == d_date_7
+                           │           │     Runtime Filters Builder: {d_date_7}
+                           │           ├─ Filter
+                           │           │  │     Condition: isNotNull(d_date_6) Runtime Filters: {d_date_6}
+                           │           │  └─ TableScan tpcds100.date_dim
+                           │           │           Where: isNotNull(d_date) Runtime Filters: {d_date}
+                           │           │           Outputs: d_date_6:=d_date, d_date_sk_2:=d_date_sk
+                           │           └─ Broadcast Exchange
+                           │              └─ MergingAggregated
+                           │                 └─ Repartition Exchange
+                           │                    │     Partition by: {d_date_7}
+                           │                    └─ Aggregating
+                           │                       │     Group by: {d_date_7}
+                           │                       └─ Inner Join
+                           │                          │     Condition: d_week_seq_4 == d_week_seq_5
+                           │                          │     Runtime Filters Builder: {d_week_seq_5}
+                           │                          ├─ Filter
+                           │                          │  │     Condition: isNotNull(d_date_7) Runtime Filters: {d_week_seq_4}
+                           │                          │  └─ TableScan tpcds100.date_dim
+                           │                          │           Where: isNotNull(d_date) Runtime Filters: {d_week_seq}
+                           │                          │           Outputs: d_date_7:=d_date, d_week_seq_4:=d_week_seq
+                           │                          └─ Broadcast Exchange
+                           │                             └─ EnforceSingleRow
+                           │                                └─ Union
+                           │                                   └─ Gather Exchange
+                           │                                      └─ Projection
+                           │                                         │     Expressions: [d_week_seq_5]
+                           │                                         └─ Filter
+                           │                                            │     Condition: d_date_8 = cast(10959, 'Date')
+                           │                                            └─ TableScan tpcds100.date_dim
+                           │                                                     Where: d_date = cast(10959, 'Date')
+                           │                                                     Outputs: d_date_8:=d_date, d_week_seq_5:=d_week_seq
                            └─ Repartition Exchange
-                              │     Partition by: {ws_item_sk}
-                              └─ Inner Join
-                                 │     Condition: ws_sold_date_sk == d_date_sk_2
-                                 │     Runtime Filters Builder: {d_date_sk_2}
-                                 ├─ Filter
-                                 │  │     Condition: Runtime Filters: {ws_sold_date_sk}
-                                 │  └─ TableScan tpcds100.web_sales
-                                 │           Where: Runtime Filters: {ws_sold_date_sk}
-                                 │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
-                                 └─ Broadcast Exchange
-                                    └─ Inner Join
-                                       │     Condition: d_date_6 == d_date_7
-                                       │     Runtime Filters Builder: {d_date_7}
-                                       ├─ Filter
-                                       │  │     Condition: isNotNull(d_date_6) Runtime Filters: {d_date_6}
-                                       │  └─ TableScan tpcds100.date_dim
-                                       │           Where: isNotNull(d_date) Runtime Filters: {d_date}
-                                       │           Outputs: d_date_6:=d_date, d_date_sk_2:=d_date_sk
-                                       └─ Broadcast Exchange
-                                          └─ MergingAggregated
-                                             └─ Repartition Exchange
-                                                │     Partition by: {d_date_7}
-                                                └─ Aggregating
-                                                   │     Group by: {d_date_7}
-                                                   └─ Inner Join
-                                                      │     Condition: d_week_seq_4 == d_week_seq_5
-                                                      │     Runtime Filters Builder: {d_week_seq_5}
-                                                      ├─ Filter
-                                                      │  │     Condition: isNotNull(d_date_7) Runtime Filters: {d_week_seq_4}
-                                                      │  └─ TableScan tpcds100.date_dim
-                                                      │           Where: isNotNull(d_date) Runtime Filters: {d_week_seq}
-                                                      │           Outputs: d_date_7:=d_date, d_week_seq_4:=d_week_seq
-                                                      └─ Broadcast Exchange
-                                                         └─ EnforceSingleRow
-                                                            └─ Union
-                                                               └─ Gather Exchange
-                                                                  └─ Projection
-                                                                     │     Expressions: [d_week_seq_5]
-                                                                     └─ Filter
-                                                                        │     Condition: d_date_8 = cast(10959, 'Date')
-                                                                        └─ TableScan tpcds100.date_dim
-                                                                                 Where: d_date = cast(10959, 'Date')
-                                                                                 Outputs: d_date_8:=d_date, d_week_seq_5:=d_week_seq
+                              │     Partition by: {i_item_sk_2}
+                              └─ TableScan tpcds100.item
+                                       Outputs: i_item_id_2:=i_item_id, i_item_sk_2:=i_item_sk
 note: Runtime Filter is applied for 9 times.

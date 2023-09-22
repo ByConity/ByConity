@@ -24,8 +24,8 @@ Projection Est. 32000 rows
             │              │  └─ TableScan tpch.partsupp Est. 800000 rows
             │              │           Where: Runtime Filters: {ps_suppkey}
             │              │           Outputs: [ps_availqty, ps_partkey, ps_suppkey, ps_supplycost]
-            │              └─ Broadcast Exchange Est. 200 rows
-            │                 └─ Inner Join Est. 200 rows
+            │              └─ Broadcast Exchange Est. 400 rows
+            │                 └─ Inner Join Est. 400 rows
             │                    │     Condition: s_nationkey == n_nationkey
             │                    │     Runtime Filters Builder: {n_nationkey}
             │                    ├─ Filter Est. 10000 rows
@@ -57,8 +57,8 @@ Projection Est. 32000 rows
                                  │  └─ TableScan tpch.partsupp Est. 800000 rows
                                  │           Where: Runtime Filters: {ps_suppkey}
                                  │           Outputs: ps_availqty_1:=ps_availqty, ps_suppkey_1:=ps_suppkey, ps_supplycost_1:=ps_supplycost
-                                 └─ Broadcast Exchange Est. 200 rows
-                                    └─ Inner Join Est. 200 rows
+                                 └─ Broadcast Exchange Est. 400 rows
+                                    └─ Inner Join Est. 400 rows
                                        │     Condition: s_nationkey_1 == n_nationkey_1
                                        │     Runtime Filters Builder: {n_nationkey_1}
                                        ├─ Filter Est. 10000 rows

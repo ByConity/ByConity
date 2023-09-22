@@ -51,6 +51,21 @@ public:
 
     const String & getDefaultDatabase() const { return database_name; }
 
+    static std::unordered_map<String, Field> getDefaultOptimizerSettings()
+    {
+        std::unordered_map<std::string, DB::Field> settings;
+#ifndef NDEBUG
+        // debug mode may time out.
+        settings.emplace("iterative_optimizer_timeout", "30000000");
+        settings.emplace("cascades_optimizer_timeout", "30000000");
+#endif
+        settings.emplace("dialect_type", "ANSI");
+        settings.emplace("enable_sharding_optimize", 1);
+        settings.emplace("cte_mode", "AUTO");
+        return settings;
+    }
+
+
 protected:
     String database_name;
     ContextMutablePtr session_context;

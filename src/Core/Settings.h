@@ -1920,7 +1920,7 @@ enum PreloadLevelSettings : UInt64
     M(CTEMode, cte_mode, CTEMode::INLINED, "CTE mode: SHARED|INLINED|AUTO|ENFORCED", 0) \
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
-    M(UInt64, max_graph_reorder_size, 4, "Max tables join order enum on graph", 0) \
+    M(UInt64 , max_graph_reorder_size, 6, "Max tables join order enum on graph", 0) \
     M(Bool, enable_join_graph_support_filter, true, "Whether enable join graph support filter", 0) \
     M(Bool, enable_join_reorder, true, "Whether enable join reorder", 0) \
     M(Float, enable_partial_aggregate_ratio , 0.9, "Enable partial aggregate ratio : group by keys ndv / total row count", 0) \
@@ -1954,7 +1954,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_execute_uncorrelated_subquery, false, "Whether enable execute uncorrelated subquery", 0) \
     M(UInt64, execute_uncorrelated_in_subquery_size, 10000, "Size of execute uncorrelated in subquery", 0) \
     M(Bool, enable_subcolumn_optimization_through_union, true, "Whether enable sub column optimization through set operation.", 0) \
-    M(Float, pk_selectivity, 0.5, "PK selectivity for join estimation", 0) \
+    M(Float, pk_selectivity, 1, "PK selectivity for join estimation", 0) \
     M(Bool, enable_distinct_remove, true, "Whether to eliminate redundancy during execution", 0) \
     M(Bool, use_sql_binding, false, "Whether use SQL binding", 0) \
     M(UInt64, global_bindings_update_time, 60*60, "Interval to update global binding cache from catalog, in seconds.", 0) \

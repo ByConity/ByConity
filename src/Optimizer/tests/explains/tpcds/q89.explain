@@ -22,12 +22,12 @@ Projection Est. 100 rows
                               └─ Aggregating Est. 2520 rows
                                  │     Group by: {d_moy, i_brand, i_category, i_class, s_company_name, s_store_name}
                                  │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                                 └─ Inner Join Est. 2859504 rows
+                                 └─ Inner Join Est. 5719008 rows
                                     │     Condition: ss_store_sk == s_store_sk
-                                    ├─ Inner Join Est. 2859504 rows
+                                    ├─ Inner Join Est. 5719008 rows
                                     │  │     Condition: ss_sold_date_sk == d_date_sk
                                     │  │     Runtime Filters Builder: {d_date_sk}
-                                    │  ├─ Inner Join Est. 14501212 rows
+                                    │  ├─ Inner Join Est. 29002425 rows
                                     │  │  │     Condition: ss_item_sk == i_item_sk
                                     │  │  │     Runtime Filters Builder: {i_item_sk}
                                     │  │  ├─ Filter Est. 2879987999 rows

@@ -27,8 +27,7 @@ public:
     ~PlanCheckCorrectness() { std::cout << tester->printMetric() << std::endl; }
     static void SetUpTestSuite()
     {
-        std::unordered_map<std::string, DB::Field> settings;
-        settings.emplace("enable_execute_uncorrelated_subquery", 0);
+        std::unordered_map<std::string, DB::Field> settings = BasePlanTest::getDefaultOptimizerSettings();
         tester = std::make_shared<DB::CorrectnessPlanTest>(settings);
     }
 

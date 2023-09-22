@@ -23,24 +23,21 @@ Projection
                               └─ Inner Join
                                  │     Condition: ws_item_sk == i_item_sk
                                  │     Runtime Filters Builder: {i_item_sk}
-                                 ├─ Repartition Exchange
-                                 │  │     Partition by: {ws_item_sk}
-                                 │  └─ Inner Join
-                                 │     │     Condition: ws_sold_date_sk == d_date_sk
-                                 │     │     Runtime Filters Builder: {d_date_sk}
-                                 │     ├─ Filter
-                                 │     │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                                 │     │  └─ TableScan tpcds.web_sales
-                                 │     │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                                 │     │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
-                                 │     └─ Broadcast Exchange
-                                 │        └─ Filter
-                                 │           │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                                 │           └─ TableScan tpcds.date_dim
-                                 │                    Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                                 │                    Outputs: [d_date, d_date_sk]
-                                 └─ Repartition Exchange
-                                    │     Partition by: {i_item_sk}
+                                 ├─ Inner Join
+                                 │  │     Condition: ws_sold_date_sk == d_date_sk
+                                 │  │     Runtime Filters Builder: {d_date_sk}
+                                 │  ├─ Filter
+                                 │  │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                                 │  │  └─ TableScan tpcds.web_sales
+                                 │  │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                                 │  │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
+                                 │  └─ Broadcast Exchange
+                                 │     └─ Filter
+                                 │        │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
+                                 │        └─ TableScan tpcds.date_dim
+                                 │                 Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
+                                 │                 Outputs: [d_date, d_date_sk]
+                                 └─ Broadcast Exchange
                                     └─ Filter
                                        │     Condition: i_category IN ('Books', 'Home', 'Sports')
                                        └─ TableScan tpcds.item

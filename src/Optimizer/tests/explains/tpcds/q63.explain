@@ -22,12 +22,12 @@ Projection Est. 1 rows
                               └─ Aggregating Est. 1 rows
                                  │     Group by: {d_moy, i_manager_id}
                                  │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                                 └─ Inner Join Est. 431478 rows
+                                 └─ Inner Join Est. 862957 rows
                                     │     Condition: ss_store_sk == s_store_sk
-                                    ├─ Inner Join Est. 431478 rows
+                                    ├─ Inner Join Est. 862957 rows
                                     │  │     Condition: ss_sold_date_sk == d_date_sk
                                     │  │     Runtime Filters Builder: {d_date_sk}
-                                    │  ├─ Inner Join Est. 2182151 rows
+                                    │  ├─ Inner Join Est. 4364302 rows
                                     │  │  │     Condition: ss_item_sk == i_item_sk
                                     │  │  │     Runtime Filters Builder: {i_item_sk}
                                     │  │  ├─ Filter Est. 2879987999 rows

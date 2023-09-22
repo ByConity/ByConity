@@ -25,13 +25,7 @@ class PlanCheckSsb : public ::testing::Test
 public:
     static void SetUpTestSuite()
     {
-        std::unordered_map<std::string, DB::Field> settings;
-#ifndef NDEBUG
-        // debug mode may time out.
-        settings.emplace("cascades_optimizer_timeout", "300000");
-        settings.emplace("enable_execute_uncorrelated_subquery", 0);
-#endif
-
+        std::unordered_map<std::string, DB::Field> settings = BasePlanTest::getDefaultOptimizerSettings();
         tester = std::make_shared<DB::BaseSsbPlanTest>(settings);
     }
 

@@ -109,7 +109,7 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
             return *current_status_ptr; 
         else
             /// queue is closed but status not set yet
-            return BroadcastStatus(BroadcastStatusCode::SEND_UNKNOWN_ERROR, "Send operation was interrupted");
+            return BroadcastStatus(BroadcastStatusCode::SEND_UNKNOWN_ERROR, false, "Send operation was interrupted");
     }
 
     BroadcastStatus current_status = finish(

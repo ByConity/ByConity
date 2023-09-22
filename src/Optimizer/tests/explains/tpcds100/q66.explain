@@ -80,33 +80,30 @@ Projection
                                        ├─ Inner Join
                                        │  │     Condition: cs_sold_time_sk == t_time_sk_1
                                        │  │     Runtime Filters Builder: {t_time_sk_1}
-                                       │  ├─ Repartition Exchange
-                                       │  │  │     Partition by: {cs_sold_time_sk}
-                                       │  │  └─ Inner Join
-                                       │  │     │     Condition: cs_sold_date_sk == d_date_sk_1
-                                       │  │     │     Runtime Filters Builder: {d_date_sk_1}
-                                       │  │     ├─ Inner Join
-                                       │  │     │  │     Condition: cs_ship_mode_sk == sm_ship_mode_sk_1
-                                       │  │     │  │     Runtime Filters Builder: {sm_ship_mode_sk_1}
-                                       │  │     │  ├─ Filter
-                                       │  │     │  │  │     Condition: Runtime Filters: {cs_ship_mode_sk, cs_sold_date_sk, cs_sold_time_sk}
-                                       │  │     │  │  └─ TableScan tpcds100.catalog_sales
-                                       │  │     │  │           Where: Runtime Filters: {cs_ship_mode_sk, cs_sold_date_sk, cs_sold_time_sk}
-                                       │  │     │  │           Outputs: [cs_net_paid_inc_tax, cs_quantity, cs_sales_price, cs_ship_mode_sk, cs_sold_date_sk, cs_sold_time_sk, cs_warehouse_sk]
-                                       │  │     │  └─ Broadcast Exchange
-                                       │  │     │     └─ Filter
-                                       │  │     │        │     Condition: sm_carrier_1 IN ('BARIAN', 'DHL')
-                                       │  │     │        └─ TableScan tpcds100.ship_mode
-                                       │  │     │                 Where: sm_carrier IN ('BARIAN', 'DHL')
-                                       │  │     │                 Outputs: sm_carrier_1:=sm_carrier, sm_ship_mode_sk_1:=sm_ship_mode_sk
-                                       │  │     └─ Broadcast Exchange
-                                       │  │        └─ Filter
-                                       │  │           │     Condition: d_year_1 = 2001
-                                       │  │           └─ TableScan tpcds100.date_dim
-                                       │  │                    Where: d_year = 2001
-                                       │  │                    Outputs: d_date_sk_1:=d_date_sk, d_moy_1:=d_moy, d_year_1:=d_year
-                                       │  └─ Repartition Exchange
-                                       │     │     Partition by: {t_time_sk_1}
+                                       │  ├─ Inner Join
+                                       │  │  │     Condition: cs_sold_date_sk == d_date_sk_1
+                                       │  │  │     Runtime Filters Builder: {d_date_sk_1}
+                                       │  │  ├─ Inner Join
+                                       │  │  │  │     Condition: cs_ship_mode_sk == sm_ship_mode_sk_1
+                                       │  │  │  │     Runtime Filters Builder: {sm_ship_mode_sk_1}
+                                       │  │  │  ├─ Filter
+                                       │  │  │  │  │     Condition: Runtime Filters: {cs_ship_mode_sk, cs_sold_date_sk, cs_sold_time_sk}
+                                       │  │  │  │  └─ TableScan tpcds100.catalog_sales
+                                       │  │  │  │           Where: Runtime Filters: {cs_ship_mode_sk, cs_sold_date_sk, cs_sold_time_sk}
+                                       │  │  │  │           Outputs: [cs_net_paid_inc_tax, cs_quantity, cs_sales_price, cs_ship_mode_sk, cs_sold_date_sk, cs_sold_time_sk, cs_warehouse_sk]
+                                       │  │  │  └─ Broadcast Exchange
+                                       │  │  │     └─ Filter
+                                       │  │  │        │     Condition: sm_carrier_1 IN ('BARIAN', 'DHL')
+                                       │  │  │        └─ TableScan tpcds100.ship_mode
+                                       │  │  │                 Where: sm_carrier IN ('BARIAN', 'DHL')
+                                       │  │  │                 Outputs: sm_carrier_1:=sm_carrier, sm_ship_mode_sk_1:=sm_ship_mode_sk
+                                       │  │  └─ Broadcast Exchange
+                                       │  │     └─ Filter
+                                       │  │        │     Condition: d_year_1 = 2001
+                                       │  │        └─ TableScan tpcds100.date_dim
+                                       │  │                 Where: d_year = 2001
+                                       │  │                 Outputs: d_date_sk_1:=d_date_sk, d_moy_1:=d_moy, d_year_1:=d_year
+                                       │  └─ Broadcast Exchange
                                        │     └─ Filter
                                        │        │     Condition: (t_time_1 >= 30838) AND (t_time_1 <= 59638)
                                        │        └─ TableScan tpcds100.time_dim

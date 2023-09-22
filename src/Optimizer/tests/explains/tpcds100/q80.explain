@@ -26,50 +26,54 @@ Projection
                      │              │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#sum(coalesce(sr_return_amt, 0)):=AggNull(sum)(expr#coalesce(sr_return_amt, 0)), expr#sum(minus(ss_net_profit, coalesce(sr_net_loss, 0))):=AggNull(sum)(expr#minus(ss_net_profit, coalesce(sr_net_loss, 0)))
                      │              └─ Projection
                      │                 │     Expressions: [s_store_id, ss_ext_sales_price], expr#coalesce(sr_return_amt, 0):=coalesce(sr_return_amt, 0), expr#minus(ss_net_profit, coalesce(sr_net_loss, 0)):=ss_net_profit - coalesce(sr_net_loss, 0)
-                     │                 └─ Left Join
-                     │                    │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
+                     │                 └─ Right Join
+                     │                    │     Condition: sr_item_sk == ss_item_sk, sr_ticket_number == ss_ticket_number
+                     │                    │     Runtime Filters Builder: {ss_item_sk,ss_ticket_number}
                      │                    ├─ Repartition Exchange
-                     │                    │  │     Partition by: {ss_item_sk, ss_ticket_number}
-                     │                    │  └─ Inner Join
-                     │                    │     │     Condition: ss_promo_sk == p_promo_sk
-                     │                    │     ├─ Inner Join
-                     │                    │     │  │     Condition: ss_store_sk == s_store_sk
-                     │                    │     │  ├─ Inner Join
-                     │                    │     │  │  │     Condition: ss_item_sk == i_item_sk
-                     │                    │     │  │  │     Runtime Filters Builder: {i_item_sk}
-                     │                    │     │  │  ├─ Inner Join
-                     │                    │     │  │  │  │     Condition: ss_sold_date_sk == d_date_sk
-                     │                    │     │  │  │  │     Runtime Filters Builder: {d_date_sk}
-                     │                    │     │  │  │  ├─ Filter
-                     │                    │     │  │  │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                     │                    │     │  │  │  │  └─ TableScan tpcds100.store_sales
-                     │                    │     │  │  │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                     │                    │     │  │  │  │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_net_profit, ss_promo_sk, ss_sold_date_sk, ss_store_sk, ss_ticket_number]
-                     │                    │     │  │  │  └─ Broadcast Exchange
-                     │                    │     │  │  │     └─ Filter
-                     │                    │     │  │  │        │     Condition: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
-                     │                    │     │  │  │        └─ TableScan tpcds100.date_dim
-                     │                    │     │  │  │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
-                     │                    │     │  │  │                 Outputs: [d_date, d_date_sk]
-                     │                    │     │  │  └─ Broadcast Exchange
-                     │                    │     │  │     └─ Filter
-                     │                    │     │  │        │     Condition: i_current_price > 50.
-                     │                    │     │  │        └─ TableScan tpcds100.item
-                     │                    │     │  │                 Where: i_current_price > 50.
-                     │                    │     │  │                 Outputs: [i_current_price, i_item_sk]
-                     │                    │     │  └─ Broadcast Exchange
-                     │                    │     │     └─ TableScan tpcds100.store
-                     │                    │     │              Outputs: [s_store_id, s_store_sk]
-                     │                    │     └─ Broadcast Exchange
-                     │                    │        └─ Filter
-                     │                    │           │     Condition: p_channel_tv = 'N'
-                     │                    │           └─ TableScan tpcds100.promotion
-                     │                    │                    Where: p_channel_tv = 'N'
-                     │                    │                    Outputs: [p_channel_tv, p_promo_sk]
+                     │                    │  │     Partition by: {sr_item_sk, sr_ticket_number}
+                     │                    │  └─ Filter
+                     │                    │     │     Condition: Runtime Filters: {sr_item_sk, sr_ticket_number}
+                     │                    │     └─ TableScan tpcds100.store_returns
+                     │                    │              Where: Runtime Filters: {sr_item_sk, sr_ticket_number}
+                     │                    │              Outputs: [sr_item_sk, sr_net_loss, sr_return_amt, sr_ticket_number]
                      │                    └─ Repartition Exchange
-                     │                       │     Partition by: {sr_item_sk, sr_ticket_number}
-                     │                       └─ TableScan tpcds100.store_returns
-                     │                                Outputs: [sr_item_sk, sr_net_loss, sr_return_amt, sr_ticket_number]
+                     │                       │     Partition by: {ss_item_sk, ss_ticket_number}
+                     │                       └─ Inner Join
+                     │                          │     Condition: ss_store_sk == s_store_sk
+                     │                          ├─ Inner Join
+                     │                          │  │     Condition: ss_promo_sk == p_promo_sk
+                     │                          │  ├─ Inner Join
+                     │                          │  │  │     Condition: ss_item_sk == i_item_sk
+                     │                          │  │  │     Runtime Filters Builder: {i_item_sk}
+                     │                          │  │  ├─ Inner Join
+                     │                          │  │  │  │     Condition: ss_sold_date_sk == d_date_sk
+                     │                          │  │  │  │     Runtime Filters Builder: {d_date_sk}
+                     │                          │  │  │  ├─ Filter
+                     │                          │  │  │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
+                     │                          │  │  │  │  └─ TableScan tpcds100.store_sales
+                     │                          │  │  │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
+                     │                          │  │  │  │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_net_profit, ss_promo_sk, ss_sold_date_sk, ss_store_sk, ss_ticket_number]
+                     │                          │  │  │  └─ Broadcast Exchange
+                     │                          │  │  │     └─ Filter
+                     │                          │  │  │        │     Condition: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
+                     │                          │  │  │        └─ TableScan tpcds100.date_dim
+                     │                          │  │  │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
+                     │                          │  │  │                 Outputs: [d_date, d_date_sk]
+                     │                          │  │  └─ Broadcast Exchange
+                     │                          │  │     └─ Filter
+                     │                          │  │        │     Condition: i_current_price > 50.
+                     │                          │  │        └─ TableScan tpcds100.item
+                     │                          │  │                 Where: i_current_price > 50.
+                     │                          │  │                 Outputs: [i_current_price, i_item_sk]
+                     │                          │  └─ Broadcast Exchange
+                     │                          │     └─ Filter
+                     │                          │        │     Condition: p_channel_tv = 'N'
+                     │                          │        └─ TableScan tpcds100.promotion
+                     │                          │                 Where: p_channel_tv = 'N'
+                     │                          │                 Outputs: [p_channel_tv, p_promo_sk]
+                     │                          └─ Broadcast Exchange
+                     │                             └─ TableScan tpcds100.store
+                     │                                      Outputs: [s_store_id, s_store_sk]
                      ├─ Aggregating
                      │  │     Group by: {expr#'catalog channel', expr#concat('catalog_page', catalog_page_id)}
                      │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(cs_ext_sales_price)), expr#sum(returns):=AggNull(sum)(expr#sum(coalesce(cr_return_amount, 0))), expr#sum(profit):=AggNull(sum)(expr#sum(minus(cs_net_profit, coalesce(cr_net_loss, 0))))
@@ -83,53 +87,57 @@ Projection
                      │              │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price), expr#sum(coalesce(cr_return_amount, 0)):=AggNull(sum)(expr#coalesce(cr_return_amount, 0)), expr#sum(minus(cs_net_profit, coalesce(cr_net_loss, 0))):=AggNull(sum)(expr#minus(cs_net_profit, coalesce(cr_net_loss, 0)))
                      │              └─ Projection
                      │                 │     Expressions: [cp_catalog_page_id, cs_ext_sales_price], expr#coalesce(cr_return_amount, 0):=coalesce(cr_return_amount, 0), expr#minus(cs_net_profit, coalesce(cr_net_loss, 0)):=cs_net_profit - coalesce(cr_net_loss, 0)
-                     │                 └─ Left Join
-                     │                    │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
-                     │                    ├─ Repartition Exchange
-                     │                    │  │     Partition by: {cs_item_sk, cs_order_number}
-                     │                    │  └─ Inner Join
-                     │                    │     │     Condition: cs_catalog_page_sk == cp_catalog_page_sk
-                     │                    │     ├─ Repartition Exchange
-                     │                    │     │  │     Partition by: {cs_catalog_page_sk}
-                     │                    │     │  └─ Inner Join
-                     │                    │     │     │     Condition: cs_promo_sk == p_promo_sk_1
-                     │                    │     │     ├─ Inner Join
-                     │                    │     │     │  │     Condition: cs_item_sk == i_item_sk_1
-                     │                    │     │     │  │     Runtime Filters Builder: {i_item_sk_1}
-                     │                    │     │     │  ├─ Inner Join
-                     │                    │     │     │  │  │     Condition: cs_sold_date_sk == d_date_sk_1
-                     │                    │     │     │  │  │     Runtime Filters Builder: {d_date_sk_1}
-                     │                    │     │     │  │  ├─ Filter
-                     │                    │     │     │  │  │  │     Condition: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
-                     │                    │     │     │  │  │  └─ TableScan tpcds100.catalog_sales
-                     │                    │     │     │  │  │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
-                     │                    │     │     │  │  │           Outputs: [cs_catalog_page_sk, cs_ext_sales_price, cs_item_sk, cs_net_profit, cs_order_number, cs_promo_sk, cs_sold_date_sk]
-                     │                    │     │     │  │  └─ Broadcast Exchange
-                     │                    │     │     │  │     └─ Filter
-                     │                    │     │     │  │        │     Condition: (d_date_1 >= cast(11192, 'Date')) AND (d_date_1 <= cast(11222, 'Date'))
-                     │                    │     │     │  │        └─ TableScan tpcds100.date_dim
-                     │                    │     │     │  │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
-                     │                    │     │     │  │                 Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk
-                     │                    │     │     │  └─ Broadcast Exchange
-                     │                    │     │     │     └─ Filter
-                     │                    │     │     │        │     Condition: i_current_price_1 > 50.
-                     │                    │     │     │        └─ TableScan tpcds100.item
-                     │                    │     │     │                 Where: i_current_price > 50.
-                     │                    │     │     │                 Outputs: i_current_price_1:=i_current_price, i_item_sk_1:=i_item_sk
-                     │                    │     │     └─ Broadcast Exchange
-                     │                    │     │        └─ Filter
-                     │                    │     │           │     Condition: p_channel_tv_1 = 'N'
-                     │                    │     │           └─ TableScan tpcds100.promotion
-                     │                    │     │                    Where: p_channel_tv = 'N'
-                     │                    │     │                    Outputs: p_channel_tv_1:=p_channel_tv, p_promo_sk_1:=p_promo_sk
-                     │                    │     └─ Repartition Exchange
-                     │                    │        │     Partition by: {cp_catalog_page_sk}
-                     │                    │        └─ TableScan tpcds100.catalog_page
-                     │                    │                 Outputs: [cp_catalog_page_id, cp_catalog_page_sk]
-                     │                    └─ Repartition Exchange
-                     │                       │     Partition by: {cr_item_sk, cr_order_number}
-                     │                       └─ TableScan tpcds100.catalog_returns
-                     │                                Outputs: [cr_item_sk, cr_net_loss, cr_order_number, cr_return_amount]
+                     │                 └─ Inner Join
+                     │                    │     Condition: cs_promo_sk == p_promo_sk_1
+                     │                    ├─ Right Join
+                     │                    │  │     Condition: cr_item_sk == cs_item_sk, cr_order_number == cs_order_number
+                     │                    │  │     Runtime Filters Builder: {cs_item_sk,cs_order_number}
+                     │                    │  ├─ Repartition Exchange
+                     │                    │  │  │     Partition by: {cr_item_sk, cr_order_number}
+                     │                    │  │  └─ Filter
+                     │                    │  │     │     Condition: Runtime Filters: {cr_item_sk, cr_order_number}
+                     │                    │  │     └─ TableScan tpcds100.catalog_returns
+                     │                    │  │              Where: Runtime Filters: {cr_item_sk, cr_order_number}
+                     │                    │  │              Outputs: [cr_item_sk, cr_net_loss, cr_order_number, cr_return_amount]
+                     │                    │  └─ Repartition Exchange
+                     │                    │     │     Partition by: {cs_item_sk, cs_order_number}
+                     │                    │     └─ Inner Join
+                     │                    │        │     Condition: cs_catalog_page_sk == cp_catalog_page_sk
+                     │                    │        ├─ Repartition Exchange
+                     │                    │        │  │     Partition by: {cs_catalog_page_sk}
+                     │                    │        │  └─ Inner Join
+                     │                    │        │     │     Condition: cs_item_sk == i_item_sk_1
+                     │                    │        │     │     Runtime Filters Builder: {i_item_sk_1}
+                     │                    │        │     ├─ Inner Join
+                     │                    │        │     │  │     Condition: cs_sold_date_sk == d_date_sk_1
+                     │                    │        │     │  │     Runtime Filters Builder: {d_date_sk_1}
+                     │                    │        │     │  ├─ Filter
+                     │                    │        │     │  │  │     Condition: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
+                     │                    │        │     │  │  └─ TableScan tpcds100.catalog_sales
+                     │                    │        │     │  │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
+                     │                    │        │     │  │           Outputs: [cs_catalog_page_sk, cs_ext_sales_price, cs_item_sk, cs_net_profit, cs_order_number, cs_promo_sk, cs_sold_date_sk]
+                     │                    │        │     │  └─ Broadcast Exchange
+                     │                    │        │     │     └─ Filter
+                     │                    │        │     │        │     Condition: (d_date_1 >= cast(11192, 'Date')) AND (d_date_1 <= cast(11222, 'Date'))
+                     │                    │        │     │        └─ TableScan tpcds100.date_dim
+                     │                    │        │     │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
+                     │                    │        │     │                 Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk
+                     │                    │        │     └─ Broadcast Exchange
+                     │                    │        │        └─ Filter
+                     │                    │        │           │     Condition: i_current_price_1 > 50.
+                     │                    │        │           └─ TableScan tpcds100.item
+                     │                    │        │                    Where: i_current_price > 50.
+                     │                    │        │                    Outputs: i_current_price_1:=i_current_price, i_item_sk_1:=i_item_sk
+                     │                    │        └─ Repartition Exchange
+                     │                    │           │     Partition by: {cp_catalog_page_sk}
+                     │                    │           └─ TableScan tpcds100.catalog_page
+                     │                    │                    Outputs: [cp_catalog_page_id, cp_catalog_page_sk]
+                     │                    └─ Broadcast Exchange
+                     │                       └─ Filter
+                     │                          │     Condition: p_channel_tv_1 = 'N'
+                     │                          └─ TableScan tpcds100.promotion
+                     │                                   Where: p_channel_tv = 'N'
+                     │                                   Outputs: p_channel_tv_1:=p_channel_tv, p_promo_sk_1:=p_promo_sk
                      └─ Aggregating
                         │     Group by: {expr#'web channel', expr#concat('web_site', web_site_id)}
                         │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(ws_ext_sales_price)), expr#sum(returns):=AggNull(sum)(expr#sum(coalesce(wr_return_amt, 0))), expr#sum(profit):=AggNull(sum)(expr#sum(minus(ws_net_profit, coalesce(wr_net_loss, 0))))
@@ -143,54 +151,55 @@ Projection
                                     │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price), expr#sum(coalesce(wr_return_amt, 0)):=AggNull(sum)(expr#coalesce(wr_return_amt, 0)), expr#sum(minus(ws_net_profit, coalesce(wr_net_loss, 0))):=AggNull(sum)(expr#minus(ws_net_profit, coalesce(wr_net_loss, 0)))
                                     └─ Projection
                                        │     Expressions: [web_site_id, ws_ext_sales_price], expr#coalesce(wr_return_amt, 0):=coalesce(wr_return_amt, 0), expr#minus(ws_net_profit, coalesce(wr_net_loss, 0)):=ws_net_profit - coalesce(wr_net_loss, 0)
-                                       └─ Left Join
-                                          │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
+                                       └─ Right Join
+                                          │     Condition: wr_item_sk == ws_item_sk, wr_order_number == ws_order_number
+                                          │     Runtime Filters Builder: {ws_item_sk,ws_order_number}
                                           ├─ Repartition Exchange
-                                          │  │     Partition by: {ws_item_sk, ws_order_number}
-                                          │  └─ Inner Join
-                                          │     │     Condition: ws_promo_sk == p_promo_sk_2
-                                          │     ├─ Repartition Exchange
-                                          │     │  │     Partition by: {ws_promo_sk}
-                                          │     │  └─ Inner Join
-                                          │     │     │     Condition: ws_web_site_sk == web_site_sk
-                                          │     │     ├─ Inner Join
-                                          │     │     │  │     Condition: ws_item_sk == i_item_sk_2
-                                          │     │     │  │     Runtime Filters Builder: {i_item_sk_2}
-                                          │     │     │  ├─ Repartition Exchange
-                                          │     │     │  │  │     Partition by: {ws_item_sk}
-                                          │     │     │  │  └─ Inner Join
-                                          │     │     │  │     │     Condition: ws_sold_date_sk == d_date_sk_2
-                                          │     │     │  │     │     Runtime Filters Builder: {d_date_sk_2}
-                                          │     │     │  │     ├─ Filter
-                                          │     │     │  │     │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                                          │     │     │  │     │  └─ TableScan tpcds100.web_sales
-                                          │     │     │  │     │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                                          │     │     │  │     │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_net_profit, ws_order_number, ws_promo_sk, ws_sold_date_sk, ws_web_site_sk]
-                                          │     │     │  │     └─ Broadcast Exchange
-                                          │     │     │  │        └─ Filter
-                                          │     │     │  │           │     Condition: (d_date_2 >= cast(11192, 'Date')) AND (d_date_2 <= cast(11222, 'Date'))
-                                          │     │     │  │           └─ TableScan tpcds100.date_dim
-                                          │     │     │  │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
-                                          │     │     │  │                    Outputs: d_date_2:=d_date, d_date_sk_2:=d_date_sk
-                                          │     │     │  └─ Repartition Exchange
-                                          │     │     │     │     Partition by: {i_item_sk_2}
-                                          │     │     │     └─ Filter
-                                          │     │     │        │     Condition: i_current_price_2 > 50.
-                                          │     │     │        └─ TableScan tpcds100.item
-                                          │     │     │                 Where: i_current_price > 50.
-                                          │     │     │                 Outputs: i_current_price_2:=i_current_price, i_item_sk_2:=i_item_sk
-                                          │     │     └─ Broadcast Exchange
-                                          │     │        └─ TableScan tpcds100.web_site
-                                          │     │                 Outputs: [web_site_id, web_site_sk]
-                                          │     └─ Repartition Exchange
-                                          │        │     Partition by: {p_promo_sk_2}
-                                          │        └─ Filter
-                                          │           │     Condition: p_channel_tv_2 = 'N'
-                                          │           └─ TableScan tpcds100.promotion
-                                          │                    Where: p_channel_tv = 'N'
-                                          │                    Outputs: p_channel_tv_2:=p_channel_tv, p_promo_sk_2:=p_promo_sk
+                                          │  │     Partition by: {wr_item_sk, wr_order_number}
+                                          │  └─ Filter
+                                          │     │     Condition: Runtime Filters: {wr_item_sk, wr_order_number}
+                                          │     └─ TableScan tpcds100.web_returns
+                                          │              Where: Runtime Filters: {wr_item_sk, wr_order_number}
+                                          │              Outputs: [wr_item_sk, wr_net_loss, wr_order_number, wr_return_amt]
                                           └─ Repartition Exchange
-                                             │     Partition by: {wr_item_sk, wr_order_number}
-                                             └─ TableScan tpcds100.web_returns
-                                                      Outputs: [wr_item_sk, wr_net_loss, wr_order_number, wr_return_amt]
-note: Runtime Filter is applied for 6 times.
+                                             │     Partition by: {ws_item_sk, ws_order_number}
+                                             └─ Inner Join
+                                                │     Condition: ws_web_site_sk == web_site_sk
+                                                ├─ Inner Join
+                                                │  │     Condition: ws_promo_sk == p_promo_sk_2
+                                                │  ├─ Repartition Exchange
+                                                │  │  │     Partition by: {ws_promo_sk}
+                                                │  │  └─ Inner Join
+                                                │  │     │     Condition: ws_item_sk == i_item_sk_2
+                                                │  │     │     Runtime Filters Builder: {i_item_sk_2}
+                                                │  │     ├─ Inner Join
+                                                │  │     │  │     Condition: ws_sold_date_sk == d_date_sk_2
+                                                │  │     │  │     Runtime Filters Builder: {d_date_sk_2}
+                                                │  │     │  ├─ Filter
+                                                │  │     │  │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                                                │  │     │  │  └─ TableScan tpcds100.web_sales
+                                                │  │     │  │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
+                                                │  │     │  │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_net_profit, ws_order_number, ws_promo_sk, ws_sold_date_sk, ws_web_site_sk]
+                                                │  │     │  └─ Broadcast Exchange
+                                                │  │     │     └─ Filter
+                                                │  │     │        │     Condition: (d_date_2 >= cast(11192, 'Date')) AND (d_date_2 <= cast(11222, 'Date'))
+                                                │  │     │        └─ TableScan tpcds100.date_dim
+                                                │  │     │                 Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
+                                                │  │     │                 Outputs: d_date_2:=d_date, d_date_sk_2:=d_date_sk
+                                                │  │     └─ Broadcast Exchange
+                                                │  │        └─ Filter
+                                                │  │           │     Condition: i_current_price_2 > 50.
+                                                │  │           └─ TableScan tpcds100.item
+                                                │  │                    Where: i_current_price > 50.
+                                                │  │                    Outputs: i_current_price_2:=i_current_price, i_item_sk_2:=i_item_sk
+                                                │  └─ Repartition Exchange
+                                                │     │     Partition by: {p_promo_sk_2}
+                                                │     └─ Filter
+                                                │        │     Condition: p_channel_tv_2 = 'N'
+                                                │        └─ TableScan tpcds100.promotion
+                                                │                 Where: p_channel_tv = 'N'
+                                                │                 Outputs: p_channel_tv_2:=p_channel_tv, p_promo_sk_2:=p_promo_sk
+                                                └─ Broadcast Exchange
+                                                   └─ TableScan tpcds100.web_site
+                                                            Outputs: [web_site_id, web_site_sk]
+note: Runtime Filter is applied for 12 times.

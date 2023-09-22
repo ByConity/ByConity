@@ -11,17 +11,7 @@ class PlanCheckTpcds100OnlyPlan : public ::testing::Test
 public:
     static void SetUpTestSuite()
     {
-        std::unordered_map<std::string, DB::Field> settings;
-#ifndef NDEBUG
-        // debug mode may time out.
-        settings["iterative_optimizer_timeout"] = "300000";
-        settings["cascades_optimizer_timeout"] = "300000";
-#endif
-
-        settings["cte_mode"] = "AUTO";
-        settings["enable_left_join_to_right_join"] = false;
-        settings["enable_execute_uncorrelated_subquery"] = false;
-        settings["enable_non_equi_join_reorder"] = true;
+        std::unordered_map<std::string, DB::Field> settings = BasePlanTest::getDefaultOptimizerSettings();
         tester = std::make_shared<DB::BaseTpcdsPlanTest>(settings, 100);
         tester->setShowStatistics(false);
     }

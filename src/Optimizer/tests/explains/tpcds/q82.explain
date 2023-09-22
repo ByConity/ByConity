@@ -14,7 +14,7 @@ Projection Est. 100 rows
                   │     Partition by: {i_current_price, i_item_desc, i_item_id}
                   └─ Aggregating Est. 256496 rows
                      │     Group by: {i_current_price, i_item_desc, i_item_id}
-                     └─ Inner Join Est. 1110033180 rows
+                     └─ Inner Join Est. 681244586 rows
                         │     Condition: ss_item_sk == i_item_sk
                         ├─ Filter Est. 2879987999 rows
                         │  │     Condition: Runtime Filters: {ss_item_sk}

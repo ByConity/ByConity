@@ -12,14 +12,10 @@ Projection
             └─ Inner Join
                │     Condition: ca_address_sk_1 == c_current_addr_sk
                │     Filter: ca_city_1 != ca_city
-               │     Runtime Filters Builder: {c_current_addr_sk}
                ├─ Repartition Exchange
                │  │     Partition by: {ca_address_sk_1}
-               │  └─ Filter
-               │     │     Condition: Runtime Filters: {ca_address_sk_1}
-               │     └─ TableScan tpcds100.customer_address
-               │              Where: Runtime Filters: {ca_address_sk}
-               │              Outputs: ca_address_sk_1:=ca_address_sk, ca_city_1:=ca_city
+               │  └─ TableScan tpcds100.customer_address
+               │           Outputs: ca_address_sk_1:=ca_address_sk, ca_city_1:=ca_city
                └─ Repartition Exchange
                   │     Partition by: {c_current_addr_sk}
                   └─ Inner Join
@@ -39,14 +35,10 @@ Projection
                            │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#sum(ss_ext_list_price):=AggNull(sum)(ss_ext_list_price), expr#sum(ss_ext_tax):=AggNull(sum)(ss_ext_tax)
                            └─ Inner Join
                               │     Condition: ca_address_sk == ss_addr_sk
-                              │     Runtime Filters Builder: {ss_addr_sk}
                               ├─ Repartition Exchange
                               │  │     Partition by: {ca_address_sk}
-                              │  └─ Filter
-                              │     │     Condition: Runtime Filters: {ca_address_sk}
-                              │     └─ TableScan tpcds100.customer_address
-                              │              Where: Runtime Filters: {ca_address_sk}
-                              │              Outputs: [ca_address_sk, ca_city]
+                              │  └─ TableScan tpcds100.customer_address
+                              │           Outputs: [ca_address_sk, ca_city]
                               └─ Repartition Exchange
                                  │     Partition by: {ss_addr_sk}
                                  └─ Inner Join
@@ -81,4 +73,4 @@ Projection
                                           └─ TableScan tpcds100.store
                                                    Where: s_city IN ('Fairview', 'Midway')
                                                    Outputs: [s_city, s_store_sk]
-note: Runtime Filter is applied for 6 times.
+note: Runtime Filter is applied for 4 times.

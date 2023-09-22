@@ -932,6 +932,11 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
 
         generateUUIDForTable(create);
     }
+    /// CnchMergeTree shold always have the UUID.
+    else if (database->getEngineName() == "Cnch")
+    {
+        generateUUIDForTable(create);
+    }
     else
     {
         /// As table name is always not the same with it on server side,
