@@ -110,7 +110,7 @@ SetOperationStep::SetOperationStep(DataStreams input_streams_, DataStream output
         }
     }
 
-    for (const auto & value : output_to_inputs_)
+    for (const auto & value : output_to_inputs)
     {
         Utils::checkArgument(
             value.second.size() == input_streams.size(), "Every source needs to map its symbols to an output operation symbol");
@@ -119,7 +119,7 @@ SetOperationStep::SetOperationStep(DataStreams input_streams_, DataStream output
     // Make sure each source positionally corresponds to their Symbol values in the Multimap
     for (size_t i = 0; i < input_streams.size(); i++)
     {
-        for (auto value : output_to_inputs_)
+        for (auto value : output_to_inputs)
         {
             const Names & input_symbols = input_streams[i].header.getNames();
             String symbol = value.second[i];

@@ -1,5 +1,3 @@
-DROP DATABASE IF EXISTS test;
-
 DROP TABLE IF EXISTS grouping_sets;
 
 CREATE TABLE grouping_sets(`a` String, `b` Int32, `s` Int32)

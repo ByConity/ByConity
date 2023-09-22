@@ -26,29 +26,31 @@ Projection
                                        Outputs: [block_number, gas_fee]
 note: Materialized Views is applied for 1 times: test.mv_block_number_agg_hit.
 Projection
-│     Expressions: block_number:=block_number_2, func_sign:=substring(input_2, 1, 8), transaction_hash:=transaction_hash_2
-└─ Limit
-   │     Limit: 100
-   └─ Sorting
-      │     Order by: {block_number_2 desc nulls_last, transaction_index_2 desc nulls_last}
+│     Expressions: block_number:=block_number_2, func_sign:=`expr#substring(input, 1, 8)`, transaction_hash:=transaction_hash_2
+└─ Projection
+   │     Expressions: [block_number_2, transaction_hash_2, transaction_index_2], expr#substring(input, 1, 8):=substring(input_2, 1, 8)
+   └─ Limit
       │     Limit: 100
-      └─ Gather Exchange
-         └─ Sorting
-            │     Order by: {block_number_2 desc nulls_last, transaction_index_2 desc nulls_last}
-            │     Limit: 100
-            └─ Union
-               ├─ Projection
-               │  │     Expressions: [block_number, input, transaction_hash, transaction_index]
-               │  └─ Filter
-               │     │     Condition: from_address = \'0xdb03b11f5666d0e51934b43bd830ff070497ff8c\'
-               │     └─ TableScan test.tx_from_address_hit_mv_target
-               │              Where: from_address = \'0xdb03b11f5666d0e51934b43bd830ff070497ff8c\'
-               │              Outputs: [block_number, from_address, input, transaction_hash, transaction_index]
-               └─ Projection
-                  │     Expressions: block_number_1:=block_number, input_1:=input, transaction_hash_1:=transaction_hash, transaction_index_1:=transaction_index
-                  └─ Filter
-                     │     Condition: to_address = \'0xdb03b11f5666d0e51934b43bd830ff070497ff8c\'
-                     └─ TableScan test.tx_to_address_hit_mv_target
-                              Where: to_address = \'0xdb03b11f5666d0e51934b43bd830ff070497ff8c\'
-                              Outputs: [block_number, input, to_address, transaction_hash, transaction_index]
+      └─ Sorting
+         │     Order by: {block_number_2 desc nulls_last, transaction_index_2 desc nulls_last}
+         │     Limit: 100
+         └─ Gather Exchange
+            └─ Sorting
+               │     Order by: {block_number_2 desc nulls_last, transaction_index_2 desc nulls_last}
+               │     Limit: 100
+               └─ Union
+                  ├─ Projection
+                  │  │     Expressions: [block_number, input, transaction_hash, transaction_index]
+                  │  └─ Filter
+                  │     │     Condition: from_address = \'0xdb03b11f5666d0e51934b43bd830ff070497ff8c\'
+                  │     └─ TableScan test.tx_from_address_hit_mv_target
+                  │              Where: from_address = \'0xdb03b11f5666d0e51934b43bd830ff070497ff8c\'
+                  │              Outputs: [block_number, from_address, input, transaction_hash, transaction_index]
+                  └─ Projection
+                     │     Expressions: block_number_1:=block_number, input_1:=input, transaction_hash_1:=transaction_hash, transaction_index_1:=transaction_index
+                     └─ Filter
+                        │     Condition: to_address = \'0xdb03b11f5666d0e51934b43bd830ff070497ff8c\'
+                        └─ TableScan test.tx_to_address_hit_mv_target
+                                 Where: to_address = \'0xdb03b11f5666d0e51934b43bd830ff070497ff8c\'
+                                 Outputs: [block_number, input, to_address, transaction_hash, transaction_index]
 note: Materialized Views is applied for 2 times: test.mv_tx_from_address_hit, test.mv_tx_to_address_hit.

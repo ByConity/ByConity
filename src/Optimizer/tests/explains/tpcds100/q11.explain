@@ -40,7 +40,7 @@ CTEDef [0]
       ├─ Projection Est. 102344924 rows
       │  │     Expressions: [c_customer_id, c_first_name, c_last_name, c_preferred_cust_flag, d_year, expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))], expr#'s':='s'
       │  └─ Filter Est. 102344924 rows
-      │     │     Condition: (2002 = d_year) OR (`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))` > 0.)
+      │     │     Condition: (d_year = 2002) OR (`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))` > 0.)
       │     └─ MergingAggregated Est. 113716583 rows
       │        └─ Repartition Exchange Est. 113716583 rows
       │           │     Partition by: {c_birth_country, c_customer_id, c_email_address, c_first_name, c_last_name, c_login, c_preferred_cust_flag, d_year}
@@ -74,7 +74,7 @@ CTEDef [0]
       └─ Projection Est. 25587768 rows
          │     Expressions: [c_customer_id_1, c_first_name_1, c_last_name_1, c_preferred_cust_flag_1, d_year_1, expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))], expr#'w':='w'
          └─ Filter Est. 25587768 rows
-            │     Condition: (2002 = d_year_1) OR (`expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))` > 0.)
+            │     Condition: (d_year_1 = 2002) OR (`expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))` > 0.)
             └─ MergingAggregated Est. 28430854 rows
                └─ Repartition Exchange Est. 28430854 rows
                   │     Partition by: {c_birth_country_1, c_customer_id_1, c_email_address_1, c_first_name_1, c_last_name_1, c_login_1, c_preferred_cust_flag_1, d_year_1}

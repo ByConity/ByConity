@@ -101,6 +101,30 @@ public:
 
     bool isCrossJoin() const { return kind == ASTTableJoin::Kind::Cross || (kind == ASTTableJoin::Kind::Inner && left_keys.empty()); }
 
+    bool isOuterJoin() const
+    {
+        return (kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full)
+            && (strictness == ASTTableJoin::Strictness::All || strictness == ASTTableJoin::Strictness::Any);
+    }
+
+    bool isLeftOrRightOuterJoin() const
+    {
+        return (kind == ASTTableJoin::Kind::Left || kind == ASTTableJoin::Kind::Right)
+            && (strictness == ASTTableJoin::Strictness::All || strictness == ASTTableJoin::Strictness::Any);
+    }
+
+    bool isLeftOuterJoin() const
+    {
+        return kind == ASTTableJoin::Kind::Left
+            && (strictness == ASTTableJoin::Strictness::All || strictness == ASTTableJoin::Strictness::Any);
+    }
+
+    bool isRightOuterJoin() const
+    {
+        return kind == ASTTableJoin::Kind::Right
+            && (strictness == ASTTableJoin::Strictness::All || strictness == ASTTableJoin::Strictness::Any);
+    }
+
     bool isPhysical() const override { return distribution_type != DistributionType::UNKNOWN; }
     bool isLogical() const override { return !isPhysical(); }
 

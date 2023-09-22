@@ -345,8 +345,13 @@ public:
             base_input_streams.emplace_back(generateDataStream(eng));
         auto base_output_stream = generateDataStream(eng);
         std::unordered_map<String, std::vector<String>> output_to_inputs;
-        for (int i = 0; i < 2; ++i)
-            output_to_inputs[fmt::format("text{}", eng() % 100)] = std::vector(3, fmt::format("text{}", eng() % 100));
+        auto left_symbols = base_input_streams[0].header.getNames();
+        auto right_symbols = base_input_streams[1].header.getNames();
+        auto n = left_symbols.size();
+        assert(n == right_symbols.size());
+
+        for (int i = 0; i < n; ++i)
+            output_to_inputs[fmt::format("text{}", eng() % 10000)] = std::vector{left_symbols[i], right_symbols[i]};
         return std::make_tuple(base_input_streams, base_output_stream, output_to_inputs);
     }
 

@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <set>
 #include <Optimizer/Property/PropertyDeterminer.h>
 
 #include <Optimizer/Utils.h>
@@ -24,11 +25,11 @@
 
 namespace DB
 {
-PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step, const Property & property)
+PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step, const Property & property, Context & context)
 {
-    DeterminerContext context{property};
+    DeterminerContext ctx{property, context};
     static DeterminerVisitor visitor{};
-    PropertySets input_properties = VisitorUtil::accept(step, visitor, context);
+    PropertySets input_properties = VisitorUtil::accept(step, visitor, ctx);
     if (!property.getCTEDescriptions().empty())
     {
         for (auto & property_set : input_properties)
@@ -72,7 +73,7 @@ PropertySets DeterminerVisitor::visitFilterStep(const FilterStep &, DeterminerCo
 }
 
 // TODO property expand @jingpeng
-PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerContext &)
+PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerContext & context)
 {
     Names left_keys = step.getLeftKeys();
     Names right_keys = step.getRightKeys();
@@ -111,15 +112,46 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
         return {set};
     }
 
-    Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys, false, 0, true}};
-    Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys, false, 0, false}};
-    PropertySet set;
-    set.emplace_back(left);
-    set.emplace_back(right);
-    return {set};
+    std::vector<std::tuple<String, String>> join_key_pairs;
+    for (size_t i = 0; i < left_keys.size(); ++i)
+    {
+        join_key_pairs.emplace_back(std::make_tuple(left_keys[i], right_keys[i]));
+    }
+
+    PropertySets result;
+    if (join_key_pairs.size() <= context.getContext().getSettings().max_expand_join_key_size)
+    {
+        for (auto & set : Utils::powerSet(join_key_pairs))
+        {
+            Names sub_left_keys;
+            Names sub_right_keys;
+            for (const auto & item : set)
+            {
+                sub_left_keys.emplace_back(std::get<0>(item));
+                sub_right_keys.emplace_back(std::get<1>(item));
+            }
+            Property left{Partitioning{Partitioning::Handle::FIXED_HASH, sub_left_keys, false, 0, true}};
+            Property right{Partitioning{Partitioning::Handle::FIXED_HASH, sub_right_keys, false, 0, false}};
+            PropertySet prop_set;
+            prop_set.emplace_back(left);
+            prop_set.emplace_back(right);
+            result.emplace_back(prop_set);
+        }
+    }
+    else
+    {
+        Property left{Partitioning{Partitioning::Handle::FIXED_HASH, left_keys, false, 0, true}};
+        Property right{Partitioning{Partitioning::Handle::FIXED_HASH, right_keys, false, 0, false}};
+        PropertySet prop_set;
+        prop_set.emplace_back(left);
+        prop_set.emplace_back(right);
+        result.emplace_back(prop_set);
+    }
+
+    return result;
 }
 
-PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & step, DeterminerContext &)
+PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & step, DeterminerContext & context)
 {
     //    if (/*step.isTotals() || */)
     //    {
@@ -135,6 +167,24 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     }
 
     PropertySets sets;
+    auto required_keys = context.getRequired().getNodePartitioning().getPartitioningColumns();
+    if (context.getContext().getSettingsRef().enable_merge_require_property && !required_keys.empty() && keys.size() > required_keys.size())
+    {
+        std::set<String> keys_set(keys.begin(), keys.end());
+        bool contain_all = true;
+        for (auto & required_key : required_keys)
+        {
+            if (!keys_set.contains(required_key))
+            {
+                contain_all = false;
+                break;
+            }
+        }
+
+        if (contain_all)
+            sets.emplace_back(
+                PropertySet{Property{context.getRequired().getNodePartitioning(), context.getRequired().getStreamPartitioning()}});
+    }
 
     sets.emplace_back(PropertySet{Property{Partitioning{
         Partitioning::Handle::FIXED_HASH,
@@ -239,7 +289,7 @@ PropertySets DeterminerVisitor::visitIntersectOrExceptStep(const IntersectOrExce
             input.header.getNames(),
         }});
     }
-    
+
     return {set};
 }
 
@@ -374,7 +424,7 @@ PropertySets DeterminerVisitor::visitTopNFilteringStep(const TopNFilteringStep &
     return {{require}};
 }
 
-PropertySets DeterminerVisitor::visitFillingStep(const FillingStep & , DeterminerContext & )
+PropertySets DeterminerVisitor::visitFillingStep(const FillingStep &, DeterminerContext &)
 {
     return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }

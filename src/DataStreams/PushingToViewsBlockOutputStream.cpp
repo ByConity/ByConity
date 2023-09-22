@@ -139,6 +139,10 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
         ASTPtr query;
         BlockOutputStreamPtr out;
         query = dependent_metadata_snapshot->getSelectQuery().inner_query;
+
+        if (dynamic_cast<const StorageView *>(view_table.get()))
+           continue;
+
         if (auto * materialized_view = dynamic_cast<StorageMaterializedView *>(view_table.get()))
         {
             addTableLock(
@@ -192,7 +196,7 @@ PushingToViewsBlockOutputStream::PushingToViewsBlockOutputStream(
                 out = io.out;
             }
         }
-        else if (dynamic_cast<const StorageLiveView *>(view_table.get()) || dynamic_cast<const StorageView *>(view_table.get()))
+        else if (dynamic_cast<const StorageLiveView *>(view_table.get()))
             out = std::make_shared<PushingToViewsBlockOutputStream>(
                 view_table, dependent_metadata_snapshot, insert_context, ASTPtr(), true);
         else

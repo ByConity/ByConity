@@ -35,28 +35,26 @@ Projection Est. ? rows
 │     Expressions: c1:=int1_4, c2:=str1_4, mapElement(c6, \'a\'):=`__map1__\'a\'_4`
 └─ Gather Exchange Est. ? rows
    └─ Union Est. ? rows
-      ├─ Union Est. ? rows
-      │  ├─ Filter Est. ? rows
-      │  │  │     Condition: `__map2__\'x\'` > 1
-      │  │  └─ TableScan test.t40034_t1 Est. ? rows
-      │  │           Where: `__map2__\'x\'` > 1
-      │  │           Outputs: [__map1__\'a\', __map2__\'x\', int1, str1]
-      │  └─ Filter Est. ? rows
-      │     │     Condition: `__map3__\'x\'` > 1
-      │     └─ TableScan test.t40034_t2 Est. ? rows
-      │              Where: `__map3__\'x\'` > 1
-      │              Outputs: [__map3__\'x\', __map4__\'a\', int2, str2]
-      └─ Union Est. ? rows
-         ├─ Filter Est. ? rows
-         │  │     Condition: `__map1__\'a\'_2` > 1
-         │  └─ TableScan test.t40034_t1 Est. ? rows
-         │           Where: `__map1__\'a\'` > 1
-         │           Outputs: [__map2__\'a\'], __map1__\'a\'_2:=__map1__\'a\', int1_2:=int1, str1_2:=str1
-         └─ Filter Est. ? rows
-            │     Condition: `__map4__\'a\'_1` > 1
-            └─ TableScan test.t40034_t2 Est. ? rows
-                     Where: `__map4__\'a\'` > 1
-                     Outputs: [__map3__\'a\'], __map4__\'a\'_1:=__map4__\'a\', int2_1:=int2, str2_1:=str2
+      ├─ Filter Est. ? rows
+      │  │     Condition: `__map2__\'x\'` > 1
+      │  └─ TableScan test.t40034_t1 Est. ? rows
+      │           Where: `__map2__\'x\'` > 1
+      │           Outputs: [__map1__\'a\', __map2__\'x\', int1, str1]
+      ├─ Filter Est. ? rows
+      │  │     Condition: `__map3__\'x\'` > 1
+      │  └─ TableScan test.t40034_t2 Est. ? rows
+      │           Where: `__map3__\'x\'` > 1
+      │           Outputs: [__map3__\'x\', __map4__\'a\', int2, str2]
+      ├─ Filter Est. ? rows
+      │  │     Condition: `__map1__\'a\'_2` > 1
+      │  └─ TableScan test.t40034_t1 Est. ? rows
+      │           Where: `__map1__\'a\'` > 1
+      │           Outputs: [__map2__\'a\'], __map1__\'a\'_2:=__map1__\'a\', int1_2:=int1, str1_2:=str1
+      └─ Filter Est. ? rows
+         │     Condition: `__map4__\'a\'_1` > 1
+         └─ TableScan test.t40034_t2 Est. ? rows
+                  Where: `__map4__\'a\'` > 1
+                  Outputs: [__map3__\'a\'], __map4__\'a\'_1:=__map4__\'a\', int2_1:=int2, str2_1:=str2
 100	str1	1
 200	str2	10
 200	str2	\N

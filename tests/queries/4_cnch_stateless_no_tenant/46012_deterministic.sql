@@ -1,5 +1,4 @@
-DROP database if exists test;
-create database test;
+create database if not exists test;
 use test;
 
 DROP TABLE IF EXISTS sales_transaction;

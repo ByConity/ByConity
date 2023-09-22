@@ -1941,9 +1941,11 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enforce_round_robin, false, "Whether add round robin exchange node", 0) \
     M(Bool, enable_left_join_to_right_join, true, "Whether enable convert left join to right join", 0) \
     M(Bool, enable_shuffle_with_order, false, "Whether enable keep data order when shuffle", 0) \
+    M(Bool, enable_merge_require_property, false, "Whether enable merge required property in aggregation", 0) \
     M(Bool, enable_join_graph_support_filter, true, "Whether enable join graph support filter", 0) \
     M(Bool, enable_equivalences, true, "Whether enable using equivalences when property match", 0) \
     M(Bool, enable_injective_in_property, false, "Whether enable using injective function when property match", 0) \
+    M(UInt64, max_expand_join_key_size, 3, "Whether enable using equivalences when property match", 0) \
     M(Bool, enable_sharding_optimize, false, "Whether enable sharding optimization, eg. local join", 0) \
     M(Bool, enable_magic_set, true, "Whether enable magic set rewriting for join aggregation", 0) \
     M(Float, magic_set_filter_factor, 0.5, "The minimum filter factor of magic set, used for early pruning", 0) \
@@ -1954,6 +1956,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
     M(Bool, enable_materialized_view_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
+    M(String, enable_push_partial_block_list, "", "Aggregate names who can push partial agg, split by ',' => axxx,bxxx,cxxx", 0) \
     M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_rewrite_verbose_log, false, "Whether enable materialized view based rewriter for query", 0) \
     M(Bool, enable_materialized_view_empty_grouping_rewriting, true, "Whether enable materialized view based rewriter for query", 0) \

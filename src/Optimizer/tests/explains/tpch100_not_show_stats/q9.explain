@@ -16,7 +16,7 @@ Projection
                      └─ Inner Join
                         │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
                         ├─ Repartition Exchange
-                        │  │     Partition by: {l_partkey, l_suppkey}
+                        │  │     Partition by: {l_suppkey}
                         │  └─ Inner Join
                         │     │     Condition: l_orderkey == o_orderkey
                         │     ├─ Repartition Exchange
@@ -27,31 +27,29 @@ Projection
                         │        │     Partition by: {o_orderkey}
                         │        └─ TableScan tpch100.orders
                         │                 Outputs: [o_orderdate, o_orderkey]
-                        └─ Repartition Exchange
-                           │     Partition by: {p_partkey, ps_suppkey}
-                           └─ Inner Join
-                              │     Condition: ps_suppkey == s_suppkey
-                              ├─ Repartition Exchange
-                              │  │     Partition by: {ps_suppkey}
-                              │  └─ Inner Join
-                              │     │     Condition: ps_partkey == p_partkey
-                              │     ├─ Repartition Exchange
-                              │     │  │     Partition by: {ps_partkey}
-                              │     │  └─ TableScan tpch100.partsupp
-                              │     │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
-                              │     └─ Repartition Exchange
-                              │        │     Partition by: {p_partkey}
-                              │        └─ Filter
-                              │           │     Condition: p_name LIKE '%green%'
-                              │           └─ TableScan tpch100.part
-                              │                    Where: p_name LIKE '%green%'
-                              │                    Outputs: [p_name, p_partkey]
-                              └─ Repartition Exchange
-                                 │     Partition by: {s_suppkey}
-                                 └─ Inner Join
-                                    │     Condition: s_nationkey == n_nationkey
-                                    ├─ TableScan tpch100.supplier
-                                    │        Outputs: [s_nationkey, s_suppkey]
-                                    └─ Broadcast Exchange
-                                       └─ TableScan tpch100.nation
-                                                Outputs: [n_name, n_nationkey]
+                        └─ Inner Join
+                           │     Condition: ps_suppkey == s_suppkey
+                           ├─ Repartition Exchange
+                           │  │     Partition by: {ps_suppkey}
+                           │  └─ Inner Join
+                           │     │     Condition: ps_partkey == p_partkey
+                           │     ├─ Repartition Exchange
+                           │     │  │     Partition by: {ps_partkey}
+                           │     │  └─ TableScan tpch100.partsupp
+                           │     │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
+                           │     └─ Repartition Exchange
+                           │        │     Partition by: {p_partkey}
+                           │        └─ Filter
+                           │           │     Condition: p_name LIKE '%green%'
+                           │           └─ TableScan tpch100.part
+                           │                    Where: p_name LIKE '%green%'
+                           │                    Outputs: [p_name, p_partkey]
+                           └─ Repartition Exchange
+                              │     Partition by: {s_suppkey}
+                              └─ Inner Join
+                                 │     Condition: s_nationkey == n_nationkey
+                                 ├─ TableScan tpch100.supplier
+                                 │        Outputs: [s_nationkey, s_suppkey]
+                                 └─ Broadcast Exchange
+                                    └─ TableScan tpch100.nation
+                                             Outputs: [n_name, n_nationkey]

@@ -16,7 +16,7 @@ Projection Est. 60175 rows
                      └─ Inner Join Est. 23457053518 rows
                         │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
                         ├─ Repartition Exchange Est. 6608210614 rows
-                        │  │     Partition by: {l_partkey, l_suppkey}
+                        │  │     Partition by: {l_suppkey}
                         │  └─ Inner Join Est. 6608210614 rows
                         │     │     Condition: l_orderkey == o_orderkey
                         │     ├─ Repartition Exchange Est. 5999989709 rows
@@ -27,31 +27,29 @@ Projection Est. 60175 rows
                         │        │     Partition by: {o_orderkey}
                         │        └─ TableScan tpch1000.orders Est. 1500000000 rows
                         │                 Outputs: [o_orderdate, o_orderkey]
-                        └─ Repartition Exchange Est. 692177070 rows
-                           │     Partition by: {p_partkey, ps_suppkey}
-                           └─ Inner Join Est. 692177070 rows
-                              │     Condition: ps_suppkey == s_suppkey
-                              ├─ Repartition Exchange Est. 703483921 rows
-                              │  │     Partition by: {ps_suppkey}
-                              │  └─ Inner Join Est. 703483921 rows
-                              │     │     Condition: ps_partkey == p_partkey
-                              │     ├─ Repartition Exchange Est. 800000000 rows
-                              │     │  │     Partition by: {ps_partkey}
-                              │     │  └─ TableScan tpch1000.partsupp Est. 800000000 rows
-                              │     │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
-                              │     └─ Repartition Exchange Est. 180000000 rows
-                              │        │     Partition by: {p_partkey}
-                              │        └─ Filter Est. 180000000 rows
-                              │           │     Condition: p_name LIKE '%green%'
-                              │           └─ TableScan tpch1000.part Est. 200000000 rows
-                              │                    Where: p_name LIKE '%green%'
-                              │                    Outputs: [p_name, p_partkey]
-                              └─ Repartition Exchange Est. 10000000 rows
-                                 │     Partition by: {s_suppkey}
-                                 └─ Inner Join Est. 10000000 rows
-                                    │     Condition: s_nationkey == n_nationkey
-                                    ├─ TableScan tpch1000.supplier Est. 10000000 rows
-                                    │        Outputs: [s_nationkey, s_suppkey]
-                                    └─ Broadcast Exchange Est. 25 rows
-                                       └─ TableScan tpch1000.nation Est. 25 rows
-                                                Outputs: [n_name, n_nationkey]
+                        └─ Inner Join Est. 692177070 rows
+                           │     Condition: ps_suppkey == s_suppkey
+                           ├─ Repartition Exchange Est. 703483921 rows
+                           │  │     Partition by: {ps_suppkey}
+                           │  └─ Inner Join Est. 703483921 rows
+                           │     │     Condition: ps_partkey == p_partkey
+                           │     ├─ Repartition Exchange Est. 800000000 rows
+                           │     │  │     Partition by: {ps_partkey}
+                           │     │  └─ TableScan tpch1000.partsupp Est. 800000000 rows
+                           │     │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
+                           │     └─ Repartition Exchange Est. 180000000 rows
+                           │        │     Partition by: {p_partkey}
+                           │        └─ Filter Est. 180000000 rows
+                           │           │     Condition: p_name LIKE '%green%'
+                           │           └─ TableScan tpch1000.part Est. 200000000 rows
+                           │                    Where: p_name LIKE '%green%'
+                           │                    Outputs: [p_name, p_partkey]
+                           └─ Repartition Exchange Est. 10000000 rows
+                              │     Partition by: {s_suppkey}
+                              └─ Inner Join Est. 10000000 rows
+                                 │     Condition: s_nationkey == n_nationkey
+                                 ├─ TableScan tpch1000.supplier Est. 10000000 rows
+                                 │        Outputs: [s_nationkey, s_suppkey]
+                                 └─ Broadcast Exchange Est. 25 rows
+                                    └─ TableScan tpch1000.nation Est. 25 rows
+                                             Outputs: [n_name, n_nationkey]

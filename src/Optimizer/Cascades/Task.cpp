@@ -476,7 +476,8 @@ void OptimizeInput::execute()
             }
             else
             {
-                output_prop = PropertyDeriver::deriveProperty(group_expr->getStep(), actual_input_props, context->getOptimizerContext().getContext());
+                output_prop = PropertyDeriver::deriveProperty(
+                    group_expr->getStep(), actual_input_props, context->getOptimizerContext().getContext());
             }
 
             // Not need to do pruning here because it has been done when we get the
@@ -491,12 +492,13 @@ void OptimizeInput::execute()
             GroupExprPtr local_exchange;
             Property actual = output_prop;
             if ((!is_preferred
-                && !PropertyMatcher::matchNodePartitioning(
-                    *context->getOptimizerContext().getContext(),
-                    require.getNodePartitioningRef(),
-                    output_prop.getNodePartitioning(),
-                    *equivalences,
-                    output_prop.getConstants())) || require.isEnforceNotMatch())
+                 && !PropertyMatcher::matchNodePartitioning(
+                     *context->getOptimizerContext().getContext(),
+                     require.getNodePartitioningRef(),
+                     output_prop.getNodePartitioning(),
+                     *equivalences,
+                     output_prop.getConstants()))
+                || require.isEnforceNotMatch())
             {
                 // add remote exchange
                 remote_exchange
@@ -584,8 +586,14 @@ void OptimizeInput::execute()
                     .getGroupById(group_expr->getGroupId())
                     ->setExpressionCost(
                         std::make_shared<Winner>(
-                            nullptr, nullptr, nullptr, input_props, context->getRequiredProp(), context->getCostUpperBound() + 1,
-                            std::map<CTEId, std::pair<Property, double>>{}, std::vector<CTEId>{}),
+                            nullptr,
+                            nullptr,
+                            nullptr,
+                            input_props,
+                            context->getRequiredProp(),
+                            context->getCostUpperBound() + 1,
+                            std::map<CTEId, std::pair<Property, double>>{},
+                            std::vector<CTEId>{}),
                         context->getRequiredProp());
             }
         }
@@ -595,7 +603,8 @@ void OptimizeInput::execute()
 void OptimizeInput::initInputProperties()
 {
     // initialize input properties with default required property.
-    auto required_properties = PropertyDeterminer::determineRequiredProperty(group_expr->getStep(), context->getRequiredProp());
+    auto required_properties = PropertyDeterminer::determineRequiredProperty(
+        group_expr->getStep(), context->getRequiredProp(), *context->getOptimizerContext().getContext());
     for (auto & properties : required_properties)
     {
         for (size_t i = 0; i < properties.size(); ++i)

@@ -1,6 +1,3 @@
-DROP DATABASE IF EXISTS test;
-
-
 DROP TABLE IF EXISTS groups_sum_6_preceding_6_following;
 
 CREATE TABLE groups_sum_6_preceding_6_following(`a` Int64, `b` Int64)
