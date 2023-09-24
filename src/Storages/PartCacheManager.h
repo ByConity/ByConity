@@ -66,6 +66,8 @@ struct TableMetaEntry
     UInt64 last_update_time {0};
     /// track the metrics change. Because metrics update time is not the same with data update time, so we track them separately.
     UInt64 metrics_last_update_time {0};
+    /// Needs to wait for mayUpdateTableMeta to load all needed info from KV
+    std::atomic<UInt32> cache_status {CacheStatus::UINIT};
     bool is_clustered {true};
     std::atomic_uint64_t table_definition_hash{0};
     String preallocate_vw;
@@ -196,7 +198,7 @@ private:
     //DataModelPartWrapperVector getPartsModelByPartition(const MergeTreeMetaBase & storage, const TableMetaEntryPtr & meta_ptr,
     //    const Strings & partitions, const Strings & all_existing_partitions, LoadPartsFunc & load_func, const UInt64 & ts);
 
-    static void checkTimeLimit(Stopwatch & watch);
+    void checkTimeLimit(Stopwatch & watch);
 };
 
 using PartCacheManagerPtr = std::shared_ptr<PartCacheManager>;

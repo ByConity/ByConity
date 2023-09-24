@@ -186,10 +186,27 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
     auto load_table_partitions = [&](TableMetaEntryPtr & meta_ptr)
     {
         auto table_lock = meta_ptr->writeLock();
-        getContext()->getCnchCatalog()->getPartitionsFromMetastore(*cnch_table, meta_ptr->partitions);
-        getContext()->getCnchCatalog()->getTableClusterStatus(storage.getStorageUUID(), meta_ptr->is_clustered);
-        getContext()->getCnchCatalog()->getTablePreallocateVW(storage.getStorageUUID(), meta_ptr->preallocate_vw);
-        meta_ptr->table_definition_hash = storage.getTableHashForClusterBy();
+        /// If other thread finished load, just return
+        if (meta_ptr->cache_status == CacheStatus::LOADED)
+            return;
+        try
+        {
+            meta_ptr->cache_status = CacheStatus::LOADING;
+            getContext()->getCnchCatalog()->getPartitionsFromMetastore(*cnch_table, meta_ptr->partitions);
+            getContext()->getCnchCatalog()->getTableClusterStatus(storage.getStorageUUID(), meta_ptr->is_clustered);
+            getContext()->getCnchCatalog()->getTablePreallocateVW(storage.getStorageUUID(), meta_ptr->preallocate_vw);
+            meta_ptr->table_definition_hash = storage.getTableHashForClusterBy();        
+            /// Needs make sure no other thread force reload
+            UInt32 loading = CacheStatus::LOADING;
+            meta_ptr->cache_status.compare_exchange_strong(loading, CacheStatus::LOADED);
+        }
+        catch (...)
+        {
+            /// Handle bytekv exceptions and make sure next time will retry
+            tryLogCurrentException(&Poco::Logger::get("PartCacheManager::mayUpdateTableMeta"));
+            meta_ptr->cache_status = CacheStatus::UINIT;
+            throw;
+        }
     };
 
     UUID uuid = storage.getStorageUUID();
@@ -221,6 +238,11 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
         }
         else
         {
+            if (it->second->cache_status != CacheStatus::LOADED)
+            {
+                /// Needs to wait for other thread to load and retry if other thread failed
+                meta_ptr = it->second;
+            }
             // update table_definition_hash for active tables
             it->second->table_definition_hash = storage.getTableHashForClusterBy();
         }
@@ -444,6 +466,7 @@ bool PartCacheManager::getTablePartitionMetrics(const IStorage & i_storage, std:
 
 bool PartCacheManager::getPartitionList(const IStorage & table, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list)
 {
+    mayUpdateTableMeta(table);
     TableMetaEntryPtr meta_ptr = getTableMeta(table.getStorageUUID());
     if (meta_ptr)
     {
@@ -455,6 +478,7 @@ bool PartCacheManager::getPartitionList(const IStorage & table, std::vector<std:
 
 bool PartCacheManager::getPartitionIDs(const IStorage & storage, std::vector<String> & partition_ids)
 {
+    mayUpdateTableMeta(storage);
     TableMetaEntryPtr meta_ptr = getTableMeta(storage.getStorageUUID());
 
     if (meta_ptr)
@@ -1207,13 +1231,31 @@ ServerDataPartsVector PartCacheManager::getServerPartsByPartition(const MergeTre
 
 void PartCacheManager::checkTimeLimit(Stopwatch & watch)
 {
+    auto check_max_time = [this, &watch]()
+    {
+        auto context = this->getContext();
+        /// Add parts get time check for background threads
+        if (context->getSettingsRef().cnch_background_task_part_load_max_seconds 
+            && watch.elapsedSeconds() > context->getSettingsRef().cnch_background_task_part_load_max_seconds)
+        {
+            throw Exception("Get parts timeout over " + std::to_string(context->getSettingsRef().cnch_background_task_part_load_max_seconds) + "s."
+                , ErrorCodes::TIMEOUT_EXCEEDED);
+        }
+    };
+
     if (CurrentThread::getQueryId().toString().empty())
+    {
+        check_max_time();
         return;
+    }
 
     auto thread_group = CurrentThread::getGroup();
 
     if (!thread_group)
+    {
+        check_max_time();
         return;
+    }
 
     if (auto query_context = thread_group->query_context.lock())
     {
@@ -1221,6 +1263,10 @@ void PartCacheManager::checkTimeLimit(Stopwatch & watch)
         {
             throw Exception("Get parts timeout over query max execution time.", ErrorCodes::TIMEOUT_EXCEEDED);
         }
+    }
+    else
+    {
+        check_max_time();
     }
 }
 
