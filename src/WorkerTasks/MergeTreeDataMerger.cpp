@@ -710,6 +710,13 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
 
                 column_elems_written += block.rows();
                 column_to.write(block);
+
+                if (space_reservation)
+                {
+                    Float64 progress = std::min(1., manipulation_entry->progress.load(std::memory_order_relaxed));
+
+                    space_reservation->update(static_cast<size_t>((1. - progress) * initial_reservation));
+                }
             }
 
             if (check_cancel())

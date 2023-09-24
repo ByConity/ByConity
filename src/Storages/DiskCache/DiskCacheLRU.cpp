@@ -273,7 +273,7 @@ size_t DiskCacheLRU::writeSegment(const String& seg_key, ReadBuffer& buffer, Res
         size_t written_size = 0;
         {
             WriteBufferFromFile to(fs::path(disk->getPath()) / temp_cache_rel_path);
-            copyData(buffer, to);
+            copyData(buffer, to, reservation.get());
 
             written_size = to.count();
         }
