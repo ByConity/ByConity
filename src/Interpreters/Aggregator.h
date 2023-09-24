@@ -56,7 +56,6 @@
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnLowCardinality.h>
 
-#include <Parsers/IAST_fwd.h>
 
 namespace DB
 {
@@ -158,7 +157,6 @@ private:
 template <typename Base>
 struct AggregationDataWithNullKeyTwoLevel : public Base
 {
-    using Base::Base;
     using Base::impls;
 
     AggregationDataWithNullKeyTwoLevel() = default;
@@ -213,8 +211,6 @@ struct AggregationMethodOneNumber
 
     AggregationMethodOneNumber() = default;
 
-    explicit AggregationMethodOneNumber(size_t size_hint) : data(size_hint) { }
-
     template <typename Other>
     AggregationMethodOneNumber(const Other & other) : data(other.data) {}
 
@@ -250,8 +246,6 @@ struct AggregationMethodString
 
     AggregationMethodString() = default;
 
-    explicit AggregationMethodString(size_t size_hint) : data(size_hint) { }
-
     template <typename Other>
     AggregationMethodString(const Other & other) : data(other.data) {}
 
@@ -279,8 +273,6 @@ struct AggregationMethodStringNoCache
     Data data;
 
     AggregationMethodStringNoCache() = default;
-
-    explicit AggregationMethodStringNoCache(size_t size_hint) : data(size_hint) { }
 
     template <typename Other>
     AggregationMethodStringNoCache(const Other & other) : data(other.data) {}
@@ -310,8 +302,6 @@ struct AggregationMethodFixedString
 
     AggregationMethodFixedString() = default;
 
-    explicit AggregationMethodFixedString(size_t size_hint) : data(size_hint) { }
-
     template <typename Other>
     AggregationMethodFixedString(const Other & other) : data(other.data) {}
 
@@ -338,8 +328,6 @@ struct AggregationMethodFixedStringNoCache
     Data data;
 
     AggregationMethodFixedStringNoCache() = default;
-
-    explicit AggregationMethodFixedStringNoCache(size_t size_hint) : data(size_hint) { }
 
     template <typename Other>
     AggregationMethodFixedStringNoCache(const Other & other) : data(other.data) {}
@@ -411,8 +399,6 @@ struct AggregationMethodKeysFixed
     Data data;
 
     AggregationMethodKeysFixed() = default;
-
-    explicit AggregationMethodKeysFixed(size_t size_hint) : data(size_hint) { }
 
     template <typename Other>
     AggregationMethodKeysFixed(const Other & other) : data(other.data) {}
@@ -502,8 +488,6 @@ struct AggregationMethodSerialized
     Data data;
 
     AggregationMethodSerialized() = default;
-
-    explicit AggregationMethodSerialized(size_t size_hint) : data(size_hint) { }
 
     template <typename Other>
     AggregationMethodSerialized(const Other & other) : data(other.data) {}
@@ -686,8 +670,21 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     ~AggregatedDataVariants();
 
-    void init(Type type_, std::optional<size_t> size_hint = std::nullopt);
+    void init(Type type_)
+    {
+        switch (type_)
+        {
+            case Type::EMPTY:       break;
+            case Type::without_key: break;
 
+        #define M(NAME, IS_TWO_LEVEL) \
+            case Type::NAME: NAME = std::make_unique<decltype(NAME)::element_type>(); break;
+            APPLY_FOR_AGGREGATED_VARIANTS(M)
+        #undef M
+        }
+
+        type = type_;
+    }
 
     /// Number of rows (different keys).
     size_t size() const
@@ -966,41 +963,27 @@ public:
 
         Params(
             const Block & src_header_,
-            const ColumnNumbers & keys_,
-            const AggregateDescriptions & aggregates_,
-            bool overflow_row_,
-            size_t max_rows_to_group_by_,
-            OverflowMode group_by_overflow_mode_,
-            size_t group_by_two_level_threshold_,
-            size_t group_by_two_level_threshold_bytes_,
+            const ColumnNumbers & keys_, const AggregateDescriptions & aggregates_,
+            bool overflow_row_, size_t max_rows_to_group_by_, OverflowMode group_by_overflow_mode_,
+            size_t group_by_two_level_threshold_, size_t group_by_two_level_threshold_bytes_,
             size_t max_bytes_before_external_group_by_,
             bool empty_result_for_aggregation_by_empty_set_,
-            VolumePtr tmp_volume_,
-            size_t max_threads_,
+            VolumePtr tmp_volume_, size_t max_threads_,
             size_t min_free_disk_space_,
             bool compile_aggregate_expressions_,
             size_t min_count_to_compile_aggregate_expression_,
-            const Block & intermediate_header_ = {},
-            const StatsCollectingParams & stats_collecting_params_ = {})
-            : src_header(src_header_)
-            , intermediate_header(intermediate_header_)
-            , keys(keys_)
-            , aggregates(aggregates_)
-            , keys_size(keys.size())
-            , aggregates_size(aggregates.size())
-            , overflow_row(overflow_row_)
-            , max_rows_to_group_by(max_rows_to_group_by_)
-            , group_by_overflow_mode(group_by_overflow_mode_)
-            , group_by_two_level_threshold(group_by_two_level_threshold_)
-            , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
-            , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
-            , empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_)
-            , tmp_volume(tmp_volume_)
-            , max_threads(max_threads_)
-            , min_free_disk_space(min_free_disk_space_)
-            , compile_aggregate_expressions(compile_aggregate_expressions_)
-            , min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_)
-            , stats_collecting_params(stats_collecting_params_)
+            const Block & intermediate_header_ = {})
+            : src_header(src_header_),
+            intermediate_header(intermediate_header_),
+            keys(keys_), aggregates(aggregates_), keys_size(keys.size()), aggregates_size(aggregates.size()),
+            overflow_row(overflow_row_), max_rows_to_group_by(max_rows_to_group_by_), group_by_overflow_mode(group_by_overflow_mode_),
+            group_by_two_level_threshold(group_by_two_level_threshold_), group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_),
+            max_bytes_before_external_group_by(max_bytes_before_external_group_by_),
+            empty_result_for_aggregation_by_empty_set(empty_result_for_aggregation_by_empty_set_),
+            tmp_volume(tmp_volume_), max_threads(max_threads_),
+            min_free_disk_space(min_free_disk_space_),
+            compile_aggregate_expressions(compile_aggregate_expressions_),
+            min_count_to_compile_aggregate_expression(min_count_to_compile_aggregate_expression_)
         {
         }
 
@@ -1398,13 +1381,4 @@ APPLY_FOR_AGGREGATED_VARIANTS(M)
 
 #undef M
 
-
-struct HashTablesCacheStatistics
-{
-    size_t entries = 0;
-    size_t hits = 0;
-    size_t misses = 0;
-};
-
-std::optional<HashTablesCacheStatistics> getHashTablesCacheStatistics();
 }
