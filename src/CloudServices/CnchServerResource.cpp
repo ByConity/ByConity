@@ -30,6 +30,11 @@
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Storages/Hive/StorageCnchHive.h"
 
+namespace ProfileEvents
+{
+    extern const Event CnchPartAllocationSplits;
+}
+
 namespace DB
 {
 AssignedResource::AssignedResource(const StoragePtr & storage_) : storage(storage_)
@@ -300,16 +305,19 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
             HivePartsAssignMap assigned_hive_map;
             FilePartsAssignMap assigned_file_map;
             BucketNumbersAssignmentMap assigned_bucket_numbers_map;
+            ServerDataPartsVector bucket_parts;
+            ServerDataPartsVector leftover_server_parts;
+
             if (dynamic_cast<StorageCnchMergeTree *>(storage.get()))
             {
-                if (isCnchBucketTable(context, *storage, server_parts))
-                {
-                    auto assignment = assignCnchPartsForBucketTable(server_parts, worker_group->getWorkerIDVec(), required_bucket_numbers);
-                    assigned_map = assignment.parts_assignment_map;
-                    assigned_bucket_numbers_map = assignment.bucket_number_assignment_map;
+                // NOTE: server_parts maybe moved due to splitCnchParts and cannot be used again
+                std::tie(bucket_parts, leftover_server_parts) = splitCnchParts(context, *storage, server_parts);
+                if (bucket_parts.size() > 0 && leftover_server_parts.size() > 0) {
+                    LOG_TRACE(log, "Cnch part allocation has been split. Bucket parts size = [{}], Server parts size = [{}]", bucket_parts.size(), leftover_server_parts.size());
+                    ProfileEvents::increment(ProfileEvents::CnchPartAllocationSplits);
                 }
-                else
-                    assigned_map = assignCnchParts(worker_group, server_parts);
+                assigned_map = assignCnchParts(worker_group, leftover_server_parts);
+                moveBucketTablePartsToAssignedParts(assigned_map, bucket_parts, worker_group->getWorkerIDVec(), required_bucket_numbers);
             }
             else if (auto * cnchhive = dynamic_cast<StorageCnchHive *>(storage.get()))
             {
