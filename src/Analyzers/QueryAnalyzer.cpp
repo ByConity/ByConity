@@ -1431,7 +1431,14 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
                 }
                 else
                 {
-                    ExprAnalyzer::analyze(grouping_expr, source_scope, context, analysis, "GROUP BY expression"s);
+                    // TODO @wangtao
+                    // Current we don't distinct CORRELATED or UNCORRELATED subquery in group by. 
+                    // CORRELATED/UNCORRELATED means we support subquery in group by. 
+                    // Should check CORRELATED subquery later.
+                    ExprAnalyzerOptions expr_options{"GROUP BY expression"};
+                    expr_options.selectQuery(select_query).subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED);
+                    // ExprAnalyzer::analyze(grouping_expr, source_scope, context, analysis, "GROUP BY expression"s);
+                    ExprAnalyzer::analyze(grouping_expr, source_scope, context, analysis, expr_options);
                 }
 
                 analyzed_grouping_set.push_back(grouping_expr);
