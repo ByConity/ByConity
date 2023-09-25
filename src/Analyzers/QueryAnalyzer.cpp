@@ -598,9 +598,11 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, c
             QueryNormalizer(normalizer_data).visit(alias_columns);
         }
 
+        ExprAnalyzerOptions options{"alias column"s};
+        options.recordUsedObject(false);
         for (auto & alias_col : alias_columns->children)
         {
-            auto col_type = ExprAnalyzer::analyze(alias_col, scope, context, analysis, "alias column"s);
+            auto col_type = ExprAnalyzer::analyze(alias_col, scope, context, analysis, options);
             auto col_name = alias_col->tryGetAlias();
             add_field(col_name, col_type, false);
         }
@@ -778,7 +780,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
                                 ErrorCodes::UNKNOWN_IDENTIFIER);
 
             join_field_indices.emplace_back(resolved->hierarchy_index);
-            analysis.addUsedColumn(*resolved);
+            analysis.addReadColumn(*resolved, true);
             return *resolved;
         };
 
@@ -892,7 +894,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinUsing(ASTTableJoin & table_join, Scope
 
             right_join_fields.emplace_back(resolved->hierarchy_index);
             right_join_field_reverse_map[resolved->hierarchy_index] = true_index;
-            analysis.addUsedColumn(*resolved);
+            analysis.addReadColumn(*resolved, true);
 
             auto right_type = resolved->getFieldDescription().type;
             DataTypePtr output_type = nullptr;

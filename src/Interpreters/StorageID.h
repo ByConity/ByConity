@@ -125,8 +125,28 @@ struct StorageID
     void toProto(Protos::StorageID & proto) const;
     static StorageID fromProto(const Protos::StorageID & proto, ContextPtr context);
 
+    UInt64 hash() const
+    {
+        return getQualifiedName().hash();
+    }
+
 private:
     StorageID() = default;
 };
 
+}
+
+namespace std
+{
+template <>
+struct hash<DB::StorageID>
+{
+    using argument_type = DB::StorageID;
+    using result_type = size_t;
+
+    result_type operator()(const argument_type & storage_id) const
+    {
+        return storage_id.hash();
+    }
+};
 }

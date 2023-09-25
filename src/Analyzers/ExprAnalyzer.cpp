@@ -247,7 +247,8 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTFunction(ASTPtr & node, const
     ASTFunctionPtr function_ptr = std::dynamic_pointer_cast<ASTFunction>(node);
     expandUntuple(function_ptr->arguments->children);
     expandAsterisk(function_ptr->arguments->children);
-    analysis.function_names.insert(function_ptr->name);
+    if (options.record_used_object)
+        analysis.addUsedFunction(function_ptr->name);
     auto function_type = getFunctionType(*function_ptr, context);
 
     if (function_type == FunctionType::WINDOW_FUNCTION)
@@ -394,7 +395,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         analysis.setSubColumnReference(ast, SubColumnReference{column_ref, sub_column_id});
 
         for (const auto & origin_col : column_ref.getFieldDescription().origin_columns)
-            analysis.addUsedSubColumn(origin_col.table_ast, origin_col.index_of_scope, sub_column_id);
+            analysis.addReadSubColumn(origin_col.table_ast, origin_col.index_of_scope, sub_column_id);
     };
     if ((startsWith(func_name_lowercase, "mapelement") || startsWith(func_name_lowercase, "arrayelement"))
         && function->arguments->children.size() == 2)
@@ -716,7 +717,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::handleResolvedField(ASTPtr & node, co
     if (field.scope->getType() == Scope::ScopeType::RELATION)
     {
         analysis.setColumnReference(node, field);
-        analysis.addUsedColumn(field);
+        analysis.addReadColumn(field, options.record_used_object);
     }
     else if (field.scope->getType() == Scope::ScopeType::LAMBDA)
         analysis.setLambdaArgumentReference(node, field);

@@ -10,6 +10,9 @@
 #include <Parsers/formatAST.h>
 #include <Common/ErrorCodes.h>
 #include <Common/Exception.h>
+
+#include <boost/hana.hpp>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -88,6 +91,41 @@ public:
 
     LinkedHashSet & operator=(const LinkedHashSet &) = default;
     LinkedHashSet & operator=(LinkedHashSet &&) = default;
+
+    __attribute__((__used__)) String toString() const
+    {
+        auto to_string = [](const auto & obj) -> String {
+            using T = std::decay_t<decltype(obj)>;
+            constexpr auto has_std_to_string = boost::hana::is_valid([](auto && x) -> decltype(std::to_string(x)) {});
+            constexpr auto has_to_string = boost::hana::is_valid([](auto && x) -> decltype(x.toString()) {});
+
+            if constexpr (std::is_same_v<T, String>)
+            {
+                return obj;
+            }
+            else if constexpr (std::is_same_v<T, ASTPtr> || std::is_same_v<T, ConstASTPtr>)
+            {
+                return serializeAST(*obj, true);
+            }
+            else if constexpr (decltype(has_std_to_string(obj))::value)
+            {
+                return std::to_string(obj);
+            }
+            else if constexpr (decltype(has_to_string(obj))::value)
+            {
+                return obj.toString();
+            }
+            else
+            {
+                return "[unserializable object]";
+            }
+        };
+
+        std::stringstream os;
+        for (const auto & item : ordered_storage)
+            os << to_string(item) << ", ";
+        return os.str();
+    }
 
 private:
     std::vector<Key> ordered_storage;

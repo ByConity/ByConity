@@ -850,8 +850,8 @@ QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_
     const auto & alias = table_ast.tryGetAlias();
 
     auto primary_column_size = table_scope->size();
-    const auto & used_columns = analysis.getUsedColumns(table_ast);
-    const auto & used_sub_columns = analysis.getUsedSubColumns(table_ast);
+    const auto & used_columns = analysis.getReadColumns(table_ast);
+    const auto & used_sub_columns = analysis.getReadSubColumns(table_ast);
     NamesWithAliases columns_with_aliases;
     // note primary column and sub columns may overlap, we use a map to keep allocated columns
     // e.g. SELECT m{'foo'}, __m__foo from t;

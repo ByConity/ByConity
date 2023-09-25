@@ -24,3 +24,12 @@ explain analysis insert into analysis select t1.a as a, t2.b as b from analysis 
 
 DROP TABLE IF EXISTS analysis;
 DROP TABLE IF EXISTS analysis2;
+
+DROP TABLE IF EXISTS analysis3;
+
+CREATE TABLE analysis3 (a UInt32, b UInt32, c Alias a + 1) ENGINE = CnchMergeTree() partition by a order by a;
+
+explain analysis select b from analysis3;
+explain analysis select c from analysis3;
+
+DROP TABLE IF EXISTS analysis3;
