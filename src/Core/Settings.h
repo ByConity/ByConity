@@ -2210,15 +2210,11 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, cnch_part_attach_assert_parts_count, 0, "Assert total number of parts to attach.", 0) \
     M(UInt64, cnch_part_attach_assert_rows_count, 0, "Assert totol number of part rows to attach.", 0) \
     M(UInt64, cnch_part_attach_max_source_discover_level, 1, "Maximum levels of drill down to lookup for different sources", 0) \
-    M(Bool, skip_table_definition_hash_check, false, "Whether skip table definition hash check when attach data parts.", 0) \
     M(UInt64, cnch_part_attach_max_threads, 16, "Max threads to use when attach parts", 0) \
     M(UInt64, attach_failure_injection_knob, 0, "Attach failure injection knob, for test only", 0) \
-    M(Bool, async_post_commit, false, "Txn post commit asynchronously", 0) \
-    M(Bool, \
-      allow_attach_parts_with_different_table_definition_hash, \
-      true, \
-      "Whether to allow attaching of parts with different table definition hash to target table.", \
-      0) \
+    M(Bool, skip_table_definition_hash_check, false, "Whether skip table definition hash check when attach data parts.", 0)  \
+    M(Bool, allow_attach_parts_with_different_table_definition_hash, true, "Whether to allow attaching of parts with different table definition hash to target table.", 0)  \
+    M(Bool, async_post_commit, true, "Txn post commit asynchronously", 0) \
     M(String, tenant_id, "", "tenant_id of cnch user", 0) \
     M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
     M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \

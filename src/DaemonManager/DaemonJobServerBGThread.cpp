@@ -112,15 +112,6 @@ std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread 
     return ret;
 }
 
-std::map<UUID, String> getUUIDVWsFromBackgroundJobs(const BackgroundJobs & background_jobs)
-{
-    std::map<UUID, String> ret;
-    std::transform(background_jobs.begin(), background_jobs.end()
-        , std::inserter(ret, ret.end()),
-        [] (const auto & p) { return std::make_pair(p.first, p.second->getStorageID().server_vw_name);}
-    );
-    return ret;
-}
 
 const std::vector<String> getServersInTopology(Context & context, Poco::Logger * log)
 {
@@ -282,54 +273,50 @@ UpdateResult getUpdateBGJobs(
     const std::vector<String> & alive_servers
 )
 {
-    std::map<UUID, String> new_uuid_vws;
-    std::transform(new_uuid_map.begin(), new_uuid_map.end()
-        , std::inserter(new_uuid_vws, new_uuid_vws.end()),
-        [] (const auto & p) { return std::make_pair(p.first, p.second.server_vw_name);}
-    );
+    /// using tuple because StorageID less than operator and equal isn't appropriate
+    using StorageIDData = std::tuple<UUID, String, String, String>;
+    std::set<StorageIDData> new_storage_id_set;
+    std::transform(new_uuid_map.begin(), new_uuid_map.end(),
+        std::inserter(new_storage_id_set, new_storage_id_set.end()),
+        [] (const auto & p) {
+            return std::make_tuple(
+                p.second.uuid,
+                p.second.database_name,
+                p.second.table_name,
+                p.second.server_vw_name);
+        });
 
-    auto current_uuid_vws = getUUIDVWsFromBackgroundJobs(background_jobs);
+    std::set<StorageIDData> current_storage_id_set;
+    std::transform(background_jobs.begin(), background_jobs.end(),
+        std::inserter(current_storage_id_set, current_storage_id_set.end()),
+        [] (const auto & p) {
+            return std::make_tuple(
+                p.second->getStorageID().uuid,
+                p.second->getStorageID().database_name,
+                p.second->getStorageID().table_name,
+                p.second->getStorageID().server_vw_name);
+        });
+
+    std::vector<StorageIDData> add_storage_ids;
+    std::vector<StorageIDData> remove_storage_id_candidates;
+    std::set_difference(current_storage_id_set.begin(), current_storage_id_set.end(),
+        new_storage_id_set.begin(), new_storage_id_set.end(),
+        std::back_inserter(remove_storage_id_candidates));
+
+    std::set_difference(new_storage_id_set.begin(), new_storage_id_set.end(),
+        current_storage_id_set.begin(), current_storage_id_set.end(),
+        std::back_inserter(add_storage_ids));
 
     UUIDs add_uuids;
     UUIDs remove_uuid_candidates;
 
-    auto current_it = current_uuid_vws.begin();
-    auto new_it = new_uuid_vws.begin();
-    while (current_it != current_uuid_vws.end() && new_it != new_uuid_vws.end())
-    {
-        if (current_it->first < new_it->first)
-        {
-            remove_uuid_candidates.insert(current_it->first);
-            current_it++;
-        }
-        else if (current_it->first > new_it->first)
-        {
-            add_uuids.insert(new_it->first);
-            new_it++;
-        }
-        else
-        {
-            /// Check whether server vw changed
-            /// if so, remove and add again
-            if (current_it->second != new_it->second)
-            {
-                remove_uuid_candidates.insert(current_it->first);
-                add_uuids.insert(current_it->first);
-            }
-            current_it++;
-            new_it++;
-        }
-    }
-    while (current_it != current_uuid_vws.end())
-    {
-        remove_uuid_candidates.insert(current_it->first);
-        current_it++;
-    }
-    while (new_it != new_uuid_vws.end())
-    {
-        add_uuids.insert(new_it->first);
-        new_it++;
-    }
+    std::transform(add_storage_ids.begin(), add_storage_ids.end(),
+        std::inserter(add_uuids, add_uuids.end()),
+        [] (const StorageIDData & s) { return std::get<0>(s); });
+
+    std::transform(remove_storage_id_candidates.begin(), remove_storage_id_candidates.end(),
+        std::inserter(remove_uuid_candidates, remove_uuid_candidates.end()),
+        [] (const StorageIDData & s) { return std::get<0>(s); });
 
     UUIDs remove_uuids;
     std::for_each(background_jobs.begin(), background_jobs.end(),

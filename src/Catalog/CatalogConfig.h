@@ -19,6 +19,8 @@
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Common/Exception.h>
 
+#define TSO_SERVICE_CONFIGURE "tso_service"
+
 namespace DB::ErrorCodes
 {
     extern const int METASTORE_EXCEPTION;
@@ -77,12 +79,24 @@ struct CatalogConfig
                 bytekv_conf.name_space = poco_config.getString(service_name + ".bytekv.name_space");
                 bytekv_conf.table_name = poco_config.getString(service_name + ".bytekv.table_name");
             }
+
+            if (poco_config.has(service_name + ".topology_key"))
+            {
+                topology_key = poco_config.getString(service_name + ".topology_key");
+            }
+
+            if (service_name == TSO_SERVICE_CONFIGURE)
+                key_name = poco_config.getString(service_name + ".key_name", "tso");
         }
     }
 
     StoreType type = StoreType::UNINIT;
     FDBConf fdb_conf;
     ByteKVConf bytekv_conf;
+    String topology_key;
+
+    // TSO service only.
+    String key_name;
 };
 
 }

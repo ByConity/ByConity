@@ -253,7 +253,7 @@ namespace
             // Holds literal characters that will be copied into the output. Used by the mysqlLiteral instruction.
             String literal;
 
-            bool mysql_with_only_fixed_length_formatters;
+            bool mysql_with_only_fixed_length_formatters = true;
 
             Instruction() = default;
 

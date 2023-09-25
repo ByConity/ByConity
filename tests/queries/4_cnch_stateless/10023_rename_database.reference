@@ -1,2 +1,13 @@
 2021-01-01	hello	world
+Background jobs for test_rename_from.test
+MergeMutateThread	test	Running	Running
+PartGCThread	test	Running	Running
+MergeMutateThread	test	Running
+PartGCThread	test	Running
 2021-01-01	hello	world
+Background jobs for test_rename_from.test after rename
+Background jobs for test_rename_to.test
+MergeMutateThread	test	Running	Running
+PartGCThread	test	Running	Running
+MergeMutateThread	test	Running
+PartGCThread	test	Running

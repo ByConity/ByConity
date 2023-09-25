@@ -63,7 +63,6 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
     }
 
     // 2. set output parallel the same to segment parallel
-    PlanSegmentDescriptions plan_segment_descriptions;
     for (auto & node : plan_segment_context.plan_segment_tree->getNodes())
     {
         auto inputs = node.plan_segment->getPlanSegmentInputs();
@@ -97,8 +96,13 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
                 }
             }
         }
-        plan_segment_descriptions.emplace_back(node.plan_segment->getPlanSegmentDescription());
+        
     }
+
+    // set plan_segment_descriptions for explain analyze
+    PlanSegmentDescriptions plan_segment_descriptions;
+    for (auto & node : plan_segment_context.plan_segment_tree->getNodes())
+        plan_segment_descriptions.emplace_back(node.plan_segment->getPlanSegmentDescription());
 
     auto * final_segment = plan_segment_context.plan_segment_tree->getRoot()->getPlanSegment();
     if (final_segment->getQueryPlan().getRoot())

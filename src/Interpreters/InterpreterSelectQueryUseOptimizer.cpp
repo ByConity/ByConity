@@ -343,12 +343,12 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::getPlanFromCache(UInt128 query_
 
         PlanNodeId max_id;
         auto root  = PlanCacheManager::getNewPlanNode(plan_object->plan_root, context, false, max_id);
-        CTEInfo cte_info;
+        CTEInfo cte_tmp;
         for (auto & cte : plan_object->cte_map)
-            cte_info.add(cte.first, PlanCacheManager::getNewPlanNode(cte.second, context, false, max_id));
+            cte_tmp.add(cte.first, PlanCacheManager::getNewPlanNode(cte.second, context, false, max_id));
 
         auto node_id_allocator = std::make_shared<PlanNodeIdAllocator>(max_id+1);
-        return  std::make_unique<QueryPlan>(root, cte_info, node_id_allocator);
+        return  std::make_unique<QueryPlan>(root, cte_tmp, node_id_allocator);
 
     }
     catch (...)

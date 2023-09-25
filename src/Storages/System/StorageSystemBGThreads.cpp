@@ -37,6 +37,7 @@ NamesAndTypesList StorageSystemBGThreads::getNamesAndTypes()
         {"last_wakeup_interval", std::make_shared<DataTypeInt64>()},
         {"last_wakeup_time", std::make_shared<DataTypeDateTime>()},
         {"num_wakeup", std::make_shared<DataTypeUInt64>()},
+        {"server_vw_name", std::make_shared<DataTypeString>()},
     };
 }
 
@@ -57,6 +58,7 @@ void StorageSystemBGThreads::fillData(MutableColumns & res_columns, ContextPtr c
             res_columns[c++]->insert(t->getLastWakeupInterval());
             res_columns[c++]->insert(t->getLastWakeupTime());
             res_columns[c++]->insert(t->getNumWakeup());
+            res_columns[c++]->insert(storage_id.server_vw_name);
         }
     }
 }

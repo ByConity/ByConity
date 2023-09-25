@@ -1,4 +1,15 @@
 2015-01-01	hello	world
 2015-01-02	hello2	world2
+Background jobs for rename1
+MergeMutateThread	rename1	Running	Running
+PartGCThread	rename1	Running	Running
+MergeMutateThread	rename1	Running
+PartGCThread	rename1	Running
 2015-01-01	hello	world
 2015-01-02	hello2	world2
+Background jobs for rename1 after rename
+Background jobs for rename11
+MergeMutateThread	rename11	Running	Running
+PartGCThread	rename11	Running	Running
+MergeMutateThread	rename11	Running
+PartGCThread	rename11	Running

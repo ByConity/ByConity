@@ -385,7 +385,7 @@ void MergeTreeCloudData::deactivateOutdatedParts()
 
         if (curr_part->isPartial() && curr_part->containsExactly(*prev_part))
         {
-            if (const auto & p = curr_part->tryGetPreviousPart())
+            if (const auto & p = curr_part->tryGetPreviousPart(); p && p != prev_part)
                 throw Exception("Part " + curr_part->name + " has already owned prev_part: " + p->name, ErrorCodes::LOGICAL_ERROR);
             curr_part->setPreviousPart(prev_part);
             deactivate_part(prev_jt);
