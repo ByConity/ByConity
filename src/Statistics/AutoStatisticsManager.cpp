@@ -405,7 +405,7 @@ void AutoStatisticsManager::initialize(ContextPtr context_, const Poco::Util::Ab
     if (context_->getServerType() != ServerType::cnch_server)
         return;
     // use flush to create table if not exists
-    context_->getAutoStatsTaskLog()->flush();
+    context_->getAutoStatsTaskLog()->flush(true);
 
     // zk helper will make only one manager runs at the whole cluster
     if (AutoStatisticsManager::is_initialized)
@@ -545,7 +545,7 @@ void AutoStatisticsManager::writeMemoryRecord(const std::unordered_map<UUID, UIn
 // return max_event_time of current log
 TimePoint AutoStatisticsManager::updateTaskQueueFromLog(TimePoint min_event_time)
 {
-    context->getAutoStatsTaskLog()->flush();
+    context->getAutoStatsTaskLog()->flush(true);
 
     /// record current time before read log
     /// in case reading log consume too much time
