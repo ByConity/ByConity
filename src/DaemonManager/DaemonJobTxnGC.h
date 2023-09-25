@@ -74,7 +74,7 @@ private:
     void cleanTxnRecord(const TransactionRecord & record, TxnTimestamp current_time, std::vector<TxnTimestamp> & cleanTxnIds, TxnGCLog & summary);
     bool triggerCleanUndoBuffers();
 private:
-    std::chrono::time_point<std::chrono::system_clock> lastCleanUBtime;
+    std::chrono::time_point<std::chrono::system_clock> lastCleanUBtime {std::chrono::system_clock::now()};
 };
 
 }
