@@ -465,7 +465,8 @@ struct Settings;
     M(MaxThreads, cnch_parallel_prefetching, 0, "", 0) \
     M(Bool, enable_prefetch_checksums, true, "", 0) \
     M(Bool, enable_calculate_columns_size_with_sample, 1, "", 0) \
-\
+    M(Bool, enable_calculate_columns_size_without_map, 1, "", 0) \
+                                                                                                              \
     M(Bool, disable_block_output, false, "", 0) \
     M(UInt64, min_drop_ranges_to_enable_cleanup, 365, "", 0) \
     M(Seconds, drop_ranges_lifetime, 60 * 60 * 36, "", 0) \

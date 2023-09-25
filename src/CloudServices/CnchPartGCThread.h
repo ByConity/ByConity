@@ -97,6 +97,8 @@ private:
         TxnTimestamp begin,
         TxnTimestamp end);
 
+    ServerDataPartsVector processIntermediateParts(ServerDataPartsVector & parts, TxnTimestamp gc_timestamp);
+
     // void updatePartCache(const String & partition_id, Int64 part_num) override
     // {
     //     if (auto merge = getMergeThread())

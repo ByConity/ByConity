@@ -79,7 +79,7 @@ void DropRangeAction::postCommit(TxnTimestamp commit_time)
 void DropRangeAction::abort()
 {
     // clear parts in kv
-    global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps,  /*staged_parts*/ {}}, true);
+    global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps,  /*staged_parts*/ {}});
 
     ServerPartLog::addNewParts(getContext(), ServerPartLogElement::DROP_RANGE, parts, txn_id, true);
 }

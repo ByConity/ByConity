@@ -106,15 +106,26 @@ void CnchServerTopology::setExpiration(const UInt64 & new_expiration)
     lease_expiration = new_expiration;
 }
 
+void CnchServerTopology::setInitialTime(const UInt64 & initial_time)
+{
+    lease_initialtime = initial_time;
+}
+
 UInt64 CnchServerTopology::getExpiration() const
 {
     return lease_expiration;
 }
 
+UInt64 CnchServerTopology::getInitialTime() const
+{
+    return lease_initialtime;
+}
+
 String CnchServerTopology::format() const
 {
     std::stringstream ss;
-    ss << "{expiration: " << lease_expiration;
+    ss << "{initial: " << lease_initialtime;
+    ss << ", expiration: " << lease_expiration;
     ss << ", [";
     for (auto it = vw_topologies.begin(); it != vw_topologies.end(); ++it)
     {

@@ -145,6 +145,13 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
             auto undo_bitmaps = catalog->getDeleteBitmapByKeys(table, names.bitmaps);
             auto staged_parts = catalog->getStagedDataPartsByNames(names.staged_parts, table, 0);
 
+            if (intermediate_parts.size() != names.parts.size()
+                || undo_bitmaps.size() != names.bitmaps.size()
+                || staged_parts.size() != names.staged_parts.size())
+            {
+                 throw Exception("the metadata size in kv is not matched with the record size in undo buffer", ErrorCodes::LOGICAL_ERROR);
+            }
+
             {
                 std::lock_guard lock(task.mutex);
                 task.undo_size = intermediate_parts.size() + undo_bitmaps.size();
@@ -220,7 +227,7 @@ void TransactionCleaner::cleanAbortedTxn(const TransactionRecord & txn_record)
             }
 
             // skip part cache to avoid blocking by write lock of part cache for long time
-            catalog->clearParts(table, Catalog::CommitItems{intermediate_parts, undo_bitmaps, staged_parts}, true);
+            catalog->clearParts(table, Catalog::CommitItems{intermediate_parts, undo_bitmaps, staged_parts});
 
             // clean vfs
             for (const auto & resource : resources)

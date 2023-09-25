@@ -131,7 +131,7 @@ HostWithPorts CnchTopologyMaster::getTargetServerImpl(
     auto it = current_topology.begin();
     while(it != current_topology.end())
     {
-        UInt64 lease_start_time = it->getExpiration() - lease_life_time; 
+        UInt64 lease_start_time = it->getInitialTime() ? it->getInitialTime() : it->getExpiration() - lease_life_time;
         bool commit_within_lease_life_time = commit_time_ms >= lease_start_time;
 
         if (!tso_is_available && allow_tso_unavailable)

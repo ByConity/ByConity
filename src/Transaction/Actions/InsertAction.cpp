@@ -96,7 +96,7 @@ void InsertAction::abort()
 {
     // clear parts in kv
     // skip part cache to avoid blocking by write lock of part cache for long time
-    global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}}, true);
+    global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, {staged_parts.begin(), staged_parts.end()}});
 
     ServerPartLog::addNewParts(getContext(), ServerPartLogElement::INSERT_PART, parts, txn_id, true);
 }

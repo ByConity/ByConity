@@ -237,8 +237,8 @@ bool CnchServerManager::renewLease()
         {
             std::unique_lock lock(topology_mutex);
 
-            ///clear outdated lease
-            while (!cached_topologies.empty() && cached_topologies.front().getExpiration() < current_time_ms)
+            ///clear outdated lease. Allow to keep one outdated topology to avoid no availabe topology issue when topology change
+            while (!cached_topologies.empty() && cached_topologies.front().getExpiration() + lease_life_ms < current_time_ms)
             {
                 /// At least keep one topology to avoid no lease renew happens
                 if (cached_topologies.size() == 1 && !next_version_topology)
@@ -260,23 +260,29 @@ bool CnchServerManager::renewLease()
                     LOG_WARNING(log, "Cannot renew lease because there is no topology. Current ts : {}, current topology is empty.", current_time_ms);
                 }
             }
-            else if (cached_topologies.size() == 1)
-            {
-                if (next_version_topology)
-                {
-                    UInt64 latest_lease_time = cached_topologies.back().getExpiration();
-                    next_version_topology->setExpiration(latest_lease_time + lease_life_ms);
-                    cached_topologies.push_back(*next_version_topology);
-                    LOG_DEBUG(log, "Add new topology {}", cached_topologies.back().format());
-                }
-                else
-                {
-                    cached_topologies.back().setExpiration(current_time_ms + lease_life_ms);
-                }
-            }
             else
             {
-                LOG_WARNING(log, "Cannot renew lease because there is one pending topology. Current ts : {}, current topology : {}", current_time_ms, dumpTopologies(cached_topologies));
+                UInt64 last_lease_expiration = cached_topologies.back().getExpiration();
+
+                if (current_time_ms + lease_life_ms < last_lease_expiration)
+                {
+                    LOG_WARNING(log, "Cannot renew lease because there is one pending topology. Current ts : {}, current topology : {} ", current_time_ms, dumpTopologies(cached_topologies));
+                }
+                // only update topology if current time within the scope of the last topology.
+                else
+                {
+                    if (next_version_topology)
+                    {
+                        next_version_topology->setInitialTime(last_lease_expiration);
+                        next_version_topology->setExpiration(last_lease_expiration + lease_life_ms);
+                        cached_topologies.push_back(*next_version_topology);
+                        LOG_DEBUG(log, "Add new topology {}", cached_topologies.back().format());
+                    }
+                    else
+                    {
+                        cached_topologies.back().setExpiration(current_time_ms + lease_life_ms);
+                    }
+                }
             }
 
             next_version_topology.reset();

@@ -929,7 +929,12 @@ ColumnSize MergeTreeDataPartCNCH::getColumnSizeImpl(const NameAndTypePair & colu
 
     // Special handling flattened map type
     if (column.type->isMap() && !column.type->isMapKVStore())
-        return getMapColumnSizeNotKV(checksums, column);
+    {
+        if (storage.getSettings()->enable_calculate_columns_size_without_map)
+            return size;
+        else
+            return getMapColumnSizeNotKV(checksums, column);
+    }
 
     auto serialization = getSerializationForColumn(column);
     serialization->enumerateStreams(

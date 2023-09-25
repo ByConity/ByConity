@@ -1271,7 +1271,7 @@ namespace Catalog
     }
 
     DB::ServerDataPartsVector Catalog::getServerDataPartsInPartitions(
-        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context)
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, bool for_gc)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -1346,7 +1346,8 @@ namespace Catalog
                     }
                 }
 
-                if (ts)
+                // for gc thread, intermediate parts are required in case that TransactionCleaner fails to clean them.
+                if (!for_gc && ts)
                 {
                     LOG_TRACE(
                         log,
