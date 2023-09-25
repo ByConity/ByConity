@@ -593,6 +593,7 @@ private:
     Context & context;
     MetastoreProxyPtr meta_proxy;
     const String name_space;
+    String topology_key;
 
     UInt32 max_commit_size_one_batch {2000};
     std::unordered_map<UUID, std::shared_ptr<std::mutex>> nhut_mutex;

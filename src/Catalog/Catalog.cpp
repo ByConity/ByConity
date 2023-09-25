@@ -491,6 +491,11 @@ namespace Catalog
 
                 meta_proxy = std::make_shared<MetastoreProxy>(config);
                 max_commit_size_one_batch = context.getSettingsRef().catalog_max_commit_size;
+                /// Support set a custom topology key
+                if (config.topology_key.empty())
+                    topology_key = name_space;
+                else
+                    topology_key = name_space + "_" + config.topology_key;
             },
             ProfileEvents::CatalogConstructorSuccess,
             ProfileEvents::CatalogConstructorFailed);
@@ -4060,7 +4065,7 @@ namespace Catalog
                 }
                 Protos::DataModelTopologyVersions topology_versions;
                 fillTopologyVersions(topologies, *topology_versions.mutable_topologies());
-                meta_proxy->updateTopologyMeta(name_space, topology_versions.SerializeAsString());
+                meta_proxy->updateTopologyMeta(topology_key, topology_versions.SerializeAsString());
             },
             ProfileEvents::UpdateTopologiesSuccess,
             ProfileEvents::UpdateTopologiesFailed);
@@ -4071,7 +4076,7 @@ namespace Catalog
         std::list<CnchServerTopology> res;
         runWithMetricSupport(
             [&] {
-                String topology_meta = meta_proxy->getTopologyMeta(name_space);
+                String topology_meta = meta_proxy->getTopologyMeta(topology_key);
                 if (topology_meta.empty())
                 {
                     res = {};

@@ -1286,12 +1286,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
         else
         {
-            LOG_WARNING(log, "Disable cnch part cache, which is strongly suggested for product use, since disable it may bring significant performace problem.");
+            LOG_WARNING(log, "Disable cnch part cache, which is strongly suggested for product use, since disable it may bring significant performace issue.");
         }
         if (config().getBool("enable_cnch_storage_cache", true))
         {
             LOG_INFO(log, "Init cnch storage cache.");
             global_context->setCnchStorageCache(settings.cnch_max_cached_storage);
+        }
+        else
+        {
+            LOG_WARNING(log, "Disable cnch storage cache, which is strongly suggested for product use, since disable it may bring performace issue.");
         }
 
         /// only server need start up server manager
