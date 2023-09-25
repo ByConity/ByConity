@@ -72,33 +72,32 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
         }
         if (trans_keys.empty())
             return;
-        QueryExchangeLogElement element;
-        if (auto key = trans_keys.front())
-        {
-            element.initial_query_id = key->getQueryId();
-            element.exchange_id = std::to_string(key->getExchangeId());
-            element.partition_id = std::to_string(key->getParallelIndex());
-            element.coordinator_address = key->getCoordinatorAddress();
-        }
-        element.event_time =
-            std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count();
-        element.send_time_ms = metric.send_time_ms;
-        element.send_rows = metric.send_rows;
-        element.send_bytes = metric.send_bytes;
-        element.send_uncompressed_bytes = metric.send_uncompressed_bytes;
-        element.ser_time_ms = metric.ser_time_ms;
-        element.send_retry = metric.send_retry;
-        element.send_retry_ms = metric.send_retry_ms;
-        element.overcrowded_retry = metric.overcrowded_retry;
-        element.finish_code = metric.finish_code;
-        element.is_modifier = metric.is_modifier;
-        element.message = metric.message;
-        element.type = "brpc_sender";
+
         if (context->getSettingsRef().log_query_exchange)
         {
-            if (auto exchange_log = context->getQueryExchangeLog())
-                exchange_log->add(element);
+            if (auto exchange_query_log = context->getQueryExchangeLog())
+            {
+                QueryExchangeLogElement element;
+                const auto & key = trans_keys.front();
+                element.initial_query_id = context->getInitialQueryId();
+                element.exchange_id = std::to_string(key->exchange_id);
+                element.partition_id = std::to_string(key->parallel_index);
+                element.event_time
+                    = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                element.send_time_ms = metric.send_time_ms;
+                element.send_rows = metric.send_rows;
+                element.send_bytes = metric.send_bytes;
+                element.send_uncompressed_bytes = metric.send_uncompressed_bytes;
+                element.ser_time_ms = metric.ser_time_ms;
+                element.send_retry = metric.send_retry;
+                element.send_retry_ms = metric.send_retry_ms;
+                element.overcrowded_retry = metric.overcrowded_retry;
+                element.finish_code = metric.finish_code;
+                element.is_modifier = metric.is_modifier;
+                element.message = metric.message;
+                element.type = "brpc_sender";
+                exchange_query_log->add(element);
+            }
         }
     }
     catch (...)
@@ -123,7 +122,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::send(Chunk chunk) noexcept
         auto res = BroadcastStatus(BroadcastStatusCode::RUNNING);
         for (size_t i = 0; i < sender_stream_ids.size(); ++i)
         {
-            BroadcastStatus ret_status = sendIOBuffer(buf, sender_stream_ids[i], trans_keys[i]->getKey());
+            BroadcastStatus ret_status = sendIOBuffer(buf, sender_stream_ids[i], *trans_keys[i]);
             if (ret_status.is_modifer && ret_status.code != BroadcastStatusCode::RUNNING)
             {
                 finish(
@@ -170,7 +169,7 @@ void BrpcRemoteBroadcastSender::serializeChunkToIoBuffer(Chunk chunk, WriteBuffe
     }
 }
 
-BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_buffer, brpc::StreamId stream_id, const String & data_key)
+BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_buffer, brpc::StreamId stream_id, const ExchangeDataKey & data_key)
 {
     if (io_buffer.size() > brpc::FLAGS_max_body_size)
         throw Exception(
@@ -240,7 +239,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
         {
             throw Exception(
                 "Stream-" + std::to_string(stream_id) + " write buffer occurred error, the rect_code that we can not handle:"
-                    + std::to_string(rect_code) + ", data_key-" + data_key,
+                    + std::to_string(rect_code) + ", data_key-" + data_key.toString(),
                 ErrorCodes::BRPC_EXCEPTION);
         }
         retry_count++;
@@ -249,7 +248,7 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
     metric.send_retry += retry_count;
     if (!success)
     {
-        const auto msg = "Write stream-" + std::to_string(stream_id) + " fail, with data_key-" + data_key
+        const auto msg = "Write stream-" + std::to_string(stream_id) + " fail, with data_key-" + data_key.toString()
             + ", size:" + std::to_string(io_buffer.size());
         LOG_ERROR(log, msg);
         auto current_status = BroadcastStatus(BroadcastStatusCode::SEND_TIMEOUT, true, msg);
@@ -327,7 +326,7 @@ String BrpcRemoteBroadcastSender::getName() const
     String name = "BrpcSender with keys:";
     for (const auto & trans_key : trans_keys)
     {
-        name += trans_key->getKey() + "\n";
+        name += trans_key->toString() + "\n";
     }
     return name;
 }

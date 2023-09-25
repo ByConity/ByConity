@@ -93,14 +93,13 @@ void MultiPathReceiver::registerToSendersAsync(UInt32 timeout_ms)
             if (brpc_receiver)
                 async_results.emplace_back(brpc_receiver->registerToSendersAsync(timeout_ms));
         }
-
-        LOG_DEBUG(logger, fmt::format("{} register to remote sender async", name));
+        LOG_DEBUG(logger, "{} register to remote sender async", name);
     }
     else
     {
         std::unique_lock lock(wait_register_mutex);
         if (!wait_register_cv.wait_for(lock, std::chrono::milliseconds(timeout_ms + 100), [&] { return inited.load(std::memory_order_acquire); }))
-            throw Exception("Wait register timeout for " + name, ErrorCodes::TIMEOUT_EXCEEDED);
+            throw Exception("Wait register timeout for " + name + " for query" + CurrentThread::getQueryId().toString(), ErrorCodes::TIMEOUT_EXCEEDED);
     }
 }
 
@@ -119,23 +118,17 @@ void MultiPathReceiver::registerToSendersJoin()
         {
             LOG_INFO(
                 logger,
-                    "Receiver register sender async but sender already finished, host-{} , data_key: {}_{}_{}_{}",
-                    butil::endpoint2str(res.cntl->remote_side()).c_str(),
-                    res.request->query_id(),
-                    res.request->exchange_id(),
-                    res.request->parallel_id(),
-                    res.request->coordinator_address());
+                "Receiver register sender async but sender already finished, host: {}, request: {}",
+                butil::endpoint2str(res.cntl->remote_side()).c_str(),
+                *res.request);
             continue;
         }
         res.channel->assertController(*res.cntl);
         LOG_TRACE(
             logger,
-                "Receiver register sender async successfully, host-{} , data_key: {}_{}_{}_{}",
-                butil::endpoint2str(res.cntl->remote_side()).c_str(),
-                res.request->query_id(),
-                res.request->exchange_id(),
-                res.request->parallel_id(),
-                res.request->coordinator_address());
+            "Receiver register sender async successfully, host: {} , request: {}",
+            butil::endpoint2str(res.cntl->remote_side()).c_str(),
+            *res.request);
     }
     async_results.clear();
     inited.store(true, std::memory_order_release);
@@ -221,23 +214,17 @@ void MultiPathReceiver::registerToSenders(UInt32 timeout_ms)
             {
                 LOG_INFO(
                     logger,
-                        "Receiver register sender successfully but sender already finished, host-{} , data_key: {}_{}_{}_{}",
-                        butil::endpoint2str(res.cntl->remote_side()).c_str(),
-                        res.request->query_id(),
-                        res.request->exchange_id(),
-                        res.request->parallel_id(),
-                        res.request->coordinator_address());
+                    "Receiver register sender successfully but sender already finished, host: {} , request: {}}",
+                    butil::endpoint2str(res.cntl->remote_side()).c_str(),
+                    *res.request);
                 continue;
             }
             res.channel->assertController(*res.cntl);
             LOG_TRACE(
                 logger,
-                    "Receiver register sender successfully, host-{} , data_key: {}_{}_{}_{}",
-                    butil::endpoint2str(res.cntl->remote_side()).c_str(),
-                    res.request->query_id(),
-                    res.request->exchange_id(),
-                    res.request->parallel_id(),
-                    res.request->coordinator_address());
+                "Receiver register sender successfully, host-{} , request: {}",
+                butil::endpoint2str(res.cntl->remote_side()).c_str(),
+                *res.request);
         }
         inited.store(true, std::memory_order_release);
         wait_register_cv.notify_all();

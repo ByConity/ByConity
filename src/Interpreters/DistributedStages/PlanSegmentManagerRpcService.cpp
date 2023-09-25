@@ -67,18 +67,20 @@ void PlanSegmentManagerRpcService::executeQuery(
     try
     {
         ContextMutablePtr query_context;
+        UInt64 txn_id = request->txn_id();
+        UInt64 primary_txn_id = request->primary_txn_id();
         /// Create session context for worker
         if (context->getServerType() == ServerType::cnch_worker)
         {
-            UInt64 txn_id = request->txn_id();
             auto named_session = context->acquireNamedCnchSession(txn_id, {}, true);
             query_context = Context::createCopy(named_session->context);
             query_context->setSessionContext(query_context);
-            query_context->setTemporaryTransaction(txn_id, request->primary_txn_id());
+            query_context->setTemporaryTransaction(txn_id, primary_txn_id);
         }
         else
         {
             query_context = Context::createCopy(context);
+            query_context->setTemporaryTransaction(txn_id, primary_txn_id, false);
         }
 
         /// TODO: Authentication supports inter-server cluster secret, see https://github.com/ClickHouse/ClickHouse/commit/0159c74f217ec764060c480819e3ccc9d5a99a63

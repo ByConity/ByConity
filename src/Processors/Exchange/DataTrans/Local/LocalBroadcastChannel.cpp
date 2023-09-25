@@ -23,30 +23,34 @@
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Poco/Logger.h>
+#include <Common/CurrentThread.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+#include <Interpreters/Context_fwd.h>
 #include <Processors/Exchange/ExchangeUtils.h>
 
 namespace DB
 {
 LocalBroadcastChannel::LocalBroadcastChannel(
-    ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String &name_, std::shared_ptr<QueryExchangeLog> query_exchange_log_)
+    ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String &name_, ContextPtr context_)
     : name(name_)
     , data_key(std::move(data_key_))
     , options(std::move(options_))
     , receive_queue(std::make_shared<MultiPathBoundedQueue>(options_.queue_size))
+    , context(std::move(context_))
     , logger(&Poco::Logger::get("LocalBroadcastChannel"))
-    , query_exchange_log(query_exchange_log_)
+    
 {
 }
 
-LocalBroadcastChannel::LocalBroadcastChannel(ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String &name_, MultiPathQueuePtr collector, std::shared_ptr<QueryExchangeLog> query_exchange_log_)
+LocalBroadcastChannel::LocalBroadcastChannel(
+    ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String & name_, MultiPathQueuePtr collector, ContextPtr context_)
     : name(name_)
     , data_key(std::move(data_key_))
     , options(std::move(options_))
     , receive_queue(collector)
+    , context(std::move(context_))
     , logger(&Poco::Logger::get("LocalBroadcastChannel"))
-    , query_exchange_log(query_exchange_log_)
 {
 }
 
@@ -104,9 +108,9 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
     // finished in other thread, receive_queue is closed.
     if(receive_queue->closed())
     {
-        BroadcastStatus * current_status_ptr = broadcast_status.load(std::memory_order_acquire);
-        if(current_status_ptr->code != BroadcastStatusCode::RUNNING)
-            return *current_status_ptr; 
+        BroadcastStatus * current_status = broadcast_status.load(std::memory_order_acquire);
+        if(current_status->code != BroadcastStatusCode::RUNNING)
+            return *current_status; 
         else
             /// queue is closed but status not set yet
             return BroadcastStatus(BroadcastStatusCode::SEND_UNKNOWN_ERROR, false, "Send operation was interrupted");
@@ -127,7 +131,7 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
 
     if (broadcast_status.compare_exchange_strong(current_status_ptr, new_status_ptr, std::memory_order_release, std::memory_order_acquire))
     {
-        LOG_INFO(
+        LOG_DEBUG(
             logger,
             "{} BroadcastStatus from {} to {} with message: {}",
             name,
@@ -186,37 +190,34 @@ LocalBroadcastChannel::~LocalBroadcastChannel()
         auto * status = broadcast_status.load(std::memory_order_acquire);
         if (status != &init_status)
             delete status;
-        QueryExchangeLogElement element;
-        if (auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(data_key))
+        if (context && context->getSettingsRef().log_query_exchange)
         {
-            element.initial_query_id = key->getQueryId();
-            element.exchange_id = std::to_string(key->getExchangeId());
-            element.partition_id = std::to_string(key->getParallelIndex());
-            element.coordinator_address = key->getCoordinatorAddress();
+            if (auto exchange_log = context->getQueryExchangeLog())
+            {
+                QueryExchangeLogElement element;
+                element.initial_query_id = context->getInitialQueryId();
+                element.exchange_id = std::to_string(data_key->exchange_id);
+                element.partition_id = std::to_string(data_key->parallel_index);
+
+                element.type = "local";
+                element.event_time
+                    = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                // sender
+                element.send_time_ms = send_metric.send_time_ms;
+                element.send_rows = send_metric.send_rows;
+                element.send_uncompressed_bytes = send_metric.send_uncompressed_bytes;
+
+                element.finish_code = send_metric.finish_code;
+                element.is_modifier = send_metric.is_modifier;
+                element.message = send_metric.message;
+
+                // receiver
+                element.recv_time_ms = recv_metric.recv_time_ms;
+                element.register_time_ms = recv_metric.register_time_ms;
+                element.recv_bytes = recv_metric.recv_bytes;
+                exchange_log->add(element);
+            }
         }
-        element.type = "local";
-        element.event_time =
-            std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count();
-        // sender
-        element.send_time_ms = send_metric.send_time_ms;
-        element.send_rows = send_metric.send_rows;
-        element.send_uncompressed_bytes = send_metric.send_uncompressed_bytes;
-
-        element.finish_code = send_metric.finish_code;
-        element.is_modifier = send_metric.is_modifier;
-        element.message = send_metric.message;
-
-        // receiver
-        element.recv_time_ms = recv_metric.recv_time_ms;
-        element.register_time_ms = recv_metric.register_time_ms;
-        element.recv_bytes = recv_metric.recv_bytes;
-
-        if (query_exchange_log)
-        {
-            query_exchange_log->add(element);
-        }
-
     }
     catch (...)
     {

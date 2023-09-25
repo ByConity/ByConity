@@ -66,7 +66,7 @@ private:
     std::vector<brpc::StreamId> sender_stream_ids;
     BrpcSendMetric metric;
 
-    BroadcastStatus sendIOBuffer(const butil::IOBuf & io_buffer, brpc::StreamId stream_id, const String & data_key);
+    BroadcastStatus sendIOBuffer(const butil::IOBuf & io_buffer, brpc::StreamId stream_id, const ExchangeDataKey & data_key);
     void serializeChunkToIoBuffer(Chunk chunk, WriteBufferFromBrpcBuf & out) const;
 };
 }

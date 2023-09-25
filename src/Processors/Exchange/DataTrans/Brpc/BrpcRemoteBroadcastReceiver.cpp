@@ -40,7 +40,7 @@ namespace ErrorCodes
 }
 
 BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
-    ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, bool keep_order_, const String &name_)
+    ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, bool keep_order_, const String & name_)
     : name(name_)
     , trans_key(std::move(trans_key_))
     , registry_address(std::move(registry_address_))
@@ -48,6 +48,7 @@ BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
     , header(std::move(header_))
     , queue(std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size))
     , keep_order(keep_order_)
+    , initial_query_id(context->getInitialQueryId())
 {
 }
 
@@ -60,6 +61,7 @@ BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
     , header(std::move(header_))
     , queue(collator)
     , keep_order(keep_order_)
+    , initial_query_id(context->getInitialQueryId())
 {
 }
 
@@ -72,29 +74,26 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
             brpc::StreamClose(stream_id);
             LOG_TRACE(log, "Stream {} for {} @ {} Close", stream_id, name, registry_address);
         }
-        QueryExchangeLogElement element;
-        if(auto key = std::dynamic_pointer_cast<const ExchangeDataKey>(trans_key))
-        {
-            element.initial_query_id = key->getQueryId();
-            element.exchange_id = std::to_string(key->getExchangeId());
-            element.partition_id = std::to_string(key->getParallelIndex());
-            element.coordinator_address = key->getCoordinatorAddress();
-        }
-        element.event_time =
-            std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count();
-        element.recv_time_ms = metric.recv_time_ms;
-        element.register_time_ms = metric.register_time_ms;
-        element.recv_bytes = metric.recv_bytes;
-        element.dser_time_ms = metric.dser_time_ms;
-        element.finish_code = metric.finish_code;
-        element.is_modifier = metric.is_modifier;
-        element.message = metric.message;
-        element.type = "brpc_receiver@reg_addr_" + registry_address;
         if (context->getSettingsRef().log_query_exchange)
         {
             if (auto exchange_log = context->getQueryExchangeLog())
+            {
+                QueryExchangeLogElement element;
+                element.initial_query_id = initial_query_id;
+                element.exchange_id = std::to_string(trans_key->exchange_id);
+                element.partition_id = std::to_string(trans_key->parallel_index);
+                element.event_time
+                    = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                element.recv_time_ms = metric.recv_time_ms;
+                element.register_time_ms = metric.register_time_ms;
+                element.recv_bytes = metric.recv_bytes;
+                element.dser_time_ms = metric.dser_time_ms;
+                element.finish_code = metric.finish_code;
+                element.is_modifier = metric.is_modifier;
+                element.message = metric.message;
+                element.type = "brpc_receiver@reg_addr_" + registry_address;
                 exchange_log->add(element);
+            }
         }
     }
     catch (...)
@@ -124,18 +123,18 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
 
     Protos::RegistryRequest request;
     Protos::RegistryResponse response;
-    auto exchange_key = std::dynamic_pointer_cast<ExchangeDataKey>(trans_key);
-    request.set_query_id(exchange_key->getQueryId());
-    request.set_exchange_id(exchange_key->getExchangeId());
-    request.set_parallel_id(exchange_key->getParallelIndex());
-    request.set_coordinator_address(exchange_key->getCoordinatorAddress());
-    request.set_wait_timeout_ms(context->getSettingsRef().exchange_timeout_ms / 2);
+
+    request.set_query_id(initial_query_id);
+    request.set_query_unique_id(trans_key->query_unique_id);
+    request.set_exchange_id(trans_key->exchange_id);
+    request.set_parallel_id(trans_key->parallel_index);
+    request.set_wait_timeout_ms(context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
 
     stub.registry(&cntl, &request, &response, nullptr);
     // if exchange_enable_force_remote_mode = 1, sender and receiver in same process and sender stream may close before rpc end
     if (cntl.ErrorCode() == brpc::EREQUEST && cntl.ErrorText().ends_with("was closed before responded"))
     {
-        LOG_INFO(
+        LOG_DEBUG(
             log,
             "Receiver register sender successfully but sender already finished, host-{} , data_key-{}, stream_id-{}",
             registry_address,
@@ -181,7 +180,7 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
         auto& received_chunk = std::get<Chunk>(data_packet);
         if (!received_chunk && !received_chunk.getChunkInfo())
         {
-            LOG_DEBUG(log, "{} finished ", getName());
+            LOG_TRACE(log, "{} finished ", getName());
             return RecvDataPacket(BroadcastStatus(BroadcastStatusCode::ALL_SENDERS_DONE, false, "receiver done"));
         }
 
@@ -209,7 +208,7 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
     }
     else
     {
-        LOG_DEBUG(log, "{} finished ", getName());
+        LOG_TRACE(log, "{} finished ", getName());
         return RecvDataPacket(BroadcastStatus(BroadcastStatusCode::ALL_SENDERS_DONE, false, "receiver done"));
     }
 }
@@ -295,11 +294,11 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
 
     auto exchange_key = std::dynamic_pointer_cast<ExchangeDataKey>(trans_key);
 
-    res.request->set_query_id(exchange_key->getQueryId());
-    res.request->set_exchange_id(exchange_key->getExchangeId());
-    res.request->set_parallel_id(exchange_key->getParallelIndex());
-    res.request->set_coordinator_address(exchange_key->getCoordinatorAddress());
-    res.request->set_wait_timeout_ms(std::max(timeout_ms - 500u, 1000u));
+    res.request->set_query_id(initial_query_id);
+    res.request->set_query_unique_id(exchange_key->query_unique_id);
+    res.request->set_exchange_id(exchange_key->exchange_id);
+    res.request->set_parallel_id(exchange_key->parallel_index);
+    res.request->set_wait_timeout_ms(timeout_ms);
     stub.registry(&cntl, res.request.get(), res.response.get(), brpc::DoNothing());
     metric.register_time_ms += s.elapsedMilliseconds();
     return res;

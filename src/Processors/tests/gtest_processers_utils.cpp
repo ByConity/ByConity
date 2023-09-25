@@ -25,6 +25,7 @@
 #include <Processors/Chunk.h>
 #include <Processors/tests/gtest_processers_utils.h>
 #include <common/types.h>
+#include <Common/tests/gtest_global_register.h>
 namespace UnitTest
 {
 using namespace DB;
@@ -54,13 +55,10 @@ Block createUInt64Block(size_t row_num, size_t column_num, UInt8 value)
 
 ExecutableFunctionPtr createRepartitionFunction(ContextPtr context, const ColumnsWithTypeAndName & arguments)
 {
+    tryRegisterFunctions();
     const String repartition_func_name = "cityHash64";
     auto & factory = FunctionFactory::instance();
     auto res = factory.tryGetImpl(repartition_func_name, context);
-    if (!res)
-    {
-        factory.registerFunction<FunctionCityHash64>();
-    }
     FunctionOverloadResolverPtr func_builder = factory.get(repartition_func_name, context);
     FunctionBasePtr function_base = func_builder->build(arguments);
     return function_base->prepare(arguments);

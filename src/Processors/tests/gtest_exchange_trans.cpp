@@ -105,7 +105,7 @@ static Block getHeader(size_t column_num)
 
 void receiver1()
 {
-    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 1, "localhost:6666");
+    auto receiver_data = std::make_shared<ExchangeDataKey>(3, 1, 1);
     Block header = getHeader(1);
     BrpcRemoteBroadcastReceiverShardPtr receiver
         = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
@@ -120,7 +120,7 @@ void receiver1()
 
 void receiver2()
 {
-    auto receiver_data = std::make_shared<ExchangeDataKey>("q1", 1, 2, "localhost:6666");
+    auto receiver_data = std::make_shared<ExchangeDataKey>(3, 1, 2);
     Block header = getHeader(1);
     BrpcRemoteBroadcastReceiverShardPtr receiver
         = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
@@ -135,8 +135,8 @@ void receiver2()
 
 TEST_F(ExchangeRemoteTest, SendWithTwoReceivers)
 {
-    auto receiver_data1 = std::make_shared<ExchangeDataKey>("q1", 1, 1, "localhost:6666");
-    auto receiver_data2 = std::make_shared<ExchangeDataKey>("q1", 1, 2, "localhost:6666");
+    auto receiver_data1 = std::make_shared<ExchangeDataKey>(3, 1, 1);
+    auto receiver_data2 = std::make_shared<ExchangeDataKey>(3, 1, 2);
 
     auto origin_chunk = createUInt8Chunk(1000, 1, 7);
     auto header = getHeader(1);
@@ -191,7 +191,7 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
 {
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000};
     auto header = getHeader(1);
-    auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, "localhost:6666");
+    auto data_key = std::make_shared<ExchangeDataKey>(3, 1, 1);
 
     Chunk chunk = createUInt8Chunk(10, 1, 7);
     auto total_bytes = chunk.bytes();
@@ -234,7 +234,7 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
 {
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 200};
     auto header = getHeader(1);
-    auto data_key = std::make_shared<ExchangeDataKey>("q1", 1, 1, "localhost:6666");
+    auto data_key = std::make_shared<ExchangeDataKey>(3, 1, 1);
     Chunk chunk = createUInt8Chunk(10, 1, 8);
     auto sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     sender->accept(getContext().context, header);

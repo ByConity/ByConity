@@ -91,8 +91,8 @@ private:
     std::atomic_flag send_done_flag = ATOMIC_FLAG_INIT;
     MultiPathQueuePtr queue;
     brpc::StreamId stream_id{brpc::INVALID_STREAM_ID};
-
     bool keep_order;
+    String initial_query_id;
 };
 
 using BrpcRemoteBroadcastReceiverShardPtr = std::shared_ptr<BrpcRemoteBroadcastReceiver>;
