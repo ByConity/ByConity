@@ -34,7 +34,7 @@ public:
                 getName(),
                 toString(arguments.size()));
 
-        return std::make_shared<DataTypeTime>(0);
+        return std::make_shared<DataTypeTime>(3);
     }
 
     ColumnPtr executeImpl(const ColumnsWithTypeAndName &, const DataTypePtr & result_type, size_t input_rows_count) const override
