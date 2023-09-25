@@ -1110,11 +1110,11 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
         {
             try
             {
-
-                if (dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
-                    metastore_ptr->drop(intent_names[idx], snapshot[idx].second);
-                else
-                    metastore_ptr->drop(intent_names[idx], snapshot[idx].first);
+                /// ByConity don't have MetastoreByteKVImpl
+                //if (dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
+                //    metastore_ptr->drop(intent_names[idx], snapshot[idx].second);
+                //else
+                metastore_ptr->drop(intent_names[idx], snapshot[idx].first);
             }
             catch (const Exception & e)
             {

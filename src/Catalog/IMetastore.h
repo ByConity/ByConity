@@ -74,7 +74,7 @@ public:
      * Delete a specific record from metastore;
      * bytekv api, drop by expected version (UInt64)
      */
-    virtual void drop(const String & key, const String & expected = {}) = 0;
+    virtual void drop(const String & key, const UInt64 & expected = 0) = 0;
 
     /***
      * Delete a specific record from metastore;

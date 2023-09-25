@@ -21,6 +21,7 @@
 #include <vector>
 #include <fmt/core.h>
 #include <common/getFQDNOrHostName.h>
+#include <Interpreters/Context_fwd.h>
 #include <Core/Types.h>
 
 namespace DB

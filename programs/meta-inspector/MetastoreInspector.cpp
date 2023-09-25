@@ -22,7 +22,6 @@
 #include <Catalog/StringHelper.h>
 #include <Catalog/CatalogConfig.h>
 #include <Protos/data_models.pb.h>
-#include <Common/Config/MetastoreConfig.h>
 #include <Common/filesystemHelpers.h>
 #include <brpc/server.h>
 #include <gflags/gflags.h>
