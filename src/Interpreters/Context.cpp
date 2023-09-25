@@ -502,7 +502,8 @@ struct ContextSharedPart
         DatabaseCatalog::shutdown();
 
         /// reset scheduled task before schedule pool shutdown
-        meta_checker = BackgroundSchedulePool::TaskHolder(nullptr);
+        if (meta_checker)
+            meta_checker->deactivate();
 
         std::unique_ptr<SystemLogs> delete_system_logs;
         std::unique_ptr<CnchSystemLogs> delete_cnch_system_logs;
