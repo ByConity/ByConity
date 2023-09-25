@@ -17,7 +17,7 @@ Projection Est. 20 rows
                      │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
                      └─ Projection Est. 340385780 rows
                         │     Expressions: [c_acctbal, c_address, c_comment, c_custkey, c_name, c_phone, n_name], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                        └─ Inner Join Est. 340385780 rows
+                        └─ Inner (PARALLEL_HASH) Join Est. 340385780 rows
                            │     Condition: l_orderkey == o_orderkey
                            │     Runtime Filters Builder: {o_orderkey}
                            ├─ Repartition Exchange Est. 1480726852 rows
@@ -31,7 +31,7 @@ Projection Est. 20 rows
                               │     Partition by: {o_orderkey}
                               └─ Inner Join Est. 57356847 rows
                                  │     Condition: c_nationkey == n_nationkey
-                                 ├─ Inner Join Est. 57356847 rows
+                                 ├─ Inner (PARALLEL_HASH) Join Est. 57356847 rows
                                  │  │     Condition: c_custkey == o_custkey
                                  │  │     Runtime Filters Builder: {o_custkey}
                                  │  ├─ Repartition Exchange Est. 150000000 rows

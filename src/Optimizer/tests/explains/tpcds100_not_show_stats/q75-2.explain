@@ -11,7 +11,7 @@ Projection
             │     Limit: 100
             └─ Projection
                │     Expressions: [d_year_4, d_year_5, expr#sum(sales_cnt)_1, expr#sum(sales_cnt)_2, i_brand_id_4, i_category_id_4, i_class_id_4, i_manufact_id_4], expr#minus(curr_yr.sales_amt, prev_yr.sales_amt):=`expr#sum(sales_amt)_1` - `expr#sum(sales_amt)_2`, expr#minus(curr_yr.sales_cnt, prev_yr.sales_cnt):=`expr#sum(sales_cnt)_1` - `expr#sum(sales_cnt)_2`
-               └─ Inner Join
+               └─ Inner (PARALLEL_HASH) Join
                   │     Condition: i_brand_id_4 == i_brand_id_5, i_category_id_4 == i_category_id_5, i_class_id_4 == i_class_id_5, i_manufact_id_4 == i_manufact_id_5
                   │     Filter: (`expr#sum(sales_cnt)_1` / `expr#sum(sales_cnt)_2`) < '0.9'
                   │     Runtime Filters Builder: {i_brand_id_5,i_category_id_5,i_class_id_5,i_manufact_id_5}
@@ -28,7 +28,7 @@ Projection
                   │              │  │     Aggregates: expr#sum(sales_cnt)_3:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_2), expr#sum(sales_amt)_3:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_2)
                   │              │  └─ Projection
                   │              │     │     Expressions: [d_year_6, i_brand_id_6, i_category_id_6, i_class_id_6, i_manufact_id_6], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_2:=cs_ext_sales_price_1 - coalesce(cr_return_amount_1, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_2:=cs_quantity_1 - coalesce(cr_return_quantity_1, 0)
-                  │              │     └─ Right Join
+                  │              │     └─ Right (PARALLEL_HASH) Join
                   │              │        │     Condition: cr_item_sk_1 == cs_item_sk_1, cr_order_number_1 == cs_order_number_1
                   │              │        │     Runtime Filters Builder: {cs_item_sk_1}
                   │              │        ├─ Repartition Exchange
@@ -68,7 +68,7 @@ Projection
                   │              │  │     Aggregates: expr#sum(sales_cnt)_3:=AggNull(sum)(expr#minus(ss_quantity, coalesce(sr_return_quantity, 0))_1), expr#sum(sales_amt)_3:=AggNull(sum)(expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, '0.0'))_1)
                   │              │  └─ Projection
                   │              │     │     Expressions: [d_year_7, i_brand_id_7, i_category_id_7, i_class_id_7, i_manufact_id_7], expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, '0.0'))_1:=ss_ext_sales_price_1 - coalesce(sr_return_amt_1, '0.0'), expr#minus(ss_quantity, coalesce(sr_return_quantity, 0))_1:=ss_quantity_1 - coalesce(sr_return_quantity_1, 0)
-                  │              │     └─ Right Join
+                  │              │     └─ Right (PARALLEL_HASH) Join
                   │              │        │     Condition: sr_item_sk_1 == ss_item_sk_1, sr_ticket_number_1 == ss_ticket_number_1
                   │              │        │     Runtime Filters Builder: {ss_item_sk_1,ss_ticket_number_1}
                   │              │        ├─ Repartition Exchange
@@ -108,7 +108,7 @@ Projection
                   │                 │     Aggregates: expr#sum(sales_cnt)_3:=AggNull(sum)(expr#minus(ws_quantity, coalesce(wr_return_quantity, 0))_1), expr#sum(sales_amt)_3:=AggNull(sum)(expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, '0.0'))_1)
                   │                 └─ Projection
                   │                    │     Expressions: [d_year_8, i_brand_id_8, i_category_id_8, i_class_id_8, i_manufact_id_8], expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, '0.0'))_1:=ws_ext_sales_price_1 - coalesce(wr_return_amt_1, '0.0'), expr#minus(ws_quantity, coalesce(wr_return_quantity, 0))_1:=ws_quantity_1 - coalesce(wr_return_quantity_1, 0)
-                  │                    └─ Right Join
+                  │                    └─ Right (PARALLEL_HASH) Join
                   │                       │     Condition: wr_item_sk_1 == ws_item_sk_1, wr_order_number_1 == ws_order_number_1
                   │                       │     Runtime Filters Builder: {ws_item_sk_1,ws_order_number_1}
                   │                       ├─ Repartition Exchange
@@ -156,7 +156,7 @@ Projection
                                  │  │     Aggregates: expr#sum(sales_cnt)_4:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_4), expr#sum(sales_amt)_4:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_4)
                                  │  └─ Projection
                                  │     │     Expressions: [d_year_10, i_brand_id_10, i_category_id_10, i_class_id_10, i_manufact_id_10], expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_4:=cs_ext_sales_price_2 - coalesce(cr_return_amount_2, '0.0'), expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_4:=cs_quantity_2 - coalesce(cr_return_quantity_2, 0)
-                                 │     └─ Right Join
+                                 │     └─ Right (PARALLEL_HASH) Join
                                  │        │     Condition: cr_item_sk_2 == cs_item_sk_2, cr_order_number_2 == cs_order_number_2
                                  │        │     Runtime Filters Builder: {cs_item_sk_2}
                                  │        ├─ Repartition Exchange
@@ -196,7 +196,7 @@ Projection
                                  │  │     Aggregates: expr#sum(sales_cnt)_4:=AggNull(sum)(expr#minus(ss_quantity, coalesce(sr_return_quantity, 0))_2), expr#sum(sales_amt)_4:=AggNull(sum)(expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, '0.0'))_2)
                                  │  └─ Projection
                                  │     │     Expressions: [d_year_11, i_brand_id_11, i_category_id_11, i_class_id_11, i_manufact_id_11], expr#minus(ss_ext_sales_price, coalesce(sr_return_amt, '0.0'))_2:=ss_ext_sales_price_2 - coalesce(sr_return_amt_2, '0.0'), expr#minus(ss_quantity, coalesce(sr_return_quantity, 0))_2:=ss_quantity_2 - coalesce(sr_return_quantity_2, 0)
-                                 │     └─ Right Join
+                                 │     └─ Right (PARALLEL_HASH) Join
                                  │        │     Condition: sr_item_sk_2 == ss_item_sk_2, sr_ticket_number_2 == ss_ticket_number_2
                                  │        │     Runtime Filters Builder: {ss_item_sk_2,ss_ticket_number_2}
                                  │        ├─ Repartition Exchange
@@ -236,7 +236,7 @@ Projection
                                     │     Aggregates: expr#sum(sales_cnt)_4:=AggNull(sum)(expr#minus(ws_quantity, coalesce(wr_return_quantity, 0))_2), expr#sum(sales_amt)_4:=AggNull(sum)(expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, '0.0'))_2)
                                     └─ Projection
                                        │     Expressions: [d_year_12, i_brand_id_12, i_category_id_12, i_class_id_12, i_manufact_id_12], expr#minus(ws_ext_sales_price, coalesce(wr_return_amt, '0.0'))_2:=ws_ext_sales_price_2 - coalesce(wr_return_amt_2, '0.0'), expr#minus(ws_quantity, coalesce(wr_return_quantity, 0))_2:=ws_quantity_2 - coalesce(wr_return_quantity_2, 0)
-                                       └─ Right Join
+                                       └─ Right (PARALLEL_HASH) Join
                                           │     Condition: wr_item_sk_2 == ws_item_sk_2, wr_order_number_2 == ws_order_number_2
                                           │     Runtime Filters Builder: {ws_item_sk_2,ws_order_number_2}
                                           ├─ Repartition Exchange

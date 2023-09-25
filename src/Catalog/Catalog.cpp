@@ -1029,7 +1029,7 @@ namespace Catalog
 
     StoragePtr Catalog::getTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts)
     {
-        StoragePtr out_res = nullptr;
+        StoragePtr res = nullptr;
         runWithMetricSupport(
             [&] {
                 String table_uuid = meta_proxy->getTableUUID(name_space, database, name);
@@ -1046,7 +1046,7 @@ namespace Catalog
                         /// Compare the table uuid to make sure we get the correct storage cache. Remove outdated cache if necessary.
                         if (UUIDHelpers::UUIDToString(storage->getStorageID().uuid) == table_uuid)
                         {
-                            out_res = storage;
+                            res = storage;
                             return;
                         }
                         else
@@ -1061,7 +1061,7 @@ namespace Catalog
                         "Cannot get metadata of table " + database + "." + name + " by UUID : " + table_uuid,
                         ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
 
-                auto res = createTableFromDataModel(query_context, *table);
+                res = createTableFromDataModel(query_context, *table);
 
                 /// Try insert the storage into cache.
                 if (res && storage_cache)
@@ -1070,11 +1070,10 @@ namespace Catalog
                     if (!server.empty() && isLocalServer(server.getRPCAddress(), std::to_string(context.getRPCPort())))
                         storage_cache->insert(database, name, table->commit_time(), res);
                 }
-                out_res = res;
             },
             ProfileEvents::GetTableSuccess,
             ProfileEvents::GetTableFailed);
-        return out_res;
+        return res;
     }
 
     StoragePtr Catalog::tryGetTable(const Context & query_context, const String & database, const String & name, const TxnTimestamp & ts)
@@ -1102,21 +1101,17 @@ namespace Catalog
 
     StoragePtr Catalog::tryGetTableByUUID(const Context & query_context, const String & uuid, const TxnTimestamp & ts, bool with_delete)
     {
-        StoragePtr outRes = nullptr;
+        StoragePtr res = nullptr;
         runWithMetricSupport(
             [&] {
                 auto table = tryGetTableFromMetastore(uuid, ts.toUInt64(), true, with_delete);
                 if (!table)
-                {
-                    outRes = {};
                     return;
-                }
-                auto res = createTableFromDataModel(query_context, *table);
-                outRes = res;
+                res = createTableFromDataModel(query_context, *table);
             },
             ProfileEvents::TryGetTableByUUIDSuccess,
             ProfileEvents::TryGetTableByUUIDFailed);
-        return outRes;
+        return res;
     }
 
     StoragePtr Catalog::getTableByUUID(const Context & query_context, const String & uuid, const TxnTimestamp & ts, bool with_delete)
@@ -1209,7 +1204,7 @@ namespace Catalog
 
     DataPartsVector Catalog::getStagedParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
     {
-        DataPartsVector outRes;
+        DataPartsVector res;
         runWithMetricSupport(
             [&] {
                 auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
@@ -1258,7 +1253,6 @@ namespace Catalog
                     models.push_back(std::move(model));
                 }
 
-                DataPartsVector res;
                 res.reserve(models.size());
                 for (auto & model : models)
                 {
@@ -1270,37 +1264,34 @@ namespace Catalog
                 {
                     getCommittedDataParts(res, ts, this);
                 }
-                outRes = res;
             },
             ProfileEvents::GetStagedPartsSuccess,
             ProfileEvents::GetStagedPartsFailed);
-        return outRes;
+        return res;
     }
 
     DB::ServerDataPartsVector Catalog::getServerDataPartsInPartitions(
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context)
     {
-        ServerDataPartsVector outRes;
+        ServerDataPartsVector res;
         runWithMetricSupport(
             [&] {
                 Stopwatch watch;
                 auto fall_back = [&]() {
-                    ServerDataPartsVector res;
+                    ServerDataPartsVector tmp_res;
                     auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
                     Strings all_partitions = getPartitionIDsFromMetastore(storage);
                     auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts);
                     for (auto & part_model_ptr : parts_model)
                     {
                         auto part_model_wrapper = createPartWrapperFromModel(merge_tree_storage, *part_model_ptr);
-                        res.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
+                        tmp_res.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
                     }
-                    return res;
+                    return tmp_res;
                 };
 
-                ServerDataPartsVector res;
                 if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
                 {
-                    outRes = res;
                     return;
                 }
                 auto host_port
@@ -1383,117 +1374,121 @@ namespace Catalog
                     ,storage->getStorageID().getNameForLogs()
                     ,source
                     ,ts.toString());
-                outRes = res;
             },
             ProfileEvents::GetServerDataPartsInPartitionsSuccess,
             ProfileEvents::GetServerDataPartsInPartitionsFailed);
 
-        return outRes;
+        return res;
     }
 
     ServerDataPartsVector Catalog::getAllServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const Context * session_context)
     {
-        ServerDataPartsVector outRes;
+        ServerDataPartsVector res;
         runWithMetricSupport(
             [&] {
                 if (!dynamic_cast<const MergeTreeMetaBase *>(table.get()))
                 {
-                    outRes = {};
                     return;
                 }
-                auto res = getServerDataPartsInPartitions(table, getPartitionIDs(table, session_context), ts, session_context);
-                outRes = res;
+                res = getServerDataPartsInPartitions(table, getPartitionIDs(table, session_context), ts, session_context);
             },
             ProfileEvents::GetAllServerDataPartsSuccess,
             ProfileEvents::GetAllServerDataPartsFailed);
-        return outRes;
+        return res;
     }
 
     DataPartsVector Catalog::getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts)
     {
-        DataPartsVector outRes;
+        DataPartsVector res;
         runWithMetricSupport(
             [&] {
                 auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
                 if (!storage)
                 {
-                    outRes = {};
                     return;
                 }
-                Strings partitions;
-                std::unordered_set<String> s;
+                std::unordered_map<String, NameSet> partition_names;
                 for (auto & name : names)
                 {
                     String partition = MergeTreePartInfo::fromPartName(name, storage->format_version).partition_id;
-                    if (s.insert(partition).second)
-                        partitions.emplace_back(std::move(partition));
+                    if (auto it = partition_names.find(partition); it != partition_names.end())
+                        it->second.insert(name);
+                    else
+                        partition_names[partition] = {name};
                 }
 
-                // get parts in related partitions
-                auto parts_from_partitions = getServerDataPartsInPartitions(table, partitions, ts, nullptr);
-                DataPartsVector res;
-                for (const auto & part : parts_from_partitions)
+                /// get parts per partition,
+                /// because some dirty insert txn will include too many partitions' parts,
+                /// which cause too much memory usage when get all related partitions.
+                /// find the wanted parts partition by partition could help reduce memory usage
+                for (const auto [partition, p_names] : partition_names)
                 {
-                    if (names.find(part->info().getPartNameWithHintMutation()) != names.end())
-                        res.push_back(part->toCNCHDataPart(*storage));
+                    auto parts_from_partitions = getServerDataPartsInPartitions(table, {partition}, ts, nullptr);
+                    for (const auto & part : parts_from_partitions)
+                    {
+                        if (p_names.count(part->info().getPartNameWithHintMutation()))
+                            res.push_back(part->toCNCHDataPart(*storage));
+                    }
                 }
-                outRes = res;
             },
             ProfileEvents::GetDataPartsByNamesSuccess,
             ProfileEvents::GetDataPartsByNamesFailed);
-        return outRes;
+        return res;
     }
 
     DataPartsVector
     Catalog::getStagedDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts)
     {
-        DataPartsVector outRes;
+        DataPartsVector res;
         runWithMetricSupport(
             [&] {
                 auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
                 if (!storage)
                 {
-                    outRes = {};
                     return;
                 }
-                NameSet partitions;
+                std::unordered_map<String, NameSet> partition_names;
                 for (auto & name : names)
                 {
                     auto info = MergeTreePartInfo::fromPartName(name, storage->format_version);
-                    partitions.insert(info.partition_id);
+                    if (auto it = partition_names.find(info.partition_id); it != partition_names.end())
+                        it->second.insert(name);
+                    else
+                        partition_names[info.partition_id] = {name};
                 }
 
-                DataPartsVector parts = getStagedParts(table, ts, &partitions);
-                DataPartsVector res;
-                for (auto & part : parts)
+                /// get parts per partition, same with getDataPartsByNames
+                for (const auto & [partition, p_names] : partition_names)
                 {
-                    auto name = part->info.getPartNameWithHintMutation();
-                    if (names.count(name))
-                        res.push_back(part);
+                    NameSet singlePartition{partition};
+                    DataPartsVector parts = getStagedParts(table, ts, &singlePartition);
+                    for (auto & part : parts)
+                    {
+                        auto name = part->info.getPartNameWithHintMutation();
+                        if (p_names.count(name))
+                            res.push_back(part);
+                    }
                 }
-                outRes = res;
             },
             ProfileEvents::GetStagedDataPartsByNamesSuccess,
             ProfileEvents::GetStagedDataPartsByNamesFailed);
-        return outRes;
+        return res;
     }
 
     DeleteBitmapMetaPtrVector Catalog::getAllDeleteBitmaps(const StoragePtr & table, const TxnTimestamp & ts)
     {
-        DeleteBitmapMetaPtrVector outRes;
+        DeleteBitmapMetaPtrVector res;
         runWithMetricSupport(
             [&] {
                 if (!dynamic_cast<MergeTreeMetaBase *>(table.get()))
                 {
-                    outRes = {};
                     return;
                 }
-                auto res = getDeleteBitmapsInPartitions(table, getPartitionIDs(table, nullptr), ts);
-                outRes = res;
+                res = getDeleteBitmapsInPartitions(table, getPartitionIDs(table, nullptr), ts);
             },
             ProfileEvents::GetAllDeleteBitmapsSuccess,
             ProfileEvents::GetAllDeleteBitmapsFailed);
-        return outRes;
+        return res;
     }
 
 
@@ -1515,16 +1510,16 @@ namespace Catalog
 
     bool Catalog::isHostServer(const StoragePtr & storage) const
     {
-        bool outRes;
+        bool res;
         runWithMetricSupport(
             [&] {
                 const auto host_port
                     = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), true);
-                outRes = isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()));
+                res = isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()));
             },
             ProfileEvents::IsHostServerSuccess,
             ProfileEvents::IsHostServerFailed);
-        return outRes;
+        return res;
     }
 
     void Catalog::finishCommit(
@@ -1958,7 +1953,7 @@ namespace Catalog
 
     ASTPtr Catalog::getCreateDictionary(const String & database, const String & name)
     {
-        ASTPtr outRes;
+        ASTPtr res;
         runWithMetricSupport(
             [&] {
                 String dic_meta;
@@ -1969,13 +1964,12 @@ namespace Catalog
 
                 Protos::DataModelDictionary dic_model;
                 dic_model.ParseFromString(dic_meta);
-                auto res = CatalogFactory::getCreateDictionaryByDataModel(dic_model);
-                outRes = res;
+                res = CatalogFactory::getCreateDictionaryByDataModel(dic_model);
             },
             ProfileEvents::GetCreateDictionarySuccess,
             ProfileEvents::GetCreateDictionaryFailed);
 
-        return outRes;
+        return res;
     }
 
     void Catalog::dropDictionary(const String & database, const String & name)
@@ -2145,7 +2139,7 @@ namespace Catalog
 
     TransactionRecord Catalog::getTransactionRecord(const TxnTimestamp & txnID)
     {
-        TransactionRecord outRes;
+        TransactionRecord res;
         runWithMetricSupport(
             [&] {
                 String txn_data = meta_proxy->getTransactionRecord(name_space, txnID);
@@ -2153,31 +2147,26 @@ namespace Catalog
                     throw Exception(
                         "No transaction record found with txn_id : " + std::to_string(txnID),
                         ErrorCodes::CATALOG_TRANSACTION_RECORD_NOT_FOUND);
-                auto res = TransactionRecord::deserialize(txn_data);
-                outRes = res;
+                res = TransactionRecord::deserialize(txn_data);
             },
             ProfileEvents::GetTransactionRecordSuccess,
             ProfileEvents::GetTransactionRecordFailed);
-        return outRes;
+        return res;
     }
 
     std::optional<TransactionRecord> Catalog::tryGetTransactionRecord(const TxnTimestamp & txnID)
     {
-        std::optional<TransactionRecord> outRes;
+        std::optional<TransactionRecord> res;
         runWithMetricSupport(
             [&] {
                 String txn_data = meta_proxy->getTransactionRecord(name_space, txnID);
                 if (txn_data.empty())
-                {
-                    outRes = {};
                     return;
-                }
-                auto res = TransactionRecord::deserialize(txn_data);
-                outRes = res;
+                res = TransactionRecord::deserialize(txn_data);
             },
             ProfileEvents::TryGetTransactionRecordSuccess,
             ProfileEvents::TryGetTransactionRecordFailed);
-        return outRes;
+        return res;
     }
 
     bool Catalog::setTransactionRecordStatusWithOffsets(
@@ -2186,21 +2175,20 @@ namespace Catalog
         const String & consumer_group,
         const cppkafka::TopicPartitionList & tpl)
     {
-        bool outRes;
+        bool res;
         runWithMetricSupport(
             [&] {
-                auto res = meta_proxy->updateTransactionRecordWithOffsets(
+                res = meta_proxy->updateTransactionRecordWithOffsets(
                     name_space,
                     expected_record.txnID().toUInt64(),
                     expected_record.serialize(),
                     target_record.serialize(),
                     consumer_group,
                     tpl);
-                outRes = res;
             },
             ProfileEvents::SetTransactionRecordStatusWithOffsetsSuccess,
             ProfileEvents::SetTransactionRecordStatusWithOffsetsFailed);
-        return outRes;
+        return res;
     }
 
     /// commit and abort can reuse this API. set record status to targetStatus if current record.status is Running
@@ -2309,12 +2297,12 @@ namespace Catalog
         const std::vector<WriteIntent> & intents,
         std::map<std::pair<TxnTimestamp, String>, std::vector<String>> & conflictIntents)
     {
-        bool outRes;
+        bool res;
         runWithMetricSupport(
             [&] {
                 std::vector<String> cas_failed_list;
 
-                bool res = meta_proxy->writeIntent(name_space, intent_prefix, intents, cas_failed_list);
+                res = meta_proxy->writeIntent(name_space, intent_prefix, intents, cas_failed_list);
 
                 if (!res)
                 {
@@ -2334,11 +2322,10 @@ namespace Catalog
                         }
                     }
                 }
-                outRes = res;
             },
             ProfileEvents::WriteIntentsSuccess,
             ProfileEvents::WriteIntentsFailed);
-        return outRes;
+        return res;
     }
 
     /// used in the following 2 cases.
@@ -2353,7 +2340,7 @@ namespace Catalog
         const TxnTimestamp & newTxnID,
         const String & newLocation)
     {
-        bool outRes;
+        bool res;
         runWithMetricSupport(
             [&] {
                 std::vector<WriteIntent> intent_vector;
@@ -2365,12 +2352,11 @@ namespace Catalog
                         intent_vector.emplace_back(txn_id, location, intent_name);
                 }
 
-                bool res = meta_proxy->resetIntent(name_space, intent_prefix, intent_vector, newTxnID.toUInt64(), newLocation);
-                outRes = res;
+                res = meta_proxy->resetIntent(name_space, intent_prefix, intent_vector, newTxnID.toUInt64(), newLocation);
             },
             ProfileEvents::TryResetIntentsIntentsToResetSuccess,
             ProfileEvents::TryResetIntentsIntentsToResetFailed);
-        return outRes;
+        return res;
     }
 
     bool Catalog::tryResetIntents(
@@ -2379,15 +2365,14 @@ namespace Catalog
         const TxnTimestamp & newTxnID,
         const String & newLocation)
     {
-        bool outRes;
+        bool res;
         runWithMetricSupport(
             [&] {
-                auto res = meta_proxy->resetIntent(name_space, intent_prefix, oldIntents, newTxnID.toUInt64(), newLocation);
-                outRes = res;
+                res = meta_proxy->resetIntent(name_space, intent_prefix, oldIntents, newTxnID.toUInt64(), newLocation);
             },
             ProfileEvents::TryResetIntentsOldIntentsSuccess,
             ProfileEvents::TryResetIntentsOldIntentsFailed);
-        return outRes;
+        return res;
     }
 
     /// used when current transaction is committed or aborted,
@@ -3077,25 +3062,20 @@ namespace Catalog
 
     std::optional<FilesysLock> Catalog::getFilesysLock(const String & dir)
     {
-        std::optional<FilesysLock> outRes;
+        std::optional<FilesysLock> res;
         runWithMetricSupport(
             [&] {
                 String normalized_dir = normalizePath(dir);
                 auto data = meta_proxy->getFilesysLock(name_space, dir);
                 if (!data.empty())
                 {
-                    std::optional<FilesysLock> res{FilesysLock()};
+                    res = std::make_optional<FilesysLock>();
                     res->pb_model.ParseFromString(data);
-                    outRes = res;
-                }
-                else
-                {
-                    outRes = {};
                 }
             },
             ProfileEvents::GetFilesysLockSuccess,
             ProfileEvents::GetFilesysLockFailed);
-        return outRes;
+        return res;
     }
 
     void Catalog::clearFilesysLock(const String & dir)
@@ -3816,24 +3796,21 @@ namespace Catalog
 
     bool Catalog::isTableClustered(const UUID & table_uuid)
     {
-        bool outRes;
+        bool res;
         runWithMetricSupport(
             [&] {
                 if (context.getPartCacheManager())
                 {
-                    auto res = context.getPartCacheManager()->getTableClusterStatus(table_uuid);
-                    outRes = res;
+                    res = context.getPartCacheManager()->getTableClusterStatus(table_uuid);
                 }
                 else
                 {
-                    bool clustered;
-                    getTableClusterStatus(table_uuid, clustered);
-                    outRes = clustered;
+                    getTableClusterStatus(table_uuid, res);
                 }
             },
             ProfileEvents::IsTableClusteredSuccess,
             ProfileEvents::IsTableClusteredFailed);
-        return outRes;
+        return res;
     }
 
     void Catalog::setBGJobStatus(const UUID & table_uuid, CnchBGThreadType type, CnchBGThreadStatus status)
@@ -4519,14 +4496,11 @@ namespace Catalog
 
     DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapByKeys(const StoragePtr & storage, const NameSet & keys)
     {
-        DeleteBitmapMetaPtrVector outRes;
+        DeleteBitmapMetaPtrVector res;
         runWithMetricSupport(
             [&] {
                 if (keys.empty())
-                {
-                    outRes = {};
                     return;
-                }
                 Strings full_keys;
                 for (const auto & key : keys)
                 {
@@ -4535,7 +4509,6 @@ namespace Catalog
                     full_keys.emplace_back(full_key);
                 }
 
-                DeleteBitmapMetaPtrVector res;
                 auto metas = meta_proxy->getDeleteBitmapByKeys(full_keys);
                 for (const auto & meta : metas)
                 {
@@ -4548,17 +4521,16 @@ namespace Catalog
                         res.push_back(std::make_shared<DeleteBitmapMeta>(merge_tree_storage, model_ptr));
                     }
                 }
-                outRes = res;
             },
             ProfileEvents::GetDeleteBitmapByKeysSuccess,
             ProfileEvents::GetDeleteBitmapByKeysFailed);
-        return outRes;
+        return res;
     }
 
     DeleteBitmapMetaPtrVector
     Catalog::getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
     {
-        DeleteBitmapMetaPtrVector outRes;
+        DeleteBitmapMetaPtrVector res;
         runWithMetricSupport(
             [&] {
                 const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
@@ -4575,7 +4547,7 @@ namespace Catalog
                 };
 
                 Strings all_partitions = getPartitionIDsFromMetastore(storage);
-                auto all_bitmaps = getDataModelsByPartitions<DeleteBitmapMetaPtr>(
+                res = getDataModelsByPartitions<DeleteBitmapMetaPtr>(
                     storage,
                     MetastoreProxy::deleteBitmapPrefix(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid)),
                     partitions,
@@ -4583,12 +4555,11 @@ namespace Catalog
                     createDeleteBitmapMetaPtr,
                     ts);
                 // NOTE: the below logic does is to filter out uncommited bitmaps at this moment.
-                getCommittedBitmaps(all_bitmaps, ts, this);
-                outRes = all_bitmaps;
+                getCommittedBitmaps(res, ts, this);
             },
             ProfileEvents::GetDeleteBitmapsInPartitionsSuccess,
             ProfileEvents::GetDeleteBitmapsInPartitionsFailed);
-        return outRes;
+        return res;
     }
 
     void Catalog::removeDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps)
@@ -4657,7 +4628,7 @@ namespace Catalog
 
     std::optional<DB::Protos::DataModelTable> Catalog::getTableByID(const Protos::TableIdentifier & identifier)
     {
-        std::optional<DB::Protos::DataModelTable> outRes;
+        std::optional<DB::Protos::DataModelTable> res;
         runWithMetricSupport(
             [&] {
                 const String & database_name = identifier.database();
@@ -4672,15 +4643,12 @@ namespace Catalog
                     DB::Protos::DataModelTable table_data;
                     table_data.ParseFromString(tables_meta.back());
                     replace_definition(table_data, database_name, table_name);
-                    auto res = std::make_optional<DB::Protos::DataModelTable>(std::move(table_data));
-                    outRes = res;
-                    return;
+                    res = std::make_optional<DB::Protos::DataModelTable>(std::move(table_data));
                 }
-                outRes = {};
             },
             ProfileEvents::GetTableByIDSuccess,
             ProfileEvents::GetTableByIDFailed);
-        return outRes;
+        return res;
     }
 
     Catalog::DataModelTables Catalog::getTablesByID(std::vector<std::shared_ptr<Protos::TableIdentifier>> & identifiers)

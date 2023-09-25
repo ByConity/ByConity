@@ -12,7 +12,7 @@ Projection
             │  │     Partition by: {ss_cdemo_sk}
             │  └─ Inner Join
             │     │     Condition: ss_store_sk == s_store_sk
-            │     ├─ Inner Join
+            │     ├─ Inner (PARALLEL_HASH) Join
             │     │  │     Condition: ss_addr_sk == ca_address_sk
             │     │  │     Filter: ((ca_state IN ('CO', 'OH', 'TX')) AND (ss_net_profit >= 0) AND (ss_net_profit <= 2000)) OR ((ca_state IN ('OR', 'MN', 'KY')) AND (ss_net_profit >= 150) AND (ss_net_profit <= 3000)) OR ((ca_state IN ('VA', 'CA', 'MS')) AND (ss_net_profit >= 50) AND (ss_net_profit <= 25000))
             │     │  ├─ Repartition Exchange

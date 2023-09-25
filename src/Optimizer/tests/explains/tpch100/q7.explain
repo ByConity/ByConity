@@ -18,7 +18,7 @@ Projection Est. 475000 rows
                         │     Filter: ((n_name_1 = 'GERMANY') OR (n_name = 'GERMANY')) AND ((n_name = 'FRANCE') OR (n_name_1 = 'FRANCE'))
                         ├─ Repartition Exchange Est. 183366669 rows
                         │  │     Partition by: {l_suppkey}
-                        │  └─ Inner Join Est. 183366669 rows
+                        │  └─ Inner (PARALLEL_HASH) Join Est. 183366669 rows
                         │     │     Condition: l_orderkey == o_orderkey
                         │     ├─ Repartition Exchange Est. 183366669 rows
                         │     │  │     Partition by: {l_orderkey}
@@ -29,7 +29,7 @@ Projection Est. 475000 rows
                         │     │              Outputs: [l_discount, l_extendedprice, l_orderkey, l_shipdate, l_suppkey]
                         │     └─ Repartition Exchange Est. 150000000 rows
                         │        │     Partition by: {o_orderkey}
-                        │        └─ Inner Join Est. 150000000 rows
+                        │        └─ Inner (PARALLEL_HASH) Join Est. 150000000 rows
                         │           │     Condition: o_custkey == c_custkey
                         │           ├─ Repartition Exchange Est. 150000000 rows
                         │           │  │     Partition by: {o_custkey}

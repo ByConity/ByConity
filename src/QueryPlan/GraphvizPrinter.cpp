@@ -1265,6 +1265,12 @@ String StepPrinter::printJoinStep(const JoinStep & step)
     details << "JoinKind:" << f(kind);
     details << "|";
     details << "JoinStrictness : " << strictnessf(step.getStrictness());
+    if (step.getJoinAlgorithm() != JoinAlgorithm::AUTO)
+    {
+        details << "|";
+        details << "JoinAlgorithm : " << JoinAlgorithmConverter::toString(step.getJoinAlgorithm());
+    }
+
     details << "|";
     details << "JoinKeys\\n";
     for (int i = 0; i < static_cast<int>(left.size()); ++i)

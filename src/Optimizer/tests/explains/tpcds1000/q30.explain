@@ -114,7 +114,7 @@ Projection Est. 100 rows
                                     └─ Aggregating Est. 11684085 rows
                                        │     Group by: {ca_state_5, wr_returning_customer_sk_4}
                                        │     Aggregates: expr#sum(wr_return_amt)_4:=AggNull(sum)(wr_return_amt_2)
-                                       └─ Inner Join Est. 11684085 rows
+                                       └─ Inner (PARALLEL_HASH) Join Est. 11684085 rows
                                           │     Condition: wr_returning_addr_sk_2 == ca_address_sk_3
                                           ├─ Repartition Exchange Est. 11983171 rows
                                           │  │     Partition by: {wr_returning_addr_sk_2}

@@ -9,7 +9,7 @@ Projection
             │     Aggregates: expr#sum(multiIf(and(isNotNull(ssci.customer_sk), isNull(csci.customer_sk)), 1, 0)):=AggNull(sum)(expr#multiIf(and(isNotNull(ssci.customer_sk), isNull(csci.customer_sk)), 1, 0)), expr#sum(multiIf(and(isNull(ssci.customer_sk), isNotNull(csci.customer_sk)), 1, 0)):=AggNull(sum)(expr#multiIf(and(isNull(ssci.customer_sk), isNotNull(csci.customer_sk)), 1, 0)), expr#sum(multiIf(and(isNotNull(ssci.customer_sk), isNotNull(csci.customer_sk)), 1, 0)):=AggNull(sum)(expr#multiIf(and(isNotNull(ssci.customer_sk), isNotNull(csci.customer_sk)), 1, 0))
             └─ Projection
                │     Expressions: expr#multiIf(and(isNotNull(ssci.customer_sk), isNotNull(csci.customer_sk)), 1, 0):=multiIf(isNotNull(ss_customer_sk) AND isNotNull(cs_bill_customer_sk), 1, 0), expr#multiIf(and(isNotNull(ssci.customer_sk), isNull(csci.customer_sk)), 1, 0):=multiIf(isNotNull(ss_customer_sk) AND isNull(cs_bill_customer_sk), 1, 0), expr#multiIf(and(isNull(ssci.customer_sk), isNotNull(csci.customer_sk)), 1, 0):=multiIf(isNull(ss_customer_sk) AND isNotNull(cs_bill_customer_sk), 1, 0)
-               └─ Full Join
+               └─ Full (PARALLEL_HASH) Join
                   │     Condition: ss_customer_sk == cs_bill_customer_sk, ss_item_sk == cs_item_sk
                   ├─ MergingAggregated
                   │  └─ Repartition Exchange

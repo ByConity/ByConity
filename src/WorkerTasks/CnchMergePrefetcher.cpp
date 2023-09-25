@@ -39,7 +39,7 @@ void CnchMergePrefetcher::PartFutureFiles::schedulePrefetchTask(FutureSegment & 
 
             in->seek(offset);
             WriteBufferFromFile out(local_path);
-            copyData(*in, out, size, cancel_flag);
+            copyData(*in, out, size, cancel_flag, future_segment.reservation.get());
 
             if (!cancel_flag.load(std::memory_order_relaxed))
             {

@@ -13,11 +13,11 @@ Projection Est. 60175 rows
                   │     Aggregates: expr#sum(amount):=AggNull(sum)(expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)))
                   └─ Projection Est. 2074488109 rows
                      │     Expressions: [n_name], expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)):=(l_extendedprice * (1 - l_discount)) - (ps_supplycost * l_quantity), expr#toYear(o_orderdate):=toYear(o_orderdate)
-                     └─ Inner Join Est. 2074488109 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 2074488109 rows
                         │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
                         ├─ Repartition Exchange Est. 600037902 rows
                         │  │     Partition by: {l_suppkey}
-                        │  └─ Inner Join Est. 600037902 rows
+                        │  └─ Inner (PARALLEL_HASH) Join Est. 600037902 rows
                         │     │     Condition: l_orderkey == o_orderkey
                         │     ├─ Repartition Exchange Est. 600037902 rows
                         │     │  │     Partition by: {l_orderkey}
@@ -31,7 +31,7 @@ Projection Est. 60175 rows
                            │     Condition: ps_suppkey == s_suppkey
                            ├─ Repartition Exchange Est. 72190416 rows
                            │  │     Partition by: {ps_suppkey}
-                           │  └─ Inner Join Est. 72190416 rows
+                           │  └─ Inner (PARALLEL_HASH) Join Est. 72190416 rows
                            │     │     Condition: ps_partkey == p_partkey
                            │     ├─ Repartition Exchange Est. 80000000 rows
                            │     │  │     Partition by: {ps_partkey}

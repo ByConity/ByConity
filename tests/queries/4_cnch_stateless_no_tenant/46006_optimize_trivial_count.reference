@@ -77,7 +77,7 @@ Projection Est. ? rows
          │     Aggregates: expr#count():=AggNull(count)()
          └─ Filter Est. ? rows
             │     Condition: (i > 1) AND ((i + i) < 10) AND ((j + i) < 10)
-            └─ TableScan test.test1 Est. ? rows
+            └─ TableScan test.test46006 Est. ? rows
                      Where: (i > 1) AND ((i + i) < 10) AND ((j + i) < 10)
                      Prewhere: ((i AS iiii) + i) < 10
                      Outputs: [i, j]
@@ -91,7 +91,7 @@ Projection Est. ? rows
          │     Aggregates: expr#count():=AggNull(count)()
          └─ Filter Est. ? rows
             │     Condition: (i + i) < 1
-            └─ TableScan test.test1 Est. ? rows
+            └─ TableScan test.test46006 Est. ? rows
                      Where: (i + i) < 1
                      Outputs: [i]
 non-optimized:
@@ -104,7 +104,7 @@ Projection Est. ? rows
          └─ Aggregating Est. ? rows
             │     Group by: {i}
             │     Aggregates: expr#count():=AggNull(count)()
-            └─ TableScan test.test1 Est. ? rows
+            └─ TableScan test.test46006 Est. ? rows
                      Outputs: [i]
 non-optimized:
 Projection Est. ? rows
@@ -118,11 +118,11 @@ Projection Est. ? rows
             │     Condition: i == i_1
             ├─ Repartition Exchange Est. ? rows
             │  │     Partition by: {i}
-            │  └─ TableScan test.test1 Est. ? rows
+            │  └─ TableScan test.test46006 Est. ? rows
             │           Outputs: [i]
             └─ Repartition Exchange Est. ? rows
                │     Partition by: {i_1}
-               └─ TableScan test.test1 Est. ? rows
+               └─ TableScan test.test46006 Est. ? rows
                         Outputs: i_1:=i
 Projection Est. ? rows
 │     Expressions: count():=`expr#count()`
@@ -135,7 +135,7 @@ Projection Est. ? rows
             │     Condition: cityHash64(intDiv(`expr#rowNumberInAllBlocks()`, 8192)) < 0.02
             └─ Projection Est. ? rows
                │     Expressions: expr#rowNumberInAllBlocks():=rowNumberInAllBlocks()
-               └─ TableScan test.test1 Est. ? rows
+               └─ TableScan test.test46006 Est. ? rows
                         Outputs: [i]
 Projection Est. ? rows
 │     Expressions: count():=`expr#count()`
@@ -148,5 +148,5 @@ Projection Est. ? rows
             │     Condition: `expr#host()` = \'xx\'
             └─ Projection Est. ? rows
                │     Expressions: expr#host():=host()
-               └─ TableScan test.test1 Est. ? rows
+               └─ TableScan test.test46006 Est. ? rows
                         Outputs: [p]

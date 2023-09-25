@@ -631,6 +631,8 @@ String PlanPrinter::TextPrinter::printPrefix(PlanNodeBase & plan)
                     return "";
             }
         };
+        if (join->getJoinAlgorithm() != JoinAlgorithm::AUTO)
+            return fmt::format("{}({}) ", f(join->getKind()), JoinAlgorithmConverter::toString(join->getJoinAlgorithm()));
 
         return f(join->getKind());
     }

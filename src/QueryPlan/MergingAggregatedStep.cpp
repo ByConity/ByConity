@@ -102,7 +102,9 @@ void MergingAggregatedStep::transformPipeline(QueryPipeline & pipeline, const Bu
         pipeline.resize(1);
     }
 
-    if (!memory_efficient_aggregation)
+    // @FIXME: grouping sets + two-level aggregation is incompatible with memory efficient merge
+    // see also: https://meego.feishu.cn/clickhousech/story/detail/14744099
+    if (!memory_efficient_aggregation || input_streams.front().header.has("__grouping_set"))
     {
         /// We union several sources into one, paralleling the work.
         pipeline.resize(1);

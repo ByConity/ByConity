@@ -155,6 +155,10 @@ std::pair<TxnTimestamp, TxnTimestamp> CnchServerClient::createTransactionForKafk
 ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts)
 {
     brpc::Controller cntl;
+    if (const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
+        cntl.set_timeout_ms(storage->getSettings()->cnch_meta_rpc_timeout_ms);
+    else
+        cntl.set_timeout_ms(8 * 1000);
     Protos::FetchDataPartsReq request;
     Protos::FetchDataPartsResp response;
 
@@ -261,7 +265,7 @@ TxnTimestamp CnchServerClient::commitParts(
     /// TODO: check txn_id & start_ts
 
     brpc::Controller cntl;
-    cntl.set_timeout_ms(10 * 1000); /// TODO: from config
+    cntl.set_timeout_ms(storage.getSettings()->cnch_meta_rpc_timeout_ms);
     Protos::CommitPartsReq request;
     Protos::CommitPartsResp response;
 

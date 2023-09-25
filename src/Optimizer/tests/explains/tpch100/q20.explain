@@ -31,9 +31,9 @@ Projection Est. 40000 rows
                      │     Partition by: {ps_suppkey}
                      └─ Aggregating Est. 39725 rows
                         │     Group by: {ps_suppkey}
-                        └─ Inner Join Est. 84409644 rows
+                        └─ Inner (PARALLEL_HASH) Join Est. 84409644 rows
                            │     Condition: l_partkey == p_partkey
-                           ├─ Inner Join Est. 3877774 rows
+                           ├─ Inner (PARALLEL_HASH) Join Est. 3877774 rows
                            │  │     Condition: l_partkey == ps_partkey, l_suppkey == ps_suppkey
                            │  │     Filter: ps_availqty > ('0.5' * `expr#sum(l_quantity)`)
                            │  │     Runtime Filters Builder: {ps_partkey,ps_suppkey}

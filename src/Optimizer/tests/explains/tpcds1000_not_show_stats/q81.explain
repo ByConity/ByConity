@@ -95,7 +95,7 @@ Projection
                │                          └─ Aggregating
                │                             │     Group by: {ca_state_5, cr_returning_customer_sk_4}
                │                             │     Aggregates: expr#sum(cr_return_amt_inc_tax)_4:=AggNull(sum)(cr_return_amt_inc_tax_2)
-               │                             └─ Inner Join
+               │                             └─ Inner (PARALLEL_HASH) Join
                │                                │     Condition: cr_returning_addr_sk_2 == ca_address_sk_3
                │                                ├─ Repartition Exchange
                │                                │  │     Partition by: {cr_returning_addr_sk_2}

@@ -51,7 +51,7 @@ CTEDef [1]
          └─ Aggregating
             │     Group by: {ca_county_4, d_qoy_4, d_year_4}
             │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-            └─ Inner Join
+            └─ Inner (PARALLEL_HASH) Join
                │     Condition: ws_bill_addr_sk == ca_address_sk_1
                ├─ Repartition Exchange
                │  │     Partition by: {ws_bill_addr_sk}
@@ -82,7 +82,7 @@ CTEDef [0]
          └─ Aggregating
             │     Group by: {ca_county, d_qoy, d_year}
             │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-            └─ Inner Join
+            └─ Inner (PARALLEL_HASH) Join
                │     Condition: ss_addr_sk == ca_address_sk
                ├─ Repartition Exchange
                │  │     Partition by: {ss_addr_sk}

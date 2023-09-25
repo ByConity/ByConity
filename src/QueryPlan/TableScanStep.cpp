@@ -889,7 +889,6 @@ void TableScanStep::optimizeWhereIntoPrewhre(ContextPtr context)
             std::unordered_map<std::string, UInt64> column_compressed_sizes;
             for (const auto & [name, sizes] : column_sizes)
                 column_compressed_sizes[name] = sizes.data_compressed;
-
             MergeTreeWhereOptimizer{
                 query_info, context, std::move(column_compressed_sizes), storage->getInMemoryMetadataPtr(), column_names, log};
         }
@@ -977,7 +976,7 @@ bool TableScanStep::rewriteDynamicFilterIntoPrewhere(ASTSelectQuery * query)
 
         for (size_t i = 0; i < filters.first.size(); ++i)
         {
-            if (ASTEquality::compareTree(descriptions[i].expr, it->expr))
+            if (ASTEquality::compareTree(descriptions[i].expr, it->expr) && storage->supportsPrewhere())
             {
                 prewhere_predicates.emplace_back(filters.first[i]);
                 continue;

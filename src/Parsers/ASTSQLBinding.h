@@ -70,6 +70,7 @@ public:
     String pattern;
     ASTPtr pattern_ast;
     BindingLevel level;
+    bool if_exists{false};
     /** Get the text that identifies this element. */
     String getID(char) const override { return "DropBinding"; }
 

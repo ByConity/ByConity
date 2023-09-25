@@ -15,7 +15,7 @@ Projection Est. 100 rows
                   └─ Aggregating Est. 398531221 rows
                      │     Group by: {i_item_desc, i_item_id, s_store_id, s_store_name}
                      │     Aggregates: expr#sum(ss_net_profit):=AggNull(sum)(ss_net_profit), expr#sum(sr_net_loss):=AggNull(sum)(sr_net_loss), expr#sum(cs_net_profit):=AggNull(sum)(cs_net_profit)
-                     └─ Inner Join Est. 398531221 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 398531221 rows
                         │     Condition: cs_bill_customer_sk == sr_customer_sk, cs_item_sk == i_item_sk
                         ├─ Repartition Exchange Est. 164635442 rows
                         │  │     Partition by: {cs_item_sk}
@@ -39,7 +39,7 @@ Projection Est. 100 rows
                            │  │     Partition by: {sr_item_sk}
                            │  └─ Inner Join Est. 30413402 rows
                            │     │     Condition: ss_store_sk == s_store_sk
-                           │     ├─ Inner Join Est. 30413402 rows
+                           │     ├─ Inner (PARALLEL_HASH) Join Est. 30413402 rows
                            │     │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │     │  │     Runtime Filters Builder: {sr_ticket_number}
                            │     │  ├─ Repartition Exchange Est. 45121367 rows

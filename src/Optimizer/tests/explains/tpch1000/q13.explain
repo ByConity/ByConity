@@ -16,7 +16,7 @@ Projection Est. 102503752 rows
                      └─ Aggregating Est. 102503752 rows
                         │     Group by: {c_custkey}
                         │     Aggregates: expr#count(o_orderkey):=AggNull(count)(o_orderkey)
-                        └─ Left Join Est. 1500000000 rows
+                        └─ Left (PARALLEL_HASH) Join Est. 1500000000 rows
                            │     Condition: c_custkey == o_custkey
                            │     Filter: o_comment NOT LIKE '%special%requests%'
                            ├─ Repartition Exchange Est. 150000000 rows

@@ -52,15 +52,17 @@ public:
     void shutDown();
     void partialShutdown();
 
+    void dumpServerStatus() const;
+
     void updateServerVirtualWarehouses(const Poco::Util::AbstractConfiguration & config, const String & config_name = "server_virtual_warehouses");
 private:
     void onLeader() override;
     void exitLeaderElection() override;
     void enterLeaderElection() override;
 
-    void refreshTopology();
-    void renewLease();
-    void checkAsyncQueryStatus();
+    bool refreshTopology();
+    bool renewLease();
+    bool checkAsyncQueryStatus();
 
     /// set topology status when becoming leader. may runs in background tasks.
     void setLeaderStatus();
@@ -73,11 +75,14 @@ private:
 
     std::optional<Topology> next_version_topology;
     std::list<Topology> cached_topologies;
-    mutable std::mutex topology_mutex;
+    mutable std::timed_mutex topology_mutex;
 
     std::atomic_bool need_stop{false};
     std::atomic_bool is_leader{false};
     std::atomic_bool leader_initialized{false};
+    std::atomic<UInt64> refresh_topology_time{0};
+    std::atomic<UInt64> renew_lease_time{0};
+    std::atomic<UInt64> async_query_status_check_time{0};
     std::unordered_map<String, String> server_virtual_warehouses;
 };
 

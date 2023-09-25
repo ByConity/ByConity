@@ -23,7 +23,7 @@ Projection
                   │           │     Condition: ss_item_sk == i_item_sk
                   │           ├─ Repartition Exchange
                   │           │  │     Partition by: {ss_item_sk}
-                  │           │  └─ Inner Join
+                  │           │  └─ Inner (PARALLEL_HASH) Join
                   │           │     │     Condition: ss_addr_sk == ca_address_sk
                   │           │     │     Runtime Filters Builder: {ca_address_sk}
                   │           │     ├─ Repartition Exchange
@@ -81,7 +81,7 @@ Projection
                   │           │     Condition: cs_item_sk == i_item_sk_1
                   │           ├─ Repartition Exchange
                   │           │  │     Partition by: {cs_item_sk}
-                  │           │  └─ Inner Join
+                  │           │  └─ Inner (PARALLEL_HASH) Join
                   │           │     │     Condition: cs_bill_addr_sk == ca_address_sk_1
                   │           │     │     Runtime Filters Builder: {ca_address_sk_1}
                   │           │     ├─ Repartition Exchange
@@ -139,7 +139,7 @@ Projection
                               │     Condition: ws_item_sk == i_item_sk_2
                               ├─ Repartition Exchange
                               │  │     Partition by: {ws_item_sk}
-                              │  └─ Inner Join
+                              │  └─ Inner (PARALLEL_HASH) Join
                               │     │     Condition: ws_bill_addr_sk == ca_address_sk_2
                               │     │     Runtime Filters Builder: {ca_address_sk_2}
                               │     ├─ Repartition Exchange

@@ -2201,13 +2201,6 @@ static Aggregator::Params getAggregatorParams(
     size_t group_by_two_level_threshold,
     size_t group_by_two_level_threshold_bytes)
 {
-    const auto stats_collecting_params = Aggregator::Params::StatsCollectingParams(
-        query_ptr,
-        context.getServerType() == ServerType::cnch_worker,
-        settings.collect_hash_table_stats_during_aggregation,
-        settings.max_entries_for_hash_table_stats,
-        settings.max_size_to_preallocate_for_aggregation);
-
     return Aggregator::Params
     {
         src_header_,
@@ -2224,9 +2217,7 @@ static Aggregator::Params getAggregatorParams(
         settings.max_threads,
         settings.min_free_disk_space_for_temporary_data,
         settings.compile_aggregate_expressions,
-        settings.min_count_to_compile_aggregate_expression,
-        Block{},
-        stats_collecting_params
+        settings.min_count_to_compile_aggregate_expression
     };
 }
 

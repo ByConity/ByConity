@@ -17,16 +17,16 @@ Projection Est. 729 rows
                         │     Expressions: [expr#multiply(l_extendedprice, minus(1, l_discount))], expr#multiIf(equals(nation, 'BRAZIL'), volume, 0):=multiIf(n_name = 'BRAZIL', `expr#multiply(l_extendedprice, minus(1, l_discount))`, 0), expr#toYear(o_orderdate):=toYear(o_orderdate)
                         └─ Projection Est. 53277389 rows
                            │     Expressions: [n_name, o_orderdate], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                           └─ Inner Join Est. 53277389 rows
+                           └─ Inner (PARALLEL_HASH) Join Est. 53277389 rows
                               │     Condition: l_suppkey == s_suppkey
                               ├─ Repartition Exchange Est. 53835598 rows
                               │  │     Partition by: {l_suppkey}
-                              │  └─ Inner Join Est. 53835598 rows
+                              │  └─ Inner (PARALLEL_HASH) Join Est. 53835598 rows
                               │     │     Condition: o_custkey == c_custkey
                               │     │     Runtime Filters Builder: {c_custkey}
                               │     ├─ Repartition Exchange Est. 55808004 rows
                               │     │  │     Partition by: {o_custkey}
-                              │     │  └─ Inner Join Est. 55808004 rows
+                              │     │  └─ Inner (PARALLEL_HASH) Join Est. 55808004 rows
                               │     │     │     Condition: o_orderkey == l_orderkey
                               │     │     │     Runtime Filters Builder: {l_orderkey}
                               │     │     ├─ Repartition Exchange Est. 455092518 rows

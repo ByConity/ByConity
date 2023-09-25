@@ -9,13 +9,13 @@ Projection
          └─ Sorting
             │     Order by: {c_customer_id_5 asc, c_first_name_5 asc, c_last_name_5 asc, c_preferred_cust_flag_5 asc}
             │     Limit: 100
-            └─ Inner Join
+            └─ Inner (PARALLEL_HASH) Join
                │     Condition: c_customer_id_5 == c_customer_id_4
                │     Filter: (multiIf(`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_4` > 0, `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_5` / `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_4`, NULL) > multiIf(`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_6` > 0, `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_7` / `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_6`, NULL)) AND (multiIf(`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_4` > 0, `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_5` / `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_4`, NULL) > multiIf(`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_2` > 0, `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_3` / `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_2`, NULL))
                │     Runtime Filters Builder: {c_customer_id_4}
-               ├─ Inner Join
+               ├─ Inner (PARALLEL_HASH) Join
                │  │     Condition: c_customer_id_5 == c_customer_id_6
-               │  ├─ Inner Join
+               │  ├─ Inner (PARALLEL_HASH) Join
                │  │  │     Condition: c_customer_id_5 == c_customer_id_8
                │  │  ├─ Filter
                │  │  │  │     Condition: (d_year_5 = 2002) AND (`expr#'s'_3` = 's') Runtime Filters: {c_customer_id_5}
@@ -29,9 +29,9 @@ Projection
                │     │     Condition: (d_year_6 = 2001) AND (`expr#'s'_4` = 'c') AND (`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_4` > 0.) Runtime Filters: {c_customer_id_6}
                │     └─ Buffer
                │        └─ CTERef[0]
-               └─ Inner Join
+               └─ Inner (PARALLEL_HASH) Join
                   │     Condition: c_customer_id_4 == c_customer_id_7
-                  ├─ Inner Join
+                  ├─ Inner (PARALLEL_HASH) Join
                   │  │     Condition: c_customer_id_4 == c_customer_id_9
                   │  ├─ Filter
                   │  │  │     Condition: (`expr#'s'_2` = 's') AND (d_year_4 = 2001) AND (`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_2` > 0.)

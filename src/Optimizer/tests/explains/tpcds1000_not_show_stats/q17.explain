@@ -15,7 +15,7 @@ Projection
                   └─ Aggregating
                      │     Group by: {i_item_desc, i_item_id, s_state}
                      │     Aggregates: expr#count(ss_quantity):=AggNull(count)(ss_quantity), expr#avg(ss_quantity):=AggNull(avg)(ss_quantity), expr#stddevSamp(ss_quantity):=AggNull(stddevSamp)(ss_quantity), expr#count(sr_return_quantity):=AggNull(count)(sr_return_quantity), expr#avg(sr_return_quantity):=AggNull(avg)(sr_return_quantity), expr#stddevSamp(sr_return_quantity):=AggNull(stddevSamp)(sr_return_quantity), expr#count(cs_quantity):=AggNull(count)(cs_quantity), expr#avg(cs_quantity):=AggNull(avg)(cs_quantity), expr#stddevSamp(cs_quantity):=AggNull(stddevSamp)(cs_quantity)
-                     └─ Inner Join
+                     └─ Inner (PARALLEL_HASH) Join
                         │     Condition: cs_bill_customer_sk == sr_customer_sk, cs_item_sk == i_item_sk
                         ├─ Repartition Exchange
                         │  │     Partition by: {cs_item_sk}
@@ -39,7 +39,7 @@ Projection
                            │  │     Partition by: {sr_item_sk}
                            │  └─ Inner Join
                            │     │     Condition: ss_store_sk == s_store_sk
-                           │     ├─ Inner Join
+                           │     ├─ Inner (PARALLEL_HASH) Join
                            │     │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │     │  │     Runtime Filters Builder: {sr_ticket_number}
                            │     │  ├─ Repartition Exchange

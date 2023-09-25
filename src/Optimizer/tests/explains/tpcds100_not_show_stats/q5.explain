@@ -134,7 +134,7 @@ Projection
                                        │  │     │     Expressions: [wr_net_loss, wr_return_amt, wr_returned_date_sk, ws_web_site_sk_1], expr#CAST(0, 'decimal(7, 2)')_14:=cast(`expr#CAST(0, 'decimal(7, 2)')_14`, 'Nullable(Float64)'), expr#CAST(0, 'decimal(7, 2)')_15:=cast(`expr#CAST(0, 'decimal(7, 2)')_14`, 'Nullable(Float64)')
                                        │  │     └─ Projection
                                        │  │        │     Expressions: [wr_net_loss, wr_return_amt, wr_returned_date_sk, ws_web_site_sk_1], expr#CAST(0, 'decimal(7, 2)')_14:=cast('0.00', 'Decimal(7, 2)')
-                                       │  │        └─ Right Join
+                                       │  │        └─ Right (PARALLEL_HASH) Join
                                        │  │           │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
                                        │  │           ├─ Repartition Exchange
                                        │  │           │  │     Partition by: {ws_item_sk, ws_order_number}

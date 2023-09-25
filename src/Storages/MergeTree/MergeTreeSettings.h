@@ -537,6 +537,7 @@ struct Settings;
     M(UInt64, cnch_merge_round_robin_partitions_interval, 600, "", 0) \
     M(UInt64, cnch_gc_round_robin_partitions_interval, 600, "", 0) \
     M(UInt64, cnch_gc_round_robin_partitions_number, 10, "", 0) \
+    M(UInt64, cnch_meta_rpc_timeout_ms, 8000, "", 0) \
     M(UInt64, gc_remove_part_thread_pool_size, 2, "Turn up the thread pool size to speed up GC processing of parts", 0) \
     M(UInt64, gc_trash_part_batch_size, 5000, "Batch size to remove stale parts to trash in background tasks", 0) \
     M(UInt64, gc_remove_part_batch_size, 200, "Batch size to remove trash parts from storage in background tasks", 0) \

@@ -116,8 +116,11 @@ public:
     {
         if (trunc)
         {
-            if (::open(filename.c_str(), O_TRUNC) < 0)
+            auto fd = ::open(filename.c_str(), O_TRUNC);
+            if (fd < 0)
                 throwFromErrno("open file error, file: " + filename, ErrorCodes::CANNOT_OPEN_FILE);
+            if (0 != ::close(fd))
+                throwFromErrno("close file error, file: " + filename, ErrorCodes::CANNOT_CLOSE_FILE);
         }
 
         WriteBufferFromFile file_writer(filename);

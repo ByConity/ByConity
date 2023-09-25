@@ -63,6 +63,7 @@ test_writer_and_merger ()
     --source-path "$WRITER_LOCATION/" \
     --output-path "$MERGER_LOCATION/$UUID" \
     --uuids "$UUID" \
+    --settings "max_merge_threads=3" \
     --verbose
 
   set +e

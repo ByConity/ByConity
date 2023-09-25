@@ -13,9 +13,9 @@ Projection Est. 100 rows
                │     Expressions: [d_year, expr#sum(ss_quantity), expr#sum(ss_sales_price), expr#sum(ss_wholesale_cost), ss_customer_sk, ss_item_sk], expr#plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0)):=coalesce(`expr#sum(ws_quantity)`, 0) + coalesce(`expr#sum(cs_quantity)`, 0), expr#plus(coalesce(ws_sp, 0), coalesce(cs_sp, 0)):=coalesce(`expr#sum(ws_sales_price)`, 0) + coalesce(`expr#sum(cs_sales_price)`, 0), expr#plus(coalesce(ws_wc, 0), coalesce(cs_wc, 0)):=coalesce(`expr#sum(ws_wholesale_cost)`, 0) + coalesce(`expr#sum(cs_wholesale_cost)`, 0), expr#round(divide(ss_qty, plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0))), 2):=round(`expr#sum(ss_quantity)` / (coalesce(`expr#sum(ws_quantity)`, 0) + coalesce(`expr#sum(cs_quantity)`, 0)), 2)
                └─ Filter Est. 216306305793 rows
                   │     Condition: (coalesce(`expr#sum(ws_quantity)`, 0) > 0) OR (coalesce(`expr#sum(cs_quantity)`, 0) > 0)
-                  └─ Left Join Est. 240340339770 rows
+                  └─ Left (PARALLEL_HASH) Join Est. 240340339770 rows
                      │     Condition: d_year == d_year_2, ss_customer_sk == cs_bill_customer_sk, ss_item_sk == cs_item_sk
-                     ├─ Left Join Est. 10303777366 rows
+                     ├─ Left (PARALLEL_HASH) Join Est. 10303777366 rows
                      │  │     Condition: d_year == d_year_1, ss_customer_sk == ws_bill_customer_sk, ss_item_sk == ws_item_sk
                      │  ├─ MergingAggregated Est. 683414508 rows
                      │  │  └─ Repartition Exchange Est. 683414508 rows
@@ -27,7 +27,7 @@ Projection Est. 100 rows
                      │  │           │     Expressions: [d_year, ss_customer_sk, ss_item_sk, ss_quantity, ss_sales_price, ss_wholesale_cost]
                      │  │           └─ Filter Est. 614740766 rows
                      │  │              │     Condition: isNull(sr_ticket_number)
-                     │  │              └─ Left Join Est. 683045296 rows
+                     │  │              └─ Left (PARALLEL_HASH) Join Est. 683045296 rows
                      │  │                 │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                      │  │                 ├─ Repartition Exchange Est. 569462781 rows
                      │  │                 │  │     Partition by: {ss_item_sk, ss_ticket_number}
@@ -59,7 +59,7 @@ Projection Est. 100 rows
                      │              │     Expressions: [d_year_1, ws_bill_customer_sk, ws_item_sk, ws_quantity, ws_sales_price, ws_wholesale_cost]
                      │              └─ Filter Est. 153717318 rows
                      │                 │     Condition: isNull(wr_order_number)
-                     │                 └─ Left Join Est. 170797020 rows
+                     │                 └─ Left (PARALLEL_HASH) Join Est. 170797020 rows
                      │                    │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
                      │                    ├─ Repartition Exchange Est. 142366362 rows
                      │                    │  │     Partition by: {ws_item_sk, ws_order_number}
@@ -91,7 +91,7 @@ Projection Est. 100 rows
                                  │     Expressions: [cs_bill_customer_sk, cs_item_sk, cs_quantity, cs_sales_price, cs_wholesale_cost, d_year_2]
                                  └─ Filter Est. 254605232 rows
                                     │     Condition: isNull(cr_order_number)
-                                    └─ Left Join Est. 282894703 rows
+                                    └─ Left (PARALLEL_HASH) Join Est. 282894703 rows
                                        │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
                                        ├─ Repartition Exchange Est. 282894703 rows
                                        │  │     Partition by: {cs_item_sk, cs_order_number}

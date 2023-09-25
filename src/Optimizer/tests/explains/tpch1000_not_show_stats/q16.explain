@@ -17,11 +17,11 @@ Projection
                         │     Expressions: [p_brand, p_size, p_type, ps_suppkey]
                         └─ Filter
                            │     Condition: if(isNull(ps_suppkey), NULL, NOT cast(multiIf(build_side_non_null_symbol = 1, 1, 0), 'UInt8'))
-                           └─ Left Join
+                           └─ Left (PARALLEL_HASH) Join
                               │     Condition: ps_suppkey == s_suppkey
                               ├─ Repartition Exchange
                               │  │     Partition by: {ps_suppkey}
-                              │  └─ Inner Join
+                              │  └─ Inner (PARALLEL_HASH) Join
                               │     │     Condition: ps_partkey == p_partkey
                               │     │     Runtime Filters Builder: {p_partkey}
                               │     ├─ Repartition Exchange

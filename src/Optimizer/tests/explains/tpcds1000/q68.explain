@@ -37,7 +37,7 @@ Projection Est. 100 rows
                         └─ Aggregating Est. 1945877 rows
                            │     Group by: {ca_city, ss_addr_sk, ss_customer_sk, ss_ticket_number}
                            │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#sum(ss_ext_list_price):=AggNull(sum)(ss_ext_list_price), expr#sum(ss_ext_tax):=AggNull(sum)(ss_ext_tax)
-                           └─ Inner Join Est. 1945877 rows
+                           └─ Inner (PARALLEL_HASH) Join Est. 1945877 rows
                               │     Condition: ca_address_sk == ss_addr_sk
                               │     Runtime Filters Builder: {ss_addr_sk}
                               ├─ Repartition Exchange Est. 6000000 rows

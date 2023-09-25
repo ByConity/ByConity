@@ -12,7 +12,7 @@ bool ParserCreateBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
 {
     ParserKeyword s_create("CREATE");
     ParserKeyword s_global("GLOBAL");
-    ParserKeyword s_SESSION("SESSION");
+    ParserKeyword s_session("SESSION");
     ParserKeyword s_binding("BINDING");
     ParserKeyword s_using("USING");
     ParserKeyword s_settings("SETTINGS");
@@ -27,7 +27,7 @@ bool ParserCreateBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     if (!s_create.ignore(pos, expected))
         return false;
 
-    if (s_SESSION.ignore(pos, expected))
+    if (s_session.ignore(pos, expected))
         level = BindingLevel::SESSION;
     else if (s_global.ignore(pos, expected))
         level = BindingLevel::GLOBAL;
@@ -97,19 +97,21 @@ bool ParserDropBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_drop("DROP");
     ParserKeyword s_global("GLOBAL");
-    ParserKeyword s_SESSION("SESSION");
+    ParserKeyword s_session("SESSION");
+    ParserKeyword s_if_exists("IF EXISTS");
     ParserKeyword s_binding("BINDING");
     ParserKeyword s_uuid("UUID");
 
     bool drop_uuid = false;
     String str_value;
     ASTPtr binding_pattern;
+    bool if_exists = false;
 
     BindingLevel level;
     if (!s_drop.ignore(pos, expected))
         return false;
 
-    if (s_SESSION.ignore(pos, expected))
+    if (s_session.ignore(pos, expected))
         level = BindingLevel::SESSION;
     else if (s_global.ignore(pos, expected))
         level = BindingLevel::GLOBAL;
@@ -118,6 +120,9 @@ bool ParserDropBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     if (!s_binding.ignore(pos, expected))
         return false;
+
+    if (s_if_exists.ignore(pos, expected))
+        if_exists = true;
 
     if (s_uuid.ignore(pos, expected))
         drop_uuid = true;
@@ -151,6 +156,7 @@ bool ParserDropBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     drop_binding_query->pattern = query_pattern;
     drop_binding_query->pattern_ast = binding_pattern;
+    drop_binding_query->if_exists = if_exists;
     node = drop_binding_query;
     return true;
 }

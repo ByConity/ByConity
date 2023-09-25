@@ -20,7 +20,8 @@ enum class HintCategory
 {
     UNKNOWN = 0,
     DISTRIBUTION_TYPE,
-    JOIN_ORDER
+    JOIN_ORDER,
+    JOIN_ALGORITHM,
 };
 
 class IPlanHint

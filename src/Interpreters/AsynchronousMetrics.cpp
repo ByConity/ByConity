@@ -554,7 +554,7 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         {
             auto part_cache_metrics = part_cache_manager->dumpPartCache();
             new_values["CnchPartCachePartitions"] = part_cache_metrics.first;
-            new_values["CnchPartCacheParts"] = part_cache_metrics.second;            
+            new_values["CnchPartCacheParts"] = part_cache_metrics.second;
         }
     }
 
@@ -601,14 +601,6 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 #endif
 
     new_values["Uptime"] = getContext()->getUptimeSeconds();
-
-    if (const auto stats = getHashTablesCacheStatistics())
-    {
-        new_values["HashTableStatsCacheEntries"] = stats->entries;
-        new_values["HashTableStatsCacheHits"] = stats->hits;
-        new_values["HashTableStatsCacheMisses"] = stats->misses;
-    }
-
 
     /// Process process memory usage according to OS
 #if defined(OS_LINUX)

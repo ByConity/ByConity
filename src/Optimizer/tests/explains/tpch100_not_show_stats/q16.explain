@@ -21,7 +21,7 @@ Projection
                               │     Condition: ps_suppkey == s_suppkey
                               ├─ Repartition Exchange
                               │  │     Partition by: {ps_suppkey}
-                              │  └─ Inner Join
+                              │  └─ Inner (PARALLEL_HASH) Join
                               │     │     Condition: ps_partkey == p_partkey
                               │     │     Runtime Filters Builder: {p_partkey}
                               │     ├─ Repartition Exchange

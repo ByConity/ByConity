@@ -39,7 +39,7 @@ Projection
                   │        │  └─ Broadcast Exchange
                   │        │     └─ Aggregating
                   │        │        │     Group by: {wr_order_number}
-                  │        │        └─ Inner Join
+                  │        │        └─ Inner (PARALLEL_HASH) Join
                   │        │           │     Condition: wr_order_number == ws_order_number_5
                   │        │           ├─ Repartition Exchange
                   │        │           │  │     Partition by: {wr_order_number}

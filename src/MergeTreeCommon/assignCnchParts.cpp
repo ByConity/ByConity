@@ -195,17 +195,41 @@ FilePartsAssignMap assignCnchFileParts(const WorkerGroupHandle & worker_group, c
 }
 
 
-
-bool isCnchBucketTable(const ContextPtr & context, const IStorage & storage, const ServerDataPartsVector & parts)
+std::pair<ServerDataPartsVector, ServerDataPartsVector>
+splitCnchParts(const ContextPtr & context, const IStorage & storage, const ServerDataPartsVector & parts)
 {
     if (!storage.isBucketTable())
-        return false;
+        return {{}, std::move(parts)};
     if (context->getCnchCatalog()->isTableClustered(storage.getStorageUUID()))
-        return true;
+        return {std::move(parts), {}};
 
-    return std::all_of(parts.begin(), parts.end(), [&](auto part)
-        { return part->part_model().table_definition_hash() == storage.getTableHashForClusterBy() && part->part_model().bucket_number() != -1; });
+    std::pair<ServerDataPartsVector, ServerDataPartsVector> res;
+    auto & bucket_parts = res.first;
+    auto & leftover_parts = res.second;
+    
+    std::for_each(parts.begin(), parts.end(), [&](auto part) 
+    {
+        bool is_clustered = part->part_model().table_definition_hash() == storage.getTableHashForClusterBy() && part->part_model().bucket_number() != -1;
+        if (is_clustered)
+            bucket_parts.emplace_back(part);
+        else
+            leftover_parts.emplace_back(part);
+    });
+
+    return res;
 }
+
+void moveBucketTablePartsToAssignedParts(std::unordered_map<String, ServerDataPartsVector> & assigned_map, ServerDataPartsVector & bucket_parts, const WorkerList & workers, std::set<Int64> required_bucket_numbers)
+{
+    if(bucket_parts.empty())
+        return;
+    auto bucket_parts_assignment_map = assignCnchPartsForBucketTable(bucket_parts, workers, required_bucket_numbers).parts_assignment_map;
+    for (auto & [worker_id, bucket_assigned_parts]: bucket_parts_assignment_map ) {
+        auto & assigned_parts = assigned_map[worker_id];
+        std::move(bucket_assigned_parts.begin(), bucket_assigned_parts.end(), std::back_inserter(assigned_parts));
+    }
+}
+
 
 
 BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerDataPartsVector & parts, WorkerList workers, std::set<Int64> required_bucket_numbers)

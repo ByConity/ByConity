@@ -15,7 +15,7 @@ Projection
                   └─ Aggregating
                      │     Group by: {i_item_desc, i_item_id, s_store_id, s_store_name}
                      │     Aggregates: expr#sum(ss_quantity):=AggNull(sum)(ss_quantity), expr#sum(sr_return_quantity):=AggNull(sum)(sr_return_quantity), expr#sum(cs_quantity):=AggNull(sum)(cs_quantity)
-                     └─ Inner Join
+                     └─ Inner (PARALLEL_HASH) Join
                         │     Condition: cs_bill_customer_sk == sr_customer_sk, cs_item_sk == i_item_sk
                         ├─ Repartition Exchange
                         │  │     Partition by: {cs_item_sk}
@@ -39,7 +39,7 @@ Projection
                            │  │     Partition by: {sr_item_sk}
                            │  └─ Inner Join
                            │     │     Condition: ss_store_sk == s_store_sk
-                           │     ├─ Inner Join
+                           │     ├─ Inner (PARALLEL_HASH) Join
                            │     │  │     Condition: ss_customer_sk == sr_customer_sk, ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                            │     │  │     Runtime Filters Builder: {sr_ticket_number}
                            │     │  ├─ Repartition Exchange

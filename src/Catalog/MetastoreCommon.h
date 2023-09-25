@@ -27,6 +27,7 @@ namespace Catalog
 
 #define MAX_BATCH_SIZE 1024
 #define DEFAULT_SCAN_BATCH_COUNT 10000
+#define DEFAULT_MULTI_GET_BATCH_COUNT 100
 
 enum CatalogCode : int
 {

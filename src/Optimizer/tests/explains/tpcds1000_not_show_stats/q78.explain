@@ -13,9 +13,9 @@ Projection
                │     Expressions: [d_year, expr#sum(ss_quantity), expr#sum(ss_sales_price), expr#sum(ss_wholesale_cost), ss_customer_sk, ss_item_sk], expr#plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0)):=coalesce(`expr#sum(ws_quantity)`, 0) + coalesce(`expr#sum(cs_quantity)`, 0), expr#plus(coalesce(ws_sp, 0), coalesce(cs_sp, 0)):=coalesce(`expr#sum(ws_sales_price)`, 0) + coalesce(`expr#sum(cs_sales_price)`, 0), expr#plus(coalesce(ws_wc, 0), coalesce(cs_wc, 0)):=coalesce(`expr#sum(ws_wholesale_cost)`, 0) + coalesce(`expr#sum(cs_wholesale_cost)`, 0), expr#round(divide(ss_qty, plus(coalesce(ws_qty, 0), coalesce(cs_qty, 0))), 2):=round(`expr#sum(ss_quantity)` / (coalesce(`expr#sum(ws_quantity)`, 0) + coalesce(`expr#sum(cs_quantity)`, 0)), 2)
                └─ Filter
                   │     Condition: (coalesce(`expr#sum(ws_quantity)`, 0) > 0) OR (coalesce(`expr#sum(cs_quantity)`, 0) > 0)
-                  └─ Left Join
+                  └─ Left (PARALLEL_HASH) Join
                      │     Condition: d_year == d_year_2, ss_customer_sk == cs_bill_customer_sk, ss_item_sk == cs_item_sk
-                     ├─ Left Join
+                     ├─ Left (PARALLEL_HASH) Join
                      │  │     Condition: d_year == d_year_1, ss_customer_sk == ws_bill_customer_sk, ss_item_sk == ws_item_sk
                      │  ├─ MergingAggregated
                      │  │  └─ Repartition Exchange
@@ -27,7 +27,7 @@ Projection
                      │  │           │     Expressions: [d_year, ss_customer_sk, ss_item_sk, ss_quantity, ss_sales_price, ss_wholesale_cost]
                      │  │           └─ Filter
                      │  │              │     Condition: isNull(sr_ticket_number)
-                     │  │              └─ Left Join
+                     │  │              └─ Left (PARALLEL_HASH) Join
                      │  │                 │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                      │  │                 ├─ Repartition Exchange
                      │  │                 │  │     Partition by: {ss_item_sk, ss_ticket_number}
@@ -59,7 +59,7 @@ Projection
                      │              │     Expressions: [d_year_1, ws_bill_customer_sk, ws_item_sk, ws_quantity, ws_sales_price, ws_wholesale_cost]
                      │              └─ Filter
                      │                 │     Condition: isNull(wr_order_number)
-                     │                 └─ Left Join
+                     │                 └─ Left (PARALLEL_HASH) Join
                      │                    │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
                      │                    ├─ Repartition Exchange
                      │                    │  │     Partition by: {ws_item_sk, ws_order_number}
@@ -91,7 +91,7 @@ Projection
                                  │     Expressions: [cs_bill_customer_sk, cs_item_sk, cs_quantity, cs_sales_price, cs_wholesale_cost, d_year_2]
                                  └─ Filter
                                     │     Condition: isNull(cr_order_number)
-                                    └─ Left Join
+                                    └─ Left (PARALLEL_HASH) Join
                                        │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
                                        ├─ Repartition Exchange
                                        │  │     Partition by: {cs_item_sk, cs_order_number}

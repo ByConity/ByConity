@@ -312,7 +312,7 @@ struct ContextSharedPart
     String hdfs_nn_proxy; // libhdfs3 namenode proxy
     HDFSConnectionParams hdfs_connection_params;
     mutable std::optional<EmbeddedDictionaries> embedded_dictionaries; /// Metrica's dictionaries. Have lazy initialization.
-    
+
     VETosConnectionParams vetos_connection_params;
 
     mutable std::optional<CnchCatalogDictionaryCache> cnch_catalog_dict_cache;
@@ -449,7 +449,6 @@ struct ContextSharedPart
     bool ready_for_query = false; /// Server is ready for incoming queries
 
     std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer;
-    bool is_explain_query = false;
 
     std::unique_ptr<PlanCacheManager> plan_cache_manager;
     ContextSharedPart()
@@ -531,6 +530,12 @@ struct ContextSharedPart
                 cache_manager.reset();
 
             access_control_manager.stopBgJobForKVStorage();
+
+            if (queue_manager)
+                queue_manager->shutdown();
+
+            if (worker_status_manager)
+                worker_status_manager->shutdown();
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
 
@@ -1998,7 +2003,7 @@ void Context::setCurrentDatabase(const String & name, ContextPtr local_context)
         {
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "catalog {} does not exist", catalog_name);
         }
-    } else 
+    } else
     {
         use_cnch_catalog = true;
     }
@@ -2321,15 +2326,12 @@ std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> Context::get
 
 void Context::setIsExplainQuery(const bool & is_explain_query_)
 {
-    auto lock = getLock();
-    shared->is_explain_query = is_explain_query_;
+    is_explain_query = is_explain_query_;
 }
 
 bool Context::isExplainQuery() const
 {
-    auto lock = getLock();
-
-    return shared->is_explain_query;
+    return is_explain_query;
 }
 
 void Context::setProcessListElement(ProcessList::Element * elem)
@@ -4197,7 +4199,7 @@ HDFSConnectionParams Context::getHdfsConnectionParams() const
 {
     return shared->hdfs_connection_params;
 }
-    
+
 void Context::setLasfsConnectionParams(const Poco::Util::AbstractConfiguration & config) {
     if(config.has("lasfs_config")){
         setSetting("lasfs_service_name",config.getString("lasfs_config.lasfs_service_name",""));

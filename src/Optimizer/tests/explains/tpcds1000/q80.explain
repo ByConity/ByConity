@@ -26,7 +26,7 @@ Projection Est. 100 rows
                      │              │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#sum(coalesce(sr_return_amt, 0)):=AggNull(sum)(expr#coalesce(sr_return_amt, 0)), expr#sum(minus(ss_net_profit, coalesce(sr_net_loss, 0))):=AggNull(sum)(expr#minus(ss_net_profit, coalesce(sr_net_loss, 0)))
                      │              └─ Projection Est. 3103855 rows
                      │                 │     Expressions: [s_store_id, ss_ext_sales_price], expr#coalesce(sr_return_amt, 0):=coalesce(sr_return_amt, 0), expr#minus(ss_net_profit, coalesce(sr_net_loss, 0)):=ss_net_profit - coalesce(sr_net_loss, 0)
-                     │                 └─ Right Join Est. 3103855 rows
+                     │                 └─ Right (PARALLEL_HASH) Join Est. 3103855 rows
                      │                    │     Condition: sr_item_sk == ss_item_sk, sr_ticket_number == ss_ticket_number
                      │                    │     Runtime Filters Builder: {ss_item_sk,ss_ticket_number}
                      │                    ├─ Repartition Exchange Est. 287999764 rows

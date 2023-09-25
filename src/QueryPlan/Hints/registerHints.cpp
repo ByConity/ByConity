@@ -7,6 +7,7 @@ namespace DB
 
 void registerHintBroadcastJoin(PlanHintFactory & factory);
 void registerHintRepartitionJoin(PlanHintFactory & factory);
+void registerHintUseGraceHash(PlanHintFactory & factory);
 void registerHintLeading(PlanHintFactory & factory);
 
 void registerHints()
@@ -16,7 +17,7 @@ void registerHints()
     registerHintBroadcastJoin(factory);
     registerHintLeading(factory);
     registerHintRepartitionJoin(factory);
-
+    registerHintUseGraceHash(factory);
 
 }
 

@@ -96,9 +96,14 @@ void StorageSystemCnchTableHost::fillData(MutableColumns & res_columns, ContextP
     else
         table_ids = cnch_catalog->getAllTablesID();
 
-    UInt64 ts = context->tryGetTimestamp(__PRETTY_FUNCTION__);
-    for (const auto & table_id : table_ids)
+    UInt64 ts = 0;
+    static constexpr size_t TSO_BATCH_SIZE = 100;
+    for (size_t i = 0; i < table_ids.size(); ++i)
     {
+        /// Get latest timestamp from TSO every TSO_BATCH_SIZE to avoid ts is too old when there are too many table_ids
+        if ((i % TSO_BATCH_SIZE) == 0)
+            ts = context->tryGetTimestamp(__PRETTY_FUNCTION__);
+        const auto & table_id = table_ids[i];
         if (table_id)
         {
             size_t col_num = 0;
