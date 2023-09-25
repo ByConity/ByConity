@@ -17,13 +17,13 @@ message StatsColumnBasic {
 message StatsNdvBuckets {
   required bytes bounds_blob = 1;
   repeated int64 counts = 3;           // size = num_buckets
-  repeated bytes cpc_sketch_blobs = 4; // size = num_buckets
+  repeated bytes hll_sketch_blobs = 4; // size = num_buckets
 }
 
 message StatsNdvBucketsExtend {
   required bytes bounds_blob = 1;
   repeated int64 counts = 3;           // size = num_buckets
-  repeated bytes cpc_sketch_blobs = 4; // size = num_buckets
+  repeated bytes hll_sketch_blobs = 4; // size = num_buckets
   repeated double block_ndv_counts = 6; // size = num_buckets
 }
 
@@ -55,12 +55,12 @@ enum SerdeDataType {
 enum StatisticsType {
   Invalid = 0;
   TableBasic = 1;
-  CpcSketch = 2;
   KllSketch = 3;
   NdvBuckets = 4;
   NdvBucketsResult = 5;
   ColumnBasic = 6;
   NdvBucketsExtend = 7;
+  HllSketch = 8;
   DummyAlpha = 2000;
   DummyBeta = 2001;
 }

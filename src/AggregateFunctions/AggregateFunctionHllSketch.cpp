@@ -18,13 +18,13 @@
 #include <AggregateFunctions/FactoryHelpers.h>
 #include <AggregateFunctions/Helpers.h>
 #include <Statistics/Base64.h>
-#include <Statistics/StatsCpcSketch.h>
+#include <Statistics/StatsHllSketch.h>
 // TODO: use datasketches
 namespace DB
 {
 struct CpcData
 {
-    Statistics::StatsCpcSketch data_;
+    Statistics::StatsHllSketch data_;
 
     template <typename T>
     void add(T value)
@@ -56,7 +56,7 @@ struct CpcData
         static_cast<ColumnSketchBinary &>(to).insertData(blob.c_str(), blob.size());
     }
 
-    static String getName() { return "cpc"; }
+    static String getName() { return "hll"; }
 };
 
 template <typename T>
@@ -64,7 +64,7 @@ using CpcDataAdaptor = CpcData;
 
 template <template <typename> class Function>
 AggregateFunctionPtr
-createAggregateFunctionCpcSketch(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
+createAggregateFunctionHllSketch(const std::string & name, const DataTypes & argument_types, const Array & parameters, const Settings *)
 {
     assertNoParameters(name, parameters);
     assertUnary(name, argument_types);
@@ -101,11 +101,11 @@ template <typename T>
 using Func = typename FuncImpl<T>::Func;
 
 
-void registerAggregateFunctionCpcSketch(AggregateFunctionFactory & factory)
+void registerAggregateFunctionHllSketch(AggregateFunctionFactory & factory)
 {
     AggregateFunctionWithProperties functor;
-    functor.creator = createAggregateFunctionCpcSketch<Func>;
-    factory.registerFunction("cpc", functor);
+    functor.creator = createAggregateFunctionHllSketch<Func>;
+    factory.registerFunction("hll", functor);
 }
 
 }

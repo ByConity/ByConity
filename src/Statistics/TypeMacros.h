@@ -57,4 +57,4 @@
     X_(DummyBeta) \
     X_(TableBasic) \
     X_(ColumnBasic) \
-    X_(CpcSketch)
+    X_(HllSketch)

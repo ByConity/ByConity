@@ -1710,7 +1710,8 @@ MetastoreProxy::getTableStatistics(const String & name_space, const String & uui
         StatisticsTag tag = static_cast<StatisticsTag>(table_statistic.tag());
         TxnTimestamp ts(table_statistic.timestamp());
         auto statisticPtr = createStatisticsBase(tag, table_statistic.blob());
-        res.emplace(tag, statisticPtr);
+        if (statisticPtr)
+            res.emplace(tag, statisticPtr);
     }
     return res;
 }
@@ -1781,7 +1782,8 @@ std::unordered_map<StatisticsTag, StatisticsBasePtr> MetastoreProxy::getColumnSt
         StatisticsTag tag = static_cast<StatisticsTag>(column_statistic.tag());
         TxnTimestamp ts(column_statistic.timestamp());
         auto statisticPtr = createStatisticsBase(tag, column_statistic.blob());
-        res.emplace(tag, statisticPtr);
+        if (statisticPtr)
+            res.emplace(tag, statisticPtr);
     }
 
     return res;

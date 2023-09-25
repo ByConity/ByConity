@@ -103,7 +103,7 @@ void registerAggregateFunctionsBitmapExpressionCalculation(AggregateFunctionFact
 void registerAggregateFunctionsBitmapMaxLevel(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsBitMapJoin(AggregateFunctionFactory & factory);
 void registerAggregateFunctionsBitMapJoinAndCard(AggregateFunctionFactory & factory);
-void registerAggregateFunctionCpcSketch(AggregateFunctionFactory & factory);
+void registerAggregateFunctionHllSketch(AggregateFunctionFactory & factory);
 void registerAggregateFunctionKllSketch(AggregateFunctionFactory & factory);
 void registerAggregateFunctionNdvBuckets(AggregateFunctionFactory & factory);
 void registerAggregateFunctionNdvBucketsExtend(AggregateFunctionFactory & factory);
@@ -220,7 +220,7 @@ void registerAggregateFunctions()
         registerAggregateFunctionsBitmapMaxLevel(factory);
         registerAggregateFunctionsBitMapJoin(factory);
         registerAggregateFunctionsBitMapJoinAndCard(factory);
-        registerAggregateFunctionCpcSketch(factory);
+        registerAggregateFunctionHllSketch(factory);
         registerAggregateFunctionKllSketch(factory);
         registerAggregateFunctionNdvBuckets(factory);
         registerAggregateFunctionNdvBucketsExtend(factory);

@@ -22,12 +22,12 @@
 
 namespace DB::Statistics
 {
-class StatsCpcSketch : public StatisticsBase
+class StatsHllSketch : public StatisticsBase
 {
 public:
     static constexpr auto default_lg_k = 12;
-    static constexpr auto tag = StatisticsTag::CpcSketch;
-    StatsCpcSketch() : data(default_lg_k) { }
+    static constexpr auto tag = StatisticsTag::HllSketch;
+    StatsHllSketch() : data(default_lg_k) { }
 
     String serialize() const override;
     void deserialize(std::string_view blob) override;
@@ -50,7 +50,7 @@ public:
         }
     }
 
-    void merge(const StatsCpcSketch & rhs)
+    void merge(const StatsHllSketch & rhs)
     {
         if (!un_opt.has_value())
         {
@@ -66,7 +66,7 @@ public:
     }
 
 private:
-    datasketches::cpc_sketch getFullResult() const
+    datasketches::hll_sketch getFullResult() const
     {
         if (un_opt.has_value())
         {
@@ -81,8 +81,8 @@ private:
     }
 
 private:
-    datasketches::cpc_sketch data;
-    std::optional<datasketches::cpc_union> un_opt;
+    datasketches::hll_sketch data;
+    std::optional<datasketches::hll_union> un_opt;
 };
 
 // transform ndv to integer, and make it no greater than count

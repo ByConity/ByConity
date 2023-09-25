@@ -13,18 +13,18 @@
  * limitations under the License.
  */
 
-#include <Statistics/StatsCpcSketch.h>
+#include <Statistics/StatsHllSketch.h>
 
 namespace DB::Statistics
 {
-String StatsCpcSketch::serialize() const
+String StatsHllSketch::serialize() const
 {
     std::ostringstream ss;
-    getFullResult().serialize(ss);
+    getFullResult().serialize_updatable(ss);
     return ss.str();
 }
 
-void StatsCpcSketch::deserialize(std::string_view blob)
+void StatsHllSketch::deserialize(std::string_view blob)
 {
     if (blob.empty())
     {
