@@ -1,17 +1,20 @@
 SELECT
     a,
     count(a)
-FROM t1
-INNER JOIN t1 AS t2 ON a = t2.b
+FROM t46009
+INNER JOIN t46009 AS t2 ON a = t2.b
 WHERE a < 10
 GROUP BY a
 SELECT
     a,
     count(a)
-FROM t1
-INNER JOIN t1 AS t2 ON a = t2.b
+FROM t46009
+INNER JOIN t46009 AS t2 ON a = t2.b
 WHERE (a < 10) AND (a IN ((
     SELECT b
-    FROM t1
+    FROM t46009
 ) AS t3))
 GROUP BY a
+SELECT name
+FROM cnch(\'server\', \'system.settings\')
+SETTINGS enable_optimizer = 0
