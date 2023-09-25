@@ -90,8 +90,8 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
             proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
 
     };
-    res.exception_callback = [proxy_txn](int) { 
-        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server"); 
+    res.exception_callback = [proxy_txn](int) {
+        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query failed on remote server");
         if (proxy_txn)
             proxy_txn->setTransactionStatus(CnchTransactionStatus::Aborted);
     };
