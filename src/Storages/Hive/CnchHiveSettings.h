@@ -49,6 +49,7 @@ struct Settings;
     M(String, ak_id, "", "S3 access key", 0) \
     M(String, ak_secret, "", "S3 secret key", 0) \
     M(String, region, "", "S3 region", 0) \
+    M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
     /** HMS kerberos settings **/ \
     M(Bool, hive_metastore_client_kerberos_auth, 0, "Enable hms auth with Kerberos", 0) \
     M(String, hive_metastore_client_service_fqdn, "", "The fqdn for auth server", 0) \
