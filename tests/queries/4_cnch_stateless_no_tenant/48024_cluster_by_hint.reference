@@ -1,0 +1,25 @@
+Projection Est. ? rows
+│     Expressions: [app_id, split_key], update_time:=`expr#max(timestamp)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {app_id, split_key}
+         └─ Aggregating Est. ? rows
+            │     Group by: {app_id, split_key}
+            │     Aggregates: expr#max(timestamp):=AggNull(max)(timestamp)
+            └─ Filter Est. ? rows
+               │     Condition: (toDateTime(timestamp) >= \'2023-08-13 20:12:15\') AND (toDateTime(timestamp) <= \'2023-08-14 00:41:00\')
+               └─ TableScan my_test.dwd_abtest_vid_log_realtime_aweme Est. ? rows
+                        Where: (toDateTime(timestamp) >= \'2023-08-13 20:12:15\') AND (toDateTime(timestamp) <= \'2023-08-14 00:41:00\')
+                        Outputs: [app_id, split_key, timestamp]
+Projection Est. ? rows
+│     Expressions: [app_id, split_key], update_time:=`expr#max(timestamp)`
+└─ Gather Exchange Est. ? rows
+   └─ Aggregating Est. ? rows
+      │     Group by: {app_id, split_key}
+      │     Aggregates: expr#max(timestamp):=AggNull(max)(timestamp)
+      └─ Filter Est. ? rows
+         │     Condition: (toDateTime(timestamp) >= \'2023-08-13 20:12:15\') AND (toDateTime(timestamp) <= \'2023-08-14 00:41:00\')
+         └─ TableScan my_test.dwd_abtest_vid_log_realtime_aweme Est. ? rows
+                  Where: (toDateTime(timestamp) >= \'2023-08-13 20:12:15\') AND (toDateTime(timestamp) <= \'2023-08-14 00:41:00\')
+                  Outputs: [app_id, split_key, timestamp]

@@ -360,7 +360,7 @@ std::set<std::string> RemoveRedundantAggregateVisitor::extractSymbol(const Const
             {
                 auto & expression_list = child_node->as<ASTExpressionList &>();
                 std::set<std::string> symbols;
-                for(const ConstASTPtr& child : expression_list.children)
+                for (const auto & child : expression_list.children)
                 {
                     if(child->getType() == ASTType::ASTIdentifier)
                     {

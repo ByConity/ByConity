@@ -2122,6 +2122,7 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "cnch_gc_round_robin_partitions_number",
         "gc_remove_part_thread_pool_size",
         "gc_remove_part_batch_size",
+        "cluster_by_hint",
     };
 
     /// Check whether the value is legal for Setting.
