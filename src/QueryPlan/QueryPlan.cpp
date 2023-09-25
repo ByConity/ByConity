@@ -693,10 +693,6 @@ void QueryPlan::deserialize(ReadBuffer & buffer)
          */
         size_t children_size;
         readBinary(children_size, buffer);
-        if (children_size > 100)
-        {
-            std::cout << "bug";
-        }
         std::vector<size_t> children(children_size);
         for (size_t j = 0; j < children_size; ++j)
             readBinary(children[j], buffer);

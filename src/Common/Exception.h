@@ -182,6 +182,9 @@ void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_
 void tryLogDebugCurrentException(const char * log_name, const std::string & start_of_message = "");
 void tryLogDebugCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
 
+void tryLogWarningCurrentException(const char * log_name, const std::string & start_of_message = "");
+void tryLogWarningCurrentException(Poco::Logger * logger, const std::string & start_of_message = "");
+
 /** Prints current exception in canonical format.
   * with_stacktrace - prints stack trace for DB::Exception.
   * check_embedded_stacktrace - if DB::Exception has embedded stacktrace then
