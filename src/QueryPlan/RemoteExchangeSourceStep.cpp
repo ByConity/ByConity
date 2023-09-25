@@ -137,10 +137,10 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
     Block source_header;
     if (keep_order)
         source_header = exchange_header;
-
-    if (context->getSettingsRef().exchange_enable_multipath_reciever)
+    
+    for (const auto & input : inputs)
     {
-        for (const auto & input : inputs)
+        if (context->getSettingsRef().exchange_enable_multipath_reciever && input->getExchangeMode() != ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
         {
             size_t write_plan_segment_id = input->getPlanSegmentId();
             size_t exchange_parallel_size = input->getExchangeParallelSize();
@@ -238,10 +238,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
             pipe.addSource(std::move(source));
             source_num++;
         }
-    }
-    else
-    {
-        for (const auto & input : inputs)
+        else
         {
             size_t write_plan_segment_id = input->getPlanSegmentId();
             size_t exchange_parallel_size = input->getExchangeParallelSize();
