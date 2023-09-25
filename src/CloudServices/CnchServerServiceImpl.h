@@ -240,6 +240,12 @@ public:
         Protos::RedirectCommitPartsResp * response,
         google::protobuf::Closure * done) override;
 
+    void redirectDetachAttachS3Parts(
+        google::protobuf::RpcController* controller,
+        const Protos::RedirectDetachAttachS3PartsReq * request,
+        Protos::RedirectDetachAttachS3PartsResp * response,
+        google::protobuf::Closure * done);
+
     void removeMergeMutateTasksOnPartitions(
         google::protobuf::RpcController * cntl,
         const Protos::RemoveMergeMutateTasksOnPartitionsReq * request,

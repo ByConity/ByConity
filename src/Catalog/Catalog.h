@@ -548,6 +548,8 @@ public:
 
     bool isHostServer(const ConstStoragePtr & storage) const;
 
+    std::pair<bool, HostWithPorts> checkIfHostServer(const StoragePtr & storage) const;
+
     void setMergeMutateThreadStartTime(const StorageID & storage_id, const UInt64 & startup_time) const;
 
     UInt64 getMergeMutateThreadStartTime(const StorageID & storage_id) const;

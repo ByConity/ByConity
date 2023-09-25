@@ -37,6 +37,26 @@ class CnchDataPartCache;
 using CnchDataPartCachePtr = std::shared_ptr<CnchDataPartCache>;
 class CnchServerTopology;
 
+class CacheVersion
+{
+public:
+    PairInt64 get()
+    {
+        std::shared_lock lock(mutex_);
+        return cache_version;
+    }
+
+    void set(const PairInt64 & new_version)
+    {
+        std::unique_lock lock(mutex_);
+        cache_version = new_version;
+    }
+
+private:
+    PairInt64 cache_version{0};
+    mutable std::shared_mutex mutex_;
+};
+
 struct TableMetaEntry
 {
     typedef RWLockImpl::LockHolder TableLockHolder;
@@ -81,6 +101,8 @@ struct TableMetaEntry
     /// NHUT from metastore differs with cached one, we should update cache with metastore.
     std::atomic_uint64_t cached_non_host_update_ts {0};
     std::atomic_bool need_invalid_cache {false};
+    /// Check the cache version each time when visit the cache. To make sure the visited cache is still valid
+    CacheVersion cache_version;
 
     ScanWaitFreeMap<String, PartitionInfoPtr> partitions;
     String server_vw_name;
@@ -101,7 +123,7 @@ public:
     PartCacheManager(ContextMutablePtr context_);
     ~PartCacheManager();
 
-    void mayUpdateTableMeta(const IStorage & storage);
+    void mayUpdateTableMeta(const IStorage & storage, const PairInt64 & topology_version);
 
     void updateTableNameInMetaEntry(const String & table_uuid, const String & database_name, const String & table_name);
 
@@ -119,9 +141,9 @@ public:
 
     bool getTablePartitionMetrics(const IStorage & i_storage, std::unordered_map<String, PartitionFullPtr> & partitions, bool require_partition_info = true);
 
-    bool getPartitionList(const IStorage & storage, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list);
+    bool getPartitionList(const IStorage & storage, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const PairInt64 & topology_version);
 
-    bool getPartitionIDs(const IStorage & storage, std::vector<String> & partition_ids);
+    bool getPartitionIDs(const IStorage & storage, std::vector<String> & partition_ids, const PairInt64 & topology_version);
 
     void invalidPartCache(const UUID & uuid);
 
@@ -140,7 +162,12 @@ public:
 
     void invalidPartCache(const UUID & uuid, const Strings & part_names, MergeTreeDataFormatVersion version);
 
-    void insertDataPartsIntoCache(const IStorage & table, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model, const bool is_merged_parts, const bool should_update_metrics);
+    void insertDataPartsIntoCache(
+        const IStorage & table,
+        const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model,
+        const bool is_merged_parts,
+        const bool should_update_metrics,
+        const PairInt64 & topology_version);
 
     /// Get count and weight in Part cache
     std::pair<UInt64, UInt64> dumpPartCache();
@@ -150,7 +177,11 @@ public:
     using LoadPartsFunc = std::function<DataModelPartPtrVector(const Strings&, const Strings&)>;
 
     ServerDataPartsVector getOrSetServerDataPartsInPartitions(
-        const IStorage & table, const Strings & partitions, LoadPartsFunc && load_func, const UInt64 & ts);
+        const IStorage & table,
+        const Strings & partitions,
+        LoadPartsFunc && load_func,
+        const UInt64 & ts,
+        const PairInt64 & topology_version);
 
     void mayUpdateTableMeta(const StoragePtr & table);
 

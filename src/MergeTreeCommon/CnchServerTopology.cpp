@@ -121,10 +121,21 @@ UInt64 CnchServerTopology::getInitialTime() const
     return lease_initialtime;
 }
 
+UInt64 CnchServerTopology::getTerm() const
+{
+    return term;
+}
+
+void CnchServerTopology::setTerm(UInt64 new_term)
+{
+    term = new_term;
+}
+
 String CnchServerTopology::format() const
 {
     std::stringstream ss;
-    ss << "{initial: " << lease_initialtime;
+    ss << "{term: " << term;
+    ss << ", initial: " << lease_initialtime;
     ss << ", expiration: " << lease_expiration;
     ss << ", [";
     for (auto it = vw_topologies.begin(); it != vw_topologies.end(); ++it)

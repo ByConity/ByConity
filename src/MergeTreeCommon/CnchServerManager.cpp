@@ -251,6 +251,7 @@ bool CnchServerManager::renewLease()
             {
                 if (next_version_topology)
                 {
+                    next_version_topology->setTerm(++term);
                     next_version_topology->setExpiration(current_time_ms + lease_life_ms);
                     cached_topologies.push_back(*next_version_topology);
                     LOG_DEBUG(log, "Add new topology {}", cached_topologies.back().format());
@@ -273,8 +274,10 @@ bool CnchServerManager::renewLease()
                 {
                     if (next_version_topology)
                     {
-                        next_version_topology->setInitialTime(last_lease_expiration);
-                        next_version_topology->setExpiration(last_lease_expiration + lease_life_ms);
+                        next_version_topology->setTerm(++term);
+                        auto new_lease_initial_time = std::max(last_lease_expiration, current_time_ms);
+                        next_version_topology->setInitialTime(new_lease_initial_time);
+                        next_version_topology->setExpiration(new_lease_initial_time + lease_life_ms);
                         cached_topologies.push_back(*next_version_topology);
                         LOG_DEBUG(log, "Add new topology {}", cached_topologies.back().format());
                     }
@@ -340,6 +343,8 @@ void CnchServerManager::setLeaderStatus()
 {
     std::unique_lock lock(topology_mutex);
     cached_topologies = getContext()->getCnchCatalog()->getTopologies();
+    if (!cached_topologies.empty())
+        term = cached_topologies.back().getTerm();
     leader_initialized = true;
     LOG_DEBUG(log , "Successfully set leader status.");
 }

@@ -160,7 +160,7 @@ PartCacheManager::~PartCacheManager()
     }
 }
 
-void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
+void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairInt64 & topology_version)
 {
     /* Fetches partitions from metastore if storage is not present in active_tables*/
 
@@ -169,19 +169,19 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
     if (!cnch_table)
         return;
 
-    auto load_nhut = [&](TableMetaEntryPtr & meta_ptr)
-    {
-        if (getContext()->getSettingsRef().server_write_ha)
-        {
-            UInt64 pts = getContext()->getPhysicalTimestamp();
-            if (pts)
-            {
-                UInt64 fetched_nhut = getContext()->getCnchCatalog()->getNonHostUpdateTimestampFromByteKV(storage.getStorageUUID());
-                if (pts - fetched_nhut > 9)
-                    meta_ptr->cached_non_host_update_ts = fetched_nhut;
-            }
-        }
-    };
+    // auto load_nhut = [&](TableMetaEntryPtr & meta_ptr)
+    // {
+    //     if (getContext()->getSettingsRef().server_write_ha)
+    //     {
+    //         UInt64 pts = getContext()->getPhysicalTimestamp();
+    //         if (pts)
+    //         {
+    //             UInt64 fetched_nhut = getContext()->getCnchCatalog()->getNonHostUpdateTimestampFromByteKV(storage.getStorageUUID());
+    //             if (pts - fetched_nhut > 9)
+    //                 meta_ptr->cached_non_host_update_ts = fetched_nhut;
+    //         }
+    //     }
+    // };
 
     auto load_table_partitions = [&](TableMetaEntryPtr & meta_ptr)
     {
@@ -189,6 +189,8 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
         /// If other thread finished load, just return
         if (meta_ptr->cache_status == CacheStatus::LOADED)
             return;
+        /// Invalid old cache if any
+        part_cache_ptr->dropCache(storage.getStorageUUID());
         try
         {
             meta_ptr->cache_status = CacheStatus::LOADING;
@@ -199,6 +201,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
             /// Needs make sure no other thread force reload
             UInt32 loading = CacheStatus::LOADING;
             meta_ptr->cache_status.compare_exchange_strong(loading, CacheStatus::LOADED);
+            meta_ptr->cache_version.set(topology_version);
         }
         catch (...)
         {
@@ -238,10 +241,23 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
         }
         else
         {
+            PairInt64 current_cache_version = it->second->cache_version.get();
             if (it->second->cache_status != CacheStatus::LOADED)
             {
                 /// Needs to wait for other thread to load and retry if other thread failed
                 meta_ptr = it->second;
+            }
+            else if (topology_version != PairInt64{0, 0} && current_cache_version != topology_version)
+            {
+                // update cache version if host server doesn't change in two consecutive topologies.
+                if (current_cache_version.low + 1 == topology_version.low)
+                    it->second->cache_version.set(topology_version);
+                else
+                {
+                    it->second->cache_status = CacheStatus::UINIT;
+                    meta_ptr = it->second;
+                    LOG_DEBUG(&Poco::Logger::get("PartCacheManager::MetaEntry"), "Invalid part cache because of cache version mismatch for table {}.{}", meta_ptr->database, meta_ptr->table);
+                }
             }
             // update table_definition_hash for active tables
             it->second->table_definition_hash = storage.getTableHashForClusterBy();
@@ -250,7 +266,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage)
 
     if (meta_ptr)
     {
-        load_nhut(meta_ptr);
+        // load_nhut(meta_ptr);
         load_table_partitions(meta_ptr);
 
         /// may reload partition metrics.
@@ -464,9 +480,12 @@ bool PartCacheManager::getTablePartitionMetrics(const IStorage & i_storage, std:
     return false;
 }
 
-bool PartCacheManager::getPartitionList(const IStorage & table, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list)
+bool PartCacheManager::getPartitionList(
+    const IStorage & table,
+    std::vector<std::shared_ptr<MergeTreePartition>> & partition_list,
+    const PairInt64 & topology_version)
 {
-    mayUpdateTableMeta(table);
+    mayUpdateTableMeta(table, topology_version);
     TableMetaEntryPtr meta_ptr = getTableMeta(table.getStorageUUID());
     if (meta_ptr)
     {
@@ -476,9 +495,9 @@ bool PartCacheManager::getPartitionList(const IStorage & table, std::vector<std:
     return false;
 }
 
-bool PartCacheManager::getPartitionIDs(const IStorage & storage, std::vector<String> & partition_ids)
+bool PartCacheManager::getPartitionIDs(const IStorage & storage, std::vector<String> & partition_ids, const PairInt64 & topology_version)
 {
-    mayUpdateTableMeta(storage);
+    mayUpdateTableMeta(storage, topology_version);
     TableMetaEntryPtr meta_ptr = getTableMeta(storage.getStorageUUID());
 
     if (meta_ptr)
@@ -625,13 +644,18 @@ void PartCacheManager::invalidPartCache(const UUID & uuid, const Strings & part_
     invalidPartCache(uuid, meta_ptr, partition_to_parts);
 }
 
-void PartCacheManager::insertDataPartsIntoCache(const IStorage & table, const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model, const bool is_merged_parts, const bool should_update_metrics)
+void PartCacheManager::insertDataPartsIntoCache(
+    const IStorage & table,
+    const pb::RepeatedPtrField<Protos::DataModelPart> & parts_model,
+    const bool is_merged_parts,
+    const bool should_update_metrics,
+    const PairInt64 & topology_version)
 {
     /// Only cache MergeTree tables
     if (!dynamic_cast<const MergeTreeMetaBase*>(&table))
         return;
 
-    mayUpdateTableMeta(table);
+    mayUpdateTableMeta(table, topology_version);
     UUID uuid = table.getStorageUUID();
     TableMetaEntryPtr meta_ptr = getTableMeta(uuid);
     if (!meta_ptr)
@@ -824,7 +848,7 @@ void PartCacheManager::loadActiveTables()
                 continue;
 
             if (isLocalServer(host_port.getRPCAddress(), toString(rpc_port)))
-                mayUpdateTableMeta(*table);
+                mayUpdateTableMeta(*table, host_port.topology_version);
         }
     }
 }
@@ -860,10 +884,11 @@ DB::ServerDataPartsVector PartCacheManager::getOrSetServerDataPartsInPartitions(
     const IStorage & table,
     const Strings & partitions,
     PartCacheManager::LoadPartsFunc && load_func,
-    const UInt64 & ts)
+    const UInt64 & ts,
+    const PairInt64 & topology_version)
 {
     ServerDataPartsVector res;
-    mayUpdateTableMeta(table);
+    mayUpdateTableMeta(table, topology_version);
     const auto & storage = dynamic_cast<const MergeTreeMetaBase &>(table);
     TableMetaEntryPtr meta_ptr = getTableMeta(table.getStorageUUID());
 

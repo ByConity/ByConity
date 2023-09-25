@@ -77,6 +77,8 @@ private:
     std::list<Topology> cached_topologies;
     mutable std::timed_mutex topology_mutex;
 
+    UInt64 term = 0;
+
     std::atomic_bool need_stop{false};
     std::atomic_bool is_leader{false};
     std::atomic_bool leader_initialized{false};

@@ -414,8 +414,6 @@ namespace ProfileEvents
     extern const Event GetAllMaskingPolicyAppliedTablesFailed;
     extern const Event DropMaskingPoliciesSuccess;
     extern const Event DropMaskingPoliciesFailed;
-    extern const Event IsHostServerSuccess;
-    extern const Event IsHostServerFailed;
     extern const Event SetBGJobStatusSuccess;
     extern const Event SetBGJobStatusFailed;
     extern const Event GetBGJobStatusSuccess;
@@ -1334,7 +1332,8 @@ namespace Catalog
                                 source = "KV(miss cache)";
                                 return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0});
                             },
-                            ts.toUInt64());
+                            ts.toUInt64(),
+                            host_port.topology_version);
                     }
                 }
                 else
@@ -1428,7 +1427,7 @@ namespace Catalog
                 /// because some dirty insert txn will include too many partitions' parts,
                 /// which cause too much memory usage when get all related partitions.
                 /// find the wanted parts partition by partition could help reduce memory usage
-                for (const auto [partition, p_names] : partition_names)
+                for (const auto & [partition, p_names] : partition_names)
                 {
                     auto parts_from_partitions = getServerDataPartsInPartitions(table, {partition}, ts, nullptr);
                     for (const auto & part : parts_from_partitions)
@@ -1518,18 +1517,24 @@ namespace Catalog
     bool Catalog::isHostServer(const ConstStoragePtr & storage) const
     {
         bool res;
-        runWithMetricSupport(
-            [&] {
-                const auto host_port
-                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), true);
-                if (host_port.empty())
-                    res = false;
-                else
-                    res = isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()));
-            },
-            ProfileEvents::IsHostServerSuccess,
-            ProfileEvents::IsHostServerFailed);
+
+        const auto host_port
+            = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), true);
+        if (host_port.empty())
+            res = false;
+        else
+            res = isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()));
+
         return res;
+    }
+
+    std::pair<bool, HostWithPorts> Catalog::checkIfHostServer(const StoragePtr & storage) const
+    {
+        const auto host_port
+            = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
+        if (host_port.empty())
+            return {false, host_port};
+        return {isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort())), host_port};
     }
 
     void Catalog::finishCommit(
@@ -1610,7 +1615,8 @@ namespace Catalog
 
                 /// insert new added parts into cache manager
                 if (context.getPartCacheManager())
-                    context.getPartCacheManager()->insertDataPartsIntoCache(*storage, commit_parts.parts(), is_merged_parts, true);
+                    context.getPartCacheManager()->insertDataPartsIntoCache(*storage, commit_parts.parts(),
+                    is_merged_parts, true, PairInt64{0, 0}); // Not be used anymore. Its ok set empty cache version
             },
             ProfileEvents::FinishCommitSuccess,
             ProfileEvents::FinishCommitFailed);
@@ -1783,11 +1789,6 @@ namespace Catalog
         const std::vector<String> & expected_bitmaps,
         const std::vector<String> & expected_staged_parts)
     {
-        if (!isHostServer(storage))
-        {
-            mayUpdateUHUT(storage);
-        }
-
         BatchCommitRequest batch_writes(false);
         batch_writes.SetTimeout(3000);
 
@@ -1866,19 +1867,24 @@ namespace Catalog
             ProfileEvents::DropAllPartFailed);
     }
 
-    std::vector<std::shared_ptr<MergeTreePartition>> Catalog::getPartitionList(const ConstStoragePtr & table, const Context * session_context)
+    std::vector<std::shared_ptr<MergeTreePartition>> Catalog::getPartitionList(const ConstStoragePtr & storage, const Context * /*session_context*/)
     {
         std::vector<std::shared_ptr<MergeTreePartition>> partition_list;
         runWithMetricSupport(
             [&] {
                 PartitionMap partitions;
-                if (auto * cnch_table = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
+                if (auto * cnch_table = dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
                 {
-                    bool can_use_cache = canUseCache(table, session_context);
-
-                    auto cache_manager = context.getPartCacheManager();
-                    if (isHostServer(table) && can_use_cache && cache_manager->getPartitionList(*cnch_table, partition_list))
-                        return;
+                    if (auto cache_manager = context.getPartCacheManager(); cache_manager)
+                    {
+                        const auto host_port = context.getCnchTopologyMaster()->getTargetServer(
+                            UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
+                        if (!host_port.empty() && isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()))
+                            && cache_manager->getPartitionList(*cnch_table, partition_list, host_port.topology_version))
+                        {
+                            return;
+                        }
+                    }
                     getPartitionsFromMetastore(*cnch_table, partitions);
                 }
 
@@ -1890,18 +1896,21 @@ namespace Catalog
         return partition_list;
     }
 
-    Strings Catalog::getPartitionIDs(const ConstStoragePtr & storage, const Context * session_context)
+    Strings Catalog::getPartitionIDs(const ConstStoragePtr & storage, const Context * /*session_context*/)
     {
         Strings partition_ids;
         runWithMetricSupport(
             [&] {
-                PartitionMap partitions;
-
-                bool can_use_cache = canUseCache(storage, session_context);
-
-                auto cache_manager = context.getPartCacheManager();
-                if (isHostServer(storage) && can_use_cache && cache_manager->getPartitionIDs(*storage, partition_ids))
-                    return;
+                if (auto cache_manager = context.getPartCacheManager(); cache_manager)
+                {
+                    const auto host_port = context.getCnchTopologyMaster()->getTargetServer(
+                        UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
+                    if (!host_port.empty() && isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()))
+                        && cache_manager->getPartitionIDs(*storage, partition_ids, host_port.topology_version))
+                    {
+                        return;
+                    }
+                }
                 partition_ids = getPartitionIDsFromMetastore(storage);
             },
             ProfileEvents::GetPartitionIDsSuccess,
@@ -2452,9 +2461,8 @@ namespace Catalog
                 Stopwatch watch;
 
                 if (commit_data.empty())
-                {
                     return;
-                }
+
                 LOG_DEBUG(
                     log,
                     "Start write {} parts and {} delete_bitmaps and {} staged parts to kvstore for txn {}"
@@ -2464,32 +2472,34 @@ namespace Catalog
                     ,txnID);
 
                 const auto host_port
-                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), true);
+                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), false);
 
-                if (!host_port.empty() && !isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()))
-                    && (context.getSettingsRef().enable_write_non_host_server || context.getSettingsRef().server_write_ha))
+                if (!isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort())))
                 {
-                    try
+                    if (context.getSettingsRef().enable_write_non_host_server)
                     {
-                        LOG_DEBUG(
-                            log,
-                            "Redirect writeParts request to remote host : {} for table {} , txn id : {}"
-                            ,host_port.toDebugString()
-                            ,table->getStorageID().getNameForLogs()
-                            ,txnID);
-
-                        context.getCnchServerClientPool().get(host_port)->redirectCommitParts(
-                            table, commit_data, txnID, is_merged_parts, preallocate_mode);
-                        return;
-                    }
-                    catch (Exception & e)
-                    {
-                        /// if remote quest got exception and cannot fallback to commit to current node, throw exception directly
-                        if (!context.getSettingsRef().server_write_ha)
+                        try
+                        {
+                            LOG_DEBUG(
+                                log,
+                                "Redirect writeParts request to remote host : {} for table {}, txn id : {}"
+                                    , host_port.toDebugString(), table->getStorageID().getNameForLogs(), txnID);
+                            context.getCnchServerClientPool().get(host_port)->redirectCommitParts(
+                                table, commit_data, txnID, is_merged_parts, preallocate_mode);
+                            return;
+                        }
+                        catch (Exception & e)
+                        {
+                            /// if remote quest got exception and cannot fallback to commit to current node, throw exception directly
                             throw Exception(
                                 "Fail to redirect writeParts request to remote host : " + host_port.toDebugString()
                                     + ". Error message : " + e.what(),
                                 ErrorCodes::CATALOG_COMMIT_PART_ERROR);
+                        }
+                    }
+                    else
+                    {
+                        throw Exception("Cannot commit part to non-host server.", ErrorCodes::CATALOG_COMMIT_PART_ERROR);
                     }
                 }
 
@@ -2552,7 +2562,7 @@ namespace Catalog
 
                 /// insert new added parts into cache manager
                 if (context.getPartCacheManager() && !part_models.parts().empty())
-                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), is_merged_parts, true);
+                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), is_merged_parts, true, host_port.topology_version);
 
                 LOG_DEBUG(log, "Finish write part for txn {}, elapsed {} ms.", txnID, watch.elapsedMilliseconds());
             },
@@ -2580,31 +2590,33 @@ namespace Catalog
                     ,txn_id);
 
                 const auto host_port
-                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), true);
+                    = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), false);
 
-                if (!host_port.empty() && !isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()))
-                    && (context.getSettingsRef().enable_write_non_host_server || context.getSettingsRef().server_write_ha))
+                if (!isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort())))
                 {
-                    try
+                    if (context.getSettingsRef().enable_write_non_host_server)
                     {
-                        LOG_DEBUG(
-                            log,
-                            "Redirect setCommitTime request to remote host : {} for table {}, txn id : {}"
-                            ,host_port.toDebugString()
-                            ,table->getStorageID().getNameForLogs()
-                            ,txn_id);
-
-                        context.getCnchServerClientPool().get(host_port)->redirectSetCommitTime(table, commit_data, ts, txn_id);
-                        return;
-                    }
-                    catch (Exception & e)
-                    {
-                        /// if remote quest got exception and cannot fallback to commit to current node, throw exception directly
-                        if (!context.getSettingsRef().server_write_ha)
+                        try
+                        {
+                            LOG_DEBUG(
+                                log,
+                                "Redirect setCommitTime request to remote host : {}  for table {}, txn id : {}"
+                                    ,host_port.toDebugString(), table->getStorageID().getNameForLogs(), txn_id);
+                            context.getCnchServerClientPool().get(host_port)->redirectSetCommitTime(table, commit_data, ts, txn_id);
+                            return;
+                        }
+                        catch (Exception & e)
+                        {
+                            /// if remote quest got exception and cannot fallback to commit to current node, throw exception directly
                             throw Exception(
                                 "Fail to redirect setCommitTime request to remote host : " + host_port.toDebugString()
                                     + ". Error message : " + e.what(),
                                 ErrorCodes::CATALOG_COMMIT_PART_ERROR);
+                        }
+                    }
+                    else
+                    {
+                        throw Exception("Cannot set commit time to non-host server.", ErrorCodes::CATALOG_COMMIT_PART_ERROR);
                     }
                 }
 
@@ -2721,7 +2733,7 @@ namespace Catalog
                     ,watch.elapsedMilliseconds());
 
                 if (context.getPartCacheManager() && !part_models.parts().empty())
-                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), false, false);
+                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), false, false, host_port.topology_version);
                 LOG_DEBUG(log, "Finish set commit time for txn {}, elapsed {} ms.", txn_id, watch.elapsedMilliseconds());
             },
             ProfileEvents::SetCommitTimeSuccess,
@@ -5184,6 +5196,35 @@ namespace Catalog
             return;
         }
 
+        auto [is_host_server, target_host] = checkIfHostServer(to_tbl);
+
+        if (!is_host_server)
+        {
+            if (target_host.empty())
+                throw Exception("Cannot attachDetachedParts because there is no available target server.", ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
+            if (!context.getSettingsRef().enable_write_non_host_server)
+                throw Exception("AttachDetachedParts failed because commit parts to non host server is not allowed.", ErrorCodes::CATALOG_COMMIT_PART_ERROR);
+
+            try
+            {
+                LOG_DEBUG(
+                    log,
+                    "Redirect attachDetachedParts request to remote host : {} for table {}"
+                        , target_host.toDebugString(), to_tbl->getStorageID().getNameForLogs());
+                context.getCnchServerClientPool().get(target_host)->redirectDetachAttachS3Parts(
+                    to_tbl, from_tbl->getStorageUUID(), to_tbl->getStorageUUID(), {}, parts, {}, detached_part_names, {}
+                    , DB::Protos::DetachAttachType::ATTACH_DETACHED_PARTS);
+                return;
+            }
+            catch (Exception & e)
+            {
+                throw Exception(
+                    "Fail to redirect attachDetachedParts request to remote host : " + target_host.toDebugString()
+                        + ". Error message : " + e.what(),
+                    ErrorCodes::CATALOG_COMMIT_PART_ERROR);
+            }
+        }
+
         Protos::DataModelPartVector commit_parts;
         fillPartsModel(*to_tbl, parts, *commit_parts.mutable_parts());
 
@@ -5195,7 +5236,7 @@ namespace Catalog
 
         if (context.getPartCacheManager())
             context.getPartCacheManager()->insertDataPartsIntoCache(*to_tbl,
-                commit_parts.parts(), false, true);
+                commit_parts.parts(), false, true, target_host.topology_version);
     }
 
     void Catalog::detachAttachedParts(const StoragePtr& from_tbl, const StoragePtr& to_tbl,
@@ -5209,6 +5250,34 @@ namespace Catalog
         if (parts.empty())
         {
             return;
+        }
+
+        auto [is_host_server, target_host] = checkIfHostServer(from_tbl);
+
+        if (!is_host_server)
+        {
+            if (target_host.empty())
+                throw Exception("Cannot detachAttachedParts because there is no available target server.", ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
+            if (!context.getSettingsRef().enable_write_non_host_server)
+                throw Exception("DetachAttachedParts failed because commit parts to non host server is not allowed.", ErrorCodes::CATALOG_COMMIT_PART_ERROR);
+            try
+            {
+                LOG_DEBUG(
+                    log,
+                    "Redirect detachAttachedPartsrequest to remote host : {} for table {}"
+                        , target_host.toDebugString(), from_tbl->getStorageID().getNameForLogs());
+                context.getCnchServerClientPool().get(target_host)->redirectDetachAttachS3Parts(
+                    to_tbl, from_tbl->getStorageUUID(), to_tbl->getStorageUUID(), attached_parts, parts, {}, {}, {}
+                    , DB::Protos::DetachAttachType::DETACH_ATTACHED_PARTS);
+                return;
+            }
+            catch (Exception & e)
+            {
+                throw Exception(
+                    "Fail to redirect detachAttachedParts request to remote host : " + target_host.toDebugString()
+                        + ". Error message : " + e.what(),
+                    ErrorCodes::CATALOG_COMMIT_PART_ERROR);
+            }
         }
 
         std::vector<std::optional<Protos::DataModelPart>> commit_parts;
@@ -5261,6 +5330,34 @@ namespace Catalog
             return;
         }
 
+        auto [is_host_server, target_host] = checkIfHostServer(tbl);
+
+        if (!is_host_server)
+        {
+            if (target_host.empty())
+                throw Exception("Cannot attachDetachedPartsRaw because there is no available target server.", ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
+            if (!context.getSettingsRef().enable_write_non_host_server)
+                throw Exception("AttachDetachedPartsRaw failed because commit parts to non host server is not allowed.", ErrorCodes::CATALOG_COMMIT_PART_ERROR);
+            try
+            {
+                LOG_DEBUG(
+                    log,
+                    "Redirect attachDetachedPartsRaw request to remote host : {} for table {}"
+                        , target_host.toDebugString(), tbl->getStorageID().getNameForLogs());
+                context.getCnchServerClientPool().get(target_host)->redirectDetachAttachS3Parts(
+                    tbl, UUIDHelpers::Nil, tbl->getStorageUUID(), {}, {}, part_names, {}, {}
+                    , DB::Protos::DetachAttachType::ATTACH_DETACHED_RAW);
+                return;
+            }
+            catch (Exception & e)
+            {
+                throw Exception(
+                    "Fail to redirect attachDetachedPartsRaw part request to remote host : " + target_host.toDebugString()
+                        + ". Error message : " + e.what(),
+                    ErrorCodes::CATALOG_COMMIT_PART_ERROR);
+            }
+        }
+
         std::vector<std::pair<String, UInt64>> attached_metas = meta_proxy->attachDetachedPartsRaw(
             name_space, UUIDHelpers::UUIDToString(tbl->getStorageUUID()), part_names,
             max_commit_size_one_batch, max_drop_size_one_batch);
@@ -5276,7 +5373,7 @@ namespace Catalog
 
         if (context.getPartCacheManager())
             context.getPartCacheManager()->insertDataPartsIntoCache(*tbl,
-                attached_parts.parts(), false, true);
+                attached_parts.parts(), false, true, target_host.topology_version);
     }
 
     void Catalog::detachAttachedPartsRaw(const StoragePtr& from_tbl, const String& to_uuid,
@@ -5285,6 +5382,34 @@ namespace Catalog
         if (attached_part_names.empty() && detached_part_metas.empty())
         {
             return;
+        }
+
+        auto [is_host_server, target_host] = checkIfHostServer(from_tbl);
+
+        if (!is_host_server)
+        {
+            if (target_host.empty())
+                throw Exception("Cannot detachAttachedPartsRaw because there is no available target server.", ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
+            if (!context.getSettingsRef().enable_write_non_host_server)
+                throw Exception("DetachAttachedPartsRaw failed because commit parts to non host server is not allowed.", ErrorCodes::CATALOG_COMMIT_PART_ERROR);
+            try
+            {
+                LOG_DEBUG(
+                    log,
+                    "Redirect detachAttachedPartsRaw request to remote host : {} for table  {}"
+                        ,target_host.toDebugString(), from_tbl->getStorageID().getNameForLogs());
+                context.getCnchServerClientPool().get(target_host)->redirectDetachAttachS3Parts(
+                    nullptr, from_tbl->getStorageUUID() , UUID(stringToUUID(to_uuid)), {}, {}, attached_part_names, {}, detached_part_metas
+                    , DB::Protos::DetachAttachType::DETACH_ATTACHED_RAW);
+                return;
+            }
+            catch (Exception & e)
+            {
+                throw Exception(
+                    "Fail to redirect detachAttachedPartsRaw part request to remote host : " + target_host.toDebugString()
+                        + ". Error message : " + e.what(),
+                    ErrorCodes::CATALOG_COMMIT_PART_ERROR);
+            }
         }
 
         MergeTreeDataFormatVersion format_version;

@@ -283,6 +283,62 @@ void CnchServerClient::redirectSetCommitTime(
     RPCHelpers::checkResponse(response);
 }
 
+void CnchServerClient::redirectDetachAttachS3Parts(
+        const StoragePtr & to_table,
+        const UUID & from_table_uuid,
+        const UUID & to_table_uuid,
+        const IMergeTreeDataPartsVector & attached_parts,
+        const IMergeTreeDataPartsVector & commit_parts,
+        const Strings & attached_part_names,
+        const Strings & detached_part_names,
+        const std::vector<std::pair<String, String>> &  detached_part_metas,
+        const DB::Protos::DetachAttachType & type)
+{
+    brpc::Controller cntl;
+    Protos::RedirectDetachAttachS3PartsReq request;
+    Protos::RedirectDetachAttachS3PartsResp response;
+
+    if (UUIDHelpers::Nil != from_table_uuid)
+        RPCHelpers::fillUUID(from_table_uuid, *request.mutable_from_table_uuid());
+
+    RPCHelpers::fillUUID(to_table_uuid, *request.mutable_to_table_uuid());
+
+    if (to_table)
+    {
+        for (auto & part : commit_parts)
+        {
+            // add empty part model if part is nullptr
+            auto new_added_part = request.add_commit_parts();
+            if (part)
+            {
+                fillPartModel(*to_table, *part, *new_added_part);
+            }
+        }
+
+        for (auto & part : attached_parts)
+            fillPartModel(*to_table, *part, *request.add_attached_parts());
+    }
+
+    for (auto & part_name : attached_part_names)
+        request.add_attached_part_names(part_name);
+    for (auto & part_name : detached_part_names)
+        request.add_detached_part_names(part_name);
+
+    for (auto & [name, meta] : detached_part_metas)
+    {
+        Protos::DetachPartMeta * meta_model = request.add_detached_part_meta();
+        meta_model->set_name(name);
+        meta_model->set_meta(meta);
+    }
+
+    request.set_type(type);
+
+    stub->redirectDetachAttachS3Parts(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
 TxnTimestamp CnchServerClient::commitParts(
     const TxnTimestamp & txn_id,
     ManipulationType type,

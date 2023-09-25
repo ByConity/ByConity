@@ -419,6 +419,37 @@ message RedirectCommitPartsResp
   optional string exception = 1;
 }
 
+enum DetachAttachType
+{
+  ATTACH_DETACHED_PARTS = 1;
+  DETACH_ATTACHED_PARTS = 2;
+  ATTACH_DETACHED_RAW = 3;
+  DETACH_ATTACHED_RAW = 4;
+}
+
+message DetachPartMeta
+{
+  required string name = 1;
+  required string meta = 2;
+}
+
+message RedirectDetachAttachS3PartsReq
+{
+  required DetachAttachType type = 1;
+  optional UUID from_table_uuid = 2;
+  optional UUID to_table_uuid = 3;
+  repeated DataModelPart commit_parts = 4;
+  repeated string detached_part_names = 5;
+  repeated DataModelPart attached_parts = 6;
+  repeated string attached_part_names = 7;
+  repeated DetachPartMeta detached_part_meta = 8;
+}
+
+message RedirectDetachAttachS3PartsResp
+{
+  optional string exception = 1;
+}
+
 message RemoveMergeMutateTasksOnPartitionsReq
 {
   required StorageID storage_id = 1;
@@ -531,6 +562,8 @@ service CnchServerService
   rpc redirectCommitParts(RedirectCommitPartsReq) returns (RedirectCommitPartsResp);
 
   rpc redirectSetCommitTime(RedirectCommitPartsReq) returns (RedirectCommitPartsResp);
+
+  rpc redirectDetachAttachS3Parts(RedirectDetachAttachS3PartsReq) returns (RedirectDetachAttachS3PartsResp);
 
   rpc removeMergeMutateTasksOnPartitions(RemoveMergeMutateTasksOnPartitionsReq) returns (RemoveMergeMutateTasksOnPartitionsResp);
 

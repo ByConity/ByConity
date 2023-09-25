@@ -148,6 +148,7 @@ HostWithPorts CnchTopologyMaster::getTargetServerImpl(
         if (commit_within_lease_life_time && commit_time_ms < it->getExpiration() - 6000)
         {
             target_server = it->getTargetServer(table_uuid, server_vw_name);
+            target_server.topology_version = PairInt64(it->getInitialTime(), it->getTerm());
             break;
         }
         else if (commit_within_lease_life_time && commit_time_ms < it->getExpiration())
@@ -158,7 +159,10 @@ HostWithPorts CnchTopologyMaster::getTargetServerImpl(
             {
                 HostWithPorts server_in_new_topology = it->getTargetServer(table_uuid, server_vw_name);
                 if (server_in_new_topology.isExactlySame(server_in_old_topology))
+                {
                     target_server = server_in_new_topology;
+                    target_server.topology_version = PairInt64(it->getInitialTime(), it->getTerm());
+                }
             }
             break;
         }
