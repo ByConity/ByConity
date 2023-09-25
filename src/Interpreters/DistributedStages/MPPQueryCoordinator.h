@@ -35,6 +35,8 @@ public:
     //TODO: redefine RuntimeSegmentsStatus
     void updateSegmentInstanceStatus(RuntimeSegmentsStatus status);
 
+    ContextPtr getContext() { return query_context; };
+
     ~MPPQueryCoordinator();
 
 private:
