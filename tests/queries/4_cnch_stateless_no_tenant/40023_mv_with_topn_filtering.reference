@@ -39,6 +39,7 @@ Projection
                │     Order by: {block_number_2 desc nulls_last, transaction_index_2 desc nulls_last}
                │     Limit: 100
                └─ Union
+                  │     OutputToInputs: input_2 = [input,input_1], transaction_hash_2 = [transaction_hash,transaction_hash_1], transaction_index_2 = [transaction_index,transaction_index_1], block_number_2 = [block_number,block_number_1]
                   ├─ Projection
                   │  │     Expressions: [block_number, input, transaction_hash, transaction_index]
                   │  └─ Filter

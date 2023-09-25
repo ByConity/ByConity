@@ -19,6 +19,7 @@ Projection Est. 10 rows, cost 2.388000e+01
                         │     Order by: {number_3 asc}
                         │     Size: 10
                         └─ Union Est. 90 rows, cost 6.660000e+00
+                           │     OutputToInputs: number_3 = [number,number_1,number_2]
                            ├─ Filter Est. 30 rows, cost 2.220000e+00
                            │  │     Condition: (number % 2) = 0
                            │  └─ Limit Est. 30 rows, cost 0.000000e+00

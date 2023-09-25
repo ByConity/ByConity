@@ -668,6 +668,21 @@ String PlanPrinter::TextPrinter::printSuffix(PlanNodeBase & plan)
 String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPrinterIntent & intent) const
 {
     std::stringstream out;
+    if (verbose && plan->getType() == IQueryPlanStep::Type::Union)
+    {
+        const auto * union_step = dynamic_cast<const UnionStep *>(plan.get());
+        out << intent.detailIntent() << "OutputToInputs: ";
+        
+        for (auto iter = union_step->getOutToInputs().begin(); iter != union_step->getOutToInputs().end(); ++iter)
+        {
+            if (iter != union_step->getOutToInputs().begin())
+                out << ", ";
+            const auto & output_to_inputs = *iter;
+            out << output_to_inputs.first << " = ";
+            out << join(output_to_inputs.second, ",", "[", "]");
+        }
+    }
+
     if (verbose && plan->getType() == IQueryPlanStep::Type::Join)
     {
         const auto * join_step = dynamic_cast<const JoinStep *>(plan.get());

@@ -13,6 +13,7 @@ Projection Est. 100 rows
                │     Group by: {expr#'store'_1, i_brand_id_9, i_category_id_9, i_class_id_9}
                │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(multiply(ss_quantity, ss_list_price))_1), expr#sum(number_sales):=AggNull(sum)(expr#count()_3)
                └─ Union Est. 458880 rows
+                  │     OutputToInputs: expr#count()_3 = [expr#count(),expr#count()_1,expr#count()_2], expr#sum(multiply(ss_quantity, ss_list_price))_1 = [expr#sum(multiply(ss_quantity, ss_list_price)),expr#sum(multiply(cs_quantity, cs_list_price)),expr#sum(multiply(ws_quantity, ws_list_price))], i_category_id_9 = [i_category_id,i_category_id_7,i_category_id_8], i_class_id_9 = [i_class_id,i_class_id_7,i_class_id_8], i_brand_id_9 = [i_brand_id,i_brand_id_7,i_brand_id_8], expr#'store'_1 = [expr#'store',expr#'catalog',expr#'web']
                   ├─ Projection Est. 152960 rows
                   │  │     Expressions: [expr#count(), expr#sum(multiply(ss_quantity, ss_list_price)), i_brand_id, i_category_id, i_class_id], expr#'store':='store'
                   │  └─ Inner Join Est. 152960 rows
@@ -166,6 +167,7 @@ CTEDef [1]
          └─ Projection Est. 298418925 rows
             │     Expressions: expr#multiply(quantity, list_price):=ss_quantity_2 * ss_list_price_2
             └─ Union Est. 298418925 rows
+               │     OutputToInputs: ss_list_price_2 = [ss_list_price_1,cs_list_price,ws_list_price], ss_quantity_2 = [ss_quantity_1,cs_quantity,ws_quantity]
                ├─ Inner Join Est. 170816367 rows
                │  │     Condition: ss_sold_date_sk_2 == d_date_sk_4
                │  │     Runtime Filters Builder: {d_date_sk_4}
@@ -221,6 +223,7 @@ CTEDef [0]
       │        └─ Repartition Exchange Est. 458880 rows
       │           │     Partition by: {i_brand_id_6, i_category_id_6, i_class_id_6}
       │           └─ Union Est. 458880 rows
+      │              │     OutputToInputs: count_2 = [count_2,count_2,count_2], count_1 = [count_1,count_1,count_1], i_class_id_6 = [i_class_id_2,i_class_id_3,i_class_id_5], count = [count,count,count], i_category_id_6 = [i_category_id_2,i_category_id_3,i_category_id_5], i_brand_id_6 = [i_brand_id_2,i_brand_id_3,i_brand_id_5]
       │              ├─ Aggregating Est. 152960 rows
       │              │  │     Group by: {i_brand_id_2, i_category_id_2, i_class_id_2}
       │              │  │     Aggregates: count:=AggNull(sum)(marker_3), count_1:=AggNull(sum)(marker_4), count_2:=AggNull(sum)(marker_5)
@@ -371,6 +374,7 @@ Projection Est. 100 rows
                │     │                 │           └─ Broadcast Exchange Est. 1 rows
                │     │                 │              └─ EnforceSingleRow Est. 1 rows
                │     │                 │                 └─ Union Est. 1 rows
+               │     │                 │                    │     OutputToInputs: d_week_seq_1 = [d_week_seq_1]
                │     │                 │                    └─ Gather Exchange Est. 1 rows
                │     │                 │                       └─ Projection Est. 1 rows
                │     │                 │                          │     Expressions: [d_week_seq_1]
@@ -394,6 +398,7 @@ Projection Est. 100 rows
                │     │                                │     └─ Repartition Exchange Est. 458880 rows
                │     │                                │        │     Partition by: {i_brand_id_37, i_category_id_37, i_class_id_37}
                │     │                                │        └─ Union Est. 458880 rows
+               │     │                                │           │     OutputToInputs: count_17 = [count_17,count_17,count_17], count_16 = [count_16,count_16,count_16], count_15 = [count_15,count_15,count_15], i_category_id_37 = [i_category_id_34,i_category_id_35,i_category_id_36], i_class_id_37 = [i_class_id_34,i_class_id_35,i_class_id_36], i_brand_id_37 = [i_brand_id_34,i_brand_id_35,i_brand_id_36]
                │     │                                │           ├─ Aggregating Est. 152960 rows
                │     │                                │           │  │     Group by: {i_brand_id_34, i_category_id_34, i_class_id_34}
                │     │                                │           │  │     Aggregates: count_15:=AggNull(sum)(marker_60), count_16:=AggNull(sum)(marker_61), count_17:=AggNull(sum)(marker_62)
@@ -513,6 +518,7 @@ Projection Est. 100 rows
                │     │                                                           └─ Broadcast Exchange Est. 1 rows
                │     │                                                              └─ EnforceSingleRow Est. 1 rows
                │     │                                                                 └─ Union Est. 1 rows
+               │     │                                                                    │     OutputToInputs: d_week_seq_1 = [d_week_seq_1]
                │     │                                                                    └─ Gather Exchange Est. 1 rows
                │     │                                                                       └─ Projection Est. 1 rows
                │     │                                                                          │     Expressions: [d_week_seq_1]
@@ -532,6 +538,7 @@ Projection Est. 100 rows
                │                    └─ Projection Est. 298418925 rows
                │                       │     Expressions: expr#multiply(quantity, list_price)_5:=ss_quantity_14 * ss_list_price_14
                │                       └─ Union Est. 298418925 rows
+               │                          │     OutputToInputs: ss_list_price_14 = [ss_list_price_13,cs_list_price_6,ws_list_price_6], ss_quantity_14 = [ss_quantity_13,cs_quantity_6,ws_quantity_6]
                │                          ├─ Inner Join Est. 170816367 rows
                │                          │  │     Condition: ss_sold_date_sk_14 == d_date_sk_38
                │                          │  │     Runtime Filters Builder: {d_date_sk_38}
@@ -621,6 +628,7 @@ Projection Est. 100 rows
                      │                 │           └─ Broadcast Exchange Est. 1 rows
                      │                 │              └─ EnforceSingleRow Est. 1 rows
                      │                 │                 └─ Union Est. 1 rows
+                     │                 │                    │     OutputToInputs: d_week_seq_3 = [d_week_seq_3]
                      │                 │                    └─ Gather Exchange Est. 1 rows
                      │                 │                       └─ Projection Est. 1 rows
                      │                 │                          │     Expressions: [d_week_seq_3]
@@ -644,6 +652,7 @@ Projection Est. 100 rows
                      │                                │     └─ Repartition Exchange Est. 458880 rows
                      │                                │        │     Partition by: {i_brand_id_42, i_category_id_42, i_class_id_42}
                      │                                │        └─ Union Est. 458880 rows
+                     │                                │           │     OutputToInputs: count_20 = [count_20,count_20,count_20], count_19 = [count_19,count_19,count_19], i_brand_id_42 = [i_brand_id_39,i_brand_id_40,i_brand_id_41], i_category_id_42 = [i_category_id_39,i_category_id_40,i_category_id_41], count_18 = [count_18,count_18,count_18], i_class_id_42 = [i_class_id_39,i_class_id_40,i_class_id_41]
                      │                                │           ├─ Aggregating Est. 152960 rows
                      │                                │           │  │     Group by: {i_brand_id_39, i_category_id_39, i_class_id_39}
                      │                                │           │  │     Aggregates: count_18:=AggNull(sum)(marker_72), count_19:=AggNull(sum)(marker_73), count_20:=AggNull(sum)(marker_74)
@@ -763,6 +772,7 @@ Projection Est. 100 rows
                      │                                                           └─ Broadcast Exchange Est. 1 rows
                      │                                                              └─ EnforceSingleRow Est. 1 rows
                      │                                                                 └─ Union Est. 1 rows
+                     │                                                                    │     OutputToInputs: d_week_seq_3 = [d_week_seq_3]
                      │                                                                    └─ Gather Exchange Est. 1 rows
                      │                                                                       └─ Projection Est. 1 rows
                      │                                                                          │     Expressions: [d_week_seq_3]
@@ -782,6 +792,7 @@ Projection Est. 100 rows
                                     └─ Projection Est. 298418925 rows
                                        │     Expressions: expr#multiply(quantity, list_price)_6:=ss_quantity_16 * ss_list_price_16
                                        └─ Union Est. 298418925 rows
+                                          │     OutputToInputs: ss_list_price_16 = [ss_list_price_15,cs_list_price_7,ws_list_price_7], ss_quantity_16 = [ss_quantity_15,cs_quantity_7,ws_quantity_7]
                                           ├─ Inner Join Est. 170816367 rows
                                           │  │     Condition: ss_sold_date_sk_16 == d_date_sk_44
                                           │  │     Runtime Filters Builder: {d_date_sk_44}

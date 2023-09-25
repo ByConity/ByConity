@@ -141,6 +141,7 @@ explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select t1.x as x
 Projection Est. ? rows
 │     Expressions: x:=`expr#rand(1)_3`
 └─ Union Est. ? rows
+   │     OutputToInputs: expr#rand(1)_3 = [expr#rand(1)_1,expr#rand(1)_2]
    ├─ Inner Join Est. ? rows
    │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
    │  ├─ CTERef[0] Est. 1 rows
@@ -164,6 +165,7 @@ explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select t1.x as x
 Projection Est. ? rows
 │     Expressions: x:=`expr#rand(1)_3`
 └─ Union Est. ? rows
+   │     OutputToInputs: expr#rand(1)_3 = [expr#rand(1)_1,expr#rand(2)_2]
    ├─ Inner Join Est. ? rows
    │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
    │  ├─ Buffer Est. 1 rows
@@ -222,6 +224,7 @@ explain with c1 as (select rand(1) x), c2 as (select rand(2) x), c3 as (select r
 Projection Est. ? rows
 │     Expressions: x:=`expr#rand(1)_2`
 └─ Union Est. ? rows
+   │     OutputToInputs: expr#rand(1)_2 = [expr#rand(1)_1,expr#rand(2)_2]
    ├─ Inner Join Est. ? rows
    │  │     Condition: expr#rand(1)_1 == expr#rand(2)_1
    │  ├─ CTERef[0] Est. 1 rows
@@ -311,6 +314,7 @@ Projection Est. ? rows
          └─ CTERef[1] Est. 1 rows
 CTEDef [0]
    Union Est. 2 rows
+   │     OutputToInputs: expr#rand(1)_2 = [expr#rand(1)_1,expr#rand(2)]
    ├─ Buffer Est. 1 rows
    │  └─ CTERef[1] Est. 1 rows
    └─ Projection Est. 1 rows

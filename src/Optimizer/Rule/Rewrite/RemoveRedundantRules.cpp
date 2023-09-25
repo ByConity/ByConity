@@ -76,13 +76,18 @@ TransformResult RemoveRedundantUnion::transformImpl(PlanNodePtr node, const Capt
 
     DataStreams inputs;
     PlanNodes children;
+    OutputToInputs output_to_inputs;
+    int index = 0;
     for (auto & child : node->getChildren())
     {
         if (!dynamic_cast<const ReadNothingStep *>(child->getStep().get()))
         {
             inputs.emplace_back(child->getStep()->getOutputStream());
             children.emplace_back(child);
+            for (const auto & output_to_input : step->getOutToInputs())
+                output_to_inputs[output_to_input.first].push_back(output_to_input.second[index]);
         }
+        ++index;
     }
 
     if (children.empty())
@@ -97,8 +102,7 @@ TransformResult RemoveRedundantUnion::transformImpl(PlanNodePtr node, const Capt
         auto input_columns = children[0]->getStep()->getOutputStream().header;
         Assignments assignments;
         NameToType name_to_type;
-        const auto & output_to_inputs = step->getOutToInputs();
-        for (const auto & output_to_input : output_to_inputs)
+        for (const auto & output_to_input : step->getOutToInputs())
         {
             String output = output_to_input.first;
             for (const auto & input : output_to_input.second)
@@ -121,7 +125,7 @@ TransformResult RemoveRedundantUnion::transformImpl(PlanNodePtr node, const Capt
     if (children.size() != node->getChildren().size())
     {
         auto union_step
-            = std::make_unique<UnionStep>(inputs, step->getOutputStream(), OutputToInputs{}, step->getMaxThreads(), step->isLocal());
+            = std::make_unique<UnionStep>(inputs, step->getOutputStream(), output_to_inputs, step->getMaxThreads(), step->isLocal());
         return PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(union_step), children, node->getStatistics());
     }
 

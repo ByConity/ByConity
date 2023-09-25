@@ -13,6 +13,7 @@ Projection Est. 100 rows
                └─ Repartition Exchange Est. 17800 rows
                   │     Partition by: {__grouping_set, expr#'store channel'_1, expr#concat('store', store_id)_1}
                   └─ Union Est. 17800 rows
+                     │     OutputToInputs: expr#sum(profit) = [expr#sum(profit),expr#sum(profit),expr#sum(profit)], expr#'store channel'_1 = [expr#'store channel',expr#'catalog channel',expr#'web channel'], expr#sum(returns) = [expr#sum(returns),expr#sum(returns),expr#sum(returns)], expr#sum(sales) = [expr#sum(sales),expr#sum(sales),expr#sum(sales)], expr#concat('store', store_id)_1 = [expr#concat('store', store_id),expr#concat('catalog_page', catalog_page_id),expr#concat('web_site', web_site_id)], __grouping_set = [__grouping_set,__grouping_set,__grouping_set]
                      ├─ Aggregating Est. 501 rows
                      │  │     Group by: {expr#'store channel', expr#concat('store', store_id)}
                      │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(ss_ext_sales_price)), expr#sum(returns):=AggNull(sum)(expr#sum(coalesce(sr_return_amt, 0))), expr#sum(profit):=AggNull(sum)(expr#sum(minus(ss_net_profit, coalesce(sr_net_loss, 0))))

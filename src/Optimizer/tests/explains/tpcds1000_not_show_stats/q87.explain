@@ -11,6 +11,7 @@ Projection
                │     Group by: {c_first_name_4, c_last_name_4, d_date_4}
                │     Aggregates: count:=AggNull(sum)(marker), count_1:=AggNull(sum)(marker_1), count_2:=AggNull(sum)(marker_2)
                └─ Union
+                  │     OutputToInputs: marker_2 = [marker_5,marker_8,marker_11], marker_1 = [marker_4,marker_7,marker_10], d_date_4 = [d_date,d_date_1,d_date_3], c_first_name_4 = [c_first_name,c_first_name_1,c_first_name_3], marker = [marker_3,marker_6,marker_9], c_last_name_4 = [c_last_name,c_last_name_1,c_last_name_3]
                   ├─ Projection
                   │  │     Expressions: [c_first_name, c_last_name, d_date], marker_3:=1, marker_4:=0, marker_5:=0
                   │  └─ MergingAggregated

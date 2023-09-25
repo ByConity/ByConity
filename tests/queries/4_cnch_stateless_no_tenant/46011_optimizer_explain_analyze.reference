@@ -2,6 +2,7 @@ Gather Exchange
 └─ Aggregating
    │     Group by: {id_2}
    └─ Union
+      │     OutputToInputs: id_2 = [id,id_1]
       ├─ MergingAggregated
       │  └─ Repartition Exchange
       │     │     Partition by: {id}

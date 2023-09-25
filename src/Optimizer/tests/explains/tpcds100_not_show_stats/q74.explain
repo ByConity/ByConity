@@ -37,6 +37,7 @@ CTEDef [0]
    Repartition Exchange
    │     Partition by: {c_customer_id_2}
    └─ Union
+      │     OutputToInputs: expr#sum(ss_net_paid)_1 = [expr#sum(ss_net_paid),expr#sum(ws_net_paid)], d_year_2 = [d_year,d_year_1], c_last_name_2 = [c_last_name,c_last_name_1], c_first_name_2 = [c_first_name,c_first_name_1], expr#'s'_1 = [expr#'s',expr#'w'], c_customer_id_2 = [c_customer_id,c_customer_id_1]
       ├─ Projection
       │  │     Expressions: [c_customer_id, c_first_name, c_last_name, d_year, expr#sum(ss_net_paid)], expr#'s':='s'
       │  └─ Filter

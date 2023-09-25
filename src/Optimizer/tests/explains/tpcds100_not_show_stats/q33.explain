@@ -13,6 +13,7 @@ Projection
                │     Group by: {i_manufact_id_6}
                │     Aggregates: expr#sum(total_sales):=AggNull(sum)(expr#sum(ss_ext_sales_price)_1)
                └─ Union
+                  │     OutputToInputs: expr#sum(ss_ext_sales_price)_1 = [expr#sum(ss_ext_sales_price),expr#sum(cs_ext_sales_price),expr#sum(ws_ext_sales_price)], i_manufact_id_6 = [i_manufact_id,i_manufact_id_2,i_manufact_id_4]
                   ├─ MergingAggregated
                   │  └─ Repartition Exchange
                   │     │     Partition by: {i_manufact_id}

@@ -23,6 +23,7 @@ Projection Est. 100 rows
                   │        └─ Repartition Exchange Est. 56430 rows
                   │           │     Partition by: {d_year_9, i_brand_id_9, i_category_id_9, i_class_id_9, i_manufact_id_9}
                   │           └─ Union Est. 56430 rows
+                  │              │     OutputToInputs: expr#sum(sales_cnt)_3 = [expr#sum(sales_cnt)_3,expr#sum(sales_cnt)_3,expr#sum(sales_cnt)_3], i_manufact_id_9 = [i_manufact_id_6,i_manufact_id_7,i_manufact_id_8], i_category_id_9 = [i_category_id_6,i_category_id_7,i_category_id_8], i_class_id_9 = [i_class_id_6,i_class_id_7,i_class_id_8], i_brand_id_9 = [i_brand_id_6,i_brand_id_7,i_brand_id_8], expr#sum(sales_amt)_3 = [expr#sum(sales_amt)_3,expr#sum(sales_amt)_3,expr#sum(sales_amt)_3], d_year_9 = [d_year_6,d_year_7,d_year_8]
                   │              ├─ Aggregating Est. 18810 rows
                   │              │  │     Group by: {d_year_6, i_brand_id_6, i_category_id_6, i_class_id_6, i_manufact_id_6}
                   │              │  │     Aggregates: expr#sum(sales_cnt)_3:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_2), expr#sum(sales_amt)_3:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_2)
@@ -151,6 +152,7 @@ Projection Est. 100 rows
                            └─ Repartition Exchange Est. 56430 rows
                               │     Partition by: {d_year_13, i_brand_id_13, i_category_id_13, i_class_id_13, i_manufact_id_13}
                               └─ Union Est. 56430 rows
+                                 │     OutputToInputs: expr#sum(sales_amt)_4 = [expr#sum(sales_amt)_4,expr#sum(sales_amt)_4,expr#sum(sales_amt)_4], expr#sum(sales_cnt)_4 = [expr#sum(sales_cnt)_4,expr#sum(sales_cnt)_4,expr#sum(sales_cnt)_4], i_manufact_id_13 = [i_manufact_id_10,i_manufact_id_11,i_manufact_id_12], i_category_id_13 = [i_category_id_10,i_category_id_11,i_category_id_12], i_class_id_13 = [i_class_id_10,i_class_id_11,i_class_id_12], i_brand_id_13 = [i_brand_id_10,i_brand_id_11,i_brand_id_12], d_year_13 = [d_year_10,d_year_11,d_year_12]
                                  ├─ Aggregating Est. 18810 rows
                                  │  │     Group by: {d_year_10, i_brand_id_10, i_category_id_10, i_class_id_10, i_manufact_id_10}
                                  │  │     Aggregates: expr#sum(sales_cnt)_4:=AggNull(sum)(expr#minus(cs_quantity, coalesce(cr_return_quantity, 0))_4), expr#sum(sales_amt)_4:=AggNull(sum)(expr#minus(cs_ext_sales_price, coalesce(cr_return_amount, '0.0'))_4)
