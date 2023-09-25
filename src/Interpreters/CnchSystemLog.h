@@ -17,6 +17,7 @@
 
 #include <Interpreters/SystemLog.h>
 #include <Interpreters/KafkaLog.h>
+#include <Interpreters/QueryLog.h>
 
 
 namespace DB
@@ -24,11 +25,13 @@ namespace DB
 
 class QueryMetricLog;
 class QueryWorkerMetricLog;
+class CnchQueryLog;
 
 // Query metrics definitions
 constexpr auto CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME = "query_metrics";
 constexpr auto CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME = "query_worker_metrics";
 constexpr auto CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME = "cnch_kafka_log";
+constexpr auto CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME = "cnch_query_log";
 
 static inline bool isQueryMetricsTable(const String & database, const String & table)
 {
@@ -65,12 +68,19 @@ public:
         return query_worker_metrics;
     }
 
+    std::shared_ptr<CnchQueryLog> getCnchQueryLog() const
+    {
+        std::lock_guard<std::mutex> lock(mutex);
+        return cnch_query_log;
+    }
+
     void shutdown();
 
 private:
     std::shared_ptr<CloudKafkaLog> cloud_kafka_log;
     std::shared_ptr<QueryMetricLog> query_metrics;                /// Used to log query metrics.
     std::shared_ptr<QueryWorkerMetricLog> query_worker_metrics;   /// Used to log query worker metrics.
+    std::shared_ptr<CnchQueryLog> cnch_query_log;
 
     int init_time_in_worker{};
     int init_time_in_server{};
@@ -95,6 +105,7 @@ private:
 constexpr auto QUERY_METRICS_CONFIG_PREFIX = "query_metrics";
 constexpr auto QUERY_WORKER_METRICS_CONFIG_PREFIX = "query_worker_metrics";
 constexpr auto CNCH_KAFKA_LOG_CONFIG_PREFIX = "cnch_kafka_log";
+constexpr auto CNCH_QUERY_LOG_CONFIG_PREFIX = "cnch_query_log";
 
 /// Instead of typedef - to allow forward declaration.
 class CloudKafkaLog : public CnchSystemLog<KafkaLogElement>

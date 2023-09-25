@@ -218,8 +218,8 @@ BlockIO MPPQueryCoordinator::execute()
     {
         if (isAmbiguosError(e.code()))
         {
-            auto query_status = waitUntilFinish(e.code(), e.message());
-            throw Exception(query_status.summarized_error_msg, query_status.error_code);
+            auto status = waitUntilFinish(e.code(), e.message());
+            throw Exception(status.summarized_error_msg, status.error_code);
         }
         throw;
     }

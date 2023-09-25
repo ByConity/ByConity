@@ -23,6 +23,13 @@
 #include <Common/Exception.h>
 #include <Common/ThreadPool.h>
 
+namespace DB::ErrorCodes
+{
+    extern const int NOT_IMPLEMENTED;
+    extern const int LOGICAL_ERROR;
+    extern const int UNFINISHED;
+    extern const int BAD_ARGUMENTS;
+}
 namespace DB::DaemonManager
 {
 bool DaemonJobTxnGC::executeImpl()
@@ -56,30 +63,42 @@ void DaemonJobTxnGC::cleanTxnRecords(const TransactionRecords & txn_records)
     TxnTimestamp current_time = context.getTimestamp();
 
     size_t num_threads = std::min(txn_records.size(), size_t(context.getConfigRef().getUInt("cnch_txn_gc_parallel", 16)));
+    if (num_threads == 0)
+        throw Exception("the number of thread config for cnch_txn_gc_parallel is 0", ErrorCodes::LOGICAL_ERROR);
+
     ThreadPool thread_pool(num_threads);
+    ExceptionHandler exception_handler;
 
-    size_t chunk_size = txn_records.size() / num_threads;
-
-    for (size_t chunk_begin = 0; chunk_begin < txn_records.size(); chunk_begin += chunk_size)
+    const size_t chunk_size = txn_records.size() / num_threads;
+    size_t bonus = txn_records.size() - chunk_size * num_threads;
+    size_t chunk_begin = 0;
+    size_t chunk_end = 0;
+    for (chunk_begin = 0, chunk_end = chunk_size;
+        chunk_begin < txn_records.size(); chunk_begin = chunk_end, chunk_end += chunk_size)
     {
-        size_t chunk_end = std::min(txn_records.size(), chunk_begin + chunk_size);
+        if (bonus) {
+            ++chunk_end;
+            --bonus;
+        }
+
         thread_pool.scheduleOrThrow(
+            createExceptionHandledJob(
             [this, &txn_records, current_time, &summary, chunk_begin, chunk_end, & context] {
                 std::vector<TxnTimestamp> cleanTxnIds;
                 cleanTxnIds.reserve(chunk_end - chunk_begin);
 
-                for (size_t i = chunk_begin; i < chunk_end; i++)
+                for (size_t j = chunk_begin; j < chunk_end; j++)
                 {
-                    cleanTxnRecord(txn_records[i], current_time, cleanTxnIds, summary);
+                    cleanTxnRecord(txn_records[j], current_time, cleanTxnIds, summary);
                 }
 
                 context.getCnchCatalog()->removeTransactionRecords(cleanTxnIds);
                 summary.cleaned += cleanTxnIds.size();
-            }
-            );
+            }, exception_handler));
     }
 
     thread_pool.wait();
+    exception_handler.throwIfException();
 }
 
 void DaemonJobTxnGC::cleanTxnRecord(

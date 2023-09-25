@@ -209,29 +209,6 @@ namespace DB::ErrorCodes
     extern const int CORRUPTED_DATA;
     extern const int UNKNOWN_POLICY;
     extern const int PATH_ACCESS_DENIED;
-    extern const int PROF_NOT_SET;
-}
-
-/* Since the jemalloc read MALLOC_CONF only during program start,
- * set env when running does not work.
- * So leverage `execv` to replace the running image with the new MALLOC_CONF env
- */
-static int generalExevc(int argc_, char ** argv_)
-{
-    std::vector<char *> argv(argv_, argv_ + argc_);
-
-    std::string server = "server";
-    /// Handle the removal logic in `isClickhouseApp` method
-    if(std::string(argv[0]) == "clickhouse" || endsWith(argv[0], "/clickhouse"))
-        argv.insert(argv.begin()+1, server.data());
-
-    argv.push_back(nullptr);
-    if (execvp(argv[0], argv.data()) < 0)
-    {
-        std::cerr << "execv failed, error code: " << errno << ", " << strerror(errno) << std::endl;
-        return -1;
-    }
-    return 0;
 }
 
 int mainEntryClickHouseServer(int argc, char ** argv)
@@ -265,19 +242,6 @@ int mainEntryClickHouseServer(int argc, char ** argv)
     try
     {
         return app.run(argc, argv);
-    }
-    catch (DB::Exception & e)
-    {
-        if (e.code() == DB::ErrorCodes::PROF_NOT_SET)
-        {
-            return generalExevc(argc, argv);
-        }
-        else
-        {
-            std::cerr << DB::getCurrentExceptionMessage(true) << "\n";
-            auto code = DB::getCurrentExceptionCode();
-            return code ? code : 1;
-        }
     }
     catch (...)
     {

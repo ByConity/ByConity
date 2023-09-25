@@ -891,14 +891,18 @@ BlockInputStreamPtr InterpreterExplainQuery::explainAnalysis(const ASTPtr & ast)
     Array databases_array;
     size_t array_off_size = 0;
 
-    for (const auto & [storage_id, columns] : analysis->getUsedColumns())
+    const auto & used_columns_map = analysis->getUsedColumns();
+    for (const auto & [table_ast, storage_analysis] : analysis->getStorages())
     {
         Array columns_array;
-        tables_array.push_back(storage_id.table_name);
-        databases_array.push_back(storage_id.database_name);
+        tables_array.push_back(storage_analysis.table);
+        databases_array.push_back(storage_analysis.database);
         array_off_size++;
-        for (const auto & column : columns)
-            columns_array.push_back(column);
+        if (auto it = used_columns_map.find(storage_analysis.storage->getStorageID()); it != used_columns_map.end())
+        {
+            for (const auto & column : it->second)
+                columns_array.push_back(column);
+        }
         column_columns_list->insert(columns_array);
     }
     columns_list_offset_data.push_back(array_off_size);

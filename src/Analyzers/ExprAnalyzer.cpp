@@ -38,6 +38,7 @@
 #include <Parsers/ASTVisitor.h>
 #include <QueryPlan/Void.h>
 #include <DataTypes/DataTypeMap.h>
+#include <Interpreters/join_common.h>
 
 #include <Poco/String.h>
 
@@ -295,9 +296,9 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::visitASTSubquery(ASTPtr & node, const
     // when a scalar subquery has 0 rows, it returns NULL, hence we change its type to Nullable type
     // note that this feature is not compatible with subquery with multiple output returning Tuple type
     // see test 00420_null_in_scalar_subqueries
-    if (!type->isNullable() && type->canBeInsideNullable())
+    if (!type->isNullable() && JoinCommon::canBecomeNullable(type))
     {
-        type = makeNullable(type);
+        type = JoinCommon::tryConvertTypeToNullable(type);
         analysis.setTypeCoercion(node, type);
     }
 

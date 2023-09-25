@@ -25,6 +25,7 @@
 #include <Parsers/formatAST.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/JoinStep.h>
+#include <Interpreters/join_common.h>
 
 namespace DB
 {
@@ -231,9 +232,9 @@ TransformResult SimplifyJoinFilterRewriteRule::transformImpl(PlanNodePtr node, c
         {
             for (const auto & column : header)
             {
-                if (column.type->canBeInsideNullable())
+                if (JoinCommon::canBecomeNullable(column.type))
                 {
-                    NameAndTypePair name_and_type{column.name, makeNullable(column.type)};
+                    NameAndTypePair name_and_type{column.name, JoinCommon::tryConvertTypeToNullable(column.type)};
                     column_types.emplace_back(name_and_type);
                 }
                 else

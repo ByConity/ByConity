@@ -146,6 +146,7 @@ class ProcessorsProfileLog;
 class ZooKeeperLog;
 class QueryMetricLog;
 class QueryWorkerMetricLog;
+class CnchQueryLog;
 struct QueryMetricElement;
 struct QueryWorkerMetricElement;
 using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
@@ -1187,6 +1188,7 @@ public:
     std::shared_ptr<QueryWorkerMetricLog> getQueryWorkerMetricsLog() const;
     void insertQueryWorkerMetricsElement(
         const QueryWorkerMetricElement & element); /// Add the metrics element to the background thread for flushing
+    std::shared_ptr<CnchQueryLog> getCnchQueryLog() const;
 
     const MergeTreeSettings & getMergeTreeSettings() const;
     const MergeTreeSettings & getReplicatedMergeTreeSettings() const;

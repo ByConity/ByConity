@@ -18,6 +18,7 @@ namespace JoinCommon
 bool isNullable(const DataTypePtr & type);
 bool canBecomeNullable(const DataTypePtr & type);
 DataTypePtr convertTypeToNullable(const DataTypePtr & type);
+DataTypePtr tryConvertTypeToNullable(const DataTypePtr & type);
 void convertColumnToNullable(ColumnWithTypeAndName & column, bool remove_low_card = false);
 void convertColumnsToNullable(Block & block, size_t starting_pos = 0);
 void convertColumnToNullable2(ColumnWithTypeAndName & column);

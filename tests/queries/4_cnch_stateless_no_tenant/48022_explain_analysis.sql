@@ -22,6 +22,16 @@ explain analysis select * from analysis order by a limit 3 with ties;
 
 explain analysis insert into analysis select t1.a as a, t2.b as b from analysis t1  ANY FULL JOIN analysis2 t2 using(a);
 
+explain analysis select name from cnch(server, system.settings);
+
+explain analysis select * from cnch(server, system, one);
+
+explain analysis select sum(*) from numbers(10);
+
+explain analysis select count() from analysis;
+
+explain analysis select count(*) from analysis;
+
 DROP TABLE IF EXISTS analysis;
 DROP TABLE IF EXISTS analysis2;
 

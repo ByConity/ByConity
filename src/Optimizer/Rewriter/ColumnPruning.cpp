@@ -16,6 +16,7 @@
 #include <Optimizer/Rewriter/ColumnPruning.h>
 
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/join_common.h>
 #include <Optimizer/Correlation.h>
 #include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/SymbolsExtractor.h>
@@ -468,7 +469,7 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, NameSet & requi
             {
                 if (origin_output.type->isNullable())
                 {
-                    output.type = makeNullable(output.type);
+                    output.type = JoinCommon::tryConvertTypeToNullable(output.type);
                 }
             }
     }

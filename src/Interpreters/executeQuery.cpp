@@ -206,6 +206,31 @@ void tryQueueQuery(ContextMutablePtr context, ASTType ast_type)
     }
 }
 
+static bool needThrowRootCauseError(const Context * context, int & error_code, String & error_messge)
+{
+    const String & query_id = context->getCurrentQueryId();
+    auto coordinator = MPPQueryManager::instance().getCoordinator(query_id);
+    if (!coordinator)
+        return false;
+
+    if (coordinator->getContext().get() != context)
+        return false;
+
+    coordinator->updateSegmentInstanceStatus(RuntimeSegmentsStatus{
+        .query_id = query_id, .segment_id = 0, .is_succeed = false, .message = error_messge, .code = error_code});
+    if (isAmbiguosError(error_code))
+    {
+        auto query_status = coordinator->waitUntilFinish(error_code, error_messge);
+        if (query_status.error_code != error_code)
+        {
+            error_code = query_status.error_code;
+            error_messge = query_status.summarized_error_msg;
+            return true;
+        }
+    }
+    return false;
+}
+
 static void checkASTSizeLimits(const IAST & ast, const Settings & settings)
 {
     if (settings.max_ast_depth)
@@ -311,6 +336,14 @@ static void logQuery(const String & query, ContextPtr context, bool internal)
     }
 }
 
+static void logQuery(ContextPtr context, const QueryLogElement & log_element)
+{
+    if (auto query_log = context->getQueryLog())
+        query_log->add(log_element);
+
+    if (auto cnch_query_log = context->getCnchQueryLog())
+        cnch_query_log->add(log_element);
+}
 
 /// Call this inside catch block.
 static void setExceptionStackTrace(QueryLogElement & elem)
@@ -401,6 +434,8 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextMuta
     elem.exception_code = getCurrentExceptionCode();
     elem.exception = getCurrentExceptionMessage(false);
 
+    bool throw_root_cause = needThrowRootCauseError(context.get(), elem.exception_code, elem.exception);
+
     elem.client_info = context->getClientInfo();
     elem.partition_ids = context->getPartitionIds();
 
@@ -417,8 +452,7 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextMuta
 
     if (settings.log_queries && elem.type >= settings.log_queries_min_type
         && !settings.log_queries_min_query_duration_ms.totalMilliseconds())
-        if (auto query_log = context->getQueryLog())
-            query_log->add(elem);
+        logQuery(context, elem);
 
     if (settings.enable_query_level_profiling)
     {
@@ -481,6 +515,10 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextMuta
         {
             ProfileEvents::increment(ProfileEvents::FailedInsertQuery);
         }
+    }
+    if (throw_root_cause)
+    {
+        throw Exception(elem.exception, elem.exception_code);
     }
 }
 
@@ -1192,10 +1230,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     elem.log_comment.resize(settings.max_query_size);
 
                 if (elem.type >= settings.log_queries_min_type && !settings.log_queries_min_query_duration_ms.totalMilliseconds())
-                {
-                    if (auto query_log = context->getQueryLog())
-                        query_log->add(elem);
-                }
+                    logQuery(context, elem);
             }
 
             if (settings.enable_query_level_profiling && context->getServerType() == ServerType::cnch_server)
@@ -1447,10 +1482,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                         if (log_queries && elem.type >= log_queries_min_type
                             && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
-                        {
-                            if (auto query_log = context->getQueryLog())
-                                query_log->add(elem);
-                        }
+                            logQuery(context, elem);
 
                         if (log_processors_profiles)
                         {
@@ -1494,11 +1526,10 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                             updateAsyncQueryStatus(context, async_query_id, query_id, AsyncQueryStatus::Finished);
                         }
 
-                        // cancel coordinator itself
-                        context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(query_id);
-                        SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
-                        scheduler->finishPlanSegments(query_id);
-                        RuntimeFilterManager::getInstance().removeQuery(query_id);
+                        auto coodinator = MPPQueryManager::instance().getCoordinator(query_id);
+                        if (coodinator)
+                            coodinator->updateSegmentInstanceStatus(
+                                RuntimeSegmentsStatus{.query_id = query_id, .segment_id = 0, .is_succeed = true});
                     };
 
             auto exception_callback = [elem,
@@ -1546,33 +1577,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 if (current_settings.calculate_text_stack_trace)
                     setExceptionStackTrace(elem);
 
-                bool throw_root_cause = false;
-                auto coordinator = MPPQueryManager::instance().getCoordinator(query_id);
-                if (coordinator)
-                {
-                    coordinator->updateSegmentInstanceStatus(RuntimeSegmentsStatus{
-                        .query_id = query_id,
-                        .segment_id = 0,
-                        .is_succeed = false,
-                        .message = elem.exception,
-                        .code = elem.exception_code});
-                    if (isAmbiguosError(elem.exception_code))
-                    {
-                        auto query_status = coordinator->waitUntilFinish(elem.exception_code, elem.exception);
-                        throw_root_cause = query_status.error_code != elem.exception_code;
-                        elem.exception_code = query_status.error_code;
-                        elem.exception = query_status.summarized_error_msg;
-                    }
-                }
+                bool throw_root_cause = needThrowRootCauseError(context.get(), elem.exception_code, elem.exception);
 
                 logException(context, elem);
 
                 /// In case of exception we log internal queries also
                 if (log_queries && elem.type >= log_queries_min_type && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
-                {
-                    if (auto query_log = context->getQueryLog())
-                        query_log->add(elem);
-                }
+                    logQuery(context, elem);
 
                 if (context->getSettingsRef().enable_query_level_profiling)
                 {
@@ -1608,15 +1619,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 {
                     updateAsyncQueryStatus(context, async_query_id, query_id, AsyncQueryStatus::Failed, elem.exception);
                 }
-
-                auto coodinator = MPPQueryManager::instance().getCoordinator(query_id);
-                if (coodinator)
-                    coodinator->updateSegmentInstanceStatus(RuntimeSegmentsStatus{
-                        .query_id = query_id,
-                        .segment_id = 0,
-                        .is_succeed = false,
-                        .message = elem.exception,
-                        .code = elem.exception_code});
                 if (throw_root_cause)
                 {
                     throw Exception(elem.exception, elem.exception_code);

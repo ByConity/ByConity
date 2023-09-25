@@ -21,6 +21,7 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/convertFieldToType.h>
+#include <Interpreters/join_common.h>
 #include <Optimizer/FunctionInvoker.h>
 #include <Optimizer/LiteralEncoder.h>
 #include <Optimizer/PredicateUtils.h>
@@ -161,7 +162,7 @@ ASTPtr UnwrapCastInComparisonVisitor::visitASTFunction(ASTPtr & node, UnwrapCast
         return rewriteArgs(function, context, true);
     }
 
-    auto casted_literal_type = literal_type->isNullable() ? makeNullable(source_type) : removeNullable(source_type);
+    auto casted_literal_type = literal_type->isNullable() ? JoinCommon::tryConvertTypeToNullable(source_type) : removeNullable(source_type);
     auto ast_casted_literal = LiteralEncoder::encode(literal_in_source_type, casted_literal_type, context.context);
     compare_res = compare(literal, literal_type, round_trip_literal, literal_type, context.context);
 

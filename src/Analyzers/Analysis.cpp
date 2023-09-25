@@ -135,7 +135,14 @@ JoinOnAnalysis & Analysis::getJoinOnAnalysis(ASTTableJoin & table_join)
 
 const StorageAnalysis & Analysis::getStorageAnalysis(const IAST & ast)
 {
-    MAP_GET(storage_results, &ast);
+    if (storage_results.count(&ast) == 0)
+        throw Exception("storage not found in storage_results", ErrorCodes::LOGICAL_ERROR); 
+    return storage_results[&ast];
+}
+
+const LinkedHashMap<const IAST *, StorageAnalysis> & Analysis::getStorages() const
+{
+    return storage_results;
 }
 
 UInt64 Analysis::getLimitByValue(ASTSelectQuery & select_query)
