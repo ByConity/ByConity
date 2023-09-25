@@ -529,6 +529,8 @@ private:
 
     std::weak_ptr<PlanSegmentProcessListEntry> segment_process_list_entry;
     QueueThrottlerDeleterPtr queue_throttler_ptr;
+    bool enable_worker_fault_tolerance = false;
+
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
@@ -1517,6 +1519,10 @@ public:
     void waitReadFromClientFinished() const;
 
     ReadSettings getReadSettings() const;
+
+    bool isEnabledWorkerFaultTolerance() const { return enable_worker_fault_tolerance; }
+    void enableWorkerFaultTolerance() { enable_worker_fault_tolerance = true; }
+    void disableWorkerFaultTolerance() { enable_worker_fault_tolerance = false; }
 
     void setPlanCacheManager(std::unique_ptr<PlanCacheManager> && manager);
     PlanCacheManager* getPlanCacheManager();
