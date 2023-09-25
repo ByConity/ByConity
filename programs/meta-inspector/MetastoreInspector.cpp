@@ -15,16 +15,25 @@
 
 
 #include <Poco/Util/Application.h>
+#include <filesystem>
 //#include <Catalog/MetastoreByteKVImpl.h>
 #include <Catalog/MetastoreFDBImpl.h>
 #include <Common/HostWithPorts.h>
 #include <Catalog/StringHelper.h>
 #include <Catalog/CatalogConfig.h>
 #include <Protos/data_models.pb.h>
-#include <common/LineReader.h>
+#include <Common/Config/MetastoreConfig.h>
+#include <Common/filesystemHelpers.h>
 #include <brpc/server.h>
 #include <gflags/gflags.h>
 #include <iostream>
+#if USE_REPLXX
+#    include <common/ReplxxLineReader.h>
+#elif defined(USE_READLINE) && USE_READLINE
+#    include <common/ReadlineLineReader.h>
+#else
+#    include <common/LineReader.h>
+#endif
 
 namespace brpc
 {
@@ -152,7 +161,7 @@ protected:
             .binding("help"));
         options.addOption(
             Poco::Util::Option("config-file", "C", "config file path")
-                .required(true)
+                .required(false)
                 .repeatable(false)
                 .argument("<file>", true)
                 .binding("config-file"));
@@ -172,6 +181,8 @@ protected:
 
     void initialize(Application& self) override
     {
+        if (config().has("help"))
+            return;
         std::string conf_path = config().getString("config-file");
         if (conf_path.empty())
             throw Exception("config-file can not be empty.", ErrorCodes::BAD_ARGUMENTS);
@@ -183,6 +194,13 @@ protected:
 
         Application::initialize(self);
     }
+
+#if USE_REPLXX
+    static void highlight(const String & , std::vector<replxx::Replxx::Color> & )
+    {
+        //To be defined
+    }
+#endif
 
     int main(const std::vector<std::string> &) override
     {
@@ -205,9 +223,54 @@ protected:
         }
         else
         {
-            LineReader::Patterns extenders = {"\\"};
-            LineReader::Patterns delimiters = {";"};
-            LineReader lr("place_holder", false, extenders, delimiters);
+            std::string history_file;
+            /// Load command history if present.
+            if (config().has("meta_history_file"))
+                history_file = config().getString("meta_history_file");
+            else
+            {
+                auto * history_file_from_env = getenv("CLICKHOUSE_META_HISTORY_FILE");
+                if (history_file_from_env)
+                    history_file = history_file_from_env;
+                else
+                {
+                    const char * home_path_cstr = getenv("HOME");
+                    if (home_path_cstr)
+                        history_file = std::string(home_path_cstr) + "/.meta-inspector-history";
+                }
+            }
+
+            if (!history_file.empty() && !std::filesystem::exists(history_file))
+            {
+                /// Avoid TOCTOU issue.
+                try
+                {
+                    FS::createFile(history_file);
+                }
+                catch (const ErrnoException & e)
+                {
+                    if (e.getErrno() != EEXIST)
+                        throw;
+                }
+            }
+
+            LineReader::Patterns query_extenders = {"\\"};
+            LineReader::Patterns query_delimiters = {";"};
+            LineReader::Suggest suggest;
+
+#if USE_REPLXX
+            replxx::Replxx::highlighter_callback_t highlight_callback{};
+            if (config().has("highlight") && config().getBool("highlight"))
+                highlight_callback = highlight;
+
+            ReplxxLineReader lr(suggest, history_file, config().has("multiline"), query_extenders, query_delimiters, highlight_callback);
+
+#elif defined(USE_READLINE) && USE_READLINE
+            ReadlineLineReader lr(suggest, history_file, config().has("multiline"), query_extenders, query_delimiters);
+#else
+            LineReader lr(history_file, config().has("multiline"), query_extenders, query_delimiters);
+#endif
+
             do
             {
                 auto input_cmd = lr.readLine(":> ", "");
@@ -259,7 +322,8 @@ private:
         try
         {
             MetaCommand cmd = MetaCommand::parse(command);
-            std::string full_key = Catalog::escapeString(name_space) + '_' + cmd.key;
+            std::string full_key = name_space.empty() ? cmd.key : Catalog::escapeString(name_space) + '_' + cmd.key;
+            size_t key_offset = name_space.empty() ? 0 : name_space.size() + 1;
             switch (cmd.type)
             {
                 case MetaCommandType::HELP:
@@ -283,7 +347,7 @@ private:
                     while(it->next())
                     {
                         if (need_print)
-                            std::cout << it->key().substr(name_space.size() + 1, std::string::npos) << std::endl;
+                            std::cout << it->key().substr(key_offset, std::string::npos) << std::endl;
                         counter++;
                     }
                     std::cout << "Total: " << counter << std::endl;
@@ -309,7 +373,7 @@ private:
         }
     }
 
-    std::string name_space = "default";
+    std::string name_space = "";
     MetastorePtr metastore_ptr;
 };
 }
