@@ -106,4 +106,9 @@ class QueryLog : public SystemLog<QueryLogElement>
     using SystemLog<QueryLogElement>::SystemLog;
 };
 
+class CnchQueryLog : public CnchSystemLog<QueryLogElement>
+{
+    using CnchSystemLog<QueryLogElement>::CnchSystemLog;
+};
+
 }

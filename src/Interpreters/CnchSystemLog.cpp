@@ -18,6 +18,7 @@
 #include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/KafkaLog.h>
+#include <Interpreters/IInterpreter.h>
 #include <algorithm>
 
 namespace DB
@@ -85,6 +86,8 @@ String prepareEngineClause(const Poco::Util::AbstractConfiguration & config, con
         engine += " ORDER BY (`query_id`, `server_id`) ";
     else if (std::is_same_v<LogElement, QueryWorkerMetricElement>)
         engine += " ORDER BY (`initial_query_id`, `current_query_id`, `worker_id`) ";
+    else if (std::is_same_v<LogElement, QueryLogElement>)
+        engine += " ORDER BY (`query_id`, `event_time`) ";
 
     String partition_by = config.getString(config_prefix + ".partition_by", "toStartOfDay(event_time)");
     if (!partition_by.empty())
@@ -101,6 +104,7 @@ String prepareEngineClause(const Poco::Util::AbstractConfiguration & config, con
 
 template String prepareEngineClause<QueryMetricElement>(const Poco::Util::AbstractConfiguration &, const String &);
 template String prepareEngineClause<QueryWorkerMetricElement>(const Poco::Util::AbstractConfiguration &, const String &);
+template String prepareEngineClause<QueryLogElement>(const Poco::Util::AbstractConfiguration &, const String &);
 
 template <>
 String prepareEngineClause<KafkaLogElement>(const Poco::Util::AbstractConfiguration & config, const String & config_prefix)
@@ -245,7 +249,7 @@ bool CnchSystemLogs::initInServerForSingleLog(ContextPtr & global_context,
     {
         std::lock_guard<std::mutex> g(mutex);
         if (cloud_log)
-            ret = true;
+            return true;
     }
 
     try
@@ -300,6 +304,7 @@ bool CnchSystemLogs::initInServer(ContextPtr global_context)
     bool kafka_ret = true;
     bool query_metrics_ret = true;
     bool query_worker_metrics_ret = true;
+    bool cnch_query_log_ret = true;
 
     if (config.has(CNCH_KAFKA_LOG_CONFIG_PREFIX))
         kafka_ret = initInServerForSingleLog<CloudKafkaLog>(global_context,
@@ -325,7 +330,15 @@ bool CnchSystemLogs::initInServer(ContextPtr global_context)
             config,
             query_worker_metrics);
 
-    return (kafka_ret && query_metrics_ret && query_worker_metrics_ret);
+    if (config.has(CNCH_QUERY_LOG_CONFIG_PREFIX))
+        cnch_query_log_ret = initInServerForSingleLog<CnchQueryLog>(global_context,
+            CNCH_SYSTEM_LOG_DB_NAME,
+            CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME,
+            CNCH_QUERY_LOG_CONFIG_PREFIX,
+            config,
+            cnch_query_log);
+
+    return (kafka_ret && query_metrics_ret && query_worker_metrics_ret && cnch_query_log_ret);
 }
 
 bool CnchSystemLogs::initInWorker(ContextPtr global_context)

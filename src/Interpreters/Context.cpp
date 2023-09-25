@@ -3370,6 +3370,16 @@ void Context::insertQueryWorkerMetricsElement(const QueryWorkerMetricElement & e
     }
 }
 
+std::shared_ptr<CnchQueryLog> Context::getCnchQueryLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->cnch_system_logs)
+        return {};
+
+    return shared->cnch_system_logs->getCnchQueryLog();
+}
+
 std::shared_ptr<TraceLog> Context::getTraceLog() const
 {
     auto lock = getLock();

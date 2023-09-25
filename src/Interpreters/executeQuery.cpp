@@ -311,6 +311,14 @@ static void logQuery(const String & query, ContextPtr context, bool internal)
     }
 }
 
+static void logQuery(ContextPtr context, const QueryLogElement & log_element)
+{
+    if (auto query_log = context->getQueryLog())
+        query_log->add(log_element);
+
+    if (auto cnch_query_log = context->getCnchQueryLog())
+        cnch_query_log->add(log_element);
+}
 
 /// Call this inside catch block.
 static void setExceptionStackTrace(QueryLogElement & elem)
@@ -417,8 +425,7 @@ static void onExceptionBeforeStart(const String & query_for_logging, ContextMuta
 
     if (settings.log_queries && elem.type >= settings.log_queries_min_type
         && !settings.log_queries_min_query_duration_ms.totalMilliseconds())
-        if (auto query_log = context->getQueryLog())
-            query_log->add(elem);
+        logQuery(context, elem);
 
     if (settings.enable_query_level_profiling)
     {
@@ -1192,10 +1199,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     elem.log_comment.resize(settings.max_query_size);
 
                 if (elem.type >= settings.log_queries_min_type && !settings.log_queries_min_query_duration_ms.totalMilliseconds())
-                {
-                    if (auto query_log = context->getQueryLog())
-                        query_log->add(elem);
-                }
+                    logQuery(context, elem);
             }
 
             if (settings.enable_query_level_profiling && context->getServerType() == ServerType::cnch_server)
@@ -1447,10 +1451,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                         if (log_queries && elem.type >= log_queries_min_type
                             && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
-                        {
-                            if (auto query_log = context->getQueryLog())
-                                query_log->add(elem);
-                        }
+                            logQuery(context, elem);
 
                         if (log_processors_profiles)
                         {
@@ -1569,10 +1570,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
 
                 /// In case of exception we log internal queries also
                 if (log_queries && elem.type >= log_queries_min_type && Int64(elem.query_duration_ms) >= log_queries_min_query_duration_ms)
-                {
-                    if (auto query_log = context->getQueryLog())
-                        query_log->add(elem);
-                }
+                    logQuery(context, elem);
 
                 if (context->getSettingsRef().enable_query_level_profiling)
                 {
