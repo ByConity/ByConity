@@ -14,13 +14,20 @@
  */
 
 #include <CloudServices/CnchServerResource.h>
-
+#include <Catalog/CatalogUtils.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
+#include <brpc/controller.h>
+#include <Common/CurrentThread.h>
+#include <Common/Exception.h>
+#include "Storages/Hive/HiveFile/IHiveFile.h"
+#include "Storages/Hive/StorageCnchHive.h"
+
+#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/RemoteFile/StorageCnchHDFS.h>
 #include <Storages/RemoteFile/StorageCnchS3.h>
 #include <Storages/StorageCnchMergeTree.h>
@@ -33,6 +40,8 @@
 namespace ProfileEvents
 {
     extern const Event CnchPartAllocationSplits;
+    extern const Event CnchSendResourceRpcCallElapsedMilliseconds;
+    extern const Event CnchSendResourceElapsedMilliseconds;
 }
 
 namespace DB
@@ -171,6 +180,7 @@ void CnchServerResource::addCreateQuery(
 
 void CnchServerResource::sendResource(const ContextPtr & context, const HostWithPorts & worker)
 {
+    Stopwatch watch;
     /**
      * send_lock:
      * For union query, it may send resources to a worker multiple times,
@@ -196,12 +206,15 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
     auto worker_client = worker_group->getWorkerClient(worker);
     auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker.id);
     auto call_id = worker_client->sendResources(context, resources_to_send, handler, full_worker_id);
+    ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, watch.elapsedMilliseconds());
     brpc::Join(call_id);
     handler->throwIfException();
+    ProfileEvents::increment(ProfileEvents::CnchSendResourceElapsedMilliseconds, watch.elapsedMilliseconds());
 }
 
 void CnchServerResource::sendResources(const ContextPtr & context)
 {
+    Stopwatch watch;
     auto send_lock = getLockForSend("ALL_WORKER");
 
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
@@ -217,13 +230,41 @@ void CnchServerResource::sendResources(const ContextPtr & context)
     }
 
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
-
-    for (const auto & [host_ports, resources_to_send] : all_resources)
+    call_ids.resize(all_resources.size());
+    auto worker_send_resources = [&](const HostWithPorts & host_ports, const std::vector<AssignedResource> & resources_to_send, size_t i)
     {
         auto worker_client = worker_group->getWorkerClient(host_ports);
         auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), host_ports.id);
-        call_ids.emplace_back(worker_client->sendResources(context, resources_to_send, handler, full_worker_id));
+        call_ids[i] = worker_client->sendResources(context, resources_to_send, handler, full_worker_id);
+    };
+
+    size_t max_threads = Catalog::getMaxThreads();
+    size_t i = 0;
+    if (max_threads < 2 || all_resources.size() < 2)
+    {
+        for (auto & [host_ports_, resources_] : all_resources)
+        {
+            worker_send_resources(host_ports_, resources_, i);
+            i++;
+        }
     }
+    else
+    {
+        max_threads = std::min(max_threads, all_resources.size());
+        ExceptionHandler exception_handler;
+        ThreadPool thread_pool(max_threads);
+        for (auto it = all_resources.begin(); it != all_resources.end(); it++)
+        {
+            thread_pool.scheduleOrThrowOnError(createExceptionHandledJob(
+                [&, i, it](){ worker_send_resources(it->first, it->second, i); },
+                exception_handler));
+            i++;
+        }
+        thread_pool.wait();
+        exception_handler.throwIfException();
+    }
+
+    ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, watch.elapsedMilliseconds());
 
     for (auto & call_id : call_ids)
         brpc::Join(call_id);
@@ -244,6 +285,8 @@ void CnchServerResource::sendResources(const ContextPtr & context)
     }
 
     handler->throwIfException();
+
+    ProfileEvents::increment(ProfileEvents::CnchSendResourceElapsedMilliseconds, watch.elapsedMilliseconds());
 }
 
 void CnchServerResource::sendResources(const ContextPtr & context, WorkerAction act)
@@ -356,7 +399,7 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
                     assigned_hive_parts = std::move(it->second);
                 }
 
-                
+
                 if (auto it = assigned_file_map.find(host_ports.id); it != assigned_file_map.end())
                 {
                     assigned_file_parts = std::move(it->second);

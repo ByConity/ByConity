@@ -84,6 +84,7 @@
 namespace ProfileEvents
 {
 extern const Event CatalogTime;
+extern const Event PrunePartsTime;
 extern const Event TotalPartitions;
 extern const Event PrunedPartitions;
 extern const Event SelectedParts;
@@ -1074,9 +1075,11 @@ ServerDataPartsVector StorageCnchMergeTree::getAllPartsInPartitions(
         }
         // TEST_LOG(testlog, "get dataparts in partitions.");
         LOG_DEBUG(log, "Total number of parts get from bytekv: {}", all_parts.size());
-        all_parts = CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context));
+        auto catalog_time_ms = watch.elapsedMilliseconds();
+        all_parts = CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context), true);
 
-        ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
+        ProfileEvents::increment(ProfileEvents::CatalogTime, catalog_time_ms);
+        ProfileEvents::increment(ProfileEvents::PrunePartsTime, watch.elapsedMilliseconds() - catalog_time_ms);
         ProfileEvents::increment(ProfileEvents::TotalPartitions, total_partition_number);
         ProfileEvents::increment(ProfileEvents::PrunedPartitions, pruned_partitions.size());
         ProfileEvents::increment(ProfileEvents::SelectedParts, all_parts.size());

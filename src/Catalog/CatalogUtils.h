@@ -74,7 +74,7 @@ struct partition_comparator
     }
 };
 
-using PartitionMap = std::map<String, PartitionInfoPtr, partition_comparator>;
+using PartitionMap = std::map<String, PartitionInfoPtr>;
 
 inline String normalizePath(const String & path)
 {
@@ -129,5 +129,7 @@ struct BatchedCommitIndex
     size_t expected_staged_end;
 };
 
+size_t getMaxThreads();
+size_t getMinParts();
 }
 }

@@ -230,6 +230,8 @@ private:
     //    const Strings & partitions, const Strings & all_existing_partitions, LoadPartsFunc & load_func, const UInt64 & ts);
 
     void checkTimeLimit(Stopwatch & watch);
+
+    size_t getMaxThreads() const;
 };
 
 using PartCacheManagerPtr = std::shared_ptr<PartCacheManager>;

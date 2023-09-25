@@ -1278,6 +1278,7 @@ namespace Catalog
         const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, bool for_gc)
     {
         ServerDataPartsVector res;
+        String source;
         runWithMetricSupport(
             [&] {
                 Stopwatch watch;
@@ -1302,8 +1303,6 @@ namespace Catalog
                     = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), true);
                 auto host_with_rpc = host_port.getRPCAddress();
 
-                String source;
-
                 if (host_port.empty())
                 {
                     /// if host not found, fall back to fetch part from metastore.
@@ -1325,15 +1324,18 @@ namespace Catalog
                     else
                     {
                         source = "PartCache";
+                        std::atomic_bool miss_cache{false};
                         res = context.getPartCacheManager()->getOrSetServerDataPartsInPartitions(
                             *storage,
                             partitions,
                             [&](const Strings & required_partitions, const Strings & full_partitions) {
-                                source = "KV(miss cache)";
+                                miss_cache = true;
                                 return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0});
                             },
                             ts.toUInt64(),
                             host_port.topology_version);
+                        if (miss_cache)
+                            source = "KV(miss cache)";
                     }
                 }
                 else
@@ -1383,7 +1385,8 @@ namespace Catalog
             },
             ProfileEvents::GetServerDataPartsInPartitionsSuccess,
             ProfileEvents::GetServerDataPartsInPartitionsFailed);
-
+        if (source.starts_with("KV"))
+            std::sort(res.begin(), res.end(), CnchPartsHelper::PartComparator<ServerDataPartPtr>{});
         return res;
     }
 
