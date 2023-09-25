@@ -100,11 +100,18 @@ std::vector<std::pair<String, UInt64>> MetastoreFDBImpl::multiGet(const std::vec
     return res;
 }
 
-void MetastoreFDBImpl::drop(const String & key, const String & expected)
+void MetastoreFDBImpl::drop(const String & key, [[maybe_unused]] const UInt64 & expected)
 {
     FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
     check_fdb_op(fdb_client->CreateTransaction(tr));
-    check_fdb_op(fdb_client->Delete(tr, key, expected));
+    check_fdb_op(fdb_client->Delete(tr, key));
+}
+
+void MetastoreFDBImpl::drop(const String & key, const String & expected_value)
+{
+    FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
+    check_fdb_op(fdb_client->CreateTransaction(tr));
+    check_fdb_op(fdb_client->Delete(tr, key, expected_value));
 }
 
 MetastoreFDBImpl::IteratorPtr MetastoreFDBImpl::getAll()

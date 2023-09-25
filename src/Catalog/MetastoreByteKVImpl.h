@@ -86,9 +86,11 @@ public:
 
     std::vector<std::pair<String, UInt64>> multiGet(const std::vector<String> & keys) override;
 
-    bool batchWrite(const BatchCommitRequest & req, BatchCommitResponse response) override;
+    bool batchWrite(const BatchCommitRequest & req, BatchCommitResponse & response) override;
 
     void drop(const String & key, const UInt64 & expected_version = 0) override;
+
+    void drop(const String & key, const String & expected_value) override;
 
     IteratorPtr getAll() override;
 

@@ -80,6 +80,8 @@ public:
 
     void drop(const String &, const String & expected = {}) override;
 
+    void drop(const String &, const String & expected_value) override;
+
     IteratorPtr getAll() override;
 
     IteratorPtr getByPrefix(const String &, const size_t & limit = 0, uint32_t scan_batch_size = DEFAULT_SCAN_BATCH_COUNT) override;
