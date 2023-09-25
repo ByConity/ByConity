@@ -18,10 +18,11 @@
 
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <Interpreters/join_common.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Core/Block.h>
-#include "Core/Names.h"
+#include <Core/Names.h>
 
 namespace DB
 {
@@ -50,7 +51,7 @@ DataTypePtr ApplyStep::getAssignmentDataType() const
             auto argument_name = arguments->children[0]->as<ASTIdentifier>()->name();
             for (const auto & column : input_streams[0].header)
                 if (column.name == argument_name)
-                    return column.type->isNullable() ? makeNullable(std::make_shared<DataTypeUInt8>()) : std::make_shared<DataTypeUInt8>();
+                    return column.type->isNullable() ? JoinCommon::tryConvertTypeToNullable(std::make_shared<DataTypeUInt8>()) : std::make_shared<DataTypeUInt8>();
             throw Exception("Unknown data type for column " + argument_name, ErrorCodes::LOGICAL_ERROR);
         }
         case ApplyStep::SubqueryType::EXISTS: {
@@ -59,14 +60,14 @@ DataTypePtr ApplyStep::getAssignmentDataType() const
         case ApplyStep::SubqueryType::SCALAR: {
             for (const auto & column : input_streams[1].header)
                 if (column.name == assignment.first)
-                    return column.type->canBeInsideNullable() ? makeNullable(column.type) : column.type;
+                    return JoinCommon::canBecomeNullable(column.type) ? JoinCommon::tryConvertTypeToNullable(column.type) : column.type;
             throw Exception("Unknown data type for column " + assignment.first, ErrorCodes::LOGICAL_ERROR);
         }
         case ApplyStep::SubqueryType::QUANTIFIED_COMPARISON: {
             auto argument_name = assignment.second->children[0]->as<ASTIdentifier>()->name();
             for (const auto & column : input_streams[0].header)
                 if (column.name == argument_name)
-                    return column.type->isNullable() ? makeNullable(std::make_shared<DataTypeUInt8>()) : std::make_shared<DataTypeUInt8>();
+                    return column.type->isNullable() ? JoinCommon::tryConvertTypeToNullable(std::make_shared<DataTypeUInt8>()) : std::make_shared<DataTypeUInt8>();
             throw Exception("Unknown data type for column " + argument_name, ErrorCodes::LOGICAL_ERROR);
         }
     }

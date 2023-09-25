@@ -255,7 +255,7 @@ PlanNodePtr UnifyNullableVisitor::visitUnionNode(UnionNode & node, Void & v)
 
             if (input_type->isNullable() && !output.type->isNullable())
             {
-                output.type = makeNullable(output.type);
+                output.type = JoinCommon::tryConvertTypeToNullable(output.type);
             }
         }
     };

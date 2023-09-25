@@ -29,6 +29,7 @@
 #include <Optimizer/Utils.h>
 #include <Interpreters/convertFieldToType.h>
 #include <Interpreters/ActionsVisitor.h>
+#include <Interpreters/join_common.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/formatAST.h>
 
@@ -65,7 +66,7 @@ static DataTypePtr makeNullableByArgumentTypes(const InterpretIMResults & argume
     DataTypePtr result = std::make_shared<T>();
 
     if (std::any_of(arguments.begin(), arguments.end(), [](auto & arg) { return arg.type->isNullable();}))
-        result = makeNullable(result);
+        result = JoinCommon::tryConvertTypeToNullable(result);
 
     return result;
 }
@@ -191,7 +192,7 @@ struct LogicalFunctionRewriter
             else
             {
                 // `x AND NULL` return `x AND NULL`
-                argument_results.emplace_back(makeNullable(std::make_shared<DataTypeNothing>()), Null());
+                argument_results.emplace_back(JoinCommon::tryConvertTypeToNullable(std::make_shared<DataTypeNothing>()), Null());
             }
         }
 
@@ -528,7 +529,7 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
 
     // === Null simplify ===
     if (has_null_argument && function_builder->useDefaultImplementationForNulls() && setting.enable_null_simplify)
-        return {makeNullable(std::make_shared<DataTypeNothing>()), Null()};
+        return {JoinCommon::tryConvertTypeToNullable(std::make_shared<DataTypeNothing>()), Null()};
 
     // === Function simplify ===
     using namespace function_simplify_rules_;

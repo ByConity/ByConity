@@ -96,6 +96,13 @@ DataTypePtr convertTypeToNullable(const DataTypePtr & type)
     return makeNullable(type);
 }
 
+DataTypePtr tryConvertTypeToNullable(const DataTypePtr & type)
+{
+    if (canBecomeNullable(type))
+        return convertTypeToNullable(type);
+    return type;
+}
+
 void convertColumnToNullable(ColumnWithTypeAndName & column, bool remove_low_card)
 {
     if (remove_low_card && column.type->lowCardinality())
