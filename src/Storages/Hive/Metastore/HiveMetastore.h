@@ -49,7 +49,8 @@ public:
 
     // ApacheHive::TableStatsResult getPartitionedTableStats(const String & db_name, const String & table_name, const Strings& col_names, const std::vector<ApacheHive::Partition>& partitions ) override;
 
-    ApacheHive::PartitionsStatsResult getPartitionStats(const String & db_name, const String & table_name, const Strings& col_names, const Strings& partitions ) override;
+    ApacheHive::PartitionsStatsResult getPartitionStats(
+        const String & db_name, const String & table_name, const Strings & col_names,const Strings& partition_keys, const std::vector<Strings> & partition_vals) override;
 
 
 private:

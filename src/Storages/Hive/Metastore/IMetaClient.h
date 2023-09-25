@@ -33,7 +33,7 @@ public:
     // virtual ApacheHive::TableStatsResult getPartitionedTableStats(const String & db_name, const String & table_name, const Strings& col_names, const std::vector<ApacheHive::Partition>& partitions) = 0;
 
     // each partition is identified by a `key1=val1/key2=val2`
-    virtual ApacheHive::PartitionsStatsResult getPartitionStats(const String & db_name, const String & table_name, const Strings& col_names, const Strings& partitions ) = 0;
+    virtual ApacheHive::PartitionsStatsResult getPartitionStats(const String & db_name, const String & table_name, const Strings& col_names, const Strings& partition_keys, const std::vector<Strings>& partition_vals ) = 0;
 };
 using IMetaClientPtr = std::shared_ptr<IMetaClient>;
 

@@ -31,6 +31,7 @@
 #include "Storages/MergeTree/PartitionPruner.h"
 #include "Storages/StorageFactory.h"
 #include "Storages/StorageInMemoryMetadata.h"
+#include "Storages/DataLakes/HudiDirectoryLister.h"
 
 #include <boost/lexical_cast.hpp>
 
