@@ -55,13 +55,13 @@ Result BackgroundJob::start(bool write_status_to_persisent_store)
     }
     catch (const Exception & e)
     {
-        LOG_WARNING(log, " Got exception {}.{} when getTargetServer for {}",
-            e.code(), e.displayText(), storage_id.getNameForLogs());
+        exception_str = fmt::format("Got exception {}. {} when getTargetServer for {}", e.code(), e.displayText(), storage_id.getNameForLogs());
+        LOG_WARNING(log, exception_str);
     }
     catch (...)
     {
-        exception_str = getCurrentExceptionMessage(true);
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        exception_str = fmt::format("Got exception {} when getTargetServer for {}", getCurrentExceptionMessage(true), storage_id.getNameForLogs());
+        LOG_WARNING(log, exception_str);
     }
 
     if (!cnch_server)

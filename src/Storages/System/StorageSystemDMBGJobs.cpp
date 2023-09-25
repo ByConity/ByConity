@@ -38,7 +38,8 @@ namespace DB
             {"host_port", std::make_shared<DataTypeString>()},
             {"status", std::make_shared<DataTypeString>()},
             {"expected_status", std::make_shared<DataTypeString>()},
-            {"last_start_time", std::make_shared<DataTypeDateTime>()}
+            {"last_start_time", std::make_shared<DataTypeDateTime>()},
+            {"server_vw_name", std::make_shared<DataTypeString>()},
         };
     }
 
@@ -75,6 +76,7 @@ namespace DB
                         res_columns[column_num++]->insert(toString(bg_job_data.status));
                         res_columns[column_num++]->insert(toString(bg_job_data.expected_status));
                         res_columns[column_num++]->insert(bg_job_data.last_start_time);
+                        res_columns[column_num++]->insert(bg_job_data.storage_id.server_vw_name);
                     }
                 );
             }

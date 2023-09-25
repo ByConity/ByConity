@@ -82,7 +82,7 @@ struct QueryLogElement
     std::vector<UInt64> thread_ids;
     std::shared_ptr<ProfileEvents::Counters> profile_counters;
     String max_io_time_thread_name;
-    uint64_t max_io_time_thread_ms;
+    uint64_t max_io_time_thread_ms{};
     std::shared_ptr<ProfileEvents::Counters> max_thread_io_profile_counters;
     std::shared_ptr<Settings> query_settings;
 
