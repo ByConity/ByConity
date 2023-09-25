@@ -286,9 +286,9 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context)
     PlanCheck::checkFinalPlan(plan, context);
 
     context->logOptimizerProfile(&Poco::Logger::get("PlanOptimizer"),
-                                 "Optimizer stage run time: ",
-                                 "checkFinalPlan",
-                                 std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms", true);
+                                "Optimizer stage run time: ",
+                                "checkFinalPlan",
+                                std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms", true);
 }
 
 void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context, const Rewriters & rewriters)
@@ -306,8 +306,10 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context, const 
         UInt64 elapsed = total_watch.elapsedMilliseconds();
         double single_rewriter_duration = rule_watch.elapsedMillisecondsAsDouble();
 
-        LOG_DEBUG(
-            &Poco::Logger::get("PlanOptimizer"), "optimizer rule run time: {}, {} ms", rewriter->name(), single_rewriter_duration);
+        context->logOptimizerProfile(&Poco::Logger::get("PlanOptimizer"),
+                                                "Optimizer rule run time: ",
+                                                rewriter->name(),
+                                                std::to_string(single_rewriter_duration) + "ms", true);
 
         if (single_rewriter_duration >= 1000)
             LOG_INFO(

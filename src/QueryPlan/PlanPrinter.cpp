@@ -197,16 +197,16 @@ String PlanPrinter::textDistributedPlan(
 
     for (auto & segment_ptr : segments_desc)
     {
-        String state_partition;
-        if (segment_ptr->segment_id == 0)
-            state_partition = "SINGLE";
-        else if (segment_ptr->is_source)
-            state_partition = "SOURCE";
-        else
-            state_partition = "HASH";
+        // String state_partition;
+        // if (segment_ptr->segment_id == 0)
+        //     state_partition = "SINGLE";
+        // else if (segment_ptr->is_source)
+        //     state_partition = "SOURCE";
+        // else
+        //     state_partition = "HASH";
 
         size_t segment_id = segment_ptr->segment_id;
-        os << "Segment[" << segment_id << "] ["<< state_partition << "]\n";
+        os << "Segment[" << segment_id << "]\n";
 
         ExchangeMode mode = segment_ptr->mode;
         String exchange = (segment_id == 0) ? "Output" : f(mode);

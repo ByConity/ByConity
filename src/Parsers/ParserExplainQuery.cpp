@@ -108,7 +108,7 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         if (parser_settings.parse(pos, settings, expected))
         {
             auto settings_ast = settings->as<ASTSetQuery &>();
-            const auto & is_json = settings_ast.changes.tryGet("json");
+            auto *is_json = settings_ast.changes.tryGet("json");
             if (kind == ASTExplainQuery::ExplainKind::Analysis && is_json && is_json->toString() == "1")
             {
 
