@@ -1046,8 +1046,6 @@ ServerDataPartsVector StorageCnchMergeTree::getAllPartsInPartitions(
 {
     ServerDataPartsVector all_parts;
 
-    // TEST_START(testlog);
-
     if (local_context->getCnchCatalog())
     {
         TransactionCnchPtr cur_txn = local_context->getCurrentTransaction();
@@ -1055,10 +1053,11 @@ ServerDataPartsVector StorageCnchMergeTree::getAllPartsInPartitions(
             throw Exception("current txn is not set.", ErrorCodes::LOGICAL_ERROR);
 
         Stopwatch watch;
-        auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
-        // TEST_LOG(testlog, "get partition list.");
-        Strings pruned_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names_to_return, local_context);
-        // TEST_LOG(testlog, "select partitions by predicate.");
+
+        auto pruned_res = getPrunedPartitions(query_info, column_names_to_return, local_context);
+        Strings & pruned_partitions = pruned_res.partitions;
+        UInt64 total_partition_number = pruned_res.total_partition_number;
+
         if (cur_txn->isSecondary())
         {
             /// Get all parts in the partition list
@@ -1078,7 +1077,7 @@ ServerDataPartsVector StorageCnchMergeTree::getAllPartsInPartitions(
         all_parts = CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context));
 
         ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
-        ProfileEvents::increment(ProfileEvents::TotalPartitions, partition_list.size());
+        ProfileEvents::increment(ProfileEvents::TotalPartitions, total_partition_number);
         ProfileEvents::increment(ProfileEvents::PrunedPartitions, pruned_partitions.size());
         ProfileEvents::increment(ProfileEvents::SelectedParts, all_parts.size());
     }
@@ -1498,15 +1497,12 @@ void StorageCnchMergeTree::sendDropDiskCacheTasks(ContextPtr context, const Serv
     server_resource->sendResources(context, worker_action);
 }
 
-Strings StorageCnchMergeTree::getPrunedPartitions(
-    const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context)
+PrunedPartitions StorageCnchMergeTree::getPrunedPartitions(
+    const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const
 {
-    Strings pruned_partitions;
+    PrunedPartitions pruned_partitions;
     if (local_context->getCnchCatalog())
-    {
-        auto partition_list = local_context->getCnchCatalog()->getPartitionList(shared_from_this(), local_context.get());
-        pruned_partitions = selectPartitionsByPredicate(query_info, partition_list, column_names_to_return, local_context);
-    }
+        pruned_partitions = local_context->getCnchCatalog()->getPartitionsByPredicate(local_context, shared_from_this(), query_info, column_names_to_return);
     return pruned_partitions;
 }
 

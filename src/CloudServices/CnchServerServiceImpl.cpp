@@ -537,6 +537,54 @@ void CnchServerServiceImpl::fetchDataParts(
     });
 }
 
+void CnchServerServiceImpl::fetchPartitions(
+    [[maybe_unused]] ::google::protobuf::RpcController* controller,
+    [[maybe_unused]] const ::DB::Protos::FetchPartitionsReq* request,
+    [[maybe_unused]] ::DB::Protos::FetchPartitionsResp* response,
+    [[maybe_unused]] ::google::protobuf::Closure* done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, gc = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            StoragePtr storage
+                = gc->getCnchCatalog()->getTable(*gc, request->database(), request->table(),  TxnTimestamp::maxTS());
+
+            auto calculated_host = gc->getCnchTopologyMaster()
+                                       ->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true).getRPCAddress();
+
+            if (request->remote_host() != calculated_host)
+                throw Exception(
+                    "Fetch partitions failed because of inconsistent view of topology in remote server, remote_host: " + request->remote_host()
+                        + ", calculated_host: " + calculated_host,
+                    ErrorCodes::LOGICAL_ERROR);
+
+            if (!isLocalServer(calculated_host, std::to_string(gc->getRPCPort())))
+                throw Exception(
+                    "Fetch partition failed because calculated host server (" + calculated_host + ") is not current server.",
+                    ErrorCodes::LOGICAL_ERROR);
+
+            Names column_names;
+            for (const auto & name : request->column_name_filter())
+                column_names.push_back(name);
+            SelectQueryInfo query_info;
+            auto interpreter = SelectQueryInfo::buildQueryInfoFromQuery(gc, storage, request->predicate(), query_info);
+
+            auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(gc, storage, query_info, column_names);
+
+            response->set_total_size(required_partitions.total_partition_number);
+            auto & mutable_partitions = *response->mutable_partitions();
+            for (auto & partition : required_partitions.partitions)
+                *mutable_partitions.Add() = std::move(partition);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
 void CnchServerServiceImpl::fetchUniqueTableMeta(
     ::google::protobuf::RpcController * controller,
     const ::DB::Protos::FetchUniqueTableMetaReq * request,

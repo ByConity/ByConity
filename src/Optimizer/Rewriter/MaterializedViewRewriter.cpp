@@ -315,7 +315,7 @@ bool checkMVConsistencyByPartition(
             select_query->setExpression(ASTSelectQuery::Expression::WHERE, PredicateUtils::combineConjuncts(table_preds));
 
         SelectQueryInfo query_info = buildSelectQueryInfoForQuery(select_query, context);
-        auto required_partitions = merge_tree->getPrunedPartitions(query_info, column_names_to_return, context);
+        auto required_partitions = merge_tree->getPrunedPartitions(query_info, column_names_to_return, context).partitions;
         std::unordered_set<String> required_part_name_set_for_this_table;
         for (const auto & part : required_partitions)
         {

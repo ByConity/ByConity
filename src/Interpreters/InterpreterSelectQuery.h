@@ -141,6 +141,7 @@ public:
 
 private:
     friend class InterpreterPerfectShard;
+    friend struct SelectQueryInfo;
 
     InterpreterSelectQuery(
         const ASTPtr & query_ptr_,

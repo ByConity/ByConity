@@ -194,7 +194,7 @@ public:
     void sendPreloadTasks(ContextPtr local_context, ServerDataPartsVector parts, bool enable_parts_sync_preload = true, UInt64 parts_preload_level = 0, UInt64 ts = {});
     void sendDropDiskCacheTasks(ContextPtr local_context, const ServerDataPartsVector & parts, bool sync = false, bool drop_vw_disk_cache = false);
 
-    Strings getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context);
+    PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const ;
 
 protected:
     StorageCnchMergeTree(
@@ -208,6 +208,7 @@ protected:
         std::unique_ptr<MergeTreeSettings> settings_);
 
 private:
+    friend class DB::Catalog::Catalog;
     // Relative path to auxility storage disk root
     String relative_auxility_storage_path;
 

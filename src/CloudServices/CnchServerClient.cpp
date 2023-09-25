@@ -16,7 +16,7 @@
 #include <CloudServices/CnchServerClient.h>
 #include <Protos/DataModelHelpers.h>
 #include <Protos/cnch_server_rpc.pb.h>
-
+#include <Parsers/ASTSerDerHelper.h>
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 #include <Storages/StorageCnchMergeTree.h>
@@ -178,6 +178,39 @@ ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_hos
 
     const auto & storage = dynamic_cast<const MergeTreeMetaBase &>(*table);
     return createServerPartsFromModels(storage, response.parts());
+}
+
+PrunedPartitions CnchServerClient::fetchPartitions(const String & remote_host, const ConstStoragePtr & table, const SelectQueryInfo & query_info, const Names & column_names)
+{
+    brpc::Controller cntl;
+    if (const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
+        cntl.set_timeout_ms(storage->getSettings()->cnch_meta_rpc_timeout_ms);
+    else
+        cntl.set_timeout_ms(8 * 1000);
+
+    Protos::FetchPartitionsReq request;
+    Protos::FetchPartitionsResp response;
+
+    request.set_remote_host(remote_host);
+    request.set_database(table->getDatabaseName());
+    request.set_table(table->getTableName());
+    WriteBufferFromOwnString buff;
+    serializeAST(query_info.query, buff);
+    request.set_predicate(buff.str());
+
+    for (const auto & name : column_names)
+        request.add_column_name_filter(name);
+
+    stub->fetchPartitions(&cntl, &request, & response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    UInt64 total_size = response.total_size();
+    Strings fetched_partitions;
+    for (const auto & partition : response.partitions())
+        fetched_partitions.push_back(partition);
+    return PrunedPartitions{fetched_partitions, total_size};
 }
 
 void buildRedirectCommitRequestBase(
