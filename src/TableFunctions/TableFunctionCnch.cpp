@@ -24,6 +24,7 @@
 #include <Storages/getStructureOfRemoteTable.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Poco/Logger.h>
+#include <Interpreters/VirtualWarehousePool.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <ResourceManagement/CommonData.h>
 
