@@ -36,7 +36,7 @@ enum class StatisticsTag : UInt64
     NdvBucketsResult = 5, // including bounds, min/max and ndv(double value) for each buckets
     ColumnBasic = 6, // now put min/max here
     NdvBucketsExtend = 7, // including bounds, min/max and ndv(hll object), block_ndv for each buckets
-    HllSketch = 8,
+    HllSketch = 9,
 
     // for test only
     DummyAlpha = 2000,

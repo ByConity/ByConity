@@ -60,7 +60,7 @@ enum StatisticsType {
   NdvBucketsResult = 5;
   ColumnBasic = 6;
   NdvBucketsExtend = 7;
-  HllSketch = 8;
+  HllSketch = 9;
   DummyAlpha = 2000;
   DummyBeta = 2001;
 }
