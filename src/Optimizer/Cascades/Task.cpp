@@ -474,6 +474,17 @@ void OptimizeInput::execute()
                 output_prop = cte_def_best_expr->getActualProperty().translate(cte_step->getReverseOutputColumns());
                 cte_actual_props.emplace(cte_id, std::make_pair(cte_global_property, cte_def_best_expr->getCost()));
             }
+            else if (context->getOptimizerContext().isEnableWhatIfMode() && group_expr->getStep()->getType() == IQueryPlanStep::Type::TableScan)
+            {
+                const auto * table_scan_step = dynamic_cast<const TableScanStep *>(group_expr->getStep().get());
+
+                NameToNameMap translation;
+                for (const auto & item : table_scan_step->getColumnAlias())
+                    translation.emplace(item.first, item.second);
+
+                output_prop = PropertyDeriver::deriveStoragePropertyWhatIfMode(
+                    table_scan_step->getStorage(), context->getOptimizerContext().getContext(), context->getRequiredProp()).translate(translation);
+            }
             else
             {
                 output_prop = PropertyDeriver::deriveProperty(

@@ -97,6 +97,9 @@ public:
 
     bool isEnablePruning() const { return enable_pruning; }
 
+    void setEnableWhatIfMode(bool enable_what_if_mode_) { enable_what_if_mode = enable_what_if_mode_; }
+    bool isEnableWhatIfMode() const { return enable_what_if_mode;}
+
 private:
     ContextMutablePtr context;
     CTEInfo & cte_info;
@@ -109,6 +112,7 @@ private:
     bool support_filter;
     UInt64 task_execution_timeout;
     bool enable_pruning;
+    bool enable_what_if_mode = false;
     Poco::Logger * log;
 };
 

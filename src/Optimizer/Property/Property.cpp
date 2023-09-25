@@ -334,6 +334,32 @@ String CTEDescriptions::toString() const
     return output.str();
 }
 
+size_t TableLayout::hash() const
+{
+    size_t hash = IntHash64Impl::apply(this->size());
+    for (const auto & item : *this)
+    {
+        hash = MurmurHash3Impl64::combineHashes(hash, item.first.hash());
+        hash = MurmurHash3Impl64::combineHashes(hash, item.second.isStarPartitioned() ? 0 : item.second.getPartitionKey().hash());
+    }
+    return hash;
+}
+
+String TableLayout::toString() const
+{
+    auto it = begin();
+    if (it == end())
+        return "";
+    std::stringstream output;
+    output << "TableLayout(" << it->first.database << "." << it->first.table << ")="
+           << (it->second.isStarPartitioned() ? "*" : it->second.getPartitionKey().column);
+    while (++it != end())
+        output << ","
+               << "TableLayout(" << it->first.database << "." << it->first.table << ")="
+               << (it->second.isStarPartitioned() ? "*" : it->second.getPartitionKey().column);
+    return output.str();
+}
+
 Property Property::translate(const std::unordered_map<String, String> & identities) const
 {
     Property result{
@@ -366,6 +392,7 @@ size_t Property::hash() const
     hash = MurmurHash3Impl64::combineHashes(hash, sorting.hash());
     //    hash = MurmurHash3Impl64::combineHashes(hash, constants.hash());
     hash = MurmurHash3Impl64::combineHashes(hash, cte_descriptions.hash());
+    hash = MurmurHash3Impl64::combineHashes(hash, table_layout.hash());
     return hash;
 }
 
@@ -381,6 +408,8 @@ String Property::toString() const
         output << " " << sorting.toString();
     if (!cte_descriptions.empty())
         output << " " << cte_descriptions.toString();
+    if (!table_layout.empty())
+        output << " " << table_layout.toString();
     return output.str();
 }
 

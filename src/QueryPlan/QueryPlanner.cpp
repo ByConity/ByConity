@@ -575,7 +575,9 @@ void QueryPlannerVisitor::planCrossJoin(ASTTableJoin & table_join, PlanBuilder &
             DataStreams{left_builder.getCurrentDataStream(), right_builder.getCurrentDataStream()},
             DataStream{.header = output_header},
             ASTTableJoin::Kind::Cross,
-            ASTTableJoin::Strictness::Unspecified);
+            ASTTableJoin::Strictness::Unspecified,
+            context->getSettingsRef().max_threads,
+            context->getSettingsRef().optimize_read_in_order);
 
         planHint(join_step, table_join.hints);
         left_builder.addStep(std::move(join_step), {left_builder.getRoot(), right_builder.getRoot()});

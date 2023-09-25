@@ -30,13 +30,14 @@ PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step
     DeterminerContext ctx{property, context};
     static DeterminerVisitor visitor{};
     PropertySets input_properties = VisitorUtil::accept(step, visitor, ctx);
-    if (!property.getCTEDescriptions().empty())
+    if (!property.getCTEDescriptions().empty() || !property.getTableLayout().empty())
     {
         for (auto & property_set : input_properties)
         {
             for (auto & prop : property_set)
             {
                 prop.setCTEDescriptions(property.getCTEDescriptions());
+                prop.setTableLayout(property.getTableLayout());
             }
         }
     }

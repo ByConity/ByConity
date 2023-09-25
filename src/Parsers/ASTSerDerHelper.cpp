@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Parsers/ASTAdviseQuery.h>
 #include <Parsers/ASTAlterDiskCacheQuery.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAssignment.h>

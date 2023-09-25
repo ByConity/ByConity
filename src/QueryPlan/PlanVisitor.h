@@ -156,6 +156,22 @@ public:
     }
 
     template <typename R, typename C>
+    static R accept(const IQueryPlanStep & step, StepVisitor<R, C> & visitor, C & context)
+    {
+        switch (step.getType())
+        {
+#define VISITOR_DEF(TYPE) \
+    case IQueryPlanStep::Type::TYPE: { \
+        return visitor.visit##TYPE##Step(static_cast<const TYPE##Step &>(step), context); \
+    }
+            APPLY_STEP_TYPES(VISITOR_DEF)
+#undef VISITOR_DEF
+            default:
+                return visitor.visitStep(step, context);
+        }
+    }
+
+    template <typename R, typename C>
     static R accept(const QueryPlanStepPtr & step, StepVisitor<R, C> & visitor, C & context)
     {
         switch (step->getType())

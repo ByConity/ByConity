@@ -20,7 +20,7 @@
  */
 
 #include <Interpreters/Context.h>
-#include <Interpreters/DistributedStages/InterpreterDistributedStages.h>
+#include <Parsers/ASTAdviseQuery.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAlterWarehouseQuery.h>
 #include <Parsers/ASTCheckQuery.h>
@@ -69,6 +69,7 @@
 #include <Parsers/MySQL/ASTCreateQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
 
+#include <Interpreters/InterpreterAdviseQuery.h>
 #include <Interpreters/InterpreterAlterQuery.h>
 #include <Interpreters/InterpreterAlterWarehouseQuery.h>
 #include <Interpreters/InterpreterCheckQuery.h>
@@ -252,6 +253,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTSwitchQuery>())
     {
         return std::make_unique<InterpreterSwitchQuery>(query, context);
+    }
+    else if (query->as<ASTAdviseQuery>())
+    {
+        return std::make_unique<InterpreterAdviseQuery>(query, context);
     }
     else if (query->as<ASTSetQuery>())
     {

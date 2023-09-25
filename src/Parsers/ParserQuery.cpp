@@ -39,6 +39,7 @@
 #include <Parsers/ParserInsertQuery.h>
 #include <Parsers/ParserOptimizeQuery.h>
 #include <Parsers/ParserQuery.h>
+#include <Parsers/ParserAdviseQuery.h>
 #include <Parsers/ParserQueryWithOutput.h>
 #include <Parsers/ParserRenameQuery.h>
 #include <Parsers/ParserSetQuery.h>
@@ -62,6 +63,7 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserSwitchQuery switch_p;
     ParserSetQuery set_p(false);
     ParserSystemQuery system_p(dt);
+    ParserAdviseQuery advise_p(dt);
     ParserCreateUserQuery create_user_p;
     ParserCreateRoleQuery create_role_p;
     ParserCreateQuotaQuery create_quota_p;
@@ -88,6 +90,7 @@ bool ParserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         || use_p.parse(pos, node, expected)
         || set_role_p.parse(pos, node, expected)
         || set_p.parse(pos, node, expected)
+        || advise_p.parse(pos, node, expected)
         || system_p.parse(pos, node, expected)
         || create_user_p.parse(pos, node, expected)
         || create_role_p.parse(pos, node, expected)

@@ -16,6 +16,7 @@
 #pragma once
 
 #include <Analyzers/ASTEquals.h>
+#include <Analyzers/QualifiedColumnName.h>
 #include <Core/Names.h>
 #include <Core/SortDescription.h>
 #include <Core/Types.h>
@@ -347,6 +348,27 @@ private:
     std::set<CTEId> explored;
 };
 
+struct WorkloadTablePartitioning
+{
+    std::optional<QualifiedColumnName> partition_key;
+
+    static WorkloadTablePartitioning starPartition() { return WorkloadTablePartitioning{std::nullopt}; }
+
+    bool isStarPartitioned() const { return !partition_key.has_value(); }
+
+    QualifiedColumnName getPartitionKey() const { return partition_key.value(); }
+
+    bool operator==(const WorkloadTablePartitioning & other) const { return partition_key == other.partition_key; }
+};
+
+class TableLayout : public std::map<QualifiedTableName, WorkloadTablePartitioning>
+{
+public:
+    using std::map<QualifiedTableName, WorkloadTablePartitioning>::map;
+    size_t hash() const;
+    String toString() const;
+};
+
 class Property
 {
 public:
@@ -370,7 +392,8 @@ public:
     const Constants & getConstants() const { return constants; }
     const CTEDescriptions & getCTEDescriptions() const { return cte_descriptions; }
     CTEDescriptions & getCTEDescriptions() { return cte_descriptions; }
-    bool isEnforceNotMatch() const { return enforce_not_match; } 
+    bool isEnforceNotMatch() const { return enforce_not_match; }
+    const TableLayout & getTableLayout() const { return table_layout; }
 
     void setPreferred(bool preferred_) { preferred = preferred_; }
     void setNodePartitioning(Partitioning node_partitioning_) { node_partitioning = std::move(node_partitioning_); }
@@ -379,6 +402,7 @@ public:
     void setSorting(Sorting sorting_) { sorting = std::move(sorting_); }
     void setConstants(Constants constants_) { constants = std::move(constants_); }
     void setEnforceNotMatch(bool enforce_not_match_) { enforce_not_match = enforce_not_match_; }
+    void setTableLayout(TableLayout table_layout_) { table_layout = std::move(table_layout_); }
 
     Property clearSorting() const
     {
@@ -392,7 +416,8 @@ public:
     bool operator==(const Property & other) const
     {
         return preferred == other.preferred && node_partitioning == other.node_partitioning
-            && stream_partitioning == other.stream_partitioning && sorting == other.sorting && cte_descriptions == other.cte_descriptions;
+            && stream_partitioning == other.stream_partitioning && sorting == other.sorting && cte_descriptions == other.cte_descriptions
+            && table_layout == other.table_layout;
     }
 
     bool operator!=(const Property & other) const { return !(*this == other); }
@@ -417,6 +442,8 @@ private:
     CTEDescriptions cte_descriptions;
     // used by offloading
     bool enforce_not_match = false;
+    // Description of the what-if table layout
+    TableLayout table_layout;
 };
 
 /**
@@ -443,6 +470,11 @@ struct CTEDescriptionHash
      * @returns hash code
      */
     std::size_t operator()(const CTEDescription & cte_description) const { return cte_description.hash(); }
+};
+
+struct TableLayoutHash
+{
+    size_t operator()(const TableLayout & layout) const { return layout.hash(); }
 };
 
 }

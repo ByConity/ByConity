@@ -1333,7 +1333,7 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
         }
         else if (select_item->as<ASTQualifiedAsterisk>())
         {
-            if (select_item->children.empty() && select_item->getChildren()[0]->as<ASTTableIdentifier>())
+            if (select_item->children.empty() || !select_item->getChildren()[0]->as<ASTTableIdentifier>())
                 throw Exception("Unable to resolve qualified asterisk", ErrorCodes::UNKNOWN_IDENTIFIER);
 
             ASTIdentifier& astidentifier = select_item->getChildren()[0]->as<ASTTableIdentifier&>();

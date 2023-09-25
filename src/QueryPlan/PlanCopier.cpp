@@ -99,7 +99,7 @@ QueryPlanPtr PlanCopier::copy(const QueryPlanPtr & plan, ContextMutablePtr & con
     for (const auto & [cte_id, cte_def] : plan->getCTEInfo().getCTEs()) {
         mapping = {};
         cte_info.add(cte_id, copy(cte_def, context, mapping));
-    } 
+    }
     return std::make_unique<QueryPlan>(plan_node, cte_info, context->getPlanNodeIdAllocator());
 }
 
@@ -255,29 +255,29 @@ PlanNodePtr PlanCopierVisitor::visitPartitionTopNNode(PartitionTopNNode & node, 
     return PartitionTopNNode::createPlanNode(id_allocator->nextId(), step);
 }
 
-PlanNodePtr PlanCopierVisitor::visitPartialSortingNode(PartialSortingNode & node, Void &) 
+PlanNodePtr PlanCopierVisitor::visitPartialSortingNode(PartialSortingNode & node, Void &)
 {
     auto step = symbol_mapper.map(*node.getStep());
     return PartialSortingNode::createPlanNode(id_allocator->nextId(), step);
-} 
+}
 
-PlanNodePtr PlanCopierVisitor::visitRemoteExchangeSourceNode(RemoteExchangeSourceNode & node, Void &) 
+PlanNodePtr PlanCopierVisitor::visitRemoteExchangeSourceNode(RemoteExchangeSourceNode & node, Void &)
 {
     auto step = symbol_mapper.map(*node.getStep());
     return RemoteExchangeSourceNode::createPlanNode(id_allocator->nextId(), step);
-} 
+}
 
 PlanNodePtr PlanCopierVisitor::visitReadNothingNode(ReadNothingNode & node, Void &)
 {
     auto step = symbol_mapper.map(*node.getStep());
     return ReadNothingNode::createPlanNode(id_allocator->nextId(), step);
-} 
+}
 
-PlanNodePtr PlanCopierVisitor::visitTotalsHavingNode(TotalsHavingNode & node, Void &) 
+PlanNodePtr PlanCopierVisitor::visitTotalsHavingNode(TotalsHavingNode & node, Void &)
 {
     auto step = symbol_mapper.map(*node.getStep());
     return TotalsHavingNode::createPlanNode(id_allocator->nextId(), step);
-} 
+}
 
 PlanNodePtr PlanCopierVisitor::visitTopNFilteringNode(TopNFilteringNode & node, Void &)
 {

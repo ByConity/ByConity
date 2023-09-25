@@ -1,0 +1,98 @@
+#include <Advisor/WorkloadTableStats.h>
+
+#include <Core/Block.h>
+#include <Core/NamesAndTypes.h>
+#include <Core/Types.h>
+#include <Interpreters/Context.h>
+#include <Optimizer/CardinalityEstimate/PlanNodeStatistics.h>
+#include <Poco/Logger.h>
+#include <Statistics/CatalogAdaptor.h>
+#include <Statistics/StatisticsCollector.h>
+#include <Statistics/SubqueryHelper.h>
+#include <Statistics/TypeUtils.h>
+#include <fmt/core.h>
+
+#include <memory>
+#include <set>
+
+
+namespace DB
+{
+
+static std::vector<WorkloadExtendedStatsType> extended_stats_types = {
+    WorkloadExtendedStatsType::HLL_STATS,
+    WorkloadExtendedStatsType::COUNT_DISTINCT_STATS
+};
+
+WorkloadTableStats WorkloadTableStats::build(ContextPtr context, const String & database_name, const String & table_name)
+{
+    auto stats_catalog = Statistics::createCatalogAdaptor(context);
+    auto stats_table_id = stats_catalog->getTableIdByName(database_name, table_name);
+    if (!stats_table_id)
+    {
+        return WorkloadTableStats{nullptr};
+    }
+
+    PlanNodeStatisticsPtr basic_stats;
+    try
+    {
+        Statistics::StatisticsCollector collector(context, stats_catalog, stats_table_id.value());
+        collector.readAllFromCatalog();
+        basic_stats = collector.toPlanNodeStatistics().value_or(nullptr);
+        if (basic_stats)
+            LOG_DEBUG(&Poco::Logger::get("WorkloadTableStats"), "Stats for table {}.{}: {} rows, {} symbols",
+                      database_name, table_name, basic_stats->getRowCount(), basic_stats->getSymbolStatistics().size());
+    } catch (...) {}
+
+    return WorkloadTableStats{basic_stats};
+}
+
+WorkloadExtendedStatsPtr WorkloadTableStats::collectExtendedStats(
+    ContextPtr context,
+    const String & database,
+    const String & table,
+    const NamesAndTypesList & columns)
+{
+    std::set<String> columns_to_collect; /* ordered set */
+    for (const auto & column : columns)
+    {
+        if (!extended_stats->contains(column.name))
+            columns_to_collect.emplace(column.name);
+    }
+
+    if (columns_to_collect.empty())
+        return extended_stats;
+
+    String query = "SELECT ";
+    for (const auto & column : columns_to_collect)
+    {
+        for (const auto & type : extended_stats_types)
+        {
+            query += fmt::format(getStatsAggregation(type), column) + ", ";
+        }
+    }
+    query.pop_back();
+    query.pop_back();
+    query += fmt::format(" FROM {}.{}", database, table);
+
+    LOG_DEBUG(&Poco::Logger::get("WorkloadTableStats"), "Collecting extended stats for table: {}", query);
+
+    Statistics::SubqueryHelper subquery_helper = Statistics::SubqueryHelper::create(context, query);
+    Block result = Statistics::getOnlyRowFrom(subquery_helper);
+
+    auto column_it = result.cbegin();
+
+    for (const auto & column : columns_to_collect)
+    {
+        for (const auto & type : extended_stats_types)
+        {
+            (*extended_stats)[column][type] = (*column_it->column)[0];
+            ++column_it;
+        }
+    }
+    
+    return extended_stats;
+}
+
+
+} // namespace DB

@@ -20,7 +20,7 @@ public:
     explicit BaseWorkloadTest(int sf_ = 1000)
         : AbstractPlanTestSuite("tpcds" + std::to_string(sf_), BasePlanTest::getDefaultOptimizerSettings()), sf(sf_)
     {
-        createTables(/*enable_memory_table=*/true);
+        createTables();
         dropTableStatistics();
         loadTableStatistics();
     }

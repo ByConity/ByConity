@@ -29,6 +29,7 @@ public:
     static Property deriveProperty(QueryPlanStepPtr step, Property & input_property, ContextMutablePtr & context);
     static Property deriveProperty(QueryPlanStepPtr step, PropertySet & input_properties, ContextMutablePtr & context);
     static Property deriveStorageProperty(const StoragePtr& storage, ContextMutablePtr & context);
+    static Property deriveStoragePropertyWhatIfMode(const StoragePtr& storage, ContextMutablePtr & context, const Property & required_property);
 };
 
 class DeriverContext
