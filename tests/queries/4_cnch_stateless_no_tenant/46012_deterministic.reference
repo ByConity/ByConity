@@ -6,9 +6,9 @@ Gather Exchange Est. ? rows
       ├─ Repartition Exchange Est. ? rows
       │  │     Partition by: {item_code}
       │  └─ Filter Est. ? rows
-      │     │     Condition: (toStartOfMonth(transaction_time) - toStartOfMonth(transaction_time)) = cast(31, \'Int32\')
+      │     │     Condition: (toStartOfMonth(transaction_time) - toStartOfMonth(transaction_time)) = cast(7, \'Int32\')
       │     └─ TableScan test.sales_transaction Est. ? rows
-      │              Where: (toStartOfMonth(transaction_time) - toStartOfMonth(transaction_time)) = cast(31, \'Int32\')
+      │              Where: (toStartOfMonth(transaction_time) - toStartOfMonth(transaction_time)) = cast(7, \'Int32\')
       │              Outputs: [item_code, transaction_time]
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {expr#cast(item_code_1, \'Nullable(String)\')}

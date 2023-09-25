@@ -11,4 +11,4 @@ set enable_optimizer=1;
 explain SELECT `s`.`item_code`
 FROM `sales_transaction` AS s
          INNER JOIN `items` AS i ON `i`.`item_code` = `s`.`item_code`
-WHERE toStartOfMonth(`transaction_time`) - toStartOfMonth(`transaction_time`) = toStartOfMonth(toDate(now())) + toIntervalMonth(1) - toStartOfMonth(toDate(now()))
+WHERE toStartOfMonth(`transaction_time`) - toStartOfMonth(`transaction_time`) = toStartOfMonth(toDate(now())) + toIntervalWeek(1) - toStartOfMonth(toDate(now()))
