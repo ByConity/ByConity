@@ -18,7 +18,6 @@
 namespace DB::Statistics
 {
 
-constexpr UInt64 DEFAULT_KLL_SKETCH_LOG_K = 1600;
 struct CollectorSettings
 {
     bool collect_histogram = true;
@@ -55,6 +54,17 @@ struct CollectorSettings
 
         // other settings should be manually set
         // like if not exists
+
+        // normalize conflicting settings
+        normalize();
+    }
+
+    void normalize()
+    {
+        if (histogram_bucket_size <= 0)
+        {
+            collect_histogram = false;
+        }
     }
 };
 

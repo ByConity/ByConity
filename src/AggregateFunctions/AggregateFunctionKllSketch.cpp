@@ -33,7 +33,7 @@ struct KllData
     using EmbeddedType = std::conditional_t<std::is_same_v<T, UUID>, UInt128, T>;
     Statistics::StatsKllSketchImpl<EmbeddedType> data_;
 
-    explicit KllData(UInt64 logK = Statistics::DEFAULT_KLL_SKETCH_LOG_K) : data_(logK) {}
+    explicit KllData(UInt64 logK = DEFAULT_KLL_SKETCH_LOG_K) : data_(logK) {}
 
     void add(T value) { data_.update(value); }
 
@@ -72,7 +72,7 @@ createAggregateFunctionKllSketch(const std::string & name, const DataTypes & arg
     UInt64 logK;
     if (parameters.empty())
     {
-        logK = Statistics::DEFAULT_KLL_SKETCH_LOG_K;
+        logK = DEFAULT_KLL_SKETCH_LOG_K;
     }
     else if (parameters.size() == 1)
     {

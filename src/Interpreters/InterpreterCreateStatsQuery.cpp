@@ -277,6 +277,7 @@ BlockIO InterpreterCreateStatsQuery::execute()
         }
     }
 
+    settings.normalize();
     BlockIO io;
     io.in = std::make_shared<CreateStatsBlockInputStream>(context, settings, std::move(valid_targets));
     return io;

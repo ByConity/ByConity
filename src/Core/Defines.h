@@ -22,6 +22,7 @@
 #pragma once
 
 #include <common/defines.h>
+#include <cstdint>
 
 #define DBMS_DEFAULT_HOST "localhost"
 #define DBMS_DEFAULT_PORT 9000
@@ -119,3 +120,6 @@
 
 /// SERVER VW
 constexpr auto DEFAULT_SERVER_VW_NAME = "server_vw_default";
+
+// Statistics
+constexpr uint64_t DEFAULT_KLL_SKETCH_LOG_K = 1600;
