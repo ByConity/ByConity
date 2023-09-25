@@ -19,7 +19,7 @@
 #include <Statistics/CollectStep.h>
 #include <Statistics/ParseUtils.h>
 #include <Statistics/ScaleAlgorithm.h>
-#include <Statistics/StatsCpcSketch.h>
+#include <Statistics/StatsHllSketch.h>
 #include <Statistics/StatsNdvBucketsExtend.h>
 #include <Statistics/TypeUtils.h>
 #include <boost/noncopyable.hpp>
@@ -30,12 +30,12 @@ namespace DB::Statistics
 
 static const String virtual_mark_id = "cityHash64(blockNumber(), _part_uuid, intDiv(rowNumberInBlock(), 8192))";
 
-// cpc is like HyperLogLog, kll is to calculate bucket bounds for equal-height histogram
+// hll is like HyperLogLog, kll is to calculate bucket bounds for equal-height histogram
 // this fetch data via the following sql:
 // select
-//      count(<col1>), cpc(<col1>), cpc(cityHash64(<col1>, __mark_id), kll(<col1>),
-//      count(<col2>), cpc(<col2>), cpc(cityHash64(<col2>, __mark_id), kll(<col2>),
-//      count(<col3>), cpc(<col3>), cpc(cityHash64(<col3>, __mark_id), kll(<col3>),
+//      count(<col1>), hll(<col1>), hll(cityHash64(<col1>, __mark_id), kll(<col1>),
+//      count(<col2>), hll(<col2>), hll(cityHash64(<col2>, __mark_id), kll(<col2>),
+//      count(<col3>), hll(<col3>), hll(cityHash64(<col3>, __mark_id), kll(<col3>),
 // from
 //      <table>
 class FirstSampleColumnHandler : public ColumnHandlerBase
@@ -56,8 +56,8 @@ public:
         auto wrapped_col_name = getWrappedColumnName(config, quote_col_name);
 
         auto count_sql = fmt::format(FMT_STRING("count({})"), quote_col_name);
-        auto ndv_sql = fmt::format(FMT_STRING("cpc({})"), wrapped_col_name);
-        auto block_ndv_sql = fmt::format(FMT_STRING("cpc(cityHash64({}, {}))"), wrapped_col_name, virtual_mark_id);
+        auto ndv_sql = fmt::format(FMT_STRING("uniq({})"), wrapped_col_name);
+        auto block_ndv_sql = fmt::format(FMT_STRING("hll(cityHash64({}, {}))"), wrapped_col_name, virtual_mark_id);
 
         sqls.emplace_back(count_sql);
         sqls.emplace_back(ndv_sql);
@@ -65,7 +65,9 @@ public:
 
         if (config.need_histogram)
         {
-            auto histogram_sql = fmt::format(FMT_STRING("kll({})"), wrapped_col_name);
+            auto kll_log_k = handler_context.settings.kll_sketch_log_k;
+            auto kll_name = getKllFuncNameWithConfig(kll_log_k);
+            auto histogram_sql = fmt::format(FMT_STRING("{}({})"), kll_name, wrapped_col_name);
             sqls.emplace_back(histogram_sql);
         }
 
@@ -86,10 +88,7 @@ public:
                 fmt::join(sqls, ", ")));
     }
 
-    const std::vector<String> & getSqls() override
-    {
-        return sqls;
-    }
+    const std::vector<String> & getSqls() override { return sqls; }
 
     void parse(const Block & block, size_t index_offset_begin) override
     {
@@ -98,9 +97,9 @@ public:
 
         // count(col) SAMPLE
         auto sample_nonnull_count = static_cast<double>(getSingleValue<UInt64>(block, index_offset++));
-        // cpc(col) SAMPLE
-        auto ndv_blob = getSingleValue<std::string_view>(block, index_offset++);
-        // cpc(cityHash64(col, _mark_id)  SAMPLE
+        // hll(col) SAMPLE
+        double sample_ndv = getSingleValue<UInt64>(block, index_offset++);
+        // hll(cityHash64(col, _mark_id)  SAMPLE
         auto block_ndv_blob = getSingleValue<std::string_view>(block, index_offset++);
 
         // select count(*) SAMPLE
@@ -126,7 +125,6 @@ public:
         // algorithm requires block_ndv as sample_nonnull
         if (sample_nonnull_count != 0)
         {
-            double sample_ndv = getNdvFromSketchBinary(ndv_blob);
             double block_ndv = getNdvFromSketchBinary(block_ndv_blob);
             block_ndv = std::min(block_ndv, sample_nonnull_count);
 
@@ -188,8 +186,8 @@ public:
 
                     result.min_as_double = histogram->minAsDouble().value_or(std::nan(""));
                     result.max_as_double = histogram->maxAsDouble().value_or(std::nan(""));
-
-                    result.bucket_bounds = histogram->getBucketBounds();
+                    auto histogram_bucket_size = handler_context.settings.histogram_bucket_size;
+                    result.bucket_bounds = histogram->getBucketBounds(histogram_bucket_size);
                 }
             }
 
@@ -274,10 +272,7 @@ public:
         sqls.emplace_back(ndv_buckets_extend_sql);
     }
 
-    const std::vector<String> & getSqls() 
-    {
-        return sqls;     
-    }
+    const std::vector<String> & getSqls() { return sqls; }
 
     void parse(const Block & block, size_t index_offset) override
     {
@@ -376,14 +371,13 @@ String constructThirdSql(
     auto data_type = decayDataType(col_desc.type);
     auto config = getColumnConfig(settings, data_type);
     auto wrapped_col_name = getWrappedColumnName(config, backQuoteIfNeed(col_desc.name));
-    auto tag_sql = [&]() -> String 
-    {
-        if (bucket_bounds) 
+    auto tag_sql = [&]() -> String {
+        if (bucket_bounds)
         {
             auto bounds_b64 = base64Encode(bucket_bounds->serialize());
             return fmt::format(FMT_STRING("bucket_bounds_search('{}', {})"), bounds_b64, wrapped_col_name);
         }
-        else 
+        else
         {
             // when bucket_bounds not exists, possibly statistics_collect_histogram=false,
             // we treat as if histogram has only one bucket, i.e., "group by 0"
@@ -586,7 +580,7 @@ public:
                 col_data.ndv_value = scaleNdv(full_count, sample_row_count, sample_ndv, sample_block_ndv);
             }
 
-            if (col_data.bucket_bounds) 
+            if (col_data.bucket_bounds)
             {
                 std::vector<UInt64> res_counts(num_buckets);
                 std::vector<double> res_ndvs(num_buckets);

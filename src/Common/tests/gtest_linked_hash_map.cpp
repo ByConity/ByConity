@@ -14,10 +14,11 @@
  */
 
 #include <memory>
-#include <common/defines.h>
 #include <fmt/format.h>
 #include <gtest/gtest.h>
 #include <Common/LinkedHashMap.h>
+#include <Common/LinkedHashSet.h>
+#include <common/defines.h>
 using namespace DB;
 
 
@@ -107,4 +108,18 @@ TEST(LinkedHashMap, UniquePtr)
     }
     ASSERT_FALSE(mapping.count(genK(N)));
     ASSERT_LOGICAL_ERROR(mapping.at(genK(N)));
+}
+
+
+TEST(LinkedHashMap, operatorBracket)
+{
+    LinkedHashMap<String, LinkedHashSet<String>> map;
+    LinkedHashSet<String> set;
+    set.emplace("1");
+
+    map.emplace("foo", std::move(set));
+    map["bar"].emplace("100");
+    map["foo"].emplace("2");
+    map["zzz"];
+    std::cout << map.toString() << std::endl;
 }

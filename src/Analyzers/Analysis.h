@@ -20,6 +20,7 @@
 #include <Analyzers/ResolvedWindow.h>
 #include <Analyzers/Scope.h>
 #include <Analyzers/SubColumnID.h>
+#include <Interpreters/StorageID.h>
 #include <Interpreters/asof.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTFunction.h>
@@ -29,7 +30,7 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <Storages/IStorage_fwd.h>
-#include "Interpreters/StorageID.h"
+#include <Common/LinkedHashSet.h>
 
 #include <utility>
 #include <vector>
@@ -278,10 +279,16 @@ struct Analysis
     std::unordered_map<ASTPtr, ResolvedField> column_references;
     void setColumnReference(const ASTPtr & ast, const ResolvedField & resolved);
     std::optional<ResolvedField> tryGetColumnReference(const ASTPtr & ast);
-    std::unordered_map<const IAST *, std::set<size_t>> used_columns;
-    void addUsedColumn(const IAST * table_ast, size_t field_index);
-    void addUsedColumn(const ResolvedField & resolved_field);
-    const std::set<size_t> & getUsedColumns(const IAST & table_ast);
+
+    // Which columns are needed to read, used for planning phase column pruning.
+    // Columns used in alias columns will be included regardless of whether their
+    // alias columns are used.
+    //
+    // ASTTableIdentifier -> index of table storage scope
+    std::unordered_map<const IAST *, std::set<size_t>> read_columns;
+    void addReadColumn(const IAST * table_ast, size_t field_index);
+    void addReadColumn(const ResolvedField & resolved_field, bool add_used);
+    const std::set<size_t> & getReadColumns(const IAST & table_ast);
 
     // ASTIdentifier
     std::unordered_map<ASTPtr, ResolvedField> lambda_argument_references;
@@ -376,9 +383,9 @@ struct Analysis
     void setSubColumnReference(const ASTPtr & ast, const SubColumnReference & reference);
     std::optional<SubColumnReference> tryGetSubColumnReference(const ASTPtr & ast);
 
-    std::unordered_map<const IAST *, std::vector<SubColumnIDSet>> used_sub_columns;
-    void addUsedSubColumn(const IAST * table_ast, size_t field_index, const SubColumnID & sub_column_id);
-    const std::vector<SubColumnIDSet> & getUsedSubColumns(const IAST & table_ast);
+    std::unordered_map<const IAST *, std::vector<SubColumnIDSet>> read_sub_columns;
+    void addReadSubColumn(const IAST * table_ast, size_t field_index, const SubColumnID & sub_column_id);
+    const std::vector<SubColumnIDSet> & getReadSubColumns(const IAST & table_ast);
 
     /// Type coercion
     // expression-level coercion
@@ -410,9 +417,28 @@ struct Analysis
         return insert_analysis;
     }
 
-    // function names
-    std::set<String> function_names;
-    std::set<String> & getFunctionNames() { return function_names; }
+    // Which columns are used in query, used for EXPLAIN ANALYSIS reporting.
+    // A difference with read_columns is, columns used in alias columns are not included.
+    LinkedHashMap<StorageID, LinkedHashSet<String>> used_columns;
+    void addUsedColumn(const StorageID & storage_id, const String & column)
+    {
+        used_columns[storage_id].emplace(column);
+    }
+    const LinkedHashMap<StorageID, LinkedHashSet<String>> & getUsedColumns() const
+    {
+        return used_columns;
+    }
+
+    // Which functions are used in query.
+    std::set<String> used_functions;
+    void addUsedFunction(const String & function)
+    {
+        used_functions.emplace(function);
+    }
+    const std::set<String> & getUsedFunctions() const
+    {
+        return used_functions;
+    }
 };
 
 }

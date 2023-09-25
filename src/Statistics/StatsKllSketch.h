@@ -46,9 +46,9 @@ public:
     template <typename T>
     using Impl = StatsKllSketchImpl<T>;
 
-    virtual std::shared_ptr<BucketBounds> getBucketBounds() const = 0;
+    virtual std::shared_ptr<BucketBounds> getBucketBounds(UInt64 histogram_bucket_size) const = 0;
 
-    virtual std::shared_ptr<StatsNdvBucketsResult> generateNdvBucketsResult(double total_ndv) const = 0;
+    virtual std::shared_ptr<StatsNdvBucketsResult> generateNdvBucketsResult(double total_ndv, UInt64 histogram_bucket_size) const = 0;
 
     virtual int64_t getCount() const = 0;
 

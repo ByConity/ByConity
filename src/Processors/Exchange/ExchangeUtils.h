@@ -22,6 +22,8 @@
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <absl/strings/str_split.h>
+#include <fmt/core.h>
+#include <Common/CurrentThread.h>
 #include <Common/Allocator.h>
 #include <Common/CurrentMemoryTracker.h>
 #include <Common/Exception.h>
@@ -63,7 +65,8 @@ public:
         if (status.is_modifer && status.code > 0)
         {
             throw Exception(
-                sender.getName() + " fail to send data: " + status.message + " code: " + std::to_string(status.code),
+                sender.getName() + " for query: " + CurrentThread::getQueryId().toString() + " fail to send data: " + status.message
+                    + " code: " + std::to_string(status.code),
                 ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
         }
         return status;

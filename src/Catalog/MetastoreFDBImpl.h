@@ -78,7 +78,9 @@ public:
 
     bool batchWrite(const BatchCommitRequest & req, BatchCommitResponse & response) override;
 
-    void drop(const String &, const String & expected = {}) override;
+    void drop(const String &, const UInt64 & expected = 0) override;
+
+    void drop(const String &, const String & expected_value) override;
 
     IteratorPtr getAll() override;
 

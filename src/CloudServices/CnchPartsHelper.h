@@ -34,13 +34,25 @@ enum LoggingOption
     EnableLogging = 1,
 };
 
+template <class T>
+struct PartComparator
+{
+    bool operator()(const T & lhs, const T & rhs) const
+    {
+        auto & l = lhs->get_info();
+        auto & r = rhs->get_info();
+        return std::forward_as_tuple(l.partition_id, l.min_block, l.max_block, l.level, lhs->get_commit_time(), l.storage_type)
+            < std::forward_as_tuple(r.partition_id, r.min_block, r.max_block, r.level, rhs->get_commit_time(), r.storage_type);
+    }
+};
+
 LoggingOption getLoggingOption(const Context & c);
 
 IMergeTreeDataPartsVector toIMergeTreeDataPartsVector(const MergeTreeDataPartsCNCHVector & vec);
 MergeTreeDataPartsCNCHVector toMergeTreeDataPartsCNCHVector(const IMergeTreeDataPartsVector & vec);
 
 MergeTreeDataPartsVector calcVisibleParts(MergeTreeDataPartsVector & all_parts, bool flatten, LoggingOption logging = DisableLogging);
-ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging = DisableLogging);
+ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging = DisableLogging, bool move_source_parts = false);
 MergeTreeDataPartsCNCHVector calcVisibleParts(MergeTreeDataPartsCNCHVector & all_parts, bool flatten, LoggingOption logging = DisableLogging);
 
 ServerDataPartsVector calcVisiblePartsForGC(

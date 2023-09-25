@@ -29,6 +29,7 @@
 #pragma clang diagnostic ignored "-Wcast-align"
 #pragma clang diagnostic ignored "-Wshadow-uncaptured-local"
 #pragma clang diagnostic ignored "-Wcovered-switch-default"
+#include <DataSketches/hll.hpp>
 #include <DataSketches/cpc_sketch.hpp>
 #include <DataSketches/cpc_union.hpp>
 #include <DataSketches/kll_sketch.hpp>

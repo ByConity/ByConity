@@ -43,7 +43,7 @@ struct NdvBucketsData
 
     NdvBucketsData() = default;
 
-    NdvBucketsData(std::string_view blob)
+    explicit NdvBucketsData(std::string_view blob)
     {
         Statistics::BucketBoundsImpl<EmbeddedType> bounds;
         bounds.deserialize(blob);

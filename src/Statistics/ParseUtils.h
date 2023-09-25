@@ -19,7 +19,7 @@
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/CollectorSettings.h>
 #include <Statistics/StatisticsCommon.h>
-#include <Statistics/StatsCpcSketch.h>
+#include <Statistics/StatsHllSketch.h>
 #include <Statistics/StatsNdvBucketsResult.h>
 #include <Statistics/TableHandler.h>
 #include <Statistics/TypeUtils.h>
@@ -120,8 +120,8 @@ inline Float64 getNdvFromSketchBinary(std::string_view blob)
     {
         return 0;
     }
-    auto cpc = createStatisticsUntyped<StatsCpcSketch>(StatisticsTag::CpcSketch, blob);
-    return cpc->getEstimate();
+    auto hll = createStatisticsUntyped<StatsHllSketch>(StatisticsTag::HllSketch, blob);
+    return hll->getEstimate();
 }
 
 inline String getWrappedColumnName(const ColumnCollectConfig & config, const String & col_name)
@@ -142,5 +142,16 @@ inline String getWrappedColumnName(const ColumnCollectConfig & config, const Str
     }
 }
 
+inline String getKllFuncNameWithConfig(UInt64 kll_log_k)
+{
+    if (kll_log_k == DEFAULT_KLL_SKETCH_LOG_K)
+    {
+        return "kll";
+    }
+    else
+    {
+        return fmt::format("kll({})", kll_log_k);
+    }
+}
 
 }

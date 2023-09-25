@@ -229,8 +229,9 @@ TxnTimestamp CnchWorkerTransaction::commitV2()
         {
             LOG_DEBUG(log, "Transaction {} commit failed\n", txn_record.txnID().toUInt64());
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
-            rollback();
-            throw;
+            // depends on kv implementation, such as bytekv, some error codes are uncertain case like LOCK_TIMEOUT, 
+            // instead of call the rollback explicitly, it is better to let server executes the clean logic to make sure the correct state transition.
+            throw e;
         }
     }
     catch (...)

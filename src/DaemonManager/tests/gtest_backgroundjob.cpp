@@ -121,6 +121,11 @@ public:
 
 const UUID g_uuid1 = UUID{UInt128{0, 1}};
 const StorageID g_storage_id1{"db1", "tb1", g_uuid1};
+const UUID g_uuid2 = UUID{UInt128{0, 2}};
+const StorageID g_storage_id2{"db2", "tb2", g_uuid2};
+const UUID g_uuid3 = UUID{UInt128{0, 3}};
+const StorageID g_storage_id3{"db3", "tb3", g_uuid3};
+
 const std::unordered_map<UUID, String> global_target_host_map {
         {g_uuid1, MockTargetServerCalculater::TARGET_SERVER}
 };
@@ -188,13 +193,26 @@ TEST(backgroundjob, test_persistent_status)
     }
 
     {
-        const UUID uuid = UUID{UInt128{0, 2}};
-        const StorageID storage_id{"db2", "tb2", uuid};
-        BackgroundJob bg_info{storage_id, CnchBGThreadStatus::Stopped, daemon_job, "127.0.0.1:9010"};
-        EXPECT_EQ(proxy->stored_statuses.at(uuid), CnchBGThreadStatus::Stopped);
+        BackgroundJob bg_info{g_storage_id2, CnchBGThreadStatus::Stopped, daemon_job, "127.0.0.1:9010"};
+        EXPECT_EQ(proxy->stored_statuses.at(g_uuid2), CnchBGThreadStatus::Stopped);
         bg_info.start(false);
         EXPECT_EQ(bg_info.getJobStatus(), CnchBGThreadStatus::Running);
-        EXPECT_EQ(proxy->stored_statuses.at(uuid), CnchBGThreadStatus::Stopped);
+        EXPECT_EQ(proxy->stored_statuses.at(g_uuid2), CnchBGThreadStatus::Stopped);
+    }
+
+    {
+        BackgroundJob bg_info{g_storage_id3, daemon_job};
+        EXPECT_EQ(proxy->stored_statuses.at(g_uuid3), CnchBGThreadStatus::Running);
+        EXPECT_EQ(bg_info.getJobStatus(), CnchBGThreadStatus::Stopped);
+        bg_info.start(true);
+        EXPECT_EQ(proxy->stored_statuses.at(g_uuid3), CnchBGThreadStatus::Running);
+        EXPECT_EQ(bg_info.getJobStatus(), CnchBGThreadStatus::Running);
+    }
+
+    {
+        BackgroundJob bg_info{g_storage_id3, daemon_job};
+        EXPECT_EQ(proxy->stored_statuses.at(g_uuid3), CnchBGThreadStatus::Running);
+        EXPECT_EQ(bg_info.getJobStatus(), CnchBGThreadStatus::Stopped);
     }
 }
 

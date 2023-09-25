@@ -15,8 +15,9 @@
 
 #include <type_traits>
 #include <Statistics/CollectStep.h>
+#include <Statistics/CollectorSettings.h>
 #include <Statistics/ParseUtils.h>
-#include <Statistics/StatsCpcSketch.h>
+#include <Statistics/StatsHllSketch.h>
 #include <Statistics/StatsNdvBuckets.h>
 #include <Statistics/TableHandler.h>
 #include <Statistics/TypeUtils.h>
@@ -44,11 +45,13 @@ public:
 
         auto count_sql = fmt::format(FMT_STRING("count({})"), quote_col_name);
         sqls.emplace_back(count_sql);
-        auto ndv_sql = fmt::format(FMT_STRING("cpc({})"), wrapped_col_name);
+        auto ndv_sql = fmt::format(FMT_STRING("uniq({})"), wrapped_col_name);
         sqls.emplace_back(ndv_sql);
         if (config.need_histogram)
         {
-            auto histogram_sql = fmt::format(FMT_STRING("kll({})"), wrapped_col_name);
+            auto kll_log_k = handler_context.settings.kll_sketch_log_k;
+            auto kll_name = getKllFuncNameWithConfig(kll_log_k);
+            auto histogram_sql = fmt::format(FMT_STRING("{}({})"), kll_name, wrapped_col_name);
             sqls.emplace_back(histogram_sql);
         }
 
@@ -86,9 +89,8 @@ public:
             // select count(*)
             double full_count = handler_context.full_count;
 
-            // cpc(col)
-            auto ndv_blob = getSingleValue<std::string_view>(block, index_offset++);
-            double ndv = getNdvFromSketchBinary(ndv_blob);
+            // hll(col)
+            double ndv = getSingleValue<UInt64>(block, index_offset++);
             result.is_ndv_reliable = true;
             result.ndv_value = std::min(ndv, nonnull_count);
 
@@ -102,8 +104,8 @@ public:
                     auto histogram = createStatisticsTyped<StatsKllSketch>(StatisticsTag::KllSketch, histogram_blob);
                     result.min_as_double = histogram->minAsDouble().value_or(std::nan(""));
                     result.max_as_double = histogram->maxAsDouble().value_or(std::nan(""));
-
-                    result.bucket_bounds = histogram->getBucketBounds();
+                    auto histogram_bucket_size = handler_context.settings.histogram_bucket_size;
+                    result.bucket_bounds = histogram->getBucketBounds(histogram_bucket_size);
                 }
                 LOG_INFO(
                     &Poco::Logger::get("FirstFullColumnHandler"),
@@ -113,8 +115,7 @@ public:
                                    "column raw data: nonnull_count={}, ndv=&& "
                                    "cast data: result.nonnull_count={}, "
                                    "result.is_ndv_reliable={}, "
-                                   "result.ndv_value={}"
-                                   ),
+                                   "result.ndv_value={}"),
                         col_name,
                         full_count,
                         nonnull_count,
@@ -124,7 +125,7 @@ public:
                         result.ndv_value));
             }
 
-            if (config.need_minmax) 
+            if (config.need_minmax)
             {
                 auto min = getSingleValue<Float64>(block, index_offset++);
                 auto max = getSingleValue<Float64>(block, index_offset++);

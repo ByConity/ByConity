@@ -878,7 +878,6 @@ BlockInputStreamPtr InterpreterExplainQuery::explainAnalysis(const ASTPtr & ast)
     auto query_ptr = explain.getExplainedQuery();
     query_ptr = QueryRewriter().rewrite(query_ptr, context);
     AnalysisPtr analysis = QueryAnalyzer::analyze(query_ptr, context);
-    auto & table_storage_scopes = analysis->getTableStorageScopeMap();
 
     // get used tables, databases, columns_list
     auto column_tables = ColumnArray::create(ColumnString::create());
@@ -891,19 +890,15 @@ BlockInputStreamPtr InterpreterExplainQuery::explainAnalysis(const ASTPtr & ast)
     Array tables_array;
     Array databases_array;
     size_t array_off_size = 0;
-    for (auto & it : table_storage_scopes)
+
+    for (const auto & [storage_id, columns] : analysis->getUsedColumns())
     {
         Array columns_array;
-        auto storage = analysis->getStorageAnalysis(*it.first);
-        tables_array.push_back(storage.table);
-        databases_array.push_back(storage.database);
-        const auto & column_id_set = analysis->getUsedColumns(*it.first);
-        std::vector<String> column_list;
+        tables_array.push_back(storage_id.table_name);
+        databases_array.push_back(storage_id.database_name);
         array_off_size++;
-        for (size_t i : column_id_set)
-        {
-            columns_array.push_back(it.second->at(i).name);
-        }
+        for (const auto & column : columns)
+            columns_array.push_back(column);
         column_columns_list->insert(columns_array);
     }
     columns_list_offset_data.push_back(array_off_size);
@@ -911,7 +906,7 @@ BlockInputStreamPtr InterpreterExplainQuery::explainAnalysis(const ASTPtr & ast)
     //get used functions
     auto column_functions = ColumnArray::create(ColumnString::create());
     Array functions_array;
-    for (auto & func_name : analysis->getFunctionNames())
+    for (const auto & func_name : analysis->getUsedFunctions())
         functions_array.push_back(func_name);
 
     // get settings

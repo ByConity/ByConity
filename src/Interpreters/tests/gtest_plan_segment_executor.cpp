@@ -37,6 +37,7 @@
 #include <Processors/tests/gtest_processers_utils.h>
 #include <gtest/gtest.h>
 #include <Poco/ConsoleChannel.h>
+#include <common/types.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_utils.h>
 
@@ -47,7 +48,7 @@ namespace UnitTest
 TEST(PlanSegmentExecutor, ExecuteTest)
 {
     initLogger();
-    const auto & context = getContext().context;
+    auto context = Context::createCopy(getContext().context);
     context->setProcessListEntry(nullptr);
     const size_t rows = 100;
     Block block = createUInt64Block(rows, 10, 88);
@@ -63,17 +64,20 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .need_send_plan_segment_status = false};
 
     const String query_id = "PlanSegmentExecutor_test";
+    const UInt64 query_tx_id = 12345;
+    context->setTemporaryTransaction(query_tx_id,query_tx_id,false);
+
     AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
     auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
 
-    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 1, coordinator_address_str);
+    auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 1);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
 
-    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 1, coordinator_address_str);
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 1);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
     auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
     sink_sender->becomeRealSender(sink_channel);
@@ -160,17 +164,20 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .need_send_plan_segment_status = false};
 
     const String query_id = "PlanSegmentExecutor_test";
+    const UInt64 query_tx_id = 11111;
+    context->setTemporaryTransaction(query_tx_id,query_tx_id,false);
+
     AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
     auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
 
-    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 1, coordinator_address_str);
+    auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 1);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
 
-    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 1, coordinator_address_str);
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 1);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
     auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
     sink_sender->becomeRealSender(sink_channel);
@@ -260,17 +267,20 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .need_send_plan_segment_status = false};
 
     const String query_id = "PlanSegmentExecutor_test";
+    const UInt64 query_tx_id = 11111;
+    context->setTemporaryTransaction(query_tx_id,query_tx_id,false);
+
     AddressInfo coordinator_address("localhost", 8888, "test", "123456", 9999, 6666);
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
     auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
     LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
 
-    auto source_key = std::make_shared<ExchangeDataKey>(query_id, 1, 1, coordinator_address_str);
+    auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 1);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
 
-    auto sink_key = std::make_shared<ExchangeDataKey>(query_id, 2, 1, coordinator_address_str);
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 1);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
     auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
     sink_sender->becomeRealSender(sink_channel);

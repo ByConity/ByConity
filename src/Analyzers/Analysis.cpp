@@ -166,27 +166,28 @@ std::optional<ResolvedField> Analysis::tryGetColumnReference(const ASTPtr & ast)
     return std::nullopt;
 }
 
-void Analysis::addUsedColumn(const IAST * table_ast, size_t field_index)
+void Analysis::addReadColumn(const IAST * table_ast, size_t field_index)
 {
-    used_columns[table_ast].emplace(field_index);
+    read_columns[table_ast].emplace(field_index);
 }
 
-void Analysis::addUsedColumn(const ResolvedField & resolved_field)
+void Analysis::addReadColumn(const ResolvedField & resolved_field, bool add_used)
 {
     const auto & field_desc = resolved_field.getFieldDescription();
-    if (!field_desc.origin_columns.empty())
+    // only need do this in the initial SELECT query
+    if (field_desc.origin_columns.size() == 1)
     {
-        auto origin_column = field_desc.origin_columns.front();
-        if (origin_column.table_ast)
-            addUsedColumn(origin_column.table_ast, origin_column.index_of_scope);
+        const auto & origin_column = field_desc.origin_columns.front();
+        addReadColumn(origin_column.table_ast, origin_column.index_of_scope);
+        if (add_used)
+            addUsedColumn(origin_column.storage->getStorageID(), origin_column.column);
     }
 }
 
-const std::set<size_t> & Analysis::getUsedColumns(const IAST & table_ast)
+const std::set<size_t> & Analysis::getReadColumns(const IAST & table_ast)
 {
-    return used_columns[&table_ast];
+    return read_columns[&table_ast];
 }
-
 
 void Analysis::setLambdaArgumentReference(const ASTPtr & ast, const ResolvedField & resolved)
 {
@@ -364,16 +365,16 @@ std::optional<SubColumnReference> Analysis::tryGetSubColumnReference(const ASTPt
     return std::nullopt;
 }
 
-void Analysis::addUsedSubColumn(const IAST * table_ast, size_t field_index, const SubColumnID & sub_column_id)
+void Analysis::addReadSubColumn(const IAST * table_ast, size_t field_index, const SubColumnID & sub_column_id)
 {
-    auto & vec = used_sub_columns[table_ast];
+    auto & vec = read_sub_columns[table_ast];
     vec.resize(std::max(field_index + 1, vec.size()));
     vec[field_index].insert(sub_column_id);
 }
 
-const std::vector<SubColumnIDSet> & Analysis::getUsedSubColumns(const IAST & table_ast)
+const std::vector<SubColumnIDSet> & Analysis::getReadSubColumns(const IAST & table_ast)
 {
-    return used_sub_columns[&table_ast];
+    return read_sub_columns[&table_ast];
 }
 
 void Analysis::addNonDeterministicFunctions(IAST & ast)

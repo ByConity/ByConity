@@ -35,7 +35,7 @@ TEST(ExchangeLocalBroadcast, LocalBroadcastRegistryTest)
 {
     initLogger();
     LocalChannelOptions options{10, 1000};
-    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, "");
+    auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->becomeRealSender(channel);
@@ -50,7 +50,7 @@ TEST(ExchangeLocalBroadcast, LocalBroadcastRegistryTest)
 TEST(ExchangeLocalBroadcast, NormalSendRecvTest)
 {
     LocalChannelOptions options{10, 1000};
-    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, "");
+    auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->becomeRealSender(channel);
@@ -71,7 +71,7 @@ TEST(ExchangeLocalBroadcast, NormalSendRecvTest)
 TEST(ExchangeLocalBroadcast, SendTimeoutTest)
 {
     LocalChannelOptions options{1, 200};
-    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, "");
+    auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->becomeRealSender(channel);
@@ -88,7 +88,7 @@ TEST(ExchangeLocalBroadcast, SendTimeoutTest)
 TEST(ExchangeLocalBroadcast, AllSendDoneTest)
 {
     LocalChannelOptions options{10, 1000};
-    auto data_key = std::make_shared<ExchangeDataKey>("", 1, 1, "");
+    auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->becomeRealSender(channel);

@@ -168,7 +168,7 @@ std::vector<Protos::DataModelDB> MetastoreProxy::getTrashDBs(const String & name
     std::vector<Protos::DataModelDB> res;
     auto it = metastore_ptr->getByPrefix(dbTrashPrefix(name_space));
     while(it->next())
-    { 
+    {
         Protos::DataModelDB db_model;
         db_model.ParseFromString(it->value());
         res.emplace_back(db_model);
@@ -1093,7 +1093,7 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
     BatchCommitRequest batch_write;
     BatchCommitResponse resp;
 
-    /// CAS delete is needed becuase the intent could be overwrite by other transactions
+     /// CAS delete is needed becuase the intent could be overwrite by other transactions
     for (auto idx : matched_intent_index)
     {
         batch_write.AddDelete(intent_names[idx], intents[idx].serialize());
@@ -1110,6 +1110,10 @@ void MetastoreProxy::clearIntents(const String & name_space, const String & inte
         {
             try
             {
+                /// ByConity don't have MetastoreByteKVImpl
+                //if (dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
+                //    metastore_ptr->drop(intent_names[idx], snapshot[idx].second);
+                //else
                 metastore_ptr->drop(intent_names[idx], snapshot[idx].first);
             }
             catch (const Exception & e)
@@ -1409,7 +1413,7 @@ void MetastoreProxy::setTableClusterStatus(const String & name_space, const Stri
     BatchCommitRequest batch_write;
     batch_write.AddPut(SinglePutRequest(clusterStatusKey(name_space, uuid), already_clustered ? "true" : "false"));
     batch_write.AddPut(table_definition_hash_put_request);
-    
+
     BatchCommitResponse resp;
     try
     {
@@ -1710,7 +1714,8 @@ MetastoreProxy::getTableStatistics(const String & name_space, const String & uui
         StatisticsTag tag = static_cast<StatisticsTag>(table_statistic.tag());
         TxnTimestamp ts(table_statistic.timestamp());
         auto statisticPtr = createStatisticsBase(tag, table_statistic.blob());
-        res.emplace(tag, statisticPtr);
+        if (statisticPtr)
+            res.emplace(tag, statisticPtr);
     }
     return res;
 }
@@ -1781,7 +1786,8 @@ std::unordered_map<StatisticsTag, StatisticsBasePtr> MetastoreProxy::getColumnSt
         StatisticsTag tag = static_cast<StatisticsTag>(column_statistic.tag());
         TxnTimestamp ts(column_statistic.timestamp());
         auto statisticPtr = createStatisticsBase(tag, column_statistic.blob());
-        res.emplace(tag, statisticPtr);
+        if (statisticPtr)
+            res.emplace(tag, statisticPtr);
     }
 
     return res;

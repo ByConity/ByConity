@@ -22,7 +22,7 @@
 #include <fmt/core.h>
 #include <common/getFQDNOrHostName.h>
 #include <Interpreters/Context_fwd.h>
-#include <Common/WorkerId.h>
+#include <Core/Types.h>
 
 namespace DB
 {
@@ -162,6 +162,7 @@ public:
     uint16_t http_port{0};
     uint16_t exchange_port{0};
     uint16_t exchange_status_port{0};
+    PairInt64 topology_version = PairInt64{0, 0};
 private:
     std::string host;
 public:

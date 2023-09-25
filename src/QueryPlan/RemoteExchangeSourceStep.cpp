@@ -40,6 +40,7 @@
 #include <QueryPlan/RemoteExchangeSourceStep.h>
 #include <brpc/controller.h>
 #include <butil/endpoint.h>
+#include <common/types.h>
 #include <common/getFQDNOrHostName.h>
 #include <Common/Exception.h>
 
@@ -112,6 +113,7 @@ void RemoteExchangeSourceStep::setPlanSegment(PlanSegment * plan_segment_)
 
 void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)
 {
+    auto current_tx_id = context->getCurrentTransactionID().toUInt64();
     if (!plan_segment)
         throw Exception("Should setPlanSegment before initializePipeline!", ErrorCodes::LOGICAL_ERROR);
 
@@ -135,14 +137,14 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
     Block source_header;
     if (keep_order)
         source_header = exchange_header;
-
-    if (context->getSettingsRef().exchange_enable_multipath_reciever)
+    
+    for (const auto & input : inputs)
     {
-        for (const auto & input : inputs)
+        if (context->getSettingsRef().exchange_enable_multipath_reciever && input->getExchangeMode() != ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
         {
             size_t write_plan_segment_id = input->getPlanSegmentId();
             size_t exchange_parallel_size = input->getExchangeParallelSize();
-            size_t exchange_id = input->getExchangeId();
+            UInt32 exchange_id = input->getExchangeId();
 
             //TODO: hack logic for BROADCAST, we should remove this logic
             if (input->getExchangeMode() == ExchangeMode::BROADCAST)
@@ -163,29 +165,35 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                 auto write_address_info = extractExchangeHostPort(source_address);
                 for (size_t i = 0; i < exchange_parallel_size; ++i)
                 {
-                    size_t partition_id = partition_id_start + i;
-                    ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(
-                        query_id, exchange_id, partition_id, coordinator_address);
+                    UInt32 partition_id = partition_id_start + i;
+                    ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
                     BroadcastReceiverPtr receiver;
                     if (ExchangeUtils::isLocalExchange(read_address_info, source_address))
                     {
                         if (!options.force_remote_mode)
                         {
-                            LOG_DEBUG(logger, "Create local exchange source : {}@{} for plansegment {}->{}",
-                                  data_key->dump(), write_address_info, write_plan_segment_id, plan_segment_id);
-                            std::shared_ptr<QueryExchangeLog> query_exchange_log = nullptr;
-                            if (context->getSettingsRef().log_query_exchange && context->getQueryExchangeLog())
-                                query_exchange_log = context->getQueryExchangeLog();
+                            LOG_TRACE(
+                                logger,
+                                "Create local exchange source : {}@{} for plansegment {}->{}",
+                                *data_key,
+                                write_address_info,
+                                write_plan_segment_id,
+                                plan_segment_id);
                             String name = LocalBroadcastChannel::generateName(
                                 exchange_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
-                            auto local_channel = std::make_shared<LocalBroadcastChannel>(data_key, local_options, name, collector, query_exchange_log);
+                            auto local_channel = std::make_shared<LocalBroadcastChannel>(data_key, local_options, name, collector, context);
                             receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(local_channel);
                         }
                         else
                         {
                             String localhost_address = context->getHostWithPorts().getExchangeAddress();
-                            LOG_DEBUG(logger, "Force local exchange use remote source : {}@{} for plansegment {}->{}",
-                                    data_key->dump(), localhost_address, write_plan_segment_id, plan_segment_id);
+                            LOG_TRACE(
+                                logger,
+                                "Force local exchange use remote source : {}@{} for plansegment {}->{}",
+                                *data_key,
+                                localhost_address,
+                                write_plan_segment_id,
+                                plan_segment_id);
                             String name = BrpcRemoteBroadcastReceiver::generateName(
                                 exchange_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
                             auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
@@ -195,8 +203,13 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     }
                     else
                     {
-                        LOG_DEBUG(logger, "Create remote exchange source : {}@{} for plansegment {}->{}",
-                                data_key->dump(), write_address_info, write_plan_segment_id, plan_segment_id);
+                        LOG_TRACE(
+                            logger,
+                            "Create remote exchange source : {}@{} for plansegment {}->{}",
+                            *data_key,
+                            write_address_info,
+                            write_plan_segment_id,
+                            plan_segment_id);
                         String name = BrpcRemoteBroadcastReceiver::generateName(
                             exchange_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
                         auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
@@ -209,7 +222,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
             }
             if (settings.distributed_settings.is_explian)
             {
-                ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(query_id, exchange_id, partition_id_start, coordinator_address);
+                ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id_start);
                 String name = BrpcRemoteBroadcastReceiver::generateName(
                             exchange_id, write_plan_segment_id, plan_segment_id, partition_id_start, coordinator_address);
                 auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(std::move(data_key), "", context, exchange_header, keep_order, name);
@@ -225,10 +238,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
             pipe.addSource(std::move(source));
             source_num++;
         }
-    }
-    else
-    {
-        for (const auto & input : inputs)
+        else
         {
             size_t write_plan_segment_id = input->getPlanSegmentId();
             size_t exchange_parallel_size = input->getExchangeParallelSize();
@@ -250,28 +260,34 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                 for (size_t i = 0; i < exchange_parallel_size; ++i)
                 {
                     size_t partition_id = partition_id_start + i;
-                    ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(
-                        query_id, exchange_id, partition_id, coordinator_address);
+                    ExchangeDataKeyPtr data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
                     BroadcastReceiverPtr receiver;
                     if (ExchangeUtils::isLocalExchange(read_address_info, source_address))
                     {
                         if (!options.force_remote_mode)
                         {
-                            LOG_DEBUG(logger, "Create local exchange source : {}@{} for plansegment {}->{}",
-                                  data_key->dump(), write_address_info, write_plan_segment_id, plan_segment_id);
-                            std::shared_ptr<QueryExchangeLog> query_exchange_log = nullptr;
-                            if (context->getSettingsRef().log_query_exchange && context->getQueryExchangeLog())
-                                query_exchange_log = context->getQueryExchangeLog();
+                            LOG_TRACE(
+                                logger,
+                                "Create local exchange source : {}@{} for plansegment {}->{}",
+                                *data_key,
+                                write_address_info,
+                                write_plan_segment_id,
+                                plan_segment_id);
                             String name = LocalBroadcastChannel::generateName(
                                 exchange_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
-                            auto local_channel = std::make_shared<LocalBroadcastChannel>(data_key, local_options, name, query_exchange_log);
+                            auto local_channel = std::make_shared<LocalBroadcastChannel>(data_key, local_options, name, context);
                             receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(local_channel);
                         }
                         else
                         {
                             String localhost_address = context->getHostWithPorts().getExchangeAddress();
-                            LOG_DEBUG(logger, "Force local exchange use remote source : {}@{} for plansegment {}->{}",
-                                    data_key->dump(), localhost_address, write_plan_segment_id, plan_segment_id);
+                            LOG_TRACE(
+                                logger,
+                                "Force local exchange use remote source : {}@{} for plansegment {}->{}",
+                                *data_key,
+                                localhost_address,
+                                write_plan_segment_id,
+                                plan_segment_id);
                             String name = BrpcRemoteBroadcastReceiver::generateName(
                                 exchange_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
                             auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
@@ -281,8 +297,13 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                     }
                     else
                     {
-                        LOG_DEBUG(logger, "Create remote exchange source : {}@{} for plansegment {}->{}",
-                                data_key->dump(), write_address_info, write_plan_segment_id, plan_segment_id);
+                        LOG_TRACE(
+                            logger,
+                            "Create remote exchange source : {}@{} for plansegment {}->{}",
+                            *data_key,
+                            write_address_info,
+                            write_plan_segment_id,
+                            plan_segment_id);
                         String name = BrpcRemoteBroadcastReceiver::generateName(
                             exchange_id, write_plan_segment_id, plan_segment_id, partition_id, coordinator_address);
                         auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(

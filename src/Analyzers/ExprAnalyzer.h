@@ -55,6 +55,7 @@ struct ExprAnalyzerOptions
     SubquerySupport subquery_support = SubquerySupport::DISALLOWED;
     bool expand_untuple = true;
     bool expand_asterisk = true;
+    bool record_used_object = true; // whether record used_columns, used_functions
 
     // constructor
     ExprAnalyzerOptions(String statement_name_ = ""): statement_name(std::move(statement_name_)) // NOLINT(google-explicit-constructor)
@@ -90,9 +91,16 @@ struct ExprAnalyzerOptions
         expand_untuple = arg;
         return *this;
     }
+
     ExprAnalyzerOptions & expandAsterisk(bool arg)
     {
         expand_asterisk = arg;
+        return *this;
+    }
+
+    ExprAnalyzerOptions & recordUsedObject(bool arg)
+    {
+        record_used_object = arg;
         return *this;
     }
 };

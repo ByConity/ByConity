@@ -213,7 +213,8 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
             {
                 auto tag = static_cast<StatisticsTag>(k);
                 auto obj = createStatisticsBase(tag, v);
-                collection[tag] = std::move(obj);
+                if (obj)
+                    collection[tag] = std::move(obj);
             }
             StatisticsCollector::TableStats table_stats;
             table_stats.readFromCollection(collection);

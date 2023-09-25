@@ -221,6 +221,15 @@ public:
         return true;
     }
 
+    template <typename KeyArg, typename ValArg = Value, std::enable_if_t<std::is_default_constructible<ValArg>::value, bool> = true>
+    Value & operator[](KeyArg && key)
+    {
+        auto it = mapping.emplace(key, ordered_storage.size());
+        if (it.second)
+            ordered_storage.emplace_back(std::forward<KeyArg>(key), ValArg());
+        return ordered_storage.at(it.first->second).second;
+    }
+
     LinkedHashMap(const LinkedHashMap &) = default;
     LinkedHashMap(LinkedHashMap &&) = default;
 

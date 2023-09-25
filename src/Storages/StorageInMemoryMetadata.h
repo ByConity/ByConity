@@ -238,6 +238,7 @@ struct StorageInMemoryMetadata
     Int64 getBucketNumberFromClusterByKey() const;
     Int64 getSplitNumberFromClusterByKey() const;
     bool getWithRangeFromClusterByKey() const;
+    bool getIsUserDefinedExpressionFromClusterByKey() const;
     /// Check if cluster by key is same with unique key, only valid for unique table
     bool checkIfClusterByKeySameWithUniqueKey() const;
 

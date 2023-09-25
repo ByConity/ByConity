@@ -16,8 +16,8 @@
 #include <Optimizer/Dump/Json2Pb.h>
 #include <Statistics/StatisticsBaseImpl.h>
 #include <Statistics/StatsColumnBasic.h>
-#include <Statistics/StatsCpcSketch.h>
 #include <Statistics/StatsDummy.h>
+#include <Statistics/StatsHllSketch.h>
 #include <Statistics/StatsKllSketchImpl.h>
 #include <Statistics/StatsNdvBucketsExtendImpl.h>
 #include <Statistics/StatsNdvBucketsImpl.h>
@@ -154,8 +154,8 @@ StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob)
                 return createStatisticsUntyped<StatsTableBasic>(tag, blob);
             case StatisticsTag::ColumnBasic:
                 return createStatisticsUntyped<StatsColumnBasic>(tag, blob);
-            case StatisticsTag::CpcSketch:
-                return createStatisticsUntyped<StatsCpcSketch>(tag, blob);
+            case StatisticsTag::HllSketch:
+                return createStatisticsUntyped<StatsHllSketch>(tag, blob);
             case StatisticsTag::KllSketch:
                 return createStatisticsTyped<StatsKllSketch>(tag, blob);
             case StatisticsTag::NdvBuckets:
@@ -165,7 +165,8 @@ StatisticsBasePtr createStatisticsBase(StatisticsTag tag, std::string_view blob)
             case StatisticsTag::NdvBucketsResult:
                 return createStatisticsTyped<StatsNdvBucketsResult>(tag, blob);
             default: {
-                throw Exception("Unimplemented Statistics Tag", ErrorCodes::NOT_IMPLEMENTED);
+                // unknonw statistics should be ignored instead of throw Exception
+                return nullptr;
             }
         }
     }();

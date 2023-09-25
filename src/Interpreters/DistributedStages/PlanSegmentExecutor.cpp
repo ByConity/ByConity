@@ -323,7 +323,7 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
 
 void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders)
 {
-    String coordinator_address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
+    UInt64 current_tx_id = context->getCurrentTransactionID().toUInt64();
 
     std::vector<BroadcastSenderPtrs> senders_list;
     for (const auto &cur_plan_segment_output : plan_segment_outputs)
@@ -357,8 +357,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
         for (size_t i = 0; i < total_partition_num; i++)
         {
             size_t partition_id = i + 1;
-            auto data_key = std::make_shared<ExchangeDataKey>(
-                plan_segment->getQueryId(), exchange_id, partition_id, coordinator_address);
+            auto data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
             BroadcastSenderProxyPtr sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key, sender_options);
             sender->accept(context, header);
             current_exchange_senders.emplace_back(std::move(sender));
@@ -410,7 +409,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
                 break;
             default:
                 throw Exception(
-                    "Cannot find expected ExchangeMode " + std::to_string(UInt8(exchange_mode)),
+                    "Cannot find expected ExchangeMode " + std::to_string(static_cast<UInt8>(exchange_mode)),
                     ErrorCodes::LOGICAL_ERROR
                 );
         }
@@ -543,7 +542,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
                         break;
                     default:
                         throw Exception(
-                            "Cannot find expected ExchangeMode " + std::to_string(UInt8(exchange_mode)),
+                            "Cannot find expected ExchangeMode " + std::to_string(static_cast<UInt8>(exchange_mode)),
                             ErrorCodes::LOGICAL_ERROR
                         );
                 }
@@ -626,23 +625,17 @@ void PlanSegmentExecutor::registerAllExchangeReceivers(const QueryPipeline & pip
         {
             LOG_INFO(
                 &Poco::Logger::get("PlanSegmentExecutor"),
-                "Receiver register sender successfully but sender already finished, host-{} , data_key: {}_{}_{}_{}",
+                "Receiver register sender successfully but sender already finished, host: {}, request: {}",
                 butil::endpoint2str(res.cntl->remote_side()).c_str(),
-                res.request->query_id(),
-                res.request->exchange_id(),
-                res.request->parallel_id(),
-                res.request->coordinator_address());
+                *res.request);
             continue;
         }
         res.channel->assertController(*res.cntl);
         LOG_TRACE(
             &Poco::Logger::get("PlanSegmentExecutor"),
-            "Receiver register sender successfully, host-{} , data_key: {}_{}_{}_{}",
+            "Receiver register sender successfully, host: {}, request: {}",
             butil::endpoint2str(res.cntl->remote_side()).c_str(),
-            res.request->query_id(),
-            res.request->exchange_id(),
-            res.request->parallel_id(),
-            res.request->coordinator_address());
+            *res.request);
     }
 }
 

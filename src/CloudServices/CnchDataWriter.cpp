@@ -533,7 +533,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
                     if (context->getSettings().skip_table_definition_hash_check)
                         part->table_definition_hash = table_definition_hash;
 
-                    if (context->getSettings().allow_attach_parts_with_different_table_definition_hash)
+                    if (context->getSettings().allow_attach_parts_with_different_table_definition_hash && !storage_ptr->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey())
                         continue;
 
                     if (!part->deleted &&

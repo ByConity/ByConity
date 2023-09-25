@@ -78,13 +78,6 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             else
                 kind = ASTExplainQuery::ExplainKind::LogicalAnalyze;
         }
-        // else if (s_trace.ignore(pos, expected))
-        // {
-        //     if (s_rule.ignore(pos, expected))
-        //         kind = ASTExplainQuery::ExplainKind::TraceOptimizerRule;
-        //     else
-        //         kind = ASTExplainQuery::ExplainKind::TraceOptimizer;
-        // }
         else if (s_trace.ignore(pos, expected))
         {
             if (s_rule.ignore(pos, expected))
@@ -108,7 +101,7 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         if (parser_settings.parse(pos, settings, expected))
         {
             auto settings_ast = settings->as<ASTSetQuery &>();
-            auto *is_json = settings_ast.changes.tryGet("json");
+            auto * is_json = settings_ast.changes.tryGet("json");
             if (kind == ASTExplainQuery::ExplainKind::Analysis && is_json && is_json->toString() == "1")
             {
 

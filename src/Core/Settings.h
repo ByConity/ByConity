@@ -1676,11 +1676,9 @@ enum PreloadLevelSettings : UInt64
     M(Milliseconds, topology_lease_life_ms, 12000, "Expiration time of topology lease.", 0) \
     M(Milliseconds, topology_session_restart_check_ms, 120, "Check and try to restart leader election for server master", 0) \
     M(UInt64, catalog_max_commit_size, 2000, "Max record number to be committed in one batch.", 0) \
-    M(Bool, \
-      server_write_ha, \
-      false, \
-      "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", \
-      0) \
+    M(Bool, catalog_enable_multiple_threads, false, "Whether leverage multiple threads to handle metadata.", 0) \
+    M(UInt64, catalog_multiple_threads_min_parts, 10000, "Minimum parts number to enable multi-thread in calc visible parts.", 0) \
+    M(Bool, server_write_ha, false, "Whether to enable write on non-host server if host server is not available. Directly commit from non-host server.", 0) \
     M(Bool, enable_write_non_host_server, true, "Whether to eable write on non-host server. Will root write request to host server.", 0) \
     M(Bool, force_execute_alter, false, "Force the Alter Query to be executed ignore the host server.", 0) \
     M(UInt64, \
@@ -1882,11 +1880,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, statistics_collect_histogram, true, "Enable histogram collection", 0) \
     M(Bool, statistics_collect_floating_histogram, true, "Collect histogram for float/double/Decimal columns", 0) \
     M(Bool, statistics_collect_floating_histogram_ndv, true, "Collect histogram ndv for float/double/Decimal columns", 0) \
-    M(UInt64, \
-      statistics_collect_string_size_limit_for_histogram, \
-      64, \
-      "Collect string histogram only for avg_size <= string_size_limit, since it's unnecessary to collect stats for text", \
-      0) \
+    M(UInt64, statistics_collect_string_size_limit_for_histogram, 64, "Collect string histogram only for avg_size <= string_size_limit, since it's unnecessary to collect stats for text", 0) \
+    M(UInt64, statistics_histogram_bucket_size, 250, "Default bucket size of histogram", 0) \
+    M(UInt64, statistics_kll_sketch_log_k, 1600, "Default logK parameter of kll_sketch in statistics", 0) \
     M(Bool, statistics_enable_sample, false, "Use sampling for statistics", 0) \
     M(UInt64, statistics_sample_row_count, 40'000'000, "Minimal row count for sampling", 0) \
     M(Float, statistics_sample_ratio, 0.1, "Ratio for sampling", 0) \
@@ -1953,6 +1949,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_materialized_view_rewrite_match_range_filter, false, "Whether enable materialized view based rewriter matching range filter by its allowable value Domain", 0) \
     M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::PARTITION, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
     M(Bool, enable_execute_query, true, "Whether to execute this query", 0) \
+    M(UInt64, max_plan_segment_num, 500, "maximum plan segments allowed, 0 means no restriction", 0)\
     /** Exchange settings */ \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \

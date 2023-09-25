@@ -248,7 +248,7 @@ BlocksWithPartition MergeTreeDataWriter::splitBlockPartitionIntoPartsByClusterKe
 
     auto split_number = metadata_snapshot->getSplitNumberFromClusterByKey();
     auto is_with_range = metadata_snapshot->getWithRangeFromClusterByKey();
-    prepareBucketColumn(block_copy, metadata_snapshot->getClusterByKey().column_names, split_number, is_with_range, metadata_snapshot->getBucketNumberFromClusterByKey(), context);
+    prepareBucketColumn(block_copy, metadata_snapshot->getClusterByKey().column_names, split_number, is_with_range, metadata_snapshot->getBucketNumberFromClusterByKey(), context, metadata_snapshot->getIsUserDefinedExpressionFromClusterByKey());
 
     return populatePartitions(block, block_copy, max_parts, {COLUMN_BUCKET_NUMBER}, true);
 }

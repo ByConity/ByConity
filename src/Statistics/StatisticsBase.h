@@ -32,10 +32,11 @@ enum class StatisticsTag : UInt64
     TableBasic = 1,
     CpcSketch = 2,
     KllSketch = 3,
-    NdvBuckets = 4, // including bounds, min/max and ndv(cpc object) for each buckets
+    NdvBuckets = 4, // including bounds, min/max and ndv(hll object) for each buckets
     NdvBucketsResult = 5, // including bounds, min/max and ndv(double value) for each buckets
     ColumnBasic = 6, // now put min/max here
-    NdvBucketsExtend = 7, // including bounds, min/max and ndv(cpc object), block_ndv for each buckets
+    NdvBucketsExtend = 7, // including bounds, min/max and ndv(hll object), block_ndv for each buckets
+    HllSketch = 9,
 
     // for test only
     DummyAlpha = 2000,

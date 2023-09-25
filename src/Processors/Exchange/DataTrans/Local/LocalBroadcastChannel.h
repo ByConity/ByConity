@@ -44,18 +44,14 @@ class LocalBroadcastChannel final : public IBroadcastReceiver,
                                     boost::noncopyable
 {
 public:
-    explicit LocalBroadcastChannel(
-        ExchangeDataKeyPtr data_key_,
-        LocalChannelOptions options_,
-        const String &name_,
-        std::shared_ptr<QueryExchangeLog> query_exchange_log_ = nullptr);
+    LocalBroadcastChannel(ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String & name_, ContextPtr context_ = nullptr);
 
-    explicit LocalBroadcastChannel(
+    LocalBroadcastChannel(
         ExchangeDataKeyPtr data_key_,
         LocalChannelOptions options_,
-        const String &name_,
-        MultiPathQueuePtr collector, 
-        std::shared_ptr<QueryExchangeLog> query_exchange_log_ = nullptr);
+        const String & name_,
+        MultiPathQueuePtr collector,
+        ContextPtr context_ = nullptr);
 
     BroadcastStatus send(Chunk chunk) override;
     RecvDataPacket recv(UInt32 timeout_ms) override;
@@ -98,7 +94,7 @@ private:
     MultiPathQueuePtr receive_queue;
     BroadcastStatus init_status{BroadcastStatusCode::RUNNING, false, "init"};
     std::atomic<BroadcastStatus *> broadcast_status{&init_status};
+    ContextPtr context;
     Poco::Logger * logger;
-    std::shared_ptr<QueryExchangeLog> query_exchange_log;
 };
 }

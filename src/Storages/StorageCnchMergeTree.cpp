@@ -84,6 +84,7 @@
 namespace ProfileEvents
 {
 extern const Event CatalogTime;
+extern const Event PrunePartsTime;
 extern const Event TotalPartitions;
 extern const Event PrunedPartitions;
 extern const Event SelectedParts;
@@ -1074,9 +1075,11 @@ ServerDataPartsVector StorageCnchMergeTree::getAllPartsInPartitions(
         }
         // TEST_LOG(testlog, "get dataparts in partitions.");
         LOG_DEBUG(log, "Total number of parts get from bytekv: {}", all_parts.size());
-        all_parts = CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context));
+        auto catalog_time_ms = watch.elapsedMilliseconds();
+        all_parts = CnchPartsHelper::calcVisibleParts(all_parts, false, CnchPartsHelper::getLoggingOption(*local_context), true);
 
-        ProfileEvents::increment(ProfileEvents::CatalogTime, watch.elapsedMilliseconds());
+        ProfileEvents::increment(ProfileEvents::CatalogTime, catalog_time_ms);
+        ProfileEvents::increment(ProfileEvents::PrunePartsTime, watch.elapsedMilliseconds() - catalog_time_ms);
         ProfileEvents::increment(ProfileEvents::TotalPartitions, total_partition_number);
         ProfileEvents::increment(ProfileEvents::PrunedPartitions, pruned_partitions.size());
         ProfileEvents::increment(ProfileEvents::SelectedParts, all_parts.size());
@@ -1995,6 +1998,9 @@ void StorageCnchMergeTree::reclusterPartition(const PartitionCommand & command, 
     if (getInMemoryMetadataPtr()->hasUniqueKey())
         throw Exception("Table with UNIQUE KEY doesn't support recluster partition commands.", ErrorCodes::SUPPORT_IS_DISABLED);
 
+    if (getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey())
+        throw Exception("Table with user defined CLUSTER BY expression doesn't support recluster partition commands.", ErrorCodes::SUPPORT_IS_DISABLED);
+
     // create mutation command with partition or predicate attribute
     MutationCommand mutation_command;
     mutation_command.type = MutationCommand::Type::RECLUSTER;
@@ -2119,6 +2125,7 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "cnch_gc_round_robin_partitions_number",
         "gc_remove_part_thread_pool_size",
         "gc_remove_part_batch_size",
+        "cluster_by_hint",
     };
 
     /// Check whether the value is legal for Setting.
@@ -2574,7 +2581,8 @@ std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQuery
                     metadata_snapshot->getSplitNumberFromClusterByKey(),
                     metadata_snapshot->getWithRangeFromClusterByKey(),
                     metadata_snapshot->getBucketNumberFromClusterByKey(),
-                    local_context);
+                    local_context,
+                    metadata_snapshot->getIsUserDefinedExpressionFromClusterByKey());
                 auto bucket_number
                     = block_copy.getByPosition(block_copy.columns() - 1).column->getInt(0); // this block only contains one row
                 bucket_numbers.insert(bucket_number);
@@ -2642,7 +2650,9 @@ StorageCnchMergeTree::checkStructureAndGetCnchMergeTree(const StoragePtr & sourc
     // If target table is a bucket table, ensure that source table is a bucket table
     // or if the source table is a bucket table, ensure the table_definition_hash is the same before proceeding to drop parts
     // Can remove this check if rollback has been implemented
-    if (isBucketTable() && !local_context->getSettingsRef().allow_attach_parts_with_different_table_definition_hash
+    bool skip_table_definition_hash_check = local_context->getSettingsRef().allow_attach_parts_with_different_table_definition_hash 
+                                                        && !getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
+    if (isBucketTable() && !skip_table_definition_hash_check
         && (!src_data->isBucketTable() || getTableHashForClusterBy() != src_data->getTableHashForClusterBy()))
     {
         LOG_DEBUG(

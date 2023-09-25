@@ -29,19 +29,16 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
 #include <common/logger_useful.h>
-#include "Storages/Hive/StorageCnchHive.h"
-#include "Storages/RemoteFile/IStorageCnchFile.h"
-#include "Storages/StorageCnchMergeTree.h"
-#include "Storages/StorageMaterializedView.h"
-#include "Storages/RemoteFile/IStorageCnchFile.h"
-#include <Interpreters/executeQuery.h>
+#include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageMaterializedView.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
+#include <Interpreters/executeQuery.h>
 //#include <Common/TestLog.h>
 
 namespace DB
 {
-static void changeDistributedStages(ASTPtr & node)
+static void changeASTSettings(ASTPtr & node)
 {
     if (!node)
         return;
@@ -55,17 +52,13 @@ static void changeDistributedStages(ASTPtr & node)
         for (auto & change : ast.changes)
         {
             if (change.name == "enable_distributed_stages")
-            {
                 change.value = Field(false);
-                return;
-            }
+            else if (change.name == "enable_optimizer")
+                change.value = Field(false);
         }
     }
-    else
-    {
-        for (auto & child : node->children)
-            changeDistributedStages(child);
-    }
+    for (auto & child : node->children)
+        changeASTSettings(child);
 }
 
 void turnOffOptimizer(ContextMutablePtr context, ASTPtr & node)
@@ -75,7 +68,7 @@ void turnOffOptimizer(ContextMutablePtr context, ASTPtr & node)
     setting_changes.emplace_back("enable_optimizer", false);
 
     context->applySettingsChanges(setting_changes);
-    changeDistributedStages(node);
+    changeASTSettings(node);
 }
 
 static bool checkDatabaseAndTable(String database_name, String table_name, ContextMutablePtr context, const NameSet & ctes)
@@ -124,7 +117,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, [[m
     // will execute query : INSERT INTO test.parallel_replicas_backup_4313395779120660490 (d, x, u, s) SELECT d, x, u, s FROM test.parallel_replicas )
     // will execute query : SELECT d, x, u, s FROM test.parallel_replicas_4313395779120660490
     // in worker.
-    if (context->getApplicationType() != Context::ApplicationType::SERVER)
+    if (context->getServerType() == ServerType::cnch_worker)
     {
         turnOffOptimizer(context, node);
         return false;

@@ -34,6 +34,7 @@
 #include <Processors/tests/gtest_processers_utils.h>
 #include <gtest/gtest.h>
 #include <Poco/ConsoleChannel.h>
+#include "common/types.h"
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_utils.h>
 #include <common/scope_guard.h>
@@ -46,7 +47,10 @@ namespace UnitTest
 TEST(ExchangeSourceStep, InitializePipelineTest)
 {
     initLogger();
-    const auto & context = getContext().context;
+    UInt64 query_tx_id = 666;
+    auto context = Context::createCopy(getContext().context);
+    context->setTemporaryTransaction(query_tx_id,query_tx_id,false);
+
     auto & client_info = context->getClientInfo();
     PlanSegment plan_segment = PlanSegment();
     plan_segment.setQueryId("RemoteExchangeSourceStep_test");
@@ -83,11 +87,11 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000, .send_threshold_in_bytes = 0};
     exchange_source_step.setExchangeOptions(exchange_options);
 
-    auto data_key_1 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 1, coordinator_address_str);
+    auto data_key_1 = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 1);
     BroadcastSenderProxyPtr local_sender_1 = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key_1);
     local_sender_1->accept(context, header);
 
-    auto data_key_2 = std::make_shared<ExchangeDataKey>(plan_segment.getQueryId(), 1, 2, coordinator_address_str);
+    auto data_key_2 = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 2);
     BroadcastSenderProxyPtr local_sender_2 = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key_2);
     local_sender_2->accept(context, header);
 

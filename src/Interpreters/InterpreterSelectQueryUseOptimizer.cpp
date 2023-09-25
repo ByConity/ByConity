@@ -43,6 +43,12 @@
 
 namespace DB
 {
+
+namespace ErrorCodes
+{
+extern const int TOO_MANY_PLAN_SEGMENTS;
+}
+
 QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
 {
     // When interpret sub query, reuse context info, e.g. PlanNodeIdAllocator, SymbolAllocator.
@@ -314,8 +320,19 @@ QueryPipeline executeTEALimit(QueryPipeline & pipeline, ContextMutablePtr contex
 BlockIO InterpreterSelectQueryUseOptimizer::execute()
 {
     std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
+    auto & plan_segment_tree = plan_segment_tree_and_used_storage_ids.first;
+    size_t plan_segment_num = plan_segment_tree->getPlanSegmentsMap().size();
+    UInt64 max_plan_segment_num = context->getSettingsRef().max_plan_segment_num;
+    if (max_plan_segment_num != 0 && plan_segment_num > max_plan_segment_num)
+        throw Exception(
+            fmt::format(
+                "query_id:{} plan_segments size {} exceed max_plan_segment_num {}",
+                context->getCurrentQueryId(),
+                plan_segment_num,
+                max_plan_segment_num),
+            ErrorCodes::TOO_MANY_PLAN_SEGMENTS);
 
-    auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree_and_used_storage_ids.first), context, MPPQueryOptions());
+    auto coodinator = std::make_shared<MPPQueryCoordinator>(std::move(plan_segment_tree), context, MPPQueryOptions());
 
     BlockIO res = coodinator->execute();
 

@@ -237,12 +237,15 @@ BucketNumberAndServerPartsAssignment assignCnchPartsForBucketTable(const ServerD
     std::sort(workers.begin(), workers.end());
     BucketNumberAndServerPartsAssignment assignment;
 
+    /// Leverage unordered_set to gain O(1) contains
+    std::unordered_set<Int64> required_bucket_numbers_set(required_bucket_numbers.begin(), required_bucket_numbers.end());
+
     for (const auto & part : parts)
     {
         // For bucket tables, the parts with the same bucket number is assigned to the same worker.
         Int64 bucket_number = part->part_model().bucket_number();
         // if required_bucket_numbers is empty, assign parts as per normal
-        if (required_bucket_numbers.size() == 0 || required_bucket_numbers.find(bucket_number) != required_bucket_numbers.end())
+        if (required_bucket_numbers_set.empty() || required_bucket_numbers_set.contains(bucket_number))
         {
             auto index = bucket_number % workers.size();
             assignment.parts_assignment_map[workers[index]].emplace_back(part);

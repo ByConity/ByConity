@@ -14,12 +14,15 @@
  */
 
 #include <CloudServices/CnchPartsHelper.h>
-
+#include <Catalog/CatalogUtils.h>
 #include <Catalog/DataModelPartWrapper.h>
+#include <Common/ThreadPool.h>
+#include <Common/Stopwatch.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 
 #include <sstream>
+#include <functional>
 
 namespace DB::CnchPartsHelper
 {
@@ -58,18 +61,6 @@ namespace
         return oss.str();
     }
 
-    template <class T>
-    struct PartComparator
-    {
-        bool operator()(const T & lhs, const T & rhs) const
-        {
-            auto & l = lhs->get_info();
-            auto & r = rhs->get_info();
-            return std::forward_as_tuple(l.partition_id, l.min_block, l.max_block, l.level, lhs->get_commit_time(), l.storage_type)
-                < std::forward_as_tuple(r.partition_id, r.min_block, r.max_block, r.level, rhs->get_commit_time(), r.storage_type);
-        }
-    };
-
     /** Cnch parts classification:
      *  all parts:
      *  1) invisible parts
@@ -89,7 +80,8 @@ namespace
         bool skip_drop_ranges,
         Vec * visible_alone_drop_ranges,
         Vec * invisible_dropped_parts,
-        LoggingOption logging)
+        LoggingOption logging,
+        bool move_source_parts = false /* Reduce the all_parts destruct time */)
     {
         using Part = typename Vec::value_type;
 
@@ -110,87 +102,176 @@ namespace
             return visible_parts;
         }
 
-        std::sort(all_parts.begin(), all_parts.end(), PartComparator<Part>{});
+        if (logging == EnableLogging)
+            move_source_parts = false; /// Do not use move operate to enable serverPartsToDebugString(all_parts)
 
-        /// One-pass algorithm to construct delta chains
-        auto prev_it = all_parts.begin();
-        auto curr_it = std::next(prev_it);
-
-        while (prev_it != all_parts.end())
+        auto process_parts = [&](Vec & parts, size_t begin_pos, size_t end_pos, Vec & visible_parts_)
         {
-            auto & prev_part = *prev_it;
+            std::sort(parts.begin() + begin_pos, parts.begin() + end_pos, PartComparator<Part>{});
 
-            /// 1. prev_part is a DROP RANGE mark
-            if (prev_part->get_info().level == MergeTreePartInfo::MAX_LEVEL)
+            /// One-pass algorithm to construct delta chains
+            auto prev_it = parts.begin() + begin_pos;
+            auto curr_it = std::next(prev_it);
+            auto parts_end = parts.begin() + end_pos;
+
+            while (prev_it != parts_end)
             {
-                /// a. curr_part is in same partition
-                if (curr_it != all_parts.end() && prev_part->get_info().partition_id == (*curr_it)->get_info().partition_id)
+                auto & prev_part = *prev_it;
+
+                /// 1. prev_part is a DROP RANGE mark
+                if (prev_part->get_info().level == MergeTreePartInfo::MAX_LEVEL)
                 {
-                    /// i) curr_part is also a DROP RANGE mark, and must be the bigger one
-                    if ((*curr_it)->get_info().level == MergeTreePartInfo::MAX_LEVEL)
+                    /// a. curr_part is in same partition
+                    if (curr_it != parts_end && prev_part->get_info().partition_id == (*curr_it)->get_info().partition_id)
                     {
-                        if (invisible_dropped_parts)
-                            invisible_dropped_parts->push_back(*prev_it);
-
-                        if (visible_alone_drop_ranges)
+                        /// i) curr_part is also a DROP RANGE mark, and must be the bigger one
+                        if ((*curr_it)->get_info().level == MergeTreePartInfo::MAX_LEVEL)
                         {
-                            (*prev_it)->setPreviousPart(nullptr); /// reset whatever
-                            (*curr_it)->setPreviousPart(*prev_it); /// set previous part for visible_alone_drop_ranges
+                            if (invisible_dropped_parts)
+                                invisible_dropped_parts->push_back(*prev_it);
+
+                            if (visible_alone_drop_ranges)
+                            {
+                                (*prev_it)->setPreviousPart(nullptr); /// reset whatever
+                                (*curr_it)->setPreviousPart(*prev_it); /// set previous part for visible_alone_drop_ranges
+                            }
+
+                            prev_it = curr_it;
+                            ++curr_it;
+                            continue;
                         }
+                        /// ii) curr_part is marked as dropped by prev_part
+                        else if ((*curr_it)->get_info().max_block <= prev_part->get_info().max_block)
+                        {
+                            if (invisible_dropped_parts)
+                                invisible_dropped_parts->push_back(*curr_it);
 
-                        prev_it = curr_it;
-                        ++curr_it;
-                        continue;
+                            if (visible_alone_drop_ranges)
+                                prev_part->setPreviousPart(*curr_it); /// set previous part for visible_alone_drop_ranges
+
+                            ++curr_it;
+                            continue;
+                        }
                     }
-                    /// ii) curr_part is marked as dropped by prev_part
-                    else if ((*curr_it)->get_info().max_block <= prev_part->get_info().max_block)
-                    {
-                        if (invisible_dropped_parts)
-                            invisible_dropped_parts->push_back(*curr_it);
 
-                        if (visible_alone_drop_ranges)
-                            prev_part->setPreviousPart(*curr_it); /// set previous part for visible_alone_drop_ranges
+                    /// a. iii) [fallthrough] same partition, but curr_part is a new part with data after the DROP RANGE mark
 
-                        ++curr_it;
-                        continue;
-                    }
+                    /// b) curr_it is in the end
+                    /// c) different partition
+
+                    if (skip_drop_ranges)
+                        ; /// do nothing
+                    else
+                        visible_parts_.push_back(prev_part);
+
+                    if (visible_alone_drop_ranges && !prev_part->tryGetPreviousPart())
+                        visible_alone_drop_ranges->push_back(prev_part);
+                    prev_part->setPreviousPart(nullptr);
+                }
+                /// 2. curr_part contains the prev_part
+                else if (curr_it != parts_end && (*curr_it)->containsExactly(*prev_part))
+                {
+                    (*curr_it)->setPreviousPart(prev_part);
+                }
+                /// 3. curr_it is in the end
+                /// 4. curr_part is not related to the prev_part which means prev_part must be visible
+                else
+                {
+                    if (skip_drop_ranges && prev_part->get_deleted())
+                        ; /// do nothing
+                    else
+                        visible_parts_.push_back(prev_part);
+
+                    if (visible_alone_drop_ranges && !prev_part->tryGetPreviousPart() && prev_part->get_deleted())
+                        visible_alone_drop_ranges->push_back(prev_part);
                 }
 
-                /// a. iii) [fallthrough] same partition, but curr_part is a new part with data after the DROP RANGE mark
-
-                /// b) curr_it is in the end
-                /// c) different partition
-
-                if (skip_drop_ranges)
-                    ; /// do nothing
-                else
-                    visible_parts.push_back(prev_part);
-
-                if (visible_alone_drop_ranges && !prev_part->tryGetPreviousPart())
-                    visible_alone_drop_ranges->push_back(prev_part);
-                prev_part->setPreviousPart(nullptr);
+                prev_it = curr_it;
+                if (curr_it != parts_end)
+                    ++curr_it;
             }
-            /// 2. curr_part contains the prev_part
-            else if (curr_it != all_parts.end() && (*curr_it)->containsExactly(*prev_part))
+        };
+
+        /// Try to process parts partition by partition, since this could decrease time complexity from N*log(N) to N*log(P)
+        /// First check whether parts are partition aligned and partition sorted
+        /// and record the partition parts_begin and parts_end positions
+        bool partition_aligned = true;
+        bool partition_sorted = true;
+        std::vector<size_t> partition_pos;
+        std::unordered_set<String> partition_ids;
+        /// Have a quick check if there is only one partition to avoid overhead
+        if ((*all_parts.begin())->get_info().partition_id == (*all_parts.rbegin())->get_info().partition_id)
+        {
+            partition_aligned = false;
+        }
+        else
+        {
+            partition_pos.push_back(0);
+            for (size_t i = 1; i < all_parts.size(); ++i)
             {
-                (*curr_it)->setPreviousPart(prev_part);
+                const String & prev_partition_id = all_parts[i-1]->get_info().partition_id;
+                const String & partition_id = all_parts[i]->get_info().partition_id;
+                if (prev_partition_id < partition_id)
+                {
+                    if (partition_ids.contains(partition_id))
+                    {
+                        partition_aligned = false;
+                        break;
+                    }
+                    partition_pos.push_back(i);
+                    partition_ids.insert(partition_id);
+                }
+                else if (prev_partition_id > partition_id)
+                {
+                    partition_sorted = false;
+                    break;
+                }
             }
-            /// 3. curr_it is in the end
-            /// 4. curr_part is not related to the prev_part which means prev_part must be visible
+        }
+
+        if (partition_aligned)
+            partition_pos.push_back(all_parts.size());
+
+        /// If parts are not partition aligned or partition sorted, could not do partial sort
+        /// Since needs to make sure the return parts are sorted
+        if (!partition_sorted || !partition_aligned)
+        {
+            if (!partition_sorted)
+                LOG_WARNING(&Poco::Logger::get(__func__), "parts are not partition sorted, this could make calcVisible slow");
+            else if (partition_ids.size() > 1)
+                LOG_WARNING(&Poco::Logger::get(__func__), "parts are not partition aligned, this could make calcVisible slow");
+            process_parts(all_parts, 0, all_parts.size(), visible_parts);
+        }
+        else
+        {
+            size_t max_threads = std::min(Catalog::getMaxThreads(), partition_ids.size());
+            if (max_threads < 2 || all_parts.size() < Catalog::getMinParts())
+            {
+                for (size_t i = 0; i < partition_pos.size() - 1; ++i)
+                    process_parts(all_parts, partition_pos[i], partition_pos[i+1], visible_parts);
+            }
             else
             {
-                if (skip_drop_ranges && prev_part->get_deleted())
-                    ; /// do nothing
-                else
-                    visible_parts.push_back(prev_part);
+                std::vector<Vec> partition_visible_parts;
+                partition_visible_parts.resize(partition_pos.size() - 1);
+                ExceptionHandler exception_handler;
+                ThreadPool thread_pool(max_threads);
+                for (size_t i = 0; i < partition_pos.size() - 1; ++i)
+                {
+                    thread_pool.scheduleOrThrowOnError(createExceptionHandledJob(
+                        [&, i]() {  process_parts(all_parts, partition_pos[i], partition_pos[i+1], partition_visible_parts[i]); },
+                        exception_handler));
+                }
+                thread_pool.wait();
+                exception_handler.throwIfException();
 
-                if (visible_alone_drop_ranges && !prev_part->tryGetPreviousPart() && prev_part->get_deleted())
-                    visible_alone_drop_ranges->push_back(prev_part);
+                size_t total_visible_parts_number = 0;
+                for (auto & parts : partition_visible_parts)
+                    total_visible_parts_number += parts.size();
+                visible_parts.reserve(total_visible_parts_number);
+                for (auto & parts : partition_visible_parts)
+                    visible_parts.insert(visible_parts.end(), std::make_move_iterator(parts.begin()), std::make_move_iterator(parts.end()));
             }
-
-            prev_it = curr_it;
-            if (curr_it != all_parts.end())
-                ++curr_it;
         }
 
         if (flatten)
@@ -217,9 +298,9 @@ MergeTreeDataPartsVector calcVisibleParts(MergeTreeDataPartsVector & all_parts, 
     return calcVisiblePartsImpl<MergeTreeDataPartsVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
 }
 
-ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging)
+ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging, bool move_source_parts)
 {
-    return calcVisiblePartsImpl<ServerDataPartsVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
+    return calcVisiblePartsImpl<ServerDataPartsVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging, move_source_parts);
 }
 
 MergeTreeDataPartsCNCHVector calcVisibleParts(MergeTreeDataPartsCNCHVector & all_parts, bool flatten, LoggingOption logging)

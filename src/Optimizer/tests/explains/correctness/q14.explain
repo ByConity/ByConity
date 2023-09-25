@@ -62,3 +62,35 @@ Gather Exchange Est. ? rows
          │     Partition by: {a_8}
          └─ TableScan correctness.q6_t4 Est. ? rows
                   Outputs: a_8:=a, e_1:=e
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Inner Join Est. ? rows
+            │     Condition: 
+            ├─ Inner Join Est. ? rows
+            │  │     Condition: expr#cast(sk_1, 'Nullable(Int64)') == expr#cast(sk, 'Nullable(Int64)')
+            │  ├─ Repartition Exchange Est. ? rows
+            │  │  │     Partition by: {expr#cast(sk_1, 'Nullable(Int64)')}
+            │  │  └─ Projection Est. ? rows
+            │  │     │     Expressions: expr#cast(sk_1, 'Nullable(Int64)'):=cast(sk_1, 'Nullable(Int64)')
+            │  │     └─ TableScan correctness.cust Est. ? rows
+            │  │              Outputs: sk_1:=sk
+            │  └─ Repartition Exchange Est. ? rows
+            │     │     Partition by: {expr#cast(sk, 'Nullable(Int64)')}
+            │     └─ Projection Est. ? rows
+            │        │     Expressions: expr#cast(sk, 'Nullable(Int64)'):=cast(sk, 'Nullable(Int64)')
+            │        └─ Filter Est. ? rows
+            │           │     Condition: price < 10.
+            │           └─ TableScan correctness.web Est. ? rows
+            │                    Where: price < 10.
+            │                    Outputs: [price, sk]
+            └─ Broadcast Exchange Est. ? rows
+               └─ Filter Est. ? rows
+                  │     Condition: 22. = price_1
+                  └─ TableScan correctness.web Est. ? rows
+                           Where: 22. = price
+                           Outputs: price_1:=price

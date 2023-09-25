@@ -11,7 +11,10 @@ class RemoveRedundantDistinct : public Rewriter
 {
 public:
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
-    String name() const override { return "RemoveRedundantDistinct"; };
+    String name() const override
+    {
+        return "RemoveRedundantDistinct";
+    }
 };
 struct RemoveRedundantAggregateContext
 {

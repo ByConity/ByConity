@@ -18,6 +18,7 @@
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastSender.h>
+#include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
 #include <Processors/Exchange/ExchangeUtils.h>
 #include <brpc/stream.h>
 #include <Common/Exception.h>
@@ -54,7 +55,11 @@ void BrpcExchangeReceiverRegistryService::registry(
             catch (...)
             {
                 brpc::StreamClose(sender_stream_id);
-                LOG_ERROR(log, "Create stream failed when becomeRealSender for {} by exception: {}", sender_proxy->getDataKey()->getKey(), getCurrentExceptionMessage(false));
+                LOG_ERROR(
+                    log,
+                    "Create stream failed when becomeRealSender for request {} by exception: {}",
+                    *request,
+                    getCurrentExceptionMessage(false));
             }
         }
     });
@@ -64,11 +69,7 @@ void BrpcExchangeReceiverRegistryService::registry(
     brpc::StreamOptions stream_options;
     stream_options.max_buf_size = max_buf_size;
 
-    auto data_key = std::make_shared<ExchangeDataKey>(
-        request->query_id(),
-        request->exchange_id(),
-        request->parallel_id(),
-        request->coordinator_address());
+    auto data_key = std::make_shared<ExchangeDataKey>(request->query_unique_id(), request->exchange_id(), request->parallel_id());
     try
     {
         sender_proxy
@@ -77,7 +78,7 @@ void BrpcExchangeReceiverRegistryService::registry(
     }
     catch (...)
     {
-        String error_msg = "Create stream for " + data_key->getKey() + " failed by exception: " + getCurrentExceptionMessage(false);
+        String error_msg = "Create stream " + data_key->toString() + " for query" + request->query_id() + " failed by exception: " + getCurrentExceptionMessage(false);
         LOG_ERROR(log, error_msg);
         cntl->SetFailed(error_msg);
         return;
@@ -86,7 +87,7 @@ void BrpcExchangeReceiverRegistryService::registry(
     if (brpc::StreamAccept(&sender_stream_id, *cntl, &stream_options) != 0)
     {
         sender_stream_id = brpc::INVALID_STREAM_ID;
-        String error_msg = "Fail to accept stream for data_key-" + data_key->getKey();
+        String error_msg = "Fail to accept stream " + data_key->toString() + " for query " + request->query_id();
         LOG_ERROR(log, error_msg);
         cntl->SetFailed(error_msg);
         return;

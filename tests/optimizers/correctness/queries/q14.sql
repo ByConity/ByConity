@@ -30,3 +30,7 @@ where
   and q6_t3.a = q6_t4.a
   and q6_t4.a = q6_t5.a
 );
+
+SELECT  /*+ leading(((b, a1), a2))*/ count()
+FROM web AS a1, web AS a2, cust AS b
+WHERE (a1.price < 10) AND (a2.price = 22) AND (a1.sk = b.sk);

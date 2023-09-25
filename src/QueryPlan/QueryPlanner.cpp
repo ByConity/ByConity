@@ -225,7 +225,7 @@ namespace
             output_types[output_name] = input_types[input_column];
             // TODO global low card
             // if (output_types[output_name]->globalLowCardinality())
-                // has_global_low_cardinality = true;
+            // has_global_low_cardinality = true;
         }
 
         PlanNodePtr secondary_newness_node = nullptr;
@@ -420,7 +420,8 @@ RelationPlan QueryPlannerVisitor::visitASTExplainQuery(ASTPtr & node, const Void
     auto plan = process(query.getExplainedQuery());
     auto analyze_node = PlanNodeBase::createPlanNode(
         context->nextNodeId(),
-        std::make_shared<ExplainAnalyzeStep>(plan.getRoot()->getCurrentDataStream(), query.getKind(), context, nullptr, query.print_stats, query.print_profile),
+        std::make_shared<ExplainAnalyzeStep>(
+            plan.getRoot()->getCurrentDataStream(), query.getKind(), context, nullptr, query.print_stats, query.print_profile),
         {plan.getRoot()});
 
     return {analyze_node, {{"Explain Analyze"}}};
@@ -827,31 +828,30 @@ QueryPlannerVisitor::prepareJoinOnKeys(ASTTableJoin & table_join, PlanBuilder & 
     return {left_symbols, right_symbols};
 }
 
-DataStream QueryPlannerVisitor::getJoinOutputStream(ASTTableJoin & , PlanBuilder & left_builder, PlanBuilder & right_builder)
+DataStream QueryPlannerVisitor::getJoinOutputStream(ASTTableJoin &, PlanBuilder & left_builder, PlanBuilder & right_builder)
 {
-
     DataStream output_stream;
 
     // columns will be pruned further in optimizing phase
-    for (auto & x: left_builder.getOutputNamesAndTypes())
+    for (auto & x : left_builder.getOutputNamesAndTypes())
         output_stream.header.insert({x.type, x.name});
 
-    for (auto & x: right_builder.getOutputNamesAndTypes())
+    for (auto & x : right_builder.getOutputNamesAndTypes())
         output_stream.header.insert({x.type, x.name});
 
     return output_stream;
-
 }
 
-RelationPlan QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints)
+RelationPlan
+QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_scope, ASTSelectQuery & origin_query, SqlHints & hints)
 {
     const auto & storage_analysis = analysis.getStorageAnalysis(table_ast);
     const auto & storage = storage_analysis.storage;
     const auto & alias = table_ast.tryGetAlias();
 
     auto primary_column_size = table_scope->size();
-    const auto & used_columns = analysis.getUsedColumns(table_ast);
-    const auto & used_sub_columns = analysis.getUsedSubColumns(table_ast);
+    const auto & used_columns = analysis.getReadColumns(table_ast);
+    const auto & used_sub_columns = analysis.getReadSubColumns(table_ast);
     NamesWithAliases columns_with_aliases;
     // note primary column and sub columns may overlap, we use a map to keep allocated columns
     // e.g. SELECT m{'foo'}, __m__foo from t;
@@ -2219,11 +2219,7 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
             distinct_columns.push_back(set_operation_node->getCurrentDataStream().header.getByPosition(i).name);
 
         auto distinct_step = std::make_shared<DistinctStep>(
-            set_operation_node->getCurrentDataStream(),
-            extractDistinctSizeLimits(),
-            0,
-            distinct_columns,
-            false);
+            set_operation_node->getCurrentDataStream(), extractDistinctSizeLimits(), 0, distinct_columns, false);
 
         auto distinct_node = set_operation_node->addStep(context->nextNodeId(), std::move(distinct_step));
 

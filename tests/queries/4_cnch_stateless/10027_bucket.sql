@@ -10,6 +10,7 @@ DROP TABLE IF EXISTS bucket_attach;
 DROP TABLE IF EXISTS bucket_attach_2;
 DROP TABLE IF EXISTS test_optimize;
 DROP TABLE IF EXISTS test_optimize_with_date_column;
+DROP TABLE IF EXISTS test_user_defined_expr;
 
 
 CREATE TABLE bucket (name String, age Int64) ENGINE = CnchMergeTree() PARTITION BY name CLUSTER BY age INTO 1 BUCKETS ORDER BY name;
@@ -23,6 +24,9 @@ CREATE TABLE bucket_attach (name String, age Int64) ENGINE = CnchMergeTree() PAR
 CREATE TABLE bucket_attach_2 (name String, age Int64) ENGINE = CnchMergeTree() PARTITION BY name CLUSTER BY age INTO 2 BUCKETS ORDER BY name;
 CREATE TABLE test_optimize (`id` UInt32, `code` UInt32, `record` String) ENGINE = CnchMergeTree PARTITION BY id CLUSTER BY code INTO 4 BUCKETS ORDER BY code;
 CREATE TABLE test_optimize_with_date_column (`id` UInt32, `code` UInt32, `record` Date) ENGINE = CnchMergeTree PARTITION BY id CLUSTER BY record INTO 4 BUCKETS ORDER BY record;
+CREATE TABLE test_user_defined_expr (`id` UInt32, `code` UInt32, `record` String) ENGINE = CnchMergeTree PARTITION BY id CLUSTER BY EXPRESSION empty(record) INTO 2 BUCKETS ORDER BY record;
+CREATE TABLE test_user_defined_expr_error (`id` UInt32, `code` UInt32, `record` String) ENGINE = CnchMergeTree PARTITION BY id CLUSTER BY EXPRESSION record INTO 2 BUCKETS ORDER BY record; -- { serverError 36 }
+CREATE TABLE test_user_defined_expr_error (`id` UInt32, `code` UInt32, `record` String) ENGINE = CnchMergeTree PARTITION BY id CLUSTER BY EXPRESSION (code*2, code) INTO 2 BUCKETS ORDER BY record; -- { serverError 36 }
 
 -- Ensure bucket number is assigned to a part in bucket table
 INSERT INTO bucket VALUES ('jane', 10);
@@ -86,6 +90,17 @@ SELECT * FROM bucket_attach_2 ORDER BY name FORMAT CSV; -- empty results returne
 SELECT count(DISTINCT table_definition_hash) FROM system.cnch_parts where database = currentDatabase() and table = 'bucket_attach' and active FORMAT CSV;
 SELECT cluster_status FROM system.cnch_table_info where database = currentDatabase() and table = 'bucket_attach' FORMAT CSV;
 
+-- Ensure bucket number is assigned using user defined cluster by expression
+INSERT INTO test_user_defined_expr VALUES (1, 1, 'r1'), (2, 2, '');
+SELECT * FROM test_user_defined_expr ORDER BY id FORMAT CSV;
+SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'test_user_defined_expr' ORDER BY bucket_number FORMAT CSV;
+ALTER TABLE test_user_defined_expr MODIFY CLUSTER BY EXPRESSION code*2 INTO 2 BUCKETS;
+TRUNCATE TABLE test_user_defined_expr;
+INSERT INTO test_user_defined_expr VALUES (1, 0, 'r1');
+SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'test_user_defined_expr' and active ORDER BY bucket_number FORMAT CSV;
+INSERT INTO test_user_defined_expr VALUES (1, 1, 'r1'); -- { serverError 49 }
+ALTER TABLE test_user_defined_expr RECLUSTER PARTITION WHERE 1; -- { serverError 344 }
+
 -- Ensure optimize_skip_unused_workers 
 INSERT INTO TABLE test_optimize select toUInt32(number/10), toUInt32(number/10), concat('record', toString(number)) from system.numbers limit 30;
 SELECT * FROM  test_optimize where code = 2 ORDER BY record LIMIT 3 FORMAT CSV;
@@ -119,3 +134,4 @@ DROP TABLE bucket_attach;
 DROP TABLE bucket_attach_2;
 DROP TABLE test_optimize;
 DROP TABLE test_optimize_with_date_column;
+DROP TABLE test_user_defined_expr;

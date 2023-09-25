@@ -17,85 +17,31 @@
 
 #include <string>
 #include <fmt/core.h>
+#include <common/types.h>
+#include <fmt/format.h>
 
 namespace DB
 {
 struct ExchangeDataKey
 {
-    const String query_id;
-    const UInt64 exchange_id;
-    const UInt64 parallel_index;
-    const String coordinator_address;
-
-    ExchangeDataKey(
-        String query_id_, UInt64 exchange_id_, UInt64 parallel_index_, String coordinator_address_)
-        : query_id(std::move(query_id_))
-        , exchange_id(exchange_id_)
-        , parallel_index(parallel_index_)
-        , coordinator_address(std::move(coordinator_address_))
+    explicit ExchangeDataKey(UInt64 query_unique_id_, UInt64 exchange_id_, UInt64 parallel_index_)
+        : query_unique_id(query_unique_id_), exchange_id(exchange_id_), parallel_index(parallel_index_)
     {
     }
+    UInt64 query_unique_id;
+    UInt64 exchange_id;
+    UInt64 parallel_index;
 
-    bool operator==(const ExchangeDataKey & compare_to) const
+    String toString() const
     {
-        return (
-            exchange_id == compare_to.exchange_id &&
-            parallel_index == compare_to.parallel_index &&
-            0 == query_id.compare(compare_to.query_id) &&
-            0 == coordinator_address.compare(coordinator_address)
-        );
+        return std::to_string(query_unique_id) + "_" + std::to_string(exchange_id) + "_" + std::to_string(parallel_index);
     }
 
-    bool operator<(const ExchangeDataKey & compare_to) const
+    bool operator==(const ExchangeDataKey & other) const
     {
-        if (exchange_id < compare_to.exchange_id)
-            return true;
-        if (exchange_id > compare_to.exchange_id)
-            return false;
-
-        if (parallel_index < compare_to.parallel_index)
-            return true;
-        if (parallel_index > compare_to.parallel_index)
-            return false;
-
-        int query_id_compare = query_id.compare(compare_to.query_id);
-        if (query_id_compare < 0)
-            return true;
-        if (query_id_compare > 0)
-            return false;
-
-        int coordinator_address_compare = coordinator_address.compare(compare_to.coordinator_address);
-        if (coordinator_address_compare < 0)
-            return true;
-        if (coordinator_address_compare > 0)
-            return false;
-
-        return true;
+        return query_unique_id == other.query_unique_id && exchange_id == other.exchange_id
+            && parallel_index == other.parallel_index;
     }
-
-    String getKey() const
-    {
-        return query_id + "_" + std::to_string(exchange_id) + "_"
-            + std::to_string(parallel_index) + "_" + coordinator_address;
-    }
-
-    String dump() const
-    {
-        return fmt::format(
-            "ExchangeDataKey: [query_id: {}, exchange_id: {}, parallel_index: {}, coordinator_address: {}]",
-            query_id,
-            exchange_id,
-            parallel_index,
-            coordinator_address);
-    }
-
-    inline const String & getQueryId() const { return query_id; }
-
-    inline const String & getCoordinatorAddress() const { return coordinator_address; }
-
-    inline UInt64 getExchangeId() const {return exchange_id;}
-
-    inline UInt64 getParallelIndex() const {return parallel_index;}
 };
 
 using ExchangeDataKeyPtr = std::shared_ptr<ExchangeDataKey>;
@@ -105,13 +51,32 @@ struct ExchangeDataKeyHashFunc
 {
     size_t operator()(const ExchangeDataKey & key) const
     {
-        size_t h1 = std::hash<int>()(key.exchange_id);
-        size_t h2 = std::hash<int>()(key.parallel_index);
-        size_t h3 = std::hash<String>()(key.query_id);
-        size_t h4 = std::hash<String>()(key.coordinator_address);
-
-        return h1 ^ h2 ^ h3 ^ h4;
+        size_t h1 = std::hash<UInt64>()(key.query_unique_id);
+        size_t h2 = std::hash<UInt64>()(key.exchange_id);
+        size_t h3 = std::hash<UInt64>()(key.parallel_index);
+        return h1 ^ h2 ^ h3;
     }
 };
 
 }
+template <>
+struct fmt::formatter<DB::ExchangeDataKey>
+{
+    constexpr auto parse(format_parse_context & ctx)
+    {
+        const auto *it = ctx.begin();
+        const auto *end = ctx.end();
+
+        /// Only support {}.
+        if (it != end && *it != '}')
+            throw format_error("Invalid format for struct ExchangeDataKey");
+
+        return it;
+    }
+
+    template <typename FormatContext>
+    auto format(const DB::ExchangeDataKey & key, FormatContext & ctx)
+    {
+        return format_to(ctx.out(), "ExchangeKey[{}_{}_{}]", key.query_unique_id, key.exchange_id, key.parallel_index);
+    }
+};

@@ -77,6 +77,17 @@ public:
         const TxnTimestamp & commitTs,
         const UInt64 txn_id);
 
+    void redirectDetachAttachS3Parts(
+        const StoragePtr & to_table,
+        const UUID & from_table_uuid,
+        const UUID & to_table_uuid,
+        const IMergeTreeDataPartsVector & attached_parts,
+        const IMergeTreeDataPartsVector & commit_parts,
+        const Strings & attached_part_names,
+        const Strings & detached_part_names,
+        const std::vector<std::pair<String, String>> &  detached_part_metas,
+        const DB::Protos::DetachAttachType & type);
+
     TxnTimestamp commitParts(
         const TxnTimestamp & txn_id,
         ManipulationType type,

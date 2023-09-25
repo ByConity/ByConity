@@ -334,17 +334,9 @@ struct Settings;
       "Minimal absolute delay to close, stop serving requests and not return Ok during status check.", \
       0) \
     M(UInt64, enable_vertical_merge_algorithm, 1, "Enable usage of Vertical merge algorithm.", 0) \
-    M(UInt64, \
-      vertical_merge_algorithm_min_rows_to_activate, \
-      16 * DEFAULT_MERGE_BLOCK_SIZE, \
-      "Minimal (approximate) sum of rows in merging parts to activate Vertical merge algorithm.", \
-      0) \
-    M(UInt64, \
-      vertical_merge_algorithm_min_columns_to_activate, \
-      11, \
-      "Minimal amount of non-PK columns to activate Vertical merge algorithm.", \
-      0) \
-\
+    M(UInt64, vertical_merge_algorithm_min_rows_to_activate, 16 * DEFAULT_MERGE_BLOCK_SIZE, "Minimal (approximate) sum of rows in merging parts to activate Vertical merge algorithm.", 0) \
+    M(UInt64, vertical_merge_algorithm_min_columns_to_activate, 11, "Minimal amount of non-PK columns to activate Vertical merge algorithm.", 0) \
+    M(String, cluster_by_hint, "", "same as cluster by in ddl, but not enforced, user ensure data is correct.", 0)                                  \
     /** Compatibility settings */ \
     M(Bool, \
       compatibility_allow_sampling_expression_not_in_primary_key, \

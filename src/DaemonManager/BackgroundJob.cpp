@@ -28,10 +28,7 @@ BackgroundJob::BackgroundJob(StorageID storage_id_, DaemonJobServerBGThread & da
 {
     std::optional<CnchBGThreadStatus> stored_status = daemon_job.getStatusPersistentStore().createStatusIfNotExist(storage_id, CnchBGThreadStatus::Running);
     if (stored_status)
-    {
-        status = *stored_status;
         expected_status = *stored_status;
-    }
 }
 
 BackgroundJob::BackgroundJob(StorageID storage_id_, CnchBGThreadStatus status_, DaemonJobServerBGThread & daemon_job_, String host_port_)

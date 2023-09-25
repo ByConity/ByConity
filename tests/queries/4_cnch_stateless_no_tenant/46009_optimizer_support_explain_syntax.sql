@@ -1,11 +1,13 @@
 use test;
 set enable_optimizer=1;
 
-DROP TABLE IF EXISTS t1;
-CREATE TABLE t1(a Int, b Int) Engine = CnchMergeTree() order by a;
+DROP TABLE IF EXISTS t46009;
+CREATE TABLE t46009(a Int, b Int) Engine = CnchMergeTree() order by a;
 
-explain syntax select t1.a, count(a) from t1 join t1 as t2 on t1.a=t2.b where t1.a < 10 group by t1.a;
+explain syntax select t46009.a, count(a) from t46009 join t46009 as t2 on t46009.a=t2.b where t46009.a < 10 group by t46009.a;
 
-explain syntax select t1.a, count(a) from t1 join t1 as t2 on t1.a=t2.b where t1.a < 10 and (t1.a in ((select b from t1) as t3)) group by t1.a;
+explain syntax select t46009.a, count(a) from t46009 join t46009 as t2 on t46009.a=t2.b where t46009.a < 10 and (t46009.a in ((select b from t46009) as t3)) group by t46009.a;
 
-DROP TABLE IF EXISTS t1;
+explain syntax select name from cnch(server, system.settings) settings enable_optimizer=1;
+
+DROP TABLE IF EXISTS t46009;

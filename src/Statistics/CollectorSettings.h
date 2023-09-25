@@ -17,6 +17,7 @@
 #include <Core/Settings.h>
 namespace DB::Statistics
 {
+
 struct CollectorSettings
 {
     bool collect_histogram = true;
@@ -27,6 +28,8 @@ struct CollectorSettings
     double sample_ratio = 0.01;
     StatisticsAccurateSampleNdvMode accurate_sample_ndv = StatisticsAccurateSampleNdvMode::AUTO;
     StatisticsCachePolicy cache_policy = StatisticsCachePolicy::Default;
+    UInt64 histogram_bucket_size = 250;
+    UInt64 kll_sketch_log_k = DEFAULT_KLL_SKETCH_LOG_K;
 
     CollectorSettings() { }
 
@@ -46,8 +49,22 @@ struct CollectorSettings
         sample_ratio = settings.statistics_sample_ratio;
         accurate_sample_ndv = settings.statistics_accurate_sample_ndv;
         cache_policy = settings.statistics_cache_policy;
+        histogram_bucket_size = settings.statistics_histogram_bucket_size;
+        kll_sketch_log_k = settings.statistics_kll_sketch_log_k;
+
         // other settings should be manually set
         // like if not exists
+
+        // normalize conflicting settings
+        normalize();
+    }
+
+    void normalize()
+    {
+        if (histogram_bucket_size <= 0)
+        {
+            collect_histogram = false;
+        }
     }
 };
 

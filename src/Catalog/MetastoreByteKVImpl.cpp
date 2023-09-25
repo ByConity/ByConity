@@ -17,6 +17,7 @@
 #include <Catalog/MetastoreByteKVImpl.h>
 #include <Catalog/CatalogUtils.h>
 #include <iostream>
+#include <client.h>
 #include <common/defines.h>
 
 namespace DB
@@ -26,6 +27,7 @@ namespace ErrorCodes
 {
     extern const int METASTORE_OPERATION_ERROR;
     extern const int METASTORE_COMMIT_CAS_FAILURE;
+    extern const int NOT_IMPLEMENTED;
 }
 
 namespace Catalog
@@ -166,7 +168,7 @@ std::vector<std::pair<String, UInt64>> MetastoreByteKVImpl::multiGet(const std::
     return res;
 }
 
-bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommitResponse response)
+bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommitResponse & response)
 {
     bytekv::sdk::WriteBatchRequest wb_req;
     bytekv::sdk::WriteBatchResponse wb_resp;
@@ -195,7 +197,7 @@ bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommit
     {
         DeleteRequest del_req;
         del_req.table = this->table_name;
-        del_req.key = Slice(delete_key);
+        del_req.key = Slice(delete_key.key);
         // del_req.expected_version = expected_version;
         wb_req.AddDelete(del_req);
     }
@@ -243,7 +245,6 @@ bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommit
     return response.puts.size() == 0;
 }
 
-
 void MetastoreByteKVImpl::drop(const String & key, const UInt64 & expected_version)
 {
     DeleteRequest del_req;
@@ -253,6 +254,11 @@ void MetastoreByteKVImpl::drop(const String & key, const UInt64 & expected_versi
     del_req.expected_version = expected_version;
     auto code = retryWhenHostIsDown([&]() { return client->Delete(del_req, &del_resp); });
     assertStatus(OperationType::DELETE, code, {Errorcode::OK});
+}
+
+void MetastoreByteKVImpl::drop([[maybe_unused]] const String & key, [[maybe_unused]] const String & expected_value)
+{
+    throw Exception("drop by expected value is not supported in bytekv catalog api", Errorcode::NOT_IMPLEMENTED);
 }
 
 MetastoreByteKVImpl::IteratorPtr MetastoreByteKVImpl::getAll()

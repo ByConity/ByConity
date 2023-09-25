@@ -2582,12 +2582,18 @@ bool ParserExistsExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
 bool ParserClusterByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserExpression elem_p;
+    ParserKeyword expression("EXPRESSION");
     ParserKeyword into("INTO");
     ParserKeyword buckets("BUCKETS");
     ParserKeyword split_number("SPLIT_NUMBER");
     ParserKeyword with_range("WITH_RANGE");
     ParserUnsignedInteger total_bucket_number_p;
     ParserUnsignedInteger split_number_p;
+
+    // parse EXPRESSION keyword
+    bool is_user_defined_expression = false;
+    if (expression.ignore(pos, expected))
+        is_user_defined_expression = true;
 
     // parse columns in CLUSTER BY. Must come first as pos and expected is passed in after parsing CLUSTER BY
     ASTPtr columns_elem;
@@ -2621,6 +2627,12 @@ bool ParserClusterByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     // parses the SPLIT_NUMBER. This argument is optional.
     if (split_number.ignore(pos, expected))
     {
+        if (is_user_defined_expression)
+        {
+            expected.add(pos, "no SPLIT_NUMBER for user defined CLUSTER BY EXPRESSION");
+            return false;
+        }
+
         if (!split_number_p.parse(pos, split_number_elem, expected))
             return false;
 
@@ -2642,6 +2654,12 @@ bool ParserClusterByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     bool is_with_range_present = false;
     if (with_range.ignore(pos, expected))
     {
+        if (is_user_defined_expression)
+        {
+            expected.add(pos, "no WITH_RANGE for user defined CLUSTER BY EXPRESSION");
+            return false;
+        }
+
         if (split_number_value <= 0)
         {
             expected.add(pos, "required SPLIT_NUMBER > 0 for WITH_RANGE");
@@ -2650,7 +2668,7 @@ bool ParserClusterByElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         is_with_range_present = true;
     }
 
-    node = std::make_shared<ASTClusterByElement>(columns_elem, total_bucket_number_elem, split_number_value, is_with_range_present);
+    node = std::make_shared<ASTClusterByElement>(columns_elem, total_bucket_number_elem, split_number_value, is_with_range_present, is_user_defined_expression);
 
     return true;
 }
