@@ -70,7 +70,7 @@ struct ConfigurationFieldNumber : public ConfigurationFieldBase
     {
         if constexpr (std::is_same_v<T, bool>)
             value = config.getBool(full_key, value);
-        if constexpr (std::is_floating_point_v<T>)
+        else if constexpr (std::is_floating_point_v<T>)
             value = config.getDouble(full_key, value);
         else if constexpr (std::is_signed_v<T>)
             value = config.getInt64(full_key, value);
