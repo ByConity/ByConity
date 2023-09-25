@@ -211,6 +211,7 @@ public:
     /// Result pipeline must contain any number of streams with compatible output header is hasOutputStream(),
     ///   or pipeline should be completed otherwise.
     virtual QueryPipelinePtr updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & settings) = 0;
+    static ActionsDAGPtr createFilterExpressionActions(ContextPtr context, const ASTPtr & filter, const Block & header);
     static ActionsDAGPtr createExpressionActions(
         ContextPtr context, const NamesAndTypesList & source, const Names & output, const ASTPtr & ast, bool add_project = true);
     static ActionsDAGPtr createExpressionActions(

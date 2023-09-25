@@ -280,6 +280,16 @@ message AggregatingStep {
   required bool should_produce_results_in_order_of_bucket_number = 13;
 }
 
+message TotalsHavingStep {
+  required ITransformingStep query_plan_base = 1;
+  required bool overflow_row = 2;
+  optional AST having_filter = 3;
+  required string filter_column_name = 4;
+  required TotalsMode.Enum totals_mode = 5;
+  required double auto_include_threshold = 6;
+  required bool final = 7;
+}
+
 message ArrayJoinStep {
   required ITransformingStep query_plan_base = 1;
   required ArrayJoinAction array_join = 2;
@@ -300,6 +310,8 @@ message RemoteExchangeSourceStep {
   required DataStream input_stream = 1;
   required bytes step_description = 2;
   repeated PlanSegmentInput inputs = 3;
+  optional bool is_add_totals = 4;
+  optional bool is_add_extremes = 5;
 }
 
 message FinalSampleStep {
@@ -372,11 +384,6 @@ message RollupStep {
 message SettingQuotaAndLimitsStep {
   // unimplemented
 }
-
-message TotalsHavingStep {
-  // unimplemented
-}
-
 
 // this must be identical to APPLY_STEP_PROTOBUF_TYPES_AND_NAME
 //    with Step/_step postfix

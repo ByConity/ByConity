@@ -62,10 +62,16 @@ public:
     const GroupingDescriptions & getGroupings() const { return groupings; }
     const GroupingSetsParamsList & getGroupingSetsParamsList() const { return grouping_sets_params; }
     const AggregatingTransformParamsPtr & getAggregatingTransformParams() const { return params; }
-    bool MemoryEfficientAggregation() const { return memory_efficient_aggregation; }
+    bool isMemoryEfficientAggregation() const
+    {
+        return memory_efficient_aggregation;
+    }
     size_t getMaxThreads() const { return max_threads; }
     size_t getMemoryEfficientMergeThreads() const { return memory_efficient_merge_threads; }
-    bool ShouldProduceResultsInOrderOfBucketNumber() const { return should_produce_results_in_order_of_bucket_number; }
+    bool isShouldProduceResultsInOrderOfBucketNumber() const
+    {
+        return should_produce_results_in_order_of_bucket_number;
+    }
 
     void toProto(Protos::MergingAggregatedStep & proto, bool for_hash_equals = false) const;
     static std::shared_ptr<MergingAggregatedStep> fromProto(const Protos::MergingAggregatedStep & proto, ContextPtr context);
@@ -83,9 +89,9 @@ private:
 
     /// It determines if we should resize pipeline to 1 at the end.
     /// Needed in case of distributed memory efficient aggregation over distributed table.
-    /// Specifically, if there is a further MergingAggregatedStep and 
+    /// Specifically, if there is a further MergingAggregatedStep and
     /// distributed_aggregation_memory_efficient=true
-    /// then the pipeline should not be resized to > 1; otherwise, 
+    /// then the pipeline should not be resized to > 1; otherwise,
     /// the data passed to GroupingAggregatedTransform are not in bucket order -> error.
     /// Set as to_stage==WithMergeableState && distributed_aggregation_memory_efficient
     /// which is equivalent to !final_ && && distributed_aggregation_memory_efficient

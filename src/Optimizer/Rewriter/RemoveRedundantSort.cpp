@@ -49,26 +49,19 @@ PlanNodePtr RedundantSortVisitor::processChildren(PlanNodeBase & node, Redundant
         return node.shared_from_this();
 
     PlanNodes children;
-    DataStreams inputs;
     for (const auto & item : node.getChildren())
     {
         RedundantSortContext child_context{.context = sort_context.context, .can_sort_be_removed = sort_context.can_sort_be_removed};
         PlanNodePtr child = VisitorUtil::accept(*item, *this, child_context);
         children.emplace_back(child);
-        inputs.push_back(child->getStep()->getOutputStream());
     }
 
-    node.getStep()->setInputStreams(inputs);
     node.replaceChildren(children);
     return node.shared_from_this();
 }
 
 PlanNodePtr RedundantSortVisitor::resetChild(PlanNodeBase & node, PlanNodes & children, RedundantSortContext &)
 {
-    DataStreams inputs;
-    for (auto & child : children)
-        inputs.push_back(child->getStep()->getOutputStream());
-    node.getStep()->setInputStreams(inputs);
     node.replaceChildren(children);
     return node.shared_from_this();
 }

@@ -63,6 +63,8 @@ private:
     PlanNodePtr visitTopNFilteringNode(TopNFilteringNode & node, NameSet & require) override;
     PlanNodePtr visitFillingNode(FillingNode & node, NameSet & require) override;
     PlanNodePtr visitTableWriteNode(TableWriteNode & node, NameSet & context) override;
+    PlanNodePtr visitTotalsHavingNode(TotalsHavingNode & node, NameSet & require) override;
+    PlanNodePtr visitMergingAggregatedNode(MergingAggregatedNode & node, NameSet & require) override;
 
     CTEPostorderVisitHelper post_order_cte_helper;
     std::unordered_map<CTEId, NameSet> cte_require_columns{};

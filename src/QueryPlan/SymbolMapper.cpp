@@ -161,7 +161,7 @@ Block SymbolMapper::map(const Block & name_and_types)
 }
 
 DataStream SymbolMapper::map(const DataStream & data_stream)
-{   
+{
     DataStream output{map(data_stream.header)};
     output.has_single_port = data_stream.has_single_port;
     output.sort_mode = data_stream.sort_mode;
@@ -311,9 +311,9 @@ AggregatingTransformParamsPtr SymbolMapper::map(const AggregatingTransformParams
     return std::make_shared<AggregatingTransformParams>(map(param->params), param->final);
 }
 
-ArrayJoinActionPtr SymbolMapper::map(const ArrayJoinActionPtr & array_join_action) 
+ArrayJoinActionPtr SymbolMapper::map(const ArrayJoinActionPtr & array_join_action)
 {
-    if (array_join_action == nullptr) 
+    if (array_join_action == nullptr)
         return nullptr;
     return std::make_shared<ArrayJoinAction>(
         map(array_join_action->columns),
@@ -337,7 +337,7 @@ std::shared_ptr<AggregatingStep> SymbolMapper::map(const AggregatingStep & agg)
         agg.isFinal(),
         SortDescription{map(agg.getGroupBySortDescription())},
         map(agg.getGroupings()),
-        false,
+        agg.needOverflowRow(),
         agg.shouldProduceResultsInOrderOfBucketNumber());
 }
 
@@ -549,7 +549,7 @@ std::shared_ptr<MergingAggregatedStep> SymbolMapper::map(const MergingAggregated
         map(merging_agg.getGroupingSetsParamsList()),
         map(merging_agg.getGroupings()),
         map(merging_agg.getAggregatingTransformParams()),
-        merging_agg.MemoryEfficientAggregation(),
+        merging_agg.isMemoryEfficientAggregation(),
         merging_agg.getMaxThreads(),
         merging_agg.getMemoryEfficientMergeThreads());
 }
@@ -615,7 +615,9 @@ std::shared_ptr<RemoteExchangeSourceStep> SymbolMapper::map(const RemoteExchange
 {
     return std::make_shared<RemoteExchangeSourceStep>(
         remote_exchange.getInput(),
-        map(remote_exchange.getInputStreams()[0]));
+        map(remote_exchange.getInputStreams()[0]),
+        remote_exchange.isAddTotals(),
+        remote_exchange.isAddExtremes());
 }
 
 

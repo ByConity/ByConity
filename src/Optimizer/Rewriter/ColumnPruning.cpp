@@ -15,6 +15,7 @@
 
 #include <Optimizer/Rewriter/ColumnPruning.h>
 
+#include <DataTypes/DataTypeAggregateFunction.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/join_common.h>
 #include <Optimizer/Correlation.h>
@@ -24,6 +25,7 @@
 #include <QueryPlan/ApplyStep.h>
 #include <QueryPlan/AssignUniqueIdStep.h>
 #include <QueryPlan/DistinctStep.h>
+#include <QueryPlan/Dummy.h>
 #include <QueryPlan/ExceptStep.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/IntersectStep.h>
@@ -35,7 +37,6 @@
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
-#include <QueryPlan/Dummy.h>
 
 namespace DB
 {
@@ -326,8 +327,15 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
     }
 
     auto agg_step = std::make_shared<AggregatingStep>(
-        child->getStep()->getOutputStream(), step->getKeys(), std::move(aggs), step->getGroupingSetsParams(), step->isFinal(), step->getGroupBySortDescription(), step->getGroupings()
-        , false, step->shouldProduceResultsInOrderOfBucketNumber()
+        child->getStep()->getOutputStream(),
+        step->getKeys(),
+        aggs,
+        step->getGroupingSetsParams(),
+        step->isFinal(),
+        step->getGroupBySortDescription(),
+        step->getGroupings(),
+        step->needOverflowRow(),
+        step->shouldProduceResultsInOrderOfBucketNumber()
         //        step->getHaving(),
         //        step->getInteresteventsInfoList()
     );
@@ -747,5 +755,73 @@ PlanNodePtr ColumnPruningVisitor::visitTableWriteNode(TableWriteNode & node, Nam
     PlanNodePtr new_child = VisitorUtil::accept(*child, *this, require);
     node.replaceChildren({new_child});
     return node.shared_from_this();
+}
+
+PlanNodePtr ColumnPruningVisitor::visitTotalsHavingNode(TotalsHavingNode & node, NameSet & require)
+{
+    const auto * step = node.getStep().get();
+
+    for (const auto & col_with_name_type : step->getInputStreams()[0].header)
+        if (typeid_cast<const DataTypeAggregateFunction *>(col_with_name_type.type.get()))
+            require.emplace(col_with_name_type.name);
+
+    if (const auto & having_filter = step->getHavingFilter())
+    {
+        auto symbols = SymbolsExtractor::extract(having_filter);
+        require.insert(symbols.begin(), symbols.end());
+    }
+
+    auto rewritten_child = VisitorUtil::accept(node.getChildren()[0], *this, require);
+    node.replaceChildren({rewritten_child});
+    return node.shared_from_this();
+}
+
+PlanNodePtr ColumnPruningVisitor::visitMergingAggregatedNode(MergingAggregatedNode & node, NameSet & require)
+{
+    const auto * step = node.getStep().get();
+
+    NameSet child_require{step->getKeys().begin(), step->getKeys().end()};
+
+    AggregateDescriptions aggs;
+    for (const auto & agg : step->getAggregates())
+    {
+        if ((agg.argument_names.size() == 1 && require.contains(agg.argument_names[0])) || require.contains(agg.column_name))
+        {
+            aggs.push_back(agg);
+            child_require.insert(agg.argument_names.begin(), agg.argument_names.end());
+            child_require.emplace(agg.column_name);
+        }
+    }
+
+    if (aggs.empty() && step->getKeys().empty())
+    {
+        return createDummyPlanNode(context).second;
+    }
+
+    auto rewritten_child = VisitorUtil::accept(node.getChildren()[0], *this, child_require);
+    const auto & rewritten_child_header = rewritten_child->getCurrentDataStream().header;
+    ColumnNumbers key_positions;
+    for (const auto & key : step->getKeys())
+        key_positions.emplace_back(rewritten_child_header.getPositionByName(key));
+    const auto & transform_params = step->getAggregatingTransformParams();
+    const auto & aggregator_params = transform_params->params;
+    Aggregator::Params new_aggregator_params{
+        rewritten_child_header, key_positions, std::move(aggs), aggregator_params.overflow_row, aggregator_params.max_threads};
+    auto new_transform_params = std::make_shared<AggregatingTransformParams>(new_aggregator_params, transform_params->final);
+
+    auto rewritten_merge_step = std::make_shared<MergingAggregatedStep>(
+        rewritten_child->getCurrentDataStream(),
+        step->getKeys(),
+        step->getGroupingSetsParamsList(),
+        step->getGroupings(),
+        new_transform_params,
+        step->isMemoryEfficientAggregation(),
+        step->getMaxThreads(),
+        step->getMemoryEfficientMergeThreads());
+
+    PlanNodes children{rewritten_child};
+    auto rewritten_merge_node
+        = MergingAggregatedNode::createPlanNode(context->nextNodeId(), std::move(rewritten_merge_step), children, node.getStatistics());
+    return rewritten_merge_node;
 }
 }

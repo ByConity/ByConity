@@ -371,6 +371,9 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
         BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context)
     );
 
+    pipeline->setTotalsPortToMainPortTransform();
+    pipeline->setExtremesPortToMainPortTransform();
+
     registerAllExchangeReceivers(*pipeline, context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
 
     pipeline->setMaxThreads(pipeline->getNumThreads());

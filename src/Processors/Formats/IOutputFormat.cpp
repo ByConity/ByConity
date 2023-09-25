@@ -66,7 +66,7 @@ IOutputFormat::Status IOutputFormat::prepare()
     return Status::Finished;
 }
 
-static Chunk prepareTotals(Chunk chunk)
+Chunk IOutputFormat::prepareTotals(Chunk chunk)
 {
     if (!chunk.hasRows())
         return {};

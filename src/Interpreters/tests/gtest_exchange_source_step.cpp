@@ -81,7 +81,7 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
 
 
     DataStream datastream{.header = header};
-    RemoteExchangeSourceStep exchange_source_step(inputs, datastream);
+    RemoteExchangeSourceStep exchange_source_step(inputs, datastream, false, false);
     exchange_source_step.setPlanSegment(&plan_segment);
 
     ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000, .send_threshold_in_bytes = 0};

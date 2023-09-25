@@ -134,11 +134,15 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
     ExchangeStep * step = dynamic_cast<ExchangeStep *>(node->step.get());
 
     PlanSegmentInputs inputs;
+    bool is_add_totals = false;
+    bool is_add_extremes = false;
     for (auto & child : node->children)
     {
         PlanSegmentVisitorContext child_context{{}, {}, split_context.exchange_id};
         auto plan_segment = createPlanSegment(child, child_context);
 
+        is_add_totals |= child_context.is_add_totals;
+        is_add_extremes |= child_context.is_add_extremes;
         auto input = std::make_shared<PlanSegmentInput>(step->getHeader(), PlanSegmentType::EXCHANGE);
         input->setShufflekeys(step->getSchema().getPartitioningColumns());
         input->setPlanSegmentId(plan_segment->getPlanSegmentId());
@@ -156,7 +160,8 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
         split_context.inputs.emplace_back(input);
         split_context.children.emplace_back(plan_segment);
     }
-    QueryPlanStepPtr remote_step = std::make_unique<RemoteExchangeSourceStep>(inputs, step->getOutputStream());
+    QueryPlanStepPtr remote_step
+        = std::make_unique<RemoteExchangeSourceStep>(inputs, step->getOutputStream(), is_add_totals, is_add_extremes);
     remote_step->setStepDescription(step->getStepDescription());
     QueryPlan::Node remote_node{.step = std::move(remote_step), .children = {}, .id = node->id};
     plan_segment_context.query_plan.addNode(std::move(remote_node));
@@ -204,7 +209,8 @@ PlanSegmentResult PlanSegmentVisitor::visitCTERefNode(QueryPlan::Node * node, Pl
     split_context.inputs.emplace_back(input);
     split_context.children.emplace_back(plan_segment);
 
-    QueryPlanStepPtr remote_step = std::make_unique<RemoteExchangeSourceStep>(PlanSegmentInputs{input}, step->getOutputStream());
+    QueryPlanStepPtr remote_step = std::make_unique<RemoteExchangeSourceStep>(
+        PlanSegmentInputs{input}, step->getOutputStream(), false, false); // with totals is not expected used in queries with multiple table
     remote_step->setStepDescription(step->getStepDescription());
     QueryPlan::Node remote_node{.step = std::move(remote_step), .children = {}, .id = node->id};
     plan_segment_context.query_plan.addNode(std::move(remote_node));
@@ -218,6 +224,18 @@ PlanSegmentResult PlanSegmentVisitor::visitCTERefNode(QueryPlan::Node * node, Pl
     plan_segment_context.query_plan.addNode(std::move(projection_node));
 
     return plan_segment_context.query_plan.getLastNode();
+}
+
+PlanSegmentResult PlanSegmentVisitor::visitTotalsHavingNode(QueryPlan::Node * node, PlanSegmentVisitorContext & context)
+{
+    context.is_add_totals = true;
+    return visitNode(node, context);
+}
+
+PlanSegmentResult PlanSegmentVisitor::visitExtremesNode(QueryPlan::Node * node, PlanSegmentVisitorContext & context)
+{
+    context.is_add_extremes = true;
+    return visitNode(node, context);
 }
 
 PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size_t segment_id, PlanSegmentVisitorContext & split_context)

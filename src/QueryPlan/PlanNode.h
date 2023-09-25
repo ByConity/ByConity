@@ -210,6 +210,8 @@ private:
         {
             inputs.emplace_back(child->getCurrentDataStream());
         }
+
+        getStep()->setInputStreams(inputs);
     }
 
     void setStepImpl(QueryPlanStepPtr & step_) override

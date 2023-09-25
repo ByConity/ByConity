@@ -170,6 +170,16 @@ void IQueryPlanStep::describePipeline(const Processors & processors, FormatSetti
 }
 
 
+ActionsDAGPtr IQueryPlanStep::createFilterExpressionActions(ContextPtr context, const ASTPtr & filter, const Block & header)
+{
+    Names output;
+    for (const auto & item : header)
+        output.emplace_back(item.name);
+    output.push_back(filter->getColumnName());
+
+    return createExpressionActions(context, header.getNamesAndTypesList(), output, filter);
+}
+
 ActionsDAGPtr IQueryPlanStep::createExpressionActions(
     ContextPtr context, const NamesAndTypesList & source, const NamesWithAliases & output, const ASTPtr & ast, bool add_project)
 {

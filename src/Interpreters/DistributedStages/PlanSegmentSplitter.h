@@ -57,6 +57,8 @@ struct PlanSegmentVisitorContext
     PlanSegmentInputs inputs;
     std::vector<PlanSegment *> children;
     size_t & exchange_id;
+    bool is_add_totals = false;
+    bool is_add_extremes = false;
 };
 
 class PlanSegmentVisitor: public NodeVisitor<PlanSegmentResult, PlanSegmentVisitorContext>
@@ -70,6 +72,8 @@ public:
     PlanSegmentResult visitNode(QueryPlan::Node *, PlanSegmentVisitorContext & split_context) override;
     PlanSegmentResult visitExchangeNode(QueryPlan::Node * node, PlanSegmentVisitorContext & split_context) override;
     PlanSegmentResult visitCTERefNode(QueryPlan::Node * node, PlanSegmentVisitorContext & context) override;
+    PlanSegmentResult visitTotalsHavingNode(QueryPlan::Node * node, PlanSegmentVisitorContext & context) override;
+    PlanSegmentResult visitExtremesNode(QueryPlan::Node * node, PlanSegmentVisitorContext & context) override;
 
     PlanSegment * createPlanSegment(QueryPlan::Node * node, PlanSegmentVisitorContext & split_context);
     PlanSegment * createPlanSegment(QueryPlan::Node * node, size_t segment_id, PlanSegmentVisitorContext & split_context);

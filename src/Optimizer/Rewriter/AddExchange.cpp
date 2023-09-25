@@ -201,6 +201,11 @@ ExchangeResult ExchangeVisitor::visitLimitByNode(LimitByNode & node, ExchangeCon
     return visitPlanNode(node, cxt);
 }
 
+ExchangeResult ExchangeVisitor::visitTotalsHavingNode(TotalsHavingNode & node, ExchangeContext & cxt)
+{
+    return enforceNodeAndStream(node, cxt);
+}
+
 ExchangeResult ExchangeVisitor::visitSortingNode(SortingNode & node, ExchangeContext & cxt)
 {
     return enforceNodeAndStream(node, cxt);

@@ -49,33 +49,36 @@ TransformResult split(const PlanNodePtr & node, RuleContext & context)
         false,
         step->getGroupBySortDescription(),
         step->getGroupings(),
-        false,
+        step->needOverflowRow(),
         context.context->getSettingsRef().distributed_aggregation_memory_efficient);
-
 
     auto partial_agg_node
         = PlanNodeBase::createPlanNode(context.context->nextNodeId(), std::move(partial_agg), node->getChildren(), node->getStatistics());
 
-
-    ColumnNumbers keys;
-    auto exchange_header = partial_agg_node->getStep()->getOutputStream().header;
+    Names keys;
     if (!step->getGroupingSetsParams().empty())
-    {
-        keys.push_back(exchange_header.getPositionByName("__grouping_set"));
-    }
+        keys.push_back("__grouping_set");
+    keys.insert(keys.end(), step->getKeys().begin(), step->getKeys().end());
 
-    for (const auto & key : step->getKeys())
+    ColumnNumbers keys_positions;
+    auto exchange_header = partial_agg_node->getStep()->getOutputStream().header;
+
+    for (const auto & key : keys)
     {
-        keys.emplace_back(exchange_header.getPositionByName(key));
+        keys_positions.emplace_back(exchange_header.getPositionByName(key));
     }
 
     Aggregator::Params new_params(
-        partial_agg_node->getStep()->getOutputStream().header, keys, step->getAggregates(), step->getParams().overflow_row, context.context->getSettingsRef().max_threads);
-    auto transform_params = std::make_shared<AggregatingTransformParams>(new_params, step->isFinal());
+        exchange_header,
+        keys_positions,
+        step->getAggregates(),
+        step->getParams().overflow_row,
+        context.context->getSettingsRef().max_threads);
 
+    auto transform_params = std::make_shared<AggregatingTransformParams>(new_params, step->isFinal());
     QueryPlanStepPtr final_agg = std::make_shared<MergingAggregatedStep>(
         partial_agg_node->getStep()->getOutputStream(),
-        step->getKeys(),
+        std::move(keys),
         step->getGroupingSetsParams(),
         step->getGroupings(),
         transform_params,

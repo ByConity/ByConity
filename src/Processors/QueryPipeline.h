@@ -101,6 +101,11 @@ public:
     /// Add totals which returns one chunk with single row with defaults.
     void addDefaultTotals();
 
+    /// set Transform which will transfer data from totals_port to output ports if totals_port is not empty
+    void setTotalsPortToMainPortTransform();
+    /// set Transform which will transfer data from extremes_port to output ports if totals_port is not empty
+    void setExtremesPortToMainPortTransform();
+
     /// Forget about current totals and extremes. It is needed before aggregation, cause they will be calculated again.
     void dropTotalsAndExtremes();
 

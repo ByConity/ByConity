@@ -81,6 +81,7 @@ public:
     ExchangeResult visitReadNothingNode(ReadNothingNode & node, ExchangeContext &) override;
     ExchangeResult visitValuesNode(ValuesNode & node, ExchangeContext &) override;
     ExchangeResult visitLimitNode(LimitNode & node, ExchangeContext & cxt) override;
+    ExchangeResult visitTotalsHavingNode(TotalsHavingNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitLimitByNode(LimitByNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitSortingNode(SortingNode & node, ExchangeContext & cxt) override;
     ExchangeResult visitMergeSortingNode(MergeSortingNode & node, ExchangeContext & cxt) override;

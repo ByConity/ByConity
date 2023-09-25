@@ -28,6 +28,8 @@
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Processors/Transforms/FilterTransform.h>
 #include <Common/JSONBuilder.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <Processors/Port.h>
 
 namespace DB
 {
@@ -86,24 +88,13 @@ void FilterStep::updateInputStream(DataStream input_stream, bool keep_header)
     input_streams.emplace_back(std::move(input_stream));
 }
 
-ActionsDAGPtr FilterStep::createActions(ContextPtr context, const ASTPtr & rewrite_filter) const
-{
-    Names output;
-    for (const auto & item : input_streams[0].header)
-        output.emplace_back(item.name);
-    output.push_back(rewrite_filter->getColumnName());
-
-    return createExpressionActions(context, input_streams[0].header.getNamesAndTypesList(), output, rewrite_filter);
-}
-
-
 void FilterStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & settings)
 {
     ConstASTPtr rewrite_filter = filter;
     if (!actions_dag)
     {
         rewrite_filter = rewriteRuntimeFilter(filter, pipeline, settings);
-        actions_dag = createActions(settings.context, rewrite_filter->clone());
+        actions_dag = IQueryPlanStep::createFilterExpressionActions(settings.context, rewrite_filter->clone(), input_streams[0].header);
         filter_column_name = rewrite_filter->getColumnName();
     }
 

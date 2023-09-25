@@ -24,18 +24,15 @@ void SortingOrderedSource::rewrite(QueryPlan & plan, ContextMutablePtr context) 
 PlanAndProp SortingOrderedSource::Rewriter::visitPlanNode(PlanNodeBase & node, Void &)
 {
     PlanNodes children;
-    DataStreams inputs;
     Void require;
     PropertySet input_properties;
     for (const auto & child : node.getChildren())
     {
         auto result = VisitorUtil::accept(child, *this, require);
         children.emplace_back(result.plan);
-        inputs.push_back(result.plan->getStep()->getOutputStream());
         input_properties.emplace_back(result.property);
     }
 
-    node.getStep()->setInputStreams(inputs);
 
     node.replaceChildren(children);
     Property prop = PropertyDeriver::deriveProperty(node.getStep(), input_properties, context);
@@ -80,7 +77,7 @@ PlanAndProp SortingOrderedSource::Rewriter::visitWindowNode(WindowNode & node, V
 {
     auto result = VisitorUtil::accept(node.getChildren()[0], *this, v);
 
-#if 0 
+#if 0
     if (context->getSettingsRef().optimize_read_in_window_order)
     {
         auto step = node.getStep();

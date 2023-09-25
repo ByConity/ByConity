@@ -39,7 +39,7 @@ class RemoteExchangeSourceStepXXX
 class RemoteExchangeSourceStep : public ISourceStep
 {
 public:
-    explicit RemoteExchangeSourceStep(PlanSegmentInputs inputs_, DataStream input_stream_);
+    explicit RemoteExchangeSourceStep(PlanSegmentInputs inputs_, DataStream input_stream_, bool is_add_totals_, bool is_add_extremes_);
 
     String getName() const override { return "RemoteExchangeSource"; }
     Type getType() const override { return Type::RemoteExchangeSource; }
@@ -60,6 +60,9 @@ public:
     void setExchangeOptions(ExchangeOptions options_) { options = options_; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
 
+    bool isAddTotals() const { return is_add_totals; }
+    bool isAddExtremes() const  { return is_add_extremes; }
+
 private:
     void registerAllReceivers(BrpcReceiverPtrs receivers, UInt32 timeout_ms);
     PlanSegmentInputs inputs;
@@ -71,5 +74,7 @@ private:
     AddressInfo read_address_info;
     ContextPtr context;
     ExchangeOptions options;
+    bool is_add_totals;
+    bool is_add_extremes;
 };
 }

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <optional>
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/BlockIO.h>
 #include <Parsers/ASTVisitor.h>
@@ -36,6 +37,8 @@ struct QueryUseOptimizerContext
 {
     ContextMutablePtr context;
     NameSet ctes;
+    Tables external_tables;
+    std::optional<bool> is_add_totals;
 };
 
 class QueryUseOptimizerVisitor : public ASTVisitor<bool, QueryUseOptimizerContext>

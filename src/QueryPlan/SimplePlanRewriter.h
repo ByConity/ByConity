@@ -34,15 +34,12 @@ public:
         if (node.getChildren().empty())
             return node.shared_from_this();
         PlanNodes children;
-        DataStreams inputs;
         for (const auto & item : node.getChildren())
         {
             PlanNodePtr child = VisitorUtil::accept(*item, *this, c);
             children.emplace_back(child);
-            inputs.push_back(child->getStep()->getOutputStream());
         }
 
-        node.getStep()->setInputStreams(inputs);
         node.replaceChildren(children);
         return node.shared_from_this();
     }

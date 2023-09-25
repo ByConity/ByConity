@@ -339,15 +339,12 @@ PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterProbRewriter::visitPlanN
     PlanNodeBase & plan, std::unordered_set<RuntimeFilterId> & allowed_runtime_filters)
 {
     PlanNodes children;
-    DataStreams inputs;
     for (auto & child : plan.getChildren())
     {
         auto result = VisitorUtil::accept(*child, *this, allowed_runtime_filters);
         children.emplace_back(result);
-        inputs.emplace_back(child->getStep()->getOutputStream());
     }
     auto new_step = plan.getStep()->copy(context);
-    new_step->setInputStreams(inputs);
     plan.setStep(new_step);
 
     plan.replaceChildren(children);
@@ -505,16 +502,13 @@ PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterBuildRewriter::rewrite(P
 PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterBuildRewriter::visitPlanNode(PlanNodeBase & plan, Void & c)
 {
     PlanNodes children;
-    DataStreams inputs;
     for (auto & child : plan.getChildren())
     {
         auto result = VisitorUtil::accept(*child, *this, c);
         children.emplace_back(result);
-        inputs.push_back(child->getStep()->getOutputStream());
     }
 
     auto new_step = plan.getStep()->copy(context);
-    new_step->setInputStreams(inputs);
     plan.setStep(new_step);
     plan.replaceChildren(children);
     return plan.shared_from_this();

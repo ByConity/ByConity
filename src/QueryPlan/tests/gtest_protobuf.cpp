@@ -1062,7 +1062,7 @@ TEST_F(ProtobufTest, RemoteExchangeSourceStep)
         auto input_stream = generateDataStream(eng);
         auto step_description = fmt::format("text{}", eng() % 100);
         auto inputs = std::vector{generatePlanSegmentInput(eng)};
-        auto step = std::make_shared<RemoteExchangeSourceStep>(inputs, input_stream);
+        auto step = std::make_shared<RemoteExchangeSourceStep>(inputs, input_stream, false, false);
         step->setStepDescription(step_description);
         return step;
     }();

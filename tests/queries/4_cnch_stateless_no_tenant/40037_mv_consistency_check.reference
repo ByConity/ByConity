@@ -1,14 +1,14 @@
 Projection Est. ? rows
-│     Expressions: [event_date, uid], server_time_hour:=`expr#toHour(toDateTime(server_time))`, sum_click:=`expr#sum(click)`
+│     Expressions: [event_date, uid], server_time_hour:=`expr#toHour(toDateTime(server_time, \'Europe/Moscow\'))`, sum_click:=`expr#sum(click)`
 └─ Gather Exchange Est. ? rows
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
-         │     Partition by: {event_date, expr#toHour(toDateTime(server_time)), uid}
+         │     Partition by: {event_date, expr#toHour(toDateTime(server_time, \'Europe/Moscow\')), uid}
          └─ Aggregating Est. ? rows
-            │     Group by: {event_date, expr#toHour(toDateTime(server_time)), uid}
+            │     Group by: {event_date, expr#toHour(toDateTime(server_time, \'Europe/Moscow\')), uid}
             │     Aggregates: expr#sum(click):=AggNull(sum)(click)
             └─ Projection Est. ? rows
-               │     Expressions: [click, event_date, uid], expr#toHour(toDateTime(server_time)):=toHour(toDateTime(server_time))
+               │     Expressions: [click, event_date, uid], expr#toHour(toDateTime(server_time, \'Europe/Moscow\')):=toHour(toDateTime(server_time, \'Europe/Moscow\'))
                └─ TableScan test_40037.base40037 Est. ? rows
                         Outputs: [click, event_date, server_time, uid]
 Projection Est. ? rows
@@ -29,32 +29,32 @@ Projection Est. ? rows
                            Outputs: [event_date, server_time_hour, sum_click, uid]
 note: Materialized Views is applied for 1 times: test_40037.mv40037.
 Projection Est. ? rows
-│     Expressions: [event_date, uid], server_time_hour:=`expr#toHour(toDateTime(server_time))`, sum_click:=`expr#sum(click)`
+│     Expressions: [event_date, uid], server_time_hour:=`expr#toHour(toDateTime(server_time, \'Europe/Moscow\'))`, sum_click:=`expr#sum(click)`
 └─ Gather Exchange Est. ? rows
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
-         │     Partition by: {event_date, expr#toHour(toDateTime(server_time)), uid}
+         │     Partition by: {event_date, expr#toHour(toDateTime(server_time, \'Europe/Moscow\')), uid}
          └─ Aggregating Est. ? rows
-            │     Group by: {event_date, expr#toHour(toDateTime(server_time)), uid}
+            │     Group by: {event_date, expr#toHour(toDateTime(server_time, \'Europe/Moscow\')), uid}
             │     Aggregates: expr#sum(click):=AggNull(sum)(click)
             └─ Projection Est. ? rows
-               │     Expressions: [click, event_date, uid], expr#toHour(toDateTime(server_time)):=toHour(toDateTime(server_time))
+               │     Expressions: [click, event_date, uid], expr#toHour(toDateTime(server_time, \'Europe/Moscow\')):=toHour(toDateTime(server_time, \'Europe/Moscow\'))
                └─ Filter Est. ? rows
-                  │     Condition: toHour(toDateTime(server_time)) = 8
+                  │     Condition: toHour(toDateTime(server_time, \'Europe/Moscow\')) = 8
                   └─ TableScan test_40037.base40037 Est. ? rows
-                           Where: toHour(toDateTime(server_time)) = 8
+                           Where: toHour(toDateTime(server_time, \'Europe/Moscow\')) = 8
                            Outputs: [click, event_date, server_time, uid]
 Projection Est. ? rows
-│     Expressions: [event_date, uid], server_time_hour:=`expr#toHour(toDateTime(server_time))`, sum_click:=`expr#sum(click)`
+│     Expressions: [event_date, uid], server_time_hour:=`expr#toHour(toDateTime(server_time, \'Europe/Moscow\'))`, sum_click:=`expr#sum(click)`
 └─ Gather Exchange Est. ? rows
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
-         │     Partition by: {event_date, expr#toHour(toDateTime(server_time)), uid}
+         │     Partition by: {event_date, expr#toHour(toDateTime(server_time, \'Europe/Moscow\')), uid}
          └─ Aggregating Est. ? rows
-            │     Group by: {event_date, expr#toHour(toDateTime(server_time)), uid}
+            │     Group by: {event_date, expr#toHour(toDateTime(server_time, \'Europe/Moscow\')), uid}
             │     Aggregates: expr#sum(click):=AggNull(sum)(click)
             └─ Projection Est. ? rows
-               │     Expressions: [click, event_date, uid], expr#toHour(toDateTime(server_time)):=toHour(toDateTime(server_time))
+               │     Expressions: [click, event_date, uid], expr#toHour(toDateTime(server_time, \'Europe/Moscow\')):=toHour(toDateTime(server_time, \'Europe/Moscow\'))
                └─ Filter Est. ? rows
                   │     Condition: (event_date >= cast(19358, \'Date\')) AND (event_date <= cast(19367, \'Date\'))
                   └─ TableScan test_40037.base40037 Est. ? rows

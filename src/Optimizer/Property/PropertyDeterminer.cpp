@@ -22,6 +22,7 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
+#include "QueryPlan/TotalsHavingStep.h"
 
 namespace DB
 {
@@ -158,6 +159,12 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     //    {
     //        return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
     //    }
+    if (!step.isFinal())
+    {
+        auto require = context.getRequired();
+        require.setPreferred(true);
+        return {{require}};
+    }
 
     auto keys = step.getKeys();
     if (keys.empty())
@@ -200,6 +207,11 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     }
 
     return sets;
+}
+
+PropertySets DeterminerVisitor::visitTotalsHavingStep(const TotalsHavingStep & , DeterminerContext & )
+{
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 
 PropertySets DeterminerVisitor::visitMarkDistinctStep(const MarkDistinctStep & step, DeterminerContext &)

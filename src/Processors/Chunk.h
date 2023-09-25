@@ -41,7 +41,9 @@ public:
         ChunkMissingValues = 3,
         ChunksToMerge = 4,
         RepartitionChunkInfo = 5,
-        SelectorInfo = 6
+        SelectorInfo = 6,
+        Totals = 7,
+        Extremes = 8
     };
 
     virtual ~ChunkInfo() = default;
@@ -64,6 +66,18 @@ protected:
         return typeid(lhs) == typeid(rhs) // Allow compare only instances of the same dynamic type
             && lhs.isEqual(rhs);
     }
+};
+
+class ChunkInfoTotals: public ChunkInfo
+{
+public:
+    Type getType() const override { return Type::Totals; }
+};
+
+class ChunkInfoExtremes: public ChunkInfo
+{
+public:
+    Type getType() const override { return Type::Extremes; }
 };
 
 using ChunkInfoPtr = std::shared_ptr<const ChunkInfo>;

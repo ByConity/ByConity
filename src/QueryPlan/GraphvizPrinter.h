@@ -73,6 +73,7 @@ public:
     Void visitMergingSortedNode(MergingSortedNode & node, PrinterContext & context) override;
     Void visitDistinctNode(DistinctNode & node, PrinterContext & context) override;
     Void visitExtremesNode(ExtremesNode & node, PrinterContext & context) override;
+    Void visitTotalsHavingNode(TotalsHavingNode & node, PrinterContext & context) override;
     Void visitFinalSampleNode(FinalSampleNode & node, PrinterContext & context) override;
     Void visitApplyNode(ApplyNode & node, PrinterContext & context) override;
     Void visitEnforceSingleRowNode(EnforceSingleRowNode & node, PrinterContext & context) override;
@@ -146,6 +147,7 @@ public:
     Void visitMergingSortedNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitDistinctNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitExtremesNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitTotalsHavingNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitFinalSampleNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitApplyNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitEnforceSingleRowNode(QueryPlan::Node * node, PrinterContext & context) override;
@@ -214,6 +216,8 @@ public:
     static String printTopNFilteringStep(const TopNFilteringStep & step);
     static String printFillingStep(const FillingStep & step);
     static String printIntersectOrExceptStep(const IntersectOrExceptStep & step);
+    static String printTotalsHavingStep(const TotalsHavingStep & step);
+    static String printExtremesStep(const ExtremesStep & step);
 
 private:
     static String printFilter(const ConstASTPtr & filter);

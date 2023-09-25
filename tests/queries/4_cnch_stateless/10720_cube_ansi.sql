@@ -9,11 +9,11 @@ INSERT INTO cube VALUES ('b', 2, 20), ('b', 2, 15);
 
 SELECT a, b, sum(s), count() from cube GROUP BY CUBE(a, b) ORDER BY a, b;
 
-SELECT a, b, sum(s), count() from cube GROUP BY CUBE(a, b) WITH TOTALS ORDER BY a, b;
+SELECT a, b, sum(s), count() from cube GROUP BY CUBE(a, b) WITH TOTALS ORDER BY a, b SETTINGS enable_optimizer = 0;
 
 SELECT a, b, sum(s), count() from cube GROUP BY a, b WITH CUBE ORDER BY a, b;
 
-SELECT a, b, sum(s), count() from cube GROUP BY a, b WITH CUBE WITH TOTALS ORDER BY a, b;
+SELECT a, b, sum(s), count() from cube GROUP BY a, b WITH CUBE WITH TOTALS ORDER BY a, b SETTINGS enable_optimizer = 0;
 
 SET group_by_two_level_threshold = 1;
 SELECT a, b, sum(s), count() from cube GROUP BY a, b WITH CUBE ORDER BY a, b;
