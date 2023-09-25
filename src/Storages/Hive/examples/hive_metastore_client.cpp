@@ -1,8 +1,8 @@
 #include <exception>
 #include <iostream>
-#include <vector>
-#include <string>
 #include <optional>
+#include <string>
+#include <vector>
 
 #include <ThriftHiveMetastore.h>
 #include <hive_metastore_types.h>
@@ -165,31 +165,10 @@ void show_stat(
 int main(int argc, char ** argv)
 {
     auto opts = parseOptions(argc, argv);
-    for(auto o : opts)
-    {
-        std::cout << o.first <<" " << o.second.value().type().name() << std::endl;
-    }
     std::string host = opts["host"].as<std::string>();
     int port = opts["port"].as<int32_t>();
 
-    std::string hive_db_name;
-    std::string hive_table_name;
-
-    if (3 < argc)
-    {
-        hive_db_name = argv[3];
-    }
-
-    if (4 < argc)
-    {
-        hive_table_name = argv[4];
-    }
-
-    std::shared_ptr<TTransport> socket(new TSocket(host, port));
-    std::shared_ptr<TTransport> transport(new TBufferedTransport(socket));
-    std::shared_ptr<TProtocol> protocol(new TBinaryProtocol(transport));
-    ThriftHiveMetastoreClient client(protocol);
-    transport->open();
+    auto hms_client = DB::HiveMetastoreClientFactory::instance().getOrCreate("thrift://" + host + ":" + std::to_string(port), {});
 
     if (opts.count("desc"))
     {
@@ -199,7 +178,7 @@ int main(int argc, char ** argv)
             std::cout << "--desc db_name table_name" << std::endl;
             return -1;
         }
-        describe_table(client, params[0], params[1]);
+        describe_table(hms_client, params[0], params[1]);
         return 0;
     }
 
@@ -209,10 +188,10 @@ int main(int argc, char ** argv)
         switch (params.size())
         {
             case 0:
-                listAllDBs(client);
+                listAllDBs(hms_client);
                 return 0;
             case 1:
-                listAllTables(client, params[0]);
+                listAllTables(hms_client, params[0]);
                 return 0;
             default:
                 std::cout << "--list [db_name]" << std::endl;
@@ -222,16 +201,25 @@ int main(int argc, char ** argv)
 
     if (opts.count("stat"))
     {
-
         const auto & params = opts["stat"].as<std::vector<std::string>>();
-        if (params.size() != 2)
+        if (params.size() == 2)
         {
-            std::cout << "--stat db_name table_name" << std::endl;
+            show_stat(hms_client, params[0], params[1]);
+        }
+        else if (params.size() == 3)
+        {
+            show_stat(hms_client, params[0], params[1], params[2]);
+        }
+        else if (params.size() == 4)
+        {
+            show_stat(hms_client, params[0], params[1], params[2], params[3]);
+        }
+        else
+        {
+            std::cout << "--stat db_name table_name [partition_name] [column_name]" << std::endl;
             return -1;
         }
-        show_stat(client, params[0], params[1]);
 
         return 0;
     }
-
 }

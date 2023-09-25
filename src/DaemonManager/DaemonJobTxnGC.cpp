@@ -148,7 +148,11 @@ void DaemonJobTxnGC::cleanTxnRecord(
 
 bool DaemonJobTxnGC::triggerCleanUndoBuffers()
 {
-    const int clean_undobuffer_interval = getContext()->getConfigRef().getInt("clean_undobuffer_interval_minutes", 6 * 60); // default 6 hour
+    // disable clean undobuffer by default. This task fetch all undobuffers from bytekv and may cause high memory usage
+    const int clean_undobuffer_interval = getContext()->getConfigRef().getInt("clean_undobuffer_interval_minutes", 0);
+    if (clean_undobuffer_interval == 0)
+        return false;
+
     std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::minutes>(now - lastCleanUBtime).count();
     return duration >= clean_undobuffer_interval;

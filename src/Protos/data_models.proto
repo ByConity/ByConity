@@ -325,6 +325,7 @@ message DataModelTopology
     required uint64 expiration = 1;
     repeated DataModelHostWithPorts servers = 2; // deprecated
     repeated DataModelVwTopology vw_topologies = 3;
+    optional uint64 initialtime = 4;
 }
 
 message DataModelTopologyVersions

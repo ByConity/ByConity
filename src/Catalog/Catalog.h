@@ -48,6 +48,7 @@ namespace DB::ErrorCodes
 namespace DB
 {
 class AttachFilter;
+struct PrunedPartitions;
 }
 
 namespace DB::Catalog
@@ -178,7 +179,7 @@ public:
     bool getTableActiveness(const StoragePtr & storage, const TxnTimestamp & ts);
 
     ///data parts related interface
-    ServerDataPartsVector getServerDataPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context);
+    ServerDataPartsVector getServerDataPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, bool for_gc = false);
 
     ServerDataPartsVector getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context);
     DataPartsVector getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
@@ -223,6 +224,7 @@ public:
 
     Strings getPartitionIDs(const ConstStoragePtr & storage, const Context * session_context);
 
+    PrunedPartitions getPartitionsByPredicate(ContextPtr session_context, const ConstStoragePtr & storage, const SelectQueryInfo & query_info, const Names & column_names_to_return);
     /// dictionary related APIs
 
     void createDictionary(const StorageID & storage_id, const String & create_query);
@@ -544,7 +546,7 @@ public:
     // Strings getAllMaskingPolicyAppliedTables();
     // void dropMaskingPolicies(const Strings & masking_policy_names);
 
-    bool isHostServer(const StoragePtr & storage) const;
+    bool isHostServer(const ConstStoragePtr & storage) const;
 
     void setMergeMutateThreadStartTime(const StorageID & storage_id, const UInt64 & startup_time) const;
 

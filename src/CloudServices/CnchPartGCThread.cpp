@@ -128,9 +128,17 @@ void CnchPartGCThread::clearOldPartsByPartition(const StoragePtr & istorage, Sto
     auto now = time(nullptr);
 
     Stopwatch watch;
-    auto all_parts = catalog->getServerDataPartsInPartitions(istorage, {partition_id}, gc_timestamp, nullptr);
+    auto all_parts = catalog->getServerDataPartsInPartitions(istorage, {partition_id}, gc_timestamp, nullptr, true);
     LOG_TRACE(log, "Get parts for {} from Catalog cost {} us, size: {}", partition_id, watch.elapsedMicroseconds(), all_parts.size());
     watch.restart();
+
+    // Get zombie parts to remove and filter out invisible intermediate parts.
+    auto intermediate_parts_to_remove = processIntermediateParts(all_parts, gc_timestamp);
+    if (!intermediate_parts_to_remove.empty())
+    {
+        LOG_TRACE(log, "Get {} staged intermediate parts to remove for {} ", intermediate_parts_to_remove.size(), partition_id);
+        pushToRemovingQueue(storage, intermediate_parts_to_remove, "Staged Intermediate Parts");
+    }
 
     ServerDataPartsVector visible_alone_drop_ranges;
     ServerDataPartsVector invisible_dropped_parts;
@@ -712,4 +720,70 @@ size_t CnchPartGCThread::clearDataFileInTrash(const StoragePtr & istorage, Stora
 
     return total_removed_items;
 }
+
+ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataPartsVector & parts, TxnTimestamp gc_timestamp)
+{
+    ServerDataPartsVector intermediate_parts;
+    std::set<TxnTimestamp> txn_ids;
+    // Collect all intermediate parts and related transactions.
+    parts.erase(std::remove_if(parts.begin(), parts.end(),
+        [&](const ServerDataPartPtr & p)
+        {
+            if (p->getCommitTime() == IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
+            {
+                intermediate_parts.push_back(p);
+                txn_ids.insert(p->part_model_wrapper->part_model->part_info().mutation());
+                return true;
+            }
+            return false;
+        }
+    ), parts.end());
+
+    // no intermediate part to process.
+    if (txn_ids.empty())
+        return {};
+
+    // get all transaction records that intermediated parts belongs to from catalog.
+    std::vector<TransactionRecord> txn_records;
+    try
+    {
+        txn_records = catalog->getTransactionRecords(std::vector<TxnTimestamp>(txn_ids.begin(), txn_ids.end()), 100000);
+    }
+    catch (...)
+    {
+        LOG_WARNING(log, "Fail to get transaction records from catalog. Will skip all intermediate parts.");
+        return {};
+    }
+
+    std::unordered_map<UInt64, TxnTimestamp> transactions; //txn_id -> commit_ts
+    // find out inactive and finished transactions
+    for (const auto & record : txn_records)
+    {
+        if (record.isInactive())
+            transactions.emplace(record.txnID(), 0); // commit_ts == 0 means txn is not active here.
+        else if (record.status() == CnchTransactionStatus::Finished)
+            transactions.emplace(record.txnID(), record.commitTs());
+    }
+
+    // return if no zombie/active intermediate parts to process
+    if (transactions.empty())
+        return {};
+
+    // now collect zombie intermediate parts to remove and put back visible intermediate parts for further processing 
+    ServerDataPartsVector zombie_intermediate_parts;
+    for (const auto & part : intermediate_parts)
+    {
+        auto txn_id = part->part_model_wrapper->part_model->part_info().mutation();
+        // skip those invisible intermediate parts (not zombie).
+        if (!transactions.contains(txn_id))
+            continue;
+
+        if (!transactions[txn_id])
+            zombie_intermediate_parts.push_back(part);
+        else if (transactions[txn_id] <= gc_timestamp)
+            parts.push_back(part);
+    }
+    return zombie_intermediate_parts;
+}
+
 }

@@ -31,6 +31,12 @@
 namespace DB
 {
 
+struct PrunedPartitions
+{
+    Strings partitions;
+    UInt64 total_partition_number;
+};
+
 /// Pruning partitions in verbatim way using KeyCondition
 class PartitionPruner
 {

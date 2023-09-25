@@ -121,6 +121,7 @@ fillTopologyVersions(const std::list<CnchServerTopology> & topologies, pb::Repea
 {
     std::for_each(topologies.begin(), topologies.end(), [&](const auto & topology) {
         auto & topology_version = *topology_versions.Add();
+        topology_version.set_initialtime(topology.getInitialTime());
         topology_version.set_expiration(topology.getExpiration());
         for (const auto & [k, v] : topology.getVwTopologies())
         {
@@ -143,10 +144,13 @@ inline std::list<CnchServerTopology>
 createTopologyVersionsFromModel(const pb::RepeatedPtrField<Protos::DataModelTopology> & topology_versions)
 {
     std::list<CnchServerTopology> res;
-    std::for_each(topology_versions.begin(), topology_versions.end(), [&](const auto & model) {
-        UInt64 expiration = model.expiration();
+    std::for_each(topology_versions.begin(), topology_versions.end(), [&](const auto & model)
+    {
         auto topology = CnchServerTopology();
-        topology.setExpiration(expiration);
+        topology.setExpiration(model.expiration());
+        // to be comparable with old format topology during upgrade
+        if (model.has_initialtime())
+            topology.setInitialTime(model.initialtime());
         for (const auto & vw_topology : model.vw_topologies())
         {
             String vw_name = vw_topology.server_vw_name();

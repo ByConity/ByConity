@@ -6,6 +6,7 @@
 #include <Common/Exception.h>
 #if USE_HIVE
 
+#include <hive_metastore_types.h>
 #include "Access/KerberosInit.h"
 #include "Storages/Hive/CnchHiveSettings.h"
 #include "Storages/Hive/TSaslClientTransport.h"
@@ -24,7 +25,7 @@ namespace ErrorCodes
     extern const int NO_HIVEMETASTORE;
     extern const int BAD_ARGUMENTS;
     extern const int NETWORK_ERROR;
-}
+} // namespace ErrorCodes
 
 static const unsigned max_hive_metastore_client_connections = 16;
 static const int max_hive_metastore_client_retry = 3;
@@ -68,9 +69,7 @@ void HiveMetastoreClient::tryCallHiveClient(std::function<void(ThriftHiveMetasto
 Strings HiveMetastoreClient::getAllDatabases()
 {
     Strings databases;
-    tryCallHiveClient([&](auto & client) {
-        client->get_all_databases(databases);
-    });
+    tryCallHiveClient([&](auto & client) { client->get_all_databases(databases); });
     return databases;
 }
 
@@ -195,8 +194,7 @@ std::vector<ApacheHive::Partition>
 HiveMetastoreClient::getPartitionsByFilter(const String & db_name, const String & table_name, const String & filter)
 {
     std::vector<ApacheHive::Partition> partitions;
-    tryCallHiveClient([&] (auto & client)
-    {
+    tryCallHiveClient([&](auto & client) {
         if (filter.empty())
             client->get_partitions(partitions, getOriginalDatabaseName(db_name), table_name, -1);
         else
@@ -248,9 +246,11 @@ HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String & name,
     std::shared_ptr<TTransport> transport = std::make_shared<TBufferedTransport>(socket);
     if (settings && settings->hive_metastore_client_kerberos_auth)
     {
-        String hadoop_kerberos_principal = fmt::format("{}/{}", settings->hive_metastore_client_principal.toString(), settings->hive_metastore_client_service_fqdn.toString());
-        kerberosInit(settings->hive_metastore_client_keytab_path,hadoop_kerberos_principal);
-        transport = TSaslClientTransport::wrapClientTransports(settings->hive_metastore_client_service_fqdn, settings->hive_metastore_client_principal, transport);
+        String hadoop_kerberos_principal = fmt::format(
+            "{}/{}", settings->hive_metastore_client_principal.toString(), settings->hive_metastore_client_service_fqdn.toString());
+        kerberosInit(settings->hive_metastore_client_keytab_path, hadoop_kerberos_principal);
+        transport = TSaslClientTransport::wrapClientTransports(
+            settings->hive_metastore_client_service_fqdn, settings->hive_metastore_client_principal, transport);
     }
     std::shared_ptr<TProtocol> protocol = std::make_shared<TBinaryProtocol>(transport);
     std::shared_ptr<ThriftHiveMetastoreClient> thrift_client = std::make_shared<ThriftHiveMetastoreClient>(protocol);
@@ -264,6 +264,6 @@ HiveMetastoreClientFactory::createThriftHiveMetastoreClient(const String & name,
     }
     return thrift_client;
 }
-}
+} // namespace DB
 
 #endif

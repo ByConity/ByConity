@@ -392,6 +392,7 @@ struct TransactionRecord
     }
     bool hasMainTableUUID() const { return pb_model.has_main_table_uuid(); }
     String toString() const { return pb_model.ShortDebugString(); }
+    bool isInactive() const { return pb_model.status() == CnchTransactionStatus::Inactive; }
 };
 
 }

@@ -49,6 +49,7 @@
 #include <Storages/PartCacheManager.h>
 #include <Storages/CnchStorageCache.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
+#include <Storages/MergeTree/PartitionPruner.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <brpc/server.h>
@@ -1271,7 +1272,7 @@ namespace Catalog
     }
 
     DB::ServerDataPartsVector Catalog::getServerDataPartsInPartitions(
-        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context)
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, bool for_gc)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
@@ -1346,7 +1347,8 @@ namespace Catalog
                     }
                 }
 
-                if (ts)
+                // for gc thread, intermediate parts are required in case that TransactionCleaner fails to clean them.
+                if (!for_gc && ts)
                 {
                     LOG_TRACE(
                         log,
@@ -1508,14 +1510,17 @@ namespace Catalog
         return meta_proxy->getNonHostUpdateTimeStamp(name_space, UUIDHelpers::UUIDToString(uuid));
     }
 
-    bool Catalog::isHostServer(const StoragePtr & storage) const
+    bool Catalog::isHostServer(const ConstStoragePtr & storage) const
     {
         bool res;
         runWithMetricSupport(
             [&] {
                 const auto host_port
                     = context.getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageID().uuid), storage->getServerVwName(), true);
-                res = isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()));
+                if (host_port.empty())
+                    res = false;
+                else
+                    res = isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()));
             },
             ProfileEvents::IsHostServerSuccess,
             ProfileEvents::IsHostServerFailed);
@@ -1864,7 +1869,7 @@ namespace Catalog
                     bool can_use_cache = canUseCache(table, session_context);
 
                     auto cache_manager = context.getPartCacheManager();
-                    if (can_use_cache && cache_manager->getPartitionList(*cnch_table, partition_list))
+                    if (isHostServer(table) && can_use_cache && cache_manager->getPartitionList(*cnch_table, partition_list))
                         return;
                     getPartitionsFromMetastore(*cnch_table, partitions);
                 }
@@ -1887,7 +1892,7 @@ namespace Catalog
                 bool can_use_cache = canUseCache(storage, session_context);
 
                 auto cache_manager = context.getPartCacheManager();
-                if (can_use_cache && cache_manager->getPartitionIDs(*storage, partition_ids))
+                if (isHostServer(storage) && can_use_cache && cache_manager->getPartitionIDs(*storage, partition_ids))
                     return;
                 partition_ids = getPartitionIDsFromMetastore(storage);
             },
@@ -1895,6 +1900,43 @@ namespace Catalog
             ProfileEvents::GetPartitionIDsFailed);
         return partition_ids;
     }
+
+    PrunedPartitions Catalog::getPartitionsByPredicate(ContextPtr session_context, const ConstStoragePtr & storage, const SelectQueryInfo & query_info, const Names & column_names_to_return)
+    {
+        PrunedPartitions pruned_partitions;
+        auto getPartitionsLocally = [&]()
+        {
+            auto * cnch_mergetree = dynamic_cast<const StorageCnchMergeTree *>(storage.get());
+            if (!cnch_mergetree)
+                return;
+            auto all_partitions = getPartitionList(storage, nullptr);
+            pruned_partitions.total_partition_number = all_partitions.size();
+            pruned_partitions.partitions = cnch_mergetree->selectPartitionsByPredicate(query_info, all_partitions, column_names_to_return, session_context);
+        };
+        const auto host_port = context.getCnchTopologyMaster()->getTargetServer(
+            UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
+
+        if (!host_port.empty() && !isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort())))
+        {
+            // redirect request to host server
+            try
+            {
+                auto host_with_rpc = host_port.getRPCAddress();
+                pruned_partitions = context.getCnchServerClientPool().get(host_with_rpc)->fetchPartitions(host_with_rpc, storage, query_info, column_names_to_return);
+                LOG_TRACE(log, "Fetched {}/{} partitions from remote host {}", pruned_partitions.partitions.size(), pruned_partitions.total_partition_number, host_port.toDebugString());
+            }
+            catch (...)
+            {
+                LOG_DEBUG(log, "Failed to fetch request partitions from remote server. Fall back to get partitions locally.");
+                getPartitionsLocally();
+            }
+        }
+        else
+            getPartitionsLocally();
+
+        return pruned_partitions;
+    }
+
 
     template<typename Map>
     void Catalog::getPartitionsFromMetastore(const MergeTreeMetaBase & table, Map & partition_list)

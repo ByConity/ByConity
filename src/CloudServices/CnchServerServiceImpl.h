@@ -96,6 +96,12 @@ public:
         ::DB::Protos::FetchDataPartsResp * response,
         ::google::protobuf::Closure * done) override;
 
+    void fetchPartitions(
+        google::protobuf::RpcController * cntl,
+        const ::DB::Protos::FetchPartitionsReq* request,
+        ::DB::Protos::FetchPartitionsResp* response,
+        ::google::protobuf::Closure* done) override;
+
     void fetchUniqueTableMeta(
         ::google::protobuf::RpcController * controller,
         const ::DB::Protos::FetchUniqueTableMetaReq * request,

@@ -26,6 +26,7 @@
 #include <Core/SortDescription.h>
 #include <Core/Names.h>
 #include <Storages/ProjectionsDescription.h>
+#include <Storages/IStorage_fwd.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context_fwd.h>
 #include <memory>
@@ -155,6 +156,7 @@ struct ProjectionCandidate
     ManyExpressionActions group_by_elements_actions;
 };
 
+class InterpreterSelectQuery;
 /** Query along with some additional data,
   *  that can be used during query processing
   *  inside storage engines.
@@ -199,6 +201,9 @@ struct SelectQueryInfo
 
     void toProto(Protos::SelectQueryInfo & proto) const;
     void fillFromProto(const Protos::SelectQueryInfo & proto);
+
+    /// caller must hold the interpreter to prevent some resources in query_info from being released
+    static std::shared_ptr<InterpreterSelectQuery> buildQueryInfoFromQuery(ContextPtr context, const StoragePtr & storage, const String & query, SelectQueryInfo & query_info);
 };
 
 }

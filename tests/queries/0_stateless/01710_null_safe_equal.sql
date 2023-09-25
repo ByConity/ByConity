@@ -48,6 +48,7 @@ select '# USING <=> hash';
 SET join_using_null_safe=1;
 SET join_algorithm='hash';
 SELECT key, value FROM nse_lhs JOIN nse_rhs USING (value, key);
+SELECT key FROM ( SELECT 1 as key) RIGHT JOIN (SELECT 1 as key) USING key;
 select '';
 
 select '# USING <=> partial_merge';

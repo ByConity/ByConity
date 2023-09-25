@@ -215,6 +215,22 @@ message CommitWorkerRPCByKeyResp
   optional string exception = 1;
 }
 
+message FetchPartitionsReq
+{
+  required string remote_host = 1;
+  required string database = 2;
+  required string table = 3;
+  optional string predicate = 4;
+  repeated string column_name_filter = 5;
+}
+
+message FetchPartitionsResp
+{
+  required uint64 total_size = 1;
+  repeated string partitions = 2;
+  optional string exception = 3;
+}
+
 message FetchDataPartsReq
 {
   required string remote_host = 1;
@@ -479,6 +495,8 @@ service CnchServerService
   rpc getNumBackgroundThreads(BackgroundThreadNumReq) returns (BackgroundThreadNumResp);
 
   rpc fetchDataParts(FetchDataPartsReq) returns (FetchDataPartsResp);
+
+  rpc fetchPartitions(FetchPartitionsReq) returns (FetchPartitionsResp);
 
   rpc fetchUniqueTableMeta(FetchUniqueTableMetaReq) returns (FetchUniqueTableMetaResp);
 

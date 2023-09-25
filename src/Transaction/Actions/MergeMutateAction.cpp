@@ -70,7 +70,7 @@ void MergeMutateAction::abort()
 {
     // clear parts in kv
     // skip part cache to avoid blocking by write lock of part cache for long time
-    global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}}, true);
+    global_context.getCnchCatalog()->clearParts(table, Catalog::CommitItems{{parts.begin(), parts.end()}, delete_bitmaps, /*staged_parts*/{}});
 }
 
 void MergeMutateAction::updatePartData(MutableMergeTreeDataPartCNCHPtr part, [[maybe_unused]] TxnTimestamp commit_time)

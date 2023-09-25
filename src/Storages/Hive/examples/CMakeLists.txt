@@ -1,6 +1,6 @@
 if (ENABLE_HIVE)
     add_executable(hive_metastore_client hive_metastore_client.cpp)
-    target_link_libraries (hive_metastore_client PUBLIC ${HIVE_METASTORE_LIBRARY} ${THRIFT_LIBRARY} boost::program_options)
+    target_link_libraries (hive_metastore_client PUBLIC ${HIVE_METASTORE_LIBRARY} ${THRIFT_LIBRARY} clickhouse_common_io boost::program_options)
     target_include_directories (hive_metastore_client PUBLIC ${HIVE_METASTORE_INCLUDE_DIR})
 
     add_executable(glue_client glue_client.cpp)

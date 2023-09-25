@@ -405,7 +405,7 @@ bool LockManager::isTxnExpired(const TxnTimestamp & txn_id, const Context & cont
         if (auto catalog = context.tryGetCnchCatalog(); catalog)
         {
             auto txn_record = catalog->tryGetTransactionRecord(txn_id);
-            if (txn_record)
+            if (txn_record && !txn_record->ended())
             {
                 TransactionRecord target_record = txn_record.value();
                 target_record.setStatus(CnchTransactionStatus::Aborted).setCommitTs(context.getTimestamp());

@@ -35,6 +35,7 @@ namespace Protos
 }
 
 class ICnchTransaction;
+struct PrunedPartitions;
 
 class CnchServerClient : public RpcClientBase
 {
@@ -60,6 +61,8 @@ public:
     void removeIntermediateData(const TxnTimestamp & txn_id);
 
     ServerDataPartsVector fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts);
+
+    PrunedPartitions fetchPartitions(const String & remote_host, const ConstStoragePtr & table, const SelectQueryInfo & query_info, const Names & column_names);
 
     void redirectCommitParts(
         const StoragePtr & table,

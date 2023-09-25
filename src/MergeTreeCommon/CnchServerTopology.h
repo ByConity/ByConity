@@ -61,13 +61,18 @@ public:
 
     void setExpiration(const UInt64 & new_expiration);
 
+    void setInitialTime(const UInt64 & initial_time);
+
     UInt64 getExpiration() const;
+
+    UInt64 getInitialTime() const;
 
     String format() const;
 
     bool isSameTopologyWith(const CnchServerTopology & other_topology) const;
 
 private:
+    UInt64 lease_initialtime = 0;
     UInt64 lease_expiration = 0;
     HostWithPortsVec servers;
     std::map<String, CnchServerVwTopology> vw_topologies;

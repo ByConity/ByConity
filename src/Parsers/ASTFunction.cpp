@@ -335,7 +335,6 @@ void ASTFunction::formatImplWithoutAlias(const FormatSettings & settings, Format
                 "plus",            " + ",
                 "minus",           " - ",
                 "notEquals",       " != ",
-                "bitEquals",       " <=> ",
                 "lessOrEquals",    " <= ",
                 "greaterOrEquals", " >= ",
                 "less",            " < ",
