@@ -146,7 +146,7 @@ void PartWriter::execute()
 
     auto metadata_snapshot = table->getInMemoryMetadataPtr();
 
-    Block sample_block = metadata_snapshot->getSampleBlockNonMaterialized();
+    Block sample_block = metadata_snapshot->getSampleBlock(true);
 
     /// set current transaction
     TransactionRecord record;
