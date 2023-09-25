@@ -91,6 +91,7 @@ private:
 void registerFunctionIfNull(FunctionFactory & factory)
 {
     factory.registerFunction<FunctionIfNull>(FunctionFactory::CaseInsensitive);
+    factory.registerAlias("nvl", FunctionIfNull::name, FunctionFactory::CaseInsensitive);
 }
 
 }
