@@ -175,6 +175,8 @@
 
 #include <IO/VETosCommon.h>
 
+#include <Statistics/AutoStatisticsManager.h>
+
 namespace fs = std::filesystem;
 
 namespace ProfileEvents
@@ -449,6 +451,7 @@ struct ContextSharedPart
     bool ready_for_query = false; /// Server is ready for incoming queries
 
     std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer;
+    std::unique_ptr<Statistics::AutoStats::AutoStatisticsManager> auto_stats_manager;
 
     std::unique_ptr<PlanCacheManager> plan_cache_manager;
     ContextSharedPart()
@@ -3486,6 +3489,15 @@ std::shared_ptr<ZooKeeperLog> Context::getZooKeeperLog() const
     return shared->system_logs->zookeeper_log;
 }
 
+std::shared_ptr<AutoStatsTaskLog> Context::getAutoStatsTaskLog() const
+{
+    auto lock = getLock();
+
+    if (!shared->system_logs)
+        return {};
+
+    return shared->system_logs->auto_stats_task_log;
+}
 
 CompressionCodecPtr Context::chooseCompressionCodec(size_t part_size, double part_size_ratio) const
 {

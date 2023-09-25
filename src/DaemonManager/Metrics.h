@@ -31,6 +31,8 @@ namespace DB::DaemonManager::BRPCMetrics
     extern bvar::Adder< int > g_executeImpl_DedupWorker;
     extern bvar::Adder< int > g_executeImpl_GlobalGC_error;
     extern bvar::Adder< int > g_executeImpl_GlobalGC;
+    extern bvar::Adder< int > g_executeImpl_AutoStatistics_error;
+    extern bvar::Adder< int > g_executeImpl_AutoStatistics;
     extern bvar::Adder< int > g_executeImpl_TxnGC_error;
     extern bvar::Adder< int > g_executeImpl_TxnGC;
     extern bvar::Adder< int > g_executeImpl_Clustering_error;

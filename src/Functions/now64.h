@@ -25,7 +25,7 @@ namespace ErrorCodes
     extern const int CANNOT_CLOCK_GETTIME;
 }
 
-static DateTime64 nowSubsecondDt64(UInt32 scale)
+inline DateTime64 nowSubsecondDt64(UInt32 scale)
 {
     static constexpr Int32 fractional_scale = 9;
 

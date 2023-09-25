@@ -26,6 +26,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Catalog/CatalogUtils.h>
 #include <Access/IAccessEntity.h>
+#include <Statistics/AutoStatisticsHelper.h>
 
 namespace DB
 {
@@ -57,6 +58,13 @@ public:
     void finishTransaction(const TxnTimestamp & txn_id);
 
     CnchTransactionStatus getTransactionStatus(const TxnTimestamp & txn_id, bool need_search_catalog = false);
+
+    // Statistics
+    std::unordered_map<UUID, UInt64> queryUdiCounter();
+    void redirectUdiCounter(const std::unordered_map<UUID, UInt64>& data);
+    void scheduleDistributeUdiCount();
+    void scheduleAutoStatsCollect();
+    void redirectAsyncStatsTasks(google::protobuf::RepeatedPtrField<Protos::AutoStats::TaskInfoCore> tasks);
 
     void removeIntermediateData(const TxnTimestamp & txn_id);
 

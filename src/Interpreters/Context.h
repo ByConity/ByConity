@@ -147,6 +147,7 @@ class ZooKeeperLog;
 class QueryMetricLog;
 class QueryWorkerMetricLog;
 class CnchQueryLog;
+class AutoStatsTaskLog;
 struct QueryMetricElement;
 struct QueryWorkerMetricElement;
 using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
@@ -1052,6 +1053,7 @@ public:
     std::shared_ptr<zkutil::ZooKeeper> getZooKeeper() const;
     /// Same as above but return a zookeeper connection from auxiliary_zookeepers configuration entry.
     std::shared_ptr<zkutil::ZooKeeper> getAuxiliaryZooKeeper(const String & name) const;
+    std::shared_ptr<AutoStatsTaskLog> getAutoStatsTaskLog() const;
 
     /// Try to connect to Keeper using get(Auxiliary)ZooKeeper. Useful for
     /// internal Keeper start (check connection to some other node). Return true

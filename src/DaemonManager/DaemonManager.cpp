@@ -142,6 +142,7 @@ std::vector<DaemonJobPtr> createLocalDaemonJobs(
 {
     std::map<std::string, unsigned int> default_config = {
         { "GLOBAL_GC", 5000},
+        { "AUTO_STATISTICS", 10000},
         { "TXN_GC", 600000}
     };
 

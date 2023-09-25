@@ -16,6 +16,7 @@
 #pragma once
 #include <Core/Types.h>
 
+#include <unordered_map>
 #include <utility>
 #include <Interpreters/StorageID.h>
 
@@ -39,10 +40,22 @@ public:
     UniqueKey getUniqueKey() const;
     StorageID getStorageID() const { return storage_id; }
     UUID getUUID() const { return storage_id.uuid; }
+    String getNameForLogs() const { return storage_id.getNameForLogs(); }
+
+    bool operator==(const StatsTableIdentifier & right) const { return storage_id == right.storage_id; }
 
 private:
     StorageID storage_id;
     // useful only for adaptor
+};
+}
+
+namespace std
+{
+template <>
+struct hash<DB::Statistics::StatsTableIdentifier>
+{
+    size_t operator()(const DB::Statistics::StatsTableIdentifier & identifier) const { return std::hash<DB::UUID>{}(identifier.getUUID()); }
 };
 
 }

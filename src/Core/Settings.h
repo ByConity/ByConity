@@ -1854,14 +1854,11 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, statistics_collect_string_size_limit_for_histogram, 64, "Collect string histogram only for avg_size <= string_size_limit, since it's unnecessary to collect stats for text", 0) \
     M(UInt64, statistics_histogram_bucket_size, 250, "Default bucket size of histogram", 0) \
     M(UInt64, statistics_kll_sketch_log_k, 1600, "Default logK parameter of kll_sketch in statistics", 0) \
-    M(Bool, statistics_enable_sample, false, "Use sampling for statistics", 0) \
+    M(Bool, statistics_enable_async, false, "Collect stats use async mode", 0) \
+    M(Bool, statistics_enable_sample, true, "Use sampling for statistics", 0) \
     M(UInt64, statistics_sample_row_count, 40'000'000, "Minimal row count for sampling", 0) \
-    M(Float, statistics_sample_ratio, 0.1, "Ratio for sampling", 0) \
-    M(StatisticsAccurateSampleNdvMode, \
-      statistics_accurate_sample_ndv, \
-      StatisticsAccurateSampleNdvMode::AUTO, \
-      "Mode of accurate sample ndv to estimate full ndv", \
-      0) \
+    M(Float, statistics_sample_ratio, 0.01, "Ratio for sampling", 0) \
+    M(StatisticsAccurateSampleNdvMode, statistics_accurate_sample_ndv, StatisticsAccurateSampleNdvMode::AUTO, "Mode of accurate sample ndv to estimate full ndv", 0) \
     M(UInt64, statistics_batch_max_columns, 30, "Max column size in a batch when collecting stats", 0) \
     M(String, statistics_exclude_tables_regex, "", "regex to exclude tables for statistics operations", 0) \
     M(Bool, statistics_simplify_histogram, false, "Reduce buckets of histogram with simplifying", 0) \

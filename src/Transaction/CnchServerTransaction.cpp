@@ -82,6 +82,15 @@ std::vector<ActionPtr> & CnchServerTransaction::getPendingActions()
     return actions;
 }
 
+static void commitModifiedCount(Statistics::AutoStats::ModifiedCounter& counter)
+{
+    if (counter.empty()) return;
+
+    auto& instance = Statistics::AutoStats::AutoStatisticsMemoryRecord::instance();
+    instance.append(counter);
+}
+
+
 TxnTimestamp CnchServerTransaction::commitV1()
 {
     LOG_DEBUG(log, "Transaction {} starts commit (v1 api)\n", txn_record.txnID().toUInt64());
@@ -108,7 +117,7 @@ TxnTimestamp CnchServerTransaction::commitV1()
         setStatus(CnchTransactionStatus::Finished);
         setCommitTime(commit_ts);
         LOG_DEBUG(log, "Successfully committed transaction (v1 api): {}\n", txn_record.txnID().toUInt64());
-
+        commitModifiedCount(this->modified_counter);
         return commit_ts;
     }
     catch (...)
@@ -203,6 +212,7 @@ TxnTimestamp CnchServerTransaction::commit()
                     ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
                     LOG_DEBUG(log, "Successfully committed Kafka transaction {} at {} with {} offsets number, elapsed {} ms",
                                      txn_record.txnID().toUInt64(), commit_ts, tpl.size(), stop_watch.elapsedMilliseconds());
+                    commitModifiedCount(this->modified_counter);
                     return commit_ts;
                 }
                 else
@@ -256,6 +266,7 @@ TxnTimestamp CnchServerTransaction::commit()
                     ProfileEvents::increment(ProfileEvents::CnchTxnCommitted);
                     ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
                     LOG_DEBUG(log, "Successfully committed transaction {} at {}\n", txn_record.txnID().toUInt64(), commit_ts);
+                    commitModifiedCount(this->modified_counter);
                     return commit_ts;
                 }
                 else // CAS failed
@@ -266,6 +277,7 @@ TxnTimestamp CnchServerTransaction::commit()
                         ProfileEvents::increment(ProfileEvents::CnchTxnCommitted);
                         ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
                         LOG_DEBUG(log, "Transaction {} has been successfully committed in previous trials.\n", txn_record.txnID().toUInt64());
+                        commitModifiedCount(this->modified_counter);
                         return txn_record.commitTs();
                     }
                     else
@@ -460,5 +472,11 @@ void CnchServerTransaction::removeIntermediateData()
     LOG_DEBUG(log, "Secondary transaction failed, will remove all intermediate data during rollback");
     std::for_each(actions.begin(), actions.end(), [](auto & action) { action->abort(); });
     actions.clear();
+}
+
+void CnchServerTransaction::incrementModifiedCount(const Statistics::AutoStats::ModifiedCounter& new_counts)
+{
+    auto lock = getLock();
+    modified_counter.merge(new_counts);
 }
 }

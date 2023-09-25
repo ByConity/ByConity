@@ -185,7 +185,14 @@ public:
         FullScan = 1,
         Sample = 2
     };
+    enum class SyncMode
+    {
+        Default = 0,
+        Sync = 1,
+        Async = 2
+    };
     SampleType sample_type = SampleType::Default;
+    SyncMode sync_mode = SyncMode::Default;
     std::optional<Int64> sample_rows = std::nullopt;
     std::optional<double> sample_ratio = std::nullopt;
 

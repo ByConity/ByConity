@@ -43,6 +43,7 @@
 #include <WorkerTasks/ManipulationType.h>
 #include <Core/Types.h>
 #include <Core/UUID.h>
+#include <Statistics/AutoStatisticsMemoryRecord.h>
 
 namespace ProfileEvents
 {
@@ -493,6 +494,8 @@ void CnchDataWriter::finalize()
 TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, const std::unique_ptr<S3AttachPartsInfo> & s3_parts_info)
 {
     Stopwatch watch;
+    namespace AutoStats = Statistics::AutoStats;
+    AutoStats::ModifiedCounter modified_counter;
 
     if (context->getServerType() != ServerType::cnch_server)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Must be called in Server mode: {}", context->getServerType());
@@ -518,6 +521,8 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
                 LOG_DEBUG(log, "Nothing to commit, we skip this call.");
                 break;
             }
+            modified_counter.analyze(storage_ptr, dumped_data.parts);
+            modified_counter.analyze(storage_ptr, dumped_data.staged_parts);
 
             if (!tpl.empty() && !consumer_group.empty())
                 txn->setKafkaTpl(consumer_group, tpl);
@@ -560,6 +565,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
                 LOG_DEBUG(log, "No parts to commit, we skip this call.");
                 break;
             }
+            modified_counter.analyze(storage_ptr, dumped_data.parts);
 
             auto action = txn->createAction<DropRangeAction>(txn->getTransactionRecord(), storage_ptr);
             for (const auto & part : dumped_data.parts)
@@ -624,6 +630,13 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Not support commit type {}", typeToString(type));
         }
     } while (false);
+
+    // only here we can make sure there is no exception
+    // log modified count to AutoStatsMemoryRecord
+    if (auto* server_txn = dynamic_cast<CnchServerTransaction*>(txn.get()))
+    {
+        server_txn->incrementModifiedCount(modified_counter);
+    }
 
     return commit_time;
 }

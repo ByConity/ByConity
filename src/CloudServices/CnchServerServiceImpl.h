@@ -220,6 +220,37 @@ public:
         Protos::GetDeletingTablesInGlobalGCResp * response,
         google::protobuf::Closure * done) override;
 
+    // About Auto Statistics
+    void queryUdiCounter(
+        [[maybe_unused]] google::protobuf::RpcController* controller,
+        const Protos::QueryUdiCounterReq* request,
+        Protos::QueryUdiCounterResp* response,
+        google::protobuf::Closure* done) override;
+
+    void redirectUdiCounter(
+        google::protobuf::RpcController* controller,
+        const Protos::RedirectUdiCounterReq* request,
+        Protos::RedirectUdiCounterResp* response,
+        google::protobuf::Closure* done) override;
+
+    void scheduleDistributeUdiCount(
+        google::protobuf::RpcController* controller,
+        const Protos::ScheduleDistributeUdiCountReq* request,
+        Protos::ScheduleDistributeUdiCountResp* response,
+        google::protobuf::Closure* done) override;
+
+    void scheduleAutoStatsCollect(
+        google::protobuf::RpcController* controller,
+        const Protos::ScheduleAutoStatsCollectReq* request,
+        Protos::ScheduleAutoStatsCollectResp* response,
+        google::protobuf::Closure* done) override;
+
+    void redirectAsyncStatsTasks(
+        google::protobuf::RpcController* controller,
+        const Protos::RedirectAsyncStatsTasksReq* request,
+        Protos::RedirectAsyncStatsTasksResp* response,
+        google::protobuf::Closure* done) override;
+
     // forward part commit request to host server.
     void handleRedirectCommitRequest(
         google::protobuf::RpcController * controller,
@@ -244,7 +275,7 @@ public:
         google::protobuf::RpcController* controller,
         const Protos::RedirectDetachAttachS3PartsReq * request,
         Protos::RedirectDetachAttachS3PartsResp * response,
-        google::protobuf::Closure * done);
+        google::protobuf::Closure * done) override;
 
     void removeMergeMutateTasksOnPartitions(
         google::protobuf::RpcController * cntl,

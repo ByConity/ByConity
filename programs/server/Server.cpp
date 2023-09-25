@@ -133,6 +133,7 @@
 
 #include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <ServiceDiscovery/ServiceDiscoveryLocal.h>
+#include <Statistics/AutoStatisticsManager.h>
 
 #if !defined(ARCADIA_BUILD)
 #   include "config_core.h"
@@ -994,6 +995,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
             {
                 global_context->updateQueueManagerConfig();
                 global_context->updateAdaptiveSchdulerConfig();
+                if (auto auto_stats_manager = Statistics::AutoStats::AutoStatisticsManager::tryGetInstance())
+                {
+                    auto_stats_manager->prepareNewConfig(*config);
+                }
             }
         },
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
@@ -1736,6 +1741,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             Statistics::CacheManager::initialize(global_context);
             BindingCacheManager::initializeGlobalBinding(global_context);
             PlanCacheManager::initialize(global_context);
+            Statistics::AutoStats::AutoStatisticsManager::initialize(global_context, global_context->getConfigRef());
         }
 
         if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
