@@ -1284,6 +1284,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                 query_ctx->getCurrentTransaction()->getTransactionID());
 
             UInt64 table_def_hash = target_tbl.getTableHashForClusterBy();
+            bool is_user_defined_cluster_by_expression = target_tbl.getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
             size_t offset = 0;
             auto & worker_pool = attach_ctx.getWorkerPool(total_parts_count);
             for (auto & parts_and_infos : parts_and_infos_from_sources)
@@ -1291,7 +1292,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                 for (auto & part_and_info : parts_and_infos)
                 {
                     worker_pool.scheduleOrThrowOnError(
-                        [&parts_with_history, table_def_hash, offset, part = part_and_info.first, part_info = part_and_info.second, this]() {
+                        [&parts_with_history, table_def_hash, is_user_defined_cluster_by_expression, offset, part = part_and_info.first, part_info = part_and_info.second, this]() {
                             String part_name = part_info.getPartNameWithHintMutation();
                             String tbl_rel_path = target_tbl.getRelativeDataPath(IStorage::StorageLocation::MAIN);
                             String target_path = std::filesystem::path(tbl_rel_path) / part_name / "";
@@ -1334,7 +1335,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                             part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
                             parts_with_history.first[offset] = part;
                             parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_name);
-                            if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash)
+                            if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash || is_user_defined_cluster_by_expression)
                                 parts_with_history.second[offset]->table_definition_hash = table_def_hash;
 
                             if (is_unique_tbl && attach_meta)
@@ -1358,6 +1359,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
 
             size_t offset = 0;
             UInt64 table_def_hash = target_tbl.getTableHashForClusterBy();
+            bool is_user_defined_cluster_by_expression = target_tbl.getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
             String from_storage_uuid = from_storage == nullptr ? "" : UUIDHelpers::UUIDToString(from_storage->getStorageUUID());
             for (auto& parts_and_infos : parts_and_infos_from_sources)
             {
@@ -1397,7 +1399,7 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                     part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
                     parts_with_history.first[offset] = part;
                     parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_info.getPartNameWithHintMutation());
-                    if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash)
+                    if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash || is_user_defined_cluster_by_expression)
                         parts_with_history.second[offset]->table_definition_hash = table_def_hash;
                     ++offset;
                 }

@@ -39,10 +39,14 @@ namespace ErrorCodes
  * TODO: Add test cases
  **/
 void prepareBucketColumn(
-    Block & block, const Names bucket_columns, const Int64 split_number, const bool is_with_range, const Int64 total_shard_num, const ContextPtr & context)
+    Block & block, const Names bucket_columns, const Int64 split_number, const bool is_with_range, const Int64 total_shard_num, const ContextPtr & context,
+    const bool is_user_defined_expression)
 {
     if (split_number <= 0 && is_with_range)
         throw Exception("Unexpected operation. SPLIT_NUMBER is required for WITH_RANGE ", ErrorCodes::LOGICAL_ERROR);
+
+    if (is_user_defined_expression && (split_number > 0 || is_with_range))
+        throw Exception("Unexpected operation. SPLIT_NUMBER and WITH_RANGE not allowed for user defined CLUSTER BY expression", ErrorCodes::LOGICAL_ERROR);
 
     ColumnPtr bucket_number_column;
     if (split_number > 0)
@@ -57,6 +61,10 @@ void prepareBucketColumn(
             block.insert(ColumnWithTypeAndName{std::move(split_value_column), std::make_shared<DataTypeInt64>(), "split_value"});
         }
         bucket_number_column = createBucketNumberColumn(block, split_number, is_with_range, total_shard_num);
+    }
+    else if (is_user_defined_expression)
+    {
+        bucket_number_column = createColumnWithUserExpression(block, bucket_columns, total_shard_num);
     }
     else
     {
@@ -146,6 +154,29 @@ ColumnPtr createColumnWithSipHash(Block & block, const Names & bucket_columns, c
             block.getByName(column_name).column->updateHashWithValue(i, hash);
         }
         result_column->insertValue(hash.get64() % divisor);
+    }
+    return result_column;
+}
+
+ColumnPtr createColumnWithUserExpression(Block & block, const Names & bucket_columns, const Int64 & total_shard_num)
+{
+    auto result_column = ColumnUInt64::create();
+    auto num_rows = block.rows();
+    auto col = block.getByName(bucket_columns[0]);
+    // For each row, get the UInt64 value of the user defined expression
+    for (size_t i = 0; i < num_rows; i++)
+    {
+        auto bucket_number_from_expression = col.column->getInt(i);
+        if (unlikely(bucket_number_from_expression >= total_shard_num))
+        {
+            throw Exception("User defined expression for cluster by resulted in a row's BUCKET NUMBER[" 
+            + std::to_string(bucket_number_from_expression) 
+            + "] >= TOTAL BUCKET NUMBER["
+            + std::to_string(total_shard_num) 
+            + "]"
+            , ErrorCodes::LOGICAL_ERROR);
+        }
+        result_column->insertValue(bucket_number_from_expression);
     }
     return result_column;
 }

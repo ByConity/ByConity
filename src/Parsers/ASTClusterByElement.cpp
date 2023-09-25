@@ -23,6 +23,12 @@ namespace DB
 
 void ASTClusterByElement::formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const
 {
+    if (is_user_defined_expression)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "")
+        << "EXPRESSION "
+        << (settings.hilite ? hilite_none : "");
+    }
     getColumns()->formatImpl(settings, state, frame);
     settings.ostr << (settings.hilite ? hilite_keyword : "")
         << " INTO "

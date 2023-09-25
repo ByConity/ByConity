@@ -503,6 +503,13 @@ bool StorageInMemoryMetadata::getWithRangeFromClusterByKey() const
     return false;
 }
 
+bool StorageInMemoryMetadata::getIsUserDefinedExpressionFromClusterByKey() const
+{
+    if (hasClusterByKey())
+        return cluster_by_key.definition_ast->as<ASTClusterByElement>()->is_user_defined_expression;
+    return false;
+}
+
 bool StorageInMemoryMetadata::checkIfClusterByKeySameWithUniqueKey() const
 {
     if (!hasUniqueKey())

@@ -30,7 +30,7 @@
 #include <Interpreters/TreeRewriter.h>
 #include <Storages/extractKeyExpressionList.h>
 #include <Common/quoteString.h>
-
+#include <Analyzers/TypeAnalyzer.h>
 
 namespace DB
 {
@@ -39,6 +39,7 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
     extern const int DATA_TYPE_CANNOT_BE_USED_IN_KEY;
+    extern const int BAD_ARGUMENTS;
 }
 
 KeyDescription::KeyDescription(const KeyDescription & other)
@@ -122,7 +123,24 @@ KeyDescription KeyDescription::getClusterByKeyFromAST(
     const ColumnsDescription & columns,
     ContextPtr context)
 {
-    auto result = getSortingKeyFromAST(definition_ast->as<ASTClusterByElement>()->getColumns(), columns, context, {});
+    ASTClusterByElement * cluster_by_ast_element = definition_ast->as<ASTClusterByElement>();
+    auto result = getSortingKeyFromAST(cluster_by_ast_element->getColumns(), columns, context, {});
+    if (cluster_by_ast_element->is_user_defined_expression)
+    {
+        if (result.data_types.size() != 1)
+            throw Exception("User defined cluster by expression should only contain 1 column but found " 
+            + toString(result.data_types.size()) 
+            + " columns", 
+            ErrorCodes::BAD_ARGUMENTS);
+        
+        if (!isUnsignedInteger(result.data_types[0]))
+        {
+            throw Exception("User defined cluster by expression should return an Integer result but got " 
+            + result.data_types[0]->getName()
+            + " instead", 
+            ErrorCodes::BAD_ARGUMENTS);
+        }
+    }
     result.definition_ast = definition_ast;
     return result;
 }

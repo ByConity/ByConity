@@ -323,7 +323,7 @@ ASTs StorageCloudMergeTree::convertBucketNumbersToAstLiterals(const ASTPtr where
             {
                 // Get bucket number of this single value from the IN set
                 Block block_copy = block;
-                prepareBucketColumn(block_copy, metadata_snapshot->getColumnsForClusterByKey(), metadata_snapshot->getSplitNumberFromClusterByKey(), metadata_snapshot->getWithRangeFromClusterByKey(), metadata_snapshot->getBucketNumberFromClusterByKey(), local_context);
+                prepareBucketColumn(block_copy, metadata_snapshot->getColumnsForClusterByKey(), metadata_snapshot->getSplitNumberFromClusterByKey(), metadata_snapshot->getWithRangeFromClusterByKey(), metadata_snapshot->getBucketNumberFromClusterByKey(), local_context, metadata_snapshot->getIsUserDefinedExpressionFromClusterByKey());
                 auto bucket_number = block_copy.getByPosition(block_copy.columns() - 1).column->getInt(0); // this block only contains one row
 
                 // Create ASTLiteral using the bucket column in the block if it can be found in required_bucket_numbers

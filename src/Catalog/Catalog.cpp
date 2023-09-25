@@ -1550,8 +1550,11 @@ namespace Catalog
                 }
                 // If target table is a bucket table, ensure that the source part is not a bucket part or if the source part is a bucket part
                 // ensure that the table_definition_hash is the same before committing
+                // If allow_attach_parts_with_different_table_definition_hash is set to true AND the table is NOT clustered by user defined expression, skip this check
                 // TODO: Implement rollback for this to work properly
-                if (storage->isBucketTable() && !context.getSettings().allow_attach_parts_with_different_table_definition_hash)
+                bool skip_table_definition_hash_check = context.getSettings().allow_attach_parts_with_different_table_definition_hash 
+                                                        && !storage->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
+                if (storage->isBucketTable() && !skip_table_definition_hash_check)
                 {
                     for (auto & part : parts)
                     {
@@ -1574,7 +1577,7 @@ namespace Catalog
                 // If target table is a bucket table, table_definition_hash check was skipped and is initially fully clustered
                 // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false
                 if (storage->isBucketTable()
-                    && context.getSettings().allow_attach_parts_with_different_table_definition_hash
+                    && skip_table_definition_hash_check
                     && isTableClustered(storage->getStorageUUID()))
                 {
                     for (auto & part : parts)
@@ -2492,8 +2495,11 @@ namespace Catalog
 
                 // If target table is a bucket table, ensure that the source part is not a bucket part or if the source part is a bucket part
                 // ensure that the table_definition_hash is the same before committing
+                // If allow_attach_parts_with_different_table_definition_hash is set to true AND the table is NOT clustered by user defined expression, skip this check
                 // TODO: Implement rollback for this to work properly
-                if (table->isBucketTable() && !context.getSettings().allow_attach_parts_with_different_table_definition_hash)
+                bool skip_table_definition_hash_check = context.getSettings().allow_attach_parts_with_different_table_definition_hash 
+                                                        && !table->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
+                if (table->isBucketTable() && !skip_table_definition_hash_check)
                 {
                     for (auto & part : commit_data.data_parts)
                     {
@@ -2509,7 +2515,7 @@ namespace Catalog
                 // If target table is a bucket table, table_definition_hash check was skipped and is initially fully clustered
                 // Check if any of the parts that will be added has a different table_definition_hash. If yes, set cluster status to false
                 if (table->isBucketTable()
-                    && context.getSettings().allow_attach_parts_with_different_table_definition_hash
+                    && skip_table_definition_hash_check
                     && isTableClustered(table->getStorageUUID()))
                 {
                     for (auto & part : commit_data.data_parts)
