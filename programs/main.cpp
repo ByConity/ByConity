@@ -35,6 +35,7 @@
 #include <utility> /// pair
 
 #if !defined(ARCADIA_BUILD)
+#    include "config_core.h"
 #    include "config_tools.h"
 #endif
 
@@ -45,6 +46,15 @@
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
 
+#if USE_JEMALLOC
+#include <unistd.h>
+
+namespace DB::ErrorCodes
+{
+    extern const int PROF_NOT_SET;
+    extern const int STD_EXCEPTION;
+}
+#endif
 
 /// Universal executable for various clickhouse applications
 #if ENABLE_CLICKHOUSE_SERVER
@@ -389,6 +399,22 @@ struct Checker
 
 }
 
+#if USE_JEMALLOC
+/* Since the jemalloc read MALLOC_CONF only during program start,
+ * set env when running does not work.
+ * So leverage `execv` to replace the running image with the new MALLOC_CONF env
+ */
+static int generalExevc(char ** argv_)
+{
+    if (execvp(argv_[0], argv_) < 0)
+    {
+        std::cerr << "execv failed, error code: " << errno << ", " << strerror(errno) << std::endl;
+        return DB::ErrorCodes::STD_EXCEPTION;
+    }
+    return 0;
+}
+#endif
+
 
 /// This allows to implement assert to forbid initialization of a class in static constructors.
 /// Usage:
@@ -426,5 +452,14 @@ int main(int argc_, char ** argv_)
         }
     }
 
-    return main_func(static_cast<int>(argv.size()), argv.data());
+    int code = main_func(static_cast<int>(argv.size()), argv.data());
+
+#if USE_JEMALLOC
+    if (code == DB::ErrorCodes::PROF_NOT_SET)
+    {
+        code = generalExevc(argv_);
+    }
+#endif
+
+    return code;
 }

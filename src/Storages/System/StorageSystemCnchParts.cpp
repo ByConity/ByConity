@@ -171,6 +171,10 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
         const String & table_name = it.second;
         auto table = cnch_catalog->tryGetTable(*context, database_name, table_name, start_time);
 
+        /// Skip not exist table
+        if (!table)
+            continue;
+
         auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(table.get());
         if (!cnch_merge_tree)
         {
