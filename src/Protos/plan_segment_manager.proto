@@ -34,6 +34,11 @@ message SendPlanSegmentStatusResponse {
   optional string message = 1;
 }
 
+message TraceMeta {
+  required string traceparent = 1;
+  required string tracestate = 2;
+}
+
 message ExecutePlanSegmentRequest {
   // version number for plan segment serialize and deserialize
   required uint32 brpc_protocol_minor_revision = 1;
