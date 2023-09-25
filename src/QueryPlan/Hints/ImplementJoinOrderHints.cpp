@@ -43,7 +43,7 @@ PlanNodePtr JoinOrderHintsVisitor::visitJoinNode(JoinNode & node, Void & v)
     if (!leading_hint)
         return visitPlanNode(node, v);
 
-    JoinGraph join_graph = JoinGraph::build(join_ptr, context, false, true);
+    JoinGraph join_graph = JoinGraph::build(join_ptr, context, true, true, true);
     if (join_graph.size() < 2)
         return join_ptr;
 
