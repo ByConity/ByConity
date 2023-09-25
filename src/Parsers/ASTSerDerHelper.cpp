@@ -136,19 +136,6 @@ void serializeAST(const ConstASTPtr & ast, WriteBuffer & buf)
         writeBinary(false, buf);
 }
 
-void serializeAST(const ConstASTPtr & ast, WriteBuffer & buf)
-{
-    if (ast)
-    {
-        writeBinary(true, buf);
-        writeBinary(UInt8(ast->getType()), buf);
-        ast->serialize(buf);
-    }
-    else
-        writeBinary(false, buf);
-}
-
-
 ASTPtr deserializeAST(ReadBuffer & buf)
 {
     bool has_ast;
