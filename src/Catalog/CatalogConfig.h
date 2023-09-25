@@ -19,6 +19,8 @@
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Common/Exception.h>
 
+#define TSO_SERVICE_CONFIGURE "tso_service"
+
 namespace DB::ErrorCodes
 {
     extern const int METASTORE_EXCEPTION;
