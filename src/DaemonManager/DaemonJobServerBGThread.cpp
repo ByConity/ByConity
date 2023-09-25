@@ -926,7 +926,7 @@ BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
             StorageID storage_id = RPCHelpers::createStorageID(task.storage_id());
 
             auto task_status = CnchBGThreadStatus(task.status());
-            LOG_TRACE(log, "{} is {} on {}", storage_id.getNameForLogs(), toString(task_status), cnch_server->getRPCAddress());
+            LOG_DEBUG(log, "bg thread {} is {} on {}", storage_id.getNameForLogs(), toString(task_status), cnch_server->getRPCAddress());
 
             if (auto it = ret.find(storage_id.uuid); it != ret.end())
             {
