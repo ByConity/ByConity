@@ -167,6 +167,8 @@ public:
 
     QueryPlan getSubPlan(QueryPlan::Node * node_);
 
+    static UInt32 getPlanNodeCount(PlanNodePtr node);
+
     void freshPlan();
 
     size_t getSize() const { return nodes.size(); }

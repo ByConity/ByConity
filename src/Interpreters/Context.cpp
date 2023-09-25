@@ -105,6 +105,7 @@
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
 #include <Storages/CnchStorageCache.h>
+#include <QueryPlan/PlanCache.h>
 #include <Storages/CompressionCodecSelector.h>
 #include <Storages/DiskCache/KeyIndexFileCache.h>
 #include <Storages/HDFS/HDFSCommon.h>
@@ -450,6 +451,7 @@ struct ContextSharedPart
     std::shared_ptr<ProfileElementConsumer<ProcessorProfileLogElement>> processor_log_element_consumer;
     bool is_explain_query = false;
 
+    std::unique_ptr<PlanCacheManager> plan_cache_manager;
     ContextSharedPart()
         : macros(std::make_unique<Macros>())
     {
@@ -488,6 +490,9 @@ struct ContextSharedPart
         /**  After system_logs have been shut down it is guaranteed that no system table gets created or written to.
           *  Note that part changes at shutdown won't be logged to part log.
           */
+
+        if (plan_cache_manager)
+            plan_cache_manager.reset();
 
         if (system_logs)
             system_logs->shutdown();
@@ -5138,4 +5143,17 @@ void Context::waitReadFromClientFinished() const
     if (!shared->read_cv.wait_for(lk, std::chrono::milliseconds(timeout), [this] { return read_from_client_finished; }))
         throw Exception("Timeout exceeded while reading data from client.", ErrorCodes::TIMEOUT_EXCEEDED);
 }
+
+void Context::setPlanCacheManager(std::unique_ptr<PlanCacheManager> && manager)
+{
+    auto lock = getLock();
+    shared->plan_cache_manager = std::move(manager);
+}
+
+PlanCacheManager* Context::getPlanCacheManager()
+{
+    auto lock = getLock();
+    return shared->plan_cache_manager ? shared->plan_cache_manager.get() : nullptr;
+}
+
 }

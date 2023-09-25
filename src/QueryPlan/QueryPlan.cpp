@@ -824,4 +824,12 @@ PlanNodePtr QueryPlan::getPlanNodeById(PlanNodeId node_id) const
     return nullptr;
 }
 
+UInt32 QueryPlan::getPlanNodeCount(PlanNodePtr node)
+{
+    UInt32 size = 1;
+    for (auto & child : node->getChildren())
+        size += getPlanNodeCount(child);
+    return size;
+}
+
 }

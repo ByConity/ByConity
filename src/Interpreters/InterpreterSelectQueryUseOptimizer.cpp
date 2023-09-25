@@ -38,6 +38,8 @@
 #include "QueryPlan/QueryPlan.h"
 #include <Parsers/queryToString.h>
 #include <Interpreters/executeQuery.h>
+#include <common/logger_useful.h>
+#include <QueryPlan/PlanNodeIdAllocator.h>
 
 namespace DB
 {
@@ -56,19 +58,17 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
     context->createPlanNodeIdAllocator();
     context->createSymbolAllocator();
     context->createOptimizerMetrics();
+    bool enable_plan_cache = context->getSettingsRef().enable_plan_cache &&
+                            (query_ptr->as<ASTSelectQuery>() || query_ptr->as<ASTSelectWithUnionQuery>() || query_ptr->as<ASTSelectIntersectExceptQuery>());
 
     {
-        if (context->getSettingsRef().enable_plan_cache)
+        if (enable_plan_cache)
         {
             query_hash = PlanCacheManager::hash(query_ptr, context->getSettingsRef());
-            auto & cache = PlanCacheManager::instance();
-            auto cached = cache.get(query_hash);
-            if (cached)
+            query_plan = getPlanFromCache(query_hash);
+            if (query_plan)
             {
-                query_plan = std::make_unique<QueryPlan>();
-                ReadBufferFromString query_buffer(*cached);
                 query_plan->addInterpreterContext(context);
-                query_plan->deserialize(query_buffer);
                 LOG_INFO(log, "hit plan cache");
             }
         }
@@ -96,16 +96,10 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
             PlanOptimizer::optimize(*query_plan, context);
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
-            if (context->getSettingsRef().enable_plan_cache)
+            if (enable_plan_cache && query_hash && query_plan)
             {
-                WriteBufferFromOwnString query_buffer;
-                query_plan->serialize(query_buffer);
-                auto & query_str = query_buffer.str();
-                if (query_str.size() <= context->getSettingsRef().max_plan_mem_size)
-                {
-                    auto & cache = PlanCacheManager::instance();
-                    cache.add(query_hash, query_str);
-                }
+               if (addPlanToCache(query_hash, query_plan))
+                   LOG_INFO(log, "plan cache added");
             }
         }
     }
@@ -333,6 +327,58 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
 
     res.pipeline.addUsedStorageIDs(plan_segment_tree_and_used_storage_ids.second);
     return res;
+}
+
+QueryPlanPtr InterpreterSelectQueryUseOptimizer::getPlanFromCache(UInt128 query_hash)
+{
+    if (!context->getPlanCacheManager())
+        throw Exception("plan cache has to be initialized", ErrorCodes::LOGICAL_ERROR);
+
+    auto & cached = context->getPlanCacheManager()->instance();
+    try
+    {
+        auto plan_object = cached.get(query_hash);
+        if (!plan_object || !plan_object->plan_root)
+            return nullptr;
+
+        PlanNodeId max_id;
+        auto root  = PlanCacheManager::getNewPlanNode(plan_object->plan_root, context, false, max_id);
+        CTEInfo cte_info;
+        for (auto & cte : plan_object->cte_map)
+            cte_info.add(cte.first, PlanCacheManager::getNewPlanNode(cte.second, context, false, max_id));
+
+        auto node_id_allocator = std::make_shared<PlanNodeIdAllocator>(max_id+1);
+        return  std::make_unique<QueryPlan>(root, cte_info, node_id_allocator);
+
+    }
+    catch (...)
+    {
+        cached.remove(query_hash);
+        return nullptr;
+    }
+}
+
+bool InterpreterSelectQueryUseOptimizer::addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan)
+{
+    if (!context->getPlanCacheManager())
+        throw Exception("plan cache has to be initialized", ErrorCodes::LOGICAL_ERROR);
+
+    auto & cache = context->getPlanCacheManager()->instance();
+    auto root = plan->getPlanNode();
+    UInt32 size = QueryPlan::getPlanNodeCount(root);
+
+    if (size > context->getSettingsRef().max_plannode_count)
+        return false;
+
+    PlanNodeId max_id;
+    PlanCacheManager::PlanObjectValue plan_object;
+    plan_object.plan_root = PlanCacheManager::getNewPlanNode(root, context, true, max_id);
+
+    for (const auto & cte : plan->getCTEInfo().getCTEs())
+        plan_object.cte_map.emplace(cte.first, PlanCacheManager::getNewPlanNode(cte.second, context, true, max_id));
+
+    cache.add(query_hash, plan_object);
+    return true;
 }
 
 QueryPlan PlanNodeToNodeVisitor::convert(QueryPlan & query_plan)

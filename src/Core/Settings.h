@@ -1847,7 +1847,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \
-    M(UInt64, max_plan_mem_size, 1024 * 16 * 16, "The max plan size (byte)", 0) \
+    M(UInt64, max_plannode_count, 200, "The max plannode count", 0) \
     M(Bool, enable_memory_catalog, false, "Enable memory catalog for unittest", 0) \
     M(UInt64, memory_catalog_worker_size, 8, "Memory catalog work size for unittest", 0) \
     M(Bool, print_graphviz, false, "Whether print graphviz", 0) \
@@ -1999,12 +1999,13 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_runtime_filter_cost, false, "Whether enable runtime filter cost", 0) \
     M(Bool, enable_local_runtime_filter, true, "Whether enable runtime filter in local mode", 0) \
     M(UInt64, runtime_filter_min_filter_rows, 10000, "Set minimum row to enable runtime filter", 0) \
-    M(Float, runtime_filter_min_filter_factor, 0.3, "Set minimum filter factor to enable runtime filter", 0) \
+    M(Float, runtime_filter_min_filter_factor, 0.4, "Set minimum filter factor to enable runtime filter", 0) \
     M(Bool, enable_range_cover, true, "Whether use range rather than bloom or values set for runtime filter", 0) \
     M(Bool, runtime_filter_rewrite_bloom_filter_into_prewhere, true, "Whether enable pushdown runtime filter to prewhere for join", 0) \
     M(UInt64, runtime_filter_bloom_build_threshold, 2048000, "The threshold of right table to build bloom filter", 0) \
     M(UInt64, runtime_filter_in_build_threshold, 1024, "The threshold of right table to build value set filter", 0) \
     M(Bool, enable_runtime_filter_pipeline_poll, true, "No additional segment needed for the left side during broadcast join, polling time bounded", 0) \
+    M(UInt64, grf_ndv_enlarge_size, 8, "The times to enlarge the grf ndv, optimal value is the number workers ", 0) \
     \
     /** ip2geo settings */ \
     M(String, ip2geo_local_path, "/data01/clickhouse/data/geo_db/", "Local path for IP Database files", 0) \

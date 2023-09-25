@@ -1834,7 +1834,9 @@ void HashJoin::tryBuildRuntimeFilters(size_t total_rows) const
             }
 
             if (runtime_filter_consumer->isDistributed(rf.first))
-                pre_ht_size *=2; /// enlarge ndv in case error rate increase. TODO: shuffle-aware global runtime filter
+                pre_ht_size
+                    *= runtime_filter_consumer
+                           ->getGrfNdvEnlargeSize(); /// enlarge ndv in case error rate increase. TODO: shuffle-aware global runtime filter
 
             buildBloomFilterRF(rf.second, rf.first, pre_ht_size, runtime_filter_consumer.get());
         }
@@ -1852,8 +1854,7 @@ void HashJoin::buildBloomFilterRF(
     const auto & col = data->blocks.front().getByName(name);
     const auto type = removeNullable(recursiveRemoveLowCardinality(col.type));
     WhichDataType which(type);
-    BloomFilterWithRangePtr bf_with_range
-        = std::make_shared<BloomFilterWithRange>(ht_size, type, false);
+    BloomFilterWithRangePtr bf_with_range = std::make_shared<BloomFilterWithRange>(ht_size, type);
 
     for (const auto & block : data->blocks)
     {
@@ -1937,6 +1938,8 @@ void HashJoin::bypassRuntimeFilters(BypassType type) const
     auto & runtime_filters = runtime_filter_consumer->getRuntimeFilters();
     if (runtime_filters.empty())
         return;
+
+    LOG_DEBUG(log, "going build rf bypass rf: {}", bypassTypeToString(type));
 
     for (const auto & rf : runtime_filters)
     {

@@ -81,7 +81,7 @@ void BlockBloomFilter::addKeyUnhash(UInt64 h)
     auto slot_index = (h >> 32) & (slots - 1);
     uint32x4_t masks[uint32x4s_in_slot];
 
-    makeMask(h >> 32, masks);
+    makeMask(h, masks);
 
     uint32_t* ptr = reinterpret_cast<uint32_t*>(data.get()) + slot_index * uint32s_in_slot;
     __builtin_assume_aligned(ptr, bytes_in_slot);
@@ -94,9 +94,6 @@ void BlockBloomFilter::addKeyUnhash(UInt64 h)
     data = vld1q_u32(ptr + 4);
     res = vorrq_u32(data, masks[1]);
     vst1q_u32(ptr + 4, res);
-
-    if (save_hash)
-        hashes.push_back(h);
 }
 
 bool BlockBloomFilter::probeKeyUnhash(UInt64 h) const
@@ -108,7 +105,7 @@ bool BlockBloomFilter::probeKeyUnhash(UInt64 h) const
     uint32x4_t line_1 = vld1q_u32(&cache_line[slot_index * uint32s_in_slot]);
     uint32x4_t line_2 = vld1q_u32(&cache_line[slot_index * uint32s_in_slot + 4]);
 
-    makeMask(h >> 32, masks);
+    makeMask(h, masks);
     uint32x4_t out_1 = vbicq_u32(masks[0], line_1);
     uint32x4_t out_2 = vbicq_u32(masks[1], line_2);
     out_1 = vorrq_u32(out_1, out_2);
@@ -141,8 +138,6 @@ void BlockBloomFilter::addKeyUnhash(UInt64 h)
 
 #if USE_MULTITARGET_CODE
     if (isArchSupported(TargetArch::AVX2)) {
-        if (save_hash)
-            hashes.push_back(h);
         return TargetSpecific::AVX2::addKeyUnhash(h, slots, this->data.get());
     }
 #endif
@@ -150,13 +145,11 @@ void BlockBloomFilter::addKeyUnhash(UInt64 h)
     // scalar version
     auto slot_index = (h >> 32) & (slots - 1);
     uint32_t masks[uint32s_in_slot];
-    makeMask(h >> 32, masks);
+    makeMask(h, masks);
     uint32_t* cache_line = reinterpret_cast<uint32_t*>(data.get());
     for (int i = 0; i < uint32s_in_slot; ++i) {
         cache_line[slot_index * uint32s_in_slot + i] |= masks[i];
     }
-    if (save_hash)
-        hashes.push_back(h);
 }
 
 bool BlockBloomFilter::probeKeyUnhash(UInt64 h) const
@@ -171,7 +164,7 @@ bool BlockBloomFilter::probeKeyUnhash(UInt64 h) const
     // scalar version
     auto slot_index = (h >> 32) & (slots - 1);
     uint32_t masks[uint32s_in_slot];
-    makeMask(h >> 32, masks);
+    makeMask(h, masks);
     uint32_t* cache_line = reinterpret_cast<uint32_t*>(data.get());
     for (int i = 0; i < uint32s_in_slot; ++i) {
         if ((cache_line[slot_index * uint32s_in_slot + i] & masks[i]) == 0) {
@@ -213,21 +206,15 @@ void BlockBloomFilter::deserialize(ReadBuffer & istr)
     readBinary(ndv, istr);
     init(ndv);
     istr.read(reinterpret_cast<char *>(data.get()), bytes_in_slot * slots);
-    readBinary(save_hash, istr);
-    if (save_hash)
-        readVectorBinary(hashes, istr);
 }
 
 void BlockBloomFilter::serializeToBuffer(WriteBuffer & ostr)
 {
     writeBinary(ndv, ostr);
     ostr.write(reinterpret_cast<const char *>(data.get()), bytes_in_slot * slots);
-    writeBinary(save_hash, ostr);
-    if (save_hash)
-        writeVectorBinary(hashes, ostr);
 }
 
-void BlockBloomFilter::mergeInplace(const BlockBloomFilter & bf)
+void BlockBloomFilter::mergeInplace(BlockBloomFilter && bf)
 {
     if (this->slots != bf.slots)
     {
@@ -236,30 +223,23 @@ void BlockBloomFilter::mergeInplace(const BlockBloomFilter & bf)
 
         if (this->slots < bf.slots)
         {
-            std::unique_ptr<UInt8[], free_deleter> new_data =
-                std::unique_ptr<UInt8[], free_deleter>(static_cast<UInt8 *>(std::aligned_alloc(bytes_in_slot, bf.slots * bytes_in_slot)));
-
-            size_t start = 0;
-            size_t total = bf.slots * bytes_in_slot;
-            do
-            {
-                memcpy(new_data.get() + start, data.get(), bytes_in_slot * slots);
-                start += bytes_in_slot * slots;
-            } while(start < total);
-            data = std::move(new_data);
+            UInt64 tmp = slots;
             slots = bf.slots;
+            bf.slots = tmp;
+            ndv = bf.ndv;
+            this->data.swap(bf.data);
         }
-        else
+
+        size_t total = bytes_in_slot * slots;
+        size_t step = bytes_in_slot * bf.slots;
+        for (size_t start = 0; start < total; start += step)
         {
-            size_t total = bytes_in_slot * slots;
-            size_t step  = bytes_in_slot * bf.slots;
-            for (size_t start = 0; start < total; start += step)
-            {
-                for (size_t i = 0; i < bytes_in_slot * bf.slots; i++)
-                    this->data[start + i] |= bf.data[i];
-            }
-            return ;
+            for (size_t i = 0; i < bytes_in_slot * bf.slots; i++)
+                this->data[start + i] |= bf.data[i];
         }
+        // LOG_DEBUG(&Poco::Logger::get("BlockBloomFilter"), "merge... build rf ndv:{}-{}, slot:{}-{}, total:{}, step:{}",
+        //     this->ndv, bf.ndv, slots, bf.slots, total, step);
+        return;
     }
 
     for (size_t i = 0; i < bytes_in_slot * slots; i++)

@@ -166,9 +166,9 @@ class BloomFilterWithRange
 public:
     BloomFilterWithRange() = default;
 
-    explicit BloomFilterWithRange(size_t ht_size, const DataTypePtr & dataType, bool save_hash)
+    explicit BloomFilterWithRange(size_t ht_size, const DataTypePtr & dataType)
     {
-        bf.init(ht_size, save_hash);
+        bf.init(ht_size);
         auto && op_min_max = dataType->getRange();
         if (op_min_max)
         {
@@ -288,22 +288,9 @@ public:
         return bf.probeKeyUnhash(h);
     }
 
-    void mergeInplace(const BloomFilterWithRange & bfRange)
+    void mergeInplace(BloomFilterWithRange && bfRange)
     {
-        if (bf.save_hash && bfRange.bf.save_hash)
-        {
-            BlockBloomFilter temp;
-            temp.init(bf.ndv + bfRange.bf.ndv, true);
-            for (auto const h : bf.hashes)
-                temp.addKeyUnhash(h);
-
-            for (auto const h : bfRange.bf.hashes)
-                temp.addKeyUnhash(h);
-
-            bf = std::move(temp);
-        }
-        else
-            bf.mergeInplace(bfRange.bf);
+        bf.mergeInplace(std::move(bfRange.bf));
 
         has_null |= bfRange.has_null;
 

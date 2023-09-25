@@ -14,12 +14,14 @@ RuntimeFilterConsumer::RuntimeFilterConsumer(
     std::string query_id_,
     size_t local_stream_parallel_,
     size_t parallel_,
+    size_t grf_ndv_enlarge_size_,
     AddressInfo coordinator_address_,
     AddressInfo current_address_)
     : builder(std::move(builder_))
     , query_id(std::move(query_id_))
     , local_stream_parallel(local_stream_parallel_)
     , parallel(parallel_)
+    , grf_ndv_enlarge_size(grf_ndv_enlarge_size_)
     , coordinator_address(std::move(coordinator_address_))
     , current_address(std::move(current_address_))
     , timer{CLOCK_MONOTONIC_COARSE}

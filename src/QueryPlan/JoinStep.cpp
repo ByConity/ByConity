@@ -231,6 +231,7 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
                 settings.context->getInitialQueryId(),
                 runtime_filter_builders.size(),
                 settings.distributed_settings.parallel_size,
+                settings.context->getSettingsRef().grf_ndv_enlarge_size,
                 settings.distributed_settings.coordinator_address,
                 settings.distributed_settings.current_address);
 

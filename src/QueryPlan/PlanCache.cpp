@@ -6,20 +6,25 @@
 namespace DB
 {
 
-std::unique_ptr<PlanCacheManager::CacheType> PlanCacheManager::cache;
-
-void PlanCacheManager::initialize(ContextPtr context)
+void PlanCacheManager::initialize(ContextMutablePtr context)
 {
-    if (cache)
+    if (!context->getPlanCacheManager())
+    {
+        auto manager_instance = std::make_unique<PlanCacheManager>();
+        context->setPlanCacheManager(std::move(manager_instance));
+    }
+
+    auto * manager_instance = context->getPlanCacheManager();
+    if (manager_instance->cache)
     {
         LOG_WARNING(&Poco::Logger::get("PlanCacheManager"), "PlanCacheManager already initialized");
         return;
     }
-    auto max_size = context->getConfigRef().getUInt64("optimizer.plancache.max_cache_size", PlanCacheConfig::max_cache_size);
 
+    auto max_size = context->getConfigRef().getUInt64("optimizer.plancache.max_cache_size", PlanCacheConfig::max_cache_size);
     auto expire_time = std::chrono::seconds(
         context->getConfigRef().getUInt64("optimizer.plancache.cache_expire_time", PlanCacheConfig::cache_expire_time));
-    initialize(max_size, expire_time);
+    manager_instance->initialize(max_size, expire_time);
 }
 
 void PlanCacheManager::initialize(UInt64 max_size, std::chrono::seconds expire_time)
@@ -47,7 +52,34 @@ UInt128 PlanCacheManager::hash(const ASTPtr & query_ast, const Settings & settin
     return key;
 }
 
-void PlanCacheManager::invalidate(ContextPtr)
+PlanNodePtr PlanCacheManager::getNewPlanNode(PlanNodePtr node, ContextMutablePtr & context, bool cache_plan, PlanNodeId & max_id)
+{
+    if (max_id < node->getId())
+        max_id = node->getId();
+
+    if (node->getType() == IQueryPlanStep::Type::TableScan)
+    {
+        auto step = node->getStep()->copy(context);
+        auto * table_step = dynamic_cast<TableScanStep *>(step.get());
+        if (cache_plan)
+            table_step->cleanStorage();
+        else
+            table_step->setStorage(context);
+        return PlanNodeBase::createPlanNode(node->getId(), step, {});
+    }
+
+    PlanNodes children;
+    for (auto & child : node->getChildren())
+    {
+        auto result_node = getNewPlanNode(child, context, cache_plan, max_id);
+        if (result_node)
+            children.emplace_back(result_node);
+    }
+
+    return PlanNodeBase::createPlanNode(node->getId(), node->getStep()->copy(context), children);
+}
+
+void PlanCacheManager::invalidate(ContextMutablePtr)
 {
 //     if (!cache)
 //         throw Exception("CacheManager not initialized", ErrorCodes::LOGICAL_ERROR);
@@ -63,4 +95,4 @@ void PlanCacheManager::invalidate(ContextPtr)
 //     }
 }
 
-} // namespace DB::Statistics
+}

@@ -15,6 +15,7 @@ public:
         std::string query_id,
         size_t local_stream_parallel_,
         size_t parallel_,
+        size_t grf_ndv_enlarge_size_,
         AddressInfo coordinator_address_,
         AddressInfo current_address_);
 
@@ -30,11 +31,19 @@ public:
         return !builder->isLocal(name);
     }
 
-    void fixParallel(size_t parallel_) {local_stream_parallel *= parallel_;}
-    size_t getLocalSteamParallel()
+    void fixParallel(size_t parallel)
+    {
+        local_stream_parallel *= parallel;
+    }
+    size_t getLocalSteamParallel() const
     {
         return local_stream_parallel;
     }
+    size_t getGrfNdvEnlargeSize() const
+    {
+        return std::min(grf_ndv_enlarge_size, parallel);
+    }
+
 
 private:
     void transferRuntimeFilter(RuntimeFilterData && data);
@@ -43,6 +52,7 @@ private:
     const std::string query_id;
     mutable size_t local_stream_parallel;
     const size_t parallel;
+    const size_t grf_ndv_enlarge_size; // use for global grf
     const AddressInfo coordinator_address;
     const AddressInfo current_address;
 
