@@ -49,7 +49,7 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_analyze("ANALYZE");
     ParserKeyword s_trace("TRACE_OPT");
     ParserKeyword s_rule("RULE");
-    ParserKeyword s_analysis("ANALYSIS");
+    ParserKeyword s_metadata("METADATA");
 
 
     if (s_explain.ignore(pos, expected))
@@ -85,8 +85,8 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             else
                 kind = ASTExplainQuery::ExplainKind::TraceOptimizer;
         }
-        else if (s_analysis.ignore(pos, expected))
-            kind = ASTExplainQuery::ExplainKind::Analysis;
+        else if (s_metadata.ignore(pos, expected))
+            kind = ASTExplainQuery::ExplainKind::MetaData;
     }
     else
         return false;
@@ -102,7 +102,7 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         {
             auto settings_ast = settings->as<ASTSetQuery &>();
             auto * is_json = settings_ast.changes.tryGet("json");
-            if (kind == ASTExplainQuery::ExplainKind::Analysis && is_json && is_json->toString() == "1")
+            if (kind == ASTExplainQuery::ExplainKind::MetaData && is_json && is_json->toString() == "1")
             {
 
                 explain_query->format = std::make_shared<ASTIdentifier>("JSON");

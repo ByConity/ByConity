@@ -78,7 +78,7 @@ private:
 
     BlockIO explainAnalyze();
 
-    BlockInputStreamPtr explainAnalysis(const ASTPtr & ast);
+    BlockInputStreamPtr explainMetaData(const ASTPtr & ast);
 
     void explainPipelineWithOptimizer(const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr);
 };

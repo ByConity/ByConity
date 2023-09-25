@@ -134,7 +134,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, [[m
             || explain->getKind() ==  ASTExplainQuery::Distributed
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizerRule
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizer
-            || explain->getKind() ==  ASTExplainQuery::Analysis;
+            || explain->getKind() ==  ASTExplainQuery::MetaData;
         return explain_plan && check(explain->getExplainedQuery(), context);
     }
 
