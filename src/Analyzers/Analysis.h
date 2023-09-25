@@ -339,8 +339,9 @@ struct Analysis
     JoinOnAnalysis & getJoinOnAnalysis(ASTTableJoin &);
 
     // ASTTableExpression::database_and_table/ASTTableExpression::table_function
-    std::unordered_map<const IAST *, StorageAnalysis> storage_results;
+    LinkedHashMap<const IAST *, StorageAnalysis> storage_results;
     const StorageAnalysis & getStorageAnalysis(const IAST &);
+    const LinkedHashMap<const IAST *, StorageAnalysis> & getStorages() const;
 
     /// Select
     std::unordered_map<ASTSelectQuery *, ASTs> select_expressions;
@@ -419,12 +420,12 @@ struct Analysis
 
     // Which columns are used in query, used for EXPLAIN ANALYSIS reporting.
     // A difference with read_columns is, columns used in alias columns are not included.
-    LinkedHashMap<StorageID, LinkedHashSet<String>> used_columns;
+    std::unordered_map<StorageID, LinkedHashSet<String>> used_columns;
     void addUsedColumn(const StorageID & storage_id, const String & column)
     {
         used_columns[storage_id].emplace(column);
     }
-    const LinkedHashMap<StorageID, LinkedHashSet<String>> & getUsedColumns() const
+    const std::unordered_map<StorageID, LinkedHashSet<String>> & getUsedColumns() const
     {
         return used_columns;
     }

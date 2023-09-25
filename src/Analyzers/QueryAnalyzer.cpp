@@ -631,10 +631,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeSubquery(ASTPtr & node, const QualifiedNam
     return subquery_scope;
 }
 
-ScopePtr QueryAnalyzerVisitor::analyzeTableFunction(ASTFunction & /*table_function*/, const QualifiedName & /*column_prefix*/)
+ScopePtr QueryAnalyzerVisitor::analyzeTableFunction(ASTFunction & table_function, const QualifiedName & column_prefix)
 {
-    throw Exception("table function is not supported yet", ErrorCodes::NOT_IMPLEMENTED);
-    /*
     // execute table function
     StoragePtr storage = context->getQueryContext()->executeTableFunction(table_function.ptr());
     StorageID storage_id = storage->getStorageID();
@@ -655,7 +653,6 @@ ScopePtr QueryAnalyzerVisitor::analyzeTableFunction(ASTFunction & /*table_functi
     const auto * table_function_scope = createScope(field_descriptions);
     analysis.setScope(table_function, table_function_scope);
     return table_function_scope;
-     */
 }
 
 ScopePtr QueryAnalyzerVisitor::analyzeJoin(ASTTableJoin & table_join, ScopePtr left_scope, ScopePtr right_scope,
@@ -1434,8 +1431,8 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
                 else
                 {
                     // TODO @wangtao
-                    // Current we don't distinct CORRELATED or UNCORRELATED subquery in group by. 
-                    // CORRELATED/UNCORRELATED means we support subquery in group by. 
+                    // Current we don't distinct CORRELATED or UNCORRELATED subquery in group by.
+                    // CORRELATED/UNCORRELATED means we support subquery in group by.
                     // Should check CORRELATED subquery later.
                     ExprAnalyzerOptions expr_options{"GROUP BY expression"};
                     expr_options.selectQuery(select_query).subquerySupport(ExprAnalyzerOptions::SubquerySupport::CORRELATED);
