@@ -116,6 +116,7 @@
 #include <Common/getMappedArea.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Common/JeprofControl.h>
 #include <Common/remapExecutable.h>
 #include <common/ErrorHandlers.h>
 #include <common/coverage.h>
@@ -991,6 +992,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
             global_context->updateInterserverCredentials(*config);
             global_context->setMergeSchedulerSettings(*config);
             CGroupManagerFactory::loadFromConfig(*config);
+#if USE_JEMALLOC
+            JeprofControl::instance().loadFromConfig(*config);
+#endif
             if (global_context->getServerType() == ServerType::cnch_server)
             {
                 global_context->updateQueueManagerConfig();
