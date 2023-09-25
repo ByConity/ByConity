@@ -206,7 +206,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         /// When attaching old-style database during server startup, we must always use Ordinary engine
         if (create.attach)
             throw Exception("Database engine must be specified for ATTACH DATABASE query", ErrorCodes::UNKNOWN_DATABASE_ENGINE);
-        DefaultDatabaseEngine default_database_engine = getContext()->getSettingsRef().default_database_engine.value;
+        DefaultDatabaseEngine default_database_engine = (database_name == "default") ? DefaultDatabaseEngine::Atomic : getContext()->getSettingsRef().default_database_engine.value;
         auto engine = std::make_shared<ASTFunction>();
         auto storage = std::make_shared<ASTStorage>();
 
@@ -234,6 +234,8 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
 
     if (create.storage->engine->name == "Atomic" || create.storage->engine->name == "Replicated" || create.storage->engine->name == "MaterializedPostgreSQL" || create.storage->engine->name == "Cnch")
     {
+        if (create.storage->engine->name == "Cnch" && database_name == "default")
+            throw Exception(ErrorCodes::INCORRECT_QUERY, "Create default database with Cnch Engine is not allowed.");
         if (create.attach && create.uuid == UUIDHelpers::Nil)
             throw Exception(ErrorCodes::INCORRECT_QUERY, "UUID must be specified for ATTACH. "
                             "If you want to attach existing database, use just ATTACH DATABASE {};", create.database);
