@@ -15,6 +15,7 @@
 
 #include <iostream>
 #include <string>
+#include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
 #include <FormaterTool/PartConverter.h>
@@ -57,6 +58,7 @@ void run(const std::string & query, Poco::Logger * log)
 
     DB::registerFunctions();
     DB::registerDictionaries();
+    DB::registerServiceDiscovery();
     DB::registerDisks();
     DB::registerStorages();
     DB::registerFormats();
@@ -68,6 +70,7 @@ void run(const std::string & query, Poco::Logger * log)
     mutable_context_ptr->makeGlobalContext();
     mutable_context_ptr->setConfig(configuration);
     mutable_context_ptr->setMarkCache(1000000);
+    mutable_context_ptr->initServiceDiscoveryClient();
 
     const char * begin = query.data();
     const char * end = query.data() + query.size();
