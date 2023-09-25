@@ -343,8 +343,9 @@ void ExpressionAnalyzer::analyzeAggregation()
                             }
 
                             /// When ANSI mode is on, aggregation keys must be nullable.
-                            NameAndTypePair key{column_name,
-                                                ansi_enabled ? makeNullable(node->result_type) : node->result_type};
+                            NameAndTypePair key{column_name, node->result_type};
+                            if (ansi_enabled && JoinCommon::canBecomeNullable(key.type))
+                                key.type = JoinCommon::convertTypeToNullable(key.type);
 
                             grouping_set_list.push_back(key);
 
@@ -400,8 +401,9 @@ void ExpressionAnalyzer::analyzeAggregation()
                         }
 
                         /// When ANSI mode is on, aggregation keys must be nullable.
-                        NameAndTypePair key{column_name,
-                                            ansi_enabled ? makeNullable(node->result_type) : node->result_type};
+                        NameAndTypePair key{column_name, node->result_type};
+                        if (ansi_enabled && JoinCommon::canBecomeNullable(key.type))
+                            key.type = JoinCommon::convertTypeToNullable(key.type);
 
                         /// Aggregation keys are uniqued.
                         if (!unique_keys.contains(key.name))
