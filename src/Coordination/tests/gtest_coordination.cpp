@@ -229,7 +229,9 @@ TEST_P(CoordinationTest, TestSummingRaft1)
     EXPECT_TRUE(ret->get_accepted()) << "failed to replicate: entry 1" << ret->get_result_code();
     EXPECT_EQ(ret->get_result_code(), nuraft::cmd_result_code::OK) << "failed to replicate: entry 1" << ret->get_result_code();
 
-    while (s1.state_machine->getValue() != 143)
+    size_t retry_times = 10;
+
+    while (retry_times-- && s1.state_machine->getValue() != 143)
     {
         std::cout << "Waiting s1 to apply entry\n";
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
