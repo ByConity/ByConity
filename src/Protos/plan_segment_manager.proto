@@ -78,6 +78,10 @@ message ExecutePlanSegmentRequest {
 
   optional uint32 brpc_protocol_major_revision = 25;
   optional uint64 primary_txn_id = 26;
+  // Opentelemetry protocol v2
+  optional TraceMeta trace_meta = 27;
+  
+  optional string initial_user = 28;
 }
 
 message ExecutePlanSegmentResponse {
