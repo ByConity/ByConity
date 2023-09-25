@@ -32,7 +32,6 @@
 
 #define DBMS_MIN_REVISION_WITH_LOW_CARDINALITY_TYPE 54405
 #define DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO 54420
-#define DBMS_MIN_REVISION_WITH_PLAN_SEGMENT_VERSION 54426
 
 /// Minimum revision supporting SettingsBinaryFormat::STRINGS.
 #define DBMS_MIN_REVISION_WITH_SETTINGS_SERIALIZED_AS_STRINGS 54429
@@ -61,12 +60,6 @@
 /// later is just a number for server version (one number instead of commit SHA)
 /// for simplicity (sometimes it may be more convenient in some use cases).
 #define DBMS_TCP_PROTOCOL_VERSION 54450
-
-/**
- * VERSION for plan segment serialize and deserialize
- * if you add a new element for plan segment serialization, increment this version.
- */
-#define DBMS_PLAN_SEGMENT_VERSION 1
 
 #define DBMS_MIN_PROTOCOL_VERSION_WITH_INITIAL_QUERY_START_TIME 54449
 
