@@ -58,6 +58,8 @@ std::pair<PartGeneratorID::Type, String> PartGeneratorID::parse(const String& me
                 case 'P': type = PART_WRITER; break;
                 case 'T': type = TRANSACTION; break;
                 case 'D': type = DUMPER; break;
+                default:
+                    throw Exception(fmt::format("Invalid meta value {}", meta_), ErrorCodes::BAD_ARGUMENTS);
             }
 
             return std::pair<Type, String>(type, meta_.substr(2));
