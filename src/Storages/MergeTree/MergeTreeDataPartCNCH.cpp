@@ -1071,10 +1071,19 @@ void MergeTreeDataPartCNCH::fillProjectionNamesFromChecksums(const MergeTreeData
 
 void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UInt64 submit_ts) const
 {
+    String full_path = getFullPath();
     if (isPartial())
-        throw Exception("Preload partial parts in invalid", ErrorCodes::LOGICAL_ERROR);
+    {
+        LOG_WARNING(storage.log, "Preload partial parts in invalid: {}", full_path);
+        return;
+    }
 
-    LOG_TRACE(storage.log, "Start preload part: {}", name);
+    String part_path = fs::path(getFullRelativePath()) / DATA_FILE;
+    if (!volume->getDisk()->exists(part_path))
+    {
+        LOG_WARNING(storage.log, "Can't find {} when preload level: {} before caching", full_path + DATA_FILE, preload_level);
+        return;
+    }
 
     LOG_TRACE(storage.log, "Start preload part: {}", name);
 
@@ -1177,7 +1186,15 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
         };
     }
 
-    pool.scheduleOrThrowOnError([this, level = preload_level, segments = std::move(segments), cb = std::move(callback), disk_cache = cache] {
+    pool.scheduleOrThrowOnError([this, part_path, full_path, level = preload_level, segments = std::move(segments), cb = std::move(callback), disk_cache = cache] {
+        if (!volume->getDisk()->exists(part_path))
+        {
+            LOG_WARNING(storage.log, "Can't find {} when preload level: {} on caching", full_path + DATA_FILE, level);
+            if (cb)
+                cb("Can't find part file!", 0);
+            return;
+        }
+
         String last_exception{};
         int real_cache_segments_count = 0;
         for (const auto & segment : segments)
@@ -1192,8 +1209,8 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                     {
                         if (disk_cache->get(mark_key).second.empty())
                         {
-                             segment->cacheToDisk(*disk_cache);
-                             real_cache_segments_count++;
+                            segment->cacheToDisk(*disk_cache);
+                            real_cache_segments_count++;
                         }
 
                     }
@@ -1201,16 +1218,16 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                     {
                         if (disk_cache->get(seg_key).second.empty())
                         {
-                             segment->cacheToDisk(*disk_cache);
-                             real_cache_segments_count++;
+                            segment->cacheToDisk(*disk_cache);
+                            real_cache_segments_count++;
                         }
                     }
                     else
                     {
                         if (disk_cache->get(seg_key).second.empty() || disk_cache->get(mark_key).second.empty())
                         {
-                             segment->cacheToDisk(*disk_cache);
-                             real_cache_segments_count++;
+                            segment->cacheToDisk(*disk_cache);
+                            real_cache_segments_count++;
                         }
                     }
                 }
