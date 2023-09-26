@@ -30,7 +30,7 @@ namespace TSO
 
 TSOProxy::TSOProxy(const MetastoreConfig & config)
 {
-    if (config.type == StoreType::FDB)
+    if (config.type == MetaStoreType::FDB)
     {
         metastore_ptr = std::make_shared<TSOMetaFDBImpl>(config.fdb_conf.cluster_conf_path, config.key_name);
     }

@@ -30,7 +30,7 @@
 #include <Access/AccessControlManager.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Catalog/Catalog.h>
-#include <Catalog/MetastoreConfig.h>
+#include <Common/Config/MetastoreConfig.h>
 #include <CloudServices/CnchServerServiceImpl.h>
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchWorkerServiceImpl.h>

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <mutex>
-#include <Catalog/CatalogConfig.h>
 #include <Catalog/MetastoreProxy.h>
 #include <ExternalCatalog/IExternalCatalog.h>
 #include <Transaction/TxnTimestamp.h>
@@ -31,7 +30,7 @@ public:
 private:
     std::mutex mu;
     [[maybe_unused]] Context & context;
-    Catalog::CatalogConfig metastore_conf;
+    MetastoreConfig metastore_conf;
     std::shared_ptr<Catalog::MetastoreProxy> meta_proxy; // connection to fdb/bytekv.
     std::string name_space;
     std::map<std::string, PlainConfigsPtr> catalog_confs; // use for check whether the catalog has been changed.
