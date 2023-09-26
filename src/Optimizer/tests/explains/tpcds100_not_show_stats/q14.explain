@@ -321,28 +321,53 @@ Projection
                │     │        └─ Projection
                │     │           │     Expressions: [i_brand_id_20, i_category_id_20, i_class_id_20], expr#multiply(ss_quantity, ss_list_price)_1:=ss_quantity_9 * ss_list_price_9
                │     │           └─ Inner Join
-               │     │              │     Condition: ss_item_sk_9 == i_item_sk_17
+               │     │              │     Condition: i_item_sk_17 == i_item_sk_22
                │     │              ├─ Repartition Exchange
-               │     │              │  │     Partition by: {ss_item_sk_9}
+               │     │              │  │     Partition by: {i_item_sk_17}
                │     │              │  └─ Filter
-               │     │              │     │     Condition: isNotNull(ss_item_sk_9) AND isNotNull(ss_sold_date_sk_9)
-               │     │              │     └─ TableScan tpcds100.store_sales
-               │     │              │              Where: isNotNull(ss_item_sk) AND isNotNull(ss_sold_date_sk)
-               │     │              │              Outputs: ss_item_sk_9:=ss_item_sk, ss_list_price_9:=ss_list_price, ss_quantity_9:=ss_quantity, ss_sold_date_sk_9:=ss_sold_date_sk
+               │     │              │     │     Condition: isNotNull(i_item_sk_17) Runtime Filters: {i_item_sk_17}
+               │     │              │     └─ TableScan tpcds100.item
+               │     │              │              Where: isNotNull(i_item_sk) Runtime Filters: {i_item_sk}
+               │     │              │              Outputs: i_brand_id_20:=i_brand_id, i_category_id_20:=i_category_id, i_class_id_20:=i_class_id, i_item_sk_17:=i_item_sk
                │     │              └─ Inner Join
-               │     │                 │     Condition: i_item_sk_17 == i_item_sk_22
-               │     │                 ├─ Repartition Exchange
-               │     │                 │  │     Partition by: {i_item_sk_17}
+               │     │                 │     Condition: i_item_sk_22 == ss_item_sk_9
+               │     │                 │     Runtime Filters Builder: {ss_item_sk_9}
+               │     │                 ├─ Aggregating
+               │     │                 │  │     Group by: {i_item_sk_22}
                │     │                 │  └─ Filter
-               │     │                 │     │     Condition: isNotNull(i_item_sk_17)
-               │     │                 │     └─ TableScan tpcds100.item
-               │     │                 │              Where: isNotNull(i_item_sk)
-               │     │                 │              Outputs: i_brand_id_20:=i_brand_id, i_category_id_20:=i_category_id, i_class_id_20:=i_class_id, i_item_sk_17:=i_item_sk
-               │     │                 └─ Aggregating
-               │     │                    │     Group by: {i_item_sk_22}
-               │     │                    └─ Filter
-               │     │                       │     Condition: isNotNull(i_item_sk_22)
-               │     │                       └─ CTERef[0]
+               │     │                 │     │     Condition: isNotNull(i_item_sk_22) Runtime Filters: {i_item_sk_22}
+               │     │                 │     └─ CTERef[0]
+               │     │                 └─ Repartition Exchange
+               │     │                    │     Partition by: {ss_item_sk_9}
+               │     │                    └─ Inner Join
+               │     │                       │     Condition: ss_sold_date_sk_9 == d_date_sk_27
+               │     │                       │     Runtime Filters Builder: {d_date_sk_27}
+               │     │                       ├─ Filter
+               │     │                       │  │     Condition: isNotNull(ss_item_sk_9) Runtime Filters: {ss_sold_date_sk_9}
+               │     │                       │  └─ TableScan tpcds100.store_sales
+               │     │                       │           Where: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
+               │     │                       │           Outputs: ss_item_sk_9:=ss_item_sk, ss_list_price_9:=ss_list_price, ss_quantity_9:=ss_quantity, ss_sold_date_sk_9:=ss_sold_date_sk
+               │     │                       └─ Broadcast Exchange
+               │     │                          └─ Inner Join
+               │     │                             │     Condition: d_week_seq == d_week_seq_1
+               │     │                             │     Runtime Filters Builder: {d_week_seq_1}
+               │     │                             ├─ Filter
+               │     │                             │  │     Condition: Runtime Filters: {d_week_seq}
+               │     │                             │  └─ TableScan tpcds100.date_dim
+               │     │                             │           Where: Runtime Filters: {d_week_seq}
+               │     │                             │           Outputs: [d_week_seq], d_date_sk_27:=d_date_sk
+               │     │                             └─ Broadcast Exchange
+               │     │                                └─ EnforceSingleRow
+               │     │                                   └─ Union
+               │     │                                      │     OutputToInputs: d_week_seq_1 = [d_week_seq_1]
+               │     │                                      └─ Gather Exchange
+               │     │                                         └─ Projection
+               │     │                                            │     Expressions: [d_week_seq_1]
+               │     │                                            └─ Filter
+               │     │                                               │     Condition: (d_year_27 = 2000) AND (d_moy_3 = 12) AND (d_dom = 11)
+               │     │                                               └─ TableScan tpcds100.date_dim
+               │     │                                                        Where: (d_year = 2000) AND (d_moy = 12) AND (d_dom = 11)
+               │     │                                                        Outputs: [d_dom], d_moy_3:=d_moy, d_week_seq_1:=d_week_seq, d_year_27:=d_year
                │     └─ Broadcast Exchange
                │        └─ EnforceSingleRow
                │           └─ CTERef[1]
@@ -360,28 +385,53 @@ Projection
                      │        └─ Projection
                      │           │     Expressions: [i_brand_id_27, i_category_id_27, i_class_id_27], expr#multiply(ss_quantity, ss_list_price)_2:=ss_quantity_12 * ss_list_price_12
                      │           └─ Inner Join
-                     │              │     Condition: ss_item_sk_11 == i_item_sk_23
+                     │              │     Condition: i_item_sk_23 == i_item_sk_24
                      │              ├─ Repartition Exchange
-                     │              │  │     Partition by: {ss_item_sk_11}
+                     │              │  │     Partition by: {i_item_sk_23}
                      │              │  └─ Filter
-                     │              │     │     Condition: isNotNull(ss_item_sk_11) AND isNotNull(ss_sold_date_sk_12)
-                     │              │     └─ TableScan tpcds100.store_sales
-                     │              │              Where: isNotNull(ss_item_sk) AND isNotNull(ss_sold_date_sk)
-                     │              │              Outputs: ss_item_sk_11:=ss_item_sk, ss_list_price_12:=ss_list_price, ss_quantity_12:=ss_quantity, ss_sold_date_sk_12:=ss_sold_date_sk
+                     │              │     │     Condition: isNotNull(i_item_sk_23) Runtime Filters: {i_item_sk_23}
+                     │              │     └─ TableScan tpcds100.item
+                     │              │              Where: isNotNull(i_item_sk) Runtime Filters: {i_item_sk}
+                     │              │              Outputs: i_brand_id_27:=i_brand_id, i_category_id_27:=i_category_id, i_class_id_27:=i_class_id, i_item_sk_23:=i_item_sk
                      │              └─ Inner Join
-                     │                 │     Condition: i_item_sk_23 == i_item_sk_24
-                     │                 ├─ Repartition Exchange
-                     │                 │  │     Partition by: {i_item_sk_23}
+                     │                 │     Condition: i_item_sk_24 == ss_item_sk_11
+                     │                 │     Runtime Filters Builder: {ss_item_sk_11}
+                     │                 ├─ Aggregating
+                     │                 │  │     Group by: {i_item_sk_24}
                      │                 │  └─ Filter
-                     │                 │     │     Condition: isNotNull(i_item_sk_23)
-                     │                 │     └─ TableScan tpcds100.item
-                     │                 │              Where: isNotNull(i_item_sk)
-                     │                 │              Outputs: i_brand_id_27:=i_brand_id, i_category_id_27:=i_category_id, i_class_id_27:=i_class_id, i_item_sk_23:=i_item_sk
-                     │                 └─ Aggregating
-                     │                    │     Group by: {i_item_sk_24}
-                     │                    └─ Filter
-                     │                       │     Condition: isNotNull(i_item_sk_24)
-                     │                       └─ CTERef[0]
+                     │                 │     │     Condition: isNotNull(i_item_sk_24) Runtime Filters: {i_item_sk_24}
+                     │                 │     └─ CTERef[0]
+                     │                 └─ Repartition Exchange
+                     │                    │     Partition by: {ss_item_sk_11}
+                     │                    └─ Inner Join
+                     │                       │     Condition: ss_sold_date_sk_12 == d_date_sk_34
+                     │                       │     Runtime Filters Builder: {d_date_sk_34}
+                     │                       ├─ Filter
+                     │                       │  │     Condition: isNotNull(ss_item_sk_11) Runtime Filters: {ss_sold_date_sk_12}
+                     │                       │  └─ TableScan tpcds100.store_sales
+                     │                       │           Where: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
+                     │                       │           Outputs: ss_item_sk_11:=ss_item_sk, ss_list_price_12:=ss_list_price, ss_quantity_12:=ss_quantity, ss_sold_date_sk_12:=ss_sold_date_sk
+                     │                       └─ Broadcast Exchange
+                     │                          └─ Inner Join
+                     │                             │     Condition: d_week_seq_2 == d_week_seq_3
+                     │                             │     Runtime Filters Builder: {d_week_seq_3}
+                     │                             ├─ Filter
+                     │                             │  │     Condition: Runtime Filters: {d_week_seq_2}
+                     │                             │  └─ TableScan tpcds100.date_dim
+                     │                             │           Where: Runtime Filters: {d_week_seq}
+                     │                             │           Outputs: d_date_sk_34:=d_date_sk, d_week_seq_2:=d_week_seq
+                     │                             └─ Broadcast Exchange
+                     │                                └─ EnforceSingleRow
+                     │                                   └─ Union
+                     │                                      │     OutputToInputs: d_week_seq_3 = [d_week_seq_3]
+                     │                                      └─ Gather Exchange
+                     │                                         └─ Projection
+                     │                                            │     Expressions: [d_week_seq_3]
+                     │                                            └─ Filter
+                     │                                               │     Condition: (d_year_34 = 1999) AND (d_moy_4 = 12) AND (d_dom_1 = 11)
+                     │                                               └─ TableScan tpcds100.date_dim
+                     │                                                        Where: (d_year = 1999) AND (d_moy = 12) AND (d_dom = 11)
+                     │                                                        Outputs: d_dom_1:=d_dom, d_moy_4:=d_moy, d_week_seq_3:=d_week_seq, d_year_34:=d_year
                      └─ Broadcast Exchange
                         └─ EnforceSingleRow
                            └─ CTERef[1]
@@ -519,5 +569,5 @@ CTEDef [0]
                               │     Partition by: {i_item_sk_25}
                               └─ TableScan tpcds100.item
                                        Outputs: i_brand_id_28:=i_brand_id, i_category_id_28:=i_category_id, i_class_id_28:=i_class_id, i_item_sk_25:=i_item_sk
-note: Runtime Filter is applied for 6 times.
+note: Runtime Filter is applied for 14 times.
 note: CTE(Common Table Expression) is applied for 4 times.

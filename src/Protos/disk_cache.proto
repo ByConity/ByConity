@@ -1,0 +1,20 @@
+syntax = "proto2";
+package DB.Protos;
+
+message BigHashPersistentData {
+    required uint32 format_version = 1;
+    required uint64 generation_time = 2;
+    required uint64 item_count = 3;
+    required uint64 bucket_size = 4;
+    required uint64 cache_base_offset = 5;
+    required uint64 num_buckets = 6;
+    required uint64 used_size_bytes = 7;
+}
+
+message BloomFilterPersistentData {
+    required uint32 num_filters = 1;
+    required uint64 hash_table_bit_size = 2;
+    required uint64 filter_byte_size = 3;
+    required uint32 fragment_size = 4;
+    repeated uint64 seeds = 5;
+}

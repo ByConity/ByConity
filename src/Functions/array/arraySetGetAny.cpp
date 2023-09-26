@@ -55,7 +55,7 @@ public:
         return std::make_shared<FunctionArraySetGetAny>(context);
     }
 
-    FunctionArraySetGetAny(ContextPtr &)
+    explicit FunctionArraySetGetAny(ContextPtr &)
     {
     }
 
@@ -67,13 +67,15 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    DataTypePtr getReturnTypeImpl([[maybe_unused]] const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         const DataTypeArray * array_type = checkAndGetDataType<DataTypeArray>(arguments[0].get());
         if (!array_type)
             throw Exception("Argument for function " + getName() + " must be array.",
                             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
+        if (const DataTypeNullable * nullable_inner_type = checkAndGetDataType<DataTypeNullable>(array_type->getNestedType().get()))
+            return array_type->getNestedType();
         return std::make_shared<DataTypeNullable>(array_type->getNestedType());
     }
 
@@ -95,6 +97,12 @@ public:
                             ErrorCodes::ILLEGAL_COLUMN);
 
         auto res_column = array->getData().cloneEmpty();
+        bool is_nullable = false;
+        if (res_column->isNullable())
+        {
+            is_nullable = true;
+            res_column = static_cast<const ColumnNullable &>(*res_column).getNestedColumn().cloneEmpty();
+        }
         auto res_map = ColumnUInt8::create();
 
         const Set & set = *(set_column->getData());
@@ -103,21 +111,17 @@ public:
         {
             case SetVariants::Type::EMPTY:
                 break;
-                /* TODO dongyifeng support it later
-                 */
-            case SetVariants::Type::key_string:
-            case SetVariants::Type::key_fixed_string:
-                break;
-                /* TODO dongyifeng add it later
-                case SetVariants::Type::bitmap64:
-                    break;
-                     */
-#define M(NAME)                                                          \
-                case SetVariants::Type::NAME:                                \
-                    setGetImpl<std::decay_t<decltype(*set.data.NAME)>>(*set.data.NAME, *array, *res_column, *res_map, set); \
+            // case SetVariants::Type::bitmap64:
+                // break;
+#define M(NAME)                                                         \
+                case SetVariants::Type::NAME:                           \
+                    if (is_nullable)                                    \
+                        setGetImpl<true, std::decay_t<decltype(*set.data.NAME)>>(*set.data.NAME, *array, *res_column, *res_map, set); \
+                    else                                                \
+                        setGetImpl<false, std::decay_t<decltype(*set.data.NAME)>>(*set.data.NAME, *array, *res_column, *res_map, set); \
                     break;
 
-            APPLY_FOR_SET_VARIANTS_WITHOUT_STRING(M)
+            APPLY_FOR_SET_VARIANTS(M)
 #undef M
         }
 
@@ -127,12 +131,12 @@ public:
             return ColumnNullable::create(std::move(res_column), std::move(res_map));
     }
 
-    template <typename Method>
+    template <bool Nullable, typename Method>
     inline void setGetImpl([[maybe_unused]] Method& method,  [[maybe_unused]] const ColumnArray& array,
                            [[maybe_unused]] IColumn & result, [[maybe_unused]] ColumnUInt8 & result_map, const Set & set) const
     {
         const DataTypes & data_types = set.getDataTypes();
-        if (data_types.size() == 0)
+        if (data_types.empty())
             throw Exception("Cannot find a valid set type", ErrorCodes::LOGICAL_ERROR);
 
         const IDataType & data_type = *(data_types[0]);
@@ -141,54 +145,53 @@ public:
         if constexpr (std::is_same<typename Method::Key, UInt8>::value)
         {
             if (to_type.isInt8())
-                setGetNumberImpl<Method, Int8>(method, array, result, result_map);
+                return setGetNumberImpl<Nullable, Method, Int8>(method, array, result, result_map);
             else if (to_type.isUInt8())
-                setGetNumberImpl<Method, UInt8>(method, array, result, result_map);
-            else
-                throw Exception("Not implement type for function " + data_type.getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                return setGetNumberImpl<Nullable, Method, UInt8>(method, array, result, result_map);
         }
         else if constexpr (std::is_same<typename Method::Key, UInt16>::value)
         {
             if (to_type.isInt16())
-                setGetNumberImpl<Method, Int16>(method, array, result, result_map);
+                return setGetNumberImpl<Nullable, Method, Int16>(method, array, result, result_map);
             else if (to_type.isUInt16())
-                setGetNumberImpl<Method, UInt16>(method, array, result, result_map);
-            else
-                throw Exception("Not implement type for function " + data_type.getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                return setGetNumberImpl<Nullable, Method, UInt16>(method, array, result, result_map);
         }
         else if constexpr (std::is_same<typename Method::Key, UInt32>::value)
         {
             if (to_type.isInt32())
-                setGetNumberImpl<Method, Int32>(method, array, result, result_map);
+                return setGetNumberImpl<Nullable, Method, Int32>(method, array, result, result_map);
             else if (to_type.isUInt32())
-                setGetNumberImpl<Method, UInt32>(method, array, result, result_map);
-            else
-                throw Exception("Not implement type for function " + data_type.getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                return setGetNumberImpl<Nullable, Method, UInt32>(method, array, result, result_map);
         }
         else if constexpr (std::is_same<typename Method::Key, UInt64>::value)
         {
             if (to_type.isInt64())
-                setGetNumberImpl<Method, Int64>(method, array, result, result_map);
+                return setGetNumberImpl<Nullable, Method, Int64>(method, array, result, result_map);
             else if (to_type.isUInt64())
-                setGetNumberImpl<Method, UInt64>(method, array, result, result_map);
-            else
-                throw Exception("Not implement type for function " + data_type.getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+                return setGetNumberImpl<Nullable, Method, UInt64>(method, array, result, result_map);
         }
-        else
-            throw Exception("Not implement type for function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+
+        throw Exception("Not implement type " + data_type.getName() + " for function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    template <typename Method, typename Data_Type>
+    template <bool Nullable, typename Method, typename DataType>
     inline void setGetNumberImpl(Method & method, const ColumnArray & array, IColumn & result, ColumnUInt8 & result_map) const
     {
-        if (auto * result_column = typeid_cast<ColumnVector<Data_Type> *>(&result))
+        ConstNullMapPtr null_map{};
+        ColumnRawPtrs key_cols;
+        key_cols.push_back(&array.getData());
+        if(Nullable) extractNestedColumnsAndNullMap(key_cols, null_map);
+
+        if (auto * result_column = typeid_cast<ColumnVector<DataType> *>(&result))
         {
-            const typename ColumnVector<Data_Type>::Container & array_container = typeid_cast<const ColumnVector<Data_Type> *>(&(array.getData()))->getData();
-            typename ColumnVector<Data_Type>::Container & result_container = result_column->getData();
+            typename Method::State state(key_cols, {}, nullptr);
+            typename ColumnVector<DataType>::Container & result_container = result_column->getData();
             ColumnUInt8::Container & result_map_container = result_map.getData();
             size_t rsize = array.size();
             const auto & offsets = array.getOffsets();
             size_t pre_offset = 0, cur_offset = 0;
+            
+            Arena arena(0);
             for (size_t i = 0; i<rsize; ++i)
             {
                 // get current elems in this array input
@@ -196,10 +199,11 @@ public:
                 bool get_element = false;
                 for (size_t j = pre_offset; j < cur_offset; ++j)
                 {
-                    Data_Type key = array_container[j];
-                    if (method.data.has(key))
+                    if (Nullable && (*null_map)[j]) continue;
+                    auto key_holder = state.getKeyHolder(j, arena);
+                    if (method.data.has(key_holder))
                     {
-                        result_container.push_back(key);
+                        result_container.push_back(key_holder);
                         get_element = true;
                         break;
                     }

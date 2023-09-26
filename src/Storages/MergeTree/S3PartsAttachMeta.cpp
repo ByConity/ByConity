@@ -197,7 +197,7 @@ S3PartsAttachMeta::S3PartsAttachMeta(
 
 String S3PartsAttachMeta::metaPrefix(const String & task_id_prefix_)
 {
-    return fmt::format("attach_meta/{}/", task_id_prefix_);
+    return fmt::format("attach_meta/{}", task_id_prefix_);
 }
 
 String S3PartsAttachMeta::metaFileKey(const String & task_id_, size_t idx_)

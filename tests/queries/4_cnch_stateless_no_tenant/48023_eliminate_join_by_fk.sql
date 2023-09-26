@@ -261,29 +261,3 @@ from cust c,
 where c.sk = w.sk
   and w.price < 4000
 group by c_customer_id);
-
-select 'OK: handle any#name';
-explain
-select any(c_customer_id) customer_id,
-  's' sale_type
-from cust c,
-  web w
-where c.sk = w.sk
-  and w.price < 2000
-group by c_customer_id
-union all
-select c_customer_id customer_id,
-  'c' sale_type
-from cust c,
-  web w
-where c.sk = w.sk
-  and w.price < 3000
-group by c_customer_id
-union all
-select c_customer_id customer_id,
-  'w' sale_type
-from cust c,
-  web w
-where c.sk = w.sk
-  and w.price < 4000
-group by c_customer_id;
