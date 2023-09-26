@@ -502,7 +502,7 @@ void CnchWorkerServiceImpl::preloadDataParts(
         ThreadPool * pool_ptr;
         if (request->sync())
         {
-            pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), 16UL));
+            pool = std::make_unique<ThreadPool>(std::min(data_parts.size(), cloud_merge_tree.getSettings()->cnch_parallel_preloading.value));
             pool_ptr = pool.get();
         }
         else
