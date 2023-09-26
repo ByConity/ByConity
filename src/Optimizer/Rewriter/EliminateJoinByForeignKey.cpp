@@ -448,6 +448,27 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
                 invalid_tables.insert(invalid_pk_tables.begin(), invalid_pk_tables.end());
             }
         }
+    
+        // If a child does not have fk information, make the pk table corresponding to ordinary keys in the child invalid.
+        // because when pk info is invalidating, pk_keys will be dropped, but ordinary_keys in same table will preserve.
+        {
+            NameSet partial_invalid_tables;
+
+            for (const auto & key : left_ordinary_keys)
+                partial_invalid_tables.insert(key.getTableName());
+            for (const auto & key : left_fp_keys)
+                partial_invalid_tables.erase(key.getTableName());
+            
+            invalid_tables.insert(partial_invalid_tables.begin(), partial_invalid_tables.end());        
+            partial_invalid_tables.clear();
+
+            for (const auto & key : right_ordinary_keys)
+                partial_invalid_tables.insert(key.getTableName());
+            for (const auto & key : right_fp_keys)
+                partial_invalid_tables.erase(key.getTableName());
+
+            invalid_tables.insert(partial_invalid_tables.begin(), partial_invalid_tables.end());
+        }
 
         NameSet filter_invalid_tables = visitFilterExpression(step.getFilter(), translated);
         invalid_tables.insert(filter_invalid_tables.begin(), filter_invalid_tables.end());
