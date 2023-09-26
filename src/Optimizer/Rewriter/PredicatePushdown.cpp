@@ -792,7 +792,6 @@ PlanNodePtr PredicateVisitor::visitUnionNode(UnionNode & node, PredicateContext 
 
     const auto & step = *node.getStep();
     PlanNodes children;
-    DataStreams inputs;
     ConstASTPtr predicate = predicate_context.predicate;
     for (size_t i = 0; i < node.getChildren().size(); i++)
     {
@@ -810,9 +809,7 @@ PlanNodePtr PredicateVisitor::visitUnionNode(UnionNode & node, PredicateContext 
             .context = predicate_context.context};
         PlanNodePtr child = process(*node.getChildren()[i], source_context);
         children.emplace_back(child);
-        inputs.push_back(child->getStep()->getOutputStream());
     }
-    node.getStep()->setInputStreams(inputs);
     node.replaceChildren(children);
     return node.shared_from_this();
 }
@@ -894,15 +891,12 @@ PlanNodePtr PredicateVisitor::processChild(PlanNodeBase & node, PredicateContext
         return node.shared_from_this();
 
     PlanNodes children;
-    DataStreams inputs;
     for (const auto & item : node.getChildren())
     {
         PlanNodePtr child = process(*item, predicate_context);
         children.emplace_back(child);
-        inputs.push_back(child->getStep()->getOutputStream());
     }
 
-    node.getStep()->setInputStreams(inputs);
     node.replaceChildren(children);
     return node.shared_from_this();
 }

@@ -75,16 +75,16 @@ ENUM_WITH_PROTO_CONVERTER(
 DECLARE_SETTING_ENUM(JoinAlgorithm)
 
 /// Which rows should be included in TOTALS.
-enum class TotalsMode
-{
-    BEFORE_HAVING            = 0, /// Count HAVING for all read rows;
-                                  ///  including those not in max_rows_to_group_by
-                                  ///  and have not passed HAVING after grouping.
-    AFTER_HAVING_INCLUSIVE    = 1, /// Count on all rows except those that have not passed HAVING;
-                                   ///  that is, to include in TOTALS all the rows that did not pass max_rows_to_group_by.
-    AFTER_HAVING_EXCLUSIVE    = 2, /// Include only the rows that passed and max_rows_to_group_by, and HAVING.
-    AFTER_HAVING_AUTO         = 3, /// Automatically select between INCLUSIVE and EXCLUSIVE,
-};
+ENUM_WITH_PROTO_CONVERTER(
+    TotalsMode, // enum name
+    Protos::TotalsMode, // proto enum message
+    (BEFORE_HAVING, 0), /// Count HAVING for all read rows;
+    ///  including those not in max_rows_to_group_by
+    ///  and have not passed HAVING after grouping.
+    (AFTER_HAVING_INCLUSIVE, 1), /// Count on all rows except those that have not passed HAVING;
+    ///  that is, to include in TOTALS all the rows that did not pass max_rows_to_group_by.
+    (AFTER_HAVING_EXCLUSIVE, 2), /// Include only the rows that passed and max_rows_to_group_by, and HAVING.
+    (AFTER_HAVING_AUTO, 3)); /// Automatically select between INCLUSIVE and EXCLUSIVE,
 
 DECLARE_SETTING_ENUM(TotalsMode)
 

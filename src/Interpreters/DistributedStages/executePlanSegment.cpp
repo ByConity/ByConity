@@ -133,6 +133,7 @@ void executePlanSegmentRemotely(
     const auto & coordinator_address = plan_segment.getCoordinatorAddress();
     request.set_user(coordinator_address.getUser());
     request.set_password(coordinator_address.getPassword());
+    request.set_initial_user(context->getClientInfo().initial_user);
     request.set_current_host(coordinator_address.getHostName());
     request.set_current_port(coordinator_address.getPort());
     request.set_current_exchange_port(coordinator_address.getExchangePort());

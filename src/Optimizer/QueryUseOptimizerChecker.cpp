@@ -134,7 +134,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, [[m
             || explain->getKind() ==  ASTExplainQuery::Distributed
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizerRule
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizer
-            || explain->getKind() ==  ASTExplainQuery::Analysis;
+            || explain->getKind() ==  ASTExplainQuery::MetaData;
         return explain_plan && check(explain->getExplainedQuery(), context);
     }
 
@@ -231,11 +231,15 @@ bool QueryUseOptimizerVisitor::visitASTSelectQuery(ASTPtr & node, QueryUseOptimi
         return false;
     }
 
-    if (select->group_by_with_totals)
+    if (select->group_by_with_totals && context.is_add_totals.has_value())
     {
-        reason = "group by with totals";
+        reason = "group by with totals only supports with totals at outmost select";
         return false;
     }
+    if (select->group_by_with_totals)
+        context.is_add_totals.emplace(true);
+    else
+        context.is_add_totals.emplace(false);
 
     QueryUseOptimizerContext child_context{.context = context.context, .ctes = context.ctes};
     collectWithTableNames(*select, child_context.ctes);

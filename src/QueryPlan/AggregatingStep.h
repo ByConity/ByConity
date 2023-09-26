@@ -117,12 +117,12 @@ public:
         bool final_,
         SortDescription group_by_sort_description_ = {},
         GroupingDescriptions groupings_ = {},
-        bool /*totals_*/ = false,
+        bool overflow_row_ = false,
         bool should_produce_results_in_order_of_bucket_number_ = false)
         : AggregatingStep(
             input_stream_,
             keys_,
-            createParams(input_stream_.header, aggregates_, keys_),
+            createParams(input_stream_.header, aggregates_, keys_, overflow_row_),
             std::move(grouping_sets_params_),
             final_,
             0,
@@ -179,14 +179,18 @@ public:
     bool isGroupingSet() const { return !grouping_sets_params.empty(); }
     const GroupingDescriptions & getGroupings() const { return groupings; }
     bool shouldProduceResultsInOrderOfBucketNumber() const { return should_produce_results_in_order_of_bucket_number; }
-
+    bool needOverflowRow() const
+    {
+        return params.overflow_row;
+    }
     bool isNormal() const { return final && !isGroupingSet() /*&& !totals && !having*/ && groupings.empty(); }
 
     void toProto(Protos::AggregatingStep & proto, bool for_hash_equals = false) const;
     static std::shared_ptr<AggregatingStep> fromProto(const Protos::AggregatingStep & proto, ContextPtr context);
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
-    static Aggregator::Params createParams(Block header_before_aggregation, AggregateDescriptions aggregates, Names group_by_keys);
+    static Aggregator::Params
+    createParams(Block header_before_aggregation, AggregateDescriptions aggregates, Names group_by_keys, bool overflow_row);
     GroupingSetsParamsList prepareGroupingSetsParams() const;
 
 private:

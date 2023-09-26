@@ -51,8 +51,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-RemoteExchangeSourceStep::RemoteExchangeSourceStep(PlanSegmentInputs inputs_, DataStream input_stream_)
-    : ISourceStep(DataStream{.header = inputs_[0]->getHeader()}), inputs(std::move(inputs_))
+RemoteExchangeSourceStep::RemoteExchangeSourceStep(PlanSegmentInputs inputs_, DataStream input_stream_, bool is_add_totals_, bool is_add_extremes_)
+    : ISourceStep(DataStream{.header = inputs_[0]->getHeader()}), inputs(std::move(inputs_)), is_add_totals(is_add_totals_), is_add_extremes(is_add_extremes_)
 {
     input_streams.emplace_back(std::move(input_stream_));
     logger = &Poco::Logger::get("RemoteExchangeSourceStep");
@@ -70,6 +70,8 @@ void RemoteExchangeSourceStep::toProto(Protos::RemoteExchangeSourceStep & proto,
             throw Exception("PlanSegmentInput cannot be nullptr", ErrorCodes::LOGICAL_ERROR);
         element->toProto(*proto.add_inputs());
     }
+    proto.set_is_add_totals(is_add_totals);
+    proto.set_is_add_extremes(is_add_extremes);
 }
 
 std::shared_ptr<RemoteExchangeSourceStep>
@@ -87,7 +89,10 @@ RemoteExchangeSourceStep::fromProto(const Protos::RemoteExchangeSourceStep & pro
         inputs.emplace_back(std::move(element));
     }
 
-    auto step = std::make_shared<RemoteExchangeSourceStep>(inputs, input_stream);
+    bool is_add_totals = proto.has_is_add_totals() ? proto.is_add_totals(): false;
+    bool is_add_extremes = proto.has_is_add_extremes() ? proto.is_add_extremes(): false;
+
+    auto step = std::make_unique<RemoteExchangeSourceStep>(inputs, input_stream, is_add_totals, is_add_extremes);
     step->setStepDescription(step_description);
 
     return step;
@@ -95,13 +100,19 @@ RemoteExchangeSourceStep::fromProto(const Protos::RemoteExchangeSourceStep & pro
 
 std::shared_ptr<IQueryPlanStep> RemoteExchangeSourceStep::copy(ContextPtr) const
 {
-    return std::make_shared<RemoteExchangeSourceStep>(inputs, input_streams[0]);
+    return std::make_shared<RemoteExchangeSourceStep>(inputs, input_streams[0], is_add_totals, is_add_extremes);
 }
 
 void RemoteExchangeSourceStep::setPlanSegment(PlanSegment * plan_segment_)
 {
     plan_segment = plan_segment_;
     plan_segment_id = plan_segment->getPlanSegmentId();
+    /// only plan segment at server needs to set totals source or extremes source
+    if (plan_segment_id != 0)
+    {
+        is_add_totals = false;
+        is_add_extremes = false;
+    }
     query_id = plan_segment->getQueryId();
     coordinator_address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
     read_address_info = plan_segment->getCurrentAddress();
@@ -137,7 +148,13 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
     Block source_header;
     if (keep_order)
         source_header = exchange_header;
-    
+
+    ExchangeTotalsSourcePtr totals_source;
+    if (is_add_totals)
+        totals_source = std::make_shared<ExchangeTotalsSource>(source_header);
+    ExchangeExtremesSourcePtr extremes_source;
+    if (is_add_extremes)
+        extremes_source = std::make_shared<ExchangeExtremesSource>(source_header);
     for (const auto & input : inputs)
     {
         if (context->getSettingsRef().exchange_enable_multipath_reciever && input->getExchangeMode() != ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
@@ -234,7 +251,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                 exchange_id, write_plan_segment_id, plan_segment_id, coordinator_address);
             auto multi_path_receiver = std::make_shared<MultiPathReceiver>(collector, std::move(receivers), exchange_header, receiver_name, enable_block_compress);
             LOG_DEBUG(logger, "Create {}", multi_path_receiver->getName());
-            auto source = std::make_shared<ExchangeSource>(source_header, std::move(multi_path_receiver), options, is_final_plan_segment);
+            auto source = std::make_shared<ExchangeSource>(source_header, std::move(multi_path_receiver), options, is_final_plan_segment, totals_source, extremes_source);
             pipe.addSource(std::move(source));
             source_num++;
         }
@@ -310,7 +327,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                             std::move(data_key), write_address_info, context, exchange_header, keep_order, name);
                         receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
                     }
-                    auto source = std::make_shared<ExchangeSource>(source_header, std::move(receiver), options, is_final_plan_segment);
+                    auto source = std::make_shared<ExchangeSource>(source_header, std::move(receiver), options, is_final_plan_segment, totals_source, extremes_source);
                     pipe.addSource(std::move(source));
                     source_num++;
                 }
@@ -318,6 +335,10 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
         }
     }
 
+    if (is_add_totals)
+        pipe.addTotalsSource(std::move(totals_source));
+    if (is_add_extremes)
+        pipe.addExtremesSource(std::move(extremes_source));
     pipeline.init(std::move(pipe));
     if (!keep_order)
     {

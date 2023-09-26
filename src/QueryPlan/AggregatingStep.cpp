@@ -188,7 +188,8 @@ appendGroupingColumns(Block block, const GroupingSetsParamsList & grouping_set_p
     return res;
 }
 
-Aggregator::Params AggregatingStep::createParams(Block header_before_aggregation, AggregateDescriptions aggregates, Names group_by_keys)
+Aggregator::Params
+AggregatingStep::createParams(Block header_before_aggregation, AggregateDescriptions aggregates, Names group_by_keys, bool overflow_row)
 {
     ColumnNumbers keys;
     for (const auto & key : group_by_keys)
@@ -224,7 +225,7 @@ Aggregator::Params AggregatingStep::createParams(Block header_before_aggregation
 
 
     return Aggregator::Params(
-        header_before_aggregation, keys, aggregates, false, 0, OverflowMode::THROW, 0, 0, 0, false, nullptr, 0, 0, false, 0);
+        header_before_aggregation, keys, aggregates, overflow_row, 0, OverflowMode::THROW, 0, 0, 0, false, nullptr, 0, 0, false, 0);
 }
 
 GroupingSetsParamsList AggregatingStep::prepareGroupingSetsParams() const
@@ -685,7 +686,7 @@ std::shared_ptr<IQueryPlanStep> AggregatingStep::copy(ContextPtr) const
         final,
         group_by_sort_description,
         groupings,
-        false,
+        needOverflowRow(),
         should_produce_results_in_order_of_bucket_number);
 }
 

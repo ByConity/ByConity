@@ -1,9 +1,10 @@
 syntax = "proto2";
 
-package DB.Statistics.Protos;
+package DB.Protos;
 
 message StatsTableBasic {
   required int64 row_count = 1;
+  optional int64 timestamp = 2;
 }
 
 message StatsColumnBasic {
@@ -29,8 +30,8 @@ message StatsNdvBucketsExtend {
 
 message StatsNdvBucketsResult {
   required bytes bounds_blob = 1;
-  repeated int64 counts = 3;    // size = num_buckets
-  repeated double ndvs = 4;       // size = num_buckets
+  repeated int64 counts = 3;  // size = num_buckets
+  repeated double ndvs = 4;   // size = num_buckets
 }
 
 enum SerdeDataType {
@@ -47,11 +48,12 @@ enum SerdeDataType {
   Int128 = 10;
   Float32 = 11;
   Float64 = 12;
-  StringOldVersion = 15; // this is the old version of string, here for compatibility
+  StringOldVersion = 15;  // here for compatibility
   String = 16;
   UInt256 = 17;
   Int256 = 18;
 }
+
 enum StatisticsType {
   Invalid = 0;
   TableBasic = 1;
@@ -60,16 +62,21 @@ enum StatisticsType {
   NdvBucketsResult = 5;
   ColumnBasic = 6;
   NdvBucketsExtend = 7;
+  UdiCounter = 8;
   HllSketch = 9;
   DummyAlpha = 2000;
   DummyBeta = 2001;
 }
 
+message StatsUdiCounter {
+  required uint64 udi_count = 1;
+}
+
 message DbStats {
   enum Version {
     Invalid = 0;
-    V1 = 1; // for cnch-dev, where enum TypeIndex don't has DataTime64
-    V2 = 2; // for vanilla-dev, where enum TypeIndex has DataTime64
+    V1 = 1;  // for cnch-dev, where enum TypeIndex don't has DataTime64
+    V2 = 2;  // for vanilla-dev, where enum TypeIndex has DataTime64
   }
   required string db_name = 1;
   repeated TableStats tables = 2;

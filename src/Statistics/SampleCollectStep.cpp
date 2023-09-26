@@ -272,7 +272,7 @@ public:
         sqls.emplace_back(ndv_buckets_extend_sql);
     }
 
-    const std::vector<String> & getSqls() { return sqls; }
+    const std::vector<String> & getSqls() override { return sqls; }
 
     void parse(const Block & block, size_t index_offset) override
     {
@@ -596,15 +596,27 @@ public:
     }
 
     // exported symbol
-    void collect(const ColumnDescVector & cols_desc) override
+    void collect(const ColumnDescVector & all_cols_desc) override
     {
         // TODO: split them into several columns step
         collectTable();
 
-        firstCollectStep(cols_desc);
+        auto cols_desc_groups = split(all_cols_desc, context->getSettingsRef().statistics_batch_max_columns);
 
-        auto unhandled_cols = collectSecondStep(cols_desc);
-        collectThirdStep(unhandled_cols);
+        ColumnDescVector all_unhandled_cols;
+
+        for (auto & cols_desc_group : cols_desc_groups)
+        {
+            firstCollectStep(cols_desc_group);
+            auto unhandled_cols = collectSecondStep(cols_desc_group);
+            all_unhandled_cols.insert(all_unhandled_cols.end(), unhandled_cols.begin(), unhandled_cols.end());
+        }
+
+        auto unhandled_cols_groups = split(all_unhandled_cols, context->getSettingsRef().statistics_batch_max_columns);
+        for (auto & unhandled_cols_group : unhandled_cols_groups)
+        {
+            collectThirdStep(unhandled_cols_group);
+        }
     }
 
 private:

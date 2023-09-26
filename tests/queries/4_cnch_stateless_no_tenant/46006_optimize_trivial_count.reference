@@ -55,6 +55,7 @@ optimized:
 Projection Est. 0 rows, cost 3.200000e-01
 │     Expressions: count():=`expr#count()_2`
 └─ Union Est. 0 rows, cost 3.200000e-01
+   │     OutputToInputs: expr#count()_2 = [expr#count(),expr#count()_1]
    ├─ MergingAggregated Est. 0 rows, cost 1.600000e-01
    │  └─ Gather Exchange Est. 0 rows, cost 1.600000e-01
    │     └─ ReadStorageRowCount Est. 0 rows, cost 0.000000e+00

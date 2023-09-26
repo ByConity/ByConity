@@ -34,6 +34,9 @@
 #include <Transaction/TxnTimestamp.h>
 #include <WorkerTasks/ManipulationType.h>
 #include "Common/tests/gtest_global_context.h"
+#include <Statistics/AutoStatisticsHelper.h>
+#include <Statistics/AutoStatisticsRpcUtils.h>
+#include <Statistics/AutoStatisticsManager.h>
 #include <Common/Exception.h>
 #include <Access/AccessControlManager.h>
 
@@ -48,6 +51,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_TABLE;
     extern const int CNCH_TOPOLOGY_NOT_MATCH_ERROR;
 }
+namespace AutoStats = Statistics::AutoStats;
 
 CnchServerServiceImpl::CnchServerServiceImpl(ContextMutablePtr global_context)
     : WithMutableContext(global_context),
@@ -861,6 +865,106 @@ void CnchServerServiceImpl::getServerStartTime(
 {
     brpc::ClosureGuard done_guard(done);
     response->set_server_start_time(server_start_time);
+}
+
+// About Auto Statistics
+void CnchServerServiceImpl::queryUdiCounter(
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    const Protos::QueryUdiCounterReq* request,
+    Protos::QueryUdiCounterResp* response,
+    google::protobuf::Closure* done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        Statistics::AutoStats::queryUdiCounter(request, response);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchServerServiceImpl::redirectUdiCounter(
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    const Protos::RedirectUdiCounterReq* request,
+    Protos::RedirectUdiCounterResp* response,
+    google::protobuf::Closure* done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        Statistics::AutoStats::redirectUdiCounter(request, response);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+// About Auto Statistics
+void CnchServerServiceImpl::scheduleDistributeUdiCount(
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    const Protos::ScheduleDistributeUdiCountReq* request,
+    Protos::ScheduleDistributeUdiCountResp* response,
+    google::protobuf::Closure* done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        (void)request;
+        if (auto auto_stats_manager = AutoStats::AutoStatisticsManager::tryGetInstance())
+            auto_stats_manager->scheduleDistributeUdiCount();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+// About Auto Statistics
+void CnchServerServiceImpl::scheduleAutoStatsCollect(
+    [[maybe_unused]] google::protobuf::RpcController* controller,
+    const Protos::ScheduleAutoStatsCollectReq* request,
+    Protos::ScheduleAutoStatsCollectResp* response,
+    google::protobuf::Closure* done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        (void)request;
+        if (auto auto_stats_manager = AutoStats::AutoStatisticsManager::tryGetInstance())
+            auto_stats_manager->scheduleCollect();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchServerServiceImpl::redirectAsyncStatsTasks(
+    [[maybe_unused]] google::protobuf::RpcController * controller,
+    const Protos::RedirectAsyncStatsTasksReq * request,
+    Protos::RedirectAsyncStatsTasksResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(
+        done, response, [request = request, response = response, done = done, global_context = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+            try
+            {
+                Statistics::AutoStats::redirectAsyncStatsTasks(global_context, request, response);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        });
 }
 
 void CnchServerServiceImpl::scheduleGlobalGC(

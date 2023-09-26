@@ -34,6 +34,7 @@
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
 #include <Optimizer/makeCastFunction.h>
+#include <Parsers/ASTSelectQuery.h>
 #include <Parsers/formatAST.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/ApplyStep.h>
@@ -58,6 +59,11 @@
 #include <QueryPlan/WindowStep.h>
 #include <QueryPlan/planning_common.h>
 #include <Common/FieldVisitors.h>
+
+#include <algorithm>
+#include <memory>
+#include <unordered_set>
+
 namespace DB
 {
 namespace ErrorCodes
@@ -142,6 +148,7 @@ private:
     void planWithFill(PlanBuilder & builder, ASTSelectQuery & select_query);
     void planLimitBy(PlanBuilder & builder, ASTSelectQuery & select_query);
     void planLimit(PlanBuilder & builder, ASTSelectQuery & select_query);
+    void planTotalsAndHaving(PlanBuilder & builder, ASTSelectQuery & select_query);
     // void planSampling(PlanBuilder & builder, ASTSelectQuery & select_query);
     RelationPlan planFinalSelect(PlanBuilder & builder, ASTSelectQuery & select_query);
 
@@ -179,6 +186,7 @@ private:
 
     void processSubqueryArgs(PlanBuilder & builder, ASTs & children, String & rhs_symbol, String & lhs_symbol, RelationPlan & rhs_plan);
     void planHint(const QueryPlanStepPtr & step, SqlHints & sql_hints);
+    bool needAggregateOverflowRow(ASTSelectQuery & select_query) const;
 };
 
 namespace
@@ -352,7 +360,11 @@ RelationPlan QueryPlannerVisitor::visitASTSelectQuery(ASTPtr & node, const Void 
 
     planAggregate(builder, select_query);
 
-    planFilter(builder, select_query, select_query.having());
+    if (select_query.group_by_with_totals)
+        planTotalsAndHaving(builder, select_query);
+    else
+        planFilter(builder, select_query, select_query.having());
+
     PRINT_PLAN(builder.plan, plan_having);
 
     planWindow(builder, select_query);
@@ -575,7 +587,9 @@ void QueryPlannerVisitor::planCrossJoin(ASTTableJoin & table_join, PlanBuilder &
             DataStreams{left_builder.getCurrentDataStream(), right_builder.getCurrentDataStream()},
             DataStream{.header = output_header},
             ASTTableJoin::Kind::Cross,
-            ASTTableJoin::Strictness::Unspecified);
+            ASTTableJoin::Strictness::Unspecified,
+            context->getSettingsRef().max_threads,
+            context->getSettingsRef().optimize_read_in_order);
 
         planHint(join_step, table_join.hints);
         left_builder.addStep(std::move(join_step), {left_builder.getRoot(), right_builder.getRoot()});
@@ -1373,19 +1387,59 @@ void QueryPlannerVisitor::planAggregate(PlanBuilder & builder, ASTSelectQuery & 
 
     auto agg_step = std::make_shared<AggregatingStep>(
         builder.getCurrentDataStream(),
-        std::move(keys_for_all_group),
-        std::move(aggregate_descriptions),
-        select_query.group_by_with_grouping_sets || grouping_sets_params.size() > 1 ? std::move(grouping_sets_params)
-                                                                                    : GroupingSetsParamsList{},
-        true,
+        keys_for_all_group,
+        aggregate_descriptions,
+        select_query.group_by_with_grouping_sets || grouping_sets_params.size() > 1 ? grouping_sets_params : GroupingSetsParamsList{},
+        !select_query.group_by_with_totals, // when WITH TOTALS exists, TotalsHavingStep is to finalize aggregates
         SortDescription{},
         grouping_operations_descs,
-        select_query.group_by_with_totals,
+        needAggregateOverflowRow(select_query),
         context->getSettingsRef().distributed_aggregation_memory_efficient);
 
     builder.addStep(std::move(agg_step));
     builder.withAdditionalMappings(mappings_for_aggregate);
+
+    if (select_query.group_by_with_totals)
+    {
+        const auto & header = builder.getCurrentDataStream().header;
+        ColumnNumbers keys_positions;
+
+        for (const auto & key : keys_for_all_group)
+            keys_positions.emplace_back(header.getPositionByName(key));
+
+        Aggregator::Params params(
+            header, keys_positions, aggregate_descriptions, needAggregateOverflowRow(select_query), context->getSettingsRef().max_threads);
+
+        auto transform_params = std::make_shared<AggregatingTransformParams>(params, false);
+
+        QueryPlanStepPtr merge_agg = std::make_shared<MergingAggregatedStep>(
+            builder.getCurrentDataStream(),
+            keys_for_all_group,
+            select_query.group_by_with_grouping_sets || grouping_sets_params.size() > 1 ? grouping_sets_params : GroupingSetsParamsList{},
+            grouping_operations_descs,
+            transform_params,
+            false,
+            context->getSettingsRef().max_threads,
+            context->getSettingsRef().aggregation_memory_efficient_merge_threads);
+
+        builder.addStep(std::move(merge_agg));
+    }
+
     PRINT_PLAN(builder.plan, plan_aggregate);
+}
+
+void QueryPlannerVisitor::planTotalsAndHaving(PlanBuilder & builder, ASTSelectQuery & select_query)
+{
+    const auto& settings = context->getSettingsRef();
+
+    auto totals_having_step = std::make_shared<TotalsHavingStep>(
+        builder.getCurrentDataStream(),
+        needAggregateOverflowRow(select_query),
+        select_query.having() ? builder.translate(select_query.having()) : nullptr,
+        settings.totals_mode,
+        settings.totals_auto_threshold,
+        true);
+    builder.addStep(std::move(totals_having_step));
 }
 
 void QueryPlannerVisitor::planWindow(PlanBuilder & builder, ASTSelectQuery & select_query)
@@ -2359,4 +2413,10 @@ void QueryPlannerVisitor::planHint(const QueryPlanStepPtr & step, SqlHints & sql
         step->addHints(hint_list, context);
 }
 
+bool QueryPlannerVisitor::needAggregateOverflowRow(ASTSelectQuery & select_query) const
+{
+    const auto & settings = context->getSettingsRef();
+    return select_query.group_by_with_totals && settings.max_rows_to_group_by && settings.group_by_overflow_mode == OverflowMode::ANY
+        && settings.totals_mode != TotalsMode::AFTER_HAVING_EXCLUSIVE;
+}
 }

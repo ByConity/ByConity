@@ -140,6 +140,7 @@ class ReadBuffer;
     M(ASTCreateBinding) \
     M(ASTShowBindings) \
     M(ASTDropBinding) \
+    M(ASTAdviseQuery) \
     M(ASTSelectIntersectExceptQuery) \
     M(ASTWindowListElement) \
     M(ASTTEALimit) \

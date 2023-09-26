@@ -5,6 +5,7 @@ Projection Est. 1 rows
    └─ MergingAggregated Est. 1 rows
       └─ Gather Exchange Est. 2 rows
          └─ Union Est. 2 rows
+            │     OutputToInputs: expr#sum(sales) = [expr#sum(sales),expr#sum(sales)]
             ├─ Aggregating Est. 1 rows
             │  │     Group by: {}
             │  │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#multiply(cs_quantity, cs_list_price))
@@ -185,6 +186,7 @@ Projection Est. 100 rows
             │     Order by: {c_last_name_2 asc, c_first_name_2 asc, expr#sum(multiply(cs_quantity, cs_list_price))_1 asc}
             │     Limit: 100
             └─ Union Est. 28929060 rows
+               │     OutputToInputs: c_first_name_2 = [c_first_name,c_first_name_1], expr#sum(multiply(cs_quantity, cs_list_price))_1 = [expr#sum(multiply(cs_quantity, cs_list_price)),expr#sum(multiply(ws_quantity, ws_list_price))], c_last_name_2 = [c_last_name,c_last_name_1]
                ├─ MergingAggregated Est. 19218679 rows
                │  └─ Repartition Exchange Est. 19218679 rows
                │     │     Partition by: {c_first_name, c_last_name}

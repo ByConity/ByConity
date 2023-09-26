@@ -36,6 +36,7 @@
 #include <Interpreters/KafkaLog.h>
 #include <Interpreters/ProcessorsProfileLog.h>
 #include <Interpreters/ZooKeeperLog.h>
+#include <Interpreters/AutoStatsTaskLog.h>
 
 #include <Poco/Util/AbstractConfiguration.h>
 #include <common/logger_useful.h>
@@ -145,6 +146,7 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
     kafka_log = createSystemLog<KafkaLog>(global_context, "system", "kafka_log", config, "kafka_log", true);
     processors_profile_log = createSystemLog<ProcessorsProfileLog>(global_context, "system", "processors_profile_log", config, "processors_profile_log", false);
     zookeeper_log = createSystemLog<ZooKeeperLog>(global_context, "system", "zookeeper_log", config, "zookeeper_log", false);
+    auto_stats_task_log = createSystemLog<AutoStatsTaskLog>(global_context, "system", "auto_stats_task_log", config, "auto_stats_task_log", true);
 
     if (query_log)
         logs.emplace_back(query_log.get());
@@ -179,6 +181,8 @@ SystemLogs::SystemLogs(ContextPtr global_context, const Poco::Util::AbstractConf
         logs.emplace_back(processors_profile_log.get());
     if (zookeeper_log)
         logs.emplace_back(zookeeper_log.get());
+    if (auto_stats_task_log)
+        logs.emplace_back(auto_stats_task_log.get());
 
     try
     {

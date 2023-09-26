@@ -1,0 +1,51 @@
+syntax = "proto2";
+
+package DB.Protos.AutoStats;
+
+option cc_generic_services = true;
+import "cnch_common.proto";
+
+enum TaskStatus {
+    NotExists = 1;
+    Created = 2;
+    Pending = 3;
+    Running = 4;
+    Error = 5;
+    Failed = 6;
+    Success = 7;
+    Cancelled = 8;
+}
+
+enum TaskType {
+    Manual = 1;
+    Auto = 2;
+}
+
+// Serialization of
+//        struct TaskInfoCore
+//        {
+//                    // fixed fields, no need to lock
+//                UUID task_uuid;
+//                TaskType task_type;
+//                UUID table_uuid;
+//                std::vector<String> columns_name;
+//                String settings_json;
+//                UInt64 stats_row_count;
+//                UInt64 udi_count;
+//                double priority;
+//                UInt64 retry_times;
+//                TaskStatus status;
+//        };
+message TaskInfoCore
+{
+    required UUID task_uuid = 1;
+    required TaskType task_type = 2;
+    required UUID table_uuid = 3;
+    repeated string columns_name = 4;
+    required string settings_json = 5;
+    required uint64 stats_row_count = 6;
+    required uint64 udi_count = 7;
+    required double priority = 8;
+    required uint64 retry_times = 9;
+    required TaskStatus status = 10;
+}

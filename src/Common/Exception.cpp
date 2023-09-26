@@ -245,6 +245,22 @@ void tryLogDebugCurrentException(Poco::Logger * logger, const std::string & star
     }
 }
 
+void tryLogWarningCurrentException(const char * log_name, const std::string & start_of_message)
+{
+    tryLogWarningCurrentException(&Poco::Logger::get(log_name), start_of_message);
+}
+
+void tryLogWarningCurrentException(Poco::Logger * logger, const std::string & start_of_message)
+{
+    try
+    {
+        LOG_WARNING(logger, start_of_message + (start_of_message.empty() ? "" : ": ") + getCurrentExceptionMessage(true));
+    }
+    catch (...)
+    {
+    }
+}
+
 std::unique_ptr<Exception> getSerializableException()
 {
     try

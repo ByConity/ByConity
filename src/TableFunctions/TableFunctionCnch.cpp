@@ -18,6 +18,7 @@
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/evaluateConstantExpression.h>
+#include <Interpreters/Context_fwd.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
 #include <Storages/StorageDistributed.h>
@@ -174,6 +175,10 @@ void TableFunctionCnch::parseArguments(const ASTPtr & ast_function, ContextPtr c
 
 StoragePtr TableFunctionCnch::executeImpl(const ASTPtr & /*ast_function*/, ContextPtr context, const std::string & table_name, ColumnsDescription cached_columns) const
 {
+    auto mutable_context = std::const_pointer_cast<Context>(context);
+    mutable_context->enableWorkerFaultTolerance();
+    mutable_context->setSetting("skip_unavailable_shards", Field{true});
+    
     if (cached_columns.empty())
         cached_columns = getActualTableStructure(context);
 
@@ -204,7 +209,7 @@ StoragePtr TableFunctionCnch::executeImpl(const ASTPtr & /*ast_function*/, Conte
 ColumnsDescription TableFunctionCnch::getActualTableStructure(ContextPtr context) const
 {
     assert(cluster);
-    return getStructureOfRemoteTable(*cluster, remote_table_id, context);
+    return getStructureOfRemoteTable(*cluster, remote_table_id, context); 
 }
 
 void registerTableFunctionCnch(TableFunctionFactory & factory)

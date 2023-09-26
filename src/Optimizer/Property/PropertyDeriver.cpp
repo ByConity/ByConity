@@ -137,6 +137,32 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, Cont
     return Property{Partitioning(Partitioning::Handle::UNKNOWN), Partitioning(Partitioning::Handle::UNKNOWN), sorting};
 }
 
+Property PropertyDeriver::deriveStoragePropertyWhatIfMode(const StoragePtr& storage, ContextMutablePtr & context, const Property & required_property)
+{
+    Property actual_storage_property = deriveStorageProperty(storage, context);
+
+    const auto & table_layout = required_property.getTableLayout();
+
+    if (!table_layout.contains(storage->getStorageID().getQualifiedName()))
+        return actual_storage_property;
+
+    auto what_if_table_partitioning = table_layout.at(storage->getStorageID().getQualifiedName());
+
+    if (what_if_table_partitioning.isStarPartitioned()) // use required property to calculate lower bound
+        return required_property;
+
+    Names clusterBy{what_if_table_partitioning.getPartitionKey().column};
+    // the bucket number is only used for matching, can be set to anything
+    UInt64 buckets = (actual_storage_property.getNodePartitioning().getPartitioningHandle() == Partitioning::Handle::BUCKET_TABLE)
+        ? actual_storage_property.getNodePartitioning().getBuckets() : context->getSettingsRef().memory_catalog_worker_size;
+
+    Partitioning new_partitioning{Partitioning::Handle::BUCKET_TABLE, clusterBy, true, buckets, true, Partitioning::Component::ANY};
+    actual_storage_property.setNodePartitioning(new_partitioning);
+
+    return actual_storage_property;
+}
+
+
 Property DeriverVisitor::visitStep(const IQueryPlanStep &, DeriverContext & context)
 {
     return context.getInput()[0].clearSorting();

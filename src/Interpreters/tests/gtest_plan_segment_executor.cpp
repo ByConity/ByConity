@@ -113,7 +113,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     context->getClientInfo().current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
 
     DataStream datastream{.header = header};
-    auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream);
+    auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream, false, false);
     exchange_source_step->setPlanSegment(&plan_segment);
     exchange_source_step->setExchangeOptions(exchange_options);
 
@@ -213,7 +213,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     context->getClientInfo().current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
 
     DataStream datastream{.header = header};
-    auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream);
+    auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream, false, false);
     exchange_source_step->setPlanSegment(&plan_segment);
     exchange_source_step->setExchangeOptions(exchange_options);
 
@@ -315,7 +315,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     context->getClientInfo().initial_query_id = plan_segment.getQueryId();
     context->getClientInfo().current_query_id = plan_segment.getQueryId() + std::to_string(plan_segment.getPlanSegmentId());
     DataStream datastream{.header = header};
-    auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream);
+    auto exchange_source_step = std::make_unique<RemoteExchangeSourceStep>(inputs, datastream, false, false);
     exchange_source_step->setPlanSegment(&plan_segment);
     exchange_source_step->setExchangeOptions(exchange_options);
 

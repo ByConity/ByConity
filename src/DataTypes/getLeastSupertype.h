@@ -51,12 +51,23 @@ size_t getMaxScaleIndex(const DataTypes &types)
     return max_scale_date_time_index;
 }
 
+enum class LeastSupertypeOnError
+{
+    Throw,
+    Null,
+};
+
 /** Get data type that covers all possible values of passed data types.
   * If there is no such data type, throws an exception.
   *
   * Examples: least common supertype for UInt8, Int8 - Int16.
   * Examples: there is no least common supertype for Array(UInt8), Int8.
   */
-DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conversion = false);
+template <LeastSupertypeOnError on_error = LeastSupertypeOnError::Throw>
+DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conversio = false);
 
+/// Same as above but return nullptr instead of throwing exception.
+DataTypePtr tryGetLeastSupertype(const DataTypes & types, bool allow_extended_conversio = false);
+
+using TypeIndexSet = std::unordered_set<TypeIndex>;
 }

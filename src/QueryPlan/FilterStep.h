@@ -51,13 +51,13 @@ public:
     const String & getFilterColumnName() const { return filter_column_name; }
     bool removesFilterColumn() const { return remove_filter_column; }
 
-    ActionsDAGPtr createActions(ContextPtr context, const ASTPtr & rewrite_filter) const;
-
     void toProto(Protos::FilterStep & proto, bool for_hash_equals = false) const;
     static std::shared_ptr<FilterStep> fromProto(const Protos::FilterStep & proto, ContextPtr context);
 
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+
+    static ConstASTPtr rewriteRuntimeFilter(const ConstASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context);
 
 private:
     ActionsDAGPtr actions_dag;
@@ -65,7 +65,6 @@ private:
     String filter_column_name;
     bool remove_filter_column;
 
-    static ConstASTPtr rewriteRuntimeFilter(const ConstASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context);
 };
 
 }

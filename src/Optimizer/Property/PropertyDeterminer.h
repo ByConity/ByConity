@@ -17,7 +17,8 @@
 
 #include <Optimizer/Property/Property.h>
 #include <QueryPlan/PlanVisitor.h>
-#include "QueryPlan/TableWriteStep.h"
+#include <QueryPlan/TableWriteStep.h>
+#include <QueryPlan/TotalsHavingStep.h>
 
 #include <utility>
 
@@ -50,6 +51,7 @@ public:
     PropertySets visitJoinStep(const JoinStep & step, DeterminerContext &) override;
     PropertySets visitArrayJoinStep(const ArrayJoinStep & step, DeterminerContext & context) override;
     PropertySets visitAggregatingStep(const AggregatingStep & step, DeterminerContext &) override;
+    PropertySets visitTotalsHavingStep(const TotalsHavingStep & step, DeterminerContext &) override;
     PropertySets visitMarkDistinctStep(const MarkDistinctStep & step, DeterminerContext &) override;
     PropertySets visitMergingAggregatedStep(const MergingAggregatedStep & step, DeterminerContext &) override;
     PropertySets visitUnionStep(const UnionStep & step, DeterminerContext & context) override;

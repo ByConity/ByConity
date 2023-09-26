@@ -188,7 +188,7 @@ StoragePtr DatabaseWithOwnTablesBase::detachTableUnlocked(const String & table_n
     auto table_id = res->getStorageID();
     if (table_id.hasUUID())
     {
-        assert(database_name == DatabaseCatalog::TEMPORARY_DATABASE || getUUID() != UUIDHelpers::Nil);
+        assert(database_name == DatabaseCatalog::TEMPORARY_DATABASE || getUUID() != UUIDHelpers::Nil || ((res->getName() == "CloudMergeTree") && (getEngineName() == "Memory")));
         DatabaseCatalog::instance().removeUUIDMapping(table_id.uuid);
     }
 

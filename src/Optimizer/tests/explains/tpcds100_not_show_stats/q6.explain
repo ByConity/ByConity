@@ -60,6 +60,7 @@ Projection
                            │  └─ Broadcast Exchange
                            │     └─ EnforceSingleRow
                            │        └─ Union
+                           │           │     OutputToInputs: d_month_seq_1 = [d_month_seq_1]
                            │           └─ Gather Exchange
                            │              └─ MergingAggregated
                            │                 └─ Repartition Exchange

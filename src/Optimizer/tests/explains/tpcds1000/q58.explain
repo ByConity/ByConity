@@ -60,6 +60,7 @@ Projection Est. 100 rows
                │                                      └─ Broadcast Exchange Est. 1 rows
                │                                         └─ EnforceSingleRow Est. 1 rows
                │                                            └─ Union Est. 1 rows
+               │                                               │     OutputToInputs: d_week_seq_3 = [d_week_seq_3]
                │                                               └─ Gather Exchange Est. 1 rows
                │                                                  └─ Projection Est. 1 rows
                │                                                     │     Expressions: [d_week_seq_3]
@@ -115,6 +116,7 @@ Projection Est. 100 rows
                   │           │                          └─ Broadcast Exchange Est. 1 rows
                   │           │                             └─ EnforceSingleRow Est. 1 rows
                   │           │                                └─ Union Est. 1 rows
+                  │           │                                   │     OutputToInputs: d_week_seq_1 = [d_week_seq_1]
                   │           │                                   └─ Gather Exchange Est. 1 rows
                   │           │                                      └─ Projection Est. 1 rows
                   │           │                                         │     Expressions: [d_week_seq_1]
@@ -179,6 +181,7 @@ Projection Est. 100 rows
                                                          └─ Broadcast Exchange Est. 1 rows
                                                             └─ EnforceSingleRow Est. 1 rows
                                                                └─ Union Est. 1 rows
+                                                                  │     OutputToInputs: d_week_seq_5 = [d_week_seq_5]
                                                                   └─ Gather Exchange Est. 1 rows
                                                                      └─ Projection Est. 1 rows
                                                                         │     Expressions: [d_week_seq_5]

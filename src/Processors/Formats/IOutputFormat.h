@@ -85,6 +85,7 @@ public:
     size_t getResultRows() const { return result_rows; }
     size_t getResultBytes() const { return result_bytes; }
 
+    static Chunk prepareTotals(Chunk chunk);
 private:
     /// Counters for consumed chunks. Are used for QueryLog.
     size_t result_rows = 0;

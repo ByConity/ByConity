@@ -41,6 +41,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int NOT_IMPLEMENTED;
 }
 
 static void checkSource(const IProcessor & source)
@@ -688,6 +689,29 @@ void Pipe::finalizeWriteInQueryCache()
     /// We can call finalize() on any of them.
     if (it != processors.end())
         dynamic_cast<StreamInQueryCacheTransform &>(**it).finalizeWriteInQueryCache();
+}
+
+void Pipe::addSimpleTransformToPort(ProcessorPtr transform, OutputPort * port)
+{
+    if (port == nullptr)
+        throw Exception("addSimpleTransformToPort does not accept null port", ErrorCodes::LOGICAL_ERROR);
+    auto & input_port = transform->getInputs().front();
+    if (port == totals_port)
+    {
+        connect(*totals_port, input_port);
+        totals_port = nullptr;
+    }
+    else if (port == extremes_port)
+    {
+        connect(*extremes_port, input_port);
+        extremes_port = nullptr;
+    }
+    else
+    {
+        throw Exception("Cannot add simple transform to a single output port.", ErrorCodes::NOT_IMPLEMENTED);
+    }
+    output_ports.emplace_back(&transform->getOutputs().front());
+    processors.emplace_back(std::move(transform));
 }
 
 void Pipe::addSimpleTransform(const ProcessorGetterWithStreamKind & getter)

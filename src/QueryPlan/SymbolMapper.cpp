@@ -35,6 +35,7 @@
 #include <QueryPlan/ValuesStep.h>
 #include <QueryPlan/WindowStep.h>
 #include <QueryPlan/PlanSerDerHelper.h>
+#include <QueryPlan/PlanVisitor.h>
 
 namespace DB
 {
@@ -55,11 +56,8 @@ private:
 SymbolMapper SymbolMapper::simpleMapper(std::unordered_map<Symbol, Symbol> & mapping)
 {
     return SymbolMapper([&mapping](Symbol symbol) {
-        if (mapping.contains(symbol) && mapping.at(symbol) != symbol)
-        {
-            symbol = mapping.at(symbol);
-        }
-        return symbol;
+        auto it = mapping.find(symbol);
+        return it != mapping.end() ? it->second : std::move(symbol);
     });
 }
 
@@ -163,7 +161,7 @@ Block SymbolMapper::map(const Block & name_and_types)
 }
 
 DataStream SymbolMapper::map(const DataStream & data_stream)
-{   
+{
     DataStream output{map(data_stream.header)};
     output.has_single_port = data_stream.has_single_port;
     output.sort_mode = data_stream.sort_mode;
@@ -313,9 +311,9 @@ AggregatingTransformParamsPtr SymbolMapper::map(const AggregatingTransformParams
     return std::make_shared<AggregatingTransformParams>(map(param->params), param->final);
 }
 
-ArrayJoinActionPtr SymbolMapper::map(const ArrayJoinActionPtr & array_join_action) 
+ArrayJoinActionPtr SymbolMapper::map(const ArrayJoinActionPtr & array_join_action)
 {
-    if (array_join_action == nullptr) 
+    if (array_join_action == nullptr)
         return nullptr;
     return std::make_shared<ArrayJoinAction>(
         map(array_join_action->columns),
@@ -339,7 +337,7 @@ std::shared_ptr<AggregatingStep> SymbolMapper::map(const AggregatingStep & agg)
         agg.isFinal(),
         SortDescription{map(agg.getGroupBySortDescription())},
         map(agg.getGroupings()),
-        false,
+        agg.needOverflowRow(),
         agg.shouldProduceResultsInOrderOfBucketNumber());
 }
 
@@ -475,26 +473,31 @@ std::shared_ptr<IntersectStep> SymbolMapper::map(const IntersectStep & intersect
 
 std::shared_ptr<TableScanStep> SymbolMapper::map(const TableScanStep & scan)
 {
+    DataStream mapped_output_stream = map(scan.getOutputStream());
+    NamesWithAliases mapped_column_alias = map(scan.getColumnAlias());
+    DataStream mapped_table_output_stream = map(scan.getTableOutputStream());
+
+    // order matters as symbol mapper should traverse plan nodes bottom-up
+    auto mapped_filter = scan.getPushdownFilterCast() ? map(*scan.getPushdownFilterCast()) : nullptr;
+    auto mapped_projection = scan.getPushdownProjectionCast() ? map(*scan.getPushdownProjectionCast()) : nullptr;
+    auto mapped_aggregation = scan.getPushdownAggregationCast() ? map(*scan.getPushdownAggregationCast()) : nullptr;
+
     auto mapped_scan = std::make_shared<TableScanStep>(
-        context,
+        std::move(mapped_output_stream),
+        scan.getStorage(),
         scan.getStorageID(),
-        map(scan.getColumnAlias()),
+        scan.getOriginalTable(),
+        scan.getColumnNames(),
+        std::move(mapped_column_alias),
         scan.getQueryInfo(),
         scan.getMaxBlockSize(),
         scan.getTableAlias(),
-        scan.getHints());
+        scan.getHints(),
+        std::move(mapped_aggregation),
+        std::move(mapped_projection),
+        std::move(mapped_filter),
+        std::move(mapped_table_output_stream));
 
-    // order matters as symbol mapper should traverse plan nodes bottom-up
-    if (const auto * step = scan.getPushdownFilterCast())
-        mapped_scan->setPushdownFilter(map(*step));
-
-    if (const auto * step = scan.getPushdownProjectionCast())
-        mapped_scan->setPushdownProjection(map(*step));
-
-    if (const auto * step = scan.getPushdownAggregationCast())
-        mapped_scan->setPushdownAggregation(map(*step));
-
-    mapped_scan->formatOutputStream();
     return mapped_scan;
 }
 
@@ -546,7 +549,7 @@ std::shared_ptr<MergingAggregatedStep> SymbolMapper::map(const MergingAggregated
         map(merging_agg.getGroupingSetsParamsList()),
         map(merging_agg.getGroupings()),
         map(merging_agg.getAggregatingTransformParams()),
-        merging_agg.MemoryEfficientAggregation(),
+        merging_agg.isMemoryEfficientAggregation(),
         merging_agg.getMaxThreads(),
         merging_agg.getMemoryEfficientMergeThreads());
 }
@@ -612,7 +615,9 @@ std::shared_ptr<RemoteExchangeSourceStep> SymbolMapper::map(const RemoteExchange
 {
     return std::make_shared<RemoteExchangeSourceStep>(
         remote_exchange.getInput(),
-        map(remote_exchange.getInputStreams()[0]));
+        map(remote_exchange.getInputStreams()[0]),
+        remote_exchange.isAddTotals(),
+        remote_exchange.isAddExtremes());
 }
 
 
@@ -681,6 +686,60 @@ std::shared_ptr<WindowStep> SymbolMapper::map(const WindowStep & window)
         window.needSort(),
         SortDescription{map(window.getPrefixDescription())}
     );
+}
+
+class SymbolMapperVisitor : public StepVisitor<QueryPlanStepPtr, SymbolMapper>
+{
+public:
+    explicit SymbolMapperVisitor(ContextPtr _context): context(_context) {}
+protected:
+    QueryPlanStepPtr visitStep(const IQueryPlanStep & step, SymbolMapper &) override { return step.copy(context); }
+    QueryPlanStepPtr visitAggregatingStep(const AggregatingStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitApplyStep(const ApplyStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitArrayJoinStep(const ArrayJoinStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitAssignUniqueIdStep(const AssignUniqueIdStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitCreatingSetsStep(const CreatingSetsStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitCubeStep(const CubeStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitDistinctStep(const DistinctStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitEnforceSingleRowStep(const EnforceSingleRowStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitExpressionStep(const ExpressionStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitExceptStep(const ExceptStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitExtremesStep(const ExtremesStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitExchangeStep(const ExchangeStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitFillingStep(const FillingStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitFinalSampleStep(const FinalSampleStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitFinishSortingStep(const FinishSortingStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitFilterStep(const FilterStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitIntersectStep(const IntersectStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitIntersectOrExceptStep(const IntersectOrExceptStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitJoinStep(const JoinStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitLimitStep(const LimitStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitLimitByStep(const LimitByStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitMergeSortingStep(const MergeSortingStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitMergingSortedStep(const MergingSortedStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitMergingAggregatedStep(const MergingAggregatedStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitMarkDistinctStep(const MarkDistinctStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitOffsetStep(const OffsetStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitProjectionStep(const ProjectionStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitPartitionTopNStep(const PartitionTopNStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitPartialSortingStep(const PartialSortingStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitReadNothingStep(const ReadNothingStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitRemoteExchangeSourceStep(const RemoteExchangeSourceStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitSortingStep(const SortingStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitTopNFilteringStep(const TopNFilteringStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitTableScanStep(const TableScanStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitTotalsHavingStep(const TotalsHavingStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitUnionStep(const UnionStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitValuesStep(const ValuesStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+    QueryPlanStepPtr visitWindowStep(const WindowStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
+private:
+    ContextPtr context;
+};
+
+QueryPlanStepPtr SymbolMapper::map(const IQueryPlanStep & step)
+{
+    SymbolMapperVisitor visitor(context);
+    return VisitorUtil::accept(step, visitor, *this);
 }
 
 }

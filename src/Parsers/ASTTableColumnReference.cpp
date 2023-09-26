@@ -38,8 +38,8 @@ void ASTTableColumnReference::appendColumnName(WriteBuffer & buffer) const
     writeString(getID('.'), buffer);
 }
 
-void ASTTableColumnReference::formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const {
-    writeString(getID('.'), settings.ostr);
+void ASTTableColumnReference::formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const
+{
+    settings.writeIdentifier(column_name);
 }
-
 }

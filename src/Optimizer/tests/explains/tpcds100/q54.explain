@@ -42,6 +42,7 @@ Projection Est. 100 rows
                                     │     │  └─ Broadcast Exchange Est. 1 rows
                                     │     │     └─ EnforceSingleRow Est. 1 rows
                                     │     │        └─ Union Est. 1 rows
+                                    │     │           │     OutputToInputs: expr#plus(d_month_seq, 1) = [expr#plus(d_month_seq, 1)]
                                     │     │           └─ Gather Exchange Est. 1 rows
                                     │     │              └─ MergingAggregated Est. 1 rows
                                     │     │                 └─ Repartition Exchange Est. 1 rows
@@ -58,6 +59,7 @@ Projection Est. 100 rows
                                     │     └─ Broadcast Exchange Est. 1 rows
                                     │        └─ EnforceSingleRow Est. 1 rows
                                     │           └─ Union Est. 1 rows
+                                    │              │     OutputToInputs: expr#plus(d_month_seq, 3) = [expr#plus(d_month_seq, 3)]
                                     │              └─ Gather Exchange Est. 1 rows
                                     │                 └─ MergingAggregated Est. 1 rows
                                     │                    └─ Repartition Exchange Est. 1 rows
@@ -117,6 +119,7 @@ Projection Est. 100 rows
                                                 │                          │  │     Condition: cs_item_sk_1 == i_item_sk
                                                 │                          │  │     Runtime Filters Builder: {i_item_sk}
                                                 │                          │  ├─ Union Est. 215998302 rows
+                                                │                          │  │  │     OutputToInputs: cs_item_sk_1 = [cs_item_sk,ws_item_sk], cs_bill_customer_sk_1 = [cs_bill_customer_sk,ws_bill_customer_sk], cs_sold_date_sk_1 = [cs_sold_date_sk,ws_sold_date_sk]
                                                 │                          │  │  ├─ Filter Est. 143997065 rows
                                                 │                          │  │  │  │     Condition: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
                                                 │                          │  │  │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows

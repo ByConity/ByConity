@@ -231,7 +231,6 @@ void Connection::sendHello()
         writeStringBinary(user, *out);
         writeStringBinary(password, *out);
     }
-    writeVarUInt(DBMS_PLAN_SEGMENT_VERSION, *out);
 
     out->next();
 }
@@ -263,8 +262,6 @@ void Connection::receiveHello()
             readVarUInt(server_version_patch, *in);
         else
             server_version_patch = server_revision;
-        if (server_revision >= DBMS_MIN_REVISION_WITH_PLAN_SEGMENT_VERSION)
-            readVarUInt(server_plan_segment_version, *in);
     }
     else if (packet_type == Protocol::Server::Exception)
         receiveException()->rethrow();

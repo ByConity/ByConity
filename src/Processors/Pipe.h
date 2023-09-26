@@ -114,6 +114,8 @@ public:
     /// Add transform with single input and single output for each port.
     void addSimpleTransform(const ProcessorGetter & getter);
     void addSimpleTransform(const ProcessorGetterWithStreamKind & getter);
+    /// Add a simple transform to port(could be totals or extremes, which will be set to null after connected)
+    void addSimpleTransformToPort(ProcessorPtr transform, OutputPort * port);
 
     /// Changes the number of output ports if needed. Adds ResizeTransform.
     void resize(size_t num_streams, bool force = false, bool strict = false);

@@ -3,6 +3,7 @@ Projection Est. 54 rows, cost 7.540000e+01
 │     Expressions: id:=id_18
 └─ Gather Exchange Est. 54 rows, cost 7.140400e+01
    └─ Union Est. 54 rows, cost 6.260400e+01
+      │     OutputToInputs: id_18 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17]
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id]
       │  └─ Filter Est. 3 rows, cost 3.256000e+00
@@ -134,6 +135,7 @@ Projection Est. 54 rows, cost 7.540000e+01
 │     Expressions: id:=id_18
 └─ Gather Exchange Est. 54 rows, cost 7.140400e+01
    └─ Union Est. 54 rows, cost 6.260400e+01
+      │     OutputToInputs: id_18 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17]
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id]
       │  └─ Filter Est. 3 rows, cost 3.256000e+00
@@ -265,6 +267,7 @@ Projection Est. 54 rows, cost 7.540000e+01
 │     Expressions: id:=id_18
 └─ Gather Exchange Est. 54 rows, cost 7.140400e+01
    └─ Union Est. 54 rows, cost 6.260400e+01
+      │     OutputToInputs: id_18 = [id,id_1,id_2,id_3,id_4,id_5,id_6,id_7,id_8,id_9,id_10,id_11,id_12,id_13,id_14,id_15,id_16,id_17]
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id]
       │  └─ Filter Est. 3 rows, cost 3.256000e+00

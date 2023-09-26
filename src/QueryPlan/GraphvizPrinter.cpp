@@ -97,6 +97,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     //    {IQueryPlanStep::Type::Decompression, "darkolivegreen4"},
     {IQueryPlanStep::Type::Distinct, "darkolivegreen4"},
     {IQueryPlanStep::Type::Extremes, "goldenrod4"},
+    {IQueryPlanStep::Type::TotalsHaving, "goldenrod4"},
     {IQueryPlanStep::Type::FinalSample, "goldenrod4"},
     {IQueryPlanStep::Type::Apply, "orange"},
     {IQueryPlanStep::Type::EnforceSingleRow, "bisque"},
@@ -417,11 +418,22 @@ Void PlanNodePrinter::visitExtremesNode(ExtremesNode & node, PrinterContext & co
 {
     auto stepPtr = node.getStep();
     String label{"ExtremesNode"};
-    String details{"ExtremesNode"};
+    auto & step = dynamic_cast<const ExtremesStep &>(*stepPtr);
     String color{NODE_COLORS[stepPtr->getType()]};
-    printNode(node, label, details, color, context);
+    printNode(node, label, StepPrinter::printExtremesStep(step), color, context);
     return visitChildren(node, context);
 }
+
+Void PlanNodePrinter::visitTotalsHavingNode(TotalsHavingNode & node, PrinterContext & context)
+{
+    auto stepPtr = node.getStep();
+    String label{"TotalsHavingNode"};
+    auto & step = dynamic_cast<const TotalsHavingStep &>(*stepPtr);
+    String color{NODE_COLORS[stepPtr->getType()]};
+    printNode(node, label, StepPrinter::printTotalsHavingStep(step), color, context);
+    return visitChildren(node, context);
+}
+
 
 Void PlanNodePrinter::visitFinalSampleNode(FinalSampleNode & node, PrinterContext & context)
 {
@@ -954,9 +966,19 @@ Void PlanSegmentNodePrinter::visitExtremesNode(QueryPlan::Node * node, PrinterCo
 {
     auto & stepPtr = node->step;
     String label{"ExtremesNode"};
-    String details{"ExtremesNode"};
+    auto & step = dynamic_cast<const ExtremesStep &>(*stepPtr);
     String color{NODE_COLORS[stepPtr->getType()]};
-    printNode(node, label, details, color, context);
+    printNode(node, label, StepPrinter::printExtremesStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanSegmentNodePrinter::visitTotalsHavingNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & stepPtr = node->step;
+    String label{"TotalsHavingNode"};
+    auto & step = dynamic_cast<const TotalsHavingStep &>(*stepPtr);
+    String color{NODE_COLORS[stepPtr->getType()]};
+    printNode(node, label, StepPrinter::printTotalsHavingStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -2317,6 +2339,30 @@ String StepPrinter::printFillingStep(const FillingStep & step)
     }
 
     details << "|";
+    details << "Output |";
+    for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+    return details.str();
+}
+
+String StepPrinter::printTotalsHavingStep(const TotalsHavingStep & step)
+{
+    std::stringstream details;
+    details << "Output |";
+    for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+    return details.str();
+}
+
+String StepPrinter::printExtremesStep(const ExtremesStep & step)
+{
+    std::stringstream details;
     details << "Output |";
     for (const auto & column : step.getOutputStream().header)
     {

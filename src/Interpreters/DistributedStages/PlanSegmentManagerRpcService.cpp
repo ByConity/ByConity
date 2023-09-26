@@ -102,7 +102,8 @@ void PlanSegmentManagerRpcService::executeQuery(
         Decimal64 initial_query_start_time_microseconds {request->initial_query_start_time()};
         client_info.initial_query_start_time = initial_query_start_time_microseconds / 1000000;
         client_info.initial_query_start_time_microseconds = initial_query_start_time_microseconds;
-        client_info.initial_user = request->user();
+        /// Fall back to user when initial_user not set for compatibility.
+        client_info.initial_user = request->has_initial_user() ? request->initial_user() : request->user();
         client_info.initial_query_id = request->query_id();
 
         client_info.initial_address = initial_socket_address;

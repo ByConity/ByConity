@@ -163,7 +163,6 @@ private:
     UInt64 client_version_minor = 0;
     UInt64 client_version_patch = 0;
     UInt64 client_tcp_protocol_version = 0;
-    UInt64 client_plan_segment_version = 0;
 
     ContextMutablePtr connection_context;
     ContextMutablePtr query_context;

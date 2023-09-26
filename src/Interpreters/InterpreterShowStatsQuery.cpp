@@ -39,9 +39,9 @@ namespace ErrorCodes
     extern const int UNKNOWN_TABLE;
     extern const int FILE_NOT_FOUND;
 }
-using Statistics::Protos::DbStats;
-using Statistics::Protos::DbStats_Version_V1;
-using Statistics::Protos::DbStats_Version_V2;
+using Protos::DbStats;
+using Protos::DbStats_Version_V1;
+using Protos::DbStats_Version_V2;
 using namespace Statistics;
 
 

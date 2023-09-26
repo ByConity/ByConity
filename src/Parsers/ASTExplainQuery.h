@@ -48,7 +48,7 @@ public:
         LogicalAnalyze,    /// 'EXPLAIN ANALYZE SELECT...'
         TraceOptimizer,    /// 'EXPLAIN TRACE_OPT SELECT...'
         TraceOptimizerRule,    /// 'EXPLAIN TRACE_OPT RULE SELECT...'
-        Analysis, // 'EXPLAIN ANALYSIS...'
+        MetaData, // 'EXPLAIN METADATA...'
     };
 
     bool print_stats = true;
@@ -127,7 +127,7 @@ private:
             case Distributed: return "EXPLAIN DISTRIBUTED";
             case TraceOptimizer: return "EXPLAIN TRACE_OPT";
             case TraceOptimizerRule: return "EXPLAIN TRACE_OPT RULE";
-            case Analysis: return "EXPLAIN ANALYSIS";
+            case MetaData: return "EXPLAIN METADATA";
         }
 
         __builtin_unreachable();

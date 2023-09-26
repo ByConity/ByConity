@@ -47,6 +47,7 @@ Projection Est. 10 rows
                                     └─ Repartition Exchange Est. 14722 rows
                                        │     Partition by: {expr#substring(ca_zip, 1, 5)_2}
                                        └─ Union Est. 14722 rows
+                                          │     OutputToInputs: count_1 = [count_1,count_1], count = [count,count], expr#substring(ca_zip, 1, 5)_2 = [expr#substring(ca_zip, 1, 5),expr#substring(ca_zip, 1, 5)_1]
                                           ├─ Aggregating Est. 7749 rows
                                           │  │     Group by: {expr#substring(ca_zip, 1, 5)}
                                           │  │     Aggregates: count:=AggNull(sum)(marker_2), count_1:=AggNull(sum)(marker_3)

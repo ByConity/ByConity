@@ -35,6 +35,9 @@ public:
     void setRowCount(int64_t row_count);
     int64_t getRowCount() const;
 
+    void setTimestamp(DateTime64 timestamp);
+    DateTime64 getTimestamp() const;
+
     String serializeToJson() const override;
     void deserializeFromJson(std::string_view json) override;
 

@@ -73,7 +73,10 @@ MergingAggregatedStep::MergingAggregatedStep(
     bool memory_efficient_aggregation_,
     size_t max_threads_,
     size_t memory_efficient_merge_threads_)
-    : ITransformingStep(input_stream_, appendGroupingColumns(params_->getHeader(), groupings_), getTraits(!(params_->final) && memory_efficient_aggregation_))
+    : ITransformingStep(
+        input_stream_,
+        appendGroupingColumns(params_->getCustomHeader(params_->final), groupings_),
+        getTraits(!(params_->final) && memory_efficient_aggregation_))
     , keys(std::move(keys_))
     , grouping_sets_params(std::move(grouping_sets_params_))
     , groupings(std::move(groupings_))
@@ -81,7 +84,7 @@ MergingAggregatedStep::MergingAggregatedStep(
     , memory_efficient_aggregation(memory_efficient_aggregation_)
     , max_threads(max_threads_)
     , memory_efficient_merge_threads(memory_efficient_merge_threads_)
-    , should_produce_results_in_order_of_bucket_number (!(params->final) && memory_efficient_aggregation)
+    , should_produce_results_in_order_of_bucket_number(!(params->final) && memory_efficient_aggregation)
 {
     /// Aggregation keys are distinct
     for (auto key : params->params.keys)
@@ -100,6 +103,23 @@ void MergingAggregatedStep::transformPipeline(QueryPipeline & pipeline, const Bu
     if (hasNonParallelAggregateFunctions(params->params.aggregates))
     {
         pipeline.resize(1);
+    }
+
+    // optimizer use MergingAggregateStep in by-name style, regenerate aggregator params of by-position style
+    if (!keys.empty())
+    {
+        ColumnNumbers key_positions;
+        const auto & header = pipeline.getHeader();
+        for (const auto & key : keys)
+            key_positions.emplace_back(header.getPositionByName(key));
+
+        Aggregator::Params new_params(
+            header,
+            key_positions,
+            params->params.aggregates,
+            params->params.overflow_row,
+            build_settings.context->getSettingsRef().max_threads);
+        params = std::make_shared<AggregatingTransformParams>(new_params, params->final);
     }
 
     // @FIXME: grouping sets + two-level aggregation is incompatible with memory efficient merge

@@ -163,7 +163,6 @@ bool IterativeRewriter::exploreChildren(PlanNodePtr & plan, IterativeRewriterCon
     bool progress = false;
 
     PlanNodes children;
-    DataStreams inputs;
 
     for (PlanNodePtr & child : plan->getChildren())
     {
@@ -172,14 +171,12 @@ bool IterativeRewriter::exploreChildren(PlanNodePtr & plan, IterativeRewriterCon
         if (child)
         {
             children.emplace_back(child);
-            inputs.push_back(child->getStep()->getOutputStream());
         }
     }
 
     if (progress)
     {
         plan->replaceChildren(children);
-        plan->getStep()->setInputStreams(inputs);
     }
 
     return progress;

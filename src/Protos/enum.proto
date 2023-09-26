@@ -157,3 +157,12 @@ message RuntimeFilterDistribution {
     Distributed = 1;
   }
 }
+
+message TotalsMode {
+  enum Enum {
+    BEFORE_HAVING = 0;
+    AFTER_HAVING_INCLUSIVE = 1;
+    AFTER_HAVING_EXCLUSIVE = 2;
+    AFTER_HAVING_AUTO = 3;
+  }
+}

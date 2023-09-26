@@ -28,6 +28,7 @@ struct CollectorSettings
     double sample_ratio = 0.01;
     StatisticsAccurateSampleNdvMode accurate_sample_ndv = StatisticsAccurateSampleNdvMode::AUTO;
     StatisticsCachePolicy cache_policy = StatisticsCachePolicy::Default;
+    bool if_not_exists = false;
     UInt64 histogram_bucket_size = 250;
     UInt64 kll_sketch_log_k = DEFAULT_KLL_SKETCH_LOG_K;
 
@@ -66,6 +67,8 @@ struct CollectorSettings
             collect_histogram = false;
         }
     }
-};
 
+    String toJsonStr() const;
+    void fromJsonStr(const String & json_str);
+};
 }

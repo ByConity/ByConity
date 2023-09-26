@@ -42,6 +42,7 @@ Projection
                │     │     │              └─ Broadcast Exchange
                │     │     │                 └─ EnforceSingleRow
                │     │     │                    └─ Union
+               │     │     │                       │     OutputToInputs: expr#avg(ss_net_profit)_1 = [expr#avg(ss_net_profit)_1]
                │     │     │                       └─ Gather Exchange
                │     │     │                          └─ Projection
                │     │     │                             │     Expressions: [expr#avg(ss_net_profit)_1]
@@ -79,6 +80,7 @@ Projection
                │     │                    └─ Broadcast Exchange
                │     │                       └─ EnforceSingleRow
                │     │                          └─ Union
+               │     │                             │     OutputToInputs: expr#avg(ss_net_profit)_3 = [expr#avg(ss_net_profit)_3]
                │     │                             └─ Gather Exchange
                │     │                                └─ Projection
                │     │                                   │     Expressions: [expr#avg(ss_net_profit)_3]

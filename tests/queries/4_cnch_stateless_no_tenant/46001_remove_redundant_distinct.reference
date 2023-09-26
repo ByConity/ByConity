@@ -6,6 +6,7 @@ Projection Est. ? rows
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {id_2}
          └─ Union Est. ? rows
+            │     OutputToInputs: id_2 = [id,id_1]
             ├─ TableScan test_distinct.unique_1 Est. ? rows
             │        Outputs: [id]
             └─ Aggregating Est. ? rows
@@ -25,6 +26,7 @@ Projection Est. ? rows
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {id_1}
          └─ Union Est. ? rows
+            │     OutputToInputs: id_1 = [id,id3]
             ├─ TableScan test_distinct.unique_1 Est. ? rows
             │        Outputs: [id]
             └─ TableScan test_distinct.unique_3 Est. ? rows
@@ -168,6 +170,7 @@ Gather Exchange Est. ? rows
 └─ Projection Est. ? rows
    │     Expressions: id:=id_3
    └─ Union Est. ? rows
+      │     OutputToInputs: id_3 = [id_1,id_2]
       ├─ Projection Est. ? rows
       │  │     Expressions: id_1:=id_4
       │  └─ TableScan test_distinct.unique_1 Est. ? rows

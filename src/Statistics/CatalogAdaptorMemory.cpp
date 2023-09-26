@@ -93,7 +93,7 @@ public:
         }
     }
 
-    ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) const override
+    ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) override
     {
         ColumnDescVector result;
         auto storage = getStorageByTableId(identifier);
@@ -180,14 +180,14 @@ public:
         Statistics::CacheManager::invalidate(context, table);
     }
 
-    void invalidateServerStatsCache(const StatsTableIdentifier & table) const override
+    void invalidateServerStatsCache(const StatsTableIdentifier & table) override
     {
         Statistics::CacheManager::invalidate(context, table);
     }
 
-    void invalidateAllServerStatsCache() const override { Statistics::CacheManager::reset(); }
+    void invalidateAllServerStatsCache() override { Statistics::CacheManager::reset(); }
 
-    std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) const override
+    std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) override
     {
         std::vector<StatsTableIdentifier> results;
         auto db = DatabaseCatalog::instance().getDatabase(database_name, context);
@@ -200,7 +200,7 @@ public:
         return results;
     }
 
-    std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table_name) const override
+    std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table_name) override
     {
         auto & ins = DatabaseCatalog::instance();
         auto db_storage = ins.getDatabase(database_name, context);
@@ -214,11 +214,25 @@ public:
         return StatsTableIdentifier(result);
     }
 
-    StoragePtr getStorageByTableId(const StatsTableIdentifier & identifier) const override
+    std::optional<StatsTableIdentifier> getTableIdByUUID(const UUID & uuid) override
+    {
+        (void)uuid;
+        // this should be called only in daemon manager
+        throw Exception("Unimplemented", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    StoragePtr getStorageByTableId(const StatsTableIdentifier & identifier) override
     {
         auto & ins = DatabaseCatalog::instance();
         return ins.getTable(identifier.getStorageID(), context);
     }
+
+    StoragePtr tryGetStorageByUUID(const UUID & uuid) override
+    {
+        (void)uuid;
+        throw Exception("Unimplemented", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
 
     UInt64 getUpdateTime() override
     {
@@ -226,7 +240,32 @@ public:
         return 0;
     }
 
-    const Settings & getSettingsRef() const override { return context->getSettingsRef(); }
+    const Settings & getSettingsRef() override { return context->getSettingsRef(); }
+
+    UInt64 fetchAddUdiCount(const StatsTableIdentifier & table_identifier, UInt64 count) override
+    {
+        throw Exception("Unimplemented", ErrorCodes::NOT_IMPLEMENTED);
+        // auto & sms = getStatisticsMemoryStore();
+        // std::unique_lock lck(sms.mtx);
+        // auto unique_key = table_identifier.getUniqueKey();
+        // UInt64 old_count = 0;
+        // if (sms.udi_counters.count(unique_key))
+        // {
+        //     old_count = sms.udi_counters.at(unique_key);
+        // }
+        // //
+        // if (count != 0)
+        // {
+        //     auto new_count = old_count + count;
+        //     sms.udi_counters[unique_key] = new_count;
+        // }
+        // return old_count;
+    }
+
+    void removeUdiCount(const StatsTableIdentifier & table) override
+    {
+        // DO NOTHING
+    }
 
 private:
     StatisticsMemoryStore & getStatisticsMemoryStore() { return *statistics_memory_store; }

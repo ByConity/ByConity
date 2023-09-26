@@ -319,7 +319,6 @@ private:
     UInt64 server_revision = 0;
     String server_timezone;
     String server_display_name;
-    UInt64 server_plan_segment_version = 0;
 
     std::unique_ptr<Poco::Net::StreamSocket> socket;
     std::shared_ptr<ReadBufferFromPocoSocket> in;

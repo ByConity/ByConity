@@ -20,6 +20,7 @@ Projection Est. ? rows
 │     Expressions: c1:=int1_1, c2:=str1_1, mapElement(c4, \'y\'):=`__map2__\'y\'_1`
 └─ Gather Exchange Est. ? rows
    └─ Union Est. ? rows
+      │     OutputToInputs: __map2__\'y\'_1 = [__map2__\'y\',__map3__\'y\'], str1_1 = [str1,str2], int1_1 = [int1,int2]
       ├─ Filter Est. ? rows
       │  │     Condition: `__map1__\'a\'` > 1
       │  └─ TableScan test.t40034_t1 Est. ? rows
@@ -35,6 +36,7 @@ Projection Est. ? rows
 │     Expressions: c1:=int1_4, c2:=str1_4, mapElement(c6, \'a\'):=`__map1__\'a\'_4`
 └─ Gather Exchange Est. ? rows
    └─ Union Est. ? rows
+      │     OutputToInputs: __map1__\'a\'_4 = [__map1__\'a\',__map4__\'a\',__map2__\'a\',__map3__\'a\'], str1_4 = [str1,str2,str1_2,str2_1], int1_4 = [int1,int2,int1_2,int2_1]
       ├─ Filter Est. ? rows
       │  │     Condition: `__map2__\'x\'` > 1
       │  └─ TableScan test.t40034_t1 Est. ? rows

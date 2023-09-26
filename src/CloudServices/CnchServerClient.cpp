@@ -22,6 +22,7 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
+#include <Protos/auto_statistics.pb.h>
 
 
 namespace DB
@@ -704,6 +705,75 @@ bool CnchServerClient::scheduleGlobalGC(const std::vector<Protos::DataModelTable
 
     assertController(cntl);
     return response.ret();
+}
+
+std::unordered_map<UUID, UInt64> CnchServerClient::queryUdiCounter()
+{
+    brpc::Controller cntl;
+    Protos::QueryUdiCounterReq request;
+    Protos::QueryUdiCounterResp response;
+    stub->queryUdiCounter(&cntl, &request, &response, nullptr);
+    RPCHelpers::checkResponse(response);
+    assertController(cntl);
+    std::unordered_map<UUID, UInt64> result;
+    assert(response.tables_size() == response.udi_counts_size());
+    for (int i = 0; i < response.tables_size(); ++i)
+    {
+        auto uuid = RPCHelpers::createUUID(response.tables(i));
+        auto count = response.udi_counts(i);
+        result[uuid] = count;
+    }
+
+    return result;
+}
+
+void CnchServerClient::redirectUdiCounter(const std::unordered_map<UUID, UInt64> & data)
+{
+    brpc::Controller cntl;
+    Protos::RedirectUdiCounterReq request;
+    for (auto & [k, v] : data)
+    {
+        auto uuid_ptr = request.add_tables();
+        RPCHelpers::fillUUID(k, *uuid_ptr);
+        request.add_udi_counts(v);
+    }
+    Protos::RedirectUdiCounterResp response;
+    stub->redirectUdiCounter(&cntl, &request, &response, nullptr);
+    RPCHelpers::checkResponse(response);
+    assertController(cntl);
+}
+
+void CnchServerClient::scheduleDistributeUdiCount()
+{
+    brpc::Controller cntl;
+    Protos::ScheduleDistributeUdiCountReq request;
+    Protos::ScheduleDistributeUdiCountResp response;
+
+    stub->scheduleDistributeUdiCount(&cntl, &request, &response, nullptr);
+    RPCHelpers::checkResponse(response);
+    assertController(cntl);
+}
+
+void CnchServerClient::scheduleAutoStatsCollect()
+{
+    brpc::Controller cntl;
+    Protos::ScheduleAutoStatsCollectReq request;
+    Protos::ScheduleAutoStatsCollectResp response;
+
+    stub->scheduleAutoStatsCollect(&cntl, &request, &response, nullptr);
+    RPCHelpers::checkResponse(response);
+    assertController(cntl);
+}
+void CnchServerClient::redirectAsyncStatsTasks(google::protobuf::RepeatedPtrField<Protos::AutoStats::TaskInfoCore> tasks)
+{
+    brpc::Controller cntl;
+    Protos::RedirectAsyncStatsTasksReq request;
+    *request.mutable_tasks() = std::move(tasks);
+    Protos::RedirectAsyncStatsTasksResp response;
+
+    stub->redirectAsyncStatsTasks(&cntl, &request, &response, nullptr);
+    RPCHelpers::checkResponse(response);
+    assertController(cntl);
 }
 
 UInt64 CnchServerClient::getNumOfTablesCanSendForGlobalGC()

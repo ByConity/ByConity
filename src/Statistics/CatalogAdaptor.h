@@ -38,23 +38,29 @@ public:
 
     virtual void invalidateClusterStatsCache(const StatsTableIdentifier & table) = 0;
     // const because it should use ConstContext
-    virtual void invalidateServerStatsCache(const StatsTableIdentifier & table) const = 0;
-    virtual void invalidateAllServerStatsCache() const = 0;
+    virtual void invalidateServerStatsCache(const StatsTableIdentifier & table) = 0;
+    virtual void invalidateAllServerStatsCache() = 0;
 
-    virtual std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) const = 0;
-    virtual std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table) const = 0;
-    virtual StoragePtr getStorageByTableId(const StatsTableIdentifier & identifier) const = 0;
+    virtual std::vector<StatsTableIdentifier> getAllTablesID(const String & database_name) = 0;
+    virtual std::optional<StatsTableIdentifier> getTableIdByName(const String & database_name, const String & table) = 0;
+    virtual std::optional<StatsTableIdentifier> getTableIdByUUID(const UUID & uuid) = 0;
+    virtual StoragePtr getStorageByTableId(const StatsTableIdentifier & identifier) = 0;
+    virtual StoragePtr tryGetStorageByUUID(const UUID & uuid) = 0;
     virtual UInt64 getUpdateTime() = 0;
-    virtual ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) const = 0;
-    virtual const Settings & getSettingsRef() const = 0;
+    virtual ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) = 0;
+    virtual const Settings & getSettingsRef() = 0;
 
-    virtual bool isTableCollectable(const StatsTableIdentifier & table) const
+    virtual UInt64 fetchAddUdiCount(const StatsTableIdentifier & table, UInt64 count) = 0;
+    virtual void removeUdiCount(const StatsTableIdentifier & table) = 0;
+
+
+    virtual bool isTableCollectable(const StatsTableIdentifier & table)
     {
         (void)table;
         return true;
     }
 
-    virtual bool isTableAutoUpdated(const StatsTableIdentifier & table) const
+    virtual bool isTableAutoUpdated(const StatsTableIdentifier & table)
     {
         (void)table;
         return false;
@@ -64,8 +70,9 @@ public:
     virtual ~CatalogAdaptor() = default;
 };
 
+
 using CatalogAdaptorPtr = std::shared_ptr<CatalogAdaptor>;
-using ConstCatalogAdaptorPtr = std::shared_ptr<const CatalogAdaptor>;
+using ConstCatalogAdaptorPtr = std::shared_ptr<CatalogAdaptor>;
 CatalogAdaptorPtr createCatalogAdaptor(ContextPtr context);
 inline ConstCatalogAdaptorPtr createConstCatalogAdaptor(ContextPtr context)
 {

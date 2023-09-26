@@ -70,7 +70,6 @@ PlanNodePtr UnifyJoinOutputs::Rewriter::visitPlanNode(PlanNodeBase & node, std::
         return node.shared_from_this();
 
     PlanNodes children;
-    DataStreams inputs;
     for (const auto & child : node.getChildren())
     {
         std::set<String> require;
@@ -79,10 +78,8 @@ PlanNodePtr UnifyJoinOutputs::Rewriter::visitPlanNode(PlanNodeBase & node, std::
 
         auto result = VisitorUtil::accept(child, *this, require);
         children.emplace_back(result);
-        inputs.push_back(result->getStep()->getOutputStream());
     }
 
-    node.getStep()->setInputStreams(inputs);
     node.replaceChildren(children);
     return node.shared_from_this();
 }

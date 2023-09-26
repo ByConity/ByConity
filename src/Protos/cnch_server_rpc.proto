@@ -3,6 +3,7 @@ package DB.Protos;
 
 import "data_models.proto";
 import "cnch_common.proto";
+import "auto_statistics.proto";
 
 option cc_generic_services = true;
 
@@ -381,6 +382,56 @@ message ScheduleGlobalGCResp
   optional bool ret = 1;
   optional string exception = 2;
 }
+message RedirectUdiCounterReq
+{
+  repeated UUID tables = 1;
+  repeated uint64 udi_counts = 2;
+}
+
+message RedirectUdiCounterResp  
+{
+  optional string exception = 1;
+}
+
+message QueryUdiCounterReq
+{
+}
+
+message QueryUdiCounterResp
+{
+  optional string exception = 1;
+  repeated UUID tables = 2;
+  repeated uint64 udi_counts = 3;
+}
+
+message ScheduleDistributeUdiCountReq
+{
+}
+
+message ScheduleDistributeUdiCountResp
+{
+  optional string exception = 1;
+}
+
+message ScheduleAutoStatsCollectReq
+{
+}
+
+message ScheduleAutoStatsCollectResp
+{
+  optional string exception = 1;
+}
+
+message RedirectAsyncStatsTasksReq
+{
+  repeated AutoStats.TaskInfoCore tasks = 1;
+}
+
+message RedirectAsyncStatsTasksResp
+{
+  optional string exception = 1;
+}
+
 
 message GetNumOfTablesCanSendForGlobalGCReq
 {
@@ -554,6 +605,14 @@ service CnchServerService
   rpc getServerStartTime(GetServerStartTimeReq) returns (GetServerStartTimeResp);
 
   rpc scheduleGlobalGC(ScheduleGlobalGCReq) returns (ScheduleGlobalGCResp);
+
+
+  // for auto statistics
+  rpc queryUdiCounter(QueryUdiCounterReq) returns (QueryUdiCounterResp);
+  rpc redirectUdiCounter(RedirectUdiCounterReq) returns (RedirectUdiCounterResp);
+  rpc scheduleDistributeUdiCount(ScheduleDistributeUdiCountReq) returns (ScheduleDistributeUdiCountResp);
+  rpc scheduleAutoStatsCollect(ScheduleAutoStatsCollectReq) returns (ScheduleAutoStatsCollectResp);
+  rpc redirectAsyncStatsTasks(RedirectAsyncStatsTasksReq) returns (RedirectAsyncStatsTasksResp);
 
   rpc getNumOfTablesCanSendForGlobalGC(GetNumOfTablesCanSendForGlobalGCReq) returns (GetNumOfTablesCanSendForGlobalGCResp);
 

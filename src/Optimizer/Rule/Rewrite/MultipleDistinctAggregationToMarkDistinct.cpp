@@ -149,6 +149,10 @@ TransformResult MultipleDistinctAggregationToMarkDistinct::transformImpl(PlanNod
         step.getKeys(),
         new_agg_descs,
         step.getGroupingSetsParams(),
+        step.isFinal(),
+        step.getGroupBySortDescription(),
+        step.getGroupings(),
+        step.needOverflowRow(),
         step.shouldProduceResultsInOrderOfBucketNumber());
     auto count_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(count_agg_step), {child});
     return count_agg_node;

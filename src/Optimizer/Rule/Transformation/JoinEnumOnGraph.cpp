@@ -506,7 +506,7 @@ BitSet MinCutBranchAlg::neighbor(const BitSet & nodes)
     {
         if (!graph.getEdges().contains(pos))
         {
-            std::cout << "bug";
+            throw Exception("Not found edge in graph", DB::ErrorCodes::LOGICAL_ERROR);
         }
         for (const auto & item : graph.getEdges().at(pos))
         {

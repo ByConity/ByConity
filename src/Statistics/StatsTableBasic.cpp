@@ -34,6 +34,19 @@ int64_t StatsTableBasic::getRowCount() const
 {
     return table_basic_pb.row_count();
 }
+
+void StatsTableBasic::setTimestamp(DateTime64 timestamp)
+{
+    table_basic_pb.set_timestamp(timestamp.value);
+}
+
+DateTime64 StatsTableBasic::getTimestamp() const
+{
+    DateTime64 result;
+    result.value = table_basic_pb.has_timestamp() ? table_basic_pb.timestamp() : 0;
+    return result;
+}
+
 String StatsTableBasic::serializeToJson() const
 {
     String json_str;

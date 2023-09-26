@@ -49,6 +49,7 @@ CTEDef [0]
    Repartition Exchange Est. 1761879197 rows
    │     Partition by: {c_customer_id_3}
    └─ Union Est. 1761879197 rows
+      │     OutputToInputs: expr#'s'_1 = [expr#'s',expr#'c',expr#'w'], expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_1 = [expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2)),expr#sum(divide(plus(minus(minus(cs_ext_list_price, cs_ext_wholesale_cost), cs_ext_discount_amt), cs_ext_sales_price), 2)),expr#sum(divide(plus(minus(minus(ws_ext_list_price, ws_ext_wholesale_cost), ws_ext_discount_amt), ws_ext_sales_price), 2))], c_customer_id_3 = [c_customer_id,c_customer_id_1,c_customer_id_2], c_preferred_cust_flag_3 = [c_preferred_cust_flag,c_preferred_cust_flag_1,c_preferred_cust_flag_2], d_year_3 = [d_year,d_year_1,d_year_2], c_last_name_3 = [c_last_name,c_last_name_1,c_last_name_2], c_first_name_3 = [c_first_name,c_first_name_1,c_first_name_2]
       ├─ Projection Est. 1007913280 rows
       │  │     Expressions: [c_customer_id, c_first_name, c_last_name, c_preferred_cust_flag, d_year, expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))], expr#'s':='s'
       │  └─ Filter Est. 1007913280 rows

@@ -65,6 +65,7 @@ public:
     }
 
     Void visitJoinNode(JoinNode & node, Void & context) override { return visitChildren(node, context); }
+    Void visitExchangeNode(ExchangeNode & node, Void & context) override { return visitChildren(node, context); }
 
     Void visitTableScanNode(TableScanNode & node, Void &) override
     {
@@ -74,6 +75,13 @@ public:
             auto column_reference = std::make_shared<ASTTableColumnReference>(table_step->getStorage().get(), node.getId(), item.first);
             addSymbolExpressionMapping(item.second, column_reference);
         }
+        return Void{};
+    }
+
+    Void visitPlanNode(PlanNodeBase & node, Void & context) override
+    {
+        visitChildren(node, context);
+        valid = false; // unsupported node
         return Void{};
     }
 

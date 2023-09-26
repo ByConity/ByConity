@@ -85,6 +85,7 @@
 #include <Interpreters/CnchSystemLog.h>
 #include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
+#include <Interpreters/AutoStatsTaskLog.h>
 #include "common/sleep.h"
 
 #if !defined(ARCADIA_BUILD)
@@ -422,7 +423,8 @@ BlockIO InterpreterSystemQuery::execute()
                 [&] { if (auto asynchronous_metric_log = getContext()->getAsynchronousMetricLog()) asynchronous_metric_log->flush(true); },
                 [&] { if (auto opentelemetry_span_log = getContext()->getOpenTelemetrySpanLog()) opentelemetry_span_log->flush(true); },
                 [&] { if (auto zookeeper_log = getContext()->getZooKeeperLog()) zookeeper_log->flush(true); },
-                [&] { if (auto processors_profile_log = getContext()->getProcessorsProfileLog()) processors_profile_log->flush(true); }
+                [&] { if (auto processors_profile_log = getContext()->getProcessorsProfileLog()) processors_profile_log->flush(true); },
+                [&] { if (auto auto_stats_task_log = getContext()->getAutoStatsTaskLog()) auto_stats_task_log->flush(true); }
             );
             break;
         }

@@ -59,6 +59,7 @@ Projection
                │  │           │                          └─ Broadcast Exchange
                │  │           │                             └─ EnforceSingleRow
                │  │           │                                └─ Union
+               │  │           │                                   │     OutputToInputs: d_week_seq_3 = [d_week_seq_3]
                │  │           │                                   └─ Gather Exchange
                │  │           │                                      └─ Projection
                │  │           │                                         │     Expressions: [d_week_seq_3]
@@ -115,6 +116,7 @@ Projection
                │              │                          └─ Broadcast Exchange
                │              │                             └─ EnforceSingleRow
                │              │                                └─ Union
+               │              │                                   │     OutputToInputs: d_week_seq_1 = [d_week_seq_1]
                │              │                                   └─ Gather Exchange
                │              │                                      └─ Projection
                │              │                                         │     Expressions: [d_week_seq_1]
@@ -171,6 +173,7 @@ Projection
                            │                          └─ Broadcast Exchange
                            │                             └─ EnforceSingleRow
                            │                                └─ Union
+                           │                                   │     OutputToInputs: d_week_seq_5 = [d_week_seq_5]
                            │                                   └─ Gather Exchange
                            │                                      └─ Projection
                            │                                         │     Expressions: [d_week_seq_5]

@@ -157,6 +157,7 @@ public:
     std::shared_ptr<ValuesStep> map(const ValuesStep & values);
     std::shared_ptr<WindowStep> map(const WindowStep & window);
 
+    QueryPlanStepPtr map(const IQueryPlanStep & step);
 
 private:
     MappingFunction mapping_function;

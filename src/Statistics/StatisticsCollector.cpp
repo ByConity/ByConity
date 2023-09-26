@@ -30,6 +30,8 @@
 #include <Storages/Hive/StorageCnchHive.h>
 #include <boost/algorithm/string/join.hpp>
 #include <common/logger_useful.h>
+#include <DataTypes/DataTypeDateTime64.h>
+#include <Functions/now64.h>
 
 namespace DB::Statistics
 {
@@ -49,6 +51,11 @@ void StatisticsCollector::collect(const ColumnDescVector & cols_desc)
 
     step->collect(cols_desc);
     step->writeResult(table_stats, columns_stats);
+    if (auto basic = table_stats.basic)
+    {
+        auto timestamp = nowSubsecondDt64(DataTypeDateTime64::default_scale);
+        basic->setTimestamp(timestamp);
+    }
 }
 
 void StatisticsCollector::writeToCatalog()
@@ -66,6 +73,10 @@ void StatisticsCollector::writeToCatalog()
     auto proxy = createCachedStatsProxy(catalog, settings.cache_policy);
     proxy->put(table_info, std::move(data));
     catalog->invalidateClusterStatsCache(table_info);
+    // clear udi whenever it is to create/drop stats
+    // since after manual drop stats, users just don't want statistics,
+    // so we needn't care about udi for auto stats until next insertion
+    catalog->removeUdiCount(table_info);
 }
 
 void StatisticsCollector::readAllFromCatalog()

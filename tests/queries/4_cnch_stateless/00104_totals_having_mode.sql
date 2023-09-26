@@ -1,5 +1,3 @@
-SET enable_optimizer = 0; -- GROUP BY number WITH TOTALS HAVING will transform to filter and push down, the result is incorrect for totals_mode
-
 SET max_threads = 1;
 SET max_block_size = 65536;
 SET max_rows_to_group_by = 65535;

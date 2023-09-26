@@ -43,7 +43,6 @@ class ParserStatsQueryBase : public IParserBase
 {
 public:
     [[nodiscard]] const char * getName() const override { return ParserName::Name; }
-    using SampleType = ASTCreateStatsQuery::SampleType;
     using QueryAst = QueryAstClass;
 
 protected:
@@ -81,7 +80,7 @@ protected:
 
             if (!parseDatabaseAndTableNameOrAsterisks(pos, expected, query->database, any_database, query->table, any_table))
                 return false;
-            
+
             // collect on any database is not implemented
             if (any_database)
                 return false;

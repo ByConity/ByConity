@@ -1333,7 +1333,7 @@ ASTs QueryAnalyzerVisitor::analyzeSelect(ASTSelectQuery & select_query, ScopePtr
         }
         else if (select_item->as<ASTQualifiedAsterisk>())
         {
-            if (select_item->children.empty() && select_item->getChildren()[0]->as<ASTTableIdentifier>())
+            if (select_item->children.empty() || !select_item->getChildren()[0]->as<ASTTableIdentifier>())
                 throw Exception("Unable to resolve qualified asterisk", ErrorCodes::UNKNOWN_IDENTIFIER);
 
             ASTIdentifier& astidentifier = select_item->getChildren()[0]->as<ASTTableIdentifier&>();
@@ -1455,6 +1455,14 @@ void QueryAnalyzerVisitor::analyzeGroupBy(ASTSelectQuery & select_query, ASTs & 
         else
         {
             analyze_grouping_set(select_query.groupBy()->children);
+        }
+
+        if (select_query.group_by_with_totals)
+        {
+            if (select_query.group_by_with_cube || select_query.group_by_with_rollup || select_query.group_by_with_grouping_sets)
+            {
+                throw Exception("WITH TOTALS and ROLLUP/CUBE/GROUPING SETS are not supported together", ErrorCodes::NOT_IMPLEMENTED);
+            }
         }
     }
 

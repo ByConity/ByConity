@@ -364,8 +364,8 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
     // if query is not supported by optimizer, settings `settings.enable_optimizer` in context will be disabled.
     if (QueryUseOptimizerChecker::check(query, getContext()))
     {
-        if (ast.getKind() == ASTExplainQuery::Analysis)
-            return explainAnalysis(query);
+        if (ast.getKind() == ASTExplainQuery::MetaData)
+            return explainMetaData(query);
         explainUsingOptimizer(query, buf, single_line);
     }
     else if (ast.getKind() == ASTExplainQuery::ParsedAST)
@@ -482,8 +482,8 @@ BlockInputStreamPtr InterpreterExplainQuery::executeImpl()
         if (plan_segment_tree)
             buf << plan_segment_tree->toString();
     }
-    else if (ast.getKind() == ASTExplainQuery::Analysis)
-        return explainAnalysis(query);
+    else if (ast.getKind() == ASTExplainQuery::MetaData)
+        return explainMetaData(query);
 
     if (single_line)
         res_columns[0]->insertData(buf.str().data(), buf.str().size());
@@ -870,8 +870,7 @@ void InterpreterExplainQuery::explainDistributedWithOptimizer(
     buffer << PlanPrinter::textDistributedPlan(plan_segment_descriptions, true, true, costs, {}, plan);
 }
 
-
-BlockInputStreamPtr InterpreterExplainQuery::explainAnalysis(const ASTPtr & ast)
+BlockInputStreamPtr InterpreterExplainQuery::explainMetaData(const ASTPtr & ast)
 {
     const auto & explain = ast->as<ASTExplainQuery &>();
     auto context = Context::createCopy(getContext());

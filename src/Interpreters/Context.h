@@ -147,6 +147,7 @@ class ZooKeeperLog;
 class QueryMetricLog;
 class QueryWorkerMetricLog;
 class CnchQueryLog;
+class AutoStatsTaskLog;
 struct QueryMetricElement;
 struct QueryWorkerMetricElement;
 using QueryWorkerMetricElementPtr = std::shared_ptr<QueryWorkerMetricElement>;
@@ -529,6 +530,8 @@ private:
 
     std::weak_ptr<PlanSegmentProcessListEntry> segment_process_list_entry;
     QueueThrottlerDeleterPtr queue_throttler_ptr;
+    bool enable_worker_fault_tolerance = false;
+
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
@@ -1050,6 +1053,7 @@ public:
     std::shared_ptr<zkutil::ZooKeeper> getZooKeeper() const;
     /// Same as above but return a zookeeper connection from auxiliary_zookeepers configuration entry.
     std::shared_ptr<zkutil::ZooKeeper> getAuxiliaryZooKeeper(const String & name) const;
+    std::shared_ptr<AutoStatsTaskLog> getAutoStatsTaskLog() const;
 
     /// Try to connect to Keeper using get(Auxiliary)ZooKeeper. Useful for
     /// internal Keeper start (check connection to some other node). Return true
@@ -1517,6 +1521,10 @@ public:
     void waitReadFromClientFinished() const;
 
     ReadSettings getReadSettings() const;
+
+    bool isEnabledWorkerFaultTolerance() const { return enable_worker_fault_tolerance; }
+    void enableWorkerFaultTolerance() { enable_worker_fault_tolerance = true; }
+    void disableWorkerFaultTolerance() { enable_worker_fault_tolerance = false; }
 
     void setPlanCacheManager(std::unique_ptr<PlanCacheManager> && manager);
     PlanCacheManager* getPlanCacheManager();

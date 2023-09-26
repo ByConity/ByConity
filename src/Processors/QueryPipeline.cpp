@@ -21,28 +21,29 @@
 
 #include <Processors/QueryPipeline.h>
 
-#include <Processors/ResizeProcessor.h>
-#include <Processors/LimitTransform.h>
-#include <Processors/Transforms/TotalsHavingTransform.h>
-#include <Processors/Transforms/ExtremesTransform.h>
-#include <Processors/Transforms/CreatingSetsTransform.h>
-#include <Processors/Transforms/ExpressionTransform.h>
-#include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
-#include <Processors/Transforms/JoiningTransform.h>
-#include <Processors/Formats/IOutputFormat.h>
-#include <Processors/Sources/SourceFromInputStream.h>
-#include <Processors/Executors/PipelineExecutor.h>
-#include <Processors/Transforms/PartialSortingTransform.h>
-#include <Processors/Sources/SourceFromSingleChunk.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/IJoin.h>
-#include <Common/typeid_cast.h>
-#include <Common/CurrentThread.h>
 #include <Processors/DelayedPortsProcessor.h>
+#include <Processors/Executors/PipelineExecutor.h>
+#include <Processors/Formats/IOutputFormat.h>
+#include <Processors/LimitTransform.h>
+#include <Processors/ResizeProcessor.h>
 #include <Processors/RowsBeforeLimitCounter.h>
 #include <Processors/Sources/RemoteSource.h>
+#include <Processors/Sources/SourceFromInputStream.h>
+#include <Processors/Sources/SourceFromSingleChunk.h>
+#include <Processors/Transforms/CreatingSetsTransform.h>
+#include <Processors/Transforms/ExpressionTransform.h>
+#include <Processors/Transforms/ExtremesTransform.h>
+#include <Processors/Transforms/JoiningTransform.h>
+#include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
+#include <Processors/Transforms/PartialSortingTransform.h>
+#include <Processors/Transforms/ToMainPortTransform.h>
+#include <Processors/Transforms/TotalsHavingTransform.h>
+#include <Common/CurrentThread.h>
+#include <Common/typeid_cast.h>
 
 namespace DB
 {
@@ -199,6 +200,26 @@ void QueryPipeline::addDefaultTotals()
 
     auto source = std::make_shared<SourceFromSingleChunk>(current_header, Chunk(std::move(columns), 1));
     pipe.addTotalsSource(std::move(source));
+}
+
+void QueryPipeline::setTotalsPortToMainPortTransform()
+{
+    if (pipe.getTotalsPort())
+    {
+        checkInitializedAndNotCompleted();
+        auto transform = std::make_shared<TotalsPortToMainPortTransform>(getHeader());
+        pipe.addSimpleTransformToPort(transform, pipe.getTotalsPort());
+    }
+}
+
+void QueryPipeline::setExtremesPortToMainPortTransform()
+{
+    if (pipe.getExtremesPort())
+    {
+        checkInitializedAndNotCompleted();
+        auto transform = std::make_shared<ExtremesPortToMainPortTransform>(getHeader());
+        pipe.addSimpleTransformToPort(transform, pipe.getExtremesPort());
+    }
 }
 
 void QueryPipeline::dropTotalsAndExtremes()

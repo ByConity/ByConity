@@ -40,20 +40,40 @@ namespace ErrorCodes
     extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
 }
 
-ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, ExchangeOptions options_)
+class ExchangeTotalsSource;
+using ExchangeTotalsSourcePtr = std::shared_ptr<ExchangeTotalsSource>;
+class ExchangeExtremesSource;
+using ExchangeExtremesSourcePtr = std::shared_ptr<ExchangeExtremesSource>;
+
+ExchangeSource::ExchangeSource(
+    Block header_,
+    BroadcastReceiverPtr receiver_,
+    ExchangeOptions options_,
+    ExchangeTotalsSourcePtr totals_source_,
+    ExchangeExtremesSourcePtr extremes_source_)
     : SourceWithProgress(std::move(header_), false)
     , receiver(std::move(receiver_))
     , options(options_)
     , fetch_exception_from_scheduler(false)
+    , totals_source(std::move(totals_source_))
+    , extremes_source(std::move(extremes_source_))
     , logger(&Poco::Logger::get("ExchangeSource"))
 {
 }
 
-ExchangeSource::ExchangeSource(Block header_, BroadcastReceiverPtr receiver_, ExchangeOptions options_, bool fetch_exception_from_scheduler_)
+ExchangeSource::ExchangeSource(
+    Block header_,
+    BroadcastReceiverPtr receiver_,
+    ExchangeOptions options_,
+    bool fetch_exception_from_scheduler_,
+    ExchangeTotalsSourcePtr totals_source_,
+    ExchangeExtremesSourcePtr extremes_source_)
     : SourceWithProgress(std::move(header_), false)
     , receiver(std::move(receiver_))
     , options(options_)
     , fetch_exception_from_scheduler(fetch_exception_from_scheduler_)
+    , totals_source(std::move(totals_source_))
+    , extremes_source(std::move(extremes_source_))
     , logger(&Poco::Logger::get("ExchangeSource"))
 {
 }
@@ -93,6 +113,14 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
 #ifndef NDEBUG
         LOG_TRACE(logger, "{} receive chunk with rows: {}", getName(), chunk.getNumRows());
 #endif
+        if (chunk && chunk.getChunkInfo() &&  chunk.getChunkInfo()->getType() == ChunkInfo::Type::Totals && totals_source)
+        {
+            totals_source->setTotals(std::move(chunk)); // assuming only one totals chunk, so it should be safe to do so.
+        }
+        else if (chunk && chunk.getChunkInfo() &&  chunk.getChunkInfo()->getType() == ChunkInfo::Type::Extremes && extremes_source)
+        {
+            extremes_source->setExtremes(std::move(chunk)); // assuming only one extremes chunk, so it should be safe to do so.
+        }
         return std::make_optional(std::move(chunk));
     }
     const auto & status = std::get<BroadcastStatus>(packet);
@@ -131,6 +159,40 @@ void ExchangeSource::onCancel()
     LOG_TRACE(logger, "ExchangeSource {} onCancel", getName());
     was_query_canceled = true;
     receiver->finish(BroadcastStatusCode::RECV_CANCELLED, "Cancelled by pipeline");
+}
+
+ExchangeTotalsSource::ExchangeTotalsSource(const Block& header)
+    : ISource(header)
+{
+}
+
+ExchangeTotalsSource::~ExchangeTotalsSource() = default;
+
+Chunk ExchangeTotalsSource::generate()
+{
+    return std::move(totals);
+}
+
+void ExchangeTotalsSource::setTotals(Chunk chunk)
+{
+    totals = std::move(chunk);
+}
+
+ExchangeExtremesSource::ExchangeExtremesSource(const Block& header)
+    : ISource(header)
+{
+}
+
+ExchangeExtremesSource::~ExchangeExtremesSource() = default;
+
+Chunk ExchangeExtremesSource::generate()
+{
+    return std::move(extremes);
+}
+
+void ExchangeExtremesSource::setExtremes(Chunk chunk)
+{
+    extremes = std::move(chunk);
 }
 
 }

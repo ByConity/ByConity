@@ -118,10 +118,15 @@ Float64 getValueFromNumberLiteral(const ASTPtr & node)
 
 bool ParserCreateStatsQuery::parseSuffix(Pos & pos, QueryAst & node, Expected & expected)
 {
+    ParserKeyword s_sync("SYNC");
+    ParserKeyword s_async("ASYNC");
     ParserKeyword s_partition("PARTITION");
     ParserKeyword s_with("WITH");
     ParserPartition partition_p;
     ParserNothing dummy_p;
+
+    using SampleType = ASTCreateStatsQuery::SampleType;
+    using SyncMode = ASTCreateStatsQuery::SyncMode;
 
     auto & create_stats_ast = node;
 
@@ -134,6 +139,15 @@ bool ParserCreateStatsQuery::parseSuffix(Pos & pos, QueryAst & node, Expected & 
 
         create_stats_ast.partition = partition;
         create_stats_ast.children.push_back(create_stats_ast.partition);
+    }
+
+    if (s_sync.ignore(pos, expected))
+    {
+        create_stats_ast.sync_mode = SyncMode::Sync;
+    }
+    else if (s_async.ignore(pos, expected))
+    {
+        create_stats_ast.sync_mode = SyncMode::Async;
     }
 
     if (s_with.ignore(pos, expected))

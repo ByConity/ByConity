@@ -47,6 +47,7 @@ Projection
                                     └─ Repartition Exchange
                                        │     Partition by: {expr#substring(ca_zip, 1, 5)_2}
                                        └─ Union
+                                          │     OutputToInputs: count_1 = [count_1,count_1], count = [count,count], expr#substring(ca_zip, 1, 5)_2 = [expr#substring(ca_zip, 1, 5),expr#substring(ca_zip, 1, 5)_1]
                                           ├─ Aggregating
                                           │  │     Group by: {expr#substring(ca_zip, 1, 5)}
                                           │  │     Aggregates: count:=AggNull(sum)(marker_2), count_1:=AggNull(sum)(marker_3)

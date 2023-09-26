@@ -1,38 +1,5 @@
 *** create stats
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	30	2
-test_long_ddl_stats	10	2
+test_long_ddl_stats	1000	2
 *** show table stats
 test_long_ddl_stats.*		2					
 test_long_ddl_stats.data0	UInt64	2	0	2	0	1	1

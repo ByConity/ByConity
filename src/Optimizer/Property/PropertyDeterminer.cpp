@@ -22,6 +22,7 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
+#include "QueryPlan/TotalsHavingStep.h"
 
 namespace DB
 {
@@ -30,13 +31,14 @@ PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step
     DeterminerContext ctx{property, context};
     static DeterminerVisitor visitor{};
     PropertySets input_properties = VisitorUtil::accept(step, visitor, ctx);
-    if (!property.getCTEDescriptions().empty())
+    if (!property.getCTEDescriptions().empty() || !property.getTableLayout().empty())
     {
         for (auto & property_set : input_properties)
         {
             for (auto & prop : property_set)
             {
                 prop.setCTEDescriptions(property.getCTEDescriptions());
+                prop.setTableLayout(property.getTableLayout());
             }
         }
     }
@@ -157,6 +159,12 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     //    {
     //        return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
     //    }
+    if (!step.isFinal())
+    {
+        auto require = context.getRequired();
+        require.setPreferred(true);
+        return {{require}};
+    }
 
     auto keys = step.getKeys();
     if (keys.empty())
@@ -199,6 +207,11 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     }
 
     return sets;
+}
+
+PropertySets DeterminerVisitor::visitTotalsHavingStep(const TotalsHavingStep & , DeterminerContext & )
+{
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 
 PropertySets DeterminerVisitor::visitMarkDistinctStep(const MarkDistinctStep & step, DeterminerContext &)

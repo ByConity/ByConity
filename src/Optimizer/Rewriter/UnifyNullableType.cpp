@@ -208,9 +208,8 @@ PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, V
         step.isFinal(),
         step.getGroupBySortDescription(),
         step.getGroupings(),
-        false,
-        step.shouldProduceResultsInOrderOfBucketNumber()
-        );
+        step.needOverflowRow(),
+        step.shouldProduceResultsInOrderOfBucketNumber());
     auto agg_node_set_null
         = AggregatingNode::createPlanNode(context->nextNodeId(), std::move(agg_step_set_null), PlanNodes{child}, node.getStatistics());
 

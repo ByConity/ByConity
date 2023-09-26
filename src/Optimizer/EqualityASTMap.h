@@ -109,7 +109,7 @@ public:
 
     auto begin() { return container.begin(); }
     auto end() { return container.end(); }
-    size_t size() { return container.size(); }
+    size_t size() const { return container.size(); }
     auto find(const Key & key)
     {
         return container.find(key);
@@ -180,13 +180,9 @@ public:
         return res;
     }
 
-    auto begin() const
-    {
-        return container.cbegin();
-    }
-
+    auto begin() const { return container.cbegin(); }
     auto end() const { return container.cend(); }
-    size_t size() { return container.size(); }
+    size_t size() const { return container.size(); }
 
     template <typename Iter>
     auto erase(Iter iter) -> Iter

@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <Parsers/ASTAdviseQuery.h>
 #include <Parsers/ASTAlterDiskCacheQuery.h>
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAssignment.h>
@@ -123,18 +124,6 @@ void serializeAST(const IAST & ast, WriteBuffer & buf)
     ast.serialize(buf);
 }
 
-void serializeAST(const ASTPtr & ast, WriteBuffer & buf)
-{
-    if (ast)
-    {
-        writeBinary(true, buf);
-        writeBinary(UInt8(ast->getType()), buf);
-        ast->serialize(buf);
-    }
-    else
-        writeBinary(false, buf);
-}
-
 void serializeAST(const ConstASTPtr & ast, WriteBuffer & buf)
 {
     if (ast)
@@ -146,7 +135,6 @@ void serializeAST(const ConstASTPtr & ast, WriteBuffer & buf)
     else
         writeBinary(false, buf);
 }
-
 
 ASTPtr deserializeAST(ReadBuffer & buf)
 {

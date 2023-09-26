@@ -117,6 +117,7 @@ class MutationLog;
 class KafkaLog;
 class ProcessorsProfileLog;
 class ZooKeeperLog;
+class AutoStatsTaskLog;
 
 
 class ISystemLog
@@ -165,6 +166,9 @@ struct SystemLogs
 
     /// Used to log processors profiling
     std::shared_ptr<ProcessorsProfileLog> processors_profile_log;
+
+    /// Used to log auto statistics task log
+    std::shared_ptr<AutoStatsTaskLog> auto_stats_task_log;
 
     std::vector<ISystemLog *> logs;
 };

@@ -97,7 +97,7 @@ ISimpleTransform::Status ExplainAnalyzeTransform::prepare()
 void ExplainAnalyzeTransform::getRemoteProcessorProfiles(std::unordered_map<size_t, std::unordered_map<String, ProcessorProfiles>> & segment_profiles)
 {
     // Get operator profile of other segments
-    UInt64 time_out = context->getSettingsRef().cascades_optimizer_timeout;
+    UInt64 time_out = context->getSettingsRef().operator_profile_receive_timeout;
     auto time_start = std::chrono::system_clock::now();
 
     auto consumer = context->getProcessorProfileElementConsumer();
