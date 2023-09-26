@@ -125,6 +125,12 @@ MergeTreeDataMerger::MergeTreeDataMerger(
     space_reservation = data.reserveSpace(estimateNeededDiskSpace(params.source_data_parts), IStorage::StorageLocation::AUXILITY);
 }
 
+MergeTreeDataMerger::~MergeTreeDataMerger()
+{
+    if (prefetcher)
+        prefetcher.reset();
+}
+
 void MergeTreeDataMerger::prepareColumnNamesAndTypes(
     const StorageMetadataPtr & metadata_snapshot,
     const MergeTreeMetaBase::MergingParams & merging_params,
@@ -391,7 +397,6 @@ MergeTreeMutableDataPartPtr MergeTreeDataMerger::mergePartsToTemporaryPartImpl(
     const bool read_with_direct_io = false;
 
     // create merge prefetcher if necessary
-    std::unique_ptr<CnchMergePrefetcher> prefetcher = nullptr;
     if (context->getSettingsRef().cnch_enable_merge_prefetch)
     {
         if (std::any_of(merging_columns.begin(), merging_columns.end(), [](auto & c) { return c.type->isMap(); }))

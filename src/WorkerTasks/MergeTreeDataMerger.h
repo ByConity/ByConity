@@ -56,7 +56,7 @@ public:
         CheckCancelCallback check_cancel_,
         bool build_rowid_mappings = false);
 
-    ~MergeTreeDataMerger() = default;
+    ~MergeTreeDataMerger();
 
     MergeTreeMutableDataPartPtr mergePartsToTemporaryPart();
 
@@ -112,6 +112,9 @@ private:
     ReservationPtr space_reservation;
     /// Used for building rowid mappings
     size_t output_rowid = 0;
+
+    /// NOTE: must be constructed before (src/merged) streams, and deconstructed after streams.
+    std::unique_ptr<CnchMergePrefetcher> prefetcher;
 };
 
 } /// EOF
