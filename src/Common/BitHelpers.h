@@ -1,8 +1,9 @@
 #pragma once
 
+#include <algorithm>
+#include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <cassert>
 #include <type_traits>
 #include <common/defines.h>
 
@@ -125,7 +126,7 @@ constexpr auto to_underlying(E e) noexcept
 }
 
 #define bf_shf(x) (__builtin_ffsll(x) - 1)
-#define GENMASK(h, l) (((~0UL) - (1UL << (l)) + 1) & (~0UL >> (sizeof(long)*8 - 1 - (h))))
+#define GENMASK(h, l) (((~0UL) - (1UL << (l)) + 1) & (~0UL >> (sizeof(long) * 8 - 1 - (h))))
 #define FIELD_GET(_mask, _reg) static_cast<decltype(_mask)>(((_reg) & (_mask)) >> bf_shf(_mask))
 #define FIELD_PREP(_mask, _val) (static_cast<decltype(_mask)>(_val) << bf_shf(_mask) & (_mask))
 

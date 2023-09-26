@@ -607,6 +607,8 @@ dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${PARALLEL_HASHMAP_INCLUDE
 include ("${ClickHouse_SOURCE_DIR}/cmake/add_check.cmake")
 
 if (ENABLE_TESTS AND USE_GTEST)
+    dbms_target_link_libraries(PRIVATE resolv)
+
     macro (grep_gtest_sources BASE_DIR DST_VAR)
         # Cold match files that are not in tests/ directories
         file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
@@ -662,4 +664,42 @@ if (ENABLE_TESTS AND USE_GTEST)
     endif ()
 
     add_check(unit_tests_dbms)
+endif ()
+    
+
+if (ENABLE_BENCHMARK)
+    file(GLOB_RECURSE 
+            CLICKHOUSE_BENCHMARK_UTIL_SRCS
+            CONFIGURE_DEPENDS
+            ${ClickHouse_SOURCE_DIR}/src/benchmark/benchmark_util/*.h
+            ${ClickHouse_SOURCE_DIR}/src/benchmark/benchmark_util/*.cpp)
+
+    add_library(clickhouse_benchmark_util STATIC ${CLICKHOUSE_BENCHMARK_UTIL_SRCS})
+    add_custom_command(TARGET clickhouse_benchmark_util DEPENDS gtest gmock gtest_main gmock_main)
+    target_compile_options(clickhouse_benchmark_util PRIVATE "-Werror" "-Wall")
+    target_include_directories(clickhouse_benchmark_util PUBLIC ${ClickHouse_SOURCE_DIR}/src/benchmark/*.h)
+    target_link_libraries(clickhouse_benchmark_util PUBLIC dbms clickhouse_functions clickhouse_aggregate_functions benchmark)
+    set_target_properties(clickhouse_benchmark_util PROPERTIES CXX_EXTENSIONS OFF)
+
+
+    set(CLICKHOUSE_BENCHMARKS "")
+    function(add_clickhouse_benchmark BENCHMARK_NAME BENCHMARK_CPP)
+        add_executable(${BENCHMARK_NAME} ${BENCHMARK_CPP})
+
+        target_compile_options(${BENCHMARK_NAME} PRIVATE "-Werror" "-Wall")
+        target_include_directories(${BENCHMARK_NAME} PRIVATE ${ClickHouse_SOURCE_DIR}/src/benchmark/*.h)
+        target_link_libraries(${BENCHMARK_NAME} PRIVATE clickhouse_benchmark_util)
+        set_target_properties(${BENCHMARK_NAME} PROPERTIES
+            CXX_EXTENSIONS OFF
+            ENABLE_EXPORTS ON
+            )
+        
+        list(APPEND CLICKHOUSE_BENCHMARK ${BENCHMARK_NAME})
+    endfunction ()
+
+    file(GLOB_RECURSE CLICKHOUSE_BENCHMARK_SOURCES "${ClickHouse_SOURCE_DIR}/src/benchmark/*.cpp")
+    foreach(CLICKHOUSE_BENCHMARK_CPP ${CLICKHOUSE_BENCHMARK_SOURCES})
+        get_filename_component(CLICKHOUSE_BENCHMARK ${CLICKHOUSE_BENCHMARK_CPP} NAME_WE)
+        add_clickhouse_benchmark(${CLICKHOUSE_BENCHMARK} ${CLICKHOUSE_BENCHMARK_CPP})
+    endforeach()
 endif ()

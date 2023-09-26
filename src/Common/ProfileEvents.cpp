@@ -823,7 +823,6 @@
     M(TSOError, "Error logged by TSO Service as a response to CNCH") \
     \
 
-
 namespace ProfileEvents
 {
 

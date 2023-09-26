@@ -18,6 +18,8 @@
 #include <limits>
 #include <Poco/Util/AbstractConfiguration.h>
 
+#include <common/types.h>
+
 namespace DB
 {
 struct DiskCacheSettings
@@ -47,6 +49,12 @@ struct DiskCacheSettings
     size_t hits_to_cache {2};
     // Size of disk cache statistics bucket size
     size_t stats_bucket_size {10000};
+
+    // config for BigHash
+    UInt32 bucket_size {4 * 1024};
+    UInt64 cache_start_offset {};
+    UInt64 cache_size {};
+
 
     // load previous folder cached data if it's not empty for compatible when data dir config is changed
     std::string previous_disk_cache_dir{};
