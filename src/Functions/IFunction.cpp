@@ -30,6 +30,7 @@
 #include <Columns/ColumnTuple.h>
 #include <Columns/ColumnLowCardinality.h>
 #include <DataTypes/DataTypeNothing.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/Native.h>
 #include <DataTypes/DataTypeLowCardinality.h>
@@ -288,7 +289,13 @@ ColumnPtr IExecutableFunction::execute(const ColumnsWithTypeAndName & arguments,
             if (is_full_stat) // for full state lc column
             {
                 convertLowCardinalityColumnsToFull(columns_without_low_cardinality);
-                return executeWithoutLowCardinalityColumns(columns_without_low_cardinality, dictionary_type, input_rows_count, dry_run);
+                MutableColumnPtr res_index = DataTypeUInt8().createColumn();
+                MutableColumnPtr res_dictionary
+                    = DataTypeLowCardinality::createColumnUnique(*res_low_cardinality_type->getDictionaryType());
+                return ColumnLowCardinality::create(
+                    std::move(res_dictionary),
+                    std::move(res_index),
+                    executeWithoutLowCardinalityColumns(columns_without_low_cardinality, dictionary_type, input_rows_count, dry_run));
             }
 
             size_t new_input_rows_count = columns_without_low_cardinality.empty()
