@@ -130,6 +130,8 @@ static bool checkProfEnv()
 
 DB::PipeFDs signal_pipe;
 
+static constexpr size_t max_query_id_size = 127;
+
 #if USE_BREAKPAD
 static bool use_minidump = true;
 static std::shared_ptr<google_breakpad::MinidumpDescriptor> descriptor;
@@ -144,7 +146,32 @@ static bool dumpCallbackInfo(const google_breakpad::MinidumpDescriptor & descrip
 
 static bool dumpCallbackError(const google_breakpad::MinidumpDescriptor & descriptor, void *, bool succeeded)
 {
-    LOG_ERROR(&Poco::Logger::get("Minidump"), "SCM {}, core dump path: {}", VERSION_SCM, descriptor.path());
+    DENY_ALLOCATIONS_IN_SCOPE;
+    /// Leverage SignalListener's log to avoid deadlock of Poco::Logger
+    static constexpr size_t buf_size = PIPE_BUF;
+
+    char buf[buf_size];
+    DB::WriteBufferFromFileDescriptorDiscardOnFailure out(signal_pipe.fds_rw[1], buf_size, buf);
+
+    StringRef query_id = DB::CurrentThread::getQueryId();   /// This is signal safe.
+    query_id.size = std::min(query_id.size, max_query_id_size);
+
+    std::string message = query_id.size ?
+        fmt::format("(query_id: {}) generate core minidump path: {}", query_id.toString(), descriptor.path()) :
+        fmt::format("(no query) generate core minidump path: {}", descriptor.path());
+    
+    if (message.size() > buf_size - 16)
+        message.resize(buf_size - 16);
+
+    DB::writeBinary(-1, out);
+    DB::writeBinary(UInt32(getThreadId()), out);
+    DB::writeBinary(message, out);
+
+    out.next();
+
+    /// The time that is usually enough for separate thread to print info into log.
+    sleepForSeconds(5);
+
     return succeeded;
 }
 
@@ -171,8 +198,6 @@ static void call_default_signal_handler(int sig)
 #endif
     raise(sig);
 }
-
-static constexpr size_t max_query_id_size = 127;
 
 static const size_t signal_pipe_buf_size =
     sizeof(int)
