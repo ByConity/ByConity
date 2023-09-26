@@ -2105,6 +2105,7 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
         "parts_preload_level",
         "cnch_parallel_prefetching",
         "enable_prefetch_checksums",
+        "cnch_parallel_preloading",
 
         "enable_addition_bg_task",
         "max_addition_bg_task_num",
