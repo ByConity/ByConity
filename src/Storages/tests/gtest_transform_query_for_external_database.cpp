@@ -86,7 +86,7 @@ private:
             database->attachTable(
                 table_name,
                 StorageMemory::create(
-                    StorageID(db_name, table_name), ColumnsDescription{getColumns()}, ConstraintsDescription{}, String{}));
+                    StorageID(db_name, table_name), ColumnsDescription{getColumns()}, ConstraintsDescription{},  ForeignKeysDescription{}, UniqueNotEnforcedDescription{}, String{}));
         }
         DatabaseCatalog::instance().attachDatabase(database->getDatabaseName(), database);
         context->setCurrentDatabase("test");

@@ -7,7 +7,7 @@ Gather Exchange Est. ? rows
          └─ Aggregating Est. ? rows
             │     Group by: {__uykyub__\'mmm\'_1}
             └─ Left Join Est. ? rows
-               │     Condition: expr#\'PPPAAA\'_1 == expr#cast(k4k4k4, \'Nullable(String)\'), i_7id_3 == expr#cast(k1k1k1, \'Nullable(String)\')
+               │     Condition: expr#\'PPPAAA\'_1 == k4k4k4, i_7id_3 == k1k1k1
                ├─ Repartition Exchange Est. ? rows
                │  │     Partition by: {expr#\'PPPAAA\'_1, i_7id_3}
                │  └─ Projection Est. ? rows
@@ -51,32 +51,30 @@ Gather Exchange Est. ? rows
                │                                      └─ TableScan zx_test.table6 Est. ? rows
                │                                               Outputs: vvv1_3:=vvv1
                └─ Repartition Exchange Est. ? rows
-                  │     Partition by: {expr#cast(k1k1k1, \'Nullable(String)\'), expr#cast(k4k4k4, \'Nullable(String)\')}
-                  └─ Projection Est. ? rows
-                     │     Expressions: expr#cast(k1k1k1, \'Nullable(String)\'):=cast(k1k1k1, \'Nullable(String)\'), expr#cast(k4k4k4, \'Nullable(String)\'):=cast(k4k4k4, \'Nullable(String)\')
-                     └─ MergingAggregated Est. ? rows
-                        └─ Repartition Exchange Est. ? rows
-                           │     Partition by: {k1k1k1, k2k2k2, k4k4k4}
-                           └─ Aggregating Est. ? rows
-                              │     Group by: {k1k1k1, k2k2k2, k4k4k4}
-                              └─ Inner Join Est. ? rows
-                                 │     Condition: my_date_3 == expr#max(my_date)_1
-                                 ├─ Repartition Exchange Est. ? rows
-                                 │  │     Partition by: {my_date_3}
-                                 │  └─ Filter Est. ? rows
-                                 │     │     Condition: \'XXX\' = cast(k4k4k4, \'Nullable(String)\')
-                                 │     └─ TableScan zx_test.table2 Est. ? rows
-                                 │              Where: \'XXX\' = cast(k4k4k4, \'Nullable(String)\')
-                                 │              Outputs: [k1k1k1, k2k2k2, k4k4k4], my_date_3:=my_date
-                                 └─ MergingAggregated Est. ? rows
-                                    └─ Repartition Exchange Est. ? rows
-                                       │     Partition by: {expr#max(my_date)_1}
-                                       └─ Aggregating Est. ? rows
-                                          │     Group by: {expr#max(my_date)_1}
-                                          └─ MergingAggregated Est. ? rows
-                                             └─ Gather Exchange Est. ? rows
-                                                └─ Aggregating Est. ? rows
-                                                   │     Group by: {}
-                                                   │     Aggregates: expr#max(my_date)_1:=AggNull(max)(my_date_4)
-                                                   └─ TableScan zx_test.table2 Est. ? rows
-                                                            Outputs: my_date_4:=my_date
+                  │     Partition by: {k1k1k1, k4k4k4}
+                  └─ MergingAggregated Est. ? rows
+                     └─ Repartition Exchange Est. ? rows
+                        │     Partition by: {k1k1k1, k2k2k2, k4k4k4}
+                        └─ Aggregating Est. ? rows
+                           │     Group by: {k1k1k1, k2k2k2, k4k4k4}
+                           └─ Inner Join Est. ? rows
+                              │     Condition: my_date_3 == expr#max(my_date)_1
+                              ├─ Repartition Exchange Est. ? rows
+                              │  │     Partition by: {my_date_3}
+                              │  └─ Filter Est. ? rows
+                              │     │     Condition: k4k4k4 = \'XXX\'
+                              │     └─ TableScan zx_test.table2 Est. ? rows
+                              │              Where: k4k4k4 = \'XXX\'
+                              │              Outputs: [k1k1k1, k2k2k2, k4k4k4], my_date_3:=my_date
+                              └─ MergingAggregated Est. ? rows
+                                 └─ Repartition Exchange Est. ? rows
+                                    │     Partition by: {expr#max(my_date)_1}
+                                    └─ Aggregating Est. ? rows
+                                       │     Group by: {expr#max(my_date)_1}
+                                       └─ MergingAggregated Est. ? rows
+                                          └─ Gather Exchange Est. ? rows
+                                             └─ Aggregating Est. ? rows
+                                                │     Group by: {}
+                                                │     Aggregates: expr#max(my_date)_1:=AggNull(max)(my_date_4)
+                                                └─ TableScan zx_test.table2 Est. ? rows
+                                                         Outputs: my_date_4:=my_date

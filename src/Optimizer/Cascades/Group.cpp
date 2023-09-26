@@ -19,8 +19,9 @@
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/Cascades/GroupExpression.h>
 #include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
-#include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/AnyStep.h>
+#include <QueryPlan/CTERefStep.h>
+#include <Optimizer/Property/ConstantsDeriver.h>
 
 namespace DB
 {
@@ -127,6 +128,15 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
         {
             equivalences = std::make_shared<SymbolEquivalences>();
         }
+    }
+    if (!constants.has_value())
+    {
+        std::vector<Constants> children;
+        for (const auto & child : expression->getChildrenGroups())
+        {
+            children.emplace_back(context.getMemo().getGroupById(child)->getConstants().value_or(Constants{}));
+        }
+        constants = ConstantsDeriver::deriveConstants(expression->getStep(), children, context.getCTEInfo(), context.getContext());
     }
 }
 

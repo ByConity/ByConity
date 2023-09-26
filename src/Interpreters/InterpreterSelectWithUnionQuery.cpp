@@ -386,7 +386,7 @@ QueryPipeline InterpreterSelectWithUnionQuery::executeTEALimit(QueryPipelinePtr 
 
     // Create implicit storage to buffer pre tealimit results
     NamesAndTypesList columns = result_header.getNamesAndTypesList();
-    auto temporary_table = TemporaryTableHolder(context->getQueryContext(), ColumnsDescription{columns}, {});
+    auto temporary_table = TemporaryTableHolder(context->getQueryContext(), ColumnsDescription{columns}, {}, {}, {});
 
     String implicit_name  = "_TEALIMITDATA";
 

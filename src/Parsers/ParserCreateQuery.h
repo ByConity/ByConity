@@ -335,6 +335,32 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+class ParserForeignKeyDeclaration : public IParserDialectBase
+{
+protected:
+    const char * getName() const override
+    {
+        return "foreign key declaration";
+    }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+class ParserUniqueNotEnforcedDeclaration : public IParserDialectBase
+{
+protected:
+    const char * getName() const override
+    {
+        return "unique not enforced declaration";
+    }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
 class ParserProjectionDeclaration : public IParserDialectBase
 {
 protected:
@@ -368,6 +394,32 @@ class ParserConstraintDeclarationList : public IParserDialectBase
 protected:
     const char * getName() const override { return "constraint declaration list"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+class ParserForeignKeyDeclarationList : public IParserDialectBase
+{
+protected:
+    const char * getName() const override
+    {
+        return "foreign key declaration list";
+    }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+class ParserUniqueNotEnforcedDeclarationList : public IParserDialectBase
+{
+protected:
+    const char * getName() const override
+    {
+        return "unique not enforced declaration list";
+    }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+
 public:
     using IParserDialectBase::IParserDialectBase;
 };

@@ -1,0 +1,28 @@
+1	1	CHILD ONE
+2	1	CHILD ONE
+3	2	CHILD TWO
+4	2	CHILD TWO
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: [id]
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {id}
+         └─ Aggregating Est. ? rows
+            │     Group by: {id}
+            └─ Inner Join Est. ? rows
+               │     Condition: parent_id == id_1
+               ├─ Repartition Exchange Est. ? rows
+               │  │     Partition by: {parent_id}
+               │  └─ Filter Est. ? rows
+               │     │     Condition: id = 1
+               │     └─ TableScan test.c Est. ? rows
+               │              Where: id = 1
+               │              Outputs: [id, parent_id]
+               └─ Repartition Exchange Est. ? rows
+                  │     Partition by: {id_1}
+                  └─ TableScan test.pp Est. ? rows
+                           Outputs: id_1:=id
+1
+CREATE TABLE test.c\n(\n    `id` UInt8,\n    `parent_id` UInt8,\n    `description` String,\n    CONSTRAINT unq1 UNIQUE (parent_id),\n    CONSTRAINT my_name_1 UNIQUE (id, description)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE test.c\n(\n    `id` UInt8,\n    `parent_id` UInt8,\n    `description` String\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192

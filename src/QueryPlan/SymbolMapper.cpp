@@ -332,6 +332,7 @@ std::shared_ptr<AggregatingStep> SymbolMapper::map(const AggregatingStep & agg)
     return std::make_shared<AggregatingStep>(
         map(agg.getInputStreams()[0]),
         map(agg.getKeys()),
+        map(agg.getKeysNotHashed()),
         map(agg.getAggregates()),
         map(agg.getGroupingSetsParams()),
         agg.isFinal(),

@@ -49,6 +49,8 @@ class IDatabase;
 class Exception;
 class ColumnsDescription;
 struct ConstraintsDescription;
+struct ForeignKeysDescription;
+struct UniqueNotEnforcedDescription;
 
 using DatabasePtr = std::shared_ptr<IDatabase>;
 using DatabaseAndTable = std::pair<DatabasePtr, StoragePtr>;
@@ -117,6 +119,8 @@ struct TemporaryTableHolder : boost::noncopyable, WithContext
         ContextPtr context,
         const ColumnsDescription & columns,
         const ConstraintsDescription & constraints,
+        const ForeignKeysDescription & foreign_keys_,
+        const UniqueNotEnforcedDescription & unique_not_enforced_,
         const ASTPtr & query = {},
         bool create_for_global_subquery = false);
 

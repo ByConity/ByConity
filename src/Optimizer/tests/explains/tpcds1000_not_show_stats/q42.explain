@@ -9,33 +9,35 @@ Projection
          └─ Sorting
             │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, d_year asc, i_category_id asc, i_category asc}
             │     Limit: 100
-            └─ MergingAggregated
-               └─ Repartition Exchange
-                  │     Partition by: {d_year, i_category, i_category_id}
-                  └─ Aggregating
-                     │     Group by: {d_year, i_category, i_category_id}
-                     │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                     └─ Inner Join
-                        │     Condition: ss_item_sk == i_item_sk
-                        │     Runtime Filters Builder: {i_item_sk}
-                        ├─ Inner Join
-                        │  │     Condition: ss_sold_date_sk == d_date_sk
-                        │  │     Runtime Filters Builder: {d_date_sk}
-                        │  ├─ Filter
-                        │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                        │  │  └─ TableScan tpcds1000.store_sales
-                        │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                        │  │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
-                        │  └─ Broadcast Exchange
-                        │     └─ Filter
-                        │        │     Condition: (d_year = 2000) AND (d_moy = 11)
-                        │        └─ TableScan tpcds1000.date_dim
-                        │                 Where: (d_year = 2000) AND (d_moy = 11)
-                        │                 Outputs: [d_date_sk, d_moy, d_year]
-                        └─ Broadcast Exchange
-                           └─ Filter
-                              │     Condition: i_manager_id = 1
-                              └─ TableScan tpcds1000.item
-                                       Where: i_manager_id = 1
-                                       Outputs: [i_category, i_category_id, i_item_sk, i_manager_id]
+            └─ Projection
+               │     Expressions: [expr#sum(ss_ext_sales_price), i_category, i_category_id], d_year:=2000
+               └─ MergingAggregated
+                  └─ Repartition Exchange
+                     │     Partition by: {i_category, i_category_id}
+                     └─ Aggregating
+                        │     Group by: {i_category, i_category_id}
+                        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
+                        └─ Inner Join
+                           │     Condition: ss_item_sk == i_item_sk
+                           │     Runtime Filters Builder: {i_item_sk}
+                           ├─ Inner Join
+                           │  │     Condition: ss_sold_date_sk == d_date_sk
+                           │  │     Runtime Filters Builder: {d_date_sk}
+                           │  ├─ Filter
+                           │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
+                           │  │  └─ TableScan tpcds1000.store_sales
+                           │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
+                           │  │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
+                           │  └─ Broadcast Exchange
+                           │     └─ Filter
+                           │        │     Condition: (d_year = 2000) AND (d_moy = 11)
+                           │        └─ TableScan tpcds1000.date_dim
+                           │                 Where: (d_year = 2000) AND (d_moy = 11)
+                           │                 Outputs: [d_date_sk, d_moy, d_year]
+                           └─ Broadcast Exchange
+                              └─ Filter
+                                 │     Condition: i_manager_id = 1
+                                 └─ TableScan tpcds1000.item
+                                          Where: i_manager_id = 1
+                                          Outputs: [i_category, i_category_id, i_item_sk, i_manager_id]
 note: Runtime Filter is applied for 2 times.

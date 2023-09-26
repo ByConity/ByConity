@@ -604,7 +604,7 @@ void ExprAnalyzerVisitor::processSubqueryArgsWithCoercion(ASTPtr & lhs_ast, ASTP
     auto lhs_type = process(lhs_ast).type;
     auto rhs_type = handleSubquery(rhs_ast);
 
-    if (!lhs_type->equals(*rhs_type))
+    if (!JoinCommon::isJoinCompatibleTypes(lhs_type, rhs_type))
     {
         DataTypePtr super_type = nullptr;
         if (enable_implicit_type_conversion)

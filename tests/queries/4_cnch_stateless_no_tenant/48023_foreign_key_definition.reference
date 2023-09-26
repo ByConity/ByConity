@@ -1,0 +1,19 @@
+CREATE TABLE test.child\n(\n    `id` Nullable(UInt8),\n    `parent_id` Nullable(UInt8),\n    `description` Nullable(String),\n    CONSTRAINT fk1 FOREIGN KEY (parent_id) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+Projection Est. ? rows
+│     Expressions: [description, id, parent_id]
+└─ Sorting Est. ? rows
+   │     Order by: {id asc}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {id asc}
+         └─ Filter Est. ? rows
+            │     Condition: isNotNull(parent_id)
+            └─ TableScan test.child Est. ? rows
+                     Where: isNotNull(parent_id)
+                     Outputs: [description, id, parent_id]
+1	1	CHILD ONE
+2	1	CHILD ONE
+3	2	CHILD TWO
+4	2	CHILD TWO
+CREATE TABLE test.child\n(\n    `id` Nullable(UInt8),\n    `parent_id` Nullable(UInt8),\n    `description` Nullable(String),\n    CONSTRAINT fk1 FOREIGN KEY (parent_id) REFERENCES parent(id),\n    CONSTRAINT my_name_1 FOREIGN KEY (id) REFERENCES parent(id)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192
+CREATE TABLE test.child\n(\n    `id` Nullable(UInt8),\n    `parent_id` Nullable(UInt8),\n    `description` Nullable(String)\n)\nENGINE = CnchMergeTree\nORDER BY id\nSETTINGS storage_policy = \'cnch_default_hdfs\', index_granularity = 8192

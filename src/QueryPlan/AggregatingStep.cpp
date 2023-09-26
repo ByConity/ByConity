@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-#include <memory>
+#include <algorithm>
 #include <QueryPlan/AggregatingStep.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
@@ -270,6 +270,7 @@ GroupingSetsParamsList AggregatingStep::prepareGroupingSetsParams() const
 AggregatingStep::AggregatingStep(
     const DataStream & input_stream_,
     Names keys_,
+    const NameSet & keys_not_hashed_,
     Aggregator::Params params_,
     GroupingSetsParamsList grouping_sets_params_,
     bool final_,
@@ -288,6 +289,7 @@ AggregatingStep::AggregatingStep(
         getTraits(should_produce_results_in_order_of_bucket_number_),
         false)
     , keys(std::move(keys_))
+    , keys_not_hashed(keys_not_hashed_)
     , params(std::move(params_))
     , grouping_sets_params(std::move(grouping_sets_params_))
     , final(final_)
@@ -681,6 +683,7 @@ std::shared_ptr<IQueryPlanStep> AggregatingStep::copy(ContextPtr) const
     return std::make_shared<AggregatingStep>(
         input_streams[0],
         keys,
+        keys_not_hashed,
         params.aggregates,
         grouping_sets_params,
         final,
@@ -729,6 +732,12 @@ void AggregatingStep::toProto(Protos::AggregatingStep & proto, bool) const
     ITransformingStep::serializeToProtoBase(*proto.mutable_query_plan_base());
     for (const auto & element : keys)
         proto.add_keys(element);
+
+    Names ordered_keys_not_hashed(keys_not_hashed.begin(), keys_not_hashed.end());
+    std::sort(ordered_keys_not_hashed.begin(), ordered_keys_not_hashed.end());
+    for (const auto & element : ordered_keys_not_hashed)
+        proto.add_keys_not_hashed(element);
+
     params.toProto(*proto.mutable_params());
     for (const auto & element : grouping_sets_params)
         element.toProto(*proto.add_grouping_sets_params());
@@ -753,6 +762,9 @@ std::shared_ptr<AggregatingStep> AggregatingStep::fromProto(const Protos::Aggreg
     Names keys;
     for (const auto & element : proto.keys())
         keys.emplace_back(element);
+    NameSet keys_not_hashed;
+    for (const auto & element : proto.keys_not_hashed())
+        keys_not_hashed.emplace(element);
     auto params = Aggregator::Params::fromProto(proto.params(), context);
     GroupingSetsParamsList grouping_sets_params;
     for (const auto & proto_element : proto.grouping_sets_params())
@@ -788,6 +800,7 @@ std::shared_ptr<AggregatingStep> AggregatingStep::fromProto(const Protos::Aggreg
     auto step = std::make_shared<AggregatingStep>(
         base_input_stream,
         keys,
+        keys_not_hashed,
         params,
         grouping_sets_params,
         final,
@@ -803,4 +816,5 @@ std::shared_ptr<AggregatingStep> AggregatingStep::fromProto(const Protos::Aggreg
     step->setStepDescription(step_description);
     return step;
 }
+
 }

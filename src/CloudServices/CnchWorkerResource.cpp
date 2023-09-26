@@ -23,7 +23,11 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/formatTenantDatabaseName.h>
+#include <Parsers/ASTForeignKeyDeclaration.h>
+#include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
 #include <Poco/Logger.h>
+#include <Storages/ForeignKeysDescription.h>
+#include <Storages/UniqueNotEnforcedDescription.h>
 #include <Storages/IStorage.h>
 #include <Databases/DatabaseMemory.h>
 #include <Storages/StorageFactory.h>
@@ -70,6 +74,8 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
     ColumnsDescription columns;
     IndicesDescription indices;
     ConstraintsDescription constraints;
+    ForeignKeysDescription foreign_keys;
+    UniqueNotEnforcedDescription unique_not_enforced;
 
     if (ast_create_query.columns_list)
     {
@@ -87,6 +93,14 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
         if (ast_create_query.columns_list->constraints)
             for (const auto & constraint : ast_create_query.columns_list->constraints->children)
                 constraints.constraints.push_back(std::dynamic_pointer_cast<ASTConstraintDeclaration>(constraint->clone()));
+
+        if (ast_create_query.columns_list->foreign_keys)
+            for (const auto & foreign_key : ast_create_query.columns_list->foreign_keys->children)
+                foreign_keys.foreign_keys.push_back(std::dynamic_pointer_cast<ASTForeignKeyDeclaration>(foreign_key->clone()));
+
+        if (ast_create_query.columns_list->unique)
+            for (const auto & unique : ast_create_query.columns_list->unique->children)
+                unique_not_enforced.unique.push_back(std::dynamic_pointer_cast<ASTUniqueNotEnforcedDeclaration>(unique->clone()));
     }
     else
         throw Exception("Incorrect CREATE query: required list of column descriptions or AS section or SELECT.", ErrorCodes::INCORRECT_QUERY);
@@ -95,6 +109,8 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
     ASTPtr new_columns = InterpreterCreateQuery::formatColumns(columns);
     ASTPtr new_indices = InterpreterCreateQuery::formatIndices(indices);
     ASTPtr new_constraints = InterpreterCreateQuery::formatConstraints(constraints);
+    ASTPtr new_foreign_keys = InterpreterCreateQuery::formatForeignKeys(foreign_keys);
+    ASTPtr new_unique_not_enforced = InterpreterCreateQuery::formatUnique(unique_not_enforced);
 
     if (ast_create_query.columns_list->columns)
         ast_create_query.columns_list->replace(ast_create_query.columns_list->columns, new_columns);
@@ -105,6 +121,12 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
     if (ast_create_query.columns_list->constraints)
         ast_create_query.columns_list->replace(ast_create_query.columns_list->constraints, new_constraints);
 
+    if (ast_create_query.columns_list->foreign_keys)
+        ast_create_query.columns_list->replace(ast_create_query.columns_list->foreign_keys, new_foreign_keys);
+
+    if (ast_create_query.columns_list->unique)
+        ast_create_query.columns_list->replace(ast_create_query.columns_list->unique, new_unique_not_enforced);
+
     /// Check for duplicates
     std::set<String> all_columns;
     for (const auto & column : columns)
@@ -114,7 +136,7 @@ void CnchWorkerResource::executeCreateQuery(ContextMutablePtr context, const Str
     }
 
     /// Table constructing
-    StoragePtr res = StorageFactory::instance().get(ast_create_query, "", context, context->getGlobalContext(), columns, constraints, false);
+    StoragePtr res = StorageFactory::instance().get(ast_create_query, "", context, context->getGlobalContext(), columns, constraints, foreign_keys, unique_not_enforced, false);
     res->startup();
 
     {

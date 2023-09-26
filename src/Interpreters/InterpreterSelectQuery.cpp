@@ -2315,6 +2315,7 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
     auto aggregating_step = std::make_unique<AggregatingStep>(
         query_plan.getCurrentDataStream(),
         std::move(aggregator_params),
+        NameSet{},
         std::move(grouping_sets_params),
         final,
         settings.max_block_size,

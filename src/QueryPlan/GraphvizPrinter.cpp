@@ -1377,6 +1377,14 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool incl
         details << key << "\\n";
     }
     details << "|";
+    
+    details << "KeysNotHashed:\\n";
+    for (const auto & key : step.getKeysNotHashed())
+    {
+        details << key << "\\n";
+    }
+    details << "|";
+    
     details << "Functions:\\n";
     const AggregateDescriptions & descs = step.getAggregates();
     for (const auto & desc : descs)

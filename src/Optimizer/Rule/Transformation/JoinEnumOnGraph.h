@@ -16,8 +16,8 @@
 #pragma once
 #include <Functions/FunctionsHashing.h>
 #include <Optimizer/PredicateUtils.h>
+#include <Optimizer/Property/Equivalences.h>
 #include <Optimizer/Rule/Rule.h>
-#include <Optimizer/Equivalences.h>
 #include <QueryPlan/JoinStep.h>
 #include <boost/dynamic_bitset.hpp>
 

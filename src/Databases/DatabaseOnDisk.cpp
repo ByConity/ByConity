@@ -21,12 +21,15 @@
 
 #include <Databases/DatabaseOnDisk.h>
 
+#include <filesystem>
+#include <Databases/DatabaseAtomic.h>
+#include <Databases/DatabaseOrdinary.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/WriteHelpers.h>
-#include <Interpreters/Context.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ParserCreateQuery.h>
@@ -35,13 +38,11 @@
 #include <Storages/IStorage.h>
 #include <Storages/StorageFactory.h>
 #include <TableFunctions/TableFunctionFactory.h>
-#include <Common/escapeForFileName.h>
-#include <common/logger_useful.h>
-#include <Databases/DatabaseOrdinary.h>
-#include <Databases/DatabaseAtomic.h>
 #include <Common/assert_cast.h>
-#include <filesystem>
+#include <Common/escapeForFileName.h>
 #include <Common/filesystemHelpers.h>
+#include <common/logger_useful.h>
+#include <Storages/UniqueNotEnforcedDescription.h>
 
 namespace fs = std::filesystem;
 
@@ -90,6 +91,8 @@ std::pair<String, StoragePtr> createTableFromAST(
 
     ColumnsDescription columns;
     ConstraintsDescription constraints;
+    ForeignKeysDescription foreign_keys;
+    UniqueNotEnforcedDescription unique;
 
     if (!ast_create_query.is_dictionary)
     {
@@ -110,6 +113,8 @@ std::pair<String, StoragePtr> createTableFromAST(
         {
             columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, true);
             constraints = InterpreterCreateQuery::getConstraintsDescription(ast_create_query.columns_list->constraints);
+            foreign_keys = InterpreterCreateQuery::getForeignKeysDescription(ast_create_query.columns_list->foreign_keys);
+            unique = InterpreterCreateQuery::getUniqueNotEnforcedDescription(ast_create_query.columns_list->unique);
         }
     }
 
@@ -123,8 +128,9 @@ std::pair<String, StoragePtr> createTableFromAST(
             context->getGlobalContext(),
             columns,
             constraints,
-            has_force_restore_data_flag)
-    };
+            foreign_keys,
+            unique,
+            has_force_restore_data_flag)};
 }
 
 
@@ -185,11 +191,15 @@ void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemo
     ASTPtr new_columns = InterpreterCreateQuery::formatColumns(metadata.columns);
     ASTPtr new_indices = InterpreterCreateQuery::formatIndices(metadata.secondary_indices);
     ASTPtr new_constraints = InterpreterCreateQuery::formatConstraints(metadata.constraints);
+    ASTPtr new_foreign_keys = InterpreterCreateQuery::formatForeignKeys(metadata.foreign_keys);
+    ASTPtr new_unique = InterpreterCreateQuery::formatUnique(metadata.unique_not_enforced);
     ASTPtr new_projections = InterpreterCreateQuery::formatProjections(metadata.projections);
 
     ast_create_query.columns_list->replace(ast_create_query.columns_list->columns, new_columns);
     ast_create_query.columns_list->setOrReplace(ast_create_query.columns_list->indices, new_indices);
     ast_create_query.columns_list->setOrReplace(ast_create_query.columns_list->constraints, new_constraints);
+    ast_create_query.columns_list->setOrReplace(ast_create_query.columns_list->foreign_keys, new_foreign_keys);
+    ast_create_query.columns_list->setOrReplace(ast_create_query.columns_list->unique, new_unique);
     ast_create_query.columns_list->setOrReplace(ast_create_query.columns_list->projections, new_projections);
 
     if (metadata.select.select_query)

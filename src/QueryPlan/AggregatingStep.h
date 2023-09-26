@@ -21,6 +21,7 @@
 #include <Protos/plan_node_utils.pb.h>
 #include <QueryPlan/ITransformingStep.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Core/Names.h>
 
 namespace DB
 {
@@ -82,6 +83,7 @@ public:
     AggregatingStep(
         const DataStream & input_stream_,
         Aggregator::Params params_,
+        const NameSet & keys_not_hashed_,
         GroupingSetsParamsList grouping_sets_params_,
         bool final_,
         size_t max_block_size_,
@@ -94,6 +96,7 @@ public:
         : AggregatingStep(
             input_stream_,
             Names(),
+            keys_not_hashed_,
             std::move(params_),
             std::move(grouping_sets_params_),
             final_,
@@ -112,6 +115,7 @@ public:
     AggregatingStep(
         const DataStream & input_stream_,
         Names keys_,
+        const NameSet & keys_not_hashed_,
         AggregateDescriptions aggregates_,
         GroupingSetsParamsList grouping_sets_params_,
         bool final_,
@@ -122,6 +126,7 @@ public:
         : AggregatingStep(
             input_stream_,
             keys_,
+            keys_not_hashed_,
             createParams(input_stream_.header, aggregates_, keys_, overflow_row_),
             std::move(grouping_sets_params_),
             final_,
@@ -141,6 +146,7 @@ public:
     AggregatingStep(
         const DataStream & input_stream_,
         Names keys_,
+        const NameSet & keys_not_hashed_,
         Aggregator::Params params_,
         GroupingSetsParamsList grouping_sets_params_,
         bool final_,
@@ -168,6 +174,7 @@ public:
     const Aggregator::Params & getParams() const { return params; }
     const AggregateDescriptions & getAggregates() const { return params.aggregates; }
     const Names & getKeys() const { return keys; }
+    const NameSet & getKeysNotHashed() const { return keys_not_hashed; }
     const GroupingSetsParamsList & getGroupingSetsParams() const { return grouping_sets_params; }
     const SortDescription & getGroupBySortDescription() const { return group_by_sort_description; }
     void setGroupBySortDescription(const SortDescription & group_by_sort_description_)
@@ -196,6 +203,9 @@ public:
 private:
     Poco::Logger * log = &Poco::Logger::get("TableScanStep");
     Names keys;
+
+    NameSet keys_not_hashed; // keys which can be output directly, same as function `any`, but no type loss.
+
     Aggregator::Params params;
     GroupingSetsParamsList grouping_sets_params;
     bool final;

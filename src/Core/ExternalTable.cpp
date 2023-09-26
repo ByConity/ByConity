@@ -5,6 +5,8 @@
 #include <Storages/IStorage.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/ConstraintsDescription.h>
+#include <Storages/ForeignKeysDescription.h>
+#include <Storages/UniqueNotEnforcedDescription.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <IO/ReadBufferFromIStream.h>
@@ -156,7 +158,7 @@ void ExternalTablesHandler::handlePart(const Poco::Net::MessageHeader & header, 
 
     /// Create table
     NamesAndTypesList columns = sample_block.getNamesAndTypesList();
-    auto temporary_table = TemporaryTableHolder(getContext(), ColumnsDescription{columns}, {});
+    auto temporary_table = TemporaryTableHolder(getContext(), ColumnsDescription{columns}, {}, {}, {});
     auto storage = temporary_table.getTable();
     getContext()->addExternalTable(data->table_name, std::move(temporary_table));
     BlockOutputStreamPtr output = storage->write(ASTPtr(), storage->getInMemoryMetadataPtr(), getContext());

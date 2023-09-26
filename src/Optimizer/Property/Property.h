@@ -21,8 +21,8 @@
 #include <Core/SortDescription.h>
 #include <Core/Types.h>
 #include <Functions/FunctionsHashing.h>
-#include <Optimizer/Equivalences.h>
 #include <Optimizer/FunctionInvoker.h>
+#include <Optimizer/Property/Equivalences.h>
 #include <Parsers/IAST_fwd.h>
 #include <Protos/EnumMacros.h>
 #include <Protos/plan_node_utils.pb.h>
@@ -258,21 +258,6 @@ private:
     Names columns;
 };
 
-class Constants
-{
-public:
-    Constants() = default;
-    explicit Constants(std::map<String, FieldWithType> values_) : values(std::move(values_)) { }
-    const std::map<String, FieldWithType> & getValues() const { return values; }
-    bool contains(const String & name) const { return values.contains(name); }
-
-    Constants translate(const std::unordered_map<String, String> & identities) const;
-    Constants normalize(const SymbolEquivalences & symbol_equivalences) const;
-
-private:
-    std::map<String, FieldWithType> values {};
-};
-
 class CTEDescription
 {
 public:
@@ -375,12 +360,10 @@ public:
     explicit Property(
         Partitioning node_partitioning_ = Partitioning(Partitioning::Handle::ARBITRARY),
         Partitioning stream_partitioning_ = Partitioning(Partitioning::Handle::ARBITRARY),
-        Sorting sorting_ = {},
-        Constants constants_ = {})
+        Sorting sorting_ = {})
         : node_partitioning(std::move(node_partitioning_))
         , stream_partitioning(std::move(stream_partitioning_))
         , sorting(std::move(sorting_))
-        , constants(std::move(constants_))
     {
     }
 
@@ -389,7 +372,6 @@ public:
     Partitioning & getNodePartitioningRef() { return node_partitioning; }
     const Partitioning & getStreamPartitioning() const { return stream_partitioning; }
     const Sorting & getSorting() const { return sorting; }
-    const Constants & getConstants() const { return constants; }
     const CTEDescriptions & getCTEDescriptions() const { return cte_descriptions; }
     CTEDescriptions & getCTEDescriptions() { return cte_descriptions; }
     bool isEnforceNotMatch() const { return enforce_not_match; }
@@ -400,13 +382,12 @@ public:
     void setStreamPartitioning(Partitioning stream_partitioning_) { stream_partitioning = std::move(stream_partitioning_); }
     void setCTEDescriptions(CTEDescriptions descriptions) { cte_descriptions = std::move(descriptions); }
     void setSorting(Sorting sorting_) { sorting = std::move(sorting_); }
-    void setConstants(Constants constants_) { constants = std::move(constants_); }
     void setEnforceNotMatch(bool enforce_not_match_) { enforce_not_match = enforce_not_match_; }
     void setTableLayout(TableLayout table_layout_) { table_layout = std::move(table_layout_); }
 
     Property clearSorting() const
     {
-        auto result = Property{node_partitioning, stream_partitioning, {}, constants};
+        auto result = Property{node_partitioning, stream_partitioning, {}};
         result.setCTEDescriptions(cte_descriptions);
         return result;
     }
@@ -436,8 +417,6 @@ private:
     Sorting sorting;
     // Description of the group property of the columns
     // Grouping grouping;
-    // Description of the constant columns
-    Constants constants;
     // Description of the requirements of the common table expressions.
     CTEDescriptions cte_descriptions;
     // used by offloading

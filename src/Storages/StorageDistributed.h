@@ -29,11 +29,17 @@
 #include <Common/SimpleIncrement.h>
 #include <Client/ConnectionPool.h>
 #include <Client/ConnectionPoolWithFailover.h>
-#include <Parsers/ASTFunction.h>
-#include <common/logger_useful.h>
-#include <Common/ActionBlocker.h>
-#include <Parsers/IAST_fwd.h>
 #include <Interpreters/Cluster.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/IAST_fwd.h>
+#include <QueryPlan/ReadStorageRowCountStep.h>
+#include <Storages/Distributed/DirectoryMonitor.h>
+#include <Storages/Distributed/DistributedSettings.h>
+#include <Storages/IStorage.h>
+#include <Common/ActionBlocker.h>
+#include <Common/SimpleIncrement.h>
+#include <common/logger_useful.h>
+#include <Storages/UniqueNotEnforcedDescription.h>
 
 #include <pcg_random.hpp>
 
@@ -150,6 +156,8 @@ private:
         const StorageID & id_,
         const ColumnsDescription & columns_,
         const ConstraintsDescription & constraints_,
+        const ForeignKeysDescription & foreign_keys_,
+        const UniqueNotEnforcedDescription & unique_,
         const String & comment,
         const String & remote_database_,
         const String & remote_table_,
@@ -167,6 +175,8 @@ private:
         const StorageID & id_,
         const ColumnsDescription & columns_,
         const ConstraintsDescription & constraints_,
+        const ForeignKeysDescription & foreign_keys_,
+        const UniqueNotEnforcedDescription & unique_,
         ASTPtr remote_table_function_ptr_,
         const String & cluster_name_,
         ContextPtr context_,

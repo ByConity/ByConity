@@ -103,6 +103,7 @@ Projection
                                                 │              │     Partition by: {c_current_addr_sk, c_customer_sk}
                                                 │              └─ Aggregating
                                                 │                 │     Group by: {c_current_addr_sk, c_customer_sk}
+                                                │                 │     Group by keys not hashed: {c_current_addr_sk}
                                                 │                 └─ Inner Join
                                                 │                    │     Condition: c_customer_sk == cs_bill_customer_sk_1
                                                 │                    │     Runtime Filters Builder: {cs_bill_customer_sk_1}

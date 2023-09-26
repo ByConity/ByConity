@@ -69,7 +69,7 @@ TransformResult SingleDistinctAggregationToGroupBy::transformImpl(PlanNodePtr no
 
     AggregateDescriptions aggregate_descriptions;
     auto group_agg_step
-        = std::make_shared<AggregatingStep>(node->getChildren()[0]->getStep()->getOutputStream(), symbols, aggregate_descriptions, GroupingSetsParamsList{}, true);
+        = std::make_shared<AggregatingStep>(node->getChildren()[0]->getStep()->getOutputStream(), symbols, step.getKeysNotHashed(), aggregate_descriptions, GroupingSetsParamsList{}, true);
     auto group_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(group_agg_step), node->getChildren());
 
     std::unordered_map<String, DataTypePtr> name_to_type;
@@ -98,7 +98,7 @@ TransformResult SingleDistinctAggregationToGroupBy::transformImpl(PlanNodePtr no
         count_aggs.emplace_back(count_agg);
     }
 
-    auto count_agg_step = std::make_shared<AggregatingStep>(group_agg_node->getStep()->getOutputStream(), group_by, count_aggs, GroupingSetsParamsList{}, true);
+    auto count_agg_step = std::make_shared<AggregatingStep>(group_agg_node->getStep()->getOutputStream(), group_by, step.getKeysNotHashed(), count_aggs, GroupingSetsParamsList{}, true);
     auto count_agg_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(count_agg_step), {group_agg_node});
     return count_agg_node;
 }

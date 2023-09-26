@@ -23,8 +23,13 @@
 #include <Optimizer/Rule/Pattern.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/Utils.h>
+#include <Parsers/ASTFunction.h>
+#include <Parsers/IAST_fwd.h>
 #include <QueryPlan/ApplyStep.h>
+#include <QueryPlan/CTERefStep.h>
 #include <QueryPlan/FilterStep.h>
+#include <QueryPlan/IQueryPlanStep.h>
+#include <QueryPlan/PlanNode.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/UnionStep.h>

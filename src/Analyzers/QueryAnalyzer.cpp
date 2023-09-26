@@ -36,7 +36,6 @@
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
 #include <Interpreters/TranslateQualifiedNamesVisitor.h>
 #include <Interpreters/convertFieldToType.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTAsterisk.h>
 #include <Parsers/ASTColumnsMatcher.h>
@@ -51,8 +50,12 @@
 #include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
-#include <Storages/RemoteFile/IStorageCnchFile.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Interpreters/join_common.h>
+#include <unordered_map>
+#include <sstream>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMemory.h>
 #include "Parsers/formatAST.h"
@@ -1089,7 +1092,7 @@ ScopePtr QueryAnalyzerVisitor::analyzeJoinOn(ASTTableJoin & table_join, ScopePtr
                         DataTypePtr left_type = analysis.getExpressionType(left_ast);
                         DataTypePtr right_type = analysis.getExpressionType(right_ast);
 
-                        if (!left_type->equals(*right_type))
+                        if (!JoinCommon::isJoinCompatibleTypes(left_type, right_type))
                         {
                             DataTypePtr super_type = nullptr;
 

@@ -493,9 +493,25 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
         return node_;
     }
 
+    Names new_keys;
+    NameSet new_keys_not_hashed = step->getKeysNotHashed();
+    for (const auto & key : step->getKeys())
+    {
+        if (!require_.contains(key) && new_keys_not_hashed.contains(key))
+        {
+            new_keys_not_hashed.erase(key);
+        }
+        else
+        {
+            new_keys.push_back(key);
+        }
+    }
+    
+
     auto agg_step = std::make_shared<AggregatingStep>(
         child->getStep()->getOutputStream(),
-        step->getKeys(),
+        new_keys,
+        new_keys_not_hashed,
         aggs,
         step->getGroupingSetsParams(),
         step->isFinal(),

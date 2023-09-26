@@ -46,6 +46,10 @@ namespace Utils
     bool isIdentity(const Assignment & assignment);
     bool isIdentity(const Assignments & assignments);
     bool isIdentity(const ProjectionStep & project);
+    
+    // return nested name if assignment does not affect the data in the bound column, such as cast to Nullable(column_name), int8 to int32.
+    String getNestedNameIfCastPreserveCardinality(const ConstASTPtr & ast, const NameToType & input_name_to_type);
+    
     NameToNameMap extractIdentities(const ProjectionStep & project);
     std::unordered_map<String, String> computeIdentityTranslations(Assignments & assignments);
     ASTPtr extractAggregateToFunction(const AggregateDescription & agg_descr);

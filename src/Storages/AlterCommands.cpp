@@ -38,12 +38,14 @@
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTConstraintDeclaration.h>
 #include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTForeignKeyDeclaration.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTIndexDeclaration.h>
 #include <Parsers/ASTProjectionDeclaration.h>
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
 #include <Parsers/queryToString.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/IStorage.h>
@@ -269,6 +271,36 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
 
         return command;
     }
+    else if (command_ast->type == ASTAlterCommand::ADD_FOREIGN_KEY)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.foreign_key_decl = command_ast->foreign_key_decl;
+        command.type = AlterCommand::ADD_FOREIGN_KEY;
+
+        const auto & ast_foreign_key_decl = command_ast->foreign_key_decl->as<ASTForeignKeyDeclaration &>();
+
+        command.foreign_key_name = ast_foreign_key_decl.fk_name;
+
+        command.if_not_exists = command_ast->if_not_exists;
+
+        return command;
+    }
+    else if (command_ast->type == ASTAlterCommand::ADD_UNIQUE_NOT_ENFORCED)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.unique_not_enforced_decl = command_ast->unique_not_enforced_decl;
+        command.type = AlterCommand::ADD_UNIQUE_NOT_ENFORCED;
+
+        const auto & ast_unique_not_enforced_decl = command_ast->unique_not_enforced_decl->as<ASTUniqueNotEnforcedDeclaration &>();
+
+        command.unique_not_enforced_name = ast_unique_not_enforced_decl.name;
+
+        command.if_not_exists = command_ast->if_not_exists;
+
+        return command;
+    }
     else if (command_ast->type == ASTAlterCommand::ADD_PROJECTION)
     {
         AlterCommand command;
@@ -306,6 +338,26 @@ std::optional<AlterCommand> AlterCommand::parse(const ASTAlterCommand * command_
         command.if_exists = command_ast->if_exists;
         command.type = AlterCommand::DROP_CONSTRAINT;
         command.constraint_name = command_ast->constraint->as<ASTIdentifier &>().name();
+
+        return command;
+    }
+    else if (command_ast->type == ASTAlterCommand::DROP_FOREIGN_KEY)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.if_exists = command_ast->if_exists;
+        command.type = AlterCommand::DROP_FOREIGN_KEY;
+        command.foreign_key_name = command_ast->foreign_key->as<ASTIdentifier &>().name();
+
+        return command;
+    }
+    else if (command_ast->type == ASTAlterCommand::DROP_UNIQUE_NOT_ENFORCED)
+    {
+        AlterCommand command;
+        command.ast = command_ast->clone();
+        command.if_exists = command_ast->if_exists;
+        command.type = AlterCommand::DROP_UNIQUE_NOT_ENFORCED;
+        command.unique_not_enforced_name = command_ast->unique_not_enforced->as<ASTIdentifier &>().name();
 
         return command;
     }
@@ -633,6 +685,87 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
         }
         metadata.constraints.constraints.erase(erase_it);
     }
+    else if (type == ADD_FOREIGN_KEY)
+    {
+        String new_foreign_key_name = foreign_key_decl->as<ASTForeignKeyDeclaration &>().fk_name;
+
+        if (std::any_of(
+                metadata.foreign_keys.foreign_keys.cbegin(),
+                metadata.foreign_keys.foreign_keys.cend(),
+                [new_foreign_key_name](const ASTPtr & foreign_key_ast) {
+                    return foreign_key_ast->as<ASTForeignKeyDeclaration &>().fk_name == new_foreign_key_name;
+                }))
+        {
+            if (if_not_exists)
+                return;
+            throw Exception(
+                "Cannot add foreign key " + new_foreign_key_name + ": foreign key with this name already exists",
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+
+        auto insert_it = metadata.foreign_keys.foreign_keys.end();
+
+        metadata.foreign_keys.foreign_keys.emplace(insert_it, std::dynamic_pointer_cast<ASTForeignKeyDeclaration>(foreign_key_decl));
+    }
+    else if (type == DROP_FOREIGN_KEY)
+    {
+        auto erase_it = std::find_if(
+            metadata.foreign_keys.foreign_keys.begin(), metadata.foreign_keys.foreign_keys.end(), [this](const ASTPtr & foreign_key_ast) {
+                return foreign_key_ast->as<ASTForeignKeyDeclaration &>().fk_name == foreign_key_name;
+            });
+
+        if (erase_it == metadata.foreign_keys.foreign_keys.end())
+        {
+            if (if_exists)
+                return;
+            throw Exception(
+                "Wrong foreign key name. Cannot find foreign key `" + foreign_key_name + "` to drop.", ErrorCodes::BAD_ARGUMENTS);
+        }
+        metadata.foreign_keys.foreign_keys.erase(erase_it);
+    }
+
+    else if (type == ADD_UNIQUE_NOT_ENFORCED)
+    {
+        String new_unique_not_enforced_name = unique_not_enforced_decl->as<ASTUniqueNotEnforcedDeclaration &>().name;
+
+        if (std::any_of(
+                metadata.unique_not_enforced.unique.cbegin(),
+                metadata.unique_not_enforced.unique.cend(),
+                [new_unique_not_enforced_name](const ASTPtr & unique_not_enforced_ast) {
+                    return unique_not_enforced_ast->as<ASTUniqueNotEnforcedDeclaration &>().name == new_unique_not_enforced_name;
+                }))
+        {
+            if (if_not_exists)
+                return;
+            throw Exception(
+                "Cannot add unique_not_enforced " + new_unique_not_enforced_name + ": this name already exists",
+                ErrorCodes::ILLEGAL_COLUMN);
+        }
+
+        auto insert_it = metadata.unique_not_enforced.unique.end();
+
+        metadata.unique_not_enforced.unique.emplace(
+            insert_it, std::dynamic_pointer_cast<ASTUniqueNotEnforcedDeclaration>(unique_not_enforced_decl));
+    }
+    else if (type == DROP_UNIQUE_NOT_ENFORCED)
+    {
+        auto erase_it = std::find_if(
+            metadata.unique_not_enforced.unique.begin(),
+            metadata.unique_not_enforced.unique.end(),
+            [this](const ASTPtr & unique_not_enforced_ast) {
+                return unique_not_enforced_ast->as<ASTUniqueNotEnforcedDeclaration &>().name == unique_not_enforced_name;
+            });
+
+        if (erase_it == metadata.unique_not_enforced.unique.end())
+        {
+            if (if_exists)
+                return;
+            throw Exception(
+                "Wrong unique_not_enforced name. Cannot find unique_not_enforced `" + unique_not_enforced_name + "` to drop.",
+                ErrorCodes::BAD_ARGUMENTS);
+        }
+        metadata.unique_not_enforced.unique.erase(erase_it);
+    }
     else if (type == ADD_PROJECTION)
     {
         auto projection = ProjectionDescription::getProjectionFromAST(projection_decl, metadata.columns, context);
@@ -708,6 +841,12 @@ void AlterCommand::apply(StorageInMemoryMetadata & metadata, ContextPtr context)
 
         for (auto & constraint : metadata.constraints.constraints)
             rename_visitor.visit(constraint);
+
+        for (auto & foreign_key : metadata.foreign_keys.foreign_keys)
+            rename_visitor.visit(foreign_key);
+
+        for (auto & unique_key : metadata.unique_not_enforced.unique)
+            rename_visitor.visit(unique_key);
 
         if (metadata.isSortingKeyDefined())
             rename_visitor.visit(metadata.sorting_key.definition_ast);
@@ -970,6 +1109,10 @@ String alterTypeToString(const AlterCommand::Type type)
         return "ADD COLUMN";
     case AlterCommand::Type::ADD_CONSTRAINT:
         return "ADD CONSTRAINT";
+    case AlterCommand::Type::ADD_FOREIGN_KEY:
+        return "ADD FOREIGN KEY";
+    case AlterCommand::Type::ADD_UNIQUE_NOT_ENFORCED:
+        return "ADD UNIQUE NOT ENFORCED";
     case AlterCommand::Type::ADD_INDEX:
         return "ADD INDEX";
     case AlterCommand::Type::ADD_PROJECTION:
@@ -980,6 +1123,10 @@ String alterTypeToString(const AlterCommand::Type type)
         return "DROP COLUMN";
     case AlterCommand::Type::DROP_CONSTRAINT:
         return "DROP CONSTRAINT";
+    case AlterCommand::Type::DROP_FOREIGN_KEY:
+        return "DROP FOREIGN KEY";
+    case AlterCommand::Type::DROP_UNIQUE_NOT_ENFORCED:
+        return "DROP UNIQUE NOT ENFORCED";
     case AlterCommand::Type::DROP_INDEX:
         return "DROP INDEX";
     case AlterCommand::Type::DROP_PROJECTION:

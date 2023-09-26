@@ -18,7 +18,11 @@
 #include <Functions/FunctionsHashing.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
-#include <Optimizer/SymbolEquivalencesDeriver.h>
+#include <Optimizer/Property/SymbolEquivalencesDeriver.h>
+#include <IO/ReadHelpers.h>
+#include <IO/WriteHelpers.h>
+#include <Optimizer/Property/Constants.h>
+#include <Optimizer/Property/SymbolEquivalencesDeriver.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <Protos/plan_node_utils.pb.h>
 #include <QueryPlan/PlanSerDerHelper.h>
@@ -267,30 +271,6 @@ String Sorting::toString() const
         std::next(begin()), end(), front().toString(), [](std::string a, const auto & b) { return std::move(a) + '-' + b.toString(); });
 }
 
-Constants Constants::translate(const std::unordered_map<String, String> & identities) const
-{
-    std::map<String, FieldWithType> translate_value;
-    for (const auto & item : values)
-        if (identities.contains(item.first))
-            translate_value[identities.at(item.first)] = item.second;
-        else
-            translate_value[item.first] = item.second;
-    return Constants{translate_value};
-}
-
-Constants Constants::normalize(const SymbolEquivalences & symbol_equivalences) const
-{
-    auto mapping = symbol_equivalences.representMap();
-    for (const auto & item : values)
-    {
-        if (!mapping.contains(item.first))
-        {
-            mapping[item.first] = item.first;
-        }
-    }
-    return translate(mapping);
-}
-
 size_t CTEDescriptions::hash() const
 {
     size_t hash = IntHash64Impl::apply(cte_descriptions.size());
@@ -362,11 +342,7 @@ String TableLayout::toString() const
 
 Property Property::translate(const std::unordered_map<String, String> & identities) const
 {
-    Property result{
-        node_partitioning.translate(identities),
-        stream_partitioning.translate(identities),
-        sorting.translate(identities),
-        constants.translate(identities)};
+    Property result{node_partitioning.translate(identities), stream_partitioning.translate(identities), sorting.translate(identities)};
     result.setPreferred(preferred);
     result.setCTEDescriptions(cte_descriptions.translate(identities));
     return result;
@@ -377,8 +353,7 @@ Property Property::normalize(const SymbolEquivalences & symbol_equivalences) con
     Property result{
         node_partitioning.normalize(symbol_equivalences),
         stream_partitioning.normalize(symbol_equivalences),
-        sorting,
-        constants.normalize(symbol_equivalences)};
+        sorting.normalize(symbol_equivalences)};
     result.setPreferred(preferred);
     result.setCTEDescriptions(cte_descriptions);
     return result;
@@ -390,7 +365,6 @@ size_t Property::hash() const
     hash = MurmurHash3Impl64::combineHashes(hash, node_partitioning.hash());
     hash = MurmurHash3Impl64::combineHashes(hash, stream_partitioning.hash());
     hash = MurmurHash3Impl64::combineHashes(hash, sorting.hash());
-    //    hash = MurmurHash3Impl64::combineHashes(hash, constants.hash());
     hash = MurmurHash3Impl64::combineHashes(hash, cte_descriptions.hash());
     hash = MurmurHash3Impl64::combineHashes(hash, table_layout.hash());
     return hash;

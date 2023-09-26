@@ -20,13 +20,13 @@
 #include <utility>
 
 #include <Interpreters/Context.h>
+#include <Optimizer/ConstHashAST.h>
+#include <Optimizer/EqualityASTMap.h>
 #include <Optimizer/ExpressionExtractor.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SymbolsExtractor.h>
-#include <Optimizer/EqualityASTMap.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/IAST_fwd.h>
-#include "ConstHashAST.h"
 
 namespace DB
 {

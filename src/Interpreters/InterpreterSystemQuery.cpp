@@ -816,15 +816,12 @@ StoragePtr InterpreterSystemQuery::tryRestartReplica(const StorageID & replica, 
 
     auto columns = InterpreterCreateQuery::getColumnsDescription(*create.columns_list->columns, system_context, true);
     auto constraints = InterpreterCreateQuery::getConstraintsDescription(create.columns_list->constraints);
+    auto foreign_keys = InterpreterCreateQuery::getForeignKeysDescription(create.columns_list->foreign_keys);
+    auto unique = InterpreterCreateQuery::getUniqueNotEnforcedDescription(create.columns_list->unique);
     auto data_path = database->getTableDataPath(create);
 
-    table = StorageFactory::instance().get(create,
-        data_path,
-        system_context,
-        system_context->getGlobalContext(),
-        columns,
-        constraints,
-        false);
+    table = StorageFactory::instance().get(
+        create, data_path, system_context, system_context->getGlobalContext(), columns, constraints, foreign_keys, unique, false);
 
     database->attachTable(replica.table_name, table, data_path);
 

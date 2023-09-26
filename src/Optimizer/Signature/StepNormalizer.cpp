@@ -339,6 +339,7 @@ StepAndOutputOrder StepNormalizer::visitAggregatingStep(const AggregatingStep & 
     auto normal_agg = std::make_shared<AggregatingStep>(
         normal_input_streams.front(),
         mapped_keys,
+        step.getKeysNotHashed(),
         aggregates_reordered,
         GroupingSetsParamsList{}, // checked empty
         step.isFinal(),

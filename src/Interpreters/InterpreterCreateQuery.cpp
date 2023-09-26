@@ -91,6 +91,8 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <Parsers/ASTForeignKeyDeclaration.h>
+#include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
 
 #include <Catalog/Catalog.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
@@ -502,6 +504,26 @@ ASTPtr InterpreterCreateQuery::formatConstraints(const ConstraintsDescription & 
     return res;
 }
 
+ASTPtr InterpreterCreateQuery::formatForeignKeys(const ForeignKeysDescription & foreign_keys)
+{
+    auto res = std::make_shared<ASTExpressionList>();
+
+    for (const auto & foreign_key : foreign_keys.foreign_keys)
+        res->children.push_back(foreign_key->clone());
+
+    return res;
+}
+
+ASTPtr InterpreterCreateQuery::formatUnique(const UniqueNotEnforcedDescription & unique)
+{
+    auto res = std::make_shared<ASTExpressionList>();
+
+    for (const auto & unique_key : unique.unique)
+        res->children.push_back(unique_key->clone());
+
+    return res;
+}
+
 ASTPtr InterpreterCreateQuery::formatProjections(const ProjectionsDescription & projections)
 {
     auto res = std::make_shared<ASTExpressionList>();
@@ -654,6 +676,24 @@ ConstraintsDescription InterpreterCreateQuery::getConstraintsDescription(const A
     return res;
 }
 
+ForeignKeysDescription InterpreterCreateQuery::getForeignKeysDescription(const ASTExpressionList * foreign_keys)
+{
+    ForeignKeysDescription res;
+    if (foreign_keys)
+        for (const auto & foreign_key : foreign_keys->children)
+            res.foreign_keys.push_back(std::dynamic_pointer_cast<ASTForeignKeyDeclaration>(foreign_key->clone()));
+    return res;
+}
+
+UniqueNotEnforcedDescription InterpreterCreateQuery::getUniqueNotEnforcedDescription(const ASTExpressionList * unique)
+{
+    UniqueNotEnforcedDescription res;
+    if (unique)
+        for (const auto & unique_key : unique->children)
+            res.unique.push_back(std::dynamic_pointer_cast<ASTUniqueNotEnforcedDeclaration>(unique_key->clone()));
+    return res;
+}
+
 
 InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(ASTCreateQuery & create) const
 {
@@ -662,8 +702,12 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
 
     if (create.columns_list)
     {
-        if (create.as_table_function && (create.columns_list->indices || create.columns_list->constraints))
-            throw Exception("Indexes and constraints are not supported for table functions", ErrorCodes::INCORRECT_QUERY);
+        if (create.as_table_function
+            && (create.columns_list->indices || create.columns_list->constraints || create.columns_list->foreign_keys
+                || create.columns_list->unique))
+            throw Exception(
+                "Indexes, constraints and foreign keys and unique(not enforced) are not supported for table functions",
+                ErrorCodes::INCORRECT_QUERY);
 
         if (create.columns_list->columns)
         {
@@ -683,6 +727,8 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
             }
 
         properties.constraints = getConstraintsDescription(create.columns_list->constraints);
+        properties.foreign_keys = getForeignKeysDescription(create.columns_list->foreign_keys);
+        properties.unique = getUniqueNotEnforcedDescription(create.columns_list->unique);
     }
     else if (!create.as_table.empty())
     {
@@ -704,6 +750,8 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
             properties.projections = as_storage_metadata->getProjections().clone();
 
         properties.constraints = as_storage_metadata->getConstraints();
+        properties.foreign_keys = as_storage_metadata->getForeignKeys();
+        properties.unique = as_storage_metadata->getUniqueNotEnforced();
     }
     else if (create.select)
     {
@@ -735,11 +783,15 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
     ASTPtr new_columns = formatColumns(properties.columns);
     ASTPtr new_indices = formatIndices(properties.indices);
     ASTPtr new_constraints = formatConstraints(properties.constraints);
+    ASTPtr new_foreign_keys = formatForeignKeys(properties.foreign_keys);
+    ASTPtr new_unique = formatUnique(properties.unique);
     ASTPtr new_projections = formatProjections(properties.projections);
 
     create.columns_list->setOrReplace(create.columns_list->columns, new_columns);
     create.columns_list->setOrReplace(create.columns_list->indices, new_indices);
     create.columns_list->setOrReplace(create.columns_list->constraints, new_constraints);
+    create.columns_list->setOrReplace(create.columns_list->foreign_keys, new_foreign_keys);
+    create.columns_list->setOrReplace(create.columns_list->unique, new_unique);
     create.columns_list->setOrReplace(create.columns_list->projections, new_projections);
 
     validateTableStructure(create, properties);
@@ -990,6 +1042,89 @@ void InterpreterCreateQuery::assertOrSetUUID(ASTCreateQuery & create, const Data
 
 BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 {
+    // Make sure names in foreign key exist.
+    if (create.columns_list && create.columns_list->foreign_keys)
+    {
+        if (create.database.empty())
+            create.database = getContext()->getCurrentDatabase();
+
+        auto contains_columns = [](const ASTExpressionList & name_list, const Names & names) {
+            NameSet name_set;
+            for (const auto & name : names)
+                name_set.insert(name);
+
+            for (const auto & ptr : name_list.children)
+                if (!name_set.contains(ptr->as<ASTIdentifier &>().name()))
+                    return ptr->as<ASTIdentifier &>().name();
+            return String();
+        };
+
+        Names columns;
+        for (const auto & expr : create.columns_list->columns->as<ASTExpressionList &>().children)
+            columns.push_back(expr->as<ASTColumnDeclaration &>().name);
+
+        // FOREIGN KEY (foreign_key.column_names) REFERENCES(foreign_key.ref_column_names)
+        if (!columns.empty())
+        {
+            const ASTExpressionList * foreign_keys = create.columns_list->foreign_keys;
+
+            for (const auto & foreign_key_child : foreign_keys->children)
+            {
+                auto & foreign_key = foreign_key_child->as<ASTForeignKeyDeclaration &>();
+                auto ref_storage_ptr = DatabaseCatalog::instance().tryGetTable({create.database, foreign_key.ref_table_name}, getContext());
+                if (!ref_storage_ptr)
+                    throw Exception("FOREIGN KEY references unknown table " + foreign_key.ref_table_name, ErrorCodes::UNKNOWN_TABLE);
+
+                auto check_res = contains_columns(foreign_key.column_names->as<ASTExpressionList &>(), columns);
+                auto ref_check_res = contains_columns(
+                    foreign_key.ref_column_names->as<ASTExpressionList &>(),
+                    ref_storage_ptr->getInMemoryMetadataPtr()->getColumns().getAll().getNames());
+
+                if (!check_res.empty())
+                    throw Exception("FOREIGN KEY references unknown column " + check_res, ErrorCodes::ILLEGAL_COLUMN);
+                if (!ref_check_res.empty())
+                    throw Exception("FOREIGN KEY references unknown column " + ref_check_res, ErrorCodes::ILLEGAL_COLUMN);
+            }
+        }
+    }
+
+    // Make sure names in unique not enforced exist.
+    if (create.columns_list && create.columns_list->unique)
+    {
+        if (create.database.empty())
+            create.database = getContext()->getCurrentDatabase();
+
+        auto contains_columns = [](const ASTExpressionList & name_list, const Names & names) {
+            NameSet name_set;
+            for (const auto & name : names)
+                name_set.insert(name);
+
+            for (const auto & ptr : name_list.children)
+                if (!name_set.contains(ptr->as<ASTIdentifier &>().name()))
+                    return ptr->as<ASTIdentifier &>().name();
+            return String();
+        };
+
+        Names columns;
+        for (const auto & expr : create.columns_list->columns->as<ASTExpressionList &>().children)
+            columns.push_back(expr->as<ASTColumnDeclaration &>().name);
+
+        if (!columns.empty())
+        {
+            const ASTExpressionList * unique = create.columns_list->unique;
+
+            for (const auto & unique_child : unique->children)
+            {
+                auto & unique_key = unique_child->as<ASTUniqueNotEnforcedDeclaration &>();
+
+                auto check_res = contains_columns(unique_key.column_names->as<ASTExpressionList &>(), columns);
+
+                if (!check_res.empty())
+                    throw Exception("UNIQUE NOT ENFORCED not exists -- " + check_res, ErrorCodes::ILLEGAL_COLUMN);
+            }
+        }
+    }
+
     /// Temporary tables are created out of databases.
     if (create.temporary && !create.database.empty())
         throw Exception("Temporary tables cannot be inside a database. You should not specify a database for a temporary table.",
@@ -1239,7 +1374,7 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
             return false;
 
         String temporary_table_name = create.table;
-        auto temporary_table = TemporaryTableHolder(getContext(), properties.columns, properties.constraints, query_ptr);
+        auto temporary_table = TemporaryTableHolder(getContext(), properties.columns, properties.constraints, properties.foreign_keys, properties.unique, query_ptr);
         getContext()->getSessionContext()->addExternalTable(temporary_table_name, std::move(temporary_table));
         return true;
     }
@@ -1286,6 +1421,8 @@ bool InterpreterCreateQuery::doCreateTable(ASTCreateQuery & create,
             getContext()->getGlobalContext(),
             properties.columns,
             properties.constraints,
+            properties.foreign_keys,
+            properties.unique,
             false);
     }
 

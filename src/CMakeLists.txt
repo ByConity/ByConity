@@ -287,6 +287,7 @@ add_object_library(clickhouse_optimizer_property Optimizer/Property)
 add_object_library(clickhouse_optimizer_rewriter Optimizer/Rewriter)
 add_object_library(clickhouse_optimizer_signature Optimizer/Signature)
 add_object_library(clickhouse_optimizer_dump Optimizer/Dump)
+add_object_library(clickhouse_optimizer_data_dependency Optimizer/DataDependency)
 add_object_library(clickhouse_statistics Statistics)
 
 
