@@ -1501,6 +1501,19 @@ struct ConvertThroughParsing
                         convertFromTime<ToDataType>(vec_to[i], res);
                     }
                 }
+                else if (!string_size)
+                {
+                    /*
+                    * select toDate('') ==> return toDate('1970-01-01')
+                    *
+                    * In Function toDate(Nullable(String))
+                    *     Nullable(String) will be convert to String, So Null will be convert to '',
+                    *     In this case, function will throw 'parse error'.
+                    *
+                    * TODO: fix function toDate('') throw error when parameter isn't Nullable
+                    */
+                    vec_to[i] = static_cast<typename ToDataType::FieldType>(0);
+                }
                 else
                 {
                     if constexpr (to_datetime64)
@@ -1547,19 +1560,6 @@ struct ConvertThroughParsing
                     time_t res;
                     parsed = tryParseDateTimeBestEffortUS(res, read_buffer, *local_time_zone, *utc_time_zone);
                     vec_to[i] = res;
-                }
-                else if (!string_size)
-                {
-                    /*
-                    * select toDate('') ==> return toDate('1970-01-01')
-                    *
-                    * In Function toDate(Nullable(String))
-                    *     Nullable(String) will be convert to String, So Null will be convert to '',
-                    *     In this case, function will throw 'parse error'.
-                    *
-                    * TODO: fix function toDate('') throw error when parameter isn't Nullable
-                    */
-                    vec_to[i] = static_cast<typename ToDataType::FieldType>(0);
                 }
                 else
                 {

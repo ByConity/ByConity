@@ -54,7 +54,7 @@ public:
         return std::make_shared<FunctionArraySetCheck>(context);
     }
 
-    FunctionArraySetCheck(ContextPtr)
+    explicit FunctionArraySetCheck(ContextPtr)
     {
     }
 
@@ -66,22 +66,8 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
-    DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
+    DataTypePtr getReturnTypeImpl(const DataTypes & ) const override
     {
-        if (arguments.size() == 2)
-        {
-            if (isArray(arguments[0]))
-            {
-                if (const auto * data_type_array = typeid_cast<const DataTypeArray*>(arguments[0].get()))
-                {
-                    if (data_type_array->getNestedType()->getTypeId() == TypeIndex::String)
-                        throw Exception{
-                            "Second argument for function " + getName() + " can not be string, will be support later",
-                            ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT};
-                }
-
-            }
-        }
         return std::make_shared<DataTypeNumber<UInt8>>();
     }
 
@@ -108,7 +94,10 @@ public:
                     all_array_const = false;
                 }
                 else if (array_const)
+                {
+                    is_nullable = isColumnNullable(array_const->getData());
                     array = array_const;
+                }
 
                 if (!array)
                     throw Exception("Illegal first argument of function " + getName(), ErrorCodes::ILLEGAL_COLUMN);
@@ -119,9 +108,9 @@ public:
             }
             else
             {
-                bool isArgNullable = isColumnNullable(*arguments[i].column);
+                bool is_arg_nullable = isColumnNullable(*arguments[i].column);
 
-                if (isArgNullable)
+                if (is_arg_nullable)
                     throw Exception("Nullable set is not support in function " + getName(), ErrorCodes::NOT_IMPLEMENTED);
 
                 const ColumnSet * set_arg = checkAndGetColumn<ColumnSet>(arguments[i].column.get());
@@ -148,27 +137,32 @@ public:
             const ColumnArray * array = arrays[col_idx];
             const Set & st = *(sets[col_idx]->getData());
             bool is_nullable = is_nullables[col_idx];
-            bool first = col_idx == 0 ? true : false;
+            bool first = (col_idx == 0);
 
             switch(st.data.type)
             {
                 case SetVariants::Type::EMPTY:
                     break;
-                    /* TODO dongyifeng support it later
-                     */
+                // case SetVariants::Type::bitmap64:
+                    // break;
                 case SetVariants::Type::key_string:
-                case SetVariants::Type::key_fixed_string:
+                    if (is_nullable)                                                    \
+                        setCheckImpl<std::decay_t<decltype(*st.data.key_string)>, true, true>(*st.data.key_string, *array, vec_res, first);
+                    else                                                                \
+                        setCheckImpl<std::decay_t<decltype(*st.data.key_string)>, false, true>(*st.data.key_string, *array, vec_res, first);
                     break;
-                    /* TODO dongyifeng add it later
-                    case SetVariants::Type::bitmap64:
-                        break;
-                         */
-#define M(NAME)                                                          \
-                case SetVariants::Type::NAME:                                \
-                    if (is_nullable)                                         \
-                    setCheckImpl<std::decay_t<decltype(*st.data.NAME)>, true>(*st.data.NAME, *array, vec_res, first);  \
-                    else                                                                                          \
-                    setCheckImpl<std::decay_t<decltype(*st.data.NAME)>, false>(*st.data.NAME, *array, vec_res, first); \
+                case SetVariants::Type::key_fixed_string:
+                    if (is_nullable)                                                    \
+                        setCheckImpl<std::decay_t<decltype(*st.data.key_fixed_string)>, true, true>(*st.data.key_fixed_string, *array, vec_res, first);
+                    else                                                                \
+                        setCheckImpl<std::decay_t<decltype(*st.data.key_fixed_string)>, false, true>(*st.data.key_fixed_string, *array, vec_res, first);
+                    break;
+#define M(NAME)                                                            \
+                case SetVariants::Type::NAME:                                           \
+                    if (is_nullable)                                                    \
+                        setCheckImpl<std::decay_t<decltype(*st.data.NAME)>, true, false>(*st.data.NAME, *array, vec_res, first);   \
+                    else                                                                \
+                        setCheckImpl<std::decay_t<decltype(*st.data.NAME)>, false, false>(*st.data.NAME, *array, vec_res, first);  \
                     break;
 
                 APPLY_FOR_SET_VARIANTS_WITHOUT_STRING(M)
@@ -182,7 +176,7 @@ public:
             return result_column;
     }
 
-    template <typename Method, bool Nullable>
+    template <typename Method, bool Nullable, bool StringType = false>
     inline void setCheckImpl(Method& method,
                              const ColumnArray& keys,
                              ColumnUInt8::Container& result,
@@ -196,7 +190,9 @@ public:
 
         if(Nullable) extractNestedColumnsAndNullMap(key_cols, null_map);
 
-        typename Method::State state(key_cols, {}, nullptr);
+        Sizes key_sizes;
+        ClearableSetVariants::chooseMethod(key_cols, key_sizes);
+        typename Method::State state(key_cols, key_sizes, nullptr);
         size_t pre_offset = 0, cur_offset = 0;
         auto& offsets = keys.getOffsets();
         Arena arena(0);
@@ -211,8 +207,11 @@ public:
                 for (size_t j = pre_offset; (!has_key) && j < cur_offset; ++j)
                 {
                     if (Nullable && (*null_map)[j]) continue; // skip null input
-                    typename Method::Key key = state.getKeyHolder(j, arena);
-                    has_key = method.data.has(key);
+                    auto key_holder = state.getKeyHolder(j, arena);
+                    if constexpr (StringType)
+                        has_key = method.data.has(key_holder.key);
+                    else
+                        has_key = method.data.has(key_holder);
                 }
                 result[i] = has_key;
             }

@@ -80,6 +80,15 @@ namespace ErrorCodes
     extern const int TOO_MANY_ARGUMENTS_FOR_FUNCTION;
 }
 
+static std::unordered_set<String> array_set_functions = {
+    {"arraySetCheck", "arraySetGet", "arraySetGetAny"}
+};
+
+bool isArraySetFunctions(const String & name)
+{
+    return array_set_functions.count(name);
+}
+
 static NamesAndTypesList::iterator findColumn(const String & name, NamesAndTypesList & cols)
 {
     return std::find_if(cols.begin(), cols.end(),
@@ -377,6 +386,18 @@ SetPtr makeExplicitSet(
     auto column_name = left_arg->getColumnName();
     const auto & dag_node = actions.findInIndex(column_name);
     DataTypePtr left_arg_type = dag_node.result_type;
+
+    if (isArraySetFunctions(node->name))
+    {
+        if (const auto *const null_type_ptr = typeid_cast<const DataTypeNullable *>(left_arg_type.get()))
+            left_arg_type = null_type_ptr->getNestedType();
+
+        const auto *const arg_type_ptr = typeid_cast<const DataTypeArray *>(left_arg_type.get());
+        if (arg_type_ptr)
+            left_arg_type = arg_type_ptr->getNestedType();
+        else
+            throw Exception("Invalid argument of function arraySet related functions", ErrorCodes::LOGICAL_ERROR);
+    }
 
     DataTypes set_element_types = {left_arg_type};
     const auto * left_tuple_type = typeid_cast<const DataTypeTuple *>(left_arg_type.get());
@@ -914,6 +935,9 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
     }
 
     SetPtr prepared_set;
+    std::vector<SetPtr> prepared_sets_vec;
+
+    bool need_make_set_for_func = isArraySetFunctions(node.name);
     if (checkFunctionIsInOrGlobalInOperator(node))
     {
         /// Let's find the type of the first argument (then getActionsImpl will be called again and will not affect anything).
@@ -938,6 +962,36 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
                         column_name);
             }
             return;
+        }
+    }
+    else if (need_make_set_for_func)
+    {
+        size_t arg_size = node.arguments->children.size();
+        if (arg_size % 2 != 0)
+            throw Exception("The number of arguments is wrong in arraySet function", ErrorCodes::LOGICAL_ERROR);
+
+        // to check const arguments. if the only_consts is true, arraySetCheck should make set if and only if the i and i + 2 is const literal
+        bool make_set = true;
+        for (size_t i = 0; i < arg_size; i += 2)
+        {
+            ASTPtr arg_col = node.arguments->children.at(i);
+            if (data.only_consts
+                && checkIdentifier(arg_col))
+            {
+                make_set = false;
+                break;
+            }
+        }
+
+        if (make_set)
+        {
+            for (size_t i = 0; i < arg_size; i += 2)
+            {
+                ASTPtr arg_col = node.arguments->children.at(i);
+                visit(arg_col, data);
+                SetPtr arg_prepared_set = makeSet(node, data, data.no_subqueries, true);
+                prepared_sets_vec.push_back(arg_prepared_set);
+            }
         }
     }
 
@@ -1087,6 +1141,36 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
                         column.column = ColumnConst::create(std::move(column_set), 1);
                     else
                         column.column = std::move(column_set);
+                    data.addColumn(column);
+                }
+
+                argument_types.push_back(column.type);
+                argument_names.push_back(column.name);
+            }
+            else if (((need_make_set_for_func) && (arg % 2)) && !prepared_sets_vec.empty())
+            {
+                ColumnWithTypeAndName column;
+                column.type = std::make_shared<DataTypeSet>();
+
+                bool has_set = prepared_sets_vec.size() > arg / 2;
+                /// If the argument is a set given by an enumeration of values (so, the set was already built), give it a unique name,
+                ///  so that sets with the same literal representation do not fuse together (they can have different types).
+                if (has_set && prepared_sets_vec[arg / 2])
+                    column.name = data.getUniqueName("__set");
+                else
+                    column.name = child->getColumnName();
+
+                if (!data.hasColumn(column.name))
+                {
+                    if (has_set && prepared_sets_vec[arg / 2])
+                        column.column = ColumnSet::create(1, prepared_sets_vec[arg / 2]);
+                    else
+                    {
+                        auto column_set = ColumnSet::create(1, prepared_set);
+                        /// If prepared_set is not empty, we have a set made with literals.
+                        /// Create a const ColumnSet to make constant folding work
+                        column.column = std::move(column_set);
+                    }
                     data.addColumn(column);
                 }
 
