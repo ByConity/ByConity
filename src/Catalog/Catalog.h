@@ -17,7 +17,6 @@
 
 #include <map>
 #include <set>
-#include <Catalog/CatalogConfig.h>
 #include <Catalog/CatalogUtils.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Catalog/MetastoreProxy.h>
@@ -37,6 +36,7 @@
 #include <Common/Configurations.h>
 #include <Common/DNSResolver.h>
 #include <Common/HostWithPorts.h>
+#include <Common/Config/MetastoreConfig.h>
 #include <common/getFQDNOrHostName.h>
 // #include <Access/MaskingPolicyDataModel.h>
 
@@ -66,7 +66,7 @@ public:
 
     using MetastoreProxyPtr = std::shared_ptr<MetastoreProxy>;
 
-    Catalog(Context & _context, CatalogConfig & config, String _name_space = "default");
+    Catalog(Context & _context, MetastoreConfig & config, String _name_space = "default");
 
     ~Catalog() = default;
 

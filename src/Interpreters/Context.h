@@ -318,8 +318,9 @@ using TSOClientPool = RpcClientPool<TSO::TSOClient>;
 namespace Catalog
 {
     class Catalog;
-    struct CatalogConfig;
 }
+
+struct MetastoreConfig;
 
 namespace ResourceManagement
 {
@@ -1414,7 +1415,7 @@ public:
     ThreadPool & getPartCacheManagerThreadPool();
 
     /// catalog related
-    void initCatalog(Catalog::CatalogConfig & catalog_conf, const String & name_space);
+    void initCatalog(MetastoreConfig & catalog_conf, const String & name_space);
     std::shared_ptr<Catalog::Catalog> tryGetCnchCatalog() const;
     std::shared_ptr<Catalog::Catalog> getCnchCatalog() const;
 

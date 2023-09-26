@@ -4539,7 +4539,7 @@ PartCacheManagerPtr Context::getPartCacheManager() const
     return shared->cache_manager;
 }
 
-void Context::initCatalog(Catalog::CatalogConfig & catalog_conf, const String & name_space)
+void Context::initCatalog(MetastoreConfig & catalog_conf, const String & name_space)
 {
     shared->cnch_catalog = std::make_unique<Catalog::Catalog>(*this, catalog_conf, name_space);
 }

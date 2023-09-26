@@ -71,8 +71,13 @@ public:
         std::shared_ptr<bytekv::sdk::Iterator> inner_it;
     };
 
-    MetastoreByteKVImpl(const String & service_name_, const String & cluster_name_,
-                        const String & name_space_, const String & table_name_);
+    MetastoreByteKVImpl(
+        const String & discovery_type_,
+        const String & service_name_,
+        const UInt64 service_port_,
+        const String & cluster_name_,
+        const String & name_space_,
+        const String & table_name_);
 
     void init();
 
@@ -112,8 +117,9 @@ public:
 
 
 private:
-
+    String discovery_type;
     String service_name;
+    UInt64 service_port;
     String cluster_name;
     String name_space;
     String table_name;

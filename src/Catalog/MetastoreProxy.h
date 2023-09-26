@@ -15,7 +15,6 @@
 
 #pragma once
 
-#include <Catalog/CatalogConfig.h>
 //#include <Catalog/MetastoreByteKVImpl.h>
 #include <Catalog/MetastoreFDBImpl.h>
 #include <Catalog/StringHelper.h>
@@ -40,6 +39,7 @@
 #include <Access/IAccessEntity.h>
 #include <Parsers/formatTenantDatabaseName.h>
 #include <Interpreters/SQLBinding/SQLBinding.h>
+#include <Common/Config/MetastoreConfig.h>
 
 namespace DB::ErrorCodes
 {
@@ -137,9 +137,9 @@ public:
     using MetastorePtr = std::shared_ptr<IMetaStore>;
     using RepeatedFields = google::protobuf::RepeatedPtrField<std::string>;
 
-    MetastoreProxy(CatalogConfig & config)
+    MetastoreProxy(MetastoreConfig & config)
     {
-        if (config.type == StoreType::FDB)
+        if (config.type == MetaStoreType::FDB)
         {
             metastore_ptr = std::make_shared<MetastoreFDBImpl>(config.fdb_conf.cluster_conf_path);
         }

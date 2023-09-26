@@ -15,7 +15,6 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Catalog/Catalog.h>
-#include <Catalog/CatalogConfig.h>
 #include <Catalog/CatalogFactory.h>
 #include <Core/Defines.h>
 #include <Core/Types.h>
@@ -36,6 +35,7 @@
 #include <Poco/Util/HelpFormatter.h>
 #include <Poco/Environment.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/Config/MetastoreConfig.h>
 #include <DaemonManager/DMDefines.h>
 #include <DaemonManager/DaemonHelper.h>
 #include <DaemonManager/DaemonManagerServiceImpl.h>
@@ -216,7 +216,6 @@ int DaemonManager::main(const std::vector<std::string> &)
     Logger * log = &logger();
     LOG_INFO(log, "Daemon Manager start up...");
 
-
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases, ...
       */
@@ -231,7 +230,7 @@ int DaemonManager::main(const std::vector<std::string> &)
     global_context->initCnchConfig(config());
 
     const Poco::Util::AbstractConfiguration & cnch_config = global_context->getCnchConfigRef();
-    Catalog::CatalogConfig catalog_conf(cnch_config);
+    MetastoreConfig catalog_conf(cnch_config, CATALOG_SERVICE_CONFIGURE);
     global_context->initCatalog(catalog_conf,
         cnch_config.getString("catalog.name_space", "default"));
     global_context->initServiceDiscoveryClient();

@@ -32,6 +32,7 @@ namespace ErrorCodes
 {
     extern const int BRPC_TIMEOUT;
     extern const int TSO_INTERNAL_ERROR;
+    extern const int TSO_OPERATION_ERROR;
 }
 
 namespace TSO

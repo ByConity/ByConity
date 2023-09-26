@@ -42,12 +42,20 @@ public:
     using ExpectedCodes = std::initializer_list<Errorcode>;
 
     TSOMetaByteKVImpl(
+        const String & discovery_type_,
         const String & service_name_,
+        const UInt64 service_port_,
         const String & cluster_name_,
         const String & name_space_,
         const String & table_name_,
         const String & key_name_)
-        : TSOMetastore(key_name_), service_name(service_name_), cluster_name(cluster_name_), name_space(name_space_), table_name(table_name_)
+        : TSOMetastore(key_name_)
+        , discovery_type(discovery_type_)
+        , service_name(service_name_)
+        , service_port(service_port_)
+        , cluster_name(cluster_name_)
+        , name_space(name_space_)
+        , table_name(table_name_)
     {
         init();
     }
@@ -57,7 +65,9 @@ public:
     void init()
     {
         auto code = ByteKVClientBuilder()
+                .setServiceDiscoveryType(discovery_type)    
                 .setServiceName(service_name)
+                .setServicePort(service_port)
                 .setClusterName(cluster_name)
                 .setNameSpace(name_space)
                 .build(client);
@@ -100,7 +110,9 @@ public:
     std::shared_ptr<ByteKVClient> client;
 
 private:
+    String discovery_type;
     String service_name;
+    UInt64 service_port;
     String cluster_name;
     String name_space;
     String table_name;

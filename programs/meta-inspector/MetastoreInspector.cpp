@@ -20,9 +20,9 @@
 #include <Catalog/MetastoreFDBImpl.h>
 #include <Common/HostWithPorts.h>
 #include <Catalog/StringHelper.h>
-#include <Catalog/CatalogConfig.h>
 #include <Protos/data_models.pb.h>
 #include <Common/filesystemHelpers.h>
+#include <Common/Config/MetastoreConfig.h>
 #include <brpc/server.h>
 #include <gflags/gflags.h>
 #include <iostream>
@@ -300,13 +300,13 @@ private:
 
     void initializeMetastore()
     {
-        Catalog::CatalogConfig catalog_conf(config());
+        MetastoreConfig catalog_conf(config(), CATALOG_SERVICE_CONFIGURE);
         const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
         const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
         if (consul_http_host != nullptr && consul_http_port != nullptr)
             brpc::policy::FLAGS_consul_agent_addr = "http://" + createHostPortString(consul_http_host, consul_http_port);
 
-        if (catalog_conf.type == Catalog::StoreType::FDB)
+        if (catalog_conf.type == MetaStoreType::FDB)
         {
             metastore_ptr = std::make_shared<Catalog::MetastoreFDBImpl>(catalog_conf.fdb_conf.cluster_conf_path);
         }

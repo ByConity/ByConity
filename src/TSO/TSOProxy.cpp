@@ -28,7 +28,7 @@ namespace ErrorCodes
 namespace TSO
 {
 
-TSOProxy::TSOProxy(const TSOConfig & config)
+TSOProxy::TSOProxy(const MetastoreConfig & config)
 {
     if (config.type == StoreType::FDB)
     {
