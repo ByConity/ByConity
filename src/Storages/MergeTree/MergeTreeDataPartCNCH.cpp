@@ -1177,7 +1177,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
         };
     }
 
-    pool.scheduleOrThrow([this, level = preload_level, segments = std::move(segments), cb = std::move(callback), disk_cache = cache] {
+    pool.scheduleOrThrowOnError([this, level = preload_level, segments = std::move(segments), cb = std::move(callback), disk_cache = cache] {
         String last_exception{};
         int real_cache_segments_count = 0;
         for (const auto & segment : segments)
@@ -1276,7 +1276,7 @@ void MergeTreeDataPartCNCH::dropDiskCache(ThreadPool & pool, bool drop_vw_disk_c
         }
     };
 
-    pool.scheduleOrThrow(impl);
+    pool.scheduleOrThrowOnError(impl);
 }
 
 std::unique_ptr<ReadBufferFromFileBase> MergeTreeDataPartCNCH::openForReading(const DiskPtr & disk, const String & path, size_t file_size) const

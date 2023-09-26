@@ -115,7 +115,7 @@ DiskCacheLRU::DiskCacheLRU(const VolumePtr & volume_, const ThrottlerPtr & throt
     }
 
     auto & thread_pool = IDiskCache::getThreadPool();
-    thread_pool.scheduleOrThrow([this] {
+    thread_pool.scheduleOrThrowOnError([this] {
         load();
     });
 }

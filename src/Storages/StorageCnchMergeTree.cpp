@@ -985,7 +985,7 @@ CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, Context
     ThreadPool pool(std::min(16UL, cnch_parts.size()));
     for (size_t i = 0; i < cnch_parts.size(); ++i)
     {
-        pool.scheduleOrThrow([i, &cnch_parts, &results] {
+        pool.scheduleOrThrowOnError([i, &cnch_parts, &results] {
             String message;
             bool is_passed = false;
             try

@@ -326,11 +326,9 @@ private:
             *worker_iter = std::make_unique<Worker>(*this, logger_, worker_iter);
             worker_num_ = workers_.size();
 
-            worker_pool_->scheduleOrThrow([wrk_iter = worker_iter]() {
+            return worker_pool_->trySchedule([wrk_iter = worker_iter]() {
                 (*wrk_iter)->run();
             });
-
-            return true;
         }
 
         bool removeWorker(typename std::list<std::unique_ptr<Worker>>::iterator worker_iter) {
