@@ -22,6 +22,11 @@
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int TSO_OPERATION_ERROR;
+};
+
 namespace TSO
 {
 

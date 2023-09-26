@@ -470,7 +470,7 @@ namespace Catalog
         return parseQuery(parser, begin, end, "", 0, 0);
     }
 
-    Catalog::Catalog(Context & _context, CatalogConfig & config, String _name_space) : context(_context), name_space(_name_space)
+    Catalog::Catalog(Context & _context, MetastoreConfig & config, String _name_space) : context(_context), name_space(_name_space)
     {
         runWithMetricSupport(
             [&] {

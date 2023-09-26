@@ -19,7 +19,7 @@
 #include <gflags/gflags.h>
 #include <Catalog/MetastoreFDBImpl.h>
 #include <Catalog/StringHelper.h>
-#include <Catalog/CatalogConfig.h>
+#include <Common/Config/MetastoreConfig.h>
 #include <Catalog/MetastoreProxy.h>
 #include <Protos/data_models.pb.h>
 
@@ -106,7 +106,7 @@ int S3MetaSanitizer::main(const std::vector<std::string>&)
 
 void S3MetaSanitizer::initializeMetastore()
 {
-    Catalog::CatalogConfig catalog_conf(config());
+    MetastoreConfig catalog_conf(config(), CATALOG_SERVICE_CONFIGURE);
     const char * consul_http_host = getenv("CONSUL_HTTP_HOST");
     const char * consul_http_port = getenv("CONSUL_HTTP_PORT");
     if (consul_http_host != nullptr && consul_http_port != nullptr)
@@ -114,7 +114,7 @@ void S3MetaSanitizer::initializeMetastore()
 
     catalog_namespace = config().getString("catalog.name_space", "default");
 
-    if (catalog_conf.type == Catalog::StoreType::FDB)
+    if (catalog_conf.type == MetaStoreType::FDB)
     {
         metastore_ptr = std::make_shared<Catalog::MetastoreFDBImpl>(catalog_conf.fdb_conf.cluster_conf_path);
     }
@@ -160,7 +160,7 @@ int mainEntryClickhouseS3MetaSanitizer(int argc, char** argv)
     }
     catch (const std::exception& e)
     {
-        std::cerr << "Failed to sanitize s3 meta: " << e.what() << std::endl; 
+        std::cerr << "Failed to sanitize s3 meta: " << e.what() << std::endl;
     }
     return -1;
 }

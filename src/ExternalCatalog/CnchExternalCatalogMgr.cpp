@@ -1,7 +1,5 @@
 #include <memory>
 #include <mutex>
-#include <Catalog/CatalogConfig.h>
-#include <Catalog/MetastoreProxy.h>
 #include <ExternalCatalog/CnchExternalCatalogMgr.h>
 #include <ExternalCatalog/HiveExternalCatalog.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>

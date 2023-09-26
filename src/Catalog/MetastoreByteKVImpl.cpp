@@ -66,7 +66,9 @@ MetastoreByteKVImpl::MetastoreByteKVImpl(
 void MetastoreByteKVImpl::init()
 {
     auto code = ByteKVClientBuilder()
+        .setServiceDiscoveryType(discovery_type)
         .setServiceName(service_name)
+        .setServicePort(service_port)
         .setClusterName(cluster_name)
         .setNameSpace(name_space)
         .setConnectionTimeoutMS(3000)

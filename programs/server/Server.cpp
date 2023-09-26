@@ -30,9 +30,7 @@
 #include <Access/AccessControlManager.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Catalog/Catalog.h>
-#include <Catalog/CatalogConfig.h>
-// #include <Catalog/MetastoreConfig.h>
-#include <Catalog/Catalog.h>
+#include <Common/Config/MetastoreConfig.h>
 #include <CloudServices/CnchServerServiceImpl.h>
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchWorkerServiceImpl.h>
@@ -97,7 +95,6 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/Config/VWCustomizedSettings.h>
-#include <Common/Configurations.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/DNSResolver.h>
 #include <Common/Elf.h>
@@ -118,6 +115,7 @@
 #include <Common/getNumberOfPhysicalCPUCores.h>
 #include <Common/JeprofControl.h>
 #include <Common/remapExecutable.h>
+#include <Common/Configurations.h>
 #include <common/ErrorHandlers.h>
 #include <common/coverage.h>
 #include <common/defines.h>
@@ -600,7 +598,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)
         global_context->setComplexQueryActive(true);
 
-    Catalog::CatalogConfig catalog_conf(global_context->getCnchConfigRef());
+    MetastoreConfig catalog_conf(global_context->getCnchConfigRef(), CATALOG_SERVICE_CONFIGURE);
+
+    std::string current_raw_sd_config;
+    if (config().has("service_discovery")) // only important for local mode (for observing if the sd section is changed)
+    {
+        current_raw_sd_config = config().getRawString("service_discovery");
+    }
 
     /// Initialize components in server or worker.
     if (global_context->getServerType() == ServerType::cnch_server || global_context->getServerType() == ServerType::cnch_worker)

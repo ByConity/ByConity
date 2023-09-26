@@ -15,7 +15,7 @@
 
 #pragma once
 
-#include <TSO/TSOConfig.h>
+#include <Common/Config/MetastoreConfig.h>
 #include <TSO/TSOMetastore.h>
 
 namespace DB
@@ -28,7 +28,7 @@ class TSOProxy
 {
 public:
 
-    TSOProxy(const TSOConfig & config);
+    TSOProxy(const MetastoreConfig & config);
     ~TSOProxy() {}
 
     void setTimestamp(UInt64 timestamp);

@@ -524,8 +524,6 @@ endif ()
 dbms_target_include_directories (SYSTEM BEFORE PRIVATE ${SPARSEHASH_INCLUDE_DIR})
 
 if (USE_PROTOBUF)
-    dbms_target_link_libraries (PRIVATE ${Protobuf_LIBRARY})
-    dbms_target_include_directories (SYSTEM BEFORE PRIVATE ${Protobuf_INCLUDE_DIR})
     target_link_libraries(clickhouse_common_io PUBLIC brpc-static ${DYNAMIC_LIB})
     target_link_libraries(clickhouse_common_io PUBLIC clickhouse_protos_lib)
     target_link_libraries(clickhouse_common_io PUBLIC ${Protobuf_LIBRARY})
