@@ -31,6 +31,7 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/registerStorages.h>
 #include <Common/NamePrompter.h>
+#include <Storages/Hive/Metastore/IMetaClient.h>
 
 namespace DB
 {
