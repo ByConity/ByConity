@@ -22,6 +22,8 @@
 #include <Optimizer/Rewriter/AddExchange.h>
 #include <Optimizer/Rewriter/AddRuntimeFilters.h>
 #include <Optimizer/Rewriter/ColumnPruning.h>
+#include <Optimizer/Rewriter/EliminateJoinByForeignKey.h>
+#include <Optimizer/Rewriter/GroupByKeysPruning.h>
 #include <Optimizer/Rewriter/MaterializedViewRewriter.h>
 #include <Optimizer/Rewriter/OptimizeTrivialCount.h>
 #include <Optimizer/Rewriter/PredicatePushdown.h>
@@ -194,6 +196,10 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<IterativeRewriter>(Rules::pushAggRules(), "PushAggregateThroughJoin"),
 
         std::make_shared<ImplementJoinOrderHints>(),
+
+        std::make_shared<GroupByKeysPruning>(),
+        std::make_shared<EliminateJoinByFK>(),
+
         std::make_shared<SimpleReorderJoin>(),
         std::make_shared<PredicatePushdown>(),
 

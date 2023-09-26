@@ -24,12 +24,17 @@
 #include <Parsers/ASTConstraintDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTForeignKeyDeclaration.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTIndexDeclaration.h>
 #include <Parsers/ASTProjectionDeclaration.h>
-#include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/ASTExpressionList.h>
+#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
+#include <Parsers/CommonParsers.h>
+#include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/IAST.h>
 #include <Parsers/IAST_fwd.h>
@@ -39,6 +44,7 @@
 #include <Parsers/ParserProjectionSelectQuery.h>
 #include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/ParserSetQuery.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Common/typeid_cast.h>
 
 
@@ -177,6 +183,98 @@ bool ParserConstraintDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
     return true;
 }
 
+bool ParserForeignKeyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserIdentifier name_p;
+    ParserKeyword s_foreign_key("FOREIGN KEY");
+    ParserKeyword s_references("REFERENCES");
+
+    ParserToken s_lparen(TokenType::OpeningRoundBracket);
+    ParserToken s_rparen(TokenType::ClosingRoundBracket);
+
+    ParserList foreign_key_columns_p(std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma), false);
+    ParserIdentifier ref_table_name_p;
+    ParserList references_columns_p(std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma), false);
+
+
+    ASTPtr fk_name;
+    ASTPtr column_names;
+    ASTPtr ref_table_name;
+    ASTPtr ref_column_names;
+
+    if (!name_p.parse(pos, fk_name, expected))
+        return false;
+
+    if (!s_foreign_key.ignore(pos, expected))
+        return false;
+
+    if (!s_lparen.ignore(pos, expected))
+        return false;
+    if (!foreign_key_columns_p.parse(pos, column_names, expected))
+        return false;
+    if (!s_rparen.ignore(pos, expected))
+        return false;
+
+    if (!s_references.ignore(pos, expected))
+        return false;
+
+    if (!ref_table_name_p.parse(pos, ref_table_name, expected))
+        return false;
+
+    if (!s_lparen.ignore(pos, expected))
+        return false;
+    if (!references_columns_p.parse(pos, ref_column_names, expected))
+        return false;
+    if (!s_rparen.ignore(pos, expected))
+        return false;
+
+    auto foreign_key = std::make_shared<ASTForeignKeyDeclaration>();
+    foreign_key->fk_name = fk_name->as<ASTIdentifier &>().name();
+    foreign_key->column_names = column_names;
+    foreign_key->ref_table_name = ref_table_name->as<ASTIdentifier &>().name();
+    foreign_key->ref_column_names = ref_column_names;
+
+    node = foreign_key;
+
+    return true;
+}
+
+bool ParserUniqueNotEnforcedDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserIdentifier name_p;
+    ParserKeyword s_unique_not_enforced("UNIQUE");
+
+    ParserToken s_lparen(TokenType::OpeningRoundBracket);
+    ParserToken s_rparen(TokenType::ClosingRoundBracket);
+
+    ParserList unique_columns_p(std::make_unique<ParserIdentifier>(), std::make_unique<ParserToken>(TokenType::Comma), false);
+
+
+    ASTPtr name;
+    ASTPtr column_names;
+
+    if (!name_p.parse(pos, name, expected))
+        return false;
+
+    if (!s_unique_not_enforced.ignore(pos, expected))
+        return false;
+
+    if (!s_lparen.ignore(pos, expected))
+        return false;
+    if (!unique_columns_p.parse(pos, column_names, expected))
+        return false;
+    if (!s_rparen.ignore(pos, expected))
+        return false;
+
+
+    auto unique = std::make_shared<ASTUniqueNotEnforcedDeclaration>();
+    unique->name = name->as<ASTIdentifier &>().name();
+    unique->column_names = column_names;
+
+    node = unique;
+
+    return true;
+}
 
 bool ParserProjectionDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
@@ -220,17 +318,14 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     ParserProjectionDeclaration projection_p(dt);
     ParserColumnDeclaration column_p{dt, true, true};
     ParserExpression primary_key_p(dt);
+    ParserForeignKeyDeclaration foreign_key_p(dt);
+    ParserUniqueNotEnforcedDeclaration unique_p(dt);
 
     ASTPtr new_node = nullptr;
 
     if (s_index.ignore(pos, expected))
     {
         if (!index_p.parse(pos, new_node, expected))
-            return false;
-    }
-    else if (s_constraint.ignore(pos, expected))
-    {
-        if (!constraint_p.parse(pos, new_node, expected))
             return false;
     }
     else if (s_projection.ignore(pos, expected))
@@ -241,6 +336,12 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
     else if (s_primary_key.ignore(pos, expected))
     {
         if (!primary_key_p.parse(pos, new_node, expected))
+            return false;
+    }
+    else if (s_constraint.ignore(pos, expected))
+    {
+        if (!foreign_key_p.parse(pos, new_node, expected) && !constraint_p.parse(pos, new_node, expected)
+            && !unique_p.parse(pos, new_node, expected))
             return false;
     }
     else
@@ -265,6 +366,22 @@ bool ParserConstraintDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expect
             .parse(pos, node, expected);
 }
 
+bool ParserForeignKeyDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    return ParserList(
+               std::make_unique<ParserForeignKeyDeclaration>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
+        .parse(pos, node, expected);
+}
+
+bool ParserUniqueNotEnforcedDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    return ParserList(
+               std::make_unique<ParserUniqueNotEnforcedDeclaration>(dt),
+               std::make_unique<ParserToken>(TokenType::Comma),
+               false)
+        .parse(pos, node, expected);
+}
+
 bool ParserProjectionDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     return ParserList(std::make_unique<ParserProjectionDeclaration>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
@@ -285,6 +402,8 @@ bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, E
     ASTPtr constraints = std::make_shared<ASTExpressionList>();
     ASTPtr projections = std::make_shared<ASTExpressionList>();
     ASTPtr primary_key;
+    ASTPtr foreign_keys = std::make_shared<ASTExpressionList>();
+    ASTPtr unique = std::make_shared<ASTExpressionList>();
 
     for (const auto & elem : list->children)
     {
@@ -305,6 +424,10 @@ bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, E
             }
             primary_key = elem;
         }
+        else if (elem->as<ASTForeignKeyDeclaration>())
+            foreign_keys->children.push_back(elem);
+        else if (elem->as<ASTUniqueNotEnforcedDeclaration>())
+            unique->children.push_back(elem);
         else
             return false;
     }
@@ -321,6 +444,10 @@ bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, E
         res->set(res->projections, projections);
     if (primary_key)
         res->set(res->primary_key, primary_key);
+    if (!foreign_keys->children.empty())
+        res->set(res->foreign_keys, foreign_keys);
+    if (!unique->children.empty())
+        res->set(res->unique, unique);
 
     node = res;
 

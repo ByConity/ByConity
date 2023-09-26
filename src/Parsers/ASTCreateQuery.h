@@ -71,6 +71,8 @@ public:
     ASTExpressionList * constraints = nullptr;
     ASTExpressionList * projections = nullptr;
     IAST              * primary_key = nullptr;
+    ASTExpressionList * foreign_keys = nullptr;
+    ASTExpressionList * unique = nullptr; // unique is not enforced.
 
     String getID(char) const override { return "Columns definition"; }
 
@@ -82,8 +84,8 @@ public:
 
     bool empty() const
     {
-        return (!columns || columns->children.empty()) && (!indices || indices->children.empty())
-            && (!constraints || constraints->children.empty()) && (!projections || projections->children.empty());
+        return (!columns || columns->children.empty()) && (!indices || indices->children.empty()) && (!constraints || constraints->children.empty())
+            && (!projections || projections->children.empty()) && (!foreign_keys || foreign_keys->children.empty())&& (!unique || unique->children.empty());
     }
 };
 

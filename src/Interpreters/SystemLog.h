@@ -962,7 +962,7 @@ StoragePtr CnchSystemLog<LogElement>::createCloudMergeTreeInMemory(const Storage
     ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, /* attach= */ true);
 
     ContextMutablePtr mutable_context = Context::createCopy(context);
-    StoragePtr res = StorageFactory::instance().get(ast_create_query, "", mutable_context, mutable_context->getGlobalContext(), columns, {}, false);
+    StoragePtr res = StorageFactory::instance().get(ast_create_query, "", mutable_context, mutable_context->getGlobalContext(), columns, {}, {}, {}, false);
     return res;
 }
 

@@ -278,6 +278,7 @@ message AggregatingStep {
   repeated SortColumnDescription group_by_sort_description = 11;
   repeated GroupingDescription groupings = 12;
   required bool should_produce_results_in_order_of_bucket_number = 13;
+  repeated bytes keys_not_hashed = 14;
 }
 
 message TotalsHavingStep {
@@ -346,46 +347,10 @@ message BufferStep {
   required ITransformingStep query_plan_base = 1;
 }
 
-message CreatingSetStep {
-  // unimplemented
-}
-
-message CreatingSetsStep {
-  // unimplemented
-}
-
-message CubeStep {
-  // unimplemented
-}
-
-message ExpressionStep {
-  // unimplemented
-}
-
 message ExplainAnalyzeStep {
 }
 
-message FilledJoinStep {
-  // unimplemented
-}
-
-message PlanSegmentSourceStep {
-  // unimplemented
-}
-
-message ReadFromStorageStep {
-  // unimplemented
-}
-
-message RollupStep {
-  // unimplemented
-}
-
-message SettingQuotaAndLimitsStep {
-  // unimplemented
-}
-
-// this must be identical to APPLY_STEP_PROTOBUF_TYPES_AND_NAME
+// this must be identical to APPLY_STEP_PROTOBUF_TYPES_AND_NAMES
 //    with Step/_step postfix
 //    in src/QueryPlan/IQueryPlanStep.h
 // due to Protobuf will generate 'oneof' EnumName
@@ -432,16 +397,7 @@ message QueryPlanStep {
     IntersectOrExceptStep intersect_or_except_step = 37;
     BufferStep buffer_step = 38;
     ApplyStep apply_step = 39;
-    CreatingSetStep creating_set_step = 40;
-    CreatingSetsStep creating_sets_step = 41;
-    CubeStep cube_step = 42;
-    ExpressionStep expression_step = 43;
     ExplainAnalyzeStep explain_analyze_step = 44;
-    FilledJoinStep filled_join_step = 45;
-    PlanSegmentSourceStep plan_segment_source_step = 46;
-    ReadFromStorageStep read_from_storage_step = 47;
-    RollupStep rollup_step = 48;
-    SettingQuotaAndLimitsStep setting_quota_and_limits_step = 49;
     TotalsHavingStep totals_having_step = 50;
   }
 }

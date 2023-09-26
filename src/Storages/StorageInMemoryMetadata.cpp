@@ -37,6 +37,9 @@
 
 #include <sparsehash/dense_hash_map>
 #include <sparsehash/dense_hash_set>
+#include <Common/typeid_cast.h>
+#include <Storages/ForeignKeysDescription.h>
+#include <Storages/UniqueNotEnforcedDescription.h>
 
 
 namespace DB
@@ -56,6 +59,8 @@ StorageInMemoryMetadata::StorageInMemoryMetadata(const StorageInMemoryMetadata &
     : columns(other.columns)
     , secondary_indices(other.secondary_indices)
     , constraints(other.constraints)
+    , foreign_keys(other.foreign_keys)
+    , unique_not_enforced(other.unique_not_enforced)
     , projections(other.projections.clone())
     , partition_key(other.partition_key)
     , cluster_by_key(other.cluster_by_key)
@@ -79,6 +84,8 @@ StorageInMemoryMetadata & StorageInMemoryMetadata::operator=(const StorageInMemo
     columns = other.columns;
     secondary_indices = other.secondary_indices;
     constraints = other.constraints;
+    foreign_keys = other.foreign_keys;
+    unique_not_enforced = other.unique_not_enforced;
     projections = other.projections.clone();
     partition_key = other.partition_key;
     cluster_by_key = other.cluster_by_key;
@@ -117,6 +124,16 @@ void StorageInMemoryMetadata::setSecondaryIndices(IndicesDescription secondary_i
 void StorageInMemoryMetadata::setConstraints(ConstraintsDescription constraints_)
 {
     constraints = std::move(constraints_);
+}
+
+void StorageInMemoryMetadata::setForeignKeys(ForeignKeysDescription foreign_keys_)
+{
+    foreign_keys = std::move(foreign_keys_);
+}
+
+void StorageInMemoryMetadata::setUniqueNotEnforced(UniqueNotEnforcedDescription unique_)
+{
+    unique_not_enforced = std::move(unique_);
 }
 
 void StorageInMemoryMetadata::setProjections(ProjectionsDescription projections_)
@@ -165,6 +182,16 @@ bool StorageInMemoryMetadata::hasSecondaryIndices() const
 const ConstraintsDescription & StorageInMemoryMetadata::getConstraints() const
 {
     return constraints;
+}
+
+const ForeignKeysDescription & StorageInMemoryMetadata::getForeignKeys() const
+{
+    return foreign_keys;
+}
+
+const UniqueNotEnforcedDescription & StorageInMemoryMetadata::getUniqueNotEnforced() const
+{
+    return unique_not_enforced;
 }
 
 const ProjectionsDescription & StorageInMemoryMetadata::getProjections() const

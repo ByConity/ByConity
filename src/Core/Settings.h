@@ -1872,7 +1872,7 @@ enum PreloadLevelSettings : UInt64
     M(Float, cost_calculator_join_build_weight, 2, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_join_output_weight, 0.5, "Join output weight for cost calculator", 0) \
     M(Float, cost_calculator_cte_weight, 1, "CTE output weight for cost calculator", 0) \
-    M(Float, cost_calculator_cte_weight_for_join_build_side, 2.0, "Join build side weight for cost calculator", 0) \
+    M(Float, cost_calculator_cte_weight_for_join_build_side, 1.8, "Join build side weight for cost calculator", 0) \
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
     M(Float, stats_estimator_join_filter_selectivity, 1, "Join filter selectivity", 0) \
     M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
@@ -1918,6 +1918,10 @@ enum PreloadLevelSettings : UInt64
     M(MaterializedViewConsistencyCheckMethod, materialized_view_consistency_check_method, MaterializedViewConsistencyCheckMethod::PARTITION, "The method to check whether a materialized view is consistent with the base table for a query", 0) \
     M(Bool, enable_execute_query, true, "Whether to execute this query", 0) \
     M(UInt64, max_plan_segment_num, 500, "maximum plan segments allowed, 0 means no restriction", 0)\
+    M(Bool, enable_group_by_keys_pruning, false, "Whether to enable RBO -- group by keys pruning optimization", 0) \
+    M(Bool, enable_eliminate_join_by_fk, false, "Whether to enable RBO -- eliminate join by fk optimization", 0) \
+    M(Bool, enable_eliminate_simple_pk_fk_join, false, "Whether to eliminate simple pk-fk join optimization", 0) \
+    M(Bool, enable_eliminate_join_by_fk_without_top_join, false, "Whether to allow eliminate join by fk pull through pass the multi-child node even if no top join", 0) \
     /** Exchange settings */ \
     M(Bool, exchange_enable_multipath_reciever, true, "Whether enable exchange new mode ", 0) \
     M(UInt64, exchange_parallel_size, 1, "Exchange parallel size", 0) \

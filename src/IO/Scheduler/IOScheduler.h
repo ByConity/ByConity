@@ -17,7 +17,6 @@
 #include <common/singleton.h>
 #include <IO/Scheduler/ReaderCache.h>
 #include <Core/Types.h>
-#include <IO/RemoteFSReader.h>
 #include <IO/Scheduler/FDs.h>
 #include <IO/Scheduler/IOWorkerPool.h>
 #include <Poco/Util/AbstractConfiguration.h>
@@ -187,7 +186,7 @@ public:
 
         size_t allocation_level0_buckets_ = 1;
         size_t allocation_level1_buckets_ = 1;
-        
+
         ReaderCache::Options reader_cache_opts_ = ReaderCache::Options {.shard_size_ = 1, .max_cache_size_ = 1};
     };
 

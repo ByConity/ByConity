@@ -18,9 +18,10 @@
 #include <Core/Types.h>
 #include <Optimizer/CardinalityEstimate/PlanNodeStatistics.h>
 #include <Optimizer/Cascades/GroupExpression.h>
+#include <Optimizer/Property/Constants.h>
 #include <Optimizer/Property/Property.h>
+#include <Optimizer/Property/SymbolEquivalencesDeriver.h>
 #include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
-#include <Optimizer/SymbolEquivalencesDeriver.h>
 
 #include <memory>
 #include <string>
@@ -128,6 +129,11 @@ public:
 
     const std::unordered_map<Property, WinnerPtr, PropertyHash> & getLowestCostExpressions() const { return lowest_cost_expressions; }
 
+    const std::optional<Constants> & getConstants() const
+    {
+        return constants;
+    }
+
     const SymbolEquivalencesPtr & getEquivalences() const { return equivalences; }
 
     const std::unordered_set<CTEId> & getCTESet() const { return cte_set; }
@@ -171,6 +177,7 @@ private:
     UInt64 max_table_scan_rows = 0;
 
     SymbolEquivalencesPtr equivalences;
+    std::optional<Constants> constants;
 
     bool simple_children = true;
     bool is_table_scan = false;

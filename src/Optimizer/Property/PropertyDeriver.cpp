@@ -133,7 +133,6 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, Cont
         }
     }
 
-
     return Property{Partitioning(Partitioning::Handle::UNKNOWN), Partitioning(Partitioning::Handle::UNKNOWN), sorting};
 }
 
@@ -168,6 +167,44 @@ Property DeriverVisitor::visitStep(const IQueryPlanStep &, DeriverContext & cont
     return context.getInput()[0].clearSorting();
 }
 
+Property  DeriverVisitor::visitFinalSampleStep(const FinalSampleStep &, DeriverContext &)
+{
+    throw Exception("Not impl property deriver", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+Property DeriverVisitor::visitOffsetStep(const OffsetStep &, DeriverContext &)
+{
+    throw Exception("Not impl property deriver", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+Property DeriverVisitor::visitTotalsHavingStep(const TotalsHavingStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
+Property DeriverVisitor::visitFinishSortingStep(const FinishSortingStep & step, DeriverContext & context)
+{
+    auto prop = context.getInput()[0];
+    Sorting sorting;
+    for (auto item : step.getResultDescription())
+    {
+        sorting.emplace_back(item);
+    }
+
+    prop.setSorting(sorting);
+    return prop;
+}
+
+Property DeriverVisitor::visitPartitionTopNStep(const PartitionTopNStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
+Property DeriverVisitor::visitBufferStep(const BufferStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
 Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, DeriverContext & context)
 {
     auto assignments = step.getAssignments();
@@ -182,7 +219,7 @@ Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, Derive
                 std::set<String> symbols = SymbolsExtractor::extract(item.second);
                 bool contains_all = true;
                 auto partition_col = context.getInput()[0].getNodePartitioning().getPartitioningColumns();
-                for (auto col : partition_col)
+                for (const auto & col : partition_col)
                 {
                     if (!symbols.count(col))
                     {
@@ -244,31 +281,8 @@ Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, Derive
     return translated;
 }
 
-Property DeriverVisitor::visitFilterStep(const FilterStep & step, DeriverContext & context)
+Property DeriverVisitor::visitFilterStep(const FilterStep &, DeriverContext & context)
 {
-    Predicate::DomainTranslator<String> translator{context.getContext()};
-    // TODO, remove clone. step.getFilter()->clone()
-    Predicate::ExtractionResult<String> result
-        = translator.getExtractionResult(step.getFilter()->clone(), step.getOutputStream().header.getNamesAndTypes());
-    auto values = result.tuple_domain.extractFixedValues();
-    if (values.has_value())
-    {
-        Property input = context.getInput()[0];
-        std::map<String, FieldWithType> filter_values;
-        const Constants & origin_constants = input.getConstants();
-        for (const auto & value : origin_constants.getValues())
-        {
-            filter_values[value.first] = value.second;
-        }
-        for (auto & value : values.value())
-        {
-            filter_values[value.first] = value.second;
-        }
-        Constants filter_constants{filter_values};
-        input.setConstants(filter_constants);
-        return input;
-    }
-
     return context.getInput()[0];
 }
 
@@ -286,20 +300,6 @@ Property DeriverVisitor::visitJoinStep(const JoinStep & step, DeriverContext & c
     {
         Property left_translated = context.getInput()[0].translate(identities);
         Property right_translated = context.getInput()[1].translate(identities);
-
-        std::map<String, FieldWithType> filter_values;
-        const Constants & left_constants = left_translated.getConstants();
-        const Constants & right_constants = right_translated.getConstants();
-        for (const auto & value : left_constants.getValues())
-        {
-            filter_values[value.first] = value.second;
-        }
-        for (const auto & value : right_constants.getValues())
-        {
-            filter_values[value.first] = value.second;
-        }
-        Constants filter_constants{filter_values};
-        left_translated.setConstants(filter_constants);
 
         translated = left_translated;
 
@@ -557,10 +557,7 @@ Property DeriverVisitor::visitValuesStep(const ValuesStep &, DeriverContext &)
 Property DeriverVisitor::visitLimitStep(const LimitStep &, DeriverContext & context)
 {
     return Property{
-        context.getInput()[0].getNodePartitioning(),
-        Partitioning(Partitioning::Handle::SINGLE),
-        context.getInput()[0].getSorting(),
-        context.getInput()[0].getConstants()};
+        context.getInput()[0].getNodePartitioning(), Partitioning(Partitioning::Handle::SINGLE), context.getInput()[0].getSorting()};
 }
 
 Property DeriverVisitor::visitLimitByStep(const LimitByStep &, DeriverContext & context)

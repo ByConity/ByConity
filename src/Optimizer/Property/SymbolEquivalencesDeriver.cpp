@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-#include <Optimizer/SymbolEquivalencesDeriver.h>
+#include <Optimizer/Property/SymbolEquivalencesDeriver.h>
 #include <Optimizer/Utils.h>
 
 namespace DB

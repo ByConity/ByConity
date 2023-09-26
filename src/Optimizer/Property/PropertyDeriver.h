@@ -50,41 +50,9 @@ class DeriverVisitor : public StepVisitor<Property, DeriverContext>
 public:
     Property visitStep(const IQueryPlanStep &, DeriverContext &) override;
 
-    Property visitProjectionStep(const ProjectionStep & step, DeriverContext & context) override;
-    Property visitFilterStep(const FilterStep &, DeriverContext & context) override;
-    Property visitJoinStep(const JoinStep & step, DeriverContext & context) override;
-    Property visitArrayJoinStep(const ArrayJoinStep & step, DeriverContext & context) override;
-    Property visitAggregatingStep(const AggregatingStep & step, DeriverContext & context) override;
-    Property visitMarkDistinctStep(const MarkDistinctStep & step, DeriverContext & context) override;
-    Property visitMergingAggregatedStep(const MergingAggregatedStep &, DeriverContext & context) override;
-    Property visitUnionStep(const UnionStep & step, DeriverContext & context) override;
-    Property visitExceptStep(const ExceptStep &, DeriverContext & context) override;
-    Property visitIntersectStep(const IntersectStep &, DeriverContext & context) override;
-    Property visitIntersectOrExceptStep(const IntersectOrExceptStep &, DeriverContext & context) override;
-    Property visitExchangeStep(const ExchangeStep & step, DeriverContext & context) override;
-    Property visitRemoteExchangeSourceStep(const RemoteExchangeSourceStep &, DeriverContext & context) override;
-    Property visitTableScanStep(const TableScanStep &, DeriverContext &) override;
-    Property visitReadNothingStep(const ReadNothingStep &, DeriverContext &) override;
-    Property visitReadStorageRowCountStep(const ReadStorageRowCountStep &, DeriverContext &) override;
-    Property visitValuesStep(const ValuesStep &, DeriverContext &) override;
-    Property visitLimitStep(const LimitStep &, DeriverContext & context) override;
-    Property visitLimitByStep(const LimitByStep &, DeriverContext & context) override;
-    Property visitSortingStep(const SortingStep &, DeriverContext & context) override;
-    Property visitMergeSortingStep(const MergeSortingStep &, DeriverContext & context) override;
-    Property visitPartialSortingStep(const PartialSortingStep &, DeriverContext & context) override;
-    Property visitMergingSortedStep(const MergingSortedStep &, DeriverContext & context) override;
-    Property visitDistinctStep(const DistinctStep &, DeriverContext & context) override;
-    Property visitExtremesStep(const ExtremesStep &, DeriverContext & context) override;
-    Property visitWindowStep(const WindowStep &, DeriverContext & context) override;
-    Property visitApplyStep(const ApplyStep &, DeriverContext & context) override;
-    Property visitEnforceSingleRowStep(const EnforceSingleRowStep &, DeriverContext & context) override;
-    Property visitAssignUniqueIdStep(const AssignUniqueIdStep &, DeriverContext & context) override;
-    Property visitCTERefStep(const CTERefStep &, DeriverContext & context) override;
-    Property visitExplainAnalyzeStep(const ExplainAnalyzeStep &, DeriverContext & context) override;
-    Property visitTopNFilteringStep(const TopNFilteringStep &, DeriverContext & context) override;
-    Property visitFillingStep(const FillingStep &, DeriverContext & context) override;
-    Property visitTableWriteStep(const TableWriteStep &, DeriverContext & context) override;
-    Property visitTableFinishStep(const TableFinishStep &, DeriverContext & context) override;
+#define VISITOR_DEF(TYPE) Property visit##TYPE##Step(const TYPE##Step &, DeriverContext &) override;
+    APPLY_STEP_TYPES(VISITOR_DEF)
+#undef VISITOR_DEF
 };
 
 }

@@ -15,10 +15,10 @@
 
 #include <iostream>
 #include <gtest/gtest.h>
-#include "Common/Stopwatch.h"
-#include "Core/Field.h"
-#include "DataTypes/DataTypeFactory.h"
-#include "Optimizer/domain.h"
+#include <Common/Stopwatch.h>
+#include <Core/Field.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <Optimizer/domain.h>
 #include <Common/tests/gtest_global_register.h>
 #include <Common/tests/gtest_global_context.h>
 using namespace DB;

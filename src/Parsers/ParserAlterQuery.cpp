@@ -68,6 +68,10 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserKeyword s_add_constraint("ADD CONSTRAINT");
     ParserKeyword s_drop_constraint("DROP CONSTRAINT");
 
+    ParserKeyword s_drop_foreign_key("DROP FOREIGN KEY");
+
+    ParserKeyword s_drop_unique_not_enforced("DROP UNIQUE");
+
     ParserKeyword s_add_projection("ADD PROJECTION");
     ParserKeyword s_drop_projection("DROP PROJECTION");
     ParserKeyword s_clear_projection("CLEAR PROJECTION");
@@ -155,7 +159,10 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ParserCompoundColumnDeclaration parser_col_decl(dt);
     ParserIndexDeclaration parser_idx_decl(dt);
     ParserConstraintDeclaration parser_constraint_decl(dt);
-    ParserProjectionDeclaration parser_projection_decl(dt);
+    ParserForeignKeyDeclaration parser_foreign_key_decl(dt);
+    ParserUniqueNotEnforcedDeclaration parser_unique_not_enforced_key(dt);
+
+    ParserProjectionDeclaration parser_projection_decl;
     ParserCompoundColumnDeclaration parser_modify_col_decl(dt, false, false, true);
     ParserPartition parser_partition(dt);
     ParserExpression parser_exp_elem(dt);
@@ -519,10 +526,47 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
             if (s_if_not_exists.ignore(pos, expected))
                 command->if_not_exists = true;
 
-            if (!parser_constraint_decl.parse(pos, command->constraint_decl, expected))
+            if (parser_foreign_key_decl.parse(pos, command->foreign_key_decl, expected))
+                    command->type = ASTAlterCommand::ADD_FOREIGN_KEY;
+                else if (parser_unique_not_enforced_key.parse(pos, command->unique_not_enforced_decl, expected))
+                    command->type = ASTAlterCommand::ADD_UNIQUE_NOT_ENFORCED;
+                else if (parser_constraint_decl.parse(pos, command->constraint_decl, expected))
+                    command->type = ASTAlterCommand::ADD_CONSTRAINT;
+                else
+                    return false;
+        }
+        else if (s_drop_foreign_key.ignore(pos, expected))
+        {
+            if (s_if_exists.ignore(pos, expected))
+                command->if_exists = true;
+
+            if (!parser_name.parse(pos, command->foreign_key, expected))
                 return false;
 
-            command->type = ASTAlterCommand::ADD_CONSTRAINT;
+            command->type = ASTAlterCommand::DROP_FOREIGN_KEY;
+            command->detach = false;
+        }
+        else if (s_drop_unique_not_enforced.ignore(pos, expected))
+        {
+            if (s_if_exists.ignore(pos, expected))
+                command->if_exists = true;
+
+            if (!parser_name.parse(pos, command->unique_not_enforced, expected))
+                return false;
+
+            command->type = ASTAlterCommand::DROP_UNIQUE_NOT_ENFORCED;
+            command->detach = false;
+        }
+        else if (s_drop_constraint.ignore(pos, expected))
+        {
+            if (s_if_exists.ignore(pos, expected))
+                command->if_exists = true;
+
+            if (!parser_name.parse(pos, command->constraint, expected))
+                return false;
+
+            command->type = ASTAlterCommand::DROP_CONSTRAINT;
+            command->detach = false;
         }
         else if (s_drop_constraint.ignore(pos, expected))
         {
@@ -538,8 +582,7 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         else if (s_detach_partition_where.ignore(pos, expected))
 	    {
             if (!parser_exp_elem.parse(pos, command->predicate, expected))
-		return false;
-
+		        return false;
             command->type = ASTAlterCommand::DROP_PARTITION_WHERE;
             command->detach = true;
         }
@@ -1123,6 +1166,14 @@ bool ParserAlterCommand::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         command->children.push_back(command->constraint_decl);
     if (command->constraint)
         command->children.push_back(command->constraint);
+    if (command->foreign_key_decl)
+        command->children.push_back(command->foreign_key_decl);
+    if (command->foreign_key)
+        command->children.push_back(command->foreign_key);
+    if (command->unique_not_enforced_decl)
+        command->children.push_back(command->unique_not_enforced_decl);
+    if (command->unique_not_enforced)
+        command->children.push_back(command->unique_not_enforced);
     if (command->predicate)
         command->children.push_back(command->predicate);
     if (command->update_assignments)

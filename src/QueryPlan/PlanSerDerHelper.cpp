@@ -283,7 +283,7 @@ void serializeQueryPlanStepToProto(const QueryPlanStepPtr & step, Protos::QueryP
         return; \
     }
 
-        APPLY_STEP_PROTOBUF_TYPES_AND_NAME(CASE_DEF)
+        APPLY_STEP_PROTOBUF_TYPES_AND_NAMES(CASE_DEF)
 #undef CASE_DEF
 
         default: {
@@ -308,7 +308,7 @@ QueryPlanStepPtr deserializeQueryPlanStepFromProto(const Protos::QueryPlanStep &
     case Protos::QueryPlanStep::StepCase::k##TYPE##Step: { \
         return deserializeQueryPlanStepFromProtoImpl<TYPE##Step, Protos::TYPE##Step>(proto.VAR_NAME##_step(), context); \
     }
-        APPLY_STEP_PROTOBUF_TYPES_AND_NAME(CASE_DEF)
+        APPLY_STEP_PROTOBUF_TYPES_AND_NAMES(CASE_DEF)
 #undef CASE_DEF
 
         default: {
@@ -344,7 +344,7 @@ bool isPlanStepEqual(const IQueryPlanStep & a, const IQueryPlanStep & b)
         return isPlanStepEqualImpl<TYPE##Step, Protos::TYPE##Step>(a, b); \
     }
 
-        APPLY_STEP_PROTOBUF_TYPES_AND_NAME(CASE_DEF)
+        APPLY_STEP_PROTOBUF_TYPES_AND_NAMES(CASE_DEF)
 
         default:
             throw Exception("unsupported step", ErrorCodes::PROTOBUF_BAD_CAST);
@@ -372,7 +372,7 @@ UInt64 hashPlanStep(const IQueryPlanStep & step)
         return hashPlanStepImpl<TYPE##Step, Protos::TYPE##Step>(step); \
     }
 
-        APPLY_STEP_PROTOBUF_TYPES_AND_NAME(CASE_DEF)
+        APPLY_STEP_PROTOBUF_TYPES_AND_NAMES(CASE_DEF)
 
         default:
             throw Exception("unsupported step", ErrorCodes::PROTOBUF_BAD_CAST);

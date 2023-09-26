@@ -63,6 +63,8 @@ class ReadBuffer;
     M(ASTColumnsExceptTransformer) \
     M(ASTColumnsReplaceTransformer) \
     M(ASTConstraintDeclaration) \
+    M(ASTForeignKeyDeclaration) \
+    M(ASTUniqueNotEnforcedDeclaration) \
     M(ASTStorage) \
     M(ASTColumns) \
     M(ASTCreateQuery) \

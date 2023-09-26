@@ -15,8 +15,8 @@
 
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 
+#include <Optimizer/Property/Equivalences.h>
 #include <Optimizer/RuntimeFilterUtils.h>
-#include <Optimizer/Equivalences.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/JoinStep.h>

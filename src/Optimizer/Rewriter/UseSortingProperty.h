@@ -2,7 +2,7 @@
 
 #include <Core/SortDescription.h>
 #include <Interpreters/Context.h>
-#include <Optimizer/Equivalences.h>
+#include <Optimizer/Property/Equivalences.h>
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/SimplePlanRewriter.h>

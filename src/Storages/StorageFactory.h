@@ -26,10 +26,12 @@
 #include <Parsers/IAST_fwd.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/ConstraintsDescription.h>
-#include <Storages/Hive/Metastore/IMetaClient.h>
+#include <Storages/ForeignKeysDescription.h>
+#include <Storages/UniqueNotEnforcedDescription.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/registerStorages.h>
 #include <Common/NamePrompter.h>
+#include <Storages/Hive/Metastore/IMetaClient.h>
 
 namespace DB
 {
@@ -64,6 +66,8 @@ public:
         ContextWeakMutablePtr context;
         const ColumnsDescription & columns;
         const ConstraintsDescription & constraints;
+        const ForeignKeysDescription & foreign_keys;
+        const UniqueNotEnforcedDescription & unique;
         bool attach;
         bool create;  /// for CnchHive
         bool has_force_restore_data_flag;
@@ -115,6 +119,8 @@ public:
         ContextMutablePtr context,
         const ColumnsDescription & columns,
         const ConstraintsDescription & constraints,
+        const ForeignKeysDescription & foreign_keys,
+        const UniqueNotEnforcedDescription & unique,
         bool has_force_restore_data_flag,
         HiveParamsPtr hive_params = nullptr) const;
 

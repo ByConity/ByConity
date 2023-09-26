@@ -15,13 +15,13 @@
 
 #include <iostream>
 #include <gtest/gtest.h>
-#include "Common/Stopwatch.h"
-#include "Core/Field.h"
-#include "DataTypes/DataTypeFactory.h"
-#include "Optimizer/domain.h"
-#include "Optimizer/value_sets.h"
-#include "Optimizer/FunctionInvoker.h"
-#include "Optimizer/DomainTranslator.h"
+#include <Common/Stopwatch.h>
+#include <Core/Field.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <Optimizer/domain.h>
+#include <Optimizer/value_sets.h>
+#include <Optimizer/FunctionInvoker.h>
+#include <Optimizer/DomainTranslator.h>
 #include <DataTypes/DataTypesDecimal.h>
 #include <Analyzers/ASTEquals.h>
 #include <Optimizer/LiteralEncoder.h>

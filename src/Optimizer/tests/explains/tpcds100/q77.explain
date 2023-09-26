@@ -5,69 +5,63 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#'store channel'_1 asc, s_store_sk_2 asc}
       │     Limit: 100
-      └─ Gather Exchange Est. 3114 rows
+      └─ Gather Exchange Est. 3139 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#'store channel'_1 asc, s_store_sk_2 asc}
             │     Limit: 100
-            └─ Aggregating Est. 3114 rows
+            └─ Aggregating Est. 3139 rows
                │     Group by: {expr#'store channel'_1, s_store_sk_2}
                │     Aggregates: expr#sum(sales):=AggNull(sum)(expr#sum(ss_ext_sales_price)_1), expr#sum(returns):=AggNull(sum)(expr#coalesce(returns, 0)_2), expr#sum(profit):=AggNull(sum)(expr#minus(profit, coalesce(profit_loss, 0))_2)
-               └─ Union Est. 3114 rows
+               └─ Union Est. 3139 rows
                   │     OutputToInputs: expr#coalesce(returns, 0)_2 = [expr#coalesce(returns, 0),expr#sum(cr_return_amount),expr#coalesce(returns, 0)_1], expr#minus(profit, coalesce(profit_loss, 0))_2 = [expr#minus(profit, coalesce(profit_loss, 0)),expr#minus(profit, profit_loss),expr#minus(profit, coalesce(profit_loss, 0))_1], expr#sum(ss_ext_sales_price)_1 = [expr#sum(ss_ext_sales_price),expr#sum(cs_ext_sales_price),expr#sum(ws_ext_sales_price)], s_store_sk_2 = [s_store_sk,cs_call_center_sk,wp_web_page_sk], expr#'store channel'_1 = [expr#'store channel',expr#'catalog channel',expr#'web channel']
                   ├─ Projection Est. 198 rows
                   │  │     Expressions: [expr#sum(ss_ext_sales_price), s_store_sk], expr#'store channel':='store channel', expr#coalesce(returns, 0):=cast(coalesce(`expr#sum(sr_return_amt)`, 0), 'Nullable(Float64)'), expr#minus(profit, coalesce(profit_loss, 0)):=`expr#sum(ss_net_profit)` - coalesce(`expr#sum(sr_net_loss)`, 0)
                   │  └─ Left Join Est. 198 rows
                   │     │     Condition: s_store_sk == s_store_sk_1
-                  │     ├─ Aggregating Est. 198 rows
-                  │     │  │     Group by: {s_store_sk}
-                  │     │  │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#sum(ss_net_profit):=AggNull(sum)(ss_net_profit)
-                  │     │  └─ Inner Join Est. 4404105 rows
-                  │     │     │     Condition: ss_store_sk == s_store_sk
-                  │     │     ├─ Repartition Exchange Est. 4404105 rows
-                  │     │     │  │     Partition by: {ss_store_sk}
-                  │     │     │  └─ Inner Join Est. 4404105 rows
-                  │     │     │     │     Condition: ss_sold_date_sk == d_date_sk
-                  │     │     │     │     Runtime Filters Builder: {d_date_sk}
-                  │     │     │     ├─ Filter Est. 287997024 rows
-                  │     │     │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
-                  │     │     │     │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
-                  │     │     │     │           Where: Runtime Filters: {ss_sold_date_sk}
-                  │     │     │     │           Outputs: [ss_ext_sales_price, ss_net_profit, ss_sold_date_sk, ss_store_sk]
-                  │     │     │     └─ Broadcast Exchange Est. 29 rows
-                  │     │     │        └─ Filter Est. 29 rows
-                  │     │     │           │     Condition: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
-                  │     │     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                  │     │     │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
-                  │     │     │                    Outputs: [d_date, d_date_sk]
-                  │     │     └─ Repartition Exchange Est. 402 rows
-                  │     │        │     Partition by: {s_store_sk}
-                  │     │        └─ TableScan tpcds100.store Est. 402 rows
-                  │     │                 Outputs: [s_store_sk]
-                  │     └─ Aggregating Est. 198 rows
-                  │        │     Group by: {s_store_sk_1}
-                  │        │     Aggregates: expr#sum(sr_return_amt):=AggNull(sum)(sr_return_amt), expr#sum(sr_net_loss):=AggNull(sum)(sr_net_loss)
-                  │        └─ Inner Join Est. 403534 rows
-                  │           │     Condition: sr_store_sk == s_store_sk_1
-                  │           ├─ Repartition Exchange Est. 403534 rows
-                  │           │  │     Partition by: {sr_store_sk}
-                  │           │  └─ Inner Join Est. 403534 rows
-                  │           │     │     Condition: sr_returned_date_sk == d_date_sk_1
-                  │           │     │     Runtime Filters Builder: {d_date_sk_1}
-                  │           │     ├─ Filter Est. 28795080 rows
-                  │           │     │  │     Condition: Runtime Filters: {sr_returned_date_sk}
-                  │           │     │  └─ TableScan tpcds100.store_returns Est. 28795080 rows
-                  │           │     │           Where: Runtime Filters: {sr_returned_date_sk}
-                  │           │     │           Outputs: [sr_net_loss, sr_return_amt, sr_returned_date_sk, sr_store_sk]
-                  │           │     └─ Broadcast Exchange Est. 29 rows
-                  │           │        └─ Filter Est. 29 rows
-                  │           │           │     Condition: (d_date_1 >= cast(11192, 'Date')) AND (d_date_1 <= cast(11222, 'Date'))
-                  │           │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                  │           │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
-                  │           │                    Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk
-                  │           └─ Repartition Exchange Est. 402 rows
-                  │              │     Partition by: {s_store_sk_1}
-                  │              └─ TableScan tpcds100.store Est. 402 rows
-                  │                       Outputs: s_store_sk_1:=s_store_sk
+                  │     ├─ MergingAggregated Est. 198 rows
+                  │     │  └─ Repartition Exchange Est. 198 rows
+                  │     │     │     Partition by: {s_store_sk}
+                  │     │     └─ Aggregating Est. 198 rows
+                  │     │        │     Group by: {s_store_sk}
+                  │     │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price), expr#sum(ss_net_profit):=AggNull(sum)(ss_net_profit)
+                  │     │        └─ Projection Est. 4405609 rows
+                  │     │           │     Expressions: [ss_ext_sales_price, ss_net_profit], s_store_sk:=ss_store_sk
+                  │     │           └─ Inner Join Est. 4405609 rows
+                  │     │              │     Condition: ss_sold_date_sk == d_date_sk
+                  │     │              │     Runtime Filters Builder: {d_date_sk}
+                  │     │              ├─ Filter Est. 275035892 rows
+                  │     │              │  │     Condition: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
+                  │     │              │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
+                  │     │              │           Where: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
+                  │     │              │           Outputs: [ss_ext_sales_price, ss_net_profit, ss_sold_date_sk, ss_store_sk]
+                  │     │              └─ Broadcast Exchange Est. 29 rows
+                  │     │                 └─ Filter Est. 29 rows
+                  │     │                    │     Condition: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
+                  │     │                    └─ TableScan tpcds100.date_dim Est. 73049 rows
+                  │     │                             Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
+                  │     │                             Outputs: [d_date, d_date_sk]
+                  │     └─ MergingAggregated Est. 198 rows
+                  │        └─ Repartition Exchange Est. 198 rows
+                  │           │     Partition by: {s_store_sk_1}
+                  │           └─ Aggregating Est. 198 rows
+                  │              │     Group by: {s_store_sk_1}
+                  │              │     Aggregates: expr#sum(sr_return_amt):=AggNull(sum)(sr_return_amt), expr#sum(sr_net_loss):=AggNull(sum)(sr_net_loss)
+                  │              └─ Projection Est. 403558 rows
+                  │                 │     Expressions: [sr_net_loss, sr_return_amt], s_store_sk_1:=sr_store_sk
+                  │                 └─ Inner Join Est. 403558 rows
+                  │                    │     Condition: sr_returned_date_sk == d_date_sk_1
+                  │                    │     Runtime Filters Builder: {d_date_sk_1}
+                  │                    ├─ Filter Est. 27787916 rows
+                  │                    │  │     Condition: isNotNull(sr_store_sk) Runtime Filters: {sr_returned_date_sk}
+                  │                    │  └─ TableScan tpcds100.store_returns Est. 28795080 rows
+                  │                    │           Where: isNotNull(sr_store_sk) Runtime Filters: {sr_returned_date_sk}
+                  │                    │           Outputs: [sr_net_loss, sr_return_amt, sr_returned_date_sk, sr_store_sk]
+                  │                    └─ Broadcast Exchange Est. 29 rows
+                  │                       └─ Filter Est. 29 rows
+                  │                          │     Condition: (d_date_1 >= cast(11192, 'Date')) AND (d_date_1 <= cast(11222, 'Date'))
+                  │                          └─ TableScan tpcds100.date_dim Est. 73049 rows
+                  │                                   Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
+                  │                                   Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk
                   ├─ Projection Est. 900 rows
                   │  │     Expressions: [cs_call_center_sk, expr#sum(cr_return_amount), expr#sum(cs_ext_sales_price)], expr#'catalog channel':='catalog channel', expr#minus(profit, profit_loss):=`expr#sum(cs_net_profit)` - `expr#sum(cr_net_loss)`
                   │  └─ Cross Join Est. 900 rows
@@ -113,58 +107,52 @@ Projection Est. 100 rows
                   │                          └─ TableScan tpcds100.date_dim Est. 73049 rows
                   │                                   Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
                   │                                   Outputs: d_date_3:=d_date, d_date_sk_3:=d_date_sk
-                  └─ Projection Est. 2016 rows
+                  └─ Projection Est. 2041 rows
                      │     Expressions: [expr#sum(ws_ext_sales_price), wp_web_page_sk], expr#'web channel':='web channel', expr#coalesce(returns, 0)_1:=cast(coalesce(`expr#sum(wr_return_amt)`, 0), 'Nullable(Float64)'), expr#minus(profit, coalesce(profit_loss, 0))_1:=`expr#sum(ws_net_profit)` - coalesce(`expr#sum(wr_net_loss)`, 0)
-                     └─ Left Join Est. 2016 rows
+                     └─ Left Join Est. 2041 rows
                         │     Condition: wp_web_page_sk == wp_web_page_sk_1
-                        ├─ Aggregating Est. 2016 rows
-                        │  │     Group by: {wp_web_page_sk}
-                        │  │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price), expr#sum(ws_net_profit):=AggNull(sum)(ws_net_profit)
-                        │  └─ Inner Join Est. 1087569 rows
-                        │     │     Condition: ws_web_page_sk == wp_web_page_sk
-                        │     ├─ Repartition Exchange Est. 1101056 rows
-                        │     │  │     Partition by: {ws_web_page_sk}
-                        │     │  └─ Inner Join Est. 1101056 rows
-                        │     │     │     Condition: ws_sold_date_sk == d_date_sk_4
-                        │     │     │     Runtime Filters Builder: {d_date_sk_4}
-                        │     │     ├─ Filter Est. 72001237 rows
-                        │     │     │  │     Condition: Runtime Filters: {ws_sold_date_sk}
-                        │     │     │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
-                        │     │     │           Where: Runtime Filters: {ws_sold_date_sk}
-                        │     │     │           Outputs: [ws_ext_sales_price, ws_net_profit, ws_sold_date_sk, ws_web_page_sk]
-                        │     │     └─ Broadcast Exchange Est. 29 rows
-                        │     │        └─ Filter Est. 29 rows
-                        │     │           │     Condition: (d_date_4 >= cast(11192, 'Date')) AND (d_date_4 <= cast(11222, 'Date'))
-                        │     │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                        │     │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
-                        │     │                    Outputs: d_date_4:=d_date, d_date_sk_4:=d_date_sk
-                        │     └─ Repartition Exchange Est. 2040 rows
-                        │        │     Partition by: {wp_web_page_sk}
-                        │        └─ TableScan tpcds100.web_page Est. 2040 rows
-                        │                 Outputs: [wp_web_page_sk]
-                        └─ Aggregating Est. 2016 rows
-                           │     Group by: {wp_web_page_sk_1}
-                           │     Aggregates: expr#sum(wr_return_amt):=AggNull(sum)(wr_return_amt), expr#sum(wr_net_loss):=AggNull(sum)(wr_net_loss)
-                           └─ Inner Join Est. 91607 rows
-                              │     Condition: wr_web_page_sk == wp_web_page_sk_1
-                              ├─ Repartition Exchange Est. 92744 rows
-                              │  │     Partition by: {wr_web_page_sk}
-                              │  └─ Inner Join Est. 92744 rows
-                              │     │     Condition: wr_returned_date_sk == d_date_sk_5
-                              │     │     Runtime Filters Builder: {d_date_sk_5}
-                              │     ├─ Filter Est. 7197670 rows
-                              │     │  │     Condition: Runtime Filters: {wr_returned_date_sk}
-                              │     │  └─ TableScan tpcds100.web_returns Est. 7197670 rows
-                              │     │           Where: Runtime Filters: {wr_returned_date_sk}
-                              │     │           Outputs: [wr_net_loss, wr_return_amt, wr_returned_date_sk, wr_web_page_sk]
-                              │     └─ Broadcast Exchange Est. 29 rows
-                              │        └─ Filter Est. 29 rows
-                              │           │     Condition: (d_date_5 >= cast(11192, 'Date')) AND (d_date_5 <= cast(11222, 'Date'))
-                              │           └─ TableScan tpcds100.date_dim Est. 73049 rows
-                              │                    Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
-                              │                    Outputs: d_date_5:=d_date, d_date_sk_5:=d_date_sk
-                              └─ Repartition Exchange Est. 2040 rows
-                                 │     Partition by: {wp_web_page_sk_1}
-                                 └─ TableScan tpcds100.web_page Est. 2040 rows
-                                          Outputs: wp_web_page_sk_1:=wp_web_page_sk
+                        ├─ MergingAggregated Est. 2041 rows
+                        │  └─ Repartition Exchange Est. 2041 rows
+                        │     │     Partition by: {wp_web_page_sk}
+                        │     └─ Aggregating Est. 2041 rows
+                        │        │     Group by: {wp_web_page_sk}
+                        │        │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price), expr#sum(ws_net_profit):=AggNull(sum)(ws_net_profit)
+                        │        └─ Projection Est. 1101382 rows
+                        │           │     Expressions: [ws_ext_sales_price, ws_net_profit], wp_web_page_sk:=ws_web_page_sk
+                        │           └─ Inner Join Est. 1101382 rows
+                        │              │     Condition: ws_sold_date_sk == d_date_sk_4
+                        │              │     Runtime Filters Builder: {d_date_sk_4}
+                        │              ├─ Filter Est. 71983214 rows
+                        │              │  │     Condition: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
+                        │              │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
+                        │              │           Where: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
+                        │              │           Outputs: [ws_ext_sales_price, ws_net_profit, ws_sold_date_sk, ws_web_page_sk]
+                        │              └─ Broadcast Exchange Est. 29 rows
+                        │                 └─ Filter Est. 29 rows
+                        │                    │     Condition: (d_date_4 >= cast(11192, 'Date')) AND (d_date_4 <= cast(11222, 'Date'))
+                        │                    └─ TableScan tpcds100.date_dim Est. 73049 rows
+                        │                             Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
+                        │                             Outputs: d_date_4:=d_date, d_date_sk_4:=d_date_sk
+                        └─ MergingAggregated Est. 2041 rows
+                           └─ Repartition Exchange Est. 2041 rows
+                              │     Partition by: {wp_web_page_sk_1}
+                              └─ Aggregating Est. 2041 rows
+                                 │     Group by: {wp_web_page_sk_1}
+                                 │     Aggregates: expr#sum(wr_return_amt):=AggNull(sum)(wr_return_amt), expr#sum(wr_net_loss):=AggNull(sum)(wr_net_loss)
+                                 └─ Projection Est. 92785 rows
+                                    │     Expressions: [wr_net_loss, wr_return_amt], wp_web_page_sk_1:=wr_web_page_sk
+                                    └─ Inner Join Est. 92785 rows
+                                       │     Condition: wr_returned_date_sk == d_date_sk_5
+                                       │     Runtime Filters Builder: {d_date_sk_5}
+                                       ├─ Filter Est. 6872770 rows
+                                       │  │     Condition: isNotNull(wr_web_page_sk) Runtime Filters: {wr_returned_date_sk}
+                                       │  └─ TableScan tpcds100.web_returns Est. 7197670 rows
+                                       │           Where: isNotNull(wr_web_page_sk) Runtime Filters: {wr_returned_date_sk}
+                                       │           Outputs: [wr_net_loss, wr_return_amt, wr_returned_date_sk, wr_web_page_sk]
+                                       └─ Broadcast Exchange Est. 29 rows
+                                          └─ Filter Est. 29 rows
+                                             │     Condition: (d_date_5 >= cast(11192, 'Date')) AND (d_date_5 <= cast(11222, 'Date'))
+                                             └─ TableScan tpcds100.date_dim Est. 73049 rows
+                                                      Where: (d_date >= cast(11192, 'Date')) AND (d_date <= cast(11222, 'Date'))
+                                                      Outputs: d_date_5:=d_date, d_date_sk_5:=d_date_sk
 note: Runtime Filter is applied for 6 times.

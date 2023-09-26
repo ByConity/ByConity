@@ -100,6 +100,9 @@
 
 #include <memory>
 
+#include <Parsers/ASTForeignKeyDeclaration.h>
+#include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
+
 namespace DB
 {
 

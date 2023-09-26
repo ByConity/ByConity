@@ -18,6 +18,7 @@
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/CostModel/CostCalculator.h>
 #include <Optimizer/CostModel/PlanNodeCost.h>
+#include <Optimizer/Property/Constants.h>
 #include <Optimizer/Property/PropertyDeriver.h>
 #include <Optimizer/Property/PropertyDeterminer.h>
 #include <Optimizer/Property/PropertyEnforcer.h>
@@ -499,17 +500,18 @@ void OptimizeInput::execute()
             auto require = context->getRequiredProp();
             bool is_preferred = require.isPreferred();
 
+            Constants constants = context->getMemo().getGroupById(group_expr->getGroupId())->getConstants().value_or(Constants{});
+
             GroupExprPtr remote_exchange;
             GroupExprPtr local_exchange;
             Property actual = output_prop;
-            if ((!is_preferred
-                 && !PropertyMatcher::matchNodePartitioning(
-                     *context->getOptimizerContext().getContext(),
-                     require.getNodePartitioningRef(),
-                     output_prop.getNodePartitioning(),
-                     *equivalences,
-                     output_prop.getConstants()))
-                || require.isEnforceNotMatch())
+            if (!is_preferred
+                && !PropertyMatcher::matchNodePartitioning(
+                    *context->getOptimizerContext().getContext(),
+                    require.getNodePartitioningRef(),
+                    output_prop.getNodePartitioning(),
+                    *equivalences,
+                    constants))
             {
                 // add remote exchange
                 remote_exchange

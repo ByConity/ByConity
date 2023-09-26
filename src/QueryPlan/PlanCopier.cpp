@@ -148,18 +148,6 @@ PlanNodePtr PlanCopierVisitor::visitAssignUniqueIdNode(AssignUniqueIdNode & node
     return AssignUniqueIdNode::createPlanNode(id_allocator->nextId(), step);
 }
 
-PlanNodePtr PlanCopierVisitor::visitCreatingSetsNode(CreatingSetsNode & node, Void &)
-{
-    auto step = symbol_mapper.map(*node.getStep());
-    return CreatingSetsNode::createPlanNode(id_allocator->nextId(), step);
-}
-
-PlanNodePtr PlanCopierVisitor::visitCubeNode(CubeNode & node, Void &)
-{
-    auto step = symbol_mapper.map(*node.getStep());
-    return CubeNode::createPlanNode(id_allocator->nextId(), step);
-}
-
 PlanNodePtr PlanCopierVisitor::visitDistinctNode(DistinctNode & node, Void &)
 {
     auto step = symbol_mapper.map(*node.getStep());
@@ -170,12 +158,6 @@ PlanNodePtr PlanCopierVisitor::visitEnforceSingleRowNode(EnforceSingleRowNode & 
 {
     auto step = symbol_mapper.map(*node.getStep());
     return EnforceSingleRowNode::createPlanNode(id_allocator->nextId(), step);
-}
-
-PlanNodePtr PlanCopierVisitor::visitExpressionNode(ExpressionNode & node, Void &)
-{
-    auto step = symbol_mapper.map(*node.getStep());
-    return ExpressionNode::createPlanNode(id_allocator->nextId(), step);
 }
 
 PlanNodePtr PlanCopierVisitor::visitExchangeNode(ExchangeNode & node, Void &) {

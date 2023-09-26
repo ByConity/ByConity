@@ -203,6 +203,7 @@ PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, V
     auto agg_step_set_null = std::make_shared<AggregatingStep>(
         child->getStep()->getOutputStream(),
         step.getKeys(),
+        step.getKeysNotHashed(),
         descs_set_nullable,
         step.getGroupingSetsParams(),
         step.isFinal(),

@@ -290,6 +290,26 @@ AccessRightsElements InterpreterAlterQuery::getRequiredAccessForCommand(const AS
             required_access.emplace_back(AccessType::ALTER_DROP_CONSTRAINT, database, table);
             break;
         }
+        case ASTAlterCommand::ADD_FOREIGN_KEY:
+        {
+            required_access.emplace_back(AccessType::ALTER_ADD_FOREIGN_KEY, database, table);
+            break;
+        }
+        case ASTAlterCommand::DROP_FOREIGN_KEY:
+        {
+            required_access.emplace_back(AccessType::ALTER_DROP_FOREIGN_KEY, database, table);
+            break;
+        }
+        case ASTAlterCommand::ADD_UNIQUE_NOT_ENFORCED:
+        {
+            required_access.emplace_back(AccessType::ALTER_ADD_UNIQUE_NOT_ENFORCED, database, table);
+            break;
+        }
+        case ASTAlterCommand::DROP_UNIQUE_NOT_ENFORCED:
+        {
+            required_access.emplace_back(AccessType::ALTER_DROP_UNIQUE_NOT_ENFORCED, database, table);
+            break;
+        }
         case ASTAlterCommand::ADD_PROJECTION:
         {
             required_access.emplace_back(AccessType::ALTER_ADD_PROJECTION, database, table);

@@ -77,7 +77,7 @@ TransformResult DistinctToAggregate::transformImpl(PlanNodePtr node, const Captu
             descriptions.emplace_back(aggregate_desc);
         }
         auto group_agg_step = std::make_shared<AggregatingStep>(
-            node->getStep()->getOutputStream(), step.getColumns(), descriptions, GroupingSetsParamsList{}, true);
+            node->getStep()->getOutputStream(), step.getColumns(), NameSet{}, descriptions, GroupingSetsParamsList{}, true);
         auto group_agg_node
             = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(group_agg_step), node->getChildren());
         return group_agg_node;

@@ -106,8 +106,9 @@ DB::StoragePtr HiveExternalCatalog::getTable(
         "",
         mutable_context,
         mutable_context->getGlobalContext(),
-        columns,
+        InterpreterCreateQuery::getColumnsDescription(*create_query_ast.columns_list->columns, mutable_context, false),
         InterpreterCreateQuery::getConstraintsDescription(create_query_ast.columns_list->constraints),
+        {},{},
         false,
         std::move(hive_params));
 

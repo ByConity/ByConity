@@ -32,6 +32,8 @@
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/TTLDescription.h>
 
+#include <Storages/UniqueNotEnforcedDescription.h>
+#include <Storages/ForeignKeysDescription.h>
 #include <Common/MultiVersion.h>
 
 namespace DB
@@ -48,6 +50,10 @@ struct StorageInMemoryMetadata
     IndicesDescription secondary_indices;
     /// Table constraints. Currently supported for MergeTree only.
     ConstraintsDescription constraints;
+    /// Table foreign keys. Currently supported for MergeTree only.
+    ForeignKeysDescription foreign_keys;
+    /// Table unique not enforced. Currently supported for MergeTree only.
+    UniqueNotEnforcedDescription unique_not_enforced;
     /// Table projections. Currently supported for MergeTree only.
     ProjectionsDescription projections;
     mutable const ProjectionDescription * selected_projection{};
@@ -96,6 +102,12 @@ struct StorageInMemoryMetadata
     /// Sets constraints
     void setConstraints(ConstraintsDescription constraints_);
 
+    /// Sets foreign keys
+    void setForeignKeys(ForeignKeysDescription foreign_keys_);
+
+    /// Sets unique not enforced
+    void setUniqueNotEnforced(UniqueNotEnforcedDescription unique);
+
     /// Sets projections
     void setProjections(ProjectionsDescription projections_);
 
@@ -134,6 +146,12 @@ struct StorageInMemoryMetadata
 
     /// Return table constraints
     const ConstraintsDescription & getConstraints() const;
+
+    /// Return table foreign keys
+    const ForeignKeysDescription & getForeignKeys() const;
+
+    /// Return table foreign keys
+    const UniqueNotEnforcedDescription & getUniqueNotEnforced() const;
 
     const ProjectionsDescription & getProjections() const;
     /// Has at least one projection

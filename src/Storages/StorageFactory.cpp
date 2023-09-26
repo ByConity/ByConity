@@ -20,13 +20,16 @@
  */
 
 #include <Storages/StorageFactory.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
-#include <Parsers/ASTFunction.h>
+#include <Interpreters/StorageID.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <Parsers/ASTFunction.h>
+#include <Storages/IStorage.h>
+#include <Storages/StorageFactory.h>
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
-#include <IO/WriteHelpers.h>
-#include <Interpreters/StorageID.h>
+#include <Storages/UniqueNotEnforcedDescription.h>
 
 namespace DB
 {
@@ -84,6 +87,8 @@ StoragePtr StorageFactory::get(
     ContextMutablePtr context,
     const ColumnsDescription & columns,
     const ConstraintsDescription & constraints,
+    const ForeignKeysDescription & foreign_keys,
+    const UniqueNotEnforcedDescription & unique,
     bool has_force_restore_data_flag,
     HiveParamsPtr hive_params) const
 {
@@ -230,6 +235,8 @@ StoragePtr StorageFactory::get(
         .context = context,
         .columns = columns,
         .constraints = constraints,
+        .foreign_keys = foreign_keys,
+        .unique = unique,
         .attach = query.attach,
         .create = query.create,
         .has_force_restore_data_flag = has_force_restore_data_flag,

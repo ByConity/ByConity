@@ -15,9 +15,9 @@
 
 #pragma once
 
-#include <Optimizer/Equivalences.h>
 #include <Optimizer/JoinGraph.h>
 #include <Optimizer/MaterializedView/MaterializedViewStructure.h>
+#include <Optimizer/Property/Equivalences.h>
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <Optimizer/SymbolTransformMap.h>
 #include <Optimizer/Utils.h>

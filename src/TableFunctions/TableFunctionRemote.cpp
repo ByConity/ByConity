@@ -36,6 +36,8 @@
 #include <TableFunctions/TableFunctionFactory.h>
 #include <Core/Defines.h>
 #include <common/range.h>
+#include <Storages/ForeignKeysDescription.h>
+#include <Storages/UniqueNotEnforcedDescription.h>
 #include "registerTableFunctions.h"
 
 
@@ -292,35 +294,38 @@ StoragePtr TableFunctionRemote::executeImpl(const ASTPtr & /*ast_function*/, Con
         cached_columns = getActualTableStructure(context);
 
     assert(cluster);
-    StoragePtr res = remote_table_function_ptr
-        ? StorageDistributed::create(
-            StorageID(getDatabaseName(), table_name),
-            cached_columns,
-            ConstraintsDescription{},
-            remote_table_function_ptr,
-            String{},
-            context,
-            sharding_key,
-            String{},
-            String{},
-            DistributedSettings{},
-            false,
-            cluster)
-        : StorageDistributed::create(
-            StorageID(getDatabaseName(), table_name),
-            cached_columns,
-            ConstraintsDescription{},
-            String{},
-            remote_table_id.database_name,
-            remote_table_id.table_name,
-            String{},
-            context,
-            sharding_key,
-            String{},
-            String{},
-            DistributedSettings{},
-            false,
-            cluster);
+    StoragePtr res = remote_table_function_ptr ? StorageDistributed::create(
+                         StorageID(getDatabaseName(), table_name),
+                         cached_columns,
+                         ConstraintsDescription{},
+                         ForeignKeysDescription{},
+                         UniqueNotEnforcedDescription{},
+                         remote_table_function_ptr,
+                         String{},
+                         context,
+                         sharding_key,
+                         String{},
+                         String{},
+                         DistributedSettings{},
+                         false,
+                         cluster)
+                                               : StorageDistributed::create(
+                                                   StorageID(getDatabaseName(), table_name),
+                                                   cached_columns,
+                                                   ConstraintsDescription{},
+                                                   ForeignKeysDescription{},
+                                                   UniqueNotEnforcedDescription{},
+                                                   String{},
+                                                   remote_table_id.database_name,
+                                                   remote_table_id.table_name,
+                                                   String{},
+                                                   context,
+                                                   sharding_key,
+                                                   String{},
+                                                   String{},
+                                                   DistributedSettings{},
+                                                   false,
+                                                   cluster);
 
     res->startup();
     return res;

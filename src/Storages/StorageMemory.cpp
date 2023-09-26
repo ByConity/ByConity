@@ -1,5 +1,6 @@
 #include <cassert>
 #include <Common/Exception.h>
+#include <Storages/UniqueNotEnforcedDescription.h>
 
 #include <DataStreams/IBlockInputStream.h>
 
@@ -164,6 +165,8 @@ StorageMemory::StorageMemory(
     const StorageID & table_id_,
     ColumnsDescription columns_description_,
     ConstraintsDescription constraints_,
+    ForeignKeysDescription foreign_keys_,
+    UniqueNotEnforcedDescription unique_not_enforced_,
     const String & comment,
     bool compress_)
     : IStorage(table_id_), data(std::make_unique<const Blocks>()), compress(compress_)
@@ -171,6 +174,8 @@ StorageMemory::StorageMemory(
     StorageInMemoryMetadata storage_metadata;
     storage_metadata.setColumns(std::move(columns_description_));
     storage_metadata.setConstraints(std::move(constraints_));
+    storage_metadata.setForeignKeys(std::move(foreign_keys_));
+    storage_metadata.setUniqueNotEnforced(std::move(unique_not_enforced_));
     storage_metadata.setComment(comment);
     setInMemoryMetadata(storage_metadata);
 }
@@ -358,7 +363,7 @@ void registerStorageMemory(StorageFactory & factory)
         if (has_settings)
             settings.loadFromQuery(*args.storage_def);
 
-        return StorageMemory::create(args.table_id, args.columns, args.constraints, args.comment, settings.compress);
+        return StorageMemory::create(args.table_id, args.columns, args.constraints, args.foreign_keys, args.unique, args.comment, settings.compress);
     },
     {
         .supports_settings = true,

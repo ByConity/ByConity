@@ -73,11 +73,8 @@ public:
     PlanNodePtr visitApplyNode(ApplyNode &, Void &) override;
     PlanNodePtr visitArrayJoinNode(ArrayJoinNode &, Void &) override;
     PlanNodePtr visitAssignUniqueIdNode(AssignUniqueIdNode &, Void &) override;
-    PlanNodePtr visitCreatingSetsNode(CreatingSetsNode &, Void &) override;
-    PlanNodePtr visitCubeNode(CubeNode &, Void &) override;
     PlanNodePtr visitDistinctNode(DistinctNode &, Void &) override;
     PlanNodePtr visitEnforceSingleRowNode(EnforceSingleRowNode &, Void &) override;
-    PlanNodePtr visitExpressionNode(ExpressionNode &, Void &) override;
     PlanNodePtr visitExceptNode(ExceptNode &, Void &) override;
     PlanNodePtr visitExtremesNode(ExtremesNode &, Void &) override;
     PlanNodePtr visitExchangeNode(ExchangeNode &, Void &) override;

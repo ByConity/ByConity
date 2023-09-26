@@ -44,6 +44,7 @@ TransformResult split(const PlanNodePtr & node, RuleContext & context)
     QueryPlanStepPtr partial_agg = std::make_shared<AggregatingStep>(
         node->getChildren()[0]->getStep()->getOutputStream(),
         step->getKeys(),
+        step->getKeysNotHashed(),
         step->getAggregates(),
         step->getGroupingSetsParams(),
         false,

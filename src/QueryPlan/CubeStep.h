@@ -41,17 +41,6 @@ public:
 
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
-    void toProto(Protos::CubeStep & proto, bool for_hash_equals = false) const
-    {
-        (void)proto;
-        (void)for_hash_equals;
-        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
-    }
-    static std::shared_ptr<CubeStep> fromProto(const Protos::CubeStep & proto, ContextPtr)
-    {
-        (void)proto;
-        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
-    }
 
 private:
     size_t keys_size;

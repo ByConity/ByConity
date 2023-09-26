@@ -232,6 +232,28 @@ void ASTAlterCommand::formatImpl(
                       << "DROP CONSTRAINT " << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "");
         constraint->formatImpl(settings, state, frame);
     }
+    else if (type == ASTAlterCommand::ADD_FOREIGN_KEY)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ADD CONSTRAINT " << (settings.hilite ? hilite_none : "");
+        foreign_key_decl->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::DROP_FOREIGN_KEY)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "DROP FOREIGN KEY " << (if_exists ? "IF EXISTS " : "")
+                      << (settings.hilite ? hilite_none : "");
+        foreign_key->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::ADD_UNIQUE_NOT_ENFORCED)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ADD CONSTRAINT " << (settings.hilite ? hilite_none : "");
+        unique_not_enforced_decl->formatImpl(settings, state, frame);
+    }
+    else if (type == ASTAlterCommand::DROP_UNIQUE_NOT_ENFORCED)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "DROP UNIQUE "
+                      << (if_exists ? "IF EXISTS " : "") << (settings.hilite ? hilite_none : "");
+        unique_not_enforced->formatImpl(settings, state, frame);
+    }
     else if (type == ASTAlterCommand::ADD_PROJECTION)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ADD PROJECTION " << (if_not_exists ? "IF NOT EXISTS " : "") << (settings.hilite ? hilite_none : "");

@@ -1,6 +1,18 @@
 drop database if exists zx_test;
 create database if not exists zx_test;
 use zx_test;
+drop table if exists table1;
+drop table if exists table2;
+drop table if exists table3;
+drop table if exists table4;
+drop table if exists table5;
+drop table if exists table6;
+drop table if exists table1_local;
+drop table if exists table2_local;
+drop table if exists table3_local;
+drop table if exists table4_local;
+drop table if exists table5_local;
+drop table if exists table6_local;
 
 
 CREATE TABLE zx_test.table1 (

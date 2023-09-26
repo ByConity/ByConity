@@ -31,7 +31,11 @@ public:
 
     void describePipeline(FormatSettings & settings) const override;
     
-    String getOperator() const;
+    String getOperatorStr() const;
+
+    ASTSelectIntersectExceptQuery::Operator getOperator() const;
+
+    size_t getMaxThreads() const { return max_threads; }
 
 private:
     Block header;

@@ -147,6 +147,7 @@ TransformResult MultipleDistinctAggregationToMarkDistinct::transformImpl(PlanNod
     auto count_agg_step = std::make_shared<AggregatingStep>(
         child->getStep()->getOutputStream(),
         step.getKeys(),
+        step.getKeysNotHashed(),
         new_agg_descs,
         step.getGroupingSetsParams(),
         step.isFinal(),

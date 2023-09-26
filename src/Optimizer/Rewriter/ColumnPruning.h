@@ -29,43 +29,26 @@ public:
     static void selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage, NameSet & required);
 };
 
-class ColumnPruningVisitor : public SimplePlanRewriter<NameSet>
+class ColumnPruningVisitor : public PlanNodeVisitor<PlanNodePtr, NameSet>
 {
 public:
     explicit ColumnPruningVisitor(ContextMutablePtr context_, CTEInfo & cte_info_, PlanNodePtr & root)
-        : SimplePlanRewriter(context_, cte_info_), post_order_cte_helper(cte_info_, root)
+        : context(std::move(context_)), post_order_cte_helper(cte_info_, root)
     {
     }
 
 private:
-    PlanNodePtr visitArrayJoinNode(ArrayJoinNode & node, NameSet & require) override;
-    PlanNodePtr visitLimitByNode(LimitByNode & node, NameSet & context) override;
-    PlanNodePtr visitWindowNode(WindowNode & node, NameSet & context) override;
-    PlanNodePtr visitDistinctNode(DistinctNode & node, NameSet & context) override;
-    PlanNodePtr visitJoinNode(JoinNode & node, NameSet & context) override;
-    PlanNodePtr visitSortingNode(SortingNode & node, NameSet & require) override;
-    PlanNodePtr visitMergeSortingNode(MergeSortingNode & node, NameSet & require) override;
-    PlanNodePtr visitMergingSortedNode(MergingSortedNode & node, NameSet & require) override;
-    PlanNodePtr visitPartialSortingNode(PartialSortingNode & node, NameSet & require) override;
-    PlanNodePtr visitAggregatingNode(AggregatingNode & node, NameSet & require) override;
-    PlanNodePtr visitMarkDistinctNode(MarkDistinctNode & node, NameSet & require) override;
-    PlanNodePtr visitTableScanNode(TableScanNode & node, NameSet & require) override;
-    PlanNodePtr visitFilterNode(FilterNode & node, NameSet & c) override;
-    PlanNodePtr visitProjectionNode(ProjectionNode & node, NameSet & c) override;
-    PlanNodePtr visitApplyNode(ApplyNode & node, NameSet & c) override;
-    PlanNodePtr visitUnionNode(UnionNode & node, NameSet & require) override;
-    PlanNodePtr visitExceptNode(ExceptNode & node, NameSet & require) override;
-    PlanNodePtr visitIntersectNode(IntersectNode & node, NameSet & require) override;
-    PlanNodePtr visitAssignUniqueIdNode(AssignUniqueIdNode & node, NameSet & require) override;
-    PlanNodePtr visitExchangeNode(ExchangeNode & node, NameSet & require) override;
-    PlanNodePtr visitCTERefNode(CTERefNode & node, NameSet & require) override;
-    PlanNodePtr visitExplainAnalyzeNode(ExplainAnalyzeNode & node, NameSet & require) override;
-    PlanNodePtr visitTopNFilteringNode(TopNFilteringNode & node, NameSet & require) override;
-    PlanNodePtr visitFillingNode(FillingNode & node, NameSet & require) override;
-    PlanNodePtr visitTableWriteNode(TableWriteNode & node, NameSet & context) override;
-    PlanNodePtr visitTotalsHavingNode(TotalsHavingNode & node, NameSet & require) override;
-    PlanNodePtr visitMergingAggregatedNode(MergingAggregatedNode & node, NameSet & require) override;
 
+    PlanNodePtr visitPlanNode(PlanNodeBase & node, NameSet & require) override;
+
+#define VISITOR_DEF(TYPE) PlanNodePtr visit##TYPE##Node(TYPE##Node &, NameSet &) override;
+    APPLY_STEP_TYPES(VISITOR_DEF)
+#undef VISITOR_DEF
+
+    template <bool require_all>
+    PlanNodePtr visitDefault(PlanNodeBase & node, NameSet & require);
+
+    ContextMutablePtr context;
     CTEPostorderVisitHelper post_order_cte_helper;
     std::unordered_map<CTEId, NameSet> cte_require_columns{};
 };

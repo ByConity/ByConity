@@ -189,6 +189,8 @@ StoragePtr TableFunctionCnch::executeImpl(const ASTPtr & /*ast_function*/, Conte
             StorageID(getDatabaseName(), table_name),
             cached_columns,
             ConstraintsDescription{},
+            ForeignKeysDescription{},
+            UniqueNotEnforcedDescription{},
             String{},
             remote_table_id.database_name,
             remote_table_id.table_name,

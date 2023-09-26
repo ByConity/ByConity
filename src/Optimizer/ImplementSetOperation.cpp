@@ -19,6 +19,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/UnionStep.h>
+#include <Core/Names.h>
 
 namespace DB
 {
@@ -65,7 +66,7 @@ TranslationResult SetOperationNodeTranslator::makeSetContainmentPlanForDistinct(
     }
 
     auto agg_step = std::make_shared<AggregatingStep>(
-        union_node->getStep()->getOutputStream(), std::move(group_by_keys), std::move(aggregates), GroupingSetsParamsList{}, true);
+        union_node->getStep()->getOutputStream(), group_by_keys, NameSet{}, aggregates, GroupingSetsParamsList{}, true);
     PlanNodes children{union_node};
     PlanNodePtr agg_node = std::make_shared<AggregatingNode>(context.nextNodeId(), std::move(agg_step), children);
 

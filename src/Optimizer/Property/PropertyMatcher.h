@@ -16,8 +16,9 @@
 #pragma once
 
 #include <Core/SortDescription.h>
+#include <Optimizer/Property/Constants.h>
 #include <Optimizer/Property/Property.h>
-#include <Optimizer/SymbolEquivalencesDeriver.h>
+#include <Optimizer/Property/SymbolEquivalencesDeriver.h>
 
 namespace DB
 {

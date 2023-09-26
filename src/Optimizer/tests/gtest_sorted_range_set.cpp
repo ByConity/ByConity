@@ -15,11 +15,11 @@
 
 #include <iostream>
 #include <gtest/gtest.h>
-#include "Common/FieldVisitors.h"
-#include "Common/Stopwatch.h"
-#include "Core/Field.h"
-#include "DataTypes/DataTypeFactory.h"
-#include "Optimizer/value_sets.h"
+#include <Common/FieldVisitors.h>
+#include <Common/Stopwatch.h>
+#include <Core/Field.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <Optimizer/value_sets.h>
 using namespace DB;
 using namespace DB::Predicate;
 using PredicateRange = Predicate::Range;

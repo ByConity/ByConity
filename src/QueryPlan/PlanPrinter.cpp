@@ -718,7 +718,6 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             out << intent.detailIntent() << "Limit: " << sort->getLimit();
     }
 
-
     if (verbose && plan->getType() == IQueryPlanStep::Type::Limit)
     {
         const auto * limit = dynamic_cast<const LimitStep *>(plan.get());
@@ -735,6 +734,14 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         auto keys = agg->getKeys();
         std::sort(keys.begin(), keys.end());
         out << intent.detailIntent() << "Group by: " << join(keys, ", ", "{", "}");
+
+
+        auto keys_not_hashed = agg->getKeysNotHashed();
+        if (!keys_not_hashed.empty())
+        {
+            NameOrderedSet sorted_names(keys_not_hashed.begin(), keys_not_hashed.end());
+            out << intent.detailIntent() << "Group by keys not hashed: " << join(sorted_names, ", ", "{", "}");
+        }
 
         std::vector<String> aggregates;
         for (const auto & desc : agg->getAggregates())

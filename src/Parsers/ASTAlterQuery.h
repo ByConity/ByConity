@@ -74,6 +74,12 @@ public:
         ADD_CONSTRAINT,
         DROP_CONSTRAINT,
 
+        ADD_FOREIGN_KEY,
+        DROP_FOREIGN_KEY,
+
+        ADD_UNIQUE_NOT_ENFORCED,
+        DROP_UNIQUE_NOT_ENFORCED,
+
         ADD_PROJECTION,
         DROP_PROJECTION,
         MATERIALIZE_PROJECTION,
@@ -164,9 +170,25 @@ public:
     */
     ASTPtr constraint_decl;
 
+    /** The ADD FOREIGN KEY query stores the ForeignKeyDeclaration there.
+    */
+    ASTPtr foreign_key_decl;
+
+    /** The ADD UNIQUE query stores the ForeignKeyDeclaration there.
+    */
+    ASTPtr unique_not_enforced_decl;
+
     /** The DROP CONSTRAINT query stores the name for deletion.
     */
     ASTPtr constraint;
+
+    /** The DROP FOREIGN KEY query stores the name for deletion.
+    */
+    ASTPtr foreign_key;
+
+    /** The DROP UNIQUE query stores the name for deletion.
+    */
+    ASTPtr unique_not_enforced;
 
     /** The ADD PROJECTION query stores the ProjectionDeclaration there.
      */

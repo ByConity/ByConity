@@ -164,13 +164,18 @@ StoragePtr PartToolkitBase::getTable()
 
         ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(*create.columns_list->columns, getContext(), create.attach);
         ConstraintsDescription constraints = InterpreterCreateQuery::getConstraintsDescription(create.columns_list->constraints);
+        ForeignKeysDescription foreign_keys = InterpreterCreateQuery::getForeignKeysDescription(create.columns_list->foreign_keys);
+        UniqueNotEnforcedDescription unique = InterpreterCreateQuery::getUniqueNotEnforcedDescription(create.columns_list->unique);
 
-        StoragePtr res = StorageFactory::instance().get(create,
+        StoragePtr res = StorageFactory::instance().get(
+            create,
             PT_RELATIVE_LOCAL_PATH,
             getContext(),
             getContext()->getGlobalContext(),
             columns,
             constraints,
+            foreign_keys,
+            unique,
             false);
 
         storage = res;

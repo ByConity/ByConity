@@ -81,5 +81,5 @@ create table lineitem (
     l_shipinstruct  Nullable(String),
     l_shipmode  Nullable(String),
     l_comment  Nullable(String)
-) ENGINE = CnchMergeTree()
+) ENGINE = CnchMergeTree() 
 ORDER BY l_orderkey;

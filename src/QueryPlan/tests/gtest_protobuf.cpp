@@ -941,6 +941,9 @@ TEST_F(ProtobufTest, AggregatingStep)
         Names keys;
         for (int i = 0; i < 10; ++i)
             keys.emplace_back(fmt::format("text{}", eng() % 100));
+        NameSet keys_not_hashed;
+        for (int i = 0; i < 10; ++i)
+            keys_not_hashed.emplace(fmt::format("text{}", eng() % 100));
         auto params = generateAggregatorParams(eng);
         GroupingSetsParamsList grouping_sets_params;
         for (int i = 0; i < 2; ++i)
@@ -961,6 +964,7 @@ TEST_F(ProtobufTest, AggregatingStep)
         auto step = std::make_shared<AggregatingStep>(
             base_input_stream,
             keys,
+            keys_not_hashed,
             params,
             grouping_sets_params,
             final,

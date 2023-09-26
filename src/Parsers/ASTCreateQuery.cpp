@@ -168,6 +168,10 @@ ASTPtr ASTColumns::clone() const
         res->set(res->indices, indices->clone());
     if (constraints)
         res->set(res->constraints, constraints->clone());
+    if (foreign_keys)
+        res->set(res->foreign_keys, foreign_keys->clone());
+    if (unique)
+        res->set(res->unique, unique->clone());
     if (projections)
         res->set(res->projections, projections->clone());
     if (primary_key)
@@ -217,6 +221,26 @@ void ASTColumns::formatImpl(const FormatSettings & s, FormatState & state, Forma
             auto elem = std::make_shared<ASTColumnsElement>();
             elem->prefix = "PROJECTION";
             elem->set(elem->elem, projection->clone());
+            list.children.push_back(elem);
+        }
+    }
+    if (foreign_keys)
+    {
+        for (const auto & foreign_key : foreign_keys->children)
+        {
+            auto elem = std::make_shared<ASTColumnsElement>();
+            elem->prefix = "CONSTRAINT";
+            elem->set(elem->elem, foreign_key->clone());
+            list.children.push_back(elem);
+        }
+    }
+    if (unique)
+    {
+        for (const auto & unique_key : unique->children)
+        {
+            auto elem = std::make_shared<ASTColumnsElement>();
+            elem->prefix = "CONSTRAINT";
+            elem->set(elem->elem, unique_key->clone());
             list.children.push_back(elem);
         }
     }

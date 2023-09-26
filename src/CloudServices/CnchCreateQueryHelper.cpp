@@ -24,6 +24,9 @@
 #include <Parsers/parseQuery.h>
 #include <Storages/IStorage.h>
 #include <Storages/StorageFactory.h>
+#include "Storages/ColumnsDescription.h"
+#include "Storages/ForeignKeysDescription.h"
+#include "Storages/UniqueNotEnforcedDescription.h"
 
 namespace DB
 {
@@ -57,6 +60,16 @@ StoragePtr createStorageFromQuery(const String & query, ContextMutablePtr & cont
     {
         constrants = InterpreterCreateQuery::getConstraintsDescription(ast->columns_list->constraints);
     }
+    ForeignKeysDescription foreign_keys;
+    if (ast->columns_list && ast->columns_list->foreign_keys)
+    {
+        foreign_keys = InterpreterCreateQuery::getForeignKeysDescription(ast->columns_list->foreign_keys);
+    }
+    UniqueNotEnforcedDescription unique_not_enforced;
+    if (ast->columns_list && ast->columns_list->unique)
+    {
+        unique_not_enforced = InterpreterCreateQuery::getUniqueNotEnforcedDescription(ast->columns_list->unique);
+    }
 
     return StorageFactory::instance().get(
         *ast,
@@ -67,6 +80,8 @@ StoragePtr createStorageFromQuery(const String & query, ContextMutablePtr & cont
         // should NOT affect existing tables.
         columns,
         constrants,
+        foreign_keys,
+        unique_not_enforced,
         false /*has_force_restore_data_flag*/);
 }
 

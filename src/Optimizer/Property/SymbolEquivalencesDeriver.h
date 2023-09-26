@@ -15,8 +15,8 @@
 
 #pragma once
 
+#include <Optimizer/Property/Equivalences.h>
 #include <QueryPlan/PlanVisitor.h>
-#include <Optimizer/Equivalences.h>
 
 #include <utility>
 

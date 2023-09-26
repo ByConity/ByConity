@@ -16,8 +16,8 @@
 #pragma once
 
 #include <Interpreters/Context.h>
+#include <Optimizer/Property/Equivalences.h>
 #include <Optimizer/Rewriter/Rewriter.h>
-#include <Optimizer/Equivalences.h>
 #include <QueryPlan/SimplePlanVisitor.h>
 
 namespace DB

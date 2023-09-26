@@ -43,4 +43,14 @@ PlanNodeStatisticsPtr SortingEstimator::estimate(PlanNodeStatisticsPtr & child_s
     return child_stats;
 }
 
+PlanNodeStatisticsPtr SortingEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const FinishSortingStep & step)
+{
+    if (step.getLimit() > 0)
+    {
+        size_t limit = step.getLimit();
+        return LimitEstimator::getLimitStatistics(child_stats, limit);
+    }
+    return child_stats;
+}
+
 }

@@ -112,6 +112,8 @@ public:
                 getContext(),
                 ColumnsDescription{columns},
                 ConstraintsDescription{},
+                ForeignKeysDescription{},
+                UniqueNotEnforcedDescription{},
                 nullptr,
                 /*create_for_global_subquery*/ true);
             StoragePtr external_storage = external_storage_holder->getTable();
