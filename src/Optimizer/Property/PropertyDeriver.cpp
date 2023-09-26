@@ -168,6 +168,44 @@ Property DeriverVisitor::visitStep(const IQueryPlanStep &, DeriverContext & cont
     return context.getInput()[0].clearSorting();
 }
 
+Property  DeriverVisitor::visitFinalSampleStep(const FinalSampleStep &, DeriverContext &)
+{
+    throw Exception("Not impl property deriver", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+Property DeriverVisitor::visitOffsetStep(const OffsetStep &, DeriverContext &)
+{
+    throw Exception("Not impl property deriver", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+Property DeriverVisitor::visitTotalsHavingStep(const TotalsHavingStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
+Property DeriverVisitor::visitFinishSortingStep(const FinishSortingStep & step, DeriverContext & context)
+{
+    auto prop = context.getInput()[0];
+    Sorting sorting;
+    for (auto item : step.getResultDescription())
+    {
+        sorting.emplace_back(item);
+    }
+
+    prop.setSorting(sorting);
+    return prop;
+}
+
+Property DeriverVisitor::visitPartitionTopNStep(const PartitionTopNStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
+Property DeriverVisitor::visitBufferStep(const BufferStep &, DeriverContext & context)
+{
+    return context.getInput()[0];
+}
+
 Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, DeriverContext & context)
 {
     auto assignments = step.getAssignments();
@@ -182,7 +220,7 @@ Property DeriverVisitor::visitProjectionStep(const ProjectionStep & step, Derive
                 std::set<String> symbols = SymbolsExtractor::extract(item.second);
                 bool contains_all = true;
                 auto partition_col = context.getInput()[0].getNodePartitioning().getPartitioningColumns();
-                for (auto col : partition_col)
+                for (const auto & col : partition_col)
                 {
                     if (!symbols.count(col))
                     {

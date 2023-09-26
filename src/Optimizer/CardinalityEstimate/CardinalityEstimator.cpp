@@ -85,6 +85,51 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitStep(const IQueryPlanStep &, Card
     return context.children_stats[0];
 }
 
+PlanNodeStatisticsPtr CardinalityVisitor::visitFinalSampleStep(const FinalSampleStep &, CardinalityContext &)
+{
+    throw Exception("Not impl card estimate", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+PlanNodeStatisticsPtr CardinalityVisitor::visitOffsetStep(const OffsetStep &, CardinalityContext &)
+{
+    throw Exception("Not impl card estimate", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+PlanNodeStatisticsPtr CardinalityVisitor::visitTotalsHavingStep(const TotalsHavingStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
+PlanNodeStatisticsPtr CardinalityVisitor::visitTableFinishStep(const TableFinishStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+
+}
+PlanNodeStatisticsPtr CardinalityVisitor::visitBufferStep(const BufferStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+
+}
+PlanNodeStatisticsPtr CardinalityVisitor::visitMarkDistinctStep(const MarkDistinctStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+
+}
+PlanNodeStatisticsPtr CardinalityVisitor::visitIntersectOrExceptStep(const IntersectOrExceptStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+PlanNodeStatisticsPtr CardinalityVisitor::visitTableWriteStep(const TableWriteStep &, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    return child_stats;
+}
+
 PlanNodeStatisticsPtr CardinalityVisitor::visitProjectionStep(const ProjectionStep & step, CardinalityContext & context)
 {
     if (context.children_stats.empty())
@@ -206,6 +251,13 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitLimitByStep(const LimitByStep & s
 {
     PlanNodeStatisticsPtr child_stats = context.children_stats[0];
     PlanNodeStatisticsPtr stats = LimitEstimator::estimate(child_stats, step);
+    return stats;
+}
+
+PlanNodeStatisticsPtr CardinalityVisitor::visitFinishSortingStep(const FinishSortingStep & step, CardinalityContext & context)
+{
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    PlanNodeStatisticsPtr stats = SortingEstimator::estimate(child_stats, step);
     return stats;
 }
 

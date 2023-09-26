@@ -62,19 +62,6 @@ public:
     // void serialize(WriteBuffer &) const override;
 
     // static QueryPlanStepPtr deserialize(ReadBuffer &, ContextPtr context_ = nullptr);
-
-    void toProto(Protos::ReadFromStorageStep & proto, bool for_hash_equals = false) const
-    {
-        (void)proto;
-        (void)for_hash_equals;
-        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
-    }
-
-    static std::shared_ptr<ReadFromStorageStep> fromProto(const Protos::ReadFromStorageStep & proto, ContextPtr)
-    {
-        (void)proto;
-        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
-    }
 };
 
 }

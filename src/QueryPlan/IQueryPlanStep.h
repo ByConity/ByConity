@@ -118,7 +118,9 @@ public:
 // this must match protobuf message QueryPlanStep
 // in src/Protos/plan_node.proto
 // where Step/_step postfix is attached.
-#define APPLY_STEP_PROTOBUF_TYPES_AND_NAME(MM) \
+
+// Use for Optimizer
+#define APPLY_STEP_PROTOBUF_TYPES_AND_NAMES(MM) \
     MM(Aggregating, aggregating) \
     MM(ArrayJoin, array_join) \
     MM(AssignUniqueId, assign_unique_id) \
@@ -130,8 +132,6 @@ public:
     MM(Extremes, extremes) \
     MM(Filling, filling) \
     MM(Filter, filter) \
-    MM(FinalSample, final_sample) \
-    MM(FinishSorting, finish_sorting) \
     MM(Intersect, intersect) \
     MM(Join, join) \
     MM(LimitBy, limit_by) \
@@ -140,7 +140,6 @@ public:
     MM(MergeSorting, merge_sorting) \
     MM(MergingAggregated, merging_aggregated) \
     MM(MergingSorted, merging_sorted) \
-    MM(Offset, offset) \
     MM(PartialSorting, partial_sorting) \
     MM(PartitionTopN, partition_top_n) \
     MM(Projection, projection) \
@@ -156,23 +155,17 @@ public:
     MM(Window, window) \
     MM(Values, values) \
     MM(IntersectOrExcept, intersect_or_except) \
-    MM(Buffer, buffer) \
+    MM(Buffer, buffer)\
     MM(Apply, apply) \
-    MM(CreatingSet, creating_set) \
-    MM(CreatingSets, creating_sets) \
-    MM(Cube, cube) \
-    MM(Expression, expression) \
     MM(ExplainAnalyze, explain_analyze) \
-    MM(FilledJoin, filled_join) \
-    MM(PlanSegmentSource, plan_segment_source) \
-    MM(ReadFromStorage, read_from_storage) \
-    MM(Rollup, rollup) \
-    MM(SettingQuotaAndLimits, setting_quota_and_limits) \
+    MM(FinalSample, final_sample) \
+    MM(Offset, offset) \
+    MM(FinishSorting, finish_sorting) \
     MM(TotalsHaving, totals_having)
 
 // macro helpers to convert MM(x, y) to M(x)
 #define IMPL_TUPLE_TO_FIRST(_x, _y) (_x)
-#define IMPL_STEPS_PROTOBUF_TYPES APPLY_STEP_PROTOBUF_TYPES_AND_NAME(IMPL_TUPLE_TO_FIRST)
+#define IMPL_STEPS_PROTOBUF_TYPES APPLY_STEP_PROTOBUF_TYPES_AND_NAMES(IMPL_TUPLE_TO_FIRST)
 #define IMPL_MACRO_FUNCTION_APPLY(_r, _data, _elem) _data(_elem)
 
 // apply unary macro
@@ -194,6 +187,15 @@ public:
         ReadFromPreparedSource,
         NullSource,
         Tree,
+        CreatingSet,
+        CreatingSets,
+        Cube,
+        Expression,
+        FilledJoin,
+        PlanSegmentSource,
+        SettingQuotaAndLimits,
+        ReadFromStorage,
+        Rollup
     };
 
 #undef ENUM_DEF

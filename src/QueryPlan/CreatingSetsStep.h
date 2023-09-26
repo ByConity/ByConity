@@ -29,17 +29,6 @@ public:
     void describeActions(FormatSettings & settings) const override;
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
-    void toProto(Protos::CreatingSetStep & proto, bool for_hash_equals = false) const
-    {
-        (void)proto;
-        (void)for_hash_equals;
-        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
-    }
-    static std::shared_ptr<CreatingSetStep> fromProto(const Protos::CreatingSetStep & proto, ContextPtr)
-    {
-        (void)proto;
-        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
-    }
 
 private:
     String description;
@@ -61,18 +50,6 @@ public:
     void describePipeline(FormatSettings & settings) const override;
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr ptr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
-
-    void toProto(Protos::CreatingSetsStep & proto, bool for_hash_equals = false) const
-    {
-        (void)proto;
-        (void)for_hash_equals;
-        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
-    }
-    static std::shared_ptr<CreatingSetsStep> fromProto(const Protos::CreatingSetsStep & proto, ContextPtr)
-    {
-        (void)proto;
-        throw Exception("unimplemented", ErrorCodes::PROTOBUF_BAD_CAST);
-    }
 
 private:
     Processors processors;

@@ -45,10 +45,36 @@ PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step
     return input_properties;
 }
 
-
 PropertySets DeterminerVisitor::visitStep(const IQueryPlanStep &, DeterminerContext & context)
 {
     return {{context.getRequired()}};
+}
+
+PropertySets DeterminerVisitor::visitBufferStep(const BufferStep & node, DeterminerContext & context)
+{
+    return visitStep(node, context);
+}
+
+PropertySets DeterminerVisitor::visitPartitionTopNStep(const PartitionTopNStep &, DeterminerContext & context)
+{
+    auto require = context.getRequired();
+    require.setPreferred(true);
+    return {{require}};
+}
+
+PropertySets DeterminerVisitor::visitFinalSampleStep(const FinalSampleStep &, DeterminerContext &)
+{
+    throw Exception("Not impl property determiner", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+PropertySets DeterminerVisitor::visitOffsetStep(const OffsetStep &, DeterminerContext &)
+{
+    throw Exception("Not impl property determiner", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+PropertySets DeterminerVisitor::visitFinishSortingStep(const FinishSortingStep &, DeterminerContext &)
+{
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 
 PropertySets DeterminerVisitor::visitProjectionStep(const ProjectionStep & step, DeterminerContext & ctx)

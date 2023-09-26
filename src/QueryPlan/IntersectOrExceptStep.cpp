@@ -84,12 +84,17 @@ void IntersectOrExceptStep::describePipeline(FormatSettings & settings) const
     IQueryPlanStep::describePipeline(processors, settings);
 }
 
-String IntersectOrExceptStep::getOperator() const
+String IntersectOrExceptStep::getOperatorStr() const
 {
     const auto & name = ASTSelectIntersectExceptQuery::OperatorConverter::toString(current_operator);
     if (name.empty())
         return "UNKNOWN";
     return name;
+}
+
+ASTSelectIntersectExceptQuery::Operator IntersectOrExceptStep::getOperator() const
+{
+    return current_operator;
 }
 
 void IntersectOrExceptStep::toProto(Protos::IntersectOrExceptStep & proto, bool) const

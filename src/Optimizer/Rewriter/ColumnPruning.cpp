@@ -101,6 +101,173 @@ void ColumnPruning::selectColumnWithMinSize(NamesAndTypesList source_columns, St
     }
 }
 
+template <bool require_all>
+PlanNodePtr ColumnPruningVisitor::visitDefault(PlanNodeBase & node, NameSet & require)
+{
+    if (node.getChildren().empty())
+        return node.shared_from_this();
+
+    if constexpr (require_all)
+    {
+        // add all output columns into require, to prevent any pruning in source steps
+        for (const auto & col_with_name : node.getCurrentDataStream().header)
+            require.insert(col_with_name.name);
+    }
+
+    PlanNodes children;
+    for (const auto & item : node.getChildren())
+    {
+        auto child_require = require;
+        PlanNodePtr child = VisitorUtil::accept(*item, *this, child_require);
+        children.emplace_back(child);
+    }
+
+    node.replaceChildren(children);
+    return node.shared_from_this();
+}
+
+PlanNodePtr ColumnPruningVisitor::visitPlanNode(PlanNodeBase & node, NameSet & require)
+{
+    return visitDefault<true>(node, require);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitFinishSortingNode(FinishSortingNode & node, NameSet & require)
+{
+    return visitPlanNode(node, require);
+}
+
+
+PlanNodePtr ColumnPruningVisitor::visitFinalSampleNode(FinalSampleNode &, NameSet &)
+{
+    throw Exception("Not impl column pruning", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitOffsetNode(OffsetNode &, NameSet &)
+{
+    throw Exception("Not impl column pruning", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitTableFinishNode(TableFinishNode & node, NameSet & require)
+{
+    return visitPlanNode(node, require);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitLimitNode(LimitNode & node, NameSet & require)
+{
+    return visitDefault<false>(node, require);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitReadStorageRowCountNode(ReadStorageRowCountNode & node, NameSet & require)
+{
+    return visitDefault<false>(node, require);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitIntersectOrExceptNode(IntersectOrExceptNode & node, NameSet &)
+{
+    const auto * step = node.getStep().get();
+
+    std::vector<size_t> require_index;
+
+    size_t index = 0;
+    DataStream output_stream;
+    for (const auto & item : step->getOutputStream().header)
+    {
+        require_index.emplace_back(index);
+        output_stream.header.insert(item);
+        index++;
+    }
+
+    /// count(*) requires nothing but we need gave some rows.
+    if (require_index.empty())
+        require_index.emplace_back(0);
+
+    PlanNodes children;
+    DataStreams children_streams;
+    for (const auto & child : node.getChildren())
+    {
+        NameSet child_require;
+        for (const auto & item : require_index)
+            child_require.insert(child->getStep()->getOutputStream().header.getByPosition(item).name);
+
+        auto new_child = VisitorUtil::accept(child, *this, child_require);
+        children_streams.emplace_back(new_child->getStep()->getOutputStream());
+        children.emplace_back(new_child);
+    }
+
+    auto intersect_except_step = std::make_shared<IntersectOrExceptStep>(children_streams, step->getOperator(), step->getMaxThreads());
+    auto intersect_except_node = IntersectOrExceptNode::createPlanNode(context->nextNodeId(), std::move(intersect_except_step), children, node.getStatistics());
+    return intersect_except_node;
+}
+
+PlanNodePtr ColumnPruningVisitor::visitEnforceSingleRowNode(EnforceSingleRowNode & node, NameSet & require)
+{
+    return visitDefault<false>(node, require);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitValuesNode(ValuesNode & node, NameSet & require)
+{
+    const auto * step = node.getStep().get();
+    const auto & fields = step->getFields();
+    const auto & output_stream = step->getOutputStream();
+    NamesAndTypes header;
+    Fields data;
+    for (size_t index = 0; index < fields.size(); ++index)
+    {
+        if (require.empty())
+            break;
+
+        auto name_type = output_stream.header.getByPosition(index);
+        if (require.contains(name_type.name))
+        {
+            header.emplace_back(name_type.name, name_type.type);
+            data.emplace_back(fields[index]);
+        }
+    }
+
+    if (header.empty())
+    {
+        auto name_type = output_stream.header.getByPosition(0);
+        header.emplace_back(name_type.name, name_type.type);
+        data.emplace_back(fields[0]);
+    }
+
+    auto values_step = std::make_shared<ValuesStep>(header, data, step->getRows());
+    auto values_node = ValuesNode::createPlanNode(context->nextNodeId(), std::move(values_step), {}, node.getStatistics());
+    return values_node;
+}
+
+PlanNodePtr ColumnPruningVisitor::visitBufferNode(BufferNode & node, NameSet & require)
+{
+    return visitDefault<false>(node, require);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitRemoteExchangeSourceNode(RemoteExchangeSourceNode &, NameSet &)
+{
+    throw Exception("Not impl column pruning", ErrorCodes::NOT_IMPLEMENTED);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitReadNothingNode(ReadNothingNode & node, NameSet & require)
+{
+    return visitDefault<false>(node, require);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitPartitionTopNNode(PartitionTopNNode & node, NameSet & require)
+{
+    const auto * step = node.getStep().get();
+    for (const auto & name : step->getPartition())
+        require.insert(name);
+
+    for (const auto & name : step->getOrderBy())
+        require.insert(name);
+
+    return visitDefault<false>(node, require);
+}
+
+PlanNodePtr ColumnPruningVisitor::visitExtremesNode(ExtremesNode & node, NameSet & require)
+{
+    return visitDefault<false>(node, require);
+}
+
 PlanNodePtr ColumnPruningVisitor::visitLimitByNode(LimitByNode & node, NameSet & require)
 {
     const auto * step = node.getStep().get();
@@ -653,7 +820,7 @@ PlanNodePtr ColumnPruningVisitor::visitAssignUniqueIdNode(AssignUniqueIdNode & n
         return VisitorUtil::accept(node.getChildren()[0], *this, require);
     }
 
-    return visitPlanNode(node, require);
+    return visitDefault<false>(node, require);
 }
 
 PlanNodePtr ColumnPruningVisitor::visitExchangeNode(ExchangeNode & node, NameSet & require)

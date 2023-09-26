@@ -1581,7 +1581,7 @@ String StepPrinter::printUnionStep(const UnionStep & step)
 String StepPrinter::printIntersectOrExceptStep(const IntersectOrExceptStep & step)
 {
     std::stringstream details;
-    details << "Operator :" << step.getOperator();
+    details << "Operator :" << step.getOperatorStr();
     details << "|";
     details << "Output |";
     for (const auto & column : step.getOutputStream().header)

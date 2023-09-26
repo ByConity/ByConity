@@ -1,5 +1,6 @@
 #pragma once
 #include <Optimizer/CardinalityEstimate/PlanNodeStatistics.h>
+#include <QueryPlan/FinishSortingStep.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/PartialSortingStep.h>
@@ -14,6 +15,7 @@ public:
     static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const PartialSortingStep &);
     static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const MergeSortingStep &);
     static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const MergingSortedStep &);
+    static PlanNodeStatisticsPtr estimate(PlanNodeStatisticsPtr & child_stats, const FinishSortingStep &);
 
 };
 

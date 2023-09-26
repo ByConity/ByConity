@@ -698,11 +698,8 @@ protected:
     QueryPlanStepPtr visitApplyStep(const ApplyStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
     QueryPlanStepPtr visitArrayJoinStep(const ArrayJoinStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
     QueryPlanStepPtr visitAssignUniqueIdStep(const AssignUniqueIdStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
-    QueryPlanStepPtr visitCreatingSetsStep(const CreatingSetsStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
-    QueryPlanStepPtr visitCubeStep(const CubeStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
     QueryPlanStepPtr visitDistinctStep(const DistinctStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
     QueryPlanStepPtr visitEnforceSingleRowStep(const EnforceSingleRowStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
-    QueryPlanStepPtr visitExpressionStep(const ExpressionStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
     QueryPlanStepPtr visitExceptStep(const ExceptStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
     QueryPlanStepPtr visitExtremesStep(const ExtremesStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
     QueryPlanStepPtr visitExchangeStep(const ExchangeStep & step, SymbolMapper & mapper) override { return mapper.map(step); }
