@@ -132,7 +132,7 @@ void MultiDiskS3PartsLazyCleaner::finalize()
 
     for (auto & cleaner : cleaners)
     {
-        pool.scheduleOrThrow(createExceptionHandledJob([&cleaner]() { cleaner.second.second->finalize(); }, except_handler));
+        pool.scheduleOrThrowOnError(createExceptionHandledJob([&cleaner]() { cleaner.second.second->finalize(); }, except_handler));
     }
 
     pool.wait();
@@ -237,7 +237,7 @@ std::vector<S3PartsAttachMeta::PartMeta> S3PartsAttachMeta::listPartsInMetaFile(
     ThreadPool pool(std::min(thread_num_, meta_files_.size()));
     for (const String & file : meta_files_)
     {
-        pool.scheduleOrThrow(createExceptionHandledJob(
+        pool.scheduleOrThrowOnError(createExceptionHandledJob(
             [this, file, &mu, &part_metas]() {
                 RAReadBufferFromS3 reader(s3_util.getClient(), s3_util.getBucket(), file);
                 std::vector<PartMeta> partial_metas;

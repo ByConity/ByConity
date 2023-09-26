@@ -1260,7 +1260,7 @@ namespace S3
         }
         else
         {
-            clean_pool->scheduleOrThrow(std::move(task));
+            clean_pool->scheduleOrThrowOnError(std::move(task));
         }
     }
 
@@ -1274,7 +1274,7 @@ namespace S3
         {
             /// In case of out-of-order schedule.
             clean_pool->wait();
-            clean_pool->scheduleOrThrow(createExceptionHandledJob([this]() { lazyRemove(std::nullopt); }, except_hdl));
+            clean_pool->scheduleOrThrowOnError(createExceptionHandledJob([this]() { lazyRemove(std::nullopt); }, except_hdl));
             clean_pool->wait();
         }
 
