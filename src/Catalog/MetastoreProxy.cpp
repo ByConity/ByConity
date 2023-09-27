@@ -168,7 +168,7 @@ std::vector<Protos::DataModelDB> MetastoreProxy::getTrashDBs(const String & name
     std::vector<Protos::DataModelDB> res;
     auto it = metastore_ptr->getByPrefix(dbTrashPrefix(name_space));
     while(it->next())
-    {
+    { 
         Protos::DataModelDB db_model;
         db_model.ParseFromString(it->value());
         res.emplace_back(db_model);
