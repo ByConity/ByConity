@@ -22,34 +22,33 @@ namespace ErrorCodes
     extern const int TYPE_MISMATCH;
 }
 
-template<typename T>
-std::shared_ptr<const DataTypeArray> getDataTypeArray(T type)
-{
-    const auto & nested_type = type->getNestedType();
-    const auto * nested_array_type = typeid_cast<const DataTypeArray *>(nested_type.get());
-    return std::shared_ptr<const DataTypeArray>{nested_type, nested_array_type};
-}
-
 //ArrayJoin support Array, Nullable(Array) and Map type
 std::shared_ptr<const DataTypeArray> getArrayJoinDataType(DataTypePtr type)
 {
-    if (const auto * array_type = typeid_cast<const DataTypeArray *>(type.get()))
-        return std::shared_ptr<const DataTypeArray>{type, array_type};
+    using DataTypeArrayPtr = std::shared_ptr<const DataTypeArray>;
+    // we don't assume what inside Nullable is always Array
+    if (const auto * nullable_type = typeid_cast<const DataTypeNullable *>(type.get())) 
+        type = nullable_type->getNestedType();
+
+    if (auto array_type_ptr = typeid_cast<DataTypeArrayPtr>(type))
+        return array_type_ptr;
     else if (const auto * map_type = typeid_cast<const DataTypeMap *>(type.get()))
-        return getDataTypeArray(map_type);
-    else if (const auto * nullable_type = typeid_cast<const DataTypeNullable *>(type.get())) 
-        return getDataTypeArray(nullable_type);
+        return typeid_cast<DataTypeArrayPtr>(map_type->getNestedType());
+
     return nullptr;
 }
 
-ColumnPtr getArrayJoinColumn(const ColumnPtr & column)
+ColumnPtr getArrayJoinColumn(ColumnPtr column)
 {
+    // we don't assume what inside Nullable is always Array
+    if (const auto* null_col = typeid_cast<const ColumnNullable *>(column.get()))
+        column = null_col->getNestedColumnPtr();
+
     if (typeid_cast<const ColumnArray *>(column.get()))
         return column;
     else if (const auto * map = typeid_cast<const ColumnMap *>(column.get()))
         return map->getNestedColumnPtr();
-    else if (const auto* null_col = typeid_cast<const ColumnNullable *>(column.get()))
-        return null_col->getNestedColumnPtr();
+
     return nullptr;
 }
 
@@ -192,19 +191,13 @@ void ArrayJoinAction::execute(Block & block)
             const auto & type = getArrayJoinDataType(current.type);
             if (!type)
                 throw Exception(ErrorCodes::TYPE_MISMATCH, "ARRAY JOIN of not array not map: {}", current.name);
+            auto column = getArrayJoinColumn(current.column->convertToFullColumnIfConst());
+            auto name = current.name;
 
             ColumnPtr array_ptr;
-            if (typeid_cast<const DataTypeArray *>(current.type.get()))
-            {
-                array_ptr = (is_left && !is_unaligned) ? non_empty_array_columns[current.name] : current.column;
-                array_ptr = array_ptr->convertToFullColumnIfConst();
-            }
-            else
-            {
-                ColumnPtr map_ptr = current.column->convertToFullColumnIfConst();
-                const ColumnMap & map = typeid_cast<const ColumnMap &>(*map_ptr);
-                array_ptr = (is_left && !is_unaligned) ? non_empty_array_columns[current.name] : map.getNestedColumnPtr();
-            }
+
+            array_ptr = (is_left && !is_unaligned) ? non_empty_array_columns[name] : column;
+            array_ptr = array_ptr->convertToFullColumnIfConst();
 
             const ColumnArray & array = typeid_cast<const ColumnArray &>(*array_ptr);
             if (!is_unaligned && !array.hasEqualOffsets(*any_array))

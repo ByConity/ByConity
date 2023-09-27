@@ -380,7 +380,7 @@ static void executeAction(const ExpressionActions::Action & action, ExecutionCon
             const ColumnArray * array = getArrayJoinColumnRawPtr(array_join_key.column);
             const auto & type = getArrayJoinDataType(array_join_key.type);
             if (!array || !type)
-                throw Exception("ARRAY JOIN of not array: " + action.node->result_name, ErrorCodes::TYPE_MISMATCH);
+                throw Exception("ARRAY JOIN of not array/map: " + action.node->result_name, ErrorCodes::TYPE_MISMATCH);
 
             for (auto & column : columns)
                 if (column.column)
@@ -765,8 +765,8 @@ ExpressionActionsChain::ArrayJoinStep::ArrayJoinStep(ArrayJoinActionPtr array_jo
 
         if (array_join->columns.count(column.name) > 0)
         {
-            const auto * array = typeid_cast<const DataTypeArray *>(column.type.get());
-            column.type = array->getNestedType();
+            auto array_type = getArrayJoinDataType(column.type);
+            column.type = array_type->getNestedType();
             /// Arrays are materialized
             column.column = nullptr;
         }
