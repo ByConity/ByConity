@@ -71,13 +71,6 @@ public:
 
     /// NOTE: will rewrite the AST to add immutable settings.
     void loadFromQuery(ASTStorage & storage_def);
-
-    // void applyChange(const SettingChange & change);
-    // void applyChanges(const SettingsChanges & changes);
-
-    // void set(const String & key, const Field & value);
-
-    // bool hasKey(const String & key);
 };
 
 }

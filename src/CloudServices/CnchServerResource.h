@@ -143,6 +143,8 @@ public:
     void sendResources(const ContextPtr & context, WorkerAction act);
     void cleanResource();
 
+    void setSendMutations(bool send_mutations_) { send_mutations = send_mutations_; }
+
 private:
     auto getLock() const { return std::lock_guard(mutex); }
     auto getLockForSend(const String & address) const { return SendLock{address, lock_manager}; }
@@ -170,6 +172,8 @@ private:
     bool skip_clean_worker{false};
     Poco::Logger * log;
     mutable ServerResourceLockManager lock_manager;
+
+    bool send_mutations{false};
 };
 
 }

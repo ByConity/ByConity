@@ -22,6 +22,7 @@
 #include <Protos/RPCHelpers.h>
 #include <Protos/cnch_worker_rpc.pb.h>
 #include <Storages/IStorage.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Transaction/ICnchTransaction.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
@@ -300,7 +301,8 @@ brpc::CallId CnchWorkerClient::sendResources(
     const ContextPtr & context,
     const std::vector<AssignedResource> & resources_to_send,
     const ExceptionHandlerWithFailedInfoPtr & handler,
-    const WorkerId & worker_id)
+    const WorkerId & worker_id,
+    bool with_mutations)
 {
     Protos::SendResourcesReq request;
 
@@ -321,6 +323,20 @@ brpc::CallId CnchWorkerClient::sendResources(
 
         /// parts
         auto & table_data_parts = *request.mutable_data_parts()->Add();
+
+        /// Send storage's mutations to worker if needed.
+        if (with_mutations)
+        {
+            auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(resource.storage.get());
+            if (cnch_merge_tree)
+            {
+                for (auto const & mutation_str : cnch_merge_tree->getPlainMutationEntries())
+                {
+                    LOG_TRACE(&Poco::Logger::get(__func__), "Send mutations to worker: {}", mutation_str);
+                    table_data_parts.add_cnch_mutation_entries(mutation_str);
+                }
+            }
+        }
 
         table_data_parts.set_database(resource.storage->getDatabaseName());
         table_data_parts.set_table(resource.worker_table_name);

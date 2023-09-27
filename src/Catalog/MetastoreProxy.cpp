@@ -887,6 +887,7 @@ void MetastoreProxy::createMutation(const String & name_space, const String & uu
 
 void MetastoreProxy::removeMutation(const String & name_space, const String & uuid, const String & mutation_name)
 {
+    LOG_TRACE(&Poco::Logger::get(__func__), "Removing mutation {}", mutation_name);
     metastore_ptr->drop(tableMutationKey(name_space, uuid, mutation_name));
 }
 

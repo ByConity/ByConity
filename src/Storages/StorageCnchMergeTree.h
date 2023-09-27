@@ -37,6 +37,8 @@ public:
 
     std::string getName() const override { return "Cnch" + merging_params.getModeName() + "MergeTree"; }
 
+    void loadMutations();
+
     bool supportsSampling() const override { return true; }
     bool supportsFinal() const override { return true; }
     bool supportsPrewhere() const override { return true; }
@@ -241,6 +243,7 @@ private:
         const String & local_table_name,
         const std::set<Int64> & required_bucket_numbers = {});
 
+    /// NOTE: No need to implement this for CnchMergeTree as data processing is on CloudMergeTree.
     MutationCommands getFirstAlterMutationCommandsForPart(const DataPartPtr &) const override { return {}; }
 
     /// For select in interactive transaction session

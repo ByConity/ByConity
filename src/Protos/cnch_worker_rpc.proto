@@ -421,6 +421,8 @@ message TableDataParts
   optional ProtoHiveFiles hive_parts = 5;
   repeated int64 bucket_numbers = 6;
   repeated CnchFilePartModel file_parts = 7;
+  /// mutations: CloudMergeTree need this to find the actual column name in storage.
+  repeated string cnch_mutation_entries = 8;
 }
 
 message SendResourcesReq

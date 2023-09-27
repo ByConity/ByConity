@@ -29,8 +29,10 @@
 #include <Protos/DataModelHelpers.h>
 #include <Protos/RPCHelpers.h>
 #include <Storages/DiskCache/IDiskCache.h>
+#include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/MutationCommands.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <WorkerTasks/ManipulationList.h>
@@ -123,6 +125,14 @@ void CnchWorkerServiceImpl::submitManipulationTask(
             auto read_buf = ReadBufferFromString(request->mutate_commands());
             params.mutation_commands = std::make_shared<MutationCommands>();
             params.mutation_commands->readText(read_buf);
+
+            /// TODO: (zuochuang.zema) send mutation_entry but not mutation_commands in RPC.
+            CnchMergeTreeMutationEntry mutation_entry;
+            mutation_entry.commands = *params.mutation_commands;
+            mutation_entry.txn_id = request->txn_id();
+            mutation_entry.commit_time = params.mutation_commit_time;
+            mutation_entry.columns_commit_time = params.columns_commit_time;
+            data->addMutationEntry(mutation_entry);
         }
 
         auto remote_address
@@ -667,6 +677,12 @@ void CnchWorkerServiceImpl::sendResources(
                     required_bucket_numbers.insert(bucket_number);
 
                 cloud_merge_tree->setRequiredBucketNumbers(required_bucket_numbers);
+
+                for (const auto & mutation_str : data.cnch_mutation_entries())
+                {
+                    auto mutation_entry = CnchMergeTreeMutationEntry::parse(mutation_str);
+                    cloud_merge_tree->addMutationEntry(mutation_entry);
+                }
             }
             else if (auto * hive_table = dynamic_cast<StorageCloudHive *>(storage.get()))
             {

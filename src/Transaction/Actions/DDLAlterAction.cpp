@@ -58,18 +58,18 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
     {
         if (!mutation_commands.empty())
         {
-            CnchMergeTreeMutationEntry mutation_entry;
-            mutation_entry.txn_id = txn_id;
-            mutation_entry.commit_time = commit_time;
-            mutation_entry.commands = mutation_commands;
-            mutation_entry.columns_commit_time = mutation_commands.changeSchema() ? commit_time : table->commit_time;
-            catalog->createMutation(table->getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
+            final_mutation_entry.emplace();
+            final_mutation_entry->txn_id = txn_id;
+            final_mutation_entry->commit_time = commit_time;
+            final_mutation_entry->commands = mutation_commands;
+            final_mutation_entry->columns_commit_time = mutation_commands.changeSchema() ? commit_time : table->commit_time;
+            catalog->createMutation(table->getStorageID(), final_mutation_entry->txn_id.toString(), final_mutation_entry->toString());
 
             // Don't create mutation task for reclustering. It will manually triggered by user
-            is_recluster = table->isBucketTable() && mutation_entry.isReclusterMutation();
+            is_recluster = table->isBucketTable() && final_mutation_entry->isReclusterMutation();
             if (!is_recluster)
-                catalog->createMutation(table->getStorageID(), mutation_entry.txn_id.toString(), mutation_entry.toString());
-            LOG_DEBUG(log, "Successfully create mutation for alter query.");
+                catalog->createMutation(table->getStorageID(), final_mutation_entry->txn_id.toString(), final_mutation_entry->toString());
+            LOG_DEBUG(log, "Successfully create mutation entry for alter query: {}", final_mutation_entry->toString());
         }
 
         // auto cache = global_context.getMaskingPolicyCache();

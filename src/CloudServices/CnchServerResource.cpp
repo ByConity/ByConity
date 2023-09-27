@@ -207,7 +207,7 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
     auto worker_client = worker_group->getWorkerClient(worker);
     auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker.id);
-    auto call_id = worker_client->sendResources(context, resources_to_send, handler, full_worker_id);
+    auto call_id = worker_client->sendResources(context, resources_to_send, handler, full_worker_id, send_mutations);
     ProfileEvents::increment(ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds, watch.elapsedMilliseconds());
     brpc::Join(call_id);
     handler->throwIfException();
@@ -237,7 +237,7 @@ void CnchServerResource::sendResources(const ContextPtr & context)
     {
         auto worker_client = worker_group->getWorkerClient(host_ports);
         auto full_worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), host_ports.id);
-        call_ids[i] = worker_client->sendResources(context, resources_to_send, handler, full_worker_id);
+        call_ids[i] = worker_client->sendResources(context, resources_to_send, handler, full_worker_id, send_mutations);
     };
 
     size_t max_threads = Catalog::getMaxThreads();

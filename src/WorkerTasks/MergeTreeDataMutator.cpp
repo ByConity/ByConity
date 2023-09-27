@@ -232,6 +232,8 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
 {
     checkOperationIsNotCanceled(manipulation_entry);
 
+    LOG_TRACE(log, "Mutating part {}", source_part->name);
+
     CurrentMetrics::Increment num_mutations{CurrentMetrics::Manipulation};
     // const auto & source_part = future_part.parts[0];
     auto storage_from_source_part = StorageFromMergeTreeDataPart::create(source_part);
