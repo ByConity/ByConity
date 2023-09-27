@@ -96,8 +96,6 @@ PartWriter::PartWriter(const ASTPtr & query_ptr_, ContextMutablePtr context_) : 
     fs::create_directory(working_path + PT_RELATIVE_LOCAL_PATH);
 
     getContext()->setPath(working_path);
-    getContext()->setHdfsUser("clickhouse");
-    getContext()->setHdfsNNProxy("nnproxy");
 
     applySettings();
 
@@ -156,6 +154,7 @@ void PartWriter::execute()
 
     /// prepare remote disk
     HDFSConnectionParams params = getContext()->getHdfsConnectionParams();
+    LOG_INFO(log, "PartWriter hdfs params = {}", params.toString());
 
     std::shared_ptr<IDisk> remote_disk;
     std::unique_ptr<S3PartsAttachMeta::Writer> s3_attach_meta_writer;
