@@ -968,6 +968,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             limits.size_limits = SizeLimits(settings.max_result_rows, settings.max_result_bytes, settings.result_overflow_mode);
         }
 
+        // if fallback by optimizer, write the ExceptionMessage to query_log
+        String fallback_reason;
 
         bool read_result_from_query_cache = false; /// a query must not read from *and* write to the query cache at the same time
         TxnTimestamp source_update_time_for_query_cache = TxnTimestamp::minTS();
@@ -1002,8 +1004,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         if (auto session_resource = context->tryGetCnchServerResource())
                             session_resource->cleanResource();
 
-                        // Used to identify 'fallback' queries in query_log
-                        context->setSetting("operator_profile_receive_timeout", 3001);
+                        fallback_reason = getCurrentExceptionMessage(true);
                     }
                     else
                     {
@@ -1198,6 +1199,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 elem.segment_parallel = 1;
                 elem.segment_parallel_index = 1;
             }
+
+            elem.fallback_reason = fallback_reason;
 
             bool log_queries = settings.log_queries && !internal;
 
