@@ -48,11 +48,12 @@ void BroadcastExchangeSink::consume(Chunk chunk)
         if (options.force_use_buffer)
         {
             auto chunk_to_send = buffer_chunk.flush(true);
-            if (!chunk_to_send)
-                return;
-            for (auto & sender : senders)
+            if (chunk_to_send)
             {
-                ExchangeUtils::sendAndCheckReturnStatus(*sender, chunk_to_send.clone());
+                for (auto & sender : senders)
+                {
+                    ExchangeUtils::sendAndCheckReturnStatus(*sender, chunk_to_send.clone());
+                }
             }
         }
         finish();
