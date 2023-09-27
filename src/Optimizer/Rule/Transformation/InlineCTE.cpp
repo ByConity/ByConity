@@ -66,7 +66,7 @@ PlanNodePtr InlineCTEWithFilter::predicatePushDown(const PlanNodePtr & node, CTE
 
     QueryPlan sub_plan{node, cte_info, context->getPlanNodeIdAllocator()};
     for (auto & rewriter : rewriters)
-        rewriter->rewrite(sub_plan, context);
+        rewriter->rewritePlan(sub_plan, context);
     return sub_plan.getPlanNode();
 }
 }

@@ -237,9 +237,6 @@ void AddBufferForDeadlockCTE::rewrite(QueryPlan & plan, ContextMutablePtr contex
 {
     static auto * logger = &Poco::Logger::get("AddBufferForDeadlockCTE");
 
-    if (!context->getSettingsRef().enable_buffer_for_deadlock_cte)
-        return;
-
     FindDirectRightVisitor find_deadlock_cte_visitor{plan.getCTEInfo(), logger};
     VisitorUtil::accept<void, const JoinPath>(plan.getPlanNode(), find_deadlock_cte_visitor, JoinPath::RIGHT);
 

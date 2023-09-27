@@ -13,8 +13,11 @@ using HintsStringSet = std::unordered_set<String>;
 class ImplementJoinAlgorithmHints : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override;
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_join_algorithm_hints; }
 };
 
 class JoinAlgorithmHintsVisitor : public PlanNodeVisitor<HintsStringSet, Void>

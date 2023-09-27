@@ -20,7 +20,7 @@ namespace DB
 
 void OptimizeTrivialCount::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    if (!context->getSettingsRef().optimize_trivial_count_query || context->getSettingsRef().max_parallel_replicas > 1 )
+    if (context->getSettingsRef().max_parallel_replicas > 1 )
         return;
     TrivialCountVisitor visitor{context, plan.getCTEInfo()};
     Void v;

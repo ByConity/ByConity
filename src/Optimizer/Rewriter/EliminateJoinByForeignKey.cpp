@@ -35,9 +35,6 @@ namespace DB
 
 void EliminateJoinByFK::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    if (!context->getSettingsRef().enable_eliminate_join_by_fk && !context->getSettingsRef().enable_eliminate_simple_pk_fk_join)
-        return;
-
     TableColumnInfo info(true);
 
     PlanNodes table_scan_nodes
@@ -148,7 +145,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitPlanNode(PlanNodeBase & 
 {
     size_t children_size = node.getChildren().size();
     if (children_size != 1)
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "unsupported step type -- " + node.getStep()->getName() + ", skip it by setting enable_eliminate_join_by_fk=0 and enable_eliminate_simple_pk_fk_join=0");
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "unsupported step type -- " + node.getStep()->getName() + ", skip it by setting enable_eliminate_join_by_fk=0");
 
     FPKeysAndOrdinaryKeys translated = VisitorUtil::accept(node.getChildren()[0], *this, join_info);
 
@@ -720,7 +717,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitUnionNode(UnionNode & no
     collectEliminableJoin(old_winners);
     result.downgradePkTables(invalid_tables);
 
-    if (!result.getFPKeys().getPrimaryKeySet().empty() && context->getSettings().enable_eliminate_join_by_fk_without_top_join)
+    if (!result.getFPKeys().getPrimaryKeySet().empty() && context->getSettings().enable_eliminate_complicated_pk_fk_join_without_top_join)
     {
         // NOTE: Currently `eliminate the join by fk without top join` only supports the union node, because corresponding eliminator must be special rewrite such as Eliminator::visitUnionNode.
         join_info.electMultiChildNode(node.shared_from_this(),result.getFPKeys());

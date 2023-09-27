@@ -17,9 +17,6 @@ namespace DB
 {
 void GroupByKeysPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    if (!context->getSettings().enable_group_by_keys_pruning)
-        return;
-
     GroupByKeysPruning::Rewriter rewriter{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), rewriter, v);

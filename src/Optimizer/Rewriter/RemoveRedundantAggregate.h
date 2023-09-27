@@ -10,11 +10,11 @@ namespace DB
 class RemoveRedundantDistinct : public Rewriter
 {
 public:
+    String name() const override { return "RemoveRedundantDistinct"; };
+
+private:
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
-    String name() const override
-    {
-        return "RemoveRedundantDistinct";
-    }
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_distinct_remove; }
 };
 struct RemoveRedundantAggregateContext
 {

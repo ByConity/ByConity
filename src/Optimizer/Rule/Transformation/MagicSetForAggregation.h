@@ -39,9 +39,8 @@ class MagicSetRule : public Rule
 public:
     RuleType getType() const override = 0;
     PatternPtr getPattern() const override = 0;
-
     const std::vector<RuleType> & blockRules() const override;
-    bool isEnabled(ContextPtr context) override { return context->getSettingsRef().enable_magic_set; }
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_magic_set; }
 
     /*
      * Build Magic Set as special join: Y filter join X.
@@ -85,7 +84,6 @@ class MagicSetForAggregation : public MagicSetRule
 public:
     RuleType getType() const override { return RuleType::MAGIC_SET_FOR_AGGREGATION; }
     String getName() const override { return "MAGIC_SET_FOR_AGGREGATION"; }
-
     PatternPtr getPattern() const override;
 
 protected:
@@ -121,7 +119,6 @@ class MagicSetForProjectionAggregation : public MagicSetRule
 public:
     RuleType getType() const override { return RuleType::MAGIC_SET_FOR_PROJECTION_AGGREGATION; }
     String getName() const override { return "MAGIC_SET_FOR_PROJECTION_AGGREGATION"; }
-
     PatternPtr getPattern() const override;
 
 protected:

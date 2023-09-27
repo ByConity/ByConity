@@ -39,8 +39,11 @@ namespace DB
 class UnifyNullableType : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "UnifyNullableType"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().join_use_nulls; }
 };
 
 class UnifyNullableVisitor : public SimplePlanRewriter<Void>

@@ -25,7 +25,7 @@ class LeftJoinToRightJoin : public Rule
 public:
     RuleType getType() const override { return RuleType::LEFT_JOIN_TO_RIGHT_JOIN; }
     String getName() const override { return "LEFT_JOIN_TO_RIGHT_JOIN"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_left_join_to_right_join; }
     PatternPtr getPattern() const override;
 
     // Left join with filter is not allowed convert to Right join with filter. (nest loop join only support left join).

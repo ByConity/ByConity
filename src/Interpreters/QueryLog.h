@@ -90,6 +90,9 @@ struct QueryLogElement
     Int64 segment_parallel{};
     Int64 segment_parallel_index{};
 
+    // if fallback by optimizer, write the ExceptionMessage to query_log
+    String fallback_reason;
+
     static std::string name() { return "QueryLog"; }
 
     static NamesAndTypesList getNamesAndTypes();

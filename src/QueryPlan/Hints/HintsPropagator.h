@@ -1,7 +1,8 @@
 #pragma once
 #include <QueryPlan/PlanVisitor.h>
 #include <Optimizer/Rewriter/Rewriter.h>
-#include <QueryPlan/SimplePlanRewriter.h>
+#include <QueryPlan/PlanVisitor.h>
+#include "QueryPlan/CTEVisitHelper.h"
 
 
 namespace DB
@@ -16,8 +17,11 @@ using HintsList = std::vector<PlanHints>;
 class HintsPropagator : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "HintsPropagator"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_hints_propagator; }
 };
 
 class HintsVisitor : public PlanNodeVisitor<void, HintsVisitorContext>
@@ -25,13 +29,14 @@ class HintsVisitor : public PlanNodeVisitor<void, HintsVisitorContext>
 public:
     explicit HintsVisitor(ContextMutablePtr & context_, CTEInfo & cte_info_, PlanNodePtr & root)
         : context(context_), post_order_cte_helper(cte_info_, root)
-    {}
+    {
+    }
 
 private:
     void visitProjectionNode(ProjectionNode & node, HintsVisitorContext &) override;
     void visitJoinNode(JoinNode & node, HintsVisitorContext &) override;
     void visitTableScanNode(TableScanNode & node, HintsVisitorContext &) override;
-    void visitPlanNode(PlanNodeBase & node, HintsVisitorContext &)  override;
+    void visitPlanNode(PlanNodeBase & node, HintsVisitorContext &) override;
     void visitFilterNode(FilterNode & node, HintsVisitorContext & hints_context) override;
     void visitCTERefNode(CTERefNode & node, HintsVisitorContext &) override;
 

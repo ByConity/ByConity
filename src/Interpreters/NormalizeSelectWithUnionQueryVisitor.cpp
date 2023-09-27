@@ -149,7 +149,20 @@ void NormalizeSelectWithUnionQueryMatcher::visit(ASTSelectWithUnionQuery & ast, 
     /// Just one union type child, lift it up
     if (selects.size() == 1 && selects[0]->as<ASTSelectWithUnionQuery>())
     {
-        ast = *(selects[0]->as<ASTSelectWithUnionQuery>());
+        ASTSelectWithUnionQuery normalized_query = *(selects[0]->as<ASTSelectWithUnionQuery>());
+        ast.union_mode = normalized_query.union_mode;
+        ast.is_normalized = normalized_query.is_normalized;
+        ast.list_of_selects = std::move(normalized_query.list_of_selects);
+        ast.children = std::move(normalized_query.children);
+        if (ast.out_file) {
+            ast.children.push_back(ast.out_file);
+        }
+        if (ast.format) {
+            ast.children.push_back(ast.format);
+        }
+        if (ast.settings_ast) {
+            ast.children.push_back(ast.settings_ast);
+        }
         ast.set_of_modes = std::move(current_set_of_modes);
         return;
     }

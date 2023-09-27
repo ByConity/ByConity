@@ -54,7 +54,7 @@ test_writer_and_merger ()
   set -ex
 
   # Run part-writer.
-  $CLICKHOUSE_BIN part-writer "load CSV file '$CSV_FILE' as table default.tmp $SCHEMA location '$WRITER_LOCATION' settings max_insert_block_size=$MAX_INSERT_BLOCK_SIZE,min_insert_block_size_rows=0,min_insert_block_size_bytes=0" | tee current_writer_log.txt
+  $CLICKHOUSE_BIN part-writer "load CSV file '$CSV_FILE' as table default.tmp $SCHEMA location '$WRITER_LOCATION' settings max_insert_block_size=$MAX_INSERT_BLOCK_SIZE,min_insert_block_size_rows=0,min_insert_block_size_bytes=0, hdfs_nnproxy = 'nnproxy' " | tee current_writer_log.txt
 
   # Run part-merger.
   UUID=$(grep -ha -m 1 "MergeTreeCNCHDataDumper.*[0-9a-f]\{8\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{4\}-[0-9a-f]\{12\}" current_writer_log.txt | grep -E -o "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")

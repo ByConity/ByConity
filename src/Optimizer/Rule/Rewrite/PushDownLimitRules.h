@@ -25,7 +25,7 @@ class PushLimitIntoDistinct: public Rule
 public:
     RuleType getType() const override { return RuleType::PUSH_LIMIT_INTO_DISTINCT; }
     String getName() const override { return "PUSH_LIMIT_INTO_DISTINCT"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_push_limit_into_distinct; }
     PatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -36,7 +36,7 @@ class PushLimitThroughProjection: public Rule
 public:
     RuleType getType() const override { return RuleType::PUSH_LIMIT_THROUGH_PROJECTION; }
     String getName() const override { return "PUSH_LIMIT_THROUGH_PROJECTION"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_push_limit_through_projetion; }    
     PatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -47,8 +47,7 @@ class PushLimitThroughExtremesStep : public Rule
 public:
     RuleType getType() const override { return RuleType::PUSH_LIMIT_THROUGH_EXTREMES; }
     String getName() const override { return "PUSH_LIMIT_THROUGH_EXTREMES"; }
-
-    PatternPtr getPattern() const override;
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_push_limit_through_extremes; }    PatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
@@ -80,7 +79,7 @@ class PushLimitThroughUnion: public Rule
 public:
     RuleType getType() const override { return RuleType::PUSH_LIMIT_THROUGH_UNION; }
     String getName() const override { return "PUSH_LIMIT_THROUGH_UNION"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_push_limit_through_union; }
     PatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -110,7 +109,7 @@ class PushLimitThroughOuterJoin: public Rule
 public:
     RuleType getType() const override { return RuleType::PUSH_LIMIT_THROUGH_OUTER_JOIN; }
     String getName() const override { return "PUSH_LIMIT_THROUGH_OUTER_JOIN"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_push_limit_through_outer_join; }    
     PatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -121,8 +120,8 @@ class LimitZeroToReadNothing : public Rule
 public:
     RuleType getType() const override { return RuleType::LIMIT_ZERO_TO_READNOTHING; }
     String getName() const override { return "LIMIT_ZERO_TO_READNOTHING"; }
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_limit_zero_to_read_nothing; }    
     PatternPtr getPattern() const override;
-
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
@@ -132,7 +131,7 @@ class PushdownLimitIntoWindow: public Rule
 public:
     RuleType getType() const override { return RuleType::PUSH_LIMIT_INTO_WINDOW; }
     String getName() const override { return "PUSH_LIMIT_INTO_WINDOW"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_push_down_limit_into_window; }    
     PatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -143,7 +142,7 @@ class PushLimitIntoSorting: public Rule
 public:
     RuleType getType() const override { return RuleType::PUSH_LIMIT_INTO_SORTING; }
     String getName() const override { return "PUSH_LIMIT_INTO_SORTING"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_push_limit_into_sorting_rule; }    
     PatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;

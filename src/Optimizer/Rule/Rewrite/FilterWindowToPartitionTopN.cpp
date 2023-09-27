@@ -29,9 +29,6 @@ namespace DB
 {
 TransformResult FilterWindowToPartitionTopN::transformImpl(PlanNodePtr node, const Captures &, RuleContext & context)
 {
-    if (!context.context->getSettingsRef().enable_filter_window_to_partition_topn)
-        return {};
-
     auto * filter_node = dynamic_cast<FilterNode *>(node.get());
     const auto & step = *filter_node->getStep();
     const auto & predicate = step.getFilter();

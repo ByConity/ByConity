@@ -34,7 +34,7 @@ insert into web values(300, null, 3003.5);
 
 set enable_optimizer=1;
 set enable_eliminate_join_by_fk=1;
-set enable_eliminate_simple_pk_fk_join=1;
+set enable_eliminate_complicated_pk_fk_join=1;
 set join_use_nulls=1;
 
 select 'real pk?';
@@ -153,7 +153,7 @@ explain
 select * from cust a, cust b
 where a.sk = b.sk;
 
-set enable_eliminate_join_by_fk_without_top_join=1;
+set enable_eliminate_complicated_pk_fk_join_without_top_join=1;
 
 alter table cust add constraint un2 unique (c_customer_id);
 

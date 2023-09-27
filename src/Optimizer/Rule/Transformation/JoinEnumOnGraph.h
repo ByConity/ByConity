@@ -34,7 +34,7 @@ public:
     JoinEnumOnGraph(bool support_filter_) : support_filter(support_filter_) { }
     RuleType getType() const override { return RuleType::JOIN_ENUM_ON_GRAPH; }
     String getName() const override { return "JOIN_ENUM_ON_GRAPH"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_join_enum_on_graph; }
     PatternPtr getPattern() const override;
 
     const std::vector<RuleType> & blockRules() const override;

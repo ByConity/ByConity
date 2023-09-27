@@ -25,7 +25,7 @@ class InlineCTE : public Rule
 public:
     RuleType getType() const override { return RuleType::INLINE_CTE; }
     String getName() const override { return "INLINE_CTE"; }
-    bool isEnabled(ContextPtr context) override { return context->getSettingsRef().cte_mode == CTEMode::AUTO; }
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().cte_mode == CTEMode::AUTO; }
     PatternPtr getPattern() const override;
 
 protected:
@@ -37,7 +37,7 @@ class InlineCTEWithFilter : public Rule
 public:
     RuleType getType() const override { return RuleType::INLINE_CTE_WITH_FILTER; }
     String getName() const override { return "InlineCTEWithFilter"; }
-    bool isEnabled(ContextPtr context) override { return context->getSettingsRef().cte_mode == CTEMode::AUTO; }
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().cte_mode == CTEMode::AUTO; }
     PatternPtr getPattern() const override;
 
 protected:

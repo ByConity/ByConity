@@ -60,8 +60,11 @@ namespace DB
 class RemoveCorrelatedScalarSubquery : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "RemoveCorrelatedScalarSubquery"; }
+
+private:
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_remove_correlated_scalar_subquery; }
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 };
 
 /**
@@ -125,8 +128,14 @@ private:
 class RemoveUnCorrelatedScalarSubquery : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "RemoveUnCorrelatedScalarSubquery"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override
+    {
+        return context->getSettingsRef().enable_remove_uncorrelated_scalar_subquery;
+    }
 };
 
 class UnCorrelatedScalarSubqueryVisitor : public SimplePlanRewriter<Void>
@@ -163,8 +172,11 @@ private:
 class RemoveCorrelatedInSubquery : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "RemoveCorrelatedInSubquery"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_remove_correlated_in_subquery; }
 };
 
 class CorrelatedInSubqueryVisitor : public SimplePlanRewriter<Void>
@@ -203,8 +215,11 @@ public:
 class RemoveUnCorrelatedInSubquery : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "RemoveUnCorrelatedInSubquery"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_remove_uncorrelated_in_subquery; }
 };
 
 class UnCorrelatedInSubqueryVisitor : public SimplePlanRewriter<Void>
@@ -223,8 +238,11 @@ public:
 class RemoveCorrelatedExistsSubquery : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "RemoveCorrelatedExistsSubquery"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_remove_correlated_exists_subquery; }
 };
 
 class CorrelatedExistsSubqueryVisitor : public SimplePlanRewriter<Void>
@@ -243,8 +261,14 @@ public:
 class RemoveUnCorrelatedExistsSubquery : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "RemoveUnCorrelatedExistsSubquery"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override
+    {
+        return context->getSettingsRef().enable_remove_uncorrelated_exists_subquery;
+    }
 };
 
 class UnCorrelatedExistsSubqueryVisitor : public SimplePlanRewriter<Void>
@@ -263,8 +287,14 @@ public:
 class RemoveUnCorrelatedQuantifiedComparisonSubquery : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "RemoveUnCorrelatedQuantifiedComparisonSubquery"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override
+    {
+        return context->getSettingsRef().enable_remove_uncorrelated_quantified_comparison_subquery;
+    }
 };
 
 class UnCorrelatedQuantifiedComparisonSubqueryVisitor : public SimplePlanRewriter<Void>
@@ -284,8 +314,14 @@ private:
 class RemoveCorrelatedQuantifiedComparisonSubquery : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "RemoveCorrelatedQuantifiedComparisonSubquery"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override
+    {
+        return context->getSettingsRef().enable_remove_correlated_quantified_comparison_subquery;
+    }
 };
 
 class CorrelatedQuantifiedComparisonSubqueryVisitor : public SimplePlanRewriter<Void>

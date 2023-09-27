@@ -29,7 +29,7 @@ INSERT INTO child VALUES (2, 1, 'CHILD ONE');
 INSERT INTO child VALUES (3, 2, 'CHILD TWO');
 INSERT INTO child VALUES (4, 2, 'CHILD TWO');
 
-set enable_eliminate_simple_pk_fk_join=1;
+set enable_eliminate_join_by_fk=1;
 
 EXPLAIN SELECT c.id, c.parent_id, c.description
 FROM   child c

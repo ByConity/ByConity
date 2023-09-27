@@ -29,11 +29,14 @@ public:
         : pushdown_filter_into_cte(pushdown_filter_into_cte_), simplify_common_filter(simplify_common_filter_)
     {
     }
-
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "PredicatePushdown"; }
 
 private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override
+    {
+        return context->getSettingsRef().enable_predicate_pushdown_rewrite;
+    }
     const bool pushdown_filter_into_cte;
     const bool simplify_common_filter;
 };

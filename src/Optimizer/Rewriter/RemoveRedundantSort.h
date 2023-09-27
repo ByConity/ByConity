@@ -24,8 +24,11 @@ namespace DB
 class RemoveRedundantSort : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "RemoveRedundantSort"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_redundant_sort_removal; }
 };
 
 struct RedundantSortContext
@@ -39,10 +42,11 @@ class RedundantSortVisitor : public SimplePlanRewriter<RedundantSortContext>
 public:
     explicit RedundantSortVisitor(ContextMutablePtr context_, CTEInfo & cte_info_, PlanNodePtr & root)
         : SimplePlanRewriter(context_, cte_info_), post_order_cte_helper(cte_info_, root)
-    {}
+    {
+    }
 
     static bool isStateful(ConstASTPtr expression, ContextMutablePtr context);
-    static bool isOrderDependentAggregateFunction(const String& aggname);
+    static bool isOrderDependentAggregateFunction(const String & aggname);
     const static std::unordered_set<String> order_dependent_agg;
 
 private:
@@ -62,7 +66,6 @@ private:
 
     CTEPostorderVisitHelper post_order_cte_helper;
     std::unordered_map<CTEId, RedundantSortContext> cte_require_context{};
-
 };
 
 class StatefulVisitor : public ConstASTVisitor<void, ContextMutablePtr>

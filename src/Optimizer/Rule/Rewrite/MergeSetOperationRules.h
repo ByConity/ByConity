@@ -23,7 +23,7 @@ class MergeUnionRule : public Rule
 public:
     RuleType getType() const override { return RuleType::MERGE_UNION; }
     String getName() const override { return "MERGE_UNION"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_merge_union; }
     PatternPtr getPattern() const override;
 
 protected:
@@ -35,7 +35,7 @@ class MergeExceptRule : public Rule
 public:
     RuleType getType() const override { return RuleType::MERGE_EXCEPT; }
     String getName() const override { return "MERGE_EXCEPT"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_merge_except; }    
     PatternPtr getPattern() const override;
 
 protected:
@@ -47,7 +47,7 @@ class MergeIntersectRule : public Rule
 public:
     RuleType getType() const override { return RuleType::MERGE_INTERSECT; }
     String getName() const override { return "MERGE_INTERSECT"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_merge_intersect; }    
     PatternPtr getPattern() const override;
 
 protected:

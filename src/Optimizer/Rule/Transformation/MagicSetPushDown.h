@@ -26,7 +26,7 @@ class MagicSetPushThroughProject : public MagicSetRule
 public:
     RuleType getType() const override { return RuleType::MAGIC_SET_PUSH_THROUGH_PROJECTION; }
     String getName() const override { return "MAGIC_SET_PUSH_THROUGH_PROJECTION"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_magic_set_push_through_projection; }
     PatternPtr getPattern() const override;
 
 protected:
@@ -41,7 +41,7 @@ class MagicSetPushThroughJoin : public MagicSetRule
 public:
     RuleType getType() const override { return RuleType::MAGIC_SET_PUSH_THROUGH_JOIN; }
     String getName() const override { return "MAGIC_SET_PUSH_THROUGH_JOIN"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_magic_set_push_through_join; }
     PatternPtr getPattern() const override;
 
     const std::vector<RuleType> & blockRules() const override;
@@ -56,7 +56,7 @@ class MagicSetPushThroughFilter : public MagicSetRule
 public:
     RuleType getType() const override { return RuleType::MAGIC_SET_PUSH_THROUGH_FILTER; }
     String getName() const override { return "MAGIC_SET_PUSH_THROUGH_FILTER"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_magic_set_push_through_filter; }
     PatternPtr getPattern() const override;
 
 protected:
@@ -68,7 +68,7 @@ class MagicSetPushThroughAggregating : public MagicSetRule
 public:
     RuleType getType() const override { return RuleType::MAGIC_SET_PUSH_THROUGH_AGGREGATING; }
     String getName() const override { return "MAGIC_SET_PUSH_THROUGH_AGGREGATING"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_magic_set_push_through_aggregating; }    
     PatternPtr getPattern() const override;
 
 protected:

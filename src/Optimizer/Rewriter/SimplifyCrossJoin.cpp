@@ -27,8 +27,6 @@ namespace DB
 {
 void SimplifyCrossJoin::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    if (!context->getSettingsRef().eliminate_cross_joins)
-        return;
     if (!PlanPattern::hasCrossJoin(plan))
         return;
     SimplifyCrossJoinVisitor visitor{context, plan.getCTEInfo()};

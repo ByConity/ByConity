@@ -24,7 +24,7 @@ class FilterWindowToPartitionTopN : public Rule
 public:
     RuleType getType() const override { return RuleType::FILTER_WINDOW_TO_PARTITION_TOPN; }
     String getName() const override { return "FILTER_WINDOW_TO_PARTITION_TOPN"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_filter_window_to_partition_topn; }
     PatternPtr getPattern() const override { return Patterns::filter().withSingle(Patterns::window().withSingle(Patterns::exchange())).result(); }
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;

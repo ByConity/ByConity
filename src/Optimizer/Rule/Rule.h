@@ -117,6 +117,10 @@ enum class RuleType : UInt32
     PUSH_LIMIT_INTO_TABLE_SCAN,
     PUSH_AGGREGATION_INTO_TABLE_SCAN,
     PUSH_PROJECTION_INTO_TABLE_SCAN,
+    PUSH_PROJECTION_THROUGH_FILTER,
+    PUSH_PROJECTION_THROUGH_PROJECTION,
+    PUSH_INDEX_PROJECTION_INTO_TABLE_SCAN,
+    PUSH_QUERY_INFO_FILTER_INTO_TABLE_SCAN,
     PUSH_FILTER_INTO_TABLE_SCAN,
 
     INNER_JOIN_REORDER,
@@ -163,8 +167,9 @@ public:
     virtual ~Rule() = default;
     virtual RuleType getType() const = 0;
     virtual String getName() const = 0;
+    // enable/disable rule by settings, every rule must implement this function.
+    virtual bool isEnabled(ContextPtr) const = 0;
     virtual PatternPtr getPattern() const = 0;
-    virtual bool isEnabled(ContextPtr) { return true; }
     // exclude this rule for a specific plan node after a successful `Rule::transform` call happens,
     // this effectively prevent a plan node being rewritten by a rule multiple times
     virtual bool excludeIfTransformSuccess() const { return false; }

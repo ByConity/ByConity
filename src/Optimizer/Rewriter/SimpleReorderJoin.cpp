@@ -30,9 +30,6 @@ namespace DB
 {
 void SimpleReorderJoin::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    if (!context->getSettingsRef().enable_join_reorder)
-        return;
-
     auto join_size = PlanPattern::maxJoinSize(plan, context);
     if (join_size <= context->getSettingsRef().max_graph_reorder_size)
         return;

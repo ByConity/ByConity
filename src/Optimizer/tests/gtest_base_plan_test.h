@@ -63,8 +63,8 @@ public:
         settings.emplace("enable_sharding_optimize", 1);
         settings.emplace("enable_group_by_keys_pruning", true);
         settings.emplace("enable_eliminate_join_by_fk", true);
-        settings.emplace("enable_eliminate_simple_pk_fk_join", true);
-        settings.emplace("enable_eliminate_join_by_fk_without_top_join", true);
+        settings.emplace("enable_eliminate_complicated_pk_fk_join", true);
+        settings.emplace("enable_eliminate_complicated_pk_fk_join_without_top_join", true);
         settings.emplace("cost_calculator_cte_weight_for_join_build_side", 1.7);
         return settings;
     }

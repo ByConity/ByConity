@@ -35,8 +35,6 @@ const std::unordered_set<String> RedundantSortVisitor::order_dependent_agg{"grou
 
 void RemoveRedundantSort::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    if (!context->getSettingsRef().enable_redundant_sort_removal)
-        return;
     RedundantSortVisitor visitor{context, plan.getCTEInfo(), plan.getPlanNode()};
     RedundantSortContext sort_context{.context = context, .can_sort_be_removed = false};
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, sort_context);
