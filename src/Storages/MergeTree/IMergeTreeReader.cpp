@@ -436,7 +436,8 @@ void IMergeTreeReader::readMapDataNotKV(
 
     // after reading all implicit values columns based files(built by keys), it's time to
     // construct runtime ColumnMap(key_column, value_column).
-    dynamic_cast<ColumnByteMap *>(const_cast<IColumn *>(column.get()))->fillByExpandedColumns(type_map, impl_key_values);
+    dynamic_cast<ColumnByteMap *>(const_cast<IColumn *>(column.get()))
+        ->fillByExpandedColumns(type_map, impl_key_values, std::min(max_rows_to_read, data_part->rows_count - next_row_number_to_read));
 }
 
 void IMergeTreeReader::readData(

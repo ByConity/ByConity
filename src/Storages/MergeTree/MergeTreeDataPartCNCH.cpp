@@ -229,16 +229,8 @@ bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair & column) const
     {
         for (auto & [file, _] : getChecksums()->files)
         {
-            if (versions->enable_compact_map_data)
-            {
-                if (isMapCompactFileNameOfSpecialMapName(file, column.name))
-                    return true;
-            }
-            else
-            {
-                if (isMapImplicitFileNameOfSpecialMapName(file, column.name))
-                    return true;
-            }
+            if (isMapImplicitFileNameOfSpecialMapName(file, column.name))
+                return true;
         }
         return false;
     }

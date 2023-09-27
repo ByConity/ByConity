@@ -114,9 +114,4 @@ bool isMapImplicitDataFileNameNotBaseOfSpecialMapName(const String file_name, co
 // i.e. __col__%271%27.mrk2, col -> true
 bool isMapImplicitFileNameOfSpecialMapName(const String file_name, const String map_col);
 
-/// For compact map type, check if it's the compacted file of target map column.
-// i.e. col.null.bin, co -> false(not belong to target map column)
-// i.e. col.bin, col -> true
-bool isMapCompactFileNameOfSpecialMapName(const String file_name, const String map_col);
-
 }

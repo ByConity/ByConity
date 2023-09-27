@@ -1,0 +1,8 @@
+insert a data part whose mark number is bigger than 1, all map columns are empty
+
+select count(id), count(string_params), count(string_list_params), count(int_params), count(int_list_params) from test_map
+500
+500
+500
+500
+500

@@ -711,23 +711,40 @@ String IMergeTreeDataPart::getColumnNameWithMinimumCompressedSize(const StorageM
     std::optional<std::string> minimum_size_column;
     UInt64 minimum_size = std::numeric_limits<UInt64>::max();
 
-    for (const auto & column : storage_columns)
-    {
-        auto column_name = column.name;
-        auto column_type = column.type;
-        if (alter_conversions.isColumnRenamed(column.name))
-            column_name = alter_conversions.getColumnOldName(column.name);
-
-        if (!hasColumnFiles(column))
-            continue;
-
-        const auto size = getColumnSize(column_name, *column_type).data_compressed;
-        if (size < minimum_size)
+    auto calculate_minumum_size = [&] (bool check_map_type) {
+        for (const auto & column : storage_columns)
         {
-            minimum_size = size;
-            minimum_size_column = column_name;
+            auto column_name = column.name;
+            auto column_type = column.type;
+
+            if (check_map_type && !column_type->isMap())
+                continue;
+            else if (!check_map_type && column_type->isMap())
+                continue;
+
+            if (alter_conversions.isColumnRenamed(column.name))
+                column_name = alter_conversions.getColumnOldName(column.name);
+
+            if (!hasColumnFiles(column))
+                continue;
+
+            const auto size = getColumnSize(column_name, *column_type).data_compressed;
+            if (size < minimum_size)
+            {
+                minimum_size = size;
+                minimum_size_column = column_name;
+            }
         }
-    }
+    };
+
+    // firstly, try without map data type
+    calculate_minumum_size(false);
+
+    if (minimum_size_column)
+        return *minimum_size_column;
+
+    // then, retry with map data type if fail to get minimum size without map type.
+    calculate_minumum_size(true);
 
     if (!minimum_size_column)
         throw Exception("Could not find a column of minimum size in MergeTree, part " + getFullPath(), ErrorCodes::LOGICAL_ERROR);
@@ -1379,18 +1396,7 @@ ColumnSize IMergeTreeDataPart::getMapColumnSizeNotKV(const IMergeTreeDataPart::C
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Can not handle map kv type in method getMapColumnSizeNotKV");
     for (auto & name_csm : checksums->files)
     {
-        bool is_map_file = false;
-        if (versions->enable_compact_map_data)
-        {
-            if (isMapCompactFileNameOfSpecialMapName(name_csm.first, column.name))
-                is_map_file = true;
-        }
-        else
-        {
-            if (isMapImplicitFileNameOfSpecialMapName(name_csm.first, column.name))
-                is_map_file = true;
-        }
-        if (is_map_file)
+        if (isMapImplicitFileNameOfSpecialMapName(name_csm.first, column.name))
         {
             if (endsWith(name_csm.first, DATA_FILE_EXTENSION))
             {

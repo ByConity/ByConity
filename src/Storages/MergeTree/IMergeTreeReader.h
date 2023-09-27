@@ -138,6 +138,9 @@ protected:
 
     friend class MergeTreeRangeReader::DelayedStream;
 
+    /// Mark row number
+    size_t next_row_number_to_read = 0;
+
 private:
     /// Alter conversions, which must be applied on fly if required
     MergeTreeMetaBase::AlterConversions alter_conversions;
