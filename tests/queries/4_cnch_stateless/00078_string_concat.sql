@@ -183,3 +183,9 @@ select concat(materialize(toFixedString('a', 1)), toFixedString('b', 1), toFixed
 select concat(materialize(toFixedString('a', 1)), toFixedString('b', 1), materialize(toFixedString('c', 1))) == 'abc' from system.numbers limit 5;
 select concat(materialize(toFixedString('a', 1)), materialize(toFixedString('b', 1)), toFixedString('c', 1)) == 'abc' from system.numbers limit 5;
 select concat(materialize(toFixedString('a', 1)), materialize(toFixedString('b', 1)), materialize(toFixedString('c', 1))) == 'abc' from system.numbers limit 5;
+
+DROP TABLE IF EXISTS test.convert_test;
+CREATE TABLE test.convert_test ( `p_date` Date, `date` Nullable(String), `id` UInt64) ENGINE = CnchMergeTree() PARTITION BY p_date ORDER BY id;
+INSERT INTO test.convert_test VALUES ('2022-02-02', '2022-02-02', 1), ('2022-02-02', '2022-02-02', 2);
+SELECT concat(0, date) FROM test.convert_test;
+DROP TABLE IF EXISTS test.convert_test;

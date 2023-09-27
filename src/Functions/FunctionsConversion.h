@@ -1032,13 +1032,15 @@ struct ConvertImpl<FromDataType, std::enable_if_t<!std::is_same_v<FromDataType, 
     {
         const auto & col_with_type_and_name = arguments[0];
         const auto & type = static_cast<const FromDataType &>(*col_with_type_and_name.type);
+        // For some cases that type is non-const but column is const
+        const auto & column = col_with_type_and_name.column->convertToFullColumnIfConst();
 
         const DateLUTImpl * time_zone = nullptr;
         /// For argument of DateTime type, second argument with time zone could be specified.
         if constexpr (std::is_same_v<FromDataType, DataTypeDateTime> || std::is_same_v<FromDataType, DataTypeDateTime64>)
             time_zone = &extractTimeZoneFromFunctionArguments(arguments, 1, 0);
 
-        if (const auto col_from = checkAndGetColumn<ColVecType>(col_with_type_and_name.column.get()))
+        if (const auto col_from = checkAndGetColumn<ColVecType>(column.get()))
         {
             auto col_to = ColumnString::create();
 
