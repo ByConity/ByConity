@@ -283,26 +283,6 @@ NamesAndTypesList StorageCnchHive::getVirtuals() const
     return NamesAndTypesList{{"_path", std::make_shared<DataTypeString>()}, {"_file", std::make_shared<DataTypeString>()}};
 }
 
-std::shared_ptr<IDirectoryLister> StorageCnchHive::getDirectoryLister()
-{
-    auto disk = HiveUtil::getDiskFromURI(hive_table->sd.location, getContext(), *storage_settings);
-    const auto & input_format = hive_table->sd.inputFormat;
-    if (input_format == "org.apache.hudi.hadoop.HoodieParquetInputFormat")
-    {
-        return std::make_shared<HudiCowDirectoryLister>(disk);
-    }
-    else if (input_format == "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat")
-    {
-        return std::make_shared<DiskDirectoryLister>(disk, IHiveFile::FileFormat::PARQUET);
-    }
-    else if (input_format == "org.apache.hadoop.hive.ql.io.orc.OrcInputFormat")
-    {
-        return std::make_shared<DiskDirectoryLister>(disk, IHiveFile::FileFormat::ORC);
-    }
-    else
-        throw Exception(ErrorCodes::UNKNOWN_FORMAT, "Unknown hive format {}", input_format);
-}
-
 HivePartitions StorageCnchHive::selectPartitions(
     ContextPtr local_context,
     const StorageMetadataPtr & metadata_snapshot,
