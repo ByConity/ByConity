@@ -7,18 +7,20 @@ Projection Est. ? rows
          │     Aggregates: expr#count():=AggNull(count)()
          └─ Left Join Est. ? rows
             │     Condition: p_date == expr#toDate(hdfs_par)_2
-            ├─ Repartition Exchange Est. ? rows
-            │  │     Partition by: {p_date}
-            │  └─ Left Join Est. ? rows
-            │     │     Condition: user_id == user_id_2, p_date == expr#toDate(hdfs_par)_1
-            │     ├─ Repartition Exchange Est. ? rows
-            │     │  │     Partition by: {p_date, user_id}
-            │     │  └─ Filter Est. ? rows
-            │     │     │     Condition: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
-            │     │     └─ TableScan test.idm_ana_xz_rpt_user_evt Est. ? rows
-            │     │              Where: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
-            │     │              Outputs: [channel, p_date, user_id]
-            │     └─ CTERef[0] Est. ? rows
+            ├─ Left Join Est. ? rows
+            │  │     Condition: p_date == expr#toDate(hdfs_par)_1, user_id == user_id_2
+            │  ├─ Repartition Exchange Est. ? rows
+            │  │  │     Partition by: {p_date}
+            │  │  └─ Filter Est. ? rows
+            │  │     │     Condition: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
+            │  │     └─ TableScan test.idm_ana_xz_rpt_user_evt Est. ? rows
+            │  │              Where: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
+            │  │              Outputs: [channel, p_date, user_id]
+            │  └─ Repartition Exchange Est. ? rows
+            │     │     Partition by: {expr#toDate(hdfs_par)_1}
+            │     └─ Filter Est. ? rows
+            │        │     Condition: `expr#toDate(hdfs_par)_1` >= cast(18359, \'Date\')
+            │        └─ CTERef[0] Est. ? rows
             └─ Repartition Exchange Est. ? rows
                │     Partition by: {expr#toDate(hdfs_par)_2}
                └─ CTERef[0] Est. ? rows

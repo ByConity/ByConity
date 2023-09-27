@@ -24,6 +24,7 @@ Projection Est. 100 rows
                   └─ Inner Join Est. 1159361 rows
                      │     Condition: sr_store_sk_1 == s_store_sk
                      │     Filter: `expr#sum(sr_return_amt)_1` > (`expr#avg(ctr_total_return)` * '1.2')
+                     │     Runtime Filters Builder: {s_store_sk}
                      ├─ Projection Est. 1159361 rows
                      │  │     Expressions: expr#sum(sr_return_amt)_1:=`expr#sum(sr_return_amt)_3`, sr_customer_sk_1:=sr_customer_sk_3, sr_store_sk_1:=sr_store_sk_3
                      │  └─ MergingAggregated Est. 1159361 rows
@@ -65,7 +66,6 @@ Projection Est. 100 rows
                      └─ Broadcast Exchange Est. 45 rows
                         └─ Inner Join Est. 45 rows
                            │     Condition: s_store_sk == sr_store_sk_2
-                           │     Runtime Filters Builder: {sr_store_sk_2}
                            ├─ Repartition Exchange Est. 45 rows
                            │  │     Partition by: {s_store_sk}
                            │  └─ Filter Est. 45 rows

@@ -19,6 +19,7 @@
 #include <Optimizer/EqualityInference.h>
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <QueryPlan/PlanVisitor.h>
+#include "QueryPlan/CTEInfo.h"
 
 namespace DB
 {
@@ -72,6 +73,7 @@ public:
     PlanNodePtr visitProjectionNode(ProjectionNode &, PredicateContext &) override;
     PlanNodePtr visitFilterNode(FilterNode &, PredicateContext &) override;
     PlanNodePtr visitAggregatingNode(AggregatingNode &, PredicateContext &) override;
+    PlanNodePtr visitMarkDistinctNode(MarkDistinctNode & node, PredicateContext & predicate_context) override;
     PlanNodePtr visitJoinNode(JoinNode &, PredicateContext &) override;
     PlanNodePtr visitExchangeNode(ExchangeNode & node, PredicateContext & predicate_context) override;
     PlanNodePtr visitWindowNode(WindowNode &, PredicateContext &) override;
@@ -171,7 +173,7 @@ public:
     ASTPtr visitAssignUniqueIdNode(AssignUniqueIdNode &, ContextMutablePtr &) override;
     ASTPtr visitCTERefNode(CTERefNode & node, ContextMutablePtr & context) override;
 
-    explicit EffectivePredicateVisitor() {}
+    explicit EffectivePredicateVisitor() = default;
 
 private:
     ASTPtr process(PlanNodeBase & node, ContextMutablePtr & context);

@@ -18,7 +18,7 @@ Projection Est. 100 rows
                │           Where: Runtime Filters: {sr_cdemo_sk}
                │           Outputs: [sr_cdemo_sk]
                └─ Broadcast Exchange Est. 6147 rows
-                  └─ Inner Join Est. 6147 rows
+                  └─ Inner Join Est. 6288 rows
                      │     Condition: c_current_hdemo_sk == hd_demo_sk
                      │     Runtime Filters Builder: {hd_demo_sk}
                      ├─ Repartition Exchange Est. 20491 rows

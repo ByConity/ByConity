@@ -59,7 +59,7 @@ Projection Est. 100 rows
                                                       │                 Where: Runtime Filters: {l_orderkey}
                                                       │                 Outputs: l_orderkey_1:=l_orderkey, l_suppkey_1:=l_suppkey
                                                       └─ AssignUniqueId Est. 12199690 rows
-                                                         └─ Inner (PARALLEL_HASH) Join Est. 12199690 rows
+                                                         └─ Inner (PARALLEL_HASH) Join Est. 24001719 rows
                                                             │     Condition: o_orderkey == l_orderkey
                                                             │     Runtime Filters Builder: {l_orderkey}
                                                             ├─ Repartition Exchange Est. 73067626 rows
@@ -71,7 +71,7 @@ Projection Est. 100 rows
                                                             │              Outputs: [o_orderkey, o_orderstatus]
                                                             └─ Repartition Exchange Est. 24000646 rows
                                                                │     Partition by: {l_orderkey}
-                                                               └─ Inner Join Est. 24000646 rows
+                                                               └─ Inner Join Est. 24000114 rows
                                                                   │     Condition: l_suppkey == s_suppkey
                                                                   │     Runtime Filters Builder: {s_suppkey}
                                                                   ├─ Filter Est. 600037902 rows

@@ -5,7 +5,7 @@ Projection Est. 406951 rows
    └─ Gather Exchange Est. 406951 rows
       └─ Sorting Est. 406951 rows
          │     Order by: {s_name asc}
-         └─ Inner Join Est. 406951 rows
+         └─ Inner Join Est. 401641 rows
             │     Condition: ps_suppkey == s_suppkey
             │     Runtime Filters Builder: {s_suppkey}
             ├─ Repartition Exchange Est. 400000 rows

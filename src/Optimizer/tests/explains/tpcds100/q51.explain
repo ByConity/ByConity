@@ -17,7 +17,7 @@ Projection Est. 100 rows
                      └─ Projection Est. 2863187397 rows
                         │     Expressions: [expr#sum(sum(ss_sales_price)) OVER (PARTITION BY ss_item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW), expr#sum(sum(ws_sales_price)) OVER (PARTITION BY ws_item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)], expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date):=multiIf(isNotNull(d_date), d_date, d_date_1), expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk):=multiIf(isNotNull(ws_item_sk), ws_item_sk, ss_item_sk)
                         └─ Full (PARALLEL_HASH) Join Est. 2863187397 rows
-                           │     Condition: ss_item_sk == ws_item_sk, d_date_1 == d_date
+                           │     Condition: d_date_1 == d_date, ss_item_sk == ws_item_sk
                            ├─ Window Est. 52062815 rows
                            │  └─ Repartition Exchange Est. 52062815 rows
                            │     │     Partition by: {ss_item_sk}

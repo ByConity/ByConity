@@ -25,7 +25,7 @@ Projection Est. 100 rows
             │                          │     Aggregates: expr#sum(coalesce(wr.wr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(wr.wr_return_quantity, 0)), expr#sum(coalesce(ws.ws_quantity, 0)):=AggNull(sum)(expr#coalesce(ws.ws_quantity, 0)), expr#sum(coalesce(wr.wr_return_amt, 0)):=AggNull(sum)(expr#coalesce(wr.wr_return_amt, 0)), expr#sum(coalesce(ws.ws_net_paid, 0)):=AggNull(sum)(expr#coalesce(ws.ws_net_paid, 0))
             │                          └─ Projection Est. 307478 rows
             │                             │     Expressions: [ws_item_sk], expr#coalesce(wr.wr_return_amt, 0):=coalesce(wr_return_amt, 0), expr#coalesce(wr.wr_return_quantity, 0):=coalesce(wr_return_quantity, 0), expr#coalesce(ws.ws_net_paid, 0):=coalesce(ws_net_paid, 0), expr#coalesce(ws.ws_quantity, 0):=coalesce(ws_quantity, 0)
-            │                             └─ Inner Join Est. 307478 rows
+            │                             └─ Inner Join Est. 633592 rows
             │                                │     Condition: ws_item_sk == wr_item_sk, ws_order_number == wr_order_number
             │                                │     Runtime Filters Builder: {wr_item_sk,wr_order_number}
             │                                ├─ Repartition Exchange Est. 11684952 rows
@@ -68,7 +68,7 @@ Projection Est. 100 rows
             │                          │     Aggregates: expr#sum(coalesce(cr.cr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(cr.cr_return_quantity, 0)), expr#sum(coalesce(cs.cs_quantity, 0)):=AggNull(sum)(expr#coalesce(cs.cs_quantity, 0)), expr#sum(coalesce(cr.cr_return_amount, 0)):=AggNull(sum)(expr#coalesce(cr.cr_return_amount, 0)), expr#sum(coalesce(cs.cs_net_paid, 0)):=AggNull(sum)(expr#coalesce(cs.cs_net_paid, 0))
             │                          └─ Projection Est. 466443 rows
             │                             │     Expressions: [cs_item_sk], expr#coalesce(cr.cr_return_amount, 0):=coalesce(cr_return_amount, 0), expr#coalesce(cr.cr_return_quantity, 0):=coalesce(cr_return_quantity, 0), expr#coalesce(cs.cs_net_paid, 0):=coalesce(cs_net_paid, 0), expr#coalesce(cs.cs_quantity, 0):=coalesce(cs_quantity, 0)
-            │                             └─ Inner Join Est. 466443 rows
+            │                             └─ Inner Join Est. 1272788 rows
             │                                │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
             │                                │     Runtime Filters Builder: {cr_item_sk,cr_order_number}
             │                                ├─ Repartition Exchange Est. 23207765 rows
@@ -111,7 +111,7 @@ Projection Est. 100 rows
                                        │     Aggregates: expr#sum(coalesce(sr.sr_return_quantity, 0)):=AggNull(sum)(expr#coalesce(sr.sr_return_quantity, 0)), expr#sum(coalesce(sts.ss_quantity, 0)):=AggNull(sum)(expr#coalesce(sts.ss_quantity, 0)), expr#sum(coalesce(sr.sr_return_amt, 0)):=AggNull(sum)(expr#coalesce(sr.sr_return_amt, 0)), expr#sum(coalesce(sts.ss_net_paid, 0)):=AggNull(sum)(expr#coalesce(sts.ss_net_paid, 0))
                                        └─ Projection Est. 544936 rows
                                           │     Expressions: [ss_item_sk], expr#coalesce(sr.sr_return_amt, 0):=coalesce(sr_return_amt, 0), expr#coalesce(sr.sr_return_quantity, 0):=coalesce(sr_return_quantity, 0), expr#coalesce(sts.ss_net_paid, 0):=coalesce(ss_net_paid, 0), expr#coalesce(sts.ss_quantity, 0):=coalesce(ss_quantity, 0)
-                                          └─ Inner Join Est. 544936 rows
+                                          └─ Inner Join Est. 732503 rows
                                              │     Condition: ss_item_sk == sr_item_sk, ss_ticket_number == sr_ticket_number
                                              │     Runtime Filters Builder: {sr_item_sk,sr_ticket_number}
                                              ├─ Repartition Exchange Est. 46701324 rows

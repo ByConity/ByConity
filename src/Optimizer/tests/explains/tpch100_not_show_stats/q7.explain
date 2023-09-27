@@ -13,43 +13,61 @@ Projection
                   │     Aggregates: expr#sum(volume):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
                   └─ Projection
                      │     Expressions: [n_name, n_name_1], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount), expr#toYear(l_shipdate):=toYear(l_shipdate)
-                     └─ Inner Join
-                        │     Condition: l_suppkey == s_suppkey
+                     └─ Inner (PARALLEL_HASH) Join
+                        │     Condition: l_orderkey == o_orderkey
                         │     Filter: ((n_name_1 = 'GERMANY') OR (n_name = 'GERMANY')) AND ((n_name = 'FRANCE') OR (n_name_1 = 'FRANCE'))
+                        │     Runtime Filters Builder: {o_orderkey}
                         ├─ Repartition Exchange
-                        │  │     Partition by: {l_suppkey}
-                        │  └─ Inner (PARALLEL_HASH) Join
-                        │     │     Condition: l_orderkey == o_orderkey
-                        │     ├─ Repartition Exchange
-                        │     │  │     Partition by: {l_orderkey}
-                        │     │  └─ Filter
-                        │     │     │     Condition: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date'))
-                        │     │     └─ TableScan tpch100.lineitem
-                        │     │              Where: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date'))
-                        │     │              Outputs: [l_discount, l_extendedprice, l_orderkey, l_shipdate, l_suppkey]
-                        │     └─ Repartition Exchange
-                        │        │     Partition by: {o_orderkey}
-                        │        └─ Inner (PARALLEL_HASH) Join
-                        │           │     Condition: o_custkey == c_custkey
-                        │           ├─ Repartition Exchange
-                        │           │  │     Partition by: {o_custkey}
-                        │           │  └─ TableScan tpch100.orders
-                        │           │           Outputs: [o_custkey, o_orderkey]
-                        │           └─ Repartition Exchange
-                        │              │     Partition by: {c_custkey}
-                        │              └─ Inner Join
-                        │                 │     Condition: c_nationkey == n_nationkey_1
-                        │                 ├─ TableScan tpch100.customer
-                        │                 │        Outputs: [c_custkey, c_nationkey]
-                        │                 └─ Broadcast Exchange
-                        │                    └─ TableScan tpch100.nation
-                        │                             Outputs: n_name_1:=n_name, n_nationkey_1:=n_nationkey
+                        │  │     Partition by: {l_orderkey}
+                        │  └─ Inner Join
+                        │     │     Condition: l_suppkey == s_suppkey
+                        │     │     Runtime Filters Builder: {s_suppkey}
+                        │     ├─ Filter
+                        │     │  │     Condition: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date')) Runtime Filters: {l_orderkey, l_suppkey}
+                        │     │  └─ TableScan tpch100.lineitem
+                        │     │           Where: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date')) Runtime Filters: {l_orderkey, l_suppkey}
+                        │     │           Outputs: [l_discount, l_extendedprice, l_orderkey, l_shipdate, l_suppkey]
+                        │     └─ Broadcast Exchange
+                        │        └─ Inner Join
+                        │           │     Condition: s_nationkey == n_nationkey
+                        │           │     Runtime Filters Builder: {n_nationkey}
+                        │           ├─ Filter
+                        │           │  │     Condition: Runtime Filters: {s_nationkey}
+                        │           │  └─ TableScan tpch100.supplier
+                        │           │           Where: Runtime Filters: {s_nationkey}
+                        │           │           Outputs: [s_nationkey, s_suppkey]
+                        │           └─ Broadcast Exchange
+                        │              └─ Filter
+                        │                 │     Condition: n_name IN ('FRANCE', 'GERMANY')
+                        │                 └─ TableScan tpch100.nation
+                        │                          Where: n_name IN ('FRANCE', 'GERMANY')
+                        │                          Outputs: [n_name, n_nationkey]
                         └─ Repartition Exchange
-                           │     Partition by: {s_suppkey}
+                           │     Partition by: {o_orderkey}
                            └─ Inner Join
-                              │     Condition: s_nationkey == n_nationkey
-                              ├─ TableScan tpch100.supplier
-                              │        Outputs: [s_nationkey, s_suppkey]
-                              └─ Broadcast Exchange
-                                 └─ TableScan tpch100.nation
-                                          Outputs: [n_name, n_nationkey]
+                              │     Condition: o_custkey == c_custkey
+                              │     Runtime Filters Builder: {c_custkey}
+                              ├─ Repartition Exchange
+                              │  │     Partition by: {o_custkey}
+                              │  └─ Filter
+                              │     │     Condition: Runtime Filters: {o_custkey}
+                              │     └─ TableScan tpch100.orders
+                              │              Where: Runtime Filters: {o_custkey}
+                              │              Outputs: [o_custkey, o_orderkey]
+                              └─ Repartition Exchange
+                                 │     Partition by: {c_custkey}
+                                 └─ Inner Join
+                                    │     Condition: c_nationkey == n_nationkey_1
+                                    │     Runtime Filters Builder: {n_nationkey_1}
+                                    ├─ Filter
+                                    │  │     Condition: Runtime Filters: {c_nationkey}
+                                    │  └─ TableScan tpch100.customer
+                                    │           Where: Runtime Filters: {c_nationkey}
+                                    │           Outputs: [c_custkey, c_nationkey]
+                                    └─ Broadcast Exchange
+                                       └─ Filter
+                                          │     Condition: n_name_1 IN ('FRANCE', 'GERMANY')
+                                          └─ TableScan tpch100.nation
+                                                   Where: n_name IN ('FRANCE', 'GERMANY')
+                                                   Outputs: n_name_1:=n_name, n_nationkey_1:=n_nationkey
+note: Runtime Filter is applied for 5 times.

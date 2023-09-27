@@ -83,7 +83,7 @@ Projection Est. 100 rows
                                           │              Outputs: [cd_credit_rating, cd_demo_sk, cd_education_status, cd_gender, cd_marital_status, cd_purchase_estimate]
                                           └─ Repartition Exchange Est. 227182 rows
                                              │     Partition by: {c_current_cdemo_sk}
-                                             └─ Inner Join Est. 227182 rows
+                                             └─ Inner Join Est. 99444 rows
                                                 │     Condition: c_current_addr_sk == ca_address_sk
                                                 │     Runtime Filters Builder: {ca_address_sk}
                                                 ├─ Repartition Exchange Est. 227181 rows

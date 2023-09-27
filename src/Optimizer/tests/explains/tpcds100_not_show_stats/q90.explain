@@ -7,7 +7,7 @@ Projection
       │     Limit: 100
       └─ Projection
          │     Expressions: expr#divide(CAST(amc, 'decimal(15, 4)'), CAST(pmc, 'decimal(15, 4)')):=CAST(`expr#count()`, 'decimal(15, 4)') / CAST(`expr#count()_1`, 'decimal(15, 4)')
-         └─ Cross Join
+         └─ Inner Join
             │     Condition: 
             ├─ MergingAggregated
             │  └─ Gather Exchange

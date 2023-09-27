@@ -9,7 +9,7 @@ Projection Est. 100 rows
          └─ Sorting Est. 100 rows
             │     Order by: {s_acctbal desc nulls_last, n_name asc, s_name asc, p_partkey asc}
             │     Limit: 100
-            └─ Inner Join Est. 288430 rows
+            └─ Inner Join Est. 288429 rows
                │     Condition: ps_suppkey == s_suppkey
                │     Runtime Filters Builder: {s_suppkey}
                ├─ Repartition Exchange Est. 1442208 rows

@@ -22,7 +22,7 @@ Projection Est. 100 rows
                               └─ Aggregating Est. 990 rows
                                  │     Group by: {i_category, i_class}
                                  │     Aggregates: expr#sum(ss_net_profit):=AggNull(sum)(ss_net_profit), expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                                 └─ Inner Join Est. 12234385 rows
+                                 └─ Inner Join Est. 12234384 rows
                                     │     Condition: ss_item_sk == i_item_sk
                                     ├─ Repartition Exchange Est. 12618110 rows
                                     │  │     Partition by: {ss_item_sk}

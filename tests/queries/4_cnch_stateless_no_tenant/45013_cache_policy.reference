@@ -7,11 +7,11 @@ t4	1	4
 Gather Exchange Est. 24 rows, cost 4.448600e+01
 └─ Projection Est. 24 rows, cost 4.048600e+01
    │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-   └─ Cross Join Est. 24 rows, cost 3.871000e+01
+   └─ Inner Join Est. 24 rows, cost 3.871000e+01
       │     Condition: 
-      ├─ Cross Join Est. 6 rows, cost 1.753000e+01
+      ├─ Inner Join Est. 6 rows, cost 1.753000e+01
       │  │     Condition: 
-      │  ├─ Cross Join Est. 2 rows, cost 6.970000e+00
+      │  ├─ Inner Join Est. 2 rows, cost 6.970000e+00
       │  │  │     Condition: 
       │  │  ├─ TableScan cache_policy_45013.t1 Est. 1 rows, cost 7.400000e-01
       │  │  │        Outputs: [x]
@@ -37,11 +37,11 @@ t4.x	UInt32	4	0	1	4	4	1
 Gather Exchange Est. ? rows
 └─ Projection Est. ? rows
    │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-   └─ Cross Join Est. ? rows
+   └─ Inner Join Est. ? rows
       │     Condition: 
-      ├─ Cross Join Est. ? rows
+      ├─ Inner Join Est. ? rows
       │  │     Condition: 
-      │  ├─ Cross Join Est. ? rows
+      │  ├─ Inner Join Est. ? rows
       │  │  │     Condition: 
       │  │  ├─ TableScan cache_policy_45013.t1 Est. ? rows
       │  │  │        Outputs: [x]
@@ -59,11 +59,11 @@ Gather Exchange Est. ? rows
 Gather Exchange Est. 24 rows, cost 4.448600e+01
 └─ Projection Est. 24 rows, cost 4.048600e+01
    │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-   └─ Cross Join Est. 24 rows, cost 3.871000e+01
+   └─ Inner Join Est. 24 rows, cost 3.871000e+01
       │     Condition: 
-      ├─ Cross Join Est. 6 rows, cost 1.753000e+01
+      ├─ Inner Join Est. 6 rows, cost 1.753000e+01
       │  │     Condition: 
-      │  ├─ Cross Join Est. 2 rows, cost 6.970000e+00
+      │  ├─ Inner Join Est. 2 rows, cost 6.970000e+00
       │  │  │     Condition: 
       │  │  ├─ TableScan cache_policy_45013.t1 Est. 1 rows, cost 7.400000e-01
       │  │  │        Outputs: [x]
@@ -89,11 +89,11 @@ t4.x	UInt32	4	0	1	4	4	1
 Gather Exchange Est. 24 rows, cost 4.448600e+01
 └─ Projection Est. 24 rows, cost 4.048600e+01
    │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-   └─ Cross Join Est. 24 rows, cost 3.871000e+01
+   └─ Inner Join Est. 24 rows, cost 3.871000e+01
       │     Condition: 
-      ├─ Cross Join Est. 6 rows, cost 1.753000e+01
+      ├─ Inner Join Est. 6 rows, cost 1.753000e+01
       │  │     Condition: 
-      │  ├─ Cross Join Est. 2 rows, cost 6.970000e+00
+      │  ├─ Inner Join Est. 2 rows, cost 6.970000e+00
       │  │  │     Condition: 
       │  │  ├─ TableScan cache_policy_45013.t1 Est. 1 rows, cost 7.400000e-01
       │  │  │        Outputs: [x]
@@ -121,11 +121,11 @@ t4.x	UInt32	4	0	1	4	4	1
 Gather Exchange Est. ? rows
 └─ Projection Est. ? rows
    │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-   └─ Cross Join Est. ? rows
+   └─ Inner Join Est. ? rows
       │     Condition: 
-      ├─ Cross Join Est. ? rows
+      ├─ Inner Join Est. ? rows
       │  │     Condition: 
-      │  ├─ Cross Join Est. ? rows
+      │  ├─ Inner Join Est. ? rows
       │  │  │     Condition: 
       │  │  ├─ TableScan cache_policy_45013.t1 Est. ? rows
       │  │  │        Outputs: [x]
@@ -145,11 +145,11 @@ t4.x	UInt32	4	0	1	4	4	1
 Gather Exchange Est. ? rows
 └─ Projection Est. ? rows
    │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-   └─ Cross Join Est. ? rows
+   └─ Inner Join Est. ? rows
       │     Condition: 
-      ├─ Cross Join Est. ? rows
+      ├─ Inner Join Est. ? rows
       │  │     Condition: 
-      │  ├─ Cross Join Est. ? rows
+      │  ├─ Inner Join Est. ? rows
       │  │  │     Condition: 
       │  │  ├─ TableScan cache_policy_45013.t1 Est. ? rows
       │  │  │        Outputs: [x]
@@ -171,11 +171,11 @@ t4.x	UInt32	4	0	1	4	4	1
 Gather Exchange Est. ? rows
 └─ Projection Est. ? rows
    │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
-   └─ Cross Join Est. ? rows
+   └─ Inner Join Est. ? rows
       │     Condition: 
-      ├─ Cross Join Est. ? rows
+      ├─ Inner Join Est. ? rows
       │  │     Condition: 
-      │  ├─ Cross Join Est. ? rows
+      │  ├─ Inner Join Est. ? rows
       │  │  │     Condition: 
       │  │  ├─ TableScan cache_policy_45013.t1 Est. ? rows
       │  │  │        Outputs: [x]

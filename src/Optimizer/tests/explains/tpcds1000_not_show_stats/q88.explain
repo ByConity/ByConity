@@ -1,18 +1,18 @@
 Projection
 │     Expressions: h10_30_to_11:=`expr#count()_4`, h10_to_10_30:=`expr#count()_3`, h11_30_to_12:=`expr#count()_6`, h11_to_11_30:=`expr#count()_5`, h12_to_12_30:=`expr#count()_7`, h8_30_to_9:=`expr#count()`, h9_30_to_10:=`expr#count()_2`, h9_to_9_30:=`expr#count()_1`
-└─ Cross Join
+└─ Inner Join
    │     Condition: 
-   ├─ Cross Join
+   ├─ Inner Join
    │  │     Condition: 
-   │  ├─ Cross Join
+   │  ├─ Inner Join
    │  │  │     Condition: 
-   │  │  ├─ Cross Join
+   │  │  ├─ Inner Join
    │  │  │  │     Condition: 
-   │  │  │  ├─ Cross Join
+   │  │  │  ├─ Inner Join
    │  │  │  │  │     Condition: 
-   │  │  │  │  ├─ Cross Join
+   │  │  │  │  ├─ Inner Join
    │  │  │  │  │  │     Condition: 
-   │  │  │  │  │  ├─ Cross Join
+   │  │  │  │  │  ├─ Inner Join
    │  │  │  │  │  │  │     Condition: 
    │  │  │  │  │  │  ├─ MergingAggregated
    │  │  │  │  │  │  │  └─ Gather Exchange

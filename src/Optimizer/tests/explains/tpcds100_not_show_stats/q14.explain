@@ -322,6 +322,7 @@ Projection
                │     │           │     Expressions: [i_brand_id_20, i_category_id_20, i_class_id_20], expr#multiply(ss_quantity, ss_list_price)_1:=ss_quantity_9 * ss_list_price_9
                │     │           └─ Inner Join
                │     │              │     Condition: i_item_sk_17 == i_item_sk_22
+               │     │              │     Runtime Filters Builder: {i_item_sk_22}
                │     │              ├─ Repartition Exchange
                │     │              │  │     Partition by: {i_item_sk_17}
                │     │              │  └─ Filter
@@ -386,6 +387,7 @@ Projection
                      │           │     Expressions: [i_brand_id_27, i_category_id_27, i_class_id_27], expr#multiply(ss_quantity, ss_list_price)_2:=ss_quantity_12 * ss_list_price_12
                      │           └─ Inner Join
                      │              │     Condition: i_item_sk_23 == i_item_sk_24
+                     │              │     Runtime Filters Builder: {i_item_sk_24}
                      │              ├─ Repartition Exchange
                      │              │  │     Partition by: {i_item_sk_23}
                      │              │  └─ Filter

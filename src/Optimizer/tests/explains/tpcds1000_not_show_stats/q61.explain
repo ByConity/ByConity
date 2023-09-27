@@ -5,7 +5,7 @@ Projection
    └─ Sorting
       │     Order by: {expr#sum(ss_ext_sales_price) asc, expr#sum(ss_ext_sales_price)_1 asc}
       │     Limit: 100
-      └─ Cross Join
+      └─ Inner Join
          │     Condition: 
          ├─ MergingAggregated
          │  └─ Gather Exchange

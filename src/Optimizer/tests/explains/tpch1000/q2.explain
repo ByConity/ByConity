@@ -43,7 +43,7 @@ Projection Est. 100 rows
                │                    │     Aggregates: expr#min(ps_supplycost):=AggNull(minIf)(ps_supplycost_1,build_side_non_null_symbol)
                │                    └─ Projection Est. 3596502 rows
                │                       │     Expressions: [ps_partkey_1, ps_supplycost_1], build_side_non_null_symbol:=1
-               │                       └─ Inner Join Est. 3596502 rows
+               │                       └─ Inner Join Est. 2766017 rows
                │                          │     Condition: n_regionkey_1 == r_regionkey_1
                │                          ├─ Inner Join Est. 13830089 rows
                │                          │  │     Condition: s_nationkey_1 == n_nationkey_1

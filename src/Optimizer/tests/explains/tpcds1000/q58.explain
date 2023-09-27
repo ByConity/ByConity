@@ -26,7 +26,7 @@ Projection Est. 100 rows
                │           │           Outputs: i_item_id_1:=i_item_id, i_item_sk_1:=i_item_sk
                │           └─ Repartition Exchange Est. 207554 rows
                │              │     Partition by: {cs_item_sk}
-               │              └─ Inner Join Est. 207554 rows
+               │              └─ Inner Join Est. 7729363 rows
                │                 │     Condition: cs_sold_date_sk == d_date_sk_1
                │                 │     Runtime Filters Builder: {d_date_sk_1}
                │                 ├─ Filter Est. 1439980416 rows
@@ -130,12 +130,12 @@ Projection Est. 100 rows
                   │              └─ TableScan tpcds1000.item Est. 300000 rows
                   │                       Outputs: [i_item_id, i_item_sk]
                   └─ MergingAggregated Est. 103778 rows
-                     └─ Repartition Exchange Est. 103778 rows
+                     └─ Repartition Exchange Est. 103918 rows
                         │     Partition by: {i_item_id_2}
-                        └─ Aggregating Est. 103778 rows
+                        └─ Aggregating Est. 103918 rows
                            │     Group by: {i_item_id_2}
                            │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-                           └─ Inner Join Est. 103778 rows
+                           └─ Inner Join Est. 103918 rows
                               │     Condition: i_item_sk_2 == ws_item_sk
                               │     Runtime Filters Builder: {ws_item_sk}
                               ├─ Repartition Exchange Est. 300000 rows
@@ -147,7 +147,7 @@ Projection Est. 100 rows
                               │              Outputs: i_item_id_2:=i_item_id, i_item_sk_2:=i_item_sk
                               └─ Repartition Exchange Est. 103778 rows
                                  │     Partition by: {ws_item_sk}
-                                 └─ Inner Join Est. 103778 rows
+                                 └─ Inner Join Est. 3889791 rows
                                     │     Condition: ws_sold_date_sk == d_date_sk_2
                                     │     Runtime Filters Builder: {d_date_sk_2}
                                     ├─ Filter Est. 720000376 rows
