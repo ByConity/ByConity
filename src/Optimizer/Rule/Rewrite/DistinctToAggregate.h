@@ -23,6 +23,7 @@ class DistinctToAggregate : public Rule
 public:
     RuleType getType() const override { return RuleType::DISTINCT_TO_AGGREGATE; }
     String getName() const override { return "DISTINCT_TO_AGGREGATE"; }
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_distinct_to_aggregate; }
     PatternPtr getPattern() const override;
 
 protected:

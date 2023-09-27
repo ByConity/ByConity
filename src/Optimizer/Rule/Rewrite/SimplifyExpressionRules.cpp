@@ -37,11 +37,6 @@ PatternPtr CommonPredicateRewriteRule::getPattern() const
 TransformResult CommonPredicateRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto & context = rule_context.context;
-    if (!context->getSettingsRef().enable_common_predicate_rewrite)
-    {
-        return {};
-    }
-
     auto * old_filter_node = dynamic_cast<FilterNode *>(node.get());
     if (!old_filter_node)
         return {};
@@ -175,10 +170,6 @@ PatternPtr UnWarpCastInPredicateRewriteRule::getPattern() const
 TransformResult UnWarpCastInPredicateRewriteRule::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
     auto & context = rule_context.context;
-    if (!context->getSettingsRef().enable_unwrap_cast_in)
-    {
-        return {};
-    }
     auto * old_filter_node = dynamic_cast<FilterNode *>(node.get());
     if (!old_filter_node)
         return {};

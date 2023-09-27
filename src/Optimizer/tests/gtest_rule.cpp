@@ -33,6 +33,7 @@ struct TestRule : public Rule
     String getName() const override{
         return "NUM_RULES";
     }
+    bool isEnabled(ContextPtr) const override { return true;};        
     PatternPtr getPattern() const override{
         using namespace DB::Patterns;
         return aggregating().capturedAs(aggregatingCap).withSingle(filter().capturedAs(filterCap)).result();

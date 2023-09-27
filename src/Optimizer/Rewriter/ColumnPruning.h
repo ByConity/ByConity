@@ -24,9 +24,12 @@ namespace DB
 class ColumnPruning : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "ColumnPruning"; }
     static void selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage, NameSet & required);
+
+private:
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_column_pruning; }
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 };
 
 class ColumnPruningVisitor : public PlanNodeVisitor<PlanNodePtr, NameSet>

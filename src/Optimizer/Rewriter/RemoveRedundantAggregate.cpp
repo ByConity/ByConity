@@ -11,13 +11,10 @@ namespace DB
 {
 void RemoveRedundantDistinct::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    if (context->getSettingsRef().enable_distinct_remove)
-    {
-        RemoveRedundantAggregateVisitor visitor{context, plan.getCTEInfo(), plan.getPlanNode()};
-        RemoveRedundantAggregateContext remove_context{context, {}};
-        auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, remove_context);
-        plan.update(result);
-    }
+    RemoveRedundantAggregateVisitor visitor{context, plan.getCTEInfo(), plan.getPlanNode()};
+    RemoveRedundantAggregateContext remove_context{context, {}};
+    auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, remove_context);
+    plan.update(result);
 }
 
 PlanNodePtr RemoveRedundantAggregateVisitor::visitPlanNode(PlanNodeBase & node, RemoveRedundantAggregateContext & context)

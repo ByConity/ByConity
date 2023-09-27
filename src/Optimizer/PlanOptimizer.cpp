@@ -301,29 +301,14 @@ void PlanOptimizer::optimize(QueryPlan & plan, ContextMutablePtr context, const 
 {
     context->setRuleId(GraphvizPrinter::PRINT_PLAN_OPTIMIZE_INDEX);
 
-    Stopwatch rule_watch, total_watch;
+    Stopwatch total_watch;
     total_watch.start();
 
     for (const auto & rewriter : rewriters)
     {
-        rule_watch.restart();
         context->incRuleId();
-        rewriter->rewrite(plan, context);
+        rewriter->rewritePlan(plan, context);
         UInt64 elapsed = total_watch.elapsedMilliseconds();
-        double single_rewriter_duration = rule_watch.elapsedMillisecondsAsDouble();
-
-        context->logOptimizerProfile(&Poco::Logger::get("PlanOptimizer"),
-                                                "Optimizer rule run time: ",
-                                                rewriter->name(),
-                                                std::to_string(single_rewriter_duration) + "ms", true);
-
-        if (single_rewriter_duration >= 1000)
-            LOG_INFO(
-                &Poco::Logger::get("PlanOptimizer"),
-                "the execute time of " + rewriter->name() + " rewriter greater than or equal to 1 second");
-
-        GraphvizPrinter::printLogicalPlan(
-            plan, context, std::to_string(context->getRuleId()) + "_" + rewriter->name() + "_" + std::to_string(single_rewriter_duration) + "ms");
 
         if (elapsed >= context->getSettingsRef().plan_optimizer_timeout)
         {

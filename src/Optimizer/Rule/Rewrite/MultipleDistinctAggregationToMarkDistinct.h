@@ -31,8 +31,8 @@ class MultipleDistinctAggregationToMarkDistinct : public Rule
 public:
     RuleType getType() const override { return RuleType::MULTIPLE_DISTINCT_AGG_TO_MARKDISTINCT; }
     String getName() const override { return "MULTIPLE_DISTINCT_AGG_TO_MARKDISTINCT"; }
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_mark_distinct_optimization; }
     PatternPtr getPattern() const override;
-    bool isEnabled(ContextPtr context) override { return context->getSettingsRef().enable_mark_distinct_optimization; }
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;

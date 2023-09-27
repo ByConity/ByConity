@@ -19,10 +19,12 @@ namespace DB
 class AddRuntimeFilters : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "AddRuntimeFilters"; }
 
 private:
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_runtime_filter; }
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+
     class AddRuntimeFilterRewriter;
     class RuntimeFilterInfoExtractor;
     class RemoveUnusedRuntimeFilterProbRewriter;
@@ -91,8 +93,10 @@ public:
 
     PlanNodePtr rewrite(const PlanNodePtr & plan);
 
-    const std::unordered_map<RuntimeFilterId, std::unordered_set<RuntimeFilterId>> &
-    getEffectiveRuntimeFilters() const { return effective_runtime_filters; }
+    const std::unordered_map<RuntimeFilterId, std::unordered_set<RuntimeFilterId>> & getEffectiveRuntimeFilters() const
+    {
+        return effective_runtime_filters;
+    }
 
 protected:
     PlanNodePtr visitPlanNode(PlanNodeBase & plan, std::unordered_set<RuntimeFilterId> & allowed_runtime_filters) override;

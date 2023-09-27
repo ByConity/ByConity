@@ -30,8 +30,11 @@ namespace DB
 class AddExchange : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "AddExchange"; }
+
+private:
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_add_exchange; }
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 };
 
 class ExchangeResult
@@ -126,7 +129,8 @@ private:
      * @param results children with it's output property.
      * @return node with it's output property.
      */
-    static ExchangeResult rebaseAndDeriveProperties(const PlanNodePtr & node, std::vector<ExchangeResult> & results, ContextMutablePtr & cxt);
+    static ExchangeResult
+    rebaseAndDeriveProperties(const PlanNodePtr & node, std::vector<ExchangeResult> & results, ContextMutablePtr & cxt);
 
     /**
      * Derive the actual property of node.

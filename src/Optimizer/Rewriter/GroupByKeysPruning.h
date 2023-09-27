@@ -16,13 +16,11 @@ namespace DB
 class GroupByKeysPruning : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
-    String name() const override
-    {
-        return "GroupByKeysPruning";
-    }
+    String name() const override { return "GroupByKeysPruning"; }
 
 private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_group_by_keys_pruning; }
     class Rewriter;
 };
 
@@ -36,9 +34,7 @@ struct PlanAndDataDependencyWithConstants
 class GroupByKeysPruning::Rewriter : public PlanNodeVisitor<PlanAndDataDependencyWithConstants, Void>
 {
 public:
-    explicit Rewriter(ContextMutablePtr context_, CTEInfo & cte_info_) : context(context_), cte_helper(cte_info_)
-    {
-    }
+    explicit Rewriter(ContextMutablePtr context_, CTEInfo & cte_info_) : context(context_), cte_helper(cte_info_) { }
     PlanAndDataDependencyWithConstants visitPlanNode(PlanNodeBase &, Void &) override;
     // PlanAndDataDependency visitJoinNode(JoinNode &, Void &) override;
     // PlanAndDataDependency visitTableScanNode(TableScanNode &, Void &) override;

@@ -39,23 +39,23 @@ struct TrivialCountContext
 class OptimizeTrivialCount : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "OptimizeTrivialCount"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().optimize_trivial_count_query; }
 };
 
 class TrivialCountVisitor : public SimplePlanRewriter<Void>
 {
 public:
-    explicit TrivialCountVisitor(ContextMutablePtr context_, CTEInfo & cte_info_)
-        : SimplePlanRewriter(context_, cte_info_)
-    {}
+    explicit TrivialCountVisitor(ContextMutablePtr context_, CTEInfo & cte_info_) : SimplePlanRewriter(context_, cte_info_) { }
 
     static NameSet getRequiredColumns(ASTs & filters);
     static ASTs replaceColumnsAlias(ASTs & filters, NamesWithAliases & column_alias);
+
 private:
-
     PlanNodePtr visitAggregatingNode(AggregatingNode & node, Void &) override;
-
 };
 
 class CountContextVisitor : public PlanNodeVisitor<void, TrivialCountContext>
@@ -65,7 +65,6 @@ private:
     void visitFilterNode(FilterNode & node, TrivialCountContext & context) override;
     void visitSortingNode(SortingNode & node, TrivialCountContext &) override;
     void visitTableScanNode(TableScanNode & node, TrivialCountContext &) override;
-    void visitPlanNode(PlanNodeBase & node, TrivialCountContext &)  override;
-
+    void visitPlanNode(PlanNodeBase & node, TrivialCountContext &) override;
 };
 }

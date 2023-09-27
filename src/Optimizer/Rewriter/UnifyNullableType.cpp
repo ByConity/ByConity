@@ -43,8 +43,6 @@ namespace ErrorCodes
 
 void UnifyNullableType::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    if (!context->getSettingsRef().join_use_nulls)
-        return;
     UnifyNullableVisitor visitor{context, plan.getCTEInfo()};
     Void v;
     auto result = VisitorUtil::accept(plan.getPlanNode(), visitor, v);

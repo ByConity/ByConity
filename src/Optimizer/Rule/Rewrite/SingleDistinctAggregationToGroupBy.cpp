@@ -55,10 +55,6 @@ PatternPtr SingleDistinctAggregationToGroupBy::getPattern() const
  */
 TransformResult SingleDistinctAggregationToGroupBy::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
-    if (!rule_context.context->getSettingsRef().enable_single_distinct_to_group_by)
-    {
-        return {};
-    }
     auto step_ptr = node->getStep();
     const auto & step = dynamic_cast<const AggregatingStep &>(*step_ptr);
 

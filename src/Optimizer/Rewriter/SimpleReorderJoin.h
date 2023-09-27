@@ -30,16 +30,23 @@ namespace DB
 class SimpleReorderJoin : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "SimpleReorderJoin"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_join_reorder; }
 };
 
 class SimpleReorderJoinVisitor : public SimplePlanRewriter<Void>
 {
 public:
-    explicit SimpleReorderJoinVisitor(ContextMutablePtr context_, CTEInfo & cte_info_) : SimplePlanRewriter(context_, cte_info_), cte_info(cte_info_) { }
+    explicit SimpleReorderJoinVisitor(ContextMutablePtr context_, CTEInfo & cte_info_)
+        : SimplePlanRewriter(context_, cte_info_), cte_info(cte_info_)
+    {
+    }
     PlanNodePtr visitJoinNode(JoinNode &, Void &) override;
-    static PlanNodePtr buildJoinTree(std::vector<String> & expected_output_symbols, JoinGraph & graph, PlanNodePtr join_node, ContextMutablePtr & context_ptr);
+    static PlanNodePtr
+    buildJoinTree(std::vector<String> & expected_output_symbols, JoinGraph & graph, PlanNodePtr join_node, ContextMutablePtr & context_ptr);
 
 private:
     CTEInfo & cte_info;

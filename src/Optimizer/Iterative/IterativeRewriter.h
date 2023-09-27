@@ -52,11 +52,12 @@ class IterativeRewriter : public Rewriter
 {
 public:
     IterativeRewriter(const std::vector<RulePtr> & rules_, std::string name_);
+    static std::map<std::underlying_type_t<RuleType>, size_t> getRuleCallTimes();
     String name() const override { return names; }
+private:
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_iterative_rewriter;};    
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
 
-    static std::map<std::underlying_type_t<RuleType>, size_t> getRuleCallTimes();
-private:
     String names;
     RuleIndex rules;
 

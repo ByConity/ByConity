@@ -30,12 +30,7 @@ PatternPtr DistinctToAggregate::getPattern() const
 
 TransformResult DistinctToAggregate::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
-    if (!rule_context.context->getSettingsRef().enable_distinct_to_aggregate)
-    {
-        return {};
-    }
-
-    auto * distinct_node = dynamic_cast<DistinctNode *>(node.get());
+    auto distinct_node = dynamic_cast<DistinctNode *>(node.get());
     if (!distinct_node)
         return {};
 

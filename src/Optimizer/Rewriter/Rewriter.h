@@ -15,21 +15,28 @@
 
 #pragma once
 
+#include <Functions/IFunction.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/Context_fwd.h>
 #include <QueryPlan/PlanNode.h>
-
+#include <QueryPlan/QueryPlan.h>
 namespace DB
 {
 class Rewriter;
 
 using RewriterPtr = std::shared_ptr<Rewriter>;
 using Rewriters = std::vector<RewriterPtr>;
-
 class Rewriter
 {
 public:
     virtual ~Rewriter() = default;
-    virtual void rewrite(QueryPlan & plan, ContextMutablePtr context) const = 0;
     virtual String name() const = 0;
+
+    void rewritePlan(QueryPlan & plan, ContextMutablePtr context) const;
+
+private:
+    virtual void rewrite(QueryPlan & plan, ContextMutablePtr context) const = 0;
+    // every rewriter must set a setting to enable/disable it.
+    virtual bool isEnabled(ContextMutablePtr context) const = 0;
 };
 }

@@ -130,7 +130,7 @@ TEST(OptimizerCascadesTest, DISABLED_Timeout)
         auto start = std::chrono::high_resolution_clock::now();
         std::cout << "Size " << table_size << '\n';
         QueryPlan plan = createQueryPlan(cyclic(table_size));
-        optimizer.rewrite(plan, context);
+        optimizer.rewritePlan(plan, context);
         auto end = std::chrono::high_resolution_clock::now();
         auto ms_int = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         std::cout << "Used " << ms_int.count() << " ms\n\n";

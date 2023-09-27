@@ -125,7 +125,7 @@ MaterializedViewMemoryCache::getMaterializedViewStructure(
            std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), wrap_rewriter_name("SwapPredicate"))};
 
     for (auto & rewriter : rewriters)
-        rewriter->rewrite(*query_plan, context);
+        rewriter->rewritePlan(*query_plan, context);
 
     GraphvizPrinter::printLogicalPlan(*query_plan, context, "MaterializedViewPlan_" + std::to_string(context->nextNodeId()));
     return MaterializedViewStructure::buildFrom(materialized_view_id, target_table_id.value(), query_plan->getPlanNode(), context);

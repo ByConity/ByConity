@@ -29,8 +29,11 @@ namespace DB
 class SimplifyCrossJoin : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "SimplifyCrossJoin"; }
+
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().eliminate_cross_joins; }
 };
 
 class SimplifyCrossJoinVisitor : public SimplePlanRewriter<Void>
@@ -43,7 +46,8 @@ private:
     std::unordered_set<PlanNodeId> reordered;
     static bool isOriginalOrder(std::vector<UInt32> & join_order);
     static std::vector<UInt32> getJoinOrder(JoinGraph & graph);
-    PlanNodePtr buildJoinTree(std::vector<String> & expected_output_symbols, JoinGraph & graph, std::vector<UInt32> & join_order);
+    PlanNodePtr
+    buildJoinTree(std::vector<String> & expected_output_symbols, JoinGraph & graph, std::vector<UInt32> & join_order);
 };
 
 class ComparePlanNode

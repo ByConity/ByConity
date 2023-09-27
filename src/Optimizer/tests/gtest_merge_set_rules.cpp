@@ -48,7 +48,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeUnionRule)
              createTableScanNode("db1", "t2", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Union);
@@ -63,7 +63,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeUnionRule)
             = createQueryPlan(createUnionNode({createTableScanNode("db1", "t0", {ds}, {}), createTableScanNode("db1", "t1", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res == plan.getPlanNode());
@@ -80,7 +80,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeUnionRule)
              createUnionNode({ds}, {createTableScanNode("db1", "t1", {ds}, {}), createTableScanNode("db1", "t2", {ds}, {})})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Union);
@@ -100,7 +100,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeUnionRule)
                   createTableScanNode("db1", "t5", {ds}, {})})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Union);
@@ -123,7 +123,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeIntersectRule)
              createTableScanNode("db1", "t2", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Intersect);
@@ -141,7 +141,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeIntersectRule)
              createTableScanNode("db1", "t2", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Intersect);
@@ -159,7 +159,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeIntersectRule)
              createTableScanNode("db1", "t2", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Intersect);
@@ -177,7 +177,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeIntersectRule)
              createTableScanNode("db1", "t2", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Intersect);
@@ -193,7 +193,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeIntersectRule)
             createIntersectNode(true, {createTableScanNode("db1", "t0", {ds}, {}), createTableScanNode("db1", "t1", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res == plan.getPlanNode());
@@ -212,7 +212,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeIntersectRule)
              createIntersectNode(true, {ds}, {createTableScanNode("db1", "t1", {ds}, {}), createTableScanNode("db1", "t2", {ds}, {})})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Intersect);
@@ -236,7 +236,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeIntersectRule)
                   createTableScanNode("db1", "t5", {ds}, {})})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Intersect);
@@ -260,7 +260,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeExceptRule)
              createTableScanNode("db1", "t2", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Except);
@@ -278,7 +278,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeExceptRule)
              createTableScanNode("db1", "t2", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res == plan.getPlanNode());
@@ -299,7 +299,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeExceptRule)
              createTableScanNode("db1", "t2", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Except);
@@ -317,7 +317,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeExceptRule)
              createTableScanNode("db1", "t2", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Except);
@@ -333,7 +333,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeExceptRule)
             createExceptNode(true, {createTableScanNode("db1", "t0", {ds}, {}), createTableScanNode("db1", "t1", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res == plan.getPlanNode());
@@ -352,7 +352,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeExceptRule)
              createExceptNode(true, {ds}, {createTableScanNode("db1", "t1", {ds}, {}), createTableScanNode("db1", "t2", {ds}, {})})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res == plan.getPlanNode());
@@ -377,7 +377,7 @@ TEST(OptimizerMergeSetRuleTest, DISABLED_MergeExceptRule)
              createTableScanNode("db1", "t3", {ds}, {})}));
 
         auto context = Context::createCopy(getContext().context);
-        rewriter.rewrite(plan, context);
+        rewriter.rewritePlan(plan, context);
         auto res = plan.getPlanNode();
 
         ASSERT_TRUE(res->getStep()->getType() == IQueryPlanStep::Type::Except);

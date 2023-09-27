@@ -33,10 +33,11 @@ namespace DB
 class MaterializedViewRewriter : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     String name() const override { return "MaterializedViewRewriter"; }
 
 private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_materialized_view_rewrite; }
     static std::map<String, std::vector<MaterializedViewStructurePtr>>
     getRelatedMaterializedViews(QueryPlan & plan, ContextMutablePtr context);
 };

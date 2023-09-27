@@ -40,11 +40,12 @@ using OptContextPtr = std::shared_ptr<OptimizationContext>;
 class CascadesOptimizer : public Rewriter
 {
 public:
-    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
-
     String name() const override { return "CascadesOptimizer"; }
     static WinnerPtr optimize(GroupId root, CascadesContext & context, const Property & required_prop);
     static PlanNodePtr buildPlanNode(GroupId root, CascadesContext & context, const Property & required_prop);
+private:
+    void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_cascades_optimizer;}
 };
 
 class CascadesContext

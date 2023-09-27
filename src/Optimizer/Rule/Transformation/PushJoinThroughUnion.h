@@ -46,7 +46,7 @@ class PushJoinThroughUnion : public Rule
 public:
     RuleType getType() const override { return RuleType::PUSH_JOIN_THROUGH_UNION; }
     String getName() const override { return "PUSH_JOIN_THROUGH_UNION"; }
-
+    bool isEnabled(ContextPtr context) const override {return context->getSettingsRef().enable_push_join_through_union; }
     PatternPtr getPattern() const override;
     const std::vector<RuleType> & blockRules() const override;
 

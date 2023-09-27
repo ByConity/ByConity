@@ -32,7 +32,7 @@
 #include <Optimizer/Rule/Rewrite/RemoveRedundantRules.h>
 #include <Optimizer/Rule/Rewrite/SimplifyExpressionRules.h>
 #include <Optimizer/Rule/Rewrite/SingleDistinctAggregationToGroupBy.h>
-#include <Optimizer/Rule/Rewrite/SwapAdjacenRules.h>
+#include <Optimizer/Rule/Rewrite/SwapAdjacentRules.h>
 #include <Optimizer/Rule/Rewrite/TopNRules.h>
 #include <Optimizer/Rule/Rewrite/FilterWindowToPartitionTopN.h>
 #include <Optimizer/Rule/Rewrite/PushDownApplyRules.h>

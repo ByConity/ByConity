@@ -24,9 +24,8 @@ class RemoveRedundantFilter : public Rule
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_FILTER; }
     String getName() const override { return "REMOVE_REDUNDANT_FILTER"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override { return Patterns::filter().result(); }
-
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -37,9 +36,8 @@ class RemoveRedundantUnion : public Rule
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_UNION; }
     String getName() const override { return "REMOVE_REDUNDANT_UNION"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override { return Patterns::unionn().result(); }
-
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
@@ -50,7 +48,7 @@ class RemoveRedundantProjection : public Rule
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_PROJECTION; }
     String getName() const override { return "REMOVE_REDUNDANT_PROJECTION"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override { return Patterns::project().result(); }
 
 protected:
@@ -62,7 +60,7 @@ class RemoveRedundantEnforceSingleRow : public Rule
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_ENFORCE_SINGLE_ROW; }
     String getName() const override { return "REMOVE_REDUNDANT_ENFORCE_SINGLE_ROW"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override { return Patterns::enforceSingleRow().result(); }
 
 protected:
@@ -74,19 +72,19 @@ class RemoveRedundantCrossJoin : public Rule
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_CROSS_JOIN; }
     String getName() const override { return "REMOVE_REDUNDANT_CROSS_JOIN"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
-class RemoveReadNothing: public Rule
+class RemoveReadNothing : public Rule
 {
 public:
     RuleType getType() const override { return RuleType::REMOVE_READ_NOTHING; }
     String getName() const override { return "REMOVE_READ_NOTHING"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override;
 
 protected:
@@ -98,7 +96,7 @@ class RemoveRedundantJoin : public Rule
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_JOIN; }
     String getName() const override { return "REMOVE_REDUNDANT_JOIN"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override;
 
 protected:
@@ -110,7 +108,7 @@ class RemoveRedundantOuterJoin : public Rule
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_OUTER_JOIN; }
     String getName() const override { return "REMOVE_REDUNDANT_JOIN"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override;
 
 protected:
@@ -123,7 +121,7 @@ class RemoveRedundantLimit : public Rule
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_LIMIT; }
     String getName() const override { return "REMOVE_REDUNDANT_LIMIT"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override;
 
 protected:
@@ -131,35 +129,36 @@ protected:
 };
 
 // TODO group by columns is distinct, no aggregate functions.
-class RemoveRedundantAggregate: public Rule
+class RemoveRedundantAggregate : public Rule
 {
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_AGGREGATE; }
     String getName() const override { return "REMOVE_REDUNDANT_AGGREGATE"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override;
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
-class RemoveRedundantAggregateWithReadNothing: public Rule
+class RemoveRedundantAggregateWithReadNothing : public Rule
 {
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_AGGREGATE_WITH_READ_NOTHING; }
     String getName() const override { return "REMOVE_REDUNDANT_AGGREGATE_WITH_READ_NOTHING"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override;
+
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
 
-class RemoveRedundantTwoApply: public Rule
+class RemoveRedundantTwoApply : public Rule
 {
 public:
     RuleType getType() const override { return RuleType::REMOVE_REDUNDANT_TWO_APPLY; }
     String getName() const override { return "REMOVE_REDUNDANT_TWO_APPLY"; }
-
+    bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().enable_remove_redundant; }
     PatternPtr getPattern() const override;
 
 protected:

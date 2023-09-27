@@ -29,11 +29,6 @@ PatternPtr LeftJoinToRightJoin::getPattern() const
 
 TransformResult LeftJoinToRightJoin::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
-    if (!rule_context.context->getSettingsRef().enable_left_join_to_right_join)
-    {
-        return {};
-    }
-
     auto *old_join_node = dynamic_cast<JoinNode *>(node.get());
     if (!old_join_node)
         return {};

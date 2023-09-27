@@ -1680,9 +1680,6 @@ private:
 
 void MaterializedViewRewriter::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    if (!context->getSettingsRef().enable_materialized_view_rewrite)
-        return;
-
     bool verbose = context->getSettingsRef().enable_materialized_view_rewrite_verbose_log;
 
     auto materialized_views = getRelatedMaterializedViews(plan, context);

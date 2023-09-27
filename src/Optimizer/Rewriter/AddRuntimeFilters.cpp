@@ -11,9 +11,6 @@ namespace DB
 
 void AddRuntimeFilters::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    if (!context->getSettingsRef().enable_runtime_filter)
-        return;
-
     Stopwatch rule_watch;
     auto print_graphviz = [&](const String & hint) {
         rule_watch.stop();
@@ -25,51 +22,50 @@ void AddRuntimeFilters::rewrite(QueryPlan & plan, ContextMutablePtr context) con
     AddRuntimeFilterRewriter add_runtime_filter_rewriter(context, plan.getCTEInfo());
     add_runtime_filter_rewriter.rewrite(plan);
 
-    print_graphviz("_AddRuntimeFilters-Step-1-AddRuntimeFilterRewriter");
+    print_graphviz("-AddRuntimeFilterRewriter");
 
     // 2.must run UnifyNullableType before PredicatePushdown
     UnifyNullableType unify_nullable_type;
-    unify_nullable_type.rewrite(plan, context);
-
-    print_graphviz("_AddRuntimeFilters-Step-2-UnifyNullableType");
+    unify_nullable_type.rewritePlan(plan, context);
 
     // 3.push down predicate with dynamic filter enabled
     PredicatePushdown predicate_push_down;
-    predicate_push_down.rewrite(plan, context);
-
-    print_graphviz("_AddRuntimeFilters-Step-3-PredicatePushdown");
+    predicate_push_down.rewritePlan(plan, context);
 
     // 4. extract all dynamic filter builders from projection,
     // then try to merge dynamic filters with the same effect
     auto runtime_filter_context = RuntimeFilterInfoExtractor::extract(plan, context);
 
-    print_graphviz("_AddRuntimeFilters-Step-4-RuntimeFilterInfoExtractorResult");
+    print_graphviz("-RuntimeFilterInfoExtractorResult");
 
     // extract and filter effective dynamic filter execute predicates with statistics.
     RemoveUnusedRuntimeFilterProbRewriter runtime_filter_prob_rewriter{context, plan.getCTEInfo(), runtime_filter_context};
     auto rewrite = runtime_filter_prob_rewriter.rewrite(plan.getPlanNode());
 
-    print_graphviz("_AddRuntimeFilters-Step-5-RemoveUnusedRuntimeFilterProbRewriter");
+    print_graphviz("-RemoveUnusedRuntimeFilterProbRewriter");
 
     RemoveUnusedRuntimeFilterBuildRewriter runtime_filter_build_rewriter{
         context, plan.getCTEInfo(), runtime_filter_prob_rewriter.getEffectiveRuntimeFilters(), runtime_filter_context};
     rewrite = runtime_filter_build_rewriter.rewrite(rewrite);
 
-    print_graphviz("_AddRuntimeFilters-Step-6-RemoveUnusedRuntimeFilterBuildRewriter");
+    print_graphviz("-RemoveUnusedRuntimeFilterBuildRewriter");
 
     if (!context->getSettingsRef().enable_runtime_filter_pipeline_poll)
     {
         rewrite = AddRuntimeFilters::AddExchange::rewrite(rewrite, context, plan.getCTEInfo());
         plan.update(rewrite);
 
-        print_graphviz("_AddRuntimeFilters-Step-7-AddExchange");
+        print_graphviz("-AddExchange");
     }
 }
 
 PlanNodePtr AddRuntimeFilters::AddRuntimeFilterRewriter::visitJoinNode(JoinNode & node, Void & c)
 {
     const auto & join = dynamic_cast<const JoinStep &>(*node.getStep());
-    if (join.getKind() != ASTTableJoin::Kind::Inner && join.getKind() != ASTTableJoin::Kind::Right)
+
+    // todo left anti
+    if (join.getKind() != ASTTableJoin::Kind::Inner && join.getKind() != ASTTableJoin::Kind::Right
+          && (join.getStrictness() != ASTTableJoin::Strictness::Semi))
         return visitPlanNode(node, c);
 
     if (!join.getRuntimeFilterBuilders().empty())
