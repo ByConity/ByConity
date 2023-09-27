@@ -55,7 +55,6 @@
 #include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/planning_common.h>
-
 #include <fmt/format.h>
 
 namespace DB

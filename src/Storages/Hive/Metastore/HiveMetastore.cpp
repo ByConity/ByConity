@@ -76,15 +76,20 @@ Strings HiveMetastoreClient::getAllDatabases()
 Strings HiveMetastoreClient::getAllTables(const String & db_name)
 {
     Strings tables;
-    tryCallHiveClient([&](auto & client) { client->get_all_tables(tables, getOriginalDatabaseName(db_name)); });
+    tryCallHiveClient([&](auto & client) {
+        client->get_all_tables(tables, getOriginalDatabaseName(db_name));
+    });
     return tables;
 }
 
 std::shared_ptr<ApacheHive::Table> HiveMetastoreClient::getTable(const String & db_name, const String & table_name)
 {
     auto table = std::make_shared<ApacheHive::Table>();
-    tryCallHiveClient([&](auto & client) { client->get_table(*table, getOriginalDatabaseName(db_name), table_name); });
-    table->dbName = db_name;
+    tryCallHiveClient([&] (auto & client)
+    {
+        client->get_table(*table, getOriginalDatabaseName(db_name), table_name);
+    });
+    table->dbName =db_name;
 
     return table;
 }
@@ -109,7 +114,7 @@ bool HiveMetastoreClient::isTableExist(const String & db_name, const String & ta
 
 
 HiveTableStats HiveMetastoreClient::getTableStats(
-    const String & db_name_may_with_tenant_id, const String & table_name, const Strings & col_names, const bool merge_all_partition)
+    const String & db_name_may_with_tenant_id, const String & table_name, const Strings & col_names, const bool merge_all_partition )
 {
     auto db_name = getOriginalDatabaseName(db_name_may_with_tenant_id);
     auto table = getTable(db_name, table_name);
@@ -155,6 +160,8 @@ HiveTableStats HiveMetastoreClient::getTableStats(
 }
 
 
+
+
 ApacheHive::PartitionsStatsResult HiveMetastoreClient::getPartitionStats(
     const String & db_name,
     const String & table_name,
@@ -171,6 +178,7 @@ ApacheHive::PartitionsStatsResult HiveMetastoreClient::getPartitionStats(
     for (const auto & v : partition_vals)
     {
         partitions.emplace_back(MetastoreConvertUtils::concatPartitionValues(partition_keys, v));
+
     }
     req.partNames = partitions;
     tryCallHiveClient([&](auto & client) { client->get_partitions_statistics_req(result, req); });

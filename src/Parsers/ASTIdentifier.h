@@ -85,7 +85,7 @@ public:
     /// Todo: we will rewrite all the global identifiers one by one: database name, user name, vw name...
     virtual void rewriteCnchDatabaseName(const Context * context);
 
-    virtual void appendCatalogName(const std::string & catalog_name);
+    virtual void appendCatalogName(const std::string& catalog_name);
 
     virtual void appendTenantId(const Context * context);
 
@@ -137,8 +137,9 @@ public:
 
     // void rewriteCnchDatabaseOrCatalog(const Context *context) override;
     void rewriteCnchDatabaseName(const Context * context) override;
-    virtual void appendCatalogName(const std::string & catalog_name) override;
+    virtual void appendCatalogName(const std::string& catalog_name) override;
     virtual void appendTenantId(const Context * context) override;
+
 };
 
 
@@ -151,7 +152,7 @@ std::optional<String> tryGetIdentifierName(const IAST * ast);
 bool tryGetIdentifierNameInto(const IAST * ast, String & name);
 void tryRewriteCnchDatabaseName(ASTPtr & ast_database, const Context *context);
 void tryAppendCatalogName(ASTPtr & ast_catalog, ASTPtr & ast_database);
-void tryRewriteHiveCatalogName(ASTPtr & ast_catalog, const Context * context);
+void tryRewriteHiveCatalogName(ASTPtr & ast_catalog, const Context *context);
 // void tryRewriteCnchDatabaseOrCatalog(ASTPtr & ast, const Context *context);
 
 inline String getIdentifierName(const ASTPtr & ast) { return getIdentifierName(ast.get()); }

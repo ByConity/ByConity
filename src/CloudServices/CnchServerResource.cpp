@@ -22,8 +22,10 @@
 #include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <brpc/controller.h>
+#include "common/logger_useful.h"
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
+#include "Interpreters/Context_fwd.h"
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Storages/Hive/StorageCnchHive.h"
 
@@ -166,7 +168,7 @@ void CnchServerResource::addCreateQuery(
     auto lock = getLock();
 
     auto it = assigned_table_resource.find(storage->getStorageUUID());
-    if (storage->getStorageUUID() == UUIDHelpers::Nil)
+    if(storage->getStorageUUID() == UUIDHelpers::Nil)
     {
         // throw DB::Exception(ErrorCodes::LOGICAL_ERROR, "UUID for resources should not be nil");
         LOG_DEBUG(log, "UUID for resources should not be nil, query: {}, table: {}", create_query, worker_table_name);

@@ -9,11 +9,13 @@ namespace DB
 
 class Context;
 
-class StorageSystemExternalTables : public shared_ptr_helper<StorageSystemExternalTables>,
-                                    public IStorageSystemOneBlock<StorageSystemExternalTables>
+class StorageSystemExternalTables : public shared_ptr_helper<StorageSystemExternalTables>, public IStorageSystemOneBlock<StorageSystemExternalTables>
 {
 public:
-    std::string getName() const override { return "StorageSystemExternalTables"; }
+    std::string getName() const override
+    {
+        return "StorageSystemExternalTables";
+    }
 
     static NamesAndTypesList getNamesAndTypes();
 

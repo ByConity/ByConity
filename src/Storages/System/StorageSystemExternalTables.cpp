@@ -30,8 +30,7 @@ NamesAndTypesList StorageSystemExternalTables::getNamesAndTypes()
     };
 }
 
-void StorageSystemExternalTables::fillData(
-    MutableColumns & res_columns, [[maybe_unused]] ContextPtr context, const SelectQueryInfo & query_info) const
+void StorageSystemExternalTables::fillData(MutableColumns & res_columns, [[maybe_unused]] ContextPtr context, const SelectQueryInfo & query_info) const
 {
     const auto & select = query_info.query->as<ASTSelectQuery>();
     if (!select->where() && !select->prewhere())
@@ -54,8 +53,7 @@ void StorageSystemExternalTables::fillData(
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "catalog {} does not exist", catalog_name);
     }
     auto all_tbls = catalog_ptr->listTableNames(database_name);
-    for (const auto & table_name : all_tbls)
-    {
+    for(const auto & table_name: all_tbls){
         res_columns[0]->insert(catalog_name);
         res_columns[1]->insert(database_name);
         res_columns[2]->insert(table_name);

@@ -85,7 +85,7 @@ public:
     EmptyDatabaseTablesIterator(const std::string & name) : IDatabaseTablesIterator(name) { }
     void next() override { }
     bool isValid() const override { return false; }
-    const String & name() const override { return database_name; }
+    const String & name() const override {return database_name;}
     const StoragePtr & table() const override { return dummy; }
 
 

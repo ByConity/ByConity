@@ -5,7 +5,6 @@
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
-#include <Storages/System/CollectWhereClausePredicate.h>
 #include <Storages/System/StorageSystemExternalDatabases.h>
 #include "Common/Exception.h"
 #include <Common/Status.h>
@@ -14,6 +13,7 @@
 #include "Parsers/ASTIdentifier.h"
 #include "Parsers/ASTLiteral.h"
 #include "Parsers/ASTSelectQuery.h"
+#include <Storages/System/CollectWhereClausePredicate.h>
 namespace DB
 {
 namespace ErrorCodes
@@ -30,8 +30,9 @@ NamesAndTypesList StorageSystemExternalDatabases::getNamesAndTypes()
 }
 
 
-void StorageSystemExternalDatabases::fillData(
-    MutableColumns & res_columns, [[maybe_unused]] ContextPtr context, const SelectQueryInfo & query_info) const
+
+
+void StorageSystemExternalDatabases::fillData(MutableColumns & res_columns, [[maybe_unused]] ContextPtr context, const SelectQueryInfo & query_info) const
 {
     const auto & select = query_info.query->as<ASTSelectQuery>();
     if (!select->where() && !select->prewhere())
@@ -50,8 +51,7 @@ void StorageSystemExternalDatabases::fillData(
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "catalog {} does not exist", catalog_name);
     }
     auto all_dbs = catalog_ptr->listDbNames();
-    for (const auto & database_name : all_dbs)
-    {
+    for(const auto & database_name: all_dbs){
         res_columns[0]->insert(catalog_name);
         res_columns[1]->insert(database_name);
     }

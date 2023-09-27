@@ -31,6 +31,7 @@
 #include <common/wide_integer_impl.h>
 
 
+
 namespace DB
 {
 
@@ -61,15 +62,17 @@ namespace UUIDHelpers
     }
 
     PairInt64 UUIDToPairInt64(const UUID & uuid)
-    {   
+    {
         return PairInt64(uuid.toUnderType().items[0], uuid.toUnderType().items[1]);
     }
 
     UUID hashUUIDfromString(const String & str)
     {
-        auto hash_val = sipHash128(str.data(), str.length());
+        auto hash_val = sipHash128(str.data(),str.length());
         return UUID(hash_val);
+
     }
+
 }
 
 }

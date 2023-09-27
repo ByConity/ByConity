@@ -519,6 +519,13 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, c
         }
         storage->renameInMemory(storage_id);
         full_table_name = storage_id.getFullTableName();
+
+        if (storage_id.getDatabaseName() != "system" &&
+            !(dynamic_cast<const MergeTreeMetaBase *>(storage.get())
+              || dynamic_cast<const StorageMemory *>(storage.get())
+              || dynamic_cast<const StorageCnchHive *>(storage.get())))
+            throw Exception("Only cnch tables & system tables are supported", ErrorCodes::NOT_IMPLEMENTED);
+
         analysis.storage_results[&db_and_table] = StorageAnalysis { storage_id.getDatabaseName(), storage_id.getTableName(), storage};
 
     }
