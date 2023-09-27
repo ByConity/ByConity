@@ -79,7 +79,10 @@ static ColumnPtr getColumnFromBlock(const Block & block, const NameAndTypePair &
 size_t MergeTreeReaderInMemory::readRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read, Columns & res_columns)
 {
     if (!continue_reading)
+    {
         total_rows_read = 0;
+        next_row_number_to_read = data_part->index_granularity.getMarkStartingRow(from_mark);
+    }
 
     size_t total_marks = data_part->index_granularity.getMarksCount();
     if (from_mark >= total_marks)
@@ -217,6 +220,7 @@ size_t MergeTreeReaderInMemory::readRows(size_t from_mark, bool continue_reading
     }
 
     total_rows_read += rows_to_read;
+    next_row_number_to_read += rows_to_read;
     return rows_to_read;
 }
 

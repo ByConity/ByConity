@@ -293,12 +293,4 @@ bool isMapImplicitFileNameOfSpecialMapName(const String file_name, const String 
         return startsWith(file_name, genMapKeyFilePrefix(map_col));
 }
 
-bool isMapCompactFileNameOfSpecialMapName(const String file_name, const String map_col)
-{
-    auto extension_loc = file_name.find('.');
-    if (extension_loc == String::npos)
-        throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_FILE_NAME, "Invalid implicit column file name {}", file_name);
-    return file_name.substr(0, extension_loc) == escapeForFileName(map_col);
-}
-
 }

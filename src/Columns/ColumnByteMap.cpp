@@ -1212,22 +1212,27 @@ void ColumnByteMap::constructAllImplicitColumns(
  * __map__%27key%27 was accumulated.
  */
 void ColumnByteMap::fillByExpandedColumns(
-    const DataTypeByteMap & map_type, const std::map<String, std::pair<size_t, const IColumn *>> & impl_key_values)
+    const DataTypeByteMap & map_type, const std::map<String, std::pair<size_t, const IColumn *>> & impl_key_values, size_t rows)
 {
     // Append to ends of this ColumnByteMap
     if (impl_key_values.empty())
-        return;
-
-    if (impl_key_values.begin()->second.second->size() < impl_key_values.begin()->second.first)
     {
-        throw Exception(
-            "MAP implicit key size is slow than offset " + toString(impl_key_values.begin()->second.second->size()) + " "
-                + toString(impl_key_values.begin()->second.first),
-            ErrorCodes::LOGICAL_ERROR);
+        // Insert default values
+        insertManyDefaults(rows);
+        return;
     }
 
-    size_t rows = impl_key_values.begin()->second.second->size() - impl_key_values.begin()->second.first;
-
+    for (auto it = impl_key_values.begin(); it != impl_key_values.end(); ++it)
+    {
+        if (it->second.first + rows != it->second.second->size())
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "MAP implicit key size is not match required rows, key: {}, offset: {}, size: {}, required rows: {}",
+                it->first,
+                it->second.first,
+                it->second.second->size(),
+                rows);
+    }
 
     IColumn & key_col = getKey();
     IColumn & value_col = getValue();

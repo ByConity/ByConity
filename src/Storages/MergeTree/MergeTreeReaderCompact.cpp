@@ -260,6 +260,8 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
 {
     if (continue_reading)
         from_mark = next_mark;
+    else
+        next_row_number_to_read = data_part->index_granularity.getMarkStartingRow(from_mark);
 
     size_t read_rows = 0;
     size_t num_columns = columns.size();
@@ -402,7 +404,7 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading,
     }
 
     next_mark = from_mark;
-
+    next_row_number_to_read += read_rows;
     return read_rows;
 }
 

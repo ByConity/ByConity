@@ -56,7 +56,6 @@ private:
     void addStreams(const NameAndTypePair & name_and_type,
         const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);
 
-    size_t next_row_number_to_read = 0;
 };
 
 }

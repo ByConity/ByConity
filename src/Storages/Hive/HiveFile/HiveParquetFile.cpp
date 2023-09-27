@@ -1,5 +1,6 @@
 #include "Storages/Hive/HiveFile/HiveParquetFile.h"
 #include <memory>
+#include <Poco/Logger.h>
 #if USE_HIVE
 
 #include "Processors/Formats/Impl/ArrowBufferedStreams.h"
@@ -171,7 +172,7 @@ SourcePtr HiveParquetFile::getReader(const Block & block, const std::shared_ptr<
         params->format_settings.parquet.allow_missing_columns,
         params->format_settings.null_as_default);
 
-    std::vector<int> column_indices = ParquetBlockInputFormat::getColumnIndices(schema, block);
+    std::vector<int> column_indices = ParquetBlockInputFormat::getColumnIndices(schema, block, params->format_settings);
     if (!params->read_buf)
         params->read_buf = readFile(params->read_settings);
 

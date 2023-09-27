@@ -127,7 +127,7 @@ public:
     void constructAllImplicitColumns(
         std::unordered_map<StringRef, String> & key_name_map, std::unordered_map<StringRef, ColumnPtr> & value_columns) const;
 
-    void fillByExpandedColumns(const DataTypeByteMap &, const std::map<String, std::pair<size_t, const IColumn *>> &);
+    void fillByExpandedColumns(const DataTypeByteMap &, const std::map<String, std::pair<size_t, const IColumn *>> &, size_t row);
 
     /**
      * Remove data of map keys from the column.
