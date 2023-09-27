@@ -128,4 +128,6 @@ public:
     }
 };
 
+using MutationCommandsPtr = std::shared_ptr<MutationCommands>;
+
 }

@@ -175,6 +175,31 @@ StorageCnchMergeTree::StorageCnchMergeTree(
     }
     relative_auxility_storage_path = fs::path("auxility_store") / relative_table_path / "";
     format_version = MERGE_TREE_CHCH_DATA_STORAGTE_VERSION;
+
+}
+
+/// NOTE: it involve a RPC. We have a CnchStorageCache to avoid invoking this RPC frequently.
+void StorageCnchMergeTree::loadMutations()
+{
+    try
+    {
+        getContext()->getCnchCatalog()->fillMutationsByStorage(getStorageID(), mutations_by_version);
+
+        auto mutations_debug_str = [&]() -> String {
+            String res;
+            for (auto const & [_, mutation] : mutations_by_version)
+            {
+                res += mutation.toString() + "\n";
+            }
+            return res;
+        };
+
+        LOG_TRACE(log, "All mutations:\n{}", mutations_debug_str());
+    }
+    catch(...)
+    {
+        LOG_WARNING(log, "Failed to fill mutations_by_version.");
+    }
 }
 
 QueryProcessingStage::Enum StorageCnchMergeTree::getQueryProcessingStage(
@@ -2070,6 +2095,16 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
 
     txn->commitV1();
     LOG_TRACE(log, "Updated shared metadata in Catalog.");
+
+    auto mutation_entry = alter_act.getMutationEntry();
+    if (!mutation_entry.has_value())
+    {
+        if (!alter_act.getMutationCommands().empty())
+            LOG_ERROR(log, "DDLAlterAction didn't generated mutation entry for commands.");
+        return;
+    }
+    addMutationEntry(*mutation_entry);
+    LOG_TRACE(log, "Added mutation entry {} to mutations_by_version", mutation_entry->txn_id);
 }
 
 void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) const
@@ -2855,6 +2890,15 @@ void StorageCnchMergeTree::mutate(const MutationCommands & commands, ContextPtr 
     alter_act.setMutationCommands(commands);
     txn->appendAction(std::move(action));
     txn->commitV1();
+
+    auto mutation_entry = alter_act.getMutationEntry();
+    if (!mutation_entry.has_value())
+    {
+        if (!commands.empty())
+            LOG_ERROR(log, "DDLAlterAction didn't generated mutation entry for commands.");
+        return;
+    }
+    addMutationEntry(*mutation_entry);
 
     /// TODO: trigger sync mutation if mutation_sync = 1, this is only an ugly (mainly for CI test)
     auto bg_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::MergeMutate, getStorageID());

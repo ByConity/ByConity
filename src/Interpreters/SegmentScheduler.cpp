@@ -187,6 +187,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
     auto server_resource = query_context->tryGetCnchServerResource();
     if (server_resource)
     {
+        server_resource->setSendMutations(true);
         /// TODO: we can skip some worker
         server_resource->sendResources(query_context);
     }

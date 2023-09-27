@@ -29,6 +29,7 @@
 #include <Statistics/StatisticsBase.h>
 // #include <Transaction/ICnchTransaction.h>
 #include <ResourceManagement/CommonData.h>
+#include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
@@ -456,6 +457,7 @@ public:
     void removeMutation(const StorageID & storage_id, const String & mutation_name);
     Strings getAllMutations(const StorageID & storage_id);
     std::multimap<String, String> getAllMutations();
+    void fillMutationsByStorage(const StorageID & storage_id, std::map<TxnTimestamp, CnchMergeTreeMutationEntry> & out_mutations);
 
 
     /// TODO:

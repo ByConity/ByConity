@@ -129,6 +129,7 @@ void MultiplexedConnections::sendResource()
 
     auto host_ports = replica_states[0].connection->getHostWithPorts();
 
+    server_resource->setSendMutations(true);
     server_resource->sendResource(getContext(), host_ports);
 }
 

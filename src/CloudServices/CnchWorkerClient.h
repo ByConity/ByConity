@@ -107,7 +107,8 @@ public:
         const ContextPtr & context,
         const std::vector<AssignedResource> & resources_to_send,
         const ExceptionHandlerWithFailedInfoPtr & handler,
-        const WorkerId & worker_id);
+        const WorkerId & worker_id,
+        bool with_mutations = false);
 
     void removeWorkerResource(TxnTimestamp txn_id);
 

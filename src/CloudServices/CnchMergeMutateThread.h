@@ -199,7 +199,6 @@ private:
 
     // Mutate
     bool tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
-    void parseMutationEntries(const Strings & all_mutations, std::lock_guard<std::mutex> &);
     void removeMutationEntry(const TxnTimestamp & commit_ts, bool recluster_finish, std::lock_guard<std::mutex> &);
 
     void removeTaskImpl(const String & task_id, std::lock_guard<std::mutex> & lock, TaskRecordPtr * out_task_record = nullptr);

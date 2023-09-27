@@ -19,12 +19,14 @@
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
 #include <Storages/extractKeyExpressionList.h>
+#include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/PinnedPartUUIDs.h>
 #include <Storages/MergeTree/MergeTreeMeta.h>
 #include <Storages/PrimaryIndexCache.h>
 #include <MergeTreeCommon/IMergeTreePartMeta.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
 #include <Common/SimpleIncrement.h>
+#include <Transaction/TxnTimestamp.h>
 #include <Disks/StoragePolicy.h>
 
 namespace DB
@@ -377,6 +379,9 @@ public:
     bool isBucketTable() const override { return getInMemoryMetadata().isClusterByKeyDefined(); }
     UInt64 getTableHashForClusterBy() const override; // to compare table engines efficiently
 
+    void addMutationEntry(const CnchMergeTreeMutationEntry & entry);
+    void removeMutationEntry(TxnTimestamp create_time);
+    Strings getPlainMutationEntries();
 
 protected:
     friend class IMergeTreeDataPart;
@@ -410,6 +415,14 @@ protected:
 
     /// Nullable key
     bool allow_nullable_key = false;
+
+    /// TODO: (zuochuang.zema) use one current_mutations_by_version for Storage and CnchMergeMutateThread.
+    /// Mutations in queue.
+    /// It's different from CnchMergeMutateThread::current_mutations_by_version which is fetched from KV every time.
+    /// We need know all mutations when query processing to do column name conversion.
+    /// See #getFirstAlterMutationCommandsForPart.
+    mutable std::mutex mutations_by_verison_mutex;
+    std::map<TxnTimestamp, CnchMergeTreeMutationEntry> mutations_by_version;
 
     /// Work with data parts
 

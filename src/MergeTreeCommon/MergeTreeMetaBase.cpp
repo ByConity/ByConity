@@ -568,6 +568,31 @@ MergeTreeMetaBase::AlterConversions MergeTreeMetaBase::getAlterConversionsForPar
     return result;
 }
 
+void MergeTreeMetaBase::addMutationEntry(const CnchMergeTreeMutationEntry & entry)
+{
+    std::lock_guard lock(mutations_by_verison_mutex);
+    mutations_by_version.try_emplace(entry.commit_time, entry);
+}
+
+void MergeTreeMetaBase::removeMutationEntry(TxnTimestamp create_time)
+{
+    std::lock_guard lock(mutations_by_verison_mutex);
+    /// Maybe erase all entries <= create_time?
+    mutations_by_version.erase(create_time);
+}
+
+Strings MergeTreeMetaBase::getPlainMutationEntries()
+{
+    Strings res;
+    std::lock_guard lock(mutations_by_verison_mutex);
+    res.reserve(mutations_by_version.size());
+    for (auto const & [_, entry] : mutations_by_version)
+    {
+        res.push_back(entry.toString());
+    }
+    return res;
+}
+
 MergeTreeMetaBase::MutableDataPartPtr MergeTreeMetaBase::cloneAndLoadDataPartOnSameDisk(
     const MergeTreeMetaBase::DataPartPtr & src_part,
     const String & tmp_part_prefix,

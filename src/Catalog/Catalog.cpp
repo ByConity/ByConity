@@ -1067,6 +1067,13 @@ namespace Catalog
 
                 res = createTableFromDataModel(query_context, *table);
 
+                /// TODO: (zuochuang.zema, guanzhe.andy) handle TimeTravel
+                if (auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(res.get()))
+                {
+                    cnch_merge_tree->loadMutations();
+                }
+                
+
                 /// Try insert the storage into cache.
                 if (res && storage_cache)
                 {
@@ -3839,6 +3846,25 @@ namespace Catalog
             ProfileEvents::GetAllMutationsSuccess,
             ProfileEvents::GetAllMutationsFailed);
         return res;
+    }
+
+    void Catalog::fillMutationsByStorage(const StorageID & storage_id, std::map<TxnTimestamp, CnchMergeTreeMutationEntry> & out_mutations)
+    {
+        assert(out_mutations.empty());
+        const auto & mutations_str = getAllMutations(storage_id);
+        LOG_TRACE(log, "Get {} mutations from catalog", mutations_str.size());
+        for (const auto & mutation_str : mutations_str)
+        {
+            try
+            {
+                auto entry = CnchMergeTreeMutationEntry::parse(mutation_str);
+                out_mutations.try_emplace(entry.commit_time, entry);
+            }
+            catch(...)
+            {
+                tryLogCurrentException(__PRETTY_FUNCTION__, "Error when parsing mutation: " + mutation_str);
+            }
+        }
     }
 
     void Catalog::setTableClusterStatus(const UUID & table_uuid, const bool clustered, const UInt64 & table_definition_hash)

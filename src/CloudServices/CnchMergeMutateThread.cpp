@@ -21,6 +21,7 @@
 #include <CloudServices/selectPartsToMerge.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <CloudServices/CnchWorkerClientPools.h>
+#include "Common/TestUtils.h"
 #include <Common/Configurations.h>
 #include <Common/ProfileEvents.h>
 #include <Interpreters/PartMergeLog.h>
@@ -53,7 +54,7 @@ namespace ErrorCodes
 namespace
 {
     constexpr auto DELAY_SCHEDULE_TIME_IN_SECOND = 60ul;
-    constexpr auto DELAY_SCHEDULE_RANDOM_TIME_IN_SECOND = 20ul;
+    constexpr auto DELAY_SCHEDULE_RANDOM_TIME_IN_SECOND = 3ul;
 
     /// XXX: some settings for MutateTask
     constexpr auto max_mutate_part_num = 100UL;
@@ -377,7 +378,7 @@ void CnchMergeMutateThread::runImpl()
     {
         std::mt19937 generator(std::random_device{}());
         last_schedule_time = current_ts;
-        auto delay_ms = 1000 * (DELAY_SCHEDULE_TIME_IN_SECOND + generator() % DELAY_SCHEDULE_RANDOM_TIME_IN_SECOND);
+        auto delay_ms = 1000 * ((isCIEnv() ? 0 : DELAY_SCHEDULE_TIME_IN_SECOND) + generator() % DELAY_SCHEDULE_RANDOM_TIME_IN_SECOND);
         scheduled_task->scheduleAfter(delay_ms);
         LOG_DEBUG(log, "Schedule after {} ms because of last_schedule_time = 0", delay_ms);
         return;
@@ -525,7 +526,7 @@ bool CnchMergeMutateThread::tryMergeParts(StoragePtr & istorage, StorageCnchMerg
     size_t max_tasks_in_round = storage_settings->max_partition_for_multi_select;
 
     for (size_t i = 0; i < max_tasks_in_round //
-         && size_t(running_merge_tasks.load(std::memory_order_relaxed)) < max_tasks_in_total //
+         && static_cast<size_t>(running_merge_tasks.load(std::memory_order_relaxed)) < max_tasks_in_total //
          && !merge_pending_queue.empty();
          ++i)
     {
@@ -1124,12 +1125,12 @@ ClusterTaskProgress CnchMergeMutateThread::getReclusteringTaskProgress()
 
     auto istorage = getStorageFromCatalog();
     auto partition_list = catalog->getPartitionList(istorage, nullptr);
-    if (partition_list.size() == 0)
+    if (partition_list.empty())
         return cluster_task_progress;
 
-    if (scheduled_mutation_partitions.size() != 0)
+    if (!scheduled_mutation_partitions.empty())
         cluster_task_progress.progress = (scheduled_mutation_partitions.size() / static_cast<double>(partition_list.size())) * 100;
-    else if (finish_mutation_partitions.size() != 0)
+    else if (!finish_mutation_partitions.empty())
         cluster_task_progress.progress = (finish_mutation_partitions.size() / static_cast<double>(partition_list.size())) * 100;
     cluster_task_progress.start_time_seconds = current_mutate_entry->commit_time.toSecond();
     return cluster_task_progress;
@@ -1137,34 +1138,34 @@ ClusterTaskProgress CnchMergeMutateThread::getReclusteringTaskProgress()
 
 
 /// Mutate
-bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorage, [[maybe_unused]] StorageCnchMergeTree & storage)
+bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage)
 {
+    LOG_TRACE(log, "Try to mutate parts... running task {}", running_mutation_tasks);
+
+    /// Fetch mutation entrys.
     std::lock_guard lock(try_mutate_parts_mutex);
-
+    current_mutations_by_version.clear();
     auto catalog = getContext()->getCnchCatalog();
-    auto all_mutations = catalog->getAllMutations(storage_id);
-
-    if (all_mutations.empty())
-        return false;
-
-    parseMutationEntries(all_mutations, lock);
-
+    catalog->fillMutationsByStorage(storage_id, current_mutations_by_version);
     if (current_mutations_by_version.empty())
+    {
+        LOG_DEBUG(log, "No mutation entry from KV.");
         return false;
+    }
 
-    const auto & entry = current_mutations_by_version.begin()->second;
-    /// Set the `current_mutate_entry` to the first mutate entry
+    /// Set current_mutate_entry to the head of entrys.
+    const auto & entry_from_catalog = current_mutations_by_version.begin()->second;
     if (!current_mutate_entry.has_value())
     {
-        current_mutate_entry = std::make_optional<CnchMergeTreeMutationEntry>(entry);
+        current_mutate_entry = std::make_optional<CnchMergeTreeMutationEntry>(entry_from_catalog);
     }
-    else if (current_mutate_entry->commit_time != entry.commit_time)
+    else if (current_mutate_entry->commit_time != entry_from_catalog.commit_time)
     {
         /// Should not happen
-        LOG_WARNING(log, "Current mutation entry missed: {}, found {}", current_mutate_entry->commit_time, entry.commit_time);
+        LOG_WARNING(log, "Current mutation entry missed: {}, found {}", current_mutate_entry->commit_time, entry_from_catalog.commit_time);
         scheduled_mutation_partitions.clear();
         finish_mutation_partitions.clear();
-        current_mutate_entry = std::make_optional<CnchMergeTreeMutationEntry>(entry);
+        current_mutate_entry = std::make_optional<CnchMergeTreeMutationEntry>(entry_from_catalog);
     }
 
     auto generate_tasks = [&](const ServerDataPartsVector & visible_parts, const NameSet & merging_mutating_parts_snapshot)
@@ -1190,7 +1191,7 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
                         parts_to_mutate.push_back(part);
                 }
                 alter_parts = storage.getServerPartsByPredicate(mutation_command.predicate, [&]{ return parts_to_mutate; }, getContext());
-                found_tasks = alter_parts.size() > 0;
+                found_tasks = !alter_parts.empty();
             }
 
         }
@@ -1325,6 +1326,7 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
     }
 
     removeMutationEntry(commit_ts, newest_cluster_by, lock);
+    storage.removeMutationEntry(commit_ts);
 
     /// clear
     scheduled_mutation_partitions.clear();
@@ -1332,22 +1334,6 @@ bool CnchMergeMutateThread::tryMutateParts([[maybe_unused]] StoragePtr & istorag
     current_mutate_entry.reset();
 
     return false;
-}
-
-void CnchMergeMutateThread::parseMutationEntries(const Strings & all_mutations, std::lock_guard<std::mutex> &)
-{
-    for (const auto & mutate : all_mutations)
-    {
-        try
-        {
-            auto entry = CnchMergeTreeMutationEntry::parse(mutate);
-            current_mutations_by_version.try_emplace(entry.commit_time, entry);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(__PRETTY_FUNCTION__, "Error when parse mutation: " + mutate);
-        }
-    }
 }
 
 void CnchMergeMutateThread::removeMutationEntry(const TxnTimestamp & commit_ts, bool recluster_finish, std::lock_guard<std::mutex> &)

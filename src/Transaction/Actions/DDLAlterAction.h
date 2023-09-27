@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/MutationCommands.h>
 #include <Transaction/Actions/IAction.h>
@@ -39,8 +40,10 @@ public:
     /// TODO: versions
     void setNewSchema(String schema_);
     String getNewSchema() const { return new_schema; }
+    std::optional<CnchMergeTreeMutationEntry> getMutationEntry() const { return final_mutation_entry; }
 
     void setMutationCommands(MutationCommands commands);
+    const MutationCommands & getMutationCommands() const { return mutation_commands; }
 
     void executeV1(TxnTimestamp commit_time) override;
 
@@ -54,6 +57,7 @@ private:
 
     String new_schema;
     MutationCommands mutation_commands;
+    std::optional<CnchMergeTreeMutationEntry> final_mutation_entry;
     Settings query_settings;
 };
 

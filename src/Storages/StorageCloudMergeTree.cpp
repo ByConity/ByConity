@@ -243,9 +243,22 @@ CloudMergeTreeDedupWorker * StorageCloudMergeTree::getDedupWorker()
     return dedup_worker.get();
 }
 
-MutationCommands StorageCloudMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & /*part*/) const
+static UInt64 getDataVersion(const std::shared_ptr<const IMergeTreeDataPart> & part)
 {
-    return {};
+    return std::max(
+        std::max(part->columns_commit_time.toUInt64(), part->mutation_commit_time.toUInt64()),
+        static_cast<UInt64>(part->info.min_block));
+}
+
+MutationCommands StorageCloudMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const
+{
+    auto data_version = getDataVersion(part);
+    std::lock_guard lock(mutations_by_verison_mutex);
+    auto it = mutations_by_version.upper_bound(data_version);
+    if (it == mutations_by_version.end())
+        return {};
+
+    return it->second.commands;
 }
 
 StoragePolicyPtr StorageCloudMergeTree::getStoragePolicy(StorageLocation location) const
