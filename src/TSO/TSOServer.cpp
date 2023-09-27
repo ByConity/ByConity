@@ -415,7 +415,7 @@ int TSOServer::main(const std::vector<std::string> &)
     else
         LOG_TRACE(log, "host_port: {}", host_port);
 
-    proxy_ptr = std::make_shared<TSOProxy>(MetastoreConfig{config(), TSO_SERVICE_CONFIGURE});
+    proxy_ptr = std::make_shared<TSOProxy>(MetastoreConfig{global_context->getCnchConfigRef(), TSO_SERVICE_CONFIGURE});
     tso_service = std::make_shared<TSOImpl>();
 
     bool listen_try = config().getBool("listen_try", false);
