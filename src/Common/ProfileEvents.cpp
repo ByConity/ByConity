@@ -75,6 +75,8 @@
     M(TableFunctionExecute, "") \
     M(MarkCacheHits, "") \
     M(MarkCacheMisses, "") \
+    M(PrimaryIndexCacheHits, "") \
+    M(PrimaryIndexCacheMisses, "") \
     M(QueryCacheHits, "") \
     M(QueryCacheMisses, "") \
     M(ChecksumsCacheHits, "") \
@@ -822,6 +824,16 @@
     M(TSORequest, "Number requests sent to TSO") \
     M(TSOError, "Error logged by TSO Service as a response to CNCH") \
     \
+    M(PutAccessEntitySuccess, "") \
+    M(PutAccessEntityFailed, "") \
+    M(TryGetAccessEntitySuccess, "") \
+    M(TryGetAccessEntityFailed, "") \
+    M(GetAllAccessEntitySuccess, "") \
+    M(GetAllAccessEntityFailed, "") \
+    M(DropAccessEntitySuccess, "") \
+    M(DropAccessEntityFailed, "") \
+    M(TryGetAccessEntityNameSuccess, "") \
+    M(TryGetAccessEntityNameFailed, "") \
 
 namespace ProfileEvents
 {
