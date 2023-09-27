@@ -22,7 +22,7 @@ Projection Est. 100 rows
                               └─ Aggregating Est. 468 rows
                                  │     Group by: {s_county, s_state}
                                  │     Aggregates: expr#sum(ss_net_profit)_1:=AggNull(sum)(ss_net_profit)
-                                 └─ Inner Join Est. 446768223 rows
+                                 └─ Inner Join Est. 521229594 rows
                                     │     Condition: ss_store_sk == s_store_sk
                                     ├─ Inner Join Est. 521229594 rows
                                     │  │     Condition: ss_sold_date_sk == d_date_sk

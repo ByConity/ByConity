@@ -20,7 +20,7 @@ Projection Est. 100 rows
                   │     └─ Aggregating Est. 146835 rows
                   │        │     Group by: {i_item_id}
                   │        │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                  │        └─ Inner (PARALLEL_HASH) Join Est. 876000 rows
+                  │        └─ Inner (PARALLEL_HASH) Join Est. 2256960 rows
                   │           │     Condition: ss_addr_sk == ca_address_sk
                   │           │     Runtime Filters Builder: {ca_address_sk}
                   │           ├─ Repartition Exchange Est. 2388408 rows
@@ -77,7 +77,7 @@ Projection Est. 100 rows
                   │     └─ Aggregating Est. 146835 rows
                   │        │     Group by: {i_item_id_2}
                   │        │     Aggregates: expr#sum(cs_ext_sales_price):=AggNull(sum)(cs_ext_sales_price)
-                  │        └─ Inner Join Est. 435174 rows
+                  │        └─ Inner Join Est. 1186500 rows
                   │           │     Condition: ca_address_sk_1 == cs_bill_addr_sk
                   │           │     Runtime Filters Builder: {cs_bill_addr_sk}
                   │           ├─ Repartition Exchange Est. 2256960 rows
@@ -89,7 +89,7 @@ Projection Est. 100 rows
                   │           │              Outputs: ca_address_sk_1:=ca_address_sk, ca_gmt_offset_1:=ca_gmt_offset
                   │           └─ Repartition Exchange Est. 1186500 rows
                   │              │     Partition by: {cs_bill_addr_sk}
-                  │              └─ Inner Join Est. 1186500 rows
+                  │              └─ Inner Join Est. 1188110 rows
                   │                 │     Condition: cs_item_sk == i_item_sk_1
                   │                 │     Runtime Filters Builder: {i_item_sk_1}
                   │                 ├─ Inner Join Est. 21642217 rows
@@ -134,7 +134,7 @@ Projection Est. 100 rows
                         └─ Aggregating Est. 146835 rows
                            │     Group by: {i_item_id_4}
                            │     Aggregates: expr#sum(ws_ext_sales_price):=AggNull(sum)(ws_ext_sales_price)
-                           └─ Inner Join Est. 219001 rows
+                           └─ Inner Join Est. 597104 rows
                               │     Condition: ca_address_sk_2 == ws_bill_addr_sk
                               │     Runtime Filters Builder: {ws_bill_addr_sk}
                               ├─ Repartition Exchange Est. 2256960 rows
@@ -146,7 +146,7 @@ Projection Est. 100 rows
                               │              Outputs: ca_address_sk_2:=ca_address_sk, ca_gmt_offset_2:=ca_gmt_offset
                               └─ Repartition Exchange Est. 597104 rows
                                  │     Partition by: {ws_bill_addr_sk}
-                                 └─ Inner Join Est. 597104 rows
+                                 └─ Inner Join Est. 597914 rows
                                     │     Condition: ws_item_sk == i_item_sk_2
                                     │     Runtime Filters Builder: {i_item_sk_2}
                                     ├─ Inner Join Est. 10891415 rows

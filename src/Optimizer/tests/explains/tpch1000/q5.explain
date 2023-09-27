@@ -13,7 +13,7 @@ Projection Est. 25 rows
                   │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
                   └─ Projection Est. 267305949 rows
                      │     Expressions: [n_name], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
-                     └─ Inner (PARALLEL_HASH) Join Est. 267305949 rows
+                     └─ Inner (PARALLEL_HASH) Join Est. 267305948 rows
                         │     Condition: c_nationkey == s_nationkey, l_suppkey == s_suppkey
                         ├─ Repartition Exchange Est. 270106620 rows
                         │  │     Partition by: {c_nationkey, l_suppkey}

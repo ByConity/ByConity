@@ -11,12 +11,12 @@ Projection Est. 13522268 rows
                └─ Repartition Exchange Est. 13522268 rows
                   │     Partition by: {i_class}
                   └─ MergingAggregated Est. 13522268 rows
-                     └─ Repartition Exchange Est. 13522268 rows
+                     └─ Repartition Exchange Est. 13522267 rows
                         │     Partition by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
-                        └─ Aggregating Est. 13522268 rows
+                        └─ Aggregating Est. 13522267 rows
                            │     Group by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
                            │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
-                           └─ Inner Join Est. 13522268 rows
+                           └─ Inner Join Est. 13522267 rows
                               │     Condition: ss_item_sk == i_item_sk
                               │     Runtime Filters Builder: {i_item_sk}
                               ├─ Inner Join Est. 45121367 rows

@@ -22,7 +22,7 @@ Projection Est. 100 rows
                            └─ Left (PARALLEL_HASH) Join Est. 260378921299 rows
                               │     Condition: cs_item_sk == cr_item_sk, cs_order_number == cr_order_number
                               ├─ Inner (PARALLEL_HASH) Join Est. 170795911988 rows
-                              │  │     Condition: inv_item_sk == cs_item_sk, inv_date_sk == d_date_sk_1
+                              │  │     Condition: inv_date_sk == d_date_sk_1, inv_item_sk == cs_item_sk
                               │  │     Filter: inv_quantity_on_hand < cs_quantity
                               │  ├─ Repartition Exchange Est. 783000000 rows
                               │  │  │     Partition by: {inv_item_sk}

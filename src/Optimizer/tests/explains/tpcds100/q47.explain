@@ -42,7 +42,7 @@ CTEDef [1]
                   └─ Aggregating Est. 70900 rows
                      │     Group by: {d_moy, d_year, i_brand, i_category, s_company_name, s_store_name}
                      │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
-                     └─ Inner Join Est. 64510118 rows
+                     └─ Inner Join Est. 64510117 rows
                         │     Condition: ss_store_sk == s_store_sk
                         ├─ Inner Join Est. 64510117 rows
                         │  │     Condition: ss_item_sk == i_item_sk

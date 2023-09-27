@@ -18,7 +18,7 @@ Projection
                      └─ Projection
                         │     Expressions: [i_item_id, w_state], expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0):=multiIf(CAST(d_date, 'date') >= cast(11027, 'Date'), cs_sales_price - coalesce(cr_refunded_cash, 0), 0), expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0):=multiIf(CAST(d_date, 'date') < cast(11027, 'Date'), cs_sales_price - coalesce(cr_refunded_cash, 0), 0)
                         └─ Right Join
-                           │     Condition: cr_order_number == cs_order_number, cr_item_sk == cs_item_sk
+                           │     Condition: cr_item_sk == cs_item_sk, cr_order_number == cs_order_number
                            │     Runtime Filters Builder: {cs_item_sk,cs_order_number}
                            ├─ Repartition Exchange
                            │  │     Partition by: {cr_item_sk, cr_order_number}

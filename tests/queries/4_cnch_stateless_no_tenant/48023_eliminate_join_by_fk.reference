@@ -164,7 +164,7 @@ Projection Est. ? rows
             │  │     Partition by: {expr#cast(sk, \'Nullable(Int64)\')}
             │  └─ Projection Est. ? rows
             │     │     Expressions: [sk], expr#cast(sk, \'Nullable(Int64)\'):=cast(sk, \'Nullable(Int64)\')
-            │     └─ Right Join Est. ? rows
+            │     └─ Inner Join Est. ? rows
             │        │     Condition: expr#cast(sk, \'Int64\') == ws_item_sk
             │        ├─ Repartition Exchange Est. ? rows
             │        │  │     Partition by: {expr#cast(sk, \'Int64\')}

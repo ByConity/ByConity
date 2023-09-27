@@ -1,55 +1,73 @@
-Projection Est. 475000 rows
+Projection Est. 3040 rows
 │     Expressions: cust_nation:=n_name_1, l_year:=`expr#toYear(l_shipdate)`, revenue:=`expr#sum(volume)`, supp_nation:=n_name
-└─ Sorting Est. 475000 rows
+└─ Sorting Est. 3040 rows
    │     Order by: {n_name asc, n_name_1 asc, expr#toYear(l_shipdate) asc}
-   └─ Gather Exchange Est. 475000 rows
-      └─ Sorting Est. 475000 rows
+   └─ Gather Exchange Est. 3040 rows
+      └─ Sorting Est. 3040 rows
          │     Order by: {n_name asc, n_name_1 asc, expr#toYear(l_shipdate) asc}
-         └─ MergingAggregated Est. 475000 rows
-            └─ Repartition Exchange Est. 475000 rows
+         └─ MergingAggregated Est. 3040 rows
+            └─ Repartition Exchange Est. 3040 rows
                │     Partition by: {expr#toYear(l_shipdate), n_name, n_name_1}
-               └─ Aggregating Est. 475000 rows
+               └─ Aggregating Est. 3040 rows
                   │     Group by: {expr#toYear(l_shipdate), n_name, n_name_1}
                   │     Aggregates: expr#sum(volume):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
-                  └─ Projection Est. 183366669 rows
+                  └─ Projection Est. 1173546 rows
                      │     Expressions: [n_name, n_name_1], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount), expr#toYear(l_shipdate):=toYear(l_shipdate)
-                     └─ Inner Join Est. 183366669 rows
-                        │     Condition: l_suppkey == s_suppkey
+                     └─ Inner (PARALLEL_HASH) Join Est. 12000000 rows
+                        │     Condition: l_orderkey == o_orderkey
                         │     Filter: ((n_name_1 = 'GERMANY') OR (n_name = 'GERMANY')) AND ((n_name = 'FRANCE') OR (n_name_1 = 'FRANCE'))
-                        ├─ Repartition Exchange Est. 183366669 rows
-                        │  │     Partition by: {l_suppkey}
-                        │  └─ Inner (PARALLEL_HASH) Join Est. 183366669 rows
-                        │     │     Condition: l_orderkey == o_orderkey
-                        │     ├─ Repartition Exchange Est. 183366669 rows
-                        │     │  │     Partition by: {l_orderkey}
-                        │     │  └─ Filter Est. 183366669 rows
-                        │     │     │     Condition: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date'))
-                        │     │     └─ TableScan tpch100.lineitem Est. 600037902 rows
-                        │     │              Where: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date'))
-                        │     │              Outputs: [l_discount, l_extendedprice, l_orderkey, l_shipdate, l_suppkey]
-                        │     └─ Repartition Exchange Est. 150000000 rows
-                        │        │     Partition by: {o_orderkey}
-                        │        └─ Inner (PARALLEL_HASH) Join Est. 150000000 rows
-                        │           │     Condition: o_custkey == c_custkey
-                        │           ├─ Repartition Exchange Est. 150000000 rows
-                        │           │  │     Partition by: {o_custkey}
-                        │           │  └─ TableScan tpch100.orders Est. 150000000 rows
-                        │           │           Outputs: [o_custkey, o_orderkey]
-                        │           └─ Repartition Exchange Est. 15000000 rows
-                        │              │     Partition by: {c_custkey}
-                        │              └─ Inner Join Est. 15000000 rows
-                        │                 │     Condition: c_nationkey == n_nationkey_1
-                        │                 ├─ TableScan tpch100.customer Est. 15000000 rows
-                        │                 │        Outputs: [c_custkey, c_nationkey]
-                        │                 └─ Broadcast Exchange Est. 25 rows
-                        │                    └─ TableScan tpch100.nation Est. 25 rows
-                        │                             Outputs: n_name_1:=n_name, n_nationkey_1:=n_nationkey
-                        └─ Repartition Exchange Est. 1000000 rows
-                           │     Partition by: {s_suppkey}
-                           └─ Inner Join Est. 1000000 rows
-                              │     Condition: s_nationkey == n_nationkey
-                              ├─ TableScan tpch100.supplier Est. 1000000 rows
-                              │        Outputs: [s_nationkey, s_suppkey]
-                              └─ Broadcast Exchange Est. 25 rows
-                                 └─ TableScan tpch100.nation Est. 25 rows
-                                          Outputs: [n_name, n_nationkey]
+                        │     Runtime Filters Builder: {o_orderkey}
+                        ├─ Repartition Exchange Est. 14669333 rows
+                        │  │     Partition by: {l_orderkey}
+                        │  └─ Inner Join Est. 48000926 rows
+                        │     │     Condition: l_suppkey == s_suppkey
+                        │     │     Runtime Filters Builder: {s_suppkey}
+                        │     ├─ Filter Est. 183366669 rows
+                        │     │  │     Condition: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date')) Runtime Filters: {l_orderkey, l_suppkey}
+                        │     │  └─ TableScan tpch100.lineitem Est. 600037902 rows
+                        │     │           Where: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date')) Runtime Filters: {l_orderkey, l_suppkey}
+                        │     │           Outputs: [l_discount, l_extendedprice, l_orderkey, l_shipdate, l_suppkey]
+                        │     └─ Broadcast Exchange Est. 80000 rows
+                        │        └─ Inner Join Est. 80000 rows
+                        │           │     Condition: s_nationkey == n_nationkey
+                        │           │     Runtime Filters Builder: {n_nationkey}
+                        │           ├─ Filter Est. 1000000 rows
+                        │           │  │     Condition: Runtime Filters: {s_nationkey}
+                        │           │  └─ TableScan tpch100.supplier Est. 1000000 rows
+                        │           │           Where: Runtime Filters: {s_nationkey}
+                        │           │           Outputs: [s_nationkey, s_suppkey]
+                        │           └─ Broadcast Exchange Est. 2 rows
+                        │              └─ Filter Est. 2 rows
+                        │                 │     Condition: n_name IN ('FRANCE', 'GERMANY')
+                        │                 └─ TableScan tpch100.nation Est. 25 rows
+                        │                          Where: n_name IN ('FRANCE', 'GERMANY')
+                        │                          Outputs: [n_name, n_nationkey]
+                        └─ Repartition Exchange Est. 12000000 rows
+                           │     Partition by: {o_orderkey}
+                           └─ Inner Join Est. 18481189 rows
+                              │     Condition: o_custkey == c_custkey
+                              │     Runtime Filters Builder: {c_custkey}
+                              ├─ Repartition Exchange Est. 150000000 rows
+                              │  │     Partition by: {o_custkey}
+                              │  └─ Filter Est. 150000000 rows
+                              │     │     Condition: Runtime Filters: {o_custkey}
+                              │     └─ TableScan tpch100.orders Est. 150000000 rows
+                              │              Where: Runtime Filters: {o_custkey}
+                              │              Outputs: [o_custkey, o_orderkey]
+                              └─ Repartition Exchange Est. 1200000 rows
+                                 │     Partition by: {c_custkey}
+                                 └─ Inner Join Est. 1200000 rows
+                                    │     Condition: c_nationkey == n_nationkey_1
+                                    │     Runtime Filters Builder: {n_nationkey_1}
+                                    ├─ Filter Est. 15000000 rows
+                                    │  │     Condition: Runtime Filters: {c_nationkey}
+                                    │  └─ TableScan tpch100.customer Est. 15000000 rows
+                                    │           Where: Runtime Filters: {c_nationkey}
+                                    │           Outputs: [c_custkey, c_nationkey]
+                                    └─ Broadcast Exchange Est. 2 rows
+                                       └─ Filter Est. 2 rows
+                                          │     Condition: n_name_1 IN ('FRANCE', 'GERMANY')
+                                          └─ TableScan tpch100.nation Est. 25 rows
+                                                   Where: n_name IN ('FRANCE', 'GERMANY')
+                                                   Outputs: n_name_1:=n_name, n_nationkey_1:=n_nationkey
+note: Runtime Filter is applied for 5 times.

@@ -10,7 +10,7 @@ Projection Est. 1 rows
             └─ Aggregating Est. 1 rows
                │     Group by: {}
                │     Aggregates: expr#uniqExact(ws_order_number):=AggNull(uniqExact)(ws_order_number), expr#sum(ws_ext_ship_cost):=AggNull(sum)(ws_ext_ship_cost), expr#sum(ws_net_profit):=AggNull(sum)(ws_net_profit)
-               └─ Inner Join Est. 5812 rows
+               └─ Inner Join Est. 489 rows
                   │     Condition: ws_web_site_sk == web_site_sk
                   │     Runtime Filters Builder: {web_site_sk}
                   ├─ Inner Join Est. 5875 rows
