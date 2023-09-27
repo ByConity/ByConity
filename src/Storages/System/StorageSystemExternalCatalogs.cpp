@@ -24,7 +24,9 @@ namespace ErrorCodes
 
 NamesAndTypesList StorageSystemExternalCatalogs::getNamesAndTypes()
 {
-    return {{"catalog_name", std::make_shared<DataTypeString>()}, {"create_time", std::make_shared<DataTypeDateTime>()}};
+    return {
+        {"catalog_name", std::make_shared<DataTypeString>()},
+        {"create_time", std::make_shared<DataTypeDateTime>()}};
 }
 
 
@@ -44,6 +46,7 @@ void StorageSystemExternalCatalogs::fillData(
             res_columns[1]->insert(0);
         }
     }
+
 }
 
 }

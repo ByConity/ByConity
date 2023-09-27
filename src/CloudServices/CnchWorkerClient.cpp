@@ -359,8 +359,8 @@ brpc::CallId CnchWorkerClient::sendResources(
     cntl->set_timeout_ms(send_timeout_ms);
     const auto call_id = cntl->call_id();
     auto * response = new Protos::SendResourcesResp();
-    stub->sendResources(
-        cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDoneWithFailedInfo, response, cntl, handler, worker_id));
+    LOG_INFO(&Poco::Logger::get(__func__), request.DebugString());
+    stub->sendResources(cntl, &request, response, brpc::NewCallback(RPCHelpers::onAsyncCallDoneWithFailedInfo, response, cntl, handler, worker_id));
 
     return call_id;
 }

@@ -206,6 +206,7 @@ public:
     }
 
 
+
     static std::string deleteBitmapPrefix(const std::string & name_space, const std::string & uuid)
     {
         std::stringstream ss;
@@ -739,7 +740,7 @@ public:
     // Note(renming):: we follow the getDatabase here, in case in the future we will use mvcc.
     void getExternalCatalog(const String & name_space, const String & name, Strings & catalog_info);
     void dropExternalCatalog(const String & name_space, const Protos::DataModelCatalog & catalog_model);
-    IMetaStore::IteratorPtr getAllExternalCatalogMeta(const String & name_space);
+    IMetaStore::IteratorPtr  getAllExternalCatalogMeta(const String& name_space);
 
     void addDatabase(const String & name_space, const Protos::DataModelDB & db_model);
     void getDatabase(const String & name_space, const String & name, Strings & db_info);

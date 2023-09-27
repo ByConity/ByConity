@@ -212,7 +212,7 @@ void TCPHandler::runImpl()
         {
             default_database = connection_context->getTenantId() + '.' + default_database;
         }
-
+        
         if ((!default_database.empty()) && (!DatabaseCatalog::instance().isDatabaseExist(default_database, connection_context)))
         {
             Exception e("Database " + backQuote(default_database) + " doesn't exist", ErrorCodes::UNKNOWN_DATABASE);

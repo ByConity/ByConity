@@ -164,3 +164,35 @@ INSTANTIATE_TEST_SUITE_P(
             "cnch=1, max_partitions_per_insert_block=10000, max_insert_block_size=1048576",
             "",
         }));
+
+
+
+    INSTANTIATE_TEST_SUITE_P(
+        ParserCreateCatalogQuery,
+        ParserTest,
+        ::testing::Values(
+            ParserTestCase{
+                std::make_shared<ParserCreateQuery>(),
+                "CREATE EXTERNAL CATALOG mock_catalog PROPERTIES type = 'Mock'",
+                "CREATE EXTERNAL CATALOG mock_catalog PROPERTIES type = 'Mock'",
+            },
+            ParserTestCase{
+                std::make_shared<ParserCreateQuery>(),
+                "CREATE EXTERNAL CATALOG hive_catalog PROPERTIES type = 'hive', hive.metastore.uri = 'thrift://localhost:9183'"
+                "CREATE EXTERNAL CATALOG hive_catalog PROPERTIES type = 'hive', hive.metastore.uri = 'thrift://localhost:9183'"}));
+    
+    INSTANTIATE_TEST_SUITE_P(
+        ParserDropCatalogQuery,
+        ParserTest,
+        ::testing::Values(ParserTestCase{
+            std::make_shared<ParserDropQuery>(),
+            "DROP EXTERNAL CATALOG mock_catalog",
+            "DROP EXTERNAL CATALOG mock_catalog",
+        }));
+    
+    INSTANTIATE_TEST_SUITE_P(ParserCreateCatalogQuery_FAIL, ParserTest, ::testing::Values(
+        ParserTestCase{
+           std::make_shared<ParserCreateQuery>(),
+           "CREATE DATABASE mock_catalog.db" ,
+        }
+));

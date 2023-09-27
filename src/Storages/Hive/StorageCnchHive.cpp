@@ -63,9 +63,8 @@ StorageCnchHive::StorageCnchHive(
 {
     try
     {
-        hive_client = client_from_catalog != nullptr
-            ? client_from_catalog
-            : HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url, storage_settings);
+        hive_client
+            = client_from_catalog != nullptr ? client_from_catalog : HiveMetastoreClientFactory::instance().getOrCreate(hive_metastore_url,storage_settings);
         hive_table = hive_client->getTable(hive_db_name, hive_table_name);
     }
     catch (...)
@@ -88,6 +87,8 @@ StorageCnchHive::StorageCnchHive(
         setInMemoryMetadata(metadata_);
     }
 }
+
+
 
 
 void StorageCnchHive::startup()
@@ -405,7 +406,7 @@ void registerStorageCnchHive(StorageFactory & factory)
             }
 
             return StorageCnchHive::create(
-                args.table_id, hive_metastore_url, hive_database, hive_table, std::move(metadata), args.getContext(), hive_settings);
+                args.table_id, hive_metastore_url, hive_database, hive_table, std::move(metadata), args.getContext(), hive_settings, args.hive_client);
         },
         features);
 }

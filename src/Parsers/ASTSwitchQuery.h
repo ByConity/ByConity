@@ -21,9 +21,9 @@
 
 #pragma once
 
-#include <IO/Operators.h>
 #include <Parsers/IAST.h>
 #include <Common/quoteString.h>
+#include <IO/Operators.h>
 
 
 namespace DB
@@ -47,8 +47,7 @@ public:
 protected:
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override
     {
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << "SWITCH " << (settings.hilite ? hilite_none : "")
-                      << backQuoteIfNeed(catalog);
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << "SWITCH " << (settings.hilite ? hilite_none : "") << backQuoteIfNeed(catalog);
     }
 };
 

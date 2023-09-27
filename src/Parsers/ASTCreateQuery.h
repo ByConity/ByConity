@@ -125,7 +125,7 @@ public:
     std::optional<UInt64> live_view_timeout;    /// For CREATE LIVE VIEW ... WITH TIMEOUT ...
     std::optional<UInt64> live_view_periodic_refresh;    /// For CREATE LIVE VIEW ... WITH [PERIODIC] REFRESH ...
 
-    ASTSetQuery * catalog_properties;
+    ASTSetQuery* catalog_properties;
 
     bool attach_short_syntax{false};
 

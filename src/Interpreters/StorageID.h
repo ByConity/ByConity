@@ -20,12 +20,14 @@
  */
 
 #pragma once
+#include <common/types.h>
+#include <Common/DefaultCatalogName.h>
+#include <Core/UUID.h>
 #include <tuple>
 #include <Core/QualifiedTableName.h>
-#include <Core/UUID.h>
+#include <Common/DefaultCatalogName.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST_fwd.h>
-#include <Common/Exception.h>
 #include <common/types.h>
 #include "Interpreters/Set.h"
 

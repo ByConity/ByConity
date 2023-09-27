@@ -90,7 +90,7 @@ StoragePtr StorageFactory::get(
     const ForeignKeysDescription & foreign_keys,
     const UniqueNotEnforcedDescription & unique,
     bool has_force_restore_data_flag,
-    HiveParamsPtr hive_params) const
+     HiveParamsPtr hive_params) const
 {
     String name, comment;
     ASTStorage * storage_def = query.storage;
@@ -241,7 +241,7 @@ StoragePtr StorageFactory::get(
         .create = query.create,
         .has_force_restore_data_flag = has_force_restore_data_flag,
         .comment = comment,
-        .hive_client = hive_params != nullptr ? hive_params->hive_client : nullptr};
+        .hive_client = hive_params !=nullptr ? hive_params->hive_client : nullptr };
 
     assert(arguments.getContext() == arguments.getContext()->getGlobalContext());
 

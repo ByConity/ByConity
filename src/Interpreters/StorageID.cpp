@@ -85,7 +85,8 @@ String StorageID::getDatabaseName() const
 String StorageID::getNameForLogs() const
 {
     assertNotEmpty();
-    return (database_name.empty() ? "" : backQuoteIfNeed(database_name) + ".") + backQuoteIfNeed(table_name)
+    return 
+        (database_name.empty() ? "" : backQuoteIfNeed(database_name) + ".") + backQuoteIfNeed(table_name)
         + (hasUUID() ? " (" + toString(uuid) + ")" : "");
 }
 

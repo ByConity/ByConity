@@ -1352,6 +1352,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->setMetaChecker();
 
 
+
+
+
     /// Init trace collector only after trace_log system table was created
     /// Disable it if we collect test coverage information, because it will work extremely slow.
     ///
