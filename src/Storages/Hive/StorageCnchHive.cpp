@@ -13,6 +13,7 @@
 #include "MergeTreeCommon/CnchStorageCommon.h"
 #include "Parsers/ASTCreateQuery.h"
 #include "Parsers/ASTLiteral.h"
+#include "Parsers/ASTSetQuery.h"
 #include "Parsers/ASTSelectQuery.h"
 #include "Parsers/queryToString.h"
 #include "Processors/Sources/NullSource.h"
@@ -20,6 +21,8 @@
 #include "QueryPlan/Optimizations/QueryPlanOptimizationSettings.h"
 #include "QueryPlan/ReadFromPreparedSource.h"
 #include "ResourceManagement/CommonData.h"
+#include "Storages/AlterCommands.h"
+#include "Storages/DataLakes/HudiDirectoryLister.h"
 #include "Storages/Hive/CnchHiveSettings.h"
 #include "Storages/Hive/DirectoryLister.h"
 #include "Storages/Hive/HiveFile/IHiveFile.h"
@@ -34,7 +37,6 @@
 #include "Storages/DataLakes/HudiDirectoryLister.h"
 
 #include <boost/lexical_cast.hpp>
-
 #include "common/scope_guard_safe.h"
 
 namespace DB
@@ -70,7 +72,7 @@ StorageCnchHive::StorageCnchHive(
     catch (...)
     {
         hive_exception = std::current_exception();
-        tryLogCurrentException(__PRETTY_FUNCTION__);
+        // tryLogCurrentException(__PRETTY_FUNCTION__);
         return;
     }
 
@@ -183,28 +185,32 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
         }
     };
 
-    if (num_streams <= 1 || partitions.size() == 1)
-    {
-        for (const auto & partition : partitions)
-        {
-            list_partition(partition);
-        }
-    }
-    else
-    {
-        size_t num_threads = std::min(size_t(num_streams), partitions.size());
+    // if (num_streams <= 1 || partitions.size() == 1)
+    // {
+    //     for (const auto & partition : partitions)
+    //     {
+    //         list_partition(partition);
+    //     }
+    // }
+    // else
+    // {
+    //     size_t num_threads = std::min(size_t(num_streams), partitions.size());
 
-        ThreadPool pool(num_threads);
-        for (const auto & partition : partitions)
-        {
-            pool.scheduleOrThrowOnError([&, partition, thread_group = CurrentThread::getGroup()] {
-                SCOPE_EXIT_SAFE(if (thread_group) CurrentThread::detachQueryIfNotDetached(););
-                if (thread_group)
-                    CurrentThread::attachTo(thread_group);
-                list_partition(partition);
-            });
-        }
-        pool.wait();
+    //     ThreadPool pool(num_threads);
+    //     for (const auto & partition : partitions)
+    //     {
+    //         pool.scheduleOrThrowOnError([&, partition, thread_group = CurrentThread::getGroup()] {
+    //             SCOPE_EXIT_SAFE(if (thread_group) CurrentThread::detachQueryIfNotDetached(););
+    //             if (thread_group)
+    //                 CurrentThread::attachTo(thread_group);
+    //             list_partition(partition);
+    //         });
+    //     }
+    //     pool.wait();
+    // }
+    for (const auto & partition : partitions)
+    {
+        list_partition(partition);
     }
 
     LOG_DEBUG(log, "Read from {} hive files", hive_files.size());
@@ -339,6 +345,58 @@ HivePartitions StorageCnchHive::selectPartitions(
     return partitions;
 }
 
+void StorageCnchHive::checkAlterIsPossible(const AlterCommands & commands, ContextPtr) const
+{
+    for (const auto & command : commands)
+    {
+        if (command.type != AlterCommand::Type::MODIFY_SETTING)
+        {
+            throw Exception(
+                ErrorCodes::NOT_IMPLEMENTED, "Alter of type {} is not supported by storage {}", alterTypeToString(command.type), getName());
+        }
+    }
+}
+
+void StorageCnchHive::alter(const AlterCommands & params, ContextPtr local_context, TableLockHolder &)
+{
+    StorageInMemoryMetadata new_metadata = getInMemoryMetadata();
+
+    params.apply(new_metadata, local_context);
+    CnchHiveSettings new_settings = storage_settings ? *storage_settings : local_context->getCnchHiveSettings();
+    const auto & settings_changes = new_metadata.settings_changes->as<const ASTSetQuery &>().changes;
+    new_settings.applyChanges(settings_changes);
+
+    // HiveSchemaConverter converter(local_context, hive_table);
+    // converter.check(new_metadata);
+
+    TransactionCnchPtr txn = local_context->getCurrentTransaction();
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef());
+    auto & alter_act = action->as<DDLAlterAction &>();
+    /// replace table schema in catalog
+    {
+        String create_table_query = getCreateTableSql();
+        ParserCreateQuery parser;
+        ASTPtr ast = parseQuery(
+            parser, create_table_query, local_context->getSettingsRef().max_query_size,
+            local_context->getSettingsRef().max_parser_depth);
+
+        auto & create_query = ast->as<ASTCreateQuery &>();
+        if (new_metadata.settings_changes && create_query.storage)
+        {
+            ASTStorage & storage_ast = *create_query.storage;
+            storage_ast.set(storage_ast.settings, new_metadata.settings_changes);
+        }
+
+        alter_act.setNewSchema(queryToString(ast));
+    }
+
+    txn->appendAction(action);
+    txn->commitV1();
+    *storage_settings = std::move(new_settings);
+
+    setInMemoryMetadata(new_metadata);
+}
+
 std::pair<UInt64, ApacheHive::TableStatsResult> StorageCnchHive::getTableStats(const Strings & col_names, ContextPtr local_context)
 {
     bool merge_partition_stats = local_context->getSettingsRef().merge_partition_stats;
@@ -350,6 +408,26 @@ std::pair<UInt64, ApacheHive::TableStatsResult> StorageCnchHive::getTableStats(c
     }
     LOG_TRACE(log, " row_count {}, stats {}", stats.row_count, apache::thrift::to_string(stats.table_stats));
     return {stats.row_count, stats.table_stats};
+}
+
+std::shared_ptr<IDirectoryLister> StorageCnchHive::getDirectoryLister()
+{
+    auto disk = HiveUtil::getDiskFromURI(hive_table->sd.location, getContext(), *storage_settings);
+    const auto & input_format = hive_table->sd.inputFormat;
+    if (input_format == "org.apache.hudi.hadoop.HoodieParquetInputFormat")
+    {
+        return std::make_shared<HudiCowDirectoryLister>(disk);
+    }
+    else if (input_format == "org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat")
+    {
+        return std::make_shared<DiskDirectoryLister>(disk, IHiveFile::FileFormat::PARQUET);
+    }
+    else if (input_format == "org.apache.hadoop.hive.ql.io.orc.OrcInputFormat")
+    {
+        return std::make_shared<DiskDirectoryLister>(disk, IHiveFile::FileFormat::ORC);
+    }
+    else
+        throw Exception(ErrorCodes::UNKNOWN_FORMAT, "Unknown hive format {}", input_format);
 }
 
 

@@ -85,5 +85,4 @@ void CnchHiveSettings::loadFromQuery(ASTStorage & storage_def)
 #undef ADD_IF_ABSENT
 }
 
-
 }

@@ -77,6 +77,9 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
+    void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override;
+    void alter(const AlterCommands & params, ContextPtr local_context, TableLockHolder &) override;
+
     std::pair<UInt64, ApacheHive::TableStatsResult> getTableStats(const Strings & col_names, ContextPtr local_context);
 
 protected:
