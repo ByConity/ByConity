@@ -1409,8 +1409,6 @@ void Context::stopResourceGroup()
 
 void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAddress & address)
 {
-    auto lock = getLock();
-
     client_info.current_user = credentials.getUserName();
     client_info.current_address = address;
 
@@ -1422,7 +1420,12 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     //#endif
 
     /// Find a user with such name and check the credentials.
+    /// NOTE: getAccessControlManager().login and other AccessControl's functions may require some IO work,
+    /// so Context::getLock() must be unlocked while we're doing this.
+
     auto new_user_id = getAccessControlManager().login(credentials, address.host());
+
+    auto lock = getLock();
     auto new_access = getAccessControlManager().getContextAccess(
         new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info);
 
