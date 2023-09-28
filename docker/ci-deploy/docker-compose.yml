@@ -71,6 +71,7 @@ services:
     image: byconity/debian:buster-runit-fdb7.1.27
     environment:
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME}
+      - CI_JOB_NAME=github 
     command: bash -c "export PATH=$PATH:/opt/byconity/bin/ && curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 ${COMPOSE_PROJECT_NAME}_tso-0:18845 && clickhouse-server --config-file /config/server.yml"
     depends_on:
       - tso
