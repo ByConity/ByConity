@@ -146,6 +146,13 @@ private:
     VirtualWarehouseSettings settings;
     Poco::Logger * log;
 
+    /// In ByteHouse, a VW will be auto recycled (auto-suspend) if no new queries received for a period (5 minutes by default).
+    /// And when user send queries to the VW again, ByteYard will make sure to send out the queries after workers are full ready.
+    /// Even though workers are full ready, the VW handle may still hold the outdated data as the UpdateMode is always TryUpdate.
+    /// This cause some query failures in auto-resume period. https:****
+    /// To fix this issue, we do a ForceUpdate if the data is not updated for a long time (the timeout of auto-suspend).
+    size_t force_update_interval_ns = 5ULL * 60 * 1000 * 1000 * 1000;
+    size_t try_update_interval_ns = 500ULL * 1000 * 1000;
     std::atomic<UInt64> last_update_time_ns{0};
 
     mutable std::mutex state_mutex;
