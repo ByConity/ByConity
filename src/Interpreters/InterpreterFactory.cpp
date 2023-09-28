@@ -38,7 +38,6 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTDropWarehouseQuery.h>
 #include <Parsers/ASTDropWorkerGroupQuery.h>
-#include <Parsers/ASTDumpInfoQuery.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTGrantQuery.h>
 #include <Parsers/ASTInsertQuery.h>
