@@ -1,0 +1,263 @@
+version: "3"
+services:
+# byconity:
+  tso-0:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "/config/start-fdb.sh; clickhouse tso-server --config-file /config/tso.yml"
+    depends_on:
+      - fdb-0
+      - hdfs-namenode
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-multi-cluster/:/config/:ro"
+    # evironment:
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "tso-0:18845/status"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  tso-1:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "/config/start-fdb.sh; clickhouse tso-server --config-file /config/tso.yml"
+    depends_on:
+      - fdb-0
+      - hdfs-namenode
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/
+      - "./byconity-multi-cluster/:/config/:ro"
+    # evironment:
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "tso-1:18845/status"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  resource-manager-0:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 tso-0:18845/status && clickhouse resource-manager --config-file /config/resource-manager.yml"
+    depends_on:
+      - tso-0
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-multi-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "resource-manager-0:28989/status"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  resource-manager-1:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 tso-0:18845/status && clickhouse resource-manager --config-file /config/resource-manager.yml"
+    depends_on:
+      - tso-0
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-multi-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "resource-manager-1:28989/status"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  server-0:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 resource-manager-0:28989/status && clickhouse server --config-file /config/server.yml"
+    depends_on:
+      - tso-0
+      - resource-manager-0
+    ports:
+      - "29123:52145"
+      - "28123:21557"
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-multi-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "server-0:21557/?query=SELECT%201"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  server-1:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 resource-manager-0:28989/status && clickhouse server --config-file /config/server.yml"
+    depends_on:
+      - tso-0
+      - resource-manager-0
+    ports:
+      - "29124:52145"
+      - "28124:21557"
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-multi-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "server-1:21557/?query=SELECT%201"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  worker-write:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server-0:21557 && clickhouse server --config-file /config/worker.yml"
+    depends_on:
+      - server-0
+    environment:
+      - VIRTUAL_WAREHOUSE_ID=vw_write
+      - WORKER_GROUP_ID=wg_write
+      - WORKER_ID=w0
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-multi-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "worker-write-0:21557/?query=SELECT%201"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  worker-default-0:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server-0:21557 && clickhouse server --config-file /config/worker.yml"
+    depends_on:
+      - server-0
+    environment:
+      - VIRTUAL_WAREHOUSE_ID=vw_default
+      - WORKER_GROUP_ID=wg_default
+      - WORKER_ID=r0
+    volumes:
+      - "./byconity-multi-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "worker-default-0:21557/?query=SELECT%201"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  worker-default-1:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server-0:21557 && clickhouse server --config-file /config/worker.yml"
+    depends_on:
+      - server-0
+    environment:
+       - VIRTUAL_WAREHOUSE_ID=vw_default
+       - WORKER_GROUP_ID=wg_default
+       - WORKER_ID=r1
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-multi-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "worker-default-1:21557/?query=SELECT%201"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  worker-default-2:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server-0:21557 && clickhouse server --config-file /config/worker.yml"
+    depends_on:
+      - server-0
+    environment:
+      - VIRTUAL_WAREHOUSE_ID=vw_default
+      - WORKER_GROUP_ID=wg_default
+      - WORKER_ID=r2
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-multi-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - "worker-default-2:21557/?query=SELECT%201"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+  daemon-manager-0:
+    image: ${BYCONITY_IMAGE}
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server-0:21557 && daemon-manager --config-file ./config/daemon-manager.yml"
+    depends_on:
+      - server-0
+    volumes:
+      - ${BYCONITY_BINARY_PATH}/:/opt/local/bin/:ro
+      - "./byconity-multi-cluster/:/config/:ro"
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - daemon-manager-0:17553/status"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    cap_add:
+      - SYS_PTRACE
+    networks:
+      - base_net
+
+networks:
+  base_net:
