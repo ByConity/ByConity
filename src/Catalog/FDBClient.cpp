@@ -125,22 +125,23 @@ fdb_error_t FDBClient::Get(FDBTransactionPtr tr, const std::string & key, GetRes
     return 0;
 }
 
-fdb_error_t FDBClient::Put(FDBTransactionPtr tr, const PutRequest & put)
+fdb_error_t FDBClient::Put(const PutRequest & put)
 {
-    AssertTrsansactionStatus(tr);
-    if (put.if_not_exists || put.expected_value)
-    {
-        GetResponse get_res;
-        Get(tr, std::string(put.key.data, put.key.size), get_res);
-
-        if ((put.if_not_exists && get_res.is_present)
-            || (put.expected_value && std::string_view(put.expected_value.value()) != get_res.value))
-            return FDBError::FDB_not_committed;
-    }
-
+    FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
+    Catalog::MetastoreFDBImpl::check_fdb_op(CreateTransaction(tr));
     unsigned int retry = 3;
     while (retry)
     {
+        if (put.if_not_exists || put.expected_value)
+        {
+            GetResponse get_res;
+            Get(tr, std::string(put.key.data, put.key.size), get_res);
+
+            if ((put.if_not_exists && get_res.is_present)
+                || (put.expected_value && std::string_view(put.expected_value.value()) != get_res.value))
+                return FDBError::FDB_not_committed;
+        }
+
         fdb_transaction_set(tr->transaction, reinterpret_cast<const uint8_t*>(put.key.data), put.key.size, reinterpret_cast<const uint8_t*>(put.value.data), put.value.size);
         FDBFuturePtr f = std::make_shared<FDBFutureRAII>(fdb_transaction_commit(tr->transaction));
         RETURN_ON_ERROR(fdb_future_block_until_ready(f->future));
@@ -364,28 +365,45 @@ fdb_error_t FDBClient::MultiWrite(FDBTransactionPtr tr, const Catalog::BatchComm
     return error_code;
 }
 
-fdb_error_t FDBClient::Delete(FDBTransactionPtr tr, const std::string & key, const std::string & expected)
+fdb_error_t FDBClient::Delete(const std::string & key, const std::string & expected)
 {
-    AssertTrsansactionStatus(tr);
-    if (!expected.empty())
+    fdb_error_t err_code = 0;
+    unsigned int retry = 3;
+    while (retry)
     {
-        FDBFuturePtr f_read = std::make_shared<FDBFutureRAII>(fdb_transaction_get(tr->transaction, reinterpret_cast<const uint8_t*>(key.c_str()), key.size(), 0));
-        RETURN_ON_ERROR(fdb_future_block_until_ready(f_read->future));
-        RETURN_ON_ERROR(fdb_future_get_error(f_read->future));
-        fdb_bool_t present;
-        uint8_t const *outValue;
-        int outValueLength;
-        RETURN_ON_ERROR(fdb_future_get_value(f_read->future, &present, &outValue, &outValueLength));
+        FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
+        Catalog::MetastoreFDBImpl::check_fdb_op(CreateTransaction(tr));
+        if (!expected.empty())
+        {
+            FDBFuturePtr f_read = std::make_shared<FDBFutureRAII>(fdb_transaction_get(tr->transaction, reinterpret_cast<const uint8_t*>(key.c_str()), key.size(), 0));
+            RETURN_ON_ERROR(fdb_future_block_until_ready(f_read->future));
+            RETURN_ON_ERROR(fdb_future_get_error(f_read->future));
+            fdb_bool_t present;
+            uint8_t const *outValue;
+            int outValueLength;
+            RETURN_ON_ERROR(fdb_future_get_value(f_read->future, &present, &outValue, &outValueLength));
 
-        if (!present || (expected.size() != static_cast<size_t>(outValueLength) || memcmp(expected.data(), outValue, outValueLength)))
-            return FDBError::FDB_not_committed;
+            if (!present || (expected.size() != static_cast<size_t>(outValueLength) || memcmp(expected.data(), outValue, outValueLength)))
+                return FDBError::FDB_not_committed;
+        }
+
+        fdb_transaction_clear(tr->transaction, reinterpret_cast<const uint8_t*>(key.c_str()), key.size());
+        FDBFuturePtr f = std::make_shared<FDBFutureRAII>(fdb_transaction_commit(tr->transaction));
+        RETURN_ON_ERROR(fdb_future_block_until_ready(f->future));
+        err_code = fdb_future_get_error(f->future);
+        if (err_code == 0)
+            break;
+        else if (err_code == FDBError::FDB_transaction_too_old ||
+                err_code == FDBError::FDB_transaction_timed_out)
+        {
+            LOG_DEBUG(&Poco::Logger::get("FDBClient::Delete"), "create new transaction to retry because get fdb error {}", fdb_get_error(err_code));
+            tr = std::make_shared<FDB::FDBTransactionRAII>();
+            Catalog::MetastoreFDBImpl::check_fdb_op(CreateTransaction(tr));
+            --retry;
+        }
     }
 
-    fdb_transaction_clear(tr->transaction, reinterpret_cast<const uint8_t*>(key.c_str()), key.size());
-    FDBFuturePtr f = std::make_shared<FDBFutureRAII>(fdb_transaction_commit(tr->transaction));
-    RETURN_ON_ERROR(fdb_future_block_until_ready(f->future));
-    fdb_error_t error_code = fdb_future_get_error(f->future);
-    return error_code;
+    return err_code;
 }
 
 fdb_error_t FDBClient::Clear(FDBTransactionPtr tr, const std::string & start_key, const std::string & end_key)
@@ -474,6 +492,45 @@ bool Iterator::Next(fdb_error_t & code)
             return false;
     }
 }
+
+fdb_error_t FDBClient::Get(const std::string & key, GetResponse & res)
+{
+    const uint8_t* p_key = reinterpret_cast<const uint8_t*>(key.c_str());
+    unsigned int retry = 3;
+    FDBFuturePtr f_read;
+    fdb_error_t err_code = 0;
+    while (retry)
+    {
+        FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
+        Catalog::MetastoreFDBImpl::check_fdb_op(CreateTransaction(tr));
+        f_read = std::make_shared<FDBFutureRAII>(fdb_transaction_get(tr->transaction, p_key, key.size(), 1));
+        RETURN_ON_ERROR(fdb_future_block_until_ready(f_read->future));
+        err_code = fdb_future_get_error(f_read->future);
+        if (err_code == 0)
+            break;
+        else if (err_code == FDBError::FDB_transaction_too_old ||
+                err_code == FDBError::FDB_transaction_timed_out)
+        {
+            LOG_DEBUG(&Poco::Logger::get("FDBClient::Get"), "create new transaction to retry because get fdb error {}", fdb_get_error(err_code));
+            tr = std::make_shared<FDB::FDBTransactionRAII>();
+            Catalog::MetastoreFDBImpl::check_fdb_op(CreateTransaction(tr));
+            --retry;
+        }
+    }
+    RETURN_ON_ERROR(err_code);
+
+    fdb_bool_t present;
+    uint8_t const *outValue;
+    int outValueLength;
+    RETURN_ON_ERROR(fdb_future_get_value(f_read->future, &present, &outValue, &outValueLength));
+    if (present)
+    {
+        res.is_present = true;
+        res.value = std::string(outValue, outValue+outValueLength);
+    }
+    return 0;
+}
+
 
 std::string Iterator::Key()
 {
