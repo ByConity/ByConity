@@ -1,7 +1,7 @@
 BYCONITY_SOURCE=$(realpath ../../..)
 BUILD_TYPE ?= "Release"
 CMAKE_FLAGS ?= ""
-TAG ?= "0.2.1"
+TAG ?= "latest"
 
 pull:
 	docker pull byconity/debian-builder

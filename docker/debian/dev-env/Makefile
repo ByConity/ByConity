@@ -11,7 +11,7 @@ run:
 		-e http_proxy=${http_proxy} \
 		-e https_proxy=${https_proxy} \
 		-v $(HOME)/.m2:/root/.m2 \
-		-v $(HOME)/ck:/root/ck \
+		-v $(BYCONITY_SOURCE):/root/ByConity \
 		-v $(HOME)/.ccache:/root/.ccache \
 		--name $(CONTAINER) \
 		--workdir /root/ByConity \
