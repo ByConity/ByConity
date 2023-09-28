@@ -19,12 +19,16 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/CurrentMetrics.h>
 
 
 /// Available metrics. Add something here as you wish.
 #define APPLY_FOR_METRICS(M) \
     M(Query, "Number of executing queries") \
+    M(DefaultQuery, "Number of default queries") \
+    M(InsertQuery, "Number of insert queries") \
+    M(SystemQuery, "Number of system queries") \
     M(Merge, "Number of executing background merges") \
     M(Manipulation, "Number of execting manipulation tasks") \
     M(Consumer, "Number of consumer task") \
@@ -156,6 +160,15 @@ namespace CurrentMetrics
         };
 
         return strings[event];
+    }
+
+    const DB::String getSnakeName(Metric event)
+    {
+        DB::String res{getName(event)};
+
+        convertCamelToSnake(res);
+
+        return res;
     }
 
     const char * getDocumentation(Metric event)

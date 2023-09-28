@@ -7,6 +7,8 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
+#include <Interpreters/Context_fwd.h>
+#include <Server/ServerPrometheusMetricsWriter.h>
 
 #include <Poco/Util/LayeredConfiguration.h>
 
@@ -27,7 +29,7 @@ void PrometheusRequestHandler::handleRequest(HTTPServerRequest & request, HTTPSe
         WriteBufferFromHTTPServerResponse wb(response, request.getMethod() == Poco::Net::HTTPRequest::HTTP_HEAD, keep_alive_timeout);
         try
         {
-            metrics_writer.write(wb);
+            metrics_writer->write(wb);
             wb.finalize();
         }
         catch (...)
@@ -41,13 +43,12 @@ void PrometheusRequestHandler::handleRequest(HTTPServerRequest & request, HTTPSe
     }
 }
 
-HTTPRequestHandlerFactoryPtr
-createPrometheusHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & config_prefix)
+HTTPRequestHandlerFactoryPtr createPrometheusHandlerFactory(
+    IServer & server, AsynchronousMetrics & async_metrics, const std::string & config_prefix, ContextMutablePtr context)
 {
     auto factory = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
-        server, PrometheusMetricsWriter(server.config(), config_prefix + ".handler", async_metrics));
+        server, std::make_shared<ServerPrometheusMetricsWriter>(server.config(), context, config_prefix + ".handler", async_metrics));
     factory->addFiltersFromConfig(server.config(), config_prefix);
     return factory;
 }
-
 }

@@ -43,6 +43,9 @@
 #include <Poco/Net/NetException.h>
 #include <Server/KeeperTCPHandlerFactory.h>
 #include <TSO/TSOImpl.h>
+#include <Server/HTTPHandlerFactory.h>
+#include <Server/PrometheusRequestHandler.h>
+#include <Server/TSOPrometheusMetricsWriter.h>
 
 using namespace std::chrono;
 
@@ -109,6 +112,7 @@ TSOServer::TSOServer()
     : LeaderElectionBase(config().getInt64("tso_service.election_check_ms", 100))
     , timer(0, TSO_UPDATE_INTERVAL)
     , callback(*this, &TSOServer::updateTSO)
+    , num_yielded_leadership(0)
 {
 }
 
@@ -317,6 +321,10 @@ void TSOServer::exitLeaderElection()
 {
     LOG_INFO(log, "Exit leader election");
 
+    if (tso_service->getIsLeader())
+    {
+        num_yielded_leadership++;
+    }
     tso_service->setIsLeader(false);
     leader_election.reset();
     current_zookeeper.reset();
@@ -348,6 +356,11 @@ void TSOServer::enterLeaderElection()
         /// Zookeeper maybe not ready now
         tryLogCurrentException(__PRETTY_FUNCTION__);
     }
+}
+
+bool TSOServer::getIsLeaderFromTSOService() const
+{
+    return tso_service->getIsLeader();
 }
 
 void TSOServer::createServer(
@@ -538,6 +551,75 @@ int TSOServer::main(const std::vector<std::string> &)
     //     },
     //     /* already_loaded = */ false);  /// Reload it right now (initial loading)
 
+    std::unique_ptr<HTTPServer> http_server;
+
+    Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
+    Poco::Timespan keep_alive_timeout(config().getUInt("tso_service.http.keep_alive_timeout", 10), 0);
+    http_params->setKeepAliveTimeout(keep_alive_timeout);
+
+    for (const auto & listen_host : listen_hosts)
+    {
+        auto create_server = [&](const char * port_name, auto && func)
+        {
+            /// For testing purposes, user may omit tcp_port or http_port or https_port in configuration file.
+            if (!config().has(port_name))
+                return;
+
+            auto port = config().getInt(port_name);
+            try
+            {
+                func(port);
+            }
+            catch (const Poco::Exception &)
+            {
+                std::string message = "Listen [" + listen_host + "]:" + std::to_string(port) + " failed: " + getCurrentExceptionMessage(false);
+
+                if (listen_try)
+                {
+                    LOG_WARNING(&logger(), "{}. If it is an IPv6 or IPv4 address and your host has disabled IPv6 or IPv4, then consider to "
+                        "specify not disabled IPv4 or IPv6 address to listen in <listen_host> element of configuration "
+                        "file. Example for disabled IPv6: <listen_host>0.0.0.0</listen_host> ."
+                        " Example for disabled IPv4: <listen_host>::</listen_host>",
+                        message);
+                }
+                else
+                {
+                    throw Exception{message, ErrorCodes::NETWORK_ERROR};
+                }
+            }
+        };
+
+        create_server("tso_service.http.port", [&](UInt16 port)
+        {
+
+            Poco::Net::ServerSocket socket;
+
+            auto address = socketBindListen(socket, listen_host, port);
+            socket.setReceiveTimeout(config().getInt("tso_service.http.receive_timeout", DEFAULT_HTTP_READ_BUFFER_TIMEOUT));
+            socket.setSendTimeout(config().getInt("tso_service.http.send_timeout", DEFAULT_HTTP_READ_BUFFER_TIMEOUT));
+
+            auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>("TSO-PrometheusHandler-factory");
+            auto handler = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
+                *this, std::make_shared<TSOPrometheusMetricsWriter>(config(), *this, global_context, "tso_service.http.prometheus"));
+            handler->attachStrictPath(config().getString("prometheus.endpoint", "/metrics"));
+            handler->allowGetAndHeadRequest();
+            factory->addHandler(handler);
+
+            http_server = std::make_unique<HTTPServer>(
+                global_context,
+                factory,
+                server_pool,
+                socket,
+                http_params);
+
+
+            LOG_INFO(&logger(), "Listening http://{}", address.toString());
+        });
+    }
+    if (http_server)
+        http_server->start();
+
+
     SCOPE_EXIT({
         LOG_INFO(log, "Shutting down.");
         /// Stop reloading of the main config. This must be done before `global_context->shutdown()` because
@@ -569,6 +651,13 @@ int TSOServer::main(const std::vector<std::string> &)
             LOG_INFO(log, "Closed connections to Keeper. But {} remain. Probably some users cannot finish their connections after context shutdown.", current_connections);
         else
             LOG_INFO(log, "Closed connections to Keeper.");
+
+        if (http_server)
+        {
+            http_server->stop();
+            LOG_INFO(log, "Stop HTTP metrics server.");
+        }
+
 
         global_context->shutdownKeeperDispatcher();
 
