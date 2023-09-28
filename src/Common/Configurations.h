@@ -51,13 +51,13 @@ struct SDConfiguration final : public SDConfigurationData
     M(String, election_prefix, "election_prefix", "", ConfigFlag::Recommended, "common prefix for all election keys") \
     M(String, server_manager_host_path, "server_manager.host_path", "data.cnch.server-election", ConfigFlag::Recommended, "election key of server manager") \
     M(UInt64, server_manager_refresh_interval_ms, "server_manager.refresh_interval_ms", 1000, ConfigFlag::Default, "") \
-    M(UInt64, server_manager_expired_interval_ms, "server_manager.expired_interval_ms", 3000, ConfigFlag::Default, "") \
+    M(UInt64, server_manager_expired_interval_ms, "server_manager.expired_interval_ms", 5000, ConfigFlag::Default, "") \
     M(String, resource_manager_host_path, "resource_manager.host_path", "data.cnch.resource_manager-election", ConfigFlag::Recommended, "election key of resource manager") \
     M(UInt64, resource_manager_refresh_interval_ms, "resource_manager.refresh_interval_ms", 1000, ConfigFlag::Default, "") \
-    M(UInt64, resource_manager_expired_interval_ms, "resource_manager.expired_interval_ms", 3000, ConfigFlag::Default, "") \
+    M(UInt64, resource_manager_expired_interval_ms, "resource_manager.expired_interval_ms", 5000, ConfigFlag::Default, "") \
     M(String, tso_host_path, "tso.host_path", "data.cnch.tso-election", ConfigFlag::Recommended, "election key of tso") \
     M(UInt64, tso_refresh_interval_ms, "tso.refresh_interval_ms", 1000, ConfigFlag::Default, "") \
-    M(UInt64, tso_expired_interval_ms, "tso.expired_interval_ms", 3000, ConfigFlag::Default, "") \
+    M(UInt64, tso_expired_interval_ms, "tso.expired_interval_ms", 5000, ConfigFlag::Default, "") \
 
 DECLARE_CONFIG_DATA(SDKVConfigurationData, SDKV_CONFIG_FIELDS_LIST)
 
