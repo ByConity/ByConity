@@ -26,6 +26,7 @@
 #include <Poco/Timer.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <Interpreters/Context_fwd.h>
+#include <Server/HTTP/HTTPServer.h>
 
 
 #define TSO_VERSION "1.0.0"
@@ -83,6 +84,10 @@ public:
         return BaseDaemon::isCancelled();
     }
 
+    /// Functions for exposing metrics
+    int getNumYieldedLeadership() const { return num_yielded_leadership; }
+    bool getIsLeaderFromTSOService() const;
+
 protected:
     int run() override;
 
@@ -112,6 +117,9 @@ private:
 
     /// keep tcp servers for clickhouse-keeper
     std::vector<ProtocolServerAdapterPtr> keeper_servers;
+
+    // Metrics
+    int num_yielded_leadership;
 
     void onLeader() override;
     void exitLeaderElection() override;

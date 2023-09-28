@@ -52,16 +52,16 @@ public:
 
         if (global_context->getServerType() == ServerType::cnch_server)
         {
-            REGISTER_SERVER_SERVICES();
+            REGISTER_SERVER_SERVICES()
         }
         else if (global_context->getServerType() == ServerType::cnch_worker)
         {
-            REGISTER_WORKER_SERVICES();
+            REGISTER_WORKER_SERVICES()
         }
 
         if (global_context->getComplexQueryActive())
         {
-            REGISTER_COMPLEX_QUERY_SERVICES();
+            REGISTER_COMPLEX_QUERY_SERVICES()
         }
 
         if (rpc_server->Start(host_port.c_str(), &options) != 0)

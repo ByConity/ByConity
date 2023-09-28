@@ -21,6 +21,7 @@
 
 #include <Common/ProfileEvents.h>
 #include <Common/CurrentThread.h>
+#include <Common/StringUtils/StringUtils.h>
 #include <Common/typeid_cast.h>
 #include <Columns/ColumnArray.h>
 
@@ -845,18 +846,24 @@ constexpr Event END = __COUNTER__;
 
 /// Global variable, initialized by zeros.
 Counter global_counters_array[END] {};
+LabelledCounter global_labelled_counters_array[END] {};
+std::mutex global_labelled_counters_locks[END] {};
 /// Initialize global counters statically
-Counters global_counters(global_counters_array);
+Counters global_counters(global_counters_array, global_labelled_counters_array, global_labelled_counters_locks);
 
 const Event Counters::num_counters = END;
 
 
 Counters::Counters(VariableContext level_, Counters * parent_)
     : counters_holder(new Counter[num_counters] {}),
+      labelled_counters_holder(new LabelledCounter[num_counters] {}),
+      labelled_counters_locks_holder(new std::mutex[num_counters] {}),
       parent(parent_),
       level(level_)
 {
     counters = counters_holder.get();
+    labelled_counters = labelled_counters_holder.get();
+    labelled_counters_locks = labelled_counters_locks_holder.get();
 }
 
 void Counters::resetCounters()
@@ -866,6 +873,11 @@ void Counters::resetCounters()
         for (Event i = 0; i < num_counters; ++i)
             counters[i].store(0, std::memory_order_relaxed);
     }
+    if (labelled_counters)
+    {
+        for (Event i = 0; i < num_counters; ++i)
+            labelled_counters[i].clear();
+    }
 }
 
 void Counters::reset()
@@ -874,17 +886,22 @@ void Counters::reset()
     resetCounters();
 }
 
+uint64_t Counters::getIOReadTime() const
+{
+    if (counters)
+        return counters[ProfileEvents::HDFSReadElapsedMilliseconds] * 1000 + counters[ProfileEvents::DiskReadElapsedMicroseconds];
+    return 0;
+}
+
 Counters Counters::getPartiallyAtomicSnapshot() const
 {
     Counters res(VariableContext::Snapshot, nullptr);
     for (Event i = 0; i < num_counters; ++i)
+    {
         res.counters[i].store(counters[i].load(std::memory_order_relaxed), std::memory_order_relaxed);
+        res.labelled_counters[i] = getLabelledCounters(i);
+    }
     return res;
-}
-
-uint64_t Counters::getIOReadTime() const
-{
-    return counters[ProfileEvents::HDFSReadElapsedMilliseconds] * 1000 + counters[ProfileEvents::DiskReadElapsedMicroseconds];
 }
 
 const char * getName(Event event)
@@ -897,6 +914,15 @@ const char * getName(Event event)
     };
 
     return strings[event];
+}
+
+const DB::String getSnakeName(Event event)
+{
+    DB::String res{getName(event)};
+
+    convertCamelToSnake(res);
+
+    return res;
 }
 
 const char * getDocumentation(Event event)
@@ -914,10 +940,13 @@ const char * getDocumentation(Event event)
 
 Event end() { return END; }
 
-
-void increment(Event event, Count amount)
+void increment(Event event, Count amount, MetricLabels labels, Metrics::MetricType type, time_t ts)
 {
-    DB::CurrentThread::getProfileEvents().increment(event, amount);
+    DB::CurrentThread::getProfileEvents().increment(event, amount, labels);
+    if (type != Metrics::MetricType::None)
+    {
+        Metrics::EmitMetric(type, getSnakeName(event), amount, LabelledMetrics::toString(labels), ts);
+    }
 }
 
 }
