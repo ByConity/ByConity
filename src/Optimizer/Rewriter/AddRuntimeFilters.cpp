@@ -111,6 +111,7 @@ PlanNodePtr AddRuntimeFilters::AddRuntimeFilterRewriter::visitJoinNode(JoinNode 
         join.getJoinAlgorithm(),
         join.isMagic(),
         join.isOrdered(),
+        join.isSimpleReordered(),
         runtime_filter_builders,
         join.getHints());
 
@@ -122,7 +123,7 @@ PlanNodePtr AddRuntimeFilters::AddRuntimeFilterRewriter::visitJoinNode(JoinNode 
                 context->nextNodeId(),
                 std::make_shared<FilterStep>(node.getChildren()[0]->getStep()->getOutputStream(), PredicateUtils::combineConjuncts(probes)),
                 PlanNodes{left}),
-            node.getChildren()[1]},
+            right},
         node.getStatistics());
 }
 
@@ -462,6 +463,7 @@ PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterProbRewriter::visitJoinN
             join_step->getJoinAlgorithm(),
             join_step->isMagic(),
             join_step->isOrdered(),
+            join_step->isSimpleReordered(),
             join_step->getRuntimeFilterBuilders(),
             join_step->getHints()),
         PlanNodes{left, right},
@@ -548,6 +550,7 @@ PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterBuildRewriter::visitJoin
         join_step->getJoinAlgorithm(),
         join_step->isMagic(),
         join_step->isOrdered(),
+        join_step->isSimpleReordered(),
         LinkedHashMap<String, RuntimeFilterBuildInfos>{runtime_filter_builders.begin(), runtime_filter_builders.end()},
         join_step->getHints());
 

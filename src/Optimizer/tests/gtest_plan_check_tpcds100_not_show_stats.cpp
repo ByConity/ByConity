@@ -1,6 +1,8 @@
 #include <Optimizer/tests/gtest_base_tpcds_plan_test.h>
 
 #include <Optimizer/Iterative/IterativeRewriter.h>
+#include <Optimizer/tests/gtest_base_tpcds_plan_test.h>
+#include <QueryPlan/PlanPrinter.h>
 #include <gtest/gtest.h>
 
 using namespace DB;
@@ -22,15 +24,10 @@ public:
         tester.reset();
     }
 
-    static std::string explain(const std::string & name)
-    {
-        return tester->explain(name);
-    }
 
-    static std::string expected(const std::string & name)
-    {
-        return tester->loadExplain(name);
-    }
+    static std::string explain(const std::string & name) { return tester->explain(name); }
+
+    static std::string expected(const std::string & name) { return tester->loadExplain(name); }
 
     static testing::AssertionResult equals(const std::string & actual, const std::string & expected)
     {
@@ -546,6 +543,6 @@ TEST_F(PlanCheckTpcds100NotShowStats, q99)
 TEST_F(PlanCheckTpcds100NotShowStats, summary)
 {
     std::cout << "rule call times:" << std::endl;
-    for (const auto & x: IterativeRewriter::getRuleCallTimes())
+    for (const auto & x : IterativeRewriter::getRuleCallTimes())
         std::cout << x.first << ": " << x.second << std::endl;
 }

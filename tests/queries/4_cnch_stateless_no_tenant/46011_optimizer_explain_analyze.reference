@@ -20,7 +20,6 @@ Gather Exchange
 Gather Exchange
 └─ Aggregating
    │     Group by: {id}
-   │     Aggregates: id_1:=AggNull(any)(id_1)
    └─ Inner Join
       │     Condition: id == id_1
       ├─ Repartition Exchange

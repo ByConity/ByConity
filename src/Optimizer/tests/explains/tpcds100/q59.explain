@@ -76,6 +76,7 @@ Projection Est. 100 rows
                   │     Condition: ss_store_sk_1 == s_store_sk
                   ├─ Inner Join Est. 66132 rows
                   │  │     Condition: d_week_seq_1 == d_week_seq_2
+                  │  │     Runtime Filters Builder: {d_week_seq_2}
                   │  ├─ Repartition Exchange Est. 9306 rows
                   │  │  │     Partition by: {d_week_seq_1}
                   │  │  └─ Projection Est. 9306 rows
@@ -114,9 +115,9 @@ Projection Est. 100 rows
                   │  │                                      └─ Projection Est. 334 rows
                   │  │                                         │     Expressions: d_week_seq_6:=d_week_seq_2
                   │  │                                         └─ Filter Est. 334 rows
-                  │  │                                            │     Condition: (d_month_seq >= 1212) AND (d_month_seq <= 1223)
+                  │  │                                            │     Condition: (d_month_seq >= 1212) AND (d_month_seq <= 1223) Runtime Filters: {d_week_seq_2}
                   │  │                                            └─ TableScan tpcds100.date_dim Est. 73049 rows
-                  │  │                                                     Where: (d_month_seq >= 1212) AND (d_month_seq <= 1223)
+                  │  │                                                     Where: (d_month_seq >= 1212) AND (d_month_seq <= 1223) Runtime Filters: {d_week_seq}
                   │  │                                                     Outputs: [d_month_seq], d_week_seq_2:=d_week_seq
                   │  └─ Repartition Exchange Est. 334 rows
                   │     │     Partition by: {d_week_seq_2}
@@ -129,4 +130,4 @@ Projection Est. 100 rows
                      └─ TableScan tpcds100.store Est. 402 rows
                               Outputs: [s_store_id, s_store_name, s_store_sk]
 note: Magic Set is applied for 2 parts.
-note: Runtime Filter is applied for 6 times.
+note: Runtime Filter is applied for 8 times.

@@ -1373,7 +1373,7 @@ void registerStorageDistributed(StorageFactory & factory)
             auto type = block.getByPosition(0).type;
 
             if (!type->isValueRepresentedByInteger())
-                throw Exception("Sharding expression has type " + type->getName() +
+                throw Exception("Sharding expression " + block.getNames()[0] + " has type " + type->getName() +
                     ", but should be one of integer type", ErrorCodes::TYPE_MISMATCH);
         }
 

@@ -475,7 +475,8 @@ void OptimizeInput::execute()
                 output_prop = cte_def_best_expr->getActualProperty().translate(cte_step->getReverseOutputColumns());
                 cte_actual_props.emplace(cte_id, std::make_pair(cte_global_property, cte_def_best_expr->getCost()));
             }
-            else if (context->getOptimizerContext().isEnableWhatIfMode() && group_expr->getStep()->getType() == IQueryPlanStep::Type::TableScan)
+            else if (
+                context->getOptimizerContext().isEnableWhatIfMode() && group_expr->getStep()->getType() == IQueryPlanStep::Type::TableScan)
             {
                 const auto * table_scan_step = dynamic_cast<const TableScanStep *>(group_expr->getStep().get());
 
@@ -484,7 +485,8 @@ void OptimizeInput::execute()
                     translation.emplace(item.first, item.second);
 
                 output_prop = PropertyDeriver::deriveStoragePropertyWhatIfMode(
-                    table_scan_step->getStorage(), context->getOptimizerContext().getContext(), context->getRequiredProp()).translate(translation);
+                                  table_scan_step->getStorage(), context->getOptimizerContext().getContext(), context->getRequiredProp())
+                                  .translate(translation);
             }
             else
             {
@@ -616,8 +618,7 @@ void OptimizeInput::execute()
 void OptimizeInput::initInputProperties()
 {
     // initialize input properties with default required property.
-    auto required_properties = PropertyDeterminer::determineRequiredProperty(
-        group_expr->getStep(), context->getRequiredProp(), *context->getOptimizerContext().getContext());
+    auto required_properties = PropertyDeterminer::determineRequiredProperty(group_expr->getStep(), context->getRequiredProp(), *context->getOptimizerContext().getContext());
     for (auto & properties : required_properties)
     {
         for (size_t i = 0; i < properties.size(); ++i)

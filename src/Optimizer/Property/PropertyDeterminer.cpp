@@ -45,6 +45,8 @@ PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step
     return input_properties;
 }
 
+
+
 PropertySets DeterminerVisitor::visitStep(const IQueryPlanStep &, DeterminerContext & context)
 {
     return {{context.getRequired()}};
@@ -175,7 +177,6 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
         prop_set.emplace_back(right);
         result.emplace_back(prop_set);
     }
-
     return result;
 }
 

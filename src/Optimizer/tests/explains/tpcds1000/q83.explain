@@ -75,6 +75,7 @@ Projection Est. 100 rows
                │                                                                 Outputs: d_date_5:=d_date, d_week_seq_3:=d_week_seq
                └─ Inner Join Est. 31132 rows
                   │     Condition: i_item_id == i_item_id_2
+                  │     Runtime Filters Builder: {i_item_id_2}
                   ├─ MergingAggregated Est. 124534 rows
                   │  └─ Repartition Exchange Est. 124703 rows
                   │     │     Partition by: {i_item_id}
@@ -87,9 +88,9 @@ Projection Est. 100 rows
                   │           ├─ Repartition Exchange Est. 300000 rows
                   │           │  │     Partition by: {i_item_sk}
                   │           │  └─ Filter Est. 300000 rows
-                  │           │     │     Condition: Runtime Filters: {i_item_sk}
+                  │           │     │     Condition: Runtime Filters: {i_item_id, i_item_sk}
                   │           │     └─ TableScan tpcds1000.item Est. 300000 rows
-                  │           │              Where: Runtime Filters: {i_item_sk}
+                  │           │              Where: Runtime Filters: {i_item_id, i_item_sk}
                   │           │              Outputs: [i_item_id, i_item_sk]
                   │           └─ Repartition Exchange Est. 124534 rows
                   │              │     Partition by: {sr_item_sk}
@@ -197,4 +198,4 @@ Projection Est. 100 rows
                                                                            └─ TableScan tpcds1000.date_dim Est. 73049 rows
                                                                                     Where: (d_date IN (cast(11138, 'Date'), cast(11227, 'Date'), cast(11278, 'Date'))) AND isNotNull(d_week_seq)
                                                                                     Outputs: d_date_8:=d_date, d_week_seq_5:=d_week_seq
-note: Runtime Filter is applied for 10 times.
+note: Runtime Filter is applied for 11 times.

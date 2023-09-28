@@ -42,22 +42,22 @@ TransformResult DistinctToAggregate::transformImpl(PlanNodePtr node, const Captu
         NamesAndTypes arbitrary_names;
 
         // check decimal type, which is not support for group by columns
-        bool has_decimal_type = false;
-        for (const auto & column : node->getStep()->getOutputStream().header)
-        {
-            TypeIndex index = column.type->getTypeId();
-            if (index == TypeIndex::Decimal32 || index == TypeIndex::Decimal64 || index == TypeIndex::Decimal128)
-            {
-                has_decimal_type = true;
-                break;
-            }
-            if (!name_set.contains(column.name))
-                arbitrary_names.emplace_back(column.name, column.type);
-        }
-        if (has_decimal_type)
-        {
-            return {};
-        }
+        // bool has_decimal_type = false;
+        // for (const auto & column : node->getStep()->getOutputStream().header)
+        // {
+        //     TypeIndex index = column.type->getTypeId();
+        //     if (index == TypeIndex::Decimal32 || index == TypeIndex::Decimal64 || index == TypeIndex::Decimal128)
+        //     {
+        //         has_decimal_type = true;
+        //         break;
+        //     }
+        //     if (!name_set.contains(column.name))
+        //         arbitrary_names.emplace_back(column.name, column.type);
+        // }
+        // if (has_decimal_type)
+        // {
+        //     return {};
+        // }
 
         AggregateDescriptions descriptions;
         for (auto & name_and_type : arbitrary_names)

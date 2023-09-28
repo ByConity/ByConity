@@ -807,6 +807,7 @@ TEST_F(ProtobufTest, JoinStep)
         auto join_algorithm = static_cast<JoinAlgorithm>(eng() % 3);
         auto is_magic = eng() % 2 == 1;
         auto is_ordered = eng() % 2 == 1;
+        auto simple_reordered = false;
         LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders;
         runtime_filter_builders.emplace("a", generateRuntimeFilterBuildInfos(eng));
         runtime_filter_builders.emplace("b", generateRuntimeFilterBuildInfos(eng));
@@ -826,7 +827,8 @@ TEST_F(ProtobufTest, JoinStep)
             distribution_type,
             join_algorithm,
             is_magic,
-            is_ordered);
+            is_ordered,
+            simple_reordered);
         step->setStepDescription(step_description);
         return step;
     }();

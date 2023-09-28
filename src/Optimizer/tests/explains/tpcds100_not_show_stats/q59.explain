@@ -76,6 +76,7 @@ Projection
                   │     Condition: ss_store_sk_1 == s_store_sk
                   ├─ Inner Join
                   │  │     Condition: d_week_seq_1 == d_week_seq_2
+                  │  │     Runtime Filters Builder: {d_week_seq_2}
                   │  ├─ Repartition Exchange
                   │  │  │     Partition by: {d_week_seq_1}
                   │  │  └─ Projection
@@ -114,9 +115,9 @@ Projection
                   │  │                                      └─ Projection
                   │  │                                         │     Expressions: d_week_seq_6:=d_week_seq_2
                   │  │                                         └─ Filter
-                  │  │                                            │     Condition: (d_month_seq >= 1212) AND (d_month_seq <= 1223)
+                  │  │                                            │     Condition: (d_month_seq >= 1212) AND (d_month_seq <= 1223) Runtime Filters: {d_week_seq_2}
                   │  │                                            └─ TableScan tpcds100.date_dim
-                  │  │                                                     Where: (d_month_seq >= 1212) AND (d_month_seq <= 1223)
+                  │  │                                                     Where: (d_month_seq >= 1212) AND (d_month_seq <= 1223) Runtime Filters: {d_week_seq}
                   │  │                                                     Outputs: [d_month_seq], d_week_seq_2:=d_week_seq
                   │  └─ Repartition Exchange
                   │     │     Partition by: {d_week_seq_2}
@@ -129,4 +130,4 @@ Projection
                      └─ TableScan tpcds100.store
                               Outputs: [s_store_id, s_store_name, s_store_sk]
 note: Magic Set is applied for 2 parts.
-note: Runtime Filter is applied for 6 times.
+note: Runtime Filter is applied for 8 times.

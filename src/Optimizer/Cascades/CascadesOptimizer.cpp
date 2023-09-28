@@ -211,19 +211,11 @@ CascadesContext::CascadesContext(ContextMutablePtr context_, CTEInfo & cte_info_
     , task_execution_timeout(context->getSettingsRef().cascades_optimizer_timeout)
     , log(&Poco::Logger::get("CascadesOptimizer"))
 {
+    LOG_DEBUG(log, "max join size: {}", max_join_size_);
     implementation_rules.emplace_back(std::make_shared<SetJoinDistribution>());
 
-    if (context->getSettingsRef().enable_join_reorder)
-    {
-        if (max_join_size_ <= context->getSettingsRef().max_graph_reorder_size)
-        {
-            transformation_rules.emplace_back(std::make_shared<JoinEnumOnGraph>(support_filter));
-        }
-        else
-        {
-            transformation_rules.emplace_back(std::make_shared<InnerJoinCommutation>());
-        }
-    }
+    transformation_rules.emplace_back(std::make_shared<JoinEnumOnGraph>(support_filter));
+    transformation_rules.emplace_back(std::make_shared<InnerJoinCommutation>());
 
     // left join inner join reorder q78, 80
     transformation_rules.emplace_back(std::make_shared<PullLeftJoinThroughInnerJoin>());

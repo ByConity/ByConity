@@ -26,12 +26,13 @@ Projection Est. 100 rows
                │     │              Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
                │     └─ Inner Join Est. 359601 rows
                │        │     Condition: p_partkey == ps_partkey_1
+               │        │     Runtime Filters Builder: {ps_partkey_1}
                │        ├─ Repartition Exchange Est. 359601 rows
                │        │  │     Partition by: {p_partkey}
                │        │  └─ Filter Est. 359601 rows
-               │        │     │     Condition: (p_size = 15) AND (p_type LIKE '%BRASS')
+               │        │     │     Condition: (p_size = 15) AND (p_type LIKE '%BRASS') Runtime Filters: {p_partkey}
                │        │     └─ TableScan tpch100.part Est. 20000000 rows
-               │        │              Where: (p_size = 15) AND (p_type LIKE '%BRASS')
+               │        │              Where: (p_size = 15) AND (p_type LIKE '%BRASS') Runtime Filters: {p_partkey}
                │        │              Outputs: [p_mfgr, p_partkey, p_size, p_type]
                │        └─ Repartition Exchange Est. 359601 rows
                │           │     Partition by: {ps_partkey_1}
@@ -113,4 +114,4 @@ Projection Est. 100 rows
                                           Where: r_name = 'EUROPE'
                                           Outputs: [r_name, r_regionkey]
 note: Magic Set is applied for 1 parts.
-note: Runtime Filter is applied for 7 times.
+note: Runtime Filter is applied for 8 times.

@@ -682,6 +682,7 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, NameSet & requi
         step->getJoinAlgorithm(),
         step->isMagic(),
         step->isOrdered(),
+        step->isSimpleReordered(),
         step->getRuntimeFilterBuilders(),
         step->getHints());
 

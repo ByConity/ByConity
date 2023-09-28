@@ -1070,16 +1070,16 @@ void PlanSegmentNodePrinter::printNode(
     if (with_id)
         out << "|" << node->id;
 
-    //    if (node.getStatistics().isDerived())
-    //    {
-    //        out << "|";
-    //        out << "Stats \\n";
-    //        auto statistics = node.getStatistics();
-    //        if (statistics)
-    //            out << statistics.value()->toString();
-    //        else
-    //            out << "None";
-    //    }
+//    if (node.getStatistics().isDerived())
+//    {
+//        out << "|";
+//        out << "Stats \\n";
+//        auto statistics = node.getStatistics();
+//        if (statistics)
+//            out << statistics.value()->toString();
+//        else
+//            out << "None";
+//    }
 
     String style = context.is_magic ? "rounded, filled, dashed" : "rounded, filled";
 
@@ -3431,20 +3431,22 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
 
     if (group.isMagic())
     {
-        out << "<TR><TD COLSPAN=\"3\">Magic</TD></TR>";
+        out << "<TR><TD COLSPAN=\"3\">MagicSet</TD></TR>";
     }
 
     for (const auto & join_set : group.getJoinSets())
     {
-        out << "<TR><TD COLSPAN=\"3\">Magic";
-        if (join_set.getGroups().size() > 1)
+        if (join_set.getGroups().size() <= 1)
+            continue;
+
+        out << "<TR><TD COLSPAN=\"3\">JoinSet: ";
+        for (size_t i = 0; i < join_set.getGroups().size(); i++)
         {
-            for (const auto group_id : join_set.getGroups())
-            {
-                out << group_id << ",";
-            }
-            out << "; ";
+            if (i != 0)
+                out << ",";
+            out << join_set.getGroups()[i];
         }
+        out << "; ";
         out << "</TD></TR>";
     }
 
@@ -3453,9 +3455,9 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
         out << "<TR><TD COLSPAN=\"3\">";
         if (group.getStatistics())
         {
-            // auto stats = escapeSpecialCharacters(group.getStatistics().value()->toString());
-            // boost::replace_all(stats, "\\n", "<BR/>");
-            // out << stats;
+            auto stats = escapeSpecialCharacters(group.getStatistics().value()->toString());
+            boost::replace_all(stats, "\\n", "<BR/>");
+            out << stats;
         }
         else
         {
@@ -3509,6 +3511,10 @@ String GraphvizPrinter::printGroup(const Group & group, const std::unordered_map
                 if (partitioning.isEnforceRoundRobin())
                 {
                     result += " RoundR";
+                }
+                if (partitioning.isRequireHandle())
+                {
+                    result += " handle";
                 }
                 return result;
             }
