@@ -1,0 +1,6 @@
+/tmp/test_dump_ddl.zip	1	0
+/tmp/test_dump_query.zip	1	1
+test_workload_dump		created database or table
+test_workload_dump	test_tb	created table and loaded stats
+test_workload_dump		created database or table
+test_workload_dump	test_tb	created table and loaded stats

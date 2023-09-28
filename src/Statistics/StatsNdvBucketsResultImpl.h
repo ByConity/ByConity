@@ -14,7 +14,7 @@
  */
 
 #pragma once
-#include <Optimizer/Dump/Json2Pb.h>
+#include <Optimizer/Dump/ProtoEnumUtils.h>
 #include <Statistics/BucketBoundsImpl.h>
 #include <Statistics/SerdeUtils.h>
 #include <Statistics/StatsHllSketch.h>
