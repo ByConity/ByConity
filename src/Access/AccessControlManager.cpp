@@ -384,8 +384,8 @@ void AccessControlManager::addStoragesFromMainConfig(
     // if (!disk_storage_dir.empty())
     //     addDiskStorage(disk_storage_dir);
 
-    // if (has_user_directories)
-    //     addStoragesFromUserDirectoriesConfig(config, "user_directories", config_dir, dbms_dir, include_from_path, get_zookeeper_function);
+    if (has_user_directories)
+        addStoragesFromUserDirectoriesConfig(config, "user_directories", config_dir, dbms_dir, include_from_path, get_zookeeper_function);
 }
 
 

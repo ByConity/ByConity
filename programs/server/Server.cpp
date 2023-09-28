@@ -1012,7 +1012,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /* already_loaded = */ false);  /// Reload it right now (initial loading)
 
     auto & access_control = global_context->getAccessControlManager();
-    access_control.addKVStorage(global_context);
     if (config().has("custom_settings_prefixes"))
         access_control.setCustomSettingsPrefixes(config().getString("custom_settings_prefixes"));
 
@@ -1037,6 +1036,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Initialize access storages.
     access_control.addStoragesFromMainConfig(config(), config_path, [&] { return global_context->getZooKeeper(); });
+    access_control.addKVStorage(global_context);
 
     /// Reload config in SYSTEM RELOAD CONFIG query.
     global_context->setConfigReloadCallback([&]()
