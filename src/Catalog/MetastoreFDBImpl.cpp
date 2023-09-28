@@ -145,10 +145,7 @@ bool MetastoreFDBImpl::batchWrite(const BatchCommitRequest & req, BatchCommitRes
     FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
     check_fdb_op(fdb_client->CreateTransaction(tr));
     fdb_error_t error_code = fdb_client->MultiWrite(tr, req, response);
-    if (error_code == FDB::FDBError::FDB_not_committed && !response.puts.empty())
-        return false;
-    else
-        check_fdb_op(error_code);
+    check_fdb_op(error_code);
 
     return true;
 }
