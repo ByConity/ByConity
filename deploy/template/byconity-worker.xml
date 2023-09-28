@@ -336,18 +336,4 @@
     </storage_configuration>
 
     <hdfs_nnproxy>hdfs://127.0.0.1:9110</hdfs_nnproxy>
-    <service_discovery_kv>
-        <server_manager>
-            <refresh_interval_ms>2000</refresh_interval_ms>
-            <expired_interval_ms>6000</expired_interval_ms>
-        </server_manager>
-        <resource_manager>
-            <refresh_interval_ms>2000</refresh_interval_ms>
-            <expired_interval_ms>6000</expired_interval_ms>
-        </resource_manager>
-        <tso>
-            <refresh_interval_ms>2000</refresh_interval_ms>
-            <expired_interval_ms>6000</expired_interval_ms>
-        </tso>
-    </service_discovery_kv>
 </yandex>
