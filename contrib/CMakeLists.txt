@@ -373,3 +373,9 @@ if (ENABLE_BENCHMARK)
 endif()
 
 add_subdirectory(hivemetastore-cmake)
+
+set(BUILD_SHARED_LIBS_BEFORE_MSGPACK ${BUILD_SHARED_LIBS})
+unset (BUILD_SHARED_LIBS)
+add_subdirectory(msgpack-c)
+set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_BEFORE_MSGPACK})
+unset(BUILD_SHARED_LIBS_BEFORE_MSGPACK)

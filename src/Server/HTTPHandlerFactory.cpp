@@ -1,19 +1,21 @@
 #include <Server/HTTPHandlerFactory.h>
 
-#include <Server/HTTP/HTTPRequestHandler.h>
-#include <Server/IServer.h>
 #include <Access/Credentials.h>
 #include <Interpreters/Context.h>
+#include <Server/HTTP/HTTPRequestHandler.h>
+#include <Server/IServer.h>
 
 #include <Poco/Util/LayeredConfiguration.h>
 
-#include "HTTPHandler.h"
-#include "NotFoundHandler.h"
-#include "StaticRequestHandler.h"
-#include "ReplicasStatusHandler.h"
-#include "InterserverIOHTTPHandler.h"
-#include "PrometheusRequestHandler.h"
-#include "WebUIRequestHandler.h"
+#include <Interpreters/Context_fwd.h>
+#include <Server/HTTPHandler.h>
+#include <Server/InterserverIOHTTPHandler.h>
+#include <Server/NotFoundHandler.h>
+#include <Server/PrometheusRequestHandler.h>
+#include <Server/ReplicasStatusHandler.h>
+#include <Server/ServerPrometheusMetricsWriter.h>
+#include <Server/StaticRequestHandler.h>
+#include <Server/WebUIRequestHandler.h>
 
 
 namespace DB
@@ -27,7 +29,8 @@ namespace ErrorCodes
 }
 
 static void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server);
-static void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics);
+static void addDefaultHandlersFactory(
+    HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics, ContextMutablePtr context);
 
 HTTPRequestHandlerFactoryMain::HTTPRequestHandlerFactoryMain(const std::string & name_)
     : log(&Poco::Logger::get(name_)), name(name_)
@@ -59,7 +62,7 @@ std::unique_ptr<HTTPRequestHandler> HTTPRequestHandlerFactoryMain::createRequest
 }
 
 static inline auto createHandlersFactoryFromConfig(
-    IServer & server, const std::string & name, const String & prefix, AsynchronousMetrics & async_metrics)
+    IServer & server, const std::string & name, const String & prefix, AsynchronousMetrics & async_metrics, ContextMutablePtr context)
 {
     auto main_handler_factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
 
@@ -70,7 +73,7 @@ static inline auto createHandlersFactoryFromConfig(
     {
         if (key == "defaults")
         {
-            addDefaultHandlersFactory(*main_handler_factory, server, async_metrics);
+            addDefaultHandlersFactory(*main_handler_factory, server, async_metrics, context);
         }
         else if (startsWith(key, "rule"))
         {
@@ -87,7 +90,7 @@ static inline auto createHandlersFactoryFromConfig(
             else if (handler_type == "predefined_query_handler")
                 main_handler_factory->addHandler(createPredefinedHandlerFactory(server, prefix + "." + key));
             else if (handler_type == "prometheus")
-                main_handler_factory->addHandler(createPrometheusHandlerFactory(server, async_metrics, prefix + "." + key));
+                main_handler_factory->addHandler(createPrometheusHandlerFactory(server, async_metrics, prefix + "." + key, context));
             else if (handler_type == "replicas_status")
                 main_handler_factory->addHandler(createReplicasStatusHandlerFactory(server, prefix + "." + key));
             else
@@ -103,16 +106,16 @@ static inline auto createHandlersFactoryFromConfig(
 }
 
 static inline HTTPRequestHandlerFactoryPtr
-createHTTPHandlerFactory(IServer & server, const std::string & name, AsynchronousMetrics & async_metrics)
+createHTTPHandlerFactory(IServer & server, const std::string & name, AsynchronousMetrics & async_metrics, ContextMutablePtr context)
 {
     if (server.config().has("http_handlers"))
     {
-        return createHandlersFactoryFromConfig(server, name, "http_handlers", async_metrics);
+        return createHandlersFactoryFromConfig(server, name, "http_handlers", async_metrics, context);
     }
     else
     {
         auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
-        addDefaultHandlersFactory(*factory, server, async_metrics);
+        addDefaultHandlersFactory(*factory, server, async_metrics, context);
         return factory;
     }
 }
@@ -129,17 +132,18 @@ static inline HTTPRequestHandlerFactoryPtr createInterserverHTTPHandlerFactory(I
     return factory;
 }
 
-HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & name)
+HTTPRequestHandlerFactoryPtr
+createHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & name, ContextMutablePtr context)
 {
     if (name == "HTTPHandler-factory" || name == "HTTPSHandler-factory")
-        return createHTTPHandlerFactory(server, name, async_metrics);
+        return createHTTPHandlerFactory(server, name, async_metrics, context);
     else if (name == "InterserverIOHTTPHandler-factory" || name == "InterserverIOHTTPSHandler-factory")
         return createInterserverHTTPHandlerFactory(server, name);
     else if (name == "PrometheusHandler-factory")
     {
         auto factory = std::make_shared<HTTPRequestHandlerFactoryMain>(name);
         auto handler = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
-            server, PrometheusMetricsWriter(server.config(), "prometheus", async_metrics));
+            server, std::make_shared<ServerPrometheusMetricsWriter>(server.config(), context, "prometheus", async_metrics));
         handler->attachStrictPath(server.config().getString("prometheus.endpoint", "/metrics"));
         handler->allowGetAndHeadRequest();
         factory->addHandler(handler);
@@ -175,7 +179,8 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
     factory.addHandler(web_ui_handler);
 }
 
-void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics)
+void addDefaultHandlersFactory(
+    HTTPRequestHandlerFactoryMain & factory, IServer & server, AsynchronousMetrics & async_metrics, ContextMutablePtr context)
 {
     addCommonDefaultHandlersFactory(factory, server);
 
@@ -188,7 +193,7 @@ void addDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IServer 
     if (server.config().has("prometheus") && server.config().getInt("prometheus.port", 0) == 0)
     {
         auto prometheus_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<PrometheusRequestHandler>>(
-            server, PrometheusMetricsWriter(server.config(), "prometheus", async_metrics));
+            server, std::make_shared<ServerPrometheusMetricsWriter>(server.config(), context, "prometheus", async_metrics));
         prometheus_handler->attachStrictPath(server.config().getString("prometheus.endpoint", "/metrics"));
         prometheus_handler->allowGetAndHeadRequest();
         factory.addHandler(prometheus_handler);

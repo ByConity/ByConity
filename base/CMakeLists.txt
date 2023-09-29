@@ -10,6 +10,7 @@ add_subdirectory (widechar_width)
 add_subdirectory (readpassphrase)
 add_subdirectory (bridge)
 add_subdirectory (libbiginteger)
+add_subdirectory (metrics2)
 
 if (USE_MYSQL)
     add_subdirectory (mysqlxx)

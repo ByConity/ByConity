@@ -6,6 +6,7 @@
 #include <Server/HTTPHandlerRequestFilter.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <common/logger_useful.h>
+#include <Interpreters/Context_fwd.h>
 
 #include <Poco/Util/LayeredConfiguration.h>
 
@@ -132,7 +133,7 @@ HTTPRequestHandlerFactoryPtr createPredefinedHandlerFactory(IServer & server, co
 HTTPRequestHandlerFactoryPtr createReplicasStatusHandlerFactory(IServer & server, const std::string & config_prefix);
 
 HTTPRequestHandlerFactoryPtr
-createPrometheusHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & config_prefix);
+createPrometheusHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & config_prefix, ContextMutablePtr context);
 
-HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & name);
+HTTPRequestHandlerFactoryPtr createHandlerFactory(IServer & server, AsynchronousMetrics & async_metrics, const std::string & name, ContextMutablePtr context);
 }
