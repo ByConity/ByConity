@@ -41,7 +41,7 @@ services:
 # byconity:
   tso:
     image: byconity/debian:buster-runit-fdb7.1.27
-    command: bash -c "export PATH=$PATH:/opt/byconity/bin/; fdbcli -C /config/fdb.cluster --exec \"configure new single ssd\"; tso-server --config-file /config/tso.yml"
+    command: bash -c "export PATH=$PATH:/opt/byconity/bin/; fdbcli -C /config/fdb.cluster --exec \"configure new single memory\"; tso-server --config-file /config/tso.yml"
     depends_on:
       - fdb
       - hdfs
