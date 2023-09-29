@@ -1,0 +1,1 @@
+select * from test_dump.people FULL join test_dump.max_avg_parition_by on test_dump.people.id=test_dump.max_avg_parition_by.id;

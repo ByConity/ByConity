@@ -38,13 +38,11 @@
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/ASTDropWarehouseQuery.h>
 #include <Parsers/ASTDropWorkerGroupQuery.h>
-#include <Parsers/ASTDumpInfoQuery.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTGrantQuery.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTKillQueryQuery.h>
 #include <Parsers/ASTOptimizeQuery.h>
-#include <Parsers/ASTRefreshQuery.h>
 #include <Parsers/ASTRenameQuery.h>
 #include <Parsers/ASTReproduceQuery.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
@@ -60,14 +58,19 @@
 #include <Parsers/ASTShowProcesslistQuery.h>
 #include <Parsers/ASTShowTablesQuery.h>
 #include <Parsers/ASTShowWarehousesQuery.h>
+#include <Parsers/ASTUseQuery.h>
+#include <Parsers/ASTExplainQuery.h>
+#include <Parsers/ASTDumpQuery.h>
+#include <Parsers/ASTReproduceQuery.h>
+#include <Parsers/TablePropertiesQueriesASTs.h>
+#include <Parsers/ASTWatchQuery.h>
+#include <Parsers/ASTGrantQuery.h>
+#include <Parsers/MySQL/ASTCreateQuery.h>
+#include <Parsers/ASTRefreshQuery.h>
 #include <Parsers/ASTStatsQuery.h>
 #include <Parsers/ASTSwitchQuery.h>
 #include <Parsers/ASTUndropQuery.h>
 #include <Parsers/ASTUpdateQuery.h>
-#include <Parsers/ASTUseQuery.h>
-#include <Parsers/ASTWatchQuery.h>
-#include <Parsers/MySQL/ASTCreateQuery.h>
-#include <Parsers/TablePropertiesQueriesASTs.h>
 
 #include <Interpreters/InterpreterAdviseQuery.h>
 #include <Interpreters/InterpreterAlterQuery.h>
@@ -88,7 +91,7 @@
 #include <Interpreters/InterpreterDropWorkerGroupQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/InterpreterUndropQuery.h>
-#include <Interpreters/InterpreterDumpInfoQueryUseOptimizer.h>
+#include <Interpreters/InterpreterDumpQuery.h>
 #include <Interpreters/InterpreterExistsQuery.h>
 #include <Interpreters/InterpreterExplainQuery.h>
 #include <Interpreters/InterpreterExternalDDLQuery.h>
@@ -99,6 +102,7 @@
 #include <Interpreters/InterpreterOptimizeQuery.h>
 #include <Interpreters/InterpreterRefreshQuery.h>
 #include <Interpreters/InterpreterRenameQuery.h>
+#include <Interpreters/InterpreterReproduceQuery.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
@@ -115,7 +119,7 @@
 #include <Interpreters/InterpreterShowTablesQuery.h>
 #include <Interpreters/InterpreterShowWarehousesQuery.h>
 #include <Interpreters/InterpreterSystemQuery.h>
-#include <Interpreters/InterpreterReproduceQueryUseOptimizer.h>
+#include <Interpreters/InterpreterReproduceQuery.h>
 #include <Interpreters/InterpreterUseQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -439,18 +443,13 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     {
         return std::make_unique<InterpreterShowStatsQuery>(query, context);
     }
-    else if (query->as<ASTDumpInfoQuery>())
+    else if (query->as<ASTDumpQuery>())
     {
-        if (QueryUseOptimizerChecker::check(query, context))
-        {
-            return std::make_unique<InterpreterDumpInfoQueryUseOptimizer>(query, context);
-        }
-        else
-            throw Exception("Not support dump query, because it's optimizer check fail.", ErrorCodes::UNKNOWN_TYPE_OF_QUERY);
+        return std::make_unique<InterpreterDumpQuery>(query, context);
     }
     else if (query->as<ASTReproduceQuery>())
     {
-        return std::make_unique<InterpreterReproduceQueryUseOptimizer>(query, context);
+        return std::make_unique<InterpreterReproduceQuery>(query, context);
     }
     else if (query->as<ASTBeginQuery>())
     {

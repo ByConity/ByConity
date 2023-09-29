@@ -146,7 +146,7 @@ class ReadBuffer;
     M(ASTSelectIntersectExceptQuery) \
     M(ASTWindowListElement) \
     M(ASTTEALimit) \
-    M(ASTDumpInfoQuery) \
+    M(ASTDumpQuery) \
     M(ASTReproduceQuery) \
     M(ASTPartToolKit) \
     M(ASTQuantifiedComparison) \

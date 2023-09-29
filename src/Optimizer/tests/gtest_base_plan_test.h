@@ -96,17 +96,6 @@ public:
     std::string loadExplain(const std::string & name);
     void saveExplain(const std::string & name, const std::string & explain);
 
-    void unZip(const String & query_id);
-    String loadExplainFromPath(const String & query_id);
-    std::filesystem::path getPlanDumpPath() { return std::filesystem::path(PLAN_DUMP_PATH) / "dump_reproduce/"; }
-    void createTablesFromJson(const String & path);
-    void createClusterInfo(const String & path);
-    String dump(const String & name);
-    String reproduce(const String & path);
-    std::vector<std::string> checkDump(const String & query_id, const String & query_id2);
-    std::vector<std::string> getPathDumpFiles(const String & query_id);
-    void cleanQueryFiles(const String & query_id);
-
     void createTables();
     void dropTableStatistics() { execute("drop stats all", createQueryContext()); }
     void loadTableStatistics();

@@ -15,10 +15,9 @@
 
 #pragma once
 
-#include <Parsers/ASTSetQuery.h>
-#include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/IAST_fwd.h>
+#include <Parsers/IParser.h>
 #include <Parsers/IParserBase.h>
-#include <Parsers/ParserQueryWithOutput.h>
 
 namespace DB
 {
@@ -28,12 +27,11 @@ namespace DB
  */
 class ParserReproduceQuery : public IParserDialectBase
 {
+public:
+    explicit ParserReproduceQuery(const char * end_) : end(end_) { }
 protected:
     const char * end;
     const char * getName() const override{ return "REPRODUCE query"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
-
-public:
-    ParserReproduceQuery(const char * end_) : end(end_) { }
 };
 }

@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-#include <Optimizer/Dump/Json2Pb.h>
+#include <Optimizer/Dump/ProtoEnumUtils.h>
 #include <Statistics/StatisticsBaseImpl.h>
 #include <Statistics/StatsColumnBasic.h>
 #include <Statistics/StatsDummy.h>
@@ -24,6 +24,7 @@
 #include <Statistics/StatsTableBasic.h>
 #include <Statistics/TypeMacros.h>
 #include <Common/Exception.h>
+#include <Poco/JSON/Parser.h>
 
 namespace DB::Statistics
 {
@@ -113,15 +114,13 @@ std::shared_ptr<StatsType> createStatisticsTypedJson(StatisticsTag tag, std::str
     {
         throw Exception("statistics blob corrupted", ErrorCodes::LOGICAL_ERROR);
     }
-    Pparser parser;
-    PVar var = parser.parse(std::string{blob.data(), blob.size()});
-    PObject json_object = *var.extract<PObject::Ptr>();
+    Poco::JSON::Object::Ptr json_object
+        = Poco::JSON::Parser().parse(std::string{blob.data(), blob.size()}).extract<Poco::JSON::Object::Ptr>();
 
-    PVar var_bounds_blob = json_object.get("bounds_blob");
-    PObject object_bounds_blob = *var_bounds_blob.extract<PObject::Ptr>();
+    Poco::JSON::Object::Ptr object_bounds_blob = json_object->getObject("bounds_blob");
 
-    String type_str = object_bounds_blob.get("type_id").toString();
-    SerdeDataType type_index = SerdeDataTypeFromString(type_str);
+    String type_str = object_bounds_blob->getValue<String>("type_id");
+    SerdeDataType type_index = ProtoEnumUtils::serdeDataTypeFromString(type_str);
 
     switch (type_index)
     {

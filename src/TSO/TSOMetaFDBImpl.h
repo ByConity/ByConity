@@ -47,25 +47,19 @@ public:
         FDB::PutRequest put_req;
         put_req.key = StringRef(key_name);
         put_req.value = StringRef(value);
-        FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
-        assertStatus(OperationType::FDB_CREATE_TXN, fdb_client->CreateTransaction(tr));
-        assertStatus(OperationType::PUT, fdb_client->Put(tr, put_req));
+        assertStatus(OperationType::PUT, fdb_client->Put(put_req));
     }
 
     void get(String & value) override
     {
-        FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
-        assertStatus(OperationType::FDB_CREATE_TXN, fdb_client->CreateTransaction(tr));
         FDB::GetResponse res;
-        assertStatus(OperationType::GET, fdb_client->Get(tr, key_name, res));
+        assertStatus(OperationType::GET, fdb_client->Get(key_name, res));
         value = res.value;
     }
 
     void clean() override
     {
-        FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
-        assertStatus(OperationType::FDB_CREATE_TXN, fdb_client->CreateTransaction(tr));
-        assertStatus(OperationType::CLEAN, fdb_client->Delete(tr, key_name));
+        assertStatus(OperationType::CLEAN, fdb_client->Delete(key_name));
     }
 
 private:

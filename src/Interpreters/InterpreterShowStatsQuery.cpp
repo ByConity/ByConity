@@ -18,7 +18,8 @@
 #include <map>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <Interpreters/InterpreterShowStatsQuery.h>
-#include <Optimizer/Dump/PlanDump.h>
+#include <Optimizer/Dump/DDLDumper.h>
+#include <Optimizer/Dump/StatsLoader.h>
 #include <Parsers/ASTStatsQuery.h>
 #include <Statistics/FormattedOutput.h>
 #include <Statistics/StatisticsCollector.h>
@@ -154,24 +155,11 @@ void writeDbStats(ContextPtr context, const String & db_name, const String & pat
     std::ofstream fout(path, std::ios::binary);
     db_stats.SerializeToOstream(&fout);
 }
-void writeDbStatsToJson(ContextPtr context, const String & db_name, const String & path)
+void writeDbStatsToJson(ContextPtr context, const String & db_name, const String & folder)
 {
-    DbStats db_stats;
-    db_stats.set_db_name(db_name);
-    db_stats.set_version(PROTO_VERSION);
-    auto catalog = createCatalogAdaptor(context);
-    auto tables = catalog->getAllTablesID(db_name);
-    Poco::JSON::Object stats_json;
-    for (auto & table : tables)
-    {
-        String table_name = table.getTableName();
-        if (table_name.find("_local") == String::npos)
-            stats_json.set(db_name + "." + table_name, tableJson(context, db_name, table_name));
-    }
-    std::ofstream fout(path);
-    Poco::Dynamic::Var stats_var(stats_json);
-    fout << stats_var.toString();
-    fout.close();
+    DDLDumper ddl_dumper(folder);
+    ddl_dumper.addTableFromDatabase(db_name, context);
+    ddl_dumper.dumpStats(folder + "/stats.json");
 }
 
 void readDbStats(ContextPtr context, const String & original_db_name, const String & path)
@@ -237,6 +225,12 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
         }
         collector.writeToCatalog();
     }
+}
+
+void readDbStatsFromJson(ContextPtr context, const String & json_file)
+{
+    StatsLoader stats_loader(json_file, context);
+    stats_loader.loadStats(/*load_all=*/true);
 }
 
 static std::vector<StatsTableIdentifier> getTables(ContextPtr context, const ASTShowStatsQuery * query)
@@ -492,8 +486,8 @@ void InterpreterShowStatsQuery::executeSpecial()
         auto db_name = query->database;
         if (db_name.empty())
             db_name = context->getCurrentDatabase();
-        auto path = context->getSettingsRef().graphviz_path.toString() + "/" + db_name + ".json";
-        writeDbStatsToJson(context, db_name, path);
+        auto folder = context->getSettingsRef().graphviz_path.toString() + '/' + db_name;
+        writeDbStatsToJson(context, db_name, folder);
     }
     else if (query->table == "__jsonload")
     {
@@ -501,13 +495,13 @@ void InterpreterShowStatsQuery::executeSpecial()
         auto db_name = query->database;
         if (db_name.empty())
             db_name = context->getCurrentDatabase();
-        auto path = context->getSettingsRef().graphviz_path.toString() + "/" + db_name + ".json";
+        auto path = context->getSettingsRef().graphviz_path.toString() + '/' + db_name + "/stats.json";
         if (!std::filesystem::exists(path))
         {
             throw Exception("json_file " + path + " not exists", ErrorCodes::FILE_NOT_FOUND);
         }
 
-        loadStats(context, path);
+        readDbStatsFromJson(context, path);
     }
     else
     {
