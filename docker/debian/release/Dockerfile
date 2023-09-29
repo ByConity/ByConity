@@ -17,7 +17,7 @@ ENV JAVA_HOME=/usr/lib/jvm/default-java
 RUN echo "/usr/lib/jvm/default-java/lib" >> /etc/ld.so.conf.d/libjvm.conf
 RUN echo "/usr/lib/jvm/default-java/lib/server" >> /etc/ld.so.conf.d/libjvm.conf
 RUN ldconfig
-ENV CLASSPATH=${CLASSPATH}:${APP_ROOT}/bin/
+ENV CLASSPATH=${APP_ROOT}/lib/jar/jni-extension_1.0-SNAPSHOT-jar-with-dependencies.jar
 
 # config runit, see base image
 RUN mkdir -p /etc/service/byconity
