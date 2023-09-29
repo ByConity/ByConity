@@ -1491,7 +1491,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     port_name,
                     "http://" + address.toString(),
                     std::make_unique<HTTPServer>(
-                        context(), createHandlerFactory(*this, async_metrics, "HTTPHandler-factory"), server_pool, socket, http_params));
+                        context(), createHandlerFactory(*this, async_metrics, "HTTPHandler-factory", context()), server_pool, socket, http_params));
             });
 
             /// HTTPS
@@ -1507,7 +1507,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     port_name,
                     "https://" + address.toString(),
                     std::make_unique<HTTPServer>(
-                        context(), createHandlerFactory(*this, async_metrics, "HTTPSHandler-factory"), server_pool, socket, http_params));
+                        context(), createHandlerFactory(*this, async_metrics, "HTTPSHandler-factory", context()), server_pool, socket, http_params));
 #else
                 UNUSED(port);
                 throw Exception{"HTTPS protocol is disabled because Poco library was built without NetSSL support.",
@@ -1588,7 +1588,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     "replica communication (interserver): http://" + address.toString(),
                     std::make_unique<HTTPServer>(
                         context(),
-                        createHandlerFactory(*this, async_metrics, "InterserverIOHTTPHandler-factory"),
+                        createHandlerFactory(*this, async_metrics, "InterserverIOHTTPHandler-factory", context()),
                         server_pool,
                         socket,
                         http_params));
@@ -1607,7 +1607,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     "secure replica communication (interserver): https://" + address.toString(),
                     std::make_unique<HTTPServer>(
                         context(),
-                        createHandlerFactory(*this, async_metrics, "InterserverIOHTTPSHandler-factory"),
+                        createHandlerFactory(*this, async_metrics, "InterserverIOHTTPSHandler-factory", context()),
                         server_pool,
                         socket,
                         http_params));
@@ -1677,7 +1677,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     "Prometheus: http://" + address.toString(),
                     std::make_unique<HTTPServer>(
                         context(),
-                        createHandlerFactory(*this, async_metrics, "PrometheusHandler-factory"),
+                        createHandlerFactory(*this, async_metrics, "PrometheusHandler-factory", context()),
                         server_pool,
                         socket,
                         http_params));

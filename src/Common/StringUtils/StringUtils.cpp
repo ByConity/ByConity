@@ -62,4 +62,28 @@ void parseSlowQuery(const std::string & query, size_t & pos)
     parseSlowQuery(query, pos);
 }
 
+// Convert lowerCamelCase and PascalCase strings to lower_with_underscore.
+void convertCamelToSnake(std::string & orig_str) {
+    std::string str(1, tolower(orig_str[0]));
+
+    // First place underscores between contiguous lower and upper case letters.
+    // For example, `_LowerCamelCase` becomes `_Lower_Camel_Case`.
+    for (auto it = orig_str.begin() + 1; it != orig_str.end(); ++it)
+    {
+        if (isupper(*it) && (*(it-1) != '_'))
+        {
+            if (islower(*(it-1)) || (it + 1 != orig_str.end() && islower(*(it+1))))
+            {
+                str += "_";
+            }
+        }
+        str += *it;
+    }
+
+    // Then convert it to lower case.
+    std::transform(str.begin(), str.end(), str.begin(), ::tolower);
+
+    orig_str = str;
+}
+
 }
