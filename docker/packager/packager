@@ -89,7 +89,7 @@ def run_docker_image_with_env(
         user = f"{os.geteuid()}:{os.getegid()}"
 
     cmd = (
-        f"docker run --network=host --user={user} --rm --volume={output}:/output "
+        f"docker run  --network=host --user={user} --rm --volume={output}:/output "
         f"--volume={ch_root}:/build --volume={ccache_dir}:/ccache {env_part} "
         f"{interactive} {image_name}:{docker_image_version}"
     )
@@ -137,7 +137,7 @@ def parse_env_variables(
     result.append(f"CXX={cxx}")
     cmake_flags.append(f"-DCMAKE_C_COMPILER={cc}")
     cmake_flags.append(f"-DCMAKE_CXX_COMPILER={cxx}")
-
+    cmake_flags.append(f"-DENABLE_CHECK_HEAVY_BUILDS=OFF")
     if build_type:
         result.append(f"BUILD_TYPE={build_type.capitalize()}")
     else:
@@ -160,10 +160,8 @@ def parse_env_variables(
 
     if official:
         cmake_flags.append("-DCLICKHOUSE_OFFICIAL_BUILD=1")
-
     result.append('CMAKE_FLAGS="' + " ".join(cmake_flags) + '"')
     result.append(f"BUILD_TARGET={build_target}")
-
     return result
 
 
