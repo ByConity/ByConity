@@ -46,7 +46,7 @@
 #include <Parsers/QueryWithOutputSettingsPushDownVisitor.h>
 #include <Parsers/ParserRefreshQuery.h>
 #include <Parsers/ParserStatsQuery.h>
-#include <Parsers/ParserDumpInfoQuery.h>
+#include <Parsers/ParserDumpQuery.h>
 #include <Parsers/ParserReproduceQuery.h>
 #include <Parsers/ParserUndropQuery.h>
 #include <Parsers/ParserAlterDiskCacheQuery.h>
@@ -78,7 +78,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserShowGrantsQuery show_grants_p;
     ParserShowPrivilegesQuery show_privileges_p;
     ParserExplainQuery explain_p(end, dt);
-    ParserDumpInfoQuery dump_info_p(end, dt);
+    ParserDumpQuery dump_p;
     ParserReproduceQuery reproduce_p(end);
     ParserRefreshQuery refresh_p(dt);
     ParserCreateStatsQuery create_stats_p;
@@ -95,7 +95,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     bool parsed =
            explain_p.parse(pos, query, expected)
         || reproduce_p.parse(pos, query, expected)
-        || dump_info_p.parse(pos, query, expected)
+        || dump_p.parse(pos, query, expected)
         || select_p.parse(pos, query, expected)
         || show_create_access_entity_p.parse(pos, query, expected) /// should be before `show_tables_p`
         || show_tables_p.parse(pos, query, expected)
@@ -201,7 +201,7 @@ bool ParserQueryWithOutput::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     }
 
     /**
-     * if no format before, try parse format after settings, i.g. (select 1) settings xxxxx format xxxxx; 
+     * if no format before, try parse format after settings, i.g. (select 1) settings xxxxx format xxxxx;
      */
     if (!query_with_output.format)
     {

@@ -14,6 +14,7 @@
  */
 
 #include <Statistics/StatsNdvBucketsResultImpl.h>
+#include <Poco/JSON/Parser.h>
 
 namespace DB::Statistics
 {
@@ -77,24 +78,26 @@ template <typename T>
 String StatsNdvBucketsResultImpl<T>::serializeToJson() const
 {
     checkValid();
-    Poco::JSON::Object::Ptr ptr_json = new Poco::JSON::Object(true);
-    Poco::JSON::Parser parser;
-    ptr_json->set("bounds_blob", parser.parse(bounds_.serializeToJson()));
-    Poco::JSON::Array array_counts;
-    for (auto & count : counts_)
-    {
-        array_counts.add(int64_t(count));
-    }
-    ptr_json->set("counts", Poco::Dynamic::Var(array_counts));
+    Poco::JSON::Object::Ptr json(new Poco::JSON::Object);
+    json->set("bounds_blob", Poco::JSON::Parser().parse(bounds_.serializeToJson()));
 
-    Poco::JSON::Array array_ndvs;
-    for (auto & ndv : ndvs_)
+    Poco::JSON::Array::Ptr array_counts(new Poco::JSON::Array);
+    for (const auto & count : counts_)
     {
-        array_ndvs.add(double(ndv));
+        array_counts->add(count);
     }
-    ptr_json->set("ndvs", Poco::Dynamic::Var(array_ndvs));
-    Poco::Dynamic::Var result(*ptr_json);
-    return result.toString();
+    json->set("counts", array_counts);
+
+    Poco::JSON::Array::Ptr array_ndvs(new Poco::JSON::Array);
+    for (const auto & ndv : ndvs_)
+    {
+        array_ndvs->add(ndv);
+    }
+    json->set("ndvs", array_ndvs);
+
+    std::stringstream ss;
+    json->stringify(ss);
+    return ss.str();
 }
 template <typename T>
 void StatsNdvBucketsResultImpl<T>::deserialize(std::string_view raw_blob)
@@ -135,33 +138,29 @@ template <typename T>
 void StatsNdvBucketsResultImpl<T>::deserializeFromJson(std::string_view raw_blob)
 {
     std::tie(bounds_, counts_, ndvs_) = [raw_blob] {
-        Pparser parser;
-        PVar var = parser.parse(std::string{raw_blob.data(), raw_blob.size()});
-        PObject json_object = *var.extract<PObject::Ptr>();
+        Poco::JSON::Object::Ptr json_object
+            = Poco::JSON::Parser().parse(std::string{raw_blob.data(), raw_blob.size()}).extract<Poco::JSON::Object::Ptr>();
 
         if (raw_blob.size() <= sizeof(SerdeDataType))
         {
             throw Exception("corrupted blob", ErrorCodes::LOGICAL_ERROR);
         }
-        PVar var_bounds_blob = json_object.get("bounds_blob");
-        PObject object_bounds_blob = *var_bounds_blob.extract<PObject::Ptr>();
+        Poco::JSON::Object::Ptr object_bounds_blob = json_object->getObject("bounds_blob");
 
-        String type_str = object_bounds_blob.get("type_id").toString();
-        SerdeDataType type_id = SerdeDataTypeFromString(type_str);
+        String type_str = object_bounds_blob->getValue<String>("type_id");
+        SerdeDataType type_id = ProtoEnumUtils::serdeDataTypeFromString(type_str);
         checkSerdeDataType<T>(type_id);
 
         BucketBoundsImpl<T> bounds;
+        std::stringstream ss;
+        object_bounds_blob->stringify(ss);
+        bounds.deserializeFromJson(ss.str());
 
-        bounds.deserializeFromJson(var_bounds_blob.toString());
-
-        PVar counts_var, ndvs_var;
-        counts_var = json_object.get("counts");
-        ndvs_var = json_object.get("ndvs");
-        PArray array_counts = *counts_var.extract<PArray::Ptr>();
-        PArray array_ndvs = *ndvs_var.extract<PArray::Ptr>();
+        Poco::JSON::Array::Ptr array_counts = json_object->getArray("counts");
+        Poco::JSON::Array::Ptr array_ndvs = json_object->getArray("ndvs");
 
         size_t num_buckets = bounds.numBuckets();
-        if (array_counts.size() != num_buckets || array_ndvs.size() != num_buckets)
+        if (array_counts->size() != num_buckets || array_ndvs->size() != num_buckets)
         {
             throw Exception("Corrupted blob", ErrorCodes::LOGICAL_ERROR);
         }
@@ -169,8 +168,8 @@ void StatsNdvBucketsResultImpl<T>::deserializeFromJson(std::string_view raw_blob
         decltype(ndvs_) ndvs(num_buckets);
         for (size_t i = 0; i < num_buckets; ++i)
         {
-            counts[i] = array_counts.get(i).convert<uint64_t>();
-            ndvs[i] = array_ndvs.get(i).convert<double>();
+            counts[i] = array_counts->getElement<uint64_t>(i);
+            ndvs[i] = array_ndvs->getElement<double>(i);
         }
         return std::tuple{std::move(bounds), std::move(counts), std::move(ndvs)};
     }();

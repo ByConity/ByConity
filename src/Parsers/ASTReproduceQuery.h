@@ -16,23 +16,63 @@
 #pragma once
 
 #include <Parsers/IAST.h>
+#include <Parsers/IAST_fwd.h>
 #include <Parsers/ASTQueryWithOutput.h>
+
+#include <unordered_map>
+
 namespace DB
 {
-/**
- * Query Dump certain information for SELECT xxx, such as ddl, statistics, settings_changed and so on.
-**/
+
 class ASTReproduceQuery : public ASTQueryWithOutput
 {
 public:
-    String reproduce_path;
+    enum class Mode
+    {
+        DDL,
+        EXPLAIN,
+        EXECUTE
+    };
+
+    enum class Expression: uint8_t
+    {
+        SUBQUERY,
+        QUERY_ID,
+        REPRODUCE_PATH,
+        SETTINGS_CHANGES,
+        CLUSTER,
+    };
+
     String getID(char) const override { return "ReproduceQuery"; }
 
     ASTType getType() const override { return ASTType::ASTReproduceQuery; }
 
     ASTPtr clone() const override;
 
+    void setExpression(Expression expr, ASTPtr && ast);
+
+    ASTPtr subquery() const { return getExpression(Expression::SUBQUERY); }
+    ASTPtr queryId() const { return getExpression(Expression::QUERY_ID); }
+    ASTPtr reproducePath() const { return getExpression(Expression::REPRODUCE_PATH); }
+    ASTPtr settingsChanges() const { return getExpression(Expression::SETTINGS_CHANGES); }
+    ASTPtr cluster() const { return getExpression(Expression::CLUSTER); }
+
+    ASTPtr getExpression(Expression expr, bool clone = false) const
+    {
+        auto it = positions.find(expr);
+        if (it != positions.end())
+            return clone ? children[it->second]->clone() : children[it->second];
+        return {};
+    }
+
+    Mode mode;
+    bool is_verbose;
+
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
+
+private:
+    std::unordered_map<Expression, size_t> positions;
+    ASTPtr & getExpression(Expression expr);
 };
 }

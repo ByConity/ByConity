@@ -13,8 +13,8 @@
  * limitations under the License.
  */
 
-#include <Optimizer/Dump/Json2Pb.h>
 #include <Statistics/StatsColumnBasic.h>
+#include <google/protobuf/util/json_util.h>
 
 namespace DB::Statistics
 {
@@ -29,12 +29,12 @@ void StatsColumnBasic::deserialize(std::string_view blob)
 String StatsColumnBasic::serializeToJson() const
 {
     String json_str;
-    Json2Pb::pbMsg2JsonStr(proto, json_str, false);
+    google::protobuf::util::MessageToJsonString(proto, &json_str);
     return json_str;
 }
 void StatsColumnBasic::deserializeFromJson(std::string_view json)
 {
-    Json2Pb::jsonStr2PbMsg({json.data(), json.size()}, proto, false);
+    google::protobuf::util::JsonStringToMessage(std::string(json), &proto);
 }
 
 } // namespace DB

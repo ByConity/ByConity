@@ -22,7 +22,6 @@
 #include <Interpreters/getTableExpressions.h>
 #include <Interpreters/misc.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
-#include <Parsers/ASTDumpInfoQuery.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTWithElement.h>
@@ -136,11 +135,6 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, [[m
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizer
             || explain->getKind() ==  ASTExplainQuery::MetaData;
         return explain_plan && check(explain->getExplainedQuery(), context);
-    }
-
-    if (auto * dump = node->as<ASTDumpInfoQuery>())
-    {
-        return check(dump->dump_query, context);
     }
 
     bool support = false;

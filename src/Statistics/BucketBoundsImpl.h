@@ -25,7 +25,7 @@
 
 #include <city.h>
 #include <IO/WriteIntText.h>
-#include <Optimizer/Dump/Json2Pb.h>
+#include <Optimizer/Dump/ProtoEnumUtils.h>
 #include <boost/algorithm/string/join.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/range/adaptor/transformed.hpp>

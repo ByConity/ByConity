@@ -21,8 +21,9 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTDropQuery.h>
-#include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTRenameQuery.h>
+#include <Parsers/ASTReproduceQuery.h>
+#include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSystemQuery.h>
@@ -89,6 +90,11 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * 
         }
         return ResourceSelectCase::QueryType::DATA;
     }
+
+    else if (const auto * ast_reproduce = ast->as<ASTReproduceQuery>();
+             ast_reproduce && ast_reproduce->mode == ASTReproduceQuery::Mode::DDL)
+        return ResourceSelectCase::QueryType::DDL;
+
     return ResourceSelectCase::QueryType::OTHER;
 }
 
