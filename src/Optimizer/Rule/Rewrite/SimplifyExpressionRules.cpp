@@ -93,6 +93,7 @@ TransformResult CommonJoinFilterRewriteRule::transformImpl(PlanNodePtr node, con
         JoinAlgorithm::AUTO,
         false,
         step.isOrdered(),
+        step.isSimpleReordered(),
         step.getRuntimeFilterBuilders(),
         step.getHints());
 
@@ -271,6 +272,7 @@ TransformResult SimplifyJoinFilterRewriteRule::transformImpl(PlanNodePtr node, c
         JoinAlgorithm::AUTO,
         false,
         step.isOrdered(),
+        step.isSimpleReordered(),
         step.getRuntimeFilterBuilders(),
         step.getHints());
     PlanNodePtr join_node = PlanNodeBase::createPlanNode(node->getId(), std::move(join_step), node->getChildren());

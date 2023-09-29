@@ -57,6 +57,7 @@ PlanNodePtr InnerJoinCommutation::swap(JoinNode & node, RuleContext & rule_conte
         JoinAlgorithm::AUTO,
         false,
         step.isOrdered(),
+        step.isSimpleReordered(),
         step.getRuntimeFilterBuilders(),
         step.getHints());
     return std::make_shared<JoinNode>(

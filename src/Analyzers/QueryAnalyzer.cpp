@@ -451,8 +451,11 @@ ScopePtr QueryAnalyzerVisitor::analyzeFrom(ASTTablesInSelectQuery & tables_in_se
     {
         auto & table_element = ast->as<ASTTablesInSelectQueryElement &>();
 
-        if (auto * table_expression = table_element.table_expression->as<ASTTableExpression>())
+        if (table_element.table_expression)
         {
+            auto * table_expression = table_element.table_expression->as<ASTTableExpression>();
+            if (!table_expression)
+                throw Exception("Invalid Table Expression", ErrorCodes::LOGICAL_ERROR);
             auto table_with_alias = extractTableWithAlias(*table_expression);
             return analyzeTableExpression(*table_expression, QualifiedName::extractQualifiedName(table_with_alias));
         }
@@ -468,8 +471,11 @@ ScopePtr QueryAnalyzerVisitor::analyzeFrom(ASTTablesInSelectQuery & tables_in_se
     {
         auto & table_element = tables_in_select.children[idx]->as<ASTTablesInSelectQueryElement &>();
 
-        if (auto * table_expression = table_element.table_expression->as<ASTTableExpression>())
+        if (table_element.table_expression)
         {
+            auto * table_expression = table_element.table_expression->as<ASTTableExpression>();
+            if (!table_expression)
+                throw Exception("Invalid Table Expression", ErrorCodes::LOGICAL_ERROR);
             auto table_with_alias = extractTableWithAlias(*table_expression);
             ScopePtr joined_table_scope = analyzeTableExpression(*table_expression, QualifiedName::extractQualifiedName(table_with_alias));
             auto & table_join = table_element.table_join->as<ASTTableJoin &>();

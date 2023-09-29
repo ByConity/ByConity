@@ -469,8 +469,11 @@ PlanBuilder QueryPlannerVisitor::planTables(ASTTablesInSelectQuery & tables_in_s
     {
         auto & table_element = tables_in_select.children[idx]->as<ASTTablesInSelectQueryElement &>();
 
-        if (auto * table_expression = table_element.table_expression->as<ASTTableExpression>())
+        if (table_element.table_expression)
         {
+            auto * table_expression = table_element.table_expression->as<ASTTableExpression>();
+            if (!table_expression)
+                throw Exception("Invalid Table Expression", ErrorCodes::LOGICAL_ERROR);
             auto right_builder = planTableExpression(*table_expression, select_query);
             planJoin(table_element.table_join->as<ASTTableJoin &>(), builder, right_builder);
         }

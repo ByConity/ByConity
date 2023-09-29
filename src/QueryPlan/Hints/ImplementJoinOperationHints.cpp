@@ -101,6 +101,7 @@ void JoinOperationHintsVisitor::visitJoinNode(JoinNode & node, Void & v)
             step.getJoinAlgorithm(),
             step.isMagic(),
             true,
+            step.isSimpleReordered(),
             step.getRuntimeFilterBuilders(),
             step.getHints());
 
@@ -149,6 +150,7 @@ void JoinOperationHintsVisitor::visitJoinNode(JoinNode & node, Void & v)
                 step.getJoinAlgorithm(),
                 step.isMagic(),
                 true,
+                step.isSimpleReordered(),
                 step.getRuntimeFilterBuilders(),
                 step.getHints());
 

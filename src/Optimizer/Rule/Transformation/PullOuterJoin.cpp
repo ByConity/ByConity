@@ -100,6 +100,7 @@ static std::optional<PlanNodePtr> createNewJoin(
         inner_join->getLeftKeys(),
         inner_join->getRightKeys());
     new_left->setOrdered(inner_join->isOrdered());
+    new_left->setSimpleReordered(inner_join->isSimpleReordered());
     new_left->setHints(inner_join->getHints());
     auto new_left_node = JoinNode::createPlanNode(context.nextNodeId(), std::move(new_left), {first, C});
 
@@ -133,6 +134,7 @@ static std::optional<PlanNodePtr> createNewJoin(
         JoinAlgorithm::AUTO,
         false,
         left_join->isOrdered(),
+        left_join->isSimpleReordered(),
         left_join->getRuntimeFilterBuilders(),
         left_join->getHints());
 

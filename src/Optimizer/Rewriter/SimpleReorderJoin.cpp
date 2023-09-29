@@ -51,7 +51,7 @@ PlanNodePtr SimpleReorderJoinVisitor::visitJoinNode(JoinNode & node, Void & v)
 
     auto join_ptr = node.shared_from_this();
     JoinGraph join_graph = JoinGraph::build(join_ptr, context, false, true, false, false);
-    if (join_graph.size() < 2)
+    if (join_graph.size() < 2 || join_graph.size() <= context->getSettingsRef().max_graph_reorder_size)
         return visitPlanNode(node, v);
 
     auto join_order = getJoinOrder(join_graph);
@@ -197,7 +197,7 @@ PlanNodePtr SimpleReorderJoinVisitor::getJoinOrder(JoinGraph & graph)
                 output.emplace_back(NameAndTypePair{item.name, item.type});
             }
 
-            QueryPlanStepPtr new_join_step = std::make_shared<JoinStep>(
+            auto new_join_step = std::make_shared<JoinStep>(
                 streams,
                 DataStream{.header = output},
                 ASTTableJoin::Kind::Inner,
@@ -206,6 +206,7 @@ PlanNodePtr SimpleReorderJoinVisitor::getJoinOrder(JoinGraph & graph)
                 context->getSettingsRef().optimize_read_in_order,
                 left_keys,
                 right_keys);
+            new_join_step->setSimpleReordered(true);
             auto new_join_node
                 = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(new_join_step), PlanNodes{left_join_node, right_join_node});
 

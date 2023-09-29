@@ -47,6 +47,7 @@ public:
         size_t max_streams_,
         bool keep_left_read_in_order_,
         bool is_ordered_ = false,
+        bool simple_reordered_ = false,
         PlanHints hints_ = {});
 
     JoinStep(
@@ -66,6 +67,7 @@ public:
         JoinAlgorithm join_algorithm = JoinAlgorithm::AUTO,
         bool magic_set_ = false,
         bool is_ordered_ = false,
+        bool simple_reordered_ = false,
         LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders = {},
         PlanHints hints_ = {});
 
@@ -133,6 +135,9 @@ public:
 
     bool isOrdered() const { return is_ordered; }
     void setOrdered(bool is_ordered_) { is_ordered = is_ordered_; }
+
+    bool isSimpleReordered() const { return simple_reordered; }
+    void setSimpleReordered(bool simple_reordered_) { simple_reordered = simple_reordered_; }
 
     bool mustReplicate() const;
     bool mustRepartition() const;
@@ -228,8 +233,9 @@ private:
     DistributionType distribution_type = DistributionType::UNKNOWN;
     JoinAlgorithm join_algorithm = JoinAlgorithm::AUTO;
     bool is_magic;
-    Processors processors;
     bool is_ordered;
+    bool simple_reordered;
+    Processors processors;
 
     LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders;
 };

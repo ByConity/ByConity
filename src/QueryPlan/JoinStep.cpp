@@ -153,20 +153,8 @@ JoinPtr JoinStep::makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterCons
     return std::make_shared<JoinSwitcher>(table_join, r_sample_block);
 }
 
-JoinStep::JoinStep(
-    const DataStream & left_stream_,
-    const DataStream & right_stream_,
-    JoinPtr join_,
-    size_t max_block_size_,
-    size_t max_streams_,
-    bool keep_left_read_in_order_,
-    bool is_ordered_,
-    PlanHints hints_)
-    : join(std::move(join_))
-    , max_block_size(max_block_size_)
-    , max_streams(max_streams_)
-    , keep_left_read_in_order(keep_left_read_in_order_)
-    , is_ordered(is_ordered_)
+JoinStep::JoinStep(const DataStream & left_stream_, const DataStream & right_stream_, JoinPtr join_, size_t max_block_size_, size_t max_streams_, bool keep_left_read_in_order_, bool is_ordered_, bool simple_reordered_, PlanHints hints_)
+    : join(std::move(join_)), max_block_size(max_block_size_), max_streams(max_streams_), keep_left_read_in_order(keep_left_read_in_order_), is_ordered(is_ordered_), simple_reordered(simple_reordered_)
 {
     input_streams = {left_stream_, right_stream_};
     output_stream = DataStream{
@@ -192,6 +180,7 @@ JoinStep::JoinStep(
     JoinAlgorithm join_algorithm_,
     bool is_magic_,
     bool is_ordered_,
+    bool simple_reordered_,
     LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders_,
     PlanHints hints_)
     : kind(kind_)
@@ -208,6 +197,7 @@ JoinStep::JoinStep(
     , join_algorithm(join_algorithm_)
     , is_magic(is_magic_)
     , is_ordered(is_ordered_)
+    , simple_reordered(simple_reordered_)
     , runtime_filter_builders(std::move(runtime_filter_builders_))
 {
     input_streams = std::move(input_streams_);
@@ -407,6 +397,7 @@ std::shared_ptr<JoinStep> JoinStep::fromProto(const Protos::JoinStep & proto, Co
         auto value = RuntimeFilterBuildInfos::fromProto(element.value());
         runtime_filter_builders.emplace(key, value);
     }
+    auto simple_reordered = false;
     auto step = std::make_shared<JoinStep>(
         input_streams,
         output_stream,
@@ -424,6 +415,7 @@ std::shared_ptr<JoinStep> JoinStep::fromProto(const Protos::JoinStep & proto, Co
         join_algorithm,
         is_magic,
         is_ordered,
+        simple_reordered,
         runtime_filter_builders);
     step->setStepDescription(step_description);
     return step;
@@ -496,6 +488,7 @@ std::shared_ptr<IQueryPlanStep> JoinStep::copy(ContextPtr) const
         join_algorithm,
         is_magic,
         is_ordered,
+        simple_reordered,
         runtime_filter_builders,
         hints);
 }

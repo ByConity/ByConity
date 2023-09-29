@@ -219,6 +219,7 @@ std::shared_ptr<JoinStep> SymbolMapper::map(const JoinStep & join)
         join.getJoinAlgorithm(),
         join.isMagic(),
         join.isOrdered(),
+        join.isSimpleReordered(),
         map(join.getRuntimeFilterBuilders()),
         join.getHints());
 }

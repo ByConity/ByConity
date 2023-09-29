@@ -77,6 +77,7 @@ TransformResult PushDownApplyThroughJoin::transformImpl(PlanNodePtr node, const 
                 step->getJoinAlgorithm(),
                 step->isMagic(),
                 step->isOrdered(),
+                step->isSimpleReordered(),
                 step->getRuntimeFilterBuilders(),
                 step->getHints());
 

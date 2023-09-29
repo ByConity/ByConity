@@ -20,22 +20,22 @@ Projection Est. 47062768 rows
             │              │     Group by: {ca_city_8, ca_city_9, ca_street_name_8, ca_street_name_9, ca_street_number_8, ca_street_number_9, ca_zip_8, ca_zip_9, d_year_12, d_year_13, d_year_14, i_item_sk_4, s_store_name_4, s_zip_4}
             │              │     Aggregates: expr#count()_4:=AggNull(count)(), expr#sum(ss_wholesale_cost)_4:=AggNull(sum)(ss_wholesale_cost_2), expr#sum(ss_list_price)_4:=AggNull(sum)(ss_list_price_2), expr#sum(ss_coupon_amt)_4:=AggNull(sum)(ss_coupon_amt_2)
             │              └─ Inner Join Est. 45235 rows
-            │                 │     Condition: hd_income_band_sk_4 == ib_income_band_sk_3
-            │                 ├─ Inner Join Est. 45235 rows
-            │                 │  │     Condition: cs_item_sk_2 == i_item_sk_4
-            │                 │  │     Runtime Filters Builder: {i_item_sk_4}
+            │                 │     Condition: cs_item_sk_2 == i_item_sk_4
+            │                 │     Runtime Filters Builder: {i_item_sk_4}
+            │                 ├─ Inner Join Est. 49250971 rows
+            │                 │  │     Condition: hd_income_band_sk_5 == ib_income_band_sk_3
             │                 │  ├─ Inner Join Est. 49250971 rows
-            │                 │  │  │     Condition: c_current_addr_sk_2 == ca_address_sk_4
+            │                 │  │  │     Condition: c_current_addr_sk_2 == ca_address_sk_5
             │                 │  │  ├─ Repartition Exchange Est. 49250971 rows
             │                 │  │  │  │     Partition by: {c_current_addr_sk_2}
             │                 │  │  │  └─ Inner Join Est. 49250971 rows
-            │                 │  │  │     │     Condition: ss_addr_sk_2 == ca_address_sk_5
+            │                 │  │  │     │     Condition: ss_addr_sk_2 == ca_address_sk_4
             │                 │  │  │     ├─ Repartition Exchange Est. 49250971 rows
             │                 │  │  │     │  │     Partition by: {ss_addr_sk_2}
             │                 │  │  │     │  └─ Inner Join Est. 49250971 rows
-            │                 │  │  │     │     │     Condition: ss_hdemo_sk_2 == hd_demo_sk_5
-            │                 │  │  │     │     ├─ Inner Join Est. 49250971 rows
-            │                 │  │  │     │     │  │     Condition: c_current_hdemo_sk_2 == hd_demo_sk_4
+            │                 │  │  │     │     │     Condition: c_current_hdemo_sk_2 == hd_demo_sk_5
+            │                 │  │  │     │     ├─ Inner Join Est. 49883196 rows
+            │                 │  │  │     │     │  │     Condition: ss_hdemo_sk_2 == hd_demo_sk_4
             │                 │  │  │     │     │  ├─ Inner Join Est. 49883196 rows
             │                 │  │  │     │     │  │  │     Condition: ss_store_sk_2 == s_store_sk_2
             │                 │  │  │     │     │  │  ├─ Inner Join Est. 49883196 rows
@@ -137,35 +137,35 @@ Projection Est. 47062768 rows
             │                 │  │  │     │     │  │     └─ TableScan tpcds100.store Est. 402 rows
             │                 │  │  │     │     │  │              Outputs: s_store_name_4:=s_store_name, s_store_sk_2:=s_store_sk, s_zip_4:=s_zip
             │                 │  │  │     │     │  └─ Broadcast Exchange Est. 7200 rows
-            │                 │  │  │     │     │     └─ TableScan tpcds100.household_demographics Est. 7200 rows
-            │                 │  │  │     │     │              Outputs: hd_demo_sk_4:=hd_demo_sk, hd_income_band_sk_4:=hd_income_band_sk
+            │                 │  │  │     │     │     └─ Filter Est. 7200 rows
+            │                 │  │  │     │     │        │     Condition: isNotNull(hd_income_band_sk_4)
+            │                 │  │  │     │     │        └─ TableScan tpcds100.household_demographics Est. 7200 rows
+            │                 │  │  │     │     │                 Where: isNotNull(hd_income_band_sk)
+            │                 │  │  │     │     │                 Outputs: hd_demo_sk_4:=hd_demo_sk, hd_income_band_sk_4:=hd_income_band_sk
             │                 │  │  │     │     └─ Broadcast Exchange Est. 7200 rows
-            │                 │  │  │     │        └─ Filter Est. 7200 rows
-            │                 │  │  │     │           │     Condition: isNotNull(hd_income_band_sk_5)
-            │                 │  │  │     │           └─ TableScan tpcds100.household_demographics Est. 7200 rows
-            │                 │  │  │     │                    Where: isNotNull(hd_income_band_sk)
-            │                 │  │  │     │                    Outputs: hd_demo_sk_5:=hd_demo_sk, hd_income_band_sk_5:=hd_income_band_sk
+            │                 │  │  │     │        └─ TableScan tpcds100.household_demographics Est. 7200 rows
+            │                 │  │  │     │                 Outputs: hd_demo_sk_5:=hd_demo_sk, hd_income_band_sk_5:=hd_income_band_sk
             │                 │  │  │     └─ Repartition Exchange Est. 1000000 rows
-            │                 │  │  │        │     Partition by: {ca_address_sk_5}
+            │                 │  │  │        │     Partition by: {ca_address_sk_4}
             │                 │  │  │        └─ TableScan tpcds100.customer_address Est. 1000000 rows
-            │                 │  │  │                 Outputs: ca_address_sk_5:=ca_address_sk, ca_city_9:=ca_city, ca_street_name_9:=ca_street_name, ca_street_number_9:=ca_street_number, ca_zip_9:=ca_zip
+            │                 │  │  │                 Outputs: ca_address_sk_4:=ca_address_sk, ca_city_8:=ca_city, ca_street_name_8:=ca_street_name, ca_street_number_8:=ca_street_number, ca_zip_8:=ca_zip
             │                 │  │  └─ Repartition Exchange Est. 1000000 rows
-            │                 │  │     │     Partition by: {ca_address_sk_4}
+            │                 │  │     │     Partition by: {ca_address_sk_5}
             │                 │  │     └─ TableScan tpcds100.customer_address Est. 1000000 rows
-            │                 │  │              Outputs: ca_address_sk_4:=ca_address_sk, ca_city_8:=ca_city, ca_street_name_8:=ca_street_name, ca_street_number_8:=ca_street_number, ca_zip_8:=ca_zip
-            │                 │  └─ Broadcast Exchange Est. 131 rows
-            │                 │     └─ Filter Est. 131 rows
-            │                 │        │     Condition: (i_color_2 IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price_2 >= 65.) AND (i_current_price_2 <= 74.) Runtime Filters: {i_item_sk_4}
-            │                 │        └─ TableScan tpcds100.item Est. 204000 rows
-            │                 │                 Where: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.) Runtime Filters: {i_item_sk}
-            │                 │                 Outputs: i_color_2:=i_color, i_current_price_2:=i_current_price, i_item_sk_4:=i_item_sk, i_product_name_4:=i_product_name
-            │                 └─ Broadcast Exchange Est. 20 rows
-            │                    └─ TableScan tpcds100.income_band Est. 20 rows
-            │                             Outputs: ib_income_band_sk_3:=ib_income_band_sk
+            │                 │  │              Outputs: ca_address_sk_5:=ca_address_sk, ca_city_9:=ca_city, ca_street_name_9:=ca_street_name, ca_street_number_9:=ca_street_number, ca_zip_9:=ca_zip
+            │                 │  └─ Broadcast Exchange Est. 20 rows
+            │                 │     └─ TableScan tpcds100.income_band Est. 20 rows
+            │                 │              Outputs: ib_income_band_sk_3:=ib_income_band_sk
+            │                 └─ Broadcast Exchange Est. 131 rows
+            │                    └─ Filter Est. 131 rows
+            │                       │     Condition: (i_color_2 IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price_2 >= 65.) AND (i_current_price_2 <= 74.) Runtime Filters: {i_item_sk_4}
+            │                       └─ TableScan tpcds100.item Est. 204000 rows
+            │                                Where: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.) Runtime Filters: {i_item_sk}
+            │                                Outputs: i_color_2:=i_color, i_current_price_2:=i_current_price, i_item_sk_4:=i_item_sk, i_product_name_4:=i_product_name
             └─ Repartition Exchange Est. 68165 rows
                │     Partition by: {i_item_sk_1, s_store_name_1, s_zip_1}
                └─ Projection Est. 68165 rows
-                  │     Expressions: ca_city_2:=ca_city_7, ca_city_3:=ca_city_6, ca_street_name_2:=ca_street_name_7, ca_street_name_3:=ca_street_name_6, ca_street_number_2:=ca_street_number_7, ca_street_number_3:=ca_street_number_6, ca_zip_2:=ca_zip_7, ca_zip_3:=ca_zip_6, d_year_3:=d_year_9, expr#count()_1:=`expr#count()_3`, expr#sum(ss_coupon_amt)_1:=`expr#sum(ss_coupon_amt)_3`, expr#sum(ss_list_price)_1:=`expr#sum(ss_list_price)_3`, expr#sum(ss_wholesale_cost)_1:=`expr#sum(ss_wholesale_cost)_3`, i_item_sk_1:=i_item_sk_3, i_product_name_1:=i_product_name_3, s_store_name_1:=s_store_name_3, s_zip_1:=s_zip_3
+                  │     Expressions: ca_city_2:=ca_city_6, ca_city_3:=ca_city_7, ca_street_name_2:=ca_street_name_6, ca_street_name_3:=ca_street_name_7, ca_street_number_2:=ca_street_number_6, ca_street_number_3:=ca_street_number_7, ca_zip_2:=ca_zip_6, ca_zip_3:=ca_zip_7, d_year_3:=d_year_9, expr#count()_1:=`expr#count()_3`, expr#sum(ss_coupon_amt)_1:=`expr#sum(ss_coupon_amt)_3`, expr#sum(ss_list_price)_1:=`expr#sum(ss_list_price)_3`, expr#sum(ss_wholesale_cost)_1:=`expr#sum(ss_wholesale_cost)_3`, i_item_sk_1:=i_item_sk_3, i_product_name_1:=i_product_name_3, s_store_name_1:=s_store_name_3, s_zip_1:=s_zip_3
                   └─ MergingAggregated Est. 45110 rows
                      └─ Repartition Exchange Est. 45110 rows
                         │     Partition by: {ca_city_6, ca_city_7, ca_street_name_6, ca_street_name_7, ca_street_number_6, ca_street_number_7, ca_zip_6, ca_zip_7, d_year_10, d_year_11, d_year_9, i_item_sk_3, i_product_name_3, s_store_name_3, s_zip_3}
@@ -174,22 +174,22 @@ Projection Est. 47062768 rows
                            │     Group by keys not hashed: {i_product_name_3}
                            │     Aggregates: expr#count()_3:=AggNull(count)(), expr#sum(ss_wholesale_cost)_3:=AggNull(sum)(ss_wholesale_cost_1), expr#sum(ss_list_price)_3:=AggNull(sum)(ss_list_price_1), expr#sum(ss_coupon_amt)_3:=AggNull(sum)(ss_coupon_amt_1)
                            └─ Inner Join Est. 45110 rows
-                              │     Condition: hd_income_band_sk_2 == ib_income_band_sk_2
-                              ├─ Inner Join Est. 45110 rows
-                              │  │     Condition: cs_item_sk_1 == i_item_sk_3
-                              │  │     Runtime Filters Builder: {i_item_sk_3}
+                              │     Condition: cs_item_sk_1 == i_item_sk_3
+                              │     Runtime Filters Builder: {i_item_sk_3}
+                              ├─ Inner Join Est. 49114918 rows
+                              │  │     Condition: hd_income_band_sk_3 == ib_income_band_sk_2
                               │  ├─ Inner Join Est. 49114918 rows
-                              │  │  │     Condition: c_current_addr_sk_1 == ca_address_sk_2
+                              │  │  │     Condition: c_current_addr_sk_1 == ca_address_sk_3
                               │  │  ├─ Repartition Exchange Est. 49114918 rows
                               │  │  │  │     Partition by: {c_current_addr_sk_1}
                               │  │  │  └─ Inner Join Est. 49114918 rows
-                              │  │  │     │     Condition: ss_addr_sk_1 == ca_address_sk_3
+                              │  │  │     │     Condition: ss_addr_sk_1 == ca_address_sk_2
                               │  │  │     ├─ Repartition Exchange Est. 49114918 rows
                               │  │  │     │  │     Partition by: {ss_addr_sk_1}
                               │  │  │     │  └─ Inner Join Est. 49114918 rows
-                              │  │  │     │     │     Condition: ss_hdemo_sk_1 == hd_demo_sk_3
-                              │  │  │     │     ├─ Inner Join Est. 49114918 rows
-                              │  │  │     │     │  │     Condition: c_current_hdemo_sk_1 == hd_demo_sk_2
+                              │  │  │     │     │     Condition: c_current_hdemo_sk_1 == hd_demo_sk_3
+                              │  │  │     │     ├─ Inner Join Est. 49745396 rows
+                              │  │  │     │     │  │     Condition: ss_hdemo_sk_1 == hd_demo_sk_2
                               │  │  │     │     │  ├─ Inner Join Est. 49745396 rows
                               │  │  │     │     │  │  │     Condition: ss_store_sk_1 == s_store_sk_1
                               │  │  │     │     │  │  ├─ Inner Join Est. 49745396 rows
@@ -291,29 +291,29 @@ Projection Est. 47062768 rows
                               │  │  │     │     │  │     └─ TableScan tpcds100.store Est. 402 rows
                               │  │  │     │     │  │              Outputs: s_store_name_3:=s_store_name, s_store_sk_1:=s_store_sk, s_zip_3:=s_zip
                               │  │  │     │     │  └─ Broadcast Exchange Est. 7200 rows
-                              │  │  │     │     │     └─ TableScan tpcds100.household_demographics Est. 7200 rows
-                              │  │  │     │     │              Outputs: hd_demo_sk_2:=hd_demo_sk, hd_income_band_sk_2:=hd_income_band_sk
+                              │  │  │     │     │     └─ Filter Est. 7200 rows
+                              │  │  │     │     │        │     Condition: isNotNull(hd_income_band_sk_2)
+                              │  │  │     │     │        └─ TableScan tpcds100.household_demographics Est. 7200 rows
+                              │  │  │     │     │                 Where: isNotNull(hd_income_band_sk)
+                              │  │  │     │     │                 Outputs: hd_demo_sk_2:=hd_demo_sk, hd_income_band_sk_2:=hd_income_band_sk
                               │  │  │     │     └─ Broadcast Exchange Est. 7200 rows
-                              │  │  │     │        └─ Filter Est. 7200 rows
-                              │  │  │     │           │     Condition: isNotNull(hd_income_band_sk_3)
-                              │  │  │     │           └─ TableScan tpcds100.household_demographics Est. 7200 rows
-                              │  │  │     │                    Where: isNotNull(hd_income_band_sk)
-                              │  │  │     │                    Outputs: hd_demo_sk_3:=hd_demo_sk, hd_income_band_sk_3:=hd_income_band_sk
+                              │  │  │     │        └─ TableScan tpcds100.household_demographics Est. 7200 rows
+                              │  │  │     │                 Outputs: hd_demo_sk_3:=hd_demo_sk, hd_income_band_sk_3:=hd_income_band_sk
                               │  │  │     └─ Repartition Exchange Est. 1000000 rows
-                              │  │  │        │     Partition by: {ca_address_sk_3}
+                              │  │  │        │     Partition by: {ca_address_sk_2}
                               │  │  │        └─ TableScan tpcds100.customer_address Est. 1000000 rows
-                              │  │  │                 Outputs: ca_address_sk_3:=ca_address_sk, ca_city_7:=ca_city, ca_street_name_7:=ca_street_name, ca_street_number_7:=ca_street_number, ca_zip_7:=ca_zip
+                              │  │  │                 Outputs: ca_address_sk_2:=ca_address_sk, ca_city_6:=ca_city, ca_street_name_6:=ca_street_name, ca_street_number_6:=ca_street_number, ca_zip_6:=ca_zip
                               │  │  └─ Repartition Exchange Est. 1000000 rows
-                              │  │     │     Partition by: {ca_address_sk_2}
+                              │  │     │     Partition by: {ca_address_sk_3}
                               │  │     └─ TableScan tpcds100.customer_address Est. 1000000 rows
-                              │  │              Outputs: ca_address_sk_2:=ca_address_sk, ca_city_6:=ca_city, ca_street_name_6:=ca_street_name, ca_street_number_6:=ca_street_number, ca_zip_6:=ca_zip
-                              │  └─ Broadcast Exchange Est. 131 rows
-                              │     └─ Filter Est. 131 rows
-                              │        │     Condition: (i_color_1 IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price_1 >= 65.) AND (i_current_price_1 <= 74.)
-                              │        └─ TableScan tpcds100.item Est. 204000 rows
-                              │                 Where: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.)
-                              │                 Outputs: i_color_1:=i_color, i_current_price_1:=i_current_price, i_item_sk_3:=i_item_sk, i_product_name_3:=i_product_name
-                              └─ Broadcast Exchange Est. 20 rows
-                                 └─ TableScan tpcds100.income_band Est. 20 rows
-                                          Outputs: ib_income_band_sk_2:=ib_income_band_sk
+                              │  │              Outputs: ca_address_sk_3:=ca_address_sk, ca_city_7:=ca_city, ca_street_name_7:=ca_street_name, ca_street_number_7:=ca_street_number, ca_zip_7:=ca_zip
+                              │  └─ Broadcast Exchange Est. 20 rows
+                              │     └─ TableScan tpcds100.income_band Est. 20 rows
+                              │              Outputs: ib_income_band_sk_2:=ib_income_band_sk
+                              └─ Broadcast Exchange Est. 131 rows
+                                 └─ Filter Est. 131 rows
+                                    │     Condition: (i_color_1 IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price_1 >= 65.) AND (i_current_price_1 <= 74.)
+                                    └─ TableScan tpcds100.item Est. 204000 rows
+                                             Where: (i_color IN ('burlywood', 'floral', 'indian', 'medium', 'purple', 'spring')) AND (i_current_price >= 65.) AND (i_current_price <= 74.)
+                                             Outputs: i_color_1:=i_color, i_current_price_1:=i_current_price, i_item_sk_3:=i_item_sk, i_product_name_3:=i_product_name
 note: Runtime Filter is applied for 15 times.

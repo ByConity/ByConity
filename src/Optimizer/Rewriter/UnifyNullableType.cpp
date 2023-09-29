@@ -152,6 +152,7 @@ PlanNodePtr UnifyNullableVisitor::visitJoinNode(JoinNode & node, Void & v)
         join_step.getJoinAlgorithm(),
         join_step.isMagic(),
         join_step.isOrdered(),
+        join_step.isSimpleReordered(),
         join_step.getRuntimeFilterBuilders(),
         join_step.getHints());
     return JoinNode::createPlanNode(context->nextNodeId(), std::move(join_step_set_null), children, node.getStatistics());

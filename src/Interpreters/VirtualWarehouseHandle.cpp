@@ -116,15 +116,18 @@ void VirtualWarehouseHandleImpl::tryUpdateWorkerGroups(UpdateMode update_mode)
         return;
 
     UInt64 current_ns = clock_gettime_ns(CLOCK_MONOTONIC_COARSE);
-    if (update_mode == ForceUpdate)
+    UInt64 the_last_update_time_ns = last_update_time_ns.load();
+    
+    if (current_ns >= the_last_update_time_ns + force_update_interval_ns)
     {
-        last_update_time_ns.store(current_ns);
+        LOG_TRACE(log, "The worker_groups is not updated for {} ms. Will use ForceUpdate mode.", force_update_interval_ns / 1000000);
+        update_mode = ForceUpdate;
     }
-    else
+
+    /// TryUpdate mode - one of the query thread will do updateWorkerGroups.
+    if (update_mode != ForceUpdate)
     {
-        constexpr UInt64 update_interval_ns = 500ULL * 1000 * 1000; // 500ms TODO: make it configurable
-        UInt64 the_last_update_time_ns = last_update_time_ns.load();
-        if (current_ns < the_last_update_time_ns + update_interval_ns)
+        if (current_ns < the_last_update_time_ns + try_update_interval_ns)
             return;
         if (!last_update_time_ns.compare_exchange_strong(the_last_update_time_ns, current_ns))
             return;
@@ -138,6 +141,8 @@ void VirtualWarehouseHandleImpl::tryUpdateWorkerGroups(UpdateMode update_mode)
 
     if (!success || worker_groups.empty())
         LOG_WARNING(log, "Failed to update worker groups for VW:{}", name);
+    
+    last_update_time_ns.store(current_ns);
 }
 
 

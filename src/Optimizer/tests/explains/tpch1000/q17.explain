@@ -8,7 +8,6 @@ Projection Est. 1 rows
          └─ Inner Join Est. 5984675 rows
             │     Condition: l_partkey == l_partkey_1
             │     Filter: l_quantity < ('0.2' * `expr#avg(l_quantity)`)
-            │     Runtime Filters Builder: {l_partkey_1}
             ├─ Repartition Exchange Est. 5999989709 rows
             │  │     Partition by: {l_partkey}
             │  └─ Filter Est. 5999989709 rows
@@ -18,12 +17,13 @@ Projection Est. 1 rows
             │              Outputs: [l_extendedprice, l_partkey, l_quantity]
             └─ Inner Join Est. 200140 rows
                │     Condition: p_partkey == l_partkey_1
+               │     Runtime Filters Builder: {l_partkey_1}
                ├─ Repartition Exchange Est. 200140 rows
                │  │     Partition by: {p_partkey}
                │  └─ Filter Est. 200140 rows
-               │     │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
+               │     │     Condition: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
                │     └─ TableScan tpch1000.part Est. 200000000 rows
-               │              Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
+               │              Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23') Runtime Filters: {p_partkey}
                │              Outputs: [p_brand, p_container, p_partkey]
                └─ Aggregating Est. 200140 rows
                   │     Group by: {l_partkey_1}
@@ -53,4 +53,4 @@ Projection Est. 1 rows
                                                 Where: (p_container = 'MED BOX') AND (p_brand = 'Brand#23')
                                                 Outputs: [p_brand, p_container, p_partkey]
 note: Magic Set is applied for 1 parts.
-note: Runtime Filter is applied for 2 times.
+note: Runtime Filter is applied for 3 times.

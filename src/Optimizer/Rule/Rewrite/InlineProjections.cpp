@@ -314,6 +314,7 @@ TransformResult InlineProjectionIntoJoin::transformImpl(PlanNodePtr node, const 
         join_step.getJoinAlgorithm(),
         join_step.isMagic(),
         join_step.isOrdered(),
+        join_step.isSimpleReordered(),
         join_step.getRuntimeFilterBuilders(),
         join_step.getHints());
     PlanNodePtr new_join_node = std::make_shared<JoinNode>(context.context->nextNodeId(), std::move(new_join_step), PlanNodes{left, right});
@@ -349,6 +350,7 @@ TransformResult InlineProjectionOnJoinIntoJoin::transformImpl(PlanNodePtr node, 
         join_step->getJoinAlgorithm(),
         join_step->isMagic(),
         join_step->isOrdered(),
+        join_step->isSimpleReordered(),
         join_step->getRuntimeFilterBuilders(),
         join_step->getHints());
 

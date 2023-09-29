@@ -1027,6 +1027,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::visitJoinNode(JoinNode & node, JoinEl
         step->getJoinAlgorithm(),
         step->isMagic(),
         step->isOrdered(),
+        step->isSimpleReordered(),
         step->getRuntimeFilterBuilders(),
         step->getHints());
 

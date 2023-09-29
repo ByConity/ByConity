@@ -612,6 +612,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             step->getJoinAlgorithm(),
             step->isMagic(),
             step->isOrdered(),
+            step->isSimpleReordered(),
             step->getRuntimeFilterBuilders(),
             step->getHints());
     }
@@ -634,6 +635,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             step->getJoinAlgorithm(),
             step->isMagic(),
             step->isOrdered(),
+            step->isSimpleReordered(),
             step->getRuntimeFilterBuilders(),
             step->getHints());
     }
@@ -664,6 +666,7 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
             join_step->getJoinAlgorithm(),
             join_step->isMagic(),
             step->isOrdered(),
+            step->isSimpleReordered(),
             step->getRuntimeFilterBuilders(),
             step->getHints());
         join_node = std::make_shared<JoinNode>(
