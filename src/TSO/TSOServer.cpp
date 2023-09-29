@@ -659,7 +659,7 @@ int TSOServer::main(const std::vector<std::string> &)
 
 
         std::for_each(http_servers.begin(), http_servers.end(),
-            [] (const std::unique_ptr<HTTPServer> & http_server)
+            [this] (const std::unique_ptr<HTTPServer> & http_server)
             {
                 if (http_server)
                 {
