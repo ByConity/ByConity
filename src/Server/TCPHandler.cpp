@@ -1433,10 +1433,10 @@ void TCPHandler::receiveQuery()
             "Inter-server secret support is disabled, because ClickHouse was built without SSL library", ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
     }
-    else
-    {
-        query_context->setInitialRowPolicy();
-    }
+    // else
+    // {
+    //     query_context->setInitialRowPolicy();
+    // }
 
     ///
     /// Settings
@@ -1609,10 +1609,10 @@ void TCPHandler::receiveCnchQuery()
             "Inter-server secret support is disabled, because ClickHouse was built without SSL library", ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
     }
-    else
-    {
-        query_context->setInitialRowPolicy();
-    }
+    // else
+    // {
+    //     query_context->setInitialRowPolicy();
+    // }
 
     /// Settings
     auto settings_changes = passed_settings.changes();
@@ -1716,7 +1716,7 @@ void TCPHandler::receivePlanSegment()
     readVarUInt(compression, *in);
     state.compression = static_cast<Protocol::Compression>(compression);
 
-    query_context->setInitialRowPolicy();
+    // query_context->setInitialRowPolicy();
 
     ///
     /// Settings

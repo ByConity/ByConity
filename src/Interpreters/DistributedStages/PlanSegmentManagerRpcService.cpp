@@ -120,7 +120,7 @@ void PlanSegmentManagerRpcService::executeQuery(
         }
 
         /// Sets an extra row policy based on `client_info.initial_user`
-        query_context->setInitialRowPolicy();
+        // query_context->setInitialRowPolicy();
 
         /// Quietly clamp to the constraints since it's a secondary query.
         query_context->clampToSettingsConstraints(settings_changes);
