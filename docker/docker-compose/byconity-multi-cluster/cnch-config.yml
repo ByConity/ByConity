@@ -89,6 +89,8 @@ service_discovery:
           name: PORT2
           value: 9181
   vw_psm: data.cnch.vw
+service_discovery_kv:
+  election_prefix: random_name_
 catalog:
   name_space: default
 catalog_service:
