@@ -549,7 +549,7 @@ def run_tests_array(all_tests_with_params):
         else:
             return ''
 
-    def judge_case_fail(proc,stdout,stderr,total_time,status,testcase_args, stdout_file, stderr_file, reference_file):
+    def judge_case_fail(proc, stdout,stderr,total_time,status,testcase_args, stdout_file, stderr_file, reference_file):
         failures = 0
         failures_chain = 0
         passed_total = 0
@@ -736,9 +736,11 @@ def run_tests_array(all_tests_with_params):
                     stdout_file = os.path.join(suite_tmp_dir, name) + file_suffix + '.stdout'
                     stderr_file = os.path.join(suite_tmp_dir, name) + file_suffix + '.stderr'
 
-
                     testcase_args = configure_testcase_args(args, case_file, suite_tmp_dir, stderr_file)
-                    proc, stdout, stderr, total_time = run_single_test(testcase_args, ext, server_logs_level, client_options, case_file, stdout_file, stderr_file)
+                    if type(testcase_args) is tuple:
+                        proc, stdout, stderr, total_time = testcase_args
+                    else:
+                        proc, stdout, stderr, total_time = run_single_test(testcase_args, ext, server_logs_level, client_options, case_file, stdout_file, stderr_file)
                     flag_failed_retry = 1
                     temp_failures = 0
                     temp_failures_chain = 0
@@ -751,7 +753,11 @@ def run_tests_array(all_tests_with_params):
                                     status += '\n'
                                 restarted_tests.append((case_file, stderr))
                                 testcase_args = configure_testcase_args(args, case_file, suite_tmp_dir, stderr_file)
-                                proc, stdout, stderr, total_time = run_single_test(testcase_args, ext, server_logs_level,client_options, case_file, stdout_file,stderr_file)
+                                if type(testcase_args) is tuple:
+                                    proc, stdout, stderr, total_time = testcase_args
+                                else:
+                                    proc, stdout, stderr, total_time = run_single_test(testcase_args, ext, server_logs_level, client_options, case_file, stdout_file, stderr_file)
+
                                 status += "{0:72}".format(name + ": ")
                                 flag_failed_retry += 1
                                 sleep(2 ** flag_failed_retry)
