@@ -76,8 +76,8 @@ enum class LockStatus : UInt32
 enum class LockLevel : UInt32
 {
     TABLE = 0,
-    BUCKET = 1,
-    PARTITION = 2,
+    PARTITION = 1,
+    BUCKET = 2,
     SIZE = 3,
 };
 
@@ -89,10 +89,10 @@ constexpr auto toString(LockLevel level)
     {
         case LockLevel::TABLE:
             return "Table";
-        case LockLevel::BUCKET:
-            return "Bucket";
         case LockLevel::PARTITION:
             return "Partition";
+        case LockLevel::BUCKET:
+            return "Bucket";
         default:
             return "Unknown";
     }

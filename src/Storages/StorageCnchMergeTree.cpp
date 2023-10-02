@@ -1353,12 +1353,12 @@ void StorageCnchMergeTree::executeDedupForRepair(const ASTPtr & partition, Conte
 
     auto catalog = local_context->getCnchCatalog();
 
-    CnchDedupHelper::DedupScope scope = CnchDedupHelper::DedupScope::Table();
+    CnchDedupHelper::DedupScope scope = CnchDedupHelper::DedupScope::TableDedup();
     if (partition)
     {
         NameOrderedSet partitions;
         partitions.insert(getPartitionIDFromQuery(partition, local_context));
-        scope = CnchDedupHelper::DedupScope::Partitions(partitions);
+        scope = CnchDedupHelper::DedupScope::PartitionDedup(partitions);
     }
 
     auto cnch_lock = txn->createLockHolder(CnchDedupHelper::getLocksToAcquire(

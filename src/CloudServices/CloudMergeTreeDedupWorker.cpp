@@ -177,8 +177,8 @@ void CloudMergeTreeDedupWorker::iterate()
         sorted_partitions.insert(part->info.partition_id);
 
     CnchDedupHelper::DedupScope scope = storage.getSettings()->partition_level_unique_keys
-        ? CnchDedupHelper::DedupScope::Partitions(sorted_partitions)
-        : CnchDedupHelper::DedupScope::Table();
+        ? CnchDedupHelper::DedupScope::PartitionDedup(sorted_partitions)
+        : CnchDedupHelper::DedupScope::TableDedup();
 
     Stopwatch watch;
     auto cnch_lock = txn->createLockHolder(
@@ -192,7 +192,7 @@ void CloudMergeTreeDedupWorker::iterate()
     staged_parts = CnchDedupHelper::getStagedPartsToDedup(scope, *cnch_table, ts);
     if (staged_parts.empty())
     {
-        LOG_INFO(log, "no more staged parts after acquried the locks, they may have been processed by other thread");
+        LOG_INFO(log, "no more staged parts after acquired the locks, they may have been processed by other thread");
         return;
     }
 
@@ -205,9 +205,9 @@ void CloudMergeTreeDedupWorker::iterate()
         LOG_DEBUG(log, "Dedup staged part: {}, commit time: {} ms.", part->name, part->commit_time.toMillisecond());
     }
 
-    if (scope.isPartitions())
+    if (!scope.isTableDedup())
     {
-        scope = CnchDedupHelper::DedupScope::Partitions(sorted_partitions);
+        scope = CnchDedupHelper::DedupScope::PartitionDedup(sorted_partitions);
     }
     MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *cnch_table, ts);
 

@@ -36,24 +36,77 @@ namespace DB::CnchDedupHelper
 class DedupScope
 {
 public:
-    static DedupScope Table()
+
+    enum class DedupMode
     {
-        static DedupScope table_scope{true};
+        TABLE,
+        PARTITION,
+    };
+
+    enum class LockMode
+    {
+        NORMAL, /// For NORMAL lock mode, if dedup mode is table, it's table level. Otherwise, it's partition level.
+        BUCKET, /// BUCKET level lock mode.
+    };
+
+    using BucketSet = std::set<Int64>;
+    using BucketWithPartition = std::pair<String, Int64>;
+    struct BucketWithPartitionComparator
+    {
+        bool operator()(const BucketWithPartition & item1, const BucketWithPartition & item2) const
+        {
+            return std::forward_as_tuple(item1.first, item1.second) < std::forward_as_tuple(item2.first, item2.second);
+        }
+    };
+    using BucketWithPartitionSet = std::set<BucketWithPartition, BucketWithPartitionComparator>;
+
+    static DedupScope TableDedup()
+    {
+        static DedupScope table_scope{DedupMode::TABLE};
         return table_scope;
     }
 
-    static DedupScope Partitions(const NameOrderedSet & partitions) { return {false, partitions}; }
+    static DedupScope TableDedupWithBucket(const BucketSet & buckets_)
+    {
+        DedupScope table_scope{DedupMode::TABLE, LockMode::BUCKET};
+        table_scope.buckets = buckets_;
+        return table_scope;
+    }
 
-    bool isTable() const { return is_table; }
-    bool isPartitions() const { return !is_table; }
+    static DedupScope PartitionDedup(const NameOrderedSet & partitions_)
+    {
+        DedupScope partition_scope{DedupMode::PARTITION};
+        partition_scope.partitions = partitions_;
+        return partition_scope;
+    }
+
+    static DedupScope PartitionDedupWithBucket(const BucketWithPartitionSet & bucket_with_partition_set_)
+    {
+        DedupScope partition_scope{DedupMode::PARTITION, LockMode::BUCKET};
+        partition_scope.bucket_with_partition_set = bucket_with_partition_set_;
+        for (const auto & bucket_with_partition : partition_scope.bucket_with_partition_set)
+            partition_scope.partitions.insert(bucket_with_partition.first);
+        return partition_scope;
+    }
+
+    bool isTableDedup() const { return dedup_mode == DedupMode::TABLE; }
+    bool isBucketLock() const { return lock_mode == LockMode::BUCKET; }
 
     const NameOrderedSet & getPartitions() const { return partitions; }
 
-private:
-    DedupScope(bool is_table_, const NameOrderedSet & partitions_ = {}) : is_table(is_table_), partitions(partitions_) { }
+    const BucketSet & getBuckets() const { return buckets; }
 
-    bool is_table{false};
+    const BucketWithPartitionSet & getBucketWithPartitionSet() const { return bucket_with_partition_set; }
+
+private:
+    DedupScope(DedupMode dedup_mode_, LockMode lock_mode_ = LockMode::NORMAL) : dedup_mode(dedup_mode_), lock_mode(lock_mode_) { }
+
+    DedupMode dedup_mode;
+    LockMode lock_mode;
+
     NameOrderedSet partitions;
+    BucketSet buckets;
+    BucketWithPartitionSet bucket_with_partition_set;
 };
 
 std::vector<LockInfoPtr>

@@ -1400,13 +1400,10 @@ void MetastoreProxy::setTableClusterStatus(const String & name_space, const Stri
     // TDH key may not exist in KV either because the table does not exist or there is an upgrade of CNCH version
     String table_definition_hash_meta;
     metastore_ptr->get(tableDefinitionHashKey(name_space, uuid), table_definition_hash_meta);
-    String expected_table_definition_hash = toString(table_definition_hash);
+    String expected_table_definition_hash = toString(table_definition_hash_meta);
     bool if_not_exists = false;
     if (table_definition_hash_meta.empty())
-    {
-        expected_table_definition_hash = "";
         if_not_exists = true;
-    }
 
     auto table_definition_hash_put_request = SinglePutRequest(tableDefinitionHashKey(name_space, uuid), toString(table_definition_hash), expected_table_definition_hash);
     table_definition_hash_put_request.if_not_exists = if_not_exists;
