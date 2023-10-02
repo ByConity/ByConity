@@ -551,7 +551,7 @@ int TSOServer::main(const std::vector<std::string> &)
     //     },
     //     /* already_loaded = */ false);  /// Reload it right now (initial loading)
 
-    std::unique_ptr<HTTPServer> http_server;
+    std::vector<std::unique_ptr<HTTPServer>> http_servers;
 
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
     Poco::Timespan keep_alive_timeout(config().getUInt("tso_service.http.keep_alive_timeout", 10), 0);
@@ -605,20 +605,25 @@ int TSOServer::main(const std::vector<std::string> &)
             handler->allowGetAndHeadRequest();
             factory->addHandler(handler);
 
-            http_server = std::make_unique<HTTPServer>(
+            http_servers.push_back(std::make_unique<HTTPServer>(
                 global_context,
                 factory,
                 server_pool,
                 socket,
-                http_params);
+                http_params));
 
 
             LOG_INFO(&logger(), "Listening http://{}", address.toString());
         });
     }
-    if (http_server)
-        http_server->start();
 
+    std::for_each(http_servers.begin(), http_servers.end(),
+        [] (const std::unique_ptr<HTTPServer> & http_server)
+        {
+            if (http_server)
+                http_server->start();
+        }
+    );
 
     SCOPE_EXIT({
         LOG_INFO(log, "Shutting down.");
@@ -652,12 +657,17 @@ int TSOServer::main(const std::vector<std::string> &)
         else
             LOG_INFO(log, "Closed connections to Keeper.");
 
-        if (http_server)
-        {
-            http_server->stop();
-            LOG_INFO(log, "Stop HTTP metrics server.");
-        }
 
+        std::for_each(http_servers.begin(), http_servers.end(),
+            [this] (const std::unique_ptr<HTTPServer> & http_server)
+            {
+                if (http_server)
+                {
+                    http_server->stop();
+                    LOG_INFO(log, "Stop HTTP metrics server.");
+                }
+            }
+        );
 
         global_context->shutdownKeeperDispatcher();
 

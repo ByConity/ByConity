@@ -287,6 +287,91 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForInsert()
     }
 }
 
+namespace
+{
+    struct BlockUniqueKeyComparator
+    {
+        const ColumnsWithTypeAndName & keys;
+        explicit BlockUniqueKeyComparator(const ColumnsWithTypeAndName & keys_) : keys(keys_) { }
+
+        bool operator()(size_t lhs, size_t rhs) const
+        {
+            for (auto & key : keys)
+            {
+                int cmp = key.column->compareAt(lhs, rhs, *key.column, /*nan_direction_hint=*/1);
+                if (cmp < 0)
+                    return true;
+                if (cmp > 0)
+                    return false;
+            }
+            return false;
+        }
+    };
+
+    /// Check whether all parts is the same table definition, otherwise we need to use normal lock instead of bucket lock.
+    bool checkBucketParts(
+        const MergeTreeMetaBase & storage,
+        const MergeTreeDataPartsCNCHVector & visible_parts,
+        const MergeTreeDataPartsCNCHVector & staged_parts)
+    {
+        if (!storage.getInMemoryMetadataPtr()->checkIfClusterByKeySameWithUniqueKey())
+            return false;
+        auto table_definition_hash = storage.getTableHashForClusterBy();
+        auto checkIfBucketPartValid = [&table_definition_hash](const MergeTreeDataPartsCNCHVector & parts) -> bool {
+            auto it = std::find_if(parts.begin(), parts.end(), [&](const auto & part) {
+                return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
+            });
+            return it == parts.end();
+        };
+        return checkIfBucketPartValid(visible_parts) && checkIfBucketPartValid(staged_parts);
+    }
+
+    CnchDedupHelper::DedupScope
+    getDedupScope(const MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & preload_parts, bool force_normal_dedup)
+    {
+        auto checkIfUseBucketLock = [&]() -> bool {
+            if (force_normal_dedup || !storage.getInMemoryMetadataPtr()->checkIfClusterByKeySameWithUniqueKey())
+                return false;
+            LOG_DEBUG(storage.getLogger(), "checkIfUseBucketLock: in");
+            auto table_definition_hash = storage.getTableHashForClusterBy();
+            /// Check whether all parts has same table_definition_hash.
+            auto it = std::find_if(preload_parts.begin(), preload_parts.end(), [&](const auto & part) {
+                return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
+            });
+            return it == preload_parts.end();
+        };
+        LOG_DEBUG(storage.getLogger(), "checkIfUseBucketLock: {}", checkIfUseBucketLock());
+
+        if (checkIfUseBucketLock())
+        {
+            if (storage.getSettings()->partition_level_unique_keys)
+            {
+                CnchDedupHelper::DedupScope::BucketWithPartitionSet bucket_with_partition_set;
+                for (const auto & part : preload_parts)
+                    bucket_with_partition_set.insert({part->info.partition_id, part->bucket_number});
+                return CnchDedupHelper::DedupScope::PartitionDedupWithBucket(bucket_with_partition_set);
+            }
+            else
+            {
+                CnchDedupHelper::DedupScope::BucketSet buckets;
+                for (const auto & part : preload_parts)
+                    buckets.insert(part->bucket_number);
+                return CnchDedupHelper::DedupScope::TableDedupWithBucket(buckets);
+            }
+        }
+        else
+        {
+            /// acquire locks for all the written partitions
+            NameOrderedSet sorted_partitions;
+            for (const auto & part : preload_parts)
+                sorted_partitions.insert(part->info.partition_id);
+
+            return storage.getSettings()->partition_level_unique_keys ? CnchDedupHelper::DedupScope::PartitionDedup(sorted_partitions)
+                                                                : CnchDedupHelper::DedupScope::TableDedup();
+        }
+    }
+}
+
 void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
 {
     auto txn = context->getCurrentTransaction();
@@ -337,26 +422,38 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
         return;
     }
 
-    /// acquire locks for all the written partitions
-    NameOrderedSet sorted_partitions;
-    for (auto & part : preload_parts)
-        sorted_partitions.insert(part->info.partition_id);
-
-    CnchDedupHelper::DedupScope scope = storage.getSettings()->partition_level_unique_keys
-        ? CnchDedupHelper::DedupScope::Partitions(sorted_partitions)
-        : CnchDedupHelper::DedupScope::Table();
-
-    std::vector<LockInfoPtr> locks_to_acquire = CnchDedupHelper::getLocksToAcquire(
-        scope, txn->getTransactionID(), storage, storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds());
+    CnchLockHolderPtr cnch_lock;
+    MergeTreeDataPartsCNCHVector visible_parts, staged_parts;
+    bool force_normal_dedup = false;
     Stopwatch lock_watch;
-    auto cnch_lock = txn->createLockHolder(std::move(locks_to_acquire));
-    if (!cnch_lock->tryLock())
+    do
     {
-        throw Exception("Failed to acquire lock for txn " + txn->getTransactionID().toString(), ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
-    }
-    ts = context->getTimestamp(); /// must get a new ts after locks are acquired
-    MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *cnch_table, ts);
-    MergeTreeDataPartsCNCHVector staged_parts = CnchDedupHelper::getStagedPartsToDedup(scope, *cnch_table, ts);
+        CnchDedupHelper::DedupScope scope = getDedupScope(storage, preload_parts, force_normal_dedup);
+
+        std::vector<LockInfoPtr> locks_to_acquire = CnchDedupHelper::getLocksToAcquire(
+            scope, txn->getTransactionID(), storage, storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds());
+        lock_watch.restart();
+        cnch_lock = txn->createLockHolder(std::move(locks_to_acquire));
+        if (!cnch_lock->tryLock())
+            throw Exception("Failed to acquire lock for txn " + txn->getTransactionID().toString(), ErrorCodes::CNCH_LOCK_ACQUIRE_FAILED);
+
+        lock_watch.restart();
+        ts = context->getTimestamp(); /// must get a new ts after locks are acquired
+        visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *cnch_table, ts);
+        staged_parts = CnchDedupHelper::getStagedPartsToDedup(scope, *cnch_table, ts);
+
+        /// In some case, visible parts or staged parts doesn't have same bucket definition or not a bucket part, we need to convert bucket lock to normal lock.
+        /// Otherwise, it may lead to duplicated data.
+        if (scope.isBucketLock() && !checkBucketParts(storage, visible_parts, staged_parts))
+        {
+            force_normal_dedup = true;
+            cnch_lock->unlock();
+            LOG_TRACE(log, "Check bucket parts failed, switch to normal lock to dedup.");
+            continue;
+        }
+        else
+            break;
+    } while (true);
 
     MergeTreeDataDeduper deduper(storage, context);
     LocalDeleteBitmaps bitmaps_to_dump = deduper.dedupParts(
@@ -377,28 +474,6 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
         txn->getTransactionID(),
         watch.elapsedMilliseconds(),
         lock_watch.elapsedMilliseconds());
-}
-
-namespace
-{
-    struct BlockUniqueKeyComparator
-    {
-        const ColumnsWithTypeAndName & keys;
-        explicit BlockUniqueKeyComparator(const ColumnsWithTypeAndName & keys_) : keys(keys_) { }
-
-        bool operator()(size_t lhs, size_t rhs) const
-        {
-            for (auto & key : keys)
-            {
-                int cmp = key.column->compareAt(lhs, rhs, *key.column, /*nan_direction_hint=*/1);
-                if (cmp < 0)
-                    return true;
-                if (cmp > 0)
-                    return false;
-            }
-            return false;
-        }
-    };
 }
 
 CloudMergeTreeBlockOutputStream::FilterInfo CloudMergeTreeBlockOutputStream::dedupWithUniqueKey(const Block & block)

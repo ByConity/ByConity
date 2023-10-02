@@ -29,7 +29,7 @@ namespace DB::CnchDedupHelper
 
 static void checkDedupScope(const DedupScope & scope, const MergeTreeMetaBase & storage)
 {
-    if (!storage.getSettings()->partition_level_unique_keys && !scope.isTable())
+    if (!storage.getSettings()->partition_level_unique_keys && !scope.isTableDedup())
         throw Exception("Expect TABLE scope for table level uniqueness", ErrorCodes::LOGICAL_ERROR);
 }
 
@@ -39,25 +39,56 @@ getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTree
     checkDedupScope(scope, storage);
 
     std::vector<LockInfoPtr> res;
-    if (scope.isPartitions())
+    if (scope.isTableDedup())
     {
-        for (auto & partition : scope.getPartitions())
+        if (scope.isBucketLock())
+        {
+            for (auto & bucket : scope.getBuckets())
+            {
+                auto lock_info = std::make_shared<LockInfo>(txn_id);
+                lock_info->setMode(LockMode::X);
+                lock_info->setTimeout(timeout_ms);
+                lock_info->setUUID(storage.getStorageUUID());
+                lock_info->setBucket(bucket);
+                res.push_back(std::move(lock_info));
+            }
+        }
+        else
         {
             auto lock_info = std::make_shared<LockInfo>(txn_id);
             lock_info->setMode(LockMode::X);
             lock_info->setTimeout(timeout_ms);
             lock_info->setUUID(storage.getStorageUUID());
-            lock_info->setPartition(partition);
             res.push_back(std::move(lock_info));
         }
     }
     else
     {
-        auto lock_info = std::make_shared<LockInfo>(txn_id);
-        lock_info->setMode(LockMode::X);
-        lock_info->setTimeout(timeout_ms);
-        lock_info->setUUID(storage.getStorageUUID());
-        res.push_back(std::move(lock_info));
+        if (scope.isBucketLock())
+        {
+            for (auto & bucket_with_partition : scope.getBucketWithPartitionSet())
+            {
+                auto lock_info = std::make_shared<LockInfo>(txn_id);
+                lock_info->setMode(LockMode::X);
+                lock_info->setTimeout(timeout_ms);
+                lock_info->setUUID(storage.getStorageUUID());
+                lock_info->setPartition(bucket_with_partition.first);
+                lock_info->setBucket(bucket_with_partition.second);
+                res.push_back(std::move(lock_info));
+            }
+        }
+        else
+        {
+            for (auto & partition : scope.getPartitions())
+            {
+                auto lock_info = std::make_shared<LockInfo>(txn_id);
+                lock_info->setMode(LockMode::X);
+                lock_info->setTimeout(timeout_ms);
+                lock_info->setUUID(storage.getStorageUUID());
+                lock_info->setPartition(partition);
+                res.push_back(std::move(lock_info));
+            }
+        }
     }
     return res;
 }
@@ -67,9 +98,10 @@ MergeTreeDataPartsCNCHVector getStagedPartsToDedup(const DedupScope & scope, Sto
     checkDedupScope(scope, cnch_table);
 
     MergeTreeDataPartsCNCHVector staged_parts;
-    if (scope.isPartitions())
+    if (!scope.isTableDedup())
     {
-        NameSet partitions_filter{scope.getPartitions().begin(), scope.getPartitions().end()};
+        const auto & partitions = scope.getPartitions();
+        NameSet partitions_filter {partitions.begin(), partitions.end()};
         return cnch_table.getStagedParts(ts, &partitions_filter);
     }
     else
@@ -92,9 +124,10 @@ MergeTreeDataPartsCNCHVector getVisiblePartsToDedup(const DedupScope & scope, St
 {
     checkDedupScope(scope, cnch_table);
 
-    if (scope.isPartitions())
+    if (!scope.isTableDedup())
     {
-        Names partitions_filter{scope.getPartitions().begin(), scope.getPartitions().end()};
+        const auto & partitions = scope.getPartitions();
+        Names partitions_filter {partitions.begin(), partitions.end()};
         return cnch_table.getUniqueTableMeta(ts, partitions_filter, force_bitmap);
     }
     else

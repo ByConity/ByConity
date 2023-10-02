@@ -509,6 +509,13 @@ Names StorageInMemoryMetadata::getColumnsForClusterByKey() const
     return {};
 }
 
+Names StorageInMemoryMetadata::getColumnsRequiredForClusterByKey() const
+{
+    if (hasClusterByKey())
+        return cluster_by_key.expression->getRequiredColumns();
+    return {};
+}
+
 Int64 StorageInMemoryMetadata::getBucketNumberFromClusterByKey() const
 {
     if (isClusterByKeyDefined())
@@ -544,13 +551,15 @@ bool StorageInMemoryMetadata::checkIfClusterByKeySameWithUniqueKey() const
     if (!isClusterByKeyDefined())
         return false;
 
-    const auto & unique_key = getUniqueKey();
-    const auto & cluster_by_key = getClusterByKey();
-    if (unique_key.column_names.size() != cluster_by_key.column_names.size())
+    /// If required columns are same in unique key and cluster by expression, we can make sure that all same unique key will split into the same bucket while writing.
+    Names unique_key_required_columns = getColumnsRequiredForUniqueKey();
+    Names cluster_by_key_required_columns = getColumnsRequiredForClusterByKey();
+    if (unique_key_required_columns.size() != cluster_by_key_required_columns.size())
         return false;
-    for (size_t i = 0; i < unique_key.column_names.size(); ++i)
+    NameSet unique_key_required_columns_set = {unique_key_required_columns.begin(), unique_key_required_columns.end()};
+    for (const auto & column: cluster_by_key_required_columns)
     {
-        if (unique_key.column_names[i] != cluster_by_key.column_names[i])
+        if (!unique_key_required_columns_set.count(column))
             return false;
     }
     return true;

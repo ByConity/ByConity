@@ -142,13 +142,13 @@ bool LockRequest::wait()
 }
 
 LockLevel LockInfo::getLockLevel() const {
-    if (hasPartition())
-    {
-        return LockLevel::PARTITION;
-    }
-    else if (hasBucket())
+    if (hasBucket())
     {
         return LockLevel::BUCKET;
+    }
+    else if (hasPartition())
+    {
+        return LockLevel::PARTITION;
     }
     else
     {
@@ -177,15 +177,15 @@ const LockRequestPtrs & LockInfo::getLockRequests()
         field_model.set_table_prefix(table_uuid_with_prefix);
         field_model.SerializeToString(&entities[to_underlying(LockLevel::TABLE)]);
     }
-    if (hasBucket())
-    {
-        field_model.set_bucket(bucket);
-        field_model.SerializeToString(&entities[to_underlying(LockLevel::BUCKET)]);
-    }
     if (hasPartition())
     {
         field_model.set_partition(partition);
         field_model.SerializeToString(&entities[to_underlying(LockLevel::PARTITION)]);
+    }
+    if (hasBucket())
+    {
+        field_model.set_bucket(bucket);
+        field_model.SerializeToString(&entities[to_underlying(LockLevel::BUCKET)]);
     }
 
     for (size_t i = 0; i <= to_underlying(level); i++)

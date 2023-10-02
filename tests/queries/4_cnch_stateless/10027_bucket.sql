@@ -88,6 +88,7 @@ ALTER TABLE bucket_attach ATTACH PARTITION 'jane' from bucket_attach_2;
 SELECT * FROM bucket_attach ORDER BY name FORMAT CSV;
 SELECT * FROM bucket_attach_2 ORDER BY name FORMAT CSV; -- empty results returned as part has been dropped from this table during attach
 SELECT count(DISTINCT table_definition_hash) FROM system.cnch_parts where database = currentDatabase() and table = 'bucket_attach' and active FORMAT CSV;
+SELECT sleep(3) FORMAT Null; -- wait for cluster_status to be changed
 SELECT cluster_status FROM system.cnch_table_info where database = currentDatabase() and table = 'bucket_attach' FORMAT CSV;
 
 -- Ensure bucket number is assigned using user defined cluster by expression

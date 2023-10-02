@@ -38,4 +38,6 @@ private:
     std::chrono::milliseconds lock_expire_duration{30000};
 };
 
+using CnchLockHolderPtr = std::shared_ptr<CnchLockHolder>;
+
 }

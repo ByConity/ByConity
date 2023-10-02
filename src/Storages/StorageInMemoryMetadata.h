@@ -251,8 +251,10 @@ struct StorageInMemoryMetadata
     bool isClusterByKeyDefined() const;
     /// Storage has cluster by key.
     bool hasClusterByKey() const;
-    /// Returns column names that need to be read to calculate cluster by key.
+    /// Returns columns names in cluster by specified by. For example: 'id', 'sipHash64(id)', etc.
     Names getColumnsForClusterByKey() const;
+    /// Returns column names that need to be read to calculate cluster by key.
+    Names getColumnsRequiredForClusterByKey() const;
     Int64 getBucketNumberFromClusterByKey() const;
     Int64 getSplitNumberFromClusterByKey() const;
     bool getWithRangeFromClusterByKey() const;

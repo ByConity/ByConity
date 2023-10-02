@@ -3,8 +3,8 @@ DROP TABLE IF EXISTS u10117_uniquekey_test_bucket2;
 DROP TABLE IF EXISTS u10117_uniquekey_test_normal;
 
 select 'test partition level unique key and cluster by is same with unique key';
-CREATE TABLE u10117_uniquekey_test_bucket (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY id INTO 1 BUCKETS ORDER BY s;
-CREATE TABLE u10117_uniquekey_test_bucket2 (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY id INTO 1 BUCKETS ORDER BY s;
+CREATE TABLE u10117_uniquekey_test_bucket (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY sipHash64(id) INTO 1 BUCKETS ORDER BY s;
+CREATE TABLE u10117_uniquekey_test_bucket2 (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY sipHash64(id) INTO 1 BUCKETS ORDER BY s;
 CREATE TABLE u10117_uniquekey_test_normal (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id ORDER BY s;
 
 SELECT 'Ensure bucket number is assigned to a part in bucket table';
@@ -20,7 +20,7 @@ SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts wh
 SELECT b1.s, id, b2.s FROM u10117_uniquekey_test_bucket b1 JOIN u10117_uniquekey_test_bucket2 b2 USING (id);
 
 SELECT 'ALTER MODIFY CLUSTER KEY DEFINITION';
-ALTER TABLE u10117_uniquekey_test_bucket MODIFY CLUSTER BY id INTO 3 BUCKETS;
+ALTER TABLE u10117_uniquekey_test_bucket MODIFY CLUSTER BY sipHash64(id) INTO 3 BUCKETS;
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 0, '0a'), ('2023-06-26', 1, '1d'), ('2023-06-26', 1, '1e'), ('2023-06-26', 4, '4a'), ('2023-06-26', 1, '1b');
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s;
 SELECT bucket_number, rows_count, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active order by bucket_number;
@@ -90,8 +90,8 @@ DROP TABLE IF EXISTS u10117_uniquekey_test_normal;
 SELECT '';
 
 select 'test table level unique key and cluster by is same with unique key';
-CREATE TABLE u10117_uniquekey_test_bucket (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY id INTO 1 BUCKETS ORDER BY s SETTINGS partition_level_unique_keys = 0;
-CREATE TABLE u10117_uniquekey_test_bucket2 (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY id INTO 1 BUCKETS ORDER BY s SETTINGS partition_level_unique_keys = 0;
+CREATE TABLE u10117_uniquekey_test_bucket (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY sipHash64(id) INTO 1 BUCKETS ORDER BY s SETTINGS partition_level_unique_keys = 0;
+CREATE TABLE u10117_uniquekey_test_bucket2 (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY sipHash64(id) INTO 1 BUCKETS ORDER BY s SETTINGS partition_level_unique_keys = 0;
 CREATE TABLE u10117_uniquekey_test_normal (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id ORDER BY s SETTINGS partition_level_unique_keys = 0;
 
 SELECT 'Ensure bucket number is assigned to a part in bucket table';
@@ -107,7 +107,7 @@ SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts wh
 SELECT b1.s, id, b2.s FROM u10117_uniquekey_test_bucket b1 JOIN u10117_uniquekey_test_bucket2 b2 USING (id);
 
 SELECT 'ALTER MODIFY CLUSTER KEY DEFINITION';
-ALTER TABLE u10117_uniquekey_test_bucket MODIFY CLUSTER BY id INTO 3 BUCKETS;
+ALTER TABLE u10117_uniquekey_test_bucket MODIFY CLUSTER BY sipHash64(id) INTO 3 BUCKETS;
 INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 0, '0a'), ('2023-06-26', 1, '1d'), ('2023-06-26', 1, '1e'), ('2023-06-26', 4, '4a'), ('2023-06-26', 1, '1b');
 SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s;
 SELECT bucket_number, rows_count, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active order by bucket_number;
