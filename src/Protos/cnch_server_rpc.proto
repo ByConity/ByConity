@@ -478,25 +478,47 @@ enum DetachAttachType
   DETACH_ATTACHED_RAW = 4;
 }
 
-message DetachPartMeta
+message DetachMeta
 {
   required string name = 1;
   required string meta = 2;
 }
 
-message RedirectDetachAttachS3PartsReq
+message RedirectAttachDetachedS3PartsReq
 {
   required DetachAttachType type = 1;
   optional UUID from_table_uuid = 2;
   optional UUID to_table_uuid = 3;
   repeated DataModelPart commit_parts = 4;
-  repeated string detached_part_names = 5;
-  repeated DataModelPart attached_parts = 6;
-  repeated string attached_part_names = 7;
-  repeated DetachPartMeta detached_part_meta = 8;
+  repeated DataModelPart commit_staged_parts = 5;
+  repeated string detached_part_names = 6;
+  repeated string detached_bitmap_names = 7;
+  repeated DataModelDeleteBitmap detached_bitmaps = 8;
+  repeated DataModelDeleteBitmap bitmaps = 9;
 }
 
-message RedirectDetachAttachS3PartsResp
+message RedirectAttachDetachedS3PartsResp
+{
+  optional string exception = 1;
+}
+
+message RedirectDetachAttachedS3PartsReq
+{
+  required DetachAttachType type = 1;
+  optional UUID from_table_uuid = 2;
+  optional UUID to_table_uuid = 3;
+  repeated DataModelPart attached_parts = 4;
+  repeated DataModelPart attached_staged_parts = 5;
+  repeated DataModelPart commit_parts = 6;
+  repeated string attached_part_names = 7;
+  repeated string attached_bitmap_names = 8;
+  repeated DataModelDeleteBitmap attached_bitmaps = 9;
+  repeated DataModelDeleteBitmap bitmaps = 10;
+  repeated DetachMeta detached_part_metas = 11;
+  repeated DetachMeta detached_bitmap_metas = 12;
+}
+
+message RedirectDetachAttachedS3PartsResp
 {
   optional string exception = 1;
 }
@@ -622,7 +644,9 @@ service CnchServerService
 
   rpc redirectSetCommitTime(RedirectCommitPartsReq) returns (RedirectCommitPartsResp);
 
-  rpc redirectDetachAttachS3Parts(RedirectDetachAttachS3PartsReq) returns (RedirectDetachAttachS3PartsResp);
+  rpc redirectAttachDetachedS3Parts(RedirectAttachDetachedS3PartsReq) returns (RedirectAttachDetachedS3PartsResp);
+
+  rpc redirectDetachAttachedS3Parts(RedirectDetachAttachedS3PartsReq) returns (RedirectDetachAttachedS3PartsResp);
 
   rpc removeMergeMutateTasksOnPartitions(RemoveMergeMutateTasksOnPartitionsReq) returns (RemoveMergeMutateTasksOnPartitionsResp);
 

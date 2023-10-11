@@ -34,7 +34,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
-    // extern const int BAD_CAST;
+    extern const int BAD_CAST;
     extern const int BAD_TYPE_OF_FIELD;
     extern const int LOGICAL_ERROR;
     extern const int BAD_ARGUMENTS;
@@ -132,9 +132,10 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
         throw Exception("Disk " + diskName() + " not found. This should only happens in testing or unstable environment. If this exception is on production, there's a bug", ErrorCodes::LOGICAL_ERROR);
     }
 
-    if (type() == UndoResourceType::Part || type() == UndoResourceType::DeleteBitmap || type() == UndoResourceType::StagedPart)
+    if (type() == UndoResourceType::Part || type() == UndoResourceType::DeleteBitmap || type() == UndoResourceType::StagedPart
+        || type() == UndoResourceType::S3DetachDeleteBitmap || type() == UndoResourceType::S3AttachDeleteBitmap)
     {
-        const auto & resource_relative_path = placeholders(1);
+        const auto & resource_relative_path = type() == UndoResourceType::S3AttachDeleteBitmap ? placeholders(4) : placeholders(1);
         String rel_path = storage->getRelativeDataPath(IStorage::StorageLocation::MAIN) + resource_relative_path;
         if (disk->exists(rel_path))
         {
@@ -178,6 +179,52 @@ void UndoResource::clean(Catalog::Catalog & , [[maybe_unused]]MergeTreeMetaBase 
     }
 }
 
+void UndoResource::commit(const Context & context) const
+{
+    auto catalog = context.getCnchCatalog();
+
+    if (type() == UndoResourceType::S3AttachDeleteBitmap)
+    {
+        const String & from_tbl_uuid = placeholders(0);
+        const String & former_bitmap_meta = placeholders(2);
+
+        StoragePtr table = catalog->tryGetTableByUUID(context, from_tbl_uuid, TxnTimestamp::maxTS(), true);
+        if (!table)
+            return;
+
+        auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
+        if (!storage)
+            throw Exception("Table is not of MergeTree class", ErrorCodes::BAD_CAST);
+
+        DiskPtr disk;
+        if (diskName().empty())
+        {
+            // For cnch, this storage policy should only contains one disk
+            disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
+        }
+        else
+        {
+            disk = storage->getStoragePolicy(IStorage::StorageLocation::MAIN)->getDiskByName(diskName());
+        }
+
+        /// This can happen in testing environment when disk name may change time to time
+        if (!disk)
+        {
+            throw Exception("Disk " + diskName() + " not found. This should only happens in testing or unstable environment. If this exception is on production, there's a bug", ErrorCodes::LOGICAL_ERROR);
+        }
+
+        DataModelDeleteBitmapPtr model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();
+        model_ptr->ParseFromString(former_bitmap_meta);
+        const auto & relative_path = DeleteBitmapMeta::deleteBitmapFileRelativePath(*model_ptr);
+        String rel_path = storage->getRelativeDataPath(IStorage::StorageLocation::MAIN) + relative_path;
+        if (disk->exists(rel_path))
+        {
+            LOG_DEBUG(log, "Will remove Disk {} undo path {}", disk->getPath(), rel_path);
+            disk->removeRecursive(rel_path);
+        }
+    }
+}
+
 UndoResourceNames integrateResources(const UndoResources & resources)
 {
     UndoResourceNames result;
@@ -209,7 +256,9 @@ UndoResourceNames integrateResources(const UndoResources & resources)
         }
         else if (resource.type() == UndoResourceType::S3AttachPart
             || resource.type() == UndoResourceType::S3DetachPart
-            || resource.type() == UndoResourceType::S3AttachMeta)
+            || resource.type() == UndoResourceType::S3AttachMeta
+            || resource.type() == UndoResourceType::S3DetachDeleteBitmap
+            || resource.type() == UndoResourceType::S3AttachDeleteBitmap)
         {
         }
         else

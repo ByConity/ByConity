@@ -1788,6 +1788,23 @@ void IMergeTreeDataPart::createDeleteBitmapForDetachedPart() const
         bitmap->cardinality());
 }
 
+LocalDeleteBitmapPtr IMergeTreeDataPart::createNewBaseDeleteBitmap(const UInt64 & txn_id) const
+{
+    if (!storage.getInMemoryMetadataPtr()->hasUniqueKey())
+        return nullptr;
+    auto bitmap = getDeleteBitmap(/*allow_null*/ true);
+    if (!bitmap)
+    {
+        LOG_DEBUG(storage.log, "Delete bitmap of part {} is nullptr, ignore detach delete bitmap.", name);
+        return nullptr;
+    }
+
+    auto new_bitmap = std::make_shared<Roaring>(*bitmap);
+    auto base_delete_bitmap = LocalDeleteBitmap::createBase(info, new_bitmap, txn_id);
+    LOG_DEBUG(storage.log, "Generate a new base delete bitmap for part {}", name);
+    return base_delete_bitmap;
+}
+
 bool IMergeTreeDataPart::hasOnlyOneCompactedMapColumnNotKV() const
 {
     if (columns_ptr->size() != 1)

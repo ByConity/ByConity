@@ -615,7 +615,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
         }
         else if (type == ManipulationType::Attach)
         {
-            if (s3_parts_info == nullptr || s3_parts_info->parts.empty())
+            if (s3_parts_info == nullptr || s3_parts_info->former_parts.empty())
             {
                 LOG_INFO(storage.getLogger(), "Nothing to commit, skip");
                 return commit_time;

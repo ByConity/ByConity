@@ -613,6 +613,8 @@
     M(ClearStagePartsMetaFailed, "") \
     M(ClearDataPartsMetaForTableSuccess, "") \
     M(ClearDataPartsMetaForTableFailed, "") \
+    M(ClearDeleteBitmapsMetaForTableSuccess, "") \
+    M(ClearDeleteBitmapsMetaForTableFailed, "") \
     M(GetSyncListSuccess, "") \
     M(GetSyncListFailed, "") \
     M(ClearSyncListSuccess, "") \
