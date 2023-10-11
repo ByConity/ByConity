@@ -40,7 +40,7 @@ Projection
                   │        │     └─ Aggregating
                   │        │        │     Group by: {wr_order_number}
                   │        │        └─ Inner Join
-                  │        │           │     Condition: wr_order_number == ws_order_number_5
+                  │        │           │     Condition: wr_order_number == ws_order_number_4
                   │        │           ├─ Repartition Exchange
                   │        │           │  │     Partition by: {wr_order_number}
                   │        │           │  └─ Filter
@@ -49,11 +49,11 @@ Projection
                   │        │           │              Where: isNotNull(wr_order_number) Runtime Filters: {wr_order_number}
                   │        │           │              Outputs: [wr_order_number]
                   │        │           └─ Repartition Exchange
-                  │        │              │     Partition by: {ws_order_number_5}
+                  │        │              │     Partition by: {ws_order_number_4}
                   │        │              └─ Inner Join
-                  │        │                 │     Condition: ws_order_number_6 == ws_order_number_5
+                  │        │                 │     Condition: ws_order_number_6 == ws_order_number_4
                   │        │                 │     Filter: ws_warehouse_sk_6 != ws_warehouse_sk_7
-                  │        │                 │     Runtime Filters Builder: {ws_order_number_5}
+                  │        │                 │     Runtime Filters Builder: {ws_order_number_4}
                   │        │                 ├─ Filter
                   │        │                 │  │     Condition: isNotNull(ws_order_number_6) Runtime Filters: {ws_order_number_6}
                   │        │                 │  └─ TableScan tpcds100.web_sales
@@ -61,13 +61,13 @@ Projection
                   │        │                 │           Outputs: ws_order_number_6:=ws_order_number, ws_warehouse_sk_7:=ws_warehouse_sk
                   │        │                 └─ Broadcast Exchange
                   │        │                    └─ Inner Join
-                  │        │                       │     Condition: ws_order_number_5 == ws_order_number_7
+                  │        │                       │     Condition: ws_order_number_4 == ws_order_number_7
                   │        │                       │     Runtime Filters Builder: {ws_order_number_7}
                   │        │                       ├─ Filter
-                  │        │                       │  │     Condition: isNotNull(ws_order_number_5) Runtime Filters: {ws_order_number_5}
+                  │        │                       │  │     Condition: isNotNull(ws_order_number_4) Runtime Filters: {ws_order_number_4}
                   │        │                       │  └─ TableScan tpcds100.web_sales
                   │        │                       │           Where: isNotNull(ws_order_number) Runtime Filters: {ws_order_number}
-                  │        │                       │           Outputs: ws_order_number_5:=ws_order_number, ws_warehouse_sk_6:=ws_warehouse_sk
+                  │        │                       │           Outputs: ws_order_number_4:=ws_order_number, ws_warehouse_sk_6:=ws_warehouse_sk
                   │        │                       └─ Broadcast Exchange
                   │        │                          └─ MergingAggregated
                   │        │                             └─ Repartition Exchange

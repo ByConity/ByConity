@@ -20,76 +20,63 @@
 #include <Functions/IFunction.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/WindowDescription.h>
-#include <QueryPlan/Assignment.h>
-#include <QueryPlan/AggregatingStep.h>
-#include <QueryPlan/ApplyStep.h>
-#include <QueryPlan/ArrayJoinStep.h>
-#include <QueryPlan/AssignUniqueIdStep.h>
-#include <QueryPlan/CreatingSetsStep.h>
-#include <QueryPlan/CubeStep.h>
-#include <QueryPlan/DistinctStep.h>
-#include <QueryPlan/EnforceSingleRowStep.h>
-#include <QueryPlan/ExpressionStep.h>
-#include <QueryPlan/ExtremesStep.h>
-#include <QueryPlan/ExceptStep.h>
-#include <QueryPlan/ExchangeStep.h>
-#include <QueryPlan/FillingStep.h>
-#include <QueryPlan/FilterStep.h>
-#include <QueryPlan/FinalSampleStep.h>
-#include <QueryPlan/FinishSortingStep.h>
-#include <QueryPlan/IntersectStep.h>
-#include <QueryPlan/JoinStep.h>
-#include <QueryPlan/LimitStep.h>
-#include <QueryPlan/LimitByStep.h>
-#include <QueryPlan/MergeSortingStep.h>
-#include <QueryPlan/MergingSortedStep.h>
-#include <QueryPlan/MergingAggregatedStep.h>
-#include <QueryPlan/OffsetStep.h>
-#include <QueryPlan/ProjectionStep.h>
-#include <QueryPlan/PartitionTopNStep.h>
-#include <QueryPlan/PartialSortingStep.h>
-#include <QueryPlan/RemoteExchangeSourceStep.h>
-#include <QueryPlan/RollupStep.h>
-#include <QueryPlan/SymbolAllocator.h>
-#include <QueryPlan/SortingStep.h>
-#include <QueryPlan/TableScanStep.h>
-#include <QueryPlan/TopNFilteringStep.h>
-#include <QueryPlan/TotalsHavingStep.h>
-#include <QueryPlan/UnionStep.h>
-#include <QueryPlan/ValuesStep.h>
-#include <QueryPlan/WindowStep.h>
 #include <Optimizer/Property/Property.h>
-#include "Interpreters/Context_fwd.h"
-#include "QueryPlan/ReadNothingStep.h"
+#include <Parsers/IAST_fwd.h>
+#include <QueryPlan/Assignment.h>
+#include <QueryPlan/PlanVisitor.h>
 
-
-
-
-
-
+#include <memory>
+#include <string>
 
 namespace DB
 {
-using ASTPtr = std::shared_ptr<IAST>;
 
-// todo@kaixi: implement for all plan nodes
+/**
+ * Copy a step and replace its all symbol using mapping_function.
+ */
 class SymbolMapper
 {
 public:
     using Symbol = std::string;
-    using MappingFunction = std::function<std::string(const std::string &)>;
+    using MappingFunction = std::function<Symbol(const Symbol &)>;
+    using AddSymbolMapping = std::function<void(const Symbol &, const Symbol &)>;
 
-    explicit SymbolMapper(MappingFunction mapping_function_, ContextPtr context_ = nullptr) : mapping_function(std::move(mapping_function_)), context(context_) { }
+    explicit SymbolMapper(MappingFunction mapping_function_) : mapping_function(std::move(mapping_function_))
+    {
+        add_symbol_mapping_function
+            = [](const Symbol &, const Symbol &) { throw Exception("Not supported in SymbolMapper", ErrorCodes::NOT_IMPLEMENTED); };
+    }
 
+    SymbolMapper(MappingFunction mapping_function_, AddSymbolMapping add_symbol_mapping_function_)
+        : mapping_function(std::move(mapping_function_)), add_symbol_mapping_function(add_symbol_mapping_function_)
+    {
+    }
+
+    /**
+     * replace symbol using mapping
+     * eg, if mapping: [a => a_1, a_1 => a_2], input: a, output: a_1
+     */
     static SymbolMapper simpleMapper(std::unordered_map<Symbol, Symbol> & mapping);
-    static SymbolMapper symbolMapper(const std::unordered_map<Symbol, Symbol> & mapping);
-    static SymbolMapper symbolReallocator(std::unordered_map<Symbol, Symbol> & mapping, SymbolAllocator & symbolAllocator, ContextPtr context);
 
-    std::string map(const std::string & symbol) { return mapping_function(symbol); }
+    /**
+     * replace symbol recursively using mapping
+     * eg, if mapping: [a => a_1, a_1 => a_2], input: a, output: a_2
+     */
+    static SymbolMapper symbolMapper(std::unordered_map<Symbol, Symbol> & mapping);
+
+    /**
+     * replace symbol recursively using mapping.
+     * if symbol is not record in mapping, create a new symbol using symbolAllocator.
+     * eg, if mapping: [a => a_1, a_1 => a_2], input: b, output: b_2; input: a, output: a_2.
+     */
+    static SymbolMapper symbolReallocator(std::unordered_map<Symbol, Symbol> & mapping, SymbolAllocator & symbolAllocator);
+
+    std::string map(const Symbol & symbol) { return mapping_function(symbol); }
+    void addSymbolMapping(const Symbol & from, const Symbol & to) { add_symbol_mapping_function(from, to); }
     template <typename T>
     std::vector<T> map(const std::vector<T> & items)
     {
-        std::vector<T>  ret;
+        std::vector<T> ret;
         std::transform(items.begin(), items.end(), std::back_inserter(ret), [&](const auto & param) { return map(param); });
         return ret;
     }
@@ -115,54 +102,22 @@ public:
     Aggregator::Params map(const Aggregator::Params & params);
     AggregatingTransformParamsPtr map(const AggregatingTransformParamsPtr & param);
     ArrayJoinActionPtr map(const ArrayJoinActionPtr & array_join_action);
-
     GroupingDescription map(const GroupingDescription & desc);
 
     LinkedHashMap<String, RuntimeFilterBuildInfos> map(const LinkedHashMap<String, RuntimeFilterBuildInfos> & infos);
+    PlanNodeStatisticsEstimate map(const PlanNodeStatisticsEstimate & estimate);
 
-    std::shared_ptr<AggregatingStep> map(const AggregatingStep & agg);
-    std::shared_ptr<ApplyStep> map(const ApplyStep & apply);
-    std::shared_ptr<ArrayJoinStep> map(const ArrayJoinStep & array_join);
-    std::shared_ptr<AssignUniqueIdStep> map(const AssignUniqueIdStep & assign);
-    std::shared_ptr<CreatingSetsStep> map(const CreatingSetsStep & creating_sets);
-    std::shared_ptr<CubeStep> map(const CubeStep & cube);
-    std::shared_ptr<DistinctStep> map(const DistinctStep & distinct);
-    std::shared_ptr<EnforceSingleRowStep> map(const EnforceSingleRowStep & row);
-    std::shared_ptr<ExpressionStep> map(const ExpressionStep & expression);
-    std::shared_ptr<ExceptStep> map(const ExceptStep & except);
-    std::shared_ptr<ExtremesStep> map(const ExtremesStep & extreme);
-    std::shared_ptr<ExchangeStep> map(const ExchangeStep & exchange);
-    std::shared_ptr<FillingStep> map(const FillingStep & filling);
-    std::shared_ptr<FinalSampleStep> map(const FinalSampleStep & final_sample);
-    std::shared_ptr<FinishSortingStep> map(const FinishSortingStep & finish_sorting);
-    std::shared_ptr<FilterStep> map(const FilterStep & filter);
-    std::shared_ptr<IntersectStep> map(const IntersectStep & intersect);
-    std::shared_ptr<JoinStep> map(const JoinStep & join);
-    std::shared_ptr<LimitStep> map(const LimitStep & limit);
-    std::shared_ptr<LimitByStep> map(const LimitByStep & limit);
-    std::shared_ptr<MergeSortingStep> map(const MergeSortingStep & sorting);
-    std::shared_ptr<MergingSortedStep> map(const MergingSortedStep & merging);
-    std::shared_ptr<MergingAggregatedStep> map(const MergingAggregatedStep & merge_agg);
-    std::shared_ptr<OffsetStep> map(const OffsetStep & offset);
-    std::shared_ptr<ProjectionStep> map(const ProjectionStep & projection);
-    std::shared_ptr<PartitionTopNStep> map(const PartitionTopNStep & partition_topn);
-    std::shared_ptr<PartialSortingStep> map(const PartialSortingStep & partition_sorting);
-    std::shared_ptr<ReadNothingStep> map(const ReadNothingStep & read_nothing);
-    std::shared_ptr<RemoteExchangeSourceStep> map(const RemoteExchangeSourceStep & remote_exchange);
-    std::shared_ptr<SortingStep> map(const SortingStep & sorting);
-    std::shared_ptr<TopNFilteringStep> map(const TopNFilteringStep & topn_filter);
-    std::shared_ptr<TableScanStep> map(const TableScanStep & table_scan);
-    std::shared_ptr<TotalsHavingStep> map(const TotalsHavingStep & total_having);
-    std::shared_ptr<UnionStep> map(const UnionStep & union_);
-    std::shared_ptr<ValuesStep> map(const ValuesStep & values);
-    std::shared_ptr<WindowStep> map(const WindowStep & window);
+#define VISITOR_DEF(TYPE) std::shared_ptr<TYPE##Step> map(const TYPE##Step &);
+    APPLY_STEP_TYPES(VISITOR_DEF)
+#undef VISITOR_DEF
 
     QueryPlanStepPtr map(const IQueryPlanStep & step);
 
 private:
     MappingFunction mapping_function;
-    ContextPtr context;
+    AddSymbolMapping add_symbol_mapping_function;
     class IdentifierRewriter;
+    class SymbolMapperVisitor;
 };
 
 }

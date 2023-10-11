@@ -1,5 +1,3 @@
-#pragma once
-
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <QueryPlan/GraphvizPrinter.h>
 
@@ -21,8 +19,11 @@ void Rewriter::rewritePlan(QueryPlan & plan, ContextMutablePtr context) const
     context->logOptimizerProfile(
         &Poco::Logger::get("PlanOptimizer"), "Optimizer rule run time: ", name(), std::to_string(duration) + "ms", true);
 
-    if (duration >= 1000)
-        LOG_WARNING(&Poco::Logger::get("PlanOptimizer"), "the execute time of " + name() + " rewriter greater than or equal to 1 second");
+    if (duration >= context->getSettingsRef().plan_optimizer_rule_warning_time)
+        LOG_WARNING(
+            &Poco::Logger::get("PlanOptimizer"),
+            "the execute time of " + name() + " rewriter " + std::to_string(duration)
+                + " ms greater than or equal to " + std::to_string(context->getSettingsRef().plan_optimizer_rule_warning_time) + " ms");
 
     if (context->getSettingsRef().print_graphviz)
     {

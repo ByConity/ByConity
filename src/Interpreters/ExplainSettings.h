@@ -121,3 +121,4 @@ ExplainSettings<Settings> checkAndGetSettings(const ASTPtr & ast_settings)
 }
 
 }
+

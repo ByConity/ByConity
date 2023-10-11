@@ -13,26 +13,22 @@
  * limitations under the License.
  */
 
-#include <QueryPlan/CTERefStep.h>
+#include <unordered_map>
 
+#include <IO/ReadHelpers.h>
+#include <IO/VarInt.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSerDerHelper.h>
 #include <QueryPlan/CTEInfo.h>
-#include <QueryPlan/FilterStep.h>
-#include <QueryPlan/PlanCopier.h>
-#include <QueryPlan/PlanNode.h>
-#include <QueryPlan/PlanSerDerHelper.h>
-#include <QueryPlan/SymbolMapper.h>
-#include <QueryPlan/ProjectionStep.h>
-#include <IO/ReadHelpers.h>
-#include <IO/VarInt.h>
+#include <QueryPlan/CTERefStep.h>
+#include <QueryPlan/PlanSymbolReallocator.h>
 
 
 namespace DB
 {
 
 CTERefStep::CTERefStep(DataStream output_, CTEId id_, std::unordered_map<String, String> output_columns_, bool has_filter_)
-        : ISourceStep(std::move(output_)), id(id_), output_columns(std::move(output_columns_)), has_filter(has_filter_)
+    : ISourceStep(std::move(output_)), id(id_), output_columns(std::move(output_columns_)), has_filter(has_filter_)
 {
 }
 
@@ -84,28 +80,13 @@ std::shared_ptr<ProjectionStep> CTERefStep::toProjectionStep() const
 
 PlanNodePtr CTERefStep::toInlinedPlanNode(CTEInfo & cte_info, ContextMutablePtr & context) const
 {
-    std::unordered_map<SymbolMapper::Symbol, SymbolMapper::Symbol> mapping;
-    auto with_clause_plan = PlanCopier::copy(cte_info.getCTEDef(id), context, mapping);
-    SymbolMapper mapper = SymbolMapper::symbolReallocator(mapping, *(context->getSymbolAllocator()), context);
-    auto node = PlanNodeBase::createPlanNode(context->nextNodeId(), toProjectionStepWithNewSymbols(mapper), {with_clause_plan});
-    return node;
-}
-
-std::shared_ptr<ProjectionStep> CTERefStep::toProjectionStepWithNewSymbols(SymbolMapper & mapper) const 
-{
-    NamesAndTypes inputs;
-    Assignments assignments;
-    NameToType name_to_type;
-    for (const auto & item : output_stream.value().header)
-    {
-        if (output_columns.contains(item.name))
-        {
-            assignments.emplace_back(item.name, std::make_shared<ASTIdentifier>(mapper.map(output_columns.at(item.name))));
-            name_to_type.emplace(item.name, item.type);
-            inputs.emplace_back(NameAndTypePair{output_columns.at(item.name), item.type});
-        }
+    std::unordered_map<String, String> symbol_mapping;
+    auto inlined_plan = PlanNodeBase::createPlanNode(context->nextNodeId(), toProjectionStep(), {cte_info.getCTEDef(id)});
+    // don't reallocate output symbols
+    for (const auto & output : inlined_plan->getOutputNames()) {
+        symbol_mapping.emplace(output, output);
     }
-    return std::make_shared<ProjectionStep>(mapper.map(DataStream{inputs}), assignments, name_to_type);
+    return PlanSymbolReallocator::reallocate(inlined_plan,context, symbol_mapping);
 }
 
 std::unordered_map<String, String> CTERefStep::getReverseOutputColumns() const

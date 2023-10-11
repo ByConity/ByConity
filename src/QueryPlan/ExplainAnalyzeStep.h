@@ -25,7 +25,9 @@ public:
     String getName() const override { return "ExplainAnalyze"; }
     Type getType() const override { return Type::ExplainAnalyze; }
     bool hasPlan() const { return query_plan_ptr != nullptr; }
-    QueryPlanSettings getSetting() const { return settings; }
+    const QueryPlanSettings & getSetting() const { return settings; }
+    const std::shared_ptr<QueryPlan> & getQueryPlan() const { return query_plan_ptr; }
+    const ContextMutablePtr & getContext() const { return context; }
 //    void setQueryPlan(QueryPlanPtr query_plan_ptr_) { query_plan = query_plan_ptr_; }
 
     void transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings &) override;

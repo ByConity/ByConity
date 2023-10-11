@@ -13,7 +13,6 @@
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <Parsers/ParserQuery.h>
 #include <QueryPlan/CTEInfo.h>
-#include <QueryPlan/PlanCopier.h>
 #include <QueryPlan/PlanNode.h>
 #include <QueryPlan/PlanPattern.h>
 #include <QueryPlan/PlanVisitor.h>
@@ -113,7 +112,7 @@ WorkloadQueryPtr WorkloadQuery::build(const std::string & query, const ContextPt
     PlanOptimizer::optimize(*query_plan, context, before_cascades);
 
     // initialize memo for memo-based advisor rules
-    auto cascades_plan = PlanCopier::copyWithoutReplacingSymbol(query_plan, context);
+    auto cascades_plan = query_plan->copy(context);
     auto cascades_context = std::make_shared<CascadesContext>(
         context,
         cascades_plan->getCTEInfo(),

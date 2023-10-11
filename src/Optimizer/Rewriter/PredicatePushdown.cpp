@@ -886,7 +886,8 @@ PlanNodePtr PredicateVisitor::visitCTERefNode(CTERefNode & node, PredicateContex
             std::vector<ConstASTPtr> common_filters;
             for (const auto & cte_ref : cte_refs)
             {
-                auto mapper = SymbolMapper::symbolMapper(cte_ref.first->getOutputColumns());
+                auto mapping = cte_ref.first->getOutputColumns();
+                auto mapper = SymbolMapper::simpleMapper(mapping);
                 auto mapped_filter = mapper.map(cte_ref.second);
                 common_filters.emplace_back(mapped_filter);
             }

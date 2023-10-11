@@ -1303,7 +1303,7 @@ String StepPrinter::printJoinStep(const JoinStep & step)
     if (!PredicateUtils::isTruePredicate(step.getFilter()))
     {
         details << "JoinFilter\\n";
-        details << step.getFilter()->getColumnName();
+        // details << step.getFilter()->getColumnName();
         details << "|";
     }
     details << inequality(step.getAsofInequality());

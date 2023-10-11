@@ -17,7 +17,6 @@
 
 #include <QueryPlan/ISourceStep.h>
 #include <QueryPlan/ProjectionStep.h>
-#include <QueryPlan/SymbolMapper.h>
 
 #include <memory>
 
@@ -25,6 +24,7 @@ namespace DB
 {
 using CTEId = UInt32;
 class CTEInfo;
+class SymbolMapper;
 
 /**
  * CTE is model as two parts: CTERef and CTEDef.
@@ -54,7 +54,6 @@ public:
     static std::shared_ptr<CTERefStep> fromProto(const Protos::CTERefStep & proto, ContextPtr context);
 
     std::shared_ptr<ProjectionStep> toProjectionStep() const;
-    std::shared_ptr<ProjectionStep> toProjectionStepWithNewSymbols(SymbolMapper & mapper) const;
     PlanNodePtr toInlinedPlanNode(CTEInfo & cte_info, ContextMutablePtr & context) const;
 
 private:

@@ -28,6 +28,8 @@ public:
     bool isEnabled(ContextPtr context) const override { return context->getSettingsRef().cte_mode == CTEMode::AUTO; }
     PatternPtr getPattern() const override;
 
+    static PlanNodePtr reoptimize(const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context);
+
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
@@ -42,6 +44,6 @@ public:
 
 protected:
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
-    static PlanNodePtr predicatePushDown(const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context);
+   
 };
 }

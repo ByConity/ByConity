@@ -4,6 +4,7 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Core/QueryProcessingStage.h>
 #include <Interpreters/ExpressionActions.h>
+#include "common/types.h"
 
 namespace DB
 {
@@ -22,6 +23,8 @@ public:
     AggregateDescription getAggregateDescription() const { return agg_desc; }
 
     ASTPtr getQuery() const { return query; }
+
+    UInt64 getNumRows() const { return num_rows; }
 
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;
 
