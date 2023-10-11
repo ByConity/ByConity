@@ -14,15 +14,13 @@ ExplainAnalyzeStep::ExplainAnalyzeStep(
     ASTExplainQuery::ExplainKind kind_,
     ContextMutablePtr context_,
     std::shared_ptr<QueryPlan> query_plan_ptr_,
-    bool print_stats_,
-    bool print_profile_
+    QueryPlanSettings settings_
     )
     : ITransformingStep(std::move(input_stream_), {{std::make_shared<DataTypeString>(),"Explain Analyze"}}, {})
     , kind(kind_)
     , context(context_)
     , query_plan_ptr(query_plan_ptr_)
-    , print_stats(print_stats_)
-    , print_profile(print_profile_)
+    , settings(settings_)
 {
 }
 
@@ -31,7 +29,7 @@ void ExplainAnalyzeStep::transformPipeline(QueryPipeline & pipeline, const Build
     if (!query_plan_ptr)
         throw Exception("QueryPlan is not set", ErrorCodes::LOGICAL_ERROR);
     pipeline.resize(1);
-    pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<ExplainAnalyzeTransform>(header, kind, query_plan_ptr, context, segment_descriptions, print_stats, print_profile); });
+    pipeline.addSimpleTransform([&](const Block & header) { return std::make_shared<ExplainAnalyzeTransform>(header, kind, query_plan_ptr, context, segment_descriptions, settings); });
 }
 
 void ExplainAnalyzeStep::setInputStreams(const DataStreams & input_streams_)
@@ -42,7 +40,7 @@ void ExplainAnalyzeStep::setInputStreams(const DataStreams & input_streams_)
 
 std::shared_ptr<IQueryPlanStep> ExplainAnalyzeStep::copy(ContextPtr) const
 {
-    return std::make_shared<ExplainAnalyzeStep>(input_streams[0], kind, context, query_plan_ptr, print_stats, print_profile);
+    return std::make_shared<ExplainAnalyzeStep>(input_streams[0], kind, context, query_plan_ptr, settings);
 }
 
 }

@@ -98,18 +98,6 @@ void PlanSegmentSplitter::split(QueryPlan & query_plan, PlanSegmentContext & pla
         }
         
     }
-
-    // set plan_segment_descriptions for explain analyze
-    PlanSegmentDescriptions plan_segment_descriptions;
-    for (auto & node : plan_segment_context.plan_segment_tree->getNodes())
-        plan_segment_descriptions.emplace_back(node.plan_segment->getPlanSegmentDescription());
-
-    auto * final_segment = plan_segment_context.plan_segment_tree->getRoot()->getPlanSegment();
-    if (final_segment->getQueryPlan().getRoot())
-    {
-        ExplainAnalyzeVisitor explain_visitor;
-        VisitorUtil::accept(final_segment->getQueryPlan().getRoot(), explain_visitor, plan_segment_descriptions);
-    }
 }
 
 PlanSegmentResult PlanSegmentVisitor::visitNode(QueryPlan::Node * node, PlanSegmentVisitorContext & split_context)
@@ -488,20 +476,6 @@ std::optional<Partitioning::Handle> SourceNodeFinder::visitRemoteExchangeSourceN
         }
     }
     return {};
-}
-
-void ExplainAnalyzeVisitor::visitExplainAnalyzeNode(QueryPlan::Node * node, PlanSegmentDescriptions & descs)
-{
-    auto * explain = dynamic_cast<ExplainAnalyzeStep *>(node->step.get());
-    explain->setPlanSegmentDescriptions(descs);
-}
-
-void ExplainAnalyzeVisitor::visitNode(QueryPlan::Node * node, PlanSegmentDescriptions & descs)
-{
-    for (const auto & child : node->children)
-    {
-        VisitorUtil::accept(child, *this, descs);
-    }
 }
 
 }

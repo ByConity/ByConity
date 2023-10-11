@@ -19,9 +19,7 @@ public:
                             std::shared_ptr<QueryPlan> query_plan_ptr_,
                             ContextMutablePtr context_,
                             PlanSegmentDescriptions & segment_descriptions_,
-                            bool print_stats_ = true,
-                            bool print_profile_ = true
-                            );
+                            QueryPlanSettings settings = {});
 
     String getName() const override { return "ExplainAnalyzeTransform"; }
 protected:
@@ -36,7 +34,6 @@ private:
     std::shared_ptr<QueryPlan> query_plan_ptr;
     PlanSegmentDescriptions segment_descriptions;
     bool has_final_transform = true;
-    bool print_stats;
-    bool print_profile;
+    QueryPlanSettings settings;
 };
 }

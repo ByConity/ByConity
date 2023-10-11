@@ -51,9 +51,6 @@ public:
         MetaData, // 'EXPLAIN METADATA...'
     };
 
-    bool print_stats = true;
-    bool print_profile = true;
-
     explicit ASTExplainQuery(ExplainKind kind_) : kind(kind_) {}
 
     String getID(char delim) const override { return "Explain" + (delim + toString(kind)); }
@@ -63,9 +60,10 @@ public:
         auto res = std::make_shared<ASTExplainQuery>(*this);
 
         res->children.clear();
+        if (query)
+            res->setExplainedQuery(query);
         if (ast_settings)
-            res->setSettings(ast_settings->clone());
-        res->setExplainedQuery(query->clone());
+            res->setSettings(ast_settings);
         cloneOutputOptions(*res);
         return res;
     }

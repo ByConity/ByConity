@@ -30,11 +30,13 @@
 #include <QueryPlan/PlanCache.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/QueryPlanner.h>
-#include <Storages/Hive/StorageCnchHive.h>
-#include <Storages/RemoteFile/IStorageCnchFile.h>
+#include <QueryPlan/PlanPrinter.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
+#include <Interpreters/WorkerStatusManager.h>
 #include <common/logger_useful.h>
+#include <Storages/Hive/StorageCnchHive.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
 #include "QueryPlan/QueryPlan.h"
 #include <Parsers/queryToString.h>
 #include <Interpreters/executeQuery.h>
@@ -146,6 +148,7 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     context->logOptimizerProfile(
         log, "Optimizer total run time: ", "PlanSegment build", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
+    setPlanSegmentInfoForExplainAnalyze(plan_segment_tree);
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
     context->logOptimizerProfile(
         log, "Optimizer total run time: ", "Optimizer Total", std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms");
@@ -398,6 +401,16 @@ bool InterpreterSelectQueryUseOptimizer::addPlanToCache(UInt128 query_hash, Quer
     return true;
 }
 
+void InterpreterSelectQueryUseOptimizer::setPlanSegmentInfoForExplainAnalyze(PlanSegmentTreePtr & plan_segment_tree)
+{
+    auto * final_segment = plan_segment_tree->getRoot()->getPlanSegment();
+    if (final_segment->getQueryPlan().getRoot())
+    {
+        ExplainAnalyzeVisitor explain_visitor;
+        VisitorUtil::accept(final_segment->getQueryPlan().getRoot(), explain_visitor, plan_segment_tree->getNodes());
+    }
+}
+
 QueryPlan PlanNodeToNodeVisitor::convert(QueryPlan & query_plan)
 {
     QueryPlan plan;
@@ -529,6 +542,23 @@ std::optional<PlanSegmentContext> ClusterInfoFinder::visitCTERefNode(CTERefNode 
 {
     const auto * cte = dynamic_cast<const CTERefStep *>(node.getStep().get());
     return cte_helper.accept(cte->getId(), *this, cluster_info_context);
+}
+
+void ExplainAnalyzeVisitor::visitExplainAnalyzeNode(QueryPlan::Node * node, PlanSegmentTree::Nodes & nodes)
+{
+    auto * explain = dynamic_cast<ExplainAnalyzeStep *>(node->step.get());
+    if (explain->getKind() != ASTExplainQuery::ExplainKind::DistributedAnalyze)
+        return;
+    PlanSegmentDescriptions plan_segment_descriptions;
+    for (auto & node : nodes)
+        plan_segment_descriptions.emplace_back(PlanSegmentDescription::getPlanSegmentDescription(node.plan_segment, true));
+    explain->setPlanSegmentDescriptions(plan_segment_descriptions);
+}
+
+void ExplainAnalyzeVisitor::visitNode(QueryPlan::Node * node, PlanSegmentTree::Nodes & nodes)
+{
+    for (const auto & child : node->children)
+        VisitorUtil::accept(child, *this, nodes);
 }
 
 }
