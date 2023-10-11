@@ -128,6 +128,8 @@ public:
 
     const ExtendedProfileInfo & getExtendedProfileInfo() const { return extended_info; }
 
+    void setServerForwarding(bool server_forwarding = false) { is_server_forwarding = server_forwarding; }
+
 private:
     Block header;
     Block totals;
@@ -200,6 +202,8 @@ private:
 
     /// This extended profile info is only for INSERT INFILE / INSERT SELECT, and metrics are sent from workers
     ExtendedProfileInfo extended_info;
+
+    bool is_server_forwarding {false};
 
     Poco::Logger * log = nullptr;
 

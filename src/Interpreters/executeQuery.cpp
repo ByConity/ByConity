@@ -769,11 +769,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 context->getHostWithPorts().toDebugString());
             if (!host_ports.empty() && !isLocalServer(host_ports.getRPCAddress(), std::to_string(context->getRPCPort())))
             {
+                String query = String(begin, begin + std::min(end - begin, static_cast<ptrdiff_t>(max_query_size)));
                 LOG_DEBUG(
-                    &Poco::Logger::get("executeQuery"), "Will reroute query " + queryToString(ast) + " to " + host_ports.toDebugString());
+                    &Poco::Logger::get("executeQuery"), "Will reroute query {} to {}", query, host_ports.toDebugString());
                 context->initializeExternalTablesIfSet();
-                executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn);
-                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query execution on remote server done");
+                executeQueryByProxy(context, host_ports, ast, res, in_interactive_txn, query);
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Query forwarded to remote server done");
                 return std::make_tuple(ast, std::move(res));
             }
         }
