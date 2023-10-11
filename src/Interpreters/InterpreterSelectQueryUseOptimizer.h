@@ -50,6 +50,8 @@ public:
     QueryPlanPtr getPlanFromCache(UInt128 query_hash);
     bool addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan);
 
+    static void setPlanSegmentInfoForExplainAnalyze(PlanSegmentTreePtr & plan_segment_tree);
+
     BlockIO execute() override;
 
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr &, ContextPtr) const override
@@ -99,5 +101,12 @@ public:
     std::optional<PlanSegmentContext> visitCTERefNode(CTERefNode & node, ClusterInfoContext & cluster_info_context) override;
 private:
     SimpleCTEVisitHelper<std::optional<PlanSegmentContext>> cte_helper;
+};
+
+class ExplainAnalyzeVisitor : public NodeVisitor<void, PlanSegmentTree::Nodes>
+{
+public:
+    void visitExplainAnalyzeNode(QueryPlan::Node * node, PlanSegmentTree::Nodes &) override;
+    void visitNode(QueryPlan::Node * node, PlanSegmentTree::Nodes &) override;
 };
 }

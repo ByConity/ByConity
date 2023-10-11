@@ -218,28 +218,6 @@ using PlanSegmentOutputs = std::vector<PlanSegmentOutputPtr>;
 class PlanSegment;
 using PlanSegmentPtr = std::unique_ptr<PlanSegment>;
 
-struct PlanSegmentDescription
-{
-    size_t segment_id;
-    String query_id;
-
-    PlanNodeId root_id;
-    PlanNodeId root_child_id;
-    PlanNodePtr plan_node = nullptr;
-
-    String cluster_name;
-    size_t parallel;
-    size_t exchange_parallel_size;
-    UInt32 shard_num;
-    ExchangeMode mode;
-    Names shuffle_keys;
-    bool is_source = false;
-    std::unordered_map<PlanNodeId, size_t> exchange_to_segment;
-};
-
-using PlanSegmentDescriptionPtr = std::shared_ptr<PlanSegmentDescription>;
-using PlanSegmentDescriptions = std::vector<PlanSegmentDescriptionPtr>;
-
 class PlanSegment
 {
 public:
@@ -326,7 +304,6 @@ public:
     void addRuntimeFilter(RuntimeFilterId id) { runtime_filters.emplace(id); }
     const std::unordered_set<RuntimeFilterId> & getRuntimeFilters() const { return runtime_filters; }
 
-    PlanSegmentDescriptionPtr getPlanSegmentDescription();
     static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
     size_t getParallelIndex() const;
 

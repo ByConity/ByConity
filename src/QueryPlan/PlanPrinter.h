@@ -26,6 +26,9 @@
 namespace DB
 {
 using PlanCostMap = std::unordered_map<PlanNodeId, double>;
+struct PlanSegmentDescription;
+using PlanSegmentDescriptionPtr = std::shared_ptr<PlanSegmentDescription>;
+using PlanSegmentDescriptions = std::vector<PlanSegmentDescriptionPtr>;
 
 class PlanPrinter
 {
@@ -40,7 +43,8 @@ public:
         PlanCostMap costs = {},
         const StepAggregatedOperatorProfiles & profiles = {},
         bool print_profile = true);
-    static String jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool verbose, const PlanNodeCost & plan_cost = {});
+    static String jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool verbose, std::optional<PlanNodeCost> plan_cost, const StepAggregatedOperatorProfiles & profiles = {});
+    static String jsonDistributedPlan(PlanSegmentDescriptions & segment_descs, const StepAggregatedOperatorProfiles & profiles);
     static String textDistributedPlan(
         PlanSegmentDescriptions & segments_desc,
         bool print_stats,
@@ -54,8 +58,6 @@ public:
     static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
 
     class TextPrinter;
-private:
-    class JsonPrinter;
 };
 
 class TextPrinterIntent
@@ -102,11 +104,11 @@ public:
     static String printPrefix(PlanNodeBase & plan);
     String printSuffix(PlanNodeBase & plan);
     static String printQError(const PlanNodeBase & plan, const StepAggregatedOperatorProfiles & profiles);
+    static String printFilter(ConstASTPtr filter);
 private:
     String printDetail(QueryPlanStepPtr plan, const TextPrinterIntent & intent) const;
     String printStatistics(const PlanNodeBase & plan, const TextPrinterIntent & intent = {}) const;
     static String printOperatorProfiles(PlanNodeBase & plan, const TextPrinterIntent & intent = {}, const StepAggregatedOperatorProfiles & profiles = {}) ;
-    static String printFilter(ConstASTPtr filter);
 
     const bool print_stats;
     const bool verbose;
@@ -116,16 +118,66 @@ private:
     const bool print_profile; 
 };
 
-class PlanPrinter::JsonPrinter
+class NodeDescription;
+using NodeDescriptionPtr = std::shared_ptr<NodeDescription>;
+using NodeDescriptions = std::vector<NodeDescriptionPtr>;
+
+class NodeDescription
 {
 public:
-    explicit JsonPrinter(bool print_stats_) : print_stats(print_stats_) { }
-    Poco::JSON::Object::Ptr printLogicalPlan(PlanNodeBase & plan);
+    size_t node_id;
+    IQueryPlanStep::Type type = IQueryPlanStep::Type::Any;
+    String step_name;
+    std::unordered_map<String, String> step_detail;
+    std::unordered_map<String, std::vector<String>> step_vector_detail;
+    std::unordered_map<String, NodeDescriptionPtr> descriptions_in_step;
+    std::vector<NodeDescriptionPtr> children;
 
-private:
-    static void detail(Poco::JSON::Object::Ptr & json, QueryPlanStepPtr plan);
+    struct StatisticInfo
+    {
+        size_t row_count = 0;
+    };
 
-    const bool print_stats;
+    std::optional<StatisticInfo> stats;
+
+    void setStepStatistic(PlanNodePtr node);
+    void setStepDetail(QueryPlanStepPtr step);
+    Poco::JSON::Object::Ptr jsonNodeDescription(const StepAggregatedOperatorProfiles & profiles, bool print_stats);
+    static NodeDescriptionPtr getPlanDescription(QueryPlan::Node * node);
+    static NodeDescriptionPtr getPlanDescription(PlanNodePtr node);
+};
+
+struct PlanSegmentDescription
+{
+    struct OutputInfo
+    {
+        size_t segment_id;
+        String plan_segment_type;
+        size_t parallel_size;
+        String shuffle_function_name;
+    };
+    size_t segment_id;
+    String query_id;
+
+    PlanNodeId root_id;
+    PlanNodeId root_child_id;
+    PlanNodePtr plan_node = nullptr;
+
+    String cluster_name;
+    size_t parallel;
+    size_t exchange_parallel_size;
+    UInt32 shard_num;
+    ExchangeMode mode;
+    Names shuffle_keys;
+    std::unordered_map<PlanNodeId, size_t> exchange_to_segment;
+    std::vector<std::shared_ptr<OutputInfo>> outputs_desc;
+
+    std::vector<String> output_columns;
+
+    NodeDescriptionPtr node_description;
+
+    Poco::JSON::Object::Ptr jsonPlanSegmentDescription(const StepAggregatedOperatorProfiles & profiles);
+    static PlanSegmentDescriptionPtr getPlanSegmentDescription(PlanSegmentPtr & segment, bool record_plan_detail = false);
 };
 
 }
