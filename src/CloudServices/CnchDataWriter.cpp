@@ -707,6 +707,9 @@ void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & sta
 
 void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_parts)
 {
+    if (context->tryGetPreloadThrottler())
+        context->tryGetPreloadThrottler()->add(1);
+
     const auto & settings = context->getSettingsRef();
     // storage.getSettings()->enable_preload_parts is old setting, use it for compitablity
     if (settings.parts_preload_level && storage.getSettings()->enable_local_disk_cache && (storage.getSettings()->enable_preload_parts || storage.getSettings()->parts_preload_level))
