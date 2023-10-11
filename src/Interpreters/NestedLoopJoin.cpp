@@ -56,6 +56,9 @@ NestedLoopJoin::NestedLoopJoin(std::shared_ptr<TableJoin> table_join_, const Blo
     if (!isLeft(table_join->kind()) && !isInner(table_join->kind()))
         throw Exception("NestedLoop join supported for LEFT and INNER JOINs only", ErrorCodes::NOT_IMPLEMENTED);
 
+    if (is_any_join)
+        throw Exception("NestedLoop join is not supported for any join", ErrorCodes::NOT_IMPLEMENTED);
+
     if (!max_rows_in_right_block)
         throw Exception("partial_nested_loop_join_rows_in_right_blocks cannot be zero", ErrorCodes::PARAMETER_OUT_OF_BOUND);
 
@@ -237,13 +240,80 @@ void NestedLoopJoin::joinImpl(
 
     for (size_t left_row_index = 0; left_row_index < left_block.rows(); left_row_index++)
     {
+        if (right_blocks.size() == 0 )
+            break;
+        
+        auto index = 0;
+        BlockFilterDescriptions block_filter_descriptions;
         for (Block right_block : right_blocks)
         {
             paddingRightBlockWithConstColumn(left_block, left_row_index, right_block);
             actions->execute(right_block, false);
             auto filter_column = right_block.getByName(filter_name).column->convertToFullColumnIfConst();
-            auto filter_and_holder = std::make_unique<FilterDescription>(*filter_column);
+            auto filter_and_holder = std::make_shared<FilterDescription>(*filter_column);
             auto filtered_size = countBytesInFilter(*filter_and_holder->data);
+            block_filter_descriptions.add(index, right_block, filter_and_holder, filtered_size);
+            index++;
+        }
+
+        auto total_filtered_size = block_filter_descriptions.getTotalFilteredSize();
+
+        if (is_left && total_filtered_size == 0)
+        {
+            if (new_block.columns() == 0)
+            {
+                auto filter_and_holder = block_filter_descriptions.getHolderByIndex(0);
+                auto right_block = block_filter_descriptions.getBlockByIndex(0);
+                for (size_t i = 0; i < right_block.columns(); ++i)
+                {
+                    auto & right_col = right_block.getByPosition(i);
+                    if (isConstFromLeftTable(right_col, left_column_names))
+                    {
+                        auto & left_col = left_block.getByName(right_col.name);
+                        auto new_column = left_col.type->createColumn();
+                        new_column->insertFrom(*left_col.column, left_row_index);
+                        new_block.insert({std::move(new_column), left_col.type, left_col.name});
+                    }
+                    else
+                    {
+                        auto new_column = right_col.type->createColumn();
+                        new_column->insertDefault();
+                        new_block.insert({std::move(new_column), right_col.type, right_col.name});
+                    }
+                }
+                continue;
+            }
+            else
+            {
+                auto filter_and_holder = block_filter_descriptions.getHolderByIndex(0);
+                auto right_block = block_filter_descriptions.getBlockByIndex(0);
+                for (size_t i = 0; i < new_block.columns(); ++i)
+                {
+                    auto & right_col = right_block.getByPosition(i);
+                    auto mutable_column = IColumn::mutate(std::move(new_block.getByPosition(i).column));
+
+                    if (isConstFromLeftTable(right_col, left_column_names))
+                    {
+                        auto & col = left_block.getByName(right_col.name);
+                        mutable_column->insertFrom(*col.column, left_row_index);
+                    }
+                    else
+                    {
+                        mutable_column->insertDefault();
+                    }
+                    new_block.getByPosition(i).column = std::move(mutable_column);
+                }
+                continue;
+            }
+        }
+
+        int i = 0;
+        for (Block b : right_blocks)
+        {
+            i++;
+            auto right_block = block_filter_descriptions.getBlockByIndex(i-1);
+            auto filtered_size = block_filter_descriptions.getFilteredSizeByIndex(i-1);
+            auto filter_and_holder = block_filter_descriptions.getHolderByIndex(i-1);
 
             if (new_block.columns() == 0)
             {
@@ -255,29 +325,13 @@ void NestedLoopJoin::joinImpl(
                     {
                         auto & left_col = left_block.getByName(right_col.name);
                         auto new_column = left_col.type->createColumn();
-                        if ((is_left && filtered_size == 0) || (is_any_join && filtered_size != 0))
-                            new_column->insertFrom(*left_col.column, left_row_index);
-                        else
-                            new_column->insertManyFrom(*left_col.column, left_row_index, filtered_size);
-
+                        new_column->insertManyFrom(*left_col.column, left_row_index, filtered_size);
                         new_block.insert({std::move(new_column), left_col.type, left_col.name});
                     }
                     // column from right table
                     else
                     {
-                        if (is_left && filtered_size == 0)
-                        {
-                            auto new_column = right_col.type->createColumn();
-                            new_column->insertDefault();
-                            new_block.insert({std::move(new_column), right_col.type, right_col.name});
-                        }
-                        else if (is_any_join && filtered_size != 0)
-                        {
-                            right_col.column = right_col.column->filter(*filter_and_holder->data, 1);
-                            new_block.insert({right_col.column->cut(0, 1), right_col.type, right_col.name});
-                        }
-                        else
-                            new_block.insert({right_col.column->filter(*filter_and_holder->data, 1), right_col.type, right_col.name});
+                        new_block.insert({right_col.column->filter(*filter_and_holder->data, 1), right_col.type, right_col.name});
                     }
                 }
             }
@@ -293,29 +347,14 @@ void NestedLoopJoin::joinImpl(
                     {
                         auto & col = left_block.getByName(right_col.name);
                         auto mutable_column = IColumn::mutate(std::move(new_block.getByPosition(i).column));
-                        if ((is_left && filtered_size == 0) || (is_any_join && filtered_size != 0))
-                            mutable_column->insertFrom(*col.column, left_row_index);
-                        else
-                            mutable_column->insertManyFrom(*col.column, left_row_index, filtered_size);
-
+                        mutable_column->insertManyFrom(*col.column, left_row_index, filtered_size);
                         new_block.getByPosition(i).column = std::move(mutable_column);
                     }
                     else
                     {
                         auto mutable_column = IColumn::mutate(std::move(new_block.getByPosition(i).column));
-                        if (is_left && filtered_size == 0)
-                            mutable_column->insertDefault();
-                        else if (is_any_join && filtered_size != 0)
-                        {
-                            right_col.column = right_col.column->filter(*filter_and_holder->data, 1);
-                            const auto source_column = right_col.column->cut(0, 1);
-                            mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
-                        }
-                        else
-                        {
-                            const auto source_column = right_col.column->filter(*filter_and_holder->data, 1);
-                            mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
-                        }
+                        const auto source_column = right_col.column->filter(*filter_and_holder->data, 1);
+                        mutable_column->insertRangeFrom(*source_column, 0, source_column->size());
                         new_block.getByPosition(i).column = std::move(mutable_column);
                     }
                 }
