@@ -60,13 +60,13 @@ CTEDef [1]
             │     │  │     Condition: Runtime Filters: {ws_sold_date_sk}
             │     │  └─ TableScan tpcds1000.web_sales
             │     │           Where: Runtime Filters: {ws_sold_date_sk}
-            │     │           Outputs: [ws_bill_addr_sk, ws_ext_sales_price, ws_sold_date_sk]
+            │     │           Outputs: [ws_sold_date_sk, ws_bill_addr_sk, ws_ext_sales_price]
             │     └─ Broadcast Exchange
             │        └─ Filter
             │           │     Condition: (d_year_4 = 2000) AND (d_qoy_4 IN (1, 2, 3))
             │           └─ TableScan tpcds1000.date_dim
             │                    Where: (d_year = 2000) AND (d_qoy IN (1, 2, 3))
-            │                    Outputs: d_date_sk_1:=d_date_sk, d_qoy_4:=d_qoy, d_year_4:=d_year
+            │                    Outputs: d_date_sk_1:=d_date_sk, d_year_4:=d_year, d_qoy_4:=d_qoy
             └─ Repartition Exchange
                │     Partition by: {ca_address_sk_1}
                └─ TableScan tpcds1000.customer_address
@@ -89,13 +89,13 @@ CTEDef [0]
             │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
             │     │  └─ TableScan tpcds1000.store_sales
             │     │           Where: Runtime Filters: {ss_sold_date_sk}
-            │     │           Outputs: [ss_addr_sk, ss_ext_sales_price, ss_sold_date_sk]
+            │     │           Outputs: [ss_sold_date_sk, ss_addr_sk, ss_ext_sales_price]
             │     └─ Broadcast Exchange
             │        └─ Filter
             │           │     Condition: (d_year = 2000) AND (d_qoy IN (1, 2, 3))
             │           └─ TableScan tpcds1000.date_dim
             │                    Where: (d_year = 2000) AND (d_qoy IN (1, 2, 3))
-            │                    Outputs: [d_date_sk, d_qoy, d_year]
+            │                    Outputs: [d_date_sk, d_year, d_qoy]
             └─ Repartition Exchange
                │     Partition by: {ca_address_sk}
                └─ TableScan tpcds1000.customer_address

@@ -15,7 +15,7 @@ Projection Est. ? rows
             │  │     │     Condition: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
             │  │     └─ TableScan test.idm_ana_xz_rpt_user_evt Est. ? rows
             │  │              Where: (p_date >= cast(18359, \'Date\')) AND (channel = \'APP\')
-            │  │              Outputs: [channel, p_date, user_id]
+            │  │              Outputs: [user_id, channel, p_date]
             │  └─ Repartition Exchange Est. ? rows
             │     │     Partition by: {expr#toDate(hdfs_par)_1}
             │     └─ Filter Est. ? rows
@@ -27,9 +27,9 @@ Projection Est. ? rows
 CTEDef [0]
    MergingAggregated Est. ? rows
    └─ Repartition Exchange Est. ? rows
-      │     Partition by: {expr#toDate(hdfs_par), user_id_1}
+      │     Partition by: {user_id_1, expr#toDate(hdfs_par)}
       └─ Aggregating Est. ? rows
-         │     Group by: {expr#toDate(hdfs_par), user_id_1}
+         │     Group by: {user_id_1, expr#toDate(hdfs_par)}
          └─ Projection Est. ? rows
             │     Expressions: [user_id_1], expr#toDate(hdfs_par):=toDate(hdfs_par)
             └─ Filter Est. ? rows

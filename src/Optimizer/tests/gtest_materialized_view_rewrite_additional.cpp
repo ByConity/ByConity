@@ -109,7 +109,7 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testAggDistinctInMvGrouping)
           "            └─ Projection\n"
           "               │     Expressions: expr#avgState(deptno)_1:=`avgState(deptno)`, expr#empid:=empid, expr#empid_1:=empid\n"
           "               └─ TableScan test_mview.MV0_MV_DATA\n"
-          "                        Outputs: [avgState(deptno), empid]")
+          "                        Outputs: [empid, avgState(deptno)]")
       .ok();
 }
 
@@ -131,7 +131,7 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testAggDistinctInMvGrouping2)
             "         └─ Projection\n"
             "            │     Expressions: expr#cd:=cd, expr#empid:=empid\n"
             "            └─ TableScan test_mview.MV0_MV_DATA\n"
-            "                     Outputs: [cd, empid]")
+            "                     Outputs: [empid, cd]")
         .ok();
 }
 
@@ -154,7 +154,7 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testAggDistinctInMvGrouping3)
           "               │     Condition: empid = 5\n"
           "               └─ TableScan test_mview.MV0_MV_DATA\n"
           "                        Where: empid = 5\n"
-          "                        Outputs: [cd, empid]")
+          "                        Outputs: [empid, cd]")
       .ok();
 }
 
@@ -213,7 +213,7 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testEmptyGrouping2)
                                   "               │     Condition: (deptno = 1) AND (empid = 2)\n"
                                   "               └─ TableScan test_mview.MV0_MV_DATA\n"
                                   "                        Where: (deptno = 1) AND (empid = 2)\n"
-                                  "                        Outputs: [count, deptno, empid]\n")
+                                  "                        Outputs: [empid, deptno, count]\n")
       .ok();
 }
 

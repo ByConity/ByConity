@@ -23,7 +23,7 @@ Projection
                      │     │     Condition: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
                      │     └─ TableScan tpch1000.lineitem
                      │              Where: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
-                     │              Outputs: [l_discount, l_extendedprice, l_orderkey, l_shipdate]
+                     │              Outputs: [l_orderkey, l_extendedprice, l_discount, l_shipdate]
                      └─ Repartition Exchange
                         │     Partition by: {o_orderkey}
                         └─ Inner (PARALLEL_HASH) Join
@@ -35,7 +35,7 @@ Projection
                            │     │     Condition: o_orderdate < cast(9204, 'Date') Runtime Filters: {o_custkey}
                            │     └─ TableScan tpch1000.orders
                            │              Where: o_orderdate < cast(9204, 'Date') Runtime Filters: {o_custkey}
-                           │              Outputs: [o_custkey, o_orderdate, o_orderkey, o_shippriority]
+                           │              Outputs: [o_orderkey, o_custkey, o_orderdate, o_shippriority]
                            └─ Repartition Exchange
                               │     Partition by: {c_custkey}
                               └─ Filter

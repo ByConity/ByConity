@@ -33,12 +33,12 @@ CTEDef [1]
    Window
    └─ Window
       └─ Repartition Exchange
-         │     Partition by: {cc_name, i_brand, i_category}
+         │     Partition by: {i_category, i_brand, cc_name}
          └─ MergingAggregated
             └─ Repartition Exchange
-               │     Partition by: {cc_name, d_moy, d_year, i_brand, i_category}
+               │     Partition by: {i_category, i_brand, cc_name, d_year, d_moy}
                └─ Aggregating
-                  │     Group by: {cc_name, d_moy, d_year, i_brand, i_category}
+                  │     Group by: {i_category, i_brand, cc_name, d_year, d_moy}
                   │     Aggregates: expr#sum(cs_sales_price):=AggNull(sum)(cs_sales_price)
                   └─ Inner Join
                      │     Condition: cs_call_center_sk == cc_call_center_sk
@@ -53,17 +53,17 @@ CTEDef [1]
                      │  │     │  │     Condition: Runtime Filters: {cs_sold_date_sk}
                      │  │     │  └─ TableScan tpcds100.catalog_sales
                      │  │     │           Where: Runtime Filters: {cs_sold_date_sk}
-                     │  │     │           Outputs: [cs_call_center_sk, cs_item_sk, cs_sales_price, cs_sold_date_sk]
+                     │  │     │           Outputs: [cs_sold_date_sk, cs_call_center_sk, cs_item_sk, cs_sales_price]
                      │  │     └─ Broadcast Exchange
                      │  │        └─ Filter
                      │  │           │     Condition: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
                      │  │           └─ TableScan tpcds100.date_dim
                      │  │                    Where: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
-                     │  │                    Outputs: [d_date_sk, d_moy, d_year]
+                     │  │                    Outputs: [d_date_sk, d_year, d_moy]
                      │  └─ Repartition Exchange
                      │     │     Partition by: {i_item_sk}
                      │     └─ TableScan tpcds100.item
-                     │              Outputs: [i_brand, i_category, i_item_sk]
+                     │              Outputs: [i_item_sk, i_brand, i_category]
                      └─ Broadcast Exchange
                         └─ TableScan tpcds100.call_center
                                  Outputs: [cc_call_center_sk, cc_name]

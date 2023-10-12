@@ -31,7 +31,7 @@ Projection Est. 53 rows
                            │  │     │  │     Condition: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
                            │  │     │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                            │  │     │           Where: isNotNull(ws_web_page_sk) Runtime Filters: {ws_sold_date_sk}
-                           │  │     │           Outputs: [ws_item_sk, ws_net_profit, ws_order_number, ws_quantity, ws_sales_price, ws_sold_date_sk, ws_web_page_sk]
+                           │  │     │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_web_page_sk, ws_order_number, ws_quantity, ws_sales_price, ws_net_profit]
                            │  │     └─ Broadcast Exchange Est. 366 rows
                            │  │        └─ Filter Est. 366 rows
                            │  │           │     Condition: d_year = 2000
@@ -53,23 +53,23 @@ Projection Est. 53 rows
                            │        │     │     ├─ Repartition Exchange Est. 7197670 rows
                            │        │     │     │  │     Partition by: {wr_refunded_addr_sk}
                            │        │     │     │  └─ TableScan tpcds100.web_returns Est. 7197670 rows
-                           │        │     │     │           Outputs: [wr_fee, wr_item_sk, wr_order_number, wr_reason_sk, wr_refunded_addr_sk, wr_refunded_cash, wr_refunded_cdemo_sk, wr_returning_cdemo_sk]
+                           │        │     │     │           Outputs: [wr_item_sk, wr_refunded_cdemo_sk, wr_refunded_addr_sk, wr_returning_cdemo_sk, wr_reason_sk, wr_order_number, wr_fee, wr_refunded_cash]
                            │        │     │     └─ Repartition Exchange Est. 1000000 rows
                            │        │     │        │     Partition by: {ca_address_sk}
                            │        │     │        └─ Filter Est. 1000000 rows
                            │        │     │           │     Condition: ca_country = 'United States'
                            │        │     │           └─ TableScan tpcds100.customer_address Est. 1000000 rows
                            │        │     │                    Where: ca_country = 'United States'
-                           │        │     │                    Outputs: [ca_address_sk, ca_country, ca_state]
+                           │        │     │                    Outputs: [ca_address_sk, ca_state, ca_country]
                            │        │     └─ Repartition Exchange Est. 1920800 rows
                            │        │        │     Partition by: {cd_demo_sk}
                            │        │        └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
-                           │        │                 Outputs: [cd_demo_sk, cd_education_status, cd_marital_status]
+                           │        │                 Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
                            │        └─ Repartition Exchange Est. 1920800 rows
-                           │           │     Partition by: {cd_demo_sk_1, cd_education_status_1, cd_marital_status_1}
+                           │           │     Partition by: {cd_education_status_1, cd_marital_status_1, cd_demo_sk_1}
                            │           └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
-                           │                    Outputs: cd_demo_sk_1:=cd_demo_sk, cd_education_status_1:=cd_education_status, cd_marital_status_1:=cd_marital_status
+                           │                    Outputs: cd_demo_sk_1:=cd_demo_sk, cd_marital_status_1:=cd_marital_status, cd_education_status_1:=cd_education_status
                            └─ Broadcast Exchange Est. 55 rows
                               └─ TableScan tpcds100.reason Est. 55 rows
-                                       Outputs: [r_reason_desc, r_reason_sk]
+                                       Outputs: [r_reason_sk, r_reason_desc]
 note: Runtime Filter is applied for 1 times.

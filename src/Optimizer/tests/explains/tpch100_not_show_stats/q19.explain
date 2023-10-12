@@ -16,11 +16,11 @@ Projection
                │     │     Condition: (l_shipinstruct = 'DELIVER IN PERSON') AND (l_shipmode IN ('AIR', 'AIR REG'))
                │     └─ TableScan tpch100.lineitem
                │              Where: (l_shipinstruct = 'DELIVER IN PERSON') AND (l_shipmode IN ('AIR', 'AIR REG'))
-               │              Outputs: [l_discount, l_extendedprice, l_partkey, l_quantity, l_shipinstruct, l_shipmode]
+               │              Outputs: [l_partkey, l_quantity, l_extendedprice, l_discount, l_shipinstruct, l_shipmode]
                └─ Repartition Exchange
                   │     Partition by: {p_partkey}
                   └─ Filter
                      │     Condition: p_size >= 1
                      └─ TableScan tpch100.part
                               Where: p_size >= 1
-                              Outputs: [p_brand, p_container, p_partkey, p_size]
+                              Outputs: [p_partkey, p_brand, p_size, p_container]

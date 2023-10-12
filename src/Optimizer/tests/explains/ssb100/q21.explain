@@ -17,4 +17,4 @@ Projection Est. 3 rows
                         │     Condition: (C_NATION = 'UNITED STATES') AND (S_NATION = 'UNITED STATES') AND (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997)
                         └─ TableScan ssb100.lineorder_flat Est. 600038145 rows
                                  Where: (C_NATION = 'UNITED STATES') AND (S_NATION = 'UNITED STATES') AND (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997)
-                                 Outputs: [C_CITY, C_NATION, LO_ORDERDATE, LO_REVENUE, S_CITY, S_NATION]
+                                 Outputs: [LO_ORDERDATE, LO_REVENUE, C_CITY, C_NATION, S_CITY, S_NATION]

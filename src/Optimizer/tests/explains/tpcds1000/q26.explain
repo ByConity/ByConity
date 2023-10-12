@@ -31,13 +31,13 @@ Projection Est. 100 rows
                         │  │     │  │  │     Condition: Runtime Filters: {cs_bill_cdemo_sk, cs_sold_date_sk}
                         │  │     │  │  └─ TableScan tpcds1000.catalog_sales Est. 1439980416 rows
                         │  │     │  │           Where: Runtime Filters: {cs_bill_cdemo_sk, cs_sold_date_sk}
-                        │  │     │  │           Outputs: [cs_bill_cdemo_sk, cs_coupon_amt, cs_item_sk, cs_list_price, cs_promo_sk, cs_quantity, cs_sales_price, cs_sold_date_sk]
+                        │  │     │  │           Outputs: [cs_sold_date_sk, cs_bill_cdemo_sk, cs_item_sk, cs_promo_sk, cs_quantity, cs_list_price, cs_sales_price, cs_coupon_amt]
                         │  │     │  └─ Broadcast Exchange Est. 27440 rows
                         │  │     │     └─ Filter Est. 27440 rows
                         │  │     │        │     Condition: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
                         │  │     │        └─ TableScan tpcds1000.customer_demographics Est. 1920800 rows
                         │  │     │                 Where: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
-                        │  │     │                 Outputs: [cd_demo_sk, cd_education_status, cd_gender, cd_marital_status]
+                        │  │     │                 Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status]
                         │  │     └─ Broadcast Exchange Est. 366 rows
                         │  │        └─ Filter Est. 366 rows
                         │  │           │     Condition: d_year = 2000
@@ -47,11 +47,11 @@ Projection Est. 100 rows
                         │  └─ Repartition Exchange Est. 300000 rows
                         │     │     Partition by: {i_item_sk}
                         │     └─ TableScan tpcds1000.item Est. 300000 rows
-                        │              Outputs: [i_item_id, i_item_sk]
+                        │              Outputs: [i_item_sk, i_item_id]
                         └─ Broadcast Exchange Est. 1500 rows
                            └─ Filter Est. 1500 rows
                               │     Condition: (p_channel_email = 'N') OR (p_channel_event = 'N')
                               └─ TableScan tpcds1000.promotion Est. 1500 rows
                                        Where: (p_channel_email = 'N') OR (p_channel_event = 'N')
-                                       Outputs: [p_channel_email, p_channel_event, p_promo_sk]
+                                       Outputs: [p_promo_sk, p_channel_email, p_channel_event]
 note: Runtime Filter is applied for 2 times.

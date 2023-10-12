@@ -7,9 +7,9 @@ Projection Est. 126 rows
          │     Order by: {expr#toYear(LO_ORDERDATE) asc, P_BRAND asc}
          └─ MergingAggregated Est. 126 rows
             └─ Repartition Exchange Est. 126 rows
-               │     Partition by: {P_BRAND, expr#toYear(LO_ORDERDATE)}
+               │     Partition by: {expr#toYear(LO_ORDERDATE), P_BRAND}
                └─ Aggregating Est. 126 rows
-                  │     Group by: {P_BRAND, expr#toYear(LO_ORDERDATE)}
+                  │     Group by: {expr#toYear(LO_ORDERDATE), P_BRAND}
                   │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
                   └─ Projection Est. 4787720 rows
                      │     Expressions: [LO_REVENUE, P_BRAND], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
@@ -17,4 +17,4 @@ Projection Est. 126 rows
                         │     Condition: (P_CATEGORY = 'MFGR#12') AND (S_REGION = 'AMERICA')
                         └─ TableScan ssb100.lineorder_flat Est. 600038145 rows
                                  Where: (P_CATEGORY = 'MFGR#12') AND (S_REGION = 'AMERICA')
-                                 Outputs: [LO_ORDERDATE, LO_REVENUE, P_BRAND, P_CATEGORY, S_REGION]
+                                 Outputs: [LO_ORDERDATE, LO_REVENUE, S_REGION, P_CATEGORY, P_BRAND]

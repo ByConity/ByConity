@@ -12,9 +12,9 @@ Projection Est. 13522268 rows
                   │     Partition by: {i_class}
                   └─ MergingAggregated Est. 13522268 rows
                      └─ Repartition Exchange Est. 13522267 rows
-                        │     Partition by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
+                        │     Partition by: {i_item_id, i_item_desc, i_category, i_class, i_current_price}
                         └─ Aggregating Est. 13522267 rows
-                           │     Group by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
+                           │     Group by: {i_item_id, i_item_desc, i_category, i_class, i_current_price}
                            │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
                            └─ Inner Join Est. 13522267 rows
                               │     Condition: ss_item_sk == i_item_sk
@@ -26,17 +26,17 @@ Projection Est. 13522268 rows
                               │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                               │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
                               │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                              │  │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
+                              │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_ext_sales_price]
                               │  └─ Broadcast Exchange Est. 29 rows
                               │     └─ Filter Est. 29 rows
                               │        │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
                               │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
                               │                 Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                              │                 Outputs: [d_date, d_date_sk]
+                              │                 Outputs: [d_date_sk, d_date]
                               └─ Broadcast Exchange Est. 89906 rows
                                  └─ Filter Est. 89906 rows
                                     │     Condition: i_category IN ('Books', 'Home', 'Sports')
                                     └─ TableScan tpcds1000.item Est. 300000 rows
                                              Where: i_category IN ('Books', 'Home', 'Sports')
-                                             Outputs: [i_category, i_class, i_current_price, i_item_desc, i_item_id, i_item_sk]
+                                             Outputs: [i_item_sk, i_item_id, i_item_desc, i_current_price, i_class, i_category]
 note: Runtime Filter is applied for 2 times.

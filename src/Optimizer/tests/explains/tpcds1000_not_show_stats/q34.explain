@@ -14,16 +14,16 @@ Projection
             │     │     Condition: Runtime Filters: {c_customer_sk}
             │     └─ TableScan tpcds1000.customer
             │              Where: Runtime Filters: {c_customer_sk}
-            │              Outputs: [c_customer_sk, c_first_name, c_last_name, c_preferred_cust_flag, c_salutation]
+            │              Outputs: [c_customer_sk, c_salutation, c_first_name, c_last_name, c_preferred_cust_flag]
             └─ Repartition Exchange
                │     Partition by: {ss_customer_sk}
                └─ Filter
                   │     Condition: (`expr#count()` >= 15) AND (`expr#count()` <= 20)
                   └─ MergingAggregated
                      └─ Repartition Exchange
-                        │     Partition by: {ss_customer_sk, ss_ticket_number}
+                        │     Partition by: {ss_ticket_number, ss_customer_sk}
                         └─ Aggregating
-                           │     Group by: {ss_customer_sk, ss_ticket_number}
+                           │     Group by: {ss_ticket_number, ss_customer_sk}
                            │     Aggregates: expr#count():=AggNull(count)()
                            └─ Inner Join
                               │     Condition: ss_hdemo_sk == hd_demo_sk
@@ -38,23 +38,23 @@ Projection
                               │  │  │  │     Condition: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk, ss_store_sk}
                               │  │  │  └─ TableScan tpcds1000.store_sales
                               │  │  │           Where: Runtime Filters: {ss_hdemo_sk, ss_sold_date_sk, ss_store_sk}
-                              │  │  │           Outputs: [ss_customer_sk, ss_hdemo_sk, ss_sold_date_sk, ss_store_sk, ss_ticket_number]
+                              │  │  │           Outputs: [ss_sold_date_sk, ss_customer_sk, ss_hdemo_sk, ss_store_sk, ss_ticket_number]
                               │  │  └─ Broadcast Exchange
                               │  │     └─ Filter
                               │  │        │     Condition: s_county = 'Williamson County'
                               │  │        └─ TableScan tpcds1000.store
                               │  │                 Where: s_county = 'Williamson County'
-                              │  │                 Outputs: [s_county, s_store_sk]
+                              │  │                 Outputs: [s_store_sk, s_county]
                               │  └─ Broadcast Exchange
                               │     └─ Filter
                               │        │     Condition: (((d_dom >= 1) AND (d_dom <= 3)) OR ((d_dom >= 25) AND (d_dom <= 28))) AND (d_year IN (1999, 2000, 2001))
                               │        └─ TableScan tpcds1000.date_dim
                               │                 Where: (((d_dom >= 1) AND (d_dom <= 3)) OR ((d_dom >= 25) AND (d_dom <= 28))) AND (d_year IN (1999, 2000, 2001))
-                              │                 Outputs: [d_date_sk, d_dom, d_year]
+                              │                 Outputs: [d_date_sk, d_year, d_dom]
                               └─ Broadcast Exchange
                                  └─ Filter
                                     │     Condition: (hd_buy_potential IN ('>10000', 'Unknown')) AND (hd_vehicle_count > 0) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > '1.2')
                                     └─ TableScan tpcds1000.household_demographics
                                              Where: (hd_buy_potential IN ('>10000', 'Unknown')) AND (hd_vehicle_count > 0) AND (multiIf(hd_vehicle_count > 0, hd_dep_count / hd_vehicle_count, NULL) > '1.2')
-                                             Outputs: [hd_buy_potential, hd_demo_sk, hd_dep_count, hd_vehicle_count]
+                                             Outputs: [hd_demo_sk, hd_buy_potential, hd_dep_count, hd_vehicle_count]
 note: Runtime Filter is applied for 4 times.

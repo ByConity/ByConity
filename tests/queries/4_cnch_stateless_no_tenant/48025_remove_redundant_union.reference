@@ -24,7 +24,7 @@ Gather Exchange Est. ? rows
                │           │        │     Condition: (toDate(recvtime_1) = cast(17751, \'Date\')) AND (\'XXX\' = multiIf(pii = \'132 06\', \'WXVAT\', (pii = \'631\') AND (hvbqqa = \'fas\'), \'PDIN\', (pii = \'63\') AND (hvbqqa = \'fdsaf\'), \'PCDT\', (pii = \'75\') OR (hvbqqa = \'zvc\'), \'XXX\', NULL)) AND (toDate(recvtime_1) = cast(18649, \'Date\'))
                │           │        └─ TableScan zx_test.table5 Est. ? rows
                │           │                 Where: (toDate(recvtime) = cast(17751, \'Date\')) AND (\'XXX\' = multiIf(pii = \'132 06\', \'WXVAT\', (pii = \'631\') AND (hvbqqa = \'fas\'), \'PDIN\', (pii = \'63\') AND (hvbqqa = \'fdsaf\'), \'PCDT\', (pii = \'75\') OR (hvbqqa = \'zvc\'), \'XXX\', NULL)) AND (toDate(recvtime) = cast(18649, \'Date\'))
-               │           │                 Outputs: [hvbqqa, oooo, pii], i_7id_1:=i_7id, recvtime_1:=recvtime
+               │           │                 Outputs: [pii, hvbqqa, oooo], recvtime_1:=recvtime, i_7id_1:=i_7id
                │           └─ MergingAggregated Est. ? rows
                │              └─ Repartition Exchange Est. ? rows
                │                 │     Partition by: {v2v2v2_2}

@@ -5,4 +5,4 @@ Projection Est. ? rows
       │     Condition: (hash_uid > 70) AND (cohort_id > 80)
       └─ TableScan correctness.q4_t1 Est. ? rows
                Where: (hash_uid > 70) AND (cohort_id > 80)
-               Outputs: [app_id, cohort_id, hash_uid, q4_date]
+               Outputs: [hash_uid, cohort_id, app_id, q4_date]

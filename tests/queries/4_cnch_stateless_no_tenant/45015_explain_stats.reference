@@ -10,7 +10,7 @@ Projection Est. 54 rows, cost 7.540000e+01
       │     │     Condition: i8 = 1
       │     └─ TableScan test.test_explain_stats Est. 4 rows, cost 2.960000e+00
       │              Where: i8 = 1
-      │              Outputs: [i8, id]
+      │              Outputs: [id, i8]
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id_1]
       │  └─ Filter Est. 3 rows, cost 3.256000e+00
@@ -142,7 +142,7 @@ Projection Est. 54 rows, cost 7.540000e+01
       │     │     Condition: i8 = 1
       │     └─ TableScan test.test_explain_stats Est. 4 rows, cost 2.960000e+00
       │              Where: i8 = 1
-      │              Outputs: [i8, id]
+      │              Outputs: [id, i8]
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id_1]
       │  └─ Filter Est. 3 rows, cost 3.256000e+00
@@ -274,7 +274,7 @@ Projection Est. 54 rows, cost 7.540000e+01
       │     │     Condition: i8 = 1
       │     └─ TableScan test.test_explain_stats Est. 4 rows, cost 2.960000e+00
       │              Where: i8 = 1
-      │              Outputs: [i8, id]
+      │              Outputs: [id, i8]
       ├─ Projection Est. 3 rows, cost 3.478000e+00
       │  │     Expressions: [id_1]
       │  └─ Filter Est. 3 rows, cost 3.256000e+00

@@ -13,9 +13,9 @@ Projection Est. 100 rows
                │     Condition: (multiIf(`expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` > 0, `expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` / `expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))`, NULL) >= '0.666666') AND (multiIf(`expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` > 0, `expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))` / `expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))`, NULL) <= '1.500000')
                └─ MergingAggregated Est. 182039 rows
                   └─ Repartition Exchange Est. 182039 rows
-                     │     Partition by: {i_item_id, w_warehouse_name}
+                     │     Partition by: {w_warehouse_name, i_item_id}
                      └─ Aggregating Est. 182039 rows
-                        │     Group by: {i_item_id, w_warehouse_name}
+                        │     Group by: {w_warehouse_name, i_item_id}
                         │     Aggregates: expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)):=AggNull(sum)(expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)), expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0)):=AggNull(sum)(expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0))
                         └─ Projection Est. 11701103 rows
                            │     Expressions: [i_item_id, w_warehouse_name], expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0):=multiIf(CAST(d_date, 'date') >= cast(11027, 'Date'), inv_quantity_on_hand, 0), expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), inv_quantity_on_hand, 0):=multiIf(CAST(d_date, 'date') < cast(11027, 'Date'), inv_quantity_on_hand, 0)
@@ -31,20 +31,20 @@ Projection Est. 100 rows
                               │  │  │  │     Condition: Runtime Filters: {inv_date_sk, inv_item_sk}
                               │  │  │  └─ TableScan tpcds1000.inventory Est. 783000000 rows
                               │  │  │           Where: Runtime Filters: {inv_date_sk, inv_item_sk}
-                              │  │  │           Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand, inv_warehouse_sk]
+                              │  │  │           Outputs: [inv_date_sk, inv_item_sk, inv_warehouse_sk, inv_quantity_on_hand]
                               │  │  └─ Broadcast Exchange Est. 19576 rows
                               │  │     └─ Filter Est. 19576 rows
                               │  │        │     Condition: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
                               │  │        └─ TableScan tpcds1000.item Est. 300000 rows
                               │  │                 Where: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
-                              │  │                 Outputs: [i_current_price, i_item_id, i_item_sk]
+                              │  │                 Outputs: [i_item_sk, i_item_id, i_current_price]
                               │  └─ Broadcast Exchange Est. 60 rows
                               │     └─ Filter Est. 60 rows
                               │        │     Condition: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
                               │        └─ TableScan tpcds1000.date_dim Est. 73049 rows
                               │                 Where: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
-                              │                 Outputs: [d_date, d_date_sk]
+                              │                 Outputs: [d_date_sk, d_date]
                               └─ Broadcast Exchange Est. 20 rows
                                  └─ TableScan tpcds1000.warehouse Est. 20 rows
-                                          Outputs: [w_warehouse_name, w_warehouse_sk]
+                                          Outputs: [w_warehouse_sk, w_warehouse_name]
 note: Runtime Filter is applied for 2 times.

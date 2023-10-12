@@ -8,7 +8,7 @@ Projection Est. ? rows
          └─ Inner Join Est. ? rows
             │     Condition: event_date == p_date, hash_uid == hash_uid_1
             ├─ TableScan test.table_misc Est. ? rows
-            │        Outputs: [event_date, hash_uid]
+            │        Outputs: [hash_uid, event_date]
             └─ TableScan test.daily_misc Est. ? rows
                      Outputs: [p_date], hash_uid_1:=hash_uid
 Projection Est. ? rows
@@ -23,6 +23,6 @@ Projection Est. ? rows
             ├─ Projection Est. ? rows
             │  │     Expressions: [event_date, hash_uid], expr#plus(hash_uid, hash_uid):=hash_uid + hash_uid
             │  └─ TableScan test.table_misc Est. ? rows
-            │           Outputs: [event_date, hash_uid]
+            │           Outputs: [hash_uid, event_date]
             └─ TableScan test.daily_misc Est. ? rows
                      Outputs: [p_date], hash_uid_1:=hash_uid

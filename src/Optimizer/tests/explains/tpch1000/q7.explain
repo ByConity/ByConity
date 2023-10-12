@@ -7,9 +7,9 @@ Projection Est. 3072 rows
          │     Order by: {n_name asc, n_name_1 asc, expr#toYear(l_shipdate) asc}
          └─ MergingAggregated Est. 3072 rows
             └─ Repartition Exchange Est. 3072 rows
-               │     Partition by: {expr#toYear(l_shipdate), n_name, n_name_1}
+               │     Partition by: {n_name, n_name_1, expr#toYear(l_shipdate)}
                └─ Aggregating Est. 3072 rows
-                  │     Group by: {expr#toYear(l_shipdate), n_name, n_name_1}
+                  │     Group by: {n_name, n_name_1, expr#toYear(l_shipdate)}
                   │     Aggregates: expr#sum(volume):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
                   └─ Projection Est. 16335856 rows
                      │     Expressions: [n_name, n_name_1], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount), expr#toYear(l_shipdate):=toYear(l_shipdate)
@@ -28,7 +28,7 @@ Projection Est. 3072 rows
                         │     │     │     Condition: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date')) Runtime Filters: {l_orderkey, l_suppkey}
                         │     │     └─ TableScan tpch1000.lineitem Est. 5999989709 rows
                         │     │              Where: (l_shipdate >= cast(9131, 'Date')) AND (l_shipdate <= cast(9861, 'Date')) Runtime Filters: {l_orderkey, l_suppkey}
-                        │     │              Outputs: [l_discount, l_extendedprice, l_orderkey, l_shipdate, l_suppkey]
+                        │     │              Outputs: [l_orderkey, l_suppkey, l_extendedprice, l_discount, l_shipdate]
                         │     └─ Repartition Exchange Est. 800000 rows
                         │        │     Partition by: {s_suppkey}
                         │        └─ Inner Join Est. 800000 rows
@@ -38,13 +38,13 @@ Projection Est. 3072 rows
                         │           │  │     Condition: Runtime Filters: {s_nationkey}
                         │           │  └─ TableScan tpch1000.supplier Est. 10000000 rows
                         │           │           Where: Runtime Filters: {s_nationkey}
-                        │           │           Outputs: [s_nationkey, s_suppkey]
+                        │           │           Outputs: [s_suppkey, s_nationkey]
                         │           └─ Broadcast Exchange Est. 2 rows
                         │              └─ Filter Est. 2 rows
                         │                 │     Condition: n_name IN ('FRANCE', 'GERMANY')
                         │                 └─ TableScan tpch1000.nation Est. 25 rows
                         │                          Where: n_name IN ('FRANCE', 'GERMANY')
-                        │                          Outputs: [n_name, n_nationkey]
+                        │                          Outputs: [n_nationkey, n_name]
                         └─ Repartition Exchange Est. 120000000 rows
                            │     Partition by: {o_orderkey}
                            └─ Inner (PARALLEL_HASH) Join Est. 175603328 rows
@@ -56,7 +56,7 @@ Projection Est. 3072 rows
                               │     │     Condition: Runtime Filters: {o_custkey}
                               │     └─ TableScan tpch1000.orders Est. 1500000000 rows
                               │              Where: Runtime Filters: {o_custkey}
-                              │              Outputs: [o_custkey, o_orderkey]
+                              │              Outputs: [o_orderkey, o_custkey]
                               └─ Repartition Exchange Est. 12000000 rows
                                  │     Partition by: {c_custkey}
                                  └─ Inner Join Est. 12000000 rows
@@ -72,5 +72,5 @@ Projection Est. 3072 rows
                                           │     Condition: n_name_1 IN ('FRANCE', 'GERMANY')
                                           └─ TableScan tpch1000.nation Est. 25 rows
                                                    Where: n_name IN ('FRANCE', 'GERMANY')
-                                                   Outputs: n_name_1:=n_name, n_nationkey_1:=n_nationkey
+                                                   Outputs: n_nationkey_1:=n_nationkey, n_name_1:=n_name
 note: Runtime Filter is applied for 5 times.

@@ -79,7 +79,7 @@ Projection Est. 10 rows, cost 1.540000e+00
                ├─ Repartition Exchange Est. ? rows, cost 3.200000e-01
                │  │     Partition by: {sk}
                │  └─ TableScan test.web Est. ? rows, cost 0.000000e+00
-               │           Outputs: [price, sk]
+               │           Outputs: [sk, price]
                └─ Repartition Exchange Est. ? rows, cost 3.200000e-01
                   │     Partition by: {expr#cast(sk_1, \'Nullable(Int64)\')}
                   └─ Projection Est. ? rows, cost 0.000000e+00
@@ -107,7 +107,7 @@ Projection Est. 10 rows, cost 1.640000e+00
                   │     Condition: isNotNull(sk)
                   └─ TableScan test.web Est. ? rows, cost 0.000000e+00
                            Where: isNotNull(sk)
-                           Outputs: [price, sk]
+                           Outputs: [sk, price]
 1000.2
 2000.3
 not OK: another incompeleted pk table
@@ -147,7 +147,7 @@ Projection Est. ? rows
                └─ Projection Est. ? rows
                   │     Expressions: [price, sk_2, ws_item_sk], expr#cast(sk_2, \'Nullable(Int64)\'):=cast(sk_2, \'Nullable(Int64)\')
                   └─ TableScan test.web Est. ? rows
-                           Outputs: [price, ws_item_sk], sk_2:=sk
+                           Outputs: [ws_item_sk, price], sk_2:=sk
 1	100	1	1000.2
 2	200	2	2000.3
 not OK: under bottom join, pk right outer join others
@@ -181,7 +181,7 @@ Projection Est. ? rows
                └─ Projection Est. ? rows
                   │     Expressions: [price, sk_1, ws_item_sk_1], expr#cast(sk_1, \'Nullable(Int64)\'):=cast(sk_1, \'Nullable(Int64)\')
                   └─ TableScan test.web Est. ? rows
-                           Outputs: [price], sk_1:=sk, ws_item_sk_1:=ws_item_sk
+                           Outputs: [price], ws_item_sk_1:=ws_item_sk, sk_1:=sk
 not OK: unique self join with select *
 Gather Exchange Est. ? rows
 └─ Projection Est. ? rows
@@ -191,11 +191,11 @@ Gather Exchange Est. ? rows
       ├─ Repartition Exchange Est. ? rows
       │  │     Partition by: {sk}
       │  └─ TableScan test.cust Est. ? rows
-      │           Outputs: [c_customer_id, item, sk]
+      │           Outputs: [sk, c_customer_id, item]
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {sk_1}
          └─ TableScan test.cust Est. ? rows
-                  Outputs: c_customer_id_1:=c_customer_id, item_1:=item, sk_1:=sk
+                  Outputs: sk_1:=sk, c_customer_id_1:=c_customer_id, item_1:=item
 OK: with top union
 Gather Exchange Est. ? rows
 └─ Projection Est. ? rows
@@ -231,7 +231,7 @@ Gather Exchange Est. ? rows
       │  │                 │     Condition: (price_1 < 3000.) AND isNotNull(cast(sk_3, \'Nullable(Int64)\'))
       │  │                 └─ TableScan test.web Est. ? rows
       │  │                          Where: (price < 3000.) AND isNotNull(cast(sk, \'Nullable(Int64)\'))
-      │  │                          Outputs: price_1:=price, sk_3:=sk
+      │  │                          Outputs: sk_3:=sk, price_1:=price
       │  └─ Projection Est. ? rows
       │     │     Expressions: [expr#cast(sk_5, \'Nullable(Int64)\')], expr#\'w\':=\'w\'
       │     └─ MergingAggregated Est. ? rows
@@ -245,13 +245,13 @@ Gather Exchange Est. ? rows
       │                    │     Condition: (price_2 < 4000.) AND isNotNull(cast(sk_5, \'Nullable(Int64)\'))
       │                    └─ TableScan test.web Est. ? rows
       │                             Where: (price < 4000.) AND isNotNull(cast(sk, \'Nullable(Int64)\'))
-      │                             Outputs: price_2:=price, sk_5:=sk
+      │                             Outputs: sk_5:=sk, price_2:=price
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {sk_6}
          └─ Projection Est. ? rows
             │     Expressions: [c_customer_id_4], sk_6:=cast(sk_6, \'Nullable(Int64)\')
             └─ TableScan test.cust Est. ? rows
-                     Outputs: c_customer_id_4:=c_customer_id, sk_6:=sk
+                     Outputs: sk_6:=sk, c_customer_id_4:=c_customer_id
 5
 not OK: with top union, but pk of one child lost
 Gather Exchange Est. ? rows
@@ -276,7 +276,7 @@ Gather Exchange Est. ? rows
       │              │        │     Condition: c_customer_id = \'notmatch\'
       │              │        └─ TableScan test.cust Est. ? rows
       │              │                 Where: c_customer_id = \'notmatch\'
-      │              │                 Outputs: [c_customer_id, sk]
+      │              │                 Outputs: [sk, c_customer_id]
       │              └─ Repartition Exchange Est. ? rows
       │                 │     Partition by: {expr#cast(sk_1, \'Nullable(Int64)\')}
       │                 └─ Projection Est. ? rows
@@ -300,7 +300,7 @@ Gather Exchange Est. ? rows
       │              │  └─ Projection Est. ? rows
       │              │     │     Expressions: [c_customer_id_1], expr#cast(sk_2, \'Nullable(Int64)\'):=cast(sk_2, \'Nullable(Int64)\')
       │              │     └─ TableScan test.cust Est. ? rows
-      │              │              Outputs: c_customer_id_1:=c_customer_id, sk_2:=sk
+      │              │              Outputs: sk_2:=sk, c_customer_id_1:=c_customer_id
       │              └─ Repartition Exchange Est. ? rows
       │                 │     Partition by: {expr#cast(sk_3, \'Nullable(Int64)\')}
       │                 └─ Projection Est. ? rows
@@ -309,7 +309,7 @@ Gather Exchange Est. ? rows
       │                       │     Condition: price_1 < 3001.
       │                       └─ TableScan test.web Est. ? rows
       │                                Where: price < 3001.
-      │                                Outputs: price_1:=price, sk_3:=sk
+      │                                Outputs: sk_3:=sk, price_1:=price
       └─ Projection Est. ? rows
          │     Expressions: [c_customer_id_2], expr#\'w\':=\'w\'
          └─ MergingAggregated Est. ? rows
@@ -324,7 +324,7 @@ Gather Exchange Est. ? rows
                      │  └─ Projection Est. ? rows
                      │     │     Expressions: [c_customer_id_2], expr#cast(sk_4, \'Nullable(Int64)\'):=cast(sk_4, \'Nullable(Int64)\')
                      │     └─ TableScan test.cust Est. ? rows
-                     │              Outputs: c_customer_id_2:=c_customer_id, sk_4:=sk
+                     │              Outputs: sk_4:=sk, c_customer_id_2:=c_customer_id
                      └─ Repartition Exchange Est. ? rows
                         │     Partition by: {expr#cast(sk_5, \'Nullable(Int64)\')}
                         └─ Projection Est. ? rows
@@ -333,5 +333,5 @@ Gather Exchange Est. ? rows
                               │     Condition: price_2 < 4001.
                               └─ TableScan test.web Est. ? rows
                                        Where: price < 4001.
-                                       Outputs: price_2:=price, sk_5:=sk
+                                       Outputs: sk_5:=sk, price_2:=price
 5

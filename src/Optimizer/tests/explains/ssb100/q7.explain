@@ -25,13 +25,13 @@ Projection Est. 59225 rows
                         │     │  │     Condition: (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997) Runtime Filters: {LO_CUSTKEY, LO_SUPPKEY}
                         │     │  └─ TableScan ssb100.lineorder Est. 600038145 rows
                         │     │           Where: (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997) Runtime Filters: {LO_CUSTKEY, LO_SUPPKEY}
-                        │     │           Outputs: [LO_CUSTKEY, LO_ORDERDATE, LO_REVENUE, LO_SUPPKEY]
+                        │     │           Outputs: [LO_CUSTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
                         │     └─ Broadcast Exchange Est. 40119 rows
                         │        └─ Filter Est. 40119 rows
                         │           │     Condition: S_REGION = 'ASIA'
                         │           └─ TableScan ssb100.supplier Est. 200000 rows
                         │                    Where: S_REGION = 'ASIA'
-                        │                    Outputs: [S_NATION, S_REGION, S_SUPPKEY]
+                        │                    Outputs: [S_SUPPKEY, S_NATION, S_REGION]
                         └─ Repartition Exchange Est. 600016 rows
                            │     Partition by: {C_CUSTKEY}
                            └─ Filter Est. 600016 rows

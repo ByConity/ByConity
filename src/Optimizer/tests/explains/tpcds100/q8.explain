@@ -28,16 +28,16 @@ Projection Est. 10 rows
                         │     │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
                         │     │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                         │     │  │           Where: Runtime Filters: {ss_sold_date_sk}
-                        │     │  │           Outputs: [ss_net_profit, ss_sold_date_sk, ss_store_sk]
+                        │     │  │           Outputs: [ss_sold_date_sk, ss_store_sk, ss_net_profit]
                         │     │  └─ Broadcast Exchange Est. 90 rows
                         │     │     └─ Filter Est. 90 rows
                         │     │        │     Condition: (d_year = 1998) AND (d_qoy = 2)
                         │     │        └─ TableScan tpcds100.date_dim Est. 73049 rows
                         │     │                 Where: (d_year = 1998) AND (d_qoy = 2)
-                        │     │                 Outputs: [d_date_sk, d_qoy, d_year]
+                        │     │                 Outputs: [d_date_sk, d_year, d_qoy]
                         │     └─ Broadcast Exchange Est. 402 rows
                         │        └─ TableScan tpcds100.store Est. 402 rows
-                        │                 Outputs: [s_store_name, s_store_sk, s_zip]
+                        │                 Outputs: [s_store_sk, s_store_name, s_zip]
                         └─ Broadcast Exchange Est. 13249 rows
                            └─ Projection Est. 13249 rows
                               │     Expressions: substring(expr#substring(ca_zip, 1, 5)_2, 1, 2):=substring(`expr#substring(ca_zip, 1, 5)_2`, 1, 2)

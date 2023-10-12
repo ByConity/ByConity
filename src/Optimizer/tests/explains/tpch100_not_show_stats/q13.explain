@@ -24,7 +24,7 @@ Projection
                            │     │     Condition: o_comment NOT LIKE '%special%requests%'
                            │     └─ TableScan tpch100.orders
                            │              Where: o_comment NOT LIKE '%special%requests%'
-                           │              Outputs: [o_comment, o_custkey, o_orderkey]
+                           │              Outputs: [o_orderkey, o_custkey, o_comment]
                            └─ Repartition Exchange
                               │     Partition by: {c_custkey}
                               └─ TableScan tpch100.customer

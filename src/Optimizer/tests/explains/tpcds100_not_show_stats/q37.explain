@@ -11,9 +11,9 @@ Projection
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange
-                  │     Partition by: {i_current_price, i_item_desc, i_item_id}
+                  │     Partition by: {i_item_id, i_item_desc, i_current_price}
                   └─ Aggregating
-                     │     Group by: {i_current_price, i_item_desc, i_item_id}
+                     │     Group by: {i_item_id, i_item_desc, i_current_price}
                      └─ Inner Join
                         │     Condition: cs_item_sk == i_item_sk
                         ├─ Filter
@@ -38,11 +38,11 @@ Projection
                               │        │     Condition: (i_current_price >= 68.) AND (i_current_price <= 98.) AND (i_manufact_id IN (677, 694, 808, 940))
                               │        └─ TableScan tpcds100.item
                               │                 Where: (i_current_price >= 68.) AND (i_current_price <= 98.) AND (i_manufact_id IN (677, 694, 808, 940))
-                              │                 Outputs: [i_current_price, i_item_desc, i_item_id, i_item_sk, i_manufact_id]
+                              │                 Outputs: [i_item_sk, i_item_id, i_item_desc, i_current_price, i_manufact_id]
                               └─ Broadcast Exchange
                                  └─ Filter
                                     │     Condition: (d_date >= cast(10988, 'Date')) AND (d_date <= cast(11048, 'Date'))
                                     └─ TableScan tpcds100.date_dim
                                              Where: (d_date >= cast(10988, 'Date')) AND (d_date <= cast(11048, 'Date'))
-                                             Outputs: [d_date, d_date_sk]
+                                             Outputs: [d_date_sk, d_date]
 note: Runtime Filter is applied for 3 times.

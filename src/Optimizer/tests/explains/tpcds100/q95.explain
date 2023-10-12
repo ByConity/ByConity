@@ -35,7 +35,7 @@ Projection Est. 1 rows
                   │        │  │  │     Condition: isNotNull(ws_order_number) Runtime Filters: {ws_order_number, ws_ship_date_sk, ws_web_site_sk}
                   │        │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                   │        │  │           Where: isNotNull(ws_order_number) Runtime Filters: {ws_order_number, ws_ship_date_sk, ws_web_site_sk}
-                  │        │  │           Outputs: [ws_ext_ship_cost, ws_net_profit, ws_order_number, ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk]
+                  │        │  │           Outputs: [ws_ship_date_sk, ws_ship_addr_sk, ws_web_site_sk, ws_order_number, ws_ext_ship_cost, ws_net_profit]
                   │        │  └─ Broadcast Exchange Est. 5811 rows
                   │        │     └─ Aggregating Est. 5811 rows
                   │        │        │     Group by: {wr_order_number}
@@ -58,7 +58,7 @@ Projection Est. 1 rows
                   │        │                 │  │     Condition: isNotNull(ws_order_number_6) Runtime Filters: {ws_order_number_6}
                   │        │                 │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                   │        │                 │           Where: isNotNull(ws_order_number) Runtime Filters: {ws_order_number}
-                  │        │                 │           Outputs: ws_order_number_6:=ws_order_number, ws_warehouse_sk_7:=ws_warehouse_sk
+                  │        │                 │           Outputs: ws_warehouse_sk_7:=ws_warehouse_sk, ws_order_number_6:=ws_order_number
                   │        │                 └─ Broadcast Exchange Est. 68567 rows
                   │        │                    └─ Inner Join Est. 68567 rows
                   │        │                       │     Condition: ws_order_number_4 == ws_order_number_7
@@ -67,7 +67,7 @@ Projection Est. 1 rows
                   │        │                       │  │     Condition: isNotNull(ws_order_number_4) Runtime Filters: {ws_order_number_4}
                   │        │                       │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                   │        │                       │           Where: isNotNull(ws_order_number) Runtime Filters: {ws_order_number}
-                  │        │                       │           Outputs: ws_order_number_4:=ws_order_number, ws_warehouse_sk_6:=ws_warehouse_sk
+                  │        │                       │           Outputs: ws_warehouse_sk_6:=ws_warehouse_sk, ws_order_number_4:=ws_order_number
                   │        │                       └─ Broadcast Exchange Est. 5811 rows
                   │        │                          └─ MergingAggregated Est. 5811 rows
                   │        │                             └─ Repartition Exchange Est. 5811 rows
@@ -91,19 +91,19 @@ Projection Est. 1 rows
                   │        │                                         │     │  │  │     Condition: isNotNull(ws_order_number) Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
                   │        │                                         │     │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                   │        │                                         │     │  │           Where: isNotNull(ws_order_number) Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
-                  │        │                                         │     │  │           Outputs: [ws_order_number, ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk]
+                  │        │                                         │     │  │           Outputs: [ws_ship_date_sk, ws_ship_addr_sk, ws_web_site_sk, ws_order_number]
                   │        │                                         │     │  └─ Broadcast Exchange Est. 59 rows
                   │        │                                         │     │     └─ Filter Est. 59 rows
                   │        │                                         │     │        │     Condition: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
                   │        │                                         │     │        └─ TableScan tpcds100.date_dim Est. 73049 rows
                   │        │                                         │     │                 Where: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
-                  │        │                                         │     │                 Outputs: [d_date, d_date_sk]
+                  │        │                                         │     │                 Outputs: [d_date_sk, d_date]
                   │        │                                         │     └─ Broadcast Exchange Est. 2 rows
                   │        │                                         │        └─ Filter Est. 2 rows
                   │        │                                         │           │     Condition: web_company_name = 'pri'
                   │        │                                         │           └─ TableScan tpcds100.web_site Est. 24 rows
                   │        │                                         │                    Where: web_company_name = 'pri'
-                  │        │                                         │                    Outputs: [web_company_name, web_site_sk]
+                  │        │                                         │                    Outputs: [web_site_sk, web_company_name]
                   │        │                                         └─ Repartition Exchange Est. 32478 rows
                   │        │                                            │     Partition by: {ca_address_sk}
                   │        │                                            └─ Filter Est. 32478 rows
@@ -116,12 +116,12 @@ Projection Est. 1 rows
                   │              │     Condition: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
                   │              └─ TableScan tpcds100.date_dim Est. 73049 rows
                   │                       Where: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
-                  │                       Outputs: [d_date, d_date_sk]
+                  │                       Outputs: [d_date_sk, d_date]
                   └─ Broadcast Exchange Est. 2 rows
                      └─ Filter Est. 2 rows
                         │     Condition: web_company_name = 'pri'
                         └─ TableScan tpcds100.web_site Est. 24 rows
                                  Where: web_company_name = 'pri'
-                                 Outputs: [web_company_name, web_site_sk]
+                                 Outputs: [web_site_sk, web_company_name]
 note: Magic Set is applied for 1 parts.
 note: Runtime Filter is applied for 10 times.

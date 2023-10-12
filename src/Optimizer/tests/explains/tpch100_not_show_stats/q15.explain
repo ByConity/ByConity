@@ -12,7 +12,7 @@ Projection
             │  │     Condition: Runtime Filters: {s_suppkey}
             │  └─ TableScan tpch100.supplier
             │           Where: Runtime Filters: {s_suppkey}
-            │           Outputs: [s_address, s_name, s_phone, s_suppkey]
+            │           Outputs: [s_suppkey, s_name, s_address, s_phone]
             └─ Broadcast Exchange
                └─ Inner Join
                   │     Condition: expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1 == expr#max(total_revenue)
@@ -42,6 +42,6 @@ CTEDef [0]
                │     Condition: (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date'))
                └─ TableScan tpch100.lineitem
                         Where: (l_shipdate >= cast(9496, 'Date')) AND (l_shipdate < cast(9587, 'Date'))
-                        Outputs: [l_discount, l_extendedprice, l_shipdate, l_suppkey]
+                        Outputs: [l_suppkey, l_extendedprice, l_discount, l_shipdate]
 note: Runtime Filter is applied for 2 times.
 note: CTE(Common Table Expression) is applied for 2 times.

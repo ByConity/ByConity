@@ -87,7 +87,7 @@ Projection Est. ? rows
             │           │     Condition: price < 10.
             │           └─ TableScan correctness.web Est. ? rows
             │                    Where: price < 10.
-            │                    Outputs: [price, sk]
+            │                    Outputs: [sk, price]
             └─ Broadcast Exchange Est. ? rows
                └─ Filter Est. ? rows
                   │     Condition: 22. = price_1

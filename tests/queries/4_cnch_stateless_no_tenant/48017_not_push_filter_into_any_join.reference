@@ -8,7 +8,7 @@ Gather Exchange Est. ? rows
          ├─ Repartition Exchange Est. ? rows
          │  │     Partition by: {hash_uid}
          │  └─ TableScan uba_production_default.events Est. ? rows
-         │           Outputs: [app_id, app_name, content, device_id, event, event_date, float_item_profiles, float_params, float_profiles, hash_uid, int_item_profiles, int_params, int_profiles, server_time, ssid, stat_standard_id, string_array_params, string_array_profiles, string_item_profiles, string_params, string_profiles, time, user_id, web_id]
+         │           Outputs: [app_id, app_name, device_id, web_id, hash_uid, server_time, time, event, stat_standard_id, event_date, string_params, int_params, float_params, string_profiles, int_profiles, float_profiles, user_id, ssid, content, string_array_profiles, string_array_params, string_item_profiles, float_item_profiles, int_item_profiles]
          └─ Repartition Exchange Est. ? rows
             │     Partition by: {hash_uid_1}
             └─ Projection Est. ? rows
@@ -17,4 +17,4 @@ Gather Exchange Est. ? rows
                   │     Condition: (app_id_1 = 20000696) AND (last_active_date >= cast(19431, \'Date\'))
                   └─ TableScan uba_production_default.users Est. ? rows
                            Where: (app_id = 20000696) AND (last_active_date >= cast(19431, \'Date\'))
-                           Outputs: [__int_profiles__\'first_event_time\', last_active_date], app_id_1:=app_id, hash_uid_1:=hash_uid
+                           Outputs: [last_active_date, __int_profiles__\'first_event_time\'], app_id_1:=app_id, hash_uid_1:=hash_uid

@@ -8,7 +8,7 @@ Projection Est. 1 rows
          └─ Filter Est. 81857585 rows
             │     Condition: (count >= 1) AND (0 = count_1) AND (0 = count_2)
             └─ Aggregating Est. 90952873 rows
-               │     Group by: {c_first_name_4, c_last_name_4, d_date_4}
+               │     Group by: {c_last_name_4, c_first_name_4, d_date_4}
                │     Aggregates: count:=AggNull(sum)(marker), count_1:=AggNull(sum)(marker_1), count_2:=AggNull(sum)(marker_2)
                └─ Union Est. 90952873 rows
                   │     OutputToInputs: marker_2 = [marker_5,marker_8,marker_11], marker_1 = [marker_4,marker_7,marker_10], d_date_4 = [d_date,d_date_1,d_date_3], c_first_name_4 = [c_first_name,c_first_name_1,c_first_name_3], marker = [marker_3,marker_6,marker_9], c_last_name_4 = [c_last_name,c_last_name_1,c_last_name_3]
@@ -16,9 +16,9 @@ Projection Est. 1 rows
                   │  │     Expressions: [c_first_name, c_last_name, d_date], marker_3:=1, marker_4:=0, marker_5:=0
                   │  └─ MergingAggregated Est. 52061118 rows
                   │     └─ Repartition Exchange Est. 52061118 rows
-                  │        │     Partition by: {c_first_name, c_last_name, d_date}
+                  │        │     Partition by: {c_last_name, c_first_name, d_date}
                   │        └─ Aggregating Est. 52061118 rows
-                  │           │     Group by: {c_first_name, c_last_name, d_date}
+                  │           │     Group by: {c_last_name, c_first_name, d_date}
                   │           └─ Inner Join Est. 52061118 rows
                   │              │     Condition: ss_customer_sk == c_customer_sk
                   │              ├─ Repartition Exchange Est. 52062815 rows
@@ -30,13 +30,13 @@ Projection Est. 1 rows
                   │              │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
                   │              │     │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                   │              │     │           Where: Runtime Filters: {ss_sold_date_sk}
-                  │              │     │           Outputs: [ss_customer_sk, ss_sold_date_sk]
+                  │              │     │           Outputs: [ss_sold_date_sk, ss_customer_sk]
                   │              │     └─ Broadcast Exchange Est. 335 rows
                   │              │        └─ Filter Est. 335 rows
                   │              │           │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                   │              │           └─ TableScan tpcds100.date_dim Est. 73049 rows
                   │              │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                  │              │                    Outputs: [d_date, d_date_sk, d_month_seq]
+                  │              │                    Outputs: [d_date_sk, d_date, d_month_seq]
                   │              └─ Repartition Exchange Est. 2000000 rows
                   │                 │     Partition by: {c_customer_sk}
                   │                 └─ TableScan tpcds100.customer Est. 2000000 rows
@@ -45,9 +45,9 @@ Projection Est. 1 rows
                   │  │     Expressions: [c_first_name_1, c_last_name_1, d_date_1], marker_6:=0, marker_7:=1, marker_8:=0
                   │  └─ MergingAggregated Est. 25875694 rows
                   │     └─ Repartition Exchange Est. 25875694 rows
-                  │        │     Partition by: {c_first_name_1, c_last_name_1, d_date_1}
+                  │        │     Partition by: {c_last_name_1, c_first_name_1, d_date_1}
                   │        └─ Aggregating Est. 25875694 rows
-                  │           │     Group by: {c_first_name_1, c_last_name_1, d_date_1}
+                  │           │     Group by: {c_last_name_1, c_first_name_1, d_date_1}
                   │           └─ Inner Join Est. 25875694 rows
                   │              │     Condition: cs_bill_customer_sk == c_customer_sk_1
                   │              ├─ Repartition Exchange Est. 25875694 rows
@@ -59,13 +59,13 @@ Projection Est. 1 rows
                   │              │     │  │     Condition: Runtime Filters: {cs_sold_date_sk}
                   │              │     │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
                   │              │     │           Where: Runtime Filters: {cs_sold_date_sk}
-                  │              │     │           Outputs: [cs_bill_customer_sk, cs_sold_date_sk]
+                  │              │     │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk]
                   │              │     └─ Broadcast Exchange Est. 335 rows
                   │              │        └─ Filter Est. 335 rows
                   │              │           │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
                   │              │           └─ TableScan tpcds100.date_dim Est. 73049 rows
                   │              │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                  │              │                    Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
+                  │              │                    Outputs: d_date_sk_1:=d_date_sk, d_date_1:=d_date, d_month_seq_1:=d_month_seq
                   │              └─ Repartition Exchange Est. 2000000 rows
                   │                 │     Partition by: {c_customer_sk_1}
                   │                 └─ TableScan tpcds100.customer Est. 2000000 rows
@@ -74,9 +74,9 @@ Projection Est. 1 rows
                      │     Expressions: [c_first_name_3, c_last_name_3, d_date_3], marker_10:=0, marker_11:=1, marker_9:=0
                      └─ MergingAggregated Est. 13016061 rows
                         └─ Repartition Exchange Est. 13016061 rows
-                           │     Partition by: {c_first_name_3, c_last_name_3, d_date_3}
+                           │     Partition by: {c_last_name_3, c_first_name_3, d_date_3}
                            └─ Aggregating Est. 13016061 rows
-                              │     Group by: {c_first_name_3, c_last_name_3, d_date_3}
+                              │     Group by: {c_last_name_3, c_first_name_3, d_date_3}
                               └─ Inner Join Est. 13016061 rows
                                  │     Condition: ws_bill_customer_sk == c_customer_sk_2
                                  ├─ Repartition Exchange Est. 13016061 rows
@@ -88,13 +88,13 @@ Projection Est. 1 rows
                                  │     │  │     Condition: Runtime Filters: {ws_sold_date_sk}
                                  │     │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                                  │     │           Where: Runtime Filters: {ws_sold_date_sk}
-                                 │     │           Outputs: [ws_bill_customer_sk, ws_sold_date_sk]
+                                 │     │           Outputs: [ws_sold_date_sk, ws_bill_customer_sk]
                                  │     └─ Broadcast Exchange Est. 335 rows
                                  │        └─ Filter Est. 335 rows
                                  │           │     Condition: (d_month_seq_2 >= 1200) AND (d_month_seq_2 <= 1211)
                                  │           └─ TableScan tpcds100.date_dim Est. 73049 rows
                                  │                    Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                 │                    Outputs: d_date_3:=d_date, d_date_sk_2:=d_date_sk, d_month_seq_2:=d_month_seq
+                                 │                    Outputs: d_date_sk_2:=d_date_sk, d_date_3:=d_date, d_month_seq_2:=d_month_seq
                                  └─ Repartition Exchange Est. 2000000 rows
                                     │     Partition by: {c_customer_sk_2}
                                     └─ TableScan tpcds100.customer Est. 2000000 rows

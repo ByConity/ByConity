@@ -11,9 +11,9 @@ Projection Est. 100 rows
             │     Limit: 100
             └─ MergingAggregated Est. 560 rows
                └─ Repartition Exchange Est. 560 rows
-                  │     Partition by: {s_store_id, s_store_name}
+                  │     Partition by: {s_store_name, s_store_id}
                   └─ Aggregating Est. 560 rows
-                     │     Group by: {s_store_id, s_store_name}
+                     │     Group by: {s_store_name, s_store_id}
                      │     Aggregates: expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))
                      └─ Projection Est. 56938789 rows
                         │     Expressions: [s_store_id, s_store_name], expr#multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Friday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Monday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Saturday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Sunday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Thursday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Tuesday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Wednesday', ss_sales_price, NULL)
@@ -26,17 +26,17 @@ Projection Est. 100 rows
                            │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
                            │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                            │  │           Where: Runtime Filters: {ss_sold_date_sk}
-                           │  │           Outputs: [ss_sales_price, ss_sold_date_sk, ss_store_sk]
+                           │  │           Outputs: [ss_sold_date_sk, ss_store_sk, ss_sales_price]
                            │  └─ Broadcast Exchange Est. 366 rows
                            │     └─ Filter Est. 366 rows
                            │        │     Condition: d_year = 2000
                            │        └─ TableScan tpcds100.date_dim Est. 73049 rows
                            │                 Where: d_year = 2000
-                           │                 Outputs: [d_date_sk, d_day_name, d_year]
+                           │                 Outputs: [d_date_sk, d_year, d_day_name]
                            └─ Broadcast Exchange Est. 226 rows
                               └─ Filter Est. 226 rows
                                  │     Condition: s_gmt_offset = -5.
                                  └─ TableScan tpcds100.store Est. 402 rows
                                           Where: s_gmt_offset = -5.
-                                          Outputs: [s_gmt_offset, s_store_id, s_store_name, s_store_sk]
+                                          Outputs: [s_store_sk, s_store_id, s_store_name, s_gmt_offset]
 note: Runtime Filter is applied for 1 times.

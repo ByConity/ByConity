@@ -11,4 +11,4 @@ Projection Est. 1 rows
                │     Condition: (LO_DISCOUNT >= 4) AND (LO_DISCOUNT <= 6) AND (LO_QUANTITY >= 26) AND (LO_QUANTITY <= 35) AND (toYYYYMM(LO_ORDERDATE) = 199401)
                └─ TableScan ssb100.lineorder Est. 600038145 rows
                         Where: (LO_DISCOUNT >= 4) AND (LO_DISCOUNT <= 6) AND (LO_QUANTITY >= 26) AND (LO_QUANTITY <= 35) AND (toYYYYMM(LO_ORDERDATE) = 199401)
-                        Outputs: [LO_DISCOUNT, LO_EXTENDEDPRICE, LO_ORDERDATE, LO_QUANTITY]
+                        Outputs: [LO_ORDERDATE, LO_QUANTITY, LO_EXTENDEDPRICE, LO_DISCOUNT]

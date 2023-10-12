@@ -33,7 +33,7 @@ Projection Est. 100 rows, cost 9.720000e+00
                         │        └─ Repartition Exchange Est. ? rows, cost 3.200000e-01
                         │           │     Partition by: {i_item_sk}
                         │           └─ TableScan test.item Est. ? rows, cost 0.000000e+00
-                        │                    Outputs: [i_category, i_item_sk]
+                        │                    Outputs: [i_item_sk, i_category]
                         ├─ Aggregating Est. ? rows, cost 6.400000e-01
                         │  │     Group by: {expr#\'web\', i_category_1}
                         │  │     Aggregates: expr#count():=AggNull(count)()
@@ -51,7 +51,7 @@ Projection Est. 100 rows, cost 9.720000e+00
                         │        └─ Repartition Exchange Est. ? rows, cost 3.200000e-01
                         │           │     Partition by: {i_item_sk_1}
                         │           └─ TableScan test.item Est. ? rows, cost 0.000000e+00
-                        │                    Outputs: i_category_1:=i_category, i_item_sk_1:=i_item_sk
+                        │                    Outputs: i_item_sk_1:=i_item_sk, i_category_1:=i_category
                         └─ Aggregating Est. ? rows, cost 6.400000e-01
                            │     Group by: {expr#\'catalog\', i_category_2}
                            │     Aggregates: expr#count():=AggNull(count)()
@@ -65,8 +65,8 @@ Projection Est. 100 rows, cost 9.720000e+00
                                  │     │     Condition: isNull(cs_ship_addr_sk)
                                  │     └─ TableScan test.catalog_sales Est. ? rows, cost 0.000000e+00
                                  │              Where: isNull(cs_ship_addr_sk)
-                                 │              Outputs: [cs_item_sk, cs_ship_addr_sk]
+                                 │              Outputs: [cs_ship_addr_sk, cs_item_sk]
                                  └─ Repartition Exchange Est. ? rows, cost 3.200000e-01
                                     │     Partition by: {i_item_sk_2}
                                     └─ TableScan test.item Est. ? rows, cost 0.000000e+00
-                                             Outputs: i_category_2:=i_category, i_item_sk_2:=i_item_sk
+                                             Outputs: i_item_sk_2:=i_item_sk, i_category_2:=i_category

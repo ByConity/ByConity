@@ -22,11 +22,11 @@ Projection Est. ? rows
             ├─ Repartition Exchange Est. ? rows
             │  │     Partition by: {x}
             │  └─ TableScan test.t48025 Est. ? rows
-            │           Outputs: [s, x]
+            │           Outputs: [x, s]
             └─ Repartition Exchange Est. ? rows
                │     Partition by: {x_1}
                └─ TableScan test.t480252 Est. ? rows
-                        Outputs: s_1:=s, x_1:=x
+                        Outputs: x_1:=x, s_1:=s
 2	a3	2	b1	2	a3
 2	a3	2	b1	2	a6
 2	a3	2	b2	2	a3
@@ -61,12 +61,12 @@ Projection Est. ? rows
             │  ├─ Repartition Exchange Est. ? rows
             │  │  │     Partition by: {x}
             │  │  └─ TableScan test.t48025 Est. ? rows
-            │  │           Outputs: [s, x]
+            │  │           Outputs: [x, s]
             │  └─ Repartition Exchange Est. ? rows
             │     │     Partition by: {x_1}
             │     └─ TableScan test.t480252 Est. ? rows
-            │              Outputs: s_1:=s, x_1:=x
+            │              Outputs: x_1:=x, s_1:=s
             └─ Repartition Exchange Est. ? rows
                │     Partition by: {x_2}
                └─ TableScan test.t48025 Est. ? rows
-                        Outputs: s_2:=s, x_2:=x
+                        Outputs: x_2:=x, s_2:=s

@@ -12,9 +12,9 @@ Projection
                   │     Partition by: {i_class}
                   └─ MergingAggregated
                      └─ Repartition Exchange
-                        │     Partition by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
+                        │     Partition by: {i_item_id, i_item_desc, i_category, i_class, i_current_price}
                         └─ Aggregating
-                           │     Group by: {i_category, i_class, i_current_price, i_item_desc, i_item_id}
+                           │     Group by: {i_item_id, i_item_desc, i_category, i_class, i_current_price}
                            │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
                            └─ Inner Join
                               │     Condition: ss_item_sk == i_item_sk
@@ -28,18 +28,18 @@ Projection
                               │     │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                               │     │  └─ TableScan tpcds100.store_sales
                               │     │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                              │     │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
+                              │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_ext_sales_price]
                               │     └─ Broadcast Exchange
                               │        └─ Filter
                               │           │     Condition: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
                               │           └─ TableScan tpcds100.date_dim
                               │                    Where: (d_date >= cast(10644, 'Date')) AND (d_date <= cast(10674, 'Date'))
-                              │                    Outputs: [d_date, d_date_sk]
+                              │                    Outputs: [d_date_sk, d_date]
                               └─ Repartition Exchange
                                  │     Partition by: {i_item_sk}
                                  └─ Filter
                                     │     Condition: i_category IN ('Books', 'Home', 'Sports')
                                     └─ TableScan tpcds100.item
                                              Where: i_category IN ('Books', 'Home', 'Sports')
-                                             Outputs: [i_category, i_class, i_current_price, i_item_desc, i_item_id, i_item_sk]
+                                             Outputs: [i_item_sk, i_item_id, i_item_desc, i_current_price, i_class, i_category]
 note: Runtime Filter is applied for 2 times.

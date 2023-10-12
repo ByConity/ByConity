@@ -27,18 +27,18 @@ Projection Est. 2369 rows
                            │     │  │     Condition: Runtime Filters: {LO_PARTKEY, LO_SUPPKEY}
                            │     │  └─ TableScan ssb100.lineorder Est. 600038145 rows
                            │     │           Where: Runtime Filters: {LO_PARTKEY, LO_SUPPKEY}
-                           │     │           Outputs: [LO_ORDERDATE, LO_PARTKEY, LO_REVENUE, LO_SUPPKEY]
+                           │     │           Outputs: [LO_PARTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
                            │     └─ Broadcast Exchange Est. 1382 rows
                            │        └─ Filter Est. 1382 rows
                            │           │     Condition: P_BRAND = 'MFGR#2221'
                            │           └─ TableScan ssb100.part Est. 1400000 rows
                            │                    Where: P_BRAND = 'MFGR#2221'
-                           │                    Outputs: [P_BRAND, P_PARTKEY]
+                           │                    Outputs: [P_PARTKEY, P_BRAND]
                            └─ Repartition Exchange Est. 39913 rows
                               │     Partition by: {S_SUPPKEY}
                               └─ Filter Est. 39913 rows
                                  │     Condition: S_REGION = 'EUROPE'
                                  └─ TableScan ssb100.supplier Est. 200000 rows
                                           Where: S_REGION = 'EUROPE'
-                                          Outputs: [S_REGION, S_SUPPKEY]
+                                          Outputs: [S_SUPPKEY, S_REGION]
 note: Runtime Filter is applied for 2 times.
