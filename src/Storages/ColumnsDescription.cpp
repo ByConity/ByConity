@@ -775,4 +775,12 @@ Block validateColumnsDefaultsAndGetSampleBlock(ASTPtr default_expr_list, const N
     }
 }
 
+Names ColumnsDescription::getNamesOfOrdinary() const
+{
+    Names ret;
+    for (const auto & col : columns)
+        if (col.default_desc.kind == ColumnDefaultKind::Default)
+            ret.emplace_back(col.name);
+    return ret;
+}
 }

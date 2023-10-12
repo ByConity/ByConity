@@ -1112,10 +1112,10 @@ void CnchServerServiceImpl::redirectSetCommitTime(
     handleRedirectCommitRequest(controller, request, response, done, true);
 }
 
-void CnchServerServiceImpl::redirectDetachAttachS3Parts(
+void CnchServerServiceImpl::redirectAttachDetachedS3Parts(
         [[maybe_unused]] google::protobuf::RpcController* controller,
-        const Protos::RedirectDetachAttachS3PartsReq * request,
-        Protos::RedirectDetachAttachS3PartsResp * response,
+        const Protos::RedirectAttachDetachedS3PartsReq * request,
+        Protos::RedirectAttachDetachedS3PartsResp * response,
         google::protobuf::Closure * done)
 {
     RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, global_context = getContext(), log = log] {
@@ -1141,17 +1141,11 @@ void CnchServerServiceImpl::redirectDetachAttachS3Parts(
             }
             to_table = global_context->getCnchCatalog()->tryGetTableByUUID(*global_context, to_table_uuid, TxnTimestamp::maxTS());
 
-            Strings attached_part_names, detached_part_names;
-            for (const auto & name : request->attached_part_names())
-                attached_part_names.push_back(name);
+            Strings detached_part_names, detached_bitmap_names;
             for (const auto & name : request->detached_part_names())
                 detached_part_names.push_back(name);
-
-            std::vector<std::pair<String, String>> detached_parts_meta;
-            for (const auto & elem : request->detached_part_meta())
-                detached_parts_meta.emplace_back(elem.name(), elem.meta());
-
-            IMergeTreeDataPartsVector attached_parts, commit_parts;
+            for (const auto & name : request->detached_bitmap_names())
+                detached_bitmap_names.push_back(name);
 
             switch (request->type())
             {
@@ -1159,34 +1153,25 @@ void CnchServerServiceImpl::redirectDetachAttachS3Parts(
                 {
                     if (!to_table || !from_table)
                         throw Exception("Cannot get table by UUID " + to_table_uuid + " or " + from_table_uuid, ErrorCodes::UNKNOWN_TABLE);
-                    auto * cnch = dynamic_cast<MergeTreeMetaBase *>(to_table.get());
-                    if (!cnch)
-                        throw Exception("Table is not of MergeTree class", ErrorCodes::BAD_ARGUMENTS);
+                    auto * to_cnch = dynamic_cast<MergeTreeMetaBase *>(to_table.get());
+                    if (!to_cnch)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table " + to_table->getStorageID().getNameForLogs() + " is not of MergeTree class");
+                    auto * from_cnch = dynamic_cast<MergeTreeMetaBase *>(from_table.get());
+                    if (!from_cnch)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table " + from_table->getStorageID().getNameForLogs() + "is not of MergeTree class");
+
                     throw_if_non_host(to_table);
-                    commit_parts = createPartVectorFromModels<IMergeTreeDataPartPtr>(*cnch, request->commit_parts(), nullptr);
-                    global_context->getCnchCatalog()->attachDetachedParts(from_table, to_table, detached_part_names, commit_parts);
-                    break;
-                }
-                case Protos::DetachAttachType::DETACH_ATTACHED_PARTS:
-                {
-                    if (!to_table || !from_table)
-                        throw Exception("Cannot get table by UUID " + to_table_uuid + " or " + from_table_uuid, ErrorCodes::UNKNOWN_TABLE);
-                    auto * cnch = dynamic_cast<MergeTreeMetaBase *>(to_table.get());
-                    if (!cnch)
-                        throw Exception("Table is not of MergeTree class", ErrorCodes::BAD_ARGUMENTS);
-                    throw_if_non_host(from_table);
-                    const pb::RepeatedPtrField<Protos::DataModelPart> & part_models = request->commit_parts();
-                    commit_parts.reserve(part_models.size());
-                    for (int i = 0; i < part_models.size(); ++i)
-                    {
-                        // reconstruct commit parts and may insert nullptr if part model is empty
-                        if (part_models[i].has_txnid())
-                            commit_parts.push_back(createPartFromModel(*cnch, part_models[i], std::nullopt));
-                        else
-                            commit_parts.push_back(nullptr);
-                    }
-                    auto attached_parts = createPartVectorFromModels<IMergeTreeDataPartPtr>(*cnch, request->attached_parts(), nullptr);
-                    global_context->getCnchCatalog()->detachAttachedParts(from_table, to_table, attached_parts, commit_parts);
+                    IMergeTreeDataPartsVector commit_parts, commit_staged_parts;
+                    commit_parts = createPartVectorFromModels<IMergeTreeDataPartPtr>(*to_cnch, request->commit_parts(), nullptr);
+                    commit_staged_parts = createPartVectorFromModels<IMergeTreeDataPartPtr>(*to_cnch, request->commit_staged_parts(), nullptr);
+                    DeleteBitmapMetaPtrVector detached_bitmaps, bitmaps;
+                    for (auto & bitmap_model : request->detached_bitmaps())
+                        detached_bitmaps.emplace_back(createFromModel(*from_cnch, bitmap_model));
+                    for (auto & bitmap_model : request->bitmaps())
+                        bitmaps.emplace_back(createFromModel(*to_cnch, bitmap_model));
+
+                    global_context->getCnchCatalog()->attachDetachedParts(
+                        from_table, to_table, detached_part_names, commit_parts, commit_staged_parts, detached_bitmaps, bitmaps);
                     break;
                 }
                 case Protos::DetachAttachType::ATTACH_DETACHED_RAW:
@@ -1194,7 +1179,84 @@ void CnchServerServiceImpl::redirectDetachAttachS3Parts(
                     if (!to_table)
                         throw Exception("Cannot get table by UUID " + to_table_uuid, ErrorCodes::UNKNOWN_TABLE);
                     throw_if_non_host(to_table);
-                    global_context->getCnchCatalog()->attachDetachedPartsRaw(to_table, attached_part_names);
+                    global_context->getCnchCatalog()->attachDetachedPartsRaw(to_table, detached_part_names, detached_bitmap_names);
+                    break;
+                }
+                default:
+                    throw Exception("Unknown RedirectAttachDetachedS3PartsReq status", ErrorCodes::NOT_IMPLEMENTED);
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            RPCHelpers::handleException(response->mutable_exception());
+        }
+    });
+}
+
+void CnchServerServiceImpl::redirectDetachAttachedS3Parts(
+        [[maybe_unused]] google::protobuf::RpcController* controller,
+        const Protos::RedirectDetachAttachedS3PartsReq * request,
+        Protos::RedirectDetachAttachedS3PartsResp * response,
+        google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(done, response, [request = request, response = response, done = done, global_context = getContext(), log = log] {
+        brpc::ClosureGuard done_guard(done);
+        try
+        {
+            auto throw_if_non_host = [&] (const StoragePtr & storage)
+            {
+                auto target_server = global_context->getCnchTopologyMaster()->
+                        getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
+                if (target_server.empty() || isLocalServer(target_server.getRPCAddress(), std::to_string(global_context->getRPCPort())))
+                    throw Exception("Redirect detach/attach parts failed because choose wrong host server.", ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
+            };
+
+            String from_table_uuid = request->has_from_table_uuid() ?
+                UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->from_table_uuid())) : "";
+            String to_table_uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(request->to_table_uuid()));
+
+            StoragePtr from_table, to_table;
+            if (request->has_from_table_uuid())
+            {
+                from_table = global_context->getCnchCatalog()->tryGetTableByUUID(*global_context, from_table_uuid, TxnTimestamp::maxTS());
+            }
+            to_table = global_context->getCnchCatalog()->tryGetTableByUUID(*global_context, to_table_uuid, TxnTimestamp::maxTS());
+
+            switch (request->type())
+            {
+                case Protos::DetachAttachType::DETACH_ATTACHED_PARTS:
+                {
+                    if (!to_table || !from_table)
+                        throw Exception("Cannot get table by UUID " + to_table_uuid + " or " + from_table_uuid, ErrorCodes::UNKNOWN_TABLE);
+                    auto * to_cnch = dynamic_cast<MergeTreeMetaBase *>(to_table.get());
+                    if (!to_cnch)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table " + to_table->getStorageID().getNameForLogs() + " is not of MergeTree class");
+                    auto * from_cnch = dynamic_cast<MergeTreeMetaBase *>(from_table.get());
+                    if (!from_cnch)
+                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table " + from_table->getStorageID().getNameForLogs() + "is not of MergeTree class");
+                    throw_if_non_host(from_table);
+
+                    IMergeTreeDataPartsVector attached_parts, attached_staged_parts, commit_parts;
+                    const pb::RepeatedPtrField<Protos::DataModelPart> & part_models = request->commit_parts();
+                    commit_parts.reserve(part_models.size());
+                    for (int i = 0; i < part_models.size(); ++i)
+                    {
+                        // reconstruct commit parts and may insert nullptr if part model is empty
+                        if (part_models[i].has_txnid())
+                            commit_parts.push_back(createPartFromModel(*to_cnch, part_models[i], std::nullopt));
+                        else
+                            commit_parts.push_back(nullptr);
+                    }
+                    attached_parts = createPartVectorFromModels<IMergeTreeDataPartPtr>(*from_cnch, request->attached_parts(), nullptr);
+                    attached_staged_parts = createPartVectorFromModels<IMergeTreeDataPartPtr>(*from_cnch, request->attached_staged_parts(), nullptr);
+                    DeleteBitmapMetaPtrVector attached_bitmaps, bitmaps;
+                    for (auto & bitmap_model : request->attached_bitmaps())
+                        attached_bitmaps.emplace_back(createFromModel(*from_cnch, bitmap_model));
+                    for (auto & bitmap_model : request->bitmaps())
+                        bitmaps.emplace_back(createFromModel(*to_cnch, bitmap_model));
+
+                    global_context->getCnchCatalog()->detachAttachedParts(from_table, to_table, attached_parts, attached_staged_parts, commit_parts, attached_bitmaps, bitmaps);
                     break;
                 }
                 case Protos::DetachAttachType::DETACH_ATTACHED_RAW:
@@ -1202,9 +1264,24 @@ void CnchServerServiceImpl::redirectDetachAttachS3Parts(
                     if (!from_table)
                         throw Exception("Cannot get table by UUID " + from_table_uuid, ErrorCodes::UNKNOWN_TABLE);
                     throw_if_non_host(from_table);
-                    global_context->getCnchCatalog()->detachAttachedPartsRaw(from_table, to_table_uuid, attached_part_names, detached_parts_meta);
+                    Strings attached_part_names, attached_bitmap_names;
+                    for (const auto & name : request->attached_part_names())
+                        attached_part_names.push_back(name);
+                    for (const auto & name : request->attached_bitmap_names())
+                        attached_bitmap_names.push_back(name);
+
+                    std::vector<std::pair<String, String>> detached_parts_metas, detached_bitmap_metas;
+                    for (const auto & elem : request->detached_part_metas())
+                        detached_parts_metas.emplace_back(elem.name(), elem.meta());
+                    for (const auto & elem : request->detached_bitmap_metas())
+                        detached_bitmap_metas.emplace_back(elem.name(), elem.meta());
+
+                    global_context->getCnchCatalog()->detachAttachedPartsRaw(
+                        from_table, to_table_uuid, attached_part_names, detached_parts_metas, attached_bitmap_names, detached_bitmap_metas);
                     break;
                 }
+                default:
+                    throw Exception("Unknown RedirectDetachAttachedS3PartsReq status", ErrorCodes::NOT_IMPLEMENTED);
             }
         }
         catch (...)

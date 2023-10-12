@@ -4,33 +4,50 @@
 
 namespace DB
 {
-constexpr auto linux_numa_cpu_file = "/sys/devices/system/node/has_cpu";
+/// Nodes that have one or more CPUs.
+constexpr auto linux_numa_cpu_file_has_cpu = "/sys/devices/system/node/has_cpu";
+/// Nodes that are online.
+constexpr auto linux_numa_cpu_file_online = "/sys/devices/system/node/online";
+/// Nodes that could be possibly become online at some point.
+constexpr auto linux_numa_cpu_file_possible = "/sys/devices/system/node/possible";
 size_t max_numa_node = 0;
 
-__attribute__((constructor)) static void init_max_numa_node()
+size_t buffer_to_number(const std::string & buffer)
 {
-    if (!std::filesystem::exists(linux_numa_cpu_file))
-    {
-        return;
-    }
-
-    std::ifstream fstream(linux_numa_cpu_file);
-    std::stringstream buffer;
-    buffer << fstream.rdbuf();
-
     try
     {
-        max_numa_node = std::stoul(buffer.str().substr(buffer.str().find('-') + 1));
+        return std::stoul(buffer.substr(buffer.rfind('-') + 1));
     }
-    catch (const std::invalid_argument&) 
+    catch (...)
     {
-        max_numa_node = 0;
+        return 0;
     }
-    catch (const std::out_of_range& e) 
-    {
-        max_numa_node = 0;
-    }
+}
 
-    
+/// Try best to init `max_numa_node` with the max numa node number we have at current time.
+__attribute__((constructor)) static void init_max_numa_node()
+{
+    auto try_read_max_numa_nude = [](const char * file_name) -> bool {
+        if (!std::filesystem::exists(file_name))
+            return false;
+
+        std::ifstream fstream(linux_numa_cpu_file_online);
+        std::stringstream buffer;
+        buffer << fstream.rdbuf();
+
+        if (buffer.str().empty())
+            return false;
+
+        max_numa_node = buffer_to_number(buffer.str());
+        return true;
+    };
+
+    if (try_read_max_numa_nude(linux_numa_cpu_file_has_cpu))
+        return;
+
+    if (try_read_max_numa_nude(linux_numa_cpu_file_online))
+        return;
+
+    try_read_max_numa_nude(linux_numa_cpu_file_possible);
 }
 }

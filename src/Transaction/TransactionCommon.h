@@ -233,6 +233,7 @@ struct UndoResource
     /// domain level logics
     bool isLegacy() const { return pb_model.placeholders_size() == 0; }
     void clean(Catalog::Catalog & catalog, MergeTreeMetaBase * storage) const;
+    void commit(const Context & context) const;
 
 private:
     static inline std::atomic<UInt64> counter{0};

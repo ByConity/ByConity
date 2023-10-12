@@ -1140,6 +1140,9 @@ public:
     ThrottlerPtr getReplicatedFetchesThrottler() const;
     ThrottlerPtr getReplicatedSendsThrottler() const;
 
+    void initPreloadThrottler();
+    ThrottlerPtr tryGetPreloadThrottler() const;
+
     /// Has distributed_ddl configuration or not.
     bool hasDistributedDDL() const;
     void setDDLWorker(std::unique_ptr<DDLWorker> ddl_worker);

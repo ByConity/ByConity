@@ -20,9 +20,13 @@
 namespace DB
 {
 S3DetachMetaAction::S3DetachMetaAction(
-    const ContextPtr & context_, const TxnTimestamp & txn_id_, const StoragePtr & tbl_, const MergeTreeDataPartsCNCHVector & parts_)
-    : IAction(context_, txn_id_), tbl(tbl_)
-{   
+    const ContextPtr & context_,
+    const TxnTimestamp & txn_id_,
+    const StoragePtr & tbl_,
+    const MergeTreeDataPartsCNCHVector & parts_,
+    const DeleteBitmapMetaPtrVector & bitmaps_)
+    : IAction(context_, txn_id_), tbl(tbl_), bitmaps(bitmaps_)
+{
     parts = CnchPartsHelper::toIMergeTreeDataPartsVector(parts_);
 }
 
@@ -33,7 +37,11 @@ void S3DetachMetaAction::executeV1(TxnTimestamp)
 
 void S3DetachMetaAction::executeV2()
 {
-    global_context.getCnchCatalog()->detachAttachedParts(tbl, tbl, parts, parts);
+    if (executed)
+        return;
+
+    global_context.getCnchCatalog()->detachAttachedParts(tbl, tbl, parts, {}, parts, {}, bitmaps);
+    executed = true;
 }
 
 void S3DetachMetaAction::abort()
@@ -45,7 +53,11 @@ void S3DetachMetaAction::abort()
         detached_names.push_back(part->info.getPartName());
     }
 
-    global_context.getCnchCatalog()->attachDetachedParts(tbl, tbl, detached_names, parts);
+    global_context.getCnchCatalog()->attachDetachedParts(tbl, tbl, detached_names, parts, {}, bitmaps, {});
+
+    /// Since bitmaps are all new base bitmap that have been regenerated, simply delete it
+    for (const auto & bitmap: bitmaps)
+        bitmap->removeFile();
 }
 
 void S3DetachMetaAction::postCommit(TxnTimestamp)
@@ -68,7 +80,15 @@ void S3DetachMetaAction::abortByUndoBuffer(const Context & ctx, const StoragePtr
         }
     });
 
-    ctx.getCnchCatalog()->attachDetachedPartsRaw(tbl, part_names);
+    std::vector<String> bitmap_names;
+    std::for_each(resources.begin(), resources.end(), [&bitmap_names](const UndoResource & resource) {
+        if (resource.type() == UndoResourceType::S3DetachDeleteBitmap)
+        {
+            bitmap_names.push_back(resource.placeholders(0));
+        }
+    });
+
+    ctx.getCnchCatalog()->attachDetachedPartsRaw(tbl, part_names, bitmap_names);
 }
 
 }

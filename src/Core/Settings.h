@@ -1637,7 +1637,8 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(Seconds, query_cache_ttl, 60, "After this time in seconds entries in the query cache become stale", 0) \
     M(Bool, query_cache_share_between_users, false, "Allow other users to read entry in the query cache", 0) \
-\
+    M(Bool, create_view_check_column_names, true, "When executing CREATE VIEW queries, whether check column names are consistent with select query", 0) \
+    \
     /** settings in cnch **/ \
     M(Seconds, drop_range_memory_lock_timeout, 5, "The time that spend on wait for memory lock when doing drop range", 0) \
     M(UInt64, cnch_data_retention_time_in_sec, 3*24*60*60, "Waiting time when dropped table or database is actually removed.", 0) \
@@ -1681,19 +1682,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
     M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
-    M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
-    M(Bool, enable_async_preload_parts, true, "Allow to preload data parts asynchronously", 0) \
-    M(UInt64, \
-      cloud_task_auto_stop_timeout, \
-      60, \
-      "We will remove this task when heartbeat can't find this task more than retries_count times.", \
-      0) \
-    M(UInt64, \
-      parts_preload_level, \
-      1, \
-      "used for global preload(manual alter&table auto), 0=close preload;1=preload meta;2=preload data;3=preload meta&data, Note: for " \
-      "table auto preload, 0 will disable all table preload, > 0 will use table preload setting", \
-      0) \
+    M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
+    M(UInt64, parts_preload_level, 1, "used for global preload(manual alter&table auto), 0=close preload;1=preload meta;2=preload data;3=preload meta&data, Note: for table auto preload, 0 will disable all table preload, > 0 will use table preload setting", 0) \
+    M(UInt64, parts_preload_throttler, 0, "used for max preload rpc concurrent count", 0) \
     M(DiskCacheMode, disk_cache_mode, DiskCacheMode::AUTO, "Whether to use local disk cache", 0) \
     M(Bool, enable_vw_customized_setting, false, "Allow vw customized overwrite profile settings", 0) \
     M(Bool, enable_async_execution, false, "Whether to enable async execution", 0) \
@@ -1804,6 +1795,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback when failed", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
+    M(UInt64, plan_optimizer_rule_warning_time, 1000, "Send warning if a optimize rule optimize time exceed timeout", 0) \
     M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \
     M(UInt64, max_plannode_count, 200, "The max plannode count", 0) \
     M(Bool, enable_memory_catalog, false, "Enable memory catalog for unittest", 0) \

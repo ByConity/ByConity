@@ -1346,6 +1346,9 @@ void TCPHandler::receiveQuery()
     if (client_tcp_protocol_version >= DBMS_MIN_REVISION_WITH_CLIENT_INFO)
         client_info.read(*in, client_tcp_protocol_version);
 
+    LOG_DEBUG(log, "receive query, client info: query_kind is {}, initial_user is {}, current_query_id is {}, initial_query_id is {}, current_user is {}, client_type is {}", 
+        client_info.query_kind, client_info.initial_user, client_info.current_query_id, client_info.initial_query_id, client_info.current_user, client_info.client_type);
+
     /// For better support of old clients, that does not send ClientInfo.
     if (client_info.query_kind == ClientInfo::QueryKind::NO_QUERY)
     {

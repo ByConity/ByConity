@@ -828,4 +828,20 @@ UInt32 QueryPlan::getPlanNodeCount(PlanNodePtr node)
     return size;
 }
 
+static PlanNodePtr copyPlanNode(const PlanNodePtr & plan, ContextMutablePtr & context)
+{
+    PlanNodes children;
+    for (auto & child : plan->getChildren())
+        children.emplace_back(copyPlanNode(child, context));
+    return PlanNodeBase::createPlanNode(plan->getId(), plan->getStep()->copy(context), children, plan->getStatistics());
+}
+
+QueryPlanPtr QueryPlan::copy(ContextMutablePtr context)
+{
+    auto copy_plan_node = copyPlanNode(plan_node, context);
+    CTEInfo copy_cte_info;
+    for (const auto & [cte_id, cte_def] : cte_info.getCTEs())
+        copy_cte_info.add(cte_id, copyPlanNode(cte_def, context));
+    return std::make_unique<QueryPlan>(copy_plan_node, copy_cte_info, context->getPlanNodeIdAllocator());
+}
 }

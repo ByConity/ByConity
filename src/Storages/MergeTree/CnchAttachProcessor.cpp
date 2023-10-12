@@ -341,7 +341,7 @@ void CnchAttachProcessor::exec()
     AttachFilter filter;
     try
     {
-        // Find all parts which matchs filter, these parts will retain it's origin
+        // Find all parts which matches filter, these parts will retain it's origin
         // position, then calculate parts chain and return all visible parts
         std::pair<AttachFilter, PartsFromSources> collect_res = collectParts(attach_ctx);
         filter = collect_res.first;
@@ -357,17 +357,14 @@ void CnchAttachProcessor::exec()
 
         if (!prepared_parts.first.empty())
         {
+            for (const auto & part : prepared_parts.second)
+                partitions_filter.emplace(part->info.partition_id);
+
             DiskType::Type disk_type = target_tbl.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk()->getType();
             if(disk_type ==  DiskType::Type::ByteS3)
-            {
-                commitPartsFromS3(prepared_parts);
-            }
+                commitPartsFromS3(prepared_parts, staged_part_names);
             else
-            {
-                for (const auto & part : prepared_parts.second)
-                    partitions_filter.emplace(part->info.partition_id);
-                commitParts(prepared_parts.second, staged_part_names, attached_partitions);   
-            }
+                commitParts(prepared_parts.second, staged_part_names, attached_partitions);
         }
     }
     catch(...)
@@ -487,6 +484,7 @@ std::pair<AttachFilter, CnchAttachProcessor::PartsFromSources> CnchAttachProcess
 
         if (command.from_zookeeper_path.empty())
         {
+            from_storage = target_tbl.shared_from_this();
             chained_parts_from_sources = collectPartsFromTableDetached(target_tbl,
                 filter, attach_ctx);
         }
@@ -564,10 +562,30 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromTable
             auto catalog = query_ctx->getCnchCatalog();
             ServerDataPartsVector parts = catalog->listDetachedParts(tbl, filter);
 
-            PartsFromSources parts_from_sources(1);
-            for (ServerDataPartPtr& part : parts)
+            DeleteBitmapMetaPtrVector bitmaps;
+            if (is_unique_tbl)
             {
-                parts_from_sources.back().push_back(part->toCNCHDataPart(tbl));
+                DeleteBitmapMetaPtrVector all_bitmaps = catalog->listDetachedDeleteBitmaps(tbl, filter);
+                CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, bitmaps);
+                LOG_DEBUG(logger, "Collect {} bitmap to attach from catalog for table {}", bitmaps.size(), tbl.getLogName());
+            }
+
+            PartsFromSources parts_from_sources(1);
+            auto bitmap_it = bitmaps.begin();
+            for (auto & part : parts)
+            {
+                auto cnch_part = part->toCNCHDataPart(tbl);
+                while (bitmap_it != bitmaps.end() && (*(*bitmap_it)) <= cnch_part->info)
+                {
+                    if (!(*bitmap_it)->sameBlock(cnch_part->info))
+                        bitmap_it++;
+                    else
+                    {
+                        attach_metas[cnch_part->name] = (*bitmap_it)->getModel();
+                        bitmap_it++;
+                    }
+                }
+                parts_from_sources.back().push_back(cnch_part);
             }
             return parts_from_sources;
         }
@@ -597,6 +615,8 @@ CnchAttachProcessor::collectPartsFromPath(const String & path, const AttachFilte
         }
         case DiskType::Type::ByteS3:
         {
+            // This is to handle parts generated from part writer. In this way, unique table will not generate bitmap. See more detail in doc: https://xxxxx
+            // Read info from task meta file
             return collectPartsFromS3TaskMeta(target_tbl, path, filter, attach_ctx);
         }
         default:
@@ -811,7 +831,7 @@ CnchAttachProcessor::PartsFromSources CnchAttachProcessor::collectPartsFromS3Tas
     return parts_from_sources;
 }
 
-void CnchAttachProcessor::commitParts(MutableMergeTreeDataPartsCNCHVector & prepared_parts, 
+void CnchAttachProcessor::commitParts(MutableMergeTreeDataPartsCNCHVector & prepared_parts,
                      NameSet & staged_parts_name, std::vector<ASTPtr> & attached_partitions)
 {
     injectFailure(AttachFailurePoint::BEFORE_COMMIT_FAIL);
@@ -1361,7 +1381,9 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
             UInt64 table_def_hash = target_tbl.getTableHashForClusterBy();
             bool is_user_defined_cluster_by_expression = target_tbl.getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
             String from_storage_uuid = from_storage == nullptr ? "" : UUIDHelpers::UUIDToString(from_storage->getStorageUUID());
-            for (auto& parts_and_infos : parts_and_infos_from_sources)
+
+            std::unordered_map<String, LocalDeleteBitmapPtr> new_bitmaps;
+            for (auto & parts_and_infos : parts_and_infos_from_sources)
             {
                 for (std::pair<IMergeTreeDataPartPtr, MergeTreePartInfo>& part_and_info : parts_and_infos)
                 {
@@ -1401,12 +1423,54 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                     parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_info.getPartNameWithHintMutation());
                     if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash || is_user_defined_cluster_by_expression)
                         parts_with_history.second[offset]->table_definition_hash = table_def_hash;
+
+                    // Rewrite delete bitmap file
+                    if (is_unique_tbl && !from_storage_uuid.empty()) /// attach part from path will not have bitmap
+                    {
+                        DataModelDeleteBitmapPtr attach_meta;
+                        {
+                            std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+                            attach_meta = attach_metas[part->name];
+                        }
+                        if (attach_meta)
+                        {
+                            /// Due to S3 don't support move file, and delete bitmap file is small.
+                            /// For convenience, we generate a new bitmap file here.
+                            DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
+                            deserializeDeleteBitmapInfo(part->storage, attach_meta, bitmap);
+                            auto new_delete_bitmap = LocalDeleteBitmap::createBase(part_info, bitmap, txn_id);
+                            auto & new_bitmap_model = new_delete_bitmap->getModel();
+                            UndoResource ub(
+                                txn_id,
+                                UndoResourceType::S3AttachDeleteBitmap,
+                                from_storage_uuid,
+                                dataModelName(*attach_meta),
+                                attach_meta->SerializeAsString(),
+                                dataModelName(*new_bitmap_model),
+                                DeleteBitmapMeta::deleteBitmapFileRelativePath(*new_bitmap_model));
+                            ub.setDiskName(part->volume->getDisk()->getName());
+                            undo_resources.emplace_back(ub);
+                            new_bitmaps[parts_with_history.second[offset]->name] = std::move(new_delete_bitmap);
+                        }
+                    }
+
                     ++offset;
                 }
             }
 
-            query_ctx->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(target_tbl.getStorageUUID()),
-                txn_id, undo_resources);
+            /// Write undo buffer first
+            query_ctx->getCnchCatalog()->writeUndoBuffer(UUIDHelpers::UUIDToString(target_tbl.getStorageUUID()), txn_id, undo_resources);
+
+            /// Dump new bitmap
+            for (const auto & [part_name, new_bitmap] : new_bitmaps)
+            {
+                auto new_bitmap_meta = new_bitmap->dump(target_tbl);
+                std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+                attach_metas[part_name] = new_bitmap_meta->getModel();
+            }
+
+            if (is_unique_tbl)
+                LOG_DEBUG(logger, "Unique table {} generates {} new bitmaps.", target_tbl.getStorageID().getNameForLogs(), new_bitmaps.size());
             break;
         }
         default:
@@ -1537,11 +1601,47 @@ void CnchAttachProcessor::verifyPartsNum(size_t parts_num) const
     }
 }
 
-void CnchAttachProcessor::commitPartsFromS3(const PartsWithHistory & prepared_parts)
+void CnchAttachProcessor::commitPartsFromS3(const PartsWithHistory & parts_with_history, NameSet & staged_parts_name)
 {
+    size_t parts_num = parts_with_history.second.size();
+    MutableMergeTreeDataPartsCNCHVector prepared_parts;
+    MutableMergeTreeDataPartsCNCHVector staged_parts;
+    DeleteBitmapMetaPtrVector detached_bitmaps;
+    DeleteBitmapMetaPtrVector new_bitmaps;
     if (is_unique_tbl)
     {
-        throw Exception("Only support attach parts for unique table in hdfs", ErrorCodes::NOT_IMPLEMENTED);
+        prepared_parts.reserve(parts_num);
+        staged_parts.reserve(parts_num);
+        std::lock_guard<std::mutex> lock(unique_table_info_mutex);
+        for (size_t i = 0; i < parts_with_history.second.size(); ++i)
+        {
+            const auto & part = parts_with_history.second[i];
+            const auto & attach_meta = attach_metas[part->name];
+
+            /// Handle bitmaps
+            if (attach_meta)
+            {
+                new_bitmaps.emplace_back(std::make_shared<DeleteBitmapMeta>(target_tbl, attach_meta));
+
+                const auto & former_part = parts_with_history.first[i];
+                const auto & former_meta = attach_metas[former_part->name];
+                if (!former_meta)
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR, "Former meta for part {} is not exist while it has new meta", former_part->name);
+
+                auto & merge_tree_storage = dynamic_cast<MergeTreeMetaBase &>(*from_storage);
+                detached_bitmaps.push_back(std::make_shared<DeleteBitmapMeta>(merge_tree_storage, former_meta));
+            }
+
+            /// Handle parts
+            if (attach_meta && query_ctx->getSettingsRef().enable_unique_table_attach_without_dedup)
+                prepared_parts.emplace_back(std::move(part));
+            else
+            {
+                staged_parts_name.insert(part->info.getPartName());
+                staged_parts.emplace_back(std::move(part));
+            }
+        }
     }
 
     // Commit transaction
@@ -1550,10 +1650,19 @@ void CnchAttachProcessor::commitPartsFromS3(const PartsWithHistory & prepared_pa
     if (command.from_table.empty() && !command.from_zookeeper_path.empty())
     {
         CnchDataWriter cnch_writer(target_tbl, query_ctx, ManipulationType::Insert);
-        cnch_writer.commitPreparedCnchParts(
-            DumpedData{
-                .parts = std::move(prepared_parts.second),
+        if (is_unique_tbl)
+        {
+            cnch_writer.commitPreparedCnchParts(DumpedData{
+                .staged_parts = std::move(parts_with_history.second),
             });
+            LOG_DEBUG(logger, "Unique table {} attach {} staged parts.", target_tbl.getStorageID().getNameForLogs(), staged_parts.size());
+        }
+        else
+        {
+            cnch_writer.commitPreparedCnchParts(DumpedData{
+                .parts = std::move(parts_with_history.second),
+            });
+        }
 
         injectFailure(AttachFailurePoint::MID_COMMIT_FAIL);
         return;
@@ -1564,18 +1673,25 @@ void CnchAttachProcessor::commitPartsFromS3(const PartsWithHistory & prepared_pa
 
     if (!command.from_table.empty())
     {
-        s3_parts_info = std::make_unique<S3AttachPartsInfo>(from_storage, prepared_parts.first, prepared_parts.second);
+        s3_parts_info = std::make_unique<S3AttachPartsInfo>(from_storage, parts_with_history.first, prepared_parts, staged_parts, detached_bitmaps, new_bitmaps);
     }
     else
     {
-        s3_parts_info = std::make_unique<S3AttachPartsInfo>(target_tbl.shared_from_this(), prepared_parts.first, prepared_parts.second);
+        s3_parts_info = std::make_unique<S3AttachPartsInfo>(target_tbl.shared_from_this(), parts_with_history.first, prepared_parts, staged_parts, detached_bitmaps, new_bitmaps);
     }
 
-    cnch_writer.commitPreparedCnchParts(
-        DumpedData{
-            .parts = std::move(prepared_parts.second),
-        },
-        s3_parts_info);
+    cnch_writer.commitPreparedCnchParts({}, s3_parts_info);
+
+    if (is_unique_tbl)
+    {
+        LOG_DEBUG(
+            logger,
+            "Unique table {} attach {} visible parts, {} staged parts, {} bitmaps.",
+            target_tbl.getStorageID().getNameForLogs(),
+            prepared_parts.size(),
+            staged_parts.size(),
+            new_bitmaps.size());
+    }
 
     injectFailure(AttachFailurePoint::MID_COMMIT_FAIL);
 }

@@ -116,10 +116,12 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
         if (chunk && chunk.getChunkInfo() &&  chunk.getChunkInfo()->getType() == ChunkInfo::Type::Totals && totals_source)
         {
             totals_source->setTotals(std::move(chunk)); // assuming only one totals chunk, so it should be safe to do so.
+            chunk = {};
         }
         else if (chunk && chunk.getChunkInfo() &&  chunk.getChunkInfo()->getType() == ChunkInfo::Type::Extremes && extremes_source)
         {
             extremes_source->setExtremes(std::move(chunk)); // assuming only one extremes chunk, so it should be safe to do so.
+            chunk = {};
         }
         return std::make_optional(std::move(chunk));
     }

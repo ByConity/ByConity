@@ -23,6 +23,7 @@
 #include <Common/filesystemHelpers.h>
 #include <Core/Block.h>
 #include <Core/SortDescription.h>
+#include <Columns/FilterDescription.h>
 #include <Interpreters/IJoin.h>
 #include <DataStreams/SizeLimits.h>
 #include <Interpreters/MergeJoin.h>
@@ -35,6 +36,44 @@ namespace DB
 {
 
 class TableJoin;
+
+struct BlockFilterDescriptions
+{
+    std::vector<int> block_indexes;
+    std::vector<Block> blocks;
+    std::vector<std::shared_ptr<FilterDescription>> holders;
+    std::vector<size_t> filtered_size;
+    int total_filtered_size = 0;
+
+    void add(int index, Block _block, std::shared_ptr<FilterDescription> holder, int _filtered_size)
+    {
+        block_indexes.push_back(index);
+        blocks.emplace_back(_block);
+        holders.emplace_back(holder);
+        filtered_size.push_back(_filtered_size);
+        total_filtered_size += _filtered_size;
+    }
+
+    std::shared_ptr<FilterDescription> getHolderByIndex(int index)
+    {
+        return holders.at(index);
+    }
+
+    int getFilteredSizeByIndex(int index)
+    {
+        return filtered_size.at(index);
+    }
+
+    Block getBlockByIndex(int index)
+    {
+        return blocks.at(index);
+    }
+
+    int getTotalFilteredSize()
+    {
+        return total_filtered_size;
+    }
+};
 
 class NestedLoopJoin : public IJoin
 {

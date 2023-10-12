@@ -284,20 +284,81 @@ void CnchServerClient::redirectSetCommitTime(
     RPCHelpers::checkResponse(response);
 }
 
-void CnchServerClient::redirectDetachAttachS3Parts(
+void CnchServerClient::redirectAttachDetachedS3Parts(
+        const StoragePtr & to_table,
+        const UUID & from_table_uuid,
+        const UUID & to_table_uuid,
+        const IMergeTreeDataPartsVector & commit_parts,
+        const IMergeTreeDataPartsVector & commit_staged_parts,
+        const Strings & detached_part_names,
+        const Strings & detached_bitmap_names,
+        const DeleteBitmapMetaPtrVector & detached_bitmaps,
+        const DeleteBitmapMetaPtrVector & bitmaps,
+        const DB::Protos::DetachAttachType & type)
+{
+    brpc::Controller cntl;
+    Protos::RedirectAttachDetachedS3PartsReq request;
+    Protos::RedirectAttachDetachedS3PartsResp response;
+
+    if (UUIDHelpers::Nil != from_table_uuid)
+        RPCHelpers::fillUUID(from_table_uuid, *request.mutable_from_table_uuid());
+
+    RPCHelpers::fillUUID(to_table_uuid, *request.mutable_to_table_uuid());
+
+    if (to_table)
+    {
+        for (auto & part : commit_parts)
+            fillPartModel(*to_table, *part, *request.add_commit_parts());
+
+        for (auto & part : commit_staged_parts)
+            fillPartModel(*to_table, *part, *request.add_commit_staged_parts());
+    }
+
+    for (auto & part_name : detached_part_names)
+        request.add_detached_part_names(part_name);
+
+    for (auto & bitmap_name : detached_bitmap_names)
+        request.add_detached_bitmap_names(bitmap_name);
+
+    for (auto & bitmap_meta: detached_bitmaps)
+    {
+        auto * new_bitmap = request.add_detached_bitmaps();
+        new_bitmap->CopyFrom(*(bitmap_meta->getModel()));
+    }
+
+    for (auto & bitmap_meta: bitmaps)
+    {
+        auto * new_bitmap = request.add_bitmaps();
+        new_bitmap->CopyFrom(*(bitmap_meta->getModel()));
+    }
+
+    request.set_type(type);
+
+    stub->redirectAttachDetachedS3Parts(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+
+void CnchServerClient::redirectDetachAttachedS3Parts(
         const StoragePtr & to_table,
         const UUID & from_table_uuid,
         const UUID & to_table_uuid,
         const IMergeTreeDataPartsVector & attached_parts,
+        const IMergeTreeDataPartsVector & attached_staged_parts,
         const IMergeTreeDataPartsVector & commit_parts,
         const Strings & attached_part_names,
-        const Strings & detached_part_names,
-        const std::vector<std::pair<String, String>> &  detached_part_metas,
+        const Strings & attached_bitmap_names,
+        const DeleteBitmapMetaPtrVector & attached_bitmaps,
+        const DeleteBitmapMetaPtrVector & bitmaps,
+        const std::vector<std::pair<String, String>> & detached_part_metas,
+        const std::vector<std::pair<String, String>> & detached_bitmap_metas,
         const DB::Protos::DetachAttachType & type)
 {
     brpc::Controller cntl;
-    Protos::RedirectDetachAttachS3PartsReq request;
-    Protos::RedirectDetachAttachS3PartsResp response;
+    Protos::RedirectDetachAttachedS3PartsReq request;
+    Protos::RedirectDetachAttachedS3PartsResp response;
 
     if (UUIDHelpers::Nil != from_table_uuid)
         RPCHelpers::fillUUID(from_table_uuid, *request.mutable_from_table_uuid());
@@ -318,23 +379,46 @@ void CnchServerClient::redirectDetachAttachS3Parts(
 
         for (auto & part : attached_parts)
             fillPartModel(*to_table, *part, *request.add_attached_parts());
+
+        for (auto & part : attached_staged_parts)
+            fillPartModel(*to_table, *part, *request.add_attached_staged_parts());
     }
 
     for (auto & part_name : attached_part_names)
         request.add_attached_part_names(part_name);
-    for (auto & part_name : detached_part_names)
-        request.add_detached_part_names(part_name);
+    for (auto & bitmap_name : attached_bitmap_names)
+        request.add_attached_bitmap_names(bitmap_name);
+
+
+    for (auto & bitmap_meta: attached_bitmaps)
+    {
+        auto * new_bitmap = request.add_attached_bitmaps();
+        new_bitmap->CopyFrom(*(bitmap_meta->getModel()));
+    }
+
+    for (auto & bitmap_meta: bitmaps)
+    {
+        auto * new_bitmap = request.add_bitmaps();
+        new_bitmap->CopyFrom(*(bitmap_meta->getModel()));
+    }
 
     for (auto & [name, meta] : detached_part_metas)
     {
-        Protos::DetachPartMeta * meta_model = request.add_detached_part_meta();
+        Protos::DetachMeta * meta_model = request.add_detached_part_metas();
+        meta_model->set_name(name);
+        meta_model->set_meta(meta);
+    }
+
+    for (auto & [name, meta] : detached_bitmap_metas)
+    {
+        Protos::DetachMeta * meta_model = request.add_detached_bitmap_metas();
         meta_model->set_name(name);
         meta_model->set_meta(meta);
     }
 
     request.set_type(type);
 
-    stub->redirectDetachAttachS3Parts(&cntl, &request, &response, nullptr);
+    stub->redirectDetachAttachedS3Parts(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
     RPCHelpers::checkResponse(response);

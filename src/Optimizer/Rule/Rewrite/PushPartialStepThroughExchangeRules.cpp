@@ -93,7 +93,7 @@ TransformResult split(const PlanNodePtr & node, RuleContext & context)
 
 PlanNodePtr createPartial(const AggregatingStep * step, PlanNodePtr child, NameToNameMap & map, Context & context)
 {
-    auto symbol_mapper = SymbolMapper::symbolMapper(map);
+    auto symbol_mapper = SymbolMapper::simpleMapper(map);
     auto agg_step = symbol_mapper.map(*step);
     auto mapped_partial = PlanNodeBase::createPlanNode(context.nextNodeId(), agg_step, {std::move(child)});
 
@@ -231,7 +231,7 @@ TransformResult PushPartialAggThroughUnion::transformImpl(PlanNodePtr node, cons
     {
         map[item.second[0]] = item.first;
     }
-    auto mapper = SymbolMapper::symbolMapper(map);
+    auto mapper = SymbolMapper::simpleMapper(map);
 
     DataStream output;
     for (const auto & item : union_inputs[0].header)
