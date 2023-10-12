@@ -39,6 +39,7 @@
 #include <Common/HostWithPorts.h>
 #include <Common/Config/MetastoreConfig.h>
 #include <common/getFQDNOrHostName.h>
+#include "Catalog/IMetastore.h"
 // #include <Access/MaskingPolicyDataModel.h>
 
 namespace DB::ErrorCodes
@@ -67,9 +68,11 @@ public:
 
     using MetastoreProxyPtr = std::shared_ptr<MetastoreProxy>;
 
-    Catalog(Context & _context, MetastoreConfig & config, String _name_space = "default");
+    Catalog(Context & _context, const MetastoreConfig & config, String _name_space = "default");
 
     ~Catalog() = default;
+
+    MetastoreProxy::MetastorePtr getMetastore();
 
     /// update optimizer stats
     void updateTableStatistics(const String & uuid, const std::unordered_map<StatisticsTag, StatisticsBasePtr> & data);

@@ -20,15 +20,15 @@
 #include <Storages/PartCacheManager.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
 
-#include <Coordination/LeaderElection.h>
-#include <Coordination/Defines.h>
-
 namespace DB
 {
 
 CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::AbstractConfiguration & config)
     : WithContext(context_)
-    , LeaderElectionBase(getContext()->getConfigRef().getUInt64("server_master.election_check_ms", 100))
+    , topology_refresh_task(getContext()->getTopologySchedulePool().createTask("TopologyRefresher", [&]() { refreshTopology(); }))
+    , lease_renew_task(getContext()->getTopologySchedulePool().createTask("LeaseRenewer", [&]() { renewLease(); }))
+    , async_query_status_check_task(
+          getContext()->getTopologySchedulePool().createTask("AsyncQueryStatusChecker", [&]() { checkAsyncQueryStatus(); }))
 {
     auto task_func = [this] (String task_name, std::function<bool ()> func, UInt64 interval, std::atomic<UInt64> & last_time, BackgroundSchedulePool::TaskHolder & task)
     {
@@ -83,65 +83,33 @@ CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::Abst
     });
 
     updateServerVirtualWarehouses(config);
-    if (!getContext()->hasZooKeeper())
-    {
-        // throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Can't start server manage due to lack of zookeeper");
-        LOG_ERROR(log, "There is no zookeeper, skip start background task for serverManager");
 
-        onLeader();
-        return;
-    }
+    /// For leader election
+    const auto & conf = getContext()->getRootConfig();
+    auto refresh_interval_ms = conf.service_discovery_kv.server_manager_refresh_interval_ms.value;
+    auto expired_interval_ms = conf.service_discovery_kv.server_manager_expired_interval_ms.value;
+    auto prefix = conf.service_discovery_kv.election_prefix.value;
+    auto election_path = prefix + conf.service_discovery_kv.server_manager_host_path.value;
+    auto host = getContext()->getHostWithPorts();
+    auto metastore_ptr = getContext()->getCnchCatalog()->getMetastore();
 
-    startLeaderElection(getContext()->getTopologySchedulePool());
+    elector = std::make_shared<StorageElector>(
+        std::make_shared<ServerManagerKvStorage>(metastore_ptr),
+        refresh_interval_ms,
+        expired_interval_ms,
+        host,
+        election_path,
+        [&](const HostWithPorts *) { return onLeader(); },
+        [&](const HostWithPorts *) { return onFollower(); }
+    );
 }
 
 CnchServerManager::~CnchServerManager()
 {
-    shutDown();
-}
-
-void CnchServerManager::onLeader()
-{
-    /// sleep to prevent multiple leaders from appearing at the same time
-    std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
-
-    auto current_address = getContext()->getHostWithPorts().getRPCAddress();
-
     try
     {
-        is_leader = true;
-        setLeaderStatus();
-        lease_renew_task->activateAndSchedule();
-        topology_refresh_task->activateAndSchedule();
-        async_query_status_check_task->activateAndSchedule();
-    }
-    catch (...)
-    {
-        LOG_ERROR(log, "Failed to set leader status when current node becoming leader.");
-    }
-
-    LOG_DEBUG(log, "Current node {} become leader", current_address);
-}
-
-
-void CnchServerManager::enterLeaderElection()
-{
-    try
-    {
-        auto current_address = getContext()->getHostWithPorts().getRPCAddress();
-        auto election_path = getContext()->getConfigRef().getString("server_master.election_path", SERVER_MASTER_ELECTION_DEFAULT_PATH);
-
-        current_zookeeper = getContext()->getZooKeeper();
-        current_zookeeper->createAncestors(election_path + "/");
-
-        leader_election = std::make_unique<zkutil::LeaderElection>(
-            getContext()->getTopologySchedulePool(),
-            election_path,
-            *current_zookeeper,
-            [&]() { onLeader(); },
-            current_address,
-            false
-        );
+        shutDown();
+        elector.reset();
     }
     catch (...)
     {
@@ -149,9 +117,47 @@ void CnchServerManager::enterLeaderElection()
     }
 }
 
-void CnchServerManager::exitLeaderElection()
+bool CnchServerManager::isLeader() const
 {
-    partialShutdown();
+    return elector->isLeader();
+}
+
+/// Callback by StorageElector. Need to gurantee no exception thrown in this method.
+bool CnchServerManager::onLeader()
+{
+    auto current_address = getContext()->getHostWithPorts().getRPCAddress();
+
+    try
+    {
+        initLeaderStatus();
+        lease_renew_task->activateAndSchedule();
+        topology_refresh_task->activateAndSchedule();
+        async_query_status_check_task->activateAndSchedule();
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "Failed to set leader status when current node becoming leader.");
+        partialShutdown();
+        return false;
+    }
+
+    LOG_DEBUG(log, "Current node {} become leader", current_address);
+    return true;
+}
+
+bool CnchServerManager::onFollower()
+{
+    try
+    {
+        partialShutdown();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        return false;
+    }
+
+    return true;
 }
 
 bool CnchServerManager::refreshTopology()
@@ -159,16 +165,17 @@ bool CnchServerManager::refreshTopology()
     try
     {
         /// Stop and wait for next leader-election
-        if (!is_leader || !leader_initialized)
+        if (!isLeader() || !leader_initialized)
             return true;
 
         auto service_discovery_client = getContext()->getServiceDiscoveryClient();
         String psm = getContext()->getConfigRef().getString("service_discovery.server.psm", "data.cnch.server");
         HostWithPortsVec server_vector = service_discovery_client->lookup(psm, ComponentType::SERVER);
 
-        /// zookeeper is nullptr means there is no leader election available,
+        /// elector is nullptr means there is no leader election available,
         /// in this case, we now only support one server in cluster.
-        if (!current_zookeeper && server_vector.size() > 1)
+        /// TODO: (LeaderElection) this logic should be handled in storage elector.
+        if (!elector && server_vector.size() > 1)
         {
             LOG_ERROR(log, "More than one server in cluster without leader-election is not supported now, stop refreshTopology, psm: {}", psm);
             return true;
@@ -224,11 +231,11 @@ bool CnchServerManager::renewLease()
 {
     try
     {
-        if (!is_leader)
+        if (!isLeader())
             return true;
 
         if (!leader_initialized)
-            setLeaderStatus();
+            initLeaderStatus();
 
         UInt64 current_time_ms = getContext()->getTimestamp() >> 18;
         UInt64 lease_life_ms = getContext()->getSettings().topology_lease_life_ms.totalMilliseconds();
@@ -339,25 +346,23 @@ bool CnchServerManager::checkAsyncQueryStatus()
     return true;
 }
 
-void CnchServerManager::setLeaderStatus()
+void CnchServerManager::initLeaderStatus()
 {
     std::unique_lock lock(topology_mutex);
     cached_topologies = getContext()->getCnchCatalog()->getTopologies();
     if (!cached_topologies.empty())
         term = cached_topologies.back().getTerm();
     leader_initialized = true;
-    LOG_DEBUG(log , "Successfully set leader status.");
+    LOG_DEBUG(log , "Successfully initialize leader status.");
 }
 
 void CnchServerManager::shutDown()
 {
     try
     {
-        need_stop = true;
         lease_renew_task->deactivate();
         topology_refresh_task->deactivate();
         async_query_status_check_task->deactivate();
-        leader_election.reset();
     }
     catch (...)
     {
@@ -365,15 +370,13 @@ void CnchServerManager::shutDown()
     }
 }
 
-/// call me when zookeeper is expired
+/// call me when election is expired
 void CnchServerManager::partialShutdown()
 {
     try
     {
-        is_leader = false;
         leader_initialized = false;
 
-        leader_election.reset();
         lease_renew_task->deactivate();
         topology_refresh_task->deactivate();
         async_query_status_check_task->deactivate();
@@ -419,7 +422,7 @@ void CnchServerManager::dumpServerStatus() const
 {
     std::stringstream ss;
     ss << "[leader selection result] : \n"
-       << "is_leader : " <<  is_leader << std::endl
+       << "is_leader : " <<  isLeader() << std::endl
        << "[tasks info] : \n"
        << "current_time : " << time(nullptr) << std::endl
        << "refresh_topology_time : " << refresh_topology_time << std::endl

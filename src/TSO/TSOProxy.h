@@ -16,7 +16,7 @@
 #pragma once
 
 #include <Common/Config/MetastoreConfig.h>
-#include <TSO/TSOMetastore.h>
+#include <Catalog/IMetastore.h>
 
 namespace DB
 {
@@ -27,16 +27,20 @@ namespace TSO
 class TSOProxy
 {
 public:
+    explicit TSOProxy(std::shared_ptr<Catalog::IMetaStore> metastore_ptr_, std::string key_)
+        : metastore_ptr(std::move(metastore_ptr_))
+        , key(std::move(key_))
+    {}
 
-    TSOProxy(const MetastoreConfig & config);
-    ~TSOProxy() {}
+    ~TSOProxy() = default;
 
     void setTimestamp(UInt64 timestamp);
     UInt64 getTimestamp();
     void clean();
 
 private:
-    TSOMetastorePtr metastore_ptr;
+    std::shared_ptr<Catalog::IMetaStore> metastore_ptr;
+    std::string key;
 };
 
 }

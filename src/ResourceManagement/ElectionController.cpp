@@ -16,8 +16,7 @@
 #include <ResourceManagement/ElectionController.h>
 #include <Catalog/Catalog.h>
 #include <Common/Configurations.h>
-#include <Coordination/Defines.h>
-#include <Coordination/KeeperDispatcher.h>
+#include <Common/HostWithPorts.h>
 #include <common/getFQDNOrHostName.h>
 #include <ResourceManagement/ResourceTracker.h>
 #include <ResourceManagement/VirtualWarehouseManager.h>
@@ -37,82 +36,73 @@ namespace DB::ResourceManagement
 
 ElectionController::ElectionController(ResourceManagerController & rm_controller_)
     : WithContext(rm_controller_.getContext())
-    , LeaderElectionBase(getContext()->getRootConfig().resource_manager.check_leader_info_interval_ms)
     , rm_controller(rm_controller_)
 {
-    enable_leader_election = getContext()->hasZooKeeper();
-    if (!enable_leader_election)
-    {
-        LOG_INFO(log, "RM is running in Single instance mode as ZooKeeper is not enabled. The current RM will become leader and should be the only instance.");
-        onLeader();
-        return;
-    }
+    const auto & config = getContext()->getRootConfig();
+    auto prefix = config.service_discovery_kv.election_prefix.value;
+    auto election_path = prefix + config.service_discovery_kv.resource_manager_host_path.value;
+    auto refresh_interval_ms = config.service_discovery_kv.resource_manager_refresh_interval_ms.value;
+    auto expired_interval_ms =  config.service_discovery_kv.resource_manager_expired_interval_ms.value;
+    auto host = getContext()->getHostWithPorts();
 
-    startLeaderElection(getContext()->getSchedulePool());
+    auto metastore_ptr = getContext()->getCnchCatalog()->getMetastore();
+    elector = std::make_shared<StorageElector>(
+        std::make_unique<ResourceManagerKvStorage>(metastore_ptr),
+        refresh_interval_ms,
+        expired_interval_ms,
+        host,
+        election_path,
+        [&](const HostWithPorts *) { return onLeader(); },
+        [&](const HostWithPorts *) { return onFollower(); }
+    );
 }
 
 ElectionController::~ElectionController()
 {
-    shutDown();
-}
-
-void ElectionController::onLeader()
-{
-    auto port = getContext()->getRootConfig().resource_manager.port.value;
-    const std::string & rm_host = getHostIPFromEnv();
-    auto current_address = createHostPortString(rm_host, port);
-    LOG_INFO(log, "Starting leader callback for " + current_address);
-
-    /// Sleep to prevent multiple leaders from appearing at the same time
-    std::this_thread::sleep_for(std::chrono::milliseconds(wait_ms));
-
-    /// Make sure get all needed metadata from KV store before becoming leader.
-    if (!pullState())
-    {
-        if (!enable_leader_election)
-        {
-            /// We have no way to trigger a new onLeader action in Single instance mode.
-            /// So we need to restart the process if we encounter any error.
-            throw Exception("Failed to pull metadata from KV store in Single instance mode, please check the metadata service and restart RM.", ErrorCodes::RESOURCE_MANAGER_INIT_ERROR);
-        }
-        is_leader = false;
-        exitLeaderElection();
-    }
-    else
-    {
-        LOG_INFO(log, "Current RM node " + current_address + " has become leader.");
-        auto & coordinator = rm_controller.getWorkerGroupResourceCoordinator();
-        coordinator.setMode(getContext()->getRootConfig().resource_manager.resource_coordinate_mode);
-        coordinator.start();
-        is_leader = true;
-    }
-}
-
-void ElectionController::enterLeaderElection()
-{
     try
     {
-        auto port = getContext()->getRootConfig().resource_manager.port.value;
-        const std::string & rm_host = getHostIPFromEnv();
-        auto current_address = createHostPortString(rm_host, port);
-        auto election_path = getContext()->getRootConfig().resource_manager.election_path.value;
+        LOG_DEBUG(log, "Exit leader election");
+        elector.reset();
 
-        current_zookeeper = getContext()->getZooKeeper();
-        current_zookeeper->createAncestors(election_path + "/");
-
-        leader_election = std::make_unique<zkutil::LeaderElection>(
-            getContext()->getSchedulePool(),
-            election_path,
-            *current_zookeeper,
-            [&]() { onLeader(); },
-            current_address,
-            false
-        );
+        shutDown();
     }
     catch (...)
     {
         tryLogCurrentException(__PRETTY_FUNCTION__);
     }
+}
+
+bool ElectionController::isLeader() const
+{
+    return elector->isLeader();
+}
+
+/// Callback by StorageElector. Need to gurantee no exception thrown in this method.
+bool ElectionController::onLeader()
+{
+    auto port = getContext()->getRootConfig().resource_manager.port.value;
+    const std::string & rm_host = getHostIPFromEnv();
+    auto current_address = createHostPortString(rm_host, port);
+    LOG_INFO(log, "Starting leader callback for {}", current_address);
+
+    /// Make sure get all needed metadata from KV store before becoming leader.
+    if (!pullState())
+    {
+        LOG_WARNING(log, "Failed to pull state from KV store.");
+        return false;
+    }
+
+    auto & coordinator = rm_controller.getWorkerGroupResourceCoordinator();
+    coordinator.setMode(getContext()->getRootConfig().resource_manager.resource_coordinate_mode);
+    coordinator.start();
+    LOG_INFO(log, "Current RM node {} has become leader.", current_address);
+    return true;
+}
+
+bool ElectionController::onFollower()
+{
+    shutDown();
+    return true;
 }
 
 bool ElectionController::pullState()
@@ -143,19 +133,9 @@ bool ElectionController::pullState()
     return success;
 }
 
-void ElectionController::exitLeaderElection()
-{
-    shutDown();
-}
-
 void ElectionController::shutDown()
 {
-    is_leader = false;
     rm_controller.getWorkerGroupResourceCoordinator().stop();
-
-    leader_election.reset();
-    current_zookeeper.reset();
-    LOG_DEBUG(log, "Exit leader election");
 }
 
 }

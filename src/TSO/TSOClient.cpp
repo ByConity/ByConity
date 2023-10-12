@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include <Common/Configurations.h>
 #include <TSO/TSOClient.h>
 
 #include <Protos/tso.pb.h>
@@ -80,9 +80,9 @@ GetTimestampsResp TSOClient::getTimestamps(UInt32 size)
 
 UInt64 getTSOResponse(const Context & context, TSORequestType type, size_t size)
 {
-    const auto & config = context.getConfigRef();
-    int tos_max_retry = config.getInt("tso_service.tso_max_retry_count", 3);
-    bool use_tso_fallback = config.getBool("tso_service.use_fallback", true);
+    const auto & config = context.getRootConfig();
+    int tos_max_retry = config.tso_service.tso_max_retry_count;
+    bool use_tso_fallback = config.tso_service.use_fallback;
 
     std::string new_leader;
     int retry = tos_max_retry;

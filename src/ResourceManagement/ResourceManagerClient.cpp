@@ -15,8 +15,9 @@
 
 #include <ResourceManagement/ResourceManagerClient.h>
 
+#include <Catalog/Catalog.h>
 #include <Common/Configurations.h>
-#include <Common/ZooKeeper/ZooKeeper.h>
+#include <Common/StorageElection/KvStorage.h>
 #include <Protos/RPCHelpers.h>
 #include <Protos/data_models.pb.h>
 #include <Protos/resource_manager_rpc.pb.h>
@@ -27,13 +28,13 @@
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 #include <common/logger_useful.h>
+#include <memory>
 
 
 namespace DB::ErrorCodes
 {
 extern const int RESOURCE_MANAGER_ILLEGAL_CONFIG;
 extern const int RESOURCE_MANAGER_NO_AVAILABLE_WORKER;
-extern const int NOT_A_LEADER;
 }
 
 namespace DB::ResourceManagement
@@ -41,9 +42,18 @@ namespace DB::ResourceManagement
 
 ResourceManagerClient::ResourceManagerClient(ContextPtr global_context_)
     : WithContext(global_context_)
-    , RpcLeaderClientBase(getName(), fetchRMAddress())
-    , stub(std::make_unique<Protos::ResourceManagerService_Stub>(&getChannel()))
+    , RpcLeaderClientBase(getName(), "127.0.0.1:18989")
 {
+    auto prefix = getContext()->getRootConfig().service_discovery_kv.election_prefix.value;
+    auto election_path = prefix + getContext()->getRootConfig().service_discovery_kv.resource_manager_host_path.value;
+    auto metastore_ptr = getContext()->getCnchCatalog()->getMetastore();
+    election_reader = std::make_unique<ElectionReader>(
+        std::make_shared<ResourceManagerKvStorage>(metastore_ptr),
+        election_path);
+    auto addr = fetchRMAddress();
+
+    /// Have to init stub after initialzing election_reader.
+    stub = std::make_unique<Stub>(&updateChannel(addr));
 }
 
 String fetchRMAddressByPSM(ContextPtr context)
@@ -72,45 +82,30 @@ String fetchRMAddressByPSM(ContextPtr context)
     return addresses[0].getRPCAddress();
 }
 
-String fetchRMAddressFromKeeper(ContextPtr context)
-{
-    auto current_zookeeper = context->getZooKeeper();
-    auto election_path = context->getRootConfig().resource_manager.election_path.value;
-    if (!current_zookeeper->exists(election_path))
-    {
-        LOG_DEBUG(&Poco::Logger::get("ResourceManagerClient"), "election_path {} not exists in zookeeper now, fallback to PSM mode.", election_path);
-        return fetchRMAddressByPSM(context);
-    }
-
-    auto children = current_zookeeper->getChildren(election_path);
-    if (children.empty())
-    {
-        throw Exception(ErrorCodes::NOT_A_LEADER, "Can't get current RM leader, leader election path {} is empty", election_path);
-    }
-
-    std::sort(children.begin(), children.end());
-    auto current_leader_node = election_path + "/" + children.front();
-    String current_leader = current_zookeeper->get(current_leader_node);
-    if (current_leader.empty())
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "Can't get current RM leader, leader_node `{}` in keeper is empty.", current_leader_node);
-
-    return current_leader;
-}
-
-/// @brief Fetch RM address from Keeper or PSM service discovery.
+/// @brief Fetch RM address from leader election result or service discovery.
 /// @return the RM's ip:port .
-/// @throw Exception if can not fetch address from either Keeper or PSM mode.
+/// @throw Exception if can not fetch address from either election result or PSM mode.
 String ResourceManagerClient::fetchRMAddress() const
 {
     auto context = getContext();
-    /// Option A. fetch by PSM mode.
-    if (!context->hasZooKeeper())
+    try
     {
-        return fetchRMAddressByPSM(context);
+        election_reader->refresh();
+        auto leader_info = election_reader->tryGetLeaderInfo();
+        if (leader_info.has_value())
+        {
+            LOG_TRACE(log, "Fetched leader info: {}", leader_info->toDebugString());
+            return leader_info->getRPCAddress();
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
     }
 
-    /// Option B. fetch from Keeper.
-    return fetchRMAddressFromKeeper(context);
+    auto addr = fetchRMAddressByPSM(context);
+    LOG_TRACE(log, "Fetched RM address by PSM: {}", addr);
+    return addr;
 }
 
 ResourceManagerClient::~ResourceManagerClient()

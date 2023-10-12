@@ -28,25 +28,15 @@ namespace ErrorCodes
 namespace TSO
 {
 
-TSOProxy::TSOProxy(const MetastoreConfig & config)
-{
-    if (config.type == MetaStoreType::FDB)
-    {
-        metastore_ptr = std::make_shared<TSOMetaFDBImpl>(config.fdb_conf.cluster_conf_path, config.key_name);
-    }
-    else
-        throw Exception("TSO metastore type should be set. Only support foundationdb and bytekv.", ErrorCodes::TSO_INTERNAL_ERROR);
-}
-
 void TSOProxy::setTimestamp(UInt64 timestamp)
 {
-    metastore_ptr->put(std::to_string(timestamp));
+    metastore_ptr->put(key, std::to_string(timestamp));
 }
 
 UInt64 TSOProxy::getTimestamp()
 {
     String timestamp_str;
-    metastore_ptr->get(timestamp_str);
+    metastore_ptr->get(key, timestamp_str);
     if (timestamp_str.empty())
     {
         return 0;
@@ -59,7 +49,7 @@ UInt64 TSOProxy::getTimestamp()
 
 void TSOProxy::clean()
 {
-    metastore_ptr->clean();
+    metastore_ptr->clean(key);
 }
 
 }

@@ -29,7 +29,7 @@ void TSOPrometheusMetricsWriter::write(WriteBuffer & wb)
     String is_leader_key{TSO_METRICS_PREFIX};
     is_leader_key.append(IS_LEADER_KEY); // create key with prefix
     String is_leader_key_label{is_leader_key};
-    is_leader_key_label += getLabel({{"tso_leader_endpoint", context->getTSOLeaderHostPort()}}); // create label for label-value pair
+    is_leader_key_label += getLabel({{"tso_leader_endpoint", tso_server.tryGetTSOLeaderHostPort()}}); // create label for label-value pair
     auto is_leader_metric_doc = metrics_namedoc_map.at(IS_LEADER_KEY); // create doc for #help
 
     // write out metrics to prometheus
@@ -39,7 +39,7 @@ void TSOPrometheusMetricsWriter::write(WriteBuffer & wb)
 
     writeOutLine(wb, "# HELP", is_leader_key, is_leader_metric_doc);
     writeOutLine(wb, "# TYPE", is_leader_key, "gauge");
-    writeOutLine(wb, is_leader_key_label, tso_server.getIsLeaderFromTSOService());
+    writeOutLine(wb, is_leader_key_label, tso_server.isLeader());
 
 }
 

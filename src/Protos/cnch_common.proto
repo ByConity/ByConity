@@ -119,3 +119,37 @@ message AsyncQueryStatus {
   required uint64 update_time = 6;
   required uint64 max_execution_time = 7;
 }
+
+message LeaderLease {
+  required uint64 elected_time = 1;
+  required uint64 last_refresh_time = 2;
+
+  //Leader should refresh "last_refresh_time" in every "refresh_interval_ms".
+  required uint64 refresh_interval_ms = 3;
+  
+  //If any follower found "last_refresh_time" was not changed in "expired_interval_ms", 
+  //then it can safely try to elect.
+  required uint64 expired_interval_ms = 4;
+  
+  enum Status {
+    //Clients can safely connect to these status leader if the status is Ready.
+    Ready = 0;
+
+    //A process have already become leader but did not wanto to provide service temporary.
+    //Other follower should stop to try to become leader but monitor the last_refresh_time
+    Wait = 1;
+
+    //Current leader does not want to become leader now.
+    //Followers can start election now.
+    //Usually, when the leader is required to shut down or restart, it can set the status before.
+    Yield = 2;
+  };
+  required Status status = 5[default = Ready];
+}
+
+message LeaderInfo {
+  required HostWithPorts address = 1;
+  required LeaderLease lease = 2;
+  optional HostWithPorts previous_leader_address = 3;
+  optional LeaderLease previous_leader_lease = 4;
+}

@@ -93,6 +93,10 @@
         </resource_manager>
     </service_discovery>
 
+    <service_discovery_kv>
+        <election_prefix>your_customized_name_</election_prefix>
+    </service_discovery_kv>
+
     <catalog>
         <name_space>catalog_namespace_uniq_string</name_space>
     </catalog>

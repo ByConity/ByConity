@@ -18,6 +18,7 @@
 #include <ResourceManagement/CommonData.h>
 #include <Common/RWLock.h>
 #include <Common/Configurations.h>
+#include <Common/StorageElection/ElectionReader.h>
 #include <CloudServices/RpcLeaderClientBase.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
@@ -38,14 +39,12 @@ namespace ErrorCodes
     extern const int BRPC_TIMEOUT;
     extern const int NO_SUCH_SERVICE;
     extern const int RESOURCE_MANAGER_NO_LEADER_ELECTED;
+    extern const int RESOURCE_MANAGER_LEADER_NOT_WORK_WELL;
 }
 
 namespace ResourceManagement
 {
 struct WorkerNode;
-
-String fetchRMAddressByPSM(ContextPtr context);
-String fetchRMAddressFromKeeper(ContextPtr context);
 
 class ResourceManagerClient : public WithContext, public RpcLeaderClientBase
 {
@@ -76,12 +75,12 @@ public:
     WorkerGroupData pickWorkerGroup(const String & vw_name, VWScheduleAlgo vw_schedule_algo, const ResourceRequirement & requirement);
     HostWithPorts pickWorker(const String & vw_name, VWScheduleAlgo vw_schedule_algo, const ResourceRequirement & requirement);
 
-    AggQueryQueueMap syncQueueDetails(VWQueryQueueMap vw_query_queue_map
-                                    , std::vector<String> * deleted_vw_list);
+    AggQueryQueueMap syncQueueDetails(VWQueryQueueMap vw_query_queue_map , std::vector<String> * deleted_vw_list);
 
 private:
     using Stub = Protos::ResourceManagerService_Stub;
     mutable RWLock leader_mutex = RWLockImpl::create();
+    std::unique_ptr<ElectionReader> election_reader;
     std::unique_ptr<Stub> stub;
 
     String fetchRMAddress() const;
@@ -133,12 +132,23 @@ private:
             }
             catch (const Exception & e)
             {
-                if (!(e.code() == ErrorCodes::BRPC_HOST_DOWN || e.code() == ErrorCodes::BRPC_CONNECT_ERROR
-                      || e.code() == ErrorCodes::NO_SUCH_SERVICE || e.code() == ErrorCodes::RESOURCE_MANAGER_NO_LEADER_ELECTED
-                    || e.code() == ErrorCodes::BRPC_TIMEOUT || e.code() == ErrorCodes::BRPC_EXCEPTION)
-                    || retry_count == max_retry_count)
+                if (retry_count == max_retry_count)
+                {
+                    LOG_ERROR(log, "All {} retries failed.", retry_count);
                     throw;
+                }
 
+                if (e.code() != ErrorCodes::BRPC_HOST_DOWN
+                    && e.code() != ErrorCodes::BRPC_CONNECT_ERROR
+                    && e.code() != ErrorCodes::NO_SUCH_SERVICE
+                    && e.code() != ErrorCodes::RESOURCE_MANAGER_NO_LEADER_ELECTED
+                    && e.code() != ErrorCodes::BRPC_TIMEOUT
+                    && e.code() != ErrorCodes::BRPC_EXCEPTION)
+                {
+                    throw;
+                }
+
+                LOG_DEBUG(log, "Catch an exception of {}, will retry the request.", e.name());
                 tryLogDebugCurrentException(__PRETTY_FUNCTION__);
             }
 
@@ -148,6 +158,10 @@ private:
             {
                 LOG_ERROR(log, "There is no active elected RM leader");
                 throw Exception("No active RM leader", ErrorCodes::RESOURCE_MANAGER_NO_LEADER_ELECTED);
+            }
+            else if (new_leader == leader_host_port)
+            {
+                throw Exception("The leader from election result not work well", ErrorCodes::RESOURCE_MANAGER_LEADER_NOT_WORK_WELL);
             }
             /// Update leader address and retry in case of any exception.
             else

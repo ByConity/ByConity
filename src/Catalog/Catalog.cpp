@@ -472,7 +472,7 @@ namespace Catalog
         return parseQuery(parser, begin, end, "", 0, 0);
     }
 
-    Catalog::Catalog(Context & _context, MetastoreConfig & config, String _name_space) : context(_context), name_space(_name_space)
+    Catalog::Catalog(Context & _context, const MetastoreConfig & config, String _name_space) : context(_context), name_space(_name_space)
     {
         runWithMetricSupport(
             [&] {
@@ -499,6 +499,11 @@ namespace Catalog
             },
             ProfileEvents::CatalogConstructorSuccess,
             ProfileEvents::CatalogConstructorFailed);
+    }
+
+    MetastoreProxy::MetastorePtr Catalog::getMetastore()
+    {
+        return meta_proxy->getMetastore();
     }
 
     void Catalog::createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts)
