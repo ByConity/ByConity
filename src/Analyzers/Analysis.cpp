@@ -150,6 +150,11 @@ UInt64 Analysis::getLimitByValue(ASTSelectQuery & select_query)
     MAP_GET(limit_by_values, &select_query);
 }
 
+UInt64 Analysis::getLimitByOffsetValue(ASTSelectQuery & select_query)
+{
+    MAP_GET(limit_by_offset_values, &select_query);
+}
+
 UInt64 Analysis::getLimitLength(ASTSelectQuery & select_query)
 {
     MAP_GET(limit_lengths, &select_query);

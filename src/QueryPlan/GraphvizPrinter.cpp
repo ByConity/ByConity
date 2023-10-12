@@ -87,6 +87,7 @@ static std::unordered_map<IQueryPlanStep::Type, std::string> NODE_COLORS = {
     {IQueryPlanStep::Type::ReadStorageRowCount, "deepskyblue"},
     {IQueryPlanStep::Type::Values, "deepskyblue"},
     {IQueryPlanStep::Type::Limit, "gray83"},
+    {IQueryPlanStep::Type::Offset, "gray83"},
     {IQueryPlanStep::Type::LimitBy, "gray83"},
     {IQueryPlanStep::Type::Filling, "gray83"},
     {IQueryPlanStep::Type::Sorting, "aliceblue"},
@@ -337,6 +338,15 @@ Void PlanNodePrinter::visitLimitNode(LimitNode & node, PrinterContext & context)
     auto step = *node.getStep();
     String color{NODE_COLORS[step.getType()]};
     printNode(node, label, StepPrinter::printLimitStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanNodePrinter::visitOffsetNode(OffsetNode & node, PrinterContext & context)
+{
+    String label{"OffsetNode"};
+    auto step = *node.getStep();
+    String color{NODE_COLORS[step.getType()]};
+    printNode(node, label, StepPrinter::printOffsetStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -859,6 +869,16 @@ Void PlanSegmentNodePrinter::visitLimitNode(QueryPlan::Node * node, PrinterConte
     auto & step = dynamic_cast<const LimitStep &>(*stepPtr);
     String color{NODE_COLORS[stepPtr->getType()]};
     printNode(node, label, StepPrinter::printLimitStep(step), color, context);
+    return visitChildren(node, context);
+}
+
+Void PlanSegmentNodePrinter::visitOffsetNode(QueryPlan::Node * node, PrinterContext & context)
+{
+    auto & stepPtr = node->step;
+    String label{"OffsetNode"};
+    auto & step = dynamic_cast<const OffsetStep &>(*stepPtr);
+    String color{NODE_COLORS[stepPtr->getType()]};
+    printNode(node, label, StepPrinter::printOffsetStep(step), color, context);
     return visitChildren(node, context);
 }
 
@@ -1928,6 +1948,22 @@ String StepPrinter::printLimitStep(const LimitStep & step)
                 << " Partial";
     return details.str();
 }
+
+String StepPrinter::printOffsetStep(const OffsetStep & step)
+{
+    std::stringstream details;
+    auto offset = step.getOffset();
+    details << "Offset:" << offset;
+    details << "|";
+    details << "Output\\n";
+    for (const auto & column : step.getOutputStream().header)
+    {
+        details << column.name << ":";
+        details << column.type->getName() << "\\n";
+    }
+    return details.str();
+}
+
 String StepPrinter::printLimitByStep(const LimitByStep & step)
 {
     std::stringstream details;

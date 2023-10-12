@@ -71,7 +71,7 @@ PropertySets DeterminerVisitor::visitFinalSampleStep(const FinalSampleStep &, De
 
 PropertySets DeterminerVisitor::visitOffsetStep(const OffsetStep &, DeterminerContext &)
 {
-    throw Exception("Not impl property determiner", ErrorCodes::NOT_IMPLEMENTED);
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 
 PropertySets DeterminerVisitor::visitFinishSortingStep(const FinishSortingStep &, DeterminerContext &)

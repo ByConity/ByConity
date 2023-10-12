@@ -142,9 +142,9 @@ PlanNodePtr ColumnPruningVisitor::visitFinalSampleNode(FinalSampleNode &, NameSe
     throw Exception("Not impl column pruning", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-PlanNodePtr ColumnPruningVisitor::visitOffsetNode(OffsetNode &, NameSet &)
+PlanNodePtr ColumnPruningVisitor::visitOffsetNode(OffsetNode & node, NameSet & require)
 {
-    throw Exception("Not impl column pruning", ErrorCodes::NOT_IMPLEMENTED);
+    return visitDefault<false>(node, require);
 }
 
 PlanNodePtr ColumnPruningVisitor::visitTableFinishNode(TableFinishNode & node, NameSet & require)

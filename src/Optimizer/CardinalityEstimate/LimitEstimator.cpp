@@ -29,6 +29,21 @@ PlanNodeStatisticsPtr LimitEstimator::estimate(PlanNodeStatisticsPtr & child_sta
     return getLimitStatistics(child_stats, limit);
 }
 
+PlanNodeStatisticsPtr LimitEstimator::estimate(PlanNodeStatisticsPtr & child_stats, const OffsetStep & offset)
+{
+    if (!child_stats)
+    {
+        return nullptr;
+    }
+
+    if (child_stats->getRowCount() <= offset.getOffset())
+    {
+        return std::make_shared<PlanNodeStatistics>(0, child_stats->getSymbolStatistics());
+    }
+
+    return std::make_shared<PlanNodeStatistics>(child_stats->getRowCount() - offset.getOffset(), child_stats->getSymbolStatistics());
+}
+
 PlanNodeStatisticsPtr LimitEstimator::getLimitStatistics(PlanNodeStatisticsPtr & child_stats, size_t limit)
 {
     if (!child_stats)

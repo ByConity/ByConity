@@ -66,6 +66,7 @@ public:
     Void visitReadStorageRowCountNode(ReadStorageRowCountNode & node, PrinterContext & context) override;
     Void visitValuesNode(ValuesNode & node, PrinterContext & context) override;
     Void visitLimitNode(LimitNode & node, PrinterContext & context) override;
+    Void visitOffsetNode(OffsetNode & node, PrinterContext & context) override;
     Void visitLimitByNode(LimitByNode & node, PrinterContext & context) override;
     Void visitSortingNode(SortingNode & node, PrinterContext & context) override;
     Void visitMergeSortingNode(MergeSortingNode & node, PrinterContext & context) override;
@@ -140,6 +141,7 @@ public:
     Void visitReadStorageRowCountNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitValuesNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitLimitNode(QueryPlan::Node * node, PrinterContext & context) override;
+    Void visitOffsetNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitLimitByNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitSortingNode(QueryPlan::Node * node, PrinterContext & context) override;
     Void visitMergeSortingNode(QueryPlan::Node * node, PrinterContext & context) override;
@@ -200,6 +202,7 @@ public:
     static String printReadStorageRowCountStep(const ReadStorageRowCountStep & step);
     static String printValuesStep(const ValuesStep & step);
     static String printLimitStep(const LimitStep & step);
+    static String printOffsetStep(const OffsetStep & step);
     static String printLimitByStep(const LimitByStep & step);
     static String printSortingStep(const SortingStep & step);
     static String printMergeSortingStep(const MergeSortingStep & step);
