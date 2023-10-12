@@ -221,10 +221,19 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
                 PropertySet{Property{context.getRequired().getNodePartitioning(), context.getRequired().getStreamPartitioning()}});
     }
 
-    sets.emplace_back(PropertySet{Property{Partitioning{
-        Partitioning::Handle::FIXED_HASH,
-        keys,
-    }}});
+    if (keys.size() <= context.getContext().getSettings().max_expand_agg_key_size)
+    {
+        for (const auto & sub_keys : Utils::powerSet(keys))
+        {
+            Property prop{Partitioning{Partitioning::Handle::FIXED_HASH, sub_keys}};
+            sets.emplace_back(PropertySet{prop});
+        }
+    }
+    else
+    {
+        sets.emplace_back(
+            PropertySet{Property{Partitioning{Partitioning::Handle::FIXED_HASH, keys}}});
+    }
 
     if (step.isGroupingSet())
     {
@@ -413,7 +422,7 @@ PropertySets DeterminerVisitor::visitExtremesStep(const ExtremesStep &, Determin
 //    return {{Property{Partitioning{Partitioning::Handle::SINGLE}, Partitioning{Partitioning::Handle::SINGLE}}}};
 //}
 
-PropertySets DeterminerVisitor::visitWindowStep(const WindowStep & step, DeterminerContext &)
+PropertySets DeterminerVisitor::visitWindowStep(const WindowStep & step, DeterminerContext & context)
 {
     auto keys = step.getWindow().partition_by;
     if (keys.empty())
@@ -427,9 +436,23 @@ PropertySets DeterminerVisitor::visitWindowStep(const WindowStep & step, Determi
     {
         group_bys.emplace_back(key.column_name);
     }
-    PropertySet set;
-    set.emplace_back(Property{Partitioning{Partitioning::Handle::FIXED_HASH, group_bys, false}});
-    return {set};
+    PropertySets sets;
+    if (keys.size() <= context.getContext().getSettings().max_expand_agg_key_size)
+    {
+        for (const auto & sub_keys : Utils::powerSet(group_bys))
+        {
+            Property prop{Partitioning{Partitioning::Handle::FIXED_HASH, sub_keys}};
+            sets.emplace_back(PropertySet{prop});
+        }
+    }
+    else
+    {
+        PropertySet set;
+        set.emplace_back(Property{
+            Partitioning{Partitioning::Handle::FIXED_HASH, group_bys, false}});
+        sets.emplace_back(set);
+    }
+    return sets;
 }
 
 PropertySets DeterminerVisitor::visitApplyStep(const ApplyStep &, DeterminerContext &)

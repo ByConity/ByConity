@@ -1,0 +1,35 @@
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {item_id}
+         └─ Aggregating Est. ? rows
+            │     Group by: {item_id}
+            │     Aggregates: expr#count():=AggNull(count)()
+            └─ Projection Est. ? rows
+               │     Expressions: [item_id]
+               └─ MergingAggregated Est. ? rows
+                  └─ Repartition Exchange Est. ? rows
+                     │     Partition by: {item_id, name}
+                     └─ Aggregating Est. ? rows
+                        │     Group by: {item_id, name}
+                        └─ TableScan zx_test.customer Est. ? rows
+                                 Outputs: [item_id, name]
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ MergingAggregated Est. ? rows
+            └─ Repartition Exchange Est. ? rows
+               │     Partition by: {item_id, name}
+               └─ Aggregating Est. ? rows
+                  │     Group by: {item_id, name}
+                  └─ Filter Est. ? rows
+                     │     Condition: (item_id >= 100) AND (item_id <= 200)
+                     └─ TableScan zx_test.customer Est. ? rows
+                              Where: (item_id >= 100) AND (item_id <= 200)
+                              Outputs: [item_id, name]
