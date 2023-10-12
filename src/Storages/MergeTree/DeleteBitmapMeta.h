@@ -73,12 +73,12 @@ public:
             partition_id, 0, max_block, DeleteBitmapMetaType::RangeTombstone, txn_id, /*bitmap=*/nullptr);
     }
 
-    /// Clients should perfer the createXxx static factory method above
+    /// Clients should prefer the createXxx static factory method above
     LocalDeleteBitmap(const MergeTreePartInfo & part_info, DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap);
     LocalDeleteBitmap(
         const String & partition_id, Int64 min_block, Int64 max_block, DeleteBitmapMetaType type, UInt64 txn_id, DeleteBitmapPtr bitmap);
 
-    UndoResource getUndoResource(const TxnTimestamp & txn_id) const;
+    UndoResource getUndoResource(const TxnTimestamp & txn_id, UndoResourceType type = UndoResourceType::DeleteBitmap) const;
 
     bool canInlineStoreInCatalog() const;
 
@@ -86,6 +86,8 @@ public:
 
     /// only for merge task to pre-set commit ts for merged part's base bitmap
     void setCommitTs(UInt64 commit_ts) { model->set_commit_time(commit_ts); }
+
+    const DataModelDeleteBitmapPtr & getModel() const { return model; }
 
 private:
     DataModelDeleteBitmapPtr model;
@@ -192,4 +194,5 @@ struct LessDeleteBitmapMeta
 
 void deserializeDeleteBitmapInfo(const MergeTreeMetaBase & storage, const DataModelDeleteBitmapPtr & meta, DeleteBitmapPtr & to_bitmap);
 
+String dataModelName(const Protos::DataModelDeleteBitmap & model);
 }

@@ -89,6 +89,8 @@ public:
 
     const ExtendedProfileInfo & getExtendedProfileInfo() const { return query_executor.getExtendedProfileInfo(); }
 
+    void enableServerForwarding() { query_executor.setServerForwarding(true); }
+
 protected:
     Block readImpl() override;
     void readSuffixImpl() override;

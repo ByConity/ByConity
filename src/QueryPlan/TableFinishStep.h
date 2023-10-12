@@ -33,6 +33,8 @@ public:
         return target;
     }
 
+    const String & getOutputAffectedRowCountSymbol() const { return output_affected_row_count_symbol; }
+
     void toProto(Protos::TableFinishStep & proto, bool for_hash_equals = false) const;
     static std::shared_ptr<TableFinishStep> fromProto(const Protos::TableFinishStep & proto, ContextPtr context);
 

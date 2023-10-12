@@ -8,7 +8,7 @@ CREATE table delete_by_unique_key(
     `revenue` UInt64)
 ENGINE = CnchMergeTree()
 partition by toDate(event_time)
-order by (event_time, product_id)
+order by product_id
 unique key product_id;
 
 insert into delete_by_unique_key values ('2021-07-13 18:50:00', 10001, 5, 500),('2021-07-13 18:50:00', 10002, 2, 200),('2021-07-13 18:50:00', 10003, 1, 100);
@@ -25,7 +25,13 @@ select * from delete_by_unique_key order by event_time, product_id, amount;
 
 select '';
 insert into delete_by_unique_key (event_time, product_id, amount, revenue, _delete_flag_) select event_time, product_id, amount, revenue, 1 as _delete_flag_ from delete_by_unique_key where revenue >= 500;
-select 'delete data whose revenue is bigger than 500 using insert select, write to another replica';
+select 'delete data whose revenue is bigger than 500 using insert select';
+select 'select unique table';
+select * from delete_by_unique_key order by event_time, product_id, amount;
+
+select '';
+insert into delete_by_unique_key (event_time, product_id, amount, revenue, _delete_flag_) values ('2021-07-13 18:50:01', 10004, 5, 500, 1),('2021-07-13 18:50:01', 10002, 2, 200, 0);
+select 'delete data one row and insert one row with lower product_id';
 select 'select unique table';
 select * from delete_by_unique_key order by event_time, product_id, amount;
 
@@ -62,7 +68,7 @@ select * from delete_by_unique_key order by event_time, product_id, amount;
 
 select '';
 insert into delete_by_unique_key (event_time, product_id, amount, revenue, _delete_flag_) select event_time, product_id, amount, revenue, 1 as _delete_flag_ from delete_by_unique_key where revenue >= 500;
-select 'delete data whose revenue is bigger than 500 using insert select, write to another replica';
+select 'delete data whose revenue is bigger than 500 using insert select';
 select 'select unique table';
 select * from delete_by_unique_key order by event_time, product_id, amount;
 

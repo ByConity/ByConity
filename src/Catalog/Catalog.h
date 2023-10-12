@@ -185,7 +185,7 @@ public:
     ServerDataPartsVector getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context);
     DataPartsVector getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
     DataPartsVector getStagedDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
-    DeleteBitmapMetaPtrVector getAllDeleteBitmaps(const StoragePtr & table, const TxnTimestamp & ts);
+    DeleteBitmapMetaPtrVector getAllDeleteBitmaps(const MergeTreeMetaBase & storage);
 
     // return table's committed staged parts. if partitions != null, ignore staged parts not belong to `partitions`.
     DataPartsVector getStagedParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
@@ -418,6 +418,7 @@ public:
     void clearDataPartsMeta(const StoragePtr & table, const DataPartsVector & parts, const bool skip_part_cache = false);
     void clearStagePartsMeta(const StoragePtr & table, const DataPartsVector & parts);
     void clearDataPartsMetaForTable(const StoragePtr & table);
+    void clearDeleteBitmapsMetaForTable(const StoragePtr & table);
 
     /**
      * @brief Move specified items into trash.
@@ -566,24 +567,44 @@ public:
     std::vector<Protos::AsyncQueryStatus> getIntermidiateAsyncQueryStatuses() const;
 
     // Interfaces to support s3 storage
-    // Delete detached parts from 'from_tbl' with `detached_part_names`,
-    // if part name in `detached_part_names` is empty, skip this delete.
-    // Write to `to_tbl` attached parts with `parts`
-    void attachDetachedParts(const StoragePtr& from_tbl, const StoragePtr& to_tbl,
-        const std::vector<String>& detached_part_names, const IMergeTreeDataPartsVector& parts);
-    // Delete parts from `from_tbl` with `attached_parts`, write detached part meta
-    // to `to_tbl` with parts, if parts is nullptr, skip this write
-    void detachAttachedParts(const StoragePtr& from_tbl, const StoragePtr& to_tbl,
-        const IMergeTreeDataPartsVector& attached_parts, const IMergeTreeDataPartsVector& parts);
+    // Delete detached parts and detached bitmaps from 'from_tbl' with `detached_part_names`.
+    // Write to `to_tbl` attached parts with `parts` and `staged_parts`
+    // Write to `to_tbl` attached bitmaps with `bitmaps`
+    void attachDetachedParts(
+        const StoragePtr & from_tbl,
+        const StoragePtr & to_tbl,
+        const Strings & detached_part_names,
+        const IMergeTreeDataPartsVector & parts,
+        const IMergeTreeDataPartsVector & staged_parts,
+        const DeleteBitmapMetaPtrVector & detached_bitmaps,
+        const DeleteBitmapMetaPtrVector & bitmaps);
+    // Delete parts from `from_tbl` with `attached_parts` and `attached_staged_parts`, write detached part meta to `to_tbl` with parts, if parts is nullptr, skip this write
+    // Delete bitmaps from `from_tbl` with `attached_bitmaps`, write detached bitmaps to `to_tbl` with `bitmaps`
+    void detachAttachedParts(
+        const StoragePtr & from_tbl,
+        const StoragePtr & to_tbl,
+        const IMergeTreeDataPartsVector & attached_parts,
+        const IMergeTreeDataPartsVector & attached_staged_parts,
+        const IMergeTreeDataPartsVector & parts,
+        const DeleteBitmapMetaPtrVector & attached_bitmaps,
+        const DeleteBitmapMetaPtrVector & bitmaps);
     // Rename part's meta for `tbl`, from detached to active
-    void attachDetachedPartsRaw(const StoragePtr& tbl, const std::vector<String>& part_names);
-    // Rename part's meta from `from_tbl` with attached_part_names, and
-    // write to `to_uuid`'s detached parts, first element of `detached_part_metas` is detached part name
-    // second element of `detached_part_metas` is detached part meta
-    void detachAttachedPartsRaw(const StoragePtr& from_tbl, const String& to_uuid,
-        const std::vector<String>& attached_part_names, const std::vector<std::pair<String, String>>& detached_part_metas);
-    ServerDataPartsVector listDetachedParts(const MergeTreeMetaBase& storage,
-        const AttachFilter& filter);
+    // Rename delete bitmap's meta for `tbl`, from detached to active
+    void attachDetachedPartsRaw(const StoragePtr & tbl, const std::vector<String> & part_names, const std::vector<String> & bitmap_names);
+    // Rename part's meta from `from_tbl` with attached_part_names, and write to `to_uuid`'s detached parts,
+    // first element of `detached_part_metas` is detached part name, second element of `detached_part_metas` is detached part meta
+    // Rename bitmap's meta from `from_tbl` with attached_bitmap_names, and write to `to_uuid`'s detached bitmaps,
+    // first element of `detached_bitmap_metas` is detached bitmap name, second element of `detached_bitmap_metas` is detached bitmap meta
+    void detachAttachedPartsRaw(
+        const StoragePtr & from_tbl,
+        const String & to_uuid,
+        const std::vector<String> & attached_part_names,
+        const std::vector<std::pair<String, String>> & detached_part_metas,
+        const std::vector<String> & attached_bitmap_names,
+        const std::vector<std::pair<String, String>> & detached_bitmap_metas);
+    ServerDataPartsVector listDetachedParts(const MergeTreeMetaBase & storage, const AttachFilter & filter);
+
+    DeleteBitmapMetaPtrVector listDetachedDeleteBitmaps(const MergeTreeMetaBase & storage, const AttachFilter & filter);
 
     // Access Entities
     std::optional<AccessEntityModel> tryGetAccessEntity(EntityType type, const String & name);

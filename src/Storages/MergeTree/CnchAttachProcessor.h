@@ -220,7 +220,7 @@ private:
 
     // Rename parts to attach to destination with new part name
     PartsWithHistory prepareParts(const PartsFromSources & parts_from_sources, AttachContext & attach_ctx);
-    void commitPartsFromS3(const PartsWithHistory & prepared_parts);
+    void commitPartsFromS3(const PartsWithHistory & prepared_parts, NameSet & staged_parts_name);
     void genPartsDeleteMark(PartsWithHistory & prepared_parts);
 
     void genPartsDeleteMark(MutableMergeTreeDataPartsCNCHVector& parts_to_write);

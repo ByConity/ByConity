@@ -31,11 +31,11 @@ extern const int LOGICAL_ERROR;
 
 namespace DB
 {
-static String dataModelName(const DataModelDeleteBitmapPtr & model)
+String dataModelName(const Protos::DataModelDeleteBitmap & model)
 {
     std::stringstream ss;
-    ss << model->partition_id() << "_" << model->part_min_block() << "_" << model->part_max_block() << "_"
-       << model->reserved() << "_" << model->type() << "_" << model->txn_id();
+    ss << model.partition_id() << "_" << model.part_min_block() << "_" << model.part_max_block() << "_"
+       << model.reserved() << "_" << model.type() << "_" << model.txn_id();
     return ss.str();
 }
 
@@ -82,9 +82,9 @@ LocalDeleteBitmap::LocalDeleteBitmap(
     model->set_cardinality(bitmap ? bitmap->cardinality() : 0);
 }
 
-UndoResource LocalDeleteBitmap::getUndoResource(const TxnTimestamp & new_txn_id) const
+UndoResource LocalDeleteBitmap::getUndoResource(const TxnTimestamp & new_txn_id, UndoResourceType type) const
 {
-    return UndoResource(new_txn_id, UndoResourceType::DeleteBitmap, dataModelName(model), DeleteBitmapMeta::deleteBitmapFileRelativePath(*model));
+    return UndoResource(new_txn_id, type, dataModelName(*model), DeleteBitmapMeta::deleteBitmapFileRelativePath(*model));
 }
 
 bool LocalDeleteBitmap::canInlineStoreInCatalog() const
@@ -125,7 +125,7 @@ DeleteBitmapMetaPtr LocalDeleteBitmap::dump(const MergeTreeMetaBase & storage) c
                 out->finalize();
             }
             model->set_file_size(size);
-            LOG_TRACE(storage.getLogger(), "Dumped delete bitmap {}", dataModelName(model));
+            LOG_TRACE(storage.getLogger(), "Dumped delete bitmap {}", dataModelName(*model));
         }
     }
     return std::make_shared<DeleteBitmapMeta>(storage, model);
@@ -195,7 +195,7 @@ DeleteBitmapMeta::~DeleteBitmapMeta()
 
 String DeleteBitmapMeta::getNameForLogs() const
 {
-    return dataModelName(model);
+    return dataModelName(*model);
 }
 
 String DeleteBitmapMeta::deleteBitmapDirRelativePath(const String & partition_id)

@@ -308,6 +308,8 @@ namespace ProfileEvents
     extern const Event ClearStagePartsMetaFailed;
     extern const Event ClearDataPartsMetaForTableSuccess;
     extern const Event ClearDataPartsMetaForTableFailed;
+    extern const Event ClearDeleteBitmapsMetaForTableSuccess;
+    extern const Event ClearDeleteBitmapsMetaForTableFailed;
     extern const Event GetSyncListSuccess;
     extern const Event GetSyncListFailed;
     extern const Event ClearSyncListSuccess;
@@ -1072,7 +1074,7 @@ namespace Catalog
                 {
                     cnch_merge_tree->loadMutations();
                 }
-                
+
 
                 /// Try insert the storage into cache.
                 if (res && storage_cache)
@@ -1491,22 +1493,25 @@ namespace Catalog
         return res;
     }
 
-    DeleteBitmapMetaPtrVector Catalog::getAllDeleteBitmaps(const StoragePtr & table, const TxnTimestamp & ts)
+    DeleteBitmapMetaPtrVector Catalog::getAllDeleteBitmaps(const MergeTreeMetaBase & storage)
     {
         DeleteBitmapMetaPtrVector res;
         runWithMetricSupport(
             [&] {
-                if (!dynamic_cast<MergeTreeMetaBase *>(table.get()))
+                IMetaStore::IteratorPtr iter
+                    = meta_proxy->getAllDeleteBitmaps(name_space, UUIDHelpers::UUIDToString(storage.getStorageID().uuid));
+
+                while (iter->next())
                 {
-                    return;
+                    DataModelDeleteBitmapPtr delete_bitmap_model = std::make_shared<Protos::DataModelDeleteBitmap>();
+                    delete_bitmap_model->ParseFromString(iter->value());
+                    res.push_back(std::make_shared<DeleteBitmapMeta>(storage, delete_bitmap_model));
                 }
-                res = getDeleteBitmapsInPartitions(table, getPartitionIDs(table, nullptr), ts);
             },
             ProfileEvents::GetAllDeleteBitmapsSuccess,
             ProfileEvents::GetAllDeleteBitmapsFailed);
         return res;
     }
-
 
     void Catalog::assertLocalServerThrowIfNot(const StoragePtr & storage) const
     {
@@ -1567,7 +1572,7 @@ namespace Catalog
                 // ensure that the table_definition_hash is the same before committing
                 // If allow_attach_parts_with_different_table_definition_hash is set to true AND the table is NOT clustered by user defined expression, skip this check
                 // TODO: Implement rollback for this to work properly
-                bool skip_table_definition_hash_check = context.getSettings().allow_attach_parts_with_different_table_definition_hash 
+                bool skip_table_definition_hash_check = context.getSettings().allow_attach_parts_with_different_table_definition_hash
                                                         && !storage->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
                 if (storage->isBucketTable() && !skip_table_definition_hash_check)
                 {
@@ -2517,7 +2522,7 @@ namespace Catalog
                 // ensure that the table_definition_hash is the same before committing
                 // If allow_attach_parts_with_different_table_definition_hash is set to true AND the table is NOT clustered by user defined expression, skip this check
                 // TODO: Implement rollback for this to work properly
-                bool skip_table_definition_hash_check = context.getSettings().allow_attach_parts_with_different_table_definition_hash 
+                bool skip_table_definition_hash_check = context.getSettings().allow_attach_parts_with_different_table_definition_hash
                                                         && !table->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
                 if (table->isBucketTable() && !skip_table_definition_hash_check)
                 {
@@ -3581,6 +3586,18 @@ namespace Catalog
             },
             ProfileEvents::ClearDataPartsMetaForTableSuccess,
             ProfileEvents::ClearDataPartsMetaForTableFailed);
+    }
+
+    void Catalog::clearDeleteBitmapsMetaForTable(const StoragePtr & storage)
+    {
+        runWithMetricSupport(
+            [&] {
+                LOG_INFO(log, "Start clear all delete bitmaps for table : {}.{}", storage->getDatabaseName(), storage->getTableName());
+                meta_proxy->dropAllDeleteBitmapInTable(name_space, UUIDHelpers::UUIDToString(storage->getStorageUUID()));
+                LOG_INFO(log, "Finish clear all delete bitmaps for table : {}.{}", storage->getDatabaseName(), storage->getTableName());
+            },
+            ProfileEvents::ClearDeleteBitmapsMetaForTableSuccess,
+            ProfileEvents::ClearDeleteBitmapsMetaForTableFailed);
     }
 
     TrashItems Catalog::getDataItemsInTrash(const StoragePtr & storage, const size_t & limit)
@@ -4648,7 +4665,8 @@ namespace Catalog
                     all_partitions,
                     createDeleteBitmapMetaPtr,
                     ts);
-                // NOTE: the below logic does is to filter out uncommited bitmaps at this moment.
+
+                // NOTE: the below logic does is to filter out uncommitted bitmaps at this moment.
                 getCommittedBitmaps(res, ts, this);
             },
             ProfileEvents::GetDeleteBitmapsInPartitionsSuccess,
@@ -5212,15 +5230,25 @@ namespace Catalog
     }
 
     /// APIs for attach parts from s3
-    void Catalog::attachDetachedParts(const StoragePtr& from_tbl, const StoragePtr& to_tbl,
-        const std::vector<String>& detached_part_names, const IMergeTreeDataPartsVector& parts)
+    void Catalog::attachDetachedParts(
+        const StoragePtr & from_tbl,
+        const StoragePtr & to_tbl,
+        const Strings & detached_part_names,
+        const IMergeTreeDataPartsVector & parts,
+        const IMergeTreeDataPartsVector & staged_parts,
+        const DeleteBitmapMetaPtrVector & detached_bitmaps,
+        const DeleteBitmapMetaPtrVector & bitmaps)
     {
-        if (detached_part_names.size() != parts.size())
+        if (detached_part_names.size() != parts.size() + staged_parts.size())
         {
-            throw Exception(fmt::format("Detached part names {} and parts count {} mismatch",
-                detached_part_names.size(), parts.size()), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Detached former parts count {} and (parts count {} plus staged_parts count {}) mismatch",
+                detached_part_names.size(),
+                parts.size(),
+                staged_parts.size());
         }
-        if (parts.empty())
+        if (detached_part_names.empty())
         {
             return;
         }
@@ -5240,9 +5268,9 @@ namespace Catalog
                     log,
                     "Redirect attachDetachedParts request to remote host : {} for table {}"
                         , target_host.toDebugString(), to_tbl->getStorageID().getNameForLogs());
-                context.getCnchServerClientPool().get(target_host)->redirectDetachAttachS3Parts(
-                    to_tbl, from_tbl->getStorageUUID(), to_tbl->getStorageUUID(), {}, parts, {}, detached_part_names, {}
-                    , DB::Protos::DetachAttachType::ATTACH_DETACHED_PARTS);
+                context.getCnchServerClientPool().get(target_host)->redirectAttachDetachedS3Parts(
+                    to_tbl, from_tbl->getStorageUUID(), to_tbl->getStorageUUID(), parts, staged_parts, detached_part_names, {}, detached_bitmaps, bitmaps,
+                    DB::Protos::DetachAttachType::ATTACH_DETACHED_PARTS);
                 return;
             }
             catch (Exception & e)
@@ -5257,10 +5285,20 @@ namespace Catalog
         Protos::DataModelPartVector commit_parts;
         fillPartsModel(*to_tbl, parts, *commit_parts.mutable_parts());
 
-        meta_proxy->attachDetachedParts(name_space,
+        Protos::DataModelPartVector commit_staged_parts;
+        fillPartsModel(*to_tbl, staged_parts, *commit_staged_parts.mutable_parts());
+
+        meta_proxy->attachDetachedParts(
+            name_space,
             UUIDHelpers::UUIDToString(from_tbl->getStorageUUID()),
-            UUIDHelpers::UUIDToString(to_tbl->getStorageUUID()), detached_part_names,
-            commit_parts, getPartitionIDs(to_tbl, nullptr), max_commit_size_one_batch,
+            UUIDHelpers::UUIDToString(to_tbl->getStorageUUID()),
+            detached_part_names,
+            commit_parts,
+            commit_staged_parts,
+            getPartitionIDs(to_tbl, nullptr),
+            detached_bitmaps,
+            bitmaps,
+            max_commit_size_one_batch,
             max_drop_size_one_batch);
 
         if (context.getPartCacheManager())
@@ -5268,13 +5306,23 @@ namespace Catalog
                 commit_parts.parts(), false, true, target_host.topology_version);
     }
 
-    void Catalog::detachAttachedParts(const StoragePtr& from_tbl, const StoragePtr& to_tbl,
-        const IMergeTreeDataPartsVector& attached_parts, const IMergeTreeDataPartsVector& parts)
+    void Catalog::detachAttachedParts(
+        const StoragePtr & from_tbl,
+        const StoragePtr & to_tbl,
+        const IMergeTreeDataPartsVector & attached_parts,
+        const IMergeTreeDataPartsVector & attached_staged_parts,
+        const IMergeTreeDataPartsVector & parts,
+        const DeleteBitmapMetaPtrVector & attached_bitmaps,
+        const DeleteBitmapMetaPtrVector & bitmaps)
     {
-        if (attached_parts.size() != parts.size())
+        if (attached_parts.size() + attached_staged_parts.size() != parts.size())
         {
-            throw Exception(fmt::format("Attached part's size {} and part size {} mismatch",
-                attached_parts.size(), parts.size()), ErrorCodes::LOGICAL_ERROR);
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "(Attached part's size {} plus attached staged part's size {})and part size {} mismatch",
+                attached_parts.size(),
+                attached_staged_parts.size(),
+                parts.size());
         }
         if (parts.empty())
         {
@@ -5295,8 +5343,8 @@ namespace Catalog
                     log,
                     "Redirect detachAttachedPartsrequest to remote host : {} for table {}"
                         , target_host.toDebugString(), from_tbl->getStorageID().getNameForLogs());
-                context.getCnchServerClientPool().get(target_host)->redirectDetachAttachS3Parts(
-                    to_tbl, from_tbl->getStorageUUID(), to_tbl->getStorageUUID(), attached_parts, parts, {}, {}, {}
+                context.getCnchServerClientPool().get(target_host)->redirectDetachAttachedS3Parts(
+                    to_tbl, from_tbl->getStorageUUID(), to_tbl->getStorageUUID(), attached_parts, attached_staged_parts, parts, {}, {}, attached_bitmaps, bitmaps, {}, {}
                     , DB::Protos::DetachAttachType::DETACH_ATTACHED_PARTS);
                 return;
             }
@@ -5311,7 +5359,7 @@ namespace Catalog
 
         std::vector<std::optional<Protos::DataModelPart>> commit_parts;
         commit_parts.reserve(parts.size());
-        for (const auto& part : parts)
+        for (const auto & part : parts)
         {
             if (part != nullptr)
             {
@@ -5326,15 +5374,29 @@ namespace Catalog
 
         std::vector<String> attached_part_names;
         attached_part_names.reserve(attached_parts.size());
-        for (const auto& part : attached_parts)
+        for (const auto & part : attached_parts)
         {
             attached_part_names.push_back(part->info.getPartName());
         }
 
-        meta_proxy->detachAttachedParts(name_space,
+        std::vector<String> attached_staged_part_names;
+        attached_part_names.reserve(attached_staged_parts.size());
+        for (const auto & part : attached_staged_parts)
+        {
+            attached_staged_part_names.push_back(part->info.getPartName());
+        }
+
+        meta_proxy->detachAttachedParts(
+            name_space,
             UUIDHelpers::UUIDToString(from_tbl->getStorageUUID()),
-            UUIDHelpers::UUIDToString(to_tbl->getStorageUUID()), attached_part_names,
-            commit_parts, max_commit_size_one_batch, max_drop_size_one_batch);
+            UUIDHelpers::UUIDToString(to_tbl->getStorageUUID()),
+            attached_part_names,
+            attached_staged_part_names,
+            commit_parts,
+            attached_bitmaps,
+            bitmaps,
+            max_commit_size_one_batch,
+            max_drop_size_one_batch);
 
         if (context.getPartCacheManager())
         {
@@ -5352,7 +5414,8 @@ namespace Catalog
         }
     }
 
-    void Catalog::attachDetachedPartsRaw(const StoragePtr& tbl, const std::vector<String>& part_names)
+    void Catalog::attachDetachedPartsRaw(
+        const StoragePtr & tbl, const std::vector<String> & part_names, const std::vector<String> & bitmap_names)
     {
         if (part_names.empty())
         {
@@ -5373,8 +5436,8 @@ namespace Catalog
                     log,
                     "Redirect attachDetachedPartsRaw request to remote host : {} for table {}"
                         , target_host.toDebugString(), tbl->getStorageID().getNameForLogs());
-                context.getCnchServerClientPool().get(target_host)->redirectDetachAttachS3Parts(
-                    tbl, UUIDHelpers::Nil, tbl->getStorageUUID(), {}, {}, part_names, {}, {}
+                context.getCnchServerClientPool().get(target_host)->redirectAttachDetachedS3Parts(
+                    tbl, UUIDHelpers::Nil, tbl->getStorageUUID(), {}, {}, part_names, bitmap_names, {}, {}
                     , DB::Protos::DetachAttachType::ATTACH_DETACHED_RAW);
                 return;
             }
@@ -5388,8 +5451,12 @@ namespace Catalog
         }
 
         std::vector<std::pair<String, UInt64>> attached_metas = meta_proxy->attachDetachedPartsRaw(
-            name_space, UUIDHelpers::UUIDToString(tbl->getStorageUUID()), part_names,
-            max_commit_size_one_batch, max_drop_size_one_batch);
+            name_space,
+            UUIDHelpers::UUIDToString(tbl->getStorageUUID()),
+            part_names,
+            bitmap_names,
+            max_commit_size_one_batch,
+            max_drop_size_one_batch);
 
         Protos::DataModelPartVector attached_parts;
         for (const auto& [meta, version] : attached_metas)
@@ -5405,8 +5472,13 @@ namespace Catalog
                 attached_parts.parts(), false, true, target_host.topology_version);
     }
 
-    void Catalog::detachAttachedPartsRaw(const StoragePtr& from_tbl, const String& to_uuid,
-        const std::vector<String>& attached_part_names, const std::vector<std::pair<String, String>>& detached_part_metas)
+    void Catalog::detachAttachedPartsRaw(
+        const StoragePtr & from_tbl,
+        const String & to_uuid,
+        const std::vector<String> & attached_part_names,
+        const std::vector<std::pair<String, String>> & detached_part_metas,
+        const std::vector<String> & attached_bitmap_names,
+        const std::vector<std::pair<String, String>> & detached_bitmap_metas)
     {
         if (attached_part_names.empty() && detached_part_metas.empty())
         {
@@ -5427,8 +5499,8 @@ namespace Catalog
                     log,
                     "Redirect detachAttachedPartsRaw request to remote host : {} for table  {}"
                         ,target_host.toDebugString(), from_tbl->getStorageID().getNameForLogs());
-                context.getCnchServerClientPool().get(target_host)->redirectDetachAttachS3Parts(
-                    nullptr, from_tbl->getStorageUUID() , UUID(stringToUUID(to_uuid)), {}, {}, attached_part_names, {}, detached_part_metas
+                context.getCnchServerClientPool().get(target_host)->redirectDetachAttachedS3Parts(
+                    nullptr, from_tbl->getStorageUUID() , UUID(stringToUUID(to_uuid)), {}, {}, {}, attached_part_names, attached_bitmap_names, {}, {}, detached_part_metas, detached_bitmap_metas
                     , DB::Protos::DetachAttachType::DETACH_ATTACHED_RAW);
                 return;
             }
@@ -5453,8 +5525,15 @@ namespace Catalog
                 ErrorCodes::LOGICAL_ERROR);
         }
 
-        meta_proxy->detachAttachedPartsRaw(name_space, UUIDHelpers::UUIDToString(from_tbl->getStorageUUID()),
-            to_uuid, attached_part_names, detached_part_metas, max_commit_size_one_batch,
+        meta_proxy->detachAttachedPartsRaw(
+            name_space,
+            UUIDHelpers::UUIDToString(from_tbl->getStorageUUID()),
+            to_uuid,
+            attached_part_names,
+            detached_part_metas,
+            attached_bitmap_names,
+            detached_bitmap_metas,
+            max_commit_size_one_batch,
             max_drop_size_one_batch);
 
         if (context.getPartCacheManager())
@@ -5633,6 +5712,43 @@ namespace Catalog
                 tryLogCurrentException(log, "Failed to reach server: " + rpc_address);
             }
         }
+    }
+
+    DeleteBitmapMetaPtrVector Catalog::listDetachedDeleteBitmaps(const MergeTreeMetaBase & storage, const AttachFilter & filter)
+    {
+        IMetaStore::IteratorPtr iter = nullptr;
+        switch (filter.mode)
+        {
+            case AttachFilter::Mode::PARTS: {
+                iter = meta_proxy->getDetachedDeleteBitmapsInRange(
+                    name_space, UUIDHelpers::UUIDToString(storage.getStorageID().uuid), "", "", true, true);
+                break;
+            }
+            case AttachFilter::Mode::PART: {
+                iter = meta_proxy->getDetachedDeleteBitmapsInRange(
+                    name_space, UUIDHelpers::UUIDToString(storage.getStorageID().uuid), filter.object_id, filter.object_id, true, true);
+                break;
+            }
+            case AttachFilter::Mode::PARTITION: {
+                iter = meta_proxy->getDetachedDeleteBitmapsInRange(
+                    name_space,
+                    UUIDHelpers::UUIDToString(storage.getStorageID().uuid),
+                    filter.object_id + "_",
+                    filter.object_id + "_",
+                    true,
+                    true);
+                break;
+            }
+        }
+
+        DeleteBitmapMetaPtrVector res;
+        while (iter->next())
+        {
+            DataModelDeleteBitmapPtr delete_bitmap_model = std::make_shared<Protos::DataModelDeleteBitmap>();
+            delete_bitmap_model->ParseFromString(iter->value());
+            res.push_back(std::make_shared<DeleteBitmapMeta>(storage, delete_bitmap_model));
+        }
+        return res;
     }
 
     void fillUUIDForDictionary(DB::Protos::DataModelDictionary & d)

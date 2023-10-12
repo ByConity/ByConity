@@ -40,7 +40,7 @@ Projection Est. 1 rows
                   │        │     └─ Aggregating Est. 101712 rows
                   │        │        │     Group by: {wr_order_number}
                   │        │        └─ Inner (PARALLEL_HASH) Join Est. 22840487 rows
-                  │        │           │     Condition: wr_order_number == ws_order_number_5
+                  │        │           │     Condition: wr_order_number == ws_order_number_4
                   │        │           ├─ Repartition Exchange Est. 71997522 rows
                   │        │           │  │     Partition by: {wr_order_number}
                   │        │           │  └─ Filter Est. 71997522 rows
@@ -49,11 +49,11 @@ Projection Est. 1 rows
                   │        │           │              Where: isNotNull(wr_order_number) Runtime Filters: {wr_order_number}
                   │        │           │              Outputs: [wr_order_number]
                   │        │           └─ Repartition Exchange Est. 13454857 rows
-                  │        │              │     Partition by: {ws_order_number_5}
+                  │        │              │     Partition by: {ws_order_number_4}
                   │        │              └─ Inner Join Est. 13454848 rows
-                  │        │                 │     Condition: ws_order_number_6 == ws_order_number_5
+                  │        │                 │     Condition: ws_order_number_6 == ws_order_number_4
                   │        │                 │     Filter: ws_warehouse_sk_6 != ws_warehouse_sk_7
-                  │        │                 │     Runtime Filters Builder: {ws_order_number_5}
+                  │        │                 │     Runtime Filters Builder: {ws_order_number_4}
                   │        │                 ├─ Filter Est. 720000376 rows
                   │        │                 │  │     Condition: isNotNull(ws_order_number_6) Runtime Filters: {ws_order_number_6}
                   │        │                 │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
@@ -61,13 +61,13 @@ Projection Est. 1 rows
                   │        │                 │           Outputs: ws_order_number_6:=ws_order_number, ws_warehouse_sk_7:=ws_warehouse_sk
                   │        │                 └─ Broadcast Exchange Est. 1169837 rows
                   │        │                    └─ Inner Join Est. 1169837 rows
-                  │        │                       │     Condition: ws_order_number_5 == ws_order_number_7
+                  │        │                       │     Condition: ws_order_number_4 == ws_order_number_7
                   │        │                       │     Runtime Filters Builder: {ws_order_number_7}
                   │        │                       ├─ Filter Est. 720000376 rows
-                  │        │                       │  │     Condition: isNotNull(ws_order_number_5) Runtime Filters: {ws_order_number_5}
+                  │        │                       │  │     Condition: isNotNull(ws_order_number_4) Runtime Filters: {ws_order_number_4}
                   │        │                       │  └─ TableScan tpcds1000.web_sales Est. 720000376 rows
                   │        │                       │           Where: isNotNull(ws_order_number) Runtime Filters: {ws_order_number}
-                  │        │                       │           Outputs: ws_order_number_5:=ws_order_number, ws_warehouse_sk_6:=ws_warehouse_sk
+                  │        │                       │           Outputs: ws_order_number_4:=ws_order_number, ws_warehouse_sk_6:=ws_warehouse_sk
                   │        │                       └─ Broadcast Exchange Est. 101712 rows
                   │        │                          └─ MergingAggregated Est. 101712 rows
                   │        │                             └─ Repartition Exchange Est. 101712 rows

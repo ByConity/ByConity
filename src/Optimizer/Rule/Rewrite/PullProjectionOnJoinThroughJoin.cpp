@@ -55,7 +55,7 @@ static std::optional<PlanNodePtr> tryPushJoinThroughLeftProjection(
     }
 
     // construct join
-    SymbolMapper symbol_mapper = SymbolMapper::symbolMapper(projection_mapping);
+    SymbolMapper symbol_mapper = SymbolMapper::simpleMapper(projection_mapping);
     auto mapped_join = symbol_mapper.map(*join_step);
 
     // construct post projection(assignments including symbols which are not join outputs will be pruned)
@@ -119,7 +119,7 @@ static std::optional<PlanNodePtr> tryPushJoinThroughRightProjection(
     }
 
     // construct join
-    SymbolMapper symbol_mapper = SymbolMapper::symbolMapper(projection_mapping);
+    SymbolMapper symbol_mapper = SymbolMapper::simpleMapper(projection_mapping);
     auto mapped_join = symbol_mapper.map(*join_step);
 
     // construct post projection(assignments including symbols which are not join outputs will be pruned)

@@ -148,6 +148,7 @@ public:
     }
 
     Names getNamesOfPhysical() const;
+    Names getNamesOfOrdinary() const;
 
     bool hasPhysical(const String & column_name) const;
     bool hasColumnOrSubcolumn(GetFlags flags, const String & column_name) const;

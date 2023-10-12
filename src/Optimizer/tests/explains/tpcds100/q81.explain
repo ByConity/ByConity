@@ -17,68 +17,66 @@ Projection Est. 100 rows
                │  │     Runtime Filters Builder: {c_customer_sk}
                │  ├─ Repartition Exchange Est. 144536 rows
                │  │  │     Partition by: {cr_returning_customer_sk_1}
-               │  │  └─ Projection Est. 144536 rows
-               │  │     │     Expressions: ca_state_1:=ca_state_4, cr_returning_customer_sk_1:=cr_returning_customer_sk_3, expr#sum(cr_return_amt_inc_tax)_1:=`expr#sum(cr_return_amt_inc_tax)_3`
-               │  │     └─ MergingAggregated Est. 144536 rows
-               │  │        └─ Repartition Exchange Est. 146175 rows
-               │  │           │     Partition by: {ca_state_4, cr_returning_customer_sk_3}
-               │  │           └─ Aggregating Est. 146175 rows
-               │  │              │     Group by: {ca_state_4, cr_returning_customer_sk_3}
-               │  │              │     Aggregates: expr#sum(cr_return_amt_inc_tax)_3:=AggNull(sum)(cr_return_amt_inc_tax_1)
-               │  │              └─ Inner Join Est. 146175 rows
-               │  │                 │     Condition: ca_address_sk_2 == cr_returning_addr_sk_1
-               │  │                 │     Runtime Filters Builder: {cr_returning_addr_sk_1}
-               │  │                 ├─ Repartition Exchange Est. 1000000 rows
-               │  │                 │  │     Partition by: {ca_address_sk_2}
-               │  │                 │  └─ Filter Est. 1000000 rows
-               │  │                 │     │     Condition: Runtime Filters: {ca_address_sk_2}
-               │  │                 │     └─ TableScan tpcds100.customer_address Est. 1000000 rows
-               │  │                 │              Where: Runtime Filters: {ca_address_sk}
-               │  │                 │              Outputs: ca_address_sk_2:=ca_address_sk, ca_state_4:=ca_state
-               │  │                 └─ Repartition Exchange Est. 144536 rows
-               │  │                    │     Partition by: {cr_returning_addr_sk_1}
-               │  │                    └─ Inner Join Est. 144536 rows
-               │  │                       │     Condition: cr_returned_date_sk_1 == d_date_sk_1
-               │  │                       │     Runtime Filters Builder: {d_date_sk_1}
-               │  │                       ├─ Inner Join Est. 836875 rows
-               │  │                       │  │     Condition: cr_returning_customer_sk_3 == c_customer_sk_1
-               │  │                       │  │     Runtime Filters Builder: {c_customer_sk_1}
-               │  │                       │  ├─ Filter Est. 14404374 rows
-               │  │                       │  │  │     Condition: Runtime Filters: {cr_returned_date_sk_1, cr_returning_customer_sk_3}
-               │  │                       │  │  └─ TableScan tpcds100.catalog_returns Est. 14404374 rows
-               │  │                       │  │           Where: Runtime Filters: {cr_returned_date_sk, cr_returning_customer_sk}
-               │  │                       │  │           Outputs: cr_return_amt_inc_tax_1:=cr_return_amt_inc_tax, cr_returned_date_sk_1:=cr_returned_date_sk, cr_returning_addr_sk_1:=cr_returning_addr_sk, cr_returning_customer_sk_3:=cr_returning_customer_sk
-               │  │                       │  └─ Broadcast Exchange Est. 115812 rows
-               │  │                       │     └─ MergingAggregated Est. 115812 rows
-               │  │                       │        └─ Repartition Exchange Est. 115812 rows
-               │  │                       │           │     Partition by: {c_customer_sk_1}
-               │  │                       │           └─ Aggregating Est. 115812 rows
-               │  │                       │              │     Group by: {c_customer_sk_1}
-               │  │                       │              └─ Projection Est. 116099 rows
-               │  │                       │                 │     Expressions: c_customer_sk_1:=c_customer_sk
-               │  │                       │                 └─ Inner Join Est. 116099 rows
-               │  │                       │                    │     Condition: c_current_addr_sk == ca_address_sk_1
-               │  │                       │                    │     Runtime Filters Builder: {ca_address_sk_1}
-               │  │                       │                    ├─ Repartition Exchange Est. 2000000 rows
-               │  │                       │                    │  │     Partition by: {c_current_addr_sk}
-               │  │                       │                    │  └─ Filter Est. 2000000 rows
-               │  │                       │                    │     │     Condition: Runtime Filters: {c_current_addr_sk, c_customer_sk}
-               │  │                       │                    │     └─ TableScan tpcds100.customer Est. 2000000 rows
-               │  │                       │                    │              Where: Runtime Filters: {c_current_addr_sk, c_customer_sk}
-               │  │                       │                    │              Outputs: [c_current_addr_sk, c_customer_sk]
-               │  │                       │                    └─ Repartition Exchange Est. 50819 rows
-               │  │                       │                       │     Partition by: {ca_address_sk_1}
-               │  │                       │                       └─ Filter Est. 50819 rows
-               │  │                       │                          │     Condition: ca_state_2 = 'GA'
-               │  │                       │                          └─ TableScan tpcds100.customer_address Est. 1000000 rows
-               │  │                       │                                   Where: ca_state = 'GA'
-               │  │                       │                                   Outputs: ca_address_sk_1:=ca_address_sk, ca_state_2:=ca_state
-               │  │                       └─ Broadcast Exchange Est. 366 rows
-               │  │                          └─ Filter Est. 366 rows
-               │  │                             │     Condition: d_year_1 = 2000
-               │  │                             └─ TableScan tpcds100.date_dim Est. 73049 rows
-               │  │                                      Where: d_year = 2000
-               │  │                                      Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
+               │  │  └─ MergingAggregated Est. 144536 rows
+               │  │     └─ Repartition Exchange Est. 146175 rows
+               │  │        │     Partition by: {ca_state_1, cr_returning_customer_sk_1}
+               │  │        └─ Aggregating Est. 146175 rows
+               │  │           │     Group by: {ca_state_1, cr_returning_customer_sk_1}
+               │  │           │     Aggregates: expr#sum(cr_return_amt_inc_tax)_1:=AggNull(sum)(cr_return_amt_inc_tax_1)
+               │  │           └─ Inner Join Est. 146175 rows
+               │  │              │     Condition: ca_address_sk_2 == cr_returning_addr_sk_1
+               │  │              │     Runtime Filters Builder: {cr_returning_addr_sk_1}
+               │  │              ├─ Repartition Exchange Est. 1000000 rows
+               │  │              │  │     Partition by: {ca_address_sk_2}
+               │  │              │  └─ Filter Est. 1000000 rows
+               │  │              │     │     Condition: Runtime Filters: {ca_address_sk_2}
+               │  │              │     └─ TableScan tpcds100.customer_address Est. 1000000 rows
+               │  │              │              Where: Runtime Filters: {ca_address_sk}
+               │  │              │              Outputs: ca_address_sk_2:=ca_address_sk, ca_state_1:=ca_state
+               │  │              └─ Repartition Exchange Est. 144536 rows
+               │  │                 │     Partition by: {cr_returning_addr_sk_1}
+               │  │                 └─ Inner Join Est. 144536 rows
+               │  │                    │     Condition: cr_returned_date_sk_1 == d_date_sk_1
+               │  │                    │     Runtime Filters Builder: {d_date_sk_1}
+               │  │                    ├─ Inner Join Est. 836875 rows
+               │  │                    │  │     Condition: cr_returning_customer_sk_1 == c_customer_sk_1
+               │  │                    │  │     Runtime Filters Builder: {c_customer_sk_1}
+               │  │                    │  ├─ Filter Est. 14404374 rows
+               │  │                    │  │  │     Condition: Runtime Filters: {cr_returned_date_sk_1, cr_returning_customer_sk_1}
+               │  │                    │  │  └─ TableScan tpcds100.catalog_returns Est. 14404374 rows
+               │  │                    │  │           Where: Runtime Filters: {cr_returned_date_sk, cr_returning_customer_sk}
+               │  │                    │  │           Outputs: cr_return_amt_inc_tax_1:=cr_return_amt_inc_tax, cr_returned_date_sk_1:=cr_returned_date_sk, cr_returning_addr_sk_1:=cr_returning_addr_sk, cr_returning_customer_sk_1:=cr_returning_customer_sk
+               │  │                    │  └─ Broadcast Exchange Est. 115812 rows
+               │  │                    │     └─ MergingAggregated Est. 115812 rows
+               │  │                    │        └─ Repartition Exchange Est. 115812 rows
+               │  │                    │           │     Partition by: {c_customer_sk_1}
+               │  │                    │           └─ Aggregating Est. 115812 rows
+               │  │                    │              │     Group by: {c_customer_sk_1}
+               │  │                    │              └─ Projection Est. 116099 rows
+               │  │                    │                 │     Expressions: c_customer_sk_1:=c_customer_sk
+               │  │                    │                 └─ Inner Join Est. 116099 rows
+               │  │                    │                    │     Condition: c_current_addr_sk == ca_address_sk_1
+               │  │                    │                    │     Runtime Filters Builder: {ca_address_sk_1}
+               │  │                    │                    ├─ Repartition Exchange Est. 2000000 rows
+               │  │                    │                    │  │     Partition by: {c_current_addr_sk}
+               │  │                    │                    │  └─ Filter Est. 2000000 rows
+               │  │                    │                    │     │     Condition: Runtime Filters: {c_current_addr_sk, c_customer_sk}
+               │  │                    │                    │     └─ TableScan tpcds100.customer Est. 2000000 rows
+               │  │                    │                    │              Where: Runtime Filters: {c_current_addr_sk, c_customer_sk}
+               │  │                    │                    │              Outputs: [c_current_addr_sk, c_customer_sk]
+               │  │                    │                    └─ Repartition Exchange Est. 50819 rows
+               │  │                    │                       │     Partition by: {ca_address_sk_1}
+               │  │                    │                       └─ Filter Est. 50819 rows
+               │  │                    │                          │     Condition: ca_state_2 = 'GA'
+               │  │                    │                          └─ TableScan tpcds100.customer_address Est. 1000000 rows
+               │  │                    │                                   Where: ca_state = 'GA'
+               │  │                    │                                   Outputs: ca_address_sk_1:=ca_address_sk, ca_state_2:=ca_state
+               │  │                    └─ Broadcast Exchange Est. 366 rows
+               │  │                       └─ Filter Est. 366 rows
+               │  │                          │     Condition: d_year_1 = 2000
+               │  │                          └─ TableScan tpcds100.date_dim Est. 73049 rows
+               │  │                                   Where: d_year = 2000
+               │  │                                   Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year
                │  └─ Repartition Exchange Est. 116099 rows
                │     │     Partition by: {c_customer_sk}
                │     └─ Inner Join Est. 116099 rows
@@ -106,13 +104,13 @@ Projection Est. 100 rows
                            │     Group by: {ca_state_3}
                            │     Aggregates: expr#avg(ctr_total_return):=AggNull(avgIf)(expr#sum(cr_return_amt_inc_tax)_2,build_side_non_null_symbol)
                            └─ Projection Est. 2476856 rows
-                              │     Expressions: build_side_non_null_symbol:=1, ca_state_3:=ca_state_5, expr#sum(cr_return_amt_inc_tax)_2:=`expr#sum(cr_return_amt_inc_tax)_4`
+                              │     Expressions: [ca_state_3, expr#sum(cr_return_amt_inc_tax)_2], build_side_non_null_symbol:=1
                               └─ MergingAggregated Est. 2476856 rows
                                  └─ Repartition Exchange Est. 2476856 rows
-                                    │     Partition by: {ca_state_5, cr_returning_customer_sk_4}
+                                    │     Partition by: {ca_state_3, cr_returning_customer_sk_4}
                                     └─ Aggregating Est. 2476856 rows
-                                       │     Group by: {ca_state_5, cr_returning_customer_sk_4}
-                                       │     Aggregates: expr#sum(cr_return_amt_inc_tax)_4:=AggNull(sum)(cr_return_amt_inc_tax_2)
+                                       │     Group by: {ca_state_3, cr_returning_customer_sk_4}
+                                       │     Aggregates: expr#sum(cr_return_amt_inc_tax)_2:=AggNull(sum)(cr_return_amt_inc_tax_2)
                                        └─ Inner Join Est. 2476856 rows
                                           │     Condition: cr_returning_addr_sk_2 == ca_address_sk_3
                                           ├─ Repartition Exchange Est. 2487778 rows
@@ -134,6 +132,6 @@ Projection Est. 100 rows
                                           └─ Repartition Exchange Est. 1000000 rows
                                              │     Partition by: {ca_address_sk_3}
                                              └─ TableScan tpcds100.customer_address Est. 1000000 rows
-                                                      Outputs: ca_address_sk_3:=ca_address_sk, ca_state_5:=ca_state
+                                                      Outputs: ca_address_sk_3:=ca_address_sk, ca_state_3:=ca_state
 note: Magic Set is applied for 1 parts.
 note: Runtime Filter is applied for 8 times.

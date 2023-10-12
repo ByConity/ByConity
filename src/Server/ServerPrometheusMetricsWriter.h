@@ -359,6 +359,8 @@ namespace ProfileEvents
     extern const Event ClearStagePartsMetaFailed;
     extern const Event ClearDataPartsMetaForTableSuccess;
     extern const Event ClearDataPartsMetaForTableFailed;
+    extern const Event ClearDeleteBitmapsMetaForTableSuccess;
+    extern const Event ClearDeleteBitmapsMetaForTableFailed;
     extern const Event GetSyncListSuccess;
     extern const Event GetSyncListFailed;
     extern const Event ClearSyncListSuccess;
@@ -885,6 +887,8 @@ private:
         ProfileEvents::ClearStagePartsMetaFailed,
         ProfileEvents::ClearDataPartsMetaForTableSuccess,
         ProfileEvents::ClearDataPartsMetaForTableFailed,
+        ProfileEvents::ClearDeleteBitmapsMetaForTableSuccess,
+        ProfileEvents::ClearDeleteBitmapsMetaForTableFailed,
         ProfileEvents::GetSyncListSuccess,
         ProfileEvents::GetSyncListFailed,
         ProfileEvents::ClearSyncListSuccess,

@@ -477,7 +477,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
 
     translated.downgradePkTables(invalid_tables);
     
-    std::unordered_map<String, JoinInfo::JoinWinner> old_winners = join_info.reset(invalid_tables);
+    std::unordered_map<String, JoinInfo::JoinWinner> old_winners = join_info.reset(invalid_tables, join_infos);
     collectEliminableJoin(old_winners);
     
 
@@ -566,7 +566,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitAggregatingNode(Aggregat
                 invalid_tables.insert(ordinary_key.getTableName());
         }
         result.downgradePkTables(invalid_tables);
-        std::unordered_map<String, JoinInfo::JoinWinner> old_winners = c.reset(invalid_tables);
+        std::unordered_map<String, JoinInfo::JoinWinner> old_winners = c.reset(invalid_tables, {c});
         collectEliminableJoin(old_winners);
     }
 
@@ -626,7 +626,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitLimitNode(LimitNode & no
 {
     auto result = VisitorUtil::accept(node.getChildren()[0], *this, c);
     auto invalid_tables = result.downgradeAllPkTables();
-    std::unordered_map<String, JoinInfo::JoinWinner> old_winners = c.reset(invalid_tables);
+    std::unordered_map<String, JoinInfo::JoinWinner> old_winners = c.reset(invalid_tables, {c});
     collectEliminableJoin(old_winners);
     return result;
 }
@@ -637,7 +637,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitFilterNode(FilterNode & 
     auto invalid_tables = visitFilterExpression(node.getStep()->getFilter(), result);
 
     result.downgradePkTables(invalid_tables);
-    std::unordered_map<String, JoinInfo::JoinWinner> old_winners = c.reset(invalid_tables);
+    std::unordered_map<String, JoinInfo::JoinWinner> old_winners = c.reset(invalid_tables, {c});
     collectEliminableJoin(old_winners);
 
     return result;
@@ -713,7 +713,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitUnionNode(UnionNode & no
 
     LOG_INFO(&Poco::Logger::get("DataDependency"), "visitPlanNode=" + std::to_string(node.getId()) + ", winners=" + std::to_string(join_info.getWinners().size()) + ". " + result.keysStr());
 
-    std::unordered_map<String, JoinInfo::JoinWinner> old_winners = join_info.reset(invalid_tables);
+    std::unordered_map<String, JoinInfo::JoinWinner> old_winners = join_info.reset(invalid_tables, join_infos);
     collectEliminableJoin(old_winners);
     result.downgradePkTables(invalid_tables);
 

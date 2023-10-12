@@ -135,7 +135,7 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
             /// Collect extra parts to update commit time
             /// We don't want to add it into integrateResources since when clean aborted
             /// transaction, we need some extra logic rather than just delete it from catalog
-            S3AttachMetaAction::collectUndoResourcesForCommit(resources, names.parts);
+            S3AttachMetaAction::collectUndoResourcesForCommit(resources, names);
             /// Clean detach parts for s3 committed
             S3DetachMetaAction::commitByUndoBuffer(global_context, table, resources);
             /// Clean s3 meta file
@@ -157,6 +157,12 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
                 task.undo_size = intermediate_parts.size() + undo_bitmaps.size();
             }
             catalog->setCommitTime(table, Catalog::CommitItems{intermediate_parts, undo_bitmaps, staged_parts}, txn_record.commitTs(), txn_record.txnID());
+
+            // clean vfs if necessary
+            for (const auto & resource : resources)
+            {
+                resource.commit(global_context);
+            }
         }
 
         catalog->clearUndoBuffer(txn_record.txnID());

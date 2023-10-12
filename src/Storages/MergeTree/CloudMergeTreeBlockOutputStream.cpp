@@ -153,31 +153,10 @@ MergeTreeMutableDataPartsVector CloudMergeTreeBlockOutputStream::convertBlockInt
             Stopwatch watch;
             bucketed_block_with_partition.partition = Row(original_partition);
 
-            DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
-            if (metadata_snapshot->hasUniqueKey() && bucketed_block_with_partition.block.has(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME))
-            {
-                /// Convert delete_flag info into delete bitmap
-                const auto & delete_flag_column = bucketed_block_with_partition.block.getByName(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME);
-                for (size_t rowid = 0; rowid < delete_flag_column.column->size(); ++rowid)
-                {
-                    if (delete_flag_column.column->getBool(rowid))
-                        bitmap->add(rowid);
-                }
-            }
-
-            /// Remove func columns
-            for (auto & [name, _] : metadata_snapshot->getFuncColumns())
-                if (bucketed_block_with_partition.block.has(name))
-                    bucketed_block_with_partition.block.erase(name);
-
             auto block_id = use_inner_block_id ? increment.get() : context->getTimestamp();
 
             MergeTreeMutableDataPartPtr temp_part
                 = writer.writeTempPart(bucketed_block_with_partition, metadata_snapshot, context, block_id, primary_txn_id);
-
-            /// Only add delete bitmap if it's not empty.
-            if (bitmap->cardinality())
-                temp_part->setDeleteBitmap(bitmap);
 
             if (txn->isSecondary())
                 temp_part->secondary_txn_id = txn->getTransactionID();

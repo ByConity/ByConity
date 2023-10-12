@@ -17,10 +17,12 @@
 
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/Iterative/IterativeRewriter.h>
+#include <Optimizer/Rewriter/ColumnPruning.h>
 #include <Optimizer/Rewriter/PredicatePushdown.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/Rule/Rules.h>
 #include <QueryPlan/CTERefStep.h>
+#include <QueryPlan/GraphvizPrinter.h>
 
 namespace DB
 {
@@ -34,7 +36,9 @@ TransformResult InlineCTE::transformImpl(PlanNodePtr node, const Captures &, Rul
     const auto * cte_step = dynamic_cast<const CTERefStep *>(node->getStep().get());
     if (cte_step->hasFilter())
         return {}; // InlineCTEWithFilter
-    return {cte_step->toInlinedPlanNode(context.cte_info, context.context)};
+
+    auto inlined_plan = cte_step->toInlinedPlanNode(context.cte_info, context.context);
+    return {InlineCTE::reoptimize(inlined_plan, context.cte_info, context.context)};
 }
 
 PatternPtr InlineCTEWithFilter::getPattern() const
@@ -51,13 +55,14 @@ TransformResult InlineCTEWithFilter::transformImpl(PlanNodePtr node, const Captu
 
     auto inlined_plan
         = PlanNodeBase::createPlanNode(node->getId(), node->getStep(), {cte_step->toInlinedPlanNode(context.cte_info, context.context)});
-    return {predicatePushDown(inlined_plan, context.cte_info, context.context)};
+    return {InlineCTE::reoptimize(inlined_plan, context.cte_info, context.context)};
 }
 
-PlanNodePtr InlineCTEWithFilter::predicatePushDown(const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context)
+PlanNodePtr InlineCTE::reoptimize(const PlanNodePtr & node, CTEInfo & cte_info, ContextMutablePtr & context)
 {
     static Rewriters rewriters
-        = {std::make_shared<PredicatePushdown>(false, true),
+        = {std::make_shared<ColumnPruning>(),
+           std::make_shared<PredicatePushdown>(false, true),
            std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
            std::make_shared<IterativeRewriter>(Rules::normalizeExpressionRules(), "NormalizeExpression"),
            std::make_shared<IterativeRewriter>(Rules::swapPredicateRules(), "SwapPredicate"),
