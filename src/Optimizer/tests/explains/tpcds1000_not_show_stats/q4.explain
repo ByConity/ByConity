@@ -44,12 +44,12 @@ Projection
                   │  │  │  │  │        │     Expressions: expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_7:=`expr#sum(divide(plus(minus(minus(ws_ext_list_price, ws_ext_wholesale_cost), ws_ext_discount_amt), ws_ext_sales_price), 2))_3`, ss_customer_sk_7:=ws_bill_customer_sk_3
                   │  │  │  │  │        └─ MergingAggregated
                   │  │  │  │  │           └─ Repartition Exchange
-                  │  │  │  │  │              │     Partition by: {d_year_20, ws_bill_customer_sk_3}
+                  │  │  │  │  │              │     Partition by: {d_year_21, ws_bill_customer_sk_3}
                   │  │  │  │  │              └─ Aggregating
-                  │  │  │  │  │                 │     Group by: {d_year_20, ws_bill_customer_sk_3}
+                  │  │  │  │  │                 │     Group by: {d_year_21, ws_bill_customer_sk_3}
                   │  │  │  │  │                 │     Aggregates: expr#sum(divide(plus(minus(minus(ws_ext_list_price, ws_ext_wholesale_cost), ws_ext_discount_amt), ws_ext_sales_price), 2))_3:=AggNull(sum)(expr#divide(plus(minus(minus(ws_ext_list_price, ws_ext_wholesale_cost), ws_ext_discount_amt), ws_ext_sales_price), 2)_3)
                   │  │  │  │  │                 └─ Projection
-                  │  │  │  │  │                    │     Expressions: [d_year_20, ws_bill_customer_sk_3], expr#divide(plus(minus(minus(ws_ext_list_price, ws_ext_wholesale_cost), ws_ext_discount_amt), ws_ext_sales_price), 2)_3:=(((ws_ext_list_price_3 - ws_ext_wholesale_cost_3) - ws_ext_discount_amt_3) + ws_ext_sales_price_3) / 2
+                  │  │  │  │  │                    │     Expressions: [d_year_21, ws_bill_customer_sk_3], expr#divide(plus(minus(minus(ws_ext_list_price, ws_ext_wholesale_cost), ws_ext_discount_amt), ws_ext_sales_price), 2)_3:=(((ws_ext_list_price_3 - ws_ext_wholesale_cost_3) - ws_ext_discount_amt_3) + ws_ext_sales_price_3) / 2
                   │  │  │  │  │                    └─ Inner Join
                   │  │  │  │  │                       │     Condition: ws_sold_date_sk_3 == d_date_sk_11
                   │  │  │  │  │                       │     Runtime Filters Builder: {d_date_sk_11}
@@ -60,10 +60,10 @@ Projection
                   │  │  │  │  │                       │           Outputs: ws_bill_customer_sk_3:=ws_bill_customer_sk, ws_ext_discount_amt_3:=ws_ext_discount_amt, ws_ext_list_price_3:=ws_ext_list_price, ws_ext_sales_price_3:=ws_ext_sales_price, ws_ext_wholesale_cost_3:=ws_ext_wholesale_cost, ws_sold_date_sk_3:=ws_sold_date_sk
                   │  │  │  │  │                       └─ Broadcast Exchange
                   │  │  │  │  │                          └─ Filter
-                  │  │  │  │  │                             │     Condition: d_year_20 = 2002
+                  │  │  │  │  │                             │     Condition: d_year_21 = 2002
                   │  │  │  │  │                             └─ TableScan tpcds1000.date_dim
                   │  │  │  │  │                                      Where: d_year = 2002
-                  │  │  │  │  │                                      Outputs: d_date_sk_11:=d_date_sk, d_year_20:=d_year
+                  │  │  │  │  │                                      Outputs: d_date_sk_11:=d_date_sk, d_year_21:=d_year
                   │  │  │  │  └─ Repartition Exchange
                   │  │  │  │     │     Partition by: {ss_customer_sk_6}
                   │  │  │  │     └─ Projection
@@ -72,12 +72,12 @@ Projection
                   │  │  │  │           │     Condition: `expr#sum(divide(plus(minus(minus(ws_ext_list_price, ws_ext_wholesale_cost), ws_ext_discount_amt), ws_ext_sales_price), 2))_2` > 0.
                   │  │  │  │           └─ MergingAggregated
                   │  │  │  │              └─ Repartition Exchange
-                  │  │  │  │                 │     Partition by: {d_year_16, ws_bill_customer_sk_2}
+                  │  │  │  │                 │     Partition by: {d_year_17, ws_bill_customer_sk_2}
                   │  │  │  │                 └─ Aggregating
-                  │  │  │  │                    │     Group by: {d_year_16, ws_bill_customer_sk_2}
+                  │  │  │  │                    │     Group by: {d_year_17, ws_bill_customer_sk_2}
                   │  │  │  │                    │     Aggregates: expr#sum(divide(plus(minus(minus(ws_ext_list_price, ws_ext_wholesale_cost), ws_ext_discount_amt), ws_ext_sales_price), 2))_2:=AggNull(sum)(expr#divide(plus(minus(minus(ws_ext_list_price, ws_ext_wholesale_cost), ws_ext_discount_amt), ws_ext_sales_price), 2)_2)
                   │  │  │  │                    └─ Projection
-                  │  │  │  │                       │     Expressions: [d_year_16, ws_bill_customer_sk_2], expr#divide(plus(minus(minus(ws_ext_list_price, ws_ext_wholesale_cost), ws_ext_discount_amt), ws_ext_sales_price), 2)_2:=(((ws_ext_list_price_2 - ws_ext_wholesale_cost_2) - ws_ext_discount_amt_2) + ws_ext_sales_price_2) / 2
+                  │  │  │  │                       │     Expressions: [d_year_17, ws_bill_customer_sk_2], expr#divide(plus(minus(minus(ws_ext_list_price, ws_ext_wholesale_cost), ws_ext_discount_amt), ws_ext_sales_price), 2)_2:=(((ws_ext_list_price_2 - ws_ext_wholesale_cost_2) - ws_ext_discount_amt_2) + ws_ext_sales_price_2) / 2
                   │  │  │  │                       └─ Inner Join
                   │  │  │  │                          │     Condition: ws_sold_date_sk_2 == d_date_sk_8
                   │  │  │  │                          │     Runtime Filters Builder: {d_date_sk_8}
@@ -88,22 +88,22 @@ Projection
                   │  │  │  │                          │           Outputs: ws_bill_customer_sk_2:=ws_bill_customer_sk, ws_ext_discount_amt_2:=ws_ext_discount_amt, ws_ext_list_price_2:=ws_ext_list_price, ws_ext_sales_price_2:=ws_ext_sales_price, ws_ext_wholesale_cost_2:=ws_ext_wholesale_cost, ws_sold_date_sk_2:=ws_sold_date_sk
                   │  │  │  │                          └─ Broadcast Exchange
                   │  │  │  │                             └─ Filter
-                  │  │  │  │                                │     Condition: d_year_16 = 2001
+                  │  │  │  │                                │     Condition: d_year_17 = 2001
                   │  │  │  │                                └─ TableScan tpcds1000.date_dim
                   │  │  │  │                                         Where: d_year = 2001
-                  │  │  │  │                                         Outputs: d_date_sk_8:=d_date_sk, d_year_16:=d_year
+                  │  │  │  │                                         Outputs: d_date_sk_8:=d_date_sk, d_year_17:=d_year
                   │  │  │  └─ Repartition Exchange
                   │  │  │     │     Partition by: {ss_customer_sk_5}
                   │  │  │     └─ Projection
                   │  │  │        │     Expressions: expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_5:=`expr#sum(divide(plus(minus(minus(cs_ext_list_price, cs_ext_wholesale_cost), cs_ext_discount_amt), cs_ext_sales_price), 2))_1`, ss_customer_sk_5:=cs_bill_customer_sk_1
                   │  │  │        └─ MergingAggregated
                   │  │  │           └─ Repartition Exchange
-                  │  │  │              │     Partition by: {cs_bill_customer_sk_1, d_year_11}
+                  │  │  │              │     Partition by: {cs_bill_customer_sk_1, d_year_12}
                   │  │  │              └─ Aggregating
-                  │  │  │                 │     Group by: {cs_bill_customer_sk_1, d_year_11}
+                  │  │  │                 │     Group by: {cs_bill_customer_sk_1, d_year_12}
                   │  │  │                 │     Aggregates: expr#sum(divide(plus(minus(minus(cs_ext_list_price, cs_ext_wholesale_cost), cs_ext_discount_amt), cs_ext_sales_price), 2))_1:=AggNull(sum)(expr#divide(plus(minus(minus(cs_ext_list_price, cs_ext_wholesale_cost), cs_ext_discount_amt), cs_ext_sales_price), 2)_1)
                   │  │  │                 └─ Projection
-                  │  │  │                    │     Expressions: [cs_bill_customer_sk_1, d_year_11], expr#divide(plus(minus(minus(cs_ext_list_price, cs_ext_wholesale_cost), cs_ext_discount_amt), cs_ext_sales_price), 2)_1:=(((cs_ext_list_price_1 - cs_ext_wholesale_cost_1) - cs_ext_discount_amt_1) + cs_ext_sales_price_1) / 2
+                  │  │  │                    │     Expressions: [cs_bill_customer_sk_1, d_year_12], expr#divide(plus(minus(minus(cs_ext_list_price, cs_ext_wholesale_cost), cs_ext_discount_amt), cs_ext_sales_price), 2)_1:=(((cs_ext_list_price_1 - cs_ext_wholesale_cost_1) - cs_ext_discount_amt_1) + cs_ext_sales_price_1) / 2
                   │  │  │                    └─ Inner Join
                   │  │  │                       │     Condition: cs_sold_date_sk_1 == d_date_sk_4
                   │  │  │                       │     Runtime Filters Builder: {d_date_sk_4}
@@ -114,10 +114,10 @@ Projection
                   │  │  │                       │           Outputs: cs_bill_customer_sk_1:=cs_bill_customer_sk, cs_ext_discount_amt_1:=cs_ext_discount_amt, cs_ext_list_price_1:=cs_ext_list_price, cs_ext_sales_price_1:=cs_ext_sales_price, cs_ext_wholesale_cost_1:=cs_ext_wholesale_cost, cs_sold_date_sk_1:=cs_sold_date_sk
                   │  │  │                       └─ Broadcast Exchange
                   │  │  │                          └─ Filter
-                  │  │  │                             │     Condition: d_year_11 = 2002
+                  │  │  │                             │     Condition: d_year_12 = 2002
                   │  │  │                             └─ TableScan tpcds1000.date_dim
                   │  │  │                                      Where: d_year = 2002
-                  │  │  │                                      Outputs: d_date_sk_4:=d_date_sk, d_year_11:=d_year
+                  │  │  │                                      Outputs: d_date_sk_4:=d_date_sk, d_year_12:=d_year
                   │  │  └─ Repartition Exchange
                   │  │     │     Partition by: {ss_customer_sk_4}
                   │  │     └─ Projection
@@ -126,12 +126,12 @@ Projection
                   │  │           │     Condition: `expr#sum(divide(plus(minus(minus(cs_ext_list_price, cs_ext_wholesale_cost), cs_ext_discount_amt), cs_ext_sales_price), 2))_4` > 0.
                   │  │           └─ MergingAggregated
                   │  │              └─ Repartition Exchange
-                  │  │                 │     Partition by: {cs_bill_customer_sk_4, d_year_23}
+                  │  │                 │     Partition by: {cs_bill_customer_sk_4, d_year_24}
                   │  │                 └─ Aggregating
-                  │  │                    │     Group by: {cs_bill_customer_sk_4, d_year_23}
+                  │  │                    │     Group by: {cs_bill_customer_sk_4, d_year_24}
                   │  │                    │     Aggregates: expr#sum(divide(plus(minus(minus(cs_ext_list_price, cs_ext_wholesale_cost), cs_ext_discount_amt), cs_ext_sales_price), 2))_4:=AggNull(sum)(expr#divide(plus(minus(minus(cs_ext_list_price, cs_ext_wholesale_cost), cs_ext_discount_amt), cs_ext_sales_price), 2)_4)
                   │  │                    └─ Projection
-                  │  │                       │     Expressions: [cs_bill_customer_sk_4, d_year_23], expr#divide(plus(minus(minus(cs_ext_list_price, cs_ext_wholesale_cost), cs_ext_discount_amt), cs_ext_sales_price), 2)_4:=(((cs_ext_list_price_4 - cs_ext_wholesale_cost_4) - cs_ext_discount_amt_4) + cs_ext_sales_price_4) / 2
+                  │  │                       │     Expressions: [cs_bill_customer_sk_4, d_year_24], expr#divide(plus(minus(minus(cs_ext_list_price, cs_ext_wholesale_cost), cs_ext_discount_amt), cs_ext_sales_price), 2)_4:=(((cs_ext_list_price_4 - cs_ext_wholesale_cost_4) - cs_ext_discount_amt_4) + cs_ext_sales_price_4) / 2
                   │  │                       └─ Inner Join
                   │  │                          │     Condition: cs_sold_date_sk_4 == d_date_sk_13
                   │  │                          │     Runtime Filters Builder: {d_date_sk_13}
@@ -142,62 +142,62 @@ Projection
                   │  │                          │           Outputs: cs_bill_customer_sk_4:=cs_bill_customer_sk, cs_ext_discount_amt_4:=cs_ext_discount_amt, cs_ext_list_price_4:=cs_ext_list_price, cs_ext_sales_price_4:=cs_ext_sales_price, cs_ext_wholesale_cost_4:=cs_ext_wholesale_cost, cs_sold_date_sk_4:=cs_sold_date_sk
                   │  │                          └─ Broadcast Exchange
                   │  │                             └─ Filter
-                  │  │                                │     Condition: d_year_23 = 2001
+                  │  │                                │     Condition: d_year_24 = 2001
                   │  │                                └─ TableScan tpcds1000.date_dim
                   │  │                                         Where: d_year = 2001
-                  │  │                                         Outputs: d_date_sk_13:=d_date_sk, d_year_23:=d_year
+                  │  │                                         Outputs: d_date_sk_13:=d_date_sk, d_year_24:=d_year
                   │  └─ Repartition Exchange
                   │     │     Partition by: {ss_customer_sk_3}
                   │     └─ Projection
-                  │        │     Expressions: expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_3:=`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_16`, ss_customer_sk_3:=ss_customer_sk_16
+                  │        │     Expressions: expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_3:=`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_17`, ss_customer_sk_3:=ss_customer_sk_17
                   │        └─ MergingAggregated
                   │           └─ Repartition Exchange
-                  │              │     Partition by: {d_year_26, ss_customer_sk_16}
+                  │              │     Partition by: {d_year_27, ss_customer_sk_17}
                   │              └─ Aggregating
-                  │                 │     Group by: {d_year_26, ss_customer_sk_16}
-                  │                 │     Aggregates: expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_16:=AggNull(sum)(expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2)_5)
+                  │                 │     Group by: {d_year_27, ss_customer_sk_17}
+                  │                 │     Aggregates: expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_17:=AggNull(sum)(expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2)_5)
                   │                 └─ Projection
-                  │                    │     Expressions: [d_year_26, ss_customer_sk_16], expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2)_5:=(((ss_ext_list_price_5 - ss_ext_wholesale_cost_5) - ss_ext_discount_amt_5) + ss_ext_sales_price_5) / 2
+                  │                    │     Expressions: [d_year_27, ss_customer_sk_17], expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2)_5:=(((ss_ext_list_price_5 - ss_ext_wholesale_cost_5) - ss_ext_discount_amt_5) + ss_ext_sales_price_5) / 2
                   │                    └─ Inner Join
                   │                       │     Condition: ss_sold_date_sk_5 == d_date_sk_15
                   │                       │     Runtime Filters Builder: {d_date_sk_15}
                   │                       ├─ Filter
-                  │                       │  │     Condition: isNotNull(ss_customer_sk_16) Runtime Filters: {ss_customer_sk_16, ss_sold_date_sk_5}
+                  │                       │  │     Condition: isNotNull(ss_customer_sk_17) Runtime Filters: {ss_customer_sk_17, ss_sold_date_sk_5}
                   │                       │  └─ TableScan tpcds1000.store_sales
                   │                       │           Where: isNotNull(ss_customer_sk) Runtime Filters: {ss_customer_sk, ss_sold_date_sk}
-                  │                       │           Outputs: ss_customer_sk_16:=ss_customer_sk, ss_ext_discount_amt_5:=ss_ext_discount_amt, ss_ext_list_price_5:=ss_ext_list_price, ss_ext_sales_price_5:=ss_ext_sales_price, ss_ext_wholesale_cost_5:=ss_ext_wholesale_cost, ss_sold_date_sk_5:=ss_sold_date_sk
+                  │                       │           Outputs: ss_customer_sk_17:=ss_customer_sk, ss_ext_discount_amt_5:=ss_ext_discount_amt, ss_ext_list_price_5:=ss_ext_list_price, ss_ext_sales_price_5:=ss_ext_sales_price, ss_ext_wholesale_cost_5:=ss_ext_wholesale_cost, ss_sold_date_sk_5:=ss_sold_date_sk
                   │                       └─ Broadcast Exchange
                   │                          └─ Filter
-                  │                             │     Condition: d_year_26 = 2002
+                  │                             │     Condition: d_year_27 = 2002
                   │                             └─ TableScan tpcds1000.date_dim
                   │                                      Where: d_year = 2002
-                  │                                      Outputs: d_date_sk_15:=d_date_sk, d_year_26:=d_year
+                  │                                      Outputs: d_date_sk_15:=d_date_sk, d_year_27:=d_year
                   └─ Repartition Exchange
                      │     Partition by: {ss_customer_sk_2}
                      └─ Projection
-                        │     Expressions: expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_2:=`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_18`, ss_customer_sk_2:=ss_customer_sk_18
+                        │     Expressions: expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_2:=`expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_19`, ss_customer_sk_2:=ss_customer_sk_19
                         └─ Filter
-                           │     Condition: `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_18` > 0.
+                           │     Condition: `expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_19` > 0.
                            └─ MergingAggregated
                               └─ Repartition Exchange
-                                 │     Partition by: {d_year_30, ss_customer_sk_18}
+                                 │     Partition by: {d_year_31, ss_customer_sk_19}
                                  └─ Aggregating
-                                    │     Group by: {d_year_30, ss_customer_sk_18}
-                                    │     Aggregates: expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_18:=AggNull(sum)(expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2)_6)
+                                    │     Group by: {d_year_31, ss_customer_sk_19}
+                                    │     Aggregates: expr#sum(divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2))_19:=AggNull(sum)(expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2)_6)
                                     └─ Projection
-                                       │     Expressions: [d_year_30, ss_customer_sk_18], expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2)_6:=(((ss_ext_list_price_6 - ss_ext_wholesale_cost_6) - ss_ext_discount_amt_6) + ss_ext_sales_price_6) / 2
+                                       │     Expressions: [d_year_31, ss_customer_sk_19], expr#divide(plus(minus(minus(ss_ext_list_price, ss_ext_wholesale_cost), ss_ext_discount_amt), ss_ext_sales_price), 2)_6:=(((ss_ext_list_price_6 - ss_ext_wholesale_cost_6) - ss_ext_discount_amt_6) + ss_ext_sales_price_6) / 2
                                        └─ Inner Join
                                           │     Condition: ss_sold_date_sk_6 == d_date_sk_18
                                           │     Runtime Filters Builder: {d_date_sk_18}
                                           ├─ Filter
-                                          │  │     Condition: isNotNull(ss_customer_sk_18) Runtime Filters: {ss_sold_date_sk_6}
+                                          │  │     Condition: isNotNull(ss_customer_sk_19) Runtime Filters: {ss_sold_date_sk_6}
                                           │  └─ TableScan tpcds1000.store_sales
                                           │           Where: isNotNull(ss_customer_sk) Runtime Filters: {ss_sold_date_sk}
-                                          │           Outputs: ss_customer_sk_18:=ss_customer_sk, ss_ext_discount_amt_6:=ss_ext_discount_amt, ss_ext_list_price_6:=ss_ext_list_price, ss_ext_sales_price_6:=ss_ext_sales_price, ss_ext_wholesale_cost_6:=ss_ext_wholesale_cost, ss_sold_date_sk_6:=ss_sold_date_sk
+                                          │           Outputs: ss_customer_sk_19:=ss_customer_sk, ss_ext_discount_amt_6:=ss_ext_discount_amt, ss_ext_list_price_6:=ss_ext_list_price, ss_ext_sales_price_6:=ss_ext_sales_price, ss_ext_wholesale_cost_6:=ss_ext_wholesale_cost, ss_sold_date_sk_6:=ss_sold_date_sk
                                           └─ Broadcast Exchange
                                              └─ Filter
-                                                │     Condition: d_year_30 = 2001
+                                                │     Condition: d_year_31 = 2001
                                                 └─ TableScan tpcds1000.date_dim
                                                          Where: d_year = 2001
-                                                         Outputs: d_date_sk_18:=d_date_sk, d_year_30:=d_year
+                                                         Outputs: d_date_sk_18:=d_date_sk, d_year_31:=d_year
 note: Runtime Filter is applied for 27 times.

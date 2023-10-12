@@ -56,6 +56,7 @@
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/planning_common.h>
 #include <fmt/format.h>
+#include <Storages/RemoteFile/IStorageCnchFile.h>
 
 namespace DB
 {
@@ -1509,8 +1510,9 @@ void TableScanStep::allocate(ContextPtr context)
     original_table = storage_id.table_name;
     auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(storage.get());
     auto * cnch_hive = dynamic_cast<StorageCnchHive *>(storage.get());
+    auto * cnch_file = dynamic_cast<IStorageCnchFile *>(storage.get());
 
-    if (!cnch_merge_tree && !cnch_hive)
+    if (!cnch_merge_tree && !cnch_hive && !cnch_file)
         return;
 
     if (cnch_merge_tree)
@@ -1530,6 +1532,12 @@ void TableScanStep::allocate(ContextPtr context)
 
         storage_id.database_name = cnch_hive->getDatabaseName();
         auto prepare_res = cnch_hive->prepareReadContext(column_names, cnch_hive->getInMemoryMetadataPtr(),query_info, context, max_streams);
+        storage_id.table_name = prepare_res.local_table_name;
+    }
+    else if (cnch_file)
+    {
+        storage_id.database_name = cnch_file->getDatabaseName();
+        auto prepare_res = cnch_file->prepareReadContext(column_names, cnch_file->getInMemoryMetadataPtr(), query_info, context, context->getSettingsRef().max_threads);
         storage_id.table_name = prepare_res.local_table_name;
     }
     storage_id.uuid = UUIDHelpers::Nil;

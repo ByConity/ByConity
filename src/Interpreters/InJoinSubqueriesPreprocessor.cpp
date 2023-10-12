@@ -286,7 +286,7 @@ bool InJoinSubqueriesPreprocessor::CheckShardsAndTables::hasAtLeastTwoShards(con
     const StorageDistributed * distributed = dynamic_cast<const StorageDistributed *>(&table);
     const StorageCnchMergeTree * cnch_merge_tree = dynamic_cast<const StorageCnchMergeTree *>(&table);
     const StorageCnchHive * cnch_hive = dynamic_cast<const StorageCnchHive *>(&table);
-    const IStorageCnchFile* cnch_file = dynamic_cast<const IStorageCnchFile *>(&table);
+    const IStorageCnchFile * cnch_file = dynamic_cast<const IStorageCnchFile *>(&table);
     if (!distributed && !cnch_merge_tree && !cnch_hive && !cnch_file)
         return false;
 

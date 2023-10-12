@@ -827,7 +827,7 @@ void CnchWorkerServiceImpl::createDedupWorker(
 
                 auto * deduper = cloud_table->getDedupWorker();
                 deduper->setServerHostWithPorts(host_ports);
-                LOG_DEBUG(log, "Success to create deuper table: {}", storage->getStorageID().getNameForLogs());
+                LOG_DEBUG(log, "Success to create deduper table: {}", storage->getStorageID().getNameForLogs());
             }
             catch (...)
             {

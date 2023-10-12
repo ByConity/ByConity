@@ -405,6 +405,39 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
             ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterBlocksAlreadySorted);
     }
 
+    DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
+    /// Build bitmap for _delete_flag_ function columns which is must after sort and remove func columns
+    {
+        if (metadata_snapshot->hasUniqueKey() && block.has(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME))
+        {
+            std::vector<size_t> index_map;
+            if (perm_ptr)
+            {
+                index_map.resize(perm_ptr->size());
+                for (size_t i = 0; i < perm_ptr->size(); ++i)
+                    index_map[perm[i]] = i;
+            }
+
+            /// Convert delete_flag info into delete bitmap
+            const auto & delete_flag_column = block.getByName(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME);
+            for (size_t rowid = 0; rowid < delete_flag_column.column->size(); ++rowid)
+            {
+                if (delete_flag_column.column->getBool(rowid))
+                {
+                    if (perm_ptr)
+                        bitmap->add(index_map[rowid]);
+                    else
+                        bitmap->add(rowid);
+                }
+            }
+        }
+
+        /// Remove func columns
+        for (auto & [name, _]: metadata_snapshot->getFuncColumns())
+            if (block.has(name))
+                block.erase(name);
+    }
+
     Names partition_key_columns = metadata_snapshot->getPartitionKey().column_names;
     if (context->getSettingsRef().optimize_on_insert)
         block = mergeBlock(block, sort_description, partition_key_columns, perm_ptr);
@@ -559,6 +592,10 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
     ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterRows, block.rows());
     ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterUncompressedBytes, block.bytes());
     ProfileEvents::increment(ProfileEvents::MergeTreeDataWriterCompressedBytes, new_data_part->getBytesOnDisk());
+
+    /// Only add delete bitmap if it's not empty.
+    if (bitmap->cardinality())
+        new_data_part->setDeleteBitmap(bitmap);
 
     return new_data_part;
 }

@@ -43,7 +43,8 @@
 #include <IO/ReadHelpers.h>
 #include <Databases/IDatabase.h>
 #include <chrono>
-
+#include <Storages/DiskCache/DiskCacheFactory.h>
+#include <Storages/DiskCache/IDiskCache.h>
 
 #if !defined(ARCADIA_BUILD)
 #    include "config_core.h"
@@ -587,6 +588,26 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
         {
             new_values["UniqueKeyIndexBlockCapacityBytes"] = uniquekey_index_block_cache->TotalCapacity();
             new_values["UniqueKeyIndexBlockCacheBytes"] = uniquekey_index_block_cache->TotalCharge();
+        }
+    }
+
+    {
+        auto merge_tree_disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+        new_values["MergeTreeDiskCacheFiles"] = merge_tree_disk_cache->getKeyCount();
+        new_values["MergeTreeDiskCacheBytes"] = merge_tree_disk_cache->getCachedSize();
+
+        auto hive_disk_cache = DiskCacheFactory::instance().tryGet(DiskCacheType::Hive);
+        if (hive_disk_cache)
+        {
+            new_values["HiveDiskCacheFiles"] = hive_disk_cache->getKeyCount();
+            new_values["HiveDiskCacheBytes"] = hive_disk_cache->getCachedSize();
+        }
+
+        auto file_disk_cache = DiskCacheFactory::instance().tryGet(DiskCacheType::File);
+        if (file_disk_cache)
+        {
+            new_values["FileDiskCacheFiles"] = file_disk_cache->getKeyCount();
+            new_values["FileDiskCacheBytes"] = file_disk_cache->getCachedSize();
         }
     }
 

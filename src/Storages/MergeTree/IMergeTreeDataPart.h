@@ -420,6 +420,9 @@ public:
 
     void createDeleteBitmapForDetachedPart() const;
 
+    /// For convenience, when detach part for unique table, we need to generate a new base bitmap.
+    LocalDeleteBitmapPtr createNewBaseDeleteBitmap(const UInt64 & txn_id) const;
+
     /// Makes checks and move part to new directory
     /// Changes only relative_dir_name, you need to update other metadata (name, is_temp) explicitly
     virtual void renameTo(const String & new_relative_path, bool remove_new_dir_if_exists) const;

@@ -58,6 +58,8 @@ struct CpuUsageInfo
     size_t total() { return user + nice + system + idle + iowait + irq + softirq; }
 };
 
+size_t buffer_to_number(const std::string & buffer);
+
 class SystemUtils
 {
 public:

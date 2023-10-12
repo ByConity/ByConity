@@ -71,9 +71,9 @@ class PlanNodeVisitor
 public:
     virtual ~PlanNodeVisitor() = default;
 
-    virtual R visitPlanNode(PlanNodeBase &, C &)
+    virtual R visitPlanNode(PlanNodeBase & node, C &)
     {
-        throw Exception("Visitor does not supported this plan node.", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Visitor does not supported this plan node:" + node.getStep()->getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
 #define VISITOR_DEF(TYPE) \
@@ -89,9 +89,9 @@ class StepVisitor
 public:
     virtual ~StepVisitor() = default;
 
-    virtual R visitStep(const IQueryPlanStep &, C &)
+    virtual R visitStep(const IQueryPlanStep & step, C &)
     {
-        throw Exception("Visitor does not supported this step.", ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception("Visitor does not supported this step: " + step.getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
 #define VISITOR_DEF(TYPE) \

@@ -104,6 +104,7 @@ namespace DB::Catalog
 #define MERGEMUTATE_THREAD_START_TIME "MTST_"
 #define DETACHED_PART_PREFIX "DP_"
 #define ENTITY_UUID_MAPPING "EUM_"
+#define DETACHED_DELETE_BITMAP_PREFIX "DDLB_"
 
 using EntityType = IAccessEntity::Type;
 struct EntityMetastorePrefix
@@ -214,23 +215,43 @@ public:
         return ss.str();
     }
 
-    /// Prefix_PartitionID_PartMinBlock_PartMaxBlock_Reserved_Type_TxnID
-    static std::string deleteBitmapKey(const std::string & name_space, const std::string & uuid, const Protos::DataModelDeleteBitmap & bitmap)
+    static std::string deleteBitmapKey(const std::string & name_space, const std::string & uuid, const String & bitmap_key)
     {
         std::stringstream ss;
-        ss << deleteBitmapPrefix(name_space, uuid)
-           << bitmap.partition_id() << "_" << bitmap.part_min_block() << "_" << bitmap.part_max_block() << "_"
-           << bitmap.reserved() << "_" << bitmap.type() << "_" << bitmap.txn_id();
+        ss << deleteBitmapPrefix(name_space, uuid) << bitmap_key;
         return ss.str();
     }
 
-    static std::string
-    deleteBitmapKeyInTrash(const std::string & name_space, const std::string & uuid, const Protos::DataModelDeleteBitmap & bitmap)
+    /// Prefix_PartitionID_PartMinBlock_PartMaxBlock_Reserved_Type_TxnID
+    static std::string deleteBitmapKey(const std::string & name_space, const std::string & uuid, const Protos::DataModelDeleteBitmap & bitmap)
+    {
+        return deleteBitmapKey(name_space, uuid, dataModelName(bitmap));
+    }
+
+    static std::string deleteBitmapKeyInTrash(const std::string & name_space, const std::string & uuid, const Protos::DataModelDeleteBitmap & bitmap)
     {
         std::stringstream ss;
-        ss << trashItemsPrefix(name_space, uuid) << DELETE_BITMAP_PREFIX << bitmap.partition_id() << "_" << bitmap.part_min_block() << "_"
-           << bitmap.part_max_block() << "_" << bitmap.reserved() << "_" << bitmap.type() << "_" << bitmap.txn_id();
+        ss << trashItemsPrefix(name_space, uuid) << DELETE_BITMAP_PREFIX << dataModelName(bitmap);
         return ss.str();
+    }
+
+    static std::string detachedDeleteBitmapKeyPrefix(const std::string & name_space, const std::string & uuid)
+    {
+        std::stringstream ss;
+        ss << escapeString(name_space) << "_" << DETACHED_DELETE_BITMAP_PREFIX << uuid << "_";
+        return ss.str();
+    }
+
+    static std::string detachedDeleteBitmapKey(const std::string & name_space, const std::string & uuid, const std::string & bitmap_key)
+    {
+        std::stringstream ss;
+        ss << detachedDeleteBitmapKeyPrefix(name_space, uuid) << bitmap_key;
+        return ss.str();
+    }
+
+    static std::string detachedDeleteBitmapKey(const std::string & name_space, const std::string & uuid, const Protos::DataModelDeleteBitmap & bitmap)
+    {
+        return detachedDeleteBitmapKey(name_space, uuid, dataModelName(bitmap));
     }
 
     static std::string tableMetaPrefix(const std::string & name_space)
@@ -803,6 +824,7 @@ public:
     /// scan staged parts
     IMetaStore::IteratorPtr getStagedParts(const String & name_space, const String & uuid);
     IMetaStore::IteratorPtr getStagedPartsInPartition(const String & name_space, const String & uuid, const String & partition);
+    void dropAllDeleteBitmapInTable(const String & name_space, const String & uuid);
 
     /// check part/delete-bitmap exist
     template <typename T, typename GenerateKeyFunc>
@@ -939,24 +961,57 @@ public:
     bool tryGetAsyncQueryStatus(const String & name_space, const String & id, Protos::AsyncQueryStatus & status) const;
     std::vector<Protos::AsyncQueryStatus> getIntermidiateAsyncQueryStatuses(const String & name_space) const;
 
-    void attachDetachedParts(const String& name_space, const String& from_uuid,
-        const String& to_uuid, const std::vector<String>& detached_part_names,
-        const Protos::DataModelPartVector& parts, const Strings& current_partitions,
-        size_t batch_write_size, size_t batch_delete_size);
-    void detachAttachedParts(const String& name_space, const String& from_uuid,
-        const String& to_uuid, const std::vector<String>& attached_part_names,
-        const std::vector<std::optional<Protos::DataModelPart>>& parts,
-        size_t batch_write_size, size_t batch_delete_size);
-    std::vector<std::pair<String, UInt64>> attachDetachedPartsRaw(const String& name_space,
-        const String& tbl_uuid, const std::vector<String>& part_names,
-        size_t batch_write_size, size_t batch_delete_size);
-    void detachAttachedPartsRaw(const String& name_space, const String& from_uuid,
-        const String& to_uuid, const std::vector<String>& attached_part_names,
-        const std::vector<std::pair<String, String>>& detached_part_metas,
-        size_t batch_write_size, size_t batch_delete_size);
+    void attachDetachedParts(
+        const String & name_space,
+        const String & from_uuid,
+        const String & to_uuid,
+        const std::vector<String> & detached_part_names,
+        const Protos::DataModelPartVector & parts,
+        const Protos::DataModelPartVector & staged_parts,
+        const Strings & current_partitions,
+        const DeleteBitmapMetaPtrVector & detached_bitmaps,
+        const DeleteBitmapMetaPtrVector & bitmaps,
+        size_t batch_write_size,
+        size_t batch_delete_size);
+    void detachAttachedParts(
+        const String & name_space,
+        const String & from_uuid,
+        const String & to_uuid,
+        const std::vector<String> & attached_part_names,
+        const std::vector<String> & attached_staged_part_names,
+        const std::vector<std::optional<Protos::DataModelPart>> & parts,
+        const DeleteBitmapMetaPtrVector & attached_bitmaps,
+        const DeleteBitmapMetaPtrVector & committed_bitmaps,
+        size_t batch_write_size,
+        size_t batch_delete_size);
+    std::vector<std::pair<String, UInt64>> attachDetachedPartsRaw(
+        const String & name_space,
+        const String & tbl_uuid,
+        const std::vector<String> & part_names,
+        const std::vector<String> & bitmap_names,
+        size_t batch_write_size,
+        size_t batch_delete_size);
+    void detachAttachedPartsRaw(
+        const String & name_space,
+        const String & from_uuid,
+        const String & to_uuid,
+        const std::vector<String> & attached_part_names,
+        const std::vector<std::pair<String, String>> & detached_part_metas,
+        const std::vector<String> & attached_bitmap_names,
+        const std::vector<std::pair<String, String>> & detached_bitmap_metas,
+        size_t batch_write_size,
+        size_t batch_delete_size);
     IMetaStore::IteratorPtr getDetachedPartsInRange(const String& name_space,
         const String& tbl_uuid, const String& range_start, const String& range_end,
         bool include_start = true, bool include_end = false);
+
+    IMetaStore::IteratorPtr getDetachedDeleteBitmapsInRange(
+        const String & name_space,
+        const String & tbl_uuid,
+        const String & range_start,
+        const String & range_end,
+        bool include_start = true,
+        bool include_end = false);
 
     /**
      * @brief Get all items in the trash state. This is a GC related function.
@@ -964,6 +1019,7 @@ public:
      * @param limit Limit the results, disabled by passing 0.
      */
     IMetaStore::IteratorPtr getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit);
+    IMetaStore::IteratorPtr getAllDeleteBitmaps(const String & name_space, const String & table_uuid);
 
     // Access Entities
     String getAccessEntity(EntityType type, const String & name_space, const String & name) const;

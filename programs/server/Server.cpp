@@ -565,6 +565,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     global_context->initCnchConfig(config());
     global_context->initRootConfig(config());
+    global_context->initPreloadThrottler();
     const auto & root_config = global_context->getRootConfig();
 
 

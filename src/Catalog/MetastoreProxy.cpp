@@ -168,7 +168,7 @@ std::vector<Protos::DataModelDB> MetastoreProxy::getTrashDBs(const String & name
     std::vector<Protos::DataModelDB> res;
     auto it = metastore_ptr->getByPrefix(dbTrashPrefix(name_space));
     while(it->next())
-    { 
+    {
         Protos::DataModelDB db_model;
         db_model.ParseFromString(it->value());
         res.emplace_back(db_model);
@@ -804,8 +804,16 @@ void MetastoreProxy::dropAllPartInTable(const String & name_space, const String 
 {
     /// clear data parts metadata as well as partition metadata
     metastore_ptr->clean(dataPartPrefix(name_space, uuid));
+    metastore_ptr->clean(stagedDataPartPrefix(name_space, uuid));
     metastore_ptr->clean(tablePartitionInfoPrefix(name_space, uuid));
     metastore_ptr->clean(detachedPartPrefix(name_space, uuid));
+}
+
+void MetastoreProxy::dropAllDeleteBitmapInTable(const String & name_space, const String & uuid)
+{
+    /// clear delete bitmaps metadata
+    metastore_ptr->clean(deleteBitmapPrefix(name_space, uuid));
+    metastore_ptr->clean(detachedDeleteBitmapKeyPrefix(name_space, uuid));
 }
 
 IMetaStore::IteratorPtr MetastoreProxy::getStagedParts(const String & name_space, const String & uuid)
@@ -2150,15 +2158,27 @@ private:
     BatchCommitRequest batch_commit_request;
 };
 
-void MetastoreProxy::attachDetachedParts(const String& name_space, const String& from_uuid,
-    const String& to_uuid, const std::vector<String>& detached_part_names,
-    const Protos::DataModelPartVector& parts, const Strings& current_partitions,
-    size_t batch_write_size, size_t batch_delete_size)
+void MetastoreProxy::attachDetachedParts(
+    const String & name_space,
+    const String & from_uuid,
+    const String & to_uuid,
+    const std::vector<String> & detached_part_names,
+    const Protos::DataModelPartVector & parts,
+    const Protos::DataModelPartVector & staged_parts,
+    const Strings & current_partitions,
+    const DeleteBitmapMetaPtrVector & detached_bitmaps,
+    const DeleteBitmapMetaPtrVector & bitmaps,
+    size_t batch_write_size,
+    size_t batch_delete_size)
 {
-    if (detached_part_names.size() != static_cast<size_t>(parts.parts_size()))
+    if (detached_part_names.size() != static_cast<size_t>(parts.parts_size() + staged_parts.parts_size()))
     {
-        throw Exception(fmt::format("Detached part names' size {} didn't match parts meta size {}",
-            detached_part_names.size(), parts.parts_size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Detached part names' size {} didn't match (parts meta size {} plus staged_parts meta size {})",
+            detached_part_names.size(),
+            parts.parts_size(),
+            staged_parts.parts_size());
     }
     if (detached_part_names.empty())
     {
@@ -2175,16 +2195,27 @@ void MetastoreProxy::attachDetachedParts(const String& name_space, const String&
         {
             auto info_ptr = createPartInfoFromModel(parts.parts(idx).part_info());
             String part_key = dataPartKey(name_space, to_uuid, info_ptr->getPartName());
-            LOG_TRACE(&Poco::Logger::get("MetaStore"), fmt::format("[attachDetachedParts] Write part record {}",
-                part_key));
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedParts] Write part record {}", part_key);
 
-            if (!existing_partitions.contains(info_ptr->partition_id)
-                && !partition_map.contains(info_ptr->partition_id))
+            if (!existing_partitions.contains(info_ptr->partition_id) && !partition_map.contains(info_ptr->partition_id))
             {
                 partition_map.emplace(info_ptr->partition_id, parts.parts(idx).partition_minmax());
             }
 
             batch_writer.addPut(part_key, parts.parts(idx).SerializeAsString());
+        }
+        for (size_t idx = 0, parts_size = staged_parts.parts_size(); idx < parts_size; ++idx)
+        {
+            auto info_ptr = createPartInfoFromModel(staged_parts.parts(idx).part_info());
+            String staged_part_key = stagedDataPartKey(name_space, to_uuid, info_ptr->getPartName());
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedStagedParts] Write part record {}", staged_part_key);
+
+            if (!existing_partitions.contains(info_ptr->partition_id) && !partition_map.contains(info_ptr->partition_id))
+            {
+                partition_map.emplace(info_ptr->partition_id, staged_parts.parts(idx).partition_minmax());
+            }
+
+            batch_writer.addPut(staged_part_key, staged_parts.parts(idx).SerializeAsString());
         }
         Protos::PartitionMeta partition_model;
         for (const auto& [partition_id, partition_minmax] : partition_map)
@@ -2220,19 +2251,57 @@ void MetastoreProxy::attachDetachedParts(const String& name_space, const String&
         }
         batch_writer.finalize();
     }
+
+    // Write new meta of delete bitmaps
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_write_size);
+        for (auto & bitmap_meta: bitmaps)
+        {
+            const auto & bitmap_model_meta = bitmap_meta->getModel();
+            String detached_bitmap_meta_key = deleteBitmapKey(name_space, to_uuid, *bitmap_model_meta);
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[attachDetachedDeleteBitmaps] Write new bitmap meta record {}", detached_bitmap_meta_key);
+
+            batch_writer.addPut(detached_bitmap_meta_key, bitmap_model_meta->SerializeAsString());
+        }
+        batch_writer.finalize();
+    }
+
+    // Delete detached meta of delete bitmaps
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_delete_size);
+        for (auto & bitmap_meta: detached_bitmaps)
+        {
+            String detached_bitmap_meta_key = detachedDeleteBitmapKey(name_space, from_uuid, *bitmap_meta->getModel());
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[detachAttachedDeleteBitmaps] Delete detached bitmap meta record {}", detached_bitmap_meta_key);
+
+            batch_writer.addDelete(detached_bitmap_meta_key);
+        }
+        batch_writer.finalize();
+    }
 }
 
-void MetastoreProxy::detachAttachedParts(const String& name_space, const String& from_uuid,
-    const String& to_uuid, const std::vector<String>& attached_part_names,
-    const std::vector<std::optional<Protos::DataModelPart>>& parts,
-    size_t batch_write_size, size_t batch_delete_size)
+void MetastoreProxy::detachAttachedParts(
+    const String & name_space,
+    const String & from_uuid,
+    const String & to_uuid,
+    const std::vector<String> & attached_part_names,
+    const std::vector<String> & attached_staged_part_names,
+    const std::vector<std::optional<Protos::DataModelPart>> & parts,
+    const DeleteBitmapMetaPtrVector & attached_bitmaps,
+    const DeleteBitmapMetaPtrVector & committed_bitmaps,
+    size_t batch_write_size,
+    size_t batch_delete_size)
 {
-    if (attached_part_names.size() != parts.size())
+    if (attached_part_names.size() + attached_staged_part_names.size() != parts.size())
     {
-        throw Exception(fmt::format("Attached part names's count {} and parts count {} missmatch",
-            attached_part_names.size(), parts.size()), ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "(Attached part names's count {} plus attached staged part names's size count {}) and parts count {} mismatch",
+            attached_part_names.size(),
+            attached_staged_part_names.size(),
+            parts.size());
     }
-    if (attached_part_names.empty())
+    if (parts.empty())
     {
         return;
     }
@@ -2267,15 +2336,57 @@ void MetastoreProxy::detachAttachedParts(const String& name_space, const String&
 
             batch_writer.addDelete(part_key);
         }
+        for (size_t idx = 0; idx < attached_staged_part_names.size(); ++idx)
+        {
+            String part_key = stagedDataPartKey(name_space, from_uuid, attached_staged_part_names[idx]);
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "[detachAttachedParts] Delete staged part record {}", part_key);
+
+            batch_writer.addDelete(part_key);
+        }
+
+        batch_writer.finalize();
+    }
+
+    // Write detached meta of delete bitmaps
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_write_size);
+        for (auto & bitmap_meta : committed_bitmaps)
+        {
+            const auto & bitmap_model_meta = bitmap_meta->getModel();
+            String detached_bitmap_meta_key = detachedDeleteBitmapKey(name_space, to_uuid, *bitmap_model_meta);
+            LOG_TRACE(
+                &Poco::Logger::get("MetaStore"),
+                "[detachAttachedDeleteBitmaps] Write detach bitmap meta record {}",
+                detached_bitmap_meta_key);
+
+            batch_writer.addPut(detached_bitmap_meta_key, bitmap_model_meta->SerializeAsString());
+        }
+        batch_writer.finalize();
+    }
+
+    // Delete part meta of delete bitmaps
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_delete_size);
+        for (auto & bitmap_meta : attached_bitmaps)
+        {
+            String detached_bitmap_meta_key = deleteBitmapKey(name_space, from_uuid, *bitmap_meta->getModel());
+            LOG_TRACE(
+                &Poco::Logger::get("MetaStore"), "[detachAttachedDeleteBitmaps] Delete bitmap meta record {}", detached_bitmap_meta_key);
+
+            batch_writer.addDelete(detached_bitmap_meta_key);
+        }
         batch_writer.finalize();
     }
 }
 
-// This method is used only for detach part's rollback, so we won't write
-// partition list here
-std::vector<std::pair<String, UInt64>> MetastoreProxy::attachDetachedPartsRaw(const String& name_space,
-    const String& tbl_uuid, const std::vector<String>& part_names,
-    size_t batch_write_size, size_t batch_delete_size)
+// This method is used only for detach part's rollback, so we won't write partition list here
+std::vector<std::pair<String, UInt64>> MetastoreProxy::attachDetachedPartsRaw(
+    const String & name_space,
+    const String & tbl_uuid,
+    const std::vector<String> & part_names,
+    const std::vector<String> & bitmap_names,
+    size_t batch_write_size,
+    size_t batch_delete_size)
 {
     if (part_names.empty())
     {
@@ -2320,13 +2431,32 @@ std::vector<std::pair<String, UInt64>> MetastoreProxy::attachDetachedPartsRaw(co
         batch_writer.finalize();
     }
 
+    // Delete detached bitmap metas
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_delete_size);
+        for (size_t i = 0; i < bitmap_names.size(); ++i)
+        {
+            String detached_bitmap_meta_key = detachedDeleteBitmapKey(name_space, tbl_uuid, bitmap_names[i]);
+            LOG_TRACE(&Poco::Logger::get("MS"), "[attachDetachedPartsRaw] Delete detached bitmap meta record {}", detached_bitmap_meta_key);
+
+            batch_writer.addDelete(detached_bitmap_meta_key);
+        }
+        batch_writer.finalize();
+    }
+
     return metas;
 }
 
-void MetastoreProxy::detachAttachedPartsRaw(const String& name_space, const String& from_uuid,
-    const String& to_uuid, const std::vector<String>& attached_part_names,
-    const std::vector<std::pair<String, String>>& detached_part_metas,
-    size_t batch_write_size, size_t batch_delete_size)
+void MetastoreProxy::detachAttachedPartsRaw(
+    const String & name_space,
+    const String & from_uuid,
+    const String & to_uuid,
+    const std::vector<String> & attached_part_names,
+    const std::vector<std::pair<String, String>> & detached_part_metas,
+    const std::vector<String> & attached_bitmap_names,
+    const std::vector<std::pair<String, String>> & detached_bitmap_metas,
+    size_t batch_write_size,
+    size_t batch_delete_size)
 {
     // Write detach meta first
     {
@@ -2347,11 +2477,42 @@ void MetastoreProxy::detachAttachedPartsRaw(const String& name_space, const Stri
         MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_delete_size);
         for (const String& attached_part_name : attached_part_names)
         {
+            /// We don't know whether attach a staged part or normal part, just delete both.
             String attached_part_key = dataPartKey(name_space, from_uuid, attached_part_name);
             LOG_TRACE(&Poco::Logger::get("MetaStore"), "Delete part record {} in detachAttachedPartsRaw",
                 attached_part_key);
 
+            String attached_staged_part_key = stagedDataPartKey(name_space, from_uuid, attached_part_name);
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "Delete staged part record {} in detachAttachedPartsRaw", attached_staged_part_key);
+
             batch_writer.addDelete(attached_part_key);
+            batch_writer.addDelete(attached_staged_part_key);
+        }
+        batch_writer.finalize();
+    }
+
+    // Write detach bitmap metas
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_write_size);
+        for (const auto & [detached_bitmap_name, detached_bitmap_meta] : detached_bitmap_metas)
+        {
+            String detached_bitmap_key = detachedDeleteBitmapKey(name_space, to_uuid, detached_bitmap_name);
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "Write detached bitmap record {} in detachAttachedPartsRaw", detached_bitmap_key);
+
+            batch_writer.addPut(detached_bitmap_key, detached_bitmap_meta);
+        }
+        batch_writer.finalize();
+    }
+
+    // Delete attached bitmap metas
+    {
+        MetastoreMultiWriteInBatch batch_writer(metastore_ptr, batch_delete_size);
+        for (const String & attached_bitmap_name : attached_bitmap_names)
+        {
+            String attached_bitmap_key = deleteBitmapKey(name_space, from_uuid, attached_bitmap_name);
+            LOG_TRACE(&Poco::Logger::get("MetaStore"), "Delete bitmap record {} in detachAttachedPartsRaw", attached_bitmap_key);
+
+            batch_writer.addDelete(attached_bitmap_key);
         }
         batch_writer.finalize();
     }
@@ -2446,9 +2607,26 @@ bool MetastoreProxy::putAccessEntity(EntityType type, const String & name_space,
     }
 }
 
+IMetaStore::IteratorPtr MetastoreProxy::getDetachedDeleteBitmapsInRange(
+    const String & name_space,
+    const String & tbl_uuid,
+    const String & range_start,
+    const String & range_end,
+    bool include_start,
+    bool include_end)
+{
+    String prefix = detachedDeleteBitmapKeyPrefix(name_space, tbl_uuid);
+    return metastore_ptr->getByRange(prefix + range_start, prefix + range_end, include_start, include_end);
+}
+
 IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit)
 {
     return metastore_ptr->getByPrefix(trashItemsPrefix(name_space, table_uuid), limit);
+}
+
+IMetaStore::IteratorPtr MetastoreProxy::getAllDeleteBitmaps(const String & name_space, const String & table_uuid)
+{
+    return metastore_ptr->getByPrefix(deleteBitmapPrefix(name_space, table_uuid));
 }
 
 } /// end of namespace DB::Catalog

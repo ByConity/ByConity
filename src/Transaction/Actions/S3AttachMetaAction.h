@@ -26,11 +26,19 @@ struct S3AttachPartsInfo
 {
 public:
     S3AttachPartsInfo(
-        const StoragePtr & from_tbl_, const IMergeTreeDataPartsVector & former_parts_, const MutableMergeTreeDataPartsCNCHVector & parts_);
+        const StoragePtr & from_tbl_,
+        const IMergeTreeDataPartsVector & former_parts_,
+        const MutableMergeTreeDataPartsCNCHVector & parts_,
+        const MutableMergeTreeDataPartsCNCHVector & staged_parts_,
+        const DeleteBitmapMetaPtrVector & detached_bitmaps_,
+        const DeleteBitmapMetaPtrVector & bitmaps_);
 
     StoragePtr from_tbl;
     const IMergeTreeDataPartsVector & former_parts;
     const MutableMergeTreeDataPartsCNCHVector & parts;
+    const MutableMergeTreeDataPartsCNCHVector & staged_parts;
+    const DeleteBitmapMetaPtrVector & detached_bitmaps;
+    const DeleteBitmapMetaPtrVector & bitmaps;
 };
 
 class S3AttachMetaAction : public IAction
@@ -43,15 +51,18 @@ public:
         , to_tbl(target_tbl)
         , former_parts(parts_info_.former_parts)
         , parts(parts_info_.parts)
+        , staged_parts(parts_info_.staged_parts)
+        , detached_bitmaps(parts_info_.detached_bitmaps)
+        , bitmaps(parts_info_.bitmaps)
     {
     }
 
     virtual void executeV1(TxnTimestamp commit_time) override;
     virtual void executeV2() override;
     virtual void abort() override;
-    virtual void postCommit(TxnTimestamp comit_time) override;
+    virtual void postCommit(TxnTimestamp commit_time) override;
 
-    static void collectUndoResourcesForCommit(const UndoResources & resources, NameSet & part_names);
+    static void collectUndoResourcesForCommit(const UndoResources & resources, UndoResourceNames & resource_names);
     static void abortByUndoBuffer(const Context & ctx, const StoragePtr & tbl, const UndoResources & resources);
 
 private:
@@ -62,6 +73,12 @@ private:
     // replace will write a new drop range part, which should be removed when rollback
     IMergeTreeDataPartsVector former_parts;
     MutableMergeTreeDataPartsCNCHVector parts;
+    MutableMergeTreeDataPartsCNCHVector staged_parts;
+
+    DeleteBitmapMetaPtrVector detached_bitmaps;
+    DeleteBitmapMetaPtrVector bitmaps;
+
+    bool executed{false};
 
     Poco::Logger * log{&Poco::Logger::get("S3AttachMetaAction")};
 };

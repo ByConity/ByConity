@@ -174,6 +174,8 @@ public:
     size_t getSize() const { return nodes.size(); }
 
     void setResetStepId(bool reset_id) { reset_step_id = reset_id; }
+
+    QueryPlanPtr copy(ContextMutablePtr context);
 private:
     Poco::Logger * log = &Poco::Logger::get("QueryPlan");
     Nodes nodes;

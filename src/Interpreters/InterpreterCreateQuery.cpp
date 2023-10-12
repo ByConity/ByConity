@@ -97,6 +97,8 @@
 #include <Catalog/Catalog.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
 
+#include <fmt/format.h>
+
 namespace DB
 {
 
@@ -700,6 +702,22 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
     TableProperties properties;
     TableLockHolder as_storage_lock;
 
+    auto check_view_columns_same_with_select = [&](const ColumnsDescription & columns) {
+        if (!create.attach && create.is_ordinary_view && create.select && getContext()->getSettingsRef().create_view_check_column_names)
+        {
+            Block select_sample = InterpreterSelectWithUnionQuery::getSampleBlock(create.select->clone(), getContext());
+            Names select_names = select_sample.getNames();
+            Names column_names = columns.getNamesOfOrdinary();
+
+            if (select_names != column_names)
+                throw Exception(
+                    ErrorCodes::INCORRECT_QUERY,
+                    "Columns of select query are not same with the column list, select query: {}, columns list: {}",
+                    fmt::join(select_names, ","),
+                    fmt::join(column_names, ","));
+        }
+    };
+
     if (create.columns_list)
     {
         if (create.as_table_function
@@ -712,6 +730,7 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
         if (create.columns_list->columns)
         {
             properties.columns = getColumnsDescription(*create.columns_list->columns, getContext(), create.attach);
+            check_view_columns_same_with_select(properties.columns);
         }
 
         if (create.columns_list->indices)
@@ -739,6 +758,7 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
         as_storage_lock = as_storage->lockForShare(getContext()->getCurrentQueryId(), getContext()->getSettingsRef().lock_acquire_timeout);
         auto as_storage_metadata = as_storage->getInMemoryMetadataPtr();
         properties.columns = as_storage_metadata->getColumns();
+        check_view_columns_same_with_select(properties.columns);
 
         /// Secondary indices make sense only for MergeTree family of storage engines.
         /// We should not copy them for other storages.
@@ -763,6 +783,7 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
         /// Table function without columns list.
         auto table_function = TableFunctionFactory::instance().get(create.as_table_function, getContext());
         properties.columns = table_function->getActualTableStructure(getContext());
+        check_view_columns_same_with_select(properties.columns);
         assert(!properties.columns.empty());
     }
     else if (create.is_dictionary)

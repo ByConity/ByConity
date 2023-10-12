@@ -167,7 +167,7 @@ ASTs TrivialCountVisitor::replaceColumnsAlias(ASTs & filters, NamesWithAliases &
         std::unordered_map<String, String> inv_alias;
         for (auto & item : column_alias)
             inv_alias.emplace(item.second, item.first);
-        auto mapper = SymbolMapper::symbolMapper(inv_alias);
+        auto mapper = SymbolMapper::simpleMapper(inv_alias);
 
         std::vector<ConstASTPtr> conjuncts;
         for (auto & filter : filter_conjuncts)

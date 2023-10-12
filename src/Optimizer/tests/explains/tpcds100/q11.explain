@@ -36,12 +36,12 @@ Projection Est. 100 rows
                   │  │           │     Condition: `expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))_3` > 0.
                   │  │           └─ MergingAggregated Est. 1902471 rows
                   │  │              └─ Repartition Exchange Est. 1902471 rows
-                  │  │                 │     Partition by: {d_year_14, ws_bill_customer_sk_3}
+                  │  │                 │     Partition by: {d_year_15, ws_bill_customer_sk_3}
                   │  │                 └─ Aggregating Est. 1902471 rows
-                  │  │                    │     Group by: {d_year_14, ws_bill_customer_sk_3}
+                  │  │                    │     Group by: {d_year_15, ws_bill_customer_sk_3}
                   │  │                    │     Aggregates: expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))_3:=AggNull(sum)(expr#minus(ws_ext_list_price, ws_ext_discount_amt)_3)
                   │  │                    └─ Projection Est. 14199978 rows
-                  │  │                       │     Expressions: [d_year_14, ws_bill_customer_sk_3], expr#minus(ws_ext_list_price, ws_ext_discount_amt)_3:=ws_ext_list_price_3 - ws_ext_discount_amt_3
+                  │  │                       │     Expressions: [d_year_15, ws_bill_customer_sk_3], expr#minus(ws_ext_list_price, ws_ext_discount_amt)_3:=ws_ext_list_price_3 - ws_ext_discount_amt_3
                   │  │                       └─ Inner Join Est. 14199978 rows
                   │  │                          │     Condition: ws_sold_date_sk_3 == d_date_sk_7
                   │  │                          │     Runtime Filters Builder: {d_date_sk_7}
@@ -52,79 +52,79 @@ Projection Est. 100 rows
                   │  │                          │           Outputs: ws_bill_customer_sk_3:=ws_bill_customer_sk, ws_ext_discount_amt_3:=ws_ext_discount_amt, ws_ext_list_price_3:=ws_ext_list_price, ws_sold_date_sk_3:=ws_sold_date_sk
                   │  │                          └─ Broadcast Exchange Est. 365 rows
                   │  │                             └─ Filter Est. 365 rows
-                  │  │                                │     Condition: d_year_14 = 2001
+                  │  │                                │     Condition: d_year_15 = 2001
                   │  │                                └─ TableScan tpcds100.date_dim Est. 73049 rows
                   │  │                                         Where: d_year = 2001
-                  │  │                                         Outputs: d_date_sk_7:=d_date_sk, d_year_14:=d_year
+                  │  │                                         Outputs: d_date_sk_7:=d_date_sk, d_year_15:=d_year
                   │  └─ Repartition Exchange Est. 1995118 rows
                   │     │     Partition by: {ss_customer_sk_3}
                   │     └─ Projection Est. 1995119 rows
-                  │        │     Expressions: expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_3:=`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_8`, ss_customer_sk_3:=ss_customer_sk_8
+                  │        │     Expressions: expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_3:=`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_9`, ss_customer_sk_3:=ss_customer_sk_9
                   │        └─ MergingAggregated Est. 1995119 rows
                   │           └─ Repartition Exchange Est. 1995119 rows
-                  │              │     Partition by: {d_year_10, ss_customer_sk_8}
+                  │              │     Partition by: {d_year_11, ss_customer_sk_9}
                   │              └─ Aggregating Est. 1995119 rows
-                  │                 │     Group by: {d_year_10, ss_customer_sk_8}
-                  │                 │     Aggregates: expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_8:=AggNull(sum)(expr#minus(ss_ext_list_price, ss_ext_discount_amt)_2)
+                  │                 │     Group by: {d_year_11, ss_customer_sk_9}
+                  │                 │     Aggregates: expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_9:=AggNull(sum)(expr#minus(ss_ext_list_price, ss_ext_discount_amt)_2)
                   │                 └─ Projection Est. 56803763 rows
-                  │                    │     Expressions: [d_year_10, ss_customer_sk_8], expr#minus(ss_ext_list_price, ss_ext_discount_amt)_2:=ss_ext_list_price_2 - ss_ext_discount_amt_2
+                  │                    │     Expressions: [d_year_11, ss_customer_sk_9], expr#minus(ss_ext_list_price, ss_ext_discount_amt)_2:=ss_ext_list_price_2 - ss_ext_discount_amt_2
                   │                    └─ Inner Join Est. 56803763 rows
                   │                       │     Condition: ss_sold_date_sk_2 == d_date_sk_4
                   │                       │     Runtime Filters Builder: {d_date_sk_4}
                   │                       ├─ Filter Est. 275049804 rows
-                  │                       │  │     Condition: isNotNull(ss_customer_sk_8) Runtime Filters: {ss_customer_sk_8, ss_sold_date_sk_2}
+                  │                       │  │     Condition: isNotNull(ss_customer_sk_9) Runtime Filters: {ss_customer_sk_9, ss_sold_date_sk_2}
                   │                       │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                   │                       │           Where: isNotNull(ss_customer_sk) Runtime Filters: {ss_customer_sk, ss_sold_date_sk}
-                  │                       │           Outputs: ss_customer_sk_8:=ss_customer_sk, ss_ext_discount_amt_2:=ss_ext_discount_amt, ss_ext_list_price_2:=ss_ext_list_price, ss_sold_date_sk_2:=ss_sold_date_sk
+                  │                       │           Outputs: ss_customer_sk_9:=ss_customer_sk, ss_ext_discount_amt_2:=ss_ext_discount_amt, ss_ext_list_price_2:=ss_ext_list_price, ss_sold_date_sk_2:=ss_sold_date_sk
                   │                       └─ Broadcast Exchange Est. 365 rows
                   │                          └─ Filter Est. 365 rows
-                  │                             │     Condition: d_year_10 = 2002
+                  │                             │     Condition: d_year_11 = 2002
                   │                             └─ TableScan tpcds100.date_dim Est. 73049 rows
                   │                                      Where: d_year = 2002
-                  │                                      Outputs: d_date_sk_4:=d_date_sk, d_year_10:=d_year
+                  │                                      Outputs: d_date_sk_4:=d_date_sk, d_year_11:=d_year
                   └─ Inner Join Est. 3804940 rows
                      │     Condition: ss_customer_sk_2 == ss_customer_sk_5
                      │     Runtime Filters Builder: {ss_customer_sk_5}
                      ├─ Repartition Exchange Est. 1995118 rows
                      │  │     Partition by: {ss_customer_sk_2}
                      │  └─ Projection Est. 1795607 rows
-                     │     │     Expressions: expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_2:=`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_6`, ss_customer_sk_2:=ss_customer_sk_6
+                     │     │     Expressions: expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_2:=`expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_7`, ss_customer_sk_2:=ss_customer_sk_7
                      │     └─ Filter Est. 1795607 rows
-                     │        │     Condition: `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_6` > 0.
+                     │        │     Condition: `expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_7` > 0.
                      │        └─ MergingAggregated Est. 1995119 rows
                      │           └─ Repartition Exchange Est. 1995119 rows
-                     │              │     Partition by: {d_year_7, ss_customer_sk_6}
+                     │              │     Partition by: {d_year_8, ss_customer_sk_7}
                      │              └─ Aggregating Est. 1995119 rows
-                     │                 │     Group by: {d_year_7, ss_customer_sk_6}
-                     │                 │     Aggregates: expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_6:=AggNull(sum)(expr#minus(ss_ext_list_price, ss_ext_discount_amt)_1)
+                     │                 │     Group by: {d_year_8, ss_customer_sk_7}
+                     │                 │     Aggregates: expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_7:=AggNull(sum)(expr#minus(ss_ext_list_price, ss_ext_discount_amt)_1)
                      │                 └─ Projection Est. 56803763 rows
-                     │                    │     Expressions: [d_year_7, ss_customer_sk_6], expr#minus(ss_ext_list_price, ss_ext_discount_amt)_1:=ss_ext_list_price_1 - ss_ext_discount_amt_1
+                     │                    │     Expressions: [d_year_8, ss_customer_sk_7], expr#minus(ss_ext_list_price, ss_ext_discount_amt)_1:=ss_ext_list_price_1 - ss_ext_discount_amt_1
                      │                    └─ Inner Join Est. 56803763 rows
                      │                       │     Condition: ss_sold_date_sk_1 == d_date_sk_2
                      │                       │     Runtime Filters Builder: {d_date_sk_2}
                      │                       ├─ Filter Est. 275049804 rows
-                     │                       │  │     Condition: isNotNull(ss_customer_sk_6) Runtime Filters: {ss_customer_sk_6, ss_sold_date_sk_1}
+                     │                       │  │     Condition: isNotNull(ss_customer_sk_7) Runtime Filters: {ss_customer_sk_7, ss_sold_date_sk_1}
                      │                       │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                      │                       │           Where: isNotNull(ss_customer_sk) Runtime Filters: {ss_customer_sk, ss_sold_date_sk}
-                     │                       │           Outputs: ss_customer_sk_6:=ss_customer_sk, ss_ext_discount_amt_1:=ss_ext_discount_amt, ss_ext_list_price_1:=ss_ext_list_price, ss_sold_date_sk_1:=ss_sold_date_sk
+                     │                       │           Outputs: ss_customer_sk_7:=ss_customer_sk, ss_ext_discount_amt_1:=ss_ext_discount_amt, ss_ext_list_price_1:=ss_ext_list_price, ss_sold_date_sk_1:=ss_sold_date_sk
                      │                       └─ Broadcast Exchange Est. 365 rows
                      │                          └─ Filter Est. 365 rows
-                     │                             │     Condition: d_year_7 = 2001
+                     │                             │     Condition: d_year_8 = 2001
                      │                             └─ TableScan tpcds100.date_dim Est. 73049 rows
                      │                                      Where: d_year = 2001
-                     │                                      Outputs: d_date_sk_2:=d_date_sk, d_year_7:=d_year
+                     │                                      Outputs: d_date_sk_2:=d_date_sk, d_year_8:=d_year
                      └─ Repartition Exchange Est. 1902470 rows
                         │     Partition by: {ss_customer_sk_5}
                         └─ Projection Est. 1902471 rows
                            │     Expressions: expr#sum(minus(ss_ext_list_price, ss_ext_discount_amt))_5:=`expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))_4`, ss_customer_sk_5:=ws_bill_customer_sk_4
                            └─ MergingAggregated Est. 1902471 rows
                               └─ Repartition Exchange Est. 1902471 rows
-                                 │     Partition by: {d_year_17, ws_bill_customer_sk_4}
+                                 │     Partition by: {d_year_18, ws_bill_customer_sk_4}
                                  └─ Aggregating Est. 1902471 rows
-                                    │     Group by: {d_year_17, ws_bill_customer_sk_4}
+                                    │     Group by: {d_year_18, ws_bill_customer_sk_4}
                                     │     Aggregates: expr#sum(minus(ws_ext_list_price, ws_ext_discount_amt))_4:=AggNull(sum)(expr#minus(ws_ext_list_price, ws_ext_discount_amt)_4)
                                     └─ Projection Est. 14199978 rows
-                                       │     Expressions: [d_year_17, ws_bill_customer_sk_4], expr#minus(ws_ext_list_price, ws_ext_discount_amt)_4:=ws_ext_list_price_4 - ws_ext_discount_amt_4
+                                       │     Expressions: [d_year_18, ws_bill_customer_sk_4], expr#minus(ws_ext_list_price, ws_ext_discount_amt)_4:=ws_ext_list_price_4 - ws_ext_discount_amt_4
                                        └─ Inner Join Est. 14199978 rows
                                           │     Condition: ws_sold_date_sk_4 == d_date_sk_9
                                           │     Runtime Filters Builder: {d_date_sk_9}
@@ -135,8 +135,8 @@ Projection Est. 100 rows
                                           │           Outputs: ws_bill_customer_sk_4:=ws_bill_customer_sk, ws_ext_discount_amt_4:=ws_ext_discount_amt, ws_ext_list_price_4:=ws_ext_list_price, ws_sold_date_sk_4:=ws_sold_date_sk
                                           └─ Broadcast Exchange Est. 365 rows
                                              └─ Filter Est. 365 rows
-                                                │     Condition: d_year_17 = 2002
+                                                │     Condition: d_year_18 = 2002
                                                 └─ TableScan tpcds100.date_dim Est. 73049 rows
                                                          Where: d_year = 2002
-                                                         Outputs: d_date_sk_9:=d_date_sk, d_year_17:=d_year
+                                                         Outputs: d_date_sk_9:=d_date_sk, d_year_18:=d_year
 note: Runtime Filter is applied for 11 times.

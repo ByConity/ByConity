@@ -57,6 +57,14 @@ public:
         return it->second;
     }
 
+    IDiskCachePtr tryGet(DiskCacheType type)
+    {
+        auto it = caches.find(type);
+        if (it == caches.end())
+            return nullptr;
+        return it->second;
+    }
+
 private:
     std::unordered_map<DiskCacheType, IDiskCachePtr> caches;
 };

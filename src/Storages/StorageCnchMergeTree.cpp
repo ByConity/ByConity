@@ -2325,11 +2325,34 @@ void StorageCnchMergeTree::dropPartsImpl(
                     }
                 }
 
+                LocalDeleteBitmaps new_bitmaps;
+                if (metadata_snapshot->hasUniqueKey() && !local_context->getSettingsRef().enable_unique_table_detach_ignore_delete_bitmap)
+                {
+                    /// Create new base delete bitmap, it will be convenient to handle only one necessary bitmap meta.
+                    getDeleteBitmapMetaForParts(parts, local_context, local_context->getCurrentCnchStartTime(), /*force_found*/ false);
+                    for (size_t i = 0; i < parts.size(); ++i)
+                    {
+                        IMergeTreeDataPartPtr curr_part = parts[i];
+                        while (curr_part)
+                        {
+                            auto new_bitmap = curr_part->createNewBaseDeleteBitmap(txn->getTransactionID());
+                            if (new_bitmap)
+                            {
+                                resources.push_back(
+                                    new_bitmap->getUndoResource(txn->getTransactionID(), UndoResourceType::S3DetachDeleteBitmap));
+                                new_bitmaps.push_back(std::move(new_bitmap));
+                            }
+                            curr_part = curr_part->tryGetPreviousPart();
+                        }
+                    }
+                }
+
                 // Write undo buffer first
                 local_context->getCnchCatalog()->writeUndoBuffer(
                     UUIDHelpers::UUIDToString(getStorageUUID()), txn->getTransactionID(), resources);
 
-                auto action = txn->createAction<S3DetachMetaAction>(shared_from_this(), parts);
+                DeleteBitmapMetaPtrVector bitmap_metas = dumpDeleteBitmaps(*this, new_bitmaps);
+                auto action = txn->createAction<S3DetachMetaAction>(shared_from_this(), parts, bitmap_metas);
                 txn->appendAction(action);
                 break;
             }

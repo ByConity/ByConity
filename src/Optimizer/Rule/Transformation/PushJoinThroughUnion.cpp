@@ -17,9 +17,10 @@
 
 #include <Optimizer/Rule/Patterns.h>
 #include <QueryPlan/JoinStep.h>
-#include <QueryPlan/PlanCopier.h>
+#include <QueryPlan/PlanSymbolReallocator.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/UnionStep.h>
+#include "QueryPlan/SymbolAllocator.h"
 
 namespace DB
 {
@@ -49,12 +50,11 @@ TransformResult PushJoinThroughUnion::transformImpl(PlanNodePtr node, const Capt
     for (size_t i = 0; i < union_node->getChildren().size(); i++)
     {
         // reallocate if need
-        std::unordered_map<std::string, std::string> reallocated_names;
+        std::unordered_map<std::string, std::string> symbol_mapping;
         PlanNodePtr right_node = node->getChildren()[1];
-        if (PlanCopier::isOverlapping(union_node->getChildren()[i]->getStep()->getOutputStream(), join.getInputStreams()[1]))
+        if (PlanSymbolReallocator::isOverlapping(union_node->getChildren()[i]->getStep()->getOutputStream(), join.getInputStreams()[1]))
         {
-            auto projection = PlanCopier::reallocateWithProjection(join.getInputStreams()[1], symbol_allocator, reallocated_names);
-            right_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(projection), PlanNodes{right_node});
+            right_node = PlanSymbolReallocator::reallocate(right_node, context, symbol_mapping);
         }
 
         // copy join
@@ -63,9 +63,9 @@ TransformResult PushJoinThroughUnion::transformImpl(PlanNodePtr node, const Capt
             {
                 return unionn.getOutToInputs().at(symbol)[i];
             }
-            if (reallocated_names.contains(symbol))
+            if (symbol_mapping.contains(symbol))
             {
-                return reallocated_names.at(symbol);
+                return symbol_mapping.at(symbol);
             }
             return symbol;
         }};
