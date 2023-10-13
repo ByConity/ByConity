@@ -73,6 +73,7 @@ static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & con
         .read_settings = context->getReadSettings(),
         .save_marks_in_cache = true,
         .checksum_on_read = context->getSettingsRef().checksum_on_read,
+        .read_source_bitmap = !context->getSettingsRef().use_encoded_bitmap
     };
 }
 

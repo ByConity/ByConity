@@ -156,6 +156,10 @@ void NamesAndTypesList::readText(ReadBuffer & buf)
             {
                 it.type->setFlags(TYPE_COMPRESSION_FLAG);
             }
+            else if (options == "BitEngineEncode")
+            {
+                const_cast<IDataType *>(it.type.get())->setFlags(TYPE_BITENGINE_ENCODE_FLAG);
+            }
             else
             {
                 // TBD: ignore for now, or throw exception
@@ -198,6 +202,12 @@ void NamesAndTypesList::writeText(WriteBuffer & buf) const
                 writeChar('\t', buf);
                 writeString("KV", buf);
                 flag ^= TYPE_MAP_KV_STORE_FLAG;
+            }
+            else if (flag & TYPE_BITENGINE_ENCODE_FLAG)
+            {
+                writeChar('\t', buf);
+                writeString("BitEngineEncode", buf);
+                flag ^= TYPE_BITENGINE_ENCODE_FLAG;
             }
             else
                 break;
@@ -310,7 +320,7 @@ NamesAndTypesList NamesAndTypesList::filter(const Names & names) const
     return filter(NameSet(names.begin(), names.end()));
 }
 
-NamesAndTypesList NamesAndTypesList::addTypes(const Names & names) const
+NamesAndTypesList NamesAndTypesList::addTypes(const Names & names, BitEngineReadType bitengine_read_type) const
 {
     /// NOTE: It's better to make a map in `IStorage` than to create it here every time again.
 #if !defined(ARCADIA_BUILD)
@@ -367,7 +377,21 @@ NamesAndTypesList NamesAndTypesList::addTypes(const Names & names) const
                 throw Exception("No column " + name, ErrorCodes::THERE_IS_NO_COLUMN);
             }
 
-            res.emplace_back(name, *it->second);
+            if (isBitmap64(*it->second) && (*it->second)->isBitEngineEncode())
+            { /// Type `BOTH` is used in BitEngineDictionaryManager::checkEncodedPart
+                if (bitengine_read_type == BitEngineReadType::BOTH && res.contains(name))
+                    res.emplace_back(name + BITENGINE_COLUMN_EXTENSION, *it->second);
+                else if (bitengine_read_type == BitEngineReadType::ONLY_ENCODE)
+                { // Type `ONLY_ENCODE` used in BitEngine parts merge
+                    res.emplace_back(name + BITENGINE_COLUMN_EXTENSION, *it->second);
+                }
+                else // Default type `ONLY_SOURCE` is used in encoding and select
+                    res.emplace_back(name, *it->second);
+            }
+            else
+            {
+                res.emplace_back(name, *it->second);
+            }
         }
     }
 

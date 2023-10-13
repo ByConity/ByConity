@@ -56,9 +56,10 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     bool read_with_direct_io_,
     bool take_column_types_from_storage,
     bool quiet,
-    CnchMergePrefetcher::PartFutureFiles* future_files)
+    CnchMergePrefetcher::PartFutureFiles* future_files,
+    BitEngineReadType bitengine_read_type)
     : SourceWithProgress(metadata_snapshot_->getSampleBlockForColumns(
-            columns_to_read_, storage_.getVirtuals(), storage_.getStorageID()))
+            columns_to_read_, storage_.getVirtuals(), storage_.getStorageID(), bitengine_read_type))
     , storage(storage_)
     , metadata_snapshot(metadata_snapshot_)
     , data_part(std::move(data_part_))
@@ -78,11 +79,13 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
     if (take_column_types_from_storage)
     {
         columns_for_reader = metadata_snapshot->getColumns().getByNames(ColumnsDescription::AllPhysical, columns_to_read, false);
+        if (bitengine_read_type != BitEngineReadType::ONLY_SOURCE)
+            columns_for_reader = columns_for_reader.addTypes(columns_for_reader.getNames(), bitengine_read_type);
     }
     else
     {
         /// take columns from data_part
-        columns_for_reader = data_part->getColumns().addTypes(columns_to_read);
+        columns_for_reader = data_part->getColumns().addTypes(columns_to_read, bitengine_read_type);
     }
 
     if (!quiet)
@@ -104,6 +107,7 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
             .buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
         },
         .save_marks_in_cache = false,
+        .read_source_bitmap = true,
     };
 
     if (future_files)

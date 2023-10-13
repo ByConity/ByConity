@@ -116,6 +116,8 @@ private:
 
     void assertOrSetUUID(ASTCreateQuery & create, const DatabasePtr & database) const;
 
+    size_t processIgnoreBitEngineEncode(ColumnsDescription & columns) const;
+
     ASTPtr query_ptr;
 
     /// Skip safety threshold when loading tables.

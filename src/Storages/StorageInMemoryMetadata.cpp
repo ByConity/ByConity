@@ -417,7 +417,10 @@ Block StorageInMemoryMetadata::getSampleBlock(bool include_func_columns) const
 }
 
 Block StorageInMemoryMetadata::getSampleBlockForColumns(
-    const Names & column_names, const NamesAndTypesList & virtuals, const StorageID & storage_id) const
+    const Names & column_names,
+    const NamesAndTypesList & virtuals,
+    const StorageID & storage_id,
+    BitEngineReadType bitengine_read_type) const
 {
     Block res;
 
@@ -435,6 +438,9 @@ Block StorageInMemoryMetadata::getSampleBlockForColumns(
         if (column)
         {
             auto column_name = column->name;
+            if (isBitmap64(column->type) && column->type->isBitEngineEncode()
+                && bitengine_read_type == BitEngineReadType::ONLY_ENCODE)
+                column_name += BITENGINE_COLUMN_EXTENSION;
             res.insert({column->type->createColumn(), column->type, column_name});
         }
         else if (auto it = virtuals_map.find(name); it != virtuals_map.end())

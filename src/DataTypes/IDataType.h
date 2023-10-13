@@ -62,8 +62,9 @@ using DataTypesWithConstInfo = std::vector<DataTypeWithConstInfo>;
 
 
 #define TYPE_MAP_KV_STORE_FLAG      0x01
-#define TYPE_SECURITY_FLAG          0x04  /// unused
-#define TYPE_ENCRYPT_FLAG           0x08  /// unused
+#define TYPE_BITENGINE_ENCODE_FLAG  0x02
+// #define TYPE_SECURITY_FLAG          0x04  /// unused
+// #define TYPE_ENCRYPT_FLAG           0x08  /// unused
 #define TYPE_COMPRESSION_FLAG       0x20
 
 /** Properties of data type.
@@ -335,6 +336,8 @@ public:
 
     /// Checks if this type is LowCardinality(Nullable(...))
     virtual bool isLowCardinalityNullable() const { return false; }
+
+    bool isBitEngineEncode() const { return flags & TYPE_BITENGINE_ENCODE_FLAG; }
 protected:
     friend class DataTypeFactory;
     friend class AggregateFunctionSimpleState;
@@ -571,6 +574,11 @@ inline bool isCompilableType(const DataTypePtr & data_type)
 inline bool isBool(const DataTypePtr & data_type)
 {
     return data_type->getName() == "Bool";
+}
+
+inline bool isBitEngineDataType(const DataTypePtr & data_type)
+{
+    return isBitmap64(data_type) && data_type->isBitEngineEncode();
 }
 
 template <typename DataType> constexpr bool IsDataTypeDecimal = false;

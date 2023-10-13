@@ -70,6 +70,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeBitMap64.h>
 
 #include <Databases/DatabaseFactory.h>
 #include <Databases/DatabaseReplicated.h>
@@ -796,6 +797,13 @@ InterpreterCreateQuery::TableProperties InterpreterCreateQuery::setProperties(AS
     /// supports schema inference (will determine table structure in it's constructor).
     else if (!StorageFactory::instance().checkIfStorageSupportsSchemaInference(create.storage->engine->name))
         throw Exception("Incorrect CREATE query: required list of column descriptions or AS section or SELECT.", ErrorCodes::INCORRECT_QUERY);
+
+    if (create.ignore_bitengine_encode)
+    {
+        /// there's no bitengine columns in table, just reset the flag
+        if (0 == processIgnoreBitEngineEncode(properties.columns))
+            create.ignore_bitengine_encode = false;
+    }
 
     /// Even if query has list of columns, canonicalize it (unfold Nested columns).
     if (!create.columns_list)
@@ -1708,6 +1716,24 @@ void InterpreterCreateQuery::extendQueryLogElemImpl(QueryLogElement & elem, cons
         elem.query_databases.insert(database);
         elem.query_tables.insert(database + "." + backQuoteIfNeed(as_table_saved));
     }
+}
+
+size_t InterpreterCreateQuery::processIgnoreBitEngineEncode(ColumnsDescription & columns) const
+{
+    size_t changed_column_cnt{0};
+    for (const auto & column : columns)
+    {
+        if (column.type->isBitEngineEncode())
+        {
+            auto bitmap_type = std::make_shared<DataTypeBitMap64>();
+            bitmap_type->setFlags(column.type->getFlags());
+            bitmap_type->resetFlags(TYPE_BITENGINE_ENCODE_FLAG);
+            const_cast<ColumnDescription &>(column).type = std::move(bitmap_type);
+            ++changed_column_cnt;
+        }
+    }
+
+    return changed_column_cnt;
 }
 
 }

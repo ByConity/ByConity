@@ -45,6 +45,14 @@ constexpr auto UKI_FILE_NAME = "unique_key.idx";   /// name of unique key index 
 constexpr auto UNIQUE_ROW_STORE_DATA_NAME = "row_store.data";
 constexpr auto UNIQUE_ROW_STORE_META_NAME = "row_store.meta";
 
+constexpr auto BITENGINE_COLUMN_EXTENSION = "_encoded_bitmap";
+constexpr auto BITENGINE_DATA_FILE_EXTENSION = "_encoded_bitmap.bin";
+constexpr auto BITENGINE_DATA_MARKS_EXTENSION = "_encoded_bitmap.mrk";
+
 bool isEngineReservedWord(const String & column);
 
+/// Type `ONLY_SOURCE` is used in encoding and select, it's **DEFAULT** type
+/// Type `ONLY_ENCODE` used in BitEngine parts merge
+/// Type `BOTH` is used in BitEngineDictionaryManager::checkEncodedPart
+enum class BitEngineReadType : uint8_t { ONLY_SOURCE, ONLY_ENCODE, BOTH, };
 }

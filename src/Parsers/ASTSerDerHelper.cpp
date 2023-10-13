@@ -23,6 +23,7 @@
 #include <Parsers/ASTColumnsMatcher.h>
 #include <Parsers/ASTColumnsTransformers.h>
 #include <Parsers/ASTConstraintDeclaration.h>
+#include <Parsers/ASTBitEngineConstraintDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTCreateQuotaQuery.h>
 #include <Parsers/ASTCreateRoleQuery.h>

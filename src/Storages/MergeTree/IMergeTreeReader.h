@@ -90,6 +90,12 @@ protected:
 
     void checkNumberOfColumns(size_t num_columns_to_read) const;
 
+    /// check whether a column is a BitEngine column,
+    /// if it is, the column will be replaced with `BITENGINE_COLUMN_EXTENSION`.
+    /// eg. a field `ids BitMap64 BitEngineEncode` is in the table schema,
+    /// in reading process, we'll read `ids_encoded_bitmap` in disk instead. And that's what we want.
+    bool checkBitEngineColumn(const NameAndTypePair & column) const;
+
     void addByteMapStreams(const NameAndTypePair & name_and_type, const String & col_name,
         const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type);
 

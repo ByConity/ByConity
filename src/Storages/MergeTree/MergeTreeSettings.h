@@ -540,6 +540,15 @@ struct Settings;
     M(String, cnch_table_uuid, "", "Used for CloudMergeTree to get uuid of Cnch Table for ingestion task, like Kafka", 0) \
 \
     M(String, remote_storage_type, "hdfs", "Table's storage type[deprcated]", 0) \
+    \
+    /** BitEngine related settings */ \
+    M(UInt64, bitengine_split_index, 0, "Copatible setting for split BitEngine dict data, no real use", 0) \
+    M(Float, bitengine_encode_loss_rate, 0.1, "The threshold that BitEngine discard some data and no exception will be thrown when encoding", 0) \
+    M(Bool, bitengine_discard_source_bitmap, false, "BitEngine doesn't store the original data column in part", 0) \
+    M(Bool, bitengine_use_key_string, false, "BitEngine support String key", 0) \
+    M(Bool, bitengine_use_key_int, true, "BitEngine support UInt64 key, default way", 0) \
+    M(String, underlying_dictionary_tables, "{}", "To specify a table to store BitEngine dictionary data, only in Cnch", 0) \
+    \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \
     M(index_granularity)

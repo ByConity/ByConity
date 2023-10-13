@@ -21,9 +21,8 @@ namespace DB
 
 bool isEngineReservedWord(const String & column)
 {
-    if (endsWith(column, COMPRESSION_COLUMN_EXTENSION))
-        return true;
-    return false;
+    return endsWith(column, COMPRESSION_COLUMN_EXTENSION)
+        || endsWith(column, BITENGINE_COLUMN_EXTENSION);
 }
 
 } // namespace DB
