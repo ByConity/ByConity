@@ -42,6 +42,9 @@ struct MergeTreeReaderSettings
     bool convert_nested_to_subcolumns = false;
     /// Validate checksums on reading (should be always enabled in production).
     bool checksum_on_read = true;
+
+    /// whether read the original bitmap columns in BitEngine mode
+    bool read_source_bitmap = true;
 };
 
 struct MergeTreeWriterSettings
@@ -77,6 +80,16 @@ struct MergeTreeWriterSettings
 
     bool optimize_map_column_serialization = false;
     bool enable_disk_based_key_index = false;
+};
+
+struct BitengineWriteSettings
+{
+    bool only_recode = false;
+    bool bitengine_encode_without_lock = false;
+    bool bitengine_encode_in_fast_mode = false;
+    bool skip_bitengine_encode = false;
+
+    Float64 bitengine_encode_loss_rate = 0.1;
 };
 
 }

@@ -24,6 +24,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ASTSetQuery.h>
+#include <Parsers/ASTBitEngineConstraintDeclaration.h>
 #include <Common/quoteString.h>
 #include <Interpreters/StorageID.h>
 #include <IO/Operators.h>
@@ -209,7 +210,10 @@ void ASTColumns::formatImpl(const FormatSettings & s, FormatState & state, Forma
         for (const auto & constraint : constraints->children)
         {
             auto elem = std::make_shared<ASTColumnsElement>();
-            elem->prefix = "CONSTRAINT";
+            if (constraint->as<ASTBitEngineConstraintDeclaration>())
+                elem->prefix = "BITENGINE_CONSTRAINT";
+            else
+                elem->prefix = "CONSTRAINT";
             elem->set(elem->elem, constraint->clone());
             list.children.push_back(elem);
         }

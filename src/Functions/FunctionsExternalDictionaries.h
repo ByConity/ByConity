@@ -708,9 +708,6 @@ struct NameDictGetFloat64 { static constexpr auto name = "dictGetFloat64"; };
 struct NameDictGetDate { static constexpr auto name = "dictGetDate"; };
 struct NameDictGetDateTime { static constexpr auto name = "dictGetDateTime"; };
 struct NameDictGetUUID { static constexpr auto name = "dictGetUUID"; };
-struct NameDictGetDecimal32 { static constexpr auto name = "dictGetDecimal32"; };
-struct NameDictGetDecimal64 { static constexpr auto name = "dictGetDecimal64"; };
-struct NameDictGetDecimal128 { static constexpr auto name = "dictGetDecimal128"; };
 struct NameDictGetString { static constexpr auto name = "dictGetString"; };
 
 using FunctionDictGetUInt8 = FunctionDictGet<DataTypeUInt8, NameDictGetUInt8>;
@@ -726,9 +723,6 @@ using FunctionDictGetFloat64 = FunctionDictGet<DataTypeFloat64, NameDictGetFloat
 using FunctionDictGetDate = FunctionDictGet<DataTypeDate, NameDictGetDate>;
 using FunctionDictGetDateTime = FunctionDictGet<DataTypeDateTime, NameDictGetDateTime>;
 using FunctionDictGetUUID = FunctionDictGet<DataTypeUUID, NameDictGetUUID>;
-using FunctionDictGetDecimal32 = FunctionDictGet<DataTypeDecimal<Decimal32>, NameDictGetDecimal32>;
-using FunctionDictGetDecimal64 = FunctionDictGet<DataTypeDecimal<Decimal64>, NameDictGetDecimal64>;
-using FunctionDictGetDecimal128 = FunctionDictGet<DataTypeDecimal<Decimal128>, NameDictGetDecimal128>;
 using FunctionDictGetString = FunctionDictGet<DataTypeString, NameDictGetString>;
 
 template<typename DataType, typename Name>
@@ -747,9 +741,6 @@ struct NameDictGetFloat64OrDefault { static constexpr auto name = "dictGetFloat6
 struct NameDictGetDateOrDefault { static constexpr auto name = "dictGetDateOrDefault"; };
 struct NameDictGetDateTimeOrDefault { static constexpr auto name = "dictGetDateTimeOrDefault"; };
 struct NameDictGetUUIDOrDefault { static constexpr auto name = "dictGetUUIDOrDefault"; };
-struct NameDictGetDecimal32OrDefault { static constexpr auto name = "dictGetDecimal32OrDefault"; };
-struct NameDictGetDecimal64OrDefault { static constexpr auto name = "dictGetDecimal64OrDefault"; };
-struct NameDictGetDecimal128OrDefault { static constexpr auto name = "dictGetDecimal128OrDefault"; };
 struct NameDictGetStringOrDefault { static constexpr auto name = "dictGetStringOrDefault"; };
 
 using FunctionDictGetUInt8OrDefault = FunctionDictGetOrDefault<DataTypeUInt8, NameDictGetUInt8OrDefault>;
@@ -765,9 +756,6 @@ using FunctionDictGetFloat64OrDefault = FunctionDictGetOrDefault<DataTypeFloat64
 using FunctionDictGetDateOrDefault = FunctionDictGetOrDefault<DataTypeDate, NameDictGetDateOrDefault>;
 using FunctionDictGetDateTimeOrDefault = FunctionDictGetOrDefault<DataTypeDateTime, NameDictGetDateTimeOrDefault>;
 using FunctionDictGetUUIDOrDefault = FunctionDictGetOrDefault<DataTypeUUID, NameDictGetUUIDOrDefault>;
-using FunctionDictGetDecimal32OrDefault = FunctionDictGetOrDefault<DataTypeDecimal<Decimal32>, NameDictGetDecimal32OrDefault>;
-using FunctionDictGetDecimal64OrDefault = FunctionDictGetOrDefault<DataTypeDecimal<Decimal64>, NameDictGetDecimal64OrDefault>;
-using FunctionDictGetDecimal128OrDefault = FunctionDictGetOrDefault<DataTypeDecimal<Decimal128>, NameDictGetDecimal128OrDefault>;
 using FunctionDictGetStringOrDefault = FunctionDictGetOrDefault<DataTypeString, NameDictGetStringOrDefault>;
 
 class FunctionDictGetOrNull final : public IFunction

@@ -55,7 +55,8 @@ public:
         bool read_with_direct_io_,
         bool take_column_types_from_storage,
         bool quiet = false,
-        CnchMergePrefetcher::PartFutureFiles* future_files = nullptr);
+        CnchMergePrefetcher::PartFutureFiles* future_files = nullptr,
+        BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE);
 
     ~MergeTreeSequentialSource() override;
 

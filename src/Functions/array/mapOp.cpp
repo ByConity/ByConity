@@ -300,6 +300,10 @@ private:
                 return execute2<KeyType, UInt256>(row_count, args, res_type);
             case TypeIndex::Float64:
                 return execute2<KeyType, Float64>(row_count, args, res_type);
+            case TypeIndex::Decimal128:
+                return execute2<KeyType, Decimal128>(row_count, args, res_type);
+            case TypeIndex::Decimal256:
+                return execute2<KeyType, Decimal256>(row_count, args, res_type);
             default:
                 throw Exception(
                     "Illegal column type " + res_value_type->getName() + " for values in arguments of function " + getName(),

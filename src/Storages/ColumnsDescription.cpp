@@ -117,6 +117,12 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
             DB::writeText("KV", buf);
             flag ^= TYPE_MAP_KV_STORE_FLAG;
         }
+        else if (flag & TYPE_BITENGINE_ENCODE_FLAG)
+        {
+            writeChar('\t', buf);
+            writeString("BitEngineEncode", buf);
+            flag ^= TYPE_BITENGINE_ENCODE_FLAG;
+        }
     }
 
     if (!comment.empty())
@@ -184,6 +190,10 @@ void ColumnDescription::readText(ReadBuffer & buf)
     }
 }
 
+bool ColumnDescription::hasBitEngineKeyStringInComment() const
+{
+    return (!comment.empty() && startsWith(comment, "+BITENGINE_KEY_STRING"));
+}
 
 ColumnsDescription::ColumnsDescription(NamesAndTypesList ordinary)
 {
@@ -783,4 +793,16 @@ Names ColumnsDescription::getNamesOfOrdinary() const
             ret.emplace_back(col.name);
     return ret;
 }
+
+bool ColumnsDescription::isBitEngineKeyStringColumn(const String & column_name) const
+{
+    const auto it = columns.get<1>().find(column_name);
+
+    if (it != columns.get<1>().end())
+    {
+        return it->hasBitEngineKeyStringInComment();
+    }
+    return false;
+}
+
 }

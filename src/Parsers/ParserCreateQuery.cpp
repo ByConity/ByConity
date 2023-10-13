@@ -39,12 +39,16 @@
 #include <Parsers/IAST.h>
 #include <Parsers/IAST_fwd.h>
 #include <Parsers/ParserCreateQuery.h>
+#include <Parsers/ParserSelectWithUnionQuery.h>
+#include <Parsers/ParserSetQuery.h>
+#include <Parsers/ASTConstraintDeclaration.h>
+#include <Parsers/ASTBitEngineConstraintDeclaration.h>
+#include <Parsers/queryToString.h>
 #include <Parsers/ParserDictionary.h>
 #include <Parsers/ParserDictionaryAttributeDeclaration.h>
 #include <Parsers/ParserProjectionSelectQuery.h>
-#include <Parsers/ParserSelectWithUnionQuery.h>
-#include <Parsers/ParserSetQuery.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <Poco/Logger.h>
 #include <Common/typeid_cast.h>
 
 
@@ -183,6 +187,33 @@ bool ParserConstraintDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected &
     return true;
 }
 
+bool ParserBitEngineConstraintDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserKeyword s_check("CHECK");
+
+    ParserIdentifier name_p;
+    ParserLogicalOrExpression expression_p(dt);
+
+    ASTPtr name;
+    ASTPtr expr;
+
+    if (!name_p.parse(pos, name, expected))
+        return false;
+
+    if (!s_check.ignore(pos, expected))
+        return false;
+
+    if (!expression_p.parse(pos, expr, expected))
+        return false;
+
+    auto constraint = std::make_shared<ASTBitEngineConstraintDeclaration>();
+    constraint->name = name->as<ASTIdentifier &>().name();
+    constraint->set(constraint->expr, expr);
+    node = constraint;
+
+    return true;
+}
+
 bool ParserForeignKeyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserIdentifier name_p;
@@ -310,11 +341,13 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
 {
     ParserKeyword s_index("INDEX");
     ParserKeyword s_constraint("CONSTRAINT");
+    ParserKeyword s_bitengine_constraint("BITENGINE_CONSTRAINT");
     ParserKeyword s_projection("PROJECTION");
     ParserKeyword s_primary_key("PRIMARY KEY");
 
     ParserIndexDeclaration index_p(dt);
     ParserConstraintDeclaration constraint_p(dt);
+    ParserBitEngineConstraintDeclaration bitengine_constraint_p(dt);
     ParserProjectionDeclaration projection_p(dt);
     ParserColumnDeclaration column_p{dt, true, true};
     ParserExpression primary_key_p(dt);
@@ -344,6 +377,11 @@ bool ParserTablePropertyDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expecte
             && !unique_p.parse(pos, new_node, expected))
             return false;
     }
+    else if (s_bitengine_constraint.ignore(pos, expected))
+    {
+        if (!bitengine_constraint_p.parse(pos, new_node, expected))
+            return false;
+    }
     else
     {
         if (!column_p.parse(pos, new_node, expected))
@@ -363,6 +401,12 @@ bool ParserIndexDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & 
 bool ParserConstraintDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     return ParserList(std::make_unique<ParserConstraintDeclaration>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
+            .parse(pos, node, expected);
+}
+
+bool ParserBitEngineConstraintDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    return ParserList(std::make_unique<ParserBitEngineConstraintDeclaration>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
             .parse(pos, node, expected);
 }
 
@@ -412,6 +456,8 @@ bool ParserTablePropertiesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, E
         else if (elem->as<ASTIndexDeclaration>())
             indices->children.push_back(elem);
         else if (elem->as<ASTConstraintDeclaration>())
+            constraints->children.push_back(elem);
+        else if (elem->as<ASTBitEngineConstraintDeclaration>())
             constraints->children.push_back(elem);
         else if (elem->as<ASTProjectionDeclaration>())
             projections->children.push_back(elem);
@@ -605,6 +651,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserKeyword s_ignore("IGNORE");
     ParserKeyword s_replicated("REPLICATED");
     ParserKeyword s_async("ASYNC");
+    ParserKeyword s_bitengine_encode("BITENGINEENCODE");
     ParserKeyword s_ttl("TTL");
     ParserToken s_dot(TokenType::Dot);
     ParserToken s_lparen(TokenType::OpeningRoundBracket);
@@ -633,6 +680,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     bool is_temporary = false;
     bool ignore_replicated = false;
     bool ignore_async = false;
+    bool ignore_bitengine_encode = false;
     bool ignore_ttl = false;
 
     if (s_create.ignore(pos, expected))
@@ -762,6 +810,12 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
                         if (temp) option = ignore_async = true;
                         temp = s_ttl.ignore(pos, expected);
                         if (temp) option = ignore_ttl = true;
+                        option |= s_bitengine_encode.ignore(pos, expected);
+
+                        // As for online tmp table created by 'CREATE TABLE tabl_x as tabl_y IGNORE ...',
+                        // this attribute is always set true for not encoding a tmp table so as to
+                        // protect the local table away from a wrong dictionary
+                        ignore_bitengine_encode = true;
 
                     } while (option);
 
@@ -790,6 +844,7 @@ bool ParserCreateTableQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     query->temporary = is_temporary;
     query->ignore_replicated = ignore_replicated;
     query->ignore_async = ignore_async;
+    query->ignore_bitengine_encode = ignore_bitengine_encode;
     query->ignore_ttl = ignore_ttl;
 
     query->setTableInfo(table_id);

@@ -239,7 +239,7 @@ FunctionArrayIntersect::CastArgumentsResult FunctionArrayIntersect::castColumns(
     const auto & type_nested = type_array->getNestedType();
     auto type_not_nullable_nested = removeNullable(type_nested);
 
-    const bool is_numeric_or_string = isNativeNumber(type_not_nullable_nested)
+    const bool is_numeric_or_string = isNumber(type_not_nullable_nested)
                                       || isDate(type_not_nullable_nested)
                                       || isDateTime(type_not_nullable_nested)
                                       || isDateTime64(type_not_nullable_nested)

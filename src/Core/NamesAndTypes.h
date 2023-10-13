@@ -135,7 +135,8 @@ public:
     NamesAndTypesList filter(const Names & names) const;
 
     /// Unlike `filter`, returns columns in the order in which they go in `names`.
-    NamesAndTypesList addTypes(const Names & names) const;
+    /// bitengine_read_type is used in BitEngineDictionaryManager or BiEngine parts merging job
+    NamesAndTypesList addTypes(const Names & names, BitEngineReadType bitengine_read_type = BitEngineReadType::ONLY_SOURCE) const;
 
     /// Check that column contains in list
     bool contains(const String & name) const;

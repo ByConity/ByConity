@@ -154,6 +154,7 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_remove{"REMOVE"};
     ParserKeyword s_compression{"COMPRESSION"};
     ParserKeyword s_kv{"KV"};
+    ParserKeyword s_bitengine_encode{"BitEngineEncode"};
     ParserTernaryOperatorExpression expr_parser(dt); /* decimal type can use float as default value */
     ParserStringLiteral string_literal_parser;
     ParserCodec codec_parser;
@@ -245,6 +246,8 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
             inner_flags |= TYPE_MAP_KV_STORE_FLAG;
         if (s_compression.ignore(pos, expected))
             inner_flags |= TYPE_COMPRESSION_FLAG;
+        if (s_bitengine_encode.ignore(pos, expected))
+            inner_flags |= TYPE_BITENGINE_ENCODE_FLAG;
 
         if (!inner_flags)
             break;
@@ -335,6 +338,15 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+class ParserBitEngineConstraintDeclaration : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "bitengine constraint declaration"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
 class ParserForeignKeyDeclaration : public IParserDialectBase
 {
 protected:
@@ -393,6 +405,15 @@ class ParserConstraintDeclarationList : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "constraint declaration list"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
+
+class ParserBitEngineConstraintDeclarationList : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "bitengine constraint declaration list"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 public:
     using IParserDialectBase::IParserDialectBase;

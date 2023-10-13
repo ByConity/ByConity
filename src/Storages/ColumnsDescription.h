@@ -70,6 +70,10 @@ struct ColumnDescription
 
     void writeText(WriteBuffer & buf) const;
     void readText(ReadBuffer & buf);
+
+    /// used for BitEngine to judge whethere the column want String as key type
+    /// if column is not a bitengine column, the function is meanless
+    bool hasBitEngineKeyStringInComment() const;
 };
 
 
@@ -183,6 +187,8 @@ public:
     {
         return columns.empty();
     }
+
+    bool isBitEngineKeyStringColumn(const String & column_name) const;
 
     /// Keep the sequence of columns and allow to lookup by name.
     using ColumnsContainer = boost::multi_index_container<
