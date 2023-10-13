@@ -145,7 +145,7 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnProjectView5)
                                     "      │     Condition: x = 2\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
                                     "               Where: x = 2\n"
-                                    "               Outputs: [ee, name, x]")
+                                    "               Outputs: [x, ee, name]")
         .ok();
 }
 
@@ -570,7 +570,7 @@ TEST_F(MaterializedViewRewriteTest, testAggregateRollUp1)
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#c:=c, expr#deptno:=deptno\n"
                                     "               └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                        Outputs: [c, deptno]")
+                                    "                        Outputs: [deptno, c]")
         .ok();
 }
 
@@ -976,7 +976,7 @@ TEST_F(MaterializedViewRewriteTest, testSingleMaterializationMultiUsage)
             "      │     │     Condition: empid < 200\n"
             "      │     └─ TableScan test_mview.MV0_MV_DATA\n"
             "      │              Where: empid < 200\n"
-            "      │              Outputs: [commission, deptno, empid, name, salary]\n"
+            "      │              Outputs: [commission, salary, name, deptno, empid]\n"
             "      └─ Repartition Exchange\n"
             "         │     Partition by: {empid_1}\n"
             "         └─ Projection\n"
@@ -985,7 +985,7 @@ TEST_F(MaterializedViewRewriteTest, testSingleMaterializationMultiUsage)
             "               │     Condition: empid < 200\n"
             "               └─ TableScan test_mview.MV0_MV_DATA\n"
             "                        Where: empid < 200\n"
-            "                        Outputs: [commission, deptno, empid, name, salary]")
+            "                        Outputs: [commission, salary, name, deptno, empid]")
         .ok();
 }
 

@@ -3,9 +3,9 @@ Projection
 └─ Gather Exchange
    └─ MergingAggregated
       └─ Repartition Exchange
-         │     Partition by: {expr#a, expr#b}
+         │     Partition by: {expr#b, expr#a}
          └─ Aggregating
-            │     Group by: {expr#a, expr#b}
+            │     Group by: {expr#b, expr#a}
             │     Aggregates: expr#sumMerge(sum_c):=AggNull(sumMerge)(expr#sum_c)
             └─ Projection
                │     Expressions: expr#a:=a, expr#b:=b, expr#sum_c:=sum_c
@@ -13,16 +13,16 @@ Projection
                   │     Condition: a = 1
                   └─ TableScan test.t40056_target1
                            Where: a = 1
-                           Outputs: [a, b, sum_c]
+                           Outputs: [sum_c, b, a]
 note: Materialized Views is applied for 1 times: test.t40056_mv1.
 Projection
 │     Expressions: a:=`expr#a`, b:=`expr#b`, sum(c):=`expr#sumMerge(sum_c)`
 └─ Gather Exchange
    └─ MergingAggregated
       └─ Repartition Exchange
-         │     Partition by: {expr#a, expr#b}
+         │     Partition by: {expr#b, expr#a}
          └─ Aggregating
-            │     Group by: {expr#a, expr#b}
+            │     Group by: {expr#b, expr#a}
             │     Aggregates: expr#sumMerge(sum_c):=AggNull(sumMerge)(expr#sum_c)
             └─ Projection
                │     Expressions: expr#a:=a, expr#b:=b, expr#sum_c:=sum_c
@@ -30,5 +30,5 @@ Projection
                   │     Condition: b = 1
                   └─ TableScan test.t40056_target2
                            Where: b = 1
-                           Outputs: [a, b, sum_c]
+                           Outputs: [sum_c, b, a]
 note: Materialized Views is applied for 1 times: test.t40056_mv2.

@@ -21,7 +21,7 @@ TableFinish Est. 1 rows, cost 5.540000e-01
                         │        │     Condition: (toDate(p_date) >= cast(19384, \'Date\')) AND (toDate(p_date) <= cast(19473, \'Date\'))
                         │        └─ TableScan test.tb_5cf1836f27bf9d05a5b73aee37b52c27 Est. ? rows, cost 0.000000e+00
                         │                 Where: (toDate(p_date) >= cast(19384, \'Date\')) AND (toDate(p_date) <= cast(19473, \'Date\'))
-                        │                 Outputs: [base_id, date, p_date, tenant_dau_au_rate]
+                        │                 Outputs: [tenant_dau_au_rate, base_id, date, p_date]
                         └─ Aggregating Est. ? rows, cost 0.000000e+00
                            │     Group by: {base_id_1}
                            │     Aggregates: expr#max(date):=AggNull(max)(date_1)

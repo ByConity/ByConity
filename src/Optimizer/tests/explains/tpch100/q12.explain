@@ -29,5 +29,5 @@ Projection Est. 2 rows
                               │     Condition: (l_shipmode IN ('MAIL', 'SHIP')) AND (l_receiptdate >= cast(8766, 'Date')) AND (l_receiptdate < cast(9131, 'Date')) AND (l_commitdate < l_receiptdate) AND (l_shipdate < l_commitdate)
                               └─ TableScan tpch100.lineitem Est. 600037902 rows
                                        Where: (l_shipmode IN ('MAIL', 'SHIP')) AND (l_receiptdate >= cast(8766, 'Date')) AND (l_receiptdate < cast(9131, 'Date')) AND (l_commitdate < l_receiptdate) AND (l_shipdate < l_commitdate)
-                                       Outputs: [l_commitdate, l_orderkey, l_receiptdate, l_shipdate, l_shipmode]
+                                       Outputs: [l_orderkey, l_shipdate, l_commitdate, l_receiptdate, l_shipmode]
 note: Runtime Filter is applied for 1 times.

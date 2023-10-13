@@ -11,9 +11,9 @@ Projection Est. 100 rows
             │     Limit: 100
             └─ MergingAggregated Est. 256496 rows
                └─ Repartition Exchange Est. 256496 rows
-                  │     Partition by: {i_current_price, i_item_desc, i_item_id}
+                  │     Partition by: {i_item_id, i_item_desc, i_current_price}
                   └─ Aggregating Est. 256496 rows
-                     │     Group by: {i_current_price, i_item_desc, i_item_id}
+                     │     Group by: {i_item_id, i_item_desc, i_current_price}
                      └─ Inner Join Est. 681244586 rows
                         │     Condition: ss_item_sk == i_item_sk
                         ├─ Filter Est. 2879987999 rows
@@ -38,11 +38,11 @@ Projection Est. 100 rows
                               │        │     Condition: (i_current_price >= 62.) AND (i_current_price <= 92.) AND (i_manufact_id IN (129, 270, 423, 821))
                               │        └─ TableScan tpcds1000.item Est. 300000 rows
                               │                 Where: (i_current_price >= 62.) AND (i_current_price <= 92.) AND (i_manufact_id IN (129, 270, 423, 821))
-                              │                 Outputs: [i_current_price, i_item_desc, i_item_id, i_item_sk, i_manufact_id]
+                              │                 Outputs: [i_item_sk, i_item_id, i_item_desc, i_current_price, i_manufact_id]
                               └─ Broadcast Exchange Est. 60 rows
                                  └─ Filter Est. 60 rows
                                     │     Condition: (d_date >= cast(11102, 'Date')) AND (d_date <= cast(11162, 'Date'))
                                     └─ TableScan tpcds1000.date_dim Est. 73049 rows
                                              Where: (d_date >= cast(11102, 'Date')) AND (d_date <= cast(11162, 'Date'))
-                                             Outputs: [d_date, d_date_sk]
+                                             Outputs: [d_date_sk, d_date]
 note: Runtime Filter is applied for 3 times.

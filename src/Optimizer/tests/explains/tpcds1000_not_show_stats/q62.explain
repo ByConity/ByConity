@@ -30,7 +30,7 @@ Projection
                            │  │  │  │  │     Condition: Runtime Filters: {ws_ship_date_sk}
                            │  │  │  │  └─ TableScan tpcds1000.web_sales
                            │  │  │  │           Where: Runtime Filters: {ws_ship_date_sk}
-                           │  │  │  │           Outputs: [ws_ship_date_sk, ws_ship_mode_sk, ws_sold_date_sk, ws_warehouse_sk, ws_web_site_sk]
+                           │  │  │  │           Outputs: [ws_sold_date_sk, ws_ship_date_sk, ws_web_site_sk, ws_ship_mode_sk, ws_warehouse_sk]
                            │  │  │  └─ Broadcast Exchange
                            │  │  │     └─ Filter
                            │  │  │        │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
@@ -42,8 +42,8 @@ Projection
                            │  │              Outputs: [sm_ship_mode_sk, sm_type]
                            │  └─ Broadcast Exchange
                            │     └─ TableScan tpcds1000.warehouse
-                           │              Outputs: [w_warehouse_name, w_warehouse_sk]
+                           │              Outputs: [w_warehouse_sk, w_warehouse_name]
                            └─ Broadcast Exchange
                               └─ TableScan tpcds1000.web_site
-                                       Outputs: [web_name, web_site_sk]
+                                       Outputs: [web_site_sk, web_name]
 note: Runtime Filter is applied for 1 times.

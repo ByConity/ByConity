@@ -20,7 +20,7 @@ Projection Est. 100 rows
                         └─ Filter Est. 172199471 rows
                            │     Condition: count_non_null_value_1 <= 0
                            └─ Aggregating Est. 191332746 rows
-                              │     Group by: {_exists_subquery, assign_unique_id_symbol, assign_unique_id_symbol_1, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey}
+                              │     Group by: {s_suppkey, n_nationkey, l_orderkey, assign_unique_id_symbol, l_suppkey, n_name, s_name, l_commitdate, s_nationkey, l_receiptdate, o_orderkey, _exists_subquery, o_orderstatus, assign_unique_id_symbol_1}
                               │     Aggregates: count_non_null_value_1:=AggNull(countIf)(build_side_non_null_symbol_1)
                               └─ Projection Est. 191332746 rows
                                  │     Expressions: [_exists_subquery, assign_unique_id_symbol, assign_unique_id_symbol_1, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol_1:=cast(multiIf(if((l_suppkey_2 != l_suppkey) AND (build_side_non_null_symbol_1 = 1), 1, NULL) = 1, 1, if((l_suppkey_2 != l_suppkey) AND (build_side_non_null_symbol_1 = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
@@ -35,14 +35,14 @@ Projection Est. 100 rows
                                     │        │     Condition: l_receiptdate_2 > l_commitdate_2 Runtime Filters: {l_orderkey_2}
                                     │        └─ TableScan tpch100.lineitem Est. 600037902 rows
                                     │                 Where: l_receiptdate > l_commitdate Runtime Filters: {l_orderkey}
-                                    │                 Outputs: l_commitdate_2:=l_commitdate, l_orderkey_2:=l_orderkey, l_receiptdate_2:=l_receiptdate, l_suppkey_2:=l_suppkey
+                                    │                 Outputs: l_orderkey_2:=l_orderkey, l_suppkey_2:=l_suppkey, l_commitdate_2:=l_commitdate, l_receiptdate_2:=l_receiptdate
                                     └─ AssignUniqueId Est. 45834268 rows
                                        └─ Projection Est. 45834268 rows
                                           │     Expressions: [assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], _exists_subquery:=count_non_null_value > 0
                                           └─ Filter Est. 45834268 rows
                                              │     Condition: count_non_null_value > 0
                                              └─ Aggregating Est. 50926965 rows
-                                                │     Group by: {assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey}
+                                                │     Group by: {o_orderstatus, o_orderkey, l_receiptdate, s_nationkey, l_suppkey, l_commitdate, s_name, n_name, l_orderkey, n_nationkey, s_suppkey, assign_unique_id_symbol}
                                                 │     Aggregates: count_non_null_value:=AggNull(countIf)(build_side_non_null_symbol)
                                                 └─ Projection Est. 50926965 rows
                                                    │     Expressions: [assign_unique_id_symbol, l_commitdate, l_orderkey, l_receiptdate, l_suppkey, n_name, n_nationkey, o_orderkey, o_orderstatus, s_name, s_nationkey, s_suppkey], build_side_non_null_symbol:=cast(multiIf(if((l_suppkey_1 != l_suppkey) AND (build_side_non_null_symbol = 1), 1, NULL) = 1, 1, if((l_suppkey_1 != l_suppkey) AND (build_side_non_null_symbol = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
@@ -78,7 +78,7 @@ Projection Est. 100 rows
                                                                   │  │     Condition: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
                                                                   │  └─ TableScan tpch100.lineitem Est. 600037902 rows
                                                                   │           Where: l_receiptdate > l_commitdate Runtime Filters: {l_suppkey}
-                                                                  │           Outputs: [l_commitdate, l_orderkey, l_receiptdate, l_suppkey]
+                                                                  │           Outputs: [l_orderkey, l_suppkey, l_commitdate, l_receiptdate]
                                                                   └─ Broadcast Exchange Est. 40000 rows
                                                                      └─ Inner Join Est. 40000 rows
                                                                         │     Condition: s_nationkey == n_nationkey
@@ -87,11 +87,11 @@ Projection Est. 100 rows
                                                                         │  │     Condition: Runtime Filters: {s_nationkey}
                                                                         │  └─ TableScan tpch100.supplier Est. 1000000 rows
                                                                         │           Where: Runtime Filters: {s_nationkey}
-                                                                        │           Outputs: [s_name, s_nationkey, s_suppkey]
+                                                                        │           Outputs: [s_suppkey, s_name, s_nationkey]
                                                                         └─ Broadcast Exchange Est. 1 rows
                                                                            └─ Filter Est. 1 rows
                                                                               │     Condition: n_name = 'SAUDI ARABIA'
                                                                               └─ TableScan tpch100.nation Est. 25 rows
                                                                                        Where: n_name = 'SAUDI ARABIA'
-                                                                                       Outputs: [n_name, n_nationkey]
+                                                                                       Outputs: [n_nationkey, n_name]
 note: Runtime Filter is applied for 5 times.

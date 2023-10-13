@@ -37,7 +37,7 @@ Projection
             │              │  │           │     │     Condition: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) AND isNotNull(l_partkey) AND isNotNull(l_suppkey) Runtime Filters: {l_partkey, l_suppkey}
             │              │  │           │     └─ TableScan tpch1000.lineitem
             │              │  │           │              Where: (l_shipdate >= cast(8766, 'Date')) AND (l_shipdate < cast(9131, 'Date')) AND isNotNull(l_partkey) AND isNotNull(l_suppkey) Runtime Filters: {l_partkey, l_suppkey}
-            │              │  │           │              Outputs: [l_partkey, l_quantity, l_shipdate, l_suppkey]
+            │              │  │           │              Outputs: [l_partkey, l_suppkey, l_quantity, l_shipdate]
             │              │  │           └─ MergingAggregated
             │              │  │              └─ Repartition Exchange
             │              │  │                 │     Partition by: {s_suppkey_1}
@@ -52,13 +52,13 @@ Projection
             │              │  │                          │  │     Condition: isNotNull(s_suppkey) Runtime Filters: {s_nationkey, s_suppkey}
             │              │  │                          │  └─ TableScan tpch1000.supplier
             │              │  │                          │           Where: isNotNull(s_suppkey) Runtime Filters: {s_nationkey, s_suppkey}
-            │              │  │                          │           Outputs: [s_nationkey, s_suppkey]
+            │              │  │                          │           Outputs: [s_suppkey, s_nationkey]
             │              │  │                          └─ Broadcast Exchange
             │              │  │                             └─ Filter
             │              │  │                                │     Condition: n_name = 'CANADA'
             │              │  │                                └─ TableScan tpch1000.nation
             │              │  │                                         Where: n_name = 'CANADA'
-            │              │  │                                         Outputs: [n_name, n_nationkey]
+            │              │  │                                         Outputs: [n_nationkey, n_name]
             │              │  └─ Repartition Exchange
             │              │     │     Partition by: {ps_partkey}
             │              │     └─ Inner Join
@@ -70,7 +70,7 @@ Projection
             │              │        │     │     Condition: isNotNull(ps_partkey) AND isNotNull(ps_suppkey) Runtime Filters: {ps_suppkey}
             │              │        │     └─ TableScan tpch1000.partsupp
             │              │        │              Where: isNotNull(ps_partkey) AND isNotNull(ps_suppkey) Runtime Filters: {ps_suppkey}
-            │              │        │              Outputs: [ps_availqty, ps_partkey, ps_suppkey]
+            │              │        │              Outputs: [ps_partkey, ps_suppkey, ps_availqty]
             │              │        └─ MergingAggregated
             │              │           └─ Repartition Exchange
             │              │              │     Partition by: {s_suppkey_1}
@@ -85,13 +85,13 @@ Projection
             │              │                       │  │     Condition: isNotNull(s_suppkey) Runtime Filters: {s_nationkey, s_suppkey}
             │              │                       │  └─ TableScan tpch1000.supplier
             │              │                       │           Where: isNotNull(s_suppkey) Runtime Filters: {s_nationkey, s_suppkey}
-            │              │                       │           Outputs: [s_nationkey, s_suppkey]
+            │              │                       │           Outputs: [s_suppkey, s_nationkey]
             │              │                       └─ Broadcast Exchange
             │              │                          └─ Filter
             │              │                             │     Condition: n_name = 'CANADA'
             │              │                             └─ TableScan tpch1000.nation
             │              │                                      Where: n_name = 'CANADA'
-            │              │                                      Outputs: [n_name, n_nationkey]
+            │              │                                      Outputs: [n_nationkey, n_name]
             │              └─ MergingAggregated
             │                 └─ Repartition Exchange
             │                    │     Partition by: {p_partkey}
@@ -103,7 +103,7 @@ Projection
             │                             │     Condition: isNotNull(p_partkey) AND (p_name LIKE 'forest%')
             │                             └─ TableScan tpch1000.part
             │                                      Where: isNotNull(p_partkey) AND (p_name LIKE 'forest%')
-            │                                      Outputs: [p_name, p_partkey]
+            │                                      Outputs: [p_partkey, p_name]
             └─ Repartition Exchange
                │     Partition by: {s_suppkey}
                └─ Inner Join
@@ -113,12 +113,12 @@ Projection
                   │  │     Condition: isNotNull(s_suppkey) Runtime Filters: {s_nationkey}
                   │  └─ TableScan tpch1000.supplier
                   │           Where: isNotNull(s_suppkey) Runtime Filters: {s_nationkey}
-                  │           Outputs: [s_address, s_name, s_nationkey, s_suppkey]
+                  │           Outputs: [s_suppkey, s_name, s_address, s_nationkey]
                   └─ Broadcast Exchange
                      └─ Filter
                         │     Condition: n_name = 'CANADA'
                         └─ TableScan tpch1000.nation
                                  Where: n_name = 'CANADA'
-                                 Outputs: [n_name, n_nationkey]
+                                 Outputs: [n_nationkey, n_name]
 note: Magic Set is applied for 2 parts.
 note: Runtime Filter is applied for 12 times.

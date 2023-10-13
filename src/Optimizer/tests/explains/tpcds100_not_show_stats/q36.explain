@@ -13,12 +13,12 @@ Projection
                │     Expressions: [expr#divide(sum(ss_net_profit), sum(ss_ext_sales_price)), expr#plus(grouping(i_category), grouping(i_class)), expr#rank() OVER (PARTITION BY grouping(i_category) + grouping(i_class), multiIf(grouping(i_class) = 0, i_category, NULL) ORDER BY sum(ss_net_profit) / sum(ss_ext_sales_price) ASC), i_category, i_class], expr#multiIf(equals(plus(grouping(i_category), grouping(i_class)), 0), i_category, NULL):=multiIf(`expr#plus(grouping(i_category), grouping(i_class))` = 0, i_category, NULL)
                └─ Window
                   └─ Repartition Exchange
-                     │     Partition by: {expr#multiIf(equals(grouping(i_class), 0), i_category, NULL), expr#plus(grouping(i_category), grouping(i_class))}
+                     │     Partition by: {expr#plus(grouping(i_category), grouping(i_class)), expr#multiIf(equals(grouping(i_class), 0), i_category, NULL)}
                      └─ Projection
                         │     Expressions: [i_category, i_class], expr#divide(sum(ss_net_profit), sum(ss_ext_sales_price)):=`expr#sum(ss_net_profit)` / `expr#sum(ss_ext_sales_price)`, expr#multiIf(equals(grouping(i_class), 0), i_category, NULL):=multiIf(`expr#grouping(i_class)` = 0, i_category, NULL), expr#plus(grouping(i_category), grouping(i_class)):=`expr#grouping(i_category)` + `expr#grouping(i_class)`
                         └─ MergingAggregated
                            └─ Repartition Exchange
-                              │     Partition by: {__grouping_set, i_category, i_class}
+                              │     Partition by: {i_category, i_class, __grouping_set}
                               └─ Aggregating
                                  │     Group by: {i_category, i_class}
                                  │     Aggregates: expr#sum(ss_net_profit):=AggNull(sum)(ss_net_profit), expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
@@ -36,7 +36,7 @@ Projection
                                     │     │  │  │     Condition: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
                                     │     │  │  └─ TableScan tpcds100.store_sales
                                     │     │  │           Where: Runtime Filters: {ss_sold_date_sk, ss_store_sk}
-                                    │     │  │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_net_profit, ss_sold_date_sk, ss_store_sk]
+                                    │     │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_ext_sales_price, ss_net_profit]
                                     │     │  └─ Broadcast Exchange
                                     │     │     └─ Filter
                                     │     │        │     Condition: d_year = 2001
@@ -48,9 +48,9 @@ Projection
                                     │           │     Condition: s_state = 'TN'
                                     │           └─ TableScan tpcds100.store
                                     │                    Where: s_state = 'TN'
-                                    │                    Outputs: [s_state, s_store_sk]
+                                    │                    Outputs: [s_store_sk, s_state]
                                     └─ Repartition Exchange
                                        │     Partition by: {i_item_sk}
                                        └─ TableScan tpcds100.item
-                                                Outputs: [i_category, i_class, i_item_sk]
+                                                Outputs: [i_item_sk, i_class, i_category]
 note: Runtime Filter is applied for 2 times.

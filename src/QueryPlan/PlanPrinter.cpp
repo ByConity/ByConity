@@ -742,11 +742,18 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             out << " Offset: " << limit->getOffset();
     }
 
+    if (verbose && plan->getType() == IQueryPlanStep::Type::Offset)
+    {
+        const auto * offset = dynamic_cast<const OffsetStep *>(plan.get());
+        out << intent.detailIntent();
+        if (offset->getOffset())
+            out << " Offset: " << offset->getOffset();
+    }
+
     if (verbose && plan->getType() == IQueryPlanStep::Type::Aggregating)
     {
         const auto * agg = dynamic_cast<const AggregatingStep *>(plan.get());
         auto keys = agg->getKeys();
-        std::sort(keys.begin(), keys.end());
         out << intent.detailIntent() << "Group by: " << join(keys, ", ", "{", "}");
 
 
@@ -778,7 +785,6 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         if (exchange->getExchangeMode() == ExchangeMode::REPARTITION)
         {
             auto keys = exchange->getSchema().getPartitioningColumns();
-            std::sort(keys.begin(), keys.end());
             out << intent.detailIntent() << "Partition by: " << join(keys, ", ", "{", "}");
         }
     }
@@ -840,11 +846,9 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             out << converted.safeGet<UInt64>();
         }
 
-        std::sort(assignments.begin(), assignments.end());
         if (!identities.empty())
         {
             std::stringstream ss;
-            std::sort(identities.begin(), identities.end());
             ss << join(identities, ", ", "[", "]");
             assignments.insert(assignments.begin(), ss.str());
         }
@@ -997,11 +1001,17 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
             step_detail["Offset"] = std::to_string(limit->getOffset());
     }
 
+        if (step->getType() == IQueryPlanStep::Type::Offset)
+    {
+        const auto * offset = dynamic_cast<const OffsetStep *>(step.get());
+        if (offset->getOffset())
+            step_detail["Offset"] = std::to_string(offset->getOffset());
+    }
+
     if (step->getType() == IQueryPlanStep::Type::Aggregating)
     {
         const auto * agg = dynamic_cast<const AggregatingStep *>(step.get());
         auto keys = agg->getKeys();
-        std::sort(keys.begin(), keys.end());
         for (auto & key : keys)
             step_vector_detail["GroupByKeys"].emplace_back(key);
 
@@ -1027,7 +1037,6 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
     {
         const auto * agg = dynamic_cast<const MergingAggregatedStep *>(step.get());
         auto keys = agg->getKeys();
-        std::sort(keys.begin(), keys.end());
         for (auto & key : keys)
             step_vector_detail["GroupByKeys"].emplace_back(key);
 
@@ -1128,11 +1137,9 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
             step_detail["Limit"] = std::to_string(converted.safeGet<UInt64>());
         }
 
-        std::sort(assignments.begin(), assignments.end());
         if (!identities.empty())
         {
             std::stringstream ss;
-            std::sort(identities.begin(), identities.end());
             for (auto & identitie : identities)
                 assignments.insert(assignments.begin(), identitie);
         }

@@ -23,17 +23,17 @@ Projection Est. 236900 rows
                         │  │  │     Condition: (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997) Runtime Filters: {LO_CUSTKEY, LO_SUPPKEY}
                         │  │  └─ TableScan ssb100.lineorder Est. 600038145 rows
                         │  │           Where: (toYear(LO_ORDERDATE) >= 1992) AND (toYear(LO_ORDERDATE) <= 1997) Runtime Filters: {LO_CUSTKEY, LO_SUPPKEY}
-                        │  │           Outputs: [LO_CUSTKEY, LO_ORDERDATE, LO_REVENUE, LO_SUPPKEY]
+                        │  │           Outputs: [LO_CUSTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
                         │  └─ Broadcast Exchange Est. 8043 rows
                         │     └─ Filter Est. 8043 rows
                         │        │     Condition: S_NATION = 'UNITED STATES'
                         │        └─ TableScan ssb100.supplier Est. 200000 rows
                         │                 Where: S_NATION = 'UNITED STATES'
-                        │                 Outputs: [S_CITY, S_NATION, S_SUPPKEY]
+                        │                 Outputs: [S_SUPPKEY, S_CITY, S_NATION]
                         └─ Broadcast Exchange Est. 120077 rows
                            └─ Filter Est. 120077 rows
                               │     Condition: C_NATION = 'UNITED STATES'
                               └─ TableScan ssb100.customer Est. 3000000 rows
                                        Where: C_NATION = 'UNITED STATES'
-                                       Outputs: [C_CITY, C_CUSTKEY, C_NATION]
+                                       Outputs: [C_CUSTKEY, C_CITY, C_NATION]
 note: Runtime Filter is applied for 2 times.

@@ -23,7 +23,7 @@ Projection Est. 100 rows
                            │     └─ Repartition Exchange Est. 52062815 rows
                            │        │     Partition by: {ss_item_sk}
                            │        └─ Aggregating Est. 52062815 rows
-                           │           │     Group by: {d_date_1, ss_item_sk}
+                           │           │     Group by: {ss_item_sk, d_date_1}
                            │           │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
                            │           └─ Inner Join Est. 52062815 rows
                            │              │     Condition: ss_sold_date_sk == d_date_sk_1
@@ -32,19 +32,19 @@ Projection Est. 100 rows
                            │              │  │     Condition: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
                            │              │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                            │              │           Where: isNotNull(ss_item_sk) Runtime Filters: {ss_sold_date_sk}
-                           │              │           Outputs: [ss_item_sk, ss_sales_price, ss_sold_date_sk]
+                           │              │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_sales_price]
                            │              └─ Broadcast Exchange Est. 335 rows
                            │                 └─ Filter Est. 335 rows
                            │                    │     Condition: (d_month_seq_1 >= 1200) AND (d_month_seq_1 <= 1211)
                            │                    └─ TableScan tpcds100.date_dim Est. 73049 rows
                            │                             Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                           │                             Outputs: d_date_1:=d_date, d_date_sk_1:=d_date_sk, d_month_seq_1:=d_month_seq
+                           │                             Outputs: d_date_sk_1:=d_date_sk, d_date_1:=d_date, d_month_seq_1:=d_month_seq
                            └─ Window Est. 13016061 rows
                               └─ MergingAggregated Est. 13016061 rows
                                  └─ Repartition Exchange Est. 13016061 rows
                                     │     Partition by: {ws_item_sk}
                                     └─ Aggregating Est. 13016061 rows
-                                       │     Group by: {d_date, ws_item_sk}
+                                       │     Group by: {ws_item_sk, d_date}
                                        │     Aggregates: expr#sum(ws_sales_price):=AggNull(sum)(ws_sales_price)
                                        └─ Inner Join Est. 13016061 rows
                                           │     Condition: ws_sold_date_sk == d_date_sk
@@ -53,11 +53,11 @@ Projection Est. 100 rows
                                           │  │     Condition: isNotNull(ws_item_sk) Runtime Filters: {ws_sold_date_sk}
                                           │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                                           │           Where: isNotNull(ws_item_sk) Runtime Filters: {ws_sold_date_sk}
-                                          │           Outputs: [ws_item_sk, ws_sales_price, ws_sold_date_sk]
+                                          │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_sales_price]
                                           └─ Broadcast Exchange Est. 335 rows
                                              └─ Filter Est. 335 rows
                                                 │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
                                                 └─ TableScan tpcds100.date_dim Est. 73049 rows
                                                          Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
-                                                         Outputs: [d_date, d_date_sk, d_month_seq]
+                                                         Outputs: [d_date_sk, d_date, d_month_seq]
 note: Runtime Filter is applied for 2 times.

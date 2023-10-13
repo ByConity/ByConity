@@ -23,7 +23,7 @@ Projection Est. 3199877 rows
             │              │  │     Condition: Runtime Filters: {ps_suppkey}
             │              │  └─ TableScan tpch100.partsupp Est. 80000000 rows
             │              │           Where: Runtime Filters: {ps_suppkey}
-            │              │           Outputs: [ps_availqty, ps_partkey, ps_suppkey, ps_supplycost]
+            │              │           Outputs: [ps_partkey, ps_suppkey, ps_availqty, ps_supplycost]
             │              └─ Broadcast Exchange Est. 40000 rows
             │                 └─ Inner Join Est. 40000 rows
             │                    │     Condition: s_nationkey == n_nationkey
@@ -32,13 +32,13 @@ Projection Est. 3199877 rows
             │                    │  │     Condition: Runtime Filters: {s_nationkey}
             │                    │  └─ TableScan tpch100.supplier Est. 1000000 rows
             │                    │           Where: Runtime Filters: {s_nationkey}
-            │                    │           Outputs: [s_nationkey, s_suppkey]
+            │                    │           Outputs: [s_suppkey, s_nationkey]
             │                    └─ Broadcast Exchange Est. 1 rows
             │                       └─ Filter Est. 1 rows
             │                          │     Condition: n_name = 'GERMANY'
             │                          └─ TableScan tpch100.nation Est. 25 rows
             │                                   Where: n_name = 'GERMANY'
-            │                                   Outputs: [n_name, n_nationkey]
+            │                                   Outputs: [n_nationkey, n_name]
             └─ Broadcast Exchange Est. 1 rows
                └─ Projection Est. 1 rows
                   │     Expressions: expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001'):=`expr#sum(multiply(ps_supplycost, ps_availqty))_1` * '0.0001'
@@ -56,7 +56,7 @@ Projection Est. 3199877 rows
                                  │  │     Condition: Runtime Filters: {ps_suppkey_1}
                                  │  └─ TableScan tpch100.partsupp Est. 80000000 rows
                                  │           Where: Runtime Filters: {ps_suppkey}
-                                 │           Outputs: ps_availqty_1:=ps_availqty, ps_suppkey_1:=ps_suppkey, ps_supplycost_1:=ps_supplycost
+                                 │           Outputs: ps_suppkey_1:=ps_suppkey, ps_availqty_1:=ps_availqty, ps_supplycost_1:=ps_supplycost
                                  └─ Broadcast Exchange Est. 40000 rows
                                     └─ Inner Join Est. 40000 rows
                                        │     Condition: s_nationkey_1 == n_nationkey_1
@@ -65,11 +65,11 @@ Projection Est. 3199877 rows
                                        │  │     Condition: Runtime Filters: {s_nationkey_1}
                                        │  └─ TableScan tpch100.supplier Est. 1000000 rows
                                        │           Where: Runtime Filters: {s_nationkey}
-                                       │           Outputs: s_nationkey_1:=s_nationkey, s_suppkey_1:=s_suppkey
+                                       │           Outputs: s_suppkey_1:=s_suppkey, s_nationkey_1:=s_nationkey
                                        └─ Broadcast Exchange Est. 1 rows
                                           └─ Filter Est. 1 rows
                                              │     Condition: n_name_1 = 'GERMANY'
                                              └─ TableScan tpch100.nation Est. 25 rows
                                                       Where: n_name = 'GERMANY'
-                                                      Outputs: n_name_1:=n_name, n_nationkey_1:=n_nationkey
+                                                      Outputs: n_nationkey_1:=n_nationkey, n_name_1:=n_name
 note: Runtime Filter is applied for 4 times.

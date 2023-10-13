@@ -24,7 +24,7 @@ Projection Est. 92253376 rows
                            │     │     Condition: o_comment NOT LIKE '%special%requests%'
                            │     └─ TableScan tpch1000.orders Est. 1500000000 rows
                            │              Where: o_comment NOT LIKE '%special%requests%'
-                           │              Outputs: [o_comment, o_custkey, o_orderkey]
+                           │              Outputs: [o_orderkey, o_custkey, o_comment]
                            └─ Repartition Exchange Est. 150000000 rows
                               │     Partition by: {c_custkey}
                               └─ TableScan tpch1000.customer Est. 150000000 rows

@@ -32,7 +32,7 @@ Projection Est. 100 rows
                │  │           │     │  │     Condition: Runtime Filters: {cs_sold_date_sk}
                │  │           │     │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
                │  │           │     │           Where: Runtime Filters: {cs_sold_date_sk}
-               │  │           │     │           Outputs: [cs_ext_sales_price, cs_item_sk, cs_sold_date_sk]
+               │  │           │     │           Outputs: [cs_sold_date_sk, cs_item_sk, cs_ext_sales_price]
                │  │           │     └─ Broadcast Exchange Est. 7 rows
                │  │           │        └─ Inner Join Est. 7 rows
                │  │           │           │     Condition: d_date_3 == d_date_4
@@ -41,7 +41,7 @@ Projection Est. 100 rows
                │  │           │           │  │     Condition: isNotNull(d_date_3) Runtime Filters: {d_date_3}
                │  │           │           │  └─ TableScan tpcds100.date_dim Est. 73049 rows
                │  │           │           │           Where: isNotNull(d_date) Runtime Filters: {d_date}
-               │  │           │           │           Outputs: d_date_3:=d_date, d_date_sk_1:=d_date_sk
+               │  │           │           │           Outputs: d_date_sk_1:=d_date_sk, d_date_3:=d_date
                │  │           │           └─ Broadcast Exchange Est. 7 rows
                │  │           │              └─ MergingAggregated Est. 7 rows
                │  │           │                 └─ Repartition Exchange Est. 7 rows
@@ -71,7 +71,7 @@ Projection Est. 100 rows
                │  │           └─ Repartition Exchange Est. 204000 rows
                │  │              │     Partition by: {i_item_sk_1}
                │  │              └─ TableScan tpcds100.item Est. 204000 rows
-               │  │                       Outputs: i_item_id_1:=i_item_id, i_item_sk_1:=i_item_sk
+               │  │                       Outputs: i_item_sk_1:=i_item_sk, i_item_id_1:=i_item_id
                │  └─ MergingAggregated Est. 100883 rows
                │     └─ Repartition Exchange Est. 100883 rows
                │        │     Partition by: {i_item_id}
@@ -89,7 +89,7 @@ Projection Est. 100 rows
                │              │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
                │              │     │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
                │              │     │           Where: Runtime Filters: {ss_sold_date_sk}
-               │              │     │           Outputs: [ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
+               │              │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_ext_sales_price]
                │              │     └─ Broadcast Exchange Est. 7 rows
                │              │        └─ Inner Join Est. 7 rows
                │              │           │     Condition: d_date == d_date_1
@@ -98,7 +98,7 @@ Projection Est. 100 rows
                │              │           │  │     Condition: isNotNull(d_date) Runtime Filters: {d_date}
                │              │           │  └─ TableScan tpcds100.date_dim Est. 73049 rows
                │              │           │           Where: isNotNull(d_date) Runtime Filters: {d_date}
-               │              │           │           Outputs: [d_date, d_date_sk]
+               │              │           │           Outputs: [d_date_sk, d_date]
                │              │           └─ Broadcast Exchange Est. 7 rows
                │              │              └─ MergingAggregated Est. 7 rows
                │              │                 └─ Repartition Exchange Est. 7 rows
@@ -128,7 +128,7 @@ Projection Est. 100 rows
                │              └─ Repartition Exchange Est. 204000 rows
                │                 │     Partition by: {i_item_sk}
                │                 └─ TableScan tpcds100.item Est. 204000 rows
-               │                          Outputs: [i_item_id, i_item_sk]
+               │                          Outputs: [i_item_sk, i_item_id]
                └─ MergingAggregated Est. 100883 rows
                   └─ Repartition Exchange Est. 100883 rows
                      │     Partition by: {i_item_id_2}
@@ -146,7 +146,7 @@ Projection Est. 100 rows
                            │     │  │     Condition: Runtime Filters: {ws_sold_date_sk}
                            │     │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                            │     │           Where: Runtime Filters: {ws_sold_date_sk}
-                           │     │           Outputs: [ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
+                           │     │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_ext_sales_price]
                            │     └─ Broadcast Exchange Est. 7 rows
                            │        └─ Inner Join Est. 7 rows
                            │           │     Condition: d_date_6 == d_date_7
@@ -155,7 +155,7 @@ Projection Est. 100 rows
                            │           │  │     Condition: isNotNull(d_date_6) Runtime Filters: {d_date_6}
                            │           │  └─ TableScan tpcds100.date_dim Est. 73049 rows
                            │           │           Where: isNotNull(d_date) Runtime Filters: {d_date}
-                           │           │           Outputs: d_date_6:=d_date, d_date_sk_2:=d_date_sk
+                           │           │           Outputs: d_date_sk_2:=d_date_sk, d_date_6:=d_date
                            │           └─ Broadcast Exchange Est. 7 rows
                            │              └─ MergingAggregated Est. 7 rows
                            │                 └─ Repartition Exchange Est. 7 rows
@@ -185,5 +185,5 @@ Projection Est. 100 rows
                            └─ Repartition Exchange Est. 204000 rows
                               │     Partition by: {i_item_sk_2}
                               └─ TableScan tpcds100.item Est. 204000 rows
-                                       Outputs: i_item_id_2:=i_item_id, i_item_sk_2:=i_item_sk
+                                       Outputs: i_item_sk_2:=i_item_sk, i_item_id_2:=i_item_id
 note: Runtime Filter is applied for 9 times.

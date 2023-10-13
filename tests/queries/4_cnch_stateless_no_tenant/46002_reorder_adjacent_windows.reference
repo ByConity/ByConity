@@ -12,7 +12,7 @@ Projection Est. ? rows
                   └─ Repartition Exchange Est. ? rows
                      │     Partition by: {major}
                      └─ TableScan test.students Est. ? rows
-                              Outputs: [age, id, major]
+                              Outputs: [id, major, age]
 ----test no swap to adjacent windows
 Projection Est. ? rows
 │     Expressions: [id, major], avg(age) OVER (PARTITION BY major ORDER BY id ASC):=`expr#avg(age) OVER (PARTITION BY major ORDER BY id ASC)`, count(major) OVER (PARTITION BY major, id ORDER BY id ASC):=`expr#count(major) OVER (PARTITION BY major, id ORDER BY id ASC)`, rank() OVER (PARTITION BY major, id ORDER BY age ASC):=`expr#rank() OVER (PARTITION BY major, id ORDER BY age ASC)`
@@ -27,4 +27,4 @@ Projection Est. ? rows
                   └─ Repartition Exchange Est. ? rows
                      │     Partition by: {major}
                      └─ TableScan test.students Est. ? rows
-                              Outputs: [age, id, major]
+                              Outputs: [id, major, age]

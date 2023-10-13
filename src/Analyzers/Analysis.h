@@ -359,6 +359,10 @@ struct Analysis
     std::unordered_map<ASTSelectQuery *, UInt64> limit_by_values;
     UInt64 getLimitByValue(ASTSelectQuery & select_query);
 
+    /// Limit By Offset
+    std::unordered_map<ASTSelectQuery *, UInt64> limit_by_offset_values;
+    UInt64 getLimitByOffsetValue(ASTSelectQuery & select_query);
+
     /// Limit
     std::unordered_map<ASTSelectQuery *, UInt64> limit_lengths;
     UInt64 getLimitLength(ASTSelectQuery & select_query);

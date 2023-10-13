@@ -32,7 +32,7 @@ Projection Est. 1 rows
                         └─ Filter Est. 61710 rows
                            │     Condition: count_non_null_value > 0
                            └─ Aggregating Est. 68567 rows
-                              │     Group by: {assign_unique_id_symbol, ca_address_sk, ca_state, d_date, d_date_sk, web_company_name, web_site_sk, ws_ext_ship_cost, ws_net_profit, ws_order_number, ws_ship_addr_sk, ws_ship_date_sk, ws_warehouse_sk, ws_web_site_sk}
+                              │     Group by: {ca_state, d_date_sk, ws_net_profit, ca_address_sk, d_date, ws_ext_ship_cost, ws_order_number, ws_warehouse_sk, web_company_name, web_site_sk, ws_web_site_sk, ws_ship_addr_sk, ws_ship_date_sk, assign_unique_id_symbol}
                               │     Aggregates: count_non_null_value:=AggNull(countIf)(build_side_non_null_symbol)
                               └─ Projection Est. 68567 rows
                                  │     Expressions: [assign_unique_id_symbol, ca_address_sk, ca_state, d_date, d_date_sk, web_company_name, web_site_sk, ws_ext_ship_cost, ws_net_profit, ws_order_number, ws_ship_addr_sk, ws_ship_date_sk, ws_warehouse_sk, ws_web_site_sk], build_side_non_null_symbol:=cast(multiIf(if((ws_warehouse_sk != ws_warehouse_sk_1) AND (build_side_non_null_symbol = 1), 1, NULL) = 1, 1, if((ws_warehouse_sk != ws_warehouse_sk_1) AND (build_side_non_null_symbol = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
@@ -47,7 +47,7 @@ Projection Est. 1 rows
                                     │        │     Condition: Runtime Filters: {ws_order_number_1}
                                     │        └─ TableScan tpcds100.web_sales Est. 72001237 rows
                                     │                 Where: Runtime Filters: {ws_order_number}
-                                    │                 Outputs: ws_order_number_1:=ws_order_number, ws_warehouse_sk_1:=ws_warehouse_sk
+                                    │                 Outputs: ws_warehouse_sk_1:=ws_warehouse_sk, ws_order_number_1:=ws_order_number
                                     └─ AssignUniqueId Est. 5811 rows
                                        └─ Repartition Exchange Est. 5811 rows
                                           │     Partition by: {ws_order_number}
@@ -66,19 +66,19 @@ Projection Est. 1 rows
                                              │     │  │  │     Condition: Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
                                              │     │  │  └─ TableScan tpcds100.web_sales Est. 72001237 rows
                                              │     │  │           Where: Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
-                                             │     │  │           Outputs: [ws_ext_ship_cost, ws_net_profit, ws_order_number, ws_ship_addr_sk, ws_ship_date_sk, ws_warehouse_sk, ws_web_site_sk]
+                                             │     │  │           Outputs: [ws_ship_date_sk, ws_ship_addr_sk, ws_web_site_sk, ws_warehouse_sk, ws_order_number, ws_ext_ship_cost, ws_net_profit]
                                              │     │  └─ Broadcast Exchange Est. 59 rows
                                              │     │     └─ Filter Est. 59 rows
                                              │     │        │     Condition: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
                                              │     │        └─ TableScan tpcds100.date_dim Est. 73049 rows
                                              │     │                 Where: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
-                                             │     │                 Outputs: [d_date, d_date_sk]
+                                             │     │                 Outputs: [d_date_sk, d_date]
                                              │     └─ Broadcast Exchange Est. 2 rows
                                              │        └─ Filter Est. 2 rows
                                              │           │     Condition: web_company_name = 'pri'
                                              │           └─ TableScan tpcds100.web_site Est. 24 rows
                                              │                    Where: web_company_name = 'pri'
-                                             │                    Outputs: [web_company_name, web_site_sk]
+                                             │                    Outputs: [web_site_sk, web_company_name]
                                              └─ Repartition Exchange Est. 32478 rows
                                                 │     Partition by: {ca_address_sk}
                                                 └─ Filter Est. 32478 rows

@@ -11,9 +11,9 @@ Projection
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange
-                  │     Partition by: {s_store_id, s_store_name}
+                  │     Partition by: {s_store_name, s_store_id}
                   └─ Aggregating
-                     │     Group by: {s_store_id, s_store_name}
+                     │     Group by: {s_store_name, s_store_id}
                      │     Aggregates: expr#sum(multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL)), expr#sum(multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL)):=AggNull(sum)(expr#multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL))
                      └─ Projection
                         │     Expressions: [s_store_id, s_store_name], expr#multiIf(equals(d_day_name, 'Friday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Friday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Monday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Monday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Saturday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Saturday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Sunday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Sunday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Thursday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Thursday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Tuesday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Tuesday', ss_sales_price, NULL), expr#multiIf(equals(d_day_name, 'Wednesday'), ss_sales_price, NULL):=multiIf(d_day_name = 'Wednesday', ss_sales_price, NULL)
@@ -26,17 +26,17 @@ Projection
                            │  │  │     Condition: Runtime Filters: {ss_sold_date_sk}
                            │  │  └─ TableScan tpcds1000.store_sales
                            │  │           Where: Runtime Filters: {ss_sold_date_sk}
-                           │  │           Outputs: [ss_sales_price, ss_sold_date_sk, ss_store_sk]
+                           │  │           Outputs: [ss_sold_date_sk, ss_store_sk, ss_sales_price]
                            │  └─ Broadcast Exchange
                            │     └─ Filter
                            │        │     Condition: d_year = 2000
                            │        └─ TableScan tpcds1000.date_dim
                            │                 Where: d_year = 2000
-                           │                 Outputs: [d_date_sk, d_day_name, d_year]
+                           │                 Outputs: [d_date_sk, d_year, d_day_name]
                            └─ Broadcast Exchange
                               └─ Filter
                                  │     Condition: s_gmt_offset = -5.
                                  └─ TableScan tpcds1000.store
                                           Where: s_gmt_offset = -5.
-                                          Outputs: [s_gmt_offset, s_store_id, s_store_name, s_store_sk]
+                                          Outputs: [s_store_sk, s_store_id, s_store_name, s_gmt_offset]
 note: Runtime Filter is applied for 1 times.

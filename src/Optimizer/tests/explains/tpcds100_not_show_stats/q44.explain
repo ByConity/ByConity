@@ -38,7 +38,7 @@ Projection
                │     │     │              │           │     Condition: ss_store_sk = 4
                │     │     │              │           └─ TableScan tpcds100.store_sales
                │     │     │              │                    Where: ss_store_sk = 4
-               │     │     │              │                    Outputs: [ss_item_sk, ss_net_profit, ss_store_sk]
+               │     │     │              │                    Outputs: [ss_item_sk, ss_store_sk, ss_net_profit]
                │     │     │              └─ Broadcast Exchange
                │     │     │                 └─ EnforceSingleRow
                │     │     │                    └─ Union
@@ -56,7 +56,7 @@ Projection
                │     │     │                                         │     Condition: (ss_store_sk_1 = 4) AND isNull(ss_addr_sk)
                │     │     │                                         └─ TableScan tpcds100.store_sales
                │     │     │                                                  Where: (ss_store_sk = 4) AND isNull(ss_addr_sk)
-               │     │     │                                                  Outputs: [ss_addr_sk], ss_net_profit_1:=ss_net_profit, ss_store_sk_1:=ss_store_sk
+               │     │     │                                                  Outputs: [ss_addr_sk], ss_store_sk_1:=ss_store_sk, ss_net_profit_1:=ss_net_profit
                │     │     └─ Repartition Exchange
                │     │        │     Partition by: {expr#rank() OVER (ORDER BY rank_col DESC)}
                │     │        └─ Filter
@@ -76,7 +76,7 @@ Projection
                │     │                    │           │     Condition: ss_store_sk_2 = 4
                │     │                    │           └─ TableScan tpcds100.store_sales
                │     │                    │                    Where: ss_store_sk = 4
-               │     │                    │                    Outputs: ss_item_sk_1:=ss_item_sk, ss_net_profit_2:=ss_net_profit, ss_store_sk_2:=ss_store_sk
+               │     │                    │                    Outputs: ss_item_sk_1:=ss_item_sk, ss_store_sk_2:=ss_store_sk, ss_net_profit_2:=ss_net_profit
                │     │                    └─ Broadcast Exchange
                │     │                       └─ EnforceSingleRow
                │     │                          └─ Union
@@ -94,7 +94,7 @@ Projection
                │     │                                               │     Condition: (ss_store_sk_3 = 4) AND isNull(ss_addr_sk_1)
                │     │                                               └─ TableScan tpcds100.store_sales
                │     │                                                        Where: (ss_store_sk = 4) AND isNull(ss_addr_sk)
-               │     │                                                        Outputs: ss_addr_sk_1:=ss_addr_sk, ss_net_profit_3:=ss_net_profit, ss_store_sk_3:=ss_store_sk
+               │     │                                                        Outputs: ss_addr_sk_1:=ss_addr_sk, ss_store_sk_3:=ss_store_sk, ss_net_profit_3:=ss_net_profit
                │     └─ Repartition Exchange
                │        │     Partition by: {i_item_sk}
                │        └─ TableScan tpcds100.item

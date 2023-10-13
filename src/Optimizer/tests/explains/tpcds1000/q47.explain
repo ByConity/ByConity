@@ -31,16 +31,16 @@ Projection Est. 100 rows
                         └─ CTERef[1] Est. 72200 rows
 CTEDef [1]
    Repartition Exchange Est. 72200 rows
-   │     Partition by: {i_brand, i_category, s_company_name, s_store_name}
+   │     Partition by: {s_store_name, s_company_name, i_category, i_brand}
    └─ Window Est. 72200 rows
       └─ Window Est. 72200 rows
          └─ Repartition Exchange Est. 72200 rows
-            │     Partition by: {i_brand, i_category, s_company_name, s_store_name}
+            │     Partition by: {i_category, i_brand, s_store_name, s_company_name}
             └─ MergingAggregated Est. 72200 rows
                └─ Repartition Exchange Est. 72200 rows
-                  │     Partition by: {d_moy, d_year, i_brand, i_category, s_company_name, s_store_name}
+                  │     Partition by: {i_category, i_brand, s_store_name, s_company_name, d_year, d_moy}
                   └─ Aggregating Est. 72200 rows
-                     │     Group by: {d_moy, d_year, i_brand, i_category, s_company_name, s_store_name}
+                     │     Group by: {i_category, i_brand, s_store_name, s_company_name, d_year, d_moy}
                      │     Aggregates: expr#sum(ss_sales_price):=AggNull(sum)(ss_sales_price)
                      └─ Inner Join Est. 664373244 rows
                         │     Condition: ss_store_sk == s_store_sk
@@ -55,19 +55,19 @@ CTEDef [1]
                         │  │     │  │     Condition: Runtime Filters: {ss_sold_date_sk}
                         │  │     │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
                         │  │     │           Where: Runtime Filters: {ss_sold_date_sk}
-                        │  │     │           Outputs: [ss_item_sk, ss_sales_price, ss_sold_date_sk, ss_store_sk]
+                        │  │     │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_store_sk, ss_sales_price]
                         │  │     └─ Broadcast Exchange Est. 427 rows
                         │  │        └─ Filter Est. 427 rows
                         │  │           │     Condition: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
                         │  │           └─ TableScan tpcds1000.date_dim Est. 73049 rows
                         │  │                    Where: (d_year = 1999) OR ((d_year = cast(1998, 'Int32')) AND (d_moy = 12)) OR ((d_year = cast(2000, 'UInt32')) AND (d_moy = 1))
-                        │  │                    Outputs: [d_date_sk, d_moy, d_year]
+                        │  │                    Outputs: [d_date_sk, d_year, d_moy]
                         │  └─ Repartition Exchange Est. 300000 rows
                         │     │     Partition by: {i_item_sk}
                         │     └─ TableScan tpcds1000.item Est. 300000 rows
-                        │              Outputs: [i_brand, i_category, i_item_sk]
+                        │              Outputs: [i_item_sk, i_brand, i_category]
                         └─ Broadcast Exchange Est. 1002 rows
                            └─ TableScan tpcds1000.store Est. 1002 rows
-                                    Outputs: [s_company_name, s_store_name, s_store_sk]
+                                    Outputs: [s_store_sk, s_store_name, s_company_name]
 note: Runtime Filter is applied for 1 times.
 note: CTE(Common Table Expression) is applied for 3 times.

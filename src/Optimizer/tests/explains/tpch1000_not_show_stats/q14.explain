@@ -23,5 +23,5 @@ Projection
                      │     Condition: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))
                      └─ TableScan tpch1000.lineitem
                               Where: (l_shipdate >= cast(9374, 'Date')) AND (l_shipdate < cast(9404, 'Date'))
-                              Outputs: [l_discount, l_extendedprice, l_partkey, l_shipdate]
+                              Outputs: [l_partkey, l_extendedprice, l_discount, l_shipdate]
 note: Runtime Filter is applied for 1 times.

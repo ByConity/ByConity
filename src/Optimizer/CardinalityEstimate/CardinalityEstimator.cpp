@@ -90,9 +90,11 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitFinalSampleStep(const FinalSample
     throw Exception("Not impl card estimate", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-PlanNodeStatisticsPtr CardinalityVisitor::visitOffsetStep(const OffsetStep &, CardinalityContext &)
+PlanNodeStatisticsPtr CardinalityVisitor::visitOffsetStep(const OffsetStep & step, CardinalityContext & context)
 {
-    throw Exception("Not impl card estimate", ErrorCodes::NOT_IMPLEMENTED);
+    PlanNodeStatisticsPtr child_stats = context.children_stats[0];
+    PlanNodeStatisticsPtr stats = LimitEstimator::estimate(child_stats, step);
+    return stats;
 }
 
 PlanNodeStatisticsPtr CardinalityVisitor::visitTotalsHavingStep(const TotalsHavingStep &, CardinalityContext & context)

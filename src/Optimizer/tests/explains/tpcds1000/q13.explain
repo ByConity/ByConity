@@ -24,7 +24,7 @@ Projection Est. 1 rows
             │     │     │  │  │     Condition: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
             │     │     │  │  └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
             │     │     │  │           Where: isNotNull(ss_store_sk) Runtime Filters: {ss_sold_date_sk}
-            │     │     │  │           Outputs: [ss_addr_sk, ss_cdemo_sk, ss_ext_sales_price, ss_ext_wholesale_cost, ss_hdemo_sk, ss_net_profit, ss_quantity, ss_sales_price, ss_sold_date_sk, ss_store_sk]
+            │     │     │  │           Outputs: [ss_sold_date_sk, ss_cdemo_sk, ss_hdemo_sk, ss_addr_sk, ss_store_sk, ss_quantity, ss_sales_price, ss_ext_sales_price, ss_ext_wholesale_cost, ss_net_profit]
             │     │     │  └─ Broadcast Exchange Est. 365 rows
             │     │     │     └─ Filter Est. 365 rows
             │     │     │        │     Condition: d_year = 2001
@@ -37,12 +37,12 @@ Projection Est. 1 rows
             │     └─ Repartition Exchange Est. 1920800 rows
             │        │     Partition by: {cd_demo_sk}
             │        └─ TableScan tpcds1000.customer_demographics Est. 1920800 rows
-            │                 Outputs: [cd_demo_sk, cd_education_status, cd_marital_status]
+            │                 Outputs: [cd_demo_sk, cd_marital_status, cd_education_status]
             └─ Repartition Exchange Est. 6000000 rows
                │     Partition by: {ca_address_sk}
                └─ Filter Est. 6000000 rows
                   │     Condition: ca_country = 'United States'
                   └─ TableScan tpcds1000.customer_address Est. 6000000 rows
                            Where: ca_country = 'United States'
-                           Outputs: [ca_address_sk, ca_country, ca_state]
+                           Outputs: [ca_address_sk, ca_state, ca_country]
 note: Runtime Filter is applied for 1 times.

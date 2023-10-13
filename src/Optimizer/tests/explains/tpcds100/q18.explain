@@ -11,9 +11,9 @@ Projection Est. 100 rows
             │     Limit: 100
             └─ MergingAggregated Est. 349868 rows
                └─ Repartition Exchange Est. 349868 rows
-                  │     Partition by: {__grouping_set, ca_country, ca_county, ca_state, i_item_id}
+                  │     Partition by: {i_item_id, ca_country, ca_state, ca_county, __grouping_set}
                   └─ Aggregating Est. 349868 rows
-                     │     Group by: {ca_country, ca_county, ca_state, i_item_id}
+                     │     Group by: {i_item_id, ca_country, ca_state, ca_county}
                      │     Aggregates: expr#avg(CAST(cs_quantity, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_quantity, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_list_price, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_list_price, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cs_net_profit, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cs_net_profit, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(c_birth_year, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(c_birth_year, 'Nullable(Decimal(12, 2))')), expr#avg(CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))')):=AggNull(avg)(expr#CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))'))
                      └─ Projection Est. 349868 rows
                         │     Expressions: [ca_country, ca_county, ca_state, i_item_id], expr#CAST(c_birth_year, 'Nullable(Decimal(12, 2))'):=CAST(c_birth_year, 'Nullable(Decimal(12, 2))'), expr#CAST(cd1.cd_dep_count, 'Nullable(Decimal(12, 2))'):=CAST(cd_dep_count, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))'):=CAST(cs_coupon_amt, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_list_price, 'Nullable(Decimal(12, 2))'):=CAST(cs_list_price, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_net_profit, 'Nullable(Decimal(12, 2))'):=CAST(cs_net_profit, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_quantity, 'Nullable(Decimal(12, 2))'):=CAST(cs_quantity, 'Nullable(Decimal(12, 2))'), expr#CAST(cs_sales_price, 'Nullable(Decimal(12, 2))'):=CAST(cs_sales_price, 'Nullable(Decimal(12, 2))')
@@ -36,13 +36,13 @@ Projection Est. 100 rows
                            │     │     │  │  │     Condition: Runtime Filters: {cs_bill_cdemo_sk, cs_bill_customer_sk, cs_sold_date_sk}
                            │     │     │  │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
                            │     │     │  │           Where: Runtime Filters: {cs_bill_cdemo_sk, cs_bill_customer_sk, cs_sold_date_sk}
-                           │     │     │  │           Outputs: [cs_bill_cdemo_sk, cs_bill_customer_sk, cs_coupon_amt, cs_item_sk, cs_list_price, cs_net_profit, cs_quantity, cs_sales_price, cs_sold_date_sk]
+                           │     │     │  │           Outputs: [cs_sold_date_sk, cs_bill_customer_sk, cs_bill_cdemo_sk, cs_item_sk, cs_quantity, cs_list_price, cs_sales_price, cs_coupon_amt, cs_net_profit]
                            │     │     │  └─ Broadcast Exchange Est. 137200 rows
                            │     │     │     └─ Filter Est. 137200 rows
                            │     │     │        │     Condition: (cd_gender = 'F') AND (cd_education_status = 'Unknown')
                            │     │     │        └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
                            │     │     │                 Where: (cd_gender = 'F') AND (cd_education_status = 'Unknown')
-                           │     │     │                 Outputs: [cd_demo_sk, cd_dep_count, cd_education_status, cd_gender]
+                           │     │     │                 Outputs: [cd_demo_sk, cd_gender, cd_education_status, cd_dep_count]
                            │     │     └─ Broadcast Exchange Est. 365 rows
                            │     │        └─ Filter Est. 365 rows
                            │     │           │     Condition: d_year = 1998
@@ -60,16 +60,16 @@ Projection Est. 100 rows
                            │           │     │     Condition: (c_birth_month IN (1, 2, 6, 8, 9, 12)) AND isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk}
                            │           │     └─ TableScan tpcds100.customer Est. 2000000 rows
                            │           │              Where: (c_birth_month IN (1, 2, 6, 8, 9, 12)) AND isNotNull(c_current_cdemo_sk) Runtime Filters: {c_current_addr_sk}
-                           │           │              Outputs: [c_birth_month, c_birth_year, c_current_addr_sk, c_current_cdemo_sk, c_customer_sk]
+                           │           │              Outputs: [c_customer_sk, c_current_cdemo_sk, c_current_addr_sk, c_birth_month, c_birth_year]
                            │           └─ Repartition Exchange Est. 151882 rows
                            │              │     Partition by: {ca_address_sk}
                            │              └─ Filter Est. 151882 rows
                            │                 │     Condition: ca_state IN ('IN', 'MS', 'ND', 'NM', 'OK', 'VA')
                            │                 └─ TableScan tpcds100.customer_address Est. 1000000 rows
                            │                          Where: ca_state IN ('IN', 'MS', 'ND', 'NM', 'OK', 'VA')
-                           │                          Outputs: [ca_address_sk, ca_country, ca_county, ca_state]
+                           │                          Outputs: [ca_address_sk, ca_county, ca_state, ca_country]
                            └─ Repartition Exchange Est. 204000 rows
                               │     Partition by: {i_item_sk}
                               └─ TableScan tpcds100.item Est. 204000 rows
-                                       Outputs: [i_item_id, i_item_sk]
+                                       Outputs: [i_item_sk, i_item_id]
 note: Runtime Filter is applied for 4 times.

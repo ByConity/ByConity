@@ -91,7 +91,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateProject)
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#c:=c, expr#deptno:=deptno\n"
                                     "               └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                        Outputs: [c, deptno]")
+                                    "                        Outputs: [deptno, c]")
         .ok();
 }
 
@@ -240,7 +240,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#c:=c, expr#deptno:=deptno, expr#s:=s\n"
                                     "               └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                        Outputs: [c, deptno, s]")
+                                    "                        Outputs: [c, s, deptno]")
         .ok();
 }
 
@@ -262,7 +262,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
                                     "            └─ Projection\n"
                                     "               │     Expressions: expr#c:=c, expr#deptno:=deptno, expr#empid:=empid, expr#s:=s\n"
                                     "               └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                        Outputs: [c, deptno, empid, s]")
+                                    "                        Outputs: [c, empid, s, deptno]")
         .ok();
 }
 
@@ -287,7 +287,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
                                     "                  │     Condition: deptno > 10\n"
                                     "                  └─ TableScan test_mview.MV0_MV_DATA\n"
                                     "                           Where: deptno > 10\n"
-                                    "                           Outputs: [deptno, s]")
+                                    "                           Outputs: [s, deptno]")
         .ok();
 }
 
@@ -314,7 +314,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
             "                  │     Condition: deptno > 10\n"
             "                  └─ TableScan test_mview.MV0_MV_DATA\n"
             "                           Where: deptno > 10\n"
-            "                           Outputs: [deptno, s]")
+            "                           Outputs: [s, deptno]")
         .ok();
 }
 
@@ -348,7 +348,7 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
                                     "                  │     Condition: deptno > 10\n"
                                     "                  └─ TableScan test_mview.MV0_MV_DATA\n"
                                     "                           Where: deptno > 10\n"
-                                    "                           Outputs: [deptno, s]")
+                                    "                           Outputs: [s, deptno]")
         .ok();
 }
 
@@ -1419,13 +1419,13 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "               │     Expressions: deptno:=`expr#deptno`, empid:=`expr#empid`\n"
                                     "               └─ MergingAggregated\n"
                                     "                  └─ Repartition Exchange\n"
-                                    "                     │     Partition by: {expr#deptno, expr#empid}\n"
+                                    "                     │     Partition by: {expr#empid, expr#deptno}\n"
                                     "                     └─ Aggregating\n"
-                                    "                        │     Group by: {expr#deptno, expr#empid}\n"
+                                    "                        │     Group by: {expr#empid, expr#deptno}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#empid:=empid\n"
                                     "                           └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                    Outputs: [deptno, empid]")
+                                    "                                    Outputs: [empid, deptno]")
         .ok();
 }
 
@@ -1454,13 +1454,13 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "               │     Expressions: deptno:=`expr#deptno`, empid:=`expr#empid`\n"
                                     "               └─ MergingAggregated\n"
                                     "                  └─ Repartition Exchange\n"
-                                    "                     │     Partition by: {expr#deptno, expr#empid}\n"
+                                    "                     │     Partition by: {expr#empid, expr#deptno}\n"
                                     "                     └─ Aggregating\n"
-                                    "                        │     Group by: {expr#deptno, expr#empid}\n"
+                                    "                        │     Group by: {expr#empid, expr#deptno}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#empid:=empid\n"
                                     "                           └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                    Outputs: [deptno, empid]")
+                                    "                                    Outputs: [empid, deptno]")
         .ok();
 }
 
@@ -1489,13 +1489,13 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "               │     Expressions: deptno:=`expr#deptno`, salary:=`expr#salary`\n"
                                     "               └─ MergingAggregated\n"
                                     "                  └─ Repartition Exchange\n"
-                                    "                     │     Partition by: {expr#deptno, expr#salary}\n"
+                                    "                     │     Partition by: {expr#salary, expr#deptno}\n"
                                     "                     └─ Aggregating\n"
-                                    "                        │     Group by: {expr#deptno, expr#salary}\n"
+                                    "                        │     Group by: {expr#salary, expr#deptno}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#salary:=salary\n"
                                     "                           └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                    Outputs: [deptno, salary]")
+                                    "                                    Outputs: [salary, deptno]")
         .ok();
 }
 
@@ -1524,12 +1524,12 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationOnCountDi
                                     "               │     Expressions: deptno:=`expr#deptno`, salary:=`expr#salary`\n"
                                     "               └─ MergingAggregated\n"
                                     "                  └─ Repartition Exchange\n"
-                                    "                     │     Partition by: {expr#deptno, expr#salary}\n"
+                                    "                     │     Partition by: {expr#salary, expr#deptno}\n"
                                     "                     └─ Aggregating\n"
-                                    "                        │     Group by: {expr#deptno, expr#salary}\n"
+                                    "                        │     Group by: {expr#salary, expr#deptno}\n"
                                     "                        └─ Projection\n"
                                     "                           │     Expressions: expr#deptno:=deptno, expr#salary:=salary\n"
                                     "                           └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "                                    Outputs: [deptno, salary]")
+                                    "                                    Outputs: [salary, deptno]")
         .ok();
 }

@@ -10,7 +10,7 @@ Projection Est. ? rows
             │     Condition: isNotNull(parent_id)
             └─ TableScan test.child Est. ? rows
                      Where: isNotNull(parent_id)
-                     Outputs: [description, id, parent_id]
+                     Outputs: [id, parent_id, description]
 1	1	CHILD ONE
 2	1	CHILD ONE
 3	2	CHILD TWO

@@ -1610,6 +1610,12 @@ void QueryAnalyzerVisitor::analyzeLimitBy(ASTSelectQuery & select_query, ScopePt
 
         auto limit_by_value = analyzeUIntConstExpression(select_query.limitByLength());
         analysis.limit_by_values[&select_query] = limit_by_value;
+
+        if (select_query.getLimitByOffset())
+        {
+            auto limit_by_offset_value = analyzeUIntConstExpression(select_query.getLimitByOffset());
+            analysis.limit_by_offset_values[&select_query] = limit_by_offset_value;
+        }
     }
 }
 

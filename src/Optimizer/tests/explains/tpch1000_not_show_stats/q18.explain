@@ -10,7 +10,7 @@ Projection
             │     Order by: {o_totalprice desc nulls_last, o_orderdate asc}
             │     Limit: 100
             └─ Aggregating
-               │     Group by: {c_custkey, c_name, o_orderdate, o_orderkey, o_totalprice}
+               │     Group by: {c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice}
                │     Aggregates: expr#sum(l_quantity)_1:=AggNull(sum)(l_quantity)
                └─ Inner (PARALLEL_HASH) Join
                   │     Condition: l_orderkey == l_orderkey_1
@@ -33,7 +33,7 @@ Projection
                      │     │     │     Condition: isNotNull(o_orderkey)
                      │     │     └─ TableScan tpch1000.orders
                      │     │              Where: isNotNull(o_orderkey)
-                     │     │              Outputs: [o_custkey, o_orderdate, o_orderkey, o_totalprice]
+                     │     │              Outputs: [o_orderkey, o_custkey, o_totalprice, o_orderdate]
                      │     └─ Repartition Exchange
                      │        │     Partition by: {c_custkey}
                      │        └─ TableScan tpch1000.customer

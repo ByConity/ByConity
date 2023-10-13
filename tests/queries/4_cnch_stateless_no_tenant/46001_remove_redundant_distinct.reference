@@ -72,7 +72,7 @@ Gather Exchange Est. ? rows
       │  └─ TableScan test_distinct.unique_1 Est. ? rows
       │           Outputs: [id, m1]
       └─ Repartition Exchange Est. ? rows
-         │     Partition by: {id2, id_1}
+         │     Partition by: {id_1, id2}
          └─ TableScan test_distinct.unique_2 Est. ? rows
                   Outputs: [id2], id_1:=id
 ---------test left join
@@ -190,8 +190,8 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
-         │     Partition by: {id4, k3, m2}
+         │     Partition by: {id4, m2, k3}
          └─ Aggregating Est. ? rows
-            │     Group by: {id4, k3, m2}
+            │     Group by: {id4, m2, k3}
             └─ TableScan test_distinct.unique_4 Est. ? rows
-                     Outputs: [id4, k3, m2]
+                     Outputs: [id4, m2, k3]

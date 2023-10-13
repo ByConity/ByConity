@@ -32,7 +32,7 @@ Projection Est. 1 rows
                         └─ Filter Est. 306264 rows
                            │     Condition: count_non_null_value > 0
                            └─ Aggregating Est. 340294 rows
-                              │     Group by: {assign_unique_id_symbol, ca_address_sk, ca_state, cc_call_center_sk, cc_county, cs_call_center_sk, cs_ext_ship_cost, cs_net_profit, cs_order_number, cs_ship_addr_sk, cs_ship_date_sk, cs_warehouse_sk, d_date, d_date_sk}
+                              │     Group by: {cc_county, cc_call_center_sk, cs_warehouse_sk, ca_state, ca_address_sk, d_date, cs_ext_ship_cost, cs_ship_addr_sk, cs_order_number, cs_net_profit, cs_ship_date_sk, cs_call_center_sk, d_date_sk, assign_unique_id_symbol}
                               │     Aggregates: count_non_null_value:=AggNull(countIf)(build_side_non_null_symbol)
                               └─ Projection Est. 340294 rows
                                  │     Expressions: [assign_unique_id_symbol, ca_address_sk, ca_state, cc_call_center_sk, cc_county, cs_call_center_sk, cs_ext_ship_cost, cs_net_profit, cs_order_number, cs_ship_addr_sk, cs_ship_date_sk, cs_warehouse_sk, d_date, d_date_sk], build_side_non_null_symbol:=cast(multiIf(if((cs_warehouse_sk != cs_warehouse_sk_1) AND (build_side_non_null_symbol = 1), 1, NULL) = 1, 1, if((cs_warehouse_sk != cs_warehouse_sk_1) AND (build_side_non_null_symbol = 1), 1, NULL) = NULL, 0, 0), 'UInt8')
@@ -47,7 +47,7 @@ Projection Est. 1 rows
                                     │        │     Condition: Runtime Filters: {cs_order_number_1}
                                     │        └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
                                     │                 Where: Runtime Filters: {cs_order_number}
-                                    │                 Outputs: cs_order_number_1:=cs_order_number, cs_warehouse_sk_1:=cs_warehouse_sk
+                                    │                 Outputs: cs_warehouse_sk_1:=cs_warehouse_sk, cs_order_number_1:=cs_order_number
                                     └─ AssignUniqueId Est. 37196 rows
                                        └─ Repartition Exchange Est. 37196 rows
                                           │     Partition by: {cs_order_number}
@@ -66,13 +66,13 @@ Projection Est. 1 rows
                                              │     │  │  │     Condition: Runtime Filters: {cs_call_center_sk, cs_ship_addr_sk, cs_ship_date_sk}
                                              │     │  │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
                                              │     │  │           Where: Runtime Filters: {cs_call_center_sk, cs_ship_addr_sk, cs_ship_date_sk}
-                                             │     │  │           Outputs: [cs_call_center_sk, cs_ext_ship_cost, cs_net_profit, cs_order_number, cs_ship_addr_sk, cs_ship_date_sk, cs_warehouse_sk]
+                                             │     │  │           Outputs: [cs_ship_date_sk, cs_ship_addr_sk, cs_call_center_sk, cs_warehouse_sk, cs_order_number, cs_ext_ship_cost, cs_net_profit]
                                              │     │  └─ Broadcast Exchange Est. 60 rows
                                              │     │     └─ Filter Est. 60 rows
                                              │     │        │     Condition: (d_date >= cast(11719, 'Date')) AND (d_date <= cast(11779, 'Date'))
                                              │     │        └─ TableScan tpcds100.date_dim Est. 73049 rows
                                              │     │                 Where: (d_date >= cast(11719, 'Date')) AND (d_date <= cast(11779, 'Date'))
-                                             │     │                 Outputs: [d_date, d_date_sk]
+                                             │     │                 Outputs: [d_date_sk, d_date]
                                              │     └─ Broadcast Exchange Est. 5 rows
                                              │        └─ Filter Est. 5 rows
                                              │           │     Condition: cc_county = 'Williamson County'

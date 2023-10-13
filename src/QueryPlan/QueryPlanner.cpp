@@ -147,8 +147,8 @@ private:
     void planOrderBy(PlanBuilder & builder, ASTSelectQuery & select_query);
     void planWithFill(PlanBuilder & builder, ASTSelectQuery & select_query);
     void planLimitBy(PlanBuilder & builder, ASTSelectQuery & select_query);
-    void planLimit(PlanBuilder & builder, ASTSelectQuery & select_query);
     void planTotalsAndHaving(PlanBuilder & builder, ASTSelectQuery & select_query);
+    void planLimitAndOffset(PlanBuilder & builder, ASTSelectQuery & select_query);
     // void planSampling(PlanBuilder & builder, ASTSelectQuery & select_query);
     RelationPlan planFinalSelect(PlanBuilder & builder, ASTSelectQuery & select_query);
 
@@ -380,7 +380,7 @@ RelationPlan QueryPlannerVisitor::visitASTSelectQuery(ASTPtr & node, const Void 
 
     planWithFill(builder, select_query);
 
-    planLimit(builder, select_query);
+    planLimitAndOffset(builder, select_query);
 
     // planSampling(builder, select_query);
 
@@ -1664,11 +1664,13 @@ void QueryPlannerVisitor::planLimitBy(PlanBuilder & builder, ASTSelectQuery & se
     builder.appendProjection(limit_by_expressions);
     PRINT_PLAN(builder.plan, plan_prepare_limit_by);
 
+    UInt64 offset = select_query.getLimitByOffset() ? analysis.getLimitByOffsetValue(select_query) : 0;
+
     // plan limit by node
     auto step = std::make_shared<LimitByStep>(
         builder.getCurrentDataStream(),
         analysis.getLimitByValue(select_query),
-        0, // TODO
+        offset,
         builder.translateToUniqueSymbols(limit_by_expressions));
     builder.addStep(std::move(step));
     PRINT_PLAN(builder.plan, plan_limit_by);
@@ -1766,7 +1768,7 @@ static bool hasWithTotalsInAnySubqueryInFromClause(const ASTSelectQuery & query)
     return false;
 }
 
-void QueryPlannerVisitor::planLimit(PlanBuilder & builder, ASTSelectQuery & select_query)
+void QueryPlannerVisitor::planLimitAndOffset(PlanBuilder & builder, ASTSelectQuery & select_query)
 {
     if (select_query.limitLength())
     {
@@ -1792,6 +1794,12 @@ void QueryPlannerVisitor::planLimit(PlanBuilder & builder, ASTSelectQuery & sele
         std::tie(limit_length, limit_offset) = getLimitLengthAndOffset(select_query);
         auto step = std::make_shared<LimitStep>(builder.getCurrentDataStream(), limit_length, limit_offset, always_read_till_end);
         builder.addStep(std::move(step));
+    }
+    else if (select_query.getLimitOffset())
+    {
+        UInt64 offset = analysis.getLimitOffset(select_query);
+        auto offsets_step = std::make_unique<OffsetStep>(builder.getCurrentDataStream(), offset);
+        builder.addStep(std::move(offsets_step));
     }
 }
 

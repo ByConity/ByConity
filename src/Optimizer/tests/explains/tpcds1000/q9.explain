@@ -94,7 +94,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │                 │     Condition: (ss_quantity_4 >= 21) AND (ss_quantity_4 <= 40)
       │  │  │  │  │  │  │  │  │  │                 └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
       │  │  │  │  │  │  │  │  │  │                          Where: (ss_quantity >= 21) AND (ss_quantity <= 40)
-      │  │  │  │  │  │  │  │  │  │                          Outputs: ss_ext_discount_amt_1:=ss_ext_discount_amt, ss_quantity_4:=ss_quantity
+      │  │  │  │  │  │  │  │  │  │                          Outputs: ss_quantity_4:=ss_quantity, ss_ext_discount_amt_1:=ss_ext_discount_amt
       │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │     └─ MergingAggregated Est. 1 rows
       │  │  │  │  │  │  │  │  │        └─ Gather Exchange Est. 1 rows
@@ -105,7 +105,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │                 │     Condition: (ss_quantity_5 >= 21) AND (ss_quantity_5 <= 40)
       │  │  │  │  │  │  │  │  │                 └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
       │  │  │  │  │  │  │  │  │                          Where: (ss_quantity >= 21) AND (ss_quantity <= 40)
-      │  │  │  │  │  │  │  │  │                          Outputs: ss_net_paid_1:=ss_net_paid, ss_quantity_5:=ss_quantity
+      │  │  │  │  │  │  │  │  │                          Outputs: ss_quantity_5:=ss_quantity, ss_net_paid_1:=ss_net_paid
       │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │     └─ Projection Est. 1 rows
       │  │  │  │  │  │  │  │        │     Expressions: expr#count()_2:=cast(`expr#count()_2`, 'Nullable(UInt64)')
@@ -129,7 +129,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │                 │     Condition: (ss_quantity_7 >= 41) AND (ss_quantity_7 <= 60)
       │  │  │  │  │  │  │                 └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
       │  │  │  │  │  │  │                          Where: (ss_quantity >= 41) AND (ss_quantity <= 60)
-      │  │  │  │  │  │  │                          Outputs: ss_ext_discount_amt_2:=ss_ext_discount_amt, ss_quantity_7:=ss_quantity
+      │  │  │  │  │  │  │                          Outputs: ss_quantity_7:=ss_quantity, ss_ext_discount_amt_2:=ss_ext_discount_amt
       │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │     └─ MergingAggregated Est. 1 rows
       │  │  │  │  │  │        └─ Gather Exchange Est. 1 rows
@@ -140,7 +140,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │                 │     Condition: (ss_quantity_8 >= 41) AND (ss_quantity_8 <= 60)
       │  │  │  │  │  │                 └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
       │  │  │  │  │  │                          Where: (ss_quantity >= 41) AND (ss_quantity <= 60)
-      │  │  │  │  │  │                          Outputs: ss_net_paid_2:=ss_net_paid, ss_quantity_8:=ss_quantity
+      │  │  │  │  │  │                          Outputs: ss_quantity_8:=ss_quantity, ss_net_paid_2:=ss_net_paid
       │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │     └─ Projection Est. 1 rows
       │  │  │  │  │        │     Expressions: expr#count()_3:=cast(`expr#count()_3`, 'Nullable(UInt64)')
@@ -164,7 +164,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │                 │     Condition: (ss_quantity_10 >= 61) AND (ss_quantity_10 <= 80)
       │  │  │  │                 └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
       │  │  │  │                          Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
-      │  │  │  │                          Outputs: ss_ext_discount_amt_3:=ss_ext_discount_amt, ss_quantity_10:=ss_quantity
+      │  │  │  │                          Outputs: ss_quantity_10:=ss_quantity, ss_ext_discount_amt_3:=ss_ext_discount_amt
       │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │     └─ MergingAggregated Est. 1 rows
       │  │  │        └─ Gather Exchange Est. 1 rows
@@ -175,7 +175,7 @@ Gather Exchange Est. 1 rows
       │  │  │                 │     Condition: (ss_quantity_11 >= 61) AND (ss_quantity_11 <= 80)
       │  │  │                 └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
       │  │  │                          Where: (ss_quantity >= 61) AND (ss_quantity <= 80)
-      │  │  │                          Outputs: ss_net_paid_3:=ss_net_paid, ss_quantity_11:=ss_quantity
+      │  │  │                          Outputs: ss_quantity_11:=ss_quantity, ss_net_paid_3:=ss_net_paid
       │  │  └─ Broadcast Exchange Est. 1 rows
       │  │     └─ Projection Est. 1 rows
       │  │        │     Expressions: expr#count()_4:=cast(`expr#count()_4`, 'Nullable(UInt64)')
@@ -199,7 +199,7 @@ Gather Exchange Est. 1 rows
       │                 │     Condition: (ss_quantity_13 >= 81) AND (ss_quantity_13 <= 100)
       │                 └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
       │                          Where: (ss_quantity >= 81) AND (ss_quantity <= 100)
-      │                          Outputs: ss_ext_discount_amt_4:=ss_ext_discount_amt, ss_quantity_13:=ss_quantity
+      │                          Outputs: ss_quantity_13:=ss_quantity, ss_ext_discount_amt_4:=ss_ext_discount_amt
       └─ Broadcast Exchange Est. 1 rows
          └─ MergingAggregated Est. 1 rows
             └─ Gather Exchange Est. 1 rows
@@ -210,4 +210,4 @@ Gather Exchange Est. 1 rows
                      │     Condition: (ss_quantity_14 >= 81) AND (ss_quantity_14 <= 100)
                      └─ TableScan tpcds1000.store_sales Est. 2879987999 rows
                               Where: (ss_quantity >= 81) AND (ss_quantity <= 100)
-                              Outputs: ss_net_paid_4:=ss_net_paid, ss_quantity_14:=ss_quantity
+                              Outputs: ss_quantity_14:=ss_quantity, ss_net_paid_4:=ss_net_paid

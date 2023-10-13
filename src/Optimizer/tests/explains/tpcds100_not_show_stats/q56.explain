@@ -42,13 +42,13 @@ Projection
                   │                 │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
                   │                 │  │  └─ TableScan tpcds100.store_sales
                   │                 │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
-                  │                 │  │           Outputs: [ss_addr_sk, ss_ext_sales_price, ss_item_sk, ss_sold_date_sk]
+                  │                 │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_addr_sk, ss_ext_sales_price]
                   │                 │  └─ Broadcast Exchange
                   │                 │     └─ Filter
                   │                 │        │     Condition: (d_moy = 2) AND (d_year = 2001)
                   │                 │        └─ TableScan tpcds100.date_dim
                   │                 │                 Where: (d_moy = 2) AND (d_year = 2001)
-                  │                 │                 Outputs: [d_date_sk, d_moy, d_year]
+                  │                 │                 Outputs: [d_date_sk, d_year, d_moy]
                   │                 └─ Broadcast Exchange
                   │                    └─ Inner Join
                   │                       │     Condition: i_item_id == i_item_id_1
@@ -58,7 +58,7 @@ Projection
                   │                       │     │     Condition: isNotNull(i_item_id)
                   │                       │     └─ TableScan tpcds100.item
                   │                       │              Where: isNotNull(i_item_id)
-                  │                       │              Outputs: [i_item_id, i_item_sk]
+                  │                       │              Outputs: [i_item_sk, i_item_id]
                   │                       └─ MergingAggregated
                   │                          └─ Repartition Exchange
                   │                             │     Partition by: {i_item_id_1}
@@ -99,13 +99,13 @@ Projection
                   │                 │  │  │     Condition: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
                   │                 │  │  └─ TableScan tpcds100.catalog_sales
                   │                 │  │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
-                  │                 │  │           Outputs: [cs_bill_addr_sk, cs_ext_sales_price, cs_item_sk, cs_sold_date_sk]
+                  │                 │  │           Outputs: [cs_sold_date_sk, cs_bill_addr_sk, cs_item_sk, cs_ext_sales_price]
                   │                 │  └─ Broadcast Exchange
                   │                 │     └─ Filter
                   │                 │        │     Condition: (d_moy_1 = 2) AND (d_year_1 = 2001)
                   │                 │        └─ TableScan tpcds100.date_dim
                   │                 │                 Where: (d_moy = 2) AND (d_year = 2001)
-                  │                 │                 Outputs: d_date_sk_1:=d_date_sk, d_moy_1:=d_moy, d_year_1:=d_year
+                  │                 │                 Outputs: d_date_sk_1:=d_date_sk, d_year_1:=d_year, d_moy_1:=d_moy
                   │                 └─ Broadcast Exchange
                   │                    └─ Inner Join
                   │                       │     Condition: i_item_id_2 == i_item_id_3
@@ -115,7 +115,7 @@ Projection
                   │                       │     │     Condition: isNotNull(i_item_id_2)
                   │                       │     └─ TableScan tpcds100.item
                   │                       │              Where: isNotNull(i_item_id)
-                  │                       │              Outputs: i_item_id_2:=i_item_id, i_item_sk_1:=i_item_sk
+                  │                       │              Outputs: i_item_sk_1:=i_item_sk, i_item_id_2:=i_item_id
                   │                       └─ MergingAggregated
                   │                          └─ Repartition Exchange
                   │                             │     Partition by: {i_item_id_3}
@@ -127,7 +127,7 @@ Projection
                   │                                      │     Condition: (i_color_1 IN ('blanched', 'burnished', 'slate')) AND isNotNull(i_item_id_3)
                   │                                      └─ TableScan tpcds100.item
                   │                                               Where: (i_color IN ('blanched', 'burnished', 'slate')) AND isNotNull(i_item_id)
-                  │                                               Outputs: i_color_1:=i_color, i_item_id_3:=i_item_id
+                  │                                               Outputs: i_item_id_3:=i_item_id, i_color_1:=i_color
                   └─ MergingAggregated
                      └─ Repartition Exchange
                         │     Partition by: {i_item_id_4}
@@ -156,13 +156,13 @@ Projection
                                     │  │  │     Condition: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
                                     │  │  └─ TableScan tpcds100.web_sales
                                     │  │           Where: Runtime Filters: {ws_item_sk, ws_sold_date_sk}
-                                    │  │           Outputs: [ws_bill_addr_sk, ws_ext_sales_price, ws_item_sk, ws_sold_date_sk]
+                                    │  │           Outputs: [ws_sold_date_sk, ws_item_sk, ws_bill_addr_sk, ws_ext_sales_price]
                                     │  └─ Broadcast Exchange
                                     │     └─ Filter
                                     │        │     Condition: (d_year_2 = 2001) AND (d_moy_2 = 2)
                                     │        └─ TableScan tpcds100.date_dim
                                     │                 Where: (d_year = 2001) AND (d_moy = 2)
-                                    │                 Outputs: d_date_sk_2:=d_date_sk, d_moy_2:=d_moy, d_year_2:=d_year
+                                    │                 Outputs: d_date_sk_2:=d_date_sk, d_year_2:=d_year, d_moy_2:=d_moy
                                     └─ Broadcast Exchange
                                        └─ Inner Join
                                           │     Condition: i_item_id_4 == i_item_id_5
@@ -172,7 +172,7 @@ Projection
                                           │     │     Condition: isNotNull(i_item_id_4)
                                           │     └─ TableScan tpcds100.item
                                           │              Where: isNotNull(i_item_id)
-                                          │              Outputs: i_item_id_4:=i_item_id, i_item_sk_2:=i_item_sk
+                                          │              Outputs: i_item_sk_2:=i_item_sk, i_item_id_4:=i_item_id
                                           └─ MergingAggregated
                                              └─ Repartition Exchange
                                                 │     Partition by: {i_item_id_5}
@@ -184,5 +184,5 @@ Projection
                                                          │     Condition: (i_color_2 IN ('blanched', 'burnished', 'slate')) AND isNotNull(i_item_id_5)
                                                          └─ TableScan tpcds100.item
                                                                   Where: (i_color IN ('blanched', 'burnished', 'slate')) AND isNotNull(i_item_id)
-                                                                  Outputs: i_color_2:=i_color, i_item_id_5:=i_item_id
+                                                                  Outputs: i_item_id_5:=i_item_id, i_color_2:=i_color
 note: Runtime Filter is applied for 9 times.

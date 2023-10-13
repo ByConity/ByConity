@@ -48,4 +48,4 @@ Projection Est. ? rows
             └─ Projection Est. ? rows
                │     Expressions: expr#tuple(uid, customer_id_bk):=(uid, customer_id_bk)
                └─ TableScan aeolus_data_db_cnch_gamma_yg_202305.aeolus_data_table_35_1537237_prod Est. ? rows
-                        Outputs: [customer_id_bk, uid]
+                        Outputs: [uid, customer_id_bk]

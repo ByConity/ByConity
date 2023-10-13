@@ -11,9 +11,9 @@ Projection Est. 100 rows
             │     Limit: 100
             └─ MergingAggregated Est. 51832 rows
                └─ Repartition Exchange Est. 51832 rows
-                  │     Partition by: {i_item_id, w_state}
+                  │     Partition by: {w_state, i_item_id}
                   └─ Aggregating Est. 51832 rows
-                     │     Group by: {i_item_id, w_state}
+                     │     Group by: {w_state, i_item_id}
                      │     Aggregates: expr#sum(multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)):=AggNull(sum)(expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)), expr#sum(multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0)):=AggNull(sum)(expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0))
                      └─ Projection Est. 381056 rows
                         │     Expressions: [i_item_id, w_state], expr#multiIf(greaterOrEquals(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0):=multiIf(CAST(d_date, 'date') >= cast(11027, 'Date'), cs_sales_price - coalesce(cr_refunded_cash, 0), 0), expr#multiIf(less(CAST(d_date, 'date'), CAST('2000-03-11', 'date')), minus(cs_sales_price, coalesce(cr_refunded_cash, 0)), 0):=multiIf(CAST(d_date, 'date') < cast(11027, 'Date'), cs_sales_price - coalesce(cr_refunded_cash, 0), 0)
@@ -41,20 +41,20 @@ Projection Est. 100 rows
                                  │  │  │  │     Condition: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
                                  │  │  │  └─ TableScan tpcds100.catalog_sales Est. 143997065 rows
                                  │  │  │           Where: Runtime Filters: {cs_item_sk, cs_sold_date_sk}
-                                 │  │  │           Outputs: [cs_item_sk, cs_order_number, cs_sales_price, cs_sold_date_sk, cs_warehouse_sk]
+                                 │  │  │           Outputs: [cs_sold_date_sk, cs_warehouse_sk, cs_item_sk, cs_order_number, cs_sales_price]
                                  │  │  └─ Broadcast Exchange Est. 60 rows
                                  │  │     └─ Filter Est. 60 rows
                                  │  │        │     Condition: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
                                  │  │        └─ TableScan tpcds100.date_dim Est. 73049 rows
                                  │  │                 Where: (d_date >= cast(10997, 'Date')) AND (d_date <= cast(11057, 'Date'))
-                                 │  │                 Outputs: [d_date, d_date_sk]
+                                 │  │                 Outputs: [d_date_sk, d_date]
                                  │  └─ Broadcast Exchange Est. 13102 rows
                                  │     └─ Filter Est. 13102 rows
                                  │        │     Condition: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
                                  │        └─ TableScan tpcds100.item Est. 204000 rows
                                  │                 Where: (i_current_price >= 0.99) AND (i_current_price <= 1.49)
-                                 │                 Outputs: [i_current_price, i_item_id, i_item_sk]
+                                 │                 Outputs: [i_item_sk, i_item_id, i_current_price]
                                  └─ Broadcast Exchange Est. 15 rows
                                     └─ TableScan tpcds100.warehouse Est. 15 rows
-                                             Outputs: [w_state, w_warehouse_sk]
+                                             Outputs: [w_warehouse_sk, w_state]
 note: Runtime Filter is applied for 4 times.

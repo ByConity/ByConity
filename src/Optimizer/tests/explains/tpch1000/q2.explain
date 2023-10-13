@@ -33,7 +33,7 @@ Projection Est. 100 rows
                │        │     │     Condition: (p_size = 15) AND (p_type LIKE '%BRASS') Runtime Filters: {p_partkey}
                │        │     └─ TableScan tpch1000.part Est. 200000000 rows
                │        │              Where: (p_size = 15) AND (p_type LIKE '%BRASS') Runtime Filters: {p_partkey}
-               │        │              Outputs: [p_mfgr, p_partkey, p_size, p_type]
+               │        │              Outputs: [p_partkey, p_mfgr, p_type, p_size]
                │        └─ Repartition Exchange Est. 3596502 rows
                │           │     Partition by: {ps_partkey_1}
                │           └─ MergingAggregated Est. 3596502 rows
@@ -73,11 +73,11 @@ Projection Est. 100 rows
                │                          │  │  │                    │     Condition: (p_size = 15) AND (p_type LIKE '%BRASS')
                │                          │  │  │                    └─ TableScan tpch1000.part Est. 200000000 rows
                │                          │  │  │                             Where: (p_size = 15) AND (p_type LIKE '%BRASS')
-               │                          │  │  │                             Outputs: [p_partkey, p_size, p_type]
+               │                          │  │  │                             Outputs: [p_partkey, p_type, p_size]
                │                          │  │  └─ Repartition Exchange Est. 10000000 rows
                │                          │  │     │     Partition by: {s_suppkey_1}
                │                          │  │     └─ TableScan tpch1000.supplier Est. 10000000 rows
-               │                          │  │              Outputs: s_nationkey_1:=s_nationkey, s_suppkey_1:=s_suppkey
+               │                          │  │              Outputs: s_suppkey_1:=s_suppkey, s_nationkey_1:=s_nationkey
                │                          │  └─ Broadcast Exchange Est. 25 rows
                │                          │     └─ TableScan tpch1000.nation Est. 25 rows
                │                          │              Outputs: n_nationkey_1:=n_nationkey, n_regionkey_1:=n_regionkey
@@ -86,7 +86,7 @@ Projection Est. 100 rows
                │                                │     Condition: r_name_1 = 'EUROPE'
                │                                └─ TableScan tpch1000.region Est. 5 rows
                │                                         Where: r_name = 'EUROPE'
-               │                                         Outputs: r_name_1:=r_name, r_regionkey_1:=r_regionkey
+               │                                         Outputs: r_regionkey_1:=r_regionkey, r_name_1:=r_name
                └─ Repartition Exchange Est. 2000000 rows
                   │     Partition by: {s_suppkey}
                   └─ Inner Join Est. 2000000 rows
@@ -96,20 +96,20 @@ Projection Est. 100 rows
                      │  │     Condition: Runtime Filters: {s_nationkey}
                      │  └─ TableScan tpch1000.supplier Est. 10000000 rows
                      │           Where: Runtime Filters: {s_nationkey}
-                     │           Outputs: [s_acctbal, s_address, s_comment, s_name, s_nationkey, s_phone, s_suppkey]
+                     │           Outputs: [s_suppkey, s_name, s_address, s_nationkey, s_phone, s_acctbal, s_comment]
                      └─ Broadcast Exchange Est. 5 rows
                         └─ Inner Join Est. 5 rows
                            │     Condition: n_regionkey == r_regionkey
                            ├─ Repartition Exchange Est. 25 rows
                            │  │     Partition by: {n_regionkey}
                            │  └─ TableScan tpch1000.nation Est. 25 rows
-                           │           Outputs: [n_name, n_nationkey, n_regionkey]
+                           │           Outputs: [n_nationkey, n_name, n_regionkey]
                            └─ Repartition Exchange Est. 1 rows
                               │     Partition by: {r_regionkey}
                               └─ Filter Est. 1 rows
                                  │     Condition: r_name = 'EUROPE'
                                  └─ TableScan tpch1000.region Est. 5 rows
                                           Where: r_name = 'EUROPE'
-                                          Outputs: [r_name, r_regionkey]
+                                          Outputs: [r_regionkey, r_name]
 note: Magic Set is applied for 1 parts.
 note: Runtime Filter is applied for 6 times.

@@ -11,9 +11,9 @@ Projection
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange
-                  │     Partition by: {__grouping_set, i_brand, i_category, i_class, i_product_name}
+                  │     Partition by: {i_product_name, i_brand, i_class, i_category, __grouping_set}
                   └─ Aggregating
-                     │     Group by: {i_brand, i_category, i_class, i_product_name}
+                     │     Group by: {i_product_name, i_brand, i_class, i_category}
                      │     Aggregates: expr#avg(inv_quantity_on_hand):=AggNull(avg)(inv_quantity_on_hand)
                      └─ Inner Join
                         │     Condition: inv_item_sk == i_item_sk
@@ -32,4 +32,4 @@ Projection
                         └─ Repartition Exchange
                            │     Partition by: {i_item_sk}
                            └─ TableScan tpcds1000.item
-                                    Outputs: [i_brand, i_category, i_class, i_item_sk, i_product_name]
+                                    Outputs: [i_item_sk, i_brand, i_class, i_category, i_product_name]

@@ -33,7 +33,7 @@ Projection
                │        │     │     Condition: (p_size = 15) AND (p_type LIKE '%BRASS') Runtime Filters: {p_partkey}
                │        │     └─ TableScan tpch100.part
                │        │              Where: (p_size = 15) AND (p_type LIKE '%BRASS') Runtime Filters: {p_partkey}
-               │        │              Outputs: [p_mfgr, p_partkey, p_size, p_type]
+               │        │              Outputs: [p_partkey, p_mfgr, p_type, p_size]
                │        └─ Repartition Exchange
                │           │     Partition by: {ps_partkey_1}
                │           └─ Aggregating
@@ -62,7 +62,7 @@ Projection
                │                    │           │  │     Condition: Runtime Filters: {s_nationkey_1}
                │                    │           │  └─ TableScan tpch100.supplier
                │                    │           │           Where: Runtime Filters: {s_nationkey}
-               │                    │           │           Outputs: s_nationkey_1:=s_nationkey, s_suppkey_1:=s_suppkey
+               │                    │           │           Outputs: s_suppkey_1:=s_suppkey, s_nationkey_1:=s_nationkey
                │                    │           └─ Broadcast Exchange
                │                    │              └─ Inner Join
                │                    │                 │     Condition: n_regionkey_1 == r_regionkey_1
@@ -76,7 +76,7 @@ Projection
                │                    │                       │     Condition: r_name_1 = 'EUROPE'
                │                    │                       └─ TableScan tpch100.region
                │                    │                                Where: r_name = 'EUROPE'
-               │                    │                                Outputs: r_name_1:=r_name, r_regionkey_1:=r_regionkey
+               │                    │                                Outputs: r_regionkey_1:=r_regionkey, r_name_1:=r_name
                │                    └─ MergingAggregated
                │                       └─ Repartition Exchange
                │                          │     Partition by: {p_partkey_1}
@@ -88,7 +88,7 @@ Projection
                │                                   │     Condition: (p_size = 15) AND (p_type LIKE '%BRASS')
                │                                   └─ TableScan tpch100.part
                │                                            Where: (p_size = 15) AND (p_type LIKE '%BRASS')
-               │                                            Outputs: [p_partkey, p_size, p_type]
+               │                                            Outputs: [p_partkey, p_type, p_size]
                └─ Repartition Exchange
                   │     Partition by: {s_suppkey}
                   └─ Inner Join
@@ -98,20 +98,20 @@ Projection
                      │  │     Condition: Runtime Filters: {s_nationkey}
                      │  └─ TableScan tpch100.supplier
                      │           Where: Runtime Filters: {s_nationkey}
-                     │           Outputs: [s_acctbal, s_address, s_comment, s_name, s_nationkey, s_phone, s_suppkey]
+                     │           Outputs: [s_suppkey, s_name, s_address, s_nationkey, s_phone, s_acctbal, s_comment]
                      └─ Broadcast Exchange
                         └─ Inner Join
                            │     Condition: n_regionkey == r_regionkey
                            ├─ Repartition Exchange
                            │  │     Partition by: {n_regionkey}
                            │  └─ TableScan tpch100.nation
-                           │           Outputs: [n_name, n_nationkey, n_regionkey]
+                           │           Outputs: [n_nationkey, n_name, n_regionkey]
                            └─ Repartition Exchange
                               │     Partition by: {r_regionkey}
                               └─ Filter
                                  │     Condition: r_name = 'EUROPE'
                                  └─ TableScan tpch100.region
                                           Where: r_name = 'EUROPE'
-                                          Outputs: [r_name, r_regionkey]
+                                          Outputs: [r_regionkey, r_name]
 note: Magic Set is applied for 1 parts.
 note: Runtime Filter is applied for 8 times.
