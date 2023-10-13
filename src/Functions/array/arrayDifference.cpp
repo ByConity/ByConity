@@ -141,7 +141,8 @@ struct ArrayDifferenceImpl
             executeType<Float64,Float64>(mapped, array, res) ||
             executeType<Decimal32, Decimal32>(mapped, array, res) ||
             executeType<Decimal64, Decimal64>(mapped, array, res) ||
-            executeType<Decimal128, Decimal128>(mapped, array, res))
+            executeType<Decimal128, Decimal128>(mapped, array, res) ||
+            executeType<Decimal256, Decimal256>(mapped, array, res))
             return res;
         else
             throw Exception("Unexpected column for arrayDifference: " + mapped->getName(), ErrorCodes::ILLEGAL_COLUMN);

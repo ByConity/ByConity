@@ -26,7 +26,7 @@ AggregateFunctionPtr createAggregateFunctionStatisticsUnary(
     AggregateFunctionPtr res;
     DataTypePtr data_type = argument_types[0];
     if (isDecimal(data_type))
-        res.reset(createWithDecimalType<FunctionTemplate>(*data_type, *data_type, argument_types));
+        res.reset(createWithDecimalType<FunctionTemplate>(*data_type, argument_types));
     else
         res.reset(createWithNumericType<FunctionTemplate>(*data_type, argument_types));
 

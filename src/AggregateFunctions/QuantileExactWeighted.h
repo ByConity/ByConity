@@ -31,7 +31,7 @@ struct QuantileExactWeighted
 
     using Weight = UInt64;
     using UnderlyingType = typename NativeType<Value>::Type;
-    using Hasher = std::conditional_t<std::is_same_v<Value, Decimal128>, Int128Hash, HashCRC32<UnderlyingType>>;
+    using Hasher = HashCRC32<UnderlyingType>;
 
     /// When creating, the hash table must be small.
     using Map = HashMapWithStackMemory<UnderlyingType, Weight, Hasher, 4>;
