@@ -254,8 +254,9 @@ void MergeTreeMetaBase::checkProperties(
                     + toString(i) + " is " + sorting_key_column +", not " + pk_column,
                     ErrorCodes::BAD_ARGUMENTS);
 
-            if (!primary_key_columns_set.emplace(pk_column).second)
-                throw Exception("Primary key contains duplicate columns", ErrorCodes::BAD_ARGUMENTS);
+            // for compatibility with cnch-1.4, which allows dup key in `order by`
+ //           if (!primary_key_columns_set.emplace(pk_column).second)
+ //               throw Exception("Primary key contains duplicate columns", ErrorCodes::BAD_ARGUMENTS);
 
         }
     }
