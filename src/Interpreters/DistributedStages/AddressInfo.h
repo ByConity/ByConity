@@ -57,7 +57,6 @@ namespace Protos
             ostr << "host_name: " << host_name << ", "
                  << "port: " << std::to_string(port) << ", "
                  << "user: " <<  user << ", "
-                 << "password: " << password << ", "
                  << "exchange_port: " << exchange_port << ", "
                  << "exchange_status_port: " << exchange_status_port;
             return ostr.str();

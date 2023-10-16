@@ -96,6 +96,10 @@ public:
     void setHandle(Handle handle_) { handle = handle_; }
     enum Handle getPartitioningHandle() const { return handle; }
     const Names & getPartitioningColumns() const { return columns; }
+    void setPartitioningColumns(Names columns_)
+    {
+        columns = std::move(columns_);
+    }
     UInt64 getBuckets() const { return buckets; }
     bool isEnforceRoundRobin() const { return enforce_round_robin; }
     void setEnforceRoundRobin(bool enforce_round_robin_) { enforce_round_robin = enforce_round_robin_; }
