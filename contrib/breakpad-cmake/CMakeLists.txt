@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.1.0)
 project(libbreakpad)
+find_package( ZLIB REQUIRED )
 
 # external breakpad repo
 set(BREAKPAD_SRC_DIR "${ClickHouse_SOURCE_DIR}/contrib/breakpad/src")
@@ -16,10 +17,13 @@ set(LIBBREAKPAD_CLIENT_SRCS
     ${BREAKPAD_SRC_DIR}/client/linux/minidump_writer/linux_dumper.cc
     ${BREAKPAD_SRC_DIR}/client/linux/minidump_writer/linux_ptrace_dumper.cc
     ${BREAKPAD_SRC_DIR}/client/linux/minidump_writer/minidump_writer.cc
+    ${BREAKPAD_SRC_DIR}/client/linux/minidump_writer/pe_file.cc
     ${BREAKPAD_SRC_DIR}/client/minidump_file_writer.cc
-    ${BREAKPAD_SRC_DIR}/common/convert_UTF.c
+    ${BREAKPAD_SRC_DIR}/common/convert_UTF.cc
     ${BREAKPAD_SRC_DIR}/common/md5.cc
+    ${BREAKPAD_SRC_DIR}/common/path_helper.cc
     ${BREAKPAD_SRC_DIR}/common/string_conversion.cc
+    ${BREAKPAD_SRC_DIR}/common/linux/breakpad_getcontext.S
     ${BREAKPAD_SRC_DIR}/common/linux/elf_core_dump.cc
     ${BREAKPAD_SRC_DIR}/common/linux/elfutils.cc
     ${BREAKPAD_SRC_DIR}/common/linux/file_id.cc
@@ -59,7 +63,16 @@ target_compile_definitions(disasm PUBLIC HAVE_CONFIG_H)
 set(PROCESSOR_SRC_DIR ${BREAKPAD_SRC_DIR}/processor)
 set(MINIDUMP_STACKWALK_SRCS
     ${BREAKPAD_SRC_DIR}/common/path_helper.cc
-    ${PROCESSOR_SRC_DIR}/microdump_stackwalk.cc
+    ${BREAKPAD_SRC_DIR}/common/linux/scoped_tmpfile.cc
+    ${BREAKPAD_SRC_DIR}/common/linux/scoped_pipe.cc
+    ${PROCESSOR_SRC_DIR}/disassembler_objdump.cc
+    ${PROCESSOR_SRC_DIR}/exploitability.cc
+    ${PROCESSOR_SRC_DIR}/exploitability_linux.cc
+    ${PROCESSOR_SRC_DIR}/exploitability_win.cc
+    ${PROCESSOR_SRC_DIR}/symbolic_constants_win.cc
+    ${PROCESSOR_SRC_DIR}/minidump.cc
+    ${PROCESSOR_SRC_DIR}/minidump_stackwalk.cc
+    ${PROCESSOR_SRC_DIR}/minidump_processor.cc
     ${PROCESSOR_SRC_DIR}/basic_code_modules.cc
     ${PROCESSOR_SRC_DIR}/basic_source_line_resolver.cc
     ${PROCESSOR_SRC_DIR}/call_stack.cc
@@ -72,6 +85,7 @@ set(MINIDUMP_STACKWALK_SRCS
     ${PROCESSOR_SRC_DIR}/microdump.cc
     ${PROCESSOR_SRC_DIR}/microdump_processor.cc
     ${PROCESSOR_SRC_DIR}/pathname_stripper.cc
+    ${PROCESSOR_SRC_DIR}/proc_maps_linux.cc
     ${PROCESSOR_SRC_DIR}/process_state.cc
     ${PROCESSOR_SRC_DIR}/simple_symbol_supplier.cc
     ${PROCESSOR_SRC_DIR}/source_line_resolver_base.cc
@@ -88,6 +102,8 @@ set(MINIDUMP_STACKWALK_SRCS
     ${PROCESSOR_SRC_DIR}/stackwalker_ppc64.cc
     ${PROCESSOR_SRC_DIR}/stackwalker_sparc.cc
     ${PROCESSOR_SRC_DIR}/stackwalker_x86.cc
+    ${PROCESSOR_SRC_DIR}/stackwalker_riscv.cc
+    ${PROCESSOR_SRC_DIR}/stackwalker_riscv64.cc
     ${PROCESSOR_SRC_DIR}/tokenize.cc
 )
 add_executable(minidump_stackwalk ${MINIDUMP_STACKWALK_SRCS})
@@ -106,6 +122,7 @@ set(MINIDUMP_DUMP_SRCS
     ${PROCESSOR_SRC_DIR}/minidump.cc
     ${PROCESSOR_SRC_DIR}/pathname_stripper.cc
     ${PROCESSOR_SRC_DIR}/proc_maps_linux.cc
+    ${BREAKPAD_SRC_DIR}/common/path_helper.cc
 )
 add_executable(minidump_dump ${MINIDUMP_DUMP_SRCS})
 target_compile_definitions(minidump_dump PUBLIC HAVE_CONFIG_H)
@@ -128,6 +145,7 @@ set(CORE2MD_SRCS
 add_executable(core2md ${CORE2MD_SRCS})
 target_compile_definitions(core2md PUBLIC HAVE_CONFIG_H)
 target_link_libraries(core2md breakpad_client)
+target_include_directories(core2md PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})  # for config.h
 
 
 set(DUMP_SYMS_SRCS
@@ -156,4 +174,5 @@ set(DUMP_SYMS_SRCS
 )
 add_executable(dump_syms ${DUMP_SYMS_SRCS})
 target_compile_definitions(dump_syms PUBLIC HAVE_CONFIG_H)
-target_include_directories(dump_syms PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${BREAKPAD_SRC_DIR})
+target_link_libraries(dump_syms ${ZLIB_LIBRARIES})
+target_include_directories(dump_syms PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${BREAKPAD_SRC_DIR} ${ZLIB_INCLUDE_DIRS})
