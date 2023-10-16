@@ -101,6 +101,7 @@ DiskPtr getDiskFromURI(const String & sd_url, const ContextPtr & context, const 
         configuration->setString(config_prefix + ".path", "");
         configuration->setString(config_prefix + ".ak_id", settings.ak_id);
         configuration->setString(config_prefix + ".ak_secret", settings.ak_secret);
+        configuration->setString(config_prefix + ".is_virtual_hosted_style", settings.hive_remote_virtual_hosted_style);
 
 #ifndef NDEBUG
         /// check that we can read from the s3 disk
