@@ -2,6 +2,7 @@
 CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . $CURDIR/../shell_config.sh
 
+${CLICKHOUSE_CLIENT} -nm --query 'CREATE DATABASE IF NOT EXISTS test'
 ${CLICKHOUSE_CLIENT} -nm --query 'USE test; DROP TABLE IF EXISTS mv_block_number_agg_hit'
 ${CLICKHOUSE_CLIENT} -nm --query 'USE test; DROP TABLE IF EXISTS mv_tx_from_address_hit'
 ${CLICKHOUSE_CLIENT} -nm --query 'USE test; DROP TABLE IF EXISTS mv_tx_to_address_hit'
