@@ -59,6 +59,7 @@ jobs:
           /bin/bash create_docker_volume_ci.sh
           echo "Bring up ByConity Cluster"
           docker-compose up -d
+          printf 'namenode listen at port: %s\n' "$CLICKHOUSE_PORT_HDFS"
           sleep 10
           conf/create_users.sh
           echo "CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0)" >> $GITHUB_ENV
