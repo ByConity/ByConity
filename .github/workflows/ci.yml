@@ -59,6 +59,7 @@ jobs:
           /bin/bash create_docker_volume_ci.sh
           echo "Bring up ByConity Cluster"
           docker-compose up -d
+          printf 'namenode listen at port: %s\n' "$CLICKHOUSE_PORT_HDFS"
           sleep 10
           conf/create_users.sh
           echo "CLICKHOUSE_HOST=$(docker inspect -f '{{range.NetworkSettings.Networks}}{{.Gateway}}{{end}}' ${COMPOSE_PROJECT_NAME}_server-0)" >> $GITHUB_ENV
@@ -120,10 +121,7 @@ jobs:
         if: always()
         continue-on-error: true
         run: |
-          bash $GITHUB_WORKSPACE/.codebase/ci_scripts/common_component/copy_core_to_shared.sh || true # copy core to artifact folder
-          bash $GITHUB_WORKSPACE/.codebase/ci_scripts/common_component/copy_case_stdout_to_shared.sh || true # copy stdout to artifact folder
-          docker ps -a --format "{{.ID}} {{.Names}} {{.Image}}" --filter name=$COMPOSE_PROJECT_NAME | grep "byconity/debian:buster-runit-fdb7.1.27" | awk {'print $1"\t"$2'} | xargs -n 2 sh -c 'mkdir -p /test_output/$2; docker cp -q $1:/var/byconity/out.log /test_output/$2/out.log' sh || true
-          docker ps -a --format "{{.ID}} {{.Names}} {{.Image}}" --filter name=$COMPOSE_PROJECT_NAME | grep "byconity/debian:buster-runit-fdb7.1.27" | awk {'print $1"\t"$2'} | xargs -n 2 sh -c 'mkdir -p /test_output/$2; docker cp -q $1:/var/byconity/err.log /test_output/$2/err.log' sh || true
+          docker ps -a --format "{{.ID}} {{.Names}} {{.Image}}" --filter name=$COMPOSE_PROJECT_NAME | grep "byconity/debian:buster-runit-fdb7.1.27" | awk {'print $1"\t"$2'} | xargs -n 2 sh -c 'mkdir -p /test_output/$2; docker cp -q $1:/var/byconity/log /test_output/$2/log' sh || true
           mv /test_output /Artifacts  && tar --warning=no-file-changed -zcf  /Artifacts.tar.gz /Artifacts/*  || true
           bash .codebase/ci_scripts/common_component/block_ci.sh || true # check block_ci_flag
       - name: Upload Artifact
