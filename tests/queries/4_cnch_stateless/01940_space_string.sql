@@ -1,0 +1,1 @@
+SELECT length(space(number)) from (select number from numbers(20));

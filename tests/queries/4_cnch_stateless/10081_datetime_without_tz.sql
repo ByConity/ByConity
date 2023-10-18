@@ -1,0 +1,34 @@
+CREATE TEMPORARY TABLE t (i UInt8, x DateTimeWithoutTz(6));
+INSERT INTO t VALUES (1, '2020-01-01 05:20:30.5555556');
+INSERT INTO t VALUES (2, '2020-01-01 05:20:30');
+INSERT INTO t VALUES (3, '2020-01-01 05:20:30.333333333333');
+INSERT INTO t VALUES (4, '2020-01-01 05:20:30.3');
+INSERT INTO t VALUES (5, NULL);
+SELECT * FROM t ORDER BY i;
+
+CREATE TEMPORARY TABLE t2 (i UInt8, x DateTimeWithoutTz);
+INSERT INTO t2 VALUES (1, '2020-01-01 05:20:30.5555556');
+INSERT INTO t2 VALUES (2, '2020-01-01 05:20:30');
+INSERT INTO t2 VALUES (3, '2020-01-01 05:20:30.333333333333');
+INSERT INTO t2 VALUES (4, '2020-01-01 05:20:30.3');
+INSERT INTO t2 VALUES (5, NULL);
+SELECT * FROM t2 ORDER BY i;
+
+select CAST('2020-01-01 05:20:30.3' AS DateTimeWithoutTz);
+select '2020-01-01 05:20:30.3'::DateTimeWithoutTz;
+
+select toFloat64('2020-01-01 05:20:30.3'::DateTimeWithoutTz);
+
+select CAST(1577856030.3 AS DateTimeWithoutTz);
+
+select YEAR('2020-01-01 05:20:30.3'::DateTimeWithoutTz), MONTH('2020-01-01 05:20:30.3'::DateTimeWithoutTz);
+
+select YEAR('1920-01-01 05:20:30.3'::DateTimeWithoutTz), MONTH('1920-01-01 05:20:30.3'::DateTimeWithoutTz);
+
+select '2020-01-01 05:20:30.3'::DateTimeWithoutTz + INTERVAL '1 day';
+
+select '1969-12-31 05:20:30.3'::DateTimeWithoutTz + INTERVAL '1 day';
+
+select CAST('2020-01-01 05:20:30.3'::DateTimeWithoutTz AS DateTime64(4, 'Asia/Kolkata'));
+
+select CAST('2020-01-01 05:20:30.3'::DateTimeWithoutTz AS Date);
