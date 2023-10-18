@@ -13,7 +13,7 @@ concurrency:
 jobs:
   scm_build:
     name: Build binary and run stateless tests
-    container: byconity/byconity-ci:latest
+    container: byconity/byconity-ci:18Oct2023
     runs-on: self-hosted
     steps:
       - name: Set environment variables

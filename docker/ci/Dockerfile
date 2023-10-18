@@ -16,3 +16,4 @@ RUN chmod +x /usr/local/bin/docker-compose
 COPY hadoop-3.3.4.tar.gz / 
 ADD install.sh /data/ci/
 RUN bash /data/ci/install.sh
+RUN curl https://clickhouse.com/ | sh
