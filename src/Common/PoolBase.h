@@ -180,7 +180,7 @@ public:
                 return Entry(allocObject());
 
             Stopwatch blocked;
-            if (timeout < 0)
+            if (timeout <= 0)
             {
                 LOG_INFO(log, "No free connections in pool. Waiting indefinitely.");
                 available.wait(lock);
