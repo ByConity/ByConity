@@ -49,6 +49,7 @@ struct Settings;
     M(String, ak_id, "", "S3 access key", 0) \
     M(String, ak_secret, "", "S3 secret key", 0) \
     M(String, region, "", "S3 region", 0) \
+    M(Bool, hive_remote_virtual_hosted_style, true, "Whether use virtual hosted style URL in Hive S3 connection", 0) \
     M(Bool, merge_partition_stats, false, "merge all partition stats", 0) \
     /** HMS kerberos settings **/ \
     M(Bool, hive_metastore_client_kerberos_auth, 0, "Enable hms auth with Kerberos", 0) \

@@ -796,7 +796,7 @@ namespace S3
         ak_id = cfg.getString(cfg_prefix + ".ak_id", "");
         ak_secret = cfg.getString(cfg_prefix + ".ak_secret", "");
 
-        is_virtual_hosted_style = cfg.getBool(cfg_prefix + ".is_virtual_hosted_style", false);
+        is_virtual_hosted_style = cfg.getBool(cfg_prefix + ".is_virtual_hosted_style", true);
         http_keep_alive_timeout_ms = cfg.getUInt(cfg_prefix + ".http_keep_alive_timeout_ms", 5000);
         http_connection_pool_size = cfg.getUInt(cfg_prefix + ".http_connection_pool_size", 1024);
 
