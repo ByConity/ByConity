@@ -25,6 +25,12 @@
 #include <chrono>
 #include <thread>
 
+namespace ProfileEvents
+{
+    extern const Event TSORequest;
+    extern const Event TSOError;
+}
+
 namespace DB
 {
 
@@ -89,6 +95,7 @@ UInt64 getTSOResponse(const Context & context, TSORequestType type, size_t size)
 
     while (retry--)
     {
+        ProfileEvents::increment(ProfileEvents::TSORequest);
         try
         {
             auto tso_client = context.getCnchTSOClient();
@@ -115,6 +122,7 @@ UInt64 getTSOResponse(const Context & context, TSORequestType type, size_t size)
         }
         catch (Exception & e)
         {
+            ProfileEvents::increment(ProfileEvents::TSOError);
             if (use_tso_fallback && e.code() != ErrorCodes::BRPC_TIMEOUT)
             {
                 /// old leader may be unavailable
