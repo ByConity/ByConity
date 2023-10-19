@@ -1,9 +1,6 @@
 set create_stats_time_output=0;
 set statistics_enable_sample=1;
 set statistics_accurate_sample_ndv='ALWAYS';
-drop database if exists test_stats_45004_sample_acc;
-create database test_stats_45004_sample_acc;
-use test_stats_45004_sample_acc;
 create table tb (
    `id` UInt64,
    `i8` Int8,
@@ -81,4 +78,3 @@ select '---------show empty stats';
 show stats all;
 drop table tb;
 drop table tbnull;
-drop database test_stats_45004_sample_acc;

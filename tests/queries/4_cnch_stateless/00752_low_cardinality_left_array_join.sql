@@ -2,9 +2,9 @@
 drop table if exists lc_left_aj;
 CREATE TABLE lc_left_aj
 (
-    str Array(LowCardinality(String)),
-    null_str Array(LowCardinality(Nullable(String))),
-    val Array(LowCardinality(Float64)),
+    str Array(LowCardinality(String)), 
+    null_str Array(LowCardinality(Nullable(String))), 
+    val Array(LowCardinality(Float64)), 
     null_val Array(LowCardinality(Nullable(Float64)))
 )
 ENGINE = CnchMergeTree ORDER BY str;

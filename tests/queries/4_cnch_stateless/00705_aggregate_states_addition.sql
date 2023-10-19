@@ -9,7 +9,7 @@ SELECT sumMerge(x + y), sumMerge(x), sumMerge(y) FROM (SELECT sumState(a) as x, 
 SELECT sumMerge(x) FROM (SELECT sumState(a) + countState(b) as x FROM add_aggregate); -- { serverError 421 }
 SELECT sumMerge(x) FROM (SELECT sumState(a) + sumState(toInt32(b)) as x FROM add_aggregate); -- { serverError 421 }
 
-SELECT minMerge(x) FROM (SELECT minState(a) + minState(b) as x FROM add_aggregate);
+SELECT minMerge(x) FROM (SELECT minState(a) + minState(b) as x FROM add_aggregate); 
 
 SELECT uniqMerge(x + y) FROM (SELECT uniqState(a) as x, uniqState(b) as y FROM add_aggregate);
 

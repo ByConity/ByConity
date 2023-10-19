@@ -22,9 +22,9 @@ SELECT -nan = toFloat64(0.0), -nan != toFloat64(0.0), -nan < toFloat64(0.0), -na
 
 --SELECT 1 % nan, nan % 1, pow(x, 1), pow(1, x); -- TODO
 SELECT 1 + nan, 1 - nan, nan - 1, 1 * nan, 1 / nan, nan / 1;
-SELECT x, exp(x), exp2(x), exp10(x), log(x), log2(x), log10(x), sqrt(x), cbrt(x) FROM (SELECT nan AS x);
-SELECT x, erf(x), erfc(x), lgamma(x), tgamma(x) FROM (SELECT nan AS x);
-SELECT x, sin(x), cos(x), tan(x), asin(x), acos(x), atan(x) FROM (SELECT nan AS x);
+SELECT nan AS x, isFinite(exp(x)) /* exp(nan) is allowed to return inf */, exp2(x), exp10(x), log(x), log2(x), log10(x), sqrt(x), cbrt(x);
+SELECT nan AS x, erf(x), erfc(x), lgamma(x), tgamma(x);
+SELECT nan AS x, sin(x), cos(x), tan(x), asin(x), acos(x), atan(x);
 
 SELECT min(x), max(x) FROM (SELECT arrayJoin([toFloat32(0.0), nan, toFloat32(1.0), toFloat32(-1.0)]) AS x);
 SELECT min(x), max(x) FROM (SELECT arrayJoin([toFloat64(0.0), -nan, toFloat64(1.0), toFloat64(-1.0)]) AS x);

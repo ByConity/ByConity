@@ -15,8 +15,8 @@ FROM
             FROM system.numbers
             LIMIT 100
         )
-        GROUP BY number % 10
+        GROUP BY key1
     )
-    GROUP BY key1 % 3
+    GROUP BY key2
 )
 ORDER BY key2;

@@ -1,4 +1,3 @@
-USE test;
 drop table if exists geohash_test_data;
 
 create table geohash_test_data (
@@ -31,22 +30,22 @@ select geohashEncode(materialize(-5.60302734375), materialize(42.593994140625), 
 select 'from table (with const precision):';
 
 -- here results are strings, so reference may contain values to match for equality.
-select 1 as p, geohashEncode(longitude, latitude, 1) as actual, if(geohashEncode(longitude, latitude, 1) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 1;
-select 2 as p, geohashEncode(longitude, latitude, 2) as actual, if(geohashEncode(longitude, latitude, 2) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 2;
-select 3 as p, geohashEncode(longitude, latitude, 3) as actual, if(geohashEncode(longitude, latitude, 3) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 3;
-select 4 as p, geohashEncode(longitude, latitude, 4) as actual, if(geohashEncode(longitude, latitude, 4) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 4;
-select 5 as p, geohashEncode(longitude, latitude, 5) as actual, if(geohashEncode(longitude, latitude, 5) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 5;
-select 6 as p, geohashEncode(longitude, latitude, 6) as actual, if(geohashEncode(longitude, latitude, 6) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 6;
-select 7 as p, geohashEncode(longitude, latitude, 7) as actual, if(geohashEncode(longitude, latitude, 7) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 7;
-select 8 as p, geohashEncode(longitude, latitude, 8) as actual, if(geohashEncode(longitude, latitude, 8) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 8;
-select 9 as p, geohashEncode(longitude, latitude, 9) as actual, if(geohashEncode(longitude, latitude, 9) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 9;
-select 10 as p, geohashEncode(longitude, latitude, 10) as actual, if(geohashEncode(longitude, latitude, 10) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 10;
-select 11 as p, geohashEncode(longitude, latitude, 11) as actual, if(geohashEncode(longitude, latitude, 11) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 11;
-select 12 as p, geohashEncode(longitude, latitude, 12) as actual, if(geohashEncode(longitude, latitude, 12) = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = 12;
+select 1 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
+select 2 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
+select 3 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
+select 4 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
+select 5 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
+select 6 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
+select 7 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
+select 8 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
+select 9 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
+select 10 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
+select 11 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
+select 12 as p, geohashEncode(longitude, latitude, p) as actual, if(actual = encoded, 'Ok', concat('expected: ', encoded)) from geohash_test_data WHERE length(encoded) = p;
 
 -- Here results are floats, and hence may not be compared for equality directly.
 -- We select all values that are off by some reasonable value:
--- each byte of encoded string provides 5 bits of precison, (roughly 2.5 for lon and lat)
+-- each byte of encoded string provides 5 bits of precision, (roughly 2.5 for lon and lat)
 -- each bit of precision divides value range by 2.
 -- hence max error is roughly value range 2.5 times divided by 2 for each precision bit.
 -- initial value range is [-90..90] for latitude and [-180..180] for longitude.
@@ -57,12 +56,12 @@ select
 	'length:', 	length(encoded),
 	'max lat error:', 180 / power(2, 2.5 * length(encoded)) as latitude_max_error,
 	'max lon error:', 360 / power(2, 2.5 * length(encoded)) as longitude_max_error,
-	'err:', (geohashDecode(encoded).2 - latitude) as lat_error, (geohashDecode(encoded).1 - longitude) as lon_error,
-	'derr:', abs(geohashDecode(encoded).2 - latitude) - 180 / power(2, 2.5 * length(encoded)), abs(geohashDecode(encoded).1 - longitude) - 360 / power(2, 2.5 * length(encoded))
+	'err:', (actual.2 - latitude) as lat_error, (actual.1 - longitude) as lon_error,
+	'derr:', abs(lat_error) - latitude_max_error, abs(lon_error) - longitude_max_error
 from geohash_test_data
 where
-	abs(geohashDecode(encoded).2 - latitude) > 180 / power(2, 2.5 * length(encoded))
+	abs(lat_error) > latitude_max_error
 	or
-	abs(geohashDecode(encoded).1 - longitude) > 360 / power(2, 2.5 * length(encoded));
+	abs(lon_error) > longitude_max_error;
 
 drop table if exists geohash_test_data;

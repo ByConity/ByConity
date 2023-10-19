@@ -7,7 +7,7 @@ INSERT INTO replaceall VALUES ('bar');
 INSERT INTO replaceall VALUES ('bao');
 SELECT str, replaceAll(str, 'o', '*') AS replaced FROM replaceall ORDER BY str ASC;
 DROP TABLE replaceall;
-CREATE TABLE replaceall (date Date DEFAULT today(), fs FixedString(16))
+CREATE TABLE replaceall (date Date DEFAULT today(), fs FixedString(16)) 
 ENGINE = CnchMergeTree PARTITION BY date ORDER BY (date, fs)
 SETTINGS index_granularity = 8192;
 INSERT INTO replaceall (fs) VALUES ('54db0d43009d\0\0\0\0'), ('fe2b58224766cf10'), ('54db0d43009d\0\0\0\0'), ('fe2b58224766cf10');

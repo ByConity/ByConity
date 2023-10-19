@@ -1,4 +1,4 @@
-CREATE DATABASE IF NOT EXISTS test;
+use test;
 DROP TABLE IF EXISTS test.consumer_hour;
 DROP TABLE IF EXISTS test.sender_hour;
 

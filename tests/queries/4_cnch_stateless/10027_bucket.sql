@@ -61,7 +61,7 @@ INSERT INTO bucket3 VALUES ('jack', 15);
 SELECT * FROM bucket3 ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'bucket3' FORMAT CSV;
 
--- Ensure bucket number is assigned to a part in bucket table with shard ratio
+-- Ensure bucket number is assigned to a part in bucket table with shard ratio 
 INSERT INTO bucket_with_split_number VALUES ('vivek', 10);
 SELECT * FROM bucket_with_split_number ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'bucket_with_split_number' FORMAT CSV;
@@ -78,7 +78,6 @@ INSERT INTO dts_bucket_with_split_number_n_range VALUES ('vivek', 30);
 SELECT * FROM dts_bucket_with_split_number_n_range ORDER BY name FORMAT CSV;
 SELECT bucket_number FROM system.cnch_parts where database = currentDatabase() and table = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
 SELECT split_number, with_range FROM system.cnch_tables where database = currentDatabase() and name = 'dts_bucket_with_split_number_n_range' FORMAT CSV;
-
 
 -- Attach partition is allowed between bucket tables with different table_definition_hash
 INSERT INTO bucket_attach VALUES ('tracy', 20);

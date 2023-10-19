@@ -8,11 +8,11 @@ INSERT INTO avg_partition_by VALUES('1', 'data', '2019-01-01', '20') ('2', 'data
 
 
 
-SELECT
-    id,
+SELECT 
+    id, 
     department,
-    AVG(age) OVER (PARTITION BY department)
-FROM avg_partition_by
+    AVG(age) OVER (PARTITION BY department) 
+FROM avg_partition_by 
 ORDER BY id;
 
 DROP TABLE avg_partition_by;

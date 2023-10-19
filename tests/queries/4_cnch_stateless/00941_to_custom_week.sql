@@ -20,7 +20,7 @@ SELECT toWeek(toDate('2000-01-06'),1) AS w2000, toWeek(toDate('2001-01-06'),1) A
 SELECT toYearWeek(toDate('2000-01-01'),0) AS w2000, toYearWeek(toDate('2001-01-01'),0) AS w2001, toYearWeek(toDate('2002-01-01'),0) AS w2002,toYearWeek(toDate('2003-01-01'),0) AS w2003, toYearWeek(toDate('2004-01-01'),0) AS w2004, toYearWeek(toDate('2005-01-01'),0) AS w2005, toYearWeek(toDate('2006-01-01'),0) AS w2006;
 SELECT toYearWeek(toDate('2000-01-06'),0) AS w2000, toYearWeek(toDate('2001-01-06'),0) AS w2001, toYearWeek(toDate('2002-01-06'),0) AS w2002,toYearWeek(toDate('2003-01-06'),0) AS w2003, toYearWeek(toDate('2004-01-06'),0) AS w2004, toYearWeek(toDate('2005-01-06'),0) AS w2005, toYearWeek(toDate('2006-01-06'),0) AS w2006;
 SELECT toYearWeek(toDate('2000-01-01'),1) AS w2000, toYearWeek(toDate('2001-01-01'),1) AS w2001, toYearWeek(toDate('2002-01-01'),1) AS w2002,toYearWeek(toDate('2003-01-01'),1) AS w2003, toYearWeek(toDate('2004-01-01'),1) AS w2004, toYearWeek(toDate('2005-01-01'),1) AS w2005, toYearWeek(toDate('2006-01-01'),1) AS w2006;
-SELECT toYearWeek(toDate('2000-01-06'),1) AS w2000, toYearWeek(toDate('2001-01-06'),1) AS w2001, toYearWeek(toDate('2002-01-06'),1) AS w2002,toYearWeek(toDate('2003-01-06'),1) AS w2003, toYearWeek(toDate('2004-01-06'),1) AS w2004, toYearWeek(toDate('2005-01-06'),1) AS w2005, toYearWeek(toDate('2006-01-06'),1) AS w2006;
+SELECT toYearWeek(toDate('2000-01-06'),1) AS w2000, toYearWeek(toDate('2001-01-06'),1) AS w2001, toYearWeek(toDate('2002-01-06'),1) AS w2002,toYearWeek(toDate('2003-01-06'),1) AS w2003, toYearWeek(toDate('2004-01-06'),1) AS w2004, toYearWeek(toDate('2005-01-06'),1) AS w2005, toYearWeek(toDate('2006-01-06'),1) AS w2006;	
 SELECT toWeek(toDate('1998-12-31'),2),toWeek(toDate('1998-12-31'),3), toWeek(toDate('2000-01-01'),2), toWeek(toDate('2000-01-01'),3);
 SELECT toWeek(toDate('2000-12-31'),2),toWeek(toDate('2000-12-31'),3);
 
@@ -32,18 +32,18 @@ SELECT toWeek(toDate('2001-01-01'),0) AS w0, toWeek(toDate('2001-01-01'),1) AS w
 
 SELECT toYearWeek(toDate('2000-12-31'),0), toYearWeek(toDate('2000-12-31'),1), toYearWeek(toDate('2000-12-31'),2), toYearWeek(toDate('2000-12-31'),3), toYearWeek(toDate('2000-12-31'),4), toYearWeek(toDate('2000-12-31'),5), toYearWeek(toDate('2000-12-31'),6), toYearWeek(toDate('2000-12-31'),7);
 
--- week mode 8,9
-SELECT
-    toDate('2016-12-21') + number AS d,
+-- week mode 8,9	
+SELECT 
+    toDate('2016-12-21') + number AS d, 
 	  toWeek(d, 8) AS week8,
-    toWeek(d, 9) AS week9,
+    toWeek(d, 9) AS week9, 
     toYearWeek(d, 8) AS yearWeek8,
     toYearWeek(d, 9) AS yearWeek9
 FROM numbers(21);
 
-SELECT toDateTime(toDate('2016-12-22') + number, 'Europe/Moscow' ) AS d,
-    toWeek(d, 8, 'Europe/Moscow') AS week8,
-    toWeek(d, 9, 'Europe/Moscow') AS week9,
+SELECT toDateTime(toDate('2016-12-22') + number, 'Europe/Moscow' ) AS d, 
+    toWeek(d, 8, 'Europe/Moscow') AS week8, 
+    toWeek(d, 9, 'Europe/Moscow') AS week9, 
     toYearWeek(d, 8, 'Europe/Moscow') AS yearWeek8,
     toYearWeek(d, 9, 'Europe/Moscow') AS yearWeek9
 FROM numbers(21);

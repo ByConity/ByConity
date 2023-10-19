@@ -1,1 +1,1 @@
-SELECT y FROM ( SELECT x, x as y FROM (SELECT materialize(1) AS x))
+SELECT y FROM (SELECT materialize(1) AS x, x AS y)

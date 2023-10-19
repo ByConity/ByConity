@@ -5,9 +5,9 @@ SELECT
     toNullable(materialize(NULL)) AS d,
     toNullable(materialize('Hello')) AS e,
     toNullable(toNullable(materialize(1))) AS f,
-    toTypeName(toNullable(NULL)),
-    toTypeName(toNullable('Hello')),
-    toTypeName(toNullable(toNullable(1))),
-    toTypeName(toNullable(materialize(NULL))),
-    toTypeName(toNullable(materialize('Hello'))),
-    toTypeName(toNullable(toNullable(materialize(1))));
+    toTypeName(a),
+    toTypeName(b),
+    toTypeName(c),
+    toTypeName(d),
+    toTypeName(e),
+    toTypeName(f);
