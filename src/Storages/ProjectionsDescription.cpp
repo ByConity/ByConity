@@ -182,8 +182,18 @@ ProjectionDescription::getProjectionFromAST(const ASTPtr & definition_ast, const
                 function_node->name = "tuple";
                 function_node->arguments = group_expression_list->clone();
                 result.key_size = function_node->arguments->children.size();
+                std::unordered_set<std::string> columns;
                 for (auto & child : function_node->arguments->children)
-                    child = std::make_shared<ASTIdentifier>(child->getColumnName());
+                {
+                    if (columns.find(child->getColumnName()) != columns.end())
+	                {
+		                throw Exception(
+		                    "Projection already has the same dimension Column ' " + child->getColumnName() + " '.",
+                			ErrorCodes::INCORRECT_QUERY);
+                    }
+		            columns.insert(child->getColumnName());
+    	            child = std::make_shared<ASTIdentifier>(child->getColumnName());
+                }                
                 function_node->children.push_back(function_node->arguments);
                 order_expression = function_node;
             }
