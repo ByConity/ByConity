@@ -54,6 +54,10 @@ MergeListElement::MergeListElement(const StorageID & table_id_, const FutureMerg
     {
         source_data_version = future_part.parts[0]->info.getDataVersion();
         is_mutation = (result_part_info.getDataVersion() != source_data_version);
+
+        WriteBufferFromString out(partition);
+        const auto & part = future_part.parts[0];
+        part->partition.serializeText(part->storage, out, {});
     }
 
     memory_tracker.setDescription("Mutate/Merge");
@@ -99,6 +103,7 @@ MergeInfo MergeListElement::getInfo() const
     res.result_part_name = result_part_name;
     res.result_part_path = result_part_path;
     res.partition_id = partition_id;
+    res.partition = partition;
     res.is_mutation = is_mutation;
     res.elapsed = watch.elapsedSeconds();
     res.progress = progress.load(std::memory_order_relaxed);
