@@ -83,8 +83,8 @@ namespace ProfileEvents
     // const extern Event TsCacheCheckFailed;
     const extern Event TsCacheCheckElapsedMilliseconds;
     const extern Event TsCacheUpdateElapsedMilliseconds;
-    // extern const Event TSORequest;
-    // extern const Event TSOError;
+    extern const Event TSORequest;
+    extern const Event TSOError;
     extern const Event DiskCacheGetMetaMicroSeconds;
     extern const Event DiskCacheGetTotalOps;
     extern const Event DiskCacheSetTotalOps;
