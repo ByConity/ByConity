@@ -50,7 +50,8 @@ public:
         const std::string & hdfs_name_,
         const HDFSConnectionParams & hdfs_params = HDFSConnectionParams::defaultNNProxy(),
         const size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
-        int flag = O_WRONLY);
+        int flag = O_WRONLY,
+        bool overwrite_current_file = false);
 
     ~WriteBufferFromHDFS() override;
 

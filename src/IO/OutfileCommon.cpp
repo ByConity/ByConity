@@ -51,7 +51,7 @@ OutfileTarget::OutfileTarget(const OutfileTarget & outfile_target_)
 {
 }
 
-WriteBuffer * OutfileTarget::getOutfileBuffer(const ContextPtr & context, bool allow_into_local)
+std::shared_ptr<WriteBuffer> OutfileTarget::getOutfileBuffer(const ContextPtr & context, bool allow_into_local)
 {
     const Poco::URI out_uri(uri);
     const String & scheme = out_uri.getScheme();
@@ -67,8 +67,8 @@ WriteBuffer * OutfileTarget::getOutfileBuffer(const ContextPtr & context, bool a
 #if USE_HDFS
     else if (DB::isHdfsOrCfsScheme(scheme))
     {
-        out_buf_raw = std::make_unique<WriteBufferFromHDFS>(
-            uri, context->getHdfsConnectionParams(), context->getSettingsRef().max_hdfs_write_buffer_size);
+        out_buf_raw = std::make_unique<WriteBufferFromHDFS>(uri, context->getHdfsConnectionParams(),
+            context->getSettingsRef().max_hdfs_write_buffer_size, O_WRONLY, context->getSettingsRef().overwrite_current_file);
 
         // hdfs always use CompressionMethod::Gzip default
         if (compression_method_str.empty())
@@ -107,7 +107,7 @@ WriteBuffer * OutfileTarget::getOutfileBuffer(const ContextPtr & context, bool a
 
     out_buf = wrapWriteBufferWithCompressionMethod(std::move(out_buf_raw), compression_method, compression_level);
 
-    return &*out_buf;
+    return out_buf;
 }
 
 void OutfileTarget::flushFile()

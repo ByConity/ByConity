@@ -9,6 +9,7 @@
 #include <Parsers/ASTQueryWithOutput.h>
 #include <Interpreters/Context.h>
 #include "Interpreters/Context_fwd.h"
+#include "WriteBuffer.h"
 
 
 namespace DB
@@ -39,7 +40,7 @@ public:
 
     OutfileTarget(const OutfileTarget& outfile_target);
 
-    WriteBuffer* getOutfileBuffer(const ContextPtr & context , bool allow_into_local = false);
+    std::shared_ptr<WriteBuffer> getOutfileBuffer(const ContextPtr & context , bool allow_into_local = false);
     
     void flushFile();
 
@@ -57,7 +58,7 @@ public:
 
 private:
     std::unique_ptr<WriteBuffer> out_buf_raw;
-    std::unique_ptr<WriteBuffer> out_buf;
+    std::shared_ptr<WriteBuffer> out_buf;
 };
 
 }

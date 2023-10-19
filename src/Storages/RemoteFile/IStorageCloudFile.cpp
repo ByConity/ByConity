@@ -478,7 +478,7 @@ BlockOutputStreamPtr IStorageCloudFile::write(const ASTPtr & query, const Storag
             else
                 throw Exception(
                     ErrorCodes::BAD_ARGUMENTS,
-                    "File with path {} already exists. If you want to overwrite it, enable setting overwrite_old_file = 1, if you want to "
+                    "File with path {} already exists. If you want to overwrite it, enable setting overwrite_current_file = 1, if you want to "
                     "create new file on each insert, enable setting insert_new_file = 1",
                     current_uri);
         }

@@ -85,6 +85,9 @@ public:
     size_t getResultRows() const { return result_rows; }
     size_t getResultBytes() const { return result_bytes; }
 
+    void setBuffer(std::shared_ptr<WriteBuffer> buffer) {
+        this->buffer_ = buffer;
+    }
     static Chunk prepareTotals(Chunk chunk);
 private:
     /// Counters for consumed chunks. Are used for QueryLog.
@@ -92,6 +95,8 @@ private:
     size_t result_bytes = 0;
 
     bool prefix_written = false;
+    // Used to ensure buffer's life cycle is as long as this class
+    std::shared_ptr<WriteBuffer> buffer_;
 };
 }
 
