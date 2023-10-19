@@ -153,23 +153,34 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
     size_t readImpl(char * to, size_t bytes)
     {
         Stopwatch watch;
-        int bytes_read = 0;
-        if (pread)
-            bytes_read = hdfsPRead(fs.get(), fin, to, bytes);
-        else
-            bytes_read = hdfsRead(fs.get(), fin, to, bytes);
-
-        if (bytes_read < 0)
+        size_t total_bytes_read = 0;
+        do
         {
-            throw Exception(ErrorCodes::NETWORK_ERROR,
-                "Fail to read from HDFS file path: {}. Error: {}", hdfs_file_path, std::string(hdfsGetLastError()));
-        }
+            int bytes_read = 0;
 
-        file_offset += bytes_read;
+            if (pread)
+                bytes_read = hdfsPRead(fs.get(), fin, to + total_bytes_read, bytes - total_bytes_read);
+            else
+                bytes_read = hdfsRead(fs.get(), fin, to + total_bytes_read, bytes - total_bytes_read);
 
-        ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsReadBytes, bytes_read);
+            if (bytes_read < 0)
+            {
+                throw Exception(
+                    ErrorCodes::NETWORK_ERROR,
+                    "Fail to read from HDFS file path: {}. Error: {}",
+                    hdfs_file_path,
+                    std::string(hdfsGetLastError()));
+            }
+            if (bytes_read == 0)
+                break;
+            total_bytes_read += bytes_read;
+        } while (total_bytes_read < bytes);
+
+        file_offset += total_bytes_read;
+
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsReadBytes, total_bytes_read);
         ProfileEvents::increment(ProfileEvents::HDFSReadElapsedMilliseconds, watch.elapsedMilliseconds());
-        return bytes_read;
+        return total_bytes_read;
     }
 
     void seek(off_t offset)
