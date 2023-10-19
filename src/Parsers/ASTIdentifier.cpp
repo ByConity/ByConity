@@ -244,9 +244,9 @@ ASTPtr ASTIdentifier::deserialize(ReadBuffer & buf)
     identifier->deserializeImpl(buf);
     return identifier;
 }
-void ASTIdentifier::rewriteCnchDatabaseName(const Context * context)
+void ASTIdentifier::rewriteCnchDatabaseName(const Context *)
 {
-    if (context && !cnch_rewritten)
+    if (!cnch_rewritten)
     {
         switch (name_parts.size())
         {
@@ -313,11 +313,13 @@ ASTTableIdentifier::ASTTableIdentifier(const StorageID & table_id, std::vector<A
         std::move(name_params))
 {
     uuid = table_id.uuid;
+    rewriteCnchDatabaseName();
 }
 
 ASTTableIdentifier::ASTTableIdentifier(const String & database_name, const String & table_name, std::vector<ASTPtr> && name_params)
     : ASTIdentifier({database_name, table_name}, true, std::move(name_params))
 {
+    rewriteCnchDatabaseName();
 }
 
 ASTPtr ASTTableIdentifier::clone() const
@@ -385,9 +387,9 @@ ASTPtr ASTTableIdentifier::deserialize(ReadBuffer & buf)
     return identifier;
 }
 
-void ASTTableIdentifier::rewriteCnchDatabaseName(const Context * context)
+void ASTTableIdentifier::rewriteCnchDatabaseName(const Context *)
 {
-    if (context && !cnch_rewritten)
+    if (!cnch_rewritten)
     {
         switch (name_parts.size())
         {

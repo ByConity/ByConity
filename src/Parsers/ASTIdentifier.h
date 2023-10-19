@@ -83,7 +83,7 @@ public:
 
     /// All the global identifiers will be rewritten in multi-tenant context settings.
     /// Todo: we will rewrite all the global identifiers one by one: database name, user name, vw name...
-    virtual void rewriteCnchDatabaseName(const Context * context);
+    virtual void rewriteCnchDatabaseName(const Context * context = nullptr);
 
     virtual void appendCatalogName(const std::string& catalog_name);
 
@@ -136,7 +136,7 @@ public:
     static ASTPtr deserialize(ReadBuffer & buf);
 
     // void rewriteCnchDatabaseOrCatalog(const Context *context) override;
-    void rewriteCnchDatabaseName(const Context * context) override;
+    void rewriteCnchDatabaseName(const Context * context = nullptr) override;
     virtual void appendCatalogName(const std::string& catalog_name) override;
     virtual void appendTenantId(const Context * context) override;
 
