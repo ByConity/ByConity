@@ -258,6 +258,47 @@ private:
                             ++i;
                             continue;
                         }
+                        else if (event > 1 && funnel_index[!next_seq].size() && isNextLevel(event, funnel_index[!next_seq].size()))
+                        {
+                            bool is_legal = true;
+                            if constexpr (with_attr)
+                            {
+                                if (event & attr_related)
+                                {
+                                    if (attr_set[!next_seq])
+                                    {
+                                        if (attr_check[!next_seq] != events[i].param) // attr not match
+                                        {
+                                            is_legal = false;
+                                        }
+                                    }
+                                    else
+                                    {
+                                        attr_check[!next_seq] = events[i].param;
+                                        attr_set[!next_seq] = true;
+                                    }
+
+                                    if (!is_legal && funnel_index[!next_seq].size() == 1)
+                                    {
+                                        if (last_start == -1)
+                                            last_start = i;
+                                    }
+                                }
+                            }
+
+                            if (is_legal)
+                            {
+                                if (funnel_index[!next_seq].size() == 1)
+                                {
+                                    if (last_start == -1)
+                                        last_start = i;
+                                }
+
+                                funnel_index[!next_seq].push_back(i);
+                            }
+                            ++i;
+                            continue;
+                        }
                         else if (event > 1 && !funnel_index[next_seq].empty())
                         {
                             if ((stime / m_watch_step) > slot_idx)
