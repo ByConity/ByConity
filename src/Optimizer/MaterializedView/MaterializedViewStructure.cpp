@@ -96,7 +96,7 @@ MaterializedViewStructure::buildFrom(
     for (auto & table_column : table_columns)
     {
         auto & query_column = query->getCurrentDataStream().header.getByPosition(index);
-        if (!removeLowCardinality(removeNullable(query_column.type))->equals(*removeLowCardinality(removeNullable(table_column.type))))
+        if (!removeNullable(removeLowCardinality(query_column.type))->equals(*removeNullable(removeLowCardinality(table_column.type))))
         {
             LOG_WARNING(
                 log,

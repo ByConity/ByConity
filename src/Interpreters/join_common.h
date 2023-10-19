@@ -4,6 +4,7 @@
 #include <Interpreters/IJoin.h>
 #include <Interpreters/ActionsDAG.h>
 #include <Interpreters/ExpressionActions.h>
+#include <DataTypes/IDataType.h>
 
 namespace DB
 {
@@ -23,6 +24,8 @@ void convertColumnToNullable(ColumnWithTypeAndName & column, bool remove_low_car
 void convertColumnsToNullable(Block & block, size_t starting_pos = 0);
 void convertColumnToNullable2(ColumnWithTypeAndName & column);
 
+ColumnPtr tryConvertColumnToNullable(ColumnPtr col);
+DataTypePtr removeTypeNullability(const DataTypePtr & type);
 void removeColumnNullability(ColumnWithTypeAndName & column);
 void changeColumnRepresentation(const ColumnPtr & src_column, ColumnPtr & dst_column);
 ColumnPtr emptyNotNullableClone(const ColumnPtr & column);

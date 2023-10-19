@@ -254,21 +254,10 @@ TransformResult RemoveRedundantOuterJoin::transformImpl(PlanNodePtr node, const 
         for (const auto & key : keys)
         {
             auto type = block.getByName(key).type;
-            if (type->getTypeId() == TypeIndex::Nothing)
+            if (removeNullable(recursiveRemoveLowCardinality(type))->getTypeId() != TypeIndex::Nothing)
             {
-                continue;
+                return false;
             }
-            if (type->isNullable())
-            {
-                if (const auto * nullable_type = dynamic_cast<const DataTypeNullable *>(type.get()))
-                {
-                    if (nullable_type->getNestedType()->getTypeId() == TypeIndex::Nothing)
-                    {
-                        continue;
-                    }
-                }
-            }
-            return false;
         }
         return true;
     };
