@@ -1,6 +1,6 @@
 
 DROP TABLE IF EXISTS alter_00394;
-CREATE TABLE alter_00394 (d Date, k UInt64, i32 Int32, n Nested(ui8 UInt8, s String))
+CREATE TABLE alter_00394 (d Date, k UInt64, i32 Int32, n Nested(ui8 UInt8, s String)) 
 ENGINE=CnchMergeTree PARTITION BY d ORDER BY k SETTINGS index_granularity = 8192;
 SYSTEM START MERGES alter_00394;
 SYSTEM STOP MERGES alter_00394;

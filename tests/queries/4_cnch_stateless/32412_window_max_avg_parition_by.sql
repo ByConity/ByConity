@@ -8,12 +8,12 @@ INSERT INTO max_avg_parition_by VALUES('1', 'data', '2019-01-01', '20') ('2', 'd
 
 
 
-SELECT
-    id,
+SELECT 
+    id, 
     department,
     MAX(AVG(age))  OVER (PARTITION BY department)
-FROM max_avg_parition_by
-GROUP BY id, department
+FROM max_avg_parition_by 
+GROUP BY id, department 
 ORDER BY department, id;
 
 

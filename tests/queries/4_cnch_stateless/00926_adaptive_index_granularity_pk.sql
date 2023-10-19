@@ -8,6 +8,7 @@ INSERT INTO pk (x, y, z) VALUES (1, 11, 1235), (2, 11, 4395), (3, 22, 3545), (4,
 
 SET max_block_size = 1;
 SET enable_shuffle_with_order=1;
+SET exchange_enable_force_keep_order=1;
 
 -- Test inferred limit
 SET max_rows_to_read = 5;

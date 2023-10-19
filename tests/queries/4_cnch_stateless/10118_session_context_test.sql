@@ -16,8 +16,8 @@ INSERT INTO table_1 values (1, 'a', 1);
 INSERT INTO table_2 values (2, 'b', 1);
 INSERT INTO table_3 values (3, 'c', 1);
 
-CREATE TABLE table_4 engine = CnchMergeTree ORDER BY key_1 AS
-SELECT
+CREATE TABLE table_4 engine = CnchMergeTree ORDER BY key_1 AS 
+SELECT 
     t1.a AS col_a,
     t1.b AS col_b,
     t1.key_1 AS key_1,

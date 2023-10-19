@@ -6,7 +6,7 @@ CREATE TABLE null_lc_set_index (
   action            LowCardinality(Nullable(String)),
   user              LowCardinality(Nullable(String)),
   INDEX test_user_idx (user) TYPE set(0) GRANULARITY 8192
-) ENGINE=CnchMergeTree
+) ENGINE=CnchMergeTree 
   PARTITION BY toYYYYMMDD(timestamp)
   ORDER BY (timestamp, action, cityHash64(user));
 INSERT INTO null_lc_set_index VALUES (1550883010, 'subscribe', 'alice');

@@ -18,7 +18,7 @@ INSERT INTO parallel_replicas (x, u, s) VALUES (51, 52, 'Z');
  * - объединение данных всех реплик совпадает с содержанием таблицы parallel_replicas.
  */
 /* Две реплики */
-CREATE TABLE parallel_replicas_backup(d Date DEFAULT today(), x UInt32, u UInt64, s String)
+CREATE TABLE parallel_replicas_backup(d Date DEFAULT today(), x UInt32, u UInt64, s String) 
 ENGINE = CnchMergeTree
 ORDER BY x;
 SET parallel_replicas_count = 0;
@@ -31,7 +31,7 @@ SELECT count() > 0 FROM parallel_replicas;
 SET parallel_replicas_count = 0;
 SELECT distinct x, u, s FROM parallel_replicas_backup ORDER BY x, u, s ASC;
 DROP TABLE parallel_replicas_backup;
-CREATE TABLE parallel_replicas_backup(d Date DEFAULT today(), x UInt32, u UInt64, s String)
+CREATE TABLE parallel_replicas_backup(d Date DEFAULT today(), x UInt32, u UInt64, s String) 
 ENGINE = CnchMergeTree ORDER BY x;
 /* Три реплики */
 SET parallel_replicas_count = 0;

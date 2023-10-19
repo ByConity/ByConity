@@ -8,7 +8,7 @@ INSERT INTO ppl4 VALUES('1', 'data', '2019-01-01', '20') ('2', 'data', '2019-03-
 
 SELECT
     row_number() OVER (ORDER BY age ASC)
-FROM ppl4
+FROM ppl4 
 Order BY id;
 
 

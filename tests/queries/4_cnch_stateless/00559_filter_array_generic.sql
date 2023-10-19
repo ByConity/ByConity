@@ -1,1 +1,1 @@
-SELECT x FROM (SELECT arrayJoin([[[1], [2]], [[1]]]) AS x) WHERE length(x) = 2;
+SELECT arrayJoin([[[1], [2]], [[1]]]) AS x WHERE length(x) = 2;

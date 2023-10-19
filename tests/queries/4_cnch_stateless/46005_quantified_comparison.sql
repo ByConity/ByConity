@@ -6,9 +6,6 @@ use test;
 
 DROP TABLE IF EXISTS nation_league;
 DROP TABLE IF EXISTS all_nation;
--- Skip the test with system tables because optimizer cannot support them now
--- This testcase mainly test quantified comparison with subquery
-
 select toUInt64(1) == any (select number from system.numbers limit 10);
 select toUInt64(12) == any (select number from system.numbers limit 10);
 select toUInt64(1) != all (select toUInt64(1) from system.numbers limit 10);
@@ -27,7 +24,6 @@ select toUInt64(11) <= all (select number from system.numbers limit 11);
 select toUInt64(11) < all (select 11 from system.numbers limit 10);
 select toUInt64(11) > all (select 11 from system.numbers limit 10);
 select toUInt64(11) >= all (select 11 from system.numbers limit 10);
-
 create table nation_league (id_nation Int32, name Nullable(String), region_key Nullable(Int32)) ENGINE=CnchMergeTree() order by id_nation;
 create table all_nation (id_nation Int32, nation_name Nullable(String), nation_key Nullable(Int32)) ENGINE=CnchMergeTree() order by id_nation;
 insert into nation_league values(8,'a',55) , (20, 'b', 546), (70, 'c', 44), (30, 'f', 90), (1,'p',3), (88, 's', 78);

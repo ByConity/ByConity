@@ -1,4 +1,3 @@
-set enable_optimizer=1;
 use test;
 set dialect_type='ANSI';
 

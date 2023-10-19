@@ -7,11 +7,11 @@ INSERT INTO ppl6 VALUES('1', 'data', '2019-01-01', '20') ('2', 'data', '2019-03-
 
 
 
-SELECT
-    id,
+SELECT 
+    id, 
     department,
-    AVG(age) OVER (PARTITION BY department)
-FROM ppl6
+    AVG(age) OVER (PARTITION BY department) 
+FROM ppl6 
 ORDER BY id;
 
 DROP TABLE ppl6;

@@ -9,7 +9,7 @@ INSERT INTO rownumber_order_by VALUES('1', 'data', '2019-01-01', '20') ('2', 'da
 
 SELECT
     row_number() OVER (ORDER BY age ASC)
-FROM rownumber_order_by
+FROM rownumber_order_by 
 Order BY id;
 
 
