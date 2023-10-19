@@ -161,6 +161,11 @@ IMPLEMENT_SETTING_ENUM(DiskCacheMode, ErrorCodes::BAD_ARGUMENTS,
      {"SKIP_DISK_CACHE", DiskCacheMode::SKIP_DISK_CACHE},
      {"FORCE_CHECKSUMS_DISK_CACHE", DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE}})
 
+IMPLEMENT_SETTING_ENUM(BackupVWMode, ErrorCodes::BAD_ARGUMENTS,
+    {{"backup", BackupVWMode::BACKUP},
+     {"round_robin", BackupVWMode::ROUND_ROBIN},
+     {"backup_only", BackupVWMode::BACKUP_ONLY}})
+
 IMPLEMENT_SETTING_ENUM(StatisticsCachePolicy, ErrorCodes::BAD_ARGUMENTS,
     {{"default", StatisticsCachePolicy::Default},
      {"cache", StatisticsCachePolicy::Cache},

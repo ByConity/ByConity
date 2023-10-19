@@ -1550,6 +1550,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0) \
     M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
+    M(String, backup_virtual_warehouse, "", "The backup vw to run query when default vw is not avaiable", 0) \
+    M(BackupVWMode, backup_vw_mode, BackupVWMode::BACKUP, "backup vw mode. backup round_robin backup_only", 0) \
     M(String, virtual_warehouse_write, "", "The write vw name set by user on which the query run", 0) \
     M(String, \
       vw_schedule_algo, \

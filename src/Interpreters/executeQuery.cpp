@@ -163,6 +163,7 @@ extern const Event QueriesFailedFromEngine;
 extern const Event QueriesSucceeded;
 extern const Event TimedOutQuery;
 extern const Event Query;
+extern const Event BackupVW;
 }
 
 namespace HistogramMetrics
@@ -182,6 +183,78 @@ namespace ErrorCodes
     extern const int CANNOT_PARSE_DOMAIN_VALUE_FROM_STRING;
     extern const int CNCH_QUEUE_QUERY_FAILURE;
     extern const int UNKNOWN_EXCEPTION;
+}
+
+void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr & ast)
+{
+    const auto & backup_vw = context->getSettingsRef().backup_virtual_warehouse.value;
+    if (backup_vw.empty())
+    {
+        trySetVirtualWarehouseAndWorkerGroup(ast, context);
+    }
+    else
+    {
+        std::vector<String> backup_vws;
+        boost::split(backup_vws, backup_vw, boost::is_any_of(","));
+        const auto & backup_vw_mode = context->getSettingsRef().backup_vw_mode;
+        if (backup_vw_mode == BackupVWMode::ROUND_ROBIN)
+        {
+            static std::atomic<uint64_t> round_robin_count{0};
+            auto idx = round_robin_count++ % (1 + backup_vws.size());
+            if (idx == 0)
+            {
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "use original vw to execute query");
+                trySetVirtualWarehouseAndWorkerGroup(ast, context);
+            }
+            else
+            {
+                ProfileEvents::increment(ProfileEvents::BackupVW, 1);
+                LOG_DEBUG(&Poco::Logger::get("executeQuery"), "backup round_robin choose {}", backup_vws[idx - 1]);
+                trySetVirtualWarehouseAndWorkerGroup(backup_vws[idx - 1], context);
+            }
+        }
+        else
+        {
+            auto runWithBackupVW = [&]()
+            {
+                for (size_t idx = 0; idx < backup_vws.size(); ++idx)
+                {
+                    const auto & vw = backup_vws[idx];
+                    try
+                    {
+                        trySetVirtualWarehouseAndWorkerGroup(vw, context);
+                        ProfileEvents::increment(ProfileEvents::BackupVW, 1);
+                        LOG_DEBUG(&Poco::Logger::get("executeQuery"), "backup vw choose {}", vw);
+                        break;
+                    }
+                    catch(const Exception & e)
+                    {
+                        if (idx == backup_vws.size() - 1)
+                        {
+                            LOG_DEBUG(&Poco::Logger::get("executeQuery"), "none of backup vws are available");
+                            throw e;
+                        }
+                    }
+                }
+            };
+
+            if (backup_vw_mode == BackupVWMode::BACKUP_ONLY)
+            {
+                runWithBackupVW();
+            }
+            else
+            {
+                try
+                {
+                    trySetVirtualWarehouseAndWorkerGroup(ast, context);
+                }
+                catch(const Exception & e)
+                {
+                    runWithBackupVW();
+                }
+            }
+        }
+    }
 }
 
 void tryQueueQuery(ContextMutablePtr context, ASTType ast_type)
@@ -566,7 +639,7 @@ static void onExceptionBeforeStart(
 
     LabelledMetrics::MetricLabels labels = markQueryProfileEventLabels(context, query_type, is_unlimited_query);
     labels.insert({"processing_stage", "before-processing"});
- 
+
     ProfileEvents::increment(ProfileEvents::QueriesFailed, 1, labels);
 
     //TODO:@lianwenlong add user error codes
@@ -811,14 +884,6 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         {
             ast = input_ast;
         }
-        if (context->getServerType() == ServerType::cnch_server && context->getVWCustomizedSettings())
-        {
-            auto vw_name = tryGetVirtualWarehouseName(ast, context);
-            if (vw_name != EMPTY_VIRTUAL_WAREHOUSE_NAME)
-            {
-                context->getVWCustomizedSettings()->overwriteDefaultSettings(vw_name, context->getSettingsRef());
-            }
-        }
 
         bool in_interactive_txn = isQueryInInteractiveSession(context, ast);
         if (in_interactive_txn && isDDLQuery(context, ast))
@@ -917,9 +982,17 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     auto txn = prepareCnchTransaction(context, ast);
     if (txn)
     {
-        trySetVirtualWarehouseAndWorkerGroup(ast, context);
+        trySetVirtualWarehouseWithBackup(context, ast);
         if (context->getServerType() == ServerType::cnch_server)
         {
+            if (context->getVWCustomizedSettings())
+            {
+                auto vw_name = tryGetVirtualWarehouseName(ast, context);
+                if (vw_name != EMPTY_VIRTUAL_WAREHOUSE_NAME)
+                {
+                    context->getVWCustomizedSettings()->overwriteDefaultSettings(vw_name, context->getSettingsRef());
+                }
+            }
             context->initCnchServerResource(txn->getTransactionID());
             if (!internal && !ast->as<ASTShowProcesslistQuery>() && context->getSettingsRef().enable_query_queue)
                 tryQueueQuery(context, ast->getType());

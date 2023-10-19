@@ -399,6 +399,20 @@ bool trySetVirtualWarehouse(const ASTPtr & ast, ContextMutablePtr & context)
     }
 }
 
+bool trySetVirtualWarehouseAndWorkerGroup(const std::string& vw_name, ContextMutablePtr & context)
+{
+    if (context->tryGetCurrentWorkerGroup())
+        return true;
+
+    setVirtualWarehouseByName(vw_name, context);
+    auto value = context->getSettingsRef().vw_schedule_algo.value;
+    auto algo = ResourceManagement::toVWScheduleAlgo(&value[0]);
+    auto worker_group = context->getCurrentVW()->pickWorkerGroup(algo);
+    LOG_DEBUG(&Poco::Logger::get("VirtualWarehouse"), "Picked worker group {}", worker_group->getQualifiedName());
+    context->setCurrentWorkerGroup(std::move(worker_group));
+    return true;
+}
+
 bool trySetVirtualWarehouseAndWorkerGroup(const ASTPtr & ast, ContextMutablePtr & context)
 {
     if (context->tryGetCurrentWorkerGroup())

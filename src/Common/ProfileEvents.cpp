@@ -827,6 +827,8 @@
     M(TSORequest, "Number requests sent to TSO") \
     M(TSOError, "Error logged by TSO Service as a response to CNCH") \
     \
+    M(BackupVW, "Whether use backup virtual warehouse or not") \
+    \
     M(PutAccessEntitySuccess, "") \
     M(PutAccessEntityFailed, "") \
     M(TryGetAccessEntitySuccess, "") \
