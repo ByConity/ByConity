@@ -203,7 +203,7 @@ ExchangeResult ExchangeVisitor::visitOffsetNode(OffsetNode & node, ExchangeConte
 
 ExchangeResult ExchangeVisitor::visitLimitByNode(LimitByNode & node, ExchangeContext & cxt)
 {
-    return visitPlanNode(node, cxt);
+    return enforceNodeAndStream(node, cxt);
 }
 
 ExchangeResult ExchangeVisitor::visitTotalsHavingNode(TotalsHavingNode & node, ExchangeContext & cxt)

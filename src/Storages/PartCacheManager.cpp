@@ -21,6 +21,7 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <Storages/CnchDataPartCache.h>
+#include <Storages/CnchStorageCache.h>
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
 #include <Common/RWLock.h>
@@ -92,6 +93,8 @@ PartCacheManager::PartCacheManager(ContextMutablePtr context_)
     : WithMutableContext(context_)
 {
     part_cache_ptr = std::make_shared<CnchDataPartCache>(getContext()->getConfigRef().getUInt("size_of_cached_parts", 100000));
+    storageCachePtr = std::make_shared<CnchStorageCache>(getContext()->getConfigRef().getUInt("cnch_max_cached_storage", 10000));
+
     metrics_updater = getContext()->getSchedulePool().createTask("PartMetricsUpdater",[this](){
         try
         {
@@ -192,6 +195,8 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
             return;
         /// Invalid old cache if any
         part_cache_ptr->dropCache(storage.getStorageUUID());
+        storageCachePtr->remove(storage.getDatabaseName(), storage.getTableName());
+
         try
         {
             meta_ptr->cache_status = CacheStatus::LOADING;
@@ -530,6 +535,7 @@ void PartCacheManager::invalidCacheWithNewTopology(const CnchServerTopology & to
         {
             LOG_DEBUG(&Poco::Logger::get("PartCacheManager::invalidCacheWithNewTopology"), "Dropping part cache of {}", UUIDHelpers::UUIDToString(it->first));
             part_cache_ptr->dropCache(it->first);
+            storageCachePtr->remove(it->second->database, it->second->table);
             it = active_tables.erase(it);
         }
         else
@@ -1414,6 +1420,12 @@ std::pair<UInt64, UInt64> PartCacheManager::dumpPartCache()
     return {part_cache_ptr->count(), part_cache_ptr->weight()};
 }
 
+std::pair<UInt64, UInt64> PartCacheManager::dumpStorageCache()
+{
+    std::unique_lock<std::mutex> lock(cache_mutex);
+    return {storageCachePtr->count(), storageCachePtr->weight()};
+}
+
 std::unordered_map<String, std::pair<size_t, size_t>> PartCacheManager::getTableCacheInfo()
 {
     CnchDataPartCachePtr cache_ptr;
@@ -1433,6 +1445,7 @@ void PartCacheManager::reset()
     std::unique_lock<std::mutex> lock(cache_mutex);
     active_tables.clear();
     part_cache_ptr->reset();
+    storageCachePtr->reset();
     /// reload active tables when topology change.
     active_table_loader->schedule();
 }
@@ -1444,6 +1457,32 @@ void PartCacheManager::shutDown()
     metrics_initializer->deactivate();
     active_table_loader->deactivate();
     meta_lock_cleaner->deactivate();
+}
+
+StoragePtr PartCacheManager::getStorageFromCache(const UUID & uuid, const PairInt64 & topology_version)
+{
+    StoragePtr res;
+    TableMetaEntryPtr table_entry = getTableMeta(uuid);
+    if (table_entry && topology_version == table_entry->cache_version.get())
+        res = storageCachePtr->get(uuid);
+    return res;
+}
+
+void PartCacheManager::insertStorageCache(const StorageID & storage_id, const StoragePtr storage, const UInt64 commit_ts, const PairInt64 & topology_version)
+{
+    TableMetaEntryPtr table_entry = getTableMeta(storage_id.uuid);
+    if (table_entry && topology_version == table_entry->cache_version.get())
+        storageCachePtr->insert(storage_id, commit_ts, storage);
+}
+
+void PartCacheManager::removeStorageCache(const String & database, const String & table)
+{
+    if (!database.empty() && !table.empty())
+        storageCachePtr->remove(database, table);
+    else if (!database.empty())
+        storageCachePtr->remove(database);
+    else
+        storageCachePtr->reset();
 }
 
 }

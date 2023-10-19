@@ -16,6 +16,9 @@
 #pragma once
 
 #include <Common/LRUCache.h>
+#include <Core/UUID.h>
+#include <Core/Types.h>
+#include <boost/bimap/bimap.hpp>
 #include <shared_mutex>
 #include <city.h>
 
@@ -24,6 +27,7 @@ namespace DB
 
 class IStorage;
 using StoragePtr = std::shared_ptr<IStorage>;
+class StorageID;
 
 using TableName = std::pair<String, String>;  // database and table pair
 using TableData = std::pair<UInt64, StoragePtr>; //identify table with commit time
@@ -42,6 +46,11 @@ class CnchStorageCache : public LRUCache<TableName, TableData, TableNameHash>
 private:
     using Base = LRUCache<TableName, TableData, TableNameHash>;
     std::shared_mutex cache_mutex;
+    boost::bimaps::bimap<UUID, TableName> uuid_to_table_names;
+
+    inline StoragePtr getImpl(const TableName & table_name);
+
+    inline void removeUnlock(const String & db, const String & table);
 
 public:
     CnchStorageCache(size_t cache_size)
@@ -57,7 +66,7 @@ public:
      * @param ts timestamp
      * @param storage_ptr storageptr
      */
-    void insert(const String & db, const String & table, const UInt64 ts, const StoragePtr & storage_ptr);
+    void insert(const StorageID & storage_id, const UInt64 ts, const StoragePtr & storage_ptr);
 
     /***
      * Get storage from cache.
@@ -65,8 +74,14 @@ public:
      * @param table tablename
      * @return nullptr if the storage is not cached.
      */
-
     StoragePtr get(const String & db, const String & table);
+
+    /***
+     * Get storage from cache.
+     * @param uuid
+     * @return nullptr if the storage is not cached.
+     */
+    StoragePtr get(const UUID & uuid);
 
     /***
      * Remove the storage cache of the table.

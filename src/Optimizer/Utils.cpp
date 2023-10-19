@@ -13,15 +13,18 @@
  * limitations under the License.
  */
 
+#include <optional>
 #include <Optimizer/Utils.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Analyzers/TypeAnalyzer.h>
+#include <DataTypes/getLeastSupertype.h>
 #include <Functions/FunctionFactory.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context.h>
+#include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/ExpressionExtractor.h>
 #include <Optimizer/SymbolsExtractor.h>
-#include <Optimizer/ExpressionDeterminism.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <boost/math/special_functions/math_fwd.hpp>
@@ -101,62 +104,33 @@ bool isIdentity(const ProjectionStep & step)
     return !step.isFinalProject() && Utils::isIdentity(step.getAssignments());
 }
 
-String getNestedNameIfCastPreserveCardinality(const ConstASTPtr & ast, const NameToType & input_name_to_type)
+bool isIdentifierOrIdentifierCast(const ConstASTPtr & expression)
 {
-    if (const auto * function = ast->as<ASTFunction>())
+    if (const auto * function = expression->as<ASTFunction>())
     {
-        if (Poco::toLower(function->name) == "cast" && function->arguments->getChildren().size() == 2)
+        return Poco::toLower(function->name) == "cast" && function->arguments->getChildren()[0]->getType() == ASTType::ASTIdentifier;
+    }
+    return expression->getType() == ASTType::ASTIdentifier;
+}
+
+ConstASTPtr tryUnwrapCast(const ConstASTPtr & expression, ContextMutablePtr context, const NamesAndTypes & names_and_types)
+{
+    if (const auto * function = expression->as<ASTFunction>();
+        function && Poco::toLower(function->name) == "cast" && function->arguments->getChildren().size() == 2)
+    {
+        auto & source_expression = function->arguments->getChildren()[0];
+        auto source_type = TypeAnalyzer::getType(source_expression, context, names_and_types);
+
+        const auto * target_type_name = function->arguments->getChildren()[1]->as<ASTLiteral>();
+        auto target_type = DataTypeFactory::instance().get(target_type_name->value.safeGet<String>());
+
+        auto super_type = tryGetLeastSupertype(DataTypes{source_type, target_type});
+        if (super_type != nullptr && super_type->equals(*target_type))
         {
-            const auto * identifier = function->arguments->getChildren()[0]->as<ASTIdentifier>();
-            const auto * literal = function->arguments->getChildren()[1]->as<ASTLiteral>();
-            if (identifier && literal && literal->value.getType() == Field::Types::Which::String)
-            {
-                String nested_name = identifier->name();
-                if (input_name_to_type.contains(nested_name))
-                {
-                    const auto& nested_type = input_name_to_type.at(nested_name);
-
-                    String cast_target_name = literal->value.safeGet<String>();
-
-                    if (cast_target_name.starts_with("Nullable(") && cast_target_name.ends_with(')'))
-                    {
-                        cast_target_name = cast_target_name.substr(9);
-                        cast_target_name.pop_back();
-                    } 
-                    else if (nested_type->isNullable()) // cast nullable to non-nullable will change cardinality.
-                    {
-                        return "";
-                    }
-
-                    String cast_source_name = removeNullable(nested_type)->getName();
-
-                    auto split = [](const String & type_str) 
-                    {
-                        String base_type_str;
-                        int bits = 0;
-                        int base = 1;
-                        int i = type_str.size() - 1;
-                        while (i >= 0 && Poco::Ascii::isDigit(type_str[i]))
-                        {
-                            bits += (type_str[i] - '0') * base;
-                            base *= 10;
-                            --i;
-                        }
-                        return std::make_pair(type_str.substr(0, i + 1), bits);
-                    };
-
-                    auto splitted_source = split(cast_source_name);
-                    auto splitted_target = split(cast_target_name);
-
-                    if (!splitted_source.first.empty() && splitted_source.first == splitted_target.first && splitted_source.second <= splitted_target.second)
-                    {
-                        return nested_name;
-                    }
-                }
-            }
+            return source_expression;
         }
     }
-    return "";
+    return expression;
 }
 
 NameToNameMap extractIdentities(const ProjectionStep & project)

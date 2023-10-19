@@ -593,32 +593,34 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitProjectionNode(Projectio
 
     FPKeysAndOrdinaryKeys translated = result.translate(revert_identifies);
 
+    const auto & names_and_types = step.getInputStreams()[0].getNamesAndTypes();
     // In special cases, projection adds a assignment function with parameters related to other keys in pk table.
     // we consider the new assignment is a other key.
     // The same is true of aggregating.
     for (const auto & [name, ast] : assignments)
     {
-        auto input_name_to_type = step.getInputStreams()[0].getNamesToTypes();
+        if (!Utils::isIdentifierOrIdentifierCast(ast))
+            continue;
+
         // cast(pk, 'Nullable(pk_type)') is allowed, it has no effect on pk side.
-        String pk_name = Utils::getNestedNameIfCastPreserveCardinality(ast, input_name_to_type);
-        
-        auto pks = old_fp_keys.getKeysInCurrentNames(Names{pk_name});
-        if (!pks.empty())
+        if (auto identifier = Utils::tryUnwrapCast(ast, context, names_and_types)->as<ASTIdentifier>())
         {
-            translated.getFPKeysRef().insert(pks.begin()->copy(name));
-        }
-        else
-        {
-            NameOrderedSet symbols = SymbolsExtractor::extract(ast);
-            for (const auto & other_key : old_ordinary_keys.getKeysInCurrentNames(symbols))
+            auto pks = old_fp_keys.getKeysInCurrentNames(Names{identifier->name()});
+            if (!pks.empty())
             {
-                translated.getOrdinaryKeysRef().updateKey(
-                    other_key.getTableName(),
-                    name);
+                translated.getFPKeysRef().insert(pks.begin()->copy(name));
+            }
+            else
+            {
+                NameOrderedSet symbols = SymbolsExtractor::extract(ast);
+                for (const auto & other_key : old_ordinary_keys.getKeysInCurrentNames(symbols))
+                {
+                    translated.getOrdinaryKeysRef().updateKey(other_key.getTableName(), name);
+                }
             }
         }
     }
-    
+
     return translated;
 }
 

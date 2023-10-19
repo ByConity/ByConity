@@ -100,9 +100,7 @@ ScalarStatsCalculator::visitASTLiteral(const ConstASTPtr & node, std::unordered_
     const auto * literal = dynamic_cast<const ASTLiteral *>(node.get());
     if (literal->value.isNull())
         return std::make_shared<SymbolStatistics>(1, 0, 0, 1);
-    DataTypePtr tmp_type = type;
-    if (tmp_type->isNullable())
-        tmp_type = dynamic_cast<const DataTypeNullable *>(type.get())->getNestedType();
+    DataTypePtr tmp_type = removeNullable(recursiveRemoveLowCardinality(type));
     if (tmp_type->isValueRepresentedByNumber())
     {
         double value = applyVisitor(FieldVisitorConvertToNumber<Float64>(), literal->value);

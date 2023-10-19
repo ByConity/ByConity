@@ -34,8 +34,6 @@ void onSettingChanged(Settings *s)
     s->except_default_mode = ansi ? SetOperationMode::DISTINCT : SetOperationMode::ALL;
     s->prefer_column_name_to_alias = ansi;
     s->data_type_default_nullable = ansi;
-    s->enable_replace_group_by_literal_to_symbol = ansi;
-    s->enable_replace_order_by_literal_to_symbol = ansi;
     s->decimal_division_use_extended_scale = ansi;
     s->decimal_arithmetic_promote_storage = ansi;
     s->allow_extended_type_conversion = ansi;

@@ -20,7 +20,6 @@
 #include <CloudServices/CnchServerClient.h>
 #include <Interpreters/Context.h>
 #include <Storages/PartCacheManager.h>
-#include <Storages/CnchStorageCache.h>
 
 namespace DB
 {
@@ -77,19 +76,14 @@ bool CnchTopologyMaster::fetchTopologies()
                 if (topologies.front().getExpiration() > last_topology.front().getExpiration() + 2 * settings.topology_lease_life_ms.totalMilliseconds())
                 {
                     LOG_WARNING(log, "Reset part and table cache because of topology change");
-                    if (getContext()->getPartCacheManager())
-                        getContext()->getPartCacheManager()->reset();
-                    if (getContext()->getCnchStorageCache())
-                        getContext()->getCnchStorageCache()->reset();
+                    if (auto cache_manager = getContext()->getPartCacheManager(); cache_manager)
+                            cache_manager->reset();
                 }
                 else if (!topologies.front().isSameTopologyWith(last_topology.front()))
                 {
                     LOG_WARNING(log, "Invalid outdated part and table cache because of topology change");
                     if (getContext()->getPartCacheManager())
                         getContext()->getPartCacheManager()->invalidCacheWithNewTopology(topologies.front());
-                    /// TODO: invalid table cache with new topology.
-                    if (getContext()->getCnchStorageCache())
-                        getContext()->getCnchStorageCache()->reset();
                 }
             }
         }
@@ -113,6 +107,30 @@ std::list<CnchServerTopology> CnchTopologyMaster::getCurrentTopology()
 {
     std::lock_guard lock(mutex);
     return topologies;
+}
+
+std::pair<PairInt64, CnchServerTopology> CnchTopologyMaster::getCurrentTopologyVersion()
+{
+    std::pair<PairInt64, CnchServerTopology> res = std::make_pair(PairInt64(0, 0), CnchServerTopology{});
+    UInt64 current_ts = getContext()->tryGetTimestamp(__PRETTY_FUNCTION__);
+    if (TxnTimestamp::fallbackTS() == current_ts)
+        return res;
+    UInt64 current_time = current_ts>>18;
+    std::list<CnchServerTopology> current_topology = getCurrentTopology();
+    UInt64 lease_life_time = getContext()->getSettingsRef().topology_lease_life_ms.totalMilliseconds();
+
+    auto it = current_topology.begin();
+    while (it != current_topology.end())
+    {
+        UInt64 lease_start_time = it->getInitialTime() ? it->getInitialTime() : it->getExpiration() - lease_life_time;
+
+        if (current_time >= lease_start_time && current_time < it->getExpiration() - 6000)
+        {
+            res = std::make_pair(PairInt64{it->getInitialTime(), it->getTerm()}, *it);
+            break;
+        }
+    }
+    return res;
 }
 
 HostWithPorts CnchTopologyMaster::getTargetServerImpl(

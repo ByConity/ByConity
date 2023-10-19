@@ -208,7 +208,13 @@ public:
 
     void insertData(const char * pos, size_t length) override;
 
-    void popBack(size_t n) override { idx.popBack(n); }
+    void popBack(size_t n) override
+    {
+        if (isFullState())
+            getNestedColumn().popBack(n);
+        else
+            idx.popBack(n);
+    }
 
     StringRef serializeValueIntoArena(size_t n, Arena & arena, char const *& begin) const override;
 

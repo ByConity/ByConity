@@ -97,7 +97,7 @@ public:
     void setType(const DataTypePtr & type_) { type = type_; }
     void setDbTableColumn(String db_table_column_) { db_table_column = db_table_column_; }
 
-    bool isNullable() const { return type->isNullable(); }
+    bool isNullable() const { return isNullableOrLowCardinalityNullable(type); }
     bool isNumber() const;
     bool isString() const;
 

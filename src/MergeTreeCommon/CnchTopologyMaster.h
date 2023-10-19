@@ -36,6 +36,8 @@ public:
 
     std::list<CnchServerTopology> getCurrentTopology();
 
+    std::pair<PairInt64, CnchServerTopology> getCurrentTopologyVersion();
+
     /// Get target server for table with current timestamp.
     HostWithPorts getTargetServer(const String & table_uuid, const String & server_vw_name, bool allow_empty_result, bool allow_tso_unavailable = false);
     /// Get target server with provided timestamp.

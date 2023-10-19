@@ -65,7 +65,7 @@ static DataTypePtr makeNullableByArgumentTypes(const InterpretIMResults & argume
 {
     DataTypePtr result = std::make_shared<T>();
 
-    if (std::any_of(arguments.begin(), arguments.end(), [](auto & arg) { return arg.type->isNullable();}))
+    if (std::any_of(arguments.begin(), arguments.end(), [](auto & arg) { return isNullableOrLowCardinalityNullable(arg.type);}))
         result = JoinCommon::tryConvertTypeToNullable(result);
 
     return result;
@@ -233,7 +233,7 @@ bool simplifyNullPrediction(const ASTFunction & function, const InterpretIMResul
     bool is_null = function.name == "isNull";
     bool is_not_null = function.name == "isNotNull";
 
-    if (!(is_null || is_not_null) || argument_results.front().type->isNullable())
+    if (!(is_null || is_not_null) || isNullableOrLowCardinalityNullable(argument_results.front().type))
         return false;
 
     simplify_result = {std::make_shared<DataTypeUInt8>(), is_null ? 0U : 1U};

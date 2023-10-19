@@ -359,6 +359,9 @@ struct Analysis
     std::unordered_map<ASTSelectQuery *, UInt64> limit_by_values;
     UInt64 getLimitByValue(ASTSelectQuery & select_query);
 
+    ListMultimap<ASTSelectQuery *, ASTPtr> limit_by_items;
+    std::vector<ASTPtr> & getLimitByItem(ASTSelectQuery & select_query);
+
     /// Limit By Offset
     std::unordered_map<ASTSelectQuery *, UInt64> limit_by_offset_values;
     UInt64 getLimitByOffsetValue(ASTSelectQuery & select_query);

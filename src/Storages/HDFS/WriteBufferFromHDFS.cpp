@@ -57,7 +57,7 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
     hdfsFile fout;
     HDFSBuilderWrapper builder;
     HDFSFSPtr fs;
-    void openFile( const std::string & hdfs_name_, int flags) {
+    void openFile( const std::string & hdfs_name_, int flags, bool overwrite_current_file = false) {
         ProfileEvents::increment(ProfileEvents::HdfsFileOpen);
         /// We use hdfs_name as path directly to avoid Poco URI escaping character(e.g. %) in hdfs_name.
         std::string path;
@@ -69,8 +69,9 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
         if (path.find_first_of("*?{") != std::string::npos)
             throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "URI '{}' contains globs, so the table is in readonly mode", hdfs_uri.toString());
 
-        if (!hdfsExists(fs.get(), path.c_str()))
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "File {} already exists", path);
+        if (!hdfsExists(fs.get(), path.c_str()) && !overwrite_current_file)
+            throw Exception(ErrorCodes::BAD_ARGUMENTS, "File {} already exists. \
+                If you want to overwrite it, enable setting overwrite_current_file = 1", path);
 
         fout = hdfsOpenFile(fs.get(), path.c_str(), flags, 0, 0, 0);     /// O_WRONLY meaning create or overwrite i.e., implies O_TRUNCAT here
 
@@ -88,15 +89,16 @@ struct WriteBufferFromHDFS::WriteBufferFromHDFSImpl
         , builder(createHDFSBuilder(hdfs_name_, config_))
         , fs(createHDFSFS(builder.get()))
     {
-        openFile(hdfs_name_,flags);
+        openFile(hdfs_name_, flags);
     }
 
     explicit WriteBufferFromHDFSImpl(
         const std::string & hdfs_name_,
         const HDFSConnectionParams & hdfsParams,
-        int flags
+        int flags,
+        bool overwrite_current_file
     ): hdfs_uri(hdfs_name_), builder(hdfsParams.createBuilder(hdfs_uri)),fs(createHDFSFS(builder.get())){
-        openFile(hdfs_name_,flags);
+        openFile(hdfs_name_, flags, overwrite_current_file);
     }
 
     ~WriteBufferFromHDFSImpl()
@@ -143,9 +145,9 @@ WriteBufferFromHDFS::WriteBufferFromHDFS(
 
 
 WriteBufferFromHDFS::WriteBufferFromHDFS(
-    const std::string & hdfs_name_, const HDFSConnectionParams & hdfs_params, const size_t buf_size_, int flag)
+    const std::string & hdfs_name_, const HDFSConnectionParams & hdfs_params, const size_t buf_size_, int flag, bool overwrite_current_file)
     : WriteBufferFromFileBase(buf_size_, nullptr, 0)
-    , impl(std::make_unique<WriteBufferFromHDFSImpl>(hdfs_name_, hdfs_params, flag))
+    , impl(std::make_unique<WriteBufferFromHDFSImpl>(hdfs_name_, hdfs_params, flag, overwrite_current_file))
     , hdfs_name(hdfs_name_)
 {
 }

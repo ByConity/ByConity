@@ -7,11 +7,6 @@
 namespace DB
 {
 
-inline bool isNullableOrLowCardinalityNullable(const DataTypePtr & data_type)
-{
-    return data_type->isNullable() || data_type->isLowCardinalityNullable();
-}
-
 void insertNullAsDefaultIfNeeded(ColumnWithTypeAndName & input_column, const ColumnWithTypeAndName & header_column, size_t column_i, BlockMissingValues * block_missing_values)
 {
     if (!isNullableOrLowCardinalityNullable(input_column.type) || isNullableOrLowCardinalityNullable(header_column.type))

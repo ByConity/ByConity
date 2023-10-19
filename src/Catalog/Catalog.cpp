@@ -47,7 +47,6 @@
 #include <Protos/data_models.pb.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/PartCacheManager.h>
-#include <Storages/CnchStorageCache.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
 #include <Storages/MergeTree/PartitionPruner.h>
 #include <IO/WriteHelpers.h>
@@ -659,6 +658,9 @@ namespace Catalog
                         table->set_txnid(txnID.toUInt64());
                         table->set_commit_time(ts.toUInt64());
                         meta_proxy->renameTable(name_space, *table, from_database, table_id_ptr->name(), table_id_ptr->uuid(), batch_writes);
+
+                        if (auto cache_manager = context.getPartCacheManager(); cache_manager)
+                            cache_manager->removeStorageCache(from_database, table->name());
                     }
 
                     /// remove old database record;
@@ -783,11 +785,11 @@ namespace Catalog
                     BatchCommitResponse resp;
                     meta_proxy->batchWrite(batch_writes, resp);
 
-                    if (context.getCnchStorageCache())
-                        context.getCnchStorageCache()->remove(db, name);
-
-                    if (context.getPartCacheManager())
-                        context.getPartCacheManager()->invalidPartCache(UUID(stringToUUID(table_uuid)));
+                    if (auto cache_manager = context.getPartCacheManager(); cache_manager)
+                    {
+                        cache_manager->invalidPartCache(storage->getStorageUUID());
+                        cache_manager->removeStorageCache(db, name);
+                    }
                 }
             },
             ProfileEvents::DropTableSuccess,
@@ -799,8 +801,6 @@ namespace Catalog
         runWithMetricSupport(
             [&] {
                 detachOrAttachTable(db, name, ts, true);
-                if (context.getCnchStorageCache())
-                    context.getCnchStorageCache()->remove(db, name);
             },
             ProfileEvents::DetachTableSuccess,
             ProfileEvents::DetachTableFailed);
@@ -857,14 +857,16 @@ namespace Catalog
                 if (table->commit_time() >= ts.toUInt64())
                     throw Exception("Cannot alter table with an earlier timestamp", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
 
+                HostWithPorts host_port;
+                bool is_local_server = false;
                 if (!query_settings.force_execute_alter)
                 {
-                    auto host_port = context.getCnchTopologyMaster()
-                                        ->getTargetServer(table_uuid, storage->getServerVwName(), false)
-                                        .getRPCAddress();
-                    if (!isLocalServer(host_port, std::to_string(context.getRPCPort())))
+                    host_port = context.getCnchTopologyMaster()
+                                        ->getTargetServer(table_uuid, storage->getServerVwName(), false);
+                    is_local_server = isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()));
+                    if (!is_local_server)
                         throw Exception(
-                            "Cannot alter table because of choosing wrong server according to current topology, chosen server: " + host_port,
+                            "Cannot alter table because of choosing wrong server according to current topology, chosen server: " + host_port.toDebugString(),
                             ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
                 }
 
@@ -899,18 +901,19 @@ namespace Catalog
                 if (is_recluster)
                     setTableClusterStatus(storage->getStorageUUID(), false, new_table->getTableHashForClusterBy());
 
-                if (context.getCnchStorageCache())
+                if (auto cache_manager = context.getPartCacheManager(); cache_manager)
                 {
-                    /// update cache with nullptr and latest table commit_time to prevent an old version be inserted into cache. the cache will be reloaded in following getTable
-                    context.getCnchStorageCache()->insert(
-                        storage->getDatabaseName(), storage->getTableName(), table->commit_time(), nullptr);
-                }
-                if (server_vw_changed)
-                {
-                    if (auto part_cache_manager = context.getPartCacheManager())
+                    if (server_vw_changed)
                     {
                         /// Invalidate part cache since this server is no longer table's host server
-                        part_cache_manager->invalidPartCache(storage->getStorageUUID());
+                        cache_manager->invalidPartCache(storage->getStorageUUID());
+                        cache_manager->removeStorageCache(storage->getDatabaseName(), storage->getTableName());
+                    }
+                    else if (is_local_server)
+                    {
+                        // update cache with nullptr and latest table commit_time to prevent an old version be inserted into cache.
+                        // the cache will be reloaded in following getTable
+                        cache_manager->insertStorageCache(storage->getStorageID(), nullptr, table->commit_time(), host_port.topology_version);
                     }
                 }
             },
@@ -984,13 +987,11 @@ namespace Catalog
                     meta_proxy->batchWrite(batch_writes, resp);
 
                     /// update table name in table meta entry so that we can get table part metrics correctly.
-                    if (context.getPartCacheManager())
+                    if (auto cache_manager = context.getPartCacheManager(); cache_manager)
                     {
-                        context.getPartCacheManager()->updateTableNameInMetaEntry(table_uuid, to_database, to_table);
+                        cache_manager->removeStorageCache(from_database, from_table);
+                        cache_manager->updateTableNameInMetaEntry(table_uuid, to_database, to_table);
                     }
-
-                    if (context.getCnchStorageCache())
-                        context.getCnchStorageCache()->remove(from_database, from_table);
                 }
                 else
                 {
@@ -1043,33 +1044,34 @@ namespace Catalog
         StoragePtr res = nullptr;
         runWithMetricSupport(
             [&] {
-                String table_uuid = meta_proxy->getTableUUID(name_space, database, name);
+                auto table_id = meta_proxy->getTableID(name_space, database, name);
 
-                if (table_uuid.empty())
+                if (!table_id)
                     throw Exception("Table not found: " + database + "." + name, ErrorCodes::UNKNOWN_TABLE);
 
 
-                auto storage_cache = context.getCnchStorageCache();
-                if (storage_cache)
+                auto cache_manager = context.getPartCacheManager();
+                bool is_host_server = false;
+                const auto host_server = context.getCnchTopologyMaster()->getTargetServer(table_id->uuid(), getServerVwNameFrom(*table_id), true);
+
+                if (!host_server.empty())
+                    is_host_server = isLocalServer(host_server.getRPCAddress(), std::to_string(context.getRPCPort()));
+
+                if (is_host_server && cache_manager)
                 {
-                    if (auto storage = storage_cache->get(database, name))
+                    auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(table_id->uuid()), host_server.topology_version);
+                    if (cached_storage && cached_storage->getStorageID().database_name == database && cached_storage->getStorageID().table_name == name)
                     {
-                        /// Compare the table uuid to make sure we get the correct storage cache. Remove outdated cache if necessary.
-                        if (UUIDHelpers::UUIDToString(storage->getStorageID().uuid) == table_uuid)
-                        {
-                            res = storage;
-                            return;
-                        }
-                        else
-                            storage_cache->remove(database, name);
+                        res = cached_storage;
+                        return;
                     }
                 }
 
-                auto table = tryGetTableFromMetastore(table_uuid, ts.toUInt64(), true);
+                auto table = tryGetTableFromMetastore(table_id->uuid(), ts.toUInt64(), true);
 
                 if (!table)
                     throw Exception(
-                        "Cannot get metadata of table " + database + "." + name + " by UUID : " + table_uuid,
+                        "Cannot get metadata of table " + database + "." + name + " by UUID : " + table_id->uuid(),
                         ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
 
                 res = createTableFromDataModel(query_context, *table);
@@ -1082,12 +1084,8 @@ namespace Catalog
 
 
                 /// Try insert the storage into cache.
-                if (res && storage_cache)
-                {
-                    auto server = context.getCnchTopologyMaster()->getTargetServer(table_uuid, res->getServerVwName(), true);
-                    if (!server.empty() && isLocalServer(server.getRPCAddress(), std::to_string(context.getRPCPort())))
-                        storage_cache->insert(database, name, table->commit_time(), res);
-                }
+                if (res && is_host_server && cache_manager)
+                    cache_manager->insertStorageCache(res->getStorageID(), res, table->commit_time(), host_server.topology_version);
             },
             ProfileEvents::GetTableSuccess,
             ProfileEvents::GetTableFailed);
@@ -1122,10 +1120,37 @@ namespace Catalog
         StoragePtr res = nullptr;
         runWithMetricSupport(
             [&] {
+                auto cache_manager = context.getPartCacheManager();
+                auto [current_topology_version, current_topology] = context.getCnchTopologyMaster()->getCurrentTopologyVersion();
+
+                if (cache_manager)
+                {
+                    if (current_topology_version != PairInt64(0, 0))
+                    {
+                        auto cached_storage = cache_manager->getStorageFromCache(UUIDHelpers::toUUID(uuid), current_topology_version);
+                        if (cached_storage)
+                        {
+                            auto host_server = current_topology.getTargetServer(uuid, cached_storage->getServerVwName());
+                            if (isLocalServer(host_server.getRPCAddress(), std::to_string(context.getRPCPort())))
+                            {
+                                res = cached_storage;
+                                return;
+                            }
+                        }
+                    }
+                }
+
                 auto table = tryGetTableFromMetastore(uuid, ts.toUInt64(), true, with_delete);
                 if (!table)
                     return;
                 res = createTableFromDataModel(query_context, *table);
+                /// Try insert the storage into cache.
+                if (res && cache_manager)
+                {
+                    auto host_server = current_topology.getTargetServer(uuid, res->getServerVwName());
+                    if (!host_server.empty() && isLocalServer(host_server.getRPCAddress(), std::to_string(context.getRPCPort())))
+                        cache_manager->insertStorageCache(res->getStorageID(), res, table->commit_time(), current_topology_version);
+                }
             },
             ProfileEvents::TryGetTableByUUIDSuccess,
             ProfileEvents::TryGetTableByUUIDFailed);
@@ -4551,10 +4576,8 @@ namespace Catalog
                 table->set_status(Status::setAttached(table->status()));
             /// directly rewrite the old table metadata rather than adding a new version
             meta_proxy->updateTable(name_space, table_uuid, table->SerializeAsString(), table->commit_time());
-            if (auto storage_cache = context.getCnchStorageCache())
-            {
-                storage_cache->remove(table->database(), table->name());
-            }
+            if (auto cache_manager = context.getPartCacheManager(); cache_manager)
+                cache_manager->removeStorageCache(db, name);
         }
         else
         {

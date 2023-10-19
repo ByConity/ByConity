@@ -658,7 +658,7 @@ PlanNodePtr ColumnPruningVisitor::visitJoinNode(JoinNode & node, NameSet & requi
         for (const auto & origin_output : step->getOutputStream().header)
             if (output.name == origin_output.name)
             {
-                if (origin_output.type->isNullable())
+                if (isNullableOrLowCardinalityNullable(origin_output.type))
                 {
                     output.type = JoinCommon::tryConvertTypeToNullable(output.type);
                 }

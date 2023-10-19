@@ -150,6 +150,11 @@ UInt64 Analysis::getLimitByValue(ASTSelectQuery & select_query)
     MAP_GET(limit_by_values, &select_query);
 }
 
+std::vector<ASTPtr> & Analysis::getLimitByItem(ASTSelectQuery & select_query)
+{
+    return limit_by_items[&select_query];
+}
+
 UInt64 Analysis::getLimitByOffsetValue(ASTSelectQuery & select_query)
 {
     MAP_GET(limit_by_offset_values, &select_query);

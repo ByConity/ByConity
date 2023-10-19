@@ -739,8 +739,7 @@ ValueSet createSingleValueSet(const DataTypePtr & type, const Field & value)
 
 bool isTypeOrderable(const DataTypePtr & type)
 {
-    auto t = recursiveRemoveLowCardinality(type);
-    t = removeNullable(t);
+    auto t = removeNullable(recursiveRemoveLowCardinality(type));
     return isNumber(t) || isDecimal(t) || isString(t) || isDateOrDateTime(t);
 }
 

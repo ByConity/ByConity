@@ -1671,20 +1671,17 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
 
     try
     {
-        WriteBuffer * out_buf;
-        String compression_method_str;
-        UInt64 compression_level = 1;
-        OutfileTargetPtr outfile_target;
-
         String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
             ? getIdentifierName(ast_query_with_output->format)
             : context->getDefaultFormat();
 
-        const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
+        String compression_method_str;
+        UInt64 compression_level = 1;
         OutfileTarget::setOufileCompression(ast_query_with_output, compression_method_str, compression_level);
 
-        outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
-        out_buf = outfile_target->getOutfileBuffer(context);
+        const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
+        OutfileTargetPtr outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
+        std::shared_ptr<WriteBuffer> out_buf = outfile_target->getOutfileBuffer(context);
 
         auto & pipeline = streams.pipeline;
 
@@ -1704,6 +1701,7 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
 
                 OutputFormatPtr out = FormatFactory::instance().getOutputFormatParallelIfPossible(
                     format_name, *out_buf, pipeline.getHeader(), context, {});
+                out->setBuffer(out_buf);
 
                 out->setAutoFlush();
                 /// Save previous progress callback if any.
@@ -1895,32 +1893,34 @@ void executeQuery(
         {
             const auto * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
 
-            WriteBuffer * out_buf = &ostr;
-            OutfileTargetPtr outfile_target;
-            std::optional<String> out_path;
-
             String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
                 ? getIdentifierName(ast_query_with_output->format)
                 : context->getDefaultFormat();
 
+            OutfileTargetPtr outfile_target;
+            BlockOutputStreamPtr out;
             if (ast_query_with_output && ast_query_with_output->out_file)
             {
-                out_path.emplace(typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>());
+                auto out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
                 String compression_method_str;
                 UInt64 compression_level = 1;
                 OutfileTarget::setOufileCompression(ast_query_with_output, compression_method_str, compression_level);
-                outfile_target = OutfileTarget::getOutfileTarget(*out_path, format_name, compression_method_str, compression_level);
-                out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
+                outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
+                auto out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
+                out = FormatFactory::instance().getOutputStreamParallelIfPossible(
+                    format_name, *out_buf, streams.in->getHeader(), context, {}, output_format_settings);
+                out->setBuffer(out_buf);
+            } else {
+                out = FormatFactory::instance().getOutputStreamParallelIfPossible(
+                    format_name, ostr, streams.in->getHeader(), context, {}, output_format_settings);
             }
-
-            auto out = FormatFactory::instance().getOutputStreamParallelIfPossible(
-                format_name, *out_buf, streams.in->getHeader(), context, {}, output_format_settings);
 
             /// Save previous progress callback if any. TODO Do it more conveniently.
             auto previous_progress_callback = context->getProgressCallback();
 
             /// NOTE Progress callback takes shared ownership of 'out'.
-            streams.in->setProgressCallback([out, previous_progress_callback](const Progress & progress) {
+            streams.in->setProgressCallback(
+                [out, previous_progress_callback](const Progress & progress) {
                 if (previous_progress_callback)
                     previous_progress_callback(progress);
                 out->onProgress(progress);
@@ -1933,20 +1933,19 @@ void executeQuery(
             copyData(
                 *streams.in, *out, []() { return false; }, [&out](const Block &) { out->flush(); });
 
-            if(outfile_target!=nullptr)
+            if (outfile_target!=nullptr)
                 outfile_target->flushFile();
         }
         else if (pipeline.initialized())
         {
             const ASTQueryWithOutput * ast_query_with_output = dynamic_cast<const ASTQueryWithOutput *>(ast.get());
 
-            WriteBuffer * out_buf = &ostr;
-            OutfileTargetPtr outfile_target;
-
             String format_name = ast_query_with_output && (ast_query_with_output->format != nullptr)
                 ? getIdentifierName(ast_query_with_output->format)
                 : context->getDefaultFormat();
 
+            OutfileTargetPtr outfile_target;
+            std::shared_ptr<WriteBuffer> out_buf;
             if (ast_query_with_output && ast_query_with_output->out_file)
             {
                 const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
@@ -1961,8 +1960,15 @@ void executeQuery(
             {
                 pipeline.addSimpleTransform([](const Block & header) { return std::make_shared<MaterializingTransform>(header); });
 
-                auto out = FormatFactory::instance().getOutputFormatParallelIfPossible(
-                    format_name, *out_buf, pipeline.getHeader(), context, {}, output_format_settings);
+                OutputFormatPtr out;
+                if (out_buf) {
+                    out = FormatFactory::instance().getOutputFormatParallelIfPossible(
+                        format_name, *out_buf, pipeline.getHeader(), context, {}, output_format_settings);
+                    out->setBuffer(out_buf);
+                } else {
+                    out = FormatFactory::instance().getOutputFormatParallelIfPossible(
+                        format_name, ostr, pipeline.getHeader(), context, {}, output_format_settings);
+                }
                 out->setAutoFlush();
 
                 /// Save previous progress callback if any. TODO Do it more conveniently.

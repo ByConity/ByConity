@@ -581,6 +581,11 @@ inline bool isBitEngineDataType(const DataTypePtr & data_type)
     return isBitmap64(data_type) && data_type->isBitEngineEncode();
 }
 
+inline bool isNullableOrLowCardinalityNullable(const DataTypePtr & data_type)
+{
+    return data_type->isNullable() || data_type->isLowCardinalityNullable();
+}
+
 template <typename DataType> constexpr bool IsDataTypeDecimal = false;
 template <typename DataType> constexpr bool IsDataTypeNumber = false;
 template <typename DataType> constexpr bool IsDataTypeDateOrDateTime = false;

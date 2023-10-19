@@ -162,7 +162,7 @@ ASTPtr UnwrapCastInComparisonVisitor::visitASTFunction(ASTPtr & node, UnwrapCast
         return rewriteArgs(function, context, true);
     }
 
-    auto casted_literal_type = literal_type->isNullable() ? JoinCommon::tryConvertTypeToNullable(source_type) : removeNullable(source_type);
+    auto casted_literal_type = isNullableOrLowCardinalityNullable(literal_type) ? JoinCommon::tryConvertTypeToNullable(source_type) : JoinCommon::removeTypeNullability(source_type);
     auto ast_casted_literal = LiteralEncoder::encode(literal_in_source_type, casted_literal_type, context.context);
     compare_res = compare(literal, literal_type, round_trip_literal, literal_type, context.context);
 
@@ -308,8 +308,8 @@ bool UnwrapCastInComparisonVisitor::isNaNOrInf(Field & field, const DataTypePtr 
 
 bool UnwrapCastInComparisonVisitor::isComparableTypes(const DataTypePtr & left, const DataTypePtr & right, ContextPtr context)
 {
-    auto nonnull_left = removeNullable(left);
-    auto nonnull_right = removeNullable(right);
+    auto nonnull_left = removeNullable(recursiveRemoveLowCardinality(left));
+    auto nonnull_right = removeNullable(recursiveRemoveLowCardinality(right));
 
     try
     {
@@ -327,8 +327,8 @@ bool UnwrapCastInComparisonVisitor::isComparableTypes(const DataTypePtr & left, 
 bool UnwrapCastInComparisonVisitor::isCastMonotonicAndInjective(
     const DataTypePtr & from_type, const DataTypePtr & to_type, const Field & literal, const DataTypePtr & literal_type, ContextPtr context)
 {
-    auto from_id = removeNullable(from_type)->getTypeId();
-    auto to_id = removeNullable(to_type)->getTypeId();
+    auto from_id = removeNullable(recursiveRemoveLowCardinality(from_type))->getTypeId();
+    auto to_id = removeNullable(recursiveRemoveLowCardinality(to_type))->getTypeId();
 
     // int->float32 is injective only within (-2^24, 2^24)
     auto is_lossless_cast_to_float32 = [](const Field & literal_, const DataTypePtr & literal_type_, ContextPtr & context_) {
@@ -504,7 +504,7 @@ bool UnwrapCastInComparisonVisitor::isCastMonotonicAndInjective(
 
 ASTPtr UnwrapCastInComparisonVisitor::inferExpressionToTrue(const ASTPtr & expression, const DataTypePtr & type)
 {
-    if (!type->isNullable())
+    if (!isNullableOrLowCardinalityNullable(type))
         return PredicateConst::TRUE_VALUE;
     else
         return makeASTFunction("trueIfNotNull", expression);
@@ -512,7 +512,7 @@ ASTPtr UnwrapCastInComparisonVisitor::inferExpressionToTrue(const ASTPtr & expre
 
 ASTPtr UnwrapCastInComparisonVisitor::inferExpressionToFalse(const ASTPtr & expression, const DataTypePtr & type)
 {
-    if (!type->isNullable())
+    if (!isNullableOrLowCardinalityNullable(type))
         return PredicateConst::FALSE_VALUE;
     else
         return makeASTFunction("falseIfNotNull", expression);
