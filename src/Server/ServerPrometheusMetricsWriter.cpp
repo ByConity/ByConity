@@ -218,12 +218,11 @@ void ServerPrometheusMetricsWriter::writeProfileEvents(WriteBuffer & wb)
             {
                 key_label += getServiceDiscoveryLabel(labels);
             }
-            //@TODO:@lianwenlong
-            // else if (profile_event == ProfileEvents::TSOError)
-            // {
-            //     labels.insert({"tso_leader_endpoint", context->getTSOLeaderHostPort()});
-            //     key_label += getLabel(labels);
-            // }
+            else if (profile_event == ProfileEvents::TSOError)
+            {
+                labels.insert({"tso_leader_endpoint", context->tryGetTSOLeaderHostPort()});
+                key_label += getLabel(labels);
+            }
             else if (startsWith(metric_name, failed_queries_metrics))
             {
                 /// Combine all different QueriesFailed related events to the same one, and use `type` label to categorize them.
