@@ -133,16 +133,18 @@ namespace {
 
                 LOG_INFO(log, fmt::format("Finish GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs()));
 
-                auto all_detached_bitmaps
-                    = catalog->listDetachedDeleteBitmaps(mergetree_meta, AttachFilter::createPartitionFilter(partition_id));
-                for (auto & detached_bitmap : all_detached_bitmaps)
-                    detached_bitmap->removeFile();
-                LOG_INFO(
-                    log,
-                    fmt::format(
+                if (mergetree_meta.getInMemoryMetadataPtr()->hasUniqueKey())
+                {
+                    auto all_detached_bitmaps
+                        = catalog->listDetachedDeleteBitmaps(mergetree_meta, AttachFilter::createPartitionFilter(partition_id));
+                    for (auto & detached_bitmap : all_detached_bitmaps)
+                        detached_bitmap->removeFile();
+                    LOG_INFO(
+                        log,
                         "Finish GC detached delete bitmap of partition {} for table {}",
                         partition_id,
-                        storage->getStorageID().getNameForLogs()));
+                        storage->getStorageID().getNameForLogs());
+                }
             });
         }
         clean_pool.wait();
@@ -243,21 +245,24 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
         LOG_DEBUG(log, "Remove data parts meta for table {}", storage_id.getNameForLogs());
         catalog->clearDataPartsMetaForTable(storage);
 
-        /// delete bitmaps;
-        auto all_bitmaps = catalog->getAllDeleteBitmaps(*mergetree);
-        LOG_DEBUG(log, "Remove delete bitmap size:  {} for table {}", all_bitmaps.size(), storage_id.getNameForLogs());
+        /// delete bitmaps
+        if (mergetree && mergetree->getInMemoryMetadataPtr()->hasUniqueKey())
         {
-            ThreadPool clean_pool(mergetree->getSettings()->gc_remove_bitmap_thread_pool_size);
-            for (auto & bitmap : all_bitmaps)
+            auto all_bitmaps = catalog->getAllDeleteBitmaps(*mergetree);
+            LOG_DEBUG(log, "Remove delete bitmap size:  {} for table {}", all_bitmaps.size(), storage_id.getNameForLogs());
             {
-                clean_pool.scheduleOrThrow([&bitmap]() { bitmap->removeFile(); });
+                ThreadPool clean_pool(mergetree->getSettings()->gc_remove_bitmap_thread_pool_size);
+                for (auto & bitmap : all_bitmaps)
+                {
+                    clean_pool.scheduleOrThrow([&bitmap]() { bitmap->removeFile(); });
+                }
+                clean_pool.wait();
             }
-            clean_pool.wait();
-        }
 
-        /// delete metadata of delete bitmaps
-        LOG_DEBUG(log, "Remove delete bitmaps meta for table {}", storage_id.getNameForLogs());
-        catalog->clearDeleteBitmapsMetaForTable(storage);
+            /// delete metadata of delete bitmaps
+            LOG_DEBUG(log, "Remove delete bitmaps meta for table {}", storage_id.getNameForLogs());
+            catalog->clearDeleteBitmapsMetaForTable(storage);
+        }
 
         /// delete table's metadata
         LOG_DEBUG(log, "Remove table meta for table {}", storage_id.getNameForLogs());
