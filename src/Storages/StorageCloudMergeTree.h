@@ -31,13 +31,13 @@ namespace IngestColumnCnch
     struct IngestPartitionParam;
 }
 
-class StorageCloudMergeTree final : public shared_ptr_helper<StorageCloudMergeTree>, public MergeTreeCloudData
+class StorageCloudMergeTree : public shared_ptr_helper<StorageCloudMergeTree>, public MergeTreeCloudData
 {
     friend struct shared_ptr_helper<StorageCloudMergeTree>;
     friend class CloudMergeTreeBlockOutputStream;
 
 public:
-    ~StorageCloudMergeTree() override;
+    virtual ~StorageCloudMergeTree() override;
 
     std::string getName() const override { return "CloudMergeTree"; }
 
