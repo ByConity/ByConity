@@ -34,7 +34,6 @@
 #include <Storages/StorageMergeTree.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
-#include <Storages/CnchStorageCache.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
 #include <Storages/UniqueKeyIndexCache.h>
@@ -551,19 +550,14 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     }
 
     {
-        if (auto part_cache_manager = getContext()->getPartCacheManager())
+        if (auto cache_manager = getContext()->getPartCacheManager())
         {
-            auto part_cache_metrics = part_cache_manager->dumpPartCache();
+            auto part_cache_metrics = cache_manager->dumpPartCache();
+            auto storage_cache_metrics = cache_manager->dumpStorageCache();
             new_values["CnchPartCachePartitions"] = part_cache_metrics.first;
             new_values["CnchPartCacheParts"] = part_cache_metrics.second;
-        }
-    }
-
-    {
-        if (auto storage_cache = getContext()->getCnchStorageCache())
-        {
-            new_values["CnchStorageCacheBytes"] = storage_cache->weight();
-            new_values["CnchStorageCacheTables"] = storage_cache->count();
+            new_values["CnchStorageCacheTables"] = storage_cache_metrics.first;
+            new_values["CnchStorageCacheBytes"] = storage_cache_metrics.second;
         }
     }
 

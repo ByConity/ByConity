@@ -251,7 +251,6 @@ using UniqueKeyIndexCachePtr = std::shared_ptr<UniqueKeyIndexCache>;
 using UniqueKeyIndexBlockCachePtr = std::shared_ptr<IndexFile::Cache>;
 using UniqueKeyIndexFileCachePtr = std::shared_ptr<IndexFile::RemoteFileCache>;
 class DeleteBitmapCache;
-class CnchStorageCache;
 class PartCacheManager;
 class IServiceDiscovery;
 using ServiceDiscoveryClientPtr = std::shared_ptr<IServiceDiscovery>;
@@ -1409,9 +1408,6 @@ public:
     UInt64 tryGetTimestamp(const String & pretty_func_name = "Context") const;
     UInt64 getTimestamps(UInt32 size) const;
     UInt64 getPhysicalTimestamp() const;
-
-    void setCnchStorageCache(size_t max_cache_size);
-    std::shared_ptr<CnchStorageCache> getCnchStorageCache() const;
 
     void setPartCacheManager();
     std::shared_ptr<PartCacheManager> getPartCacheManager() const;

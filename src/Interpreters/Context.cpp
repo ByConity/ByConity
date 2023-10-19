@@ -104,7 +104,6 @@
 #include <ResourceGroup/VWResourceGroupManager.h>
 #include <ResourceManagement/ResourceManagerClient.h>
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
-#include <Storages/CnchStorageCache.h>
 #include <QueryPlan/PlanCache.h>
 #include <Storages/CompressionCodecSelector.h>
 #include <Storages/DiskCache/KeyIndexFileCache.h>
@@ -375,7 +374,6 @@ struct ContextSharedPart
 
     mutable ServiceDiscoveryClientPtr sd;
     mutable PartCacheManagerPtr cache_manager; /// Manage cache of parts for cnch tables.
-    mutable CnchStorageCachePtr storage_cache; /// Storage cache used in cnch.
     mutable std::shared_ptr<Catalog::Catalog> cnch_catalog;
     mutable CnchServerManagerPtr server_manager;
     mutable CnchTopologyMasterPtr topology_master;
@@ -4492,21 +4490,6 @@ UInt64 Context::getPhysicalTimestamp() const
     if (TxnTimestamp::fallbackTS() == tso_ts)
         return 0;
     return TxnTimestamp(tso_ts).toMillisecond();
-}
-
-void Context::setCnchStorageCache(size_t max_cache_size)
-{
-    auto lock = getLock();
-
-    if (shared->storage_cache)
-        throw Exception("Storage cache has been already created.", ErrorCodes::LOGICAL_ERROR);
-
-    shared->storage_cache = std::make_shared<CnchStorageCache>(max_cache_size);
-}
-
-CnchStorageCachePtr Context::getCnchStorageCache() const
-{
-    return shared->storage_cache;
 }
 
 void Context::setPartCacheManager()

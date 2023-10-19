@@ -37,6 +37,9 @@ class CnchDataPartCache;
 using CnchDataPartCachePtr = std::shared_ptr<CnchDataPartCache>;
 class CnchServerTopology;
 
+class CnchStorageCache;
+using CnchStorageCachePtr = std::shared_ptr<CnchStorageCache>;
+
 class CacheVersion
 {
 public:
@@ -171,6 +174,7 @@ public:
 
     /// Get count and weight in Part cache
     std::pair<UInt64, UInt64> dumpPartCache();
+    std::pair<UInt64, UInt64> dumpStorageCache();
 
     std::unordered_map<String, std::pair<size_t, size_t>> getTableCacheInfo();
 
@@ -189,6 +193,12 @@ public:
 
     bool checkIfCacheValidWithNHUT(const UUID & uuid, const UInt64 & nhut);
 
+    StoragePtr getStorageFromCache(const UUID & uuid, const PairInt64 & topology_version);
+
+    void insertStorageCache(const StorageID & storage_id, const StoragePtr storage, const UInt64 commit_ts, const PairInt64 & topology_version);
+
+    void removeStorageCache(const String & database, const String & table = "");
+
     void reset();
 
     void shutDown();
@@ -197,6 +207,7 @@ private:
     mutable std::mutex cache_mutex;
     CnchDataPartCachePtr part_cache_ptr;
     std::unordered_map<UUID, TableMetaEntryPtr> active_tables;
+    CnchStorageCachePtr storageCachePtr;
 
     /// A cache for the NHUT which has been written to bytekv. Do not need to update NHUT each time when non-host server commit parts
     /// bacause tso has 3 seconds interval. We just cache the latest updated NHUT and only write to metastore if current ts is
