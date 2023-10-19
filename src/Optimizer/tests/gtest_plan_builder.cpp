@@ -26,7 +26,6 @@ using namespace DB;
 
 TEST(OptimizerPlanBuilder, GroupByLiteralToSymbol)
 {
-    // no need to set enable_replace_group_by_literal_to_symbol as dialect_type is set;
     BasePlanTest test;
     auto plan = test.plan("select a, sum(b) from (select 1 a, 2 b) group by 1", test.createQueryContext());
     auto agg = PlanNodeSearcher::searchFrom(plan->getPlanNode())

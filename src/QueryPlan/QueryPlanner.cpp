@@ -1659,7 +1659,7 @@ void QueryPlannerVisitor::planLimitBy(PlanBuilder & builder, ASTSelectQuery & se
         return;
 
     // project limit by keys
-    ASTs & limit_by_expressions = select_query.limitBy()->children;
+    ASTs & limit_by_expressions = analysis.getLimitByItem(select_query);
     planSubqueryExpression(builder, select_query, limit_by_expressions);
     builder.appendProjection(limit_by_expressions);
     PRINT_PLAN(builder.plan, plan_prepare_limit_by);
