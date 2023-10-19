@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <limits>
 #include <Poco/Util/AbstractConfiguration.h>
 
@@ -28,6 +29,7 @@ struct DiskCacheSettings
     void loadFromConfig(const Poco::Util::AbstractConfiguration & conf, const std::string & disk_cache_name);
 
     size_t lru_max_size {std::numeric_limits<size_t>::max()};
+    size_t lru_max_nums {std::numeric_limits<size_t>::max()};
     // When queue size exceed random drop ratio, start drop disk cache task, range from 0 - 100
     size_t random_drop_threshold {50};
     // Cache mapping bucket size
@@ -55,10 +57,11 @@ struct DiskCacheSettings
     UInt64 cache_start_offset {};
     UInt64 cache_size {};
 
-
     // load previous folder cached data if it's not empty for compatible when data dir config is changed
     std::string previous_disk_cache_dir{};
     std::string latest_disk_cache_dir{"disk_cache_v1"};
+    UInt64 meta_cache_size_ratio{0};
+    UInt64 meta_cache_nums_ratio{50};
 
     std::string toString() const;
 };

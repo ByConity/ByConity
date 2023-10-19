@@ -56,7 +56,7 @@ void generateData(const DiskPtr & disk, int depth, int num_per_level, Strings & 
             cache_name = fmt::format("{}.{}", fmt::join(partial_key, "/"), "bin");
             if constexpr (IS_V1_FORMAT)
             {
-                rel_path = DiskCacheLRU::getPath(DiskCacheLRU::hash(cache_name), "disk_cache_v1");
+                rel_path = DiskCacheLRU::getPath(DiskCacheLRU::hash(cache_name), "disk_cache_v1", "", "");
             }
             else
             {

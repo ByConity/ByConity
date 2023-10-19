@@ -19,6 +19,8 @@
 #include <Interpreters/Context.h>
 #include <Common/Stopwatch.h>
 #include <common/logger_useful.h>
+#include "Storages/DiskCache/DiskCache_fwd.h"
+#include "Storages/DiskCache/IDiskCacheSegment.h"
 
 namespace ProfileEvents
 {
@@ -84,9 +86,29 @@ ThreadPool & IDiskCache::getEvictPool()
 }
 
 
-IDiskCache::IDiskCache(const VolumePtr & volume_, const ThrottlerPtr & throttler_, const DiskCacheSettings & settings_)
-    : volume(volume_), disk_cache_throttler(throttler_), settings(settings_), previous_disk_cache_dir(settings_.previous_disk_cache_dir),latest_disk_cache_dir(settings_.latest_disk_cache_dir)
+IDiskCache::IDiskCache(
+    const String & name_,
+    const VolumePtr & volume_,
+    const ThrottlerPtr & throttler_,
+    const DiskCacheSettings & settings_,
+    const IDiskCacheStrategyPtr & strategy_,
+    bool support_multi_cache_,
+    IDiskCache::DataType type_)
+    : volume(volume_)
+    , disk_cache_throttler(throttler_)
+    , settings(settings_)
+    , strategy(strategy_)
+    , latest_disk_cache_dir(settings_.latest_disk_cache_dir)
+    , support_multi_cache(support_multi_cache_)
+    , type(type_)
+    , name(name_)
+    , log(&Poco::Logger::get(fmt::format("DiskCache(name={})", getName())))
 {
+    if (!settings.previous_disk_cache_dir.empty())
+    {
+        boost::replace_all(settings.previous_disk_cache_dir, " ", "");
+        boost::split(previous_disk_cache_dirs, settings.previous_disk_cache_dir, boost::is_any_of(","));
+    }
 }
 
 void IDiskCache::shutdown()
@@ -111,11 +133,13 @@ void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments,
         {
             try
             {
-                auto [disk, path] = get(hit_segment->getSegmentName());
-                if (disk == nullptr)
-                {
-                    hit_segment->cacheToDisk(*this);
-                }
+                String mark_name = hit_segment->getMarkName();
+                String segment_name = hit_segment->getSegmentName();
+                if ((!mark_name.empty() && !getMetaCache()->get(mark_name).second.empty())
+                    && !getDataCache()->get(segment_name).second.empty())
+                    continue;
+
+                hit_segment->cacheToDisk(*this);
             }
             catch (const Exception & e)
             {

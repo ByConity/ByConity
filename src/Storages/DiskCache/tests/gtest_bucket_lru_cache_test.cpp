@@ -120,7 +120,8 @@ TEST_F(BucketLRUCacheTest, Simple) {
     BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
         .lru_update_interval = 24 * 60 * 60,
         .mapping_bucket_size = 2,
-        .max_size = cache_size
+        .max_size = cache_size,
+        .max_nums = 10
     });
 
     insertToCache(cache, 0, cache_size);
@@ -147,7 +148,8 @@ TEST_F(BucketLRUCacheTest, Evict) {
     BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
         .lru_update_interval = 0,
         .mapping_bucket_size = 2,
-        .max_size = cache_size
+        .max_size = cache_size,
+        .max_nums = 10
     });
 
     insertToCache(cache, 0, cache_size);
@@ -170,7 +172,8 @@ TEST_F(BucketLRUCacheTest, EvictWithSkipInterval) {
     BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
         .lru_update_interval = 1,
         .mapping_bucket_size = 2,
-        .max_size = cache_size
+        .max_size = cache_size,
+        .max_nums = 10
     });
 
     insertToCache(cache, 0, cache_size);
@@ -199,7 +202,8 @@ TEST_F(BucketLRUCacheTest, InorderEvict) {
     BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
         .lru_update_interval = 1,
         .mapping_bucket_size = 2,
-        .max_size = cache_size
+        .max_size = cache_size,
+        .max_nums = 10
     });
 
     int total_size = 10000;
@@ -217,7 +221,8 @@ TEST_F(BucketLRUCacheTest, SetInsert) {
     BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
         .lru_update_interval = 1,
         .mapping_bucket_size = 2,
-        .max_size = std::max(static_cast<size_t>(std::numeric_limits<size_t>::max()), cache_size)
+        .max_size = std::max(static_cast<size_t>(std::numeric_limits<size_t>::max()), cache_size),
+        .max_nums = 10
     });
 
     insertToCache(cache, 0, cache_size - 1);
@@ -239,7 +244,8 @@ TEST_F(BucketLRUCacheTest, SetUpdate) {
     BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
         .lru_update_interval = 1,
         .mapping_bucket_size = 2,
-        .max_size = cache_size
+        .max_size = cache_size,
+        .max_nums = 10
     });
 
     insertToCache(cache, 0, cache_size);
@@ -260,7 +266,8 @@ TEST_F(BucketLRUCacheTest, Remove) {
     BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
         .lru_update_interval = 1,
         .mapping_bucket_size = 1,
-        .max_size = static_cast<size_t>(5)
+        .max_size = static_cast<size_t>(5),
+        .max_nums = 10
     });
     insertToCache(cache, 0, 5);
     VERIFY_CACHE_COUNT(cache, 5);
@@ -311,7 +318,8 @@ TEST_F(BucketLRUCacheTest, Fuzzy) {
     BucketLRUCache<String, String> cache(BucketLRUCache<String, String>::Options {
         .lru_update_interval = lru_update_interval,
         .mapping_bucket_size = mapping_bucket_size,
-        .max_size = cache_size
+        .max_size = cache_size,
+        .max_nums = 10
     });
 
     auto worker = [=, &cache]() {

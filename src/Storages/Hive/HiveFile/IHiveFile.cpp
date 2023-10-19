@@ -104,7 +104,7 @@ std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings &
         /// use local cache
         try
         {
-            auto cache = DiskCacheFactory::instance().get(DiskCacheType::Hive);
+            auto cache = DiskCacheFactory::instance().get(DiskCacheType::Hive)->getDataCache();
             auto [cache_disk, segment_path] = cache->get(file_path);
             if (cache_disk && cache_disk->exists(segment_path))
             {

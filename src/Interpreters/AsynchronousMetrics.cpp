@@ -587,21 +587,51 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
 
     {
         auto merge_tree_disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
-        new_values["MergeTreeDiskCacheFiles"] = merge_tree_disk_cache->getKeyCount();
-        new_values["MergeTreeDiskCacheBytes"] = merge_tree_disk_cache->getCachedSize();
+        if (!merge_tree_disk_cache->supportMultiDiskCache())
+        {
+            new_values["MergeTreeDiskCacheFiles"] = merge_tree_disk_cache->getKeyCount();
+            new_values["MergeTreeDiskCacheBytes"] = merge_tree_disk_cache->getCachedSize();
+        }
+        else
+        {
+            new_values["MergeTreeDiskCacheMetaFiles"] = merge_tree_disk_cache->getMetaCache()->getKeyCount();
+            new_values["MergeTreeDiskCacheMetaBytes"] = merge_tree_disk_cache->getMetaCache()->getCachedSize();
+            new_values["MergeTreeDiskCacheDataFiles"] = merge_tree_disk_cache->getDataCache()->getKeyCount();
+            new_values["MergeTreeDiskCacheDataBytes"] = merge_tree_disk_cache->getDataCache()->getCachedSize();
+        }
 
         auto hive_disk_cache = DiskCacheFactory::instance().tryGet(DiskCacheType::Hive);
         if (hive_disk_cache)
         {
-            new_values["HiveDiskCacheFiles"] = hive_disk_cache->getKeyCount();
-            new_values["HiveDiskCacheBytes"] = hive_disk_cache->getCachedSize();
+            if (!hive_disk_cache->supportMultiDiskCache())
+            {
+                new_values["HiveDiskCacheFiles"] = hive_disk_cache->getKeyCount();
+                new_values["HiveDiskCacheBytes"] = hive_disk_cache->getCachedSize();
+            }
+            else
+            {
+                new_values["HiveDiskCacheMetaFiles"] = hive_disk_cache->getMetaCache()->getKeyCount();
+                new_values["HiveDiskCacheMetaBytes"] = hive_disk_cache->getMetaCache()->getCachedSize();
+                new_values["HiveDiskCacheDataFiles"] = hive_disk_cache->getDataCache()->getKeyCount();
+                new_values["HiveDiskCacheDataBytes"] = hive_disk_cache->getDataCache()->getCachedSize();
+            }
         }
 
         auto file_disk_cache = DiskCacheFactory::instance().tryGet(DiskCacheType::File);
         if (file_disk_cache)
         {
-            new_values["FileDiskCacheFiles"] = file_disk_cache->getKeyCount();
-            new_values["FileDiskCacheBytes"] = file_disk_cache->getCachedSize();
+            if (file_disk_cache->supportMultiDiskCache())
+            {
+                new_values["FileDiskCacheFiles"] = file_disk_cache->getKeyCount();
+                new_values["FileDiskCacheBytes"] = file_disk_cache->getCachedSize();
+            }
+            else
+            {
+                new_values["FileDiskCacheMetaFiles"] = file_disk_cache->getMetaCache()->getKeyCount();
+                new_values["FileDiskCacheMetaBytes"] = file_disk_cache->getMetaCache()->getCachedSize();
+                new_values["FileDiskCacheDataFiles"] = file_disk_cache->getDataCache()->getKeyCount();
+                new_values["FileDiskCacheDataBytes"] = file_disk_cache->getDataCache()->getCachedSize();
+            }
         }
     }
 

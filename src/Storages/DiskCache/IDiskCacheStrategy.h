@@ -18,6 +18,8 @@
 #include <Storages/DiskCache/DiskCacheSettings.h>
 #include <Storages/DiskCache/IDiskCacheSegment.h>
 #include <Storages/MergeTree/MarkRange.h>
+#include "Storages/DiskCache/DiskCache_fwd.h"
+
 
 #include <set>
 #include <type_traits>
@@ -28,14 +30,17 @@ namespace DB
 class IDiskCacheStrategy : public std::enable_shared_from_this<IDiskCacheStrategy>
 {
 public:
-    explicit IDiskCacheStrategy(const DiskCacheSettings & settings_): segment_size(settings_.segment_size) {}
+    explicit IDiskCacheStrategy(const DiskCacheSettings & settings_)
+        : segment_size(settings_.segment_size)
+    {
+    }
     virtual ~IDiskCacheStrategy() = default;
 
     IDiskCacheStrategy(const IDiskCacheStrategy &) = delete;
     IDiskCacheStrategy & operator=(const IDiskCacheStrategy &) = delete;
 
     /// get segments need to be cached
-    virtual IDiskCacheSegmentsVector getCacheSegments(const IDiskCacheSegmentsVector & segments) = 0;
+    virtual IDiskCacheSegmentsVector getCacheSegments(const IDiskCachePtr & disk_cache, const IDiskCacheSegmentsVector & segments) = 0;
 
     size_t getSegmentSize() const { return segment_size; }
 

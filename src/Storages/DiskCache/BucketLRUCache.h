@@ -27,6 +27,7 @@
 #include <fmt/format.h>
 
 #include <Core/Types.h>
+#include "common/types.h"
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <IO/WriteHelpers.h>
@@ -77,6 +78,7 @@ public:
         UInt32 mapping_bucket_size = 64;
         // LRU max weight
         UInt64 max_size = 1;
+        UInt64 max_nums = 1;
 
         bool enable_customize_evict_handler = false;
         // Customize evict handler, return a pair, first element indicate
@@ -116,9 +118,9 @@ public:
             ));
         }), container(opts_.mapping_bucket_size), logger(&Poco::Logger::get("BucketLRUCache"))
     {
-        if (opts.mapping_bucket_size == 0)
+        if (opts.mapping_bucket_size <= 0 || opts.max_size <= 0 || opts.max_nums <= 0)
         {
-            throw Exception("Mapping bucket size can't be 0", ErrorCodes::BAD_ARGUMENTS);
+            throw Exception("Mapping bucket size or lru size or lru nums can't be less 0", ErrorCodes::BAD_ARGUMENTS);
         }
     }
 
@@ -448,7 +450,7 @@ private:
         LRUQueue moved_elements;
 
         for (auto iter = queue.begin();
-            iter != queue.end() && current_size > opts.max_size;)
+            iter != queue.end() && (current_size > opts.max_size || current_count > opts.max_nums);)
         {
             const Key& key = *iter;
 

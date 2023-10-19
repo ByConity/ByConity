@@ -38,8 +38,8 @@ TEST(DiskCache, DiskCachePathTest)
     String seg_key1 = IDiskCacheSegment::formatSegmentName(table_uuid, "part_1", "col", 0, ".bin");
     String seg_key2 = IDiskCacheSegment::formatSegmentName(table_uuid, "part_1", "col", 0, ".mrk");
 
-    auto path1 = DiskCacheLRU::getPath(DiskCacheLRU::hash(seg_key1), "disk_cache_v1");
-    auto path2 = DiskCacheLRU::getPath(DiskCacheLRU::hash(seg_key2), "disk_cache_v1");
+    auto path1 = DiskCacheLRU::getPath(DiskCacheLRU::hash(seg_key1), "disk_cache_v1", "", "");
+    auto path2 = DiskCacheLRU::getPath(DiskCacheLRU::hash(seg_key2), "disk_cache_v1", "", "");
 
     EXPECT_EQ(path1.parent_path(), path2.parent_path());
     EXPECT_NE(path1.filename(), path2.filename());
