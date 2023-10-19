@@ -145,7 +145,7 @@ PlanSegmentResult PlanSegmentVisitor::visitExchangeNode(QueryPlan::Node * node, 
             output->setKeepOrder(step->needKeepOrder());
         }
 
-        split_context.inputs.emplace_back(input);
+        // split_context.inputs.emplace_back(input);
         split_context.children.emplace_back(plan_segment);
     }
     QueryPlanStepPtr remote_step
@@ -194,7 +194,7 @@ PlanSegmentResult PlanSegmentVisitor::visitCTERefNode(QueryPlan::Node * node, Pl
     else
         input->setExchangeMode(ExchangeMode::LOCAL_NO_NEED_REPARTITION);
 
-    split_context.inputs.emplace_back(input);
+    // split_context.inputs.emplace_back(input);
     split_context.children.emplace_back(plan_segment);
 
     QueryPlanStepPtr remote_step = std::make_unique<RemoteExchangeSourceStep>(
@@ -232,6 +232,9 @@ PlanSegment * PlanSegmentVisitor::createPlanSegment(QueryPlan::Node * node, size
      * Be careful, after we create a sub_plan, some nodes in the original plan have been deleted and deconstructed.
      * More precisely, nodes that moved to sub_plan are deleted.
      */
+    auto all_inputs = findInputs(node);
+    split_context.inputs = all_inputs;
+
     QueryPlan sub_plan = plan_segment_context.query_plan.getSubPlan(node);
     auto [cluster_name, parallel] = findClusterAndParallelSize(sub_plan.getRoot(), split_context);
 
