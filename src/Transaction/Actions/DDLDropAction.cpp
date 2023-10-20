@@ -43,8 +43,8 @@ void DDLDropAction::executeV1(TxnTimestamp commit_time)
         // drop database
         if (params.kind == ASTDropQuery::Kind::Drop)
         {
-            for (auto & table : tables)
-                updateTsCache(table->getStorageUUID(), commit_time);
+            // for (auto & table : tables)
+            //    updateTsCache(table->getStorageUUID(), commit_time);
             cnch_catalog->dropDatabase(params.database, params.prev_version, txn_id, commit_time); /*mark database deleted, we just remove database now.*/
         }
         else if (params.kind == ASTDropQuery::Kind::Truncate)
@@ -61,12 +61,12 @@ void DDLDropAction::executeV1(TxnTimestamp commit_time)
             // drop table
             if (params.kind == ASTDropQuery::Kind::Drop)
             {
-                updateTsCache(table->getStorageUUID(), commit_time);
+                // updateTsCache(table->getStorageUUID(), commit_time);
                 cnch_catalog->dropTable(table, params.prev_version, txn_id, commit_time);
             }
             else if (params.kind == ASTDropQuery::Kind::Detach)
             {
-                updateTsCache(table->getStorageUUID(), commit_time);
+                // updateTsCache(table->getStorageUUID(), commit_time);
                 cnch_catalog->detachTable(params.database, params.table, commit_time);
             }
             else if (params.kind == ASTDropQuery::Kind::Truncate)
@@ -82,14 +82,6 @@ void DDLDropAction::executeV1(TxnTimestamp commit_time)
                 cnch_catalog->detachDictionary(params.database, params.table);
         }
     }
-}
-
-void DDLDropAction::updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time)
-{
-    auto & ts_cache_manager = global_context.getCnchTransactionCoordinator().getTsCacheManager();
-    auto table_guard = ts_cache_manager.getTimestampCacheTableGuard(uuid);
-    auto & ts_cache = ts_cache_manager.getTimestampCacheUnlocked(uuid);
-    ts_cache->insertOrAssign(UUIDHelpers::UUIDToString(uuid), commit_time);
 }
 
 }

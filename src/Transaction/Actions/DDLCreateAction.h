@@ -45,9 +45,6 @@ public:
     void abort() override;
 
 private:
-    void updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time) override;
-
-private:
     CreateActionParams params;
 };
 

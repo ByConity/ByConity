@@ -34,7 +34,7 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
     else if (!params.is_dictionary)
     {
         /// create table
-        updateTsCache(params.storage_id.uuid, commit_time);
+        /// updateTsCache(params.storage_id.uuid, commit_time);
         if (params.attach)
             cnch_catalog->attachTable(params.storage_id.database_name, params.storage_id.table_name, commit_time);
         else
@@ -48,14 +48,6 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
         else
             cnch_catalog->createDictionary(params.storage_id, params.statement);
     }
-}
-
-void DDLCreateAction::updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time)
-{
-    auto & ts_cache_manager = global_context.getCnchTransactionCoordinator().getTsCacheManager();
-    auto table_guard = ts_cache_manager.getTimestampCacheTableGuard(uuid);
-    auto & ts_cache = ts_cache_manager.getTimestampCacheUnlocked(uuid);
-    ts_cache->insertOrAssign(UUIDHelpers::UUIDToString(uuid), commit_time);
 }
 
 void DDLCreateAction::abort() {}
