@@ -31,6 +31,7 @@ namespace DB
 {
 namespace ErrorCodes
 {
+    extern const int EXCHANGE_DATA_TRANS_EXCEPTION;
     extern const int LOGICAL_ERROR;
     extern const int TIMEOUT_EXCEEDED;
 }
@@ -123,7 +124,7 @@ void MultiPathReceiver::registerToSendersJoin()
                 *res.request);
             continue;
         }
-        res.channel->assertController(*res.cntl);
+        res.channel->assertController(*res.cntl, ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
         LOG_TRACE(
             logger,
             "Receiver register sender async successfully, host: {} , request: {}",

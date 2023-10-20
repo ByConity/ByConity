@@ -24,6 +24,11 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int BRPC_CANNOT_INIT_CHANNEL;
+    extern const int BRPC_EXCEPTION;
+}
 class RpcClient : private boost::noncopyable
 {
 public:
@@ -37,7 +42,7 @@ public:
 
     auto & getChannel() { return *brpc_channel; }
 
-    void assertController(const brpc::Controller & cntl);
+    void assertController(const brpc::Controller & cntl, int error_code = ErrorCodes::BRPC_EXCEPTION);
 
 protected:
     void initChannel(brpc::Channel & channel_, const String host_port_, brpc::ChannelOptions * options = nullptr);
