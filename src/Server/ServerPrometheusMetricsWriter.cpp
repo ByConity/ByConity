@@ -7,6 +7,7 @@
 #include <Server/ServerPrometheusMetricsWriter.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
 #include <Storages/StorageCnchMergeTree.h>
+#include <Common/HistogramMetrics.h>
 #include <Common/RpcClientPool.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/config_version.h>
@@ -217,12 +218,11 @@ void ServerPrometheusMetricsWriter::writeProfileEvents(WriteBuffer & wb)
             {
                 key_label += getServiceDiscoveryLabel(labels);
             }
-            //@TODO:@lianwenlong
-            // else if (profile_event == ProfileEvents::TSOError)
-            // {
-            //     labels.insert({"tso_leader_endpoint", context->getTSOLeaderHostPort()});
-            //     key_label += getLabel(labels);
-            // }
+            else if (profile_event == ProfileEvents::TSOError)
+            {
+                labels.insert({"tso_leader_endpoint", context->tryGetTSOLeaderHostPort()});
+                key_label += getLabel(labels);
+            }
             else if (startsWith(metric_name, failed_queries_metrics))
             {
                 /// Combine all different QueriesFailed related events to the same one, and use `type` label to categorize them.
@@ -233,10 +233,8 @@ void ServerPrometheusMetricsWriter::writeProfileEvents(WriteBuffer & wb)
                 labels.insert({"failure_type", ProfileEvents::getName(profile_event)});
                 key_label = key + getLabel(labels);
             }
-            //TODO:@lianwenlong
-            // else if (profile_event == ProfileEvents::VwQuery
-            //     || profile_event == ProfileEvents::UnlimitedQuery)
-            else if (profile_event == ProfileEvents::VwQuery)
+            else if (profile_event == ProfileEvents::VwQuery
+                || profile_event == ProfileEvents::UnlimitedQuery)
             {
                 key = String{PROFILE_EVENTS_PREFIX} + PROFILE_EVENTS_LABELLED_QUERY_KEY + TOTAL_SUFFIX;
                 replaceInvalidChars(key);

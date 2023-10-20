@@ -25,6 +25,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/tests/gtest_global_context.h>
 #include <common/types.h>
+#include "Storages/DiskCache/DiskCacheSimpleStrategy.h"
 
 namespace DB
 {
@@ -123,7 +124,7 @@ public:
                 std::filesystem::path rel_path;
                 cache_name = fmt::format("{}.{}", fmt::join(partial_key, "/"), "bin");
                 if constexpr (IS_V1_FORMAT)
-                    rel_path = DiskCacheLRU::getPath(DiskCacheLRU::hash(cache_name), "disk_cache_v1");
+                    rel_path = DiskCacheLRU::getPath(DiskCacheLRU::hash(cache_name), "disk_cache_v1", "", "");
                 else
                     rel_path = std::filesystem::path("disk_cache") / cache_name;
                 partial_key.pop_back();
@@ -234,7 +235,7 @@ BENCHMARK_DEFINE_F(DiskCacheLRUBenchmark, SimpleInsert)(benchmark::State & state
         fs::create_directories("./tmp/");
         IDiskCache::init(*getContext().context);
 
-        DiskCacheLRU * cache = new DiskCacheLRU(volume, getContext().context->getDiskCacheThrottler(), settings);
+        DiskCacheLRU * cache = new DiskCacheLRU("test", volume, getContext().context->getDiskCacheThrottler(), settings, std::make_shared<DiskCacheSimpleStrategy>(settings));
         cache->load();
 
         auto workload = [&](UInt32 id) {

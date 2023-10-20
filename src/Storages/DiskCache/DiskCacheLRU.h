@@ -67,7 +67,13 @@ class DiskCacheLRU: public IDiskCache
 public:
     using KeyType = UInt128;
 
-    DiskCacheLRU(const VolumePtr & volume, const ThrottlerPtr & throttler, const DiskCacheSettings & settings);
+    DiskCacheLRU(
+        const String & name_,
+        const VolumePtr & volume,
+        const ThrottlerPtr & throttler,
+        const DiskCacheSettings & settings,
+        const IDiskCacheStrategyPtr & strategy_,
+        IDiskCache::DataType type_ = IDiskCache::DataType::ALL);
 
     void set(const String& seg_name, ReadBuffer& value, size_t weight_hint) override;
     std::pair<DiskPtr, String> get(const String& seg_name) override;
@@ -76,10 +82,9 @@ public:
 
     size_t getKeyCount() const override { return containers.count(); }
     size_t getCachedSize() const override { return containers.weight(); }
-    IDiskCacheStrategyPtr getStrategy() const override { return strategy;}
-    std::filesystem::path getRelativePath(const KeyType & key) { return getPath(key, latest_disk_cache_dir);}
+    std::filesystem::path getRelativePath(const KeyType & key, const String & seg_name, const String & prefix = {}) { return getPath(key, latest_disk_cache_dir, seg_name, prefix);}
 
-    static std::filesystem::path getPath(const KeyType & key, const String & path);
+    static std::filesystem::path getPath(const KeyType & key, const String & path, const String & seg_name, const String & prefix);
 
     /// for test
     static KeyType hash(const String & seg_name);
@@ -97,13 +102,14 @@ private:
     struct DiskIterator : private boost::noncopyable
     {
         explicit DiskIterator(
-            DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk_, int min_depth_parallel_, int max_depth_parallel_);
+            const String & name_, DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk_, int min_depth_parallel_, int max_depth_parallel_);
         virtual ~DiskIterator() = default;
 
         virtual void exec(std::filesystem::path entry_path);
         virtual void iterateDirectory(std::filesystem::path rel_path, size_t depth);
         virtual void iterateFile(std::filesystem::path file_path, size_t file_size) = 0;
 
+        String name;
         // lifecycle shorter than disk cache
         DiskCacheLRU & disk_cache;
         DiskPtr disk;
@@ -119,7 +125,7 @@ private:
 
         std::unique_ptr<ThreadPool> pool;
         ExceptionHandler handler;
-        Poco::Logger * log {&Poco::Logger::get("DiskIterator")};
+        Poco::Logger * log;
     };
 
     /// Load from disk when Disk cache starts up
@@ -156,9 +162,7 @@ private:
     };
 
     ThrottlerPtr set_rate_throttler;
-    IDiskCacheStrategyPtr strategy;
     std::atomic<bool> is_droping{false};
-    Poco::Logger * log {&Poco::Logger::get("DiskCacheLRU")};
     ShardCache<KeyType, UInt128Hash, BucketLRUCache<KeyType, DiskCacheMeta, UInt128Hash, DiskCacheWeightFunction>> containers;
 };
 

@@ -63,7 +63,7 @@ void DDLRenameAction::executeV1(TxnTimestamp commit_time)
     {
         renameTablePrefix(commit_time);
 
-        updateTsCache(params.table_params.from_table_uuid, commit_time);
+        // updateTsCache(params.table_params.from_table_uuid, commit_time);
         cnch_catalog->renameTable(params.table_params.from_database, params.table_params.from_table,
                                   params.table_params.to_database, params.table_params.to_table, txn_id, commit_time);
 
@@ -71,8 +71,8 @@ void DDLRenameAction::executeV1(TxnTimestamp commit_time)
     }
     else
     {
-        for (auto & uuid : params.db_params.uuids)
-            updateTsCache(uuid, commit_time);
+        // for (auto & uuid : params.db_params.uuids)
+        //    updateTsCache(uuid, commit_time);
 
         cnch_catalog->renameDatabase(params.db_params.from_database, params.db_params.to_database, txn_id, commit_time);
     }
@@ -108,11 +108,4 @@ void DDLRenameAction::renameTableSuffix(TxnTimestamp commit_time)
     // }
 }
 
-void DDLRenameAction::updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time)
-{
-    auto & ts_cache_manager = getContext()->getCnchTransactionCoordinator().getTsCacheManager();
-    auto table_guard = ts_cache_manager.getTimestampCacheTableGuard(uuid);
-    auto & ts_cache = ts_cache_manager.getTimestampCacheUnlocked(uuid);
-    ts_cache->insertOrAssign(UUIDHelpers::UUIDToString(uuid), commit_time);
-}
 }

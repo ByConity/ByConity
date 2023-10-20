@@ -33,7 +33,7 @@ extern const Event DiskCacheUpdateStatsMicroSeconds;
 
 namespace DB
 {
-IDiskCacheSegmentsVector DiskCacheSimpleStrategy::getCacheSegments(const IDiskCacheSegmentsVector & segments)
+IDiskCacheSegmentsVector DiskCacheSimpleStrategy::getCacheSegments(const IDiskCachePtr & disk_cache, const IDiskCacheSegmentsVector & segments)
 {
     Stopwatch update_stats_watch;
     SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::DiskCacheUpdateStatsMicroSeconds, update_stats_watch.elapsedMicroseconds()); });
@@ -41,7 +41,7 @@ IDiskCacheSegmentsVector DiskCacheSimpleStrategy::getCacheSegments(const IDiskCa
     size_t accessed_bucket_num = 0;
     size_t accessed_bucket_size = 0;
 
-    auto filter_cache_segments = [this, &accessed_bucket_num, &accessed_bucket_size](const auto & segment) {
+    auto filter_cache_segments = [this, &disk_cache, &accessed_bucket_num, &accessed_bucket_size](const auto & segment) {
         AccessStatistics & stats = cache_statistics.getAccessStats(segment->getSegmentName());
         ++accessed_bucket_num;
         Stopwatch watch;
@@ -49,7 +49,14 @@ IDiskCacheSegmentsVector DiskCacheSimpleStrategy::getCacheSegments(const IDiskCa
             std::lock_guard lock(stats.stats_mutex);
             accessed_bucket_size += stats.access_stats.size();
             ProfileEvents::increment(ProfileEvents::DiskCacheAcquireStatsLock, watch.elapsedMicroseconds());
-            auto segment_hit_count = ++stats.access_stats[segment->getSegmentName()];
+
+            String mark_name = segment->getMarkName();    
+            String segment_name = segment->getSegmentName();
+            if ((!mark_name.empty() && !disk_cache->getMetaCache()->get(mark_name).second.empty())
+                && !disk_cache->getDataCache()->get(segment_name).second.empty())
+                return false;
+
+            auto segment_hit_count = ++stats.access_stats[segment_name];
             if (segment_hit_count >= segment_hits_to_cache)
             {
                 stats.access_stats.erase(segment->getSegmentName());

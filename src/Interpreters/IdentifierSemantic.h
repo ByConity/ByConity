@@ -92,6 +92,7 @@ struct IdentifierSemantic
     /// If membership cannot be established or there are several identifies from different tables, return empty optional
     static std::optional<size_t>
     getIdentsMembership(ASTPtr ast, const std::vector<TableWithColumnNamesAndTypes> & tables, const Aliases & aliases);
+    static std::pair<String, String> extractDatabaseAndTable(const ASTIdentifier & identifier);
 
 private:
     static bool doesIdentifierBelongTo(const ASTIdentifier & identifier, const String & database, const String & table);

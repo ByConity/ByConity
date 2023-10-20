@@ -47,8 +47,8 @@ protected:
     const Context & global_context;
     TxnTimestamp txn_id;
 
-private:
-    virtual void updateTsCache(const UUID &, const TxnTimestamp &) {}
+// private:
+    // virtual void updateTsCache(const UUID &, const TxnTimestamp &) {}
 };
 
 using ActionPtr = std::shared_ptr<IAction>;

@@ -65,7 +65,7 @@ public:
     void executeV1(TxnTimestamp commit_time) override;
 
 private:
-    void updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time) override;
+    /// void updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time) override;
 
     void renameTablePrefix(TxnTimestamp commit_time);
     void renameTableSuffix(TxnTimestamp commit_time);

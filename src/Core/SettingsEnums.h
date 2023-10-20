@@ -288,5 +288,14 @@ enum class MaterializedViewConsistencyCheckMethod
     PARTITION,
 };
 
+enum class BackupVWMode
+{
+    BACKUP = 0,
+    ROUND_ROBIN,
+    BACKUP_ONLY,
+};
+
+DECLARE_SETTING_ENUM(BackupVWMode);
+
 DECLARE_SETTING_ENUM(MaterializedViewConsistencyCheckMethod)
 }

@@ -75,7 +75,7 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
         // auto cache = global_context.getMaskingPolicyCache();
         // table->checkMaskingPolicy(*cache);
 
-        updateTsCache(table->getStorageUUID(), commit_time);
+        // updateTsCache(table->getStorageUUID(), commit_time);
         if (!new_schema.empty())
         {
             catalog->alterTable(global_context, query_settings, table, new_schema, table->commit_time, txn_id, commit_time, is_recluster);
@@ -95,6 +95,7 @@ void DDLAlterAction::updatePartData(MutableMergeTreeDataPartCNCHPtr part, TxnTim
     part->commit_time = commit_time;
 }
 
+#if 0
 void DDLAlterAction::updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time)
 {
     auto & ts_cache_manager = global_context.getCnchTransactionCoordinator().getTsCacheManager();
@@ -102,5 +103,6 @@ void DDLAlterAction::updateTsCache(const UUID & uuid, const TxnTimestamp & commi
     auto & ts_cache = ts_cache_manager.getTimestampCacheUnlocked(uuid);
     ts_cache->insertOrAssign(UUIDHelpers::UUIDToString(uuid), commit_time);
 }
+#endif
 
 }

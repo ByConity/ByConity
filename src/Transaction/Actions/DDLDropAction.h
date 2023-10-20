@@ -45,7 +45,7 @@ public:
 
 private:
     void dropDataParts(const MergeTreeDataPartsCNCHVector & parts);
-    void updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time) override;
+    // void updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time) override;
 
 private:
     DropActionParams params;

@@ -47,6 +47,7 @@
 namespace CurrentMetrics
 {
     extern const Metric Query;
+    extern const Metric DefaultQuery;
 }
 
 namespace DB
@@ -60,6 +61,56 @@ class QueryStatus;
 class ThreadStatus;
 class ProcessListEntry;
 
+namespace ProcessListHelper
+{
+    enum QueryTypeImpl : uint32_t
+    {
+        Default = 0,
+        Insert = 1,
+        System = 2,
+        Proxy = 3,
+    };
+
+    enum SubQueryTypeImpl : uint32_t
+    {
+        Simple = 0,
+        Complex = 1,
+    };
+
+    constexpr auto toString(QueryTypeImpl type)
+    {
+        switch (type)
+        {
+            case QueryTypeImpl::Default:
+                return "Default";
+            case QueryTypeImpl::Insert:
+                return "Insert";
+            case QueryTypeImpl::System:
+                return "System";
+            case QueryTypeImpl::Proxy:
+                return "Proxy"; 
+            default:
+                return "Unknown";
+        }
+    }
+
+    constexpr auto toString(SubQueryTypeImpl type)
+    {
+        switch (type)
+        {
+            case SubQueryTypeImpl::Simple:
+                return "Simple";
+            case SubQueryTypeImpl::Complex:
+                return "Complex";
+            default:    
+                return "Unknown";
+        }
+    }
+}
+
+using ProcessListQueryType = ProcessListHelper::QueryTypeImpl;
+using ProcessListSubQueryType = ProcessListHelper::SubQueryTypeImpl;
+constexpr uint32_t ProcessListQueryTypeNum = uint32_t(ProcessListQueryType::Proxy) + 1;
 
 /** List of currently executing queries.
   * Also implements limit on their number.
@@ -105,6 +156,7 @@ protected:
     friend class CurrentThread;
     friend class ProcessListEntry;
 
+    ProcessListQueryType type;
     String query;
     ClientInfo client_info;
 
@@ -127,6 +179,8 @@ protected:
     IResourceGroup::Handle resource_group_handle;
 
     CurrentMetrics::Increment num_queries_increment{CurrentMetrics::Query};
+    CurrentMetrics::Increment query_type_increment{CurrentMetrics::DefaultQuery};
+    bool is_unlimited;
 
     /// True if query cancellation is in progress right now
     /// ProcessListEntry should not be destroyed if is_cancelling is true
@@ -175,9 +229,16 @@ public:
         const String & query_,
         const ClientInfo & client_info_,
         QueryPriorities::Handle && priority_handle_,
-        IResourceGroup::Handle && resource_group_handle_);
+        IResourceGroup::Handle && resource_group_handle_,
+        CurrentMetrics::Metric & query_type_metric,
+        const bool is_unlimited_);
 
     ~QueryStatus();
+
+    auto getType() const
+    {
+        return type;
+    }
 
     const ClientInfo & getClientInfo() const
     {
@@ -195,6 +256,11 @@ public:
     }
 
     ThrottlerPtr getUserNetworkThrottler();
+
+    bool isUnlimitedQuery() const
+    {
+        return is_unlimited;
+    }
 
     bool updateProgressIn(const Progress & value)
     {

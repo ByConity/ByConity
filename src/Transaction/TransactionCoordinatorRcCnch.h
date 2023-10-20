@@ -67,7 +67,7 @@ class TransactionCoordinatorRcCnch : WithContext
 public:
     explicit TransactionCoordinatorRcCnch(const ContextPtr & context_)
         : WithContext(context_)
-        , ts_cache_manager(std::make_unique<TimestampCacheManager>(getContext()->getConfigRef().getUInt("max_tscache_size", 1000)))
+        // , ts_cache_manager(std::make_unique<TimestampCacheManager>(getContext()->getConfigRef().getUInt("max_tscache_size", 1000)))
         , txn_cleaner(std::make_unique<TransactionCleaner>(
               getContext(),
               getContext()->getConfigRef().getUInt("cnch_transaction_cleaner_max_threads", 128),
@@ -150,7 +150,7 @@ public:
     // clear related api used by background scan task
     bool clearZombieParts(const std::vector<String> & parts);
 
-    TimestampCacheManager & getTsCacheManager() const { return *ts_cache_manager; }
+    // TimestampCacheManager & getTsCacheManager() const { return *ts_cache_manager; }
     TransactionCleaner & getTxnCleaner() const { return *txn_cleaner; }
 
     CnchTransactionStatus getTransactionStatus(const TxnTimestamp & txnID) const;
@@ -187,7 +187,7 @@ private:
     std::map<UUID, std::set<TxnTimestamp>> table_to_timestamps;
     uint64_t last_time_clean_timestamps;
 
-    TimestampCacheManagerPtr ts_cache_manager;
+    // TimestampCacheManagerPtr ts_cache_manager;
     TransactionCleanerPtr txn_cleaner;
 
     // background tasks

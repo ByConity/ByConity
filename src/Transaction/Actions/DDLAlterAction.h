@@ -48,7 +48,7 @@ public:
     void executeV1(TxnTimestamp commit_time) override;
 
 private:
-    void updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time) override;
+    // void updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time) override;
     void appendPart(MutableMergeTreeDataPartCNCHPtr part);
     static void updatePartData(MutableMergeTreeDataPartCNCHPtr part, TxnTimestamp commit_time);
 

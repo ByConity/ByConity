@@ -17,6 +17,7 @@
 
 #include <Storages/DiskCache/IDiskCache.h>
 #include <Storages/DiskCache/IDiskCacheStrategy.h>
+#include "Storages/DiskCache/IDiskCache.h"
 
 #include <mutex>
 #include <unordered_map>
@@ -34,7 +35,7 @@ public:
     {
     }
 
-    virtual IDiskCacheSegmentsVector getCacheSegments(const IDiskCacheSegmentsVector & segments) override;
+    virtual IDiskCacheSegmentsVector getCacheSegments(const IDiskCachePtr & disk_cache, const IDiskCacheSegmentsVector & segments) override;
 
 private:
     struct AccessStatistics

@@ -35,13 +35,25 @@
 #include <IO/WriteHelpers.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <common/logger_useful.h>
+#include <Interpreters/VirtualWarehouseHandle.h>
+#include <Parsers/ASTDeleteQuery.h>
+#include <Parsers/ASTUpdateQuery.h>
+#include <Interpreters/IdentifierSemantic.h>
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
 #include <chrono>
 
 namespace ProfileEvents
 {
-    extern const Event UserTimeMicroseconds;
-    extern const Event SystemTimeMicroseconds;
+extern const Event UnlimitedQuery;
+extern const Event VwQuery;
+extern const Event UserTimeMicroseconds;
+extern const Event SystemTimeMicroseconds;
+}
+
+namespace CurrentMetrics
+{
+extern const Metric InsertQuery;
+extern const Metric SystemQuery;
 }
 
 namespace DB
@@ -92,6 +104,90 @@ static bool isUnlimitedQuery(const IAST * ast)
     return false;
 }
 
+static bool isMonitoredCnchTable(const String & database)
+{
+    return database != "system" && database != "cnch_system";
+}
+
+static ProcessListQueryType getProcessListQueryType(const IAST * ast)
+{
+    if (!ast)
+        return ProcessListQueryType::Default;
+
+    if (ast->as<ASTInsertQuery>())
+        return ProcessListQueryType::Insert;
+
+    if (ast->as<ASTAlterQuery>()) /// XXX: Should we rename ProcessListQueryType::Insert ?
+        return ProcessListQueryType::Insert;
+
+    // Check for system SELECT queries
+    if (const auto * ast_selects = ast->as<ASTSelectWithUnionQuery>())
+    {
+
+        if (!ast_selects->list_of_selects || ast_selects->list_of_selects->children.empty())
+            return ProcessListQueryType::Default;
+
+        ASTs all_tables;
+        bool dummy = false;
+        ASTSelectQuery::collectAllTables(ast_selects, all_tables, dummy);
+
+        for (const auto & table : all_tables)
+        {
+            auto database_and_table = IdentifierSemantic::extractDatabaseAndTable(typeid_cast<ASTTableIdentifier&>(*table));
+                if (isMonitoredCnchTable(database_and_table.first))
+                    return ProcessListQueryType::Default;
+        }
+        if (!all_tables.empty())
+            return ProcessListQueryType::System;
+    }
+
+    return ProcessListQueryType::Default;
+}
+
+static CurrentMetrics::Metric getQueryTypeMetric(ProcessListQueryType & query_type)
+{
+    if (query_type == ProcessListQueryType::Insert)
+    {
+        return CurrentMetrics::InsertQuery;
+    }
+    else if (query_type == ProcessListQueryType::System)
+    {
+        return CurrentMetrics::SystemQuery;
+    } 
+
+    return CurrentMetrics::DefaultQuery;
+}
+
+static bool isMonitoredCnchQuery(const IAST * ast)
+{
+    if (const auto * create_ast = ast->as<ASTCreateQuery>(); create_ast && create_ast->select)
+    {
+        return true;
+    }
+    else if (const auto * ast_update = ast->as<ASTUpdateQuery>(); ast_update && !ast_update->database.empty() && !ast_update->table.empty())
+        return isMonitoredCnchTable(ast_update->database);
+    else if (const auto * ast_delete = ast->as<ASTDeleteQuery>(); ast_delete && !ast_delete->database.empty() && !ast_delete->table.empty())
+        return isMonitoredCnchTable(ast_delete->database);
+    else if (const auto * ast_insert = ast->as<ASTInsertQuery>(); ast_insert && (ast_insert->select || ast_insert->in_file)
+             && !ast_insert->table_id.database_name.empty() && !ast_insert->table_id.database_name.empty())
+        return isMonitoredCnchTable(ast_insert->table_id.database_name);
+    else if (const auto * ast_select = ast->as<ASTSelectWithUnionQuery>())
+    {
+        ASTs all_tables;
+        bool dummy = false;
+        ASTSelectQuery::collectAllTables(ast_select, all_tables, dummy);
+
+        for (const auto & table : all_tables)
+        {
+            auto database_table = IdentifierSemantic::extractDatabaseAndTable(typeid_cast<ASTTableIdentifier &>(*table));
+            if (isMonitoredCnchTable(database_table.first))
+                return true;
+        }
+        return false;
+    }
+    else
+        return false;
+}
 
 ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * ast, ContextPtr query_context, bool force)
 {
@@ -103,16 +199,39 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
     if (client_info.current_query_id.empty())
         throw Exception("Query id cannot be empty", ErrorCodes::LOGICAL_ERROR);
 
+    auto query_type = getProcessListQueryType(ast);
+    auto sub_query_type = ProcessListSubQueryType::Simple;
     bool is_unlimited_query = isUnlimitedQuery(ast);
+    bool is_vw_unlimited {false};
 
     IResourceGroup::Container::iterator group_it;
     IResourceGroup * resource_group = nullptr;
-    if (!is_unlimited_query)
+
+    String type = Poco::toLower(String(ProcessListHelper::toString(query_type)));
+    if (query_type == ProcessListQueryType::Default && query_context->getSettingsRef().enable_optimizer)
     {
-        const_cast<Context *>(query_context.get())->setResourceGroup(ast);
+        sub_query_type = ProcessListSubQueryType::Complex;
+    }
+    String sub_type = Poco::toLower(String(ProcessListHelper::toString(sub_query_type)));
+    LabelledMetrics::MetricLabels labels {{"query_type", type}, {"processing_stage", "processing"}, {"sub_query_type", sub_type}};
+    if (!is_unlimited_query && query_type != ProcessListQueryType::System && isMonitoredCnchQuery(ast))
+    {
+       const_cast<Context *>(query_context.get())->setResourceGroup(ast);
         /// FIXME(xuruiliang): change getResourceGroup to const getResourceGroup
         resource_group = const_cast<Context *>(query_context.get())->tryGetResourceGroup();
+        
+        if (auto vw = query_context->tryGetCurrentVW())
+            labels.insert({"vw", vw->getName()});
+        if (auto wg = query_context->tryGetCurrentWorkerGroup())
+            labels.insert({"wg", wg->getID()});
+        ProfileEvents::increment(ProfileEvents::VwQuery, 1, labels);
     }
+    else
+    {
+        is_vw_unlimited = true;
+        ProfileEvents::increment(ProfileEvents::UnlimitedQuery, 1, labels);
+    } 
+
     if (resource_group != nullptr)
         group_it = resource_group->run(query_, *query_context);
 
@@ -217,11 +336,15 @@ ProcessList::EntryPtr ProcessList::insert(const String & query_, const IAST * as
                     ErrorCodes::QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING);
         }
 
+        CurrentMetrics::Metric query_type_metric = getQueryTypeMetric(query_type);
+
         auto process_it = processes.emplace(processes.end(),
             query_context, query_, client_info, priorities.insert(settings.priority),
-            resource_group == nullptr ? nullptr : resource_group->insert(group_it));
+            resource_group == nullptr ? nullptr : resource_group->insert(group_it), query_type_metric, is_vw_unlimited);
 
         res = std::make_shared<Entry>(*this, process_it);
+
+        process_it->type = query_type;
 
         ProcessListForUser & user_process_list = user_to_queries[client_info.current_user];
         user_process_list.queries.emplace(client_info.current_query_id, &res->get());
@@ -343,13 +466,17 @@ QueryStatus::QueryStatus(
     const String & query_,
     const ClientInfo & client_info_,
     QueryPriorities::Handle && priority_handle_,
-    IResourceGroup::Handle && resource_group_handle_)
+    IResourceGroup::Handle && resource_group_handle_,
+    CurrentMetrics::Metric & query_type_metric_,
+    const bool is_unlimited_)
     : WithContext(context_)
     , query(query_)
     , client_info(client_info_)
     , priority_handle(std::move(priority_handle_))
     , resource_group_handle(std::move(resource_group_handle_))
     , num_queries_increment{CurrentMetrics::Query}
+    , query_type_increment{query_type_metric_}
+    , is_unlimited(is_unlimited_)
 {
     auto settings = getContext()->getSettings();
     limits.max_execution_time = settings.max_execution_time;

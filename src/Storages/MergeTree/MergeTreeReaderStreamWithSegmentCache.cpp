@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <cstddef>
 #include <memory>
 #include <optional>
 #include <Compression/CachedCompressedReadBuffer.h>
@@ -46,7 +47,7 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
         marks_loader(disk_, mark_cache_, mark_path_,
             stream_name_, marks_count_, *index_granularity_info_,
             settings_.save_marks_in_cache, mark_offset_, mark_size_,
-            settings_.read_settings, 1, segment_cache_, storage_id_.uuid,
+            settings_.read_settings, 1, segment_cache_ ? segment_cache_->getMetaCache().get() : nullptr, storage_id_.uuid,
             part_name_)
 {
     size_t max_mark_range_bytes = 0;
@@ -69,7 +70,7 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
 
     read_buffer_holder = std::make_unique<MergedReadBufferWithSegmentCache>(
         storage_id_, part_name_, stream_name_, disk_, data_path_, data_offset_,
-        data_size_, cache_segment_size_, segment_cache_, settings_,
+        data_size_, cache_segment_size_, segment_cache_ ? segment_cache_->getDataCache().get() : nullptr, settings_,
         total_segment_count, marks_loader, uncompressed_cache_, profile_callback_,
         clock_type_
     );

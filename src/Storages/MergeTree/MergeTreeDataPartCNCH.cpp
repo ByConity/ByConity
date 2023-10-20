@@ -319,7 +319,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
         try
         {
             MetaInfoDiskCacheSegment metainfo_segment(shared_from_this());
-            auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+            auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
             auto [cache_disk, segment_path] = disk_cache->get(metainfo_segment.getSegmentName());
             if (cache_disk && cache_disk->exists(segment_path))
             {
@@ -353,7 +353,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
     if (parent_part && enable_disk_cache)
     {
         auto segment = std::make_shared<MetaInfoDiskCacheSegment>(shared_from_this());
-        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
         disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
     }
 }
@@ -544,7 +544,7 @@ void MergeTreeDataPartCNCH::loadIndex()
 
     if (enableDiskCache())
     {
-        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
         PrimaryIndexDiskCacheSegment segment(shared_from_this());
         auto [cache_disk, segment_path] = disk_cache->get(segment.getSegmentName());
 
@@ -579,7 +579,7 @@ void MergeTreeDataPartCNCH::loadIndex()
     if (enableDiskCache())
     {
         auto index_seg = std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this());
-        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
         disk_cache->cacheSegmentsToLocalDisk({std::move(index_seg)});
     }
 }
@@ -594,7 +594,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     if (enableDiskCache())
     {
         ChecksumsDiskCacheSegment checksums_segment(shared_from_this());
-        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
         auto [cache_disk, segment_path] = disk_cache->get(checksums_segment.getSegmentName());
 
         if (cache_disk && cache_disk->exists(segment_path))
@@ -638,7 +638,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
     if (enableDiskCache())
     {
         auto segment = std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this());
-        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
         disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
     }
 
@@ -720,7 +720,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsForPart(boo
     if (enableDiskCache())
     {
         auto segment = std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this());
-        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
         disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
     }
 
@@ -1189,6 +1189,9 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
 
         String last_exception{};
         int real_cache_segments_count = 0;
+
+        auto meta_disk_cache = disk_cache->getMetaCache();
+        auto data_disk_cache = disk_cache->getDataCache();
         for (const auto & segment : segments)
         {
             try
@@ -1199,24 +1202,23 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                 {
                     if (level == PreloadLevelSettings::MetaPreload)
                     {
-                        if (disk_cache->get(mark_key).second.empty())
+                        if (meta_disk_cache->get(mark_key).second.empty())
                         {
-                            segment->cacheToDisk(*disk_cache);
+                            segment->cacheToDisk(*meta_disk_cache);
                             real_cache_segments_count++;
                         }
-
                     }
                     else if (level == PreloadLevelSettings::DataPreload)
                     {
-                        if (disk_cache->get(seg_key).second.empty())
+                        if (data_disk_cache->get(seg_key).second.empty())
                         {
-                            segment->cacheToDisk(*disk_cache);
+                            segment->cacheToDisk(*data_disk_cache);
                             real_cache_segments_count++;
                         }
                     }
                     else
                     {
-                        if (disk_cache->get(seg_key).second.empty() || disk_cache->get(mark_key).second.empty())
+                        if (data_disk_cache->get(seg_key).second.empty() || meta_disk_cache->get(mark_key).second.empty())
                         {
                             segment->cacheToDisk(*disk_cache);
                             real_cache_segments_count++;
@@ -1225,9 +1227,9 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                 }
                 else // means this is ChecksumsDiskCacheSegment or PrimaryIndexDiskCacheSegment
                 {
-                    if (disk_cache->get(seg_key).second.empty())
+                    if (meta_disk_cache->get(seg_key).second.empty())
                     {
-                        segment->cacheToDisk(*disk_cache);
+                        segment->cacheToDisk(*meta_disk_cache);
                         real_cache_segments_count++;
                     }
                 }

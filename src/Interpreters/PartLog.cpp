@@ -49,6 +49,7 @@ NamesAndTypesList PartLogElement::getNamesAndTypes()
         {"table", std::make_shared<DataTypeString>()},
         {"part_name", std::make_shared<DataTypeString>()},
         {"partition_id", std::make_shared<DataTypeString>()},
+        {"partition", std::make_shared<DataTypeString>()},
         {"path_on_disk", std::make_shared<DataTypeString>()},
 
         {"rows", std::make_shared<DataTypeUInt64>()},
@@ -84,6 +85,7 @@ void PartLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(table_name);
     columns[i++]->insert(part_name);
     columns[i++]->insert(partition_id);
+    columns[i++]->insert(partition);
     columns[i++]->insert(path_on_disk);
 
     columns[i++]->insert(rows);
@@ -160,6 +162,10 @@ bool PartLog::addNewParts(
             elem.database_name = table_id.database_name;
             elem.table_name = table_id.table_name;
             elem.partition_id = part->info.partition_id;
+            {
+                WriteBufferFromString out(elem.partition);
+                part->partition.serializeText(part->storage, out, {});
+            }
             elem.part_name = part->name;
             elem.path_on_disk = part->getFullPath();
 

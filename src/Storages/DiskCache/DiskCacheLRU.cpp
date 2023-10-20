@@ -15,6 +15,7 @@
 
 #include <Storages/DiskCache/DiskCacheLRU.h>
 #include <Storages/DiskCache/DiskCacheSimpleStrategy.h>
+#include <fmt/core.h>
 #include <sys/stat.h>
 #include <atomic>
 #include <filesystem>
@@ -22,9 +23,13 @@
 #include <string>
 #include <string_view>
 #include "Common/hex.h"
+#include "common/logger_useful.h"
 #include <Common/Throttler.h>
 #include <Common/setThreadName.h>
+#include "DataTypes/IDataType.h"
 #include "Interpreters/Context.h"
+#include "Storages/DiskCache/DiskCache_fwd.h"
+#include "Storages/DiskCache/IDiskCache.h"
 #include <common/errnoToString.h>
 #include <Disks/IVolume.h>
 #include <IO/WriteBufferFromString.h>
@@ -54,6 +59,8 @@ namespace ErrorCodes
 
 static constexpr auto DISK_CACHE_TEMP_FILE_SUFFIX = ".temp";
 static constexpr auto TMP_SUFFIX_LEN = std::char_traits<char>::length(DISK_CACHE_TEMP_FILE_SUFFIX);
+static constexpr auto META_DISK_CACHE_DIR_PREFIX = "meta";
+static constexpr auto DATA_DISK_CACHE_DIR_PREFIX = "data";
 
 namespace
 {
@@ -85,16 +92,32 @@ namespace
     }
 }
 
-DiskCacheLRU::DiskCacheLRU(const VolumePtr & volume_, const ThrottlerPtr & throttler_, const DiskCacheSettings & settings_)
-    : IDiskCache(volume_, throttler_, settings_)
+DiskCacheLRU::DiskCacheLRU(
+    const String & name_,
+    const VolumePtr & volume_,
+    const ThrottlerPtr & throttler_,
+    const DiskCacheSettings & settings_,
+    const IDiskCacheStrategyPtr & strategy_,
+    IDiskCache::DataType type_)
+    : IDiskCache(name_, volume_, throttler_, settings_, strategy_, false, type_)
     , set_rate_throttler(settings_.cache_set_rate_limit == 0 ? nullptr : std::make_shared<Throttler>(settings_.cache_set_rate_limit))
-    , strategy(std::make_shared<DiskCacheSimpleStrategy>(settings_))
     , containers(
           settings.cache_shard_num,
           BucketLRUCache<KeyType, DiskCacheMeta, UInt128Hash, DiskCacheWeightFunction>::Options{
               .lru_update_interval = static_cast<UInt32>(settings.lru_update_interval),
               .mapping_bucket_size = static_cast<UInt32>(std::max(1UL, settings.mapping_bucket_size / settings.cache_shard_num)),
-              .max_size = std::max(static_cast<size_t>(1), settings.lru_max_size / settings.cache_shard_num),
+              .max_size = std::max(
+                  static_cast<size_t>(1),
+                  type == IDiskCache::DataType::META
+                      ? static_cast<size_t>(settings.lru_max_size * (settings.meta_cache_size_ratio * 1.0 / 100) / settings.cache_shard_num)
+                      : static_cast<size_t>(
+                          settings.lru_max_size * ((100 - settings.meta_cache_size_ratio) * 1.0 / 100) / settings.cache_shard_num)),
+              .max_nums = std::max(
+                  static_cast<size_t>(1),
+                  type == IDiskCache::DataType::META
+                      ? static_cast<size_t>(settings.lru_max_nums * (settings.meta_cache_nums_ratio * 1.0 / 100) / settings.cache_shard_num)
+                      : static_cast<size_t>(
+                          settings.lru_max_nums * ((100 - settings.meta_cache_nums_ratio) * 1.0 / 100) / settings.cache_shard_num)),
               .enable_customize_evict_handler = true,
               .customize_evict_handler
               = [this](
@@ -115,9 +138,7 @@ DiskCacheLRU::DiskCacheLRU(const VolumePtr & volume_, const ThrottlerPtr & throt
     }
 
     auto & thread_pool = IDiskCache::getThreadPool();
-    thread_pool.scheduleOrThrowOnError([this] {
-        load();
-    });
+    thread_pool.scheduleOrThrowOnError([this] { load(); });
 }
 
 DiskCacheLRU::KeyType DiskCacheLRU::hash(const String & seg_key)
@@ -159,23 +180,27 @@ std::optional<DiskCacheLRU::KeyType> DiskCacheLRU::unhexKey(const String & hex_k
 // disk_cache_v1/uuid_part_name[:3]/uuid_part_name/stream_name
 // e.g. disk_cache_v1/752/752573bf0b591cd/de3e88c72ced6c3d
 // files belongs to the same part will be placed under the same path
-fs::path DiskCacheLRU::getPath(const DiskCacheLRU::KeyType & hash_key, const String & path)
+fs::path DiskCacheLRU::getPath(const DiskCacheLRU::KeyType & hash_key, const String & path, const String & seg_name, const String & prefix)
 {
     String hex_key = hexKey(hash_key);
     std::string_view view(hex_key);
     std::string_view hex_key_low = view.substr(0, HEX_KEY_LEN / 2);
     std::string_view hex_key_high = view.substr(HEX_KEY_LEN / 2, HEX_KEY_LEN);
+    if (!prefix.empty())
+        return fs::path(path) / prefix / hex_key_high.substr(0, 3) / hex_key_high / hex_key_low;
 
-    return fs::path(path) / hex_key_high.substr(0, 3) / hex_key_high / hex_key_low;
+    return fs::path(path) / (endsWith(seg_name, DATA_FILE_EXTENSION) ? DATA_DISK_CACHE_DIR_PREFIX : META_DISK_CACHE_DIR_PREFIX)
+        / hex_key_high.substr(0, 3) / hex_key_high / hex_key_low;
 }
 
-static fs::path getRelativePathForPart(const String & part_name)
+static fs::path getRelativePathForPart(const String & part_name, const String & prefix)
 {
     /// relative path for part
     auto hash = sipHash64(part_name.data(), part_name.size());
     String hex_key(HEX_KEY_LEN / 2, '\0');
     writeHexUIntLowercase(hash, hex_key.data());
-    return fs::path(hex_key.substr(0, 3)) / hex_key / "";
+    
+    return fs::path(prefix) / hex_key.substr(0, 3) / hex_key / "";
 }
 
 void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_hint)
@@ -255,13 +280,13 @@ std::pair<DiskPtr, String> DiskCacheLRU::get(const String & seg_name)
         return {};
     }
 
-    return {cache_meta->disk, getRelativePath(key)};
+    return {cache_meta->disk, getRelativePath(key, seg_name)};
 }
 
 size_t DiskCacheLRU::writeSegment(const String& seg_key, ReadBuffer& buffer, ReservationPtr& reservation)
 {
     DiskPtr disk = reservation->getDisk();
-    String cache_rel_path = getRelativePath(hash(seg_key));
+    String cache_rel_path = getRelativePath(hash(seg_key), seg_key);
     String temp_cache_rel_path = cache_rel_path + ".temp";
 
     try
@@ -312,19 +337,27 @@ void DiskCacheLRU::afterEvictSegment([[maybe_unused]]const std::vector<std::pair
         return;
 
     auto& thread_pool = IDiskCache::getEvictPool();
-    for (auto iter = updated_elements.begin(); iter != updated_elements.end(); ++iter)
+    for (const auto & updated_element : updated_elements)
     {
-        DiskPtr disk = iter->second->disk;
+        DiskPtr disk = updated_element.second->disk;
         if (unlikely(disk == nullptr))
         {
             continue;
         }
 
-        thread_pool.scheduleOrThrowOnError([this, key = iter->first, dsk = std::move(disk), &thread_pool]() {
+        thread_pool.scheduleOrThrowOnError([this, key = updated_element.first, dsk = std::move(disk), &thread_pool]() {
+            String prefix = META_DISK_CACHE_DIR_PREFIX;
             try
             {
-                auto rel_path = getRelativePath(key);
-                dsk->removeRecursive(rel_path);
+                auto rel_meta_path = getRelativePath(key, "", META_DISK_CACHE_DIR_PREFIX);
+                auto rel_data_path = getRelativePath(key, "", DATA_DISK_CACHE_DIR_PREFIX);
+                if (dsk->exists(rel_meta_path))
+                    dsk->removeRecursive(rel_meta_path);
+                else
+                {
+                    prefix = DATA_DISK_CACHE_DIR_PREFIX;
+                    dsk->removeRecursive(rel_data_path);
+                }
 
                 // Since we are holding locks of lru when calling onEvictSegment,
                 // this erase must happen after state is update to Deleting
@@ -334,13 +367,13 @@ void DiskCacheLRU::afterEvictSegment([[maybe_unused]]const std::vector<std::pair
             catch (...)
             {
                 tryLogCurrentException(log, fmt::format("Failed to remove cache {}, "
-                    "disk path {}", String(getRelativePath(key)), dsk->getPath()));
+                    "disk path {}", String(getRelativePath(key, "", prefix)), dsk->getPath()));
             }
 
             /// remove parent path if it's empty
             try
             {
-                auto rel_path = getRelativePath(key);
+                auto rel_path = getRelativePath(key, "", prefix);
                 if (dsk->isDirectoryEmpty(rel_path.parent_path()))
                 {
                     dsk->removeDirectory(rel_path.parent_path());
@@ -370,21 +403,29 @@ void DiskCacheLRU::load()
                 [this, disk] {
                     auto loader = std::make_unique<DiskCacheLoader>(
                         *this, disk, settings.cache_loader_per_disk, 1, 1);
-                    loader->exec(fs::path(latest_disk_cache_dir) / "");
+                    if (type == DataType::ALL)
+                        loader->exec(fs::path(latest_disk_cache_dir) / "");
+                    else if (type == DataType::META)
+                        loader->exec(fs::path(latest_disk_cache_dir) / META_DISK_CACHE_DIR_PREFIX);
+                    else if (type == DataType::DATA)
+                        loader->exec(fs::path(latest_disk_cache_dir) / DATA_DISK_CACHE_DIR_PREFIX);
                 },
                 except_handler));
 
-            if (!previous_disk_cache_dir.empty())
+            if (!previous_disk_cache_dirs.empty())
             {
                 dispatcher_pool.scheduleOrThrowOnError(createExceptionHandledJob(
                     [this, disk] {
-                        auto migrator = std::make_unique<DiskCacheMigrator>(
-                            *this, disk, settings.cache_loader_per_disk, 1, 1);
-                        migrator->exec(fs::path(previous_disk_cache_dir) / "");
+                        auto migrator = std::make_unique<DiskCacheMigrator>(*this, disk, settings.cache_loader_per_disk, 1, 1);
+                        for (const auto & path : previous_disk_cache_dirs)
+                        {
+                            LOG_TRACE(log, "Start migrate cache from {} to {}", disk->getPath() + path, disk->getPath() + latest_disk_cache_dir);
+                            migrator->exec(fs::path(path) / "");
+                        }
+                          
                     },
                     except_handler));
             }
-
         }
         dispatcher_pool.wait();
         except_handler.throwIfException();
@@ -396,15 +437,24 @@ void DiskCacheLRU::load()
         for (const DiskPtr & disk : disks)
         {
             auto loader = std::make_unique<DiskCacheLoader>(*this, disk, settings.cache_loader_per_disk, 1, 1);
-            loader->exec(fs::path(latest_disk_cache_dir) / "");
+            if (type == DataType::ALL)
+                loader->exec(fs::path(latest_disk_cache_dir) / "");
+            else if (type == DataType::META)
+                loader->exec(fs::path(latest_disk_cache_dir) / META_DISK_CACHE_DIR_PREFIX);
+            else if (type == DataType::DATA)
+                loader->exec(fs::path(latest_disk_cache_dir) / DATA_DISK_CACHE_DIR_PREFIX);
         }
 
-        if (!previous_disk_cache_dir.empty())
+        if (!previous_disk_cache_dirs.empty())
         {
             for (const DiskPtr & disk : disks)
             {
                 auto migrator = std::make_unique<DiskCacheMigrator>(*this, disk, settings.cache_loader_per_disk, 1, 1);
-                migrator->exec(fs::path(previous_disk_cache_dir) / "");
+                for (const auto & path : previous_disk_cache_dirs)
+                {
+                    LOG_TRACE(log, "Start migrate cache from {} to {}", disk->getPath() + path, disk->getPath() + latest_disk_cache_dir);
+                     migrator->exec(fs::path(path) / "");
+                }
             }
         }
     }
@@ -415,32 +465,47 @@ size_t DiskCacheLRU::drop(const String & part_name)
     is_droping = true;
     SCOPE_EXIT({is_droping = false; });
 
-    auto part_base_path = part_name.empty() ? fs::path(latest_disk_cache_dir) : fs::path(latest_disk_cache_dir) /  getRelativePathForPart(part_name);
-    LOG_TRACE(log, fmt::format("start delete part {} cache {}", part_name, part_base_path.relative_path().c_str()));
+    fs::path meta_path, data_path;
+    if (type == DataType::ALL || type == DataType::META)
+        meta_path = part_name.empty() ? fs::path(latest_disk_cache_dir) / META_DISK_CACHE_DIR_PREFIX : fs::path(latest_disk_cache_dir) /  getRelativePathForPart(part_name, META_DISK_CACHE_DIR_PREFIX);
+
+    if (type == DataType::ALL || type == DataType::DATA)
+        data_path = part_name.empty() ? fs::path(latest_disk_cache_dir) / DATA_DISK_CACHE_DIR_PREFIX : fs::path(latest_disk_cache_dir) /  getRelativePathForPart(part_name, DATA_DISK_CACHE_DIR_PREFIX);
+
+    LOG_TRACE(log, fmt::format("start delete part {} cache {} {}", part_name, meta_path.relative_path().c_str(), data_path.relative_path().c_str()));
 
     const Disks & disks = volume->getDisks();
     size_t delete_file_size = 0;
     for (const auto & disk : disks)
     {
-        if (!disk->exists(part_base_path))
-            continue;
+        if (!meta_path.relative_path().empty() && disk->exists(meta_path))
+        {
+            DiskCacheDeleter deleter(*this, disk, 1, -1, -1);
+            deleter.exec(meta_path);
+            delete_file_size += deleter.delete_file_size;
+        }
 
-        DiskCacheDeleter deleter(*this, disk, 1, -1, -1);
-        deleter.exec(part_base_path);
-        delete_file_size += deleter.delete_file_size;
+        if (!data_path.relative_path().empty() && disk->exists(data_path))
+        {
+            DiskCacheDeleter deleter(*this, disk, 1, -1, -1);
+            deleter.exec(data_path);
+            delete_file_size += deleter.delete_file_size;
+        }
     }
 
-    LOG_DEBUG(log, fmt::format("deleted {} cache {}, size {}", part_name, part_base_path.relative_path().c_str(), delete_file_size));
+    LOG_DEBUG(log, fmt::format("deleted {} cache size {} {} {}", part_name, delete_file_size,meta_path.relative_path().c_str(), data_path.relative_path().c_str()));
     return delete_file_size;
 }
 
 DiskCacheLRU::DiskIterator::DiskIterator(
-    DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk_, int min_depth_parallel_, int max_depth_parallel_)
-    : disk_cache(cache_)
+    const String & name_, DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk_, int min_depth_parallel_, int max_depth_parallel_)
+    : name(name_)
+    , disk_cache(cache_)
     , disk(std::move(disk_))
     , worker_per_disk(worker_per_disk_)
     , min_depth_parallel(min_depth_parallel_)
     , max_depth_parallel(max_depth_parallel_)
+    , log(&Poco::Logger::get(fmt::format("DiskIterator{}({})", name, disk_cache.getName())))
 {
 }
 
@@ -519,7 +584,7 @@ void DiskCacheLRU::DiskIterator::iterateDirectory(fs::path rel_path, size_t dept
 
 DiskCacheLRU::DiskCacheLoader::DiskCacheLoader(
     DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk_, int min_depth_parallel_, int max_depth_parallel_)
-    : DiskIterator(cache_, std::move(disk_), worker_per_disk_, min_depth_parallel_, max_depth_parallel_)
+    : DiskIterator("Loader", cache_, std::move(disk_), worker_per_disk_, min_depth_parallel_, max_depth_parallel_)
 {
 }
 
@@ -527,7 +592,7 @@ DiskCacheLRU::DiskCacheLoader::~DiskCacheLoader()
 {
     try
     {
-        LOG_INFO(&Poco::Logger::get("DiskCacheLoader"), fmt::format("Loaded {} segs from disk {}", total_loaded, disk->getPath()));
+        LOG_INFO(log, fmt::format("Loaded {} segs from disk {}", total_loaded, disk->getPath()));
     }
     catch (...) {}
 }
@@ -592,7 +657,7 @@ void DiskCacheLRU::DiskCacheLoader::iterateFile(fs::path file_path, size_t file_
 
 DiskCacheLRU::DiskCacheMigrator::DiskCacheMigrator(
     DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk_, int min_depth_parallel_, int max_depth_parallel_)
-    : DiskIterator(cache_, std::move(disk_), worker_per_disk_, min_depth_parallel_, max_depth_parallel_)
+    : DiskIterator("Migrator", cache_, std::move(disk_), worker_per_disk_, min_depth_parallel_, max_depth_parallel_)
 {
 }
 
@@ -600,7 +665,7 @@ DiskCacheLRU::DiskCacheMigrator::~DiskCacheMigrator()
 {
     try
     {
-        LOG_INFO(&Poco::Logger::get("DiskCacheMigrator"), fmt::format("Migrated {} segs from disk {}", total_migrated, disk->getPath()));
+        LOG_INFO(log, fmt::format("Migrated {} segs from disk {}", total_migrated, disk->getPath()));
     }
     catch (...) {}
 }
@@ -613,27 +678,25 @@ void DiskCacheLRU::DiskCacheMigrator::iterateFile(fs::path rel_path, size_t file
         return;
     }
 
-    String seg_name;
+    String full_path(rel_path.relative_path().c_str());
+    String entry_path = full_path.substr(full_path.find_first_of('/'), full_path.size() - 1);
+
+    String segment_hex = rel_path.filename().string();
+    /// Use little endian
+    String hex_key = segment_hex + rel_path.parent_path().filename().string();
+    auto unhexed = unhexKey(hex_key);
+    if (!unhexed)
     {
-        WriteBufferFromString buf(seg_name);
-
-        /// skip base path disk_cache/
-        for (auto it = std::next(rel_path.begin()); it != rel_path.end(); ++it)
-        {
-            if (it->empty())
-                continue;
-            if (buf.count() > 0)
-                writeChar('/', buf);
-
-            writeString(it->string(), buf);
-        }
+        LOG_ERROR(log, "Invalid disk cache file path: {}, hex_key: {}", (fs::path(disk->getPath()) / rel_path).c_str(), hex_key);
+        disk->removeFileIfExists(rel_path);
+        return;
     }
 
-    auto key = hash(seg_name);
+    const KeyType & key = unhexed.value();
     auto& shard = disk_cache.containers.shard(key);
     // Insert cache meta first, if there is a entry already there, skip this insert
 
-    auto target_path = disk_cache.getRelativePath(key);
+    auto target_path = fs::path(disk_cache.getDataDir()) / fmt::format("{}{}", DATA_DISK_CACHE_DIR_PREFIX, entry_path);
     try
     {
         bool inserted = shard.emplace(key, std::make_shared<DiskCacheMeta>(DiskCacheMeta::State::Caching, nullptr, 0));
@@ -659,8 +722,8 @@ void DiskCacheLRU::DiskCacheMigrator::iterateFile(fs::path rel_path, size_t file
 }
 
 DiskCacheLRU::DiskCacheDeleter::DiskCacheDeleter(
-    DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk, int min_depth_parallel, int max_depth_parallel)
-    : DiskIterator(cache_, std::move(disk_), worker_per_disk, min_depth_parallel, max_depth_parallel)
+    DiskCacheLRU & cache_, DiskPtr disk_, size_t worker_per_disk_, int min_depth_parallel_, int max_depth_parallel_)
+    : DiskIterator("Deleter", cache_, std::move(disk_), worker_per_disk_, min_depth_parallel_, max_depth_parallel_)
 {
 }
 

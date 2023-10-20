@@ -397,7 +397,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
         {
             // Cache segment if necessary
             IDiskCacheSegmentsVector segments
-                = segment_cache_strategy->getCacheSegments(segment_cache_strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
+                = segment_cache_strategy->getCacheSegments(segment_cache, segment_cache_strategy->transferRangesToSegments<PartFileDiskCacheSegment>(
                     all_mark_ranges,
                     source_data_part,
                     PartFileDiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},

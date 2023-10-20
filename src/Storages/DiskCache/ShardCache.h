@@ -17,6 +17,7 @@
 
 #include <vector>
 #include <Storages/DiskCache/BucketLRUCache.h>
+#include <Poco/Logger.h>
 
 namespace DB
 {
@@ -35,6 +36,16 @@ public:
         {
             containers.push_back(std::make_unique<CacheType>(opts));
         }
+
+        LOG_DEBUG(
+            &Poco::Logger::get("ShardCache"),
+            "BucketLRUCache max_nums {} * {} = {}, max_size {} * {} = {}",
+            opts.max_nums,
+            shard_num,
+            opts.max_nums * shard_num,
+            opts.max_size,
+            shard_num,
+            opts.max_size * shard_num);
     }
 
     inline CacheType& shard(const Key& key)
