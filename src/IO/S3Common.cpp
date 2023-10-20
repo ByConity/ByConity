@@ -1,4 +1,5 @@
 #include <memory>
+#include <IO/HTTPCommon.h>
 #include <IO/S3Common.h>
 #include <Common/config.h>
 
@@ -42,12 +43,32 @@
 
 #    include <IO/S3/PocoHTTPClient.h>
 #    include <IO/S3/PocoHTTPClientFactory.h>
+#    include <IO/S3/SessionAwareIOStream.h>
 #    include <boost/algorithm/string/case_conv.hpp>
 #    include <re2/re2.h>
 #    include <Poco/URI.h>
 #    include <Poco/Util/AbstractConfiguration.h>
 #    include <common/logger_useful.h>
 #    include <common/types.h>
+#    include <fmt/format.h>
+
+namespace ProfileEvents
+{
+    extern const Event S3ReadRequestsErrors;
+    extern const Event S3ResetSessions;
+    extern const Event S3PreservedSessions;
+}
+
+namespace
+{
+DB::PooledHTTPSessionPtr getSession(Aws::S3::Model::GetObjectResult & read_result)
+{
+    if (auto * session_aware_stream = dynamic_cast<DB::S3::SessionAwareIOStream<DB::PooledHTTPSessionPtr> *>(&read_result.GetBody()))
+        return static_cast<DB::PooledHTTPSessionPtr &>(session_aware_stream->getSession());
+
+    return {};
+}
+}
 
 namespace DB::S3::Auth
 {
@@ -540,6 +561,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
+    extern const int CANNOT_ALLOCATE_MEMORY;
     extern const int S3_ERROR;
     extern const int UNKNOWN_ELEMENT_IN_CONFIG;
 }
@@ -550,8 +572,9 @@ bool isS3URIScheme(const String& scheme) {
 
 namespace S3
 {
-    S3Exception::S3Exception(const Aws::S3::S3Error & s3_err, const String & extra_msg)
-        : Exception(formatS3Error(s3_err, extra_msg), ErrorCodes::S3_ERROR), error_type(s3_err.GetErrorType())
+    S3Exception::S3Exception(const Aws::S3::S3Error & s3err, const String & extra_msg)
+        : Exception(formatS3Error(s3err, extra_msg), ErrorCodes::S3_ERROR)
+        , error_type(s3err.GetErrorType())
     {
     }
 
@@ -566,6 +589,21 @@ namespace S3
             err.GetExceptionName(),
             err.GetMessage(),
             extra);
+    }
+
+    bool S3Exception::isRetryableError() const
+    {
+        /// Looks like these list is quite conservative, add more codes if you wish
+        static const std::unordered_set<Aws::S3::S3Errors> unretryable_errors = {
+            Aws::S3::S3Errors::NO_SUCH_KEY,
+            Aws::S3::S3Errors::ACCESS_DENIED,
+            Aws::S3::S3Errors::INVALID_ACCESS_KEY_ID,
+            Aws::S3::S3Errors::INVALID_SIGNATURE,
+            Aws::S3::S3Errors::NO_SUCH_UPLOAD,
+            Aws::S3::S3Errors::NO_SUCH_BUCKET,
+        };
+
+        return !unretryable_errors.contains(error_type);
     }
 
     ClientFactory::ClientFactory()
@@ -1364,6 +1402,60 @@ namespace S3
         server_side_encryption_customer_key_base64 = from.server_side_encryption_customer_key_base64;
         use_environment_credentials = from.use_environment_credentials;
         use_insecure_imds_request = from.use_insecure_imds_request;
+    }
+
+    bool processReadException(Exception & e, Poco::Logger * log, const String & bucket, const String & key, size_t offset, size_t attempt)
+    {
+        ProfileEvents::increment(ProfileEvents::S3ReadRequestsErrors);
+
+        if (log)
+            LOG_DEBUG(
+                log,
+                "Caught exception while reading S3 object. Bucket: {}, Key: {}, Offset: {}, "
+                "Attempt: {}, Message: {}",
+                bucket, key, offset, attempt, e.message());
+
+        if (auto * s3_exception = dynamic_cast<S3Exception *>(&e))
+        {
+            /// It doesn't make sense to retry Access Denied or No Such Key
+            if (!s3_exception->isRetryableError())
+            {
+                s3_exception->addMessage("while reading key: {}, from bucket: {}", key, bucket);
+                return false;
+            }
+        }
+
+        /// It doesn't make sense to retry allocator errors
+        if (e.code() == ErrorCodes::CANNOT_ALLOCATE_MEMORY)
+        {
+            if (log)
+                tryLogCurrentException(log);
+            return false;
+        }
+
+        return true;
+    }
+
+    void resetSessionIfNeeded(bool read_all_range_successfully, std::optional<Aws::S3::Model::GetObjectResult> & read_result)
+    {
+        if (!read_result)
+            return;
+
+        if (auto session = getSession(*read_result); !session.isNull())
+        {
+            /// Only connection with fully consumed response can be reused,
+            /// otherwise we'll encounter Malformed Message error on next request.
+            if (read_all_range_successfully)
+            {
+                ProfileEvents::increment(ProfileEvents::S3PreservedSessions);
+            }
+            else
+            {
+                ProfileEvents::increment(ProfileEvents::S3ResetSessions);
+                auto & http_session = static_cast<Poco::Net::HTTPClientSession &>(*session);
+                http_session.reset();
+            }
+        }
     }
 
 }

@@ -778,7 +778,8 @@
     M(ReadBufferFromS3Read, "remote s3 read op count") \
     M(ReadBufferFromS3ReadFailed, "remote s3 read failed count") \
     M(ReadBufferFromS3ReadBytes, "remote s3 read op size") \
-    M(ReadBufferFromS3ReadMicro, "remote s3 read op time") \
+    M(ReadBufferFromS3ReadMicroseconds, "remote s3 read op time") \
+    M(ReadBufferFromS3InitMicroseconds, "Time spent initializing connection to S3.") \
     \
     M(IOSchedulerOpenFileMicro, "Time used in open file when using io scheduler") \
     M(IOSchedulerScheduleMicro, "Time used in schedule io request") \
@@ -799,13 +800,15 @@
     M(PFRAWSReadBufferReadMicro, "PFRAWSReadBufferFromFS read time, including seek and nextImpl") \
     \
     M(S3TrivialReaderReadCount, "S3TrivialReader read count") \
-    M(S3TrivialReaderReadMicro, "S3TrivialReader read micro seconds") \
+    M(S3TrivialReaderReadMicroseconds, "S3TrivialReader read micro seconds") \
     M(S3TrivialReaderReadBytes, "S3TrivialReader read bytes") \
     M(S3ReadAheadReaderReadCount, "S3ReadAheadReader read count") \
     M(S3ReadAheadReaderRemoteReadCount, "S3ReadAheadReader remote read count") \
     M(S3ReadAheadReaderReadMicro, "S3ReadAheadReader read micro seconds") \
     M(S3ReadAheadReaderExpectReadBytes, "S3ReadAheadReader expected read bytes") \
     M(S3ReadAheadReaderReadBytes, "S3ReadAheadReader readed bytes") \
+    M(S3ResetSessions, "Number of HTTP sessions that were reset in S3 read.") \
+    M(S3PreservedSessions, "Number of HTTP sessions that were preserved in S3 read.") \
     M(ConnectionPoolIsFullMicroseconds, "Total time spent waiting for a slot in connection pool.") \
     \
     M(PocoHTTPS3GetCount, "") \

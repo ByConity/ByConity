@@ -18,7 +18,7 @@ namespace DB {
 // encounter any exception, it should maintain it's old state
 class S3Reader {
 public:
-    virtual ~S3Reader() {}
+    virtual ~S3Reader() = default;
 
     // Didn't guarantee read as much as size, it may read fewer than expected
     // if eof or failure happened
@@ -33,6 +33,7 @@ public:
 
     virtual const String& bucket() const = 0;
     virtual const String& key() const = 0;
+    virtual Poco::Logger * logger() const = 0;
 };
 
 class S3TrivialReader: public S3Reader {
@@ -49,6 +50,7 @@ public:
 
     virtual const String& bucket() const override { return bucket_; }
     virtual const String& key() const override { return key_; }
+    virtual Poco::Logger * logger() const override { return nullptr; }
 
 private:
     uint64_t readFragment(char* buffer, uint64_t offset, uint64_t size);
@@ -67,6 +69,8 @@ public:
         size_t max_read_expand_times, size_t read_expand_pct,
         size_t seq_read_thres, Poco::Logger* logger);
 
+    virtual ~S3ReadAheadReader() override;
+
     virtual uint64_t read(char* buffer, uint64_t size) override;
     virtual uint64_t seek(uint64_t offset) override;
 
@@ -76,12 +80,14 @@ public:
 
     virtual const String& bucket() const override { return bucket_; }
     virtual const String& key() const override { return key_; }
+    virtual Poco::Logger * logger() const override { return logger_; }
 
 private:
     void updateBufferSize(uint64_t size);
     bool refillBuffer();
     uint64_t readFromBuffer(char* buffer, size_t size);
-    void resetReader(uint64_t offset);
+    void resetReader();
+    void resetReaderAndSize(uint64_t offset);
 
     const size_t min_read_size_;
     const size_t max_read_expand_times_;
@@ -102,12 +108,10 @@ private:
     // Offset of first byte in reader
     uint64_t current_offset_;
     uint64_t reader_size_;
-    // End offset of reader
+    // End offset of reader, may past file end
     uint64_t reader_end_offset_;
-    std::unique_ptr<Aws::S3::Model::GetObjectResult> reader_;
-
-    // Optional file size, will set when file reading encounter eof
-    std::optional<uint64_t> hint_file_size_;
+    std::optional<Aws::S3::Model::GetObjectResult> read_result_;
+    bool reader_is_drained_;
 };
 
 class S3RemoteFSReader: public RemoteFSReader {

@@ -535,7 +535,7 @@ namespace ProfileEvents
     // extern const Event ReadBufferFromS3Read;
     // extern const Event ReadBufferFromS3ReadFailed;
     // extern const Event ReadBufferFromS3ReadBytes;
-    // extern const Event ReadBufferFromS3ReadMicro;
+    // extern const Event ReadBufferFromS3ReadMicroseconds;
     // extern const Event S3ReadAheadReaderRead;
 }
 
@@ -1157,7 +1157,7 @@ private:
         // ProfileEvents::ReadBufferFromS3Read,
         // ProfileEvents::ReadBufferFromS3ReadFailed,
         // ProfileEvents::ReadBufferFromS3ReadBytes,
-        // ProfileEvents::ReadBufferFromS3ReadMicro,
+        // ProfileEvents::ReadBufferFromS3ReadMicroseconds,
         // ProfileEvents::S3ReadAheadReaderRead,
     };
     const std::vector<CurrentMetrics::Metric> current_metrics_list =
