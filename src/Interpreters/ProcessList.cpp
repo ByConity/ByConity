@@ -481,6 +481,7 @@ QueryStatus::QueryStatus(
     auto settings = getContext()->getSettings();
     limits.max_execution_time = settings.max_execution_time;
     overflow_mode = settings.timeout_overflow_mode;
+    graphviz = std::make_shared<std::vector<std::pair<String, String>>>();
 }
 
 QueryStatus::~QueryStatus()
@@ -811,7 +812,6 @@ QueryStatusInfo QueryStatus::getInfo(bool get_thread_list, bool get_profile_even
 
     return res;
 }
-
 
 ProcessList::Info ProcessList::getInfo(bool get_thread_list, bool get_profile_events, bool get_settings) const
 {

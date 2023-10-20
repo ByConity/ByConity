@@ -1494,6 +1494,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         const auto finish_time = std::chrono::system_clock::now();
                         elem.event_time = time_in_seconds(finish_time);
                         elem.event_time_microseconds = time_in_microseconds(finish_time);
+                        elem.graphviz = process_list_elem->getGraphviz();
                         status_info_to_query_log(elem, info, ast);
 
 
