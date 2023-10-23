@@ -43,13 +43,15 @@ namespace DB::S3
 class S3Exception: public Exception
 {
 public:
-    explicit S3Exception(const Aws::S3::S3Error& s3_err, const String& extra_msg = "");
+    S3Exception(const Aws::S3::S3Error & s3err, const String & extra_msg = "");
 
     const char* name() const throw() override { return "DB::S3::S3Exception"; }
 
-    Aws::S3::S3Errors s3Err() const { return error_type; }
+    Aws::S3::S3Errors getS3ErrorCode() const { return error_type; }
 
-    static String formatS3Error(const Aws::S3::S3Error& err, const String& extra);
+    static String formatS3Error(const Aws::S3::S3Error & err, const String & extra);
+
+    bool isRetryableError() const;
 
 private:
     const char* className() const throw() override { return "DB::S3::S3Exception"; }
@@ -292,6 +294,12 @@ namespace Auth
             bool use_insecure_imds_request);
     };
 }
+
+/// return whether the exception worth retry or not
+bool processReadException(Exception & e, Poco::Logger * log, const String & bucket, const String & key, size_t read_offset, size_t attempt);
+
+void resetSessionIfNeeded(bool read_all_range_successfully, std::optional<Aws::S3::Model::GetObjectResult> & read_result);
+
 }
 
 #endif

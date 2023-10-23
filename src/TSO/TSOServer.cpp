@@ -466,7 +466,16 @@ int TSOServer::main(const std::vector<std::string> &)
         // if (restart_task)
         //     restart_task->deactivate();
 
-        global_context->shutdown();
+        std::for_each(rpc_servers.begin(), rpc_servers.end(),
+            [this] (const std::unique_ptr<brpc::Server> & rpc_server)
+            {
+                if (rpc_server)
+                {
+                    rpc_server->Stop(1);
+                    LOG_INFO(log, "Stop BRPC server.");
+                }
+            }
+        );
 
         std::for_each(http_servers.begin(), http_servers.end(),
             [this] (const std::unique_ptr<HTTPServer> & http_server)
@@ -478,6 +487,8 @@ int TSOServer::main(const std::vector<std::string> &)
                 }
             }
         );
+
+        global_context->shutdown();
 
         /// Wait server pool to avoid use-after-free of destroyed context in the handlers
         server_pool.joinAll();

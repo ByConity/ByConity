@@ -239,7 +239,7 @@ namespace
                     wait_on_pool_size_limit, resolve_host));
 
             auto retry_timeout = timeouts.connection_timeout.totalMicroseconds();
-            // pool_ptr gets reassigned to a valid position if it's at the end 
+            // pool_ptr gets reassigned to a valid position if it's at the end
             // coverity[deref_iterator]
             auto session = pool_ptr->second->get(retry_timeout);
 

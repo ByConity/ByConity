@@ -31,7 +31,7 @@ private:
     String key;
     UInt64 max_single_read_retries;
     off_t offset = 0;
-    Aws::S3::Model::GetObjectResult read_result;
+    std::optional<Aws::S3::Model::GetObjectResult> read_result;
     std::unique_ptr<ReadBuffer> impl;
 
     Poco::Logger * log = &Poco::Logger::get("ReadBufferFromS3");
@@ -44,6 +44,8 @@ public:
         const ReadSettings & read_settings,
         UInt64 max_single_read_retries_ = 3,
         bool restricted_seek_ = true);
+
+    ~ReadBufferFromS3() override;
 
     bool nextImpl() override;
 
@@ -58,11 +60,13 @@ public:
 
 private:
     std::unique_ptr<ReadBuffer> initialize();
+
     Aws::S3::Model::GetObjectResult sendRequest(size_t range_begin, std::optional<size_t> range_end_incl) const;
 
     ReadSettings read_settings;
     std::optional<size_t> file_size;
     bool restricted_seek;
+    bool read_all_range_successfully = false;
 };
 
 }

@@ -24,6 +24,8 @@
 #include <Columns/ColumnFixedString.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
+#include <Columns/ColumnByteMap.h>
+#include <Columns/ColumnMap.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime64.h>
 #include <DataTypes/DataTypeDate.h>
@@ -132,10 +134,12 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
         {"ProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
         {"MaxIOThreadProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
         {"Settings", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
+        {"Graphviz", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
 #else
         {"ProfileEvents", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
         {"MaxIOThreadProfileEvents", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
         {"Settings", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
+        {"Graphviz", std::make_shared<DataTypeByteMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>())},
 #endif
 
         {"used_aggregate_functions", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
@@ -164,7 +168,9 @@ NamesAndAliases QueryLogElement::getNamesAndAliases()
         {"ProfileEvents.Names", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}, "mapKeys(ProfileEvents)"},
         {"ProfileEvents.Values", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeUInt64>())}, "mapValues(ProfileEvents)"},
         {"Settings.Names", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}, "mapKeys(Settings)" },
-        {"Settings.Values", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}, "mapValues(Settings)"}
+        {"Settings.Values", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}, "mapValues(Settings)"},
+        {"Graphviz.Names", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}, "mapKeys(Graphviz)"},
+        {"Graphviz.Values", {std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}, "mapValues(Graphviz)"}
     };
 }
 
@@ -267,6 +273,51 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
     }
     else
     {
+        columns[i++]->insertDefault();
+    }
+
+    if (graphviz && !graphviz->empty())
+    {
+        auto * column = columns[i++].get();
+        /// Convert ptr and make simple check
+#ifdef USE_COMMUNITY_MAP
+        auto * column_map = column ? &typeid_cast<ColumnMap &>(*column) : nullptr;
+        if (column_map)
+        {
+            auto & offsets = column_map->getNestedColumn().getOffsets();
+            auto & tuple_column = column_map->getNestedData();
+            auto & key_column = tuple_column.getColumn(0);
+            auto & value_column = tuple_column.getColumn(1);
+            size_t size = 0;
+            for (const auto& entry : *graphviz)
+            {
+                key_column.insertData(entry.first.c_str(), strlen(entry.first.c_str()));
+                value_column.insert(entry.second);
+                size++;
+            }
+
+            offsets.push_back((offsets.empty() ? 0 : offsets.back()) + size);
+        }
+#else
+        auto * column_map = column ? &typeid_cast<DB::ColumnByteMap &>(*column) : nullptr;
+        if (column_map)
+        {
+            auto & offsets = column_map->getOffsets();
+            auto & key_column = column_map->getKey();
+            auto & value_column = column_map->getValue();
+            size_t size = 0;
+            for (const auto& entry : *graphviz)
+            {
+                key_column.insertData(entry.first.c_str(), strlen(entry.first.c_str()));
+                value_column.insert(entry.second);
+                size++;
+            }
+
+            offsets.push_back((offsets.empty() ? 0 : offsets.back()) + size);
+        }
+#endif
+    }
+    else {
         columns[i++]->insertDefault();
     }
 

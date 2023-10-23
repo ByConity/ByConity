@@ -88,7 +88,7 @@ namespace ProcessListHelper
             case QueryTypeImpl::System:
                 return "System";
             case QueryTypeImpl::Proxy:
-                return "Proxy"; 
+                return "Proxy";
             default:
                 return "Unknown";
         }
@@ -102,7 +102,7 @@ namespace ProcessListHelper
                 return "Simple";
             case SubQueryTypeImpl::Complex:
                 return "Complex";
-            default:    
+            default:
                 return "Unknown";
         }
     }
@@ -221,6 +221,9 @@ protected:
     String query_rewrite_by_view;
 
     String pipeline_info;
+    /// for storing the graphs of ASTs, plans, and pipelines
+    /// [graph name, graphviz format string]
+    std::shared_ptr<std::vector<std::pair<String, String>>> graphviz;
 
 public:
 
@@ -283,6 +286,14 @@ public:
 
     QueryStatusInfo getInfo(bool get_thread_list = false, bool get_profile_events = false, bool get_settings = false) const;
 
+    void addGraphviz(const String& name, const String& graph) {
+        graphviz->emplace_back(name, graph);
+    }
+
+    std::shared_ptr<std::vector<std::pair<String, String>>> getGraphviz() const {
+        return graphviz;
+    }
+
     /// Copies pointers to in/out streams
     void setQueryStreams(const BlockIO & io);
 
@@ -317,6 +328,7 @@ public:
     /// Same as checkTimeLimit but it never throws
     [[nodiscard]] bool checkTimeLimitSoft();
     Int64 getUsedMemory() const { return thread_group == nullptr ? 0 : thread_group->memory_tracker.get(); }
+
 };
 
 

@@ -90,10 +90,20 @@ public:
 
     inline CnchBGThreadsMap * at(size_t type)
     {
-        auto *res = threads_array[type].get();
-        if (unlikely(!res))
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "CnchBGThread for type {} is not initialized", toString(static_cast<CnchBGThreadType>(type)));
-        return res;
+        try
+        {
+            auto * res = threads_array.at(type).get();
+            if (unlikely(!res))
+            {
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "CnchBGThread for type {} is not initialized.", toString(static_cast<CnchBGThreadType>(type)));
+            }
+            return res;
+        }
+        catch(...)
+        {
+            /// Show a better exception message.
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "CnchBGThread for type {} is not initialized. Maybe the enum CnchBGThread is mismatch.", toString(static_cast<CnchBGThreadType>(type)));
+        }
     }
 
     void cleanThread();

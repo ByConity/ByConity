@@ -31,11 +31,13 @@ namespace CnchBGThread
         PartGC = 1,
         MergeMutate = 2,
         Consumer = 3,
-        DedupWorker = 4,
-        Clustering = 5,
+        MemoryBuffer = 4, /// NOTE: Just reserved for compatibility.
+        DedupWorker = 5,
+        Clustering = 6,
+        MaterializedMySQL = 7,
         
         ServerMinType = PartGC,
-        ServerMaxType = Clustering,
+        ServerMaxType = MaterializedMySQL,
 
         GlobalGC = 20, /// reserve several entries
         TxnGC = 21,
@@ -94,6 +96,10 @@ constexpr auto toString(CnchBGThreadType type)
             return "TxnGCThread";
         case CnchBGThreadType::ResourceReport:
             return "ResourceReport";
+        case CnchBGThreadType::MemoryBuffer:
+            return "MemoryBuffer";
+        case CnchBGThreadType::MaterializedMySQL:
+            return "MaterializedMySQL";
     }
     __builtin_unreachable();
 }

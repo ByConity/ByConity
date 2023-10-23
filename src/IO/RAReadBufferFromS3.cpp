@@ -23,6 +23,7 @@
 #include <Common/ProfileEvents.h>
 #include <common/logger_useful.h>
 #include <common/scope_guard.h>
+#include <common/sleep.h>
 #include <IO/ReadBufferFromFileBase.h>
 #include <IO//RAReadBufferFromS3.h>
 
@@ -31,7 +32,7 @@ namespace ProfileEvents
     extern const Event ReadBufferFromS3Read;
     extern const Event ReadBufferFromS3ReadFailed;
     extern const Event ReadBufferFromS3ReadBytes;
-    extern const Event ReadBufferFromS3ReadMicro;
+    extern const Event ReadBufferFromS3ReadMicroseconds;
 }
 
 namespace DB
@@ -40,7 +41,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int S3_ERROR;
-    extern const int BAD_ARGUMENTS;
+    extern const int CANNOT_SEEK_THROUGH_FILE;
 }
 
 RAReadBufferFromS3::RAReadBufferFromS3(const std::shared_ptr<Aws::S3::S3Client>& client,
@@ -55,9 +56,11 @@ RAReadBufferFromS3::RAReadBufferFromS3(const std::shared_ptr<Aws::S3::S3Client>&
 
 bool RAReadBufferFromS3::nextImpl()
 {
-    auto sleep_time_with_backoff_milliseconds = std::chrono::milliseconds(100);
-    for (size_t attempt = 0; true; ++attempt)
+    size_t attempt = 0;
+    size_t sleep_ms = 100;
+    while (true)
     {
+        auto offset = reader_.offset();
         try
         {
             uint64_t readed = 0;
@@ -65,8 +68,7 @@ bool RAReadBufferFromS3::nextImpl()
                 Stopwatch watch;
                 ProfileEvents::increment(ProfileEvents::ReadBufferFromS3Read);
                 SCOPE_EXIT({
-                    auto time = watch.elapsedMicroseconds();
-                    ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadMicro, time);
+                    ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadMicroseconds, watch.elapsedMicroseconds());
                 });
 
                 readed = reader_.read(buffer().begin(), internalBuffer().size());
@@ -83,15 +85,16 @@ bool RAReadBufferFromS3::nextImpl()
 
             return readed > 0;
         }
-        catch (...)
+        catch (Exception & e)
         {
             ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadFailed, 1);
 
-            if (attempt >= read_retry_)
+            if (!S3::processReadException(e, reader_.logger(), reader_.bucket(), reader_.key(), offset, ++attempt)
+                || attempt >= read_retry_)
                 throw;
 
-            std::this_thread::sleep_for(sleep_time_with_backoff_milliseconds);
-            sleep_time_with_backoff_milliseconds *= 2;
+            sleepForMilliseconds(sleep_ms);
+            sleep_ms *= 2;
         }
     }
 }
@@ -99,10 +102,7 @@ bool RAReadBufferFromS3::nextImpl()
 off_t RAReadBufferFromS3::seek(off_t off, int whence)
 {
     if (whence != SEEK_SET)
-    {
-        throw Exception(fmt::format("ReadBufferFromS3::seek expects SEEK_SET as whence while reading {}",
-            reader_.key()), ErrorCodes::BAD_ARGUMENTS);
-    }
+        throw Exception("Only SEEK_SET mode is allowed.", ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
 
     off_t buffer_start_offset = reader_.offset() - static_cast<off_t>(working_buffer.size());
     if (hasPendingData() && off <= static_cast<off_t>(reader_.offset()) && off >= buffer_start_offset)

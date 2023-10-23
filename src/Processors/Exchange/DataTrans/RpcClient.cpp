@@ -18,15 +18,11 @@
 #include <errno.h>
 #include <brpc/channel.h>
 #include <brpc/controller.h>
+#include <fmt/core.h>
 #include <Common/Exception.h>
 
 namespace DB
 {
-namespace ErrorCodes
-{
-    extern const int BRPC_CANNOT_INIT_CHANNEL;
-    extern const int BRPC_EXCEPTION;
-}
 
 RpcClient::RpcClient(String host_port_, brpc::ChannelOptions * options)
     : log(&Poco::Logger::get("RpcClient")), host_port(std::move(host_port_)), brpc_channel(std::make_unique<brpc::Channel>())
@@ -50,7 +46,7 @@ void RpcClient::checkAliveWithController(const brpc::Controller & cntl) noexcept
     }
 }
 
-void RpcClient::assertController(const brpc::Controller & cntl)
+void RpcClient::assertController(const brpc::Controller & cntl, int error_code)
 {
     if (cntl.Failed())
     {
@@ -59,7 +55,8 @@ void RpcClient::assertController(const brpc::Controller & cntl)
         {
             ok_.store(false, std::memory_order_relaxed);
         }
-        throw Exception("RpcClient exception happen-" + std::to_string(err) + ":" + cntl.ErrorText(), ErrorCodes::BRPC_EXCEPTION);
+        throw Exception(
+            fmt::format("Fail to call {}, error code: {}, msg: {}", cntl.method()->full_name(), err, cntl.ErrorText()), error_code);
     }
     else
     {

@@ -1,16 +1,19 @@
 #include <chrono>
 #include <cstdint>
 #include <thread>
+#include <IO/S3Common.h>
 #include <IO/S3RemoteFSReader.h>
 #include <aws/core/utils/memory/stl/AWSStreamFwd.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/GetObjectResult.h>
+#include <common/scope_guard_safe.h>
+#include <common/sleep.h>
 #include <Poco/Logger.h>
 #include "Common/ProfileEvents.h"
 
 namespace ProfileEvents {
     extern const Event S3TrivialReaderReadCount;
-    extern const Event S3TrivialReaderReadMicro;
+    extern const Event S3TrivialReaderReadMicroseconds;
     extern const Event S3TrivialReaderReadBytes;
     extern const Event S3ReadAheadReaderReadCount;
     extern const Event S3ReadAheadReaderRemoteReadCount;
@@ -26,6 +29,7 @@ namespace ErrorCodes {
     extern const int CANNOT_SEEK_THROUGH_FILE;
     extern const int SEEK_POSITION_OUT_OF_BOUND;
     extern const int BAD_ARGUMENTS;
+    extern const int LOGICAL_ERROR;
 }
 
 S3TrivialReader::S3TrivialReader(const std::shared_ptr<Aws::S3::S3Client>& client,
@@ -39,14 +43,11 @@ uint64_t S3TrivialReader::read(char* buffer, uint64_t size) {
 
     Stopwatch watch;
     ProfileEvents::increment(ProfileEvents::S3TrivialReaderReadCount);
-    SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::S3TrivialReaderReadMicro, watch.elapsedMicroseconds());});
+    SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::S3TrivialReaderReadMicroseconds, watch.elapsedMicroseconds());});
 
     uint64_t readed = readFragment(buffer, current_offset_, size);
-
     ProfileEvents::increment(ProfileEvents::S3TrivialReaderReadBytes, readed);
-
     current_offset_ += readed;
-
     return readed;
 }
 
@@ -58,14 +59,20 @@ uint64_t S3TrivialReader::readFragment(char* buffer, uint64_t offset, uint64_t s
     req.SetKey(key_);
     req.SetRange(range);
 
+    std::optional<Aws::S3::Model::GetObjectResult> result;
+    bool all_data_read = false;
+    SCOPE_EXIT_SAFE({ S3::resetSessionIfNeeded(all_data_read, result); });
+
     Aws::S3::Model::GetObjectOutcome outcome = client_->GetObject(req);
 
     if (outcome.IsSuccess()) {
-        Aws::IOStream& stream = outcome.GetResult().GetBody();
+        result = outcome.GetResultWithOwnership();
+        Aws::IOStream & stream = result->GetBody();
         stream.read(buffer, size);
         size_t last_read_count = stream.gcount();
         if (!last_read_count) {
             if (stream.eof()) {
+                all_data_read = true;
                 return 0;
             }
 
@@ -75,7 +82,9 @@ uint64_t S3TrivialReader::readFragment(char* buffer, uint64_t offset, uint64_t s
 
             throw Exception("Unexpected state of istream", ErrorCodes::S3_ERROR);
         }
-
+        /// Read remaining bytes after the end of the payload for chunked encoding
+        stream.ignore(INT64_MAX);
+        all_data_read = true;
         return last_read_count;
     } else {
         if (outcome.GetError().GetResponseCode() == Aws::Http::HttpResponseCode::REQUESTED_RANGE_NOT_SATISFIABLE) {
@@ -99,47 +108,60 @@ S3ReadAheadReader::S3ReadAheadReader(const std::shared_ptr<Aws::S3::S3Client>& c
         logger_(logger), client_(client), bucket_(bucket), key_(key),
         read_expanded_times_(0), readed_bytes_on_current_reader_(0), current_offset_(0),
         reader_size_(min_read_size), reader_end_offset_(0),
-        reader_(std::make_unique<Aws::S3::Model::GetObjectResult>()),
-        hint_file_size_(std::nullopt) {
+        read_result_(std::nullopt),
+        reader_is_drained_(false) {
     if (read_expand_pct < 100) {
         throw Exception(fmt::format("Read expand ratio {} is less than 100", read_expand_pct),
             ErrorCodes::BAD_ARGUMENTS);
     }
 }
 
-uint64_t S3ReadAheadReader::read(char* buffer, uint64_t size) {
-    if (hint_file_size_.has_value() && current_offset_ >= hint_file_size_.value()) {
-        return 0;
+S3ReadAheadReader::~S3ReadAheadReader()
+{
+    try
+    {
+        S3::resetSessionIfNeeded(reader_is_drained_, read_result_);
     }
+    catch (...)
+    {
+        tryLogCurrentException(logger_);
+    }
+}
 
+uint64_t S3ReadAheadReader::read(char* buffer, uint64_t size)
+{
     Stopwatch watch;
     ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderReadCount);
     ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderExpectReadBytes, size);
     SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderReadMicro, watch.elapsedMicroseconds());});
 
-    if (current_offset_ == reader_end_offset_) {
+    if (current_offset_ == reader_end_offset_)
+    {
         updateBufferSize(size);
-
-        if (!refillBuffer()) {
+        resetReader();
+        if (!refillBuffer())
             return 0;
-        }
     }
 
+    if (!read_result_)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "no read_result in S3ReadAheadReader");
     return readFromBuffer(buffer, size);
 }
 
-void S3ReadAheadReader::updateBufferSize(uint64_t size) {
+void S3ReadAheadReader::updateBufferSize(uint64_t size)
+{
     uint64_t used_pct = reader_size_ == 0 ? 0 :
         100 * readed_bytes_on_current_reader_ / reader_size_;
 
-    readed_bytes_on_current_reader_ = 0;
-
-    if (used_pct >= seq_read_threshold_) {
-        if (read_expanded_times_ < max_read_expand_times_) {
+    if (used_pct >= seq_read_threshold_)
+    {
+        if (read_expanded_times_ < max_read_expand_times_)
+        {
             ++read_expanded_times_;
             reader_size_ = reader_size_ * read_expand_pct_ / 100;
         }
-    } else {
+    } else
+    {
         read_expanded_times_ = 0;
         reader_size_ = size;
     }
@@ -147,7 +169,8 @@ void S3ReadAheadReader::updateBufferSize(uint64_t size) {
     reader_size_ = std::max(reader_size_, std::max(size, min_read_size_));
 }
 
-bool S3ReadAheadReader::refillBuffer() {
+bool S3ReadAheadReader::refillBuffer()
+{
     ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderRemoteReadCount);
 
     assert(current_offset_ == reader_end_offset_
@@ -163,41 +186,42 @@ bool S3ReadAheadReader::refillBuffer() {
 
     Aws::S3::Model::GetObjectOutcome outcome = client_->GetObject(req);
 
-    if (outcome.IsSuccess()) {
-        *reader_ = outcome.GetResultWithOwnership();
-        uint64_t readed = reader_->GetContentLength();
-        reader_end_offset_ = current_offset_ + readed;
-
-        if (!hint_file_size_.has_value() && readed < reader_size_) {
-            hint_file_size_ = reader_end_offset_;
-        }
-
-        ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderReadBytes, readed);
-
+    if (outcome.IsSuccess())
+    {
+        read_result_ = outcome.GetResultWithOwnership();
+        /// It's ok for end offset to past file end because we don't use it to determine eof.
+        /// Why not use GetContentLength()? Because some object storage implementation use chunked encoding
+        /// for response, in which case there is no 'Content-Length' header in response.
+        reader_end_offset_ = current_offset_ + reader_size_;
         return true;
-    } else {
-        if (outcome.GetError().GetResponseCode() == Aws::Http::HttpResponseCode::REQUESTED_RANGE_NOT_SATISFIABLE) {
+    }
+    else
+    {
+        if (outcome.GetError().GetResponseCode() == Aws::Http::HttpResponseCode::REQUESTED_RANGE_NOT_SATISFIABLE)
             return false;
-        }
         throw S3::S3Exception(outcome.GetError(), fmt::format("read bucket = {}, key = {} failed!", bucket_, key_));
     }
 }
 
-uint64_t S3ReadAheadReader::readFromBuffer(char* buffer, uint64_t size) {
-    try {
-        Aws::IOStream& stream = reader_->GetBody();
+uint64_t S3ReadAheadReader::readFromBuffer(char* buffer, uint64_t size)
+{
+    try
+    {
+        Aws::IOStream& stream = read_result_->GetBody();
         stream.read(buffer, size);
         size_t last_read_count = stream.gcount();
 
-        if (!last_read_count) {
-            if (stream.eof()) {
+        if (!last_read_count)
+        {
+            if (stream.eof())
+            {
+                reader_is_drained_ = true;
                 return 0;
             }
 
-            if (stream.fail()) {
+            if (stream.fail())
                 throw Exception(fmt::format("Cannot read from input stream while reading {}",
                     key_), ErrorCodes::S3_ERROR);
-            }
 
             throw Exception(fmt::format("Unexpected state of input stream while reading {}",
                 key_), ErrorCodes::S3_ERROR);
@@ -205,55 +229,82 @@ uint64_t S3ReadAheadReader::readFromBuffer(char* buffer, uint64_t size) {
 
         readed_bytes_on_current_reader_ += last_read_count;
         current_offset_ += last_read_count;
+        if (current_offset_ == reader_end_offset_)
+        {
+            reader_is_drained_ = true;
+            /// Read remaining bytes after the end of the payload for chunked encoding
+            stream.ignore(INT64_MAX);
+        }
+        else if (stream.eof())
+        {
+            reader_is_drained_ = true;
+        }
+        ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderReadBytes, last_read_count);
         return last_read_count;
-    } catch (...) {
+    }
+    catch (...)
+    {
         // Read from source failed, reset reader
-        resetReader(current_offset_);
-
+        resetReaderAndSize(current_offset_);
         throw;
     }
 }
 
-uint64_t S3ReadAheadReader::seek(uint64_t offset) {
-    try {
-        if (offset >= current_offset_ && offset < reader_end_offset_) {
-            if (offset == current_offset_) {
+uint64_t S3ReadAheadReader::seek(uint64_t offset)
+{
+    if (offset == current_offset_)
+        return offset;
+
+    try
+    {
+        if (read_result_ && offset >= current_offset_ && offset < reader_end_offset_)
+        {
+            size_t bytes_to_skip = offset - current_offset_;
+
+            Aws::IOStream& stream = read_result_->GetBody();
+            stream.ignore(bytes_to_skip);
+            size_t last_read_count = stream.gcount();
+            ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderReadBytes, last_read_count);
+            if (last_read_count == bytes_to_skip)
+            {
+                current_offset_ = offset;
                 return offset;
             }
 
-            Aws::IOStream& stream = reader_->GetBody();
-            stream.ignore(offset - current_offset_);
-
-            size_t last_read_count = stream.gcount();
-
-            if (stream.eof()) {
-                throw Exception(fmt::format("Unexpected eof when seek to {} from {} "
-                    "with ignore, ignored count {}", offset, current_offset_,
-                    last_read_count), ErrorCodes::S3_ERROR);
+            if (stream.eof()) /// reach file end
+            {
+                reader_is_drained_ = true;
             }
-
-            if (stream.fail()) {
-                throw Exception(fmt::format("Failed to ignore data when seek to {} from {}",
-                    offset, current_offset_), ErrorCodes::S3_ERROR);
+            else
+            {
+                throw Exception(ErrorCodes::S3_ERROR,
+                    "Trying to ignore {} bytes from {}, but only ignored {} bytes. Bucket: {}, Key: {}",
+                    bytes_to_skip, current_offset_, last_read_count, bucket_, key_);
             }
-
-            current_offset_ = offset;
-            return offset;
         }
-
-        resetReader(offset);
-    } catch (...) {
-        resetReader(offset);
     }
+    catch (...)
+    {
+        tryLogCurrentException(logger_);
+    }
+    resetReaderAndSize(offset);
     return offset;
 }
 
-void S3ReadAheadReader::resetReader(uint64_t offset) {
-    read_expanded_times_ = 0;
+void S3ReadAheadReader::resetReader()
+{
+    S3::resetSessionIfNeeded(reader_is_drained_, read_result_);
+    read_result_ = std::nullopt;
+    reader_is_drained_ = false;
     readed_bytes_on_current_reader_ = 0;
-    current_offset_ = offset;
+}
+
+void S3ReadAheadReader::resetReaderAndSize(uint64_t offset)
+{
+    resetReader();
+    current_offset_ = reader_end_offset_ = offset;
+    read_expanded_times_ = 0;
     reader_size_ = min_read_size_;
-    reader_end_offset_ = offset;
 }
 
 S3RemoteFSReader::S3RemoteFSReader(std::unique_ptr<S3Reader> reader, size_t read_backoff_ms,
@@ -265,31 +316,34 @@ String S3RemoteFSReader::objectName() const {
     return reader_->key();
 }
 
-uint64_t S3RemoteFSReader::read(char* buffer, uint64_t size) {
+uint64_t S3RemoteFSReader::read(char * buffer, uint64_t size)
+{
     uint64_t total_readed = 0;
-    size_t read_tried = 0;
-    auto sleep_time_with_backoff_milliseconds = std::chrono::milliseconds(read_backoff_ms_);
+    size_t attempt = 0;
+    auto sleep_ms = read_backoff_ms_;
 
-    while (size > total_readed) {
-        try {
+    while (size > total_readed)
+    {
+        try
+        {
             uint64_t readed = reader_->read(buffer + total_readed, size - total_readed);
 
-            if (readed == 0) {
+            if (readed == 0)
                 break;
-            }
 
-            if (throttler_ != nullptr) {
+            if (throttler_ != nullptr)
                 throttler_->add(readed);
-            }
 
             total_readed += readed;
-        } catch (const Exception& e) {
-            if (read_tried++ >= read_retry_) {
+        }
+        catch (Exception & e)
+        {
+            if (!S3::processReadException(e, reader_->logger(), reader_->bucket(), reader_->key(), reader_->offset(), ++attempt)
+                || attempt >= read_retry_)
                 throw;
-            }
 
-            std::this_thread::sleep_for(sleep_time_with_backoff_milliseconds);
-            sleep_time_with_backoff_milliseconds *= 2;
+            sleepForMilliseconds(sleep_ms);
+            sleep_ms *= 2;
         }
     }
 

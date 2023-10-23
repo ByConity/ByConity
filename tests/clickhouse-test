@@ -596,7 +596,7 @@ def run_tests_array(all_tests_with_params):
                         open(stdout_file).read().split('\n')[:100])
                     status += '\n'
 
-                status += 'Database: ' + testcase_args.testcase_database
+                status += 'Database: ' + testcase_args.testcase_database if type(testcase_args) is not tuple else 'failed to create'
 
             elif stderr and stderr != '\n':
                 failures = 1
