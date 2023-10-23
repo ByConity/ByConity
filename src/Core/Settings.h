@@ -887,12 +887,13 @@ enum PreloadLevelSettings : UInt64
       "Whether to retry when worker failures are detected when allocating metadata during query execution.", \
       0) \
     M(Bool, enable_partition_prune, true, "prune partition based on where expression analysis.", 0) \
-    M(Bool, \
-      restore_table_expression_in_distributed, \
-      1, \
-      "restore table expressions in distributed query to pass current database to remote query.", \
-      0) \
-\
+    M(Bool, restore_table_expression_in_distributed, 1, "restore table expressions in distributed query to pass current database to remote query.", 0) \
+    \
+    /**  settings about bitmap index */\
+    M(Bool, enable_ab_index_optimization, true, "Optimize ab version by reading Bitmap", 0)\
+    M(Bool, enable_sync_build_bitmap, false, "Build bitmap index in sync mode", 0)\
+    M(Bool, enable_async_build_bitmap_in_attach, false, "Async build bitmap index in attach, it is a user config", 0)\
+    \
     /** Limits during query execution are part of the settings. \
       * Used to provide a more safe execution of queries from the user interface. \
       * Basically, limits are checked for each block (not every row). That is, the limits can be slightly violated. \
@@ -931,6 +932,9 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_rows_to_read_local, 0, "Limit max reading rows for each local shard. The same ", 0) \
     M(UInt64, max_bytes_to_read_local, 0, "Limit max reading bytes for each local shard.", 0) \
     M(OverflowMode, read_overflow_mode_local, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
+    \
+    /** Just for compatible, totally the same with settings above */ \
+    M(Bool, allow_experimental_multiple_joins_emulation, true, "Emulate multiple joins using subselects", 0) \
     \
     M(UInt64, max_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a query segment can consume.", 0) \
     M(UInt64, max_distributed_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a distribute query can consume.", 0) \
