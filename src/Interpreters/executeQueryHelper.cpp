@@ -103,8 +103,8 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
         Protocol::Secure::Disable);
     res.remote_execution_conn->setDefaultDatabase(context->getCurrentDatabase());
 
-    // PipelineExecutor requires block header, dry run it for complex query has cost, use another way first.
-    /*LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
+    // PipelineExecutor requires block header.
+    LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
     Block header;
     if (ast->as<ASTSelectWithUnionQuery>())
         header = InterpreterSelectWithUnionQuery(ast, context, SelectQueryOptions(QueryProcessingStage::Complete).analyze()).getSampleBlock();
@@ -121,20 +121,11 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     plan->addStep(std::move(read_from_remote));
     res.pipeline = std::move(
         *plan->buildQueryPipeline(QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
-    res.pipeline.addInterpreterContext(context);*/
+    res.pipeline.addInterpreterContext(context);
 
-    LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
-    auto remote_stream = std::make_shared<RemoteBlockInputStream>(*res.remote_execution_conn, query, Block(), context);
-    remote_stream->setPoolMode(PoolMode::GET_ONE);
-    remote_stream->enableServerForwarding();
-    res.in = std::move(remote_stream);
-
-    res.finish_callback = [proxy_txn, context](IBlockInputStream * stream_in, IBlockOutputStream *, QueryPipeline *, UInt64) {
+    res.finish_callback = [proxy_txn, context, remote_query_executor](IBlockInputStream *, IBlockOutputStream *, QueryPipeline *, UInt64) {
         /// Get the extended profile info which is mainly for INSERT SELECT/INSERT INFILE
-        auto * r_stream = dynamic_cast<RemoteBlockInputStream *>(stream_in);
-        if (r_stream)
-            context->setExtendedProfileInfo(r_stream->getExtendedProfileInfo());
-        // context->setExtendedProfileInfo(remote_query_executor->getExtendedProfileInfo());
+        context->setExtendedProfileInfo(remote_query_executor->getExtendedProfileInfo());
         if (proxy_txn)
             proxy_txn->setTransactionStatus(CnchTransactionStatus::Finished);
 
