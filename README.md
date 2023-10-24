@@ -5,7 +5,7 @@
 
 Byconity, an advanced database management system, is a derivative of ClickHouse DBMS, building upon the robust codebase from ClickHouse v21.8. However, Byconity's development path has since diverged, thanks in part to insights gained from Snowflake's architecture.
 
-Our key innovations include the introduction of a compute-storage separation architecture, a state-of-the-art query optimizer, a stateless worker, and a shared-storage framework. These enhancements, inspired by both ClickHouse's strength and Snowflake's innovative approach, offer substantial performance and scalability improvements.
+Our key innovations include the introduction of a compute-storage separation architecture, a state-of-the-art query optimizer, multiple stateless workers, and a shared-storage framework. These enhancements, inspired by both ClickHouse's strength and Snowflake's innovative approach, offer substantial performance and scalability improvements.
 
 We deeply appreciate the profound contributions from the ClickHouse team, with whom we had an early discussion to share our open-source vision and technical implementations. However, given the substantial architectural differences that emerged in our modifications, the ClickHouse team assessed that integrating these changes directly into the original ClickHouse project was not feasible. As a result, we decided to launch Byconity as an independent downstream open-source project. This approach preserves the integrity of both projects while offering distinct solutions for diverse database management needs.
 
