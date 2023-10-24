@@ -5,9 +5,9 @@
 
 Byconity, an advanced database management system, is a derivative of ClickHouse DBMS, building upon the robust codebase from ClickHouse v21.8. However, Byconity's development path has since diverged, thanks in part to insights gained from Snowflake's architecture.
 
-Our key innovations include the introduction of a compute-storage separation architecture, a state-of-the-art query optimizer, stateless worker, and a shared-storage framework. These enhancements, inspired by both ClickHouse's strength and Snowflake's innovative approach, offer substantial performance and scalability improvements.
+Our key innovations include the introduction of a compute-storage separation architecture, a state-of-the-art query optimizer, a stateless worker, and a shared-storage framework. These enhancements, inspired by both ClickHouse's strength and Snowflake's innovative approach, offer substantial performance and scalability improvements.
 
-We deeply appreciate the profound contributions from the ClickHouse team, with whom we had an early discussion to share our open-source vision and technical implementations. However, given the substantial architectural differences that emerged in our modifications, the ClickHouse team assessed that integrating these changes directly into the original ClickHouse project was not feasible. As a result, we decided to launch Byconity as an independent downstream open-source project. This approach preserves the integrity of both projects while offering distinct solutions for diverse database management needs.
+We deeply appreciate the profound contributions of the ClickHouse team, with whom we had an early discussion to share our open-source vision and technical implementations. However, given the substantial architectural differences that emerged in our modifications, the ClickHouse team assessed that integrating these changes directly into the original ClickHouse project was not feasible. As a result, we decided to launch Byconity as an independent downstream open-source project. This approach preserves the integrity of both projects while offering distinct solutions for diverse database management needs.
 
 
 **Query Large Scale Data with Speed and Precision**
@@ -28,15 +28,15 @@ Byconity is designed with a cloud-native approach, optimized to take full advant
 
 ## Build and Run ByConity
 
-The easiest way to build ByConity is built in [docker dev-env](https://github.com/ByConity/ByConity/tree/master/docker/debian/dev-env). If you build on your local machine, ByConity executable file depends on Foundation DB library `libfdb_c.so`. So in order to run it, we need to install the FoundationDB client package. This [link](https://apple.github.io/foundationdb/getting-started-linux.html) tells how to install. We can download client package from FoundationDB GitHub release pages, for example [here][foundationdb-client-library].
+The easiest way to build ByConity is built in [docker dev-env](https://github.com/ByConity/ByConity/tree/master/docker/debian/dev-env). If you build on your local machine, the ByConity executable file depends on the Foundation DB library `libfdb_c.so`. So to run it, we need to install the FoundationDB client package. This [link](https://apple.github.io/foundationdb/getting-started-linux.html) tells how to install. We can download the client package from FoundationDB GitHub release pages, for example [here][foundationdb-client-library].
 
-In case you want to build ByConity in metal machine, follow this [guide](https://github.com/ByConity/ByConity/tree/master/doc/build_in_metal_machine.md)
+In case you want to build ByConity in the metal machine, follow this [guide](https://github.com/ByConity/ByConity/tree/master/doc/build_in_metal_machine.md)
 
 [foundationdb-client-library]: https://github.com/apple/foundationdb/releases/tag/7.1.3
 
 Using [Docker Compose](./docker/docker-compose/README.md) would be convenient for running a ByConity cluster.
 
-## Useful Link
+## Useful Links
 
 - [Official Website](https://byconity.github.io/): has a quick high-level overview of ByConity on the home page.
 - [Documentation](https://byconity.github.io/docs/introduction/main-principle-concepts): introduce basic usage guide and tech deep dive.
