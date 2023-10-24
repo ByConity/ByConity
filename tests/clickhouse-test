@@ -571,7 +571,7 @@ def run_tests_array(all_tests_with_params):
             status += " - Timeout!\n"
             if stderr:
                 status += stderr
-            status += 'Database: ' + testcase_args.testcase_database
+            status += 'Database: ' + testcase_args.testcase_database if type(testcase_args) is not tuple else 'failed to create'
         else:
             if proc.returncode != 0:
                 failures = 1

@@ -26,6 +26,7 @@ default_profile: default
 default_database: default
 timezone: Asia/Shanghai
 mlock_executable: false
+enable_tenant_systemdb: false
 macros:
   "-incl": macros
   "-optional": true

@@ -29,7 +29,6 @@
 #include <unistd.h>
 #include <Access/AccessControlManager.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <Catalog/Catalog.h>
 #include <Common/Config/MetastoreConfig.h>
 #include <CloudServices/CnchServerServiceImpl.h>
 #include <CloudServices/CnchWorkerClientPools.h>
@@ -60,7 +59,6 @@
 #include <Interpreters/loadMetadata.h>
 #include <Interpreters/SQLBinding/SQLBindingCache.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
-#include <QueryPlan/Hints/registerHints.h>
 #include <QueryPlan/PlanCache.h>
 #include <Server/HTTP/HTTPServer.h>
 #include <Server/HTTPHandlerFactory.h>
@@ -125,8 +123,11 @@
 #include <common/logger_useful.h>
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
-#include "BrpcServerHolder.h"
 #include "MetricsTransmitter.h"
+#include "BrpcServerHolder.h"
+#include <Catalog/Catalog.h>
+#include <QueryPlan/Hints/registerHints.h>
+#include <Parsers/formatTenantDatabaseName.h>
 
 #include <CloudServices/CnchServerClientPool.h>
 
@@ -1704,6 +1705,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
 
         global_context->setEnableSSL(enable_ssl);
+
+        bool enable_tenant_systemdb = config().getBool("enable_tenant_systemdb", true);
+        setEnableTenantSystemDB(enable_tenant_systemdb);
 
         buildLoggers(config(), logger());
 

@@ -129,6 +129,7 @@ std::pair<PairInt64, CnchServerTopology> CnchTopologyMaster::getCurrentTopologyV
             res = std::make_pair(PairInt64{it->getInitialTime(), it->getTerm()}, *it);
             break;
         }
+        it++;
     }
     return res;
 }
