@@ -42,7 +42,7 @@ private:
 
 }
 
-void registerFunctionTcpPort(FunctionFactory & factory)
+REGISTER_FUNCTION(TcpPort)
 {
     factory.registerFunction<FunctionTcpPort>();
 }

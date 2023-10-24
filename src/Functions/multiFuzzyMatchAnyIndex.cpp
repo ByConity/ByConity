@@ -20,7 +20,7 @@ using FunctionMultiFuzzyMatchAnyIndex = FunctionsMultiStringFuzzySearch<
 
 }
 
-void registerFunctionMultiFuzzyMatchAnyIndex(FunctionFactory & factory)
+REGISTER_FUNCTION(MultiFuzzyMatchAnyIndex)
 {
     factory.registerFunction<FunctionMultiFuzzyMatchAnyIndex>();
 }

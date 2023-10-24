@@ -13,7 +13,7 @@ struct NameSimpleJSONExtractUInt   { static constexpr auto name = "simpleJSONExt
 using FunctionSimpleJSONExtractUInt = FunctionsStringSearch<ExtractParamImpl<ExtractNumericType<UInt64>>, NameSimpleJSONExtractUInt>;
 
 
-void registerFunctionVisitParamExtractUInt(FunctionFactory & factory)
+REGISTER_FUNCTION(VisitParamExtractUInt)
 {
     factory.registerFunction<FunctionVisitParamExtractUInt>();
     factory.registerFunction<FunctionSimpleJSONExtractUInt>();

@@ -46,7 +46,7 @@ public:
 
 }
 
-void registerFunctionBuildId(FunctionFactory & factory)
+REGISTER_FUNCTION(BuildId)
 {
     factory.registerFunction<FunctionBuildId>();
 }

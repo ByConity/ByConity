@@ -68,7 +68,7 @@ private:
     ContextPtr context;
 };
 
-void registerFunctionToSeconds(FunctionFactory & factory)
+REGISTER_FUNCTION(ToSeconds)
 {
     factory.registerFunction<FunctionToSeconds>(FunctionFactory::CaseInsensitive);
 }

@@ -78,7 +78,7 @@ private:
     }
 };
 
-void registerFunctionNextDay(FunctionFactory & factory)
+REGISTER_FUNCTION(NextDay)
 {
     factory.registerFunction<FunctionNextDay>();
     factory.registerAlias("next_day", NextDayImp::name);

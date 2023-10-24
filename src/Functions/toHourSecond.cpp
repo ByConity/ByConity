@@ -8,7 +8,7 @@ namespace DB
 {
 using FunctionToHourSecond = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToHourSecondImpl>;
 
-void registerFunctionToHourSecond(FunctionFactory & factory)
+REGISTER_FUNCTION(ToHourSecond)
 {
     factory.registerFunction<FunctionToHourSecond>();
     /// MysQL compatibility alias.

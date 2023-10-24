@@ -22,6 +22,7 @@
 #include <Columns/ColumnString.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/getLeastSupertype.h>
+#include <Functions/FunctionsConversion.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/GatherUtils/Algorithms.h>
@@ -33,7 +34,6 @@
 #include <common/map.h>
 #include <common/range.h>
 
-#include "Functions/FunctionsConversion.h"
 #include "formatString.h"
 
 namespace DB
@@ -250,7 +250,7 @@ private:
 
 }
 
-void registerFunctionConcat(FunctionFactory & factory)
+REGISTER_FUNCTION(Concat)
 {
     factory.registerFunction<ConcatOverloadResolver>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionConcatAssumeInjective>();

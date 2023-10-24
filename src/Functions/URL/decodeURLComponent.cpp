@@ -103,7 +103,7 @@ struct DecodeURLComponentImpl
 struct NameDecodeURLComponent { static constexpr auto name = "decodeURLComponent"; };
 using FunctionDecodeURLComponent = FunctionStringToString<DecodeURLComponentImpl, NameDecodeURLComponent>;
 
-void registerFunctionDecodeURLComponent(FunctionFactory & factory)
+REGISTER_FUNCTION(DecodeURLComponent)
 {
     factory.registerFunction<FunctionDecodeURLComponent>();
 }

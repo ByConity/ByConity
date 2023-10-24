@@ -123,7 +123,7 @@ private:
 
 }
 
-void registerFunctionBitmaskToList(FunctionFactory & factory)
+REGISTER_FUNCTION(BitmaskToList)
 {
     factory.registerFunction<FunctionBitmaskToList>();
 }

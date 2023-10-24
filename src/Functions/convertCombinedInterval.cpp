@@ -250,7 +250,7 @@ using FunctionConvertDayMinuteToMinute = ConvertCombinedInterval<ConvertDayMinut
 using FunctionConvertDayHourToHour = ConvertCombinedInterval<ConvertDayHourToHourImpl>;
 using FunctionConvertYearMonthToMonth = ConvertCombinedInterval<ConvertYearMonthToMonthImpl>;
 
-void registerFunctionConvertCombinedIntervals(FunctionFactory & factory)
+REGISTER_FUNCTION(ConvertCombinedIntervals)
 {
     factory.registerFunction<FunctionConvertHourSecondToSecond>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionConvertHourMinuteToMinute>(FunctionFactory::CaseInsensitive);

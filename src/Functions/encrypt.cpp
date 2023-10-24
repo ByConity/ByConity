@@ -21,7 +21,7 @@ struct EncryptImpl
 namespace DB
 {
 
-void registerFunctionEncrypt(FunctionFactory & factory)
+REGISTER_FUNCTION(Encrypt)
 {
     factory.registerFunction<FunctionEncrypt<EncryptImpl>>();
 }

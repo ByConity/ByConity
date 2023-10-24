@@ -25,7 +25,7 @@ struct YandexConsistentHashImpl
 
 using FunctionYandexConsistentHash = FunctionConsistentHashImpl<YandexConsistentHashImpl>;
 
-void registerFunctionYandexConsistentHash(FunctionFactory & factory)
+REGISTER_FUNCTION(YandexConsistentHash)
 {
     factory.registerFunction<FunctionYandexConsistentHash>();
 }

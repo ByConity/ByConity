@@ -19,7 +19,7 @@
 namespace DB
 {
 
-void registerFunctionsLogical(FunctionFactory & factory)
+REGISTER_FUNCTION(Logical)
 {
     factory.registerFunction<FunctionAnd>();
     factory.registerFunction<FunctionOr>();

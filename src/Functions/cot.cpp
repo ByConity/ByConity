@@ -21,7 +21,7 @@ namespace
     using FunctionCot = FunctionMathUnary<UnaryFunctionVectorized<CotName, cot>>;
 }
 
-void registerFunctionCot(FunctionFactory & factory)
+REGISTER_FUNCTION(Cot)
 {
     factory.registerFunction<FunctionCot>(FunctionFactory::CaseInsensitive);
 }

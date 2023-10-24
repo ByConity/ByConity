@@ -29,7 +29,7 @@ namespace DB
 
 using FunctionToStartOfTenMinutes = FunctionDateOrDateTimeToDateTimeOrDateTime64<ToStartOfTenMinutesImpl>;
 
-void registerFunctionToStartOfTenMinutes(FunctionFactory & factory)
+REGISTER_FUNCTION(ToStartOfTenMinutes)
 {
     factory.registerFunction<FunctionToStartOfTenMinutes>();
 }

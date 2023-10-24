@@ -47,5 +47,4 @@ public:
     size_t getNumberOfArguments() const override { return 3; }
 };
 
-void registerInternalFunctionDynamicFilter(FunctionFactory &);
 }

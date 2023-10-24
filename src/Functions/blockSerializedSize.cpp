@@ -65,7 +65,7 @@ public:
 
 }
 
-void registerFunctionBlockSerializedSize(FunctionFactory & factory)
+REGISTER_FUNCTION(BlockSerializedSize)
 {
     factory.registerFunction<FunctionBlockSerializedSize>();
 }

@@ -56,7 +56,7 @@ public:
 
 }
 
-void registerFunctionHostName(FunctionFactory & factory)
+REGISTER_FUNCTION(HostName)
 {
     factory.registerFunction<FunctionHostName>();
     factory.registerAlias("hostname", "hostName");

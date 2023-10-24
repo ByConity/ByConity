@@ -8,7 +8,7 @@ namespace DB
 using FunctionEquals = FunctionComparison<EqualsOp, NameEquals>;
 using FunctionBitEquals = FunctionComparison<EqualsOp, NameBitEquals, true>;
 
-void registerFunctionEquals(FunctionFactory & factory)
+REGISTER_FUNCTION(Equals)
 {
     factory.registerFunction<FunctionEquals>();
     factory.registerFunction<FunctionBitEquals>();

@@ -123,7 +123,7 @@ private:
 };
 
 
-void registerFunctionFile(FunctionFactory & factory)
+REGISTER_FUNCTION(File)
 {
     factory.registerFunction<FunctionFile>();
 }

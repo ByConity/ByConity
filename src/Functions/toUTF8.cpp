@@ -85,7 +85,7 @@ public:
     }
 };
 
-void registerFunctionToUTF8(FunctionFactory & factory)
+REGISTER_FUNCTION(ToUTF8)
 {
     factory.registerFunction<FunctionToUTF8>("TO_UTF8", FunctionFactory::CaseInsensitive);
 }

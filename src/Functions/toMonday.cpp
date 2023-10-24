@@ -29,7 +29,7 @@ namespace DB
 
 using FunctionToMonday = FunctionDateOrDateTimeToDateOrDate32<ToMondayImpl>;
 
-void registerFunctionToMonday(FunctionFactory & factory)
+REGISTER_FUNCTION(ToMonday)
 {
     factory.registerFunction<FunctionToMonday>();
 }

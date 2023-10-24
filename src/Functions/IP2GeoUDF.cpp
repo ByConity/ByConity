@@ -32,7 +32,7 @@ extern "C" {
 
 namespace DB
 {
-void registerFunctionIP2Geo(FunctionFactory & factory)
+REGISTER_FUNCTION(IP2Geo)
 {
     factory.registerFunction<IP2GeoUDF>(FunctionFactory::CaseInsensitive);
 }

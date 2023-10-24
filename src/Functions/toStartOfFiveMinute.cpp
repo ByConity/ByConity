@@ -29,7 +29,7 @@ namespace DB
 
 using FunctionToStartOfFiveMinute = FunctionDateOrDateTimeToDateTimeOrDateTime64<ToStartOfFiveMinuteImpl>;
 
-void registerFunctionToStartOfFiveMinute(FunctionFactory & factory)
+REGISTER_FUNCTION(ToStartOfFiveMinute)
 {
     factory.registerFunction<FunctionToStartOfFiveMinute>();
     factory.registerAlias("toStartOfFiveMinutes", FunctionToStartOfFiveMinute::name, FunctionFactory::CaseInsensitive);

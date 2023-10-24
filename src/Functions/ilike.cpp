@@ -26,7 +26,7 @@ using FunctionEscapeILike = FunctionsStringSearch<EscapeILikeImpl, NameEscapeILi
 
 }
 
-void registerFunctionILike(FunctionFactory & factory)
+REGISTER_FUNCTION(ILike)
 {
     factory.registerFunction<FunctionILike>();
     factory.registerFunction<FunctionEscapeILike>();

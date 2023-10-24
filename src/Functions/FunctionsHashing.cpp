@@ -27,7 +27,7 @@
 namespace DB
 {
 
-void registerFunctionsHashing(FunctionFactory & factory)
+REGISTER_FUNCTION(Hashing)
 {
 #if USE_SSL
     factory.registerFunction<FunctionHalfMD5>();

@@ -107,7 +107,7 @@ const char * FunctionPolygonsSymDifference<CartesianPoint>::name = "polygonsSymD
 template <>
 const char * FunctionPolygonsSymDifference<SphericalPoint>::name = "polygonsSymDifferenceSpherical";
 
-void registerFunctionPolygonsSymDifference(FunctionFactory & factory)
+REGISTER_FUNCTION(PolygonsSymDifference)
 {
     factory.registerFunction<FunctionPolygonsSymDifference<CartesianPoint>>();
     factory.registerFunction<FunctionPolygonsSymDifference<SphericalPoint>>();

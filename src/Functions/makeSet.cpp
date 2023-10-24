@@ -193,7 +193,7 @@ private:
     }
 };
 
-void registerFunctionMakeSet(FunctionFactory & factory)
+REGISTER_FUNCTION(MakeSet)
 {
     factory.registerFunction<FunctionMakeSet>(FunctionFactory::CaseInsensitive);
 }

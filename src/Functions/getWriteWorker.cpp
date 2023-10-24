@@ -121,7 +121,7 @@ using FunctionGetWriteWorker = FunctionGetWriteWorkerBase<NameGetWriteWorker, fa
 using FunctionGetWriteWorkers = FunctionGetWriteWorkerBase<NameGetWriteWorkers, true>;
 
 
-void registerFunctionGetWriteWorker(FunctionFactory & factory)
+REGISTER_FUNCTION(GetWriteWorker)
 {
     factory.registerFunction<FunctionGetWriteWorker>();
     factory.registerFunction<FunctionGetWriteWorkers>();

@@ -133,7 +133,7 @@ ColumnPtr FunctionModelEvaluate::executeImpl(const ColumnsWithTypeAndName & argu
     return res;
 }
 
-void registerFunctionsExternalModels(FunctionFactory & factory)
+REGISTER_FUNCTION(ExternalModels)
 {
     factory.registerFunction<FunctionModelEvaluate>();
 }

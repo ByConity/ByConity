@@ -71,7 +71,7 @@ private:
 };
 
 
-void registerFunctionGetHostWithPorts(FunctionFactory & factory)
+REGISTER_FUNCTION(GetHostWithPorts)
 {
     factory.registerFunction<FunctionGetHostWithPorts>();
 }

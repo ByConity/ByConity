@@ -4,7 +4,7 @@
 namespace DB
 {
 
-void registerFunctionsRuntimeFilter(FunctionFactory & factory)
+REGISTER_FUNCTION(RuntimeFilter)
 {
     factory.registerFunction<RuntimeFilterBloomFilterExists>();
 }

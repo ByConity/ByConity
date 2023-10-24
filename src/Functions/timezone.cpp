@@ -45,7 +45,7 @@ public:
 
 }
 
-void registerFunctionTimezone(FunctionFactory & factory)
+REGISTER_FUNCTION(Timezone)
 {
     factory.registerFunction<FunctionTimezone>();
     factory.registerAlias("timeZone", "timezone");

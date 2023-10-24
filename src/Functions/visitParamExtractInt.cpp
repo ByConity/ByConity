@@ -12,7 +12,7 @@ using FunctionVisitParamExtractInt = FunctionsStringSearch<ExtractParamImpl<Extr
 struct NameSimpleJSONExtractInt    { static constexpr auto name = "simpleJSONExtractInt"; };
 using FunctionSimpleJSONExtractInt = FunctionsStringSearch<ExtractParamImpl<ExtractNumericType<Int64>>, NameSimpleJSONExtractInt>;
 
-void registerFunctionVisitParamExtractInt(FunctionFactory & factory)
+REGISTER_FUNCTION(VisitParamExtractInt)
 {
     factory.registerFunction<FunctionVisitParamExtractInt>();
     factory.registerFunction<FunctionSimpleJSONExtractInt>();

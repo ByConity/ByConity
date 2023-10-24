@@ -31,10 +31,7 @@ public:
 
     size_t getNumberOfArguments() const override { return 1; }
     bool useDefaultImplementationForNulls() const override { return false; }
-    bool useDefaultImplementationForNothing() const override
-    {
-        return false;
-    }
+    bool useDefaultImplementationForNothing() const override { return false; }
     bool useDefaultImplementationForConstants() const override { return true; }
     ColumnNumbers getArgumentsThatDontImplyNullableReturnType(size_t /*number_of_arguments*/) const override { return {0}; }
 
@@ -56,7 +53,7 @@ public:
 
 }
 
-void registerFunctionAssumeNotNull(FunctionFactory & factory)
+REGISTER_FUNCTION(AssumeNotNull)
 {
     factory.registerFunction<FunctionAssumeNotNull>();
 }

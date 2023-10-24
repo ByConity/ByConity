@@ -562,7 +562,7 @@ namespace
     };
 }
 
-void registerFunctionMakeDate(FunctionFactory & factory)
+REGISTER_FUNCTION(MakeDate)
 {
     factory.registerFunction<FunctionMakeDate<MakeDateTraits>>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionMakeDate<MakeDate32Traits>>(FunctionFactory::CaseInsensitive);

@@ -85,7 +85,7 @@ public:
     }
 };
 
-void registerFunctionFindInSet(FunctionFactory & factory)
+REGISTER_FUNCTION(FindInSet)
 {
     factory.registerFunction<FunctionFindInSet>(FunctionFactory::CaseInsensitive);
 }

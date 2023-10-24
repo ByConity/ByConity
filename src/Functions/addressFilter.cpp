@@ -292,7 +292,7 @@ private:
     }
 };
 
-void registerFunctionMultiAddressFilter(FunctionFactory & factory)
+REGISTER_FUNCTION(MultiAddressFilter)
 {
     factory.registerFunction<FunctionMultiAddressFilter>();
     factory.registerFunction<FunctionMultiAddressMultiDistanceFilter>();

@@ -93,7 +93,7 @@ struct ArrayFirstImpl
 struct NameArrayFirst { static constexpr auto name = "arrayFirst"; };
 using FunctionArrayFirst = FunctionArrayMapped<ArrayFirstImpl, NameArrayFirst>;
 
-void registerFunctionArrayFirst(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayFirst)
 {
     factory.registerFunction<FunctionArrayFirst>();
 }

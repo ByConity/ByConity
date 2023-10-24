@@ -78,7 +78,7 @@ public:
     }
 };
 
-void registerFunctionLogWithBase(FunctionFactory & factory)
+REGISTER_FUNCTION(LogWithBase)
 {
     factory.registerFunction<FunctionLogWithBase>(FunctionFactory::CaseInsensitive);
 }

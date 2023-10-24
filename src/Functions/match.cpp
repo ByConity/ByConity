@@ -17,7 +17,7 @@ using FunctionMatch = FunctionsStringSearch<MatchImpl<false>, NameMatch>;
 
 }
 
-void registerFunctionMatch(FunctionFactory & factory)
+REGISTER_FUNCTION(Match)
 {
     factory.registerFunction<FunctionMatch>();
 }

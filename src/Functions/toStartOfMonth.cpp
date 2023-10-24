@@ -30,7 +30,7 @@ namespace DB
 using FunctionToStartOfMonth = FunctionDateOrDateTimeToDateOrDate32<ToStartOfMonthImpl>;
 using FunctionToStartOfBiMonth = FunctionDateOrDateTimeToDateOrDate32<ToStartOfBiMonthImpl>;
 
-void registerFunctionToStartOfMonth(FunctionFactory & factory)
+REGISTER_FUNCTION(ToStartOfMonth)
 {
     factory.registerFunction<FunctionToStartOfMonth>();
     factory.registerFunction<FunctionToStartOfBiMonth>();

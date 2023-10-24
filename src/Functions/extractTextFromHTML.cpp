@@ -350,7 +350,7 @@ public:
     }
 };
 
-void registerFunctionExtractTextFromHTML(FunctionFactory & factory)
+REGISTER_FUNCTION(ExtractTextFromHTML)
 {
     factory.registerFunction<FunctionExtractTextFromHTML>();
 }

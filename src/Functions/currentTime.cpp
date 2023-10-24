@@ -137,7 +137,7 @@ public:
 
 }
 
-void registerFunctionCurrentTime(FunctionFactory & factory)
+REGISTER_FUNCTION(CurrentTime)
 {
     factory.registerFunction<CurrentTimeOverloadResolver>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<CurrentTimeOverloadResolver>("LOCALTIME", FunctionFactory::CaseInsensitive);

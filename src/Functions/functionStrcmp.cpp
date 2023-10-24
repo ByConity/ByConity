@@ -137,7 +137,7 @@ namespace
 
 }
 
-void registerFunctionStrcmp(FunctionFactory & factory)
+REGISTER_FUNCTION(Strcmp)
 {
     factory.registerFunction<FunctionStrcmp>("strcmp", FunctionFactory::CaseInsensitive);
 }

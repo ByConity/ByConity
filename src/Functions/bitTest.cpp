@@ -38,7 +38,7 @@ using FunctionBitTest = BinaryArithmeticOverloadResolver<BitTestImpl, NameBitTes
 
 }
 
-void registerFunctionBitTest(FunctionFactory & factory)
+REGISTER_FUNCTION(BitTest)
 {
     factory.registerFunction<FunctionBitTest>();
 }

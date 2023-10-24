@@ -103,7 +103,7 @@ public:
 
 };
 
-void registerFunctionHashRange(FunctionFactory & factory)
+REGISTER_FUNCTION(HashRange)
 {
     factory.registerFunction<FunctionHashRange>();
 }

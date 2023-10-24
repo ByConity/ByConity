@@ -23,12 +23,12 @@ using FunctionPosition = FunctionsStringSearch<PositionImpl<PositionCaseSensitiv
 using FunctionLocate = FunctionsStringSearch<PositionImpl<PositionCaseSensitiveASCII>, NameLocate>;
 }
 
-void registerFunctionPosition(FunctionFactory & factory)
+REGISTER_FUNCTION(Position)
 {
     factory.registerFunction<FunctionPosition>(FunctionFactory::CaseInsensitive);
 }
 
-void registerFunctionLocate(FunctionFactory & factory)
+REGISTER_FUNCTION(Locate)
 {
     factory.registerFunction<FunctionLocate>(FunctionFactory::CaseInsensitive);
 }

@@ -316,7 +316,7 @@ private:
     ImplementationSelector<IFunction> selector;
 };
 
-void registerFunctionGeoDistance(FunctionFactory & factory)
+REGISTER_FUNCTION(GeoDistance)
 {
     geodistInit();
     factory.registerFunction<FunctionGeoDistance<Method::SPHERE_DEGREES>>();

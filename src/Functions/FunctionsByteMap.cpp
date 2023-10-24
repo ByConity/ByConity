@@ -563,7 +563,8 @@ struct ExtractMapWrapper
     }
 };
 
-void registerFunctionsByteMap(FunctionFactory & factory)
+#ifndef USE_COMMUNITY_MAP
+REGISTER_FUNCTION(ByteMap)
 {
     factory.registerFunction<FunctionMapElement>();
     factory.registerFunction<FunctionMapKeys>();
@@ -577,5 +578,6 @@ void registerFunctionsByteMap(FunctionFactory & factory)
     factory.registerFunction<FunctionExtractMapKey>();
     factory.registerFunction<FunctionExtractMapColumn>();
 }
+#endif
 
 }

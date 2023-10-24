@@ -57,7 +57,7 @@ private:
 };
 
 
-void registerFunctionPodName(FunctionFactory & factory)
+REGISTER_FUNCTION(PodName)
 {
     factory.registerFunction<FunctionPodName>();
 }

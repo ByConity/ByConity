@@ -54,7 +54,7 @@ public:
 
 }
 
-void registerFunctionToColumnTypeName(FunctionFactory & factory)
+REGISTER_FUNCTION(ToColumnTypeName)
 {
     factory.registerFunction<FunctionToColumnTypeName>();
 }

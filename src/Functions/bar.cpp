@@ -126,7 +126,7 @@ public:
 
 }
 
-void registerFunctionBar(FunctionFactory & factory)
+REGISTER_FUNCTION(Bar)
 {
     factory.registerFunction<FunctionBar>();
 }

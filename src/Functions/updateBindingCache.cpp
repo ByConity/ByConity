@@ -45,7 +45,7 @@ private:
     ContextPtr context;
 };
 
-void registerFunctionUpdateBindingCache(FunctionFactory & factory)
+REGISTER_FUNCTION(UpdateBindingCache)
 {
     factory.registerFunction<FunctionUpdateBindingCache>();
 }

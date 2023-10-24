@@ -153,7 +153,7 @@ public:
     }
 };
 
-void registerFunctionBitHammingDistance(FunctionFactory & factory)
+REGISTER_FUNCTION(BitHammingDistance)
 {
     factory.registerFunction<FunctionBitHammingDistance>();
 }

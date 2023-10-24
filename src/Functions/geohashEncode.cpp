@@ -132,7 +132,7 @@ public:
 
 }
 
-void registerFunctionGeohashEncode(FunctionFactory & factory)
+REGISTER_FUNCTION(GeohashEncode)
 {
     factory.registerFunction<FunctionGeohashEncode>();
 }

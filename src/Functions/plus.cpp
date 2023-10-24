@@ -47,7 +47,7 @@ struct PlusImpl
 struct NamePlus { static constexpr auto name = "plus"; };
 using FunctionPlus = BinaryArithmeticOverloadResolver<PlusImpl, NamePlus>;
 
-void registerFunctionPlus(FunctionFactory & factory)
+REGISTER_FUNCTION(Plus)
 {
     factory.registerFunction<FunctionPlus>();
 }

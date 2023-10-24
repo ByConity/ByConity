@@ -8,7 +8,7 @@ namespace DB
 {
 using FunctionToDaySecond = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToDaySecondImpl>;
 
-void registerFunctionToDaySecond(FunctionFactory & factory)
+REGISTER_FUNCTION(ToDaySecond)
 {
     factory.registerFunction<FunctionToDaySecond>();
     /// MysQL compatibility alias.

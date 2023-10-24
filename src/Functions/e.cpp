@@ -16,7 +16,7 @@ using FunctionE = FunctionMathConstFloat64<EImpl>;
 
 }
 
-void registerFunctionE(FunctionFactory & factory)
+REGISTER_FUNCTION(E)
 {
     factory.registerFunction<FunctionE>();
 }

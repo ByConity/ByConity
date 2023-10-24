@@ -157,7 +157,7 @@ private:
     }
 };
 
-void registerFunctionSplitPart(FunctionFactory & factory)
+REGISTER_FUNCTION(SplitPart)
 {
     factory.registerFunction<FunctionSplitPart>(FunctionFactory::CaseInsensitive);
 }

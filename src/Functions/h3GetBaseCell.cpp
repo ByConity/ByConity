@@ -70,7 +70,7 @@ public:
 
 }
 
-void registerFunctionH3GetBaseCell(FunctionFactory & factory)
+REGISTER_FUNCTION(H3GetBaseCell)
 {
     factory.registerFunction<FunctionH3GetBaseCell>();
 }

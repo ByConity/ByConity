@@ -112,7 +112,7 @@ namespace DB
         }
     };
 
-    void registerFunctionPartitionStatus(FunctionFactory & factory)
+    REGISTER_FUNCTION(PartitionStatus)
     {
         factory.registerFunction<FunctionPartitionStatus>();
     }

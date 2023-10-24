@@ -45,7 +45,7 @@ template <> struct FunctionUnaryArithmeticMonotonicity<NameNegate>
     }
 };
 
-void registerFunctionNegate(FunctionFactory & factory)
+REGISTER_FUNCTION(Negate)
 {
     factory.registerFunction<FunctionNegate>();
 }

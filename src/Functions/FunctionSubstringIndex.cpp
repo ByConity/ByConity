@@ -141,7 +141,7 @@ public:
     }
 };
 
-void registerFunctionSubstringIndex(FunctionFactory & factory)
+REGISTER_FUNCTION(SubstringIndex)
 {
     factory.registerFunction<FunctionSubstringIndex>(FunctionFactory::CaseInsensitive);
 }

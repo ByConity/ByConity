@@ -130,7 +130,7 @@ public:
 };
 
 
-void registerFunctionArrayResize(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayResize)
 {
     factory.registerFunction<FunctionArrayResize>();
 }

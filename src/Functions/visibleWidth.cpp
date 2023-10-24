@@ -74,7 +74,7 @@ public:
 };
 
 
-void registerFunctionVisibleWidth(FunctionFactory & factory)
+REGISTER_FUNCTION(VisibleWidth)
 {
     factory.registerFunction<FunctionVisibleWidth>();
 }

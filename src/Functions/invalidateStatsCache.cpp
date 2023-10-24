@@ -27,7 +27,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_TABLE;
 }
 
-void registerFunctionInvalidateStatsCache(FunctionFactory & factory)
+REGISTER_FUNCTION(InvalidateStatsCache)
 {
     factory.registerFunction<FunctionInvalidateStatsCache>();
 }

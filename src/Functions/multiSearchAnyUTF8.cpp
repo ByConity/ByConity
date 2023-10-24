@@ -17,7 +17,7 @@ using FunctionMultiSearchUTF8 = FunctionsMultiStringSearch<MultiSearchImpl<Posit
 
 }
 
-void registerFunctionMultiSearchAnyUTF8(FunctionFactory & factory)
+REGISTER_FUNCTION(MultiSearchAnyUTF8)
 {
     factory.registerFunction<FunctionMultiSearchUTF8>();
 }

@@ -993,7 +993,7 @@ public:
 
 }
 
-void registerFunctionIf(FunctionFactory & factory)
+REGISTER_FUNCTION(If)
 {
     factory.registerFunction<FunctionIf>(FunctionFactory::CaseInsensitive);
 }

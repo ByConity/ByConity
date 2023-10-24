@@ -144,7 +144,7 @@ private:
     }
 };
 
-void registerFunctionElt(FunctionFactory & factory)
+REGISTER_FUNCTION(Elt)
 {
     factory.registerFunction<FunctionELT>(FunctionFactory::CaseInsensitive);
 }
