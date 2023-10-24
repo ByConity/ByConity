@@ -904,7 +904,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                 context->getHostWithPorts().toDebugString());
             if (!host_ports.empty() && !isLocalServer(host_ports.getRPCAddress(), std::to_string(context->getRPCPort())))
             {
-                String query = String(begin, begin + std::min(end - begin, static_cast<ptrdiff_t>(max_query_size)));
+                size_t query_size = (max_query_size == 0) ? (end - begin) :  std::min(end - begin, static_cast<ptrdiff_t>(max_query_size));
+                String query = String(begin, begin + query_size);
                 LOG_DEBUG(
                     &Poco::Logger::get("executeQuery"), "Will reroute query {} to {}", query, host_ports.toDebugString());
                 context->initializeExternalTablesIfSet();
