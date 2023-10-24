@@ -28,6 +28,7 @@
 #include <Storages/registerStorages.h>
 #include <loggers/OwnFormattingChannel.h>
 #include <Poco/ConsoleChannel.h>
+#include <Poco/Environment.h>
 #include <Poco/FileChannel.h>
 #include <Poco/FormattingChannel.h>
 #include <Poco/Logger.h>
@@ -121,9 +122,22 @@ int mainEntryClickhousePartToolkit(int argc, char ** argv)
     split_channel->addChannel(ff_channel);
 
     Poco::Logger::root().setChannel(split_channel);
-    Poco::Logger::root().setLevel("debug");
+
+    String log_level = "debug";
+
+    try
+    {
+        log_level = Poco::Environment::get("LOG_LEVEL", "debug");
+    }
+    catch (...)
+    {
+    }
 
     Poco::Logger * log = &Poco::Logger::get("part-toolkit");
+
+    LOG_INFO(log, "Logger level: {}", log_level);
+
+    Poco::Logger::root().setLevel(log_level);
 
     if (argc < 2)
     {
