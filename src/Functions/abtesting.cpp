@@ -291,24 +291,10 @@ public:
     }
 };
 
-void registerFunctionBayesAB(FunctionFactory & factory)
+REGISTER_FUNCTION(BayesAB)
 {
     factory.registerFunction<FunctionBayesAB>();
 }
 
 }
-
-#else
-
-namespace DB
-{
-
-class FunctionFactory;
-
-void registerFunctionBayesAB(FunctionFactory & /* factory */)
-{
-}
-
-}
-
 #endif

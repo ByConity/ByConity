@@ -102,7 +102,7 @@ private:
     }
 };
 
-void registerFunctionConvertTz(FunctionFactory & factory)
+REGISTER_FUNCTION(ConvertTz)
 {
     factory.registerFunction<FunctionConvertTz>(FunctionFactory::CaseInsensitive);
 }

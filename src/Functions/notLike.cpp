@@ -23,7 +23,7 @@ using FunctionEscapeNotLike = FunctionsStringSearch<EscapeMatchImpl<true, true>,
 
 }
 
-void registerFunctionNotLike(FunctionFactory & factory)
+REGISTER_FUNCTION(NotLike)
 {
     factory.registerFunction<FunctionNotLike>();
     factory.registerFunction<FunctionEscapeNotLike>();

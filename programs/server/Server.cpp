@@ -1085,7 +1085,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Size of cache for marks (index of MergeTree family of tables). It is mandatory.
     size_t mark_cache_size = config().getUInt64("mark_cache_size");
     if (!mark_cache_size)
-        LOG_ERROR(log, "Too low mark cache size will lead to severe performance degradation.");
+        LOG_ERROR(log, "Too low mark cache size will lead to server performance degradation.");
     if (mark_cache_size > max_cache_size)
     {
         mark_cache_size = max_cache_size;
@@ -1210,7 +1210,19 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Disk cache for unique key index
-    size_t unique_key_index_file_cache_size = config().getUInt64("unique_key_index_disk_cache_max_bytes", 53687091200); /// 50GB
+    size_t uki_disk_cache_max_bytes = 50 * 1024 * 1024 * 1024; // 50GB
+    for (const auto & [name, disk] : global_context->getDisksMap())
+    {
+        if (disk->getType() == DiskType::Type::Local && disk->getPath() == global_context->getPath())
+        {
+            Poco::File disk_path(disk->getPath());
+            if (!disk_path.canRead() || !disk_path.canWrite())
+                throw Exception("There is no RW access to disk " + name + " (" + disk->getPath() + ")", ErrorCodes::PATH_ACCESS_DENIED);
+            uki_disk_cache_max_bytes = std::min<size_t>(0.25 * disk->getAvailableSpace(), uki_disk_cache_max_bytes);
+            break;
+        }
+    }
+    size_t unique_key_index_file_cache_size = config().getUInt64("unique_key_index_disk_cache_max_bytes", uki_disk_cache_max_bytes);
     global_context->setUniqueKeyIndexFileCache(unique_key_index_file_cache_size);
 
 #if USE_EMBEDDED_COMPILER

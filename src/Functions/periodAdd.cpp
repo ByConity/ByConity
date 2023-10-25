@@ -122,7 +122,7 @@ private:
     }
 };
 
-void registerFunctionPeriodAdd(FunctionFactory & factory)
+REGISTER_FUNCTION(PeriodAdd)
 {
     factory.registerFunction<FunctionPeriodAdd>(FunctionFactory::CaseInsensitive);
 }

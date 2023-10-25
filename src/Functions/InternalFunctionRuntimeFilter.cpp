@@ -5,7 +5,7 @@
 namespace DB
 {
 
-void registerInternalFunctionRuntimeFilter(FunctionFactory & factory)
+REGISTER_FUNCTION(InternalFunctionRuntimeFilter)
 {
     factory.registerFunction<InternalFunctionRuntimeFilter>();
 }

@@ -153,7 +153,7 @@ struct ArrayCompactImpl
 struct NameArrayCompact { static constexpr auto name = "arrayCompact"; };
 using FunctionArrayCompact = FunctionArrayMapped<ArrayCompactImpl, NameArrayCompact>;
 
-void registerFunctionArrayCompact(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayCompact)
 {
     factory.registerFunction<FunctionArrayCompact>();
 }

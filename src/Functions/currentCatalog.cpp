@@ -49,7 +49,7 @@ public:
 
 }
 
-void registerFunctionCurrentCatalog(FunctionFactory & factory)
+REGISTER_FUNCTION(CurrentCatalog)
 {
     factory.registerFunction<FunctionCurrentCatalog>();
     factory.registerFunction<FunctionCurrentCatalog>("CATALOG", FunctionFactory::CaseInsensitive);

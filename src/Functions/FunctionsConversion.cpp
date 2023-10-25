@@ -26,9 +26,7 @@
 namespace DB
 {
 
-void registerFunctionFixedString(FunctionFactory & factory);
-
-void registerFunctionsConversion(FunctionFactory & factory)
+REGISTER_FUNCTION(Conversion)
 {
     factory.registerFunction<FunctionToUInt8>();
     factory.registerFunction<FunctionToUInt16>();
@@ -66,7 +64,6 @@ void registerFunctionsConversion(FunctionFactory & factory)
     factory.registerFunction<FunctionToUUID>();
     factory.registerFunction<FunctionToString>();
 
-    registerFunctionFixedString(factory);
 
     factory.registerFunction<FunctionToUnixTimestamp>();
     factory.registerAlias("unix_timestamp", NameToUnixTimestamp::name, FunctionFactory::CaseInsensitive);

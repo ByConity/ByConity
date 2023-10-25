@@ -248,7 +248,7 @@ public:
     }
 };
 
-void registerFunctionDtsPartition(FunctionFactory & factory)
+REGISTER_FUNCTION(DtsPartition)
 {
     factory.registerFunction<FunctionDtsPartition>();
 }

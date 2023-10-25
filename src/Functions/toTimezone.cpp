@@ -62,7 +62,7 @@ public:
 
 }
 
-void registerFunctionToTimeZone(FunctionFactory & factory)
+REGISTER_FUNCTION(ToTimeZone)
 {
     factory.registerFunction<FunctionToTimezone>();
     factory.registerAlias("toTimeZone", "toTimezone");

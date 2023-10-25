@@ -76,7 +76,7 @@ public:
     }
 };
 
-void registerFunctionArrayWithConstant(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayWithConstant)
 {
     factory.registerFunction<FunctionArrayWithConstant>();
 }

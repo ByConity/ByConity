@@ -180,7 +180,7 @@ private:
     }
 };
 
-void registerFunctionExportSet(FunctionFactory & factory)
+REGISTER_FUNCTION(ExportSet)
 {
     factory.registerFunction<FunctionExportSet>(FunctionFactory::CaseInsensitive);
 }

@@ -45,7 +45,7 @@ public:
 
 }
 
-void registerFunctionRandCanonical(FunctionFactory & factory)
+REGISTER_FUNCTION(RandCanonical)
 {
     factory.registerFunction<FunctionCanonicalRand>();
     factory.registerAlias("randZeroToOne", "randCanonical", FunctionFactory::CaseInsensitive);

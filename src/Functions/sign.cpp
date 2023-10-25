@@ -39,7 +39,7 @@ struct FunctionUnaryArithmeticMonotonicity<NameSign>
     static IFunction::Monotonicity get(const Field &, const Field &) { return {true, true, false}; }
 };
 
-void registerFunctionSign(FunctionFactory & factory)
+REGISTER_FUNCTION(Sign)
 {
     factory.registerFunction<FunctionSign>(FunctionFactory::CaseInsensitive);
 }

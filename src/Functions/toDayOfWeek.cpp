@@ -9,7 +9,7 @@ namespace DB
 using FunctionToDayOfWeek = FunctionCustomWeekToSomething<DataTypeUInt8, ToDayOfWeekImpl>;
 using FunctionToDayOfWeekMySQL = FunctionCustomWeekToSomething<DataTypeUInt8, ToDayOfWeekMySQLImpl>;
 
-void registerFunctionToDayOfWeek(FunctionFactory & factory)
+REGISTER_FUNCTION(ToDayOfWeek)
 {
     factory.registerFunction<FunctionToDayOfWeek>(FunctionFactory::CaseInsensitive);
 

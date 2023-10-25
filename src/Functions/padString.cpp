@@ -326,7 +326,7 @@ namespace
     };
 }
 
-void registerFunctionPadString(FunctionFactory & factory)
+REGISTER_FUNCTION(PadString)
 {
     factory.registerFunction<FunctionPadString<false, false>>(); /// leftPad
     factory.registerFunction<FunctionPadString<false, true>>();  /// leftPadUTF8

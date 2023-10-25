@@ -157,7 +157,7 @@ size_t FunctionJSONHelpers::calculateMaxSize(const ColumnString::Offsets & offse
 }
 
 
-void registerFunctionsJSON(FunctionFactory & factory)
+REGISTER_FUNCTION(JSON)
 {
     factory.registerFunction<FunctionJSON<NameJSONHas, JSONHasImpl>>();
     factory.registerFunction<FunctionJSON<NameIsValidJSON, IsValidJSONImpl>>();

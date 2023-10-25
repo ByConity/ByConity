@@ -66,7 +66,7 @@ public:
 };
 
 
-void registerFunctionHost(FunctionFactory & factory)
+REGISTER_FUNCTION(Host)
 {
     factory.registerFunction<FunctionHost>();
 }

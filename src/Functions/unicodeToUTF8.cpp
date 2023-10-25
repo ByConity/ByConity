@@ -160,7 +160,7 @@ struct UnicodeToUTF8AllName
     static constexpr auto name = "unicodeToUTF8All";
 };
 
-void registerFunctionUnicodeToUTF8(FunctionFactory & factory)
+REGISTER_FUNCTION(UnicodeToUTF8)
 {
     factory.registerFunction<FunctionUnicodeToUTF8<UnicodeToUTF8Name, false>>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionUnicodeToUTF8<UnicodeToUTF8AllName, true>>(FunctionFactory::CaseInsensitive);

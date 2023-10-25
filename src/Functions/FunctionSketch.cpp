@@ -14,7 +14,7 @@ namespace ErrorCodes
 }
 
 
-void registerFunctionSketch(FunctionFactory & factory)
+REGISTER_FUNCTION(Sketch)
 {
     factory.registerFunction<FunctionQuantilesSketch>("doubleQuantilesSketchEstimate", FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionHLLSketch>("doubleHllSketchEstimate", FunctionFactory::CaseInsensitive);

@@ -106,7 +106,7 @@ public:
 
 }
 
-void registerFunctionToday(FunctionFactory & factory)
+REGISTER_FUNCTION(Today)
 {
     factory.registerFunction<TodayOverloadResolver>();
     factory.registerAlias("CURRENT_DATE", TodayOverloadResolver::name, FunctionFactory::CaseInsensitive);

@@ -259,7 +259,7 @@ private:
     using FunctionAscii = FunctionsCharCoding<AsciiImpl, NameAscii>;
     using FunctionOrd = FunctionsCharCoding<OrdImpl, NameOrd>;
 
-    void registerFunctionCharCoding(FunctionFactory & factory)
+    REGISTER_FUNCTION(CharCoding)
     {
         factory.registerFunction<FunctionAscii>(FunctionFactory::CaseInsensitive);
         factory.registerFunction<FunctionOrd>(FunctionFactory::CaseInsensitive);

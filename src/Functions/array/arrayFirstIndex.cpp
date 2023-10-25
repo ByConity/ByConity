@@ -81,7 +81,7 @@ struct ArrayFirstIndexImpl
 struct NameArrayFirstIndex { static constexpr auto name = "arrayFirstIndex"; };
 using FunctionArrayFirstIndex = FunctionArrayMapped<ArrayFirstIndexImpl, NameArrayFirstIndex>;
 
-void registerFunctionArrayFirstIndex(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayFirstIndex)
 {
     factory.registerFunction<FunctionArrayFirstIndex>();
 }

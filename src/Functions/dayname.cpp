@@ -150,7 +150,7 @@ public:
     }
 };
 
-void registerFunctionDayName(FunctionFactory & factory)
+REGISTER_FUNCTION(DayName)
 {
     factory.registerFunction<FunctionDayName>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionMonthName>(FunctionFactory::CaseInsensitive);

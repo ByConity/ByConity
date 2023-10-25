@@ -216,7 +216,7 @@ public:
 
 };
 
-void registerFunctionArraySetGet(FunctionFactory & factory)
+REGISTER_FUNCTION(ArraySetGet)
 {
     factory.registerFunction<FunctionArraySetGet>();
 }

@@ -1187,7 +1187,7 @@ ColumnPtr FunctionArrayElement::perform(const ColumnsWithTypeAndName & arguments
 }
 
 
-void registerFunctionArrayElement(FunctionFactory & factory)
+REGISTER_FUNCTION(ArrayElement)
 {
     factory.registerFunction<FunctionArrayElement>();
 }

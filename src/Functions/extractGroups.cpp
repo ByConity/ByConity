@@ -106,7 +106,7 @@ public:
 
 }
 
-void registerFunctionExtractGroups(FunctionFactory & factory)
+REGISTER_FUNCTION(ExtractGroups)
 {
     factory.registerFunction<FunctionExtractGroups>();
 }

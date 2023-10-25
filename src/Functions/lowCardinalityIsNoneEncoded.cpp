@@ -65,7 +65,7 @@ public:
 };
 
 
-void registerFunctionLowCardinalityIsNoneEncoded(FunctionFactory & factory)
+REGISTER_FUNCTION(LowCardinalityIsNoneEncoded)
 {
     factory.registerFunction<FunctionLowCardinalityIsNoneEncoded>();
 }

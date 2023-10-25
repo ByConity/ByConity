@@ -86,7 +86,7 @@ private:
 
 }
 
-void registerFunctionGlobalVariable(FunctionFactory & factory)
+REGISTER_FUNCTION(GlobalVariable)
 {
     factory.registerFunction<FunctionGlobalVariable>();
 }

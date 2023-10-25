@@ -100,7 +100,7 @@ public:
     }
 };
 
-void registerFunctionField(FunctionFactory & factory)
+REGISTER_FUNCTION(Field)
 {
     factory.registerFunction<FunctionField>(FunctionFactory::CaseInsensitive);
 }

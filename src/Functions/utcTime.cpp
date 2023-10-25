@@ -60,7 +60,7 @@ private:
     ContextPtr context;
 };
 
-void registerFunctionUTCTime(FunctionFactory & factory)
+REGISTER_FUNCTION(UTCTime)
 {
     factory.registerFunction<FunctionUTCTime>(FunctionFactory::CaseInsensitive);
 }

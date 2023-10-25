@@ -74,7 +74,7 @@ private:
 };
 
 
-void registerFunctionGetEnv(FunctionFactory & factory)
+REGISTER_FUNCTION(GetEnv)
 {
     factory.registerFunction<FunctionGetEnv>();
 }

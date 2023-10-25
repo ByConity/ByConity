@@ -114,7 +114,7 @@ public:
 
 }
 
-void registerFunctionThrowIf(FunctionFactory & factory)
+REGISTER_FUNCTION(ThrowIf)
 {
     factory.registerFunction<FunctionThrowIf>();
 }

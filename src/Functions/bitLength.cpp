@@ -53,7 +53,7 @@ struct NameBitLength
 
 using FunctionBitLength = FunctionStringOrArrayToT<BitLengthImpl, NameBitLength, UInt64>;
 
-void registerFunctionBitLength(FunctionFactory & factory)
+REGISTER_FUNCTION(BitLength)
 {
     factory.registerFunction<FunctionBitLength>(FunctionFactory::CaseInsensitive);
 }

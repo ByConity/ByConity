@@ -243,7 +243,12 @@ void PartWriter::clean()
     bool clean_meta = task_type == DB::S3CleanTaskInfo::META || task_type == DB::S3CleanTaskInfo::ALL;
     bool clean_data = task_type == DB::S3CleanTaskInfo::DATA || task_type == DB::S3CleanTaskInfo::ALL;
     LOG_DEBUG(log, "Clean meta: {}, clean data: {}", clean_meta, clean_data);
-    DB::S3PartsAttachMeta::Cleaner cleaner(parts_attach_meta, clean_meta, clean_data, 16);
+    constexpr const char * s3_clean_concurrency_setting = "s3_clean_concurrency";
+    UInt64 s3_clean_concurrency
+        = user_settings.count(s3_clean_concurrency_setting) ? user_settings[s3_clean_concurrency_setting].safeGet<int>() : 16;
+    s3_clean_concurrency = std::max(s3_clean_concurrency, 16ul);
+
+    DB::S3PartsAttachMeta::Cleaner cleaner(parts_attach_meta, clean_meta, clean_data, s3_clean_concurrency);
     cleaner.clean();
 }
 }

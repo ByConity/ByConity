@@ -335,7 +335,8 @@ Block InterpreterKillQueryQuery::getSelectResult(const String & columns, const S
     if (where_expression)
         select_query += " WHERE " + queryToString(where_expression);
 
-    auto stream = executeQuery(select_query, getContext(), true).getInputStream();
+    auto block_io = executeQuery(select_query, getContext(), true);
+    auto stream = block_io.getInputStream();
     Block res = stream->read();
 
     if (res && stream->read())

@@ -8,7 +8,7 @@ namespace DB
 {
 using FunctionToYearMonth = FunctionDateOrDateTimeToSomething<DataTypeUInt32, ToYearMonthImpl>;
 
-void registerFunctionToYearMonth(FunctionFactory & factory)
+REGISTER_FUNCTION(ToYearMonth)
 {
     factory.registerFunction<FunctionToYearMonth>();
     /// MysQL compatibility alias.

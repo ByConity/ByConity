@@ -139,6 +139,7 @@ KeyIndexFileCache::KeyIndexFileCache(Context & context, UInt64 max_size)
     : log(&Poco::Logger::get("KeyIndexFileCache")), rep(std::make_shared<Rep>(context, max_size))
 {
     initCacheFromFileSystem();
+    LOG_INFO(log, "Successfully init KeyIndexFileCache in path {} and KeyIndexFileCache max_size is {}", rep->base_path, max_size);
 }
 
 KeyIndexFileCache::~KeyIndexFileCache() = default;

@@ -49,7 +49,7 @@ template <> struct FunctionUnaryArithmeticMonotonicity<NameAbs>
     }
 };
 
-void registerFunctionAbs(FunctionFactory & factory)
+REGISTER_FUNCTION(Abs)
 {
     factory.registerFunction<FunctionAbs>(FunctionFactory::CaseInsensitive);
 }

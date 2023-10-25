@@ -34,7 +34,7 @@ using FunctionToWeekOfYear = FunctionCustomWeekToSomething<DataTypeUInt8, ToWeek
 using FunctionToYearWeek = FunctionCustomWeekToSomething<DataTypeUInt32, ToYearWeekImpl>;
 using FunctionToStartOfWeek = FunctionCustomWeekToDateOrDate32<ToStartOfWeekImpl>;
 
-void registerFunctionToCustomWeek(FunctionFactory & factory)
+REGISTER_FUNCTION(ToCustomWeek)
 {
     factory.registerFunction<FunctionToWeek>();
     factory.registerFunction<FunctionToWeekOfYear>();

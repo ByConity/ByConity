@@ -18,7 +18,7 @@ using FunctionHasToken = FunctionsStringSearch<HasTokenImpl<VolnitskyCaseSensiti
 
 }
 
-void registerFunctionHasToken(FunctionFactory & factory)
+REGISTER_FUNCTION(HasToken)
 {
     factory.registerFunction<FunctionHasToken>();
 }

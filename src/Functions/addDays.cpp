@@ -7,7 +7,7 @@ namespace DB
 
 using FunctionAddDays = FunctionDateOrDateTimeAddInterval<AddDaysImpl>;
 
-void registerFunctionAddDays(FunctionFactory & factory)
+REGISTER_FUNCTION(AddDays)
 {
     factory.registerFunction<FunctionAddDays>(FunctionFactory::CaseInsensitive);
     factory.registerAlias("date_add", AddDaysImpl::name, FunctionFactory::CaseInsensitive);

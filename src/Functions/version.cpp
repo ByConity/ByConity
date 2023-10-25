@@ -47,7 +47,7 @@ public:
 };
 
 
-void registerFunctionVersion(FunctionFactory & factory)
+REGISTER_FUNCTION(Version)
 {
     factory.registerFunction<FunctionVersion>(FunctionFactory::CaseInsensitive);
 }

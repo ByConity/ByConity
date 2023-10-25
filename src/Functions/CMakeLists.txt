@@ -5,13 +5,14 @@ add_subdirectory(divide)
 include("${ClickHouse_SOURCE_DIR}/cmake/dbms_glob_sources.cmake")
 add_headers_and_sources(clickhouse_functions .)
 
-list(REMOVE_ITEM clickhouse_functions_sources IFunction.cpp FunctionFactory.cpp FunctionHelpers.cpp)
-list(REMOVE_ITEM clickhouse_functions_headers IFunction.h FunctionFactory.h FunctionHelpers.h)
+list(REMOVE_ITEM clickhouse_functions_sources IFunction.cpp FunctionFactory.cpp FunctionHelpers.cpp extractTimeZoneFromFunctionArguments.cpp FunctionsLogical.cpp)
+list(REMOVE_ITEM clickhouse_functions_headers IFunction.h FunctionFactory.h FunctionHelpers.h extractTimeZoneFromFunctionArguments.h FunctionsLogical.h)
 
-add_library(clickhouse_functions ${clickhouse_functions_sources})
+add_library(clickhouse_functions_obj OBJECT ${clickhouse_functions_sources})
 
-target_link_libraries(clickhouse_functions
-    PUBLIC
+list (APPEND OBJECT_LIBS $<TARGET_OBJECTS:clickhouse_functions_obj>)
+
+list (APPEND PUBLIC_LIBS
         ${BASE64_LIBRARY}
         ${CITYHASH_LIBRARIES}
         ${FARMHASH_LIBRARIES}
@@ -24,18 +25,19 @@ target_link_libraries(clickhouse_functions
         metrohash
         murmurhash
         biginteger
+)
 
-    PRIVATE
+list (APPEND PRIVATE_LIBS
         ${ZLIB_LIBRARIES}
         boost::filesystem
         divide_impl
 )
 
 if (OPENSSL_CRYPTO_LIBRARY)
-    target_link_libraries(clickhouse_functions PUBLIC ${OPENSSL_CRYPTO_LIBRARY})
+    list (APPEND PUBLIC_LIBS ${OPENSSL_CRYPTO_LIBRARY})
 endif()
 
-target_include_directories(clickhouse_functions SYSTEM PRIVATE ${SPARSEHASH_INCLUDE_DIR})
+target_include_directories(clickhouse_functions_obj SYSTEM PRIVATE ${SPARSEHASH_INCLUDE_DIR})
 
 if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE"
     OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO"
@@ -53,18 +55,18 @@ option(STRIP_DEBUG_SYMBOLS_FUNCTIONS "Do not generate debugger info for ClickHou
 
 if (STRIP_DEBUG_SYMBOLS_FUNCTIONS)
     message(WARNING "Not generating debugger info for ClickHouse functions")
-    target_compile_options(clickhouse_functions PRIVATE "-g0")
+    target_compile_options(clickhouse_functions_obj PRIVATE "-g0")
 else()
     message(STATUS "Generating debugger info for ClickHouse functions")
 endif()
 
 if (USE_ICU)
-    target_link_libraries (clickhouse_functions PRIVATE ${ICU_LIBRARIES})
-    target_include_directories(clickhouse_functions SYSTEM PRIVATE ${ICU_INCLUDE_DIRS})
+    list (APPEND PRIVATE_LIBS ${ICU_LIBRARIES})
+    target_include_directories(clickhouse_functions_obj SYSTEM PRIVATE ${ICU_INCLUDE_DIRS})
 endif ()
 
 if (USE_FASTOPS)
-    target_include_directories (clickhouse_functions SYSTEM PRIVATE ${FASTOPS_INCLUDE_DIR})
+    target_include_directories (clickhouse_functions_obj SYSTEM PRIVATE ${FASTOPS_INCLUDE_DIR})
 endif ()
 
 if (ENABLE_EXAMPLES)
@@ -72,29 +74,29 @@ if (ENABLE_EXAMPLES)
 endif ()
 
 if (USE_EMBEDDED_COMPILER)
-    target_link_libraries(clickhouse_functions PRIVATE ${REQUIRED_LLVM_LIBRARIES})
-    target_include_directories(clickhouse_functions SYSTEM BEFORE PUBLIC ${LLVM_INCLUDE_DIRS})
+    list (APPEND PRIVATE_LIBS ${REQUIRED_LLVM_LIBRARIES})
+    target_include_directories(clickhouse_functions_obj SYSTEM BEFORE PUBLIC ${LLVM_INCLUDE_DIRS})
 endif ()
 
 if(USE_BASE64)
-    target_include_directories(clickhouse_functions SYSTEM PRIVATE ${BASE64_INCLUDE_DIR})
+    target_include_directories(clickhouse_functions_obj SYSTEM PRIVATE ${BASE64_INCLUDE_DIR})
 endif()
 
-target_link_libraries(clickhouse_functions PRIVATE lz4)
+list (APPEND PRIVATE_LIBS lz4)
 
 if (USE_H3)
-    target_link_libraries(clickhouse_functions PRIVATE ${H3_LIBRARY})
-    target_include_directories(clickhouse_functions SYSTEM PRIVATE ${H3_INCLUDE_DIR})
+    list (APPEND PRIVATE_LIBS  ${H3_LIBRARY})
+    target_include_directories(clickhouse_functions_obj SYSTEM PRIVATE ${H3_INCLUDE_DIR})
 endif()
 
-target_link_libraries(clickhouse_functions PRIVATE hyperscan)
+list (APPEND PRIVATE_LIBS hyperscan)
 
 if(USE_SIMDJSON)
-    target_link_libraries(clickhouse_functions PRIVATE simdjson)
+    list (APPEND PRIVATE_LIBS simdjson)
 endif()
 
 if(USE_RAPIDJSON)
-    target_include_directories(clickhouse_functions SYSTEM PRIVATE ${RAPIDJSON_INCLUDE_DIR})
+    target_include_directories(clickhouse_functions_obj SYSTEM PRIVATE ${RAPIDJSON_INCLUDE_DIR})
 endif()
 
 # ClickHouse developers may use platform-dependent code under some macro (e.g. `#ifdef ENABLE_MULTITARGET`).
@@ -109,19 +111,32 @@ else()
 endif()
 
 add_subdirectory(GatherUtils)
-target_link_libraries(clickhouse_functions PRIVATE clickhouse_functions_gatherutils)
+list (APPEND PRIVATE_LIBS clickhouse_functions_gatherutils)
 
 add_subdirectory(URL)
-target_link_libraries(clickhouse_functions PRIVATE clickhouse_functions_url)
+list (APPEND OBJECT_LIBS $<TARGET_OBJECTS:clickhouse_functions_url>)
 
 add_subdirectory(array)
-target_link_libraries(clickhouse_functions PRIVATE clickhouse_functions_array)
+list (APPEND OBJECT_LIBS $<TARGET_OBJECTS:clickhouse_functions_array>)
 
 add_subdirectory(JSONPath)
+list (APPEND PRIVATE_LIBS clickhouse_functions_jsonpath)
 
 if (USE_STATS)
-    target_link_libraries(clickhouse_functions PRIVATE stats)
+    list (APPEND PRIVATE_LIBS stats)
 endif()
 
 # Signed integer overflow on user-provided data inside boost::geometry - ignore.
 set_source_files_properties("pointInPolygon.cpp" PROPERTIES COMPILE_FLAGS -fno-sanitize=signed-integer-overflow)
+
+target_link_libraries(clickhouse_functions_obj PUBLIC ${PUBLIC_LIBS} PRIVATE ${PRIVATE_LIBS})
+
+if (USE_STATIC_LIBRARIES OR NOT SPLIT_SHARED_LIBRARIES)
+    # Used to forward the linking information to the final binaries such as clickhouse / unit_tests_dbms,
+    # since such information are lost after we convert to OBJECT target
+    add_library(clickhouse_functions INTERFACE)
+    target_link_libraries(clickhouse_functions INTERFACE ${OBJECT_LIBS} ${PUBLIC_LIBS} ${PRIVATE_LIBS})
+else()
+    add_library(clickhouse_functions SHARED ${OBJECT_LIBS})
+    target_link_libraries(clickhouse_functions PUBLIC ${PUBLIC_LIBS} PRIVATE ${PRIVATE_LIBS})
+endif ()

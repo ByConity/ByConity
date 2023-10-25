@@ -402,7 +402,7 @@ private:
 
 }
 
-void registerFunctionDateDiff(FunctionFactory & factory)
+REGISTER_FUNCTION(DateDiff)
 {
     factory.registerFunction<FunctionDateDiff<>>(FunctionFactory::CaseInsensitive);
     factory.registerAlias("date_diff", "datediff", FunctionFactory::CaseInsensitive);

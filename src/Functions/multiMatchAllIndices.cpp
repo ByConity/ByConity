@@ -20,7 +20,7 @@ using FunctionMultiMatchAllIndices = FunctionsMultiStringSearch<
 
 }
 
-void registerFunctionMultiMatchAllIndices(FunctionFactory & factory)
+REGISTER_FUNCTION(MultiMatchAllIndices)
 {
     factory.registerFunction<FunctionMultiMatchAllIndices>();
 }

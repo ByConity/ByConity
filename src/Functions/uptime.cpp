@@ -49,7 +49,7 @@ private:
 };
 
 
-void registerFunctionUptime(FunctionFactory & factory)
+REGISTER_FUNCTION(Uptime)
 {
     factory.registerFunction<FunctionUptime>();
 }

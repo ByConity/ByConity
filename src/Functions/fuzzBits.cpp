@@ -166,7 +166,7 @@ public:
 
 }
 
-void registerFunctionFuzzBits(FunctionFactory & factory)
+REGISTER_FUNCTION(FuzzBits)
 {
     factory.registerFunction<FunctionFuzzBits>();
 }

@@ -16,7 +16,7 @@ using FunctionPi = FunctionMathConstFloat64<PiImpl>;
 
 }
 
-void registerFunctionPi(FunctionFactory & factory)
+REGISTER_FUNCTION(Pi)
 {
     factory.registerFunction<FunctionPi>(FunctionFactory::CaseInsensitive);
 }

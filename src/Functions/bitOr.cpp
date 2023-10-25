@@ -40,7 +40,7 @@ using FunctionBitOr = BinaryArithmeticOverloadResolver<BitOrImpl, NameBitOr, tru
 
 }
 
-void registerFunctionBitOr(FunctionFactory & factory)
+REGISTER_FUNCTION(BitOr)
 {
     factory.registerFunction<FunctionBitOr>();
 }

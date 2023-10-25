@@ -62,7 +62,7 @@ private:
 
 }
 
-void registerFunctionGetScalar(FunctionFactory & factory)
+REGISTER_FUNCTION(GetScalar)
 {
     factory.registerFunction<FunctionGetScalar>();
 }

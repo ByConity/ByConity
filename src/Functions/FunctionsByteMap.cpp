@@ -327,8 +327,8 @@ public:
             + " SETTINGS  max_threads = 1";
         String query = "SELECT groupUniqArrayArray(ks) AS keys FROM ( " + inner_query + " )";
 
-        auto stream = executeQuery(query, context->getQueryContext(), true).getInputStream();
-        auto res = stream->read();
+        auto block_io = executeQuery(query, context->getQueryContext(), true);
+        auto res = block_io.getInputStream()->read();
         if (res)
         {
             Field field;
@@ -563,7 +563,8 @@ struct ExtractMapWrapper
     }
 };
 
-void registerFunctionsByteMap(FunctionFactory & factory)
+#ifndef USE_COMMUNITY_MAP
+REGISTER_FUNCTION(ByteMap)
 {
     factory.registerFunction<FunctionMapElement>();
     factory.registerFunction<FunctionMapKeys>();
@@ -577,5 +578,6 @@ void registerFunctionsByteMap(FunctionFactory & factory)
     factory.registerFunction<FunctionExtractMapKey>();
     factory.registerFunction<FunctionExtractMapColumn>();
 }
+#endif
 
 }

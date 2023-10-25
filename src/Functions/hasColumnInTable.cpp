@@ -171,7 +171,7 @@ ColumnPtr FunctionHasColumnInTable::executeImpl(const ColumnsWithTypeAndName & a
 
 }
 
-void registerFunctionHasColumnInTable(FunctionFactory & factory)
+REGISTER_FUNCTION(HasColumnInTable)
 {
     factory.registerFunction<FunctionHasColumnInTable>();
 }

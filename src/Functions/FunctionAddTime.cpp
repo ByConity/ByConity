@@ -271,7 +271,7 @@ public:
 using FunctionAddTime = FunctionAddOrSubTime<NameAddTime>;
 using FunctionSubTime = FunctionAddOrSubTime<NameSubTime>;
 
-void registerFunctionAddTime(FunctionFactory & factory)
+REGISTER_FUNCTION(AddTime)
 {
     factory.registerFunction<FunctionAddTime>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionSubTime>(FunctionFactory::CaseInsensitive);

@@ -168,7 +168,7 @@ public:
     }
 };
 
-void registerFunctionBucketBoundsSearch(FunctionFactory & factory)
+REGISTER_FUNCTION(BucketBoundsSearch)
 {
     factory.registerFunction<FunctionBucketBoundsSearchBuilder>();
 }

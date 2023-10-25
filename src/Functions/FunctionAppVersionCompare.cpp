@@ -19,7 +19,7 @@
 namespace DB
 {
 
-void registerFunctionsAppVersionCompare(FunctionFactory & factory)
+REGISTER_FUNCTION(AppVersionCompare)
 {
     factory.registerFunction<FunctionVersionCompare>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionAppVersionCompare>(FunctionFactory::CaseInsensitive);

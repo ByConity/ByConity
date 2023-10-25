@@ -57,7 +57,7 @@ private:
     ContextPtr context;
 };
 
-void registerFunctionOct(FunctionFactory & factory)
+REGISTER_FUNCTION(Oct)
 {
     factory.registerFunction<FunctionOct>(FunctionFactory::CaseInsensitive);
 }

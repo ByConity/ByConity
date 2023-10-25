@@ -171,7 +171,7 @@ void registerFunctionsInImpl(FunctionFactory & factory)
 
 }
 
-void registerFunctionsIn(FunctionFactory & factory)
+REGISTER_FUNCTION(In)
 {
     registerFunctionsInImpl<false>(factory);
     registerFunctionsInImpl<true>(factory);

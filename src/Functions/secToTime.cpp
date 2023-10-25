@@ -169,7 +169,7 @@ public:
     }
 };
 
-void registerFunctionSecToTime(FunctionFactory & factory)
+REGISTER_FUNCTION(SecToTime)
 {
     factory.registerFunction<FunctionSecToTime>(FunctionFactory::CaseInsensitive);
     factory.registerFunction<FunctionTimeToSec>(FunctionFactory::CaseInsensitive);

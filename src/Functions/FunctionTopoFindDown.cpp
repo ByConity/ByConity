@@ -133,7 +133,7 @@ public:
     }
 };
 
-void registerFunctionTopoFindDown(FunctionFactory &factory)
+REGISTER_FUNCTION(TopoFindDown)
 {
     factory.registerFunction<FunctionTopoFindDown>();
 }

@@ -241,7 +241,7 @@ namespace DB
         static constexpr auto name = "runningConcurrency";
     };
 
-    void registerFunctionRunningConcurrency(FunctionFactory & factory)
+    REGISTER_FUNCTION(RunningConcurrency)
     {
         factory.registerFunction<RunningConcurrencyOverloadResolver<NameRunningConcurrency, DataTypeUInt32>>();
     }

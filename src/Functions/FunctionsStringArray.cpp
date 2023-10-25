@@ -26,7 +26,7 @@
 namespace DB
 {
 
-void registerFunctionsStringArray(FunctionFactory & factory)
+REGISTER_FUNCTION(StringArray)
 {
     factory.registerFunction<FunctionExtractAll>();
     factory.registerFunction<FunctionAlphaTokens>();

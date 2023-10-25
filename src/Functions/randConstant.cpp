@@ -115,7 +115,7 @@ using FunctionBuilderRandConstant = RandomConstantOverloadResolver<UInt32, NameR
 
 }
 
-void registerFunctionRandConstant(FunctionFactory & factory)
+REGISTER_FUNCTION(RandConstant)
 {
     factory.registerFunction<FunctionBuilderRandConstant>();
 }

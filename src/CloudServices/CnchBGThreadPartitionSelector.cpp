@@ -39,7 +39,8 @@ CnchBGThreadPartitionSelector::CnchBGThreadPartitionSelector(ContextMutablePtr g
         }
 
         auto tmp_context = Context::createCopy(getContext());
-        auto input_block = executeQuery(SQL_LOAD_PARTITION_DIGEST_INFO, tmp_context, true).getInputStream();
+        auto block_io = executeQuery(SQL_LOAD_PARTITION_DIGEST_INFO, tmp_context, true);
+        auto input_block = block_io.getInputStream();
         
         while (true)
         {

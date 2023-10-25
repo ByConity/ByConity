@@ -261,7 +261,8 @@ std::string ClickHouseDictionarySource::doInvalidateQuery(const std::string & re
         auto query_context = Context::createCopy(context);
         if (!configuration.tenant_id.empty())
             pushTenantId(configuration.tenant_id);
-        auto input_block = executeQuery(request, query_context, true).getInputStream();
+        auto block_io = executeQuery(request, query_context, true);
+        auto input_block = block_io.getInputStream();
         if (!configuration.tenant_id.empty())
             popTenantId();
         return readInvalidateQuery(*input_block);

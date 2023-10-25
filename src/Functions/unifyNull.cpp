@@ -90,7 +90,7 @@ public:
 };
 
 
-void registerFunctionUnifyNull(FunctionFactory & factory)
+REGISTER_FUNCTION(UnifyNull)
 {
     factory.registerFunction<FunctionUnifyNull>();
 }

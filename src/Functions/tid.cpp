@@ -30,7 +30,7 @@ namespace
 
 }
 
-void registerFunctionTid(FunctionFactory & factory)
+REGISTER_FUNCTION(Tid)
 {
     factory.registerFunction<FunctionTid>();
 }

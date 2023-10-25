@@ -66,7 +66,7 @@ public:
     }
 };
 
-void registerFunctionWkt(FunctionFactory & factory)
+REGISTER_FUNCTION(Wkt)
 {
     factory.registerFunction<FunctionWkt>();
 }

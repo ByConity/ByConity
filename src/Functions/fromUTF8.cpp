@@ -163,7 +163,7 @@ namespace
 
 }
 
-void registerFunctionFromUTF8(FunctionFactory & factory)
+REGISTER_FUNCTION(FromUTF8)
 {
     factory.registerFunction<FunctionFromUTF8>(FunctionFactory::CaseInsensitive);
 }

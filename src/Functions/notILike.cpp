@@ -26,7 +26,7 @@ using FunctionEscapeNotILike = FunctionsStringSearch<EscapeNotILikeImpl, NameEsc
 
 }
 
-void registerFunctionNotILike(FunctionFactory & factory)
+REGISTER_FUNCTION(NotILike)
 {
     factory.registerFunction<FunctionNotILike>();
     factory.registerFunction<FunctionEscapeNotILike>();

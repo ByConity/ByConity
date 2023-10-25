@@ -572,7 +572,7 @@ private:
 
 }
 
-void registerFunctionPointInPolygon(FunctionFactory & factory)
+REGISTER_FUNCTION(PointInPolygon)
 {
     factory.registerFunction<FunctionPointInPolygon<PointInPolygonWithGrid<Float64>>>();
 }

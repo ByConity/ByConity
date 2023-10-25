@@ -270,7 +270,7 @@ public:
 };
 
 
-void registerFunctionConv(FunctionFactory & factory)
+REGISTER_FUNCTION(Conv)
 {
     factory.registerFunction<ConvOverloadResolver>(FunctionFactory::CaseInsensitive);
 }

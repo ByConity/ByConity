@@ -40,7 +40,7 @@ using FunctionModuloOrZero = BinaryArithmeticOverloadResolver<ModuloOrZeroImpl, 
 
 }
 
-void registerFunctionModuloOrZero(FunctionFactory & factory)
+REGISTER_FUNCTION(ModuloOrZero)
 {
     factory.registerFunction<FunctionModuloOrZero>();
 }

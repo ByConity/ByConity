@@ -222,7 +222,7 @@ public:
 
 };
 
-void registerFunctionArraySetGetAny(FunctionFactory & factory)
+REGISTER_FUNCTION(ArraySetGetAny)
 {
     factory.registerFunction<FunctionArraySetGetAny>();
 }

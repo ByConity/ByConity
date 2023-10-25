@@ -85,7 +85,7 @@ private:
     ContextPtr context;
 };
 
-void registerFromUnixTimestampMilli(FunctionFactory & factory)
+REGISTER_FUNCTION(FromUnixTimestampMilli)
 {
     factory.registerFunction("fromUnixTimestampMilli",
         [](ContextPtr context){ return std::make_unique<FunctionToOverloadResolverAdaptor>(

@@ -25,7 +25,7 @@ struct NamePumpZookeeper
 
 using FunctionPumpZookeeper = FunctionGetHosts<NamePumpZookeeper>;
 
-void registerFunctionPumpZookeeper(FunctionFactory & factory)
+REGISTER_FUNCTION(PumpZookeeper)
 {
     factory.registerFunction<FunctionPumpZookeeper>(FunctionFactory::CaseInsensitive);
 }

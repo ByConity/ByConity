@@ -239,12 +239,12 @@ namespace
     };
 }
 
-void registerFunctionFromDays(FunctionFactory & factory)
+REGISTER_FUNCTION(FromDays)
 {
     factory.registerFunction<FunctionFromDaysImpl>(FunctionFactory::CaseInsensitive);
 }
 
-void registerFunctionToDays(FunctionFactory & factory)
+REGISTER_FUNCTION(ToDays)
 {
     factory.registerFunction<FunctionToDaysImpl>(FunctionFactory::CaseInsensitive);
 }

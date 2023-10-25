@@ -222,7 +222,7 @@ public:
 
 };
 
-void registerFunctionArraySetCheck(FunctionFactory & factory)
+REGISTER_FUNCTION(ArraySetCheck)
 {
     factory.registerFunction<FunctionArraySetCheck>();
 }

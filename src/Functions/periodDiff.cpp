@@ -110,7 +110,7 @@ private:
     }
 };
 
-void registerFunctionPeriodDiff(FunctionFactory & factory)
+REGISTER_FUNCTION(PeriodDiff)
 {
     factory.registerFunction<FunctionPeriodDiff>(FunctionFactory::CaseInsensitive);
 }

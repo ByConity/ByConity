@@ -306,12 +306,14 @@ public:
 
 }
 
-void registerFunctionsMap(FunctionFactory & factory)
+#ifdef USE_COMMUNITY_MAP
+REGISTER_FUNCTION(Map)
 {
     factory.registerFunction<FunctionMap>();
     factory.registerFunction<FunctionMapContains>();
     factory.registerFunction<FunctionMapKeys>();
     factory.registerFunction<FunctionMapValues>();
 }
+#endif
 
 }

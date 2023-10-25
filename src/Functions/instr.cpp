@@ -15,7 +15,7 @@ using FunctionInstr = FunctionsStringSearch<PositionImpl<PositionCaseSensitiveAS
 
 }
 
-void registerFunctionInstr(FunctionFactory & factory)
+REGISTER_FUNCTION(Instr)
 {
     factory.registerFunction<FunctionInstr>(FunctionFactory::CaseInsensitive);
 }

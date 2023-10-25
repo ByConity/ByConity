@@ -22,7 +22,7 @@ namespace DB
 
 using FunctionLastDay = FunctionDateOrDateTimeToDateOrDate32<ToLastDayOfMonthImpl>;
 
-void registerFunctionLastDay(FunctionFactory & factory)
+REGISTER_FUNCTION(LastDay)
 {
     factory.registerFunction<FunctionLastDay>();
     factory.registerAlias("last_day", ToLastDayOfMonthImpl::name, FunctionFactory::CaseInsensitive);

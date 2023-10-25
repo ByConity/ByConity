@@ -85,13 +85,6 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
     /// Allows pool to reduce number of threads in case of too slow reads.
     auto profile_callback = [this](ReadBufferFromFileBase::ProfileInfo info_) { pool->profileFeedback(info_); };
 
-    if (metadata_snapshot->hasUniqueKey())
-    {
-        task->delete_bitmap = task->data_part->getDeleteBitmap();
-        if (!task->delete_bitmap)
-            throw Exception("Expected delete bitmap exists for a unique table part: " + task->data_part->name, ErrorCodes::LOGICAL_ERROR);
-    }
-
     if (!reader)
     {
         auto rest_mark_ranges = pool->getRestMarks(*task->data_part, task->mark_ranges[0]);

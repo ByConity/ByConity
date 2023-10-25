@@ -179,7 +179,7 @@ using FunctionFormat = FormatFunction<NameFormat>;
 
 }
 
-void registerFunctionFormat(FunctionFactory & factory)
+REGISTER_FUNCTION(Format)
 {
     factory.registerFunction<FunctionFormat>(FunctionFactory::CaseInsensitive);
 }

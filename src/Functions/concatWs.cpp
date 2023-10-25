@@ -244,7 +244,7 @@ namespace
     using FunctionConcatWithSeparatorAssumeInjective = ConcatWithSeparatorImpl<NameConcatWithSeparatorAssumeInjective, true>;
 }
 
-void registerFunctionConcatWithSeparator(FunctionFactory & factory)
+REGISTER_FUNCTION(ConcatWithSeparator)
 {
     factory.registerFunction<FunctionConcatWithSeparator>(FunctionFactory::CaseInsensitive);
     factory.registerAlias("concatws", NameConcatWithSeparator::name, FunctionFactory::CaseInsensitive);

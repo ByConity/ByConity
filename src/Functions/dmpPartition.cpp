@@ -177,7 +177,7 @@ private:
     }
 };
 
-void registerFunctionDmpPartition(FunctionFactory & factory)
+REGISTER_FUNCTION(DmpPartition)
 {
     factory.registerFunction<FunctionDmpPartition>();
 }

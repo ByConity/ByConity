@@ -201,7 +201,7 @@ public:
 
 }
 
-void registerFunctionNeighbor(FunctionFactory & factory)
+REGISTER_FUNCTION(Neighbor)
 {
     factory.registerFunction<FunctionNeighbor>();
 }
