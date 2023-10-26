@@ -4,30 +4,36 @@
 
 Start by pulling the image
 ```
+# 克隆仓库
+git clone https://github.com/ByConity/ByConity.git 
+
+# 进入到仓库的开发目录下
+cd byconity/docker/debian/dev-env
+
+# 拉取最新镜像
 make pull
 ```
 
 You can run the "byconity/dev-env" container with the following command:
 ```bash
+# 运行容器，需要等待几分钟
 make run
 ```
-modify the `Makefile` and Set the environment variable `BYCONITY_SOURCE` to the path where your ByConity source code is located.
 
-
-After starting the container, you can enter it with:
-```bash
-make exec
-```
-~~ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null root@localhost -p 2222~~
 
 Inside the container, you can compile the ByConity code using the following commands.
 The compiled binary will be found within your local filesystem at `${BYCONITY_SOURCE}/build_dev/program`
 ```bash
+# 用于初始化、更新并检出Git仓库中的子模块。此过程需要下载大量文件，请耐心等待。
+git submodule update --init --recursive
+
+# 配置运行环境，这个命令执行成功之后，会自动解决include头文件的错误
 cmake -S /root/ByConity -B build_dev
+
+# 编译，最后面的64代表使用多少线程来构建，需要根据自己电脑情况修改
 ninja -C build_dev clickhouse-server -j 64
 ```
-
-The you can use [docker-compose](../../docker-compose/README.md) to run the compiled binary
+Then you can use [docker-compose](../../docker-compose/README.md) to run the compiled binary
 
 ## Ubuntu dev-env
 **WARNING: Under testing**
