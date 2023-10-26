@@ -23,12 +23,7 @@
 namespace DB
 {
 
-CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::AbstractConfiguration & config)
-    : WithContext(context_)
-    , topology_refresh_task(getContext()->getTopologySchedulePool().createTask("TopologyRefresher", [&]() { refreshTopology(); }))
-    , lease_renew_task(getContext()->getTopologySchedulePool().createTask("LeaseRenewer", [&]() { renewLease(); }))
-    , async_query_status_check_task(
-          getContext()->getTopologySchedulePool().createTask("AsyncQueryStatusChecker", [&]() { checkAsyncQueryStatus(); }))
+CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::AbstractConfiguration & config) : WithContext(context_)
 {
     auto task_func = [this] (String task_name, std::function<bool ()> func, UInt64 interval, std::atomic<UInt64> & last_time, BackgroundSchedulePool::TaskHolder & task)
     {
