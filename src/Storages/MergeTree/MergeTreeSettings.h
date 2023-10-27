@@ -570,8 +570,7 @@ struct MergeTreeSettings : public BaseSettings<MergeTreeSettingsTraits>
     static bool isReadonlySetting(const String & name)
     {
         return name == "index_granularity" || name == "index_granularity_bytes" || name == "write_final_mark"
-            || name == "enable_mixed_granularity_parts" || name == "partition_level_unique_keys" 
-            || name == "storage_policy" || name == "remote_storage_type";
+            || name == "enable_mixed_granularity_parts" || name == "storage_policy" || name == "remote_storage_type";
     }
 
     static bool isPartFormatSetting(const String & name)

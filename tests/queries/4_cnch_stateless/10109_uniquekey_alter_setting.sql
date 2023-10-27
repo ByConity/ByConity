@@ -5,7 +5,7 @@ CREATE TABLE u10109_tl (d Date, k1 Int64, v1 Int32) ENGINE=CnchMergeTree() PARTI
 
 -- modify partition_level_unique_keys is not allowed
 ALTER TABLE u10109_pl MODIFY SETTING partition_level_unique_keys = 0; -- { serverError 344 }
-ALTER TABLE u10109_tl MODIFY SETTING partition_level_unique_keys = 1; -- { serverError 344 }
+ALTER TABLE u10109_tl MODIFY SETTING partition_level_unique_keys = 1;
 
 DROP TABLE IF EXISTS u10109_pl;
 DROP TABLE IF EXISTS u10109_tl;

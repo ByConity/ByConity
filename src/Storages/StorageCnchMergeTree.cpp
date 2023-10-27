@@ -2133,6 +2133,10 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
             if (getInMemoryMetadataPtr()->hasUniqueKey() && change.name == "cnch_enable_memory_buffer" && change.value.get<Int64>() == 1)
                 throw Exception("Table with UNIQUE KEY doesn't support memory buffer", ErrorCodes::SUPPORT_IS_DISABLED);
 
+            /// Prevent set partition_level_unique_keys to 0
+            if (getInMemoryMetadataPtr()->hasUniqueKey() && change.name == "partition_level_unique_keys" && change.value.get<UInt8>() == 0)
+                throw Exception("Setting 'partition_level_unique_keys' can not change to table_level.", ErrorCodes::SUPPORT_IS_DISABLED);
+
             if (change.name.find("cnch_vw_") == 0)
                 checkAlterVW(change.value.get<String>());
 

@@ -88,6 +88,7 @@ class ASTStorage;
     M(String, cnch_schedule_mode, "random", "Schedule mode for Kafka comsume manager", 0) \
     /** Settings for Unique Table */ \
     M(Bool, enable_unique_partial_update, true, "Whether to use partial column update for INSERT", 0) \
+    M(Bool, enable_check_staging_area_status, false, "Enable check staging area status for unique table, block consume if there has too old part.", 0) \
 
 
 
