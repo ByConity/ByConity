@@ -304,9 +304,12 @@ void StorageCloudKafka::createStreamThread(const cppkafka::TopicPartitionList & 
 
 void StorageCloudKafka::checkStagedArea()
 {
+    if (!settings.enable_check_staging_area_status)
+        return;
+
     try
     {
-        [[maybe_unused]] size_t num_tables_to_write{0};
+        size_t num_tables_to_write{0};
         if (!checkDependencies(getDatabaseName(), getTableName(), /**check staged area**/true, num_tables_to_write))
             LOG_ERROR(log, "Check dependencies failed when checking for staged area.");
     }
@@ -392,14 +395,14 @@ void StorageCloudKafka::stopConsume()
 
 void StorageCloudKafka::streamThread()
 {
-    auto process_exception = [this] () {
+    auto process_exception = [this] (String message = "") {
         LOG_ERROR(this->log, "Stream thread failed: {}", getCurrentExceptionMessage(true));
 
         if (auto kafka_log = getContext()->getKafkaLog())
         {
             auto kafka_error_log = createKafkaLog(KafkaLogElement::EXCEPTION, assigned_consumer_index);
             kafka_error_log.has_error = true;
-            kafka_error_log.last_exception = getCurrentExceptionMessage(false);
+            kafka_error_log.last_exception = message.empty() ? getCurrentExceptionMessage(false): message;
             kafka_log->add(kafka_error_log);
             if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
                 cloud_kafka_log->add(kafka_error_log);
@@ -425,7 +428,8 @@ void StorageCloudKafka::streamThread()
 
             if (wait_for_staged_parts_to_publish)
             {
-                LOG_DEBUG(log, "Target table has some parts too old, skip this consume action. ");
+                LOG_DEBUG(log, "Target table has some parts too old, skip this consume action.");
+                process_exception("Target table has some parts too old, skip this consume action.");
                 break;
             }
 
@@ -686,12 +690,9 @@ bool StorageCloudKafka::checkDependencies(const String &database_name, const Str
 
             if (table_name == getTableName() && database_name == getDatabaseName())
             {
-                /* FIXME: unique table
-                cloud_table_has_unique_key = cloud->hasUniqueKey();
+                cloud_table_has_unique_key = cloud->getInMemoryMetadataPtr()->hasUniqueKey();
                 if (cloud_table_has_unique_key && check_staged_area)
-                {
                     wait_for_staged_parts_to_publish = !cloud->checkStagedParts();
-                } */
             }
             /// check its dependencies
             if (!checkDependencies(target_table->getDatabaseName(), target_table->getTableName(), check_staged_area, num_tables_to_write))
