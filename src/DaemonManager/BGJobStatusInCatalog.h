@@ -46,9 +46,10 @@ namespace BGJobStatusInCatalog
         };
 
         /// return non-empty result if there is status already exist
-        virtual std::optional<CnchBGThreadStatus> createStatusIfNotExist(const StorageID & storage_id, CnchBGThreadStatus init_status) const = 0;
+        virtual std::optional<CnchBGThreadStatus> createStatusIfNotExist(const UUID & uuid, CnchBGThreadStatus init_status) const = 0;
+
         virtual void setStatus(const UUID & table_uuid, CnchBGThreadStatus status) const = 0;
-        virtual CnchBGThreadStatus getStatus(const UUID & table_uuid,  bool use_cache) const = 0;
+        virtual CnchBGThreadStatus getStatus(const UUID & table_uuid, bool use_cache) const = 0;
         virtual CacheClearer fetchStatusesIntoCache() = 0;
         virtual ~IBGJobStatusPersistentStoreProxy() = default;
     protected:
@@ -61,9 +62,9 @@ namespace BGJobStatusInCatalog
     class CatalogBGJobStatusPersistentStoreProxy : public IBGJobStatusPersistentStoreProxy
     {
     public:
-        CatalogBGJobStatusPersistentStoreProxy(std::shared_ptr<Catalog::Catalog>, CnchBGThreadType);
+        CatalogBGJobStatusPersistentStoreProxy(std::shared_ptr<Catalog::Catalog>, CnchBGThreadType, Poco::Logger *log);
 
-        std::optional<CnchBGThreadStatus> createStatusIfNotExist(const StorageID & storage_id, CnchBGThreadStatus init_status) const override;
+        std::optional<CnchBGThreadStatus> createStatusIfNotExist(const UUID & uuid, CnchBGThreadStatus init_status) const override;
         void setStatus(const UUID & table_uuid, CnchBGThreadStatus status) const override;
         CnchBGThreadStatus getStatus(const UUID & table_uuid, bool use_cache) const override;
         CacheClearer fetchStatusesIntoCache() override;
@@ -72,7 +73,9 @@ namespace BGJobStatusInCatalog
         /// keep member variables protected for testing
         std::shared_ptr<Catalog::Catalog> catalog;
         std::unordered_map<UUID, CnchBGThreadStatus> statuses_cache;
+        bool is_cache_prefetched = false;
         CnchBGThreadType type;
+        Poco::Logger * log;
     };
 }
 

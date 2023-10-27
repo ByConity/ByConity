@@ -59,6 +59,8 @@ public:
             {UUID{UInt128{0, 2}}, CnchBGThreadStatus::Stopped},
             {UUID{UInt128{0, 3}}, CnchBGThreadStatus::Removed}
         };
+
+        is_cache_prefetched = true;
         return res;
     }
 
@@ -70,7 +72,7 @@ public:
 
 TEST(BGJobStatusInCatalogTest, test_CatalogBGJobStatusPersistentStoreProxy)
 {
-    DummyProxy proxy{nullptr, CnchBGThreadType::MergeMutate};
+    DummyProxy proxy{nullptr, CnchBGThreadType::MergeMutate, &Poco::Logger::get("test_CatalogBGJobStatusPersistentStoreProxy")};
     UUID uuid{UInt128{0, 1}};
     EXPECT_THROW(proxy.getStatus(uuid, false), Exception);
     EXPECT_THROW(proxy.getStatus(uuid, true), Exception);
@@ -78,8 +80,10 @@ TEST(BGJobStatusInCatalogTest, test_CatalogBGJobStatusPersistentStoreProxy)
     {
         IBGJobStatusPersistentStoreProxy::CacheClearer cache_clearer
             = proxy.fetchStatusesIntoCache();
-        CnchBGThreadStatus status = proxy.getStatus(UUID{UInt128{0, 1}}, true);
-        EXPECT_EQ(status, CnchBGThreadStatus::Running);
+        {
+            CnchBGThreadStatus status = proxy.getStatus(UUID{UInt128{0, 1}}, true);
+            EXPECT_EQ(status, CnchBGThreadStatus::Running);
+        }
         EXPECT_THROW(proxy.fetchStatusesIntoCache(), Exception);
         std::unordered_map<UUID, CnchBGThreadStatus> cache_before_clear = proxy.getCache();
         EXPECT_FALSE(cache_before_clear.empty());
@@ -88,6 +92,11 @@ TEST(BGJobStatusInCatalogTest, test_CatalogBGJobStatusPersistentStoreProxy)
         test_move_clearer = std::move(cache_clearer);
         cache_before_clear = proxy.getCache();
         EXPECT_FALSE(cache_before_clear.empty());
+        {
+            std::optional<CnchBGThreadStatus> status = proxy.createStatusIfNotExist(UUID{UInt128{0, 1}}, CnchBGThreadStatus::Stopped);
+            EXPECT_TRUE(status.has_value());
+            EXPECT_EQ(status.value(), CnchBGThreadStatus::Running);
+        }
     }
     std::unordered_map<UUID, CnchBGThreadStatus> cache_after_clear = proxy.getCache();
     EXPECT_TRUE(cache_after_clear.empty());
