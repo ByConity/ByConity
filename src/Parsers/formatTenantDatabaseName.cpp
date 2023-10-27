@@ -19,7 +19,7 @@ static String getTenantId()
     String empty_result;
     if (!CurrentThread::isInitialized())
         return empty_result;
-    const Context * context = CurrentThread::get().getQueryContext().get();
+    auto context = CurrentThread::get().getQueryContext();
     if (context)
     {
         if (!context->getTenantId().empty())
@@ -42,7 +42,7 @@ String getCurrentCatalog()
     String empty_result;
     if (!CurrentThread::isInitialized())
         return empty_result;
-    const Context * context = CurrentThread::get().getQueryContext().get();
+    auto context = CurrentThread::get().getQueryContext();
     if (context)
     {
         if (!context->getCurrentCatalog().empty())
