@@ -2114,61 +2114,6 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
 
 void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) const
 {
-    static std::set<String> supported_settings = {
-        "cnch_vw_default",
-        "cnch_vw_read",
-        "cnch_vw_write",
-        "cnch_vw_task",
-        "cnch_server_vw",
-
-        /// Setting for memory buffer
-        "cnch_enable_memory_buffer",
-        "cnch_memory_buffer_size",
-        "min_time_memory_buffer_to_flush",
-        "max_time_memory_buffer_to_flush",
-        "min_bytes_memory_buffer_to_flush",
-        "max_bytes_memory_buffer_to_flush",
-        "min_rows_memory_buffer_to_flush",
-        "max_rows_memory_buffer_to_flush",
-        "max_block_size_in_memory_buffer",
-        "max_bytes_to_write_wal",
-        "enable_flush_buffer_with_multi_threads",
-        "max_flush_threads_num",
-
-        "gc_remove_bitmap_batch_size",
-        "gc_remove_bitmap_thread_pool_size",
-
-        "insertion_label_ttl",
-        "enable_local_disk_cache",
-        "enable_preload_parts",
-        "enable_parts_sync_preload",
-        "parts_preload_level",
-        "cnch_parallel_prefetching",
-        "enable_prefetch_checksums",
-        "cnch_parallel_preloading",
-
-        "enable_addition_bg_task",
-        "max_addition_bg_task_num",
-        "max_addition_mutation_task_num",
-        "max_partition_for_multi_select",
-
-        "cnch_merge_parts_cache_timeout",
-        "cnch_merge_parts_cache_min_count",
-        "cnch_merge_enable_batch_select",
-        "cnch_merge_max_total_rows_to_merge",
-        "cnch_merge_max_total_bytes_to_merge",
-        "cnch_merge_max_parts_to_merge",
-        "cnch_merge_only_realtime_partition",
-        "cnch_merge_select_nonadjacent_parts",
-        "cnch_merge_pick_worker_algo",
-        "cnch_merge_round_robin_partitions_interval",
-        "cnch_gc_round_robin_partitions_interval",
-        "cnch_gc_round_robin_partitions_number",
-        "gc_remove_part_thread_pool_size",
-        "gc_remove_part_batch_size",
-        "cluster_by_hint",
-    };
-
     /// Check whether the value is legal for Setting.
     /// For example, we have a setting item, `SettingBool setting_test`
     /// If you submit a Alter query: "Alter table test modify setting setting_test='abc'"
@@ -2182,7 +2127,7 @@ void StorageCnchMergeTree::checkAlterSettings(const AlterCommands & commands) co
 
         for (auto & change : command.settings_changes)
         {
-            if (!supported_settings.count(change.name))
+            if (MergeTreeSettings::isReadonlySetting(change.name))
                 throw Exception("Setting " + change.name + " cannot be modified", ErrorCodes::SUPPORT_IS_DISABLED);
 
             if (getInMemoryMetadataPtr()->hasUniqueKey() && change.name == "cnch_enable_memory_buffer" && change.value.get<Int64>() == 1)
