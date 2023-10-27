@@ -157,6 +157,7 @@ struct PlanSegmentDescription
         String shuffle_function_name;
     };
     size_t segment_id;
+    String segment_type;
     String query_id;
 
     PlanNodeId root_id;

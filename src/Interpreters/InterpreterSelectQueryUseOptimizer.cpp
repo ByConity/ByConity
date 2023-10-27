@@ -550,8 +550,8 @@ void ExplainAnalyzeVisitor::visitExplainAnalyzeNode(QueryPlan::Node * node, Plan
     if (explain->getKind() != ASTExplainQuery::ExplainKind::DistributedAnalyze)
         return;
     PlanSegmentDescriptions plan_segment_descriptions;
-    for (auto & node : nodes)
-        plan_segment_descriptions.emplace_back(PlanSegmentDescription::getPlanSegmentDescription(node.plan_segment, true));
+    for (auto & segment_node : nodes)
+        plan_segment_descriptions.emplace_back(PlanSegmentDescription::getPlanSegmentDescription(segment_node.plan_segment, explain->getSetting().json));
     explain->setPlanSegmentDescriptions(plan_segment_descriptions);
 }
 

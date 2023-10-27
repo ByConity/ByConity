@@ -208,7 +208,7 @@ String PlanPrinter::textDistributedPlan(
     for (auto & segment_ptr : segments_desc)
     {
         size_t segment_id = segment_ptr->segment_id;
-        os << "Segment[" << segment_id << "]\n";
+        os << "Segment[" << segment_id << "] [" + segment_ptr->segment_type + "]\n";
 
         ExchangeMode mode = segment_ptr->mode;
         String exchange = (segment_id == 0) ? "Output" : f(mode);
@@ -867,9 +867,9 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
 
     if (verbose && plan->getType() == IQueryPlanStep::Type::TopNFiltering)
     {
-        auto topn_filter = dynamic_cast<const TopNFilteringStep *>(plan.get());
+        const auto *topn_filter = dynamic_cast<const TopNFilteringStep *>(plan.get());
         std::vector<String> sort_columns;
-        for (auto & desc : topn_filter->getSortDescription())
+        for (const auto & desc : topn_filter->getSortDescription())
             sort_columns.emplace_back(
                 desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
@@ -1149,21 +1149,21 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
 
         if (table_scan->getPushdownFilter())
         {
-            NodeDescriptionPtr push_down_filter_detail;
+            NodeDescriptionPtr push_down_filter_detail = std::make_shared<NodeDescription>();
             push_down_filter_detail->setStepDetail(table_scan->getPushdownFilter());
             descriptions_in_step["PushDownFilter"] = push_down_filter_detail;
         }
 
         if (table_scan->getPushdownProjection())
         {
-            NodeDescriptionPtr push_down_projection_detail;
+            NodeDescriptionPtr push_down_projection_detail = std::make_shared<NodeDescription>();
             push_down_projection_detail->setStepDetail(table_scan->getPushdownProjection());
             descriptions_in_step["PushDownProjection"] = push_down_projection_detail;
         }
 
         if (table_scan->getPushdownAggregation())
         {
-            NodeDescriptionPtr push_down_aggregation_detail;
+            NodeDescriptionPtr push_down_aggregation_detail  = std::make_shared<NodeDescription>();
             push_down_aggregation_detail->setStepDetail(table_scan->getPushdownAggregation());
             descriptions_in_step["PushDownAggregation"] = push_down_aggregation_detail;
         }
@@ -1284,6 +1284,13 @@ Poco::JSON::Object::Ptr NodeDescription::jsonNodeDescription(const StepAggregate
         json->set("Profiles", profiles);
     }
 
+    if (!descriptions_in_step.empty())
+    {
+        Poco::JSON::Object::Ptr descriptions = new Poco::JSON::Object(true);
+        for (auto & desc : descriptions_in_step)
+            descriptions->set(desc.first, desc.second->jsonNodeDescription(node_profiles, print_stats));
+        json->set("StepDescriptions", descriptions);
+    }
     Poco::JSON::Array children_array;
     for (auto & child : children)
         children_array.add(child->jsonNodeDescription(node_profiles, print_stats));
@@ -1343,6 +1350,7 @@ Poco::JSON::Object::Ptr PlanSegmentDescription::jsonPlanSegmentDescription(const
     };
 
     json->set("SegmentID", segment_id);
+    json->set("SegmentType", segment_type);
     String exchange = (segment_id == 0) ? "Output" : f(mode);
     json->set("OutputExchangeMode", exchange);
     if (exchange == "REPARTITION") // print shuffle keys
@@ -1397,6 +1405,13 @@ PlanSegmentDescriptionPtr PlanSegmentDescription::getPlanSegmentDescription(Plan
     std::unordered_map<PlanNodeId, size_t> exchange_to_segment;
     segment->getRemoteSegmentId(query_plan.getRoot(), exchange_to_segment);
     plan_segment_desc->exchange_to_segment = exchange_to_segment;
+
+    if (plan_segment_desc->segment_id == 0)
+        plan_segment_desc->segment_type = "OUTPUT";
+    else if (plan_segment_desc->exchange_to_segment.empty())
+        plan_segment_desc->segment_type = "SOURCE";
+    else
+        plan_segment_desc->segment_type = "PROCESS";
 
     if (segment->getPlanSegmentId() != 0)
     {
