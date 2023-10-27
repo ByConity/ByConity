@@ -54,7 +54,7 @@ LocalBroadcastChannel::LocalBroadcastChannel(
 {
 }
 
-RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
+RecvDataPacket LocalBroadcastChannel::recv(timespec timeout_ts)
 {
     Stopwatch s;
     MultiPathDataPacket data_packet;
@@ -64,7 +64,7 @@ RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
     if (current_status_ptr->code > 0)
         return *current_status_ptr;
 
-    if (receive_queue->tryPop(data_packet, timeout_ms))
+    if (receive_queue->tryPopUntil(data_packet, timeout_ts))
     {
         if (std::holds_alternative<Chunk>(data_packet))
         {
@@ -85,7 +85,7 @@ RecvDataPacket LocalBroadcastChannel::recv(UInt32 timeout_ms)
 
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::RECV_TIMEOUT,
-        "Receive from channel " + name + " timeout after ms: " + std::to_string(timeout_ms));
+        "Receive from channel " + name + " timeout at " + DateLUT::instance().timeToString(timeout_ts.tv_sec));
     recv_metric.recv_time_ms += s.elapsedMilliseconds();
     return current_status;
 }
@@ -99,7 +99,7 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
 
     auto bytes = chunk.allocatedBytes();
     send_metric.send_uncompressed_bytes += bytes;
-    if (receive_queue->tryEmplace(options.max_timeout_ms / 2, MultiPathDataPacket(std::move(chunk))))
+    if (receive_queue->tryEmplaceUntil(options.max_timeout_ts, MultiPathDataPacket(std::move(chunk))))
     {
         ExchangeUtils::transferThreadMemoryToGlobal(bytes);     
         return *broadcast_status.load(std::memory_order_acquire);
@@ -118,7 +118,7 @@ BroadcastStatus LocalBroadcastChannel::send(Chunk chunk)
 
     BroadcastStatus current_status = finish(
         BroadcastStatusCode::SEND_TIMEOUT,
-        "Send to channel " + name + " timeout after ms: " + std::to_string(options.max_timeout_ms));
+        "Send to channel " + name + " timeout until: " + std::to_string(options.max_timeout_ts.tv_sec));
     send_metric.send_time_ms += s.elapsedMilliseconds();
     return current_status;
 }
@@ -142,7 +142,7 @@ BroadcastStatus LocalBroadcastChannel::finish(BroadcastStatusCode status_code, S
             // close queue immediately
             receive_queue->close();
         else
-            receive_queue->tryEmplace(options.max_timeout_ms, getName());
+            receive_queue->tryEmplaceUntil(options.max_timeout_ts, getName());
         auto res = *new_status_ptr;
         res.is_modifer = true;
         send_metric.finish_code = new_status_ptr->code;

@@ -35,6 +35,7 @@
 #include <Common/ClickHouseRevision.h>
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
+#include <Common/time.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -180,7 +181,9 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
     size_t retry_count = 0;
     Stopwatch s;
     bool success = false;
-    while (s.elapsedMilliseconds() < context->getSettingsRef().exchange_timeout_ms)
+    timespec query_expiration_ts = context->getQueryExpirationTimeStamp();
+    UInt64 query_expiration_ms_ts = query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000;
+    while (time_in_milliseconds(std::chrono::system_clock::now()) < query_expiration_ms_ts)
     {
         int rect_code = brpc::StreamWrite(stream_id, io_buffer);
         if (rect_code == 0)

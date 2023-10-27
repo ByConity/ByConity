@@ -151,26 +151,27 @@ void BrpcRemoteBroadcastReceiver::pushReceiveQueue(MultiPathDataPacket packet)
 {
     if (queue->closed())
         return;
-    if (!queue->tryEmplace(context->getSettingsRef().exchange_timeout_ms, std::move(packet)))
+    if (!queue->tryEmplaceUntil(context->getQueryExpirationTimeStamp(), std::move(packet)))
     {
         if(queue->closed())
         {
             return;
         }
         throw Exception(
-            "Push exchange data to receiver for " + getName() + " timeout for "
-                + std::to_string(context->getSettingsRef().exchange_timeout_ms) + " ms.",
+            "Push exchange data to receiver for " + getName() + " timeout from " + DateLUT::instance().timeToString(context->getClientInfo().initial_query_start_time) + 
+            " to " + DateLUT::instance().timeToString(context->getQueryExpirationTimeStamp().tv_sec),
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
     }
 }
 
-RecvDataPacket BrpcRemoteBroadcastReceiver::recv(UInt32 timeout_ms) noexcept
+RecvDataPacket BrpcRemoteBroadcastReceiver::recv(timespec timeout_ts) noexcept
 {
     Stopwatch s;
     MultiPathDataPacket data_packet;
-    if (!queue->tryPop(data_packet, timeout_ms))
+    if (!queue->tryPopUntil(data_packet, timeout_ts))
     {
-        const auto error_msg = "Try pop receive queue for " + getName() + " timeout for " + std::to_string(timeout_ms) + " ms.";
+        const auto error_msg = "Try pop receive queue for " + getName() + " timeout, from " + 
+            DateLUT::instance().timeToString(context->getClientInfo().initial_query_start_time) + " to " + DateLUT::instance().timeToString(timeout_ts.tv_sec);
         BroadcastStatus current_status = finish(BroadcastStatusCode::RECV_TIMEOUT, error_msg);
         return std::move(current_status);
     }

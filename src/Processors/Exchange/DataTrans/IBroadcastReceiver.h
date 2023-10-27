@@ -18,6 +18,7 @@
 #include <variant>
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
+#include <Common/time.h>
 #include <common/types.h>
 
 namespace DB
@@ -27,7 +28,13 @@ class IBroadcastReceiver
 {
 public:
     virtual void registerToSenders(UInt32 timeout_ms) = 0;
-    virtual RecvDataPacket recv(UInt32 timeout_ms) = 0;
+    virtual RecvDataPacket recv(UInt32 timeout_ms)
+    {
+        UInt64 timeout_ms_ts = time_in_milliseconds(std::chrono::system_clock::now()) + timeout_ms;
+        timespec timeout_ts {.tv_sec = long(timeout_ms_ts/1000), .tv_nsec = long(timeout_ms_ts % 1000) * 1000000};
+        return recv(timeout_ts);
+    }
+    virtual RecvDataPacket recv(timespec timeout_ts) = 0;
     virtual BroadcastStatus finish(BroadcastStatusCode status_code_, String message) = 0;
     virtual String getName() const = 0;
     virtual ~IBroadcastReceiver() = default;

@@ -9,6 +9,7 @@
 #include <Common/QueryProfiler.h>
 #include <Common/ThreadProfileEvents.h>
 #include <Common/TraceCollector.h>
+#include <Common/time.h>
 #include <common/errnoToString.h>
 
 #if defined(OS_LINUX)
@@ -163,22 +164,6 @@ void ThreadStatus::attachQuery(const ThreadGroupStatusPtr & thread_group_, bool 
         throw Exception("Attempt to attach to nullptr thread group", ErrorCodes::LOGICAL_ERROR);
 
     setupState(thread_group_);
-}
-
-inline UInt64 time_in_nanoseconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
-{
-    return std::chrono::duration_cast<std::chrono::nanoseconds>(timepoint.time_since_epoch()).count();
-}
-
-inline UInt64 time_in_microseconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
-{
-    return std::chrono::duration_cast<std::chrono::microseconds>(timepoint.time_since_epoch()).count();
-}
-
-
-inline UInt64 time_in_seconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
-{
-    return std::chrono::duration_cast<std::chrono::seconds>(timepoint.time_since_epoch()).count();
 }
 
 void ThreadStatus::initPerformanceCounters()

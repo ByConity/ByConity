@@ -28,6 +28,7 @@
 #include <Common/CurrentMemoryTracker.h>
 #include <Common/Exception.h>
 #include <Common/MemoryTracker.h>
+#include <Common/time.h>
 #include <common/types.h>
 
 namespace DB
@@ -52,7 +53,7 @@ public:
     {
         const auto & settings = context->getSettingsRef();
         return {
-            .exhcange_timeout_ms = static_cast<UInt32>(settings.exchange_timeout_ms),
+            .exchange_timeout_ts = context->getQueryExpirationTimeStamp(),
             .send_threshold_in_bytes = settings.exchange_buffer_send_threshold_in_bytes,
             .send_threshold_in_row_num = settings.exchange_buffer_send_threshold_in_row,
             .force_remote_mode = settings.exchange_enable_force_remote_mode,

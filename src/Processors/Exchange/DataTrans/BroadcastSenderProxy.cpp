@@ -138,7 +138,8 @@ void BroadcastSenderProxy::accept(ContextPtr context_, Block header_)
         throw Exception("Can't call accept twice for {} " + data_key->toString(), ErrorCodes::LOGICAL_ERROR);
     context = std::move(context_);
     header = std::move(header_);
-    wait_timeout_ms = context->getSettingsRef().exchange_timeout_ms / 2;
+    wait_timeout_ms = context->getSettingsRef().exchange_wait_accept_max_timeout_ms + 
+                      context->getSettingsRef().wait_runtime_filter_timeout + 3000; // 3000 is send planSegment timeout
     wait_accept.notify_all();
 }
 

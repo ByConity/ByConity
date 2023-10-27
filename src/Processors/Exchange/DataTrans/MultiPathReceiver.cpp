@@ -239,14 +239,14 @@ void MultiPathReceiver::registerToSenders(UInt32 timeout_ms)
     }
 }
 
-RecvDataPacket MultiPathReceiver::recv(UInt32 timeout_ms)
+RecvDataPacket MultiPathReceiver::recv(timespec timeout_ts)
 {
     MultiPathDataPacket data_packet;
-    if (!collector->tryPop(data_packet, timeout_ms))
+    if (!collector->tryPopUntil(data_packet, timeout_ts))
     {
         bool collector_closed = collector->closed();
         String error_msg = "Try pop receive collector for " + name;
-        error_msg.append(collector_closed ? " interrupted" : " timeout for " + std::to_string(timeout_ms) + " ms.");
+        error_msg.append(collector_closed ? " interrupted" : " timeout at " + DateLUT::instance().timeToString(timeout_ts.tv_sec));
 
         BroadcastStatus current_status
             = finish(collector_closed ? BroadcastStatusCode::RECV_UNKNOWN_ERROR : BroadcastStatusCode::RECV_TIMEOUT, error_msg);
@@ -295,7 +295,7 @@ RecvDataPacket MultiPathReceiver::recv(UInt32 timeout_ms)
         if (all_receiver_done)
             return finish(BroadcastStatusCode::ALL_SENDERS_DONE, name + " received all data");
         else
-            return recv(timeout_ms);
+            return recv(timeout_ts);
     }
 }
 

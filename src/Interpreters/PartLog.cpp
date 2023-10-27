@@ -12,6 +12,7 @@
 #include <Interpreters/Context.h>
 
 #include <Common/CurrentThread.h>
+#include <Common/time.h>
 
 namespace DB
 {
@@ -113,17 +114,6 @@ bool PartLog::addNewPart(
     ContextPtr current_context, const MutableDataPartPtr & part, UInt64 elapsed_ns, const ExecutionStatus & execution_status)
 {
     return addNewParts(current_context, {part}, elapsed_ns, execution_status);
-}
-
-inline UInt64 time_in_microseconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
-{
-    return std::chrono::duration_cast<std::chrono::microseconds>(timepoint.time_since_epoch()).count();
-}
-
-
-inline UInt64 time_in_seconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
-{
-    return std::chrono::duration_cast<std::chrono::seconds>(timepoint.time_since_epoch()).count();
 }
 
 bool PartLog::addNewParts(

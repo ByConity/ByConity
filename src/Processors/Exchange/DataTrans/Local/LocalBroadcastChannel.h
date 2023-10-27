@@ -54,7 +54,7 @@ public:
         ContextPtr context_ = nullptr);
 
     BroadcastStatus send(Chunk chunk) override;
-    RecvDataPacket recv(UInt32 timeout_ms) override;
+    RecvDataPacket recv(timespec timeout_ts) override;
     void registerToSenders(UInt32 timeout_ms) override;
     void merge(IBroadcastSender &&) override;
     String getName() const override;
