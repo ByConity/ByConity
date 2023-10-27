@@ -8,6 +8,7 @@
 #include <Poco/Util/LayeredConfiguration.h>
 
 #include <Interpreters/Context_fwd.h>
+#include <Server/APIRequestHandler.h>
 #include <Server/HTTPHandler.h>
 #include <Server/InterserverIOHTTPHandler.h>
 #include <Server/NotFoundHandler.h>
@@ -167,6 +168,11 @@ void addCommonDefaultHandlersFactory(HTTPRequestHandlerFactoryMain & factory, IS
     ping_handler->attachStrictPath("/ping");
     ping_handler->allowGetAndHeadRequest();
     factory.addHandler(ping_handler);
+
+    auto api_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<APIRequestHandler>>(server);
+    api_handler->attachStrictPath("/api");
+    api_handler->allowGetAndHeadRequest();
+    factory.addHandler(api_handler);
 
     auto replicas_status_handler = std::make_shared<HandlingRuleHTTPHandlerFactory<ReplicasStatusHandler>>(server);
     replicas_status_handler->attachNonStrictPath("/replicas_status");
