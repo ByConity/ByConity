@@ -29,7 +29,7 @@
 #include <Interpreters/QueryPriorities.h>
 #include <ResourceGroup/IResourceGroupManager.h>
 #include <Storages/IStorage_fwd.h>
-#include <bthread/mtx_cv_base.h>
+#include <bthread/mutex.h>
 #include <Poco/Condition.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/CurrentThread.h>

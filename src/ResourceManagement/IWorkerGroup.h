@@ -21,7 +21,7 @@
 
 #include <map>
 #include <boost/noncopyable.hpp>
-#include <bthread/mutex.h>
+#include <bthread/recursive_mutex.h>
 
 namespace DB::ResourceManagement
 {

@@ -24,7 +24,7 @@
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <boost/noncopyable.hpp>
-#include <bthread/mtx_cv_base.h>
+#include <bthread/mutex.h>
 #include <Poco/Logger.h>
 #include <common/types.h>
 
