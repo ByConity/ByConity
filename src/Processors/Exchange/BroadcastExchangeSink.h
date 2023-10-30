@@ -20,7 +20,7 @@
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Exchange/IExchangeSink.h>
 #include <Processors/IProcessor.h>
-#include <bthread/mtx_cv_base.h>
+#include <bthread/mutex.h>
 #include <Poco/Logger.h>
 
 namespace DB

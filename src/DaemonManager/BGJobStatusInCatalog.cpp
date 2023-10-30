@@ -61,16 +61,33 @@ char serializeToChar(CnchBGThreadStatus status)
 
 CatalogBGJobStatusPersistentStoreProxy::CatalogBGJobStatusPersistentStoreProxy(
     std::shared_ptr<Catalog::Catalog> catalog_,
-    CnchBGThreadType type_)
-    : catalog{std::move(catalog_)}, statuses_cache{}, type{type_}
+    CnchBGThreadType type_,
+    Poco::Logger * log_)
+    : catalog{std::move(catalog_)}, statuses_cache{}, type{type_}, log{log_}
 {}
 
-std::optional<CnchBGThreadStatus> CatalogBGJobStatusPersistentStoreProxy::createStatusIfNotExist(const StorageID & storage_id, CnchBGThreadStatus init_status) const
+std::optional<CnchBGThreadStatus> CatalogBGJobStatusPersistentStoreProxy::createStatusIfNotExist(const UUID & uuid, CnchBGThreadStatus init_status) const
 {
-    std::optional<CnchBGThreadStatus> status = catalog->getBGJobStatus(storage_id.uuid, type);
+    std::optional<CnchBGThreadStatus> status;
+    /// use cache in fetchBackgroundJobsFromServer().
+    if (is_cache_prefetched)
+    {
+        auto it = statuses_cache.find(uuid);
+        if (it != statuses_cache.end())
+            status = it->second;
+        else
+        {
+            //Unless something weird happen in server, all the status should be found in cache
+            LOG_WARNING(log, "status is not found in prefetched cache");
+            status = catalog->getBGJobStatus(uuid, type);
+        }
+    }
+    else
+        status = catalog->getBGJobStatus(uuid, type);
+
     if (!status)
     {
-        setStatus(storage_id.uuid, init_status);
+        setStatus(uuid, init_status);
         return {};
     }
     else
@@ -88,8 +105,8 @@ CnchBGThreadStatus CatalogBGJobStatusPersistentStoreProxy::getStatus(const UUID 
 {
     if (use_cache)
     {
-        if (statuses_cache.empty())
-            throw Exception("statuses cache is empty, it need to be fetch ahead, this is developer mistake", ErrorCodes::LOGICAL_ERROR);
+        if (!is_cache_prefetched)
+            throw Exception("statuses cache haven't been prefetched, it need to be prefetched before use, this is developer mistake", ErrorCodes::LOGICAL_ERROR);
         else
         {
             auto it = statuses_cache.find(table_uuid);
@@ -109,6 +126,7 @@ IBGJobStatusPersistentStoreProxy::CacheClearer CatalogBGJobStatusPersistentStore
 
     if (catalog) // catalog is nullptr in unittest
         statuses_cache = catalog->getBGJobStatuses(type);
+    is_cache_prefetched = true;
     return CacheClearer{this};
 }
 
@@ -139,6 +157,7 @@ IBGJobStatusPersistentStoreProxy::CacheClearer::~CacheClearer()
 void CatalogBGJobStatusPersistentStoreProxy::clearCache()
 {
     statuses_cache.clear();
+    is_cache_prefetched = false;
 }
 
 } /// end namespace DB::BGJobStatusInCatalog

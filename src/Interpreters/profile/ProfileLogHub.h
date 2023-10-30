@@ -6,7 +6,7 @@
 #include <vector>
 #include <Interpreters/profile/ProfileElementConsumer.h>
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
-#include <bthread/mtx_cv_base.h>
+#include <bthread/mutex.h>
 #include <Common/ThreadPool.h>
 #include <common/logger_useful.h>
 

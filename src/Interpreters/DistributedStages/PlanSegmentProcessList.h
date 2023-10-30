@@ -20,7 +20,8 @@
 #include <Interpreters/CancellationCode.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
-#include <bthread/mtx_cv_base.h>
+#include <bthread/condition_variable.h>
+#include <bthread/mutex.h>
 #include <Poco/Logger.h>
 #include <common/types.h>
 

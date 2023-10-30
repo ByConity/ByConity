@@ -44,7 +44,7 @@ void DaemonJobServerBGThread::init()
     if (getType() == CnchBGThreadType::Consumer)
         fixKafkaActiveStatuses(this);
     status_persistent_store =
-        std::make_unique<BGJobStatusInCatalog::CatalogBGJobStatusPersistentStoreProxy>(getContext()->getCnchCatalog(), type);
+        std::make_unique<BGJobStatusInCatalog::CatalogBGJobStatusPersistentStoreProxy>(getContext()->getCnchCatalog(), type, getLog());
     bg_job_executor = std::make_unique<BackgroundJobExecutor>(*getContext(), getType());
     target_server_calculator = std::make_unique<TargetServerCalculator>(*getContext(), getType(), getLog());
     /// fetchCnchBGThreadStatus must be called after initialisation of status_persistent_store and etc
@@ -911,6 +911,14 @@ void DaemonJobForMergeMutate::executeOptimize(const StorageID & storage_id, cons
 
 BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
 {
+    Stopwatch watch;
+    watch.restart();
+    // fetch statuses in batch
+    auto cache_clearer = status_persistent_store->fetchStatusesIntoCache();
+    UInt64 milliseconds = watch.elapsedMilliseconds();
+    if (milliseconds >= SLOW_EXECUTION_THRESHOLD_MS)
+        LOG_DEBUG(log, "fetch bg job statuses took {} ms", milliseconds);
+
     BackgroundJobs ret;
     CnchServerClientPtrs cnch_servers = getContext()->getCnchServerClientPool().getAll();
 
@@ -973,6 +981,10 @@ BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
             }
         }
     }
+
+    milliseconds = watch.elapsedMilliseconds();
+    if (milliseconds >= SLOW_EXECUTION_THRESHOLD_MS)
+        LOG_DEBUG(log, "fetchBackgroundJobsFromServer took {} ms.", milliseconds);
     return ret;
 }
 

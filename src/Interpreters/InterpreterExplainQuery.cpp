@@ -107,9 +107,8 @@ BlockIO InterpreterExplainQuery::execute()
     BlockIO res;
 
     const auto & ast = query->as<ASTExplainQuery &>();
-
     if ((ast.getKind() == ASTExplainQuery::DistributedAnalyze || ast.getKind() == ASTExplainQuery::LogicalAnalyze)
-        && QueryUseOptimizerChecker::check(query, getContext()))
+        && QueryUseOptimizerChecker::check(query, getContext(), true))
     {
         if (!getContext()->getSettingsRef().log_processors_profiles || !getContext()->getSettingsRef().report_processors_profiles)
         {
@@ -742,7 +741,7 @@ void InterpreterExplainQuery::explainDistributedWithOptimizer(
 
     PlanSegmentDescriptions plan_segment_descriptions;
     for (auto & node : plan_segment_context.plan_segment_tree->getNodes())
-        plan_segment_descriptions.emplace_back(PlanSegmentDescription::getPlanSegmentDescription(node.plan_segment, true));
+        plan_segment_descriptions.emplace_back(PlanSegmentDescription::getPlanSegmentDescription(node.plan_segment, settings.json));
 
     if (settings.json)
         buffer << PlanPrinter::jsonDistributedPlan(plan_segment_descriptions, {});

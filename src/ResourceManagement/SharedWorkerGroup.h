@@ -16,8 +16,6 @@
 #pragma once
 #include <ResourceManagement/IWorkerGroup.h>
 
-#include <bthread/mutex.h>
-
 namespace DB::ResourceManagement
 {
 

@@ -30,7 +30,7 @@
 #include <common/StringRef.h>
 
 #include <boost/noncopyable.hpp>
-#include <bthread/mtx_cv_base.h>
+#include <bthread/mutex.h>
 
 #include <functional>
 #include <map>

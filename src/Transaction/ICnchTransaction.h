@@ -35,6 +35,7 @@
 #include <Common/serverLocality.h>
 #include <common/logger_useful.h>
 #include "Transaction/LockRequest.h"
+#include <bthread/recursive_mutex.h>
 
 #include <memory>
 #include <string>

@@ -24,7 +24,8 @@
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <boost/core/noncopyable.hpp>
-#include <bthread/mtx_cv_base.h>
+#include <bthread/condition_variable.h>
+#include <bthread/mutex.h>
 
 namespace DB
 {

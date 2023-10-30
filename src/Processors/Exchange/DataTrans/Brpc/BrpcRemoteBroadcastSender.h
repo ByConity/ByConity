@@ -23,7 +23,7 @@
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <brpc/stream.h>
-#include <bthread/mtx_cv_base.h>
+#include <bthread/mutex.h>
 #include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
 
 namespace DB
