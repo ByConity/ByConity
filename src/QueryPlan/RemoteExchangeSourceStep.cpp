@@ -169,7 +169,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
 
             size_t partition_id_start = (input->getParallelIndex() - 1) * exchange_parallel_size + 1;
             LocalChannelOptions local_options{
-                .queue_size = context->getSettingsRef().exchange_local_receiver_queue_size, .max_timeout_ms = options.exhcange_timeout_ms};
+                .queue_size = context->getSettingsRef().exchange_local_receiver_queue_size, .max_timeout_ts = options.exchange_timeout_ts};
             if (input->getSourceAddress().empty() && !settings.distributed_settings.is_explain)
                 throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
             bool enable_block_compress = context->getSettingsRef().exchange_enable_block_compress;
@@ -267,7 +267,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
 
             size_t partition_id_start = (input->getParallelIndex() - 1) * exchange_parallel_size + 1;
             LocalChannelOptions local_options{
-                .queue_size = context->getSettingsRef().exchange_local_receiver_queue_size, .max_timeout_ms = options.exhcange_timeout_ms};
+                .queue_size = context->getSettingsRef().exchange_local_receiver_queue_size, .max_timeout_ts = options.exchange_timeout_ts};
             if (input->getSourceAddress().empty() && !settings.distributed_settings.is_explain)
                 throw Exception("No source address!", ErrorCodes::LOGICAL_ERROR);
             bool is_final_plan_segment = plan_segment_id == 0;

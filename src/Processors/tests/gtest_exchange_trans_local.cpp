@@ -26,6 +26,7 @@
 #include <Processors/tests/gtest_processers_utils.h>
 #include <gtest/gtest.h>
 #include <Common/tests/gtest_utils.h>
+#include <Common/tests/gtest_global_context.h>
 
 namespace UnitTest
 {
@@ -34,7 +35,10 @@ using namespace DB;
 TEST(ExchangeLocalBroadcast, LocalBroadcastRegistryTest)
 {
     initLogger();
-    LocalChannelOptions options{10, 1000};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 1000 * 1000000;
+    LocalChannelOptions options{10, ts};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
@@ -49,7 +53,10 @@ TEST(ExchangeLocalBroadcast, LocalBroadcastRegistryTest)
 
 TEST(ExchangeLocalBroadcast, NormalSendRecvTest)
 {
-    LocalChannelOptions options{10, 1000};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 1000 * 1000000;
+    LocalChannelOptions options{10, ts};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
@@ -58,6 +65,7 @@ TEST(ExchangeLocalBroadcast, NormalSendRecvTest)
 
     Chunk chunk = createUInt8Chunk(10, 10, 8);
     auto total_bytes = chunk.bytes();
+    setQueryDuration();
     BroadcastStatus status = local_sender->send(std::move(chunk));
     ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
 
@@ -70,7 +78,10 @@ TEST(ExchangeLocalBroadcast, NormalSendRecvTest)
 
 TEST(ExchangeLocalBroadcast, SendTimeoutTest)
 {
-    LocalChannelOptions options{1, 200};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 200 * 1000000;
+    LocalChannelOptions options{1, ts};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
@@ -78,6 +89,7 @@ TEST(ExchangeLocalBroadcast, SendTimeoutTest)
     BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
 
     Chunk chunk = createUInt8Chunk(10, 10, 8);
+    setQueryDuration();
     BroadcastStatus status = local_sender->send(chunk.clone());
     ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
     BroadcastStatus timeout_status = local_sender->send(chunk.clone());
@@ -87,7 +99,10 @@ TEST(ExchangeLocalBroadcast, SendTimeoutTest)
 
 TEST(ExchangeLocalBroadcast, AllSendDoneTest)
 {
-    LocalChannelOptions options{10, 1000};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 1000 * 1000000;
+    LocalChannelOptions options{10, ts};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
@@ -97,6 +112,7 @@ TEST(ExchangeLocalBroadcast, AllSendDoneTest)
     Chunk chunk = createUInt8Chunk(10, 10, 8);
     auto total_bytes = chunk.bytes();
 
+    setQueryDuration();
     ASSERT_TRUE(local_sender->send(chunk.clone()).code == BroadcastStatusCode::RUNNING);
     ASSERT_TRUE(local_sender->send(chunk.clone()).code == BroadcastStatusCode::RUNNING);
     local_sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Test graceful close");

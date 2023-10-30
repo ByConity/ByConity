@@ -31,6 +31,7 @@
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
 #include <common/logger_useful.h>
+#include <Common/time.h>
 #include <common/types.h>
 
 #include <IO/LimitReadBuffer.h>
@@ -485,17 +486,6 @@ static void logException(ContextPtr context, QueryLogElement & elem)
             elem.stack_trace);
 }
 
-inline UInt64 time_in_microseconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
-{
-    return std::chrono::duration_cast<std::chrono::microseconds>(timepoint.time_since_epoch()).count();
-}
-
-
-inline UInt64 time_in_seconds(std::chrono::time_point<std::chrono::system_clock> timepoint)
-{
-    return std::chrono::duration_cast<std::chrono::seconds>(timepoint.time_since_epoch()).count();
-}
-
 static LabelledMetrics::MetricLabels markQueryProfileEventLabels(
     ContextMutablePtr context,
     ProcessListQueryType query_type = ProcessListQueryType::Default,
@@ -944,6 +934,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         }
 
         auto * insert_query = ast->as<ASTInsertQuery>();
+
+        context->setQueryExpirationTimeStamp();
 
         if (insert_query && insert_query->data)
         {

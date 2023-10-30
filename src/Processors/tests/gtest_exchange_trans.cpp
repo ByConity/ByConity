@@ -109,8 +109,9 @@ void receiver1()
     Block header = getHeader(1);
     BrpcRemoteBroadcastReceiverShardPtr receiver
         = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
-    receiver->registerToSenders(1000);
-    auto packet = receiver->recv(1000);
+    BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(receiver);
+    sink_receiver->registerToSenders(1000);
+    auto packet = sink_receiver->recv(1000);
     EXPECT_TRUE(std::holds_alternative<Chunk>(packet));
     Chunk & chunk = std::get<Chunk>(packet);
     EXPECT_EQ(chunk.getNumRows(), 1000);
@@ -124,8 +125,9 @@ void receiver2()
     Block header = getHeader(1);
     BrpcRemoteBroadcastReceiverShardPtr receiver
         = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
-    receiver->registerToSenders(1000);
-    auto packet = receiver->recv(1000);
+    BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(receiver);
+    sink_receiver->registerToSenders(1000);
+    auto packet = sink_receiver->recv(1000);
     EXPECT_TRUE(std::holds_alternative<Chunk>(packet));
     Chunk & chunk = std::get<Chunk>(packet);
     EXPECT_EQ(chunk.getNumRows(), 1000);
@@ -148,6 +150,7 @@ TEST_F(ExchangeRemoteTest, SendWithTwoReceivers)
     auto sender_2 = BroadcastSenderProxyRegistry::instance().getOrCreate(receiver_data2);
     sender_1->accept(getContext().context, header);
     sender_2->accept(getContext().context, header);
+    setQueryDuration();
     sender_1->send(origin_chunk.clone());
     sender_2->send(origin_chunk.clone());
 
@@ -189,7 +192,10 @@ void sender_thread(BroadcastSenderProxyPtr sender, Chunk chunk)
 
 TEST_F(ExchangeRemoteTest, RemoteNormalTest)
 {
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 1000 * 1000000;
+    ExchangeOptions exchange_options{.exchange_timeout_ts = ts};
     auto header = getHeader(1);
     auto data_key = std::make_shared<ExchangeDataKey>(3, 1, 1);
 
@@ -198,6 +204,7 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
 
     auto sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     sender->accept(getContext().context, header);
+    setQueryDuration();
     std::thread thread_sender(sender_thread, sender, std::move(chunk));
 
     BrpcRemoteBroadcastReceiverShardPtr receiver
@@ -232,7 +239,10 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
 
 TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
 {
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 200};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 2000 * 1000000;
+    ExchangeOptions exchange_options{.exchange_timeout_ts = ts};
     auto header = getHeader(1);
     auto data_key = std::make_shared<ExchangeDataKey>(3, 1, 1);
     Chunk chunk = createUInt8Chunk(10, 1, 8);
@@ -240,6 +250,7 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
     sender->accept(getContext().context, header);
     std::vector<std::thread> thread_senders;
     std::vector<Chunk> chunks;
+    setQueryDuration();
     for (int i = 0; i < 5; i++)
     {
         Chunk clone = chunk.clone();

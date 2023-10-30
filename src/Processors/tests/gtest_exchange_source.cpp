@@ -44,19 +44,23 @@ namespace UnitTest
 TEST(ExchangeSource, LocalNormalTest)
 {
     initLogger();
-    ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 200 * 1000000;
+    ExchangeOptions exchange_options {.exchange_timeout_ts = ts};
 
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->accept(getContext().context, Block());
     BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
-    local_receiver->registerToSenders(options.max_timeout_ms);
+    local_receiver->registerToSenders(200);
 
     Chunk chunk = createUInt8Chunk(10, 1, 8);
     auto total_bytes = chunk.bytes();
 
+    setQueryDuration();
     BroadcastStatus status = local_sender->send(std::move(chunk));
     ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
 
@@ -91,16 +95,20 @@ TEST(ExchangeSource, LocalNormalTest)
 
 TEST(ExchangeSource, LocalLimitTest)
 {
-    ExchangeOptions exchange_options {.exhcange_timeout_ms= 200};
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 200 * 1000000;
+    ExchangeOptions exchange_options {.exchange_timeout_ts = ts};
+    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
     local_sender->accept(getContext().context, Block());
-    local_receiver->registerToSenders(options.max_timeout_ms);
+    local_receiver->registerToSenders(200);
     Chunk chunk = createUInt8Chunk(10, 1, 8);
 
+    setQueryDuration();
     for (int i = 0; i < 5; i++)
     {
         BroadcastStatus status = local_sender->send(chunk.clone());

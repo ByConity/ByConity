@@ -84,7 +84,10 @@ TEST(ExchangeSourceStep, InitializePipelineTest)
     RemoteExchangeSourceStep exchange_source_step(inputs, datastream, false, false);
     exchange_source_step.setPlanSegment(&plan_segment);
 
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 1000, .send_threshold_in_bytes = 0};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 1000 * 1000000;
+    ExchangeOptions exchange_options{.exchange_timeout_ts = ts, .send_threshold_in_bytes = 0};
     exchange_source_step.setExchangeOptions(exchange_options);
 
     auto data_key_1 = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 1);

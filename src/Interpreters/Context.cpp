@@ -5160,4 +5160,26 @@ PlanCacheManager* Context::getPlanCacheManager()
     return shared->plan_cache_manager ? shared->plan_cache_manager.get() : nullptr;
 }
 
+UInt32 Context::getQueryMaxExecutionTime() const
+{
+    if (getSettingsRef().max_execution_time.totalSeconds() != 0)
+        return getSettingsRef().max_execution_time.totalSeconds() * 1000;
+    else if (getSettingsRef().exchange_timeout_ms != 0)
+        return getSettingsRef().exchange_timeout_ms;
+    else
+        return 100 * 60 * 1000; // default as 100min
+}
+
+void Context::setQueryExpirationTimeStamp()
+{
+    auto initial_query_start_time_ms = client_info.initial_query_start_time_microseconds / 1000;
+    // Internal queries are those executed without an independent client context,
+    // thus should not set initial_query_start_time, because it might introduce data race.
+    if (initial_query_start_time_ms == 0)
+        initial_query_start_time_ms = time_in_milliseconds(std::chrono::system_clock::now());
+
+    UInt64 query_expiration_ms = initial_query_start_time_ms + getQueryMaxExecutionTime();
+    query_expiration_timestamp = {.tv_sec = time_t(query_expiration_ms / 1000), .tv_nsec = long((query_expiration_ms % 1000) * 1000000)};
+}
+
 }

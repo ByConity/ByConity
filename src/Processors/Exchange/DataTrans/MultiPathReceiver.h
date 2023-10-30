@@ -40,7 +40,7 @@ public:
     void registerToSendersAsync(UInt32 timeout_ms);
     void registerToSendersJoin();
 
-    RecvDataPacket recv(UInt32 timeout_ms) override;
+    RecvDataPacket recv(timespec timeout_ts) override;
     BroadcastStatus finish(BroadcastStatusCode status_code, String message) override;
     String getName() const override;
 

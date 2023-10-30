@@ -145,10 +145,21 @@ public:
         return emplaceImpl(milliseconds, std::forward<Args...>(args...));
     }
 
+    template <typename... Args>
+    bool tryEmplaceUntil(timespec millis_timestamp, Args &&... args)
+    {
+        return emplaceUntilImpl(millis_timestamp, std::forward<Args...>(args...));
+    }
+
     /// Returns false if queue is (finished and empty) or (object was not popped during timeout)
     [[nodiscard]] bool tryPop(T & x, UInt64 milliseconds = 0)
     {
         return popImpl(x, milliseconds);
+    }
+
+    bool tryPopUntil(T & x, timespec millis_timestamp)
+    {
+        return popUntilImpl(x, millis_timestamp);
     }
 
     /// Returns size of queue

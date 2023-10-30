@@ -41,7 +41,10 @@ TEST(ExchangeUtils, mergeSenderTest)
     initLogger();
     const auto & context = getContext().context;
     Block header;
-    LocalChannelOptions options{10, 1000};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 1000 * 1000000;
+    LocalChannelOptions options{10, ts};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
     auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);

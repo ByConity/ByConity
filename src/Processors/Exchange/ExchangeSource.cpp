@@ -29,6 +29,7 @@
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <common/logger_useful.h>
 #include <Common/Exception.h>
+#include <Common/time.h>
 #include <Columns/ColumnsNumber.h>
 #include <Interpreters/SegmentScheduler.h>
 
@@ -105,7 +106,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
     if (was_query_canceled || was_receiver_finished)
         return std::nullopt;
 
-    RecvDataPacket packet = receiver->recv(options.exhcange_timeout_ms);
+    RecvDataPacket packet = receiver->recv(options.exchange_timeout_ts);
 
     if (std::holds_alternative<Chunk>(packet))
     {

@@ -51,7 +51,7 @@ public:
     ~BrpcRemoteBroadcastReceiver() override;
 
     void registerToSenders(UInt32 timeout_ms) override;
-    RecvDataPacket recv(UInt32 timeout_ms) noexcept override;
+    RecvDataPacket recv(timespec timeout_ts) noexcept override;
     BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
     String getName() const override;
     void pushReceiveQueue(MultiPathDataPacket packet);

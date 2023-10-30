@@ -533,6 +533,7 @@ private:
     QueueThrottlerDeleterPtr queue_throttler_ptr;
     bool enable_worker_fault_tolerance = false;
 
+    timespec query_expiration_timestamp{};
 public:
     // Top-level OpenTelemetry trace context for the query. Makes sense only for a query context.
     OpenTelemetryTraceContext query_trace_context;
@@ -1529,6 +1530,10 @@ public:
 
     void setPlanCacheManager(std::unique_ptr<PlanCacheManager> && manager);
     PlanCacheManager* getPlanCacheManager();
+
+    UInt32 getQueryMaxExecutionTime() const;
+    timespec getQueryExpirationTimeStamp() const { return query_expiration_timestamp; }
+    void setQueryExpirationTimeStamp();
 
 private:
     String tenant_id;

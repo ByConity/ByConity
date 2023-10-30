@@ -101,6 +101,25 @@ public:
         return true;
     }
 
+    bool tryPopUntil(T & x, timespec millis_timestamp)
+    {
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        while (queue.empty() && !is_closed)
+        {
+            if (ETIMEDOUT == empty_cv.wait_until(lock, millis_timestamp))
+                return false;
+        }
+
+        if (is_closed)
+            return false;
+
+        ::detail::moveOrCopyIfThrow(std::move(queue.front()), x);
+        queue.pop();
+        lock.unlock();
+        full_cv.notify_one();
+        return true;
+    }
+
     template <typename... Args>
     bool tryEmplace(UInt64 milliseconds, Args &&... args)
     {
@@ -108,6 +127,23 @@ public:
         while (queue.size() >= capacity && !is_closed)
         {
             if (ETIMEDOUT == full_cv.wait_for(lock, milliseconds * 1000))
+                return false;
+        }
+        if (is_closed)
+            return false;
+        queue.emplace(std::forward<Args>(args)...);
+        lock.unlock();
+        empty_cv.notify_one();
+        return true;
+    }
+
+    template <typename... Args>
+    bool tryEmplaceUntil(timespec millis_timestamp, Args &&... args)
+    {
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        while (queue.size() >= capacity && !is_closed)
+        {
+            if (ETIMEDOUT == full_cv.wait_until(lock, millis_timestamp))
                 return false;
         }
         if (is_closed)

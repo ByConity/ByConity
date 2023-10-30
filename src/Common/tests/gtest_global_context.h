@@ -23,6 +23,7 @@
 
 #include <Interpreters/Context.h>
 #include <Databases/DatabaseMemory.h>
+#include <Common/time.h>
 
 struct ContextHolder
 {
@@ -47,4 +48,16 @@ inline const ContextHolder & getContext()
 {
     static ContextHolder holder;
     return holder;
+}
+
+inline void setQueryDuration()
+{
+    auto & context = getContext().context;
+    auto & client_info = context->getClientInfo();
+
+    const auto current_time = std::chrono::system_clock::now();
+    client_info.initial_query_start_time = time_in_seconds(current_time);
+    client_info.initial_query_start_time_microseconds = time_in_microseconds(current_time);
+
+    context->setQueryExpirationTimeStamp();
 }

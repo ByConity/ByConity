@@ -61,7 +61,10 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     arguments.push_back(header.getByPosition(2));
     auto func = createRepartitionFunction(getContext().context, arguments);
 
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .need_send_plan_segment_status = false};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 2000 * 1000000;
+    ExchangeOptions exchange_options{.exchange_timeout_ts = ts, .need_send_plan_segment_status = false};
 
     const String query_id = "PlanSegmentExecutor_test";
     const UInt64 query_tx_id = 12345;
@@ -71,7 +74,7 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
     auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts};
 
     auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 1);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
@@ -161,7 +164,10 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     Chunk chunk(block.mutateColumns(), rows);
     ColumnsWithTypeAndName arguments;
 
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .need_send_plan_segment_status = false};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 2000 * 1000000;
+    ExchangeOptions exchange_options{.exchange_timeout_ts = ts, .need_send_plan_segment_status = false};
 
     const String query_id = "PlanSegmentExecutor_test";
     const UInt64 query_tx_id = 11111;
@@ -171,7 +177,7 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts};
 
     auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 1);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
@@ -264,7 +270,10 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     Chunk chunk(block.mutateColumns(), rows);
     ColumnsWithTypeAndName arguments;
 
-    ExchangeOptions exchange_options{.exhcange_timeout_ms = 2000, .need_send_plan_segment_status = false};
+    timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ts.tv_nsec += 1000 * 1000000;
+    ExchangeOptions exchange_options{.exchange_timeout_ts = ts, .need_send_plan_segment_status = false};
 
     const String query_id = "PlanSegmentExecutor_test";
     const UInt64 query_tx_id = 11111;
@@ -274,7 +283,7 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
     auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
-    LocalChannelOptions options{10, exchange_options.exhcange_timeout_ms};
+    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts};
 
     auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 1);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);

@@ -138,6 +138,8 @@ void PlanSegmentManagerRpcService::executeQuery(
         if (!query_context->hasQueryContext())
             query_context->makeQueryContext();
 
+        query_context->setQueryExpirationTimeStamp();
+
         report_metrics_timer->getResourceData().fillProto(*response->mutable_worker_resource_data());
         LOG_DEBUG(log, "adaptive scheduler worker status: {}", response->worker_resource_data().ShortDebugString());
 
