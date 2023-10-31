@@ -324,7 +324,7 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
 {
     std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
     auto & plan_segment_tree = plan_segment_tree_and_used_storage_ids.first;
-    size_t plan_segment_num = plan_segment_tree->getPlanSegmentsMap().size();
+    size_t plan_segment_num = plan_segment_tree->getNodes().size();
     UInt64 max_plan_segment_num = context->getSettingsRef().max_plan_segment_num;
     if (max_plan_segment_num != 0 && plan_segment_num > max_plan_segment_num)
         throw Exception(
