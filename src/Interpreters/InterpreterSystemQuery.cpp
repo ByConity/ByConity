@@ -96,6 +96,10 @@
 #include <Storages/Kafka/CnchKafkaOffsetManager.h>
 #endif
 
+#if USE_MYSQL
+#include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
+#endif
+
 namespace DB
 {
 namespace ErrorCodes
@@ -473,6 +477,11 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::RESTART_CONSUME:
             controlConsume(query.type);
             break;
+        case Type::START_MATERIALIZEDMYSQL:
+        case Type::STOP_MATERIALIZEDMYSQL:
+        case Type::RESYNC_MATERIALIZEDMYSQL_TABLE:
+            executeMaterializedMyQLInCnchServer(query);
+            break;
         case Type::RESET_CONSUME_OFFSET:
             resetConsumeOffset(query, system_context);
             break;
@@ -738,6 +747,34 @@ void InterpreterSystemQuery::resetConsumeOffset(ASTSystemQuery & query, ContextM
     else
         throw Exception("offset should be set by one of the parameters: timestamp, offset_value, offset_values. input: "
                             + query.string_data, ErrorCodes::BAD_ARGUMENTS);
+}
+
+void InterpreterSystemQuery::executeMaterializedMyQLInCnchServer(const ASTSystemQuery & query)
+{
+    auto database = DatabaseCatalog::instance().getDatabase(query.database, getContext());
+    auto * materialized_mysql = dynamic_cast<DatabaseCnchMaterializedMySQL*>(database.get());
+    if (!materialized_mysql)
+        throw Exception("Expect CnchMaterializedMySQL, but got " + database->getEngineName(), ErrorCodes::BAD_ARGUMENTS);
+
+    auto daemon_manager = getContext()->getDaemonManagerClient();
+
+    using Type = ASTSystemQuery::Type;
+    switch (query.type)
+    {
+        /// TODO: record the status in catalog for persistent
+        case Type::START_MATERIALIZEDMYSQL:
+            daemon_manager->controlDaemonJob(materialized_mysql->getStorageID(), CnchBGThreadType::MaterializedMySQL, CnchBGThreadAction::Start);
+            break;
+        case Type::STOP_MATERIALIZEDMYSQL:
+            daemon_manager->controlDaemonJob(materialized_mysql->getStorageID(), CnchBGThreadType::MaterializedMySQL, CnchBGThreadAction::Stop);
+            break;
+        case Type::RESYNC_MATERIALIZEDMYSQL_TABLE:
+            /// Here we use getContext() rather than system_context as query forwarding needs process_list_entry
+            materialized_mysql->manualResyncTable(query.table, getContext());
+            break;
+        default:
+            throw Exception(String(ASTSystemQuery::typeToString(query.type)) + " is not supported now", ErrorCodes::NOT_IMPLEMENTED);
+    }
 }
 
 void InterpreterSystemQuery::restoreReplica()
@@ -1424,6 +1461,8 @@ void InterpreterSystemQuery::executeActionOnCNCHLog(const String & table_name, A
 {
     if (table_name == CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME)
         executeActionOnCNCHLogImpl(getContext()->getCloudKafkaLog(), type, table_name, log);
+    else if (table_name == CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME)
+        executeActionOnCNCHLogImpl(getContext()->getCloudMaterializedMySQLLog(), type, table_name, log);
     else if (table_name == CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME)
         executeActionOnCNCHLogImpl(getContext()->getQueryMetricsLog(), type, table_name, log);
     else if (table_name == CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME)
@@ -1432,9 +1471,10 @@ void InterpreterSystemQuery::executeActionOnCNCHLog(const String & table_name, A
         executeActionOnCNCHLogImpl(getContext()->getCnchQueryLog(), type, table_name, log);
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "there is no log corresponding to table name {}, available names are {}, {}, {}",
+            "there is no log corresponding to table name {}, available names are {}, {}, {}, {}",
             table_name,
             CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME,
+            CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME);

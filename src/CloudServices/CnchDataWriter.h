@@ -24,6 +24,7 @@
 #include <Transaction/Actions/S3AttachMetaAction.h>
 #include <cppkafka/cppkafka.h>
 #include <cppkafka/topic_partition_list.h>
+#include <Databases/MySQL/MaterializedMySQLCommon.h>
 
 namespace DB
 {
@@ -48,7 +49,8 @@ public:
         ManipulationType type_,
         String task_id_ = {},
         String consumer_group_ = {},
-        const cppkafka::TopicPartitionList & tpl_ = {});
+        const cppkafka::TopicPartitionList & tpl_ = {},
+        const MySQLBinLogInfo & binlog = {});
 
     ~CnchDataWriter();
 
@@ -92,6 +94,7 @@ private:
 
     String consumer_group;
     cppkafka::TopicPartitionList tpl;
+    MySQLBinLogInfo binlog;
 
     UUID newPartID(const MergeTreePartInfo & part_info, UInt64 txn_timestamp);
     /// dump with thread pool

@@ -177,7 +177,8 @@ std::unordered_map<CnchBGThreadType, DaemonJobServerBGThreadPtr> createDaemonJob
         { "PART_MERGE", 10000},
         { "CONSUMER", 10000},
         { "DEDUP_WORKER", 10000},
-        { "PART_CLUSTERING", 10000}
+        { "PART_CLUSTERING", 10000},
+        { "MATERIALIZED_MYSQL", 10000}
     };
 
     std::map<std::string, unsigned int> config = updateConfig(std::move(default_config), app_config);

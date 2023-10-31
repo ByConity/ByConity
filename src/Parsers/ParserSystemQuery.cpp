@@ -276,6 +276,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::STOP_CONSUME:
         case Type::DROP_CONSUME:
         case Type::RESTART_CONSUME:
+        case Type::RESYNC_MATERIALIZEDMYSQL_TABLE:
         case Type::DROP_CHECKSUMS_CACHE:
         case Type::SYNC_DEDUP_WORKER:
         case Type::START_DEDUP_WORKER:
@@ -368,6 +369,14 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         case Type::CLEAN_TRANSACTION:
         {
             if (!parse_uint(pos, expected, res->txn_id))
+                return false;
+            break;
+        }
+
+        case Type::START_MATERIALIZEDMYSQL:
+        case Type::STOP_MATERIALIZEDMYSQL:
+        {
+            if (!parseIdentifierOrStringLiteral(pos, expected, res->database))
                 return false;
             break;
         }

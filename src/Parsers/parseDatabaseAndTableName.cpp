@@ -81,7 +81,7 @@ bool parseDatabaseAndTableNameOrAsterisks(IParser::Pos & pos, Expected & expecte
                 {
                     /// db.*
                     tryRewriteCnchDatabaseName(ast_db, pos.getContext());
-                    
+
                     any_database = false;
                     database = getIdentifierName(ast_db);
                     any_table = true;
@@ -113,6 +113,21 @@ bool parseDatabaseAndTableNameOrAsterisks(IParser::Pos & pos, Expected & expecte
 
         return false;
     });
+}
+
+bool parseDatabase(IParser::Pos & pos, Expected & expected, String & database_str)
+{
+    ParserToken s_dot(TokenType::Dot);
+    ParserIdentifier identifier_parser;
+
+    ASTPtr database;
+    database_str = "";
+
+    if (!identifier_parser.parse(pos, database, expected))
+        return false;
+
+    tryGetIdentifierNameInto(database, database_str);
+    return true;
 }
 
 }

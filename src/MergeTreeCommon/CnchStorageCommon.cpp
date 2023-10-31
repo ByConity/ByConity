@@ -383,7 +383,7 @@ String CnchStorageCommonHelper::getCreateQueryForCloudTable(
     return statement_buf.str();
 }
 
-bool CnchStorageCommonHelper::forwardQueryToServerIfNeeded(ContextPtr query_context, const StorageID & storage_id) const
+bool CnchStorageCommonHelper::forwardQueryToServerIfNeeded(ContextPtr query_context, const StorageID & storage_id, const String & query_to_forward, bool need_process_entry) const
 {
     if (query_context->getSettingsRef().force_execute_alter)
         return false;
@@ -392,12 +392,11 @@ bool CnchStorageCommonHelper::forwardQueryToServerIfNeeded(ContextPtr query_cont
         return false;
 
     auto process_list_entry = query_context->getProcessListEntry().lock();
-    if (!process_list_entry)
+    if (!process_list_entry && need_process_entry)
         return false;
     // set current transaction as read_only to skip cleanTxn
     query_context->getCurrentTransaction()->setReadOnly(true);
     const auto & query_client_info = query_context->getClientInfo();
-    const auto query_status = process_list_entry->get().getInfo();
     auto timeouts = ConnectionTimeouts::getTCPTimeoutsWithoutFailover(query_context->getSettingsRef());
     Connection connection(
         host_port.getHost(),
@@ -411,7 +410,12 @@ bool CnchStorageCommonHelper::forwardQueryToServerIfNeeded(ContextPtr query_cont
         Protocol::Compression::Disable,
         Protocol::Secure::Disable);
 
-    const String & query = query_status.query;
+    auto query = query_to_forward;
+    if (need_process_entry)
+    {
+        const auto query_status = process_list_entry->get().getInfo();
+        query = query_status.query;
+    }
     LOG_DEBUG(
         &Poco::Logger::get("CnchStorageCommonHelper"), "Send query `{}` to server {}", query, host_port.toDebugString());
     RemoteBlockInputStream stream(connection, query, {}, query_context);

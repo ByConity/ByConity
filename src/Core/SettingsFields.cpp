@@ -392,10 +392,10 @@ void SettingFieldMultiRegexString::readBinary(ReadBuffer & in)
 }
 
 /// Split string into strings by comma
-std::set<String> SettingFieldMultiRegexString::parseStringToRegexSet(String x)
+std::unordered_set<String> SettingFieldMultiRegexString::parseStringToRegexSet(String x)
 {
     char comma = ',';
-    std::set<String> res;
+    std::unordered_set<String> res;
     x = x + comma;
     size_t last_pos = 0, pos = x.find(comma);
     while (pos != String::npos)

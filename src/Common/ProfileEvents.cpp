@@ -403,6 +403,8 @@
     M(DropDatabaseFailed, "") \
     M(RenameDatabaseSuccess, "") \
     M(RenameDatabaseFailed, "") \
+    M(AlterDatabaseSuccess, "") \
+    M(AlterDatabaseFailed, "") \
     M(CreateTableSuccess, "") \
     M(CreateTableFailed, "") \
     M(DropTableSuccess, "") \
