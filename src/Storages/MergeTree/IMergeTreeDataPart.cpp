@@ -597,6 +597,9 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::getChecksums() const
         const String storage_unique_id = storage.getStorageUniqueID();
         auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true); };
         auto res = cache->getOrSet(storage_unique_id, getChecksumsCacheKey(storage_unique_id, *this), std::move(load_func)).first;
+
+        const_cast<IMergeTreeDataPart *>(this)->SetChecksumsPtrIfNeed(res);
+
         return res;
     }
     else
@@ -1131,13 +1134,18 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::loadChecksums(bool require)
         bytes_on_disk = checksums->getTotalSizeOnDisk();
     }
 
+    SetChecksumsPtrIfNeed(checksums);
+
+    return checksums;
+}
+
+void IMergeTreeDataPart::SetChecksumsPtrIfNeed(const ChecksumsPtr & checksums)
+{
     if (storage.getSettings()->enable_persistent_checksum || is_temp || isProjectionPart())
     {
         std::lock_guard lock(checksums_mutex);
         checksums_ptr = checksums;
     }
-
-    return checksums;
 }
 
 void IMergeTreeDataPart::loadRowsCount()

@@ -628,11 +628,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
 
     checksums = loadChecksumsForPart(true);
 
-    if (storage.getSettings()->enable_persistent_checksum || is_temp || isProjectionPart())
-    {
-        std::lock_guard lock(checksums_mutex);
-        checksums_ptr = checksums;
-    }
+    SetChecksumsPtrIfNeed(checksums);
 
     /// store in disk cache
     if (enableDiskCache())
