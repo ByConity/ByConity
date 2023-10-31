@@ -53,7 +53,13 @@ public:
 
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr & ast, ContextPtr context_) const override;
 
-    static BlockInputStreamPtr buildInputStreamFromSource(const ContextPtr context_ptr, const Block & sample, const Settings & settings, const String & source_uri, const String & format);
+    static BlockInputStreamPtr buildInputStreamFromSource(
+      const ContextPtr context_ptr,
+      const Block & sample,
+      const Settings & settings,
+      const String & source_uri,
+      const String & format,
+      bool is_enable_squash = false);
 
 private:
     StoragePtr getTable(ASTInsertQuery & query);
