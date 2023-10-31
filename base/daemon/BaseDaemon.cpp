@@ -18,6 +18,9 @@
  * This file may have been modified by Bytedance Ltd. and/or its affiliates (“ Bytedance's Modifications”).
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
+#if defined(__clang__) && __clang_major__ >= 13
+#pragma clang diagnostic ignored "-Wreserved-identifier"
+#endif
 
 #include <daemon/BaseDaemon.h>
 #include <daemon/SentryWriter.h>
@@ -159,7 +162,7 @@ static bool dumpCallbackError(const google_breakpad::MinidumpDescriptor & descri
     std::string message = query_id.size ?
         fmt::format("(query_id: {}) generate core minidump path: {}", query_id.toString(), descriptor.path()) :
         fmt::format("(no query) generate core minidump path: {}", descriptor.path());
-    
+
     if (message.size() > buf_size - 16)
         message.resize(buf_size - 16);
 
