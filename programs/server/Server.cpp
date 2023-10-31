@@ -75,6 +75,7 @@
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/registerStorages.h>
+#include <Storages/MergeTree/ChecksumsCache.h>
 #include <TableFunctions/registerTableFunctions.h>
 #include <brpc/server.h>
 #include <google/protobuf/service.h>
@@ -1093,7 +1094,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
             formatReadableSizeWithBinarySuffix(mark_cache_size));
     }
     global_context->setMarkCache(mark_cache_size);
-    global_context->setChecksumsCache(config().getUInt64("checksum_cache_size", 10737418240)); // 10GB
+
+    /// A cache for part checksums
+    ChecksumsCacheSettings checksum_cache_settings;
+    checksum_cache_settings.lru_max_size = config().getUInt64("checksum_cache_size", 10737418240); //10GB
+    checksum_cache_settings.lru_max_nums = config().getUInt64("checksum_cache_nums", 1000000); //100W
+    checksum_cache_settings.mapping_bucket_size = config().getUInt64("checksum_cache_bucket", 500000); //50w
+    checksum_cache_settings.cache_shard_num = config().getUInt64("checksum_cache_shard", 8); //8
+    checksum_cache_settings.lru_update_interval = config().getUInt64("checksum_cache_lru_update_interval", 60); //60 seconds
+    global_context->setChecksumsCache(checksum_cache_settings);
 
     /// A cache for mmapped files.
     size_t mmap_cache_size = config().getUInt64("mmap_cache_size", 1000);   /// The choice of default is arbitrary.

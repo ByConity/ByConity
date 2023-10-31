@@ -1391,7 +1391,7 @@ public:
     }
 
 
-    void setChecksumsCache(size_t cache_size_in_bytes);
+    void setChecksumsCache(const ChecksumsCacheSettings & settings);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
 
     /// client for service discovery
