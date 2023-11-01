@@ -1098,7 +1098,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// A cache for part checksums
     ChecksumsCacheSettings checksum_cache_settings;
     checksum_cache_settings.lru_max_size = config().getUInt64("checksum_cache_size", 10737418240); //10GB
-    checksum_cache_settings.mapping_bucket_size = config().getUInt64("checksum_cache_bucket", 5000); //500
+    checksum_cache_settings.mapping_bucket_size = config().getUInt64("checksum_cache_bucket", 5000); //5000
     checksum_cache_settings.cache_shard_num = config().getUInt64("checksum_cache_shard", 8); //8
     checksum_cache_settings.lru_update_interval = config().getUInt64("checksum_cache_lru_update_interval", 60); //60 seconds
     global_context->setChecksumsCache(checksum_cache_settings);
