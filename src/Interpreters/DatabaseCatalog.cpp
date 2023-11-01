@@ -324,10 +324,10 @@ DatabaseAndTable DatabaseCatalog::getTableImpl(
 
 #if USE_MYSQL
         /// It's definitely not the best place for this logic, but behaviour must be consistent with DatabaseMaterializeMySQL::tryGetTable(...)
-        if (db_and_table.first->getEngineName() == "MaterializeMySQL")
+        if (db_and_table.first->getEngineName() == "CnchMaterializedMySQL" || db_and_table.first->getEngineName() == "CloudMaterializedMySQL")
         {
-            if (!MaterializeMySQLSyncThread::isMySQLSyncThread())
-                db_and_table.second = std::make_shared<StorageMaterializeMySQL>(std::move(db_and_table.second), db_and_table.first.get());
+            if (!MaterializeMySQLSyncThread::isMySQLSyncThread() && !context_->getSettingsRef().force_manipulate_materialized_mysql_table)
+               db_and_table.second = std::make_shared<StorageMaterializeMySQL>(std::move(db_and_table.second), db_and_table.first.get());
         }
 #endif
         return db_and_table;
@@ -431,7 +431,7 @@ void DatabaseCatalog::assertDatabaseDoesntExistUnlocked(const String & database_
 void DatabaseCatalog::attachDatabase(const String & database_name, const DatabasePtr & database)
 {
     // TEMPORARY_DATABASE is stored in DatabaseCatalog becase it is tiny
-    if (database->getEngineName() == "Cnch" && database_name != TEMPORARY_DATABASE)
+    if ((database->getEngineName() == "Cnch" || database->getEngineName() == "CnchMaterializedMySQL") && database_name != TEMPORARY_DATABASE)
         return;
     String tenant_db = formatTenantDatabaseName(database_name);
     std::lock_guard lock{databases_mutex};
@@ -778,7 +778,7 @@ void DatabaseCatalog::addDependency(const StorageID & from, const StorageID & wh
 {
     String from_tenant_db = formatTenantDatabaseName(from.database_name);
     StorageID tenant_where = StorageID {formatTenantDatabaseName(where.database_name), where.table_name, where.uuid};
-    
+
     std::lock_guard lock{databases_mutex};
     // FIXME when loading metadata storage may not know UUIDs of it's dependencies, because they are not loaded yet,
     // so UUID of `from` is not used here. (same for remove, get and update)

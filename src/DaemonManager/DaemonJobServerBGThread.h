@@ -68,7 +68,8 @@ public:
     BackgroundJobPtr getBackgroundJob(const UUID & uuid) const;
     BGJobInfos getBGJobInfos() const;
     Result executeJobAction(const StorageID & storage_id, CnchBGThreadAction action);
-    virtual bool isTargetTable(const StoragePtr &) const { return false; }
+    /// StoragePtr for table level DaemonJobServerBGThread, StorageID for database level DaemonJobServerBGThread
+    virtual bool ifNeedDaemonJob(const StoragePtr &, const StorageID &) { return false; }
     IBackgroundJobExecutor & getBgJobExecutor() const { return *bg_job_executor; }
 
     /// for unit test
@@ -136,14 +137,14 @@ void runMissingAndRemoveDuplicateJob(
     BackgroundJobs &,
     const std::unordered_multimap<UUID, BGJobInfoFromServer> &);
 
-template <CnchBGThreadType T, bool (*isTargetTableF)(const StoragePtr &)>
+template <CnchBGThreadType T, bool (*ifNeedDaemonJobF)(const StoragePtr &, const StorageID &, const ContextPtr & context)>
 struct DaemonJobForCnch : public DaemonJobServerBGThread
 {
     DaemonJobForCnch(ContextMutablePtr global_context_) : DaemonJobServerBGThread(std::move(global_context_), T) { }
-    bool isTargetTable(const StoragePtr & storage) const override { return isTargetTableF(storage); }
+    bool ifNeedDaemonJob(const StoragePtr & storage, const StorageID & storage_id) override { return ifNeedDaemonJobF(storage, storage_id, getContext()); }
 };
 
-bool isCnchMergeTree(const StoragePtr & storage);
+bool isCnchMergeTree(const StoragePtr & storage, const StorageID & storage_id, const ContextPtr & context);
 
 struct DaemonJobForMergeMutate : public DaemonJobForCnch<CnchBGThreadType::MergeMutate, isCnchMergeTree>
 {

@@ -49,6 +49,7 @@ class DatabaseCnch : public IDatabase, protected WithContext
 {
 public:
     DatabaseCnch(const String & name, UUID uuid, ContextPtr context);
+    DatabaseCnch(const String & name, UUID uuid, const String & logger, ContextPtr context);
 
     String getEngineName() const override { return "Cnch"; }
     UUID getUUID() const override { return db_uuid; }
@@ -84,13 +85,13 @@ protected:
     ASTPtr getCreateTableQueryImpl(const String & name, ContextPtr local_context, bool throw_on_error) const override;
     StoragePtr tryGetTableImpl(const String & name, ContextPtr local_context) const;
 
+    Poco::Logger * log;
 private:
     const UUID db_uuid;
     /// local storage cache, mapping from name->storage, mainly for select query
     /// Work under an assumptions that database was re-created for each query
     mutable std::unordered_map<String, StoragePtr> cache;
     mutable std::shared_mutex cache_mutex;
-    Poco::Logger * log;
 };
 
 using CnchDBPtr = std::shared_ptr<DatabaseCnch>;

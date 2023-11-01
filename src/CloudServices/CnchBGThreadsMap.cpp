@@ -23,6 +23,7 @@
 #include <CloudServices/CnchPartGCThread.h>
 #include <CloudServices/DedupWorkerManager.h>
 #include <CloudServices/ReclusteringManagerThread.h>
+#include <Databases/MySQL/MaterializedMySQLSyncThreadManager.h>
 
 #include <regex>
 
@@ -69,6 +70,10 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
     else if (type == CnchBGThreadType::Clustering)
     {
         return std::make_shared<ReclusteringManagerThread>(getContext(), storage_id);
+    }
+    else if (type == CnchBGThreadType::MaterializedMySQL)
+    {
+        return std::make_shared<MaterializedMySQLSyncThreadManager>(getContext(), storage_id);
     }
     else
     {

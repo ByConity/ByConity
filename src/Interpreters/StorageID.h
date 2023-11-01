@@ -48,6 +48,7 @@ namespace ErrorCodes
 }
 
 static constexpr char const * TABLE_WITH_UUID_NAME_PLACEHOLDER = "_";
+static constexpr char const * TABLE_PLACEHOLDER_FOR_ONLY_DATABASE = "_NOT_A_TABLE";
 
 class ASTQueryWithTableAndOutput;
 class ASTTableIdentifier;
@@ -73,6 +74,12 @@ struct StorageID
         assertNotEmpty();
     }
 
+    explicit StorageID(const String & database, UUID uuid_ = UUIDHelpers::Nil)
+        : database_name(database), table_name(TABLE_PLACEHOLDER_FOR_ONLY_DATABASE), uuid(uuid_)
+    {
+        assertNotEmpty();
+    }
+
     StorageID(const ASTQueryWithTableAndOutput & query);
     StorageID(const ASTTableIdentifier & table_identifier_node);
     StorageID(const ASTPtr & node);
@@ -85,6 +92,7 @@ struct StorageID
     String getFullNameNotQuoted() const;
 
     String getNameForLogs() const;
+    String getDatabaseNameForLogs() const;
 
     explicit operator bool () const
     {
@@ -101,6 +109,11 @@ struct StorageID
         return uuid != UUIDHelpers::Nil;
     }
 
+    bool isDatabase() const
+    {
+        return table_name == TABLE_PLACEHOLDER_FOR_ONLY_DATABASE;
+    }
+
     bool operator<(const StorageID & rhs) const;
     bool operator==(const StorageID & rhs) const;
 
@@ -111,6 +124,8 @@ struct StorageID
             throw Exception("Both table name and UUID are empty", ErrorCodes::UNKNOWN_TABLE);
         if (table_name.empty() && !database_name.empty())
             throw Exception("Table name is empty, but database name is not", ErrorCodes::UNKNOWN_TABLE);
+        if (table_name == TABLE_PLACEHOLDER_FOR_ONLY_DATABASE && (database_name.empty() || !hasUUID()))
+            throw Exception("Database StorageID has no database name as well as UUID", ErrorCodes::LOGICAL_ERROR);
     }
 
     /// Avoid implicit construction of empty StorageID. However, it's needed for deferred initialization.

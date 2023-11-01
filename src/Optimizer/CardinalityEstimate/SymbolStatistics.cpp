@@ -116,7 +116,15 @@ double SymbolStatistics::estimateLessThanOrLessThanEqualFilter(double upper_boun
     double selectivity;
     if (histogram.getBuckets().empty())
     {
-        selectivity = (upper_bound - lower_bound) / (max - min);
+        double range = upper_bound - lower_bound;
+        if (range == 0 && upper_bound_inclusive)
+        {
+            selectivity = (max - min <= 0) ? 1 : 1 / (ndv);
+        }
+        else
+        {
+            selectivity = (max - min <= 0) ? 1 : range / (max - min);
+        }
     }
     else
     {
@@ -131,7 +139,15 @@ SymbolStatistics::estimateGreaterThanOrGreaterThanEqualFilter(double upper_bound
     double selectivity;
     if (histogram.getBuckets().empty())
     {
-        selectivity = (max - min <= 0) ? 1 : (upper_bound - lower_bound) / (max - min);
+        double range = upper_bound - lower_bound;
+        if (range == 0 && lower_bound_inclusive)
+        {
+            selectivity = (max - min <= 0) ? 1 : 1 / (ndv);
+        }
+        else
+        {
+            selectivity = (max - min <= 0) ? 1 : range / (max - min);
+        }
     }
     else
     {

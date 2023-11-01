@@ -30,11 +30,13 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
 {
     /// Only get target server for main table
     String database, table;
+    bool is_alter_database = false;
 
     if (const auto * alter = ast->as<ASTAlterQuery>())
     {
         database = alter->database;
         table = alter->table;
+        is_alter_database = (alter->alter_object == ASTAlterQuery::AlterObjectType::DATABASE);
     }
     else if (const auto * select = ast->as<ASTSelectWithUnionQuery>())
     {
@@ -63,7 +65,7 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
     if (database.empty())
         database = context->getCurrentDatabase();
 
-    if (database == "system")
+    if (database == "system" || is_alter_database)
         return {};
 
     auto storage = DatabaseCatalog::instance().tryGetTable(StorageID(database, table), context);

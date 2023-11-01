@@ -272,6 +272,8 @@ ASTPtr ASTCreateQuery::clone() const
         res->set(res->select, select->clone());
     if (tables)
         res->set(res->tables, tables->clone());
+    if (table_overrides)
+        res->set(res->table_overrides, table_overrides->clone());
 
     if (dictionary)
     {
@@ -317,6 +319,12 @@ void ASTCreateQuery::formatQueryImpl(const FormatSettings & settings, FormatStat
         if (storage)
             storage->formatImpl(settings, state, frame);
 
+        if (table_overrides)
+        {
+            settings.ostr << settings.nl_or_ws;
+            table_overrides->formatImpl(settings, state, frame);
+        }
+        
         return;
     }
 

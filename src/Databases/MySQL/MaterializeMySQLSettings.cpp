@@ -19,7 +19,15 @@ void MaterializeMySQLSettings::loadFromQuery(ASTStorage & storage_def)
     {
         try
         {
+            auto pre_include_tables = include_tables;
+            auto pre_exclude_tables = exclude_tables;
             applyChanges(storage_def.settings->changes);
+            if (!include_tables.value.empty() && !exclude_tables.value.empty())
+            {
+                include_tables = pre_include_tables;
+                exclude_tables = pre_exclude_tables;
+                throw Exception("Can not set both settings: include_tables and exclude_tables", ErrorCodes::BAD_ARGUMENTS);
+            }
         }
         catch (Exception & e)
         {

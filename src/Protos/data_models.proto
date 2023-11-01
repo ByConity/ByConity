@@ -27,6 +27,12 @@ message TableIdentifier
     optional string server_vw_name = 5;
 }
 
+enum CnchDatabaseType
+{
+    Cnch = 0;
+    MaterializedMySQL = 1;
+}
+
 message DataModelDB
 {
     required string name = 1;
@@ -37,6 +43,8 @@ message DataModelDB
     repeated string tables = 6;
     optional uint32 meta_version = 7;
     optional UUID uuid = 8; // optional uuid for database.
+    optional string definition = 9; // create query, useful for CnchMaterializedMySQL
+    optional CnchDatabaseType type = 10;
 };
 
 message DataModelCatalog
@@ -667,4 +675,32 @@ message DataModelAccessEntity
     required string create_sql = 2; // contains CREATE and GRANT queries of the entity
     required uint64 commit_time = 3;
     required UUID uuid = 4;
+}
+
+message MaterializedMySQLManagerMetadata
+{
+    required string database_name = 1;
+    optional UUID database_uuid = 2;
+    repeated string materialized_tables = 3;
+    optional bool dumped_first_time = 4;
+}
+
+message MaterializedMySQLBinlogMetadata
+{
+    required string database_name = 1;
+    optional UUID database_uuid = 2;
+
+    required string table = 3;
+    optional string binlog_file = 4;
+    optional uint64 binlog_position = 5;
+    optional string executed_gtid_set = 6;
+    optional uint32 meta_version = 7;
+}
+
+message MySQLBinlogModel
+{
+    optional string binlog_file = 1;
+    optional uint64 binlog_position = 2;
+    optional string executed_gtid_set = 3;
+    optional uint32 meta_version = 4;
 }

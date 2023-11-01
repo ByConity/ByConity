@@ -45,9 +45,11 @@ public:
         ContextPtr context,
         const String & database_name_,
         const String & mysql_database_name_,
+        const String & thread_key_,
         mysqlxx::Pool && pool_,
         MySQLClient && client_,
-        MaterializeMySQLSettings * settings_);
+        MaterializeMySQLSettings * settings_,
+        const String & assigned_table);
 
     void stopSynchronization();
 
@@ -57,29 +59,33 @@ public:
 
     static bool isMySQLSyncThread();
 
+    void setBinLogInfo(const MySQLBinLogInfo & binlog) { binlog_info = binlog; }
+
 private:
     Poco::Logger * log;
 
     String database_name;
     String mysql_database_name;
 
+    String assigned_materialized_table;
+    String thread_key;
+
     mutable mysqlxx::Pool pool;
     mutable MySQLClient client;
     MaterializeMySQLSettings * settings;
     String query_prefix;
+    MySQLBinLogInfo binlog_info;
 
-    // USE MySQL ERROR CODE:
-    // https://dev.mysql.com/doc/mysql-errors/5.7/en/server-error-reference.html
-    const int ER_ACCESS_DENIED_ERROR = 1045;
-    const int ER_DBACCESS_DENIED_ERROR = 1044;
-    const int ER_BAD_DB_ERROR = 1049;
+    Int64 already_skip_errors = 0;
 
-    // https://dev.mysql.com/doc/mysql-errors/8.0/en/client-error-reference.html
-    const int CR_SERVER_LOST = 2013;
+    BackgroundSchedulePool::TaskHolder heartbeat_task;
+    time_t last_heartbeat_time {0};
+    UInt64 exception_occur_times{0};
 
     struct Buffers
     {
         String database;
+        String table_suffix;
 
         /// thresholds
         size_t max_block_rows = 0;
@@ -87,19 +93,23 @@ private:
         size_t total_blocks_rows = 0;
         size_t total_blocks_bytes = 0;
 
-        using BufferAndSortingColumns = std::pair<Block, std::vector<size_t>>;
-        using BufferAndSortingColumnsPtr = std::shared_ptr<BufferAndSortingColumns>;
-        std::unordered_map<String, BufferAndSortingColumnsPtr> data;
+        using BufferAndUniqueColumns = std::pair<Block, std::vector<size_t>>;
+        using BufferAndUniqueColumnsPtr = std::shared_ptr<BufferAndUniqueColumns>;
+        std::unordered_map<String, BufferAndUniqueColumnsPtr> data;
 
-        Buffers(const String & database_) : database(database_) {}
+        Buffers(const String & database_, const String & table_suffix_) : database(database_), table_suffix(table_suffix_) {}
 
-        void commit(ContextPtr context);
+        void prepareCommit(ContextMutablePtr query_context, const String & table_name, const MySQLBinLogInfo & binlog);
+
+        void commit(ContextPtr context, const MySQLReplication::Position & position);
 
         void add(size_t block_rows, size_t block_bytes, size_t written_rows, size_t written_bytes);
 
         bool checkThresholds(size_t check_block_rows, size_t check_block_bytes, size_t check_total_rows, size_t check_total_bytes) const;
 
-        BufferAndSortingColumnsPtr getTableDataBuffer(const String & table, ContextPtr context);
+        BufferAndUniqueColumnsPtr getTableDataBuffer(const String & table, ContextPtr context);
+
+        String printBuffersInfo();
     };
 
     void synchronization();
@@ -112,11 +122,19 @@ private:
 
     void onEvent(Buffers & buffers, const MySQLReplication::BinlogEventPtr & event, MaterializeMetadata & metadata);
 
+    void commitPosition(const MySQLReplication::Position & position);
+    void tryCommitPosition(const MySQLReplication::Position & position);
+
     std::atomic<bool> sync_quit{false};
     std::unique_ptr<ThreadFromGlobalPool> background_thread_pool;
     void executeDDLAtomic(const QueryEvent & query_event);
 
     void setSynchronizationThreadException(const std::exception_ptr & exception);
+    void recordException(bool create_log = true, const String & resync_table = "");
+
+    void heartbeat();
+    void reportSyncFailed();
+    void stopSelf();
 };
 
 }

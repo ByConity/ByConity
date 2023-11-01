@@ -29,7 +29,7 @@ void DDLCreateAction::executeV1(TxnTimestamp commit_time)
     {
         /// create database
         assert(!params.attach);
-        cnch_catalog->createDatabase(params.storage_id.database_name, params.storage_id.uuid, txn_id, commit_time);
+        cnch_catalog->createDatabase(params.storage_id.database_name, params.storage_id.uuid, txn_id, commit_time, params.statement, params.engine_name);
     }
     else if (!params.is_dictionary)
     {

@@ -143,6 +143,8 @@
 #include <Storages/System/StorageSystemExternalDatabases.h>
 #include <Storages/System/StorageSystemExternalTables.h>
 #endif
+#include <Storages/System/StorageSystemMaterializedMySQL.h>
+#include <Storages/System/StorageSystemCnchMaterializedMySQL.h>
 
 namespace DB
 {
@@ -230,6 +232,10 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
 #if USE_RDKAFKA
     attach<StorageSystemKafkaTables>(system_database, "kafka_tables");
     attach<StorageSystemCnchKafkaTables>(system_database, "cnch_kafka_tables");
+#endif
+#if USE_MYSQL
+    attach<StorageSystemMaterializedMySQL>(system_database, "materialized_mysql");
+    attach<StorageSystemCnchMaterializedMySQL>(system_database, "cnch_materialized_mysql");
 #endif
     attach<StorageSystemResourceGroups>(system_database, "resource_groups");
 

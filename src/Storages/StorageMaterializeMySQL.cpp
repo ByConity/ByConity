@@ -42,7 +42,6 @@
 #include <Processors/Pipe.h>
 #include <Processors/Transforms/FilterTransform.h>
 
-#include <Databases/MySQL/DatabaseMaterializeMySQL.h>
 #include <Storages/ReadFinalForExternalReplicaStorage.h>
 #include <Storages/SelectQueryInfo.h>
 
@@ -72,14 +71,20 @@ Pipe StorageMaterializeMySQL::read(
     unsigned int num_streams)
 {
     /// If the background synchronization thread has exception.
-    rethrowSyncExceptionIfNeed(database);
     return nested_storage->read(column_names, metadata_snapshot, query_info, context, processed_stage, max_block_size, num_streams);
+}
+
+BlockOutputStreamPtr StorageMaterializeMySQL::write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context)
+{
+    if (!local_context->getSettingsRef().force_manipulate_materialized_mysql_table)
+        throwNotAllowed();
+
+    return nested_storage->write(query, metadata_snapshot, local_context);
 }
 
 NamesAndTypesList StorageMaterializeMySQL::getVirtuals() const
 {
     /// If the background synchronization thread has exception.
-    rethrowSyncExceptionIfNeed(database);
     return nested_storage->getVirtuals();
 }
 

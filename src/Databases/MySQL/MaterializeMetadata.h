@@ -8,6 +8,7 @@
 
 #include <common/types.h>
 #include <Core/MySQL/MySQLReplication.h>
+#include <Databases/MySQL/MaterializedMySQLCommon.h>
 #include <mysqlxx/Connection.h>
 #include <mysqlxx/PoolWithFailover.h>
 #include <Interpreters/Context.h>
@@ -34,25 +35,44 @@ struct MaterializeMetadata
     String binlog_ignore_db;
     String executed_gtid_set;
 
-    size_t data_version = 1;
     size_t meta_version = 2;
     String binlog_checksum = "CRC32";
 
-    void fetchMasterStatus(mysqlxx::PoolWithFailover::Entry & connection);
+    void fetchMasterOrSlaveStatus(mysqlxx::PoolWithFailover::Entry & connection, bool is_slave);
 
     void fetchMasterVariablesValue(const mysqlxx::PoolWithFailover::Entry & connection);
 
-    bool checkBinlogFileExists(const mysqlxx::PoolWithFailover::Entry & connection) const;
+    NameSet getBinlogFilesFromMySQL(const mysqlxx::PoolWithFailover::Entry & connection);
 
     void transaction(const MySQLReplication::Position & position, const std::function<void()> & fun);
 
-    void startReplication(
+    /** Get materialized tables with corresponding create query from MySQL. This should only called once
+     * @param connection               connection to MySQL
+     * @param database                 mysql database name
+     * @param expected_tables_list     a tables list set by user implying which tables they want to sync; it can be empty
+     * @param tables_with_create_query result of the function with pairs {table-name, table-create-sql}
+     * */
+    void getTablesWithCreateQueryFromMySql(
         mysqlxx::PoolWithFailover::Entry & connection,
         const String & database,
         bool & opened_transaction,
-        std::unordered_map<String, String> & need_dumping_tables);
+        std::unordered_set<String> & expected_tables_list,
+        std::unordered_map<String, String> & tables_with_create_query,
+        bool is_readonly_replica = false);
 
-    MaterializeMetadata(const String & path_, const Settings & settings_);
+    static std::vector<String> fetchTablesInDB(const mysqlxx::PoolWithFailover::Entry & connection, const std::string & database, const Settings & global_settings);
+
+    explicit MaterializeMetadata(const Settings & settings_)
+        : settings(settings_)
+    {}
+
+    MaterializeMetadata(const MySQLBinLogInfo & binlog_info, const Settings & settings_)
+        : settings(settings_)
+        , binlog_file(binlog_info.binlog_file)
+        , binlog_position(binlog_info.binlog_position)
+        , executed_gtid_set(binlog_info.executed_gtid_set)
+        , meta_version(binlog_info.meta_version)
+    {}
 };
 
 }
