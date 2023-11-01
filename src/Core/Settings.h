@@ -1559,7 +1559,7 @@ enum PreloadLevelSettings : UInt64
       "104),GlobalLowDisk(105)}", \
       0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
-    M(Bool, adaptive_type_cast, false, "Performs type cast operations adaptively, according to the value", 0) \
+    M(Bool, adaptive_type_cast, true, "Performs type cast operations adaptively, according to the value", 0) \
     M(Bool, parse_literal_as_decimal, false, "Parse numeric literal as decimal instead of float", 0) \
     M(Bool, \
       formatdatetime_f_prints_single_zero, \

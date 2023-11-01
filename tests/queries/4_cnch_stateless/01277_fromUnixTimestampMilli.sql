@@ -2,7 +2,7 @@
 SELECT fromUnixTimestampMilli();  -- {serverError 42}
 SELECT fromUnixTimestampMilli('abc');  -- {serverError 43}
 SELECT fromUnixTimestampMilli('abc', 123);  -- {serverError 43}
-SELECT fromUnixTimestampMilli(4299262262295);  -- {serverError 69}
+SELECT fromUnixTimestampMilli(4299262262295) SETTINGS adaptive_type_cast = 0;  -- {serverError 69}
 
 WITH
     CAST(1234567891011 AS Int64)  AS i64,

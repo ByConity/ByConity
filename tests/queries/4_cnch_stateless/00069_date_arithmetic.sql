@@ -28,4 +28,11 @@ SELECT toDate(toInt32(0xFFFF), 'UTC'), toDate(toUInt32(0xFFFF), 'UTC'),
        toDate(toInt64(0xFFFF), 'UTC'), toDate(toUInt64(0xFFFF), 'UTC');
 SELECT toDate(toUInt32(4294880895), 'UTC'), toDate(toInt64(4294880895), 'UTC'), toDate(toUInt64(4294880895), 'UTC');
 SELECT toDate(toUInt32(0xFFFFFFFF), 'UTC'), toDate(toInt64(0xFFFFFFFF), 'UTC'), toDate(toUInt64(0xFFFFFFFF), 'UTC');
+SELECT toDate(toInt64(1669816097134), 'UTC'), toDate(toUInt64(1669816097134), 'UTC');
+SELECT toDate(toFloat32(1669816097134.1), 'UTC'), toDate(toFloat64(1669816097134.1), 'UTC');
+SET adaptive_type_cast = 0;
+SELECT toDate(toInt64(1669816097134), 'UTC');  -- {serverError 69}
+SELECT toDate(toUInt64(1669816097134), 'UTC');  -- {serverError 69}
+SELECT toDate(toFloat32(1669816097134.1), 'UTC');  -- {serverError 69}
+SELECT toDate(toFloat64(1669816097134.1), 'UTC');  -- {serverError 69}
 
