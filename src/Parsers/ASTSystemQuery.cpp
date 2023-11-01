@@ -186,6 +186,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "START DEDUP WORKER";
         case Type::STOP_DEDUP_WORKER:
             return "STOP DEDUP WORKER";
+        case Type::START_CLUSTER:
+            return "START CLUSTER";
+        case Type::STOP_CLUSTER:
+            return "STOP CLUSTER";
         case Type::DUMP_SERVER_STATUS:
             return "DUMP SERVER STATUS";
         case Type::CLEAN_TRANSACTION:

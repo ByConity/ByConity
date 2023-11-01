@@ -1168,6 +1168,9 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
         current_mutate_entry = std::make_optional<CnchMergeTreeMutationEntry>(entry_from_catalog);
     }
 
+    if (current_mutate_entry->isReclusterMutation() && !getContext()->getTableReclusterTaskStatus(storage_id))
+        return false;
+
     auto generate_tasks = [&](const ServerDataPartsVector & visible_parts, const NameSet & merging_mutating_parts_snapshot)
     {
         auto type = current_mutate_entry->isReclusterMutation() ? ManipulationType::Clustering : ManipulationType::Mutate;
