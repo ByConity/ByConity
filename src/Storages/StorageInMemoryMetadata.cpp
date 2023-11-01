@@ -416,6 +416,21 @@ Block StorageInMemoryMetadata::getSampleBlock(bool include_func_columns) const
     return res;
 }
 
+Block StorageInMemoryMetadata::getSampleBlockWithDeleteFlag() const
+{
+    Block res = getSampleBlock();
+
+    auto delete_flag_column = getFuncColumns().tryGetByName(DELETE_FLAG_COLUMN_NAME);
+    if (delete_flag_column)
+        res.insert({delete_flag_column->type->createColumn(), delete_flag_column->type, delete_flag_column->name});
+    else
+        throw Exception(
+            ErrorCodes::NOT_FOUND_COLUMN_IN_BLOCK,
+            "Column _delete_flag_ doesn't exist when executing method getSampleBlockWithDeleteFlag.");
+
+    return res;
+}
+
 Block StorageInMemoryMetadata::getSampleBlockForColumns(
     const Names & column_names,
     const NamesAndTypesList & virtuals,

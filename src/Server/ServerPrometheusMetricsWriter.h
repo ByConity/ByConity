@@ -148,6 +148,8 @@ namespace ProfileEvents
     extern const Event DropDatabaseFailed;
     extern const Event RenameDatabaseSuccess;
     extern const Event RenameDatabaseFailed;
+    extern const Event AlterDatabaseSuccess;
+    extern const Event AlterDatabaseFailed;
     extern const Event CreateTableSuccess;
     extern const Event CreateTableFailed;
     extern const Event DropTableSuccess;
@@ -676,6 +678,8 @@ private:
         ProfileEvents::DropDatabaseFailed,
         ProfileEvents::RenameDatabaseSuccess,
         ProfileEvents::RenameDatabaseFailed,
+        ProfileEvents::AlterDatabaseSuccess,
+        ProfileEvents::AlterDatabaseFailed,
         ProfileEvents::CreateTableSuccess,
         ProfileEvents::CreateTableFailed,
         ProfileEvents::DropTableSuccess,

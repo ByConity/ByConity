@@ -186,6 +186,10 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "START DEDUP WORKER";
         case Type::STOP_DEDUP_WORKER:
             return "STOP DEDUP WORKER";
+        case Type::START_CLUSTER:
+            return "START CLUSTER";
+        case Type::STOP_CLUSTER:
+            return "STOP CLUSTER";
         case Type::DUMP_SERVER_STATUS:
             return "DUMP SERVER STATUS";
         case Type::CLEAN_TRANSACTION:
@@ -196,6 +200,12 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "JEPROF DUMP";
         case Type::LOCK_MEMORY_LOCK:
             return "LOCK MEMORY LOCK";
+        case Type::START_MATERIALIZEDMYSQL:
+            return "START MATERIALIZEDMYSQL";
+        case Type::STOP_MATERIALIZEDMYSQL:
+            return "STOP MATERIALIZEDMYSQL";
+        case Type::RESYNC_MATERIALIZEDMYSQL_TABLE:
+            return "RESYNC MATERIALIZEDMYSQL TABLE";
         case Type::UNKNOWN:
         case Type::END:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");
@@ -219,7 +229,19 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
         settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(table) << (settings.hilite ? hilite_none : "");
     };
 
-    auto print_drop_replica = [&] {
+    auto print_database = [&] ()
+    {
+        settings.ostr << " ";
+
+        if (!database.empty())
+        {
+            settings.ostr << (settings.hilite ? hilite_identifier : "") << backQuoteIfNeed(database)
+                          << (settings.hilite ? hilite_none : "");
+        }
+    };
+
+    auto print_drop_replica = [&]
+    {
         settings.ostr << " " << quoteString(replica);
         if (!table.empty())
         {
@@ -267,11 +289,20 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
         else if (!volume.empty())
             print_on_volume();
     }
-    else if (
-        type == Type::RESTART_REPLICA || type == Type::RESTORE_REPLICA || type == Type::SYNC_REPLICA || type == Type::FLUSH_DISTRIBUTED
-        || type == Type::RELOAD_DICTIONARY || type == Type::START_CONSUME || type == Type::STOP_CONSUME || type == Type::DROP_CONSUME
-        || type == Type::RESTART_CONSUME || type == Type::DROP_CNCH_PART_CACHE || type == Type::SYNC_DEDUP_WORKER
-        || type == Type::DROP_CNCH_PART_CACHE)
+    else if (  type == Type::RESTART_REPLICA
+            || type == Type::RESTORE_REPLICA
+            || type == Type::SYNC_REPLICA
+            || type == Type::FLUSH_DISTRIBUTED
+            || type == Type::RELOAD_DICTIONARY
+            || type == Type::START_CONSUME
+            || type == Type::STOP_CONSUME
+            || type == Type::DROP_CONSUME
+            || type == Type::RESTART_CONSUME
+            || type == Type::RESYNC_MATERIALIZEDMYSQL_TABLE
+            || type == Type::SYNC_DEDUP_WORKER
+            || type == Type::DROP_CNCH_PART_CACHE
+            || type == Type::START_CLUSTER
+            || type == Type::STOP_CLUSTER)
     {
         print_database_table();
     }
@@ -309,6 +340,10 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     else if (type == Type::CLEAN_TRANSACTION)
     {
         settings.ostr << " " << txn_id;
+    }
+    else if(type == Type::START_MATERIALIZEDMYSQL || type == Type::STOP_MATERIALIZEDMYSQL)
+    {
+        print_database();
     }
 }
 

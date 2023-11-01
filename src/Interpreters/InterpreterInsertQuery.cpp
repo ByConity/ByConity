@@ -628,7 +628,12 @@ void InterpreterInsertQuery::extendQueryLogElemImpl(QueryLogElement & elem, cons
 }
 
 BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
-    const ContextPtr context_ptr, const Block & sample, const Settings & settings, const String & source_uri, const String & format)
+    const ContextPtr context_ptr,
+    const Block & sample,
+    const Settings & settings,
+    const String & source_uri,
+    const String & format,
+    bool is_enable_squash)
 {
     // Assume no query and fragment in uri, todo, add sanity check
     String fuzzyFileNames;
@@ -726,6 +731,12 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
             settings.min_insert_block_size_rows,
             settings.min_insert_block_size_bytes);
     }
+
+    if (is_enable_squash)
+        stream = std::make_shared<SquashingBlockInputStream>(
+            stream,
+            settings.min_insert_block_size_rows,
+            settings.min_insert_block_size_bytes);
 
     return stream;
 }

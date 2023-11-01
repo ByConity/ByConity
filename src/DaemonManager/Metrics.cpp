@@ -62,5 +62,10 @@ namespace DB::DaemonManager::BRPCMetrics
     bvar::Adder< int > g_executeImpl_Clustering;
     bvar::Window<bvar::Adder<int>> g_executeImpl_Clustering_error_minute("DaemonManager_Internal", "executeImpl_Clustering_error", & g_executeImpl_Clustering_error, 60);
     bvar::Window<bvar::Adder<int>> g_executeImpl_Clustering_minute("DaemonManager_Internal", "executeImpl_Clustering", & g_executeImpl_Clustering, 60);
+
+    bvar::Adder< int > g_executeImpl_MaterializedMySQL_error;
+    bvar::Adder< int > g_executeImpl_MaterializedMySQL;
+    bvar::Window<bvar::Adder<int>> g_executeImpl_MaterializedMySQL_error_minute("DaemonManager_Internal", "executeImpl_MaterializedMySQL_error", & g_executeImpl_MaterializedMySQL_error, 60);
+    bvar::Window<bvar::Adder<int>> g_executeImpl_MaterializedMySQL_minute("DaemonManager_Internal", "executeImpl_MaterializedMySQL", & g_executeImpl_MaterializedMySQL, 60);
 }/// end namespace
 

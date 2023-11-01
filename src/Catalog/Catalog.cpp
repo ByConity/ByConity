@@ -103,6 +103,8 @@ namespace ProfileEvents
     extern const Event DropDatabaseFailed;
     extern const Event RenameDatabaseSuccess;
     extern const Event RenameDatabaseFailed;
+    extern const Event AlterDatabaseSuccess;
+    extern const Event AlterDatabaseFailed;
     extern const Event CreateTableSuccess;
     extern const Event CreateTableFailed;
     extern const Event DropTableSuccess;
@@ -505,7 +507,8 @@ namespace Catalog
         return meta_proxy->getMetastore();
     }
 
-    void Catalog::createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts)
+    void Catalog::createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts,
+                                 const String & create_query, const String & engine_name)
     {
         runWithMetricSupport(
             [&] {
@@ -524,6 +527,14 @@ namespace Catalog
                     db_data.set_status(0);
                     if (uuid != UUIDHelpers::Nil)
                         RPCHelpers::fillUUID(uuid, *(db_data.mutable_uuid()));
+                    if (engine_name == "CnchMaterializedMySQL")
+                    {
+                        if (create_query.empty())
+                            throw Exception("create-query is required while create CnchMaterializedMySQL in catalog", ErrorCodes::LOGICAL_ERROR);
+
+                        db_data.set_definition(create_query);
+                        db_data.set_type(DB::Protos::CnchDatabaseType::MaterializedMySQL);
+                    }
 
                     meta_proxy->addDatabase(name_space, db_data);
                 }
@@ -543,7 +554,10 @@ namespace Catalog
                     DatabasePtr db = CatalogFactory::getDatabaseByDataModel(*database_model, context);
 
                     if (database_model->has_commit_time())
-                        dynamic_cast<DatabaseCnch &>(*db).commit_time = TxnTimestamp{database_model->commit_time()};
+                    {
+                        if (!database_model->has_type() || database_model->type() == DB::Protos::CnchDatabaseType::Cnch)
+                            dynamic_cast<DatabaseCnch &>(*db).commit_time = TxnTimestamp{database_model->commit_time()};
+                    }
                     res = db;
                 }
                 else
@@ -682,6 +696,45 @@ namespace Catalog
             },
             ProfileEvents::RenameDatabaseSuccess,
             ProfileEvents::RenameDatabaseFailed);
+    }
+
+    void Catalog::alterDatabase(const String & alter_database, const TxnTimestamp & txnID, const TxnTimestamp & ts,
+                                const String & create_query, const String & engine_name)
+    {
+        runWithMetricSupport(
+            [&] {
+                if (engine_name != "CnchMaterializedMySQL")
+                    throw Exception("alter query is only available for CnchMaterializedMySQL", ErrorCodes::LOGICAL_ERROR);
+
+                if (create_query.empty())
+                    throw Exception("create_query field is required while alter CnchMaterializedMySQL in catalog", ErrorCodes::LOGICAL_ERROR);
+
+                auto database = tryGetDatabaseFromMetastore(alter_database, ts.toUInt64());
+                if (database)
+                {
+                    BatchCommitRequest batch_writes;
+
+                    /// remove old database record;
+                    batch_writes.AddDelete(MetastoreProxy::dbKey(name_space, alter_database, database->commit_time()));
+                    /// create new database record;
+                    database->set_name(alter_database);
+                    database->set_previous_version(0);
+                    database->set_txnid(txnID.toUInt64());
+                    database->set_commit_time(ts.toUInt64());
+                    database->set_definition(create_query);
+                    database->set_type(DB::Protos::CnchDatabaseType::MaterializedMySQL);
+                    batch_writes.AddPut(SinglePutRequest(MetastoreProxy::dbKey(name_space, alter_database, ts.toUInt64()), database->SerializeAsString()));
+
+                    BatchCommitResponse resp;
+                    meta_proxy->batchWrite(batch_writes, resp);
+                }
+                else
+                {
+                    throw Exception("Database not found.", ErrorCodes::UNKNOWN_DATABASE);
+                }
+            },
+            ProfileEvents::AlterDatabaseSuccess,
+            ProfileEvents::AlterDatabaseFailed);
     }
 
     void Catalog::createTable(
@@ -2293,6 +2346,28 @@ namespace Catalog
             ProfileEvents::SetTransactionRecordStatusWithOffsetsSuccess,
             ProfileEvents::SetTransactionRecordStatusWithOffsetsFailed);
         return res;
+    }
+
+    bool Catalog::setTransactionRecordStatusWithBinlog(const TransactionRecord & expected_record,
+                                                       TransactionRecord & target_record,
+                                                       const String & binlog_name,
+                                                       const std::shared_ptr<Protos::MaterializedMySQLBinlogMetadata> & binlog)
+    {
+        bool outRes;
+        runWithMetricSupport(
+            [&] {
+                auto res = meta_proxy->updateTransactionRecordWithBinlog(
+                    name_space,
+                    expected_record.txnID().toUInt64(),
+                    expected_record.serialize(),
+                    target_record.serialize(),
+                    binlog_name,
+                    binlog);
+                outRes = res;
+            },
+            ProfileEvents::SetTransactionRecordStatusWithOffsetsSuccess,
+            ProfileEvents::SetTransactionRecordStatusWithOffsetsFailed);
+        return outRes;
     }
 
     /// commit and abort can reuse this API. set record status to targetStatus if current record.status is Running
@@ -4025,6 +4100,51 @@ namespace Catalog
             ProfileEvents::GetTablePreallocateVWFailed);
     }
 
+    /// APIs for MaterializedMySQL
+    std::shared_ptr<Protos::MaterializedMySQLManagerMetadata> Catalog::getOrSetMaterializedMySQLManagerMetadata(const StorageID & storage_id)
+    {
+        auto res = meta_proxy->tryGetMaterializedMySQLManagerMetadata(name_space, storage_id.uuid);
+        if (res)
+            return res;
+
+        res = std::make_shared<Protos::MaterializedMySQLManagerMetadata>();
+        res->set_database_name(storage_id.database_name);
+        RPCHelpers::fillUUID(storage_id.uuid, *res->mutable_database_uuid());
+        res->set_dumped_first_time(false);
+
+        meta_proxy->setMaterializedMySQLManagerMetadata(name_space, storage_id.uuid, *res);
+        return res;
+    }
+
+    void Catalog::updateMaterializedMySQLManagerMetadata(const StorageID & storage_id, const Protos::MaterializedMySQLManagerMetadata & metadata)
+    {
+        meta_proxy->setMaterializedMySQLManagerMetadata(name_space, storage_id.uuid, metadata);
+    }
+
+    void Catalog::removeMaterializedMySQLManagerMetadata(const UUID & uuid)
+    {
+        meta_proxy->removeMaterializedMySQLManagerMetadata(name_space, uuid);
+    }
+
+    std::shared_ptr<Protos::MaterializedMySQLBinlogMetadata> Catalog::getMaterializedMySQLBinlogMetadata(const String & binlog_name)
+    {
+        return meta_proxy->getMaterializedMySQLBinlogMetadata(name_space, binlog_name);
+    }
+
+    void Catalog::setMaterializedMySQLBinlogMetadata(const String & binlog_name, const Protos::MaterializedMySQLBinlogMetadata & binlog_data)
+    {
+        meta_proxy->setMaterializedMySQLBinlogMetadata(name_space, binlog_name, binlog_data);
+    }
+
+    void Catalog::removeMaterializedMySQLBinlogMetadata(const String & binlog_name)
+    {
+        meta_proxy->removeMaterializedMySQLBinlogMetadata(name_space, binlog_name);
+    }
+
+    void Catalog::updateMaterializedMySQLMetadataInBatch(const Strings &keys, const Strings &values, const Strings &delete_keys)
+    {
+        meta_proxy->updateMaterializedMySQLMetadataInBatch(name_space, keys, values, delete_keys);
+    }
 
     std::unordered_map<String, PartitionFullPtr>
     Catalog::getTablePartitionMetrics(const DB::Protos::DataModelTable & table, bool & is_ready)

@@ -85,9 +85,18 @@ String StorageID::getDatabaseName() const
 String StorageID::getNameForLogs() const
 {
     assertNotEmpty();
-    return 
-        (database_name.empty() ? "" : backQuoteIfNeed(database_name) + ".") + backQuoteIfNeed(table_name)
-        + (hasUUID() ? " (" + toString(uuid) + ")" : "");
+    if (isDatabase())
+        return getDatabaseNameForLogs();
+    else
+        return (database_name.empty() ? "" : backQuoteIfNeed(database_name) + ".") + backQuoteIfNeed(table_name)
+            + (hasUUID() ? " (" + toString(uuid) + ")" : "");
+}
+
+String StorageID::getDatabaseNameForLogs() const
+{
+    if (database_name.empty())
+        throw Exception("Database name is empty", ErrorCodes::UNKNOWN_DATABASE);
+    return backQuoteIfNeed(database_name) + (hasUUID() ? " (UUID " + toString(uuid) + ")" : "");
 }
 
 bool StorageID::operator<(const StorageID & rhs) const

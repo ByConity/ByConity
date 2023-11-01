@@ -516,4 +516,52 @@ void CnchWorkerClient::submitKafkaConsumeTask(const KafkaTaskCommand & command)
 }
 #endif
 
+#if USE_MYSQL
+void CnchWorkerClient::submitMySQLSyncThreadTask(const MySQLSyncThreadCommand & command)
+{
+    brpc::Controller cntl;
+    Protos::SubmitMySQLSyncThreadTaskReq request;
+    Protos::SubmitMySQLSyncThreadTaskResp response;
+
+    request.set_type(command.type);
+    request.set_database_name(command.database_name);
+    request.set_sync_thread_key(command.sync_thread_key);
+    request.set_rpc_port(command.rpc_port);
+    request.set_table(command.table);
+
+    if (command.type == MySQLSyncThreadCommand::START_SYNC)
+    {
+        for (const auto & create_sql : command.create_sqls)
+            request.add_create_sqls(create_sql);
+
+        request.set_binlog_file(command.binlog.binlog_file);
+        request.set_binlog_position(command.binlog.binlog_position);
+        request.set_executed_gtid_set(command.binlog.executed_gtid_set);
+        request.set_meta_version(command.binlog.meta_version);
+    }
+
+    stub->submitMySQLSyncThreadTask(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+bool CnchWorkerClient::checkMySQLSyncThreadStatus(const String & database_name, const String & sync_thread)
+{
+    brpc::Controller cntl;
+    Protos::CheckMySQLSyncThreadStatusReq request;
+    Protos::CheckMySQLSyncThreadStatusResp response;
+
+    request.set_database_name(database_name);
+    request.set_sync_thread_key(sync_thread);
+
+    stub->checkMySQLSyncThreadStatus(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+
+    return response.is_running();
+}
+#endif
+
 }

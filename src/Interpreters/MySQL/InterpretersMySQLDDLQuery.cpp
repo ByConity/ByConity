@@ -20,11 +20,16 @@
 #include <Parsers/MySQL/ASTDeclareIndex.h>
 #include <Common/quoteString.h>
 #include <Common/assert_cast.h>
+#include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/ExpressionAnalyzer.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Storages/IStorage.h>
+
+#if USE_MYSQL
+#include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
+#endif
 
 namespace DB
 {
@@ -285,30 +290,6 @@ static std::tuple<NamesAndTypesList, NamesAndTypesList, NamesAndTypesList, NameS
     return std::make_tuple(non_nullable_primary_keys_names_and_types, getNames(*unique_keys, context, columns), getNames(*keys, context, columns), increment_columns);
 }
 
-static String getUniqueColumnName(NamesAndTypesList columns_name_and_type, const String & prefix)
-{
-    const auto & is_unique = [&](const String & column_name)
-    {
-        for (const auto & column_name_and_type : columns_name_and_type)
-        {
-            if (column_name_and_type.name == column_name)
-                return false;
-        }
-
-        return true;
-    };
-
-    if (is_unique(prefix))
-        return prefix;
-
-    for (size_t index = 0; ; ++index)
-    {
-        const String & cur_name = prefix + "_" + toString(index);
-        if (is_unique(cur_name))
-            return cur_name;
-    }
-}
-
 static ASTPtr getPartitionPolicy(const NamesAndTypesList & primary_keys)
 {
     const auto & numbers_partition = [&](const String & column_name, size_t type_max_size) -> ASTPtr
@@ -431,12 +412,34 @@ void InterpreterCreateImpl::validate(const InterpreterCreateImpl::TQuery & creat
         throw Exception("Missing definition of columns.", ErrorCodes::EMPTY_LIST_OF_COLUMNS_PASSED);
 }
 
+static ASTPtr tryGetTableOverride(const String & mapped_database, const String & table, ContextPtr context)
+{
+    if (auto database_ptr = DatabaseCatalog::instance().tryGetDatabase(mapped_database, context))
+    {
+        auto create_query = database_ptr->getCreateDatabaseQuery();
+        if (auto create_database_query = create_query->as<ASTCreateQuery>())
+        {
+            if (create_database_query->table_overrides)
+            {
+                return create_database_query->table_overrides->tryGetTableOverride(table);
+            }
+        }
+    }
+    return nullptr;
+}
+
 ASTs InterpreterCreateImpl::getRewrittenQueries(
-    const TQuery & create_query, ContextPtr context, const String & mapped_to_database, const String & mysql_database)
+    const TQuery & create_query, ContextPtr context, const String & mapped_to_database, const String & mysql_database, bool g_test)
 {
     auto rewritten_query = std::make_shared<ASTCreateQuery>();
     if (resolveDatabase(create_query.database, mysql_database, mapped_to_database, context) != mapped_to_database)
         return {};
+
+    auto database_ptr = DatabaseCatalog::instance().getDatabase(mapped_to_database, context);
+
+    const auto * mmysql_database = dynamic_cast<const DatabaseCnchMaterializedMySQL*>(database_ptr.get());
+    if (!mmysql_database && !g_test)
+        throw Exception("MaterializedMySQL database is expected, but got " + database_ptr->getEngineName(), ErrorCodes::LOGICAL_ERROR);
 
     const auto & create_defines = create_query.columns_list->as<MySQLParser::ASTCreateDefines>();
 
@@ -449,38 +452,7 @@ ASTs InterpreterCreateImpl::getRewrittenQueries(
             + " cannot be materialized, because there is no primary keys.", ErrorCodes::NOT_IMPLEMENTED);
 
     auto columns = std::make_shared<ASTColumns>();
-
-    const auto & create_materialized_column_declaration = [&](const String & name, const String & type, const auto & default_value)
-    {
-        auto column_declaration = std::make_shared<ASTColumnDeclaration>();
-        column_declaration->name = name;
-        column_declaration->type = makeASTFunction(type);
-        column_declaration->default_specifier = "MATERIALIZED";
-        column_declaration->default_expression = std::make_shared<ASTLiteral>(default_value);
-        column_declaration->children.emplace_back(column_declaration->type);
-        column_declaration->children.emplace_back(column_declaration->default_expression);
-        return column_declaration;
-    };
-
-    /// Add _sign and _version columns.
-    String sign_column_name = getUniqueColumnName(columns_name_and_type, "_sign");
-    String version_column_name = getUniqueColumnName(columns_name_and_type, "_version");
     columns->set(columns->columns, InterpreterCreateQuery::formatColumns(columns_description));
-    columns->columns->children.emplace_back(create_materialized_column_declaration(sign_column_name, "Int8", UInt64(1)));
-    columns->columns->children.emplace_back(create_materialized_column_declaration(version_column_name, "UInt64", UInt64(1)));
-
-    /// Add minmax skipping index for _version column.
-    auto version_index = std::make_shared<ASTIndexDeclaration>();
-    version_index->name = version_column_name;
-    auto index_expr = std::make_shared<ASTIdentifier>(version_column_name);
-    auto index_type = makeASTFunction("minmax");
-    index_type->no_empty_args = true;
-    version_index->set(version_index->expr, index_expr);
-    version_index->set(version_index->type, index_type);
-    version_index->granularity = 1;
-    ASTPtr indices = std::make_shared<ASTExpressionList>();
-    indices->children.push_back(version_index);
-    columns->set(columns->indices, indices);
 
     auto storage = std::make_shared<ASTStorage>();
 
@@ -490,15 +462,43 @@ ASTs InterpreterCreateImpl::getRewrittenQueries(
 
     /// The `order by` expression must use primary keys, otherwise the primary keys will not be merge.
     if (ASTPtr order_by_expression = getOrderByPolicy(primary_keys, unique_keys, keys, increment_columns))
+    {
         storage->set(storage->order_by, order_by_expression);
+        storage->set(storage->unique_key, order_by_expression);
+    }
 
-    storage->set(storage->engine, makeASTFunction("ReplacingMergeTree", std::make_shared<ASTIdentifier>(version_column_name)));
+    storage->set(storage->engine, makeASTFunction("CnchMergeTree"));
+
+    /// set unique key in table level & vw_write / vw_default
+    ASTPtr settings = std::make_shared<ASTSetQuery>();
+    settings->as<ASTSetQuery>()->is_standalone = false;
+    settings->as<ASTSetQuery>()->changes.push_back({"partition_level_unique_keys", 0});
+    if (!g_test)
+    {
+        settings->as<ASTSetQuery>()->changes.push_back({"cnch_vw_write", mmysql_database->getMaterializeMySQLSettings()->cnch_vw_write.value});
+        settings->as<ASTSetQuery>()->changes.push_back({"cnch_vw_default", mmysql_database->getMaterializeMySQLSettings()->cnch_vw_default.value});
+    }
+    storage->set(storage->settings, settings);
 
     rewritten_query->database = mapped_to_database;
     rewritten_query->table = create_query.table;
     rewritten_query->if_not_exists = create_query.if_not_exists;
     rewritten_query->set(rewritten_query->storage, storage);
     rewritten_query->set(rewritten_query->columns_list, columns);
+
+    /// For resync table command of materialize mysql table, first create and write data to tmp table, thus need to get the corresponding table override
+    String target_table_name = create_query.table;
+
+    #if USE_MYSQL
+        if (endsWith(target_table_name, "_CHTMP"))
+            target_table_name = target_table_name.substr(0, target_table_name.size() - toString("_CHTMP").size());
+    #endif
+
+    if (auto table_override = tryGetTableOverride(mapped_to_database, target_table_name, context))
+    {
+        auto override = table_override->as<ASTTableOverride>();
+        override->applyToCreateTableQuery(rewritten_query.get());
+    }
 
     return ASTs{rewritten_query};
 }
@@ -518,6 +518,7 @@ ASTs InterpreterDropImpl::getRewrittenQueries(
 
     ASTPtr rewritten_query = drop_query.clone();
     rewritten_query->as<ASTDropQuery>()->database = mapped_to_database;
+    rewritten_query->as<ASTDropQuery>()->if_exists = true;
     return ASTs{rewritten_query};
 }
 
@@ -571,6 +572,7 @@ ASTs InterpreterAlterImpl::getRewrittenQueries(
     auto rewritten_rename_query = std::make_shared<ASTRenameQuery>();
     rewritten_alter_query->database = mapped_to_database;
     rewritten_alter_query->table = alter_query.table;
+    rewritten_alter_query->alter_object = ASTAlterQuery::AlterObjectType::TABLE;
     rewritten_alter_query->set(rewritten_alter_query->command_list, std::make_shared<ASTExpressionList>());
 
     String default_after_column;
@@ -588,6 +590,7 @@ ASTs InterpreterAlterImpl::getRewrittenQueries(
             {
                 auto rewritten_command = std::make_shared<ASTAlterCommand>();
                 rewritten_command->type = ASTAlterCommand::ADD_COLUMN;
+                rewritten_command->if_not_exists = true;
                 rewritten_command->first = alter_command->first;
                 rewritten_command->col_decl = additional_columns->children[index]->clone();
 
@@ -613,7 +616,7 @@ ASTs InterpreterAlterImpl::getRewrittenQueries(
                     Block storage_header = storage->getInMemoryMetadataPtr()->getSampleBlock();
 
                     /// Put the sign and version columns last
-                    default_after_column = storage_header.getByPosition(storage_header.columns() - 3).name;
+                    default_after_column = storage_header.getByPosition(storage_header.columns() - 1).name;
                 }
 
                 if (!alter_command->column_name.empty())
@@ -643,6 +646,7 @@ ASTs InterpreterAlterImpl::getRewrittenQueries(
         {
             auto rewritten_command = std::make_shared<ASTAlterCommand>();
             rewritten_command->type = ASTAlterCommand::DROP_COLUMN;
+            rewritten_command->if_exists = true;
             rewritten_command->column = std::make_shared<ASTIdentifier>(alter_command->column_name);
             rewritten_alter_query->command_list->children.push_back(rewritten_command);
         }

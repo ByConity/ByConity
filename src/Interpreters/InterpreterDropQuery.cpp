@@ -39,10 +39,6 @@
 #    include "config_core.h"
 #endif
 
-#if USE_MYSQL
-#   include <Databases/MySQL/DatabaseMaterializeMySQL.h>
-#endif
-
 #if USE_LIBPQXX
 #   include <Databases/PostgreSQL/DatabaseMaterializedPostgreSQL.h>
 #endif
@@ -379,10 +375,6 @@ BlockIO InterpreterDropQuery::executeToDatabaseImpl(const ASTDropQuery & query, 
             if (query.kind == ASTDropQuery::Kind::Detach && query.permanently)
                 throw Exception("DETACH PERMANENTLY is not implemented for databases", ErrorCodes::NOT_IMPLEMENTED);
 
-#if USE_MYSQL
-            if (database->getEngineName() == "MaterializeMySQL")
-                stopDatabaseSynchronization(database);
-#endif
             if (auto * replicated = typeid_cast<DatabaseReplicated *>(database.get()))
                 replicated->stopReplication();
 #if USE_LIBPQXX

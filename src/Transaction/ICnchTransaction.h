@@ -37,6 +37,10 @@
 #include "Transaction/LockRequest.h"
 #include <bthread/recursive_mutex.h>
 
+#if USE_MYSQL
+#include <Databases/MySQL/MaterializedMySQLCommon.h>
+#endif
+
 #include <memory>
 #include <string>
 
@@ -148,6 +152,12 @@ public:
     void setInsertionLabel(InsertionLabelPtr label) { insertion_label = std::move(label); }
     const InsertionLabelPtr & getInsertionLabel() const { return insertion_label; }
 
+#if USE_MYSQL
+    void setBinlogName(String binlog_name_) { binlog_name = std::move(binlog_name_); }
+    void setBinlogInfo(MySQLBinLogInfo binlog_info) { binlog = std::move(binlog_info); }
+    const MySQLBinLogInfo & getBinlogInfo() const { return binlog; }
+#endif
+
 public:
     // Commit API for 2PC, internally calls precommit() and commit()
     // Returns commit_ts on success.
@@ -208,6 +218,11 @@ protected:
     /// for committing offsets
     String consumer_group;
     cppkafka::TopicPartitionList tpl;
+
+#if USE_MYSQL
+    MySQLBinLogInfo binlog;
+    String binlog_name;
+#endif
 
     InsertionLabelPtr insertion_label;
     std::weak_ptr<CnchLockHolder> lock_holder;

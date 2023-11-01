@@ -15,6 +15,10 @@
 
 #pragma once
 
+#if !defined(ARCADIA_BUILD)
+#    include "config_core.h"
+#endif
+
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <CloudServices/RpcClientBase.h>
 #include <Interpreters/Context_fwd.h>
@@ -28,6 +32,9 @@
 
 #include <unordered_set>
 
+#if USE_MYSQL
+#include <Databases/MySQL/MaterializedMySQLCommon.h>
+#endif
 
 namespace DB
 {
@@ -119,6 +126,11 @@ public:
 #if USE_RDKAFKA
     void submitKafkaConsumeTask(const KafkaTaskCommand & command);
     CnchConsumerStatus getConsumerStatus(const StorageID & storage_id);
+#endif
+
+#if USE_MYSQL
+    void submitMySQLSyncThreadTask(const MySQLSyncThreadCommand & command);
+    bool checkMySQLSyncThreadStatus(const String & database_name, const String & sync_thread);
 #endif
 
 private:

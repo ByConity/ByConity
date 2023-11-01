@@ -83,6 +83,8 @@ private:
     void controlConsume(ASTSystemQuery::Type type);
     void resetConsumeOffset(ASTSystemQuery & query, ContextMutablePtr & system_context);
 
+    void executeMaterializedMyQLInCnchServer(const ASTSystemQuery & query);
+
     void executeMetastoreCmd(ASTSystemQuery & query) const;
 
     void executeDedup(const ASTSystemQuery & query);

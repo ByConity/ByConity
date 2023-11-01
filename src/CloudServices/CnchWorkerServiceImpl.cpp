@@ -51,6 +51,12 @@
 #    include <Storages/Kafka/StorageCloudKafka.h>
 #endif
 
+#if USE_MYSQL
+#include <Databases/MySQL/DatabaseCloudMaterializedMySQL.h>
+#include <Databases/MySQL/MaterializedMySQLCommon.h>
+#endif
+
+#include <Storages/Hive/StorageCloudHive.h>
 #include <Storages/RemoteFile/IStorageCloudFile.h>
 #include <Storages/Hive/StorageCloudHive.h>
 
@@ -1012,6 +1018,87 @@ void CnchWorkerServiceImpl::getConsumerStatus(
             response->add_assignments(tpl);
         response->set_consumer_num(status.assigned_consumers);
         response->set_last_exception(status.last_exception);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+#endif
+
+#if USE_MYSQL
+void CnchWorkerServiceImpl::submitMySQLSyncThreadTask(
+    [[maybe_unused]] google::protobuf::RpcController * cntl,
+    [[maybe_unused]] const Protos::SubmitMySQLSyncThreadTaskReq * request,
+    [[maybe_unused]] Protos::SubmitMySQLSyncThreadTaskResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        if (request->database_name().empty() || request->sync_thread_key().empty())
+            throw Exception("MySQLSyncThread task requires database name [" + request->database_name()
+                            + "] and thread key [" + request->sync_thread_key() +"] should not be empty", ErrorCodes::BAD_ARGUMENTS);
+
+        auto command = std::make_shared<MySQLSyncThreadCommand>();
+        command->type = MySQLSyncThreadCommand::CommandType(request->type());
+        command->database_name = request->database_name();
+        command->sync_thread_key = request->sync_thread_key();
+        command->table = request->table();
+
+        if (command->type == MySQLSyncThreadCommand::START_SYNC)
+        {
+            if (request->create_sqls().empty())
+                throw Exception("Try to START SyncThread but has no create sqls", ErrorCodes::BAD_ARGUMENTS);
+            if (request->binlog_file().empty())
+                throw Exception("Try to START SyncThread but has no binlog file", ErrorCodes::BAD_ARGUMENTS);
+
+            for (const auto & create_sql : request->create_sqls())
+                command->create_sqls.emplace_back(create_sql);
+
+            command->binlog.binlog_file = request->binlog_file();
+            command->binlog.binlog_position = request->binlog_position();
+            command->binlog.executed_gtid_set = request->executed_gtid_set();
+            command->binlog.meta_version = request->meta_version();
+        }
+
+        auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
+        rpc_context->getClientInfo().rpc_port = static_cast<UInt16>(request->rpc_port());
+
+        LOG_TRACE(log, "Successfully to parse SyncThread task command: {}", MySQLSyncThreadCommand::toString(command->type));
+
+        /// create thread to execute command
+        ThreadFromGlobalPool([p = std::move(command), c = std::move(rpc_context)] {
+            // CurrentThread::attachQueryContext(*c);
+            DB::executeSyncThreadTaskCommand(*p, c);
+        }).detach();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchWorkerServiceImpl::checkMySQLSyncThreadStatus(
+    [[maybe_unused]] google::protobuf::RpcController * cntl,
+    [[maybe_unused]] const Protos::CheckMySQLSyncThreadStatusReq * request,
+    [[maybe_unused]] Protos::CheckMySQLSyncThreadStatusResp * response,
+    [[maybe_unused]] google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    try
+    {
+        auto database = DatabaseCatalog::instance().getDatabase(request->database_name(), getContext());
+        if (!database)
+            throw Exception("Database " + request->database_name() + " doesn't exist", ErrorCodes::LOGICAL_ERROR);
+
+        auto * materialized_mysql = dynamic_cast<DatabaseCloudMaterializedMySQL*>(database.get());
+        if (!materialized_mysql)
+            throw Exception("DatabaseCloudMaterializedMySQL is expected, but got " + database->getEngineName(), ErrorCodes::LOGICAL_ERROR);
+
+        response->set_is_running(materialized_mysql->syncThreadIsRunning(request->sync_thread_key()));
     }
     catch (...)
     {
