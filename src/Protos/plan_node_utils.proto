@@ -187,6 +187,7 @@ message ArrayJoinAction {
 message SelectQueryInfo {
   required AST query = 1;
   required AST view_query = 2;
+  optional AST partition_filter = 3;
 }
 
 message NameWithAliasPair {

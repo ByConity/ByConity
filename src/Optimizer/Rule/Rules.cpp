@@ -137,13 +137,13 @@ std::vector<RulePtr> Rules::distinctToAggregateRules()
 
 std::vector<RulePtr> Rules::pushIntoTableScanRules()
 {
+    return {std::make_shared<PushLimitIntoTableScan>(), std::make_shared<PushStorageFilter>()};
+}
+
+std::vector<RulePtr> Rules::pushTableScanEmbeddedStepRules()
+{
+    // enabled when optimizer_projection_support = 1
     return {
-        std::make_shared<PushLimitIntoTableScan>(),
-
-        // enable when optimizer_projection_support = 0
-        std::make_shared<PushQueryInfoFilterIntoTableScan>(),
-
-        // enable when optimizer_projection_support = 1
         std::make_shared<PushAggregationIntoTableScan>(),
         std::make_shared<PushProjectionIntoTableScan>(),
         std::make_shared<PushFilterIntoTableScan>()};

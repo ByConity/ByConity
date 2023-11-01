@@ -8,11 +8,9 @@ Projection Est. 0 rows, cost 1.600000e-01
          ├─ Aggregating Est. ? rows, cost 0.000000e+00
          │  │     Group by: {}
          │  │     Aggregates: expr#count():=AggNull(count)()
-         │  └─ Projection Est. ? rows, cost 0.000000e+00
-         │     │     Expressions: [a_1]
-         │     └─ Filter Est. ? rows, cost 0.000000e+00
-         │        │     Condition: b_1 < 8
-         │        └─ TableScan test.with_union Est. ? rows, cost 0.000000e+00
-         │                 Where: b < 8
-         │                 Outputs: a_1:=a, b_1:=b
+         │  └─ Filter Est. ? rows, cost 0.000000e+00
+         │     │     Condition: b_1 < 8
+         │     └─ TableScan test.with_union Est. ? rows, cost 0.000000e+00
+         │              Where: b < 8
+         │              Outputs: b_1:=b
          └─ ReadStorageRowCount Est. 0 rows, cost 0.000000e+00

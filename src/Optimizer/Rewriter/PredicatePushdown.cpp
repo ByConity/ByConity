@@ -585,8 +585,8 @@ PlanNodePtr PredicateVisitor::visitJoinNode(JoinNode & node, PredicateContext & 
         && (kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Cross)
         && (!(step->getFilter() && !PredicateUtils::isTruePredicate(step->getFilter()))))
     {
-        auto join_conj = PredicateUtils::extractConjuncts(new_join_filter);
-        auto post_conj = PredicateUtils::extractConjuncts(post_join_predicate);
+        auto join_conj = PredicateUtils::extractConjuncts<ConstASTPtr>(new_join_filter);
+        auto post_conj = PredicateUtils::extractConjuncts<ConstASTPtr>(post_join_predicate);
         join_conj.insert(join_conj.end(), post_conj.begin(), post_conj.end());
         post_join_predicate = PredicateUtils::combineConjuncts(join_conj);
         new_join_filter = PredicateConst::TRUE_VALUE;

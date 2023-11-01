@@ -15,7 +15,6 @@
 
 #include <Optimizer/SymbolTransformMap.h>
 
-#include <Optimizer/SimpleExpressionRewriter.h>
 #include <Optimizer/Utils.h>
 #include <Parsers/ASTTableColumnReference.h>
 #include <Parsers/formatAST.h>
@@ -166,30 +165,10 @@ String SymbolTransformMap::toString() const
     return str;
 }
 
-namespace
+void SymbolTranslationMap::addStorageTranslation(ASTPtr ast, String name, const IStorage * storage, UInt32 unique_id)
 {
-    struct RewriteIdentifier
-    {
-        using TypeToVisit = ASTIdentifier;
-
-        void visit(ASTIdentifier & identifier, ASTPtr & ast)
-        {
-            ast = std::make_shared<ASTTableColumnReference>(storage, 0, identifier.name());
-        }
-
-        const IStorage * storage;
-    };
-
-    using RewriteIdentifierMatcher = OneTypeMatcher<RewriteIdentifier>;
-    using RewriteIdentifierVisitor = InDepthNodeVisitor<RewriteIdentifierMatcher, true>;
-}
-
-void SymbolTranslationMap::addTranslation(ASTPtr ast, String name)
-{
-    RewriteIdentifier data {storage};
-    RewriteIdentifierVisitor visitor(data);
-    visitor.visit(ast);
-    translation.emplace(ast, std::move(name));
+    ast = IdentifierToColumnReference::rewrite(storage, unique_id, ast, true);
+    translation.emplace(std::move(ast), std::move(name));
 }
 
 std::optional<String> SymbolTranslationMap::tryGetTranslation(const ASTPtr & expr) const
@@ -202,4 +181,29 @@ std::optional<String> SymbolTranslationMap::tryGetTranslation(const ASTPtr & exp
     return result;
 }
 
+ASTPtr IdentifierToColumnReference::rewrite(const IStorage * storage, UInt32 unique_id, ASTPtr ast, bool clone)
+{
+    if (clone)
+        ast = ast->clone();
+    IdentifierToColumnReference rewriter{storage, unique_id};
+    Void context;
+    return ASTVisitorUtil::accept(ast, rewriter, context);
+}
+
+IdentifierToColumnReference::IdentifierToColumnReference(const IStorage * storage_, UInt32 unique_id_)
+    : storage(storage_), unique_id(unique_id_)
+{
+    if (storage == nullptr)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "storage ptr is NULL");
+    storage_metadata = storage->getInMemoryMetadataPtr();
+}
+
+ASTPtr IdentifierToColumnReference::visitASTIdentifier(ASTPtr & node, Void &)
+{
+    const auto & iden = node->as<ASTIdentifier &>();
+    const auto & columns = storage_metadata->getColumns();
+    if (columns.hasColumnOrSubcolumn(ColumnsDescription::AllPhysical, iden.name()))
+        return std::make_shared<ASTTableColumnReference>(storage, unique_id, iden.name());
+    return node;
+}
 }

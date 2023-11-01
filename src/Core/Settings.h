@@ -1489,7 +1489,9 @@ enum PreloadLevelSettings : UInt64
       "Limit the total number of optimizations applied to query plan. If zero, ignored. If limit reached, throw exception", \
       0) \
     M(Bool, query_plan_filter_push_down, true, "Allow to push down filter by predicate query plan step", 0) \
-\
+    M(Bool, enable_partition_filter_push_down, false, "Allow to push down partition filter to query info", 0) \
+    M(Bool, enable_optimizer_early_prewhere_push_down, false, "Allow to push down prewhere in the optimizer phase", 0) \
+    \
     M(UInt64, limit, 0, "Limit on read rows from the most 'end' result for select query, default 0 means no limit length", 0) \
     M(UInt64, offset, 0, "Offset on read rows from the most 'end' result for select query", 0) \
 \
@@ -1882,7 +1884,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_down_limit_into_window, true, "Whether to enable PushdownLimitIntoWindow rule", 0) \
     M(Bool, enable_push_limit_into_sorting_rule, true, "Whether to enable PushLimitIntoSorting rule", 0) \
     M(Bool, enable_push_down_apply_through_join, true, "Whether to enable PushDownApplyThroughJoin rule", 0) \
-    M(Bool, enable_push_query_info_filter_into_table_scan, true, "Whether to enable PushQueryInfoFilterIntoTableScan rule", 0) \
+    M(Bool, enable_push_storage_filter, true, "Whether to enable PushStorageFilter rule", 0) \
     M(Bool, enable_push_limit_into_table_scan, true, "Whether to enable PushLimitIntoTableScan rule", 0) \
     M(Bool, enable_push_aggregation_into_table_scan, true, "Whether to enable PushAggregationIntoTableScan rule", 0) \
     M(Bool, enable_push_projection_into_table_scan, true, "Whether to enable PushProjectionIntoTableScan rule", 0) \
@@ -2269,6 +2271,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, offloading_with_query_plan, false, "utilize query plan to offload the computation comoetely to worker", 0) \
     M(Seconds, access_entity_ttl, 60 * 60, "TTL for access entities stored in memory in seconds", 0) \
 \
+    M(Bool, debug_enable_early_partition_pruning, false, "Whether we can prune parts via query filter and partition value", 0) \
+    \
     M(String, s3_ak_id, "", "The access_key set by user when accessing ve s3.", 0) \
     M(String, s3_ak_secret, "", "The secret_key set by user when accessing ve s3.", 0) \
     M(String, s3_region, "", "The region set by user when accessing ve s3.", 0) \

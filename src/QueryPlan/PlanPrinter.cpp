@@ -51,6 +51,15 @@ String join(const V & v, const String & sep, const String & prefix = {}, const S
 }
 }
 
+String PlanPrinter::textPlanNode(PlanNodeBase & node)
+{
+    PlanCostMap costs;
+    StepAggregatedOperatorProfiles profiles;
+    TextPrinter printer{true, true, costs};
+    bool has_children = node.getChildren().empty();
+    return printer.printLogicalPlan(node, TextPrinterIntent{0, has_children}, profiles);
+}
+
 String PlanPrinter::textLogicalPlan(
     QueryPlan & plan,
     ContextMutablePtr context,
@@ -240,7 +249,8 @@ String PlanPrinter::textDistributedPlan(
             {
                 if (!first)
                     os << "\n             ";
-                os << "( SegmentID:" << output->segment_id << " PlanSegmentType:" << output->plan_segment_type << " ParallelSize:" << output->parallel_size << ")"; 
+                os << "( SegmentID:" << output->segment_id << " PlanSegmentType:" << output->plan_segment_type
+                   << " ParallelSize:" << output->parallel_size << ")";
                 first = false;
             }
             os << "]\n";
@@ -686,7 +696,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
     {
         const auto * union_step = dynamic_cast<const UnionStep *>(plan.get());
         out << intent.detailIntent() << "OutputToInputs: ";
-        
+
         for (auto iter = union_step->getOutToInputs().begin(); iter != union_step->getOutToInputs().end(); ++iter)
         {
             if (iter != union_step->getOutToInputs().begin())
@@ -832,8 +842,15 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             else
                 assignments.emplace_back(name_with_alias.second + ":=" + name_with_alias.first);
 
-        auto query_info = table_scan->getQueryInfo();
+        const auto & query_info = table_scan->getQueryInfo();
         auto *query = query_info.query->as<ASTSelectQuery>();
+
+        if (query_info.partition_filter)
+        {
+            out << intent.detailIntent();
+            out << "Partition filter: ";
+            out << serializeAST(*query_info.partition_filter);
+        }
 
         if (auto where = query->getWhere())
             out << intent.detailIntent() << "Where: " << printFilter(where);

@@ -186,8 +186,17 @@ PlanNodePtr UnifyNullableVisitor::visitAggregatingNode(AggregatingNode & node, V
             }
         }
         String fun_name = fun->getName();
-        AggregateFunctionProperties properties;
-        AggregateFunctionPtr fun_with_null = AggregateFunctionFactory::instance().get(fun_name, types, desc.parameters, properties);
+        AggregateFunctionPtr fun_with_null = desc.function;
+        // tmp fix: For AggregateFunctionNothing, the argument types may diff with
+        // the ones in `descr.function->argument_types`. In this case, reconstructing aggregate description will lead
+        // to a different result.
+        //
+        // see also similar fix in AggregatingStep.cpp
+        if (fun_name != "nothing")
+        {
+            AggregateFunctionProperties properties;
+            fun_with_null = AggregateFunctionFactory::instance().get(fun_name, types, desc.parameters, properties);
+        }
         desc_with_null.function = fun_with_null;
         desc_with_null.parameters = desc.parameters;
         desc_with_null.column_name = desc.column_name;

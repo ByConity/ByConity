@@ -38,6 +38,7 @@ public:
     static std::vector<RulePtr> distinctToAggregateRules();
     static std::vector<RulePtr> pushIntoTableScanRules();
     static std::vector<RulePtr> swapAdjacentRules();
+    static std::vector<RulePtr> pushTableScanEmbeddedStepRules();
     static std::vector<RulePtr> explainAnalyzeRules();
     static std::vector<RulePtr> pushApplyRules();
 };

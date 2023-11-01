@@ -27,7 +27,7 @@ class ASTTableColumnReference : public IAST
 {
 public:
     const IStorage * storage;
-    // Used to identify different occurrence of a same table in self-join cases.
+    // the node id of the TableScanStep, used to identify different occurrence of a same table in self-join cases.
     UInt32 unique_id;
     String column_name;
 

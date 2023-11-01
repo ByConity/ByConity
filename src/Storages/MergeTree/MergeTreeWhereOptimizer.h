@@ -43,6 +43,9 @@ class MergeTreeData;
 struct StorageInMemoryMetadata;
 using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 
+/// Push down where partition predicate to query info partition_filter
+void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryInfo & query_info, ContextPtr context);
+
 /** Identifies WHERE expressions that can be placed in PREWHERE by calculating respective
  *  sizes of columns used in particular expression and identifying "good" conditions of
  *  form "column_name = constant", where "constant" is outside some `threshold` specified in advance.

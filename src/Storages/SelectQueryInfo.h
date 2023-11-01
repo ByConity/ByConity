@@ -21,15 +21,16 @@
 
 #pragma once
 
-#include <Interpreters/PreparedSets.h>
-#include <Interpreters/DatabaseAndTableWithAlias.h>
-#include <Core/SortDescription.h>
+#include <memory>
 #include <Core/Names.h>
-#include <Storages/ProjectionsDescription.h>
-#include <Storages/IStorage_fwd.h>
+#include <Core/SortDescription.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/Context_fwd.h>
-#include <memory>
+#include <Interpreters/DatabaseAndTableWithAlias.h>
+#include <Interpreters/PreparedSets.h>
+#include <Parsers/ASTSelectQuery.h>
+#include <Storages/IStorage_fwd.h>
+#include <Storages/ProjectionsDescription.h>
 
 namespace DB
 {
@@ -165,6 +166,7 @@ struct SelectQueryInfo
 {
     ASTPtr query;
     ASTPtr view_query; /// Optimized VIEW query
+    ASTPtr partition_filter; /// partition filter
 
     /// Cluster for the query.
     ClusterPtr cluster;
@@ -201,6 +203,23 @@ struct SelectQueryInfo
 
     void toProto(Protos::SelectQueryInfo & proto) const;
     void fillFromProto(const Protos::SelectQueryInfo & proto);
+
+    const ASTSelectQuery * getSelectQuery() const
+    {
+        if (!query)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Query info query is not set");
+
+        auto * select_query = query->as<ASTSelectQuery>();
+        if (!select_query)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Query info query is not a ASTSelectQuery");
+
+        return select_query;
+    }
+
+    ASTSelectQuery * getSelectQuery()
+    {
+        return const_cast<ASTSelectQuery *>((const_cast<const SelectQueryInfo *>(this))->getSelectQuery());
+    }
 
     /// caller must hold the interpreter to prevent some resources in query_info from being released
     static std::shared_ptr<InterpreterSelectQuery> buildQueryInfoFromQuery(ContextPtr context, const StoragePtr & storage, const String & query, SelectQueryInfo & query_info);

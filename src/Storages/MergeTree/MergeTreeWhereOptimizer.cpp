@@ -35,6 +35,13 @@
 #include <DataTypes/NestedUtils.h>
 #include <common/map.h>
 
+#include <Interpreters/PartitionPredicateVisitor.h>
+#include <Interpreters/TreeRewriter.h>
+#include <Optimizer/PredicateUtils.h>
+#include <Optimizer/SymbolsExtractor.h>
+#include <Optimizer/Utils.h>
+#include <Parsers/queryToString.h>
+#include <QueryPlan/SymbolMapper.h>
 
 namespace DB
 {
@@ -410,4 +417,86 @@ void MergeTreeWhereOptimizer::determineArrayJoinedNames(ASTSelectQuery & select)
         array_joined_names.emplace(ast->getAliasOrColumnName());
 }
 
+void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryInfo & query_info, ContextPtr context)
+{
+    ASTSelectQuery * select = query->as<ASTSelectQuery>();
+    if (!select || !select->where() || query_info.partition_filter || !storage)
+        return;
+
+    if (!dynamic_cast<MergeTreeData *>(storage.get()))
+        return;
+
+    ASTs conjuncts = PredicateUtils::extractConjuncts(select->where()->clone());
+
+    // construct push filter by mapping symbol to origin column
+    std::unordered_map<String, String> column_to_alias;
+    for (const auto & item : query_info.syntax_analyzer_result->aliases)
+        column_to_alias.emplace(item.second->getColumnName(), item.first);
+    auto alias_to_column = Utils::reverseMap(column_to_alias);
+    ASTPtr push_filter;
+    if (!alias_to_column.empty())
+    {
+        auto mapper = SymbolMapper::simpleMapper(alias_to_column);
+        std::vector<ConstASTPtr> mapped_pushable_conjuncts;
+        for (auto & conjunct : conjuncts)
+        {
+            bool all_in = true;
+            auto symbols = SymbolsExtractor::extract(conjunct);
+            for (const auto & item : symbols)
+                all_in &= alias_to_column.contains(item);
+            if (all_in)
+               mapped_pushable_conjuncts.push_back(mapper.map(conjunct));
+            else
+               mapped_pushable_conjuncts.push_back(conjunct);
+        }
+
+        push_filter = PredicateUtils::combineConjuncts(mapped_pushable_conjuncts);
+    }
+    if (!PredicateUtils::isTruePredicate(push_filter))
+    {
+        if (auto * merge_tree_data = dynamic_cast<MergeTreeData *>(storage.get()))
+        {
+            ASTs push_predicates;
+            ASTs remain_predicates;
+            Names partition_key_names = merge_tree_data->getInMemoryMetadataPtr()->getPartitionKey().column_names;
+            Names virtual_key_names = merge_tree_data->getSampleBlockWithVirtualColumns().getNames();
+            partition_key_names.insert(partition_key_names.end(), virtual_key_names.begin(), virtual_key_names.end());
+            auto iter = std::stable_partition(conjuncts.begin(), conjuncts.end(), [&](const auto & predicate) {
+                PartitionPredicateVisitor::Data visitor_data{context, partition_key_names};
+                PartitionPredicateVisitor(visitor_data).visit(predicate);
+                return visitor_data.getMatch();
+            });
+
+            push_predicates.insert(push_predicates.end(), conjuncts.begin(), iter);
+            remain_predicates.insert(remain_predicates.end(), iter, conjuncts.end());
+
+            ASTPtr new_partition_filter;
+
+            if (query_info.partition_filter)
+            {
+                push_predicates.push_back(query_info.partition_filter);
+                new_partition_filter = PredicateUtils::combineConjuncts(push_predicates);
+            }
+            else
+            {
+                new_partition_filter = PredicateUtils::combineConjuncts<false>(push_predicates);
+            }
+
+            if (!PredicateUtils::isTruePredicate(new_partition_filter))
+                query_info.partition_filter = std::move(new_partition_filter);
+
+            ASTPtr new_where = PredicateUtils::combineConjuncts<false>(remain_predicates);
+            if (!PredicateUtils::isTruePredicate(new_where))
+                select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(new_where));
+            else
+                select->setExpression(ASTSelectQuery::Expression::WHERE, nullptr);
+            query_info.query = query;
+        }
+    }
+    if (query_info.partition_filter)
+    {
+        LOG_TRACE(&Poco::Logger::get("optimizePartitionPredicate"), "Optimize partition prediate push down query rewrited to {} , partiton filter-{} ",
+                queryToString(query), queryToString(query_info.partition_filter));
+    }
+}
 }

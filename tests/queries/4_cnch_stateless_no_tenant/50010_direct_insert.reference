@@ -4,9 +4,9 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
-         │     Partition by: {expr#event_name, expr#event_date, expr#app_id}
+         │     Partition by: {expr#event_date, expr#event_name, expr#app_id}
          └─ Aggregating Est. ? rows
-            │     Group by: {expr#event_name, expr#event_date, expr#app_id}
+            │     Group by: {expr#event_date, expr#event_name, expr#app_id}
             │     Aggregates: expr#sumMerge(sum_cost):=AggNull(sumMerge)(expr#sum_cost), expr#maxMerge(max_duration):=AggNull(maxMerge)(expr#max_duration)
             └─ Projection Est. ? rows
                │     Expressions: expr#app_id:=app_id, expr#event_date:=event_date, expr#event_name:=event_name, expr#max_duration:=max_duration, expr#sum_cost:=sum_cost

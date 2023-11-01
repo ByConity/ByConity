@@ -435,6 +435,9 @@ PlanNodePtr ColumnPruningVisitor::visitTableScanNode(TableScanNode & node, NameS
 {
     const auto * step = node.getStep().get();
 
+    if (step->getPushdownAggregation() || step->getPushdownProjection() || step->getPushdownFilter())
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "TableScan with pushdown steps can not be processed for column pruning.");
+
     NameSet required;
     for (const auto & item : step->getColumnAlias())
         if (require.contains(item.second))
