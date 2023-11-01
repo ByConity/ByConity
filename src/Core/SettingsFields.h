@@ -29,7 +29,7 @@
 #include <boost/range/adaptor/map.hpp>
 #include <chrono>
 #include <unordered_map>
-#include <set>
+#include <unordered_set>
 #include <string_view>
 
 
@@ -479,7 +479,7 @@ struct SettingFieldCustom
 
 struct SettingFieldMultiRegexString
 {
-    std::set<String> value;
+    std::unordered_set<String> value;
     bool changed = false;
 
     explicit SettingFieldMultiRegexString(const Field & f = {}) : value(parseStringToRegexSet(f.safeGet<const String &>())) { }
@@ -492,7 +492,7 @@ struct SettingFieldMultiRegexString
     void writeBinary(WriteBuffer & out) const;
     void readBinary(ReadBuffer & in);
 
-    std::set<String> parseStringToRegexSet(String x);
+    std::unordered_set<String> parseStringToRegexSet(String x);
 };
 
 }

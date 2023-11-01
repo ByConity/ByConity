@@ -129,6 +129,9 @@ message CommitPartsReq
   repeated DataModelDeleteBitmap delete_bitmaps = 11;
   repeated DataModelPart staged_parts = 12;
   repeated string staged_parts_paths = 13;
+
+  // Binlog will be committed with parts while sync MaterializedMySQL
+  optional MySQLBinlogModel binlog = 14;
 };
 
 message CommitPartsResp
@@ -570,6 +573,46 @@ message notifyAccessEntityChangeResp
   optional string exception = 1;
 }
 
+message SubmitMaterializedMySQLDDLQueryReq
+{
+  required string database_name = 1;
+  required string thread_key = 2;
+  required string ddl_query = 3;
+  optional string binlog_file = 4;
+  optional uint64 binlog_position = 5;
+  optional string executed_gtid_set = 6;
+  optional uint32 meta_version = 7;
+}
+
+message SubmitMaterializedMySQLDDLQueryResp
+{
+  optional string exception = 1;
+}
+
+message ReportHeartbeatForSyncThreadReq
+{
+  required string database_name = 1;
+  required string thread_key = 2;
+  optional string table = 3;
+}
+
+message ReportHeartbeatForSyncThreadResp
+{
+  optional string exception = 1;
+}
+
+message ReportSyncFailedForSyncThreadReq
+{
+  required string database_name = 1;
+  required string thread_key = 2;
+  optional string table = 3;
+}
+
+message ReportSyncFailedForSyncThreadResp
+{
+  optional string exception = 1;
+}
+
 service CnchServerService
 {
   rpc reportTaskHeartbeat(ReportTaskHeartbeatReq) returns (ReportTaskHeartbeatResp);
@@ -657,4 +700,8 @@ service CnchServerService
   rpc notifyAccessEntityChange(notifyAccessEntityChangeReq) returns (notifyAccessEntityChangeResp);
 
   rpc submitPreloadTask(SubmitPreloadTaskReq) returns (SubmitPreloadTaskResp);
+
+  rpc submitMaterializedMySQLDDLQuery(SubmitMaterializedMySQLDDLQueryReq) returns (SubmitMaterializedMySQLDDLQueryResp);
+  rpc reportHeartbeatForSyncThread(ReportHeartbeatForSyncThreadReq) returns (ReportHeartbeatForSyncThreadResp);
+  rpc reportSyncFailedForSyncThread(ReportSyncFailedForSyncThreadReq) returns (ReportSyncFailedForSyncThreadResp);
 };

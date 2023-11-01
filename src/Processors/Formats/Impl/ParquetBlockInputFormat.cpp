@@ -134,7 +134,13 @@ void ParquetBlockInputFormat::initializeRowGroupReader(size_t row_group_idx)
 
     parquet::ArrowReaderProperties properties;
     properties.set_use_threads(false);
-    properties.set_batch_size(format_settings.parquet.max_block_size);
+    if (format_settings.parquet.max_block_size > 0)
+        properties.set_batch_size(format_settings.parquet.max_block_size);
+    else 
+    {
+        const auto batch_size = metadata->RowGroup(row_group_idx)->num_rows();
+        properties.set_batch_size(batch_size);
+    }
 
     // When reading a row group, arrow will:
     //  1. Look at `metadata` to get all byte ranges it'll need to read from the file (typically one

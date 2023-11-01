@@ -35,6 +35,8 @@
 #include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
 #include <Parsers/CommonParsers.h>
 #include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/ASTTableOverrides.h>
+#include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/IAST.h>
 #include <Parsers/IAST_fwd.h>
@@ -1024,6 +1026,152 @@ bool ParserCreateLiveViewQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     return true;
 }
 
+bool ParserTableOverrideDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserKeyword s_table_override("TABLE OVERRIDE");
+    ParserIdentifier table_name_p;
+    ParserToken lparen_p(TokenType::OpeningRoundBracket);
+    ParserToken rparen_p(TokenType::ClosingRoundBracket);
+    ParserTablePropertiesDeclarationList table_properties_p;
+    ParserExpression expression_p;
+    ParserTTLExpressionList parser_ttl_list;
+    ParserKeyword s_columns("COLUMNS");
+    ParserKeyword s_partition_by("PARTITION BY");
+    ParserKeyword s_primary_key("PRIMARY KEY");
+    ParserKeyword s_order_by("ORDER BY");
+    ParserKeyword s_unique_key("UNIQUE KEY");
+    ParserKeyword s_sample_by("SAMPLE BY");
+    ParserKeyword s_ttl("TTL");
+    ASTPtr table_name;
+    ASTPtr columns;
+    ASTPtr partition_by;
+    ASTPtr primary_key;
+    ASTPtr order_by;
+    ASTPtr unique_key;
+    ASTPtr sample_by;
+    ASTPtr ttl_table;
+
+    if (!s_table_override.ignore(pos, expected))
+        return false;
+
+    if (!table_name_p.parse(pos, table_name, expected))
+        return false;
+
+    if (!lparen_p.ignore(pos, expected))
+        return false;
+
+    while (true)
+    {
+        if (!columns && s_columns.ignore(pos, expected))
+        {
+            if (!lparen_p.ignore(pos, expected))
+                return false;
+            if (!table_properties_p.parse(pos, columns, expected))
+                return false;
+            if (!rparen_p.ignore(pos, expected))
+                return false;
+        }
+
+
+        if (!partition_by && s_partition_by.ignore(pos, expected))
+        {
+            if (expression_p.parse(pos, partition_by, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!primary_key && s_primary_key.ignore(pos, expected))
+        {
+            if (expression_p.parse(pos, primary_key, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!order_by && s_order_by.ignore(pos, expected))
+        {
+            if (expression_p.parse(pos, order_by, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!unique_key && s_unique_key.ignore(pos, expected))
+        {
+            if (expression_p.parse(pos, unique_key, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!sample_by && s_sample_by.ignore(pos, expected))
+        {
+            if (expression_p.parse(pos, sample_by, expected))
+                continue;
+            else
+                return false;
+        }
+
+        if (!ttl_table && s_ttl.ignore(pos, expected))
+        {
+            if (parser_ttl_list.parse(pos, ttl_table, expected))
+                continue;
+            else
+                return false;
+        }
+
+        break;
+    }
+
+    if (!rparen_p.ignore(pos, expected))
+        return false;
+
+    auto storage = std::make_shared<ASTStorage>();
+    storage->set(storage->partition_by, partition_by);
+    storage->set(storage->primary_key, primary_key);
+    storage->set(storage->order_by, order_by);
+    storage->set(storage->unique_key, unique_key);
+    storage->set(storage->sample_by, sample_by);
+    storage->set(storage->ttl_table, ttl_table);
+
+    auto res = std::make_shared<ASTTableOverride>();
+    res->table_name = table_name->as<ASTIdentifier>()->name();
+    res->set(res->storage, storage);
+    if (columns)
+        res->set(res->columns, columns);
+
+    node = res;
+
+    return true;
+}
+
+bool ParserTableOverridesDeclarationList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    ParserTableOverrideDeclaration table_override_p;
+    ParserToken s_comma(TokenType::Comma);
+    auto res = std::make_shared<ASTTableOverrideList>();
+    auto parse_element = [&]
+    {
+        ASTPtr element;
+        if (!table_override_p.parse(pos, element, expected))
+            return false;
+        auto * table_override = element->as<ASTTableOverride>();
+        if (!table_override)
+            return false;
+        res->setTableOverride(table_override->table_name, element);
+        return true;
+    };
+
+    if (!ParserList::parseUtil(pos, expected, parse_element, s_comma, true))
+        return false;
+
+    if (!res->children.empty())
+        node = res;
+
+    return true;
+}
+
 bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserKeyword s_create("CREATE");
@@ -1032,9 +1180,11 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     ParserKeyword s_if_not_exists("IF NOT EXISTS");
     ParserStorage storage_p(dt);
     ParserIdentifier name_p;
+    ParserTableOverridesDeclarationList table_overrides_p;
 
     ASTPtr database;
     ASTPtr storage;
+    ASTPtr table_overrides;
     UUID uuid = UUIDHelpers::Nil;
 
     String cluster_str;
@@ -1076,6 +1226,8 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
 
     storage_p.parse(pos, storage, expected);
 
+    if (!table_overrides_p.parse(pos, table_overrides, expected))
+        return false;
 
     auto query = std::make_shared<ASTCreateQuery>();
     node = query;
@@ -1088,6 +1240,9 @@ bool ParserCreateDatabaseQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & e
     query->cluster = cluster_str;
 
     query->set(query->storage, storage);
+
+    if (table_overrides && !table_overrides->children.empty())
+        query->set(query->table_overrides, table_overrides);
 
     return true;
 }

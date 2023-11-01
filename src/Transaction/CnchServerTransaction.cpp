@@ -226,6 +226,47 @@ TxnTimestamp CnchServerTransaction::commit()
                         ErrorCodes::CNCH_TRANSACTION_COMMIT_ERROR);
                 }
             }
+            else if (isPrimary() && !binlog.binlog_file.empty())
+            {
+                if (binlog_name.empty())
+                    throw Exception("Binlog name should not be empty while try to commit binlog", ErrorCodes::LOGICAL_ERROR);
+
+                auto binlog_metadata = global_context->getCnchCatalog()->getMaterializedMySQLBinlogMetadata(binlog_name);
+                if (!binlog_metadata)
+                    throw Exception("Cannot get metadata for binlog #" + binlog_name, ErrorCodes::LOGICAL_ERROR);
+
+                binlog_metadata->set_binlog_file(binlog.binlog_file);
+                binlog_metadata->set_binlog_position(binlog.binlog_position);
+                binlog_metadata->set_executed_gtid_set(binlog.executed_gtid_set);
+                binlog_metadata->set_meta_version(binlog.meta_version);
+
+                // CAS operation
+                TransactionRecord target_record = getTransactionRecord();
+                target_record.setStatus(CnchTransactionStatus::Finished)
+                    .setCommitTs(commit_ts)
+                    .setMainTableUUID(getMainTableUUID());
+                Stopwatch stop_watch;
+                auto success = global_context->getCnchCatalog()->setTransactionRecordStatusWithBinlog(txn_record, target_record, binlog_name, binlog_metadata);
+
+                txn_record = std::move(target_record);
+                if (success)
+                {
+                    ProfileEvents::increment(ProfileEvents::CnchTxnCommitted);
+                    ProfileEvents::increment(ProfileEvents::CnchTxnFinishedTransactionRecord);
+                    LOG_DEBUG(log, "Successfully committed MaterializedMySQL transaction {} at {} with binlog: {}, elapsed {} ms.", txn_record.txnID(), commit_ts, binlog_name, stop_watch.elapsedMilliseconds());
+                    return commit_ts;
+                }
+                else
+                {
+                    LOG_DEBUG(log, "Failed to commit MaterializedMySQL transaction: {}, abort it directly", txn_record.txnID());
+                    setStatus(CnchTransactionStatus::Aborted);
+                    retry = 0;
+                    throw Exception(
+                        "MaterializedMySQL transaction " + txn_record.txnID().toString()
+                            + " commit failed because txn record has been changed by other transactions",
+                        ErrorCodes::CNCH_TRANSACTION_COMMIT_ERROR);
+                }
+            }
             else
             {
                 Catalog::BatchCommitRequest requests(true, true);

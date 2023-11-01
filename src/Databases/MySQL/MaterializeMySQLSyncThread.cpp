@@ -4,7 +4,8 @@
 
 #if USE_MYSQL
 
-#include <Databases/MySQL/MaterializeMySQLSyncThread.h>
+#    include <Databases/MySQL/MaterializeMySQLSyncThread.h>
+#    include <Databases/MySQL/DatabaseCloudMaterializedMySQL.h>
 #    include <cstdlib>
 #    include <random>
 #    include <Columns/ColumnTuple.h>
@@ -12,12 +13,12 @@
 #    include <DataStreams/CountingBlockOutputStream.h>
 #    include <DataStreams/OneBlockInputStream.h>
 #    include <DataStreams/copyData.h>
-#    include <Databases/MySQL/DatabaseMaterializeMySQL.h>
 #    include <Databases/MySQL/MaterializeMetadata.h>
 #    include <Formats/MySQLBlockInputStream.h>
 #    include <IO/ReadBufferFromString.h>
 #    include <Interpreters/Context.h>
 #    include <Interpreters/executeQuery.h>
+#    include <Interpreters/CnchSystemLog.h>
 #    include <Storages/StorageMergeTree.h>
 #    include <Common/quoteString.h>
 #    include <Common/setThreadName.h>
@@ -41,24 +42,6 @@ namespace ErrorCodes
 
 static constexpr auto MYSQL_BACKGROUND_THREAD_NAME = "MySQLDBSync";
 
-static ContextMutablePtr createQueryContext(ContextPtr context)
-{
-    Settings new_query_settings = context->getSettings();
-    new_query_settings.insert_allow_materialized_columns = true;
-
-    /// To avoid call AST::format
-    /// TODO: We need to implement the format function for MySQLAST
-    new_query_settings.enable_global_with_statement = false;
-
-    auto query_context = Context::createCopy(context);
-    query_context->setSettings(new_query_settings);
-    CurrentThread::QueryScope query_scope(query_context);
-
-    query_context->getClientInfo().query_kind = ClientInfo::QueryKind::SECONDARY_QUERY;
-    query_context->setCurrentQueryId(""); // generate random query_id
-    return query_context;
-}
-
 static BlockIO tryToExecuteQuery(const String & query_to_execute, ContextMutablePtr query_context, const String & database, const String & comment)
 {
     try
@@ -77,7 +60,6 @@ static BlockIO tryToExecuteQuery(const String & query_to_execute, ContextMutable
     }
 }
 
-
 MaterializeMySQLSyncThread::~MaterializeMySQLSyncThread()
 {
     try
@@ -90,69 +72,28 @@ MaterializeMySQLSyncThread::~MaterializeMySQLSyncThread()
     }
 }
 
-static void checkMySQLVariables(const mysqlxx::Pool::Entry & connection, const Settings & settings)
+static String dumpPosition(const Position & position)
 {
-    Block variables_header{
-        {std::make_shared<DataTypeString>(), "Variable_name"},
-        {std::make_shared<DataTypeString>(), "Value"}
-    };
-
-    const String & check_query = "SHOW VARIABLES;";
-
-    StreamSettings mysql_input_stream_settings(settings, false, true);
-    MySQLBlockInputStream variables_input(connection, check_query, variables_header, mysql_input_stream_settings);
-
-    std::unordered_map<String, String> variables_error_message{
-        {"log_bin", "ON"},
-        {"binlog_format", "ROW"},
-        {"binlog_row_image", "FULL"},
-        {"default_authentication_plugin", "mysql_native_password"},
-        {"log_bin_use_v1_row_events", "OFF"}
-    };
-
-    while (Block variables_block = variables_input.read())
-    {
-        ColumnPtr variable_name_column = variables_block.getByName("Variable_name").column;
-        ColumnPtr variable_value_column = variables_block.getByName("Value").column;
-
-        for (size_t index = 0; index < variables_block.rows(); ++index)
-        {
-            const auto & error_message_it = variables_error_message.find(variable_name_column->getDataAt(index).toString());
-            const String variable_val = variable_value_column->getDataAt(index).toString();
-
-            if (error_message_it != variables_error_message.end() && variable_val == error_message_it->second)
-                variables_error_message.erase(error_message_it);
-        }
-    }
-
-    if  (!variables_error_message.empty())
-    {
-        bool first = true;
-        WriteBufferFromOwnString error_message;
-        error_message << "Illegal MySQL variables, the MaterializeMySQL engine requires ";
-        for (const auto & [variable_name, variable_error_val] : variables_error_message)
-        {
-            error_message << (first ? "" : ", ") << variable_name << "='" << variable_error_val << "'";
-
-            if (first)
-                first = false;
-        }
-
-        throw Exception(error_message.str(), ErrorCodes::ILLEGAL_MYSQL_VARIABLE);
-    }
+    WriteBufferFromOwnString buf;
+    position.dump(buf);
+    return buf.str();
 }
 
 MaterializeMySQLSyncThread::MaterializeMySQLSyncThread(
     ContextPtr context_,
     const String & database_name_,
     const String & mysql_database_name_,
+    const String & thread_key_,
     mysqlxx::Pool && pool_,
     MySQLClient && client_,
-    MaterializeMySQLSettings * settings_)
+    MaterializeMySQLSettings * settings_,
+    const String & assigned_table)
     : WithContext(context_->getGlobalContext())
-    , log(&Poco::Logger::get("MaterializeMySQLSyncThread"))
+    , log(&Poco::Logger::get("MaterializedMySQLSyncThread (" + database_name_ + ") "))
     , database_name(database_name_)
     , mysql_database_name(mysql_database_name_)
+    , assigned_materialized_table(assigned_table)
+    , thread_key(thread_key_)
     , pool(std::move(pool_))
     , client(std::move(client_))
     , settings(settings_)
@@ -166,12 +107,16 @@ void MaterializeMySQLSyncThread::synchronization()
 
     try
     {
-        MaterializeMetadata metadata(
-            DatabaseCatalog::instance().getDatabase(database_name, getContext())->getMetadataPath() + "/.metadata", getContext()->getSettingsRef());
+        /// Before it will be read from persistent file each time; so if data is flushed, it will be updated
+        MaterializeMetadata metadata(binlog_info, getContext()->getSettingsRef());
         bool need_reconnect = true;
+        const auto thread_schedule_interval_ms = settings->sync_thread_schedule_interval_ms.value;
+        UInt64 max_flush_time = settings->max_flush_data_time;
 
+        Buffers buffers(database_name, thread_key);
+        UInt64 sum{0}, last{0};
+        bool got_event{false};
         Stopwatch watch;
-        Buffers buffers(database_name);
 
         while (!isCancelled())
         {
@@ -182,42 +127,91 @@ void MaterializeMySQLSyncThread::synchronization()
                 need_reconnect = false;
             }
 
-            /// TODO: add gc task for `sign = -1`(use alter table delete, execute by interval. need final state)
-            UInt64 max_flush_time = settings->max_flush_data_time;
-
             try
             {
+                got_event = false;
                 BinlogEventPtr binlog_event = client.readOneBinlogEvent(std::max(UInt64(1), max_flush_time - watch.elapsedMilliseconds()));
                 if (binlog_event)
+                {
+                    got_event = true;
+                    ++sum;
                     onEvent(buffers, binlog_event, metadata);
+                }
+
+                exception_occur_times = 0;
+                /// Do NOT catch exception of `flushBuffersData` here,
+                /// or the data will be lost if exception occurs and skip_error_count enabled
             }
             catch (const Exception & e)
             {
-                if (e.code() != ErrorCodes::CANNOT_READ_ALL_DATA || settings->max_wait_time_when_mysql_unavailable < 0)
-                    throw;
+                exception_occur_times = std::min(10ul, exception_occur_times + 1);
 
-                flushBuffersData(buffers, metadata);
-                LOG_INFO(log, "Lost connection to MySQL");
-                need_reconnect = true;
-                setSynchronizationThreadException(std::current_exception());
-                sleepForMilliseconds(settings->max_wait_time_when_mysql_unavailable);
-                continue;
+                if (e.code() == ErrorCodes::CANNOT_READ_ALL_DATA && settings->max_wait_time_when_mysql_unavailable >= 0)
+                {
+                    flushBuffersData(buffers, metadata);
+                    recordException();
+                    need_reconnect = true;
+                    tryLogCurrentException(log, "Lost connect to MySQL and we will retry later");
+                    std::this_thread::sleep_for(std::chrono::milliseconds(settings->max_wait_time_when_mysql_unavailable));
+                    continue;
+                }
+                else if (settings->skip_error_count < 0 || settings->skip_error_count > already_skip_errors)
+                {
+                    /// Print stack of the exception for debug
+                    tryLogCurrentException(log, "Skip this error due to MaterializedMySQLSetting [skip_error_count = " + settings->skip_error_count.toString()
+                                    + "], already skip " + toString(already_skip_errors) + " errors; this error info: ");
+                    if (settings->skip_error_count >= 0)
+                        already_skip_errors++;
+                }
+                else
+                    throw;
             }
+
+            /// XXX: Now it's a little heavy that any exception during `flushBuffersData` will trigger rescheduling sync-thread task;
+            /// It's better to take different actions for different exceptions
             if (watch.elapsedMilliseconds() > max_flush_time || buffers.checkThresholds(
                     settings->max_rows_in_buffer, settings->max_bytes_in_buffer,
                     settings->max_rows_in_buffers, settings->max_bytes_in_buffers)
                 )
             {
+                LOG_TRACE(log, "SyncThreadPerf: processed {} events with {} ms", sum - last, watch.elapsedMilliseconds());
+                last = sum;
+
+                if (!buffers.data.empty())
+                {
+                    LOG_DEBUG(log, "Begin to flush buffers: {}", buffers.printBuffersInfo());
+                    flushBuffersData(buffers, metadata);
+                }
+                else
+                {
+                    /// For some stable tables, the user may seldom update it. Then the binlog may be invalid for these tables.
+                    /// For such scenario, we will try to commit position for these inessential events while no data in buffer
+                    /// to keep up with the latest binlog position
+                    auto current_position = client.getPosition();
+
+                    metadata.transaction(current_position, [&]() { tryCommitPosition(current_position); });
+                }
                 watch.restart();
-                flushBuffersData(buffers, metadata);
+            }
+
+            /// Sleep some time to save resources if any exception occurred or no more events were fetched
+            if (exception_occur_times > 0 || !got_event)
+            {
+                auto real_sleep_ms = thread_schedule_interval_ms * (1 << exception_occur_times);
+                LOG_TRACE(log, "Reschedule sync thread after {} ms {}", real_sleep_ms, (exception_occur_times > 0 ? " as exception occurred" : ""));
+                std::this_thread::sleep_for(std::chrono::milliseconds(real_sleep_ms));
             }
         }
     }
     catch (...)
     {
-        client.disconnect();
+        recordException();
+        /// report sync failed status to manager
+        reportSyncFailed();
         tryLogCurrentException(log);
         setSynchronizationThreadException(std::current_exception());
+
+        stopSelf();
     }
 }
 
@@ -228,67 +222,50 @@ void MaterializeMySQLSyncThread::stopSynchronization()
         sync_quit = true;
         background_thread_pool->join();
         client.disconnect();
+
+        heartbeat_task->deactivate();
     }
 }
 
 void MaterializeMySQLSyncThread::startSynchronization()
 {
     background_thread_pool = std::make_unique<ThreadFromGlobalPool>([this]() { synchronization(); });
+
+    last_heartbeat_time = time(nullptr);
+    heartbeat_task = getContext()->getSchedulePool().createTask("MaterializedMySQLSyncThread", [this] { heartbeat(); });
+    heartbeat_task->activateAndSchedule();
 }
 
 void MaterializeMySQLSyncThread::assertMySQLAvailable()
 {
     try
     {
-        checkMySQLVariables(pool.get(), getContext()->getSettingsRef());
+        MaterializedMySQL::checkMySQLVariables(pool.get(), getContext()->getSettingsRef());
     }
     catch (const mysqlxx::ConnectionFailed & e)
     {
-        if (e.errnum() == ER_ACCESS_DENIED_ERROR
-            || e.errnum() == ER_DBACCESS_DENIED_ERROR)
+        if (e.errnum() == MySQLErrorCode::ER_ACCESS_DENIED_ERROR
+            || e.errnum() == MySQLErrorCode::ER_DBACCESS_DENIED_ERROR)
             throw Exception("MySQL SYNC USER ACCESS ERR: mysql sync user needs "
                             "at least GLOBAL PRIVILEGES:'RELOAD, REPLICATION SLAVE, REPLICATION CLIENT' "
                             "and SELECT PRIVILEGE on Database " + mysql_database_name
                             , ErrorCodes::SYNC_MYSQL_USER_ACCESS_ERROR);
-        else if (e.errnum() == ER_BAD_DB_ERROR)
+        else if (e.errnum() == MySQLErrorCode::ER_BAD_DB_ERROR)
             throw Exception("Unknown database '" + mysql_database_name + "' on MySQL", ErrorCodes::UNKNOWN_DATABASE);
         else
             throw;
     }
 }
 
-static inline void cleanOutdatedTables(const String & database_name, ContextPtr context)
-{
-    String cleaning_table_name;
-    try
-    {
-        auto ddl_guard = DatabaseCatalog::instance().getDDLGuard(database_name, "");
-        const DatabasePtr & clean_database = DatabaseCatalog::instance().getDatabase(database_name, context);
-
-        for (auto iterator = clean_database->getTablesIterator(context); iterator->isValid(); iterator->next())
-        {
-            auto query_context = createQueryContext(context);
-            String comment = "Materialize MySQL step 1: execute MySQL DDL for dump data";
-            cleaning_table_name = backQuoteIfNeed(database_name) + "." + backQuoteIfNeed(iterator->name());
-            tryToExecuteQuery(" DROP TABLE " + cleaning_table_name, query_context, database_name, comment);
-        }
-    }
-    catch (Exception & exception)
-    {
-        exception.addMessage("While executing " + (cleaning_table_name.empty() ? "cleanOutdatedTables" : cleaning_table_name));
-        throw;
-    }
-}
-
 static inline BlockOutputStreamPtr
-getTableOutput(const String & database_name, const String & table_name, ContextMutablePtr query_context, bool insert_materialized = false)
+getTableOutput(const String & database_name, const String & table_name, ContextMutablePtr query_context, bool insert_delete_flag_column = false)
 {
     const StoragePtr & storage = DatabaseCatalog::instance().getTable(StorageID(database_name, table_name), query_context);
 
     WriteBufferFromOwnString insert_columns_str;
     const StorageInMemoryMetadata & storage_metadata = storage->getInMemoryMetadata();
     const ColumnsDescription & storage_columns = storage_metadata.getColumns();
-    const NamesAndTypesList & insert_columns_names = insert_materialized ? storage_columns.getAllPhysical() : storage_columns.getOrdinary();
+    const NamesAndTypesList & insert_columns_names = storage_columns.getOrdinary();
 
 
     for (auto iterator = insert_columns_names.begin(); iterator != insert_columns_names.end(); ++iterator)
@@ -298,7 +275,10 @@ getTableOutput(const String & database_name, const String & table_name, ContextM
 
         insert_columns_str << backQuoteIfNeed(iterator->name);
     }
-
+    if (insert_delete_flag_column)
+    {
+        insert_columns_str << ", " << backQuoteIfNeed(StorageInMemoryMetadata::DELETE_FLAG_COLUMN_NAME);
+    }
 
     String comment = "Materialize MySQL step 1: execute dump data";
     BlockIO res = tryToExecuteQuery("INSERT INTO " + backQuoteIfNeed(table_name) + "(" + insert_columns_str.str() + ")" + " VALUES",
@@ -308,44 +288,6 @@ getTableOutput(const String & database_name, const String & table_name, ContextM
         throw Exception("LOGICAL ERROR: It is a bug.", ErrorCodes::LOGICAL_ERROR);
 
     return res.out;
-}
-
-static inline void dumpDataForTables(
-    mysqlxx::Pool::Entry & connection, const std::unordered_map<String, String> & need_dumping_tables,
-    const String & query_prefix, const String & database_name, const String & mysql_database_name,
-    ContextPtr context, const std::function<bool()> & is_cancelled)
-{
-    auto iterator = need_dumping_tables.begin();
-    for (; iterator != need_dumping_tables.end() && !is_cancelled(); ++iterator)
-    {
-        try
-        {
-            const auto & table_name = iterator->first;
-            auto query_context = createQueryContext(context);
-            String comment = "Materialize MySQL step 1: execute MySQL DDL for dump data";
-            tryToExecuteQuery(query_prefix + " " + iterator->second, query_context, database_name, comment); /// create table.
-
-            auto out = std::make_shared<CountingBlockOutputStream>(getTableOutput(database_name, table_name, query_context));
-            StreamSettings mysql_input_stream_settings(context->getSettingsRef());
-            MySQLBlockInputStream input(
-                connection, "SELECT * FROM " + backQuoteIfNeed(mysql_database_name) + "." + backQuoteIfNeed(table_name),
-                out->getHeader(), mysql_input_stream_settings);
-
-            Stopwatch watch;
-            copyData(input, *out, is_cancelled);
-            const Progress & progress = out->getProgress();
-            LOG_INFO(&Poco::Logger::get("MaterializeMySQLSyncThread(" + database_name + ")"),
-                "Materialize MySQL step 1: dump {}, {} rows, {} in {} sec., {} rows/sec., {}/sec."
-                , table_name, formatReadableQuantity(progress.written_rows), formatReadableSizeWithBinarySuffix(progress.written_bytes)
-                , watch.elapsedSeconds(), formatReadableQuantity(static_cast<size_t>(progress.written_rows / watch.elapsedSeconds()))
-                , formatReadableSizeWithBinarySuffix(static_cast<size_t>(progress.written_bytes / watch.elapsedSeconds())));
-        }
-        catch (Exception & exception)
-        {
-            exception.addMessage("While executing dump MySQL {}.{} table data.", mysql_database_name, iterator->first);
-            throw;
-        }
-    }
 }
 
 static inline UInt32 randomNumber()
@@ -358,7 +300,6 @@ static inline UInt32 randomNumber()
 
 bool MaterializeMySQLSyncThread::prepareSynchronized(MaterializeMetadata & metadata)
 {
-    bool opened_transaction = false;
     mysqlxx::PoolWithFailover::Entry connection;
 
     while (!isCancelled())
@@ -374,41 +315,13 @@ bool MaterializeMySQLSyncThread::prepareSynchronized(MaterializeMetadata & metad
                 continue;
             }
 
-            opened_transaction = false;
-
-            checkMySQLVariables(connection, getContext()->getSettingsRef());
-            std::unordered_map<String, String> need_dumping_tables;
-            metadata.startReplication(connection, mysql_database_name, opened_transaction, need_dumping_tables);
-
-            if (!need_dumping_tables.empty())
-            {
-                Position position;
-                position.update(metadata.binlog_position, metadata.binlog_file, metadata.executed_gtid_set);
-
-                metadata.transaction(position, [&]()
-                {
-                    cleanOutdatedTables(database_name, getContext());
-                    dumpDataForTables(
-                        connection, need_dumping_tables, query_prefix, database_name, mysql_database_name, getContext(), [this]
-                        {
-                            return isCancelled();
-                        });
-                });
-
-                const auto & position_message = [&]()
-                {
-                    WriteBufferFromOwnString buf;
-                    position.dump(buf);
-                    return buf.str();
-                };
-                LOG_INFO(log, "MySQL dump database position: \n {}", position_message());
-            }
-
-            if (opened_transaction)
-                connection->query("COMMIT").execute();
+            /// TODO: if this is required
+            MaterializedMySQL::checkMySQLVariables(connection, getContext()->getSettingsRef());
 
             client.connect();
-            client.startBinlogDumpGTID(randomNumber(), mysql_database_name, metadata.executed_gtid_set, metadata.binlog_checksum);
+            NameSet dump_tables {assigned_materialized_table};
+            client.startBinlogDumpGTID(randomNumber(), mysql_database_name, dump_tables,
+                                        metadata.executed_gtid_set, metadata.binlog_file, metadata.binlog_checksum);
 
             setSynchronizationThreadException(nullptr);
             return true;
@@ -416,9 +329,6 @@ bool MaterializeMySQLSyncThread::prepareSynchronized(MaterializeMetadata & metad
         catch (...)
         {
             tryLogCurrentException(log);
-
-            if (opened_transaction)
-                connection->query("ROLLBACK").execute();
 
             try
             {
@@ -428,7 +338,7 @@ bool MaterializeMySQLSyncThread::prepareSynchronized(MaterializeMetadata & metad
             catch (const mysqlxx::BadQuery & e)
             {
                 // Lost connection to MySQL server during query
-                if (e.code() != CR_SERVER_LOST || settings->max_wait_time_when_mysql_unavailable < 0)
+                if (e.code() != MySQLErrorCode::CR_SERVER_LOST || settings->max_wait_time_when_mysql_unavailable < 0)
                     throw;
             }
 
@@ -446,33 +356,23 @@ void MaterializeMySQLSyncThread::flushBuffersData(Buffers & buffers, Materialize
     if (buffers.data.empty())
         return;
 
-    metadata.transaction(client.getPosition(), [&]() { buffers.commit(getContext()); });
+    auto position = client.getPosition();
 
-    const auto & position_message = [&]()
-    {
-        WriteBufferFromOwnString buf;
-        client.getPosition().dump(buf);
-        return buf.str();
-    };
-    LOG_INFO(log, "MySQL executed position: \n {}", position_message());
+    metadata.transaction(position, [&]() { buffers.commit(getContext(), position); });
+
+    LOG_INFO(log, "Finish flushing and MySQL executed position: \n {}", dumpPosition(position));
 }
 
-static inline void fillSignAndVersionColumnsData(Block & data, Int8 sign_value, UInt64 version_value, size_t fill_size)
+static inline void fillSignColumnsData(Block & data, Int8 sign_value, size_t fill_size)
 {
-    MutableColumnPtr sign_mutable_column = IColumn::mutate(std::move(data.getByPosition(data.columns() - 2).column));
-    MutableColumnPtr version_mutable_column = IColumn::mutate(std::move(data.getByPosition(data.columns() - 1).column));
+    MutableColumnPtr sign_mutable_column = IColumn::mutate(std::move(data.getByPosition(data.columns() - 1).column));
 
     ColumnInt8::Container & sign_column_data = assert_cast<ColumnInt8 &>(*sign_mutable_column).getData();
-    ColumnUInt64::Container & version_column_data = assert_cast<ColumnUInt64 &>(*version_mutable_column).getData();
 
     for (size_t index = 0; index < fill_size; ++index)
-    {
         sign_column_data.emplace_back(sign_value);
-        version_column_data.emplace_back(version_value);
-    }
 
-    data.getByPosition(data.columns() - 2).column = std::move(sign_mutable_column);
-    data.getByPosition(data.columns() - 1).column = std::move(version_mutable_column);
+    data.getByPosition(data.columns() - 1).column = std::move(sign_mutable_column);
 }
 
 template <bool assert_nullable = false>
@@ -599,10 +499,10 @@ static void writeFieldsToColumn(
 }
 
 template <Int8 sign>
-static size_t onWriteOrDeleteData(const Row & rows_data, Block & buffer, size_t version)
+static size_t onWriteOrDeleteData(const Row & rows_data, Block & buffer)
 {
     size_t prev_bytes = buffer.bytes();
-    for (size_t column = 0; column < buffer.columns() - 2; ++column)
+    for (size_t column = 0; column < buffer.columns() - 1; ++column)
     {
         MutableColumnPtr col_to = IColumn::mutate(std::move(buffer.getByPosition(column).column));
 
@@ -610,20 +510,21 @@ static size_t onWriteOrDeleteData(const Row & rows_data, Block & buffer, size_t 
         buffer.getByPosition(column).column = std::move(col_to);
     }
 
-    fillSignAndVersionColumnsData(buffer, sign, version, rows_data.size());
+    fillSignColumnsData(buffer, sign, rows_data.size());
     return buffer.bytes() - prev_bytes;
 }
 
-static inline bool differenceSortingKeys(const Tuple & row_old_data, const Tuple & row_new_data, const std::vector<size_t> sorting_columns_index)
+/// We need to use unique key instead of sorting key as user could use table override func
+static inline bool differenceUniqueKeys(const Tuple & row_old_data, const Tuple & row_new_data, const std::vector<size_t> unique_columns_index)
 {
-    for (const auto & sorting_column_index : sorting_columns_index)
-        if (row_old_data[sorting_column_index] != row_new_data[sorting_column_index])
+    for (const auto & unique_column_index : unique_columns_index)
+        if (row_old_data[unique_column_index] != row_new_data[unique_column_index])
             return true;
 
     return false;
 }
 
-static inline size_t onUpdateData(const Row & rows_data, Block & buffer, size_t version, const std::vector<size_t> & sorting_columns_index)
+static inline size_t onUpdateData(const Row & rows_data, Block & buffer, const std::vector<size_t> & unique_columns_index)
 {
     if (rows_data.size() % 2 != 0)
         throw Exception("LOGICAL ERROR: It is a bug.", ErrorCodes::LOGICAL_ERROR);
@@ -634,11 +535,11 @@ static inline size_t onUpdateData(const Row & rows_data, Block & buffer, size_t 
     for (size_t index = 0; index < rows_data.size(); index += 2)
     {
         writeable_rows_mask[index + 1] = true;
-        writeable_rows_mask[index] = differenceSortingKeys(
-            DB::get<const Tuple &>(rows_data[index]), DB::get<const Tuple &>(rows_data[index + 1]), sorting_columns_index);
+        writeable_rows_mask[index] = differenceUniqueKeys(
+            DB::get<const Tuple &>(rows_data[index]), DB::get<const Tuple &>(rows_data[index + 1]), unique_columns_index);
     }
 
-    for (size_t column = 0; column < buffer.columns() - 2; ++column)
+    for (size_t column = 0; column < buffer.columns() - 1; ++column)
     {
         MutableColumnPtr col_to = IColumn::mutate(std::move(buffer.getByPosition(column).column));
 
@@ -646,31 +547,25 @@ static inline size_t onUpdateData(const Row & rows_data, Block & buffer, size_t 
         buffer.getByPosition(column).column = std::move(col_to);
     }
 
-    MutableColumnPtr sign_mutable_column = IColumn::mutate(std::move(buffer.getByPosition(buffer.columns() - 2).column));
-    MutableColumnPtr version_mutable_column = IColumn::mutate(std::move(buffer.getByPosition(buffer.columns() - 1).column));
+    MutableColumnPtr sign_mutable_column = IColumn::mutate(std::move(buffer.getByPosition(buffer.columns() - 1).column));
 
     ColumnInt8::Container & sign_column_data = assert_cast<ColumnInt8 &>(*sign_mutable_column).getData();
-    ColumnUInt64::Container & version_column_data = assert_cast<ColumnUInt64 &>(*version_mutable_column).getData();
 
     for (size_t index = 0; index < rows_data.size(); index += 2)
     {
         if (likely(!writeable_rows_mask[index]))
         {
-            sign_column_data.emplace_back(1);
-            version_column_data.emplace_back(version);
+            sign_column_data.emplace_back(0);
         }
         else
         {
             /// If the sorting keys is modified, we should cancel the old data, but this should not happen frequently
-            sign_column_data.emplace_back(-1);
             sign_column_data.emplace_back(1);
-            version_column_data.emplace_back(version);
-            version_column_data.emplace_back(version);
+            sign_column_data.emplace_back(0);
         }
     }
 
-    buffer.getByPosition(buffer.columns() - 2).column = std::move(sign_mutable_column);
-    buffer.getByPosition(buffer.columns() - 1).column = std::move(version_mutable_column);
+    buffer.getByPosition(buffer.columns() - 1).column = std::move(sign_mutable_column);
     return buffer.bytes() - prev_bytes;
 }
 
@@ -679,22 +574,22 @@ void MaterializeMySQLSyncThread::onEvent(Buffers & buffers, const BinlogEventPtr
     if (receive_event->type() == MYSQL_WRITE_ROWS_EVENT)
     {
         WriteRowsEvent & write_rows_event = static_cast<WriteRowsEvent &>(*receive_event);
-        Buffers::BufferAndSortingColumnsPtr buffer = buffers.getTableDataBuffer(write_rows_event.table, getContext());
-        size_t bytes = onWriteOrDeleteData<1>(write_rows_event.rows, buffer->first, ++metadata.data_version);
+        Buffers::BufferAndUniqueColumnsPtr buffer = buffers.getTableDataBuffer(write_rows_event.table, getContext());
+        size_t bytes = onWriteOrDeleteData<0>(write_rows_event.rows, buffer->first);
         buffers.add(buffer->first.rows(), buffer->first.bytes(), write_rows_event.rows.size(), bytes);
     }
     else if (receive_event->type() == MYSQL_UPDATE_ROWS_EVENT)
     {
         UpdateRowsEvent & update_rows_event = static_cast<UpdateRowsEvent &>(*receive_event);
-        Buffers::BufferAndSortingColumnsPtr buffer = buffers.getTableDataBuffer(update_rows_event.table, getContext());
-        size_t bytes = onUpdateData(update_rows_event.rows, buffer->first, ++metadata.data_version, buffer->second);
+        Buffers::BufferAndUniqueColumnsPtr buffer = buffers.getTableDataBuffer(update_rows_event.table, getContext());
+        size_t bytes = onUpdateData(update_rows_event.rows, buffer->first, buffer->second);
         buffers.add(buffer->first.rows(), buffer->first.bytes(), update_rows_event.rows.size(), bytes);
     }
     else if (receive_event->type() == MYSQL_DELETE_ROWS_EVENT)
     {
         DeleteRowsEvent & delete_rows_event = static_cast<DeleteRowsEvent &>(*receive_event);
-        Buffers::BufferAndSortingColumnsPtr buffer = buffers.getTableDataBuffer(delete_rows_event.table, getContext());
-        size_t bytes = onWriteOrDeleteData<-1>(delete_rows_event.rows, buffer->first, ++metadata.data_version);
+        Buffers::BufferAndUniqueColumnsPtr buffer = buffers.getTableDataBuffer(delete_rows_event.table, getContext());
+        size_t bytes = onWriteOrDeleteData<1>(delete_rows_event.rows, buffer->first);
         buffers.add(buffer->first.rows(), buffer->first.bytes(), delete_rows_event.rows.size(), bytes);
     }
     else if (receive_event->type() == MYSQL_QUERY_EVENT)
@@ -702,7 +597,7 @@ void MaterializeMySQLSyncThread::onEvent(Buffers & buffers, const BinlogEventPtr
         QueryEvent & query_event = static_cast<QueryEvent &>(*receive_event);
         Position position_before_ddl;
         position_before_ddl.update(metadata.binlog_position, metadata.binlog_file, metadata.executed_gtid_set);
-        metadata.transaction(position_before_ddl, [&]() { buffers.commit(getContext()); });
+        metadata.transaction(position_before_ddl, [&]() { buffers.commit(getContext(), position_before_ddl); });
         metadata.transaction(client.getPosition(),[&](){ executeDDLAtomic(query_event); });
     }
     else
@@ -729,14 +624,92 @@ void MaterializeMySQLSyncThread::onEvent(Buffers & buffers, const BinlogEventPtr
     }
 }
 
+void MaterializeMySQLSyncThread::commitPosition(const MySQLReplication::Position & position)
+{
+    if (position.binlog_name.empty())
+        return;
+
+    auto database = DatabaseCatalog::instance().getDatabase(database_name, getContext());
+    auto materialized_mysql = dynamic_cast<DatabaseCloudMaterializedMySQL *>(database.get());
+    if (!materialized_mysql)
+        throw Exception("Expect CloudMaterializedMySQL database, but got " + database->getEngineName(), ErrorCodes::LOGICAL_ERROR);
+
+    String binlog_meta_name = getNameForMaterializedBinlog(materialized_mysql->getDatabaseUUID(), assigned_materialized_table);
+
+    auto binlog_metadata = getContext()->getCnchCatalog()->getMaterializedMySQLBinlogMetadata(binlog_meta_name);
+    if (!binlog_metadata)
+        throw Exception("Cannot get binlog meta from catalog for " + binlog_meta_name, ErrorCodes::LOGICAL_ERROR);
+
+    if (binlog_metadata->binlog_file() != position.binlog_name
+         || binlog_metadata->binlog_position() < position.binlog_pos)
+    {
+        binlog_metadata->set_binlog_file(position.binlog_name);
+        binlog_metadata->set_binlog_position(position.binlog_pos);
+        binlog_metadata->set_executed_gtid_set(position.gtid_sets.toString());
+
+        LOG_DEBUG(log, "Try to commit position while no data in buffers now: {}", dumpPosition(position));
+        getContext()->getCnchCatalog()->setMaterializedMySQLBinlogMetadata(binlog_meta_name, *binlog_metadata);
+    }
+}
+
+void MaterializeMySQLSyncThread::tryCommitPosition(const MySQLReplication::Position & position)
+{
+    try
+    {
+        commitPosition(position);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, "Failed to commit position for thread #" + thread_key);
+    }
+}
+
 void MaterializeMySQLSyncThread::executeDDLAtomic(const QueryEvent & query_event)
 {
     try
     {
-        auto query_context = createQueryContext(getContext());
-        String comment = "Materialize MySQL step 2: execute MySQL DDL for sync data";
-        String event_database = query_event.schema == mysql_database_name ? database_name : "";
-        tryToExecuteQuery(query_prefix + query_event.query, query_context, event_database, comment);
+        String query = query_event.query;
+        auto ddl_params = parseMySQLDDLQuery(query_event.query);
+        if (ddl_params.query_type == MySQLDDLQueryParams::UNKNOWN_TYPE)
+        {
+            LOG_DEBUG(log, "Skip unsupported MySQL DDL query: {}", query_event.query);
+            return;
+        }
+        else if (!ddl_params.execute_table.empty())
+        {
+            auto ddl_database_name =  ddl_params.execute_database.empty() ? query_event.schema: ddl_params.execute_database;
+            if (ddl_database_name != mysql_database_name
+                || (assigned_materialized_table != ddl_params.execute_table && ddl_params.query_type != MySQLDDLQueryParams::CREATE_TABLE))
+            {
+                LOG_DEBUG(log, "Skip MySQL DDL: {}", query_event.query);
+                return;
+            }
+        }
+
+        auto database = DatabaseCatalog::instance().getDatabase(database_name, getContext());
+        auto materialized_mysql = dynamic_cast<DatabaseCloudMaterializedMySQL*>(database.get());
+        if (!materialized_mysql)
+            throw Exception("Database should be CloudMaterializedMySQL", ErrorCodes::LOGICAL_ERROR);
+        auto server_host_port = materialized_mysql->getServerClientOfManager();
+        auto server_client = getContext()->getCnchServerClient(server_host_port.getHost(), server_host_port.rpc_port);
+        if (!server_client)
+            throw Exception("Failed to get server client for " + server_host_port.toDebugString(), ErrorCodes::LOGICAL_ERROR);
+
+        auto pos = database_name.find("_" + thread_key);
+        if (pos == std::string::npos)
+            throw Exception(
+                "Local MaterializedMySQL database #" + database_name + " has no thread key suffix #" + thread_key,
+                 ErrorCodes::LOGICAL_ERROR
+            );
+        String cnch_database_name = database_name.substr(0, pos);
+
+        auto position = client.getPosition();
+        MySQLBinLogInfo binlog;
+        binlog.binlog_file = position.binlog_name;
+        binlog.binlog_position = position.binlog_pos;
+        binlog.executed_gtid_set = position.gtid_sets.toString();
+
+        server_client->submitMaterializedMySQLDDLQuery(cnch_database_name, thread_key, query, binlog);
     }
     catch (Exception & exception)
     {
@@ -758,8 +731,13 @@ bool MaterializeMySQLSyncThread::isMySQLSyncThread()
 
 void MaterializeMySQLSyncThread::setSynchronizationThreadException(const std::exception_ptr & exception)
 {
-    auto db = DatabaseCatalog::instance().getDatabase(database_name, getContext());
-    DB::setSynchronizationThreadException(db, exception);
+    if (exception)
+        LOG_ERROR(log, "Exception occurs in Synchronization Thread: {}", getExceptionMessage(exception, false));
+}
+
+void MaterializeMySQLSyncThread::recordException(bool create_log, const String & resync_table)
+{
+    MaterializedMySQL::recordException(MaterializedMySQLLogElement::WORKER_THREAD, getContext(), database_name, {assigned_materialized_table}, create_log, resync_table);
 }
 
 void MaterializeMySQLSyncThread::Buffers::add(size_t block_rows, size_t block_bytes, size_t written_rows, size_t written_bytes)
@@ -776,16 +754,55 @@ bool MaterializeMySQLSyncThread::Buffers::checkThresholds(size_t check_block_row
         || total_blocks_bytes >= check_total_bytes;
 }
 
-void MaterializeMySQLSyncThread::Buffers::commit(ContextPtr context)
+void MaterializeMySQLSyncThread::Buffers::prepareCommit(ContextMutablePtr query_context, const String & table_name, const MySQLBinLogInfo & binlog)
+{
+    auto table = DatabaseCatalog::instance().getTable(StorageID(database, table_name), query_context);
+    auto host_with_port = query_context->getCnchTopologyMaster()->getTargetServer(UUIDHelpers::UUIDToString(table->getStorageUUID()), table->getServerVwName(), false);
+
+    auto host_address = host_with_port.getHost();
+    auto host_port = host_with_port.rpc_port;
+    auto server_client = query_context->getCnchServerClient(host_address, host_port);
+    if (!server_client)
+        throw Exception("Failed to get ServerClient", ErrorCodes::LOGICAL_ERROR);
+
+    LOG_TRACE(&Poco::Logger::get("MaterializedMySQLSyncThread"), "Try to commit buffer data to server: {}", server_client->getRPCAddress());
+    /// set rpc info for committing later
+    auto & client_info = query_context->getClientInfo();
+
+    client_info.current_address = Poco::Net::SocketAddress(createHostPortString(host_address, host_port));
+    client_info.rpc_port = host_port;
+
+    /// Create transaction for committing data
+    auto txn = std::make_shared<CnchWorkerTransaction>(query_context, server_client);
+    txn->setBinlogInfo(binlog);
+    query_context->setCurrentTransaction(txn);
+}
+
+void MaterializeMySQLSyncThread::Buffers::commit(ContextPtr context, const MySQLReplication::Position & position)
 {
     try
     {
+        if (position.binlog_name.empty())
+            throw Exception("binlog is empty when try to committing data for MaterializedMySQL", ErrorCodes::LOGICAL_ERROR);
+
+        MySQLBinLogInfo binlog;
+        binlog.binlog_file = position.binlog_name;
+        binlog.binlog_position = position.binlog_pos;
+        binlog.executed_gtid_set = position.gtid_sets.toString();
+
+        /// XXX: Here we can just support for one table to flush
         for (auto & table_name_and_buffer : data)
         {
-            auto query_context = createQueryContext(context);
+            auto query_context = MaterializedMySQL::createQueryContext(context);
+
+            prepareCommit(query_context, table_name_and_buffer.first + "_" + table_suffix, binlog);
+
             OneBlockInputStream input(table_name_and_buffer.second->first);
-            BlockOutputStreamPtr out = getTableOutput(database, table_name_and_buffer.first, query_context, true);
+            BlockOutputStreamPtr out = getTableOutput(database, table_name_and_buffer.first + "_" + table_suffix, query_context, true);
+            Stopwatch watch;
             copyData(input, *out);
+            LOG_DEBUG(&Poco::Logger::get("MaterializeMySQLThread ({})"), "Copied {} rows and elapsed {} ms",
+                table_name_and_buffer.first, table_name_and_buffer.second->first.rows(), watch.elapsedMilliseconds());
         }
 
         data.clear();
@@ -801,28 +818,120 @@ void MaterializeMySQLSyncThread::Buffers::commit(ContextPtr context)
     }
 }
 
-MaterializeMySQLSyncThread::Buffers::BufferAndSortingColumnsPtr MaterializeMySQLSyncThread::Buffers::getTableDataBuffer(
+MaterializeMySQLSyncThread::Buffers::BufferAndUniqueColumnsPtr MaterializeMySQLSyncThread::Buffers::getTableDataBuffer(
     const String & table_name, ContextPtr context)
 {
     const auto & iterator = data.find(table_name);
     if (iterator == data.end())
     {
-        StoragePtr storage = DatabaseCatalog::instance().getTable(StorageID(database, table_name), context);
+        StoragePtr storage = DatabaseCatalog::instance().getTable(StorageID(database, table_name + "_" + table_suffix), context);
 
         const StorageInMemoryMetadata & metadata = storage->getInMemoryMetadata();
-        BufferAndSortingColumnsPtr & buffer_and_soring_columns = data.try_emplace(
-            table_name, std::make_shared<BufferAndSortingColumns>(metadata.getSampleBlock(), std::vector<size_t>{})).first->second;
+        BufferAndUniqueColumnsPtr & buffer_and_unique_columns = data.try_emplace(
+            table_name, std::make_shared<BufferAndUniqueColumns>(metadata.getSampleBlockWithDeleteFlag(), std::vector<size_t>{})).first->second;
 
-        Names required_for_sorting_key = metadata.getColumnsRequiredForSortingKey();
+        /// We need to use unique key instead of sorting key as user could use table override func
+        Names required_for_unique_key = metadata.getColumnsRequiredForUniqueKey();
 
-        for (const auto & required_name_for_sorting_key : required_for_sorting_key)
-            buffer_and_soring_columns->second.emplace_back(
-                buffer_and_soring_columns->first.getPositionByName(required_name_for_sorting_key));
+        for (const auto & required_name_for_unique_key : required_for_unique_key)
+            buffer_and_unique_columns->second.emplace_back(
+                buffer_and_unique_columns->first.getPositionByName(required_name_for_unique_key));
 
-        return buffer_and_soring_columns;
+        return buffer_and_unique_columns;
     }
 
     return iterator->second;
+}
+
+String MaterializeMySQLSyncThread::Buffers::printBuffersInfo()
+{
+    return "Total rows [" + toString(total_blocks_rows) + "]; total Bytes [" + toString(total_blocks_bytes) + "]";
+}
+
+void MaterializeMySQLSyncThread::heartbeat()
+{
+    try
+    {
+        auto database = DatabaseCatalog::instance().getDatabase(database_name, getContext());
+        auto materialized_mysql = dynamic_cast<DatabaseCloudMaterializedMySQL*>(database.get());
+        if (!materialized_mysql)
+            throw Exception("Database should be CloudMaterializedMySQL, but got " + database->getEngineName(), ErrorCodes::LOGICAL_ERROR);
+
+        auto server_host_port = materialized_mysql->getServerClientOfManager();
+        auto server_client = getContext()->getCnchServerClient(server_host_port.getHost(), server_host_port.rpc_port);
+        if (!server_client)
+            throw Exception("Failed to get server client with info: " + server_host_port.toDebugString(), ErrorCodes::LOGICAL_ERROR);
+
+        auto pos = database_name.find("_" + thread_key);
+        if (pos == std::string::npos)
+            throw Exception("Local MaterializedMySQL database #" + database_name + " has no thread key suffix #" + thread_key, ErrorCodes::LOGICAL_ERROR);
+
+        String cnch_database_name = database_name.substr(0, pos);
+        server_client->reportHeartBeatForSyncThread(cnch_database_name, thread_key);
+        LOG_TRACE(log, "Successfully to report heart beat for " + cnch_database_name + "#" + thread_key);
+
+        last_heartbeat_time = time(nullptr);
+    }
+    catch (...)
+    {
+        auto now = time(nullptr);
+        if (UInt64(now - last_heartbeat_time) > settings->sync_thread_max_heartbeat_interval_second)
+        {
+            LOG_ERROR(log, "Sync thread will shutdown as heartbeat reached time out.");
+            stopSelf();
+            return;
+        }
+    }
+
+    heartbeat_task->scheduleAfter(settings->sync_thread_heartbeat_interval_ms);
+}
+
+void MaterializeMySQLSyncThread::reportSyncFailed()
+{
+    try
+    {
+        auto database = DatabaseCatalog::instance().getDatabase(database_name, getContext());
+        auto materialized_mysql = dynamic_cast<DatabaseCloudMaterializedMySQL*>(database.get());
+        if (!materialized_mysql)
+            throw Exception("Database should be CloudMaterializedMySQL, but got " + database->getEngineName(), ErrorCodes::LOGICAL_ERROR);
+
+        auto server_host_port = materialized_mysql->getServerClientOfManager();
+        auto server_client = getContext()->getCnchServerClient(server_host_port.getHost(), server_host_port.rpc_port);
+        if (!server_client)
+            throw Exception("Failed to get server client with info: " + server_host_port.toDebugString(), ErrorCodes::LOGICAL_ERROR);
+
+        auto pos = database_name.find("_" + thread_key);
+        if (pos == std::string::npos)
+            throw Exception("Local MaterializedMySQL database #" + database_name + " has no thread key suffix #" + thread_key, ErrorCodes::LOGICAL_ERROR);
+
+        String cnch_database_name = database_name.substr(0, pos);
+        server_client->reportSyncFailedForSyncThread(cnch_database_name, thread_key);
+        LOG_TRACE(log, "Successfully to report sync failed status for " + cnch_database_name + "#" + thread_key);
+    }
+    catch (...)
+    {
+        stopSelf();
+    }
+}
+
+void MaterializeMySQLSyncThread::stopSelf()
+{
+    ThreadFromGlobalPool([c = Context::createCopy(getContext()), thread_id = thread_key, db_name = database_name] {
+        try
+        {
+            MySQLSyncThreadCommand command;
+            command.type = MySQLSyncThreadCommand::STOP_SYNC;
+            command.sync_thread_key = thread_id;
+            command.database_name = db_name;
+
+            /// call executeSyncThreadTaskCommand to trigger DROP table and database
+            executeSyncThreadTaskCommand(command, c);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(__PRETTY_FUNCTION__ );
+        }
+    }).detach();
 }
 
 }

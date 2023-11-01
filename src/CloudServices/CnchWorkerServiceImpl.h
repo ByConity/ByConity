@@ -129,6 +129,20 @@ public:
         google::protobuf::Closure * done) override;
 #endif
 
+#if USE_MYSQL
+    void submitMySQLSyncThreadTask(
+        google::protobuf::RpcController * cntl,
+        const Protos::SubmitMySQLSyncThreadTaskReq * request,
+        Protos::SubmitMySQLSyncThreadTaskResp * response,
+        google::protobuf::Closure * done) override;
+
+    void checkMySQLSyncThreadStatus(
+        google::protobuf::RpcController * cntl,
+        const Protos::CheckMySQLSyncThreadStatusReq * request,
+        Protos::CheckMySQLSyncThreadStatusResp * response,
+        google::protobuf::Closure * done) override;
+#endif
+
     void preloadChecksumsAndPrimaryIndex(
         google::protobuf::RpcController * cntl,
         const Protos::PreloadChecksumsAndPrimaryIndexReq * request,

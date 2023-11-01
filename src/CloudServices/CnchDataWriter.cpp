@@ -19,7 +19,7 @@
 #include <CloudServices/CnchMergeMutateThread.h>
 #include <CloudServices/CnchServerClient.h>
 #include <CloudServices/CnchServerClientPool.h>
-#include <Core/Types.h>
+#include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/PartLog.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
@@ -111,8 +111,15 @@ CnchDataWriter::CnchDataWriter(
     ManipulationType type_,
     String task_id_,
     String consumer_group_,
-    const cppkafka::TopicPartitionList & tpl_)
-    : storage(storage_), context(context_), type(type_), task_id(std::move(task_id_)), consumer_group(std::move(consumer_group_)), tpl(tpl_)
+    const cppkafka::TopicPartitionList & tpl_,
+    const MySQLBinLogInfo & binlog_)
+    : storage(storage_)
+    , context(context_)
+    , type(type_)
+    , task_id(std::move(task_id_))
+    , consumer_group(std::move(consumer_group_))
+    , tpl(tpl_)
+    , binlog(binlog_)
 {
 }
 
@@ -191,6 +198,8 @@ DumpedData CnchDataWriter::dumpCnchParts(
             if (tpl.empty() || consumer_group.empty())
                 throw Exception("No tpl got for kafka consume, and we won't dump and commit parts", ErrorCodes::LOGICAL_ERROR);
         }
+
+        binlog = curr_txn->getBinlogInfo();
     }
 
     auto txn_id = curr_txn->getTransactionID();
@@ -325,8 +334,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
             if (settings.debug_cnch_force_commit_parts_rpc)
             {
                 auto server_client = context->getCnchServerClient("0.0.0.0", context->getRPCPort());
-                commit_time = server_client->commitParts(
-                    txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl);
+                commit_time = server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl, binlog);
             }
             else
             {
@@ -353,7 +361,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
             }
 
             commit_time = server_client->precommitParts(
-                context, txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl);
+                context, txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl, binlog);
         }
     }
     catch (const Exception & e)
@@ -526,6 +534,17 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
 
             if (!tpl.empty() && !consumer_group.empty())
                 txn->setKafkaTpl(consumer_group, tpl);
+
+            if (!binlog.binlog_file.empty())
+            {
+                auto database = DatabaseCatalog::instance().getDatabase(storage_ptr->getDatabaseName(), context);
+                auto materialized_mysql = dynamic_cast<DatabaseCnchMaterializedMySQL*>(database.get());
+                if (!materialized_mysql)
+                    throw Exception("Try to commit binlog but database '" + database->getDatabaseName() +  "' is not CnchMaterializedMySQL", ErrorCodes::LOGICAL_ERROR);
+
+                txn->setBinlogInfo(binlog);
+                txn->setBinlogName(getNameForMaterializedBinlog(materialized_mysql->getStorageID().uuid, storage_ptr->getTableName()));
+            }
 
             // check the part is already correctly clustered for bucket table. All new inserted parts should be clustered.
             if (storage_ptr->isBucketTable())

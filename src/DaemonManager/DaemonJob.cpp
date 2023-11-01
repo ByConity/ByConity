@@ -53,6 +53,8 @@ bvar::Adder<int> & getExecuteMetric(CnchBGThreadType type)
             return g_executeImpl_TxnGC;
         case CnchBGThreadType::Clustering:
             return g_executeImpl_Clustering;
+        case CnchBGThreadType::MaterializedMySQL:
+            return g_executeImpl_MaterializedMySQL;
         default:
             throw Exception(String{"No metric add for daemon job type "} + toString(type) + ", this is coding mistake", ErrorCodes::LOGICAL_ERROR);
     }
@@ -79,6 +81,8 @@ bvar::Adder<int> & getExecuteErrorMetric(CnchBGThreadType type)
             return g_executeImpl_TxnGC_error;
         case CnchBGThreadType::Clustering:
             return g_executeImpl_Clustering_error;
+        case CnchBGThreadType::MaterializedMySQL:
+            return g_executeImpl_MaterializedMySQL_error;
         default:
             throw Exception(String{"No error metric add for daemon job type "} + toString(type) + ", this is coding mistake", ErrorCodes::LOGICAL_ERROR);
     }

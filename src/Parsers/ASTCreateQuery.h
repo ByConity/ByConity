@@ -28,6 +28,8 @@
 #include <Parsers/ASTQueryWithOnCluster.h>
 #include <Parsers/ASTQueryWithTableAndOutput.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Parsers/ASTTableOverrides.h>
+#include <Interpreters/StorageID.h>
 #include "Parsers/IAST_fwd.h"
 
 namespace DB
@@ -134,6 +136,8 @@ public:
 
     bool replace_table{false};
     bool create_or_replace{false};
+
+    ASTTableOverrideList * table_overrides = nullptr; /// For CREATE DATABASE with engines that automatically create tables
 
     /** Get the text that identifies this element. */
     String getID(char delim) const override { return (attach ? "AttachQuery" : "CreateQuery") + (delim + database) + delim + table; }

@@ -86,6 +86,10 @@
 #include <Interpreters/FunctionNameNormalizer.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 
+#include <TableFunctions/TableFunctionFactory.h>
+#include <common/logger_useful.h>
+#include <Parsers/queryToString.h>
+#include <Interpreters/executeQuery.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/executeQuery.h>
 #include <Interpreters/trySetVirtualWarehouse.h>
@@ -97,6 +101,7 @@
 
 #include <Catalog/Catalog.h>
 #include <ExternalCatalog/IExternalCatalogMgr.h>
+#include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
 
 #include <fmt/format.h>
 
@@ -252,7 +257,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         if (!create.attach && fs::exists(metadata_path))
             throw Exception(ErrorCodes::DATABASE_ALREADY_EXISTS, "Metadata directory {} already exists", metadata_path.string());
     }
-    else if (create.storage->engine->name == "MaterializeMySQL")
+    else if (create.storage->engine->name == "CnchMaterializedMySQL" || create.storage->engine->name == "CloudMaterializedMySQL")
     {
         /// It creates nested database with Ordinary or Atomic engine depending on UUID in query and default engine setting.
         /// Do nothing if it's an internal ATTACH on server startup or short-syntax ATTACH query from user,
@@ -261,12 +266,8 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         bool attach_from_user = create.attach && !internal && !create.attach_short_syntax;
         bool create_from_user = !create.attach;
 
-        if (create_from_user)
-        {
-            const auto & default_engine = getContext()->getSettingsRef().default_database_engine.value;
-            if (create.uuid == UUIDHelpers::Nil && default_engine == DefaultDatabaseEngine::Atomic)
-                create.uuid = UUIDHelpers::generateV4();    /// Will enable Atomic engine for nested database
-        }
+        if (create_from_user && create.uuid == UUIDHelpers::Nil)
+            create.uuid = UUIDHelpers::generateV4();
         else if (attach_from_user && create.uuid == UUIDHelpers::Nil)
         {
             /// Ambiguity is possible: should we attach nested database as Ordinary
@@ -276,10 +277,7 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         }
 
         /// Set metadata path according to nested engine
-        if (create.uuid == UUIDHelpers::Nil)
-            metadata_path = metadata_path / "metadata" / database_name_escaped;
-        else
-            metadata_path = metadata_path / "store" / DatabaseCatalog::getPathForUUID(create.uuid);
+        metadata_path = metadata_path / "store" / DatabaseCatalog::getPathForUUID(create.uuid);
     }
     else
     {
@@ -292,10 +290,10 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
         metadata_path = metadata_path / "metadata" / database_name_escaped;
     }
 
-    if (create.storage->engine->name == "MaterializeMySQL" && !getContext()->getSettingsRef().allow_experimental_database_materialize_mysql
+    if (create.storage->engine->name == "CnchMaterializedMySQL" && !getContext()->getSettingsRef().allow_experimental_database_materialize_mysql
         && !internal)
     {
-        throw Exception("MaterializeMySQL is an experimental database engine. "
+        throw Exception("CnchMaterializedMySQL is an experimental database engine. "
                         "Enable allow_experimental_database_materialize_mysql to use it.", ErrorCodes::UNKNOWN_DATABASE_ENGINE);
     }
 
@@ -329,13 +327,17 @@ BlockIO InterpreterCreateQuery::createDatabase(ASTCreateQuery & create)
             else
                 throw Exception("Database " + database_name + " already exists.", ErrorCodes::DATABASE_ALREADY_EXISTS);
         }
-        database_cnch->createEntryInCnchCatalog(getContext());
+        if (const auto * database_cnch_mmsql = dynamic_cast<const DatabaseCnchMaterializedMySQL *>(database.get()))
+            database_cnch_mmsql->createEntryInCnchCatalog(getContext(), queryToString(create));
+        else
+            database_cnch->createEntryInCnchCatalog(getContext());
     }
 
     if (create.uuid != UUIDHelpers::Nil)
         create.database = TABLE_WITH_UUID_NAME_PLACEHOLDER;
 
-    bool need_write_metadata_on_disk = (database->getEngineName() != "Cnch") && (!create.attach || !fs::exists(metadata_file_path));
+    bool need_write_metadata_on_disk = (database->getEngineName() != "Cnch") && (database->getEngineName() != "CnchMaterializedMySQL")
+                                        && (database->getEngineName() != "CloudMaterializedMySQL") && (!create.attach || !fs::exists(metadata_file_path));
 
     if (need_write_metadata_on_disk)
     {
@@ -1303,7 +1305,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
 
     /// CnchKafka table should be allowed to be created on worker
     if (create.storage && startsWith(create.storage->engine->name, "Cnch")
-        && !startsWith(create.storage->engine->name, "CnchKafka") && database->getEngineName() != "Cnch")
+        && !startsWith(create.storage->engine->name, "CnchKafka") && database->getEngineName() != "Cnch" && database->getEngineName() != "CnchMaterializedMySQL")
     {
         throw Exception(
             ErrorCodes::SUPPORT_IS_DISABLED,

@@ -54,6 +54,13 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
     LOG_DEBUG(log, "Wait for change schema in Catalog.");
     auto catalog = global_context.getCnchCatalog();
     bool is_recluster = false;
+    /// only used for materialized mysql
+    if (params.is_database)
+    {
+        // updateTsCache(params.storage_id.uuid, commit_time);
+        catalog->alterDatabase(params.storage_id.database_name, txn_id, commit_time, params.statement, params.engine_name);
+        return;
+    }
     try
     {
         if (!mutation_commands.empty())

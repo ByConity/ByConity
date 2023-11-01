@@ -51,7 +51,7 @@ namespace MySQLInterpreter
         static void validate(const TQuery & query, ContextPtr context);
 
         static ASTs getRewrittenQueries(
-            const TQuery & create_query, ContextPtr context, const String & mapped_to_database, const String & mysql_database);
+            const TQuery & create_query, ContextPtr context, const String & mapped_to_database, const String & mysql_database, bool g_test = false);
     };
 
 template <typename InterpreterImpl>
@@ -72,7 +72,10 @@ public:
         ASTs rewritten_queries = InterpreterImpl::getRewrittenQueries(query, getContext(), mapped_to_database, mysql_database);
 
         for (const auto & rewritten_query : rewritten_queries)
+        {
+            /// Set `internal` to true as we use CnchStorageCommonHelper to forward query to target server when needed
             executeQuery("/* Rewritten MySQL DDL Query */ " + queryToString(rewritten_query), getContext(), true);
+        }
 
         return BlockIO{};
     }

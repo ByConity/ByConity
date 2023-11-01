@@ -29,6 +29,7 @@ struct CreateActionParams
     bool attach = false;
     bool is_dictionary = false;
     bool is_database = false;
+    String engine_name = "";
 };
 
 class DDLCreateAction : public IAction

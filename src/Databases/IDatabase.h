@@ -45,6 +45,8 @@ struct IndicesDescription;
 struct StorageInMemoryMetadata;
 struct StorageID;
 class ASTCreateQuery;
+class AlterCommands;
+class SettingsChanges;
 using DictionariesWithID = std::vector<std::pair<String, UUID>>;
 
 namespace ErrorCodes
@@ -306,6 +308,14 @@ public:
     virtual std::map<String, String> getBrokenTables() {return {};}
     virtual void clearBrokenTables() {}
 
+    virtual void applySettingsChanges(const SettingsChanges &, ContextPtr)
+    {
+        throw Exception(
+            ErrorCodes::NOT_IMPLEMENTED,
+            "Database engine {} either does not support settings, or does not support altering settings",
+            getEngineName());
+    }
+    
     virtual ~IDatabase() = default;
 
 protected:
