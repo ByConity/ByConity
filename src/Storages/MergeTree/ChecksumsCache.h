@@ -20,6 +20,7 @@
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Common/ProfileEvents.h>
+#include <common/find_symbols.h>
 #include <sstream>
 
 namespace ProfileEvents
@@ -39,6 +40,13 @@ inline String getChecksumsCacheKey(const String & storage_unique_id, const IMerg
     return storage_unique_id + "_" + part.getUniquePartName();
 }
 
+inline String getStorageUniqueId(const String & checksums_cache_key)
+{
+    Strings items;
+    splitInto<'_'>(items, checksums_cache_key);
+    return items.empty() ? "" : items.front();
+}
+
 struct ChecksumsWeightFunction
 {
     size_t operator()(const MergeTreeDataPartChecksums & checksums) const
@@ -51,8 +59,6 @@ struct ChecksumsWeightFunction
 struct ChecksumsCacheSettings
 {
     size_t lru_max_size {std::numeric_limits<size_t>::max()};
-
-    size_t lru_max_nums {std::numeric_limits<size_t>::max()};
 
     // Cache mapping bucket size
     size_t mapping_bucket_size {5000};
@@ -77,8 +83,19 @@ public:
               .lru_update_interval = static_cast<UInt32>(settings.lru_update_interval),
               .mapping_bucket_size = static_cast<UInt32>(std::max(1UL, settings.mapping_bucket_size / settings.cache_shard_num)),
               .max_size = std::max(static_cast<size_t>(1), static_cast<size_t>(settings.lru_max_size / settings.cache_shard_num)),
-              .max_nums = std::max( static_cast<size_t>(1), static_cast<size_t>(settings.lru_max_nums / settings.cache_shard_num)),
-              .enable_customize_evict_handler = false,
+              .max_nums = std::numeric_limits<size_t>::max(),
+              .enable_customize_evict_handler = true,
+              .customize_evict_handler
+              = [](
+                    const ChecksumsName&, const std::shared_ptr<MergeTreeDataPartChecksums>&, size_t ) {
+                    return std::make_pair(true, nullptr);
+                },
+              .customize_post_evict_handler =
+                  [this](
+                      const std::vector<std::pair<ChecksumsName, std::shared_ptr<MergeTreeDataPartChecksums>>> & removed_elements,
+                      const std::vector<std::pair<ChecksumsName, std::shared_ptr<MergeTreeDataPartChecksums>>> & updated_elements) {
+                    afterEvictChecksums(removed_elements, updated_elements);
+                  },
             })
     {
     }
@@ -93,18 +110,21 @@ public:
         if (!result)
         {
             ProfileEvents::increment(ProfileEvents::ChecksumsCacheMisses);
+
             result = load();
-            shard.upsert(key, result);
-            flag = true;
             
-            size_t first_level_bucket = std::hash<String>()(name) % cache_shard_num;
-            std::unique_lock<std::mutex> guard(first_level_containers_locks[first_level_bucket]);
-            first_level_containers[first_level_bucket][name].insert(key);
+            bool inserted = shard.emplace(key, result);
+            if (inserted) 
+            {
+                size_t first_level_bucket = std::hash<String>()(name) % cache_shard_num;
+                std::unique_lock<std::mutex> guard(first_level_containers_locks[first_level_bucket]);
+                first_level_containers[first_level_bucket][name].insert(key);
+                flag = true;
+            }
         }
         else
         {
             ProfileEvents::increment(ProfileEvents::ChecksumsCacheHits);
-            flag = false;
         }
         
         return std::make_pair(result, flag);
@@ -152,6 +172,26 @@ public:
                 iter++;
                 dropChecksumCache(name, true);
             }
+        }
+    }
+
+private:
+    void afterEvictChecksums(const std::vector<std::pair<ChecksumsName, std::shared_ptr<MergeTreeDataPartChecksums>>>& removed_elements,
+         [[maybe_unused]] const std::vector<std::pair<ChecksumsName, std::shared_ptr<MergeTreeDataPartChecksums>>>& updated_elements) 
+    {
+        for (const auto & pair : removed_elements)
+        {
+            auto key = pair.first;
+            auto name = getStorageUniqueId(key);
+
+            {
+                size_t first_level_bucket = std::hash<String>()(name) % cache_shard_num;
+                std::unique_lock<std::mutex> guard(first_level_containers_locks[first_level_bucket]);
+                first_level_containers[first_level_bucket][name].erase(key);
+            }
+
+            auto& shard = second_level_cache.shard(key);
+            shard.erase(key);
         }
     }
 
