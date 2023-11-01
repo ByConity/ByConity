@@ -127,20 +127,6 @@ public:
             ProfileEvents::increment(ProfileEvents::ChecksumsCacheHits);
         }
         
-        size_t first_level_count = 0;
-        for (size_t i = 0; i < cache_shard_num; i++) 
-        {
-            std::unique_lock<std::mutex> guard(first_level_containers_locks[i]);
-            auto iter = first_level_containers[i].begin();
-            while (iter != first_level_containers[i].end())
-            {
-                first_level_count += iter->second.size();
-            }
-        }
-
-        LOG_DEBUG(&Poco::Logger::get("checksumsCache"), "cache weight {} count {} first_level_count {}", 
-            weight(), count(), first_level_count);
-
         return std::make_pair(result, flag);
     }
 
@@ -197,8 +183,6 @@ private:
         {
             auto key = pair.first;
             auto name = getStorageUniqueId(key);
-
-            LOG_DEBUG(&Poco::Logger::get("checksumsCache"), "afterEvictChecksums table {} part {}", name, key);
 
             {
                 size_t first_level_bucket = std::hash<String>()(name) % cache_shard_num;
