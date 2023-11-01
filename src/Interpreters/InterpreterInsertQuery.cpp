@@ -93,33 +93,6 @@ InterpreterInsertQuery::InterpreterInsertQuery(
     checkStackSize();
 }
 
-
-static String replaceMatierializedViewQuery(StorageMaterializedView * mv)
-{
-    auto query = mv->getCreateTableSql();
-
-    ParserCreateQuery parser;
-    ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, 0);
-
-    auto & create_query = ast->as<ASTCreateQuery &>();
-    create_query.to_inner_uuid = UUIDHelpers::Nil;
-    if (create_query.to_table_id.empty())
-    {
-        create_query.to_table_id.table_name = generateInnerTableName(mv->getStorageID());
-        create_query.to_table_id.database_name = mv->getDatabaseName();
-        create_query.storage = nullptr;
-    }
-
-    auto & inner_query = create_query.select->list_of_selects->children.at(0);
-    if (!inner_query)
-        throw Exception("select query is necessary for mv table", ErrorCodes::LOGICAL_ERROR);
-
-    auto & select_query = inner_query->as<ASTSelectQuery &>();
-    select_query.replaceDatabaseAndTable(mv->getStorageID().database_name, mv->getStorageID().table_name);
-
-    return getTableDefinitionFromCreateQuery(ast, false);
-}
-
 static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local_context)
 {
     Names create_view_sqls;
@@ -166,7 +139,7 @@ static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local
             auto create_target_query = target_table->getCreateTableSql();
             auto create_local_target_query = target_cnch_merge->getCreateQueryForCloudTable(create_target_query, target_cnch_merge->getTableName());
             create_view_sqls.emplace_back(create_local_target_query);
-            create_view_sqls.emplace_back(replaceMatierializedViewQuery(mv));
+            create_view_sqls.emplace_back(mv->getCreateTableSql());
         }
     }
 
@@ -202,7 +175,7 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
             Names view_create_sqls = genViewDependencyCreateQueries(storage, getContext());
             if (!view_create_sqls.empty())
             {
-                ContextMutablePtr mutable_context = Context::createCopy(getContext());
+                ContextMutablePtr mutable_context = const_pointer_cast<Context>(getContext());
                 if (!mutable_context->tryGetCnchWorkerResource())
                     mutable_context->initCnchWorkerResource();
                 view_create_sqls.emplace_back(create_query);

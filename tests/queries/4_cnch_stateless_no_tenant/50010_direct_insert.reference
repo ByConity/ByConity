@@ -13,9 +13,11 @@ Projection Est. ? rows
                └─ TableScan test.events_aggregation Est. ? rows
                         Outputs: [max_duration, sum_cost, event_date, event_name, app_id]
 note: Materialized Views is applied for 1 times: test.events_aggregate_view.
-1	show	2022-06-14	88	64
-2	send	2022-06-14	952	64
-3	show	2022-06-15	44	64
-1	show	2022-06-14	44	64
-2	send	2022-06-14	476	64
-3	show	2022-06-15	44	64
+1	show	2022-06-14	1	64
+2	send	2022-06-14	2	64
+3	show	2022-06-15	3	64
+4	show	2022-06-15	3	64
+1	show	2022-06-14	1	64
+2	send	2022-06-14	2	64
+3	show	2022-06-15	3	64
+4	show	2022-06-15	3	64

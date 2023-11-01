@@ -38,6 +38,11 @@ public:
     DatabasePtr getDatabase(const String & database_name) const;
     bool isCnchTableInWorker(const StorageID & table_id) const;
 
+    ~CnchWorkerResource() 
+    {
+        clearResource();
+    }
+
     void clearResource();
 
     auto getTables() const
