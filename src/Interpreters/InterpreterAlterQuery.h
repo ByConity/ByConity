@@ -9,7 +9,7 @@ namespace DB
 
 class AccessRightsElements;
 class ASTAlterCommand;
-
+class ASTAlterQuery;
 
 /** Allows you add or remove a column in the table.
   * It also allows you to manipulate the partitions of the MergeTree family tables.
@@ -27,6 +27,10 @@ public:
 
 private:
     AccessRightsElements getRequiredAccess() const;
+
+    BlockIO executeToTable(const ASTAlterQuery & alter);
+
+    BlockIO executeToDatabase(const ASTAlterQuery & alter);
 
     ASTPtr query_ptr;
 };

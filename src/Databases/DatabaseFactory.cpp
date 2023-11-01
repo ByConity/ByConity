@@ -42,11 +42,13 @@
 #endif
 
 #if USE_MYSQL
+#    include <Databases/MySQL/DatabaseCloudMaterializedMySQL.h>
+#    include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
+#    include <Parsers/queryToString.h>
 #    include <Core/MySQL/MySQLClient.h>
 #    include <Databases/MySQL/ConnectionMySQLSettings.h>
 #    include <Databases/MySQL/DatabaseMySQL.h>
 #    include <Databases/MySQL/MaterializeMySQLSettings.h>
-#    include <Databases/MySQL/DatabaseMaterializeMySQL.h>
 #    include <mysqlxx/Pool.h>
 #endif
 
@@ -121,8 +123,9 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
     const String & engine_name = engine_define->engine->name;
     const UUID & uuid = create.uuid;
 
-    bool engine_may_have_arguments = engine_name == "MySQL" || engine_name == "MaterializeMySQL" || engine_name == "Lazy" ||
+    bool engine_may_have_arguments = engine_name == "MySQL" || engine_name == "CnchMaterializedMySQL" || engine_name == "CloudMaterializedMySQL" || engine_name == "Lazy" ||
                                      engine_name == "Replicated" || engine_name == "PostgreSQL" || engine_name == "MaterializedPostgreSQL";
+    static const std::unordered_set<std::string_view> engines_with_table_overrides{"CnchMaterializedMySQL", "CloudMaterializedMySQL"};
     if (engine_define->engine->arguments && !engine_may_have_arguments)
         throw Exception("Database engine " + engine_name + " cannot have arguments", ErrorCodes::BAD_ARGUMENTS);
 
@@ -133,6 +136,9 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
     if (has_unexpected_element || (!may_have_settings && engine_define->settings))
         throw Exception("Database engine " + engine_name + " cannot have parameters, primary_key, order_by, unique_key, sample_by, settings",
                         ErrorCodes::UNKNOWN_ELEMENT_IN_AST);
+
+    if (create.table_overrides && !engines_with_table_overrides.contains(engine_name))
+        throw Exception("Database engine " + engine_name + " cannot have table overrides", ErrorCodes::BAD_ARGUMENTS);
 
     if (engine_name == "Ordinary")
         return std::make_shared<DatabaseOrdinary>(database_name, metadata_path, context);
@@ -148,7 +154,7 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
 
 #if USE_MYSQL
 
-    else if (engine_name == "MySQL" || engine_name == "MaterializeMySQL")
+    else if (engine_name == "MySQL" || engine_name == "CnchMaterializedMySQL" || engine_name == "CloudMaterializedMySQL")
     {
         const ASTFunction * engine = engine_define->engine;
         if (!engine->arguments || engine->arguments->children.size() != 4)
@@ -182,23 +188,18 @@ DatabasePtr DatabaseFactory::getImpl(const ASTCreateQuery & create, const String
             }
 
             const auto & [remote_host_name, remote_port] = parseAddress(host_port, 3306);
-            MySQLClient client(remote_host_name, remote_port, mysql_user_name, mysql_user_password);
-            auto mysql_pool = mysqlxx::Pool(mysql_database_name, remote_host_name, mysql_user_name, mysql_user_password, remote_port);
-
+            MySQLDatabaseInfo mysql_info{mysql_database_name, mysql_user_name, mysql_user_password, String{removeBracketsIfIpv6(remote_host_name)}, remote_port};
 
             auto materialize_mode_settings = std::make_unique<MaterializeMySQLSettings>();
-
             if (engine_define->settings)
                 materialize_mode_settings->loadFromQuery(*engine_define);
 
-            if (create.uuid == UUIDHelpers::Nil)
-                return std::make_shared<DatabaseMaterializeMySQL<DatabaseOrdinary>>(
-                    context, database_name, metadata_path, uuid, mysql_database_name, std::move(mysql_pool), std::move(client)
-                    , std::move(materialize_mode_settings));
+            if (engine_name == "CloudMaterializedMySQL")
+                return std::make_shared<DatabaseCloudMaterializedMySQL>(context, database_name, create.uuid,/// UUIDHelpers::Nil,
+                                                                    std::move(mysql_info), std::move(materialize_mode_settings));
             else
-                return std::make_shared<DatabaseMaterializeMySQL<DatabaseAtomic>>(
-                    context, database_name, metadata_path, uuid, mysql_database_name, std::move(mysql_pool), std::move(client)
-                    , std::move(materialize_mode_settings));
+                return std::make_shared<DatabaseCnchMaterializedMySQL>(context, database_name, create.uuid, std::move(mysql_info),
+                                                                       std::move(materialize_mode_settings), queryToString(create));
         }
         catch (...)
         {

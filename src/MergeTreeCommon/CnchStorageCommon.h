@@ -73,7 +73,7 @@ class CnchStorageCommonHelper
 public:
     CnchStorageCommonHelper(const StorageID & table_id_, const String & remote_database_, const String & remote_table_);
 
-    bool forwardQueryToServerIfNeeded(ContextPtr query_context, const StorageID & storage_id) const;
+    bool forwardQueryToServerIfNeeded(ContextPtr query_context, const StorageID & storage_id, const String & query_to_forward = "", bool need_process_entry = true) const;
 
     static bool healthCheckForWorkerGroup(ContextPtr context, WorkerGroupHandle & worker_group);
 

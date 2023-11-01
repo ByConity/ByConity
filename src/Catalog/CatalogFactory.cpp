@@ -26,6 +26,7 @@
 #include <Interpreters/InterpreterCreateQuery.h>
 
 #include <Databases/DatabaseCnch.h>
+#include <Databases/DatabaseFactory.h>
 #include <Protos/RPCHelpers.h>
 #include <Transaction/TxnTimestamp.h>
 
@@ -43,6 +44,31 @@ namespace Catalog
 CatalogFactory::DatabasePtr CatalogFactory::getDatabaseByDataModel(const DB::Protos::DataModelDB & db_model, const ContextPtr & context)
 {
     auto uuid = db_model.has_uuid() ? RPCHelpers::createUUID(db_model.uuid()) : UUIDHelpers::Nil;
+    if (db_model.has_uuid() && db_model.has_type() && db_model.type() == DB::Protos::CnchDatabaseType::MaterializedMySQL)
+    {
+        try
+        {
+            const auto & create_query = db_model.definition();
+            const char *begin = create_query.data();
+            const char *end = begin + create_query.size();
+            ParserQuery parser(end);
+            ASTPtr ast = parseQuery(parser, begin, end, "", 0, 0);
+            ASTCreateQuery *create_ast = ast->as<ASTCreateQuery>();
+            if (!create_ast)
+                throw Exception("Failed to parse MaterializedMySQL create sql: " + create_query, ErrorCodes::LOGICAL_ERROR);
+
+            fs::path metadata_path = fs::canonical(context->getPath());
+            metadata_path = metadata_path / "store" / DatabaseCatalog::getPathForUUID(uuid);
+            return DatabaseFactory::getImpl(*create_ast, metadata_path, context);
+        }
+        catch(...)
+        {
+            /// Handle the exception that parseQuery error or other exception for wrong param/create_query persisted
+            /// return DatabaseCnch instead of DatabaseCnchMaterializedMySQL
+            tryLogCurrentException(__PRETTY_FUNCTION__ );
+            return std::make_shared<DatabaseCnch>(db_model.name(), uuid, context);
+        }
+    }
     return std::make_shared<DatabaseCnch>(db_model.name(), uuid, context);
 }
 

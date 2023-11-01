@@ -518,6 +518,16 @@ void removeUnneededColumnsFromSelectClause(const ASTSelectQuery * select_query, 
             /// It is not easy to analyze untuple here, because types were not calculated yes.
             if (func && func->name == "untuple")
                 new_elements.push_back(elem);
+
+            /// removing aggregation can change number of rows, so `count()` result in outer sub-query would be wrong
+            /// such as: select count(1) from (SELECT 1 AS a, count(1) + 1 FROM numbers(5));
+            if (func && !select_query->groupBy())
+            {
+                GetAggregatesVisitor::Data data = {};
+                GetAggregatesVisitor(data).visit(elem);
+                if (!data.aggregates.empty())
+                    new_elements.push_back(elem);
+            }
         }
     }
 

@@ -3469,6 +3469,15 @@ std::shared_ptr<CloudKafkaLog> Context::getCloudKafkaLog() const
     return shared->cnch_system_logs->getKafkaLog();
 }
 
+std::shared_ptr<CloudMaterializedMySQLLog> Context::getCloudMaterializedMySQLLog() const
+{
+    auto lock = getLock();
+    if (!shared->cnch_system_logs)
+        return {};
+
+    return shared->cnch_system_logs->getMaterializedMySQLLog();
+}
+
 std::shared_ptr<MutationLog> Context::getMutationLog() const
 {
     auto lock = getLock();

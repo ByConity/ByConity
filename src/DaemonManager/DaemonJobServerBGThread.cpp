@@ -22,6 +22,7 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/Kafka/StorageCnchKafka.h>
 #include <CloudServices/CnchServerClientPool.h>
+#include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
 
 namespace DB::DaemonManager
 {
@@ -55,57 +56,87 @@ void DaemonJobServerBGThread::init()
 std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread & daemon_job)
 {
     const Context & context = *daemon_job.getContext();
-    auto data_models = context.getCnchCatalog()->getAllTables();
     std::unordered_map<UUID, StorageID> ret;
     Poco::Logger * log = daemon_job.getLog();
-    for (const auto & data_model : data_models)
+
+    if (daemon_job.getType() == CnchBGThreadType::MaterializedMySQL)
     {
-        auto uuid = RPCHelpers::createUUID(data_model.uuid());
-
-        if (Status::isDetached(data_model.status()) || Status::isDeleted(data_model.status()))
-            continue;
-
-        try
+        auto data_models = context.getCnchCatalog()->getAllDataBases();
+        for (const auto & data_model : data_models)
         {
-            StoragePtr storage = nullptr;
-            if (auto cache = daemon_job.getStorageCache(); cache)
-            {
-                auto res = cache->getOrSet(data_model.definition(), [&]()
-                {
-                    return Catalog::CatalogFactory::getTableByDefinition(
-                        daemon_job.getContext(),
-                        data_model.database(),
-                        data_model.name(),
-                        data_model.definition());
-                });
-                storage = std::move(res.first);
-            }
-            else
-            {
-                storage = Catalog::CatalogFactory::getTableByDefinition(
-                        daemon_job.getContext(),
-                        data_model.database(),
-                        data_model.name(),
-                        data_model.definition());
-            }
-
-            if (!storage)
-            {
-                LOG_WARNING(log, "Fail to get storagePtr for {}.{}", data_model.database(), data_model.name());
+            if (Status::isDetached(data_model.status()) || Status::isDeleted(data_model.status()))
                 continue;
+
+            if (data_model.has_type() && data_model.type() == DB::Protos::CnchDatabaseType::MaterializedMySQL)
+            {
+                auto uuid = RPCHelpers::createUUID(data_model.uuid());
+                StorageID storage_id(data_model.name(), uuid);
+
+                try
+                {
+                    /// For MaterializedMySQL, using nullptr for StoragePtr param
+                    if (daemon_job.ifNeedDaemonJob(nullptr ,storage_id))
+                        ret.insert(std::make_pair(uuid, storage_id));
+                }
+                catch(...)
+                {
+                    LOG_WARNING(log, "Fail to schedule for " + storage_id.getFullTableName() + ". Error: " + getCurrentExceptionMessage(true));
+                }
             }
-            if (daemon_job.isTargetTable(storage))
-                ret.insert(std::make_pair(uuid, storage->getStorageID()));
         }
-        catch (Exception & e)
+    }
+    else    /// For Table daemon job
+    {
+        auto data_models = context.getCnchCatalog()->getAllTables();
+        for (const auto & data_model : data_models)
         {
-            LOG_WARNING(log, "Fail to schedule for {}.{}. Error: {}", data_model.database(), data_model.name(), e.message());
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        }
-        catch (...)
-        {
-            LOG_WARNING(log, "Fail to construct storage for {}.{}", data_model.database(), data_model.name());
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            auto uuid = RPCHelpers::createUUID(data_model.uuid());
+
+            if (Status::isDetached(data_model.status()) || Status::isDeleted(data_model.status()))
+                continue;
+
+            try
+            {
+                StoragePtr storage = nullptr;
+                if (auto cache = daemon_job.getStorageCache(); cache)
+                {
+                    auto res = cache->getOrSet(data_model.definition(), [&]()
+                    {
+                        return Catalog::CatalogFactory::getTableByDefinition(
+                            daemon_job.getContext(),
+                            data_model.database(),
+                            data_model.name(),
+                            data_model.definition());
+                    });
+                    storage = std::move(res.first);
+                }
+                else
+                {
+                    storage = Catalog::CatalogFactory::getTableByDefinition(
+                            daemon_job.getContext(),
+                            data_model.database(),
+                            data_model.name(),
+                            data_model.definition());
+                }
+
+                if (!storage)
+                {
+                    LOG_WARNING(log, "Fail to get storagePtr for {}.{}", data_model.database(), data_model.name());
+                    continue;
+                }
+                if (daemon_job.ifNeedDaemonJob(storage, storage->getStorageID()))
+                    ret.insert(std::make_pair(uuid, storage->getStorageID()));
+            }
+            catch (Exception & e)
+            {
+                LOG_WARNING(log, "Fail to schedule for {}.{}. Error: ", data_model.database(), data_model.name(), e.message());
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            }
+            catch (...)
+            {
+                LOG_WARNING(log, "Fail to construct storage for {}.{}", data_model.database(), data_model.name());
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            }
         }
     }
 
@@ -988,17 +1019,25 @@ BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
     return ret;
 }
 
-bool isCnchMergeTree(const StoragePtr & storage)
+bool isCnchMergeTree(const StoragePtr & storage, const StorageID & /*storage_id*/, const ContextPtr & context [[maybe_unused]])
 {
     return dynamic_cast<StorageCnchMergeTree *>(storage.get()) != nullptr;
 }
 
-bool isCnchKafka(const StoragePtr & storage)
+bool isCnchKafka(const StoragePtr & storage, const StorageID & /*storage_id*/, const ContextPtr & context [[maybe_unused]])
 {
     return dynamic_cast<StorageCnchKafka *>(storage.get()) != nullptr;
 }
 
-bool isCnchUniqueTableAndNeedDedup(const StoragePtr & storage)
+bool isMaterializedMySQL(const StoragePtr & /*storage*/, const StorageID & storage_id, const ContextPtr & context)
+{
+    if (!storage_id.isDatabase())
+        return false;
+    auto database = context->getCnchCatalog()->getDatabase(storage_id.getDatabaseName(), context, TxnTimestamp::maxTS());
+    return dynamic_cast<DatabaseCnchMaterializedMySQL *>(database.get()) != nullptr;
+};
+
+bool isCnchUniqueTableAndNeedDedup(const StoragePtr & storage, const StorageID & /*storage_id*/, const ContextPtr & context [[maybe_unused]])
 {
     auto t = dynamic_cast<StorageCnchMergeTree *>(storage.get());
     return t && t->getInMemoryMetadataPtr()->hasUniqueKey();
@@ -1011,6 +1050,7 @@ void registerServerBGThreads(DaemonFactory & factory)
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Clustering, isCnchMergeTree>>("PART_CLUSTERING");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Consumer, isCnchKafka>>("CONSUMER");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::DedupWorker, isCnchUniqueTableAndNeedDedup>>("DEDUP_WORKER");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::MaterializedMySQL, isMaterializedMySQL>>("MATERIALIZED_MYSQL");
 }
 
 void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
@@ -1038,7 +1078,7 @@ void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
                 continue;
             }
 
-            if (daemon_job->isTargetTable(storage))
+            if (daemon_job->ifNeedDaemonJob(storage, storage->getStorageID()))
             {
                 if (!catalog->getTableActiveness(storage, TxnTimestamp::maxTS()))
                 {

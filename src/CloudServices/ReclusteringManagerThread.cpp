@@ -5,7 +5,7 @@ namespace DB
 {
 
 ReclusteringManagerThread::ReclusteringManagerThread(ContextPtr context_, const StorageID & id)
-    : ICnchBGThread(context_, CnchBGThreadType::Clustering, id)
+    : ICnchBGThread(context_->getGlobalContext(), CnchBGThreadType::Clustering, id)
 {
 }
 

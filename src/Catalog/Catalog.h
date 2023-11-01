@@ -114,7 +114,8 @@ public:
     void removeSQLBinding(const String & uuid, const bool & is_re_expression);
 
     ///database related interface
-    void createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts);
+    void createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts,
+                        const String & create_query = "", const String & engine_name = "");
 
     DatabasePtr getDatabase(const String & database, const ContextPtr & context, const TxnTimestamp & ts = 0);
 
@@ -123,6 +124,10 @@ public:
     void dropDatabase(const String & database, const TxnTimestamp & previous_version, const TxnTimestamp & txnID, const TxnTimestamp & ts);
 
     void renameDatabase(const String & from_database, const String & to_database, const TxnTimestamp & txnID, const TxnTimestamp & ts);
+
+    ///currently only used for materialized mysql
+    void alterDatabase(const String & alter_database, const TxnTimestamp & txnID, const TxnTimestamp & ts,
+                       const String & create_query = "", const String & engine_name = "");
 
     ///table related interface
     void createTable(
@@ -278,6 +283,12 @@ public:
         TransactionRecord & record,
         const String & consumer_group,
         const cppkafka::TopicPartitionList & tpl);
+
+    bool setTransactionRecordStatusWithBinlog(
+        const TransactionRecord & expected_record,
+        TransactionRecord & record,
+        const String & binlog_name,
+        const std::shared_ptr<Protos::MaterializedMySQLBinlogMetadata> & binlog);
 
     /// just set transaction status to aborted
     void rollbackTransaction(TransactionRecord record);
@@ -485,6 +496,16 @@ public:
 
     void setTablePreallocateVW(const UUID & table_uuid, const String vw);
     void getTablePreallocateVW(const UUID & table_uuid, String & vw);
+
+    /// APIs for MaterializedMySQL
+    std::shared_ptr<Protos::MaterializedMySQLManagerMetadata> getOrSetMaterializedMySQLManagerMetadata(const StorageID & storage_id);
+    void updateMaterializedMySQLManagerMetadata(const StorageID & storage_id, const Protos::MaterializedMySQLManagerMetadata & metadata);
+    void removeMaterializedMySQLManagerMetadata(const UUID & uuid);
+    void setMaterializedMySQLBinlogMetadata(const String & binlog_name, const Protos::MaterializedMySQLBinlogMetadata & binlog_data);
+    std::shared_ptr<Protos::MaterializedMySQLBinlogMetadata> getMaterializedMySQLBinlogMetadata(const String & binlog_name);
+    void removeMaterializedMySQLBinlogMetadata(const String & binlog_name);
+    // This API would be used for some DDL actions which need to update both manager metadata as well as binlog metadata
+    void updateMaterializedMySQLMetadataInBatch(const Strings & keys, const Strings & values, const Strings & delete_keys);
 
     /***
      * API to collect all metrics about a table

@@ -452,6 +452,37 @@ message RemoveWorkerResourceResp
   optional string exception = 1;
 }
 
+message SubmitMySQLSyncThreadTaskReq
+{
+  required uint32 type = 1;
+  required string database_name = 2;
+  required string sync_thread_key = 3;
+  required string table = 4;
+  repeated string create_sqls = 5;
+  optional string binlog_file = 6;
+  optional uint64 binlog_position = 7;
+  optional string executed_gtid_set = 8;
+  optional uint32 meta_version = 9;
+  optional uint32 rpc_port = 10;
+}
+
+message SubmitMySQLSyncThreadTaskResp
+{
+  optional string exception = 1;
+}
+
+message CheckMySQLSyncThreadStatusReq
+{
+  required string database_name = 1;
+  required string sync_thread_key = 2;
+}
+
+message CheckMySQLSyncThreadStatusResp
+{
+  optional string exception = 1;
+  optional bool is_running = 2;
+}
+
 service CnchWorkerService
 {
   rpc executeSimpleQuery(ExecuteSimpleQueryReq) returns (ExecuteSimpleQueryResp);
@@ -464,6 +495,9 @@ service CnchWorkerService
 
   rpc submitKafkaConsumeTask(SubmitKafkaConsumeTaskReq) returns (SubmitKafkaConsumeTaskResp);
   rpc getConsumerStatus(GetConsumerStatusReq) returns (GetConsumerStatusResp);
+
+  rpc submitMySQLSyncThreadTask(SubmitMySQLSyncThreadTaskReq) returns (SubmitMySQLSyncThreadTaskResp);
+  rpc checkMySQLSyncThreadStatus(CheckMySQLSyncThreadStatusReq) returns (CheckMySQLSyncThreadStatusResp);
 
   rpc preloadChecksumsAndPrimaryIndex(PreloadChecksumsAndPrimaryIndexReq) returns (PreloadChecksumsAndPrimaryIndexResp);
 

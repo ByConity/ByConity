@@ -23,6 +23,7 @@
 
 #include <Parsers/IParserBase.h>
 #include <Parsers/ExpressionElementParsers.h>
+#include <Parsers/ASTAlterQuery.h>
 
 namespace DB
 {
@@ -70,9 +71,13 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 
 public:
-    bool is_live_view;
+    ASTAlterQuery::AlterObjectType alter_object;
 
-    explicit ParserAlterCommandList(ParserSettingsImpl t, bool is_live_view_ = false) : IParserDialectBase(t), is_live_view(is_live_view_) {}
+    explicit ParserAlterCommandList(
+        ParserSettingsImpl t, ASTAlterQuery::AlterObjectType alter_object_ = ASTAlterQuery::AlterObjectType::TABLE)
+        : IParserDialectBase(t), alter_object(alter_object_)
+    {
+    }
 };
 
 
@@ -83,9 +88,12 @@ protected:
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
 
 public:
-    bool is_live_view;
+    ASTAlterQuery::AlterObjectType alter_object;
 
-    explicit ParserAlterCommand(ParserSettingsImpl t, bool is_live_view_ = false) : IParserDialectBase(t), is_live_view(is_live_view_) {}
+    explicit ParserAlterCommand(ParserSettingsImpl t, ASTAlterQuery::AlterObjectType alter_object_ = ASTAlterQuery::AlterObjectType::TABLE)
+        : IParserDialectBase(t), alter_object(alter_object_)
+    {
+    }
 };
 
 
