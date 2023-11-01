@@ -428,6 +428,10 @@ InterpreterSelectQuery::InterpreterSelectQuery(
 
         query_info.syntax_analyzer_result = syntax_analyzer_result;
 
+        /// Push down partition filter to query info partition_filter
+        if (settings.enable_partition_filter_push_down && !syntax_analyzer_result->optimize_trivial_count)
+            optimizePartitionPredicate(query_ptr, storage, query_info, context);
+
         if (storage && !query.final() && storage->needRewriteQueryWithFinal(syntax_analyzer_result->requiredSourceColumns()))
             query.setFinal();
 
@@ -1903,7 +1907,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         const auto & func = desc.function;
         std::optional<UInt64> num_rows{};
 
-        if (!query.prewhere() && !query.where())
+        if (!query.prewhere() && !query.where() && !query_info.partition_filter)
         {
             num_rows = storage->totalRows(context);
         }
@@ -1913,6 +1917,8 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
             temp_query_info.query = query_ptr;
             temp_query_info.syntax_analyzer_result = syntax_analyzer_result;
             temp_query_info.sets = query_analyzer->getPreparedSets();
+            if (query_info.partition_filter)
+                temp_query_info.partition_filter = query_info.partition_filter->clone();
 
             num_rows = storage->totalRowsByPartitionPredicate(temp_query_info, context);
         }

@@ -35,6 +35,11 @@ class PlanPrinter
 public:
     PlanPrinter() = delete;
 
+    static String textPlanNode(PlanNodePtr plan)
+    {
+        return textPlanNode(*plan);
+    }
+    static String textPlanNode(PlanNodeBase & node);
     static String textLogicalPlan(
         QueryPlan & plan,
         ContextMutablePtr context,
@@ -115,7 +120,7 @@ private:
     const std::unordered_map<PlanNodeId, double> & costs;
     bool is_distributed;
     const std::unordered_map<PlanNodeId, size_t> & exchange_to_segment;
-    const bool print_profile; 
+    const bool print_profile;
 };
 
 class NodeDescription;

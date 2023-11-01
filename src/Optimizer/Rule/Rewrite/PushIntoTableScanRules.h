@@ -20,24 +20,27 @@
 namespace DB
 {
 
-class PushQueryInfoFilterIntoTableScan : public Rule
+class PushStorageFilter : public Rule
 {
 public:
-    RuleType getType() const override { return RuleType::PUSH_QUERY_INFO_FILTER_INTO_TABLE_SCAN; }
-    String getName() const override { return "PUSH_QUERY_INFO_FILTER_INTO_TABLE_SCAN"; }
+    RuleType getType() const override
+    {
+        return RuleType::PUSH_STORAGE_FILTER;
+    }
+    String getName() const override
+    {
+        return "PUSH_STORAGE_FILTER";
+    }
     bool isEnabled(ContextPtr context) const override
     {
-        return context->getSettingsRef().enable_push_query_info_filter_into_table_scan;
+        return context->getSettingsRef().enable_push_storage_filter;
     }
+
     PatternPtr getPattern() const override;
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 
-    static bool pushQueryInfoFilter(TableScanStep & table_step, const std::vector<ConstASTPtr> & filter_conjuncts, ContextPtr context);
-    static std::vector<ConstASTPtr> removeStorageFilter(const std::vector<ConstASTPtr> & conjuncts);
-
-private:
-    static std::vector<ConstASTPtr> extractPushDownFilter(const std::vector<ConstASTPtr> & conjuncts, ContextPtr context);
+    static ASTPtr pushStorageFilter(TableScanStep & table_step, ASTPtr filter, ContextPtr context);
 };
 
 

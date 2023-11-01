@@ -49,12 +49,14 @@ void SelectQueryInfo::toProto(Protos::SelectQueryInfo & proto) const
 {
     serializeASTToProto(query, *proto.mutable_query());
     serializeASTToProto(view_query, *proto.mutable_view_query());
+    serializeASTToProto(partition_filter, *proto.mutable_partition_filter());
 }
 
 void SelectQueryInfo::fillFromProto(const Protos::SelectQueryInfo & proto)
 {
     query = deserializeASTFromProto(proto.query());
     view_query = deserializeASTFromProto(proto.view_query());
+    partition_filter = deserializeASTFromProto(proto.partition_filter());
 }
 
 std::shared_ptr<InterpreterSelectQuery> SelectQueryInfo::buildQueryInfoFromQuery(ContextPtr context, const StoragePtr & storage, const String & query, SelectQueryInfo & query_info)

@@ -77,10 +77,10 @@ Projection Est. ? rows
          │     Group by: {}
          │     Aggregates: expr#count():=AggNull(count)()
          └─ Filter Est. ? rows
-            │     Condition: (i > 1) AND ((i + i) < 10) AND ((j + i) < 10)
+            │     Condition: (i > 1) AND ((j + i) < 10)
             └─ TableScan test.test46006 Est. ? rows
-                     Where: (i > 1) AND ((i + i) < 10) AND ((j + i) < 10)
-                     Prewhere: ((i AS iiii) + i) < 10
+                     Where: (i > 1) AND ((j + i) < 10)
+                     Prewhere: (i + i) < 10
                      Outputs: [i, j]
 non-optimized:
 Projection Est. ? rows

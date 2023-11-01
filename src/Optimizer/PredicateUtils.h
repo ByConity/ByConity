@@ -38,19 +38,22 @@ public:
      *
      * (A & B & C & D) =>  A, B, C, D
      */
-    static std::vector<ConstASTPtr> extractConjuncts(ConstASTPtr predicate);
+    template <typename T, enable_if_ast<T> = true>
+    static std::vector<T> extractConjuncts(T predicate);
 
     /**
      * Extract predicate according 'or' function.
      *
      * (A & B) | (C & D) =>  (A & B), (C & D)
      */
-    static std::vector<ConstASTPtr> extractDisjuncts(ConstASTPtr predicate);
+    template <typename T, enable_if_ast<T> = true>
+    static std::vector<T> extractDisjuncts(T predicate);
 
     /**
      * Extract predicate according function's name.
      */
-    static std::vector<ConstASTPtr> extractPredicate(ConstASTPtr predicate);
+    template <typename T, enable_if_ast<T> = true>
+    static std::vector<T> extractPredicate(T predicate);
 
     /**
      * Extract sub-predicate :
@@ -83,13 +86,13 @@ public:
      */
     static ConstASTPtr distributePredicate(ConstASTPtr or_predicate, ContextMutablePtr & context);
 
-    template <typename T, enable_if_ast<T> = true>
+    template <bool flatten = true, typename T, enable_if_ast<T> = true>
     static ASTPtr combineConjuncts(const std::vector<T> & predicates);
-    template <typename T, enable_if_ast<T> = true>
+    template <bool flatten = true, typename T, enable_if_ast<T> = true>
     static ASTPtr combineDisjuncts(const std::vector<T> & predicates);
-    template <typename T, enable_if_ast<T> = true>
+    template <bool flatten = true, typename T, enable_if_ast<T> = true>
     static ASTPtr combineDisjunctsWithDefault(const std::vector<T> & predicates, const ASTPtr & default_ast);
-    template <typename T, enable_if_ast<T> = true>
+    template <bool flatten = true, typename T, enable_if_ast<T> = true>
     static ASTPtr combinePredicates(const String & fun, std::vector<T> predicates);
 
     template <typename T, enable_if_ast<T> = true>
@@ -117,7 +120,8 @@ public:
 
 private:
     static String flip(const String & fun_name);
-    static void extractPredicate(ConstASTPtr & predicate, const std::string & fun_name, std::vector<ConstASTPtr> & result);
+    template <typename T, enable_if_ast<T> = true>
+    static void extractPredicate(const T & predicate, const std::string & fun_name, std::vector<T> & result);
     static std::vector<std::pair<ConstASTPtr, String>>
     removeAll(std::vector<std::pair<ConstASTPtr, String>> & collection, std::set<String> & elements_to_remove);
     static std::vector<std::vector<ConstASTPtr>> cartesianProduct(std::vector<std::vector<ConstASTPtr>> &);

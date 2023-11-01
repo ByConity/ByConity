@@ -48,12 +48,14 @@ void rewriteEntityInAst(ASTPtr ast, const String & column_name, const Field & va
 
 /// Prepare `expression_ast` to filter block. Returns true if `expression_ast` is not trimmed, that is,
 /// `block` provides all needed columns for `expression_ast`, else return false.
-bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block block, ASTPtr & expression_ast);
+bool prepareFilterBlockWithQuery(
+    const ASTPtr & query, ContextPtr context, Block block, ASTPtr & expression_ast, ASTPtr partition_filter = {});
 
 /// Leave in the block only the rows that fit under the WHERE clause and the PREWHERE clause of the query.
 /// Only elements of the outer conjunction are considered, depending only on the columns present in the block.
 /// If `expression_ast` is passed, use it to filter block.
-void filterBlockWithQuery(const ASTPtr & query, Block & block, ContextPtr context, ASTPtr expression_ast = {});
+void filterBlockWithQuery(
+    const ASTPtr & query, Block & block, ContextPtr context, ASTPtr expression_ast = {}, ASTPtr partition_filter = {});
 
 /// Extract from the input stream a set of `name` column values
 template <typename T>

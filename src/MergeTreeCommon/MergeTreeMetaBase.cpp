@@ -715,6 +715,25 @@ DataTypePtr MergeTreeMetaBase::getPartitionValueType() const
     return partition_value_type;
 }
 
+ASTs MergeTreeMetaBase::getPartVirtualExpr() const
+{
+    return {
+        std::make_shared<ASTIdentifier>("_part"),
+        std::make_shared<ASTIdentifier>("_partition_id"),
+        std::make_shared<ASTIdentifier>("_part_uuid"),
+        std::make_shared<ASTIdentifier>("_partition_value")};
+}
+
+Block MergeTreeMetaBase::getSampleBlockWithVirtualColumns() const
+{
+    DataTypePtr partition_value_type = getPartitionValueType();
+    return {
+        ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_part"),
+        ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_partition_id"),
+        ColumnWithTypeAndName(ColumnUUID::create(), std::make_shared<DataTypeUUID>(), "_part_uuid"),
+        ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value")};
+}
+
 Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & parts, bool one_part) const
 {
     DataTypePtr partition_value_type = getPartitionValueType();
@@ -1584,7 +1603,7 @@ bool MergeTreeMetaBase::isBitEngineEncodeColumn(const String & name) const
  BitEngineDictionaryTableMapping MergeTreeMetaBase::parseUnderlyingDictionaryDependency(const String & mapping_str) const
  {
     BitEngineDictionaryTableMapping dict_dependencies;
-    
+
     try
     {
         auto parsed_map = BitEngineHelper::parseUnderlyingDictionarySetting(mapping_str);
@@ -1630,7 +1649,7 @@ void MergeTreeMetaBase::parseAndCheckForBitEngine()
     /// Not a bitengine table, just return
     if (bitengine_columns.empty())
         return;
-    
+
     /// Now do some syntax check for a bitengine table
     /// 1. Unique keys are not allowed for BitEngine
     if (metadata_snapshot->hasUniqueKey())
@@ -1646,7 +1665,7 @@ void MergeTreeMetaBase::parseAndCheckForBitEngine()
     else if (metadata_snapshot->getClusterByKey().column_names.size() != 1U)
         throw Exception("Only 1 field is allowed in cluster by for a BitEngine table: " + getStorageID().getFullTableName(),
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
-    
+
     /// Now, parse and check the 2nd constraint:
     /// the mapping info of bitengine table and underlying dictionary table
     bitengine_dictionary_tables_mapping = parseUnderlyingDictionaryDependency(storage_settings.get()->underlying_dictionary_tables);

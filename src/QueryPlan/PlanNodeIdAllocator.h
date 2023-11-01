@@ -29,7 +29,9 @@ using PlanNodeIdAllocatorPtr = std::shared_ptr<PlanNodeIdAllocator>;
 class PlanNodeIdAllocator
 {
 public:
-    PlanNodeIdAllocator() : next_id(0) { }
+    PlanNodeIdAllocator() : next_id(1)
+    {
+    }
 
     explicit PlanNodeIdAllocator(PlanNodeId next_id_) : next_id(next_id_) { }
 

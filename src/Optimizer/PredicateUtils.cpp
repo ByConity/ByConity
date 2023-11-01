@@ -14,9 +14,10 @@
  */
 
 #include <Analyzers/ASTEquals.h>
+#include <Optimizer/EqualityASTMap.h>
 #include <Optimizer/ExpressionDeterminism.h>
-#include <Optimizer/PredicateUtils.h>
 #include <Optimizer/PredicateConst.h>
+#include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SymbolUtils.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
@@ -24,12 +25,27 @@
 #include <Parsers/ASTLiteral.h>
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/ProjectionStep.h>
-#include <Optimizer/EqualityASTMap.h>
 
 #include <common/arithmeticOverflow.h>
 
 namespace DB
 {
+
+namespace
+{
+    template <typename T>
+    ASTPtr castToASTPtr(T && p)
+    {
+        using TP = std::decay_t<decltype(p)>;
+
+        if constexpr (std::is_same_v<TP, ASTPtr>)
+            return p; // employ RVO?
+        else if constexpr (std::is_same_v<TP, ConstASTPtr>)
+            return std::const_pointer_cast<IAST>(std::forward<TP>(p));
+        else
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "logical errror!");
+    }
+}
 
 bool PredicateUtils::equals(ASTPtr & p1, ASTPtr & p2)
 {
@@ -46,25 +62,27 @@ bool PredicateUtils::equals(ConstHashAST & p1, ConstHashAST & p2)
     return EqAST::Equal()(p1, p2);
 }
 
-
-std::vector<ConstASTPtr> PredicateUtils::extractConjuncts(ConstASTPtr predicate)
+template <typename T, enable_if_ast<T>>
+std::vector<T> PredicateUtils::extractConjuncts(T predicate)
 {
-    std::vector<ConstASTPtr> result;
+    std::vector<T> result;
     extractPredicate(predicate, PredicateConst::AND, result);
     return result;
 }
 
-std::vector<ConstASTPtr> PredicateUtils::extractDisjuncts(ConstASTPtr predicate)
+template <typename T, enable_if_ast<T>>
+std::vector<T> PredicateUtils::extractDisjuncts(T predicate)
 {
-    std::vector<ConstASTPtr> result;
+    std::vector<T> result;
     extractPredicate(predicate, PredicateConst::OR, result);
     return result;
 }
 
-std::vector<ConstASTPtr> PredicateUtils::extractPredicate(ConstASTPtr predicate)
+template <typename T, enable_if_ast<T>>
+std::vector<T> PredicateUtils::extractPredicate(T predicate)
 {
-    std::vector<ConstASTPtr> result;
-    const auto & fun = predicate->as<const ASTFunction &>();
+    std::vector<T> result;
+    const auto & fun = predicate->template as<const ASTFunction &>();
     extractPredicate(predicate, fun.name, result);
     return result;
 }
@@ -253,7 +271,7 @@ bool compareASTPtr(ASTPtr & left, ASTPtr & right)
     return MurmurHash3Impl64::apply(left_name.c_str(), left_name.size()) < MurmurHash3Impl64::apply(right_name.c_str(), right_name.size());
 }
 
-template <typename T, enable_if_ast<T>>
+template <bool flatten, typename T, enable_if_ast<T>>
 ASTPtr PredicateUtils::combineConjuncts(const std::vector<T> & predicates)
 {
     if (predicates.empty())
@@ -261,17 +279,27 @@ ASTPtr PredicateUtils::combineConjuncts(const std::vector<T> & predicates)
         return PredicateConst::TRUE_VALUE;
     }
 
-    EqualityASTSet distinct;
+    ASTSet<T> distinct; // todo: templatize EqualityASTSet
     std::vector<ASTPtr> conjuncts;
     for (const auto & predicate : predicates)
     {
         assert(predicate.get() && "predicate can't be null");
-        std::vector<ConstASTPtr> extract_predicates = extractConjuncts(predicate);
-        for (auto & extract : extract_predicates)
+        if constexpr (flatten)
         {
-            if (!isTruePredicate(extract) && distinct.emplace(extract).second)
+            std::vector<T> extract_predicates = extractConjuncts<T>(predicate);
+            for (auto & extract : extract_predicates)
             {
-                conjuncts.emplace_back(extract->clone());
+                if (!isTruePredicate(extract) && distinct.emplace(extract).second)
+                {
+                    conjuncts.emplace_back(extract->clone()); // TODO: remove clone, check tpcds correctness
+                }
+            }
+        }
+        else
+        {
+            if (!isTruePredicate(predicate) && distinct.emplace(predicate).second)
+            {
+                conjuncts.emplace_back(predicate->clone()); // TODO: remove clone, check tpcds correctness
             }
         }
     }
@@ -297,28 +325,28 @@ ASTPtr PredicateUtils::combineConjuncts(const std::vector<T> & predicates)
     return makeASTFunction(PredicateConst::AND, conjuncts);
 }
 
-template <typename T, enable_if_ast<T>>
+template <bool flatten, typename T, enable_if_ast<T>>
 ASTPtr PredicateUtils::combineDisjuncts(const std::vector<T> & predicates)
 {
-    return combineDisjunctsWithDefault(predicates, PredicateConst::FALSE_VALUE);
+    return combineDisjunctsWithDefault<flatten>(predicates, PredicateConst::FALSE_VALUE);
 }
 
-template <typename T, enable_if_ast<T>>
+template <bool /* flatten */, typename T, enable_if_ast<T>>
 ASTPtr PredicateUtils::combineDisjunctsWithDefault(const std::vector<T> & predicates, const ASTPtr & default_ast)
 {
     if (predicates.empty())
         return default_ast;
     if (predicates.size() == 1)
-        return predicates[0]->clone();
+        return predicates[0]->clone(); // TODO: remove clone, check tpcds correctness
 
-    ASTs args;
+    std::vector<ASTPtr> args;
     for (auto & arg : predicates)
     {
         if (isTruePredicate(arg))
             return PredicateConst::TRUE_VALUE;
         if (isFalsePredicate(arg))
             continue;
-        args.emplace_back(arg->clone());
+        args.emplace_back(arg->clone()); // TODO: remove clone, check tpcds correctness
     }
 
     if (args.empty())
@@ -327,14 +355,14 @@ ASTPtr PredicateUtils::combineDisjunctsWithDefault(const std::vector<T> & predic
     return makeASTFunction(PredicateConst::OR, args);
 }
 
-template <typename T, enable_if_ast<T>>
+template <bool flatten, typename T, enable_if_ast<T>>
 ASTPtr PredicateUtils::combinePredicates(const String & fun, std::vector<T> predicates)
 {
     if (fun == PredicateConst::AND)
     {
-        return combineConjuncts(predicates);
+        return combineConjuncts<flatten>(predicates);
     }
-    return combineDisjuncts(predicates);
+    return combineDisjuncts<flatten>(predicates);
 }
 
 template <typename T, enable_if_ast<T>>
@@ -503,17 +531,18 @@ bool PredicateUtils::isJoinClauseUnmodified(
     return new_left_keys == left_keys && new_right_keys == right_keys;
 }
 
-void PredicateUtils::extractPredicate(ConstASTPtr & predicate, const std::string & fun_name, std::vector<ConstASTPtr> & result)
+template <typename T, enable_if_ast<T>>
+void PredicateUtils::extractPredicate(const T & predicate, const std::string & fun_name, std::vector<T> & result)
 {
-    if (predicate && predicate->as<const ASTFunction>())
+    if (predicate && predicate->template as<const ASTFunction>())
     {
-        auto fun = predicate->as<const ASTFunction &>();
+        const auto & fun = predicate->template as<const ASTFunction &>();
         if (fun.name == fun_name)
         {
             ASTs & arguments = fun.arguments->children;
-            for (ConstASTPtr argument : arguments)
+            for (const auto & argument : arguments)
             {
-                extractPredicate(argument, fun_name, result);
+                extractPredicate<T>(argument, fun_name, result);
             }
         }
         else
@@ -665,17 +694,38 @@ PredicateUtils::extractEqualPredicates(const std::vector<ConstASTPtr> & predicat
     return {equal_predicates, other_predicates};
 }
 
-template ASTPtr PredicateUtils::combineConjuncts<ASTPtr>(const std::vector<ASTPtr> & predicates);
-template ASTPtr PredicateUtils::combineConjuncts<ConstASTPtr>(const std::vector<ConstASTPtr> & predicates);
-template ASTPtr PredicateUtils::combineDisjuncts<ASTPtr>(const std::vector<ASTPtr> & predicates);
-template ASTPtr PredicateUtils::combineDisjuncts<ConstASTPtr>(const std::vector<ConstASTPtr> & predicates);
-template ASTPtr PredicateUtils::combineDisjunctsWithDefault<ASTPtr>(const std::vector<ASTPtr> & predicates, const ASTPtr & default_ast);
+template ASTPtr PredicateUtils::combineConjuncts<true, ASTPtr>(const std::vector<ASTPtr> & predicates);
+template ASTPtr PredicateUtils::combineConjuncts<false, ASTPtr>(const std::vector<ASTPtr> & predicates);
+template ASTPtr PredicateUtils::combineConjuncts<true, ConstASTPtr>(const std::vector<ConstASTPtr> & predicates);
+template ASTPtr PredicateUtils::combineConjuncts<false, ConstASTPtr>(const std::vector<ConstASTPtr> & predicates);
+template ASTPtr PredicateUtils::combineDisjuncts<true, ASTPtr>(const std::vector<ASTPtr> & predicates);
+template ASTPtr PredicateUtils::combineDisjuncts<false, ASTPtr>(const std::vector<ASTPtr> & predicates);
+template ASTPtr PredicateUtils::combineDisjuncts<true, ConstASTPtr>(const std::vector<ConstASTPtr> & predicates);
+template ASTPtr PredicateUtils::combineDisjuncts<false, ConstASTPtr>(const std::vector<ConstASTPtr> & predicates);
 template ASTPtr
-PredicateUtils::combineDisjunctsWithDefault<ConstASTPtr>(const std::vector<ConstASTPtr> & predicates, const ASTPtr & default_ast);
-template ASTPtr PredicateUtils::combinePredicates<ASTPtr>(const String & fun, std::vector<ASTPtr> predicates);
-template ASTPtr PredicateUtils::combinePredicates<ConstASTPtr>(const String & fun, std::vector<ConstASTPtr> predicates);
+PredicateUtils::combineDisjunctsWithDefault<true, ASTPtr>(const std::vector<ASTPtr> & predicates, const ASTPtr & default_ast);
+template ASTPtr
+PredicateUtils::combineDisjunctsWithDefault<false, ASTPtr>(const std::vector<ASTPtr> & predicates, const ASTPtr & default_ast);
+template ASTPtr
+PredicateUtils::combineDisjunctsWithDefault<true, ConstASTPtr>(const std::vector<ConstASTPtr> & predicates, const ASTPtr & default_ast);
+template ASTPtr
+PredicateUtils::combineDisjunctsWithDefault<false, ConstASTPtr>(const std::vector<ConstASTPtr> & predicates, const ASTPtr & default_ast);
+template ASTPtr PredicateUtils::combinePredicates<true, ASTPtr>(const String & fun, std::vector<ASTPtr> predicates);
+template ASTPtr PredicateUtils::combinePredicates<false, ASTPtr>(const String & fun, std::vector<ASTPtr> predicates);
+template ASTPtr PredicateUtils::combinePredicates<true, ConstASTPtr>(const String & fun, std::vector<ConstASTPtr> predicates);
+template ASTPtr PredicateUtils::combinePredicates<false, ConstASTPtr>(const String & fun, std::vector<ConstASTPtr> predicates);
 template bool PredicateUtils::isTruePredicate<ASTPtr>(const ASTPtr & predicate);
 template bool PredicateUtils::isTruePredicate<ConstASTPtr>(const ConstASTPtr & predicate);
 template bool PredicateUtils::isFalsePredicate<ASTPtr>(const ASTPtr & predicate);
 template bool PredicateUtils::isFalsePredicate<ConstASTPtr>(const ConstASTPtr & predicate);
+template std::vector<ASTPtr> PredicateUtils::extractConjuncts<ASTPtr>(ASTPtr predicate);
+template std::vector<ConstASTPtr> PredicateUtils::extractConjuncts<ConstASTPtr>(ConstASTPtr predicate);
+template std::vector<ASTPtr> PredicateUtils::extractDisjuncts<ASTPtr>(ASTPtr predicate);
+template std::vector<ConstASTPtr> PredicateUtils::extractDisjuncts<ConstASTPtr>(ConstASTPtr predicate);
+template std::vector<ASTPtr> PredicateUtils::extractPredicate<ASTPtr>(ASTPtr predicate);
+template std::vector<ConstASTPtr> PredicateUtils::extractPredicate<ConstASTPtr>(ConstASTPtr predicate);
+template void
+PredicateUtils::extractPredicate<ASTPtr>(const ASTPtr & predicate, const std::string & fun_name, std::vector<ASTPtr> & result);
+template void PredicateUtils::extractPredicate<ConstASTPtr>(
+    const ConstASTPtr & predicate, const std::string & fun_name, std::vector<ConstASTPtr> & result);
 }
