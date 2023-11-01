@@ -591,21 +591,23 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::getChecksums() const
             return checksums_ptr;
     }
 
+    ChecksumsPtr res;
+
     auto cache = storage.getContext()->getChecksumsCache();
     if (cache && !is_temp)
     {
         const String storage_unique_id = storage.getStorageUniqueID();
         auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true); };
-        auto res = cache->getOrSet(storage_unique_id, getChecksumsCacheKey(storage_unique_id, *this), std::move(load_func)).first;
-
-        const_cast<IMergeTreeDataPart *>(this)->SetChecksumsPtrIfNeed(res);
-
-        return res;
+        res = cache->getOrSet(storage_unique_id, getChecksumsCacheKey(storage_unique_id, *this), std::move(load_func)).first;
     }
     else
     {
-        return const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true);
+        res = const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true);
     }
+
+    const_cast<IMergeTreeDataPart *>(this)->setChecksumsPtrIfNeed(res);
+    
+    return res;
 }
 
 IMergeTreeDataPart::IndexPtr IMergeTreeDataPart::getIndex() const
@@ -1134,13 +1136,16 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::loadChecksums(bool require)
         bytes_on_disk = checksums->getTotalSizeOnDisk();
     }
 
-    SetChecksumsPtrIfNeed(checksums);
+    setChecksumsPtrIfNeed(checksums);
 
     return checksums;
 }
 
-void IMergeTreeDataPart::SetChecksumsPtrIfNeed(const ChecksumsPtr & checksums)
+void IMergeTreeDataPart::setChecksumsPtrIfNeed(const ChecksumsPtr & checksums)
 {
+    if (checksums_ptr)
+        return;
+
     if (storage.getSettings()->enable_persistent_checksum || is_temp || isProjectionPart())
     {
         std::lock_guard lock(checksums_mutex);

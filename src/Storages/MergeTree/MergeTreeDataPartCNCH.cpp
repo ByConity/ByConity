@@ -628,7 +628,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
 
     checksums = loadChecksumsForPart(true);
 
-    SetChecksumsPtrIfNeed(checksums);
+    setChecksumsPtrIfNeed(checksums);
 
     /// store in disk cache
     if (enableDiskCache())
