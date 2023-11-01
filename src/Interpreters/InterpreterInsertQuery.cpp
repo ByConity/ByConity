@@ -148,7 +148,7 @@ static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local
 
         if (auto * mv = dynamic_cast<StorageMaterializedView*>(table.get()))
         {
-            auto target_table = DatabaseCatalog::instance().tryGetTable(mv->getStorageID(), local_context);
+            auto target_table = DatabaseCatalog::instance().tryGetTable(mv->getTargetTableId(), local_context);
             if (!target_table)
             {
                 LOG_WARNING(&Logger::get("InterpreterInsertQuery::genViewDependencyCreateQueries"), "target table for {} not exist", mv->getStorageID().getNameForLogs());
@@ -187,42 +187,47 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
     {
         query.table_id = getContext()->resolveStorageID(query.table_id);
         auto storage = DatabaseCatalog::instance().tryGetTable(query.table_id, getContext());
-        if (storage)
-            return storage;
-
-        auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-        if (!cnch_table)
-            throw Exception("Engine " + storage->getStorageID().getNameForLogs() + " doesn't support direct insertion", ErrorCodes::SUPPORT_IS_DISABLED);
-
-        auto create_query = cnch_table->getCreateQueryForCloudTable(cnch_table->getCreateTableSql(), query.table_id.table_name, nullptr, false, std::nullopt, Strings{}, query.table_id.database_name);
-        LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Worker side create query: {}" , create_query);
-
-        Names view_create_sqls = genViewDependencyCreateQueries(storage, getContext());
-        if (!view_create_sqls.empty())
+        if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
         {
-            ContextMutablePtr mutable_context = Context::createCopy(getContext());
-            if (!mutable_context->tryGetCnchWorkerResource())
-                mutable_context->initCnchWorkerResource();
-            view_create_sqls.emplace_back(create_query);
-            for(const auto & create_sql : view_create_sqls)
-                mutable_context->getCnchWorkerResource()->executeCreateQuery(mutable_context, create_sql);
-            if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(mutable_context->getCurrentTransaction()); worker_txn)
-            {
-                if (view_create_sqls.size() > 1)
-                {
-                    worker_txn->enableExplicitCommit();
-                    worker_txn->setExplicitCommitStorageID(storage->getStorageID());
-                }
+            auto create_query = cnch_table->getCreateQueryForCloudTable(
+                cnch_table->getCreateTableSql(),
+                query.table_id.table_name,
+                nullptr,
+                false,
+                std::nullopt,
+                Strings{},
+                query.table_id.database_name);
+            LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Worker side create query: {}", create_query);
 
-                mutable_context->setCurrentTransaction(worker_txn);
+            Names view_create_sqls = genViewDependencyCreateQueries(storage, getContext());
+            if (!view_create_sqls.empty())
+            {
+                ContextMutablePtr mutable_context = Context::createCopy(getContext());
+                if (!mutable_context->tryGetCnchWorkerResource())
+                    mutable_context->initCnchWorkerResource();
+                view_create_sqls.emplace_back(create_query);
+                for (const auto & create_sql : view_create_sqls)
+                    mutable_context->getCnchWorkerResource()->executeCreateQuery(mutable_context, create_sql);
+                if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(mutable_context->getCurrentTransaction()); worker_txn)
+                {
+                    if (view_create_sqls.size() > 1)
+                    {
+                        worker_txn->enableExplicitCommit();
+                        worker_txn->setExplicitCommitStorageID(storage->getStorageID());
+                    }
+
+                    mutable_context->setCurrentTransaction(worker_txn);
+                }
+                return mutable_context->getCnchWorkerResource()->getTable(query.table_id);
             }
-            return mutable_context->getCnchWorkerResource()->getTable(query.table_id);
+            else
+            {
+                query.table_id = getContext()->resolveStorageID(query.table_id);
+                return DatabaseCatalog::instance().getTable(query.table_id, getContext());
+            }
         }
         else
-        {
-            query.table_id = getContext()->resolveStorageID(query.table_id);
-            return DatabaseCatalog::instance().getTable(query.table_id, getContext());
-        }
+            return storage;
     }
     else
     {
