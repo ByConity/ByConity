@@ -31,6 +31,9 @@
 #include <Common/JSONBuilder.h>
 #include <Common/escapeForFileName.h>
 #include <Parsers/queryToString.h>
+#include <Interpreters/InterpreterSelectQuery.h>
+#include <Interpreters/RewriteDistributedQueryVisitor.h>
+#include <Optimizer/PredicateUtils.h>
 
 namespace ProfileEvents
 {
@@ -888,7 +891,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
 
     size_t total_parts = parts.size();
 
-    auto part_values = MergeTreeDataSelectExecutor::filterPartsByVirtualColumns(data, parts, query_info.query, context);
+    auto part_values = MergeTreeDataSelectExecutor::filterPartsByVirtualColumns(data, parts, query_info, context);
     if (part_values && part_values->empty())
         return std::make_shared<MergeTreeDataSelectAnalysisResult>(MergeTreeDataSelectAnalysisResult{.result = std::move(result)});
 
@@ -924,16 +927,81 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
     size_t parts_before_pk = 0;
     try
     {
-        MergeTreeDataSelectExecutor::filterPartsByPartition(
-            parts, 
-            part_values, 
-            metadata_snapshot_base, 
-            data, 
-            query_info,
-            context,
-            max_block_numbers_to_read.get(),
-            log,
-            result.index_stats);
+        if (query_info.partition_filter)
+        {
+            /// If partition filter exist reconstruct query info 
+            SelectQueryOptions options;
+            auto mutable_context = Context::createCopy(context);
+            ASTPtr copy_select = query_info.query->clone();
+            auto & copy_select_query = copy_select->as<ASTSelectQuery &>();
+            std::vector<String> setting_names{"enable_partition_filter_push_down"};
+            for (auto & setting_name : setting_names)
+            {
+                SettingChange setting;
+                setting.name = setting_name;
+                setting.value = Field(false);
+                if (copy_select_query.settings())
+                {
+                    auto * set_ast = copy_select_query.settings()->as<ASTSetQuery>();
+                    auto it = std::find_if(set_ast->changes.begin(), set_ast->changes.end(), [&](const SettingChange & change) {
+                        return change.name == setting_name;
+                    });
+                    if (it != set_ast->changes.end())
+                        it->value = Field(false);
+                    else
+                        set_ast->changes.emplace_back(setting);
+                }
+                else
+                {
+                    ASTSetQuery set_ast;
+                    set_ast.is_standalone = false;
+                    set_ast.changes.emplace_back(setting);
+                    copy_select_query.setExpression(ASTSelectQuery::Expression::SETTINGS, std::make_shared<ASTSetQuery>(set_ast));
+                }
+            }
+            std::vector<ASTPtr> combine_conjuncts;
+            combine_conjuncts.emplace_back(query_info.partition_filter->clone());
+            if (copy_select_query.getPrewhere())
+                combine_conjuncts.emplace_back(copy_select_query.getPrewhere());
+            if (copy_select_query.getWhere())
+                combine_conjuncts.emplace_back(copy_select_query.getWhere());
+            copy_select_query.setExpression(ASTSelectQuery::Expression::WHERE, 
+               PredicateUtils::combineConjuncts<true, ASTPtr>(combine_conjuncts));
+            copy_select_query.setExpression(ASTSelectQuery::Expression::PREWHERE, nullptr);
+            /**
+            * rewrite distributed query to local query since we should get all final result column from subquery, otherwise, some projection will be ignore,
+            */
+            auto query_data = RewriteDistributedQueryMatcher::collectTableInfos(copy_select, mutable_context);
+            if (!query_data.table_rewrite_info.empty())
+                RewriteDistributedQueryVisitor(query_data).visit(copy_select);
+            auto interpreter = std::make_shared<InterpreterSelectQuery>(copy_select, mutable_context, options);
+            interpreter->execute();
+            LOG_TRACE(&Poco::Logger::get("ReadFromMergeTree::selectRangesToRead"), "Construct partition filter query {}", queryToString(copy_select));
+           
+            MergeTreeDataSelectExecutor::filterPartsByPartition(
+                parts, 
+                part_values, 
+                metadata_snapshot_base, 
+                data, 
+                interpreter->getQueryInfo(),
+                context,
+                max_block_numbers_to_read.get(),
+                log,
+                result.index_stats);
+        }
+        else
+        {
+            MergeTreeDataSelectExecutor::filterPartsByPartition(
+                parts, 
+                part_values, 
+                metadata_snapshot_base, 
+                data, 
+                query_info,
+                context,
+                max_block_numbers_to_read.get(),
+                log,
+                result.index_stats);
+        }
 
         result.sampling = MergeTreeDataSelectExecutor::getSampling(
             select,

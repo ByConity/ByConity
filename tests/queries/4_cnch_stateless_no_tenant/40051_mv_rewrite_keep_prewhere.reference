@@ -9,12 +9,9 @@ Projection Est. ? rows
             │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
             └─ Projection Est. ? rows
                │     Expressions: expr#event_date:=event_date, expr#event_type:=event_type, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
-               └─ Filter Est. ? rows
-                  │     Condition: uid = \'xx\'
-                  └─ TableScan test.target40051 Est. ? rows
-                           Where: uid = \'xx\'
-                           Prewhere: uid = \'xx\'
-                           Outputs: [uid, sum_click, event_date, event_type, server_time_hour]
+               └─ TableScan test.target40051 Est. ? rows
+                        Prewhere: uid = \'xx\'
+                        Outputs: [uid, sum_click, event_date, event_type, server_time_hour]
 note: Materialized Views is applied for 1 times: test.mv40051.
 Projection Est. ? rows
 │     Expressions: event_date:=`expr#event_date`, event_type:=`expr#event_type`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
@@ -27,10 +24,7 @@ Projection Est. ? rows
             │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
             └─ Projection Est. ? rows
                │     Expressions: expr#event_date:=event_date, expr#event_type:=event_type, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
-               └─ Filter Est. ? rows
-                  │     Condition: event_type = 1
-                  └─ TableScan test.target40051 Est. ? rows
-                           Where: event_type = 1
-                           Prewhere: event_type = 1
-                           Outputs: [uid, sum_click, event_date, event_type, server_time_hour]
+               └─ TableScan test.target40051 Est. ? rows
+                        Prewhere: event_type = 1
+                        Outputs: [uid, sum_click, event_date, event_type, server_time_hour]
 note: Materialized Views is applied for 1 times: test.mv40051.

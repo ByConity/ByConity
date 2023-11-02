@@ -123,6 +123,19 @@ ExpressionTypes Analysis::getExpressionTypes()
     return expression_types;
 }
 
+void Analysis::setPrewhere(ASTSelectQuery & select_query, const ASTPtr & prewhere)
+{
+    MAP_SET(prewheres, &select_query, prewhere);
+}
+
+ASTPtr Analysis::tryGetPrewhere(ASTSelectQuery & select_query)
+{
+    if (auto it = prewheres.find(&select_query); it != prewheres.end())
+        return it->second;
+
+    return nullptr;
+}
+
 JoinUsingAnalysis & Analysis::getJoinUsingAnalysis(ASTTableJoin & table_join)
 {
     MAP_GET(join_using_results, &table_join);

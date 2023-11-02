@@ -359,6 +359,11 @@ public:
     /// Return the partition expression types as a Tuple type. Return DataTypeUInt8 if partition expression is empty.
     DataTypePtr getPartitionValueType() const;
 
+    /// Get partition virtual expression
+    ASTs getPartVirtualExpr() const;
+
+    Block getSampleBlockWithVirtualColumns() const;
+
     /// Construct a block consisting only of possible virtual columns for part pruning.
     /// If one_part is true, fill in at most one part.
     Block getBlockWithVirtualPartColumns(const DataPartsVector & parts, bool one_part) const;

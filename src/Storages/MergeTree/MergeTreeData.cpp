@@ -286,7 +286,7 @@ std::optional<UInt64> MergeTreeData::totalRowsByPartitionPredicateImpl(
     Block virtual_columns_block = getBlockWithVirtualPartColumns(parts, true /* one_part */);
 
     // Generate valid expressions for filtering
-    bool valid = VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, virtual_columns_block, expression_ast);
+    bool valid = VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, virtual_columns_block, expression_ast, query_info.partition_filter);
 
     PartitionPruner partition_pruner(metadata_snapshot, query_info, local_context, true /* strict */);
     if (partition_pruner.isUseless() && !valid)
@@ -296,7 +296,7 @@ std::optional<UInt64> MergeTreeData::totalRowsByPartitionPredicateImpl(
     if (valid && expression_ast)
     {
         virtual_columns_block = getBlockWithVirtualPartColumns(parts, false /* one_part */);
-        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context, expression_ast);
+        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context, expression_ast, query_info.partition_filter);
         part_values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_part");
         if (part_values.empty())
             return 0;
@@ -322,7 +322,7 @@ MergeTreeData::DataPartsVector MergeTreeData::getRequiredPartitions(const Select
     Block virtual_columns_block = getBlockWithVirtualPartColumns(parts, true /* one_part */);
 
     // Generate valid expressions for filtering
-    bool valid = VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, virtual_columns_block, expression_ast);
+    bool valid = VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, virtual_columns_block, expression_ast, query_info.partition_filter);
 
     PartitionPruner partition_pruner(metadata_snapshot, query_info, local_context, true /* strict */);
     if (partition_pruner.isUseless() && !valid)
@@ -332,7 +332,7 @@ MergeTreeData::DataPartsVector MergeTreeData::getRequiredPartitions(const Select
     if (valid && expression_ast)
     {
         virtual_columns_block = getBlockWithVirtualPartColumns(parts, false /* one_part */);
-        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context, expression_ast);
+        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context, expression_ast, query_info.partition_filter);
         part_values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_part");
         if (part_values.empty())
             return {};

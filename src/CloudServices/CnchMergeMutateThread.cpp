@@ -889,7 +889,7 @@ String CnchMergeMutateThread::triggerPartMerge(
     NameSet merging_mutating_parts_snapshot;
     merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
 
-    if (try_execute)
+    if (try_select)
         LOG_TRACE(log, fmt::format("merging_mutating_parts:\n{}", fmt::join(merging_mutating_parts_snapshot, "\n")));
 
     ServerDataPartsVector data_parts;

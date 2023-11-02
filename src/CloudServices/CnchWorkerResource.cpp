@@ -189,6 +189,8 @@ bool CnchWorkerResource::isCnchTableInWorker(const StorageID & table_id) const
 void CnchWorkerResource::clearResource()
 {
     auto lock = getLock();
+    for (const auto & table : cloud_tables)
+        table.second->shutdown();
     cloud_tables.clear();
     memory_databases.clear();
     cnch_tables.clear();

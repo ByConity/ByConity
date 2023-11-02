@@ -1818,6 +1818,13 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
         details << converted.safeGet<UInt64>();
         details << "|";
     }
+
+    if (query_info.partition_filter)
+    {
+        details << "Partition Filter : \\n";
+        details << printFilter(query_info.partition_filter);
+        details << "|";
+    }
     //
     //    details << "Block Size : \\n" << step.getMaxBlockSize() << "|";
     //

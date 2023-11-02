@@ -11,7 +11,7 @@ SELECT FROM_UNIXTIME(toDateTime('2018-01-02 22:33:44'), '%T'), FROM_UNIXTIME(toD
 SELECT FROM_UNIXTIME(toDateTime('2018-01-02 22:33:44'), '%W'), FROM_UNIXTIME(toDate32('2018-01-02'), '%W');
 SELECT formatDateTime(FROM_UNIXTIME(123), '%Y-%m-%d %R:%S', 'UTC');
 SELECT formatDateTime(FROM_UNIXTIME(123456789), '%Y-%m-%d %R:%S', 'UTC');
-SELECT formatDateTime(FROM_UNIXTIME(6457477432), '%Y-%m-%d %R:%S', 'UTC'); -- { serverError 69 }
+SELECT formatDateTime(FROM_UNIXTIME(6457477432), '%Y-%m-%d %R:%S', 'UTC') SETTINGS adaptive_type_cast=0; -- { serverError 69 }
 SELECT FROM_UNIXTIME(5345345, '%C', 'UTC');
 SELECT FROM_UNIXTIME(645123, '%H', 'UTC');
 SELECT FROM_UNIXTIME(1232456, '%Y-%m-%d', 'UTC');

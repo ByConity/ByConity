@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <Optimizer/SimpleExpressionRewriter.h>
 #include <Parsers/IAST_fwd.h>
 #include <QueryPlan/PlanNode.h>
 
@@ -63,12 +64,26 @@ private:
 class SymbolTranslationMap
 {
 public:
-    SymbolTranslationMap(const IStorage * storage_): storage(storage_) {}
-    void addTranslation(ASTPtr ast, String name);
+    // rewrite table column to ASTColumnReference before adding translation
+    void addStorageTranslation(ASTPtr ast, String name, const IStorage * storage, UInt32 unique_id);
     std::optional<String> tryGetTranslation(const ASTPtr & expr) const;
 
 private:
-    const IStorage * storage;
     ASTMap<String> translation;
+};
+
+class IdentifierToColumnReference : public SimpleExpressionRewriter<Void>
+{
+public:
+    static ASTPtr rewrite(const IStorage * storage, UInt32 unique_id, ASTPtr ast, bool clone = true);
+
+private:
+    const IStorage * storage;
+    UInt32 unique_id;
+    StorageMetadataPtr storage_metadata;
+
+public:
+    IdentifierToColumnReference(const IStorage * storage_, UInt32 unique_id_);
+    ASTPtr visitASTIdentifier(ASTPtr & node, Void & context) override;
 };
 }

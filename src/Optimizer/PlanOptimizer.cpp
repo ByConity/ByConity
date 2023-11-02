@@ -109,8 +109,12 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
 
         std::make_shared<OptimizeTrivialCount>(),
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
-        std::make_shared<AddBufferForDeadlockCTE>(),
 
+        std::make_shared<ColumnPruning>(),
+        std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
+                                                  e.g. use a non-nullable column ptr for a nullable column */
+        std::make_shared<AddBufferForDeadlockCTE>(),
+        std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
     };
     return simple_rewrites;
@@ -257,8 +261,12 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // push predicate into storage
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
         // TODO cost-based projection push down
-        std::make_shared<AddBufferForDeadlockCTE>(),
 
+        std::make_shared<ColumnPruning>(),
+        std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
+                                                  e.g. use a non-nullable column ptr for a nullable column */
+        std::make_shared<AddBufferForDeadlockCTE>(),
+        std::make_shared<IterativeRewriter>(Rules::pushTableScanEmbeddedStepRules(), "PushTableScanEmbeddedStepRules"),
         std::make_shared<ImplementJoinAlgorithmHints>(),
         std::make_shared<IterativeRewriter>(Rules::explainAnalyzeRules(), "ExplainAnalyze"),
     };

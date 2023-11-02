@@ -15,13 +15,15 @@
 
 #include <Optimizer/Rule/Rewrite/PushIntoTableScanRules.h>
 
+#include <Interpreters/pushFilterIntoStorage.h>
 #include <Optimizer/ExpressionDeterminism.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Rule/Patterns.h>
 #include <Optimizer/SymbolsExtractor.h>
+#include <Optimizer/Utils.h>
+#include <QueryPlan/LimitStep.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/TableScanStep.h>
-#include <QueryPlan/LimitStep.h>
 
 namespace DB
 {
@@ -34,109 +36,98 @@ namespace
     }
 }
 
-PatternPtr PushQueryInfoFilterIntoTableScan::getPattern() const
+PatternPtr PushStorageFilter::getPattern() const
 {
-    return Patterns::filter().withSingle(
-        Patterns::tableScan().matchingStep<TableScanStep>([](const auto & step) { return !step.hasQueryInfoFilter(); })).result();
+    return Patterns::filter()
+        .withSingle(Patterns::tableScan().matchingStep<TableScanStep>([](const auto & step) {
+            // check repeat calls
+            const auto & query_info = step.getQueryInfo();
+            const auto * select_query = query_info.getSelectQuery();
+            return !(query_info.partition_filter || select_query->where());
+        }))
+        .result();
 }
 
-TransformResult PushQueryInfoFilterIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+TransformResult PushStorageFilter::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
 {
-    if (isOptimizerProjectionSupportEnabled(rule_context))
-        return {};
-
     auto table_scan = node->getChildren()[0];
 
     const auto * filter_step = dynamic_cast<const FilterStep *>(node->getStep().get());
-    auto filter_conjuncts = PredicateUtils::extractConjuncts(filter_step->getFilter());
     auto copy_table_step = table_scan->getStep()->copy(rule_context.context);
 
-    if (!pushQueryInfoFilter(dynamic_cast<TableScanStep &>(*copy_table_step), filter_conjuncts, rule_context.context))
-        return {}; // repeat calls
-
+    // TODO: check repeat calls by checking query_info has been set
+    auto remaining_filter
+        = pushStorageFilter(dynamic_cast<TableScanStep &>(*copy_table_step), filter_step->getFilter()->clone(), rule_context.context);
     table_scan->setStep(copy_table_step);
 
-    auto remaining_filters = removeStorageFilter(filter_conjuncts);
-    if (remaining_filters.size() == filter_conjuncts.size())
-        return {};
-
-    ConstASTPtr new_predicate = PredicateUtils::combineConjuncts(remaining_filters);
-    if (PredicateUtils::isTruePredicate(new_predicate))
+    if (PredicateUtils::isTruePredicate(remaining_filter))
         return table_scan;
 
+    if (ASTEquality::ASTEquals()(filter_step->getFilter(), remaining_filter))
+        return {};
+
     auto new_filter_step
-        = std::make_shared<FilterStep>(table_scan->getStep()->getOutputStream(), new_predicate, filter_step->removesFilterColumn());
+        = std::make_shared<FilterStep>(table_scan->getStep()->getOutputStream(), remaining_filter, filter_step->removesFilterColumn());
     return PlanNodeBase::createPlanNode(
         rule_context.context->nextNodeId(), std::move(new_filter_step), PlanNodes{table_scan}, node->getStatistics());
 }
 
-bool PushQueryInfoFilterIntoTableScan::pushQueryInfoFilter(TableScanStep & table_step, const std::vector<ConstASTPtr> & filter_conjuncts,
-                                                           ContextPtr context)
+ASTPtr PushStorageFilter::pushStorageFilter(TableScanStep & table_step, ASTPtr query_filter, ContextPtr context)
 {
-    auto pushdown_filters = extractPushDownFilter(filter_conjuncts, context);
-    if (!pushdown_filters.empty())
+    std::unordered_map<String, String> column_to_alias;
+    for (const auto & item : table_step.getColumnAlias())
+        column_to_alias.emplace(item.first, item.second);
+    auto alias_to_column = Utils::reverseMap(column_to_alias);
+    ASTs conjuncts = PredicateUtils::extractConjuncts(query_filter);
+
+    // split functions into pushable conjuncts & non-pushable conjuncts
+    ASTs pushable_conjuncts;
+    ASTs non_pushable_conjuncts;
     {
-        std::unordered_map<String, String> inv_alias;
-        for (auto & item : table_step.getColumnAlias())
-            inv_alias.emplace(item.second, item.first);
-
-        auto mapper = SymbolMapper::simpleMapper(inv_alias);
-
-        std::vector<ConstASTPtr> conjuncts;
-        for (auto & filter : pushdown_filters)
-        {
+        auto iter = std::stable_partition(conjuncts.begin(), conjuncts.end(), [&](const auto & conjunct) {
             bool all_in = true;
-            auto symbols = SymbolsExtractor::extract(filter);
+            auto symbols = SymbolsExtractor::extract(conjunct);
             for (const auto & item : symbols)
-                all_in &= inv_alias.contains(item);
+                all_in &= alias_to_column.contains(item);
 
-            if (all_in)
-                conjuncts.emplace_back(mapper.map(filter));
-        }
+            return all_in && ExpressionDeterminism::isDeterministic(conjunct, context);
+        });
 
-        bool applied = table_step.setQueryInfoFilter(conjuncts);
-        if (!applied)
-            return false;
+        pushable_conjuncts.insert(pushable_conjuncts.end(), conjuncts.begin(), iter);
+        non_pushable_conjuncts.insert(non_pushable_conjuncts.end(), iter, conjuncts.end());
     }
 
-    return true;
-}
-
-std::vector<ConstASTPtr> PushQueryInfoFilterIntoTableScan::extractPushDownFilter(const std::vector<ConstASTPtr> & conjuncts, ContextPtr context)
-{
-    std::vector<ConstASTPtr> filters;
-    for (const auto & conjunct : conjuncts)
-        if (ExpressionDeterminism::isDeterministic(conjunct, context))
-        filters.emplace_back(conjunct);
-    return filters;
-}
-
-std::vector<ConstASTPtr> PushQueryInfoFilterIntoTableScan::removeStorageFilter(const std::vector<ConstASTPtr> & conjuncts)
-{
-    std::vector<ConstASTPtr> remove_array_set_check;
-    for (const auto & conjunct : conjuncts)
+    // construct push filter by mapping symbol to origin column
+    ASTPtr push_filter;
     {
-        // Attention !!!
-        // arraySetCheck must push into storage, it is not executable in engine.
-        if (conjunct->as<ASTFunction>())
-        {
-            const ASTFunction & fun = conjunct->as<const ASTFunction &>();
-            if (fun.name == "arraySetCheck")
-            {
-                continue;
-            }
-        }
-        remove_array_set_check.emplace_back(conjunct);
+        auto mapper = SymbolMapper::simpleMapper(alias_to_column);
+        std::vector<ConstASTPtr> mapped_pushable_conjuncts;
+        for (auto & conjunct : pushable_conjuncts)
+            mapped_pushable_conjuncts.push_back(mapper.map(conjunct));
+
+        push_filter = PredicateUtils::combineConjuncts(mapped_pushable_conjuncts);
     }
-    return remove_array_set_check;
+
+    // push filter into storage
+    if (!PredicateUtils::isTruePredicate(push_filter))
+    {
+        auto storage = Utils::getLocalStorage(table_step.getStorage(), context);
+        auto * merge_tree = dynamic_cast<MergeTreeData *>(storage.get());
+        push_filter = pushFilterIntoStorage(push_filter, merge_tree, table_step.getQueryInfo(), context);
+    }
+
+    // construnct the remaing filter
+    auto mapper = SymbolMapper::simpleMapper(column_to_alias);
+    non_pushable_conjuncts.push_back(mapper.map(push_filter));
+    return PredicateUtils::combineConjuncts(non_pushable_conjuncts);
 }
 
 PatternPtr PushLimitIntoTableScan::getPattern() const
 {
     return Patterns::limit()
         .matchingStep<LimitStep>([](auto const & limit_step) { return !limit_step.isAlwaysReadTillEnd(); })
-        .withSingle(Patterns::tableScan().matchingStep<TableScanStep>(
-            [](const auto & step) { return !step.getPushdownAggregation() && !step.getPushdownFilter() && !step.hasQueryInfoFilter(); })).result();
+        .withSingle(Patterns::tableScan())
+        .result();
 }
 
 TransformResult PushLimitIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)

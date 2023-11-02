@@ -170,7 +170,7 @@ public:
     static std::optional<std::unordered_set<String>> filterPartsByVirtualColumns(
         const MergeTreeMetaBase & data,
         const MergeTreeMetaBase::DataPartsVector & parts,
-        const ASTPtr & query,
+        const SelectQueryInfo & query_info,
         ContextPtr context);
 
     /// Filter parts using minmax index and partition key.
