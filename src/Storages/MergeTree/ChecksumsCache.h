@@ -32,7 +32,15 @@ namespace ProfileEvents
 namespace DB
 {
 
+
 using ChecksumsName = std::string;
+
+enum class ChecksumsCacheState
+{
+    Caching,
+    Cached,
+};
+using ChecksumsCacheItem = std::pair<ChecksumsCacheState, std::shared_ptr<MergeTreeDataPartChecksums>>;
 
 inline String getChecksumsCacheKey(const String & storage_unique_id, const IMergeTreeDataPart & part)
 {
@@ -49,10 +57,14 @@ inline String getStorageUniqueId(const String & checksums_cache_key)
 
 struct ChecksumsWeightFunction
 {
-    size_t operator()(const MergeTreeDataPartChecksums & checksums) const
+    size_t operator()(const ChecksumsCacheItem & cache_item) const
     {
+        const auto & checksums = cache_item.second;
+        if (!checksums)
+            return 0;
+        
         constexpr size_t kApproximatelyBytesPerElement = 128;
-        return checksums.files.size() * kApproximatelyBytesPerElement;
+        return checksums->files.size() * kApproximatelyBytesPerElement;
     }
 };
 
@@ -73,13 +85,15 @@ struct ChecksumsCacheSettings
 class ChecksumsCache
 {
 public:
+
+public:
     explicit ChecksumsCache(const ChecksumsCacheSettings & settings)
     : cache_shard_num(settings.cache_shard_num),
       first_level_containers(new std::unordered_map<String, std::set<ChecksumsName>>[settings.cache_shard_num]), 
       first_level_containers_locks(new std::mutex[settings.cache_shard_num]),
       second_level_cache(
           settings.cache_shard_num,
-          BucketLRUCache<ChecksumsName, MergeTreeDataPartChecksums, std::hash<ChecksumsName>, ChecksumsWeightFunction>::Options{
+          BucketLRUCache<ChecksumsName, ChecksumsCacheItem, std::hash<ChecksumsName>, ChecksumsWeightFunction>::Options{
               .lru_update_interval = static_cast<UInt32>(settings.lru_update_interval),
               .mapping_bucket_size = static_cast<UInt32>(std::max(1UL, settings.mapping_bucket_size / settings.cache_shard_num)),
               .max_size = std::max(static_cast<size_t>(1), static_cast<size_t>(settings.lru_max_size / settings.cache_shard_num)),
@@ -87,13 +101,13 @@ public:
               .enable_customize_evict_handler = true,
               .customize_evict_handler
               = [](
-                    const ChecksumsName&, const std::shared_ptr<MergeTreeDataPartChecksums>&, size_t ) {
+                    const ChecksumsName&, const std::shared_ptr<ChecksumsCacheItem>&, size_t ) {
                     return std::make_pair(true, nullptr);
                 },
               .customize_post_evict_handler =
                   [this](
-                      const std::vector<std::pair<ChecksumsName, std::shared_ptr<MergeTreeDataPartChecksums>>> & removed_elements,
-                      const std::vector<std::pair<ChecksumsName, std::shared_ptr<MergeTreeDataPartChecksums>>> & updated_elements) {
+                      const std::vector<std::pair<ChecksumsName, std::shared_ptr<ChecksumsCacheItem>>> & removed_elements,
+                      const std::vector<std::pair<ChecksumsName, std::shared_ptr<ChecksumsCacheItem>>> & updated_elements) {
                     afterEvictChecksums(removed_elements, updated_elements);
                   },
             })
@@ -105,26 +119,35 @@ public:
     {
         bool flag = false;
 
+        std::shared_ptr<MergeTreeDataPartChecksums> result;
+
         auto& shard = second_level_cache.shard(key);
-        std::shared_ptr<MergeTreeDataPartChecksums> result = shard.get(key);
-        if (!result)
+        std::shared_ptr<ChecksumsCacheItem> cache_result = shard.get(key);
+        if (!cache_result || cache_result->first != ChecksumsCacheState::Cached)
         {
             ProfileEvents::increment(ProfileEvents::ChecksumsCacheMisses);
 
             result = load();
             
-            bool inserted = shard.emplace(key, result);
-            if (inserted) 
+            bool inserted = shard.emplace(key, std::make_shared<ChecksumsCacheItem>(std::make_pair(ChecksumsCacheState::Caching, nullptr)));
+            if (inserted)
             {
-                size_t first_level_bucket = std::hash<String>()(name) % cache_shard_num;
-                std::unique_lock<std::mutex> guard(first_level_containers_locks[first_level_bucket]);
-                first_level_containers[first_level_bucket][name].insert(key);
+                {
+                    size_t first_level_bucket = std::hash<String>()(name) % cache_shard_num;
+                    std::unique_lock<std::mutex> guard(first_level_containers_locks[first_level_bucket]);
+                    first_level_containers[first_level_bucket][name].insert(key);
+                    LOG_DEBUG(&Poco::Logger::get("checksumsCache"), "checksums insert table {} part {} bucket {}", name, key, first_level_bucket);
+                }
+
+                shard.upsert(key, std::make_shared<ChecksumsCacheItem>(std::make_pair(ChecksumsCacheState::Cached, result)));
+
                 flag = true;
             }
         }
         else
         {
             ProfileEvents::increment(ProfileEvents::ChecksumsCacheHits);
+            result = cache_result->second;
         }
         
         return std::make_pair(result, flag);
@@ -176,18 +199,28 @@ public:
     }
 
 private:
-    void afterEvictChecksums(const std::vector<std::pair<ChecksumsName, std::shared_ptr<MergeTreeDataPartChecksums>>>& removed_elements,
-         [[maybe_unused]] const std::vector<std::pair<ChecksumsName, std::shared_ptr<MergeTreeDataPartChecksums>>>& updated_elements) 
+    void afterEvictChecksums(const std::vector<std::pair<ChecksumsName, std::shared_ptr<ChecksumsCacheItem>>>& removed_elements,
+         [[maybe_unused]] const std::vector<std::pair<ChecksumsName, std::shared_ptr<ChecksumsCacheItem>>>& updated_elements) 
     {
         for (const auto & pair : removed_elements)
         {
             auto key = pair.first;
             auto name = getStorageUniqueId(key);
 
+            size_t first_level_bucket = std::hash<String>()(name) % cache_shard_num;
+
+            auto & cache_item = pair.second;
+            if (cache_item->first != ChecksumsCacheState::Cached) 
             {
-                size_t first_level_bucket = std::hash<String>()(name) % cache_shard_num;
+                LOG_DEBUG(&Poco::Logger::get("checksumsCache"), "afterEvictChecksums table {} part {} bucket {} state {}", 
+                    name, key, first_level_bucket, cache_item->first);
+                continue;
+            }
+
+            {
                 std::unique_lock<std::mutex> guard(first_level_containers_locks[first_level_bucket]);
                 first_level_containers[first_level_bucket][name].erase(key);
+
             }
 
             auto& shard = second_level_cache.shard(key);
@@ -201,7 +234,7 @@ private:
     std::unique_ptr<std::mutex[]> first_level_containers_locks;
 
     ShardCache<ChecksumsName, std::hash<ChecksumsName>, 
-        BucketLRUCache<ChecksumsName, MergeTreeDataPartChecksums, std::hash<ChecksumsName>, ChecksumsWeightFunction>> second_level_cache;
+        BucketLRUCache<ChecksumsName, ChecksumsCacheItem, std::hash<ChecksumsName>, ChecksumsWeightFunction>> second_level_cache;
 };
 
 using ChecksumsCachePtr = std::shared_ptr<ChecksumsCache>;
