@@ -190,6 +190,8 @@ public:
 
     String genCreateTableQueryForWorker(const String & suffix);
 
+    Strings getPartitionsByPredicate(const ASTPtr & predicate, ContextPtr local_context);
+
     ServerDataPartsVector
     getServerPartsByPredicate(const ASTPtr & predicate, const std::function<ServerDataPartsVector()> & get_parts, ContextPtr local_context);
 

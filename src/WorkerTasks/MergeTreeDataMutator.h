@@ -86,7 +86,8 @@ private:
         MergeTreeMetaBase::DataPartPtr source_part,
         const Block & updated_header,
         NamesAndTypesList storage_columns,
-        const MutationCommands & commands_for_removes);
+        const MutationCommands & commands_for_removes,
+        bool with_row_exists_column);
 
     /// Get skip indices, that should exists in the resulting data part.
     static MergeTreeIndices getIndicesForNewDataPart(

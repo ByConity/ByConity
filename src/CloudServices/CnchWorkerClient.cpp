@@ -46,7 +46,7 @@ CnchWorkerClient::CnchWorkerClient(HostWithPorts host_ports_)
 CnchWorkerClient::~CnchWorkerClient() = default;
 
 void CnchWorkerClient::submitManipulationTask(
-    const MergeTreeMetaBase & storage, const ManipulationTaskParams & params, TxnTimestamp txn_id, TxnTimestamp begin_ts)
+    const MergeTreeMetaBase & storage, const ManipulationTaskParams & params, TxnTimestamp txn_id)
 {
     if (!params.rpc_port)
         throw Exception("Rpc port is not set in ManipulationTaskParams", ErrorCodes::LOGICAL_ERROR);
@@ -56,7 +56,7 @@ void CnchWorkerClient::submitManipulationTask(
     Protos::SubmitManipulationTaskResp response;
 
     request.set_txn_id(txn_id);
-    request.set_timestamp(begin_ts);
+    request.set_timestamp(0); /// NOTE: do not remove this as `timestamp` is a required field.
     request.set_type(static_cast<UInt32>(params.type));
     request.set_task_id(params.task_id);
     request.set_rpc_port(params.rpc_port);

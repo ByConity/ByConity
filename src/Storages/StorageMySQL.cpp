@@ -311,7 +311,7 @@ void StorageMySQL::alter(const AlterCommands & params, ContextPtr query_context,
 
     /// replace table schema in catalog
     TransactionCnchPtr txn = query_context->getCurrentTransaction();
-    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), query_context->getSettingsRef());
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), query_context->getSettingsRef(), query_context->getCurrentQueryId());
     auto & alter_act = action->as<DDLAlterAction &>();
 
     auto new_schema = queryToString(new_ast_create);

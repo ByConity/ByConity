@@ -636,6 +636,7 @@ std::vector<MergeTreeMutationStatus> StorageMergeTree::getMutationsStatus() cons
                 entry.create_time,
                 block_numbers_map,
                 parts_to_do_names,
+                parts_to_do_names.size(),
                 /* is_done = */parts_to_do_names.empty(),
                 {}, /// finish_time
                 entry.latest_failed_part,

@@ -26,6 +26,7 @@
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Interpreters/NamedSession.h>
 #include <Interpreters/executeQuery.h>
+#include <Interpreters/trySetVirtualWarehouse.h>
 #include <Protos/DataModelHelpers.h>
 #include <Protos/RPCHelpers.h>
 #include <Storages/DiskCache/IDiskCache.h>
@@ -35,6 +36,7 @@
 #include <Storages/MutationCommands.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Transaction/CnchWorkerTransaction.h>
+#include <Transaction/TxnTimestamp.h>
 #include <WorkerTasks/ManipulationList.h>
 #include <WorkerTasks/ManipulationTask.h>
 #include <WorkerTasks/ManipulationTaskParams.h>
@@ -102,10 +104,11 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         if (request->task_id().empty())
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Require non-empty task_id");
 
+        auto txn_id = TxnTimestamp(request->txn_id());
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         rpc_context->setCurrentQueryId(request->task_id());
         rpc_context->getClientInfo().rpc_port = request->rpc_port();
-        rpc_context->setCurrentTransaction(std::make_shared<CnchWorkerTransaction>(rpc_context, TxnTimestamp(request->txn_id())));
+        rpc_context->setCurrentTransaction(std::make_shared<CnchWorkerTransaction>(rpc_context, txn_id));
 
         const auto & settings = getContext()->getSettingsRef();
         UInt64 max_running_task = settings.max_threads * getContext()->getRootConfig().max_ratio_of_cnch_tasks_to_threads;
@@ -118,10 +121,10 @@ void CnchWorkerServiceImpl::submitManipulationTask(
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Table {} is not CloudMergeTree", storage->getStorageID().getNameForLogs());
 
         auto params = ManipulationTaskParams(storage);
-        params.type = ManipulationType(request->type());
+        params.type = static_cast<ManipulationType>(request->type());
         params.task_id = request->task_id();
         params.rpc_port = static_cast<UInt16>(request->rpc_port());
-        params.txn_id = request->txn_id();
+        params.txn_id = txn_id;
         params.columns_commit_time = request->columns_commit_time();
         params.is_bucket_table = request->is_bucket_table();
 
@@ -133,12 +136,25 @@ void CnchWorkerServiceImpl::submitManipulationTask(
             params.mutation_commands->readText(read_buf);
 
             /// TODO: (zuochuang.zema) send mutation_entry but not mutation_commands in RPC.
+            /// Data part need to load the mutation entry to do the column conversion.
             CnchMergeTreeMutationEntry mutation_entry;
             mutation_entry.commands = *params.mutation_commands;
             mutation_entry.txn_id = request->txn_id();
             mutation_entry.commit_time = params.mutation_commit_time;
             mutation_entry.columns_commit_time = params.columns_commit_time;
             data->addMutationEntry(mutation_entry);
+
+            /// Always use FAST_DELETE mode for CnchMergeTree.
+            for (auto & command : *params.mutation_commands)
+            {
+                if (command.type == MutationCommand::DELETE)
+                    command.type = MutationCommand::FAST_DELETE;
+            }
+
+            rpc_context->initCnchServerResource(txn_id);
+            rpc_context->getSettingsRef().prefer_localhost_replica = false;
+            rpc_context->getSettingsRef().prefer_cnch_catalog = true;
+            trySetVirtualWarehouseAndWorkerGroup(data->getSettings()->cnch_vw_default.value, rpc_context);
         }
 
         auto remote_address

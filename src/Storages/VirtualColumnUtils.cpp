@@ -152,7 +152,8 @@ void rewriteEntityInAst(ASTPtr ast, const String & column_name, const Field & va
     }
 }
 
-bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block block, ASTPtr & expression_ast, ASTPtr partition_filter)
+
+bool prepareFilterBlockByPredicates(const std::vector<ASTPtr> & predicates, ContextPtr context, Block block, ASTPtr & expression_ast)
 {
     if (block.rows() == 0)
         throw Exception("Cannot prepare filter with empty block", ErrorCodes::LOGICAL_ERROR);
@@ -203,25 +204,29 @@ bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block
 
     bool unmodified = true;
     std::vector<ASTPtr> functions;
-    if (!partition_filter)
-    {
-        const auto & select = query->as<ASTSelectQuery &>();
-        if (!select.where() && !select.prewhere())
-            return unmodified;
-
-        /// Create an expression that evaluates the expressions in WHERE and PREWHERE, depending only on the existing columns.
-        if (select.where())
-            unmodified &= extractFunctions(select.where(), is_constant, functions);
-        if (select.prewhere())
-            unmodified &= extractFunctions(select.prewhere(), is_constant, functions);
-    }
-    else
-    {
-        unmodified &= extractFunctions(partition_filter, is_constant, functions);
-    }
+    for (const auto & predicate : predicates)
+        unmodified &= extractFunctions(predicate, is_constant, functions);
 
     expression_ast = buildWhereExpression(functions);
     return unmodified;
+}
+
+bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block block, ASTPtr & expression_ast, ASTPtr partition_filter)
+{
+    if (partition_filter)
+        return prepareFilterBlockByPredicates({partition_filter}, context, block, expression_ast);
+
+    const auto & select = query->as<ASTSelectQuery &>();
+    if (!select.where() && !select.prewhere())
+        return true;
+
+    std::vector<ASTPtr> predicates;
+    if (select.where())
+        predicates.push_back(select.where());
+    if (select.prewhere())
+        predicates.push_back(select.prewhere());
+
+    return prepareFilterBlockByPredicates(predicates, context, block, expression_ast);
 }
 
 void filterBlockWithQuery(const ASTPtr & query, Block & block, ContextPtr context, ASTPtr expression_ast, ASTPtr partition_filter)

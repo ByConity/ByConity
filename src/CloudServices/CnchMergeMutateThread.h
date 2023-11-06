@@ -21,6 +21,7 @@
 #include <Interpreters/VirtualWarehousePool.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
+#include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Transaction/ICnchTransaction.h>
 #include <WorkerTasks/ManipulationList.h>
 
@@ -141,7 +142,7 @@ struct ClusterTaskProgress
     UInt64 progress{100}; // default is completed because all parts of a table has same table_definition_hash intially
     UInt64 start_time_seconds{0};
 
-    String toString()
+    String toString() const
     {
         String result = std::to_string(progress) + "%";
         if (start_time_seconds)
@@ -179,6 +180,7 @@ public:
     void triggerPartMutate(StoragePtr storage);
 
     void waitTasksFinish(const std::vector<String> & task_ids, UInt64 timeout_ms);
+    MergeTreeMutationStatusVector getAllMutationStatuses();
     ClusterTaskProgress getReclusteringTaskProgress();
 
 private:
@@ -198,8 +200,9 @@ private:
     String submitFutureManipulationTask(const StorageCnchMergeTree & storage, FutureManipulationTask & future_task, bool maybe_sync_task = false);
 
     // Mutate
+    void removeMutationEntryFromKV(const CnchMergeTreeMutationEntry & entry, bool recluster_finish, std::lock_guard<std::mutex> &);
+    void calcMutationPartitions(CnchMergeTreeMutationEntry & mutate_entry, StoragePtr & istorage, StorageCnchMergeTree & storage);
     bool tryMutateParts(StoragePtr & istorage, StorageCnchMergeTree & storage);
-    void removeMutationEntry(const TxnTimestamp & commit_ts, bool recluster_finish, std::lock_guard<std::mutex> &);
 
     void removeTaskImpl(const String & task_id, std::lock_guard<std::mutex> & lock, TaskRecordPtr * out_task_record = nullptr);
 
@@ -231,10 +234,11 @@ private:
     std::queue<std::unique_ptr<FutureManipulationTask>> merge_pending_queue;
 
     std::mutex try_mutate_parts_mutex; /// protect tryMutateParts(), getMutationStatus()
+    /// Partitions that all parts are mutated or under mutating.
     NameSet scheduled_mutation_partitions;
+    /// Partitions that all parts are mutated.
     NameSet finish_mutation_partitions;
     std::optional<CnchMergeTreeMutationEntry> current_mutate_entry;
-    std::map<TxnTimestamp, CnchMergeTreeMutationEntry> current_mutations_by_version;
 
     /// Separate quota for merge & mutation tasks
     std::atomic<int> running_merge_tasks{0};

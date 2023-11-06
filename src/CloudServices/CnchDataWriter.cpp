@@ -550,7 +550,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             if (storage_ptr->isBucketTable())
             {
                 auto table_definition_hash = storage_ptr->getTableHashForClusterBy();
-                for (auto & part : dumped_data.parts)
+                for (const auto & part : dumped_data.parts)
                 {
                     // NOTE: set allow_attach_parts_with_different_table_definition_hash to false and
                     // skip_table_definition_hash_check to true if you want to force set part's TDH to table's TDH

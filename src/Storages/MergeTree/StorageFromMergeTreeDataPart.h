@@ -122,21 +122,21 @@ public:
     }
 
 protected:
-    StorageFromMergeTreeDataPart(const MergeTreeData::DataPartPtr & part_)
+    explicit StorageFromMergeTreeDataPart(const MergeTreeData::DataPartPtr & part_, bool without_delete_bitmap = false)
         : IStorage(getIDFromPart(part_))
         , parts({part_})
     {
         setInMemoryMetadata(part_->storage.getInMemoryMetadata());
-        delete_bitmaps.insert({part_, part_->getDeleteBitmap()});
+        delete_bitmaps.insert({part_, without_delete_bitmap ? nullptr : part_->getDeleteBitmap()});
     }
 
-    StorageFromMergeTreeDataPart(MergeTreeData::DataPartsVector && parts_)
+    explicit StorageFromMergeTreeDataPart(MergeTreeData::DataPartsVector && parts_, bool without_delete_bitmap = false)
         : IStorage(getIDFromParts(parts_))
         , parts(std::move(parts_))
     {
         setInMemoryMetadata(parts.front()->storage.getInMemoryMetadata());
         for (auto & part : parts)
-            delete_bitmaps.insert({part, part->getDeleteBitmap()});
+            delete_bitmaps.insert({part, without_delete_bitmap ? nullptr : part->getDeleteBitmap()});
     }
 
 private:

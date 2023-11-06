@@ -67,19 +67,17 @@ Projection
                            │        │                 │           Outputs: [d_date_sk, d_month_seq]
                            │        │                 └─ Broadcast Exchange
                            │        │                    └─ EnforceSingleRow
-                           │        │                       └─ Union
-                           │        │                          │     OutputToInputs: d_month_seq_1 = [d_month_seq_1]
-                           │        │                          └─ Gather Exchange
-                           │        │                             └─ MergingAggregated
-                           │        │                                └─ Repartition Exchange
-                           │        │                                   │     Partition by: {d_month_seq_1}
-                           │        │                                   └─ Aggregating
-                           │        │                                      │     Group by: {d_month_seq_1}
-                           │        │                                      └─ Filter
-                           │        │                                         │     Condition: (d_year = 2001) AND (d_moy = 1)
-                           │        │                                         └─ TableScan tpcds1000.date_dim
-                           │        │                                                  Where: (d_year = 2001) AND (d_moy = 1)
-                           │        │                                                  Outputs: [d_year, d_moy], d_month_seq_1:=d_month_seq
+                           │        │                       └─ Gather Exchange
+                           │        │                          └─ MergingAggregated
+                           │        │                             └─ Repartition Exchange
+                           │        │                                │     Partition by: {d_month_seq_1}
+                           │        │                                └─ Aggregating
+                           │        │                                   │     Group by: {d_month_seq_1}
+                           │        │                                   └─ Filter
+                           │        │                                      │     Condition: (d_year = 2001) AND (d_moy = 1)
+                           │        │                                      └─ TableScan tpcds1000.date_dim
+                           │        │                                               Where: (d_year = 2001) AND (d_moy = 1)
+                           │        │                                               Outputs: [d_year, d_moy], d_month_seq_1:=d_month_seq
                            │        └─ Repartition Exchange
                            │           │     Partition by: {i_item_sk}
                            │           └─ TableScan tpcds1000.item

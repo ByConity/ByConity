@@ -248,6 +248,8 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int RESOURCE_MANAGER_NO_LEADER_ELECTED;
     extern const int CNCH_SERVER_NOT_FOUND;
+    extern const int CNCH_BG_THREAD_NOT_FOUND;
+    extern const int CATALOG_SERVICE_INTERNAL_ERROR;
     extern const int NOT_A_LEADER;
     extern const int INVALID_SETTING_VALUE;
 }
@@ -4918,6 +4920,56 @@ bool Context::isResourceReportRegistered()
 CnchBGThreadPtr Context::tryGetDedupWorkerManager(const StorageID & storage_id) const
 {
     return tryGetCnchBGThread(CnchBGThreadType::DedupWorker, storage_id);
+}
+
+std::multimap<StorageID, MergeTreeMutationStatus> Context::collectMutationStatusesByTables(std::unordered_set<UUID> table_uuids) const
+{
+    /// If the query is for a specified table's mutation status,
+    /// we need to ensure always return correct result, or throw exception when result is not available.
+    bool throw_on_fail = table_uuids.size() == 1;
+
+    std::multimap<StorageID, MergeTreeMutationStatus> res;
+
+    auto threads = getCnchBGThreadsMap(CnchBGThreadType::MergeMutate)->getAll();
+
+    for (const auto & [uuid, task]: threads)
+    {
+        if (!table_uuids.count(uuid))
+            continue;
+
+        if (task->getThreadStatus() == CnchBGThreadStatus::Stopped)
+        {
+            if (throw_on_fail)
+                throw Exception("Table's MergeMutateThread is stopped. Please start it first.", ErrorCodes::CNCH_BG_THREAD_NOT_FOUND);
+            continue;
+        }
+
+        try
+        {
+            auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(task.get());
+            auto statuses = merge_mutate_thread->getAllMutationStatuses();
+            for (auto & status : statuses)
+                res.emplace(task->getStorageID(), status);
+
+            table_uuids.erase(uuid);
+        }
+        catch (Exception & e)
+        {
+            // Can't get Table by uuid, table maybe already deleted.
+            if (e.code() != ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR)
+            {
+                tryLogCurrentException(__PRETTY_FUNCTION__);
+                throw;
+            }
+            else
+                LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Can't get Table by uuid, table maybe already deleted, skip it.");
+        }
+    }
+
+    if (throw_on_fail && !table_uuids.empty())
+        throw Exception("Table's MergeMutateThread is not found on the server. Please check table's host server first.", ErrorCodes::CNCH_BG_THREAD_NOT_FOUND);
+
+    return res;
 }
 
 void Context::initCnchTransactionCoordinator()

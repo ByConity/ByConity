@@ -462,7 +462,7 @@ PropertySets DeterminerVisitor::visitApplyStep(const ApplyStep &, DeterminerCont
 
 PropertySets DeterminerVisitor::visitEnforceSingleRowStep(const EnforceSingleRowStep &, DeterminerContext &)
 {
-    return {{Property{Partitioning{Partitioning::Handle::SINGLE}, Partitioning{Partitioning::Handle::SINGLE}}}};
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
 
 PropertySets DeterminerVisitor::visitAssignUniqueIdStep(const AssignUniqueIdStep & node, DeterminerContext & context)

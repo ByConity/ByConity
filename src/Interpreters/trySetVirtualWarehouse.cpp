@@ -63,7 +63,7 @@ static bool trySetVirtualWarehouseFromTable(
     if (!storage)
         return false;
 
-    if (auto cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
+    if (auto *cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
     {
         String vw_name = vw_type == VirtualWarehouseType::Write ? cnch_table->getSettings()->cnch_vw_write
                                                                 : cnch_table->getSettings()->cnch_vw_default;
@@ -418,7 +418,7 @@ bool trySetVirtualWarehouse(const ASTPtr & ast, ContextMutablePtr & context)
     }
 }
 
-bool trySetVirtualWarehouseAndWorkerGroup(const std::string& vw_name, ContextMutablePtr & context)
+bool trySetVirtualWarehouseAndWorkerGroup(const std::string & vw_name, ContextMutablePtr & context)
 {
     if (context->tryGetCurrentWorkerGroup())
         return true;

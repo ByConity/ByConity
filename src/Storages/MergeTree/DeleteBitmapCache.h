@@ -37,7 +37,7 @@ public:
     /// if found key, erase it from cache
     void erase(const String & key);
 
-    static String buildKey(UUID storage_uuid, const String & partition_id, Int64 min_block, Int64 max_block);
+    static String buildKey(UUID storage_uuid, const String & partition_id, Int64 min_block, Int64 max_block, Int64 mutation);
 
     size_t totalCharge();
 

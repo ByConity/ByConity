@@ -373,12 +373,8 @@ Property DeriverVisitor::visitArrayJoinStep(const ArrayJoinStep &, DeriverContex
 }
 
 // TODO partition key inference, translate properties according to group by keys
-Property DeriverVisitor::visitAggregatingStep(const AggregatingStep & step, DeriverContext & context)
+Property DeriverVisitor::visitAggregatingStep(const AggregatingStep &, DeriverContext & context)
 {
-    if (step.getKeys().empty())
-    {
-        return Property{Partitioning{Partitioning::Handle::SINGLE}, Partitioning{Partitioning::Handle::SINGLE}};
-    }
     return context.getInput()[0].clearSorting();
 }
 

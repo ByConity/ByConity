@@ -359,16 +359,14 @@ Projection Est. 100 rows
                │     │                             │           Outputs: [d_week_seq], d_date_sk_27:=d_date_sk
                │     │                             └─ Broadcast Exchange Est. 1 rows
                │     │                                └─ EnforceSingleRow Est. 1 rows
-               │     │                                   └─ Union Est. 1 rows
-               │     │                                      │     OutputToInputs: d_week_seq_1 = [d_week_seq_1]
-               │     │                                      └─ Gather Exchange Est. 1 rows
-               │     │                                         └─ Projection Est. 1 rows
-               │     │                                            │     Expressions: [d_week_seq_1]
-               │     │                                            └─ Filter Est. 1 rows
-               │     │                                               │     Condition: (d_year_27 = 2000) AND (d_moy_3 = 12) AND (d_dom = 11)
-               │     │                                               └─ TableScan tpcds100.date_dim Est. 73049 rows
-               │     │                                                        Where: (d_year = 2000) AND (d_moy = 12) AND (d_dom = 11)
-               │     │                                                        Outputs: [d_dom], d_week_seq_1:=d_week_seq, d_year_27:=d_year, d_moy_3:=d_moy
+               │     │                                   └─ Gather Exchange Est. 1 rows
+               │     │                                      └─ Projection Est. 1 rows
+               │     │                                         │     Expressions: [d_week_seq_1]
+               │     │                                         └─ Filter Est. 1 rows
+               │     │                                            │     Condition: (d_year_27 = 2000) AND (d_moy_3 = 12) AND (d_dom = 11)
+               │     │                                            └─ TableScan tpcds100.date_dim Est. 73049 rows
+               │     │                                                     Where: (d_year = 2000) AND (d_moy = 12) AND (d_dom = 11)
+               │     │                                                     Outputs: [d_dom], d_week_seq_1:=d_week_seq, d_year_27:=d_year, d_moy_3:=d_moy
                │     └─ Broadcast Exchange Est. 1 rows
                │        └─ EnforceSingleRow Est. 1 rows
                │           └─ CTERef[1] Est. 1 rows
@@ -424,16 +422,14 @@ Projection Est. 100 rows
                      │                             │           Outputs: d_date_sk_34:=d_date_sk, d_week_seq_2:=d_week_seq
                      │                             └─ Broadcast Exchange Est. 1 rows
                      │                                └─ EnforceSingleRow Est. 1 rows
-                     │                                   └─ Union Est. 1 rows
-                     │                                      │     OutputToInputs: d_week_seq_3 = [d_week_seq_3]
-                     │                                      └─ Gather Exchange Est. 1 rows
-                     │                                         └─ Projection Est. 1 rows
-                     │                                            │     Expressions: [d_week_seq_3]
-                     │                                            └─ Filter Est. 1 rows
-                     │                                               │     Condition: (d_year_34 = 1999) AND (d_moy_4 = 12) AND (d_dom_1 = 11)
-                     │                                               └─ TableScan tpcds100.date_dim Est. 73049 rows
-                     │                                                        Where: (d_year = 1999) AND (d_moy = 12) AND (d_dom = 11)
-                     │                                                        Outputs: d_week_seq_3:=d_week_seq, d_year_34:=d_year, d_moy_4:=d_moy, d_dom_1:=d_dom
+                     │                                   └─ Gather Exchange Est. 1 rows
+                     │                                      └─ Projection Est. 1 rows
+                     │                                         │     Expressions: [d_week_seq_3]
+                     │                                         └─ Filter Est. 1 rows
+                     │                                            │     Condition: (d_year_34 = 1999) AND (d_moy_4 = 12) AND (d_dom_1 = 11)
+                     │                                            └─ TableScan tpcds100.date_dim Est. 73049 rows
+                     │                                                     Where: (d_year = 1999) AND (d_moy = 12) AND (d_dom = 11)
+                     │                                                     Outputs: d_week_seq_3:=d_week_seq, d_year_34:=d_year, d_moy_4:=d_moy, d_dom_1:=d_dom
                      └─ Broadcast Exchange Est. 1 rows
                         └─ EnforceSingleRow Est. 1 rows
                            └─ CTERef[1] Est. 1 rows
