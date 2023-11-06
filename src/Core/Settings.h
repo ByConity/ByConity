@@ -1713,22 +1713,18 @@ enum PreloadLevelSettings : UInt64
       "Max remote filesystem cache size that can be downloaded by a single query", \
       0) \
     M(Bool, skip_download_if_exceeds_query_cache, true, "Skip download from remote filesystem if exceeds query cache size", 0) \
-\
-    /** Complex query settings **/ \
-    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0) \
-    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0) \
-    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0) \
-    M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0) \
-    M(Bool, \
-      send_plan_segment_by_brpc_join_per_stage, \
-      false, \
-      "Whether to send plan segment by BRPC and join async rpc request per stage", \
-      0) \
-    M(Bool, send_plan_segment_by_brpc_join_at_last, false, "Whether to send plan segment by BRPC and join async rpc request at last", 0) \
-\
-    /** Brpc config **/ \
-    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0) \
-\
+    \
+    /** Complex query settings **/\
+    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
+    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, send_plan_segment_by_brpc, false, "Whether to send plan segment by BRPC", 0)\
+    M(Bool, send_plan_segment_by_brpc_join_per_stage, false, "Whether to send plan segment by BRPC and join async rpc request per stage", 0)\
+    M(Bool, send_plan_segment_by_brpc_join_at_last, true, "Whether to send plan segment by BRPC and join async rpc request at last", 0)\
+    \
+    /** Brpc config **/\
+    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0)\
+    \
     /** Obsolete settings that do nothing but left for compatibility reasons. Remove each one after half a year of obsolescence. */ \
     M(UInt64, max_memory_usage_for_all_queries, 0, "Obsolete setting, does nothing.", 0) \
     M(UInt64, multiple_joins_rewriter_version, 0, "Obsolete setting, does nothing.", 0) \
