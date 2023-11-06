@@ -1642,7 +1642,6 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mutatePartToTempor
         if (in)
             in->setProgressCallback(MergeProgressCallback(merge_entry, watch_prev_elapsed, stage_progress));
         updated_header = interpreter->getUpdatedHeader();
-        updated_delete_bitmap = interpreter->getUpdatedDeleteBitmap();
     }
 
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + future_part.name, space_reservation->getDisk(), 0);

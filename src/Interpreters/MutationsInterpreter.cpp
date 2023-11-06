@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Common/RowExistsColumnInfo.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/InDepthNodeVisitor.h>
@@ -45,6 +46,7 @@
 #include <Parsers/ASTLiteral.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Parsers/ASTWithAlias.h>
 #include <Parsers/formatAST.h>
 #include <IO/WriteHelpers.h>
 #include <QueryPlan/CreatingSetsStep.h>
@@ -285,7 +287,7 @@ ASTPtr getPartitionAndPredicateExpressionForMutationCommand(
     {
         String partition_id;
 
-        auto storage_merge_tree = std::dynamic_pointer_cast<MergeTreeData>(storage);
+        auto storage_merge_tree = std::dynamic_pointer_cast<MergeTreeMetaBase>(storage);
         auto storage_from_merge_tree_data_part = std::dynamic_pointer_cast<StorageFromMergeTreeDataPart>(storage);
         if (storage_merge_tree)
             partition_id = storage_merge_tree->getPartitionIDFromQuery(command.partition, context);
@@ -306,6 +308,31 @@ ASTPtr getPartitionAndPredicateExpressionForMutationCommand(
         return command.predicate ? command.predicate->clone() : partition_predicate_as_ast_func;
 }
 
+ASTPtr getRowExistsExpressionForMutationCommand(
+    const MutationCommand & command,
+    const MergeTreeDataPartPtr & part
+)
+{
+    if (!part)
+        throw Exception("Can't get the part for mutate command", ErrorCodes::LOGICAL_ERROR);
+
+    auto negated_predicate = makeASTFunction("isZeroOrNull", command.predicate->clone());
+
+    if (part->hasRowExistsImplicitColumn())
+    {
+        auto prev_row_exists = makeASTFunction("equals",
+            std::make_shared<ASTIdentifier>("_row_exists"),
+            std::make_shared<ASTLiteral>(true));
+        auto combined_row_exists = makeASTFunction("and", prev_row_exists, negated_predicate);
+        setAlias(combined_row_exists, RowExistsColumn::ROW_EXISTS_COLUMN.name);
+        return combined_row_exists;
+    }
+    else
+    {
+        setAlias(negated_predicate, RowExistsColumn::ROW_EXISTS_COLUMN.name);
+        return negated_predicate;
+    }
+}
 
 MutationsInterpreter::MutationsInterpreter(
     StoragePtr storage_,
@@ -368,6 +395,11 @@ static void validateUpdateColumns(
                 found = true;
                 break;
             }
+        }
+
+        if (!found && column_name == RowExistsColumn::ROW_EXISTS_COLUMN.name)
+        {
+            found = true;
         }
 
         if (!found)
@@ -493,24 +525,8 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
             if (!stages.empty())
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Stage is not empty");
             stages.emplace_back(context);
-
-            if (command.columns)
-            {
-                for (const auto & column : command.columns->children)
-                {
-                    const auto * identifier = column->as<ASTIdentifier>();
-                    if (!identifier)
-                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "fastdelete columns should be identifiers");
-                    if (!all_columns.contains(identifier->name()))
-                        throw Exception(ErrorCodes::NO_SUCH_COLUMN_IN_TABLE, "Table doesn't contain physical column {}", identifier->name());
-                    /// TODO: still got some issues on map column, disable temporarily
-                    if (auto col = all_columns.tryGetByName(identifier->name()); col.has_value() && col->type->isMap())
-                        throw Exception(ErrorCodes::BAD_ARGUMENTS, "fastdelete a map column '{}' is not supported", identifier->name());
-                    /// TODO: check column is not security / encrypt / low cardinality / map kv (maybe ok for security/encrypt/lowcard ?)
-                    stages.back().fast_delete_columns.insert(identifier->name());
-                }
-            }
-            stages.back().fast_delete_filter = getPartitionAndPredicateExpressionForMutationCommand(command);
+            /// Only output _row_exists column for FAST_DELETE
+            stages.back().row_exists_expr = getRowExistsExpressionForMutationCommand(command, tryGetPartFromStorage(storage));
         }
         else if (command.type == MutationCommand::UPDATE)
         {
@@ -763,6 +779,7 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
     }
 
     is_prepared = true;
+
     if (is_fast_delete)
         return prepareInterpreterSelectQueryForFastDelete(stages.front(), dry_run);
     else
@@ -771,18 +788,12 @@ ASTPtr MutationsInterpreter::prepare(bool dry_run)
 
 ASTPtr MutationsInterpreter::prepareInterpreterSelectQueryForFastDelete(Stage & prepared_stage, bool /*dry_run*/)
 {
-    /// we construct a "SELECT _part_row_number WHERE fast_delete_condition" query
-    /// to get row numbers of all the affected rows
+    /// we construct a query to construct new _row_exists column:
+    /// "SELECT _row_exists AND NOT $PREDICATE as _row_exists"
     auto select = std::make_shared<ASTSelectQuery>();
 
     select->setExpression(ASTSelectQuery::Expression::SELECT, std::make_shared<ASTExpressionList>());
-    select->select()->children.push_back(std::make_shared<ASTIdentifier>("_part_row_number"));
-
-    if (prepared_stage.fast_delete_filter)
-    {
-        ASTPtr where_expression = prepared_stage.fast_delete_filter;
-        select->setExpression(ASTSelectQuery::Expression::WHERE, std::move(where_expression));
-    }
+    select->select()->children.push_back(prepared_stage.row_exists_expr);
 
     return select;
 }
@@ -959,25 +970,6 @@ QueryPipelinePtr MutationsInterpreter::addStreamsForLaterStages(const std::vecto
     return pipeline;
 }
 
-ImmutableDeleteBitmapPtr MutationsInterpreter::prepareNewDeleteBitmap(IBlockInputStream & in, const ImmutableDeleteBitmapPtr & current_bitmap)
-{
-    DeleteBitmapPtr new_deletes(new Roaring);
-    in.readPrefix();
-    while (Block block = in.read())
-    {
-        auto & column_and_type = block.getByName("_part_row_number");
-        const auto & row_numbers = assert_cast<const ColumnUInt64 &>(*column_and_type.column).getData();
-        for (size_t i = 0; i < row_numbers.size(); ++i)
-            new_deletes->add(static_cast<uint32_t>(row_numbers[i]));
-    }
-    in.readSuffix();
-
-    /// new bitmap := current bitmap + new deletes
-    if (current_bitmap)
-        *new_deletes |= *current_bitmap;
-    return new_deletes;
-}
-
 void MutationsInterpreter::validate()
 {
     if (!select_interpreter)
@@ -1018,27 +1010,6 @@ BlockInputStreamPtr MutationsInterpreter::execute()
 
     auto pipeline = addStreamsForLaterStages(stages, plan);
     BlockInputStreamPtr result_stream = std::make_shared<PipelineExecutingBlockInputStream>(std::move(*pipeline));
-
-    if (is_fast_delete)
-    {
-        auto part = tryGetPartFromStorage(storage);
-        if (!part)
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Cannot get the part to mutate");
-        updated_delete_bitmap = prepareNewDeleteBitmap(*result_stream, part->getDeleteBitmap());
-
-        auto & fast_delete_columns = stages.front().fast_delete_columns;
-        if (fast_delete_columns.empty())
-        {
-            updated_header = std::make_unique<Block>();
-            return nullptr;
-        }
-
-        /// construct a new stream to update fast delete columns (set deleted rows to default values)
-        Names columns_to_rewrite {fast_delete_columns.begin(), fast_delete_columns.end()};
-        auto source = std::make_unique<MergeTreeFillDeleteWithDefaultValueSource>(
-            part->storage, metadata_snapshot, part, updated_delete_bitmap, columns_to_rewrite);
-        result_stream = createStreamFromSource(std::move(source));
-    }
 
     /// Sometimes we update just part of columns (for example UPDATE mutation)
     /// in this case we don't read sorting key, so just we don't check anything.

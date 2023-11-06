@@ -598,8 +598,6 @@ public:
     /// Get required partition vector with query info
     DataPartsVector getRequiredPartitions(const SelectQueryInfo & query_info, ContextPtr context);
 
-    void checkColumnsValidity(const ColumnsDescription & columns) const override;
-
 protected:
 
     friend class IMergeTreeDataPart;

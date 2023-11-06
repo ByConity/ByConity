@@ -29,18 +29,19 @@ struct AlterDatabaseActionParams
     StorageID storage_id;
     String statement;
     bool is_database = false;
-    String engine_name = "";
+    String engine_name;
 };
 
 class DDLAlterAction : public IAction
 {
 public:
-    DDLAlterAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, StoragePtr table_, const Settings & query_settings_)
+    DDLAlterAction(const ContextPtr & query_context_, const TxnTimestamp & txn_id_, StoragePtr table_, const Settings & query_settings_, const String & query_id_)
         : IAction(query_context_, txn_id_),
         log(&Poco::Logger::get("AlterAction")),
         table(std::move(table_)),
         query_settings(query_settings_),
-        params{table->getStorageID(), "fake_statement"}
+        params{table->getStorageID(), "fake_statement"},
+        query_id(query_id_)
     {
     }
 
@@ -77,6 +78,7 @@ private:
     std::optional<CnchMergeTreeMutationEntry> final_mutation_entry;
     Settings query_settings;
     AlterDatabaseActionParams params;
+    const String query_id;
 };
 
 using DDLAlterActionPtr = std::shared_ptr<DDLAlterAction>;

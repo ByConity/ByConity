@@ -1820,6 +1820,7 @@ std::vector<MergeTreeMutationStatus> ReplicatedMergeTreeQueue::getMutationsStatu
                 entry.create_time,
                 entry.block_numbers,
                 parts_to_mutate,
+                parts_to_mutate.size(),
                 status.is_done,
                 {}, // finish_time
                 status.latest_failed_part,

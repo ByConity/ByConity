@@ -1280,30 +1280,11 @@ enum PreloadLevelSettings : UInt64
       "For tables in databases with Engine=Atomic show UUID of the table in its CREATE query.", \
       0) \
     M(UInt64, max_threads_for_cnch_dump, 1, "The maximum number of threads for dumping data in cnch.", 0) \
-    M(Bool, \
-      database_atomic_wait_for_drop_and_detach_synchronously, \
-      false, \
-      "When executing DROP or DETACH TABLE in Atomic database, wait for table data to be finally dropped or detached.", \
-      0) \
-    M(Bool, \
-      enable_scalar_subquery_optimization, \
-      true, \
-      "If it is set to true, prevent scalar subqueries from (de)serializing large scalar values and possibly avoid running the same " \
-      "subquery more than once.", \
-      0) \
-    M(Bool, optimize_trivial_count_query, true, "Process trivial 'SELECT count() FROM table' query from metadata.", 0) \
-    M(Bool, \
-      optimize_respect_aliases, \
-      true, \
-      "If it is set to true, it will respect aliases in WHERE/GROUP BY/ORDER BY, that will help with partition pruning/secondary " \
-      "indexes/optimize_aggregation_in_order/optimize_read_in_order/optimize_trivial_count", \
-      0) \
-    M(UInt64, \
-      mutations_sync, \
-      0, \
-      "Wait for synchronous execution of ALTER TABLE UPDATE/DELETE queries (mutations). 0 - execute asynchronously. 1 - wait current " \
-      "server. 2 - wait all replicas if they exist.", \
-      0) \
+    M(Bool, database_atomic_wait_for_drop_and_detach_synchronously, false, "When executing DROP or DETACH TABLE in Atomic database, wait for table data to be finally dropped or detached.", 0) \
+    M(Bool, enable_scalar_subquery_optimization, true, "If it is set to true, prevent scalar subqueries from (de)serializing large scalar values and possibly avoid running the same subquery more than once.", 0) \
+    M(Bool, optimize_trivial_count_query, false, "Process trivial 'SELECT count() FROM table' query from metadata.", 0) \
+    M(Bool, optimize_respect_aliases, true, "If it is set to true, it will respect aliases in WHERE/GROUP BY/ORDER BY, that will help with partition pruning/secondary indexes/optimize_aggregation_in_order/optimize_read_in_order/optimize_trivial_count", 0) \
+    M(UInt64, mutations_sync, 0, "Wait for synchronous execution of ALTER TABLE UPDATE/DELETE queries (mutations). 0 - execute asynchronously. 1 - wait current server. 2 - wait all replicas if they exist.", 0) \
     M(UInt64, mutations_wait_timeout, 0, "Maximum seconds to wait for synchronous mutations. 0 - wait unlimited time", 0) \
     M(String, mutation_query_id, "", "Used to overwrite mutation's query id in tests", 0) \
     M(Bool, enable_lightweight_delete, true, "Enable lightweight DELETE for mergetree tables.", 0) \
@@ -1732,22 +1713,18 @@ enum PreloadLevelSettings : UInt64
       "Max remote filesystem cache size that can be downloaded by a single query", \
       0) \
     M(Bool, skip_download_if_exceeds_query_cache, true, "Skip download from remote filesystem if exceeds query cache size", 0) \
-\
-    /** Complex query settings **/ \
-    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0) \
-    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0) \
-    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0) \
-    M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0) \
-    M(Bool, \
-      send_plan_segment_by_brpc_join_per_stage, \
-      false, \
-      "Whether to send plan segment by BRPC and join async rpc request per stage", \
-      0) \
-    M(Bool, send_plan_segment_by_brpc_join_at_last, false, "Whether to send plan segment by BRPC and join async rpc request at last", 0) \
-\
-    /** Brpc config **/ \
-    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0) \
-\
+    \
+    /** Complex query settings **/\
+    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
+    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, send_plan_segment_by_brpc, false, "Whether to send plan segment by BRPC", 0)\
+    M(Bool, send_plan_segment_by_brpc_join_per_stage, false, "Whether to send plan segment by BRPC and join async rpc request per stage", 0)\
+    M(Bool, send_plan_segment_by_brpc_join_at_last, true, "Whether to send plan segment by BRPC and join async rpc request at last", 0)\
+    \
+    /** Brpc config **/\
+    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0)\
+    \
     /** Obsolete settings that do nothing but left for compatibility reasons. Remove each one after half a year of obsolescence. */ \
     M(UInt64, max_memory_usage_for_all_queries, 0, "Obsolete setting, does nothing.", 0) \
     M(UInt64, multiple_joins_rewriter_version, 0, "Obsolete setting, does nothing.", 0) \

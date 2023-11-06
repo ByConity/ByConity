@@ -92,6 +92,8 @@ public:
     /// 1. For new part of unique table, it's valid if its delete_bitmap_metas is empty
     /// 2. Detach commands can force detach parts even if the delete bitmap of part is broken.
     /// 3. Repair part command
+    /// DELETE mutation is supported by adding a implicit column _row_exists,
+    /// and we combine the original delete bitmap and _row_exists when data processing.
     const ImmutableDeleteBitmapPtr & getDeleteBitmap(bool allow_null = false) const override;
 
     virtual void projectionRemove(const String & parent_to, bool keep_shared_data) const override;
@@ -100,6 +102,11 @@ public:
     void dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache = false) const;
 
 private:
+    /// See #getDeleteBitmap
+    const ImmutableDeleteBitmapPtr & getCombinedDeleteBitmapForUniqueTable(bool allow_null = false) const;
+    const ImmutableDeleteBitmapPtr & getCombinedDeleteBitmapForNormalTable(bool allow_null = false) const;
+
+    void combineWithRowExists(DeleteBitmapPtr & bitmap) const;
 
     bool isDeleted() const;
 

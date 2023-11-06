@@ -46,6 +46,9 @@ namespace VirtualColumnUtils
 /// - `WITH toUInt16(9000) as _port`.
 void rewriteEntityInAst(ASTPtr ast, const String & column_name, const Field & value, const String & func = "");
 
+/// Like what prepareFilterBlockWithQuery do, but just use the predicate expressions (eg. select.where and select.prewhere)
+bool prepareFilterBlockByPredicates(const std::vector<ASTPtr> & predicates, ContextPtr context, Block block, ASTPtr & expression_ast);
+
 /// Prepare `expression_ast` to filter block. Returns true if `expression_ast` is not trimmed, that is,
 /// `block` provides all needed columns for `expression_ast`, else return false.
 bool prepareFilterBlockWithQuery(

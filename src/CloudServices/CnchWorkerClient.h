@@ -65,7 +65,9 @@ public:
     ~CnchWorkerClient() override;
 
     void submitManipulationTask(
-        const MergeTreeMetaBase & storage, const ManipulationTaskParams & params, TxnTimestamp txn_id, TxnTimestamp begin_ts);
+        const MergeTreeMetaBase & storage,
+        const ManipulationTaskParams & params,
+        TxnTimestamp txn_id);
 
     void shutdownManipulationTasks(const UUID & table_uuid, const Strings & task_ids = Strings{});
     std::unordered_set<String> touchManipulationTasks(const UUID & table_uuid, const Strings & tasks_id);

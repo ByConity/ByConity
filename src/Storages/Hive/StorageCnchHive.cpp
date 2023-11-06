@@ -350,7 +350,7 @@ void StorageCnchHive::alter(const AlterCommands & params, ContextPtr local_conte
     // converter.check(new_metadata);
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
-    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef());
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef(), local_context->getCurrentQueryId());
     auto & alter_act = action->as<DDLAlterAction &>();
     /// replace table schema in catalog
     {

@@ -58,16 +58,14 @@ Projection
                │  │           │                          │           Outputs: d_date_4:=d_date, d_week_seq_2:=d_week_seq
                │  │           │                          └─ Broadcast Exchange
                │  │           │                             └─ EnforceSingleRow
-               │  │           │                                └─ Union
-               │  │           │                                   │     OutputToInputs: d_week_seq_3 = [d_week_seq_3]
-               │  │           │                                   └─ Gather Exchange
-               │  │           │                                      └─ Projection
-               │  │           │                                         │     Expressions: [d_week_seq_3]
-               │  │           │                                         └─ Filter
-               │  │           │                                            │     Condition: d_date_5 = cast(10959, 'Date')
-               │  │           │                                            └─ TableScan tpcds100.date_dim
-               │  │           │                                                     Where: d_date = cast(10959, 'Date')
-               │  │           │                                                     Outputs: d_date_5:=d_date, d_week_seq_3:=d_week_seq
+               │  │           │                                └─ Gather Exchange
+               │  │           │                                   └─ Projection
+               │  │           │                                      │     Expressions: [d_week_seq_3]
+               │  │           │                                      └─ Filter
+               │  │           │                                         │     Condition: d_date_5 = cast(10959, 'Date')
+               │  │           │                                         └─ TableScan tpcds100.date_dim
+               │  │           │                                                  Where: d_date = cast(10959, 'Date')
+               │  │           │                                                  Outputs: d_date_5:=d_date, d_week_seq_3:=d_week_seq
                │  │           └─ Repartition Exchange
                │  │              │     Partition by: {i_item_sk_1}
                │  │              └─ TableScan tpcds100.item
@@ -115,16 +113,14 @@ Projection
                │              │                          │           Outputs: [d_week_seq], d_date_1:=d_date
                │              │                          └─ Broadcast Exchange
                │              │                             └─ EnforceSingleRow
-               │              │                                └─ Union
-               │              │                                   │     OutputToInputs: d_week_seq_1 = [d_week_seq_1]
-               │              │                                   └─ Gather Exchange
-               │              │                                      └─ Projection
-               │              │                                         │     Expressions: [d_week_seq_1]
-               │              │                                         └─ Filter
-               │              │                                            │     Condition: d_date_2 = cast(10959, 'Date')
-               │              │                                            └─ TableScan tpcds100.date_dim
-               │              │                                                     Where: d_date = cast(10959, 'Date')
-               │              │                                                     Outputs: d_date_2:=d_date, d_week_seq_1:=d_week_seq
+               │              │                                └─ Gather Exchange
+               │              │                                   └─ Projection
+               │              │                                      │     Expressions: [d_week_seq_1]
+               │              │                                      └─ Filter
+               │              │                                         │     Condition: d_date_2 = cast(10959, 'Date')
+               │              │                                         └─ TableScan tpcds100.date_dim
+               │              │                                                  Where: d_date = cast(10959, 'Date')
+               │              │                                                  Outputs: d_date_2:=d_date, d_week_seq_1:=d_week_seq
                │              └─ Repartition Exchange
                │                 │     Partition by: {i_item_sk}
                │                 └─ TableScan tpcds100.item
@@ -172,16 +168,14 @@ Projection
                            │                          │           Outputs: d_date_7:=d_date, d_week_seq_4:=d_week_seq
                            │                          └─ Broadcast Exchange
                            │                             └─ EnforceSingleRow
-                           │                                └─ Union
-                           │                                   │     OutputToInputs: d_week_seq_5 = [d_week_seq_5]
-                           │                                   └─ Gather Exchange
-                           │                                      └─ Projection
-                           │                                         │     Expressions: [d_week_seq_5]
-                           │                                         └─ Filter
-                           │                                            │     Condition: d_date_8 = cast(10959, 'Date')
-                           │                                            └─ TableScan tpcds100.date_dim
-                           │                                                     Where: d_date = cast(10959, 'Date')
-                           │                                                     Outputs: d_date_8:=d_date, d_week_seq_5:=d_week_seq
+                           │                                └─ Gather Exchange
+                           │                                   └─ Projection
+                           │                                      │     Expressions: [d_week_seq_5]
+                           │                                      └─ Filter
+                           │                                         │     Condition: d_date_8 = cast(10959, 'Date')
+                           │                                         └─ TableScan tpcds100.date_dim
+                           │                                                  Where: d_date = cast(10959, 'Date')
+                           │                                                  Outputs: d_date_8:=d_date, d_week_seq_5:=d_week_seq
                            └─ Repartition Exchange
                               │     Partition by: {i_item_sk_2}
                               └─ TableScan tpcds100.item

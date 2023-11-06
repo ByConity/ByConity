@@ -236,7 +236,7 @@ public:
     /// For CLEAR MAP KEY map_column('map_key1', 'map_key2'...)
     ASTPtr map_keys;
 
-    /// For FASTDELETE / INGESTION query, the optional list of columns to overwrite
+    /// For INGESTION query, the optional list of columns to overwrite
     ASTPtr columns;
     /// For Ingestion columns
     ASTPtr keys;

@@ -24,6 +24,9 @@ protected:
     using IStorageSystemOneBlock::IStorageSystemOneBlock;
 
     void fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const override;
+
+private:
+    static void fillCnchData(MutableColumns & res_columns, ContextPtr context, const ASTPtr & query);
 };
 
 }

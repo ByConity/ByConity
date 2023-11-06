@@ -347,48 +347,6 @@ MergeTreeData::DataPartsVector MergeTreeData::getRequiredPartitions(const Select
     return required_parts;
 }
 
-void MergeTreeData::checkColumnsValidity(const ColumnsDescription & columns) const
-{
-    NamesAndTypesList func_columns = getInMemoryMetadataPtr()->getFuncColumns();
-
-    for (auto & column: columns.getAll())
-    {
-        /// check func columns
-        for (auto & [name, type]: func_columns)
-        {
-            if (name == column.name)
-                throw Exception("Column " + backQuoteIfNeed(column.name) + " is reserved column", ErrorCodes::ILLEGAL_COLUMN);
-        }
-
-        /// block implicit key name for MergeTree family
-        if (isMapImplicitKey(column.name))
-            throw Exception("Column " + backQuoteIfNeed(column.name) + " contains reserved prefix word", ErrorCodes::ILLEGAL_COLUMN);
-
-        if (column.type && column.type->isMap())
-        {
-            auto escape_name = escapeForFileName(column.name + getMapSeparator());
-            auto pos = escape_name.find(getMapSeparator());
-            /// The name of map column should not contain map separator, which is convenient for extracting map column name from a implicit column name.
-            if (pos + getMapSeparator().size() != escape_name.size())
-                throw Exception(
-                    ErrorCodes::ILLEGAL_COLUMN,
-                    "Map column name {} is invalid because its escaped name {} contains reserved word {}",
-                    backQuoteIfNeed(column.name),
-                    backQuoteIfNeed(escape_name),
-                    getMapSeparator());
-
-            if (storage_settings.get()->enable_compact_map_data)
-            {
-                const auto & type_map = typeid_cast<const DataTypeByteMap &>(*column.type);
-                if (type_map.getValueType()->lowCardinality())
-                {
-                    throw Exception("Column " + backQuoteIfNeed(column.name) + " compact map type not compatible with LowCardinality type, you need remove LowCardinality or disable compact map", ErrorCodes::ILLEGAL_COLUMN);
-                }
-            }
-        }
-    }
-}
-
 Int64 MergeTreeData::getMaxBlockNumber() const
 {
     auto lock = lockPartsRead();
@@ -1685,7 +1643,7 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
 void MergeTreeData::checkMutationIsPossible(const MutationCommands & commands, const Settings & /*settings*/) const
 {
     int num_fast_deletes = 0;
-    for (auto & command : commands)
+    for (const auto & command : commands)
         num_fast_deletes += command.type == MutationCommand::Type::FAST_DELETE;
     if (num_fast_deletes > 1)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute multiple FASTDELETE commands");

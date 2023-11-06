@@ -35,6 +35,13 @@ String ManipulationTaskParams::toDebugString() const
 
     oss << "ManipulationTask {" << task_id << "}, type " << typeToString(type) << ", ";
     oss << storage->getStorageID().getNameForLogs() << ": ";
+    if (!source_parts.empty())
+    {
+        oss << " source_parts: { " << source_parts.front()->name();
+        for (size_t i = 1; i < source_parts.size(); ++i)
+            oss << ", " << source_parts[i]->name();
+        oss << " }";
+    }
     if (!source_data_parts.empty())
     {
         oss << " source_parts: { " << source_data_parts.front()->name;

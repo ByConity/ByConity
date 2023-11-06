@@ -38,6 +38,7 @@
 #include <QueryPlan/PlanNodeIdAllocator.h>
 #include <QueryPlan/SymbolAllocator.h>
 #include <Storages/IStorage_fwd.h>
+#include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/CGroup/CGroupManager.h>
 #include <Common/MultiVersion.h>
@@ -1493,6 +1494,8 @@ public:
     bool isResourceReportRegistered();
 
     CnchBGThreadPtr tryGetDedupWorkerManager(const StorageID & storage_id) const;
+
+    std::multimap<StorageID, MergeTreeMutationStatus> collectMutationStatusesByTables(std::unordered_set<UUID> table_uuids) const;
 
     InterserverCredentialsPtr getCnchInterserverCredentials();
     std::shared_ptr<Cluster> mockCnchServersCluster() const;
