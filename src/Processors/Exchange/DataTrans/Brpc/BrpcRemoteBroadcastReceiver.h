@@ -37,10 +37,6 @@ namespace DB
 class BrpcRemoteBroadcastReceiver : public std::enable_shared_from_this<BrpcRemoteBroadcastReceiver>, public IBroadcastReceiver
 {
 public:
-<<<<<<< HEAD
-    BrpcRemoteBroadcastReceiver(ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, bool keep_order_, const String &name_);
-    BrpcRemoteBroadcastReceiver(ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, MultiPathQueuePtr collator, bool keep_order_, const String &name_);
-=======
     BrpcRemoteBroadcastReceiver(
         ExchangeDataKeyPtr trans_key_,
         String registry_address_,
@@ -51,7 +47,6 @@ public:
         MultiPathQueuePtr queue_,
         BrpcExchangeReceiverRegistryService::RegisterMode mode_ = BrpcExchangeReceiverRegistryService::RegisterMode::BRPC,
         std::shared_ptr<QueryExchangeLog> query_exchange_log_ = nullptr);
->>>>>>> ffafe57cd3f (Merge branch 'cnch-elt' into 'cnch-ce-merge')
 
     ~BrpcRemoteBroadcastReceiver() override;
 
