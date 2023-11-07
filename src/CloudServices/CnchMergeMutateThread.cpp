@@ -1225,7 +1225,7 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
         return false;
 
     /// Function to generating new tasks. Return true if we can still generate new tasks.
-    auto generate_tasks = [&](const ServerDataPartsVector & visible_parts, const NameSet & merging_mutating_parts_snapshot)
+    auto generate_tasks = [&](const ServerDataPartsVector & visible_parts, const NameSet & snapshot)
     {
         auto type = current_mutate_entry->isReclusterMutation() ? ManipulationType::Clustering : ManipulationType::Mutate;
         const auto & commit_ts= current_mutate_entry->commit_time;
@@ -1264,7 +1264,7 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
                 if (!needMutate(part, commit_ts))
                     continue;
 
-                if (merging_mutating_parts_snapshot.count(part->name()))
+                if (snapshot.count(part->name()))
                 {
                     remain_tasks_in_partition = true;
                     continue;
@@ -1347,7 +1347,7 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
 
             if (finish_mutation_partitions.find(partition_id) != finish_mutation_partitions.end())
                 continue;
-            
+
             auto timestamp = getContext()->getTimestamp();
             auto parts = catalog->getServerDataPartsInPartitions(istorage, {partition_id}, timestamp, nullptr);
             auto visible_parts = CnchPartsHelper::calcVisibleParts(parts, false);
@@ -1389,12 +1389,12 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
     else
     {
         /// We don't maintain finish_mutation_partitions/scheduled_mutation_partitions for tables without partition key.
-        auto merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
+        auto snapshot = copyCurrentlyMergingMutatingParts();
         auto parts = catalog->getAllServerDataParts(istorage, getContext()->getTimestamp(), nullptr);
         auto visible_parts = CnchPartsHelper::calcVisibleParts(parts, false);
 
         /// There is still new pending tasks, then no need to do check_all_done (just submit new tasks and go into next round).
-        if (generate_tasks(visible_parts, merging_mutating_parts_snapshot))
+        if (generate_tasks(visible_parts, snapshot))
         {
             is_finish = false;
         }

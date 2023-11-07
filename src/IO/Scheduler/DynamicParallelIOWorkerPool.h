@@ -19,7 +19,7 @@
 #include <Poco/JSON/JSON.h>
 #include <Common/Stopwatch.h>
 #include <common/scope_guard.h>
-#include <base/defines.h>
+#include <common/defines.h>
 #include <common/logger_useful.h>
 #include <Common/ThreadPool.h>
 #include <Common/BlockingQueue.h>

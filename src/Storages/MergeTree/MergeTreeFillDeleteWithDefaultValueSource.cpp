@@ -63,8 +63,8 @@ MergeTreeFillDeleteWithDefaultValueSource::MergeTreeFillDeleteWithDefaultValueSo
     MergeTreeReaderSettings reader_settings =
     {
         .read_settings = ReadSettings {
-            .aio_threshold = std::numeric_limits<size_t>::max(), // disable direct io
             .buffer_size = DBMS_DEFAULT_BUFFER_SIZE,
+            .aio_threshold = std::numeric_limits<size_t>::max(), // disable direct io
         },
         .save_marks_in_cache = false
     };

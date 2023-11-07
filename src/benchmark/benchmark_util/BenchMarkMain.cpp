@@ -1,7 +1,10 @@
 #include <cstdlib>
 #include <string_view>
 #include <stdlib.h>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 #include <benchmark/benchmark.h>
+#pragma clang diagnostic pop
 #include <benchmark/benchmark_util/BenchMarkConfig.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/FileChannel.h>

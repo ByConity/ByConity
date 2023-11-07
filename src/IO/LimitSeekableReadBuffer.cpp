@@ -106,7 +106,7 @@ bool LimitSeekableReadBuffer::nextImpl()
     working_buffer = Buffer(in_.position(), in_.buffer().begin() + usable_end_offset);
     pos = working_buffer.begin();
     buffer_end_offset_ = under_end_pos - in_.buffer().size() + usable_end_offset;
- 
+
     return true;
 }
 

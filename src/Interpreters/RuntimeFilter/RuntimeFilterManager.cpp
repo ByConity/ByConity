@@ -103,7 +103,7 @@ size_t RuntimeFilterCollection::add(RuntimeFilterData data, const String & addre
 
 std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterCollection::finalize()
 {
-    return builder->extractValues(std::move(builder->merge(rf_data)));
+    return builder->extractValues(builder->merge(rf_data));
 }
 
 RuntimeFilterManager & RuntimeFilterManager::getInstance()

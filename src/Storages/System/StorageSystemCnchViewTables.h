@@ -22,8 +22,6 @@ public:
         const size_t max_block_size,
         const unsigned num_streams) override;
 
-    virtual ~StorageSystemCnchViewTables() = default;
-
  protected:
     StorageSystemCnchViewTables(const StorageID & table_id_);
 };

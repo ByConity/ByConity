@@ -420,7 +420,7 @@ String PlanPrinter::TextPrinter::printLogicalPlan(PlanNodeBase & plan, const Tex
                 out << intent.detailIntent() << printStatistics(plan, intent);
             out << printDetail(plan.getStep(), intent) << "\n";
         }
-        
+
     }
 
     if ((step->getType() == IQueryPlanStep::Type::CTERef || step->getType() == IQueryPlanStep::Type::Exchange) && is_distributed)
@@ -1357,8 +1357,8 @@ Poco::JSON::Object::Ptr PlanSegmentDescription::jsonPlanSegmentDescription(const
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object(true);
 
-    auto f = [](ExchangeMode mode) {
-        switch (mode)
+    auto f = [](ExchangeMode xchg_mode) {
+        switch (xchg_mode)
         {
             case ExchangeMode::LOCAL_NO_NEED_REPARTITION:
                 return "LOCAL_NO_NEED_REPARTITION";

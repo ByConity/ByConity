@@ -206,18 +206,6 @@ MergeTreeDataPartPtr tryGetPartFromStorage(const StoragePtr & storage)
     return storage_from_part->getParts().front();
 }
 
-BlockInputStreamPtr createStreamFromSource(SourcePtr source)
-{
-    Pipes pipes;
-    pipes.emplace_back(Pipe(std::move(source)));
-
-    QueryPipeline pipeline;
-    pipeline.init(Pipe::unitePipes(std::move(pipes)));
-    pipeline.setMaxThreads(1);
-
-    return std::make_shared<PipelineExecutingBlockInputStream>(std::move(pipeline));
-}
-
 }
 
 

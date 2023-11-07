@@ -58,10 +58,10 @@ void RuntimeFilterConsumer::addFinishRuntimeFilter(RuntimeFilterData && data, bo
                 {
                     for (const auto & rf: builder->getRuntimeFilters())
                     {
-                        DynamicData data;
-                        data.is_local = true;
-                        data.bypass = dynamic_data.bypass;
-                        RuntimeFilterManager::getInstance().addDynamicValue(query_id, rf.second.id, std::move(data), 1);
+                        DynamicData local_data;
+                        local_data.is_local = true;
+                        local_data.bypass = local_data.bypass;
+                        RuntimeFilterManager::getInstance().addDynamicValue(query_id, rf.second.id, std::move(local_data), 1);
                     }
                 }
                 else
@@ -81,7 +81,7 @@ void RuntimeFilterConsumer::addFinishRuntimeFilter(RuntimeFilterData && data, bo
             if (runtime_filters.size() == 1)
                 transferRuntimeFilter(std::move(runtime_filters[0]));
             else
-                transferRuntimeFilter(std::move(builder->merge(runtime_filters)));
+                transferRuntimeFilter(builder->merge(runtime_filters));
         }
     }
 }

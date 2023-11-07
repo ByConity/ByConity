@@ -1437,6 +1437,7 @@ public:
     void updateQueueManagerConfig() const;
     void setServerType(const String & type_str);
     ServerType getServerType() const;
+    String getServerTypeString() const;
 
     String getVirtualWarehousePSM() const;
 

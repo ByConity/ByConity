@@ -3040,12 +3040,12 @@ std::pair<String, UInt16> Context::getInterserverIOAddress() const
     return {shared->interserver_io_host, shared->interserver_io_port};
 }
 
-UInt16 Context::getExchangePort(bool check_port_exists) const
+UInt16 Context::getExchangePort(bool) const
 {
     return getRPCPort();
 }
 
-UInt16 Context::getExchangeStatusPort(bool check_port_exists) const
+UInt16 Context::getExchangeStatusPort(bool) const
 {
     return getRPCPort();
 }
@@ -4656,6 +4656,38 @@ void Context::setServerType(const String & type_str)
 ServerType Context::getServerType() const
 {
     return shared->server_type;
+}
+
+String Context::getServerTypeString() const
+{
+    String type_str;
+    switch (shared->server_type)
+    {
+        case ServerType::standalone:
+            type_str = "standalone";
+            break;
+        case ServerType::cnch_server:
+            type_str = "cnch_server";
+            break;
+        case ServerType::cnch_worker:
+            type_str = "cnch_worker";
+            break;
+        case ServerType::cnch_daemon_manager:
+            type_str = "cnch_daemon_manager";
+            break;
+        case ServerType::cnch_resource_manager:
+            type_str = "cnch_resource_manager";
+            break;
+        case ServerType::cnch_tso_server:
+            type_str = "cnch_tso_server";
+            break;
+        case ServerType::cnch_bytepond:
+            type_str = "cnch_bytepond";
+            break;
+        default:
+            throw Exception("Unknown server type: " + std::to_string(static_cast<int>(shared->server_type)), ErrorCodes::BAD_ARGUMENTS);
+    }
+    return type_str;
 }
 
 UInt64 Context::getNonHostUpdateTime(const UUID & uuid)

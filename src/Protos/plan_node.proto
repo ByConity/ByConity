@@ -2,7 +2,6 @@ syntax = "proto2";
 import "enum.proto";
 import "plan_node_utils.proto";
 import "cnch_common.proto";
-import "google/protobuf/any.proto";
 
 package DB.Protos;
 

@@ -113,7 +113,7 @@ int MetricClient::init(const MetricCollectorConf& conf) {
     return -1;
   }
   */
-  
+
   test_connection(des_addr_, conf_, send_fd_);
   initialized_ = true;
   return 0;
@@ -174,19 +174,19 @@ int MetricClient::init_with_remote_server() {
     des_addr_ip_.sin_port = htons(conf_.udp_server_port);
 
     struct hostent* read_udp_ip = gethostbyname(conf_.udp_server_ip.c_str());
-    if (read_udp_ip == NULL || read_udp_ip->h_addr_list == NULL ||
-        read_udp_ip->h_addr_list[0] == NULL) {
+    if (read_udp_ip == nullptr || read_udp_ip->h_addr_list == nullptr ||
+        read_udp_ip->h_addr_list[0] == nullptr) {
         std::cerr << "Invalid addr: " << conf_.udp_server_ip << std::endl;
         return -1;
     }
-    des_addr_ip_.sin_addr.s_addr = ((struct in_addr*)(read_udp_ip->h_addr_list[0]))->s_addr;
+    des_addr_ip_.sin_addr.s_addr = (reinterpret_cast<struct in_addr*>(read_udp_ip->h_addr_list[0]))->s_addr;
 
     if (inet_pton(AF_INET, conf_.udp_server_ip.c_str(), &des_addr_ip_.sin_addr) < 0) {
         std::cerr << "Invalid ip addr: " << conf_.udp_server_ip << std::endl;
         return -1;
     }
 
-    if (connect(send_fd_, (struct sockaddr*)&des_addr_ip_, sizeof(des_addr_ip_)) < 0) {
+    if (connect(send_fd_, reinterpret_cast<struct sockaddr*>(&des_addr_ip_), sizeof(des_addr_ip_)) < 0) {
         std::cerr << "Failed to connect to metrics server: " << conf_.udp_server_ip << std::endl;
         return -1;
     }

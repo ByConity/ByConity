@@ -25,7 +25,6 @@
 #include <QueryPlan/DistinctStep.h>
 #include <QueryPlan/EnforceSingleRowStep.h>
 #include <QueryPlan/ExceptStep.h>
-#include <QueryPlan/ExchangeStep.h>
 #include <QueryPlan/ExpressionStep.h>
 #include <QueryPlan/ExtremesStep.h>
 #include <QueryPlan/ExplainAnalyzeStep.h>

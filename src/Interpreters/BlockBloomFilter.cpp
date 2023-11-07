@@ -6,6 +6,7 @@
 #include <Interpreters/Set.h>
 #include <Common/HashTable/Hash.h>
 #include <Common/typeid_cast.h>
+#include <Common/TargetSpecific.h>
 
 #if USE_MULTITARGET_CODE
 #    include <immintrin.h>
@@ -41,7 +42,7 @@ DECLARE_AVX2_SPECIFIC_CODE(
         auto slot_index = (h >> 32) & (slots - 1);
         auto mask = TargetSpecific::AVX2::makeMask(h);
         __m256i * ptr = reinterpret_cast<__m256i *>(data_ptr) + slot_index;
-        __builtin_assume_aligned(ptr, BlockBloomFilter::bytes_in_slot);
+        ptr = reinterpret_cast<__m256i *>(__builtin_assume_aligned(ptr, BlockBloomFilter::bytes_in_slot));
         __m256i data = _mm256_load_si256(ptr);
         __m256i res = _mm256_or_si256(data, mask);
         _mm256_store_si256(ptr, res);
@@ -51,7 +52,7 @@ DECLARE_AVX2_SPECIFIC_CODE(
         auto slot_index = (h >> 32) & (slots - 1);
         auto mask = TargetSpecific::AVX2::makeMask(h);
         auto ptr = reinterpret_cast<__m256i *>(data_ptr) + slot_index;
-        __builtin_assume_aligned(ptr, BlockBloomFilter::bytes_in_slot);
+        ptr = reinterpret_cast<__m256i *>(__builtin_assume_aligned(ptr, BlockBloomFilter::bytes_in_slot));
         const __m256i data = _mm256_load_si256(ptr);
         auto res = _mm256_testc_si256(data, mask);
         return res;
@@ -116,13 +117,13 @@ bool BlockBloomFilter::probeKeyUnhash(UInt64 h) const
     return !(res);
 }
 
-#else 
+#else
 
 
 // MakeMask for scalar version:
 
 static inline void makeMask(uint32_t key, uint32_t* masks) {
-    for (int i = 0; i < BlockBloomFilter::uint32s_in_slot; ++i)
+    for (size_t i = 0; i < BlockBloomFilter::uint32s_in_slot; ++i)
     {
         // add some salt to key
         masks[i] = key * SALT[i];
@@ -147,7 +148,7 @@ void BlockBloomFilter::addKeyUnhash(UInt64 h)
     uint32_t masks[uint32s_in_slot];
     makeMask(h, masks);
     uint32_t* cache_line = reinterpret_cast<uint32_t*>(data.get());
-    for (int i = 0; i < uint32s_in_slot; ++i) {
+    for (size_t i = 0; i < uint32s_in_slot; ++i) {
         cache_line[slot_index * uint32s_in_slot + i] |= masks[i];
     }
 }
@@ -166,7 +167,7 @@ bool BlockBloomFilter::probeKeyUnhash(UInt64 h) const
     uint32_t masks[uint32s_in_slot];
     makeMask(h, masks);
     uint32_t* cache_line = reinterpret_cast<uint32_t*>(data.get());
-    for (int i = 0; i < uint32s_in_slot; ++i) {
+    for (size_t i = 0; i < uint32s_in_slot; ++i) {
         if ((cache_line[slot_index * uint32s_in_slot + i] & masks[i]) == 0) {
             return false;
         }
@@ -189,10 +190,10 @@ BlockBloomFilter BlockBloomFilter::intersect(BlockBloomFilter && left_, BlockBlo
     auto * __restrict left_data = left_ptr->data.get();
     auto * __restrict right_data = right_ptr->data.get();
 
-    auto left_index = 0;
+    size_t left_index = 0;
     do
     {
-        for (auto i = 0; i < right_ptr->slots * bytes_in_slot; ++i)
+        for (size_t i = 0; i < right_ptr->slots * bytes_in_slot; ++i)
         {
             left_data[left_index] &= right_data[i];
         }

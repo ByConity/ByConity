@@ -219,20 +219,20 @@ int main(int argc, char ** argv)
 
     std::atomic<bool> fence{false};
     std::cout << "\nbefore create " << FLAGS_begin_clients << "\n" << std::endl;
-    auto creator = [reporter, &fence](bthread_list_t * thread_list) {
+    auto creator = [reporter, &fence](bthread_list_t * bthread_list) {
         auto worker = new Worker(fence, FLAGS_operation, reporter);
         bthread_t thread_id;
         auto executor = [](void * args) -> void * {
-            auto worker = reinterpret_cast<Worker *>(args);
-            worker->Run();
-            delete worker;
+            auto wk = reinterpret_cast<Worker *>(args);
+            wk->Run();
+            delete wk;
             return nullptr;
         };
 
         int res = bthread_start_background(&thread_id, nullptr, executor, worker);
-        ASSERT(res == 0);
-        res = bthread_list_add(thread_list, thread_id);
-        ASSERT(res == 0);
+        ASSERT(res == 0)
+        res = bthread_list_add(bthread_list, thread_id);
+        ASSERT(res == 0)
 
         ++clients;
     };

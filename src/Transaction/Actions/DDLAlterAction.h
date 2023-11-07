@@ -40,7 +40,7 @@ public:
         log(&Poco::Logger::get("AlterAction")),
         table(std::move(table_)),
         query_settings(query_settings_),
-        params{table->getStorageID(), "fake_statement"},
+        params{table->getStorageID(), "fake_statement", false, ""},
         query_id(query_id_)
     {
     }

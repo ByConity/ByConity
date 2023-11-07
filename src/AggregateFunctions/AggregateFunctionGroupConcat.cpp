@@ -62,7 +62,7 @@ public:
             buf.write(getData(), size);
     }
 
-    void read(ReadBuffer & buf, const ISerialization & /*serialization*/, Arena * arena)
+    void read(ReadBuffer & buf, const ISerialization & /*serialization*/, Arena *)
     {
         Int32 rhs_size;
         readBinary(rhs_size, buf);
@@ -89,12 +89,12 @@ public:
         }
     }
 
-    void update(const IColumn & column, size_t row_num, Arena * arena, String separator = ",")
+    void update(const IColumn & column, size_t row_num, Arena *, String separator = ",")
     {
         append(assert_cast<const ColumnString &>(column).getDataAt(row_num), separator);
     }
 
-    void update(const Self & to, Arena * arena, String separator = ",")
+    void update(const Self & to, Arena *, String separator = ",")
     {
         append(to.getStringRef(), separator);
     }
@@ -109,18 +109,18 @@ private:
 public:
     explicit AggregateFunctionGroupConcat(const DataTypePtr & type, const Array & params)
         : IAggregateFunctionDataHelper<AggregateFunctionGroupConcatData, AggregateFunctionGroupConcat>({type}, {})
-        , serialization(type->getDefaultSerialization()) 
+        , serialization(type->getDefaultSerialization())
         {
             if (params.size() > 1)
                 throw Exception("Aggregate function " + getName() + " require one parameter or less", ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-            
+
             if (params.size() == 1)
             {
                 separator = applyVisitor(FieldVisitorToString(), params[0]);
                 separator = separator.substr(1, separator.size()-2);
             }
         }
-    
+
     String getName() const override { return "groupConcat"; }
 
     DataTypePtr getReturnType() const override

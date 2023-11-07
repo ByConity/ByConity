@@ -31,9 +31,9 @@ public:
         return !builder->isLocal(name);
     }
 
-    void fixParallel(size_t parallel)
+    void fixParallel(size_t parallel_value)
     {
-        local_stream_parallel *= parallel;
+        local_stream_parallel *= parallel_value;
     }
     size_t getLocalSteamParallel() const
     {

@@ -11,8 +11,6 @@ namespace DB::Statistics::AutoStats
 
 static bool canExecuteTask(TaskQueue::Mode mode, TaskType task_type, bool is_empty_table)
 {
-    using Mode = TaskQueue::Mode;
-
     if (task_type == TaskType::Manual)
         return mode.enable_async_tasks;
     else if (is_empty_table)

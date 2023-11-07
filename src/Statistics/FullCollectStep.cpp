@@ -73,7 +73,7 @@ public:
                 fmt::join(sqls, ", ")));
     }
 
-    const std::vector<String> & getSqls() { return sqls; }
+    const std::vector<String> & getSqls() override { return sqls; }
 
     void parse(const Block & block, size_t index_offset_begin) override
     {
@@ -179,7 +179,7 @@ public:
         sqls.emplace_back(ndv_buckets_sql);
     }
 
-    const std::vector<String> & getSqls() { return sqls; }
+    const std::vector<String> & getSqls() override { return sqls; }
 
     void parse(const Block & block, size_t index_offset) override
     {

@@ -308,11 +308,6 @@ endif()
 # hash functions
 option(ENABLE_MULTITARGET_CODE "Enable platform-dependent code" ON)
 
-if (ENABLE_MULTITARGET_CODE)
-    add_definitions(-DENABLE_MULTITARGET_CODE=1)
-else()
-    add_definitions(-DENABLE_MULTITARGET_CODE=0)
-endif()
 list (APPEND DBMS_COMMON_LIBRARIES ${CITYHASH_LIBRARIES})
 list (APPEND DBMS_COMMON_LIBRARIES ${FARMHASH_LIBRARIES})
 list (APPEND DBMS_COMMON_LIBRARIES metrohash)
@@ -441,6 +436,11 @@ endif()
 if (USE_NURAFT)
     dbms_target_link_libraries(PUBLIC ${NURAFT_LIBRARY})
 endif()
+
+if (USE_MSGPACK)
+    dbms_target_link_libraries(PRIVATE ch_contrib::msgpack)
+endif()
+
 
 if(RE2_INCLUDE_DIR)
     target_include_directories(clickhouse_common_io SYSTEM BEFORE PUBLIC ${RE2_INCLUDE_DIR})

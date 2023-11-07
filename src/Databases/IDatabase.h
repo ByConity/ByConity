@@ -315,7 +315,7 @@ public:
             "Database engine {} either does not support settings, or does not support altering settings",
             getEngineName());
     }
-    
+
     virtual ~IDatabase() = default;
 
 protected:

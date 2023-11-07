@@ -155,7 +155,7 @@ bool ParserCreateStatsQuery::parseSuffix(Pos & pos, QueryAst & node, Expected & 
         auto parse_specifier = [&pos, &expected, &create_stats_ast] {
             ParserKeyword s_sample("SAMPLE");
             ParserKeyword s_fullscan("FULLSCAN");
-            ASTPtr node;
+            ASTPtr literal_node;
 
             if (s_fullscan.ignore(pos, expected))
             {
@@ -174,17 +174,17 @@ bool ParserCreateStatsQuery::parseSuffix(Pos & pos, QueryAst & node, Expected & 
                 ParserCreateStatsQuerySampleRatioSpecifier ratio_p;
                 while (true)
                 {
-                    if (rows_p.parse(pos, node, expected))
+                    if (rows_p.parse(pos, literal_node, expected))
                     {
                         if (create_stats_ast.sample_rows)
                             return false; // duplicate
-                        create_stats_ast.sample_rows = getValueFromUInt64Literal(node);
+                        create_stats_ast.sample_rows = getValueFromUInt64Literal(literal_node);
                     }
-                    else if (ratio_p.parse(pos, node, expected))
+                    else if (ratio_p.parse(pos, literal_node, expected))
                     {
                         if (create_stats_ast.sample_ratio)
                             return false; // duplicate
-                        create_stats_ast.sample_ratio = getValueFromNumberLiteral(node);
+                        create_stats_ast.sample_ratio = getValueFromNumberLiteral(literal_node);
                     }
                     else
                     {

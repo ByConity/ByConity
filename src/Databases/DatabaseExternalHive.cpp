@@ -74,11 +74,13 @@ StoragePtr DatabaseExternalHive::tryGetTable(const String & table_name, ContextP
     {
         return nullptr;
     }
+    return nullptr;
 }
 
 DatabaseTablesIteratorPtr
 DatabaseExternalHive::getTablesIterator(ContextPtr, [[maybe_unused]] const FilterByNameFunction & filter_by_table_name)
 {
+
     return std::make_unique<EmptyDatabaseTablesIterator>(getDatabaseName());
 }
 
@@ -91,14 +93,6 @@ bool DatabaseExternalHive::empty() const
 ASTPtr DatabaseExternalHive::getCreateDatabaseQuery() const
 {
     throw DB::Exception(ErrorCodes::LOGICAL_ERROR, "getCreateDatabaseQuery shall never be called for ExternalHive database.");
-    String query;
-    {
-        WriteBufferFromString buffer(query);
-        buffer << "CREATE DATABASE " << backQuoteIfNeed(getDatabaseName()) << " ENGINE = ExternalHive";
-    }
-    auto settings = getContext()->getSettingsRef();
-    ParserCreateQuery parser(ParserSettings::valueOf(settings));
-    return parseQuery(parser, query.data(), query.data() + query.size(), "", 0, settings.max_parser_depth);
 }
 
 void DatabaseExternalHive::shutdown()
