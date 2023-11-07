@@ -21,6 +21,7 @@
 #include <Parsers/ASTCreateQuery.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/DataTypeUUID.h>
 #include <Interpreters/Context.h>
@@ -50,6 +51,8 @@ StorageSystemCnchTables::StorageSystemCnchTables(const StorageID & table_id_)
             {"name", std::make_shared<DataTypeString>()},
             {"uuid", std::make_shared<DataTypeUUID>()},
             {"vw_name", std::make_shared<DataTypeString>()},
+            {"dependencies_database", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
+            {"dependencies_table", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
             {"definition", std::make_shared<DataTypeString>()},
             {"txn_id", std::make_shared<DataTypeUInt64>()},
             {"previous_version", std::make_shared<DataTypeUInt64>()},
@@ -159,6 +162,9 @@ Pipe StorageSystemCnchTables::read(
         if (Status::isDeleted(table_model.status()))
             continue;
 
+        Array dependencies_table_name_array;
+        Array dependencies_database_name_array;
+
         size_t col_num = 0;
         size_t src_index = 0;
         if (columns_mask[src_index++])
@@ -172,6 +178,32 @@ Pipe StorageSystemCnchTables::read(
 
         if (columns_mask[src_index++])
             res_columns[col_num++]->insert(table_model.vw_name());
+
+        if (columns_mask[src_index] || columns_mask[src_index + 1])
+        {
+            std::vector<StoragePtr> dependencies = {};
+            auto storage_ptr = cnch_catalog->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(table_model.uuid())), TxnTimestamp::maxTS());
+            if (storage_ptr)
+            {
+                dependencies = cnch_catalog->getAllViewsOn(*context, storage_ptr, TxnTimestamp::maxTS());
+            }
+            if (!dependencies.empty())
+            {
+                dependencies_table_name_array.reserve(dependencies.size());
+                dependencies_database_name_array.reserve(dependencies.size());
+                for (const auto & dependency : dependencies)
+                {
+                    dependencies_table_name_array.push_back(dependency->getTableName());
+                    dependencies_database_name_array.push_back(dependency->getDatabaseName());
+                }
+            }
+        }
+
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(dependencies_database_name_array);
+
+        if (columns_mask[src_index++])
+            res_columns[col_num++]->insert(dependencies_table_name_array);
 
         if (columns_mask[src_index++])
             res_columns[col_num++]->insert(table_model.definition());
