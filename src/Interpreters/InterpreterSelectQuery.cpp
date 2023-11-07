@@ -822,15 +822,15 @@ static Field getWithFillFieldValue(const ASTPtr & node, ContextPtr context)
     return field;
 }
 
-FillColumnDescription InterpreterSelectQuery::getWithFillDescription(const ASTOrderByElement & order_by_elem, ContextPtr context)
+FillColumnDescription InterpreterSelectQuery::getWithFillDescription(const ASTOrderByElement & order_by_elem, ContextPtr ctx)
 {
     FillColumnDescription descr;
     if (order_by_elem.fill_from)
-        descr.fill_from = getWithFillFieldValue(order_by_elem.fill_from, context);
+        descr.fill_from = getWithFillFieldValue(order_by_elem.fill_from, ctx);
     if (order_by_elem.fill_to)
-        descr.fill_to = getWithFillFieldValue(order_by_elem.fill_to, context);
+        descr.fill_to = getWithFillFieldValue(order_by_elem.fill_to, ctx);
     if (order_by_elem.fill_step)
-        descr.fill_step = getWithFillFieldValue(order_by_elem.fill_step, context);
+        descr.fill_step = getWithFillFieldValue(order_by_elem.fill_step, ctx);
     else
         descr.fill_step = order_by_elem.direction;
 
@@ -869,7 +869,7 @@ FillColumnDescription InterpreterSelectQuery::getWithFillDescription(const ASTOr
     return descr;
 }
 
-static SortDescription getSortDescription(const ASTSelectQuery & query, ContextPtr context)
+static SortDescription getSortDescription(const ASTSelectQuery & query, ContextPtr ctx)
 {
     SortDescription order_descr;
     order_descr.reserve(query.orderBy()->children.size());
@@ -884,7 +884,7 @@ static SortDescription getSortDescription(const ASTSelectQuery & query, ContextP
 
         if (order_by_elem.with_fill)
         {
-            FillColumnDescription fill_desc = InterpreterSelectQuery::getWithFillDescription(order_by_elem, context);
+            FillColumnDescription fill_desc = InterpreterSelectQuery::getWithFillDescription(order_by_elem, ctx);
             order_descr.emplace_back(name, order_by_elem.direction, order_by_elem.nulls_direction, collator, true, fill_desc);
         }
         else
@@ -2196,7 +2196,6 @@ void InterpreterSelectQuery::executeWhere(QueryPlan & query_plan, const ActionsD
 
 
 static Aggregator::Params getAggregatorParams(
-    const ASTPtr & query_ptr,
     const Block & src_header_,
     const SelectQueryExpressionAnalyzer & query_analyzer,
     const Context & context,
@@ -2288,7 +2287,6 @@ void InterpreterSelectQuery::executeAggregation(QueryPlan & query_plan, const Ac
 
 
     auto aggregator_params = getAggregatorParams(
-        query_ptr,
         header_before_aggregation,
         *query_analyzer,
         *context,
@@ -2393,7 +2391,7 @@ void InterpreterSelectQuery::executeRollupOrCube(QueryPlan & query_plan, Modific
     for (const auto & key : query_analyzer->aggregationKeys())
         keys.push_back(header_before_transform.getPositionByName(key.name));
 
-    auto params = getAggregatorParams(query_ptr, header_before_transform, *query_analyzer, *context, keys, query_analyzer->aggregates(), false, settings, 0, 0);
+    auto params = getAggregatorParams(header_before_transform, *query_analyzer, *context, keys, query_analyzer->aggregates(), false, settings, 0, 0);
     auto transform_params = std::make_shared<AggregatingTransformParams>(std::move(params), true);
 
     QueryPlanStepPtr step;

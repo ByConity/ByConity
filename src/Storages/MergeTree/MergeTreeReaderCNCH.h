@@ -69,8 +69,6 @@ private:
         const ReadBufferFromFileBase::ProfileCallback& profile_callback,
         clockid_t clock_type, FileStreamBuilders* stream_builders);
 
-    size_t next_row_number_to_read = 0;
-
     IDiskCacheStrategyPtr segment_cache_strategy;
     IDiskCachePtr segment_cache;
 

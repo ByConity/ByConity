@@ -103,7 +103,8 @@ public:
     void setQueueSize(size_t value);
     size_t getMaxThreads() const;
     size_t getMaxQueueSize() const;
-
+    void finalize();
+        
 private:
     friend class DiskCacheTest;
 
@@ -144,8 +145,6 @@ private:
     ReturnType scheduleImpl(Job job, int priority, std::optional<uint64_t> wait_microseconds);
 
     void worker(typename std::list<Thread>::iterator thread_it);
-
-    void finalize();
 };
 
 

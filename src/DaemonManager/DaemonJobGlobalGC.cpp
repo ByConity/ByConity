@@ -228,7 +228,7 @@ bool tryNext(Catalog::IMetaStore::IteratorPtr & trash_table_it)
     {
         ret = trash_table_it->next();
     }
-    catch (Exception & e)
+    catch (Exception &)
     {
         tryLogDebugCurrentException(__PRETTY_FUNCTION__);
     }

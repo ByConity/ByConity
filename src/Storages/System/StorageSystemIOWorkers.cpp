@@ -19,7 +19,7 @@ NamesAndTypesList StorageSystemIOWorkers::getNamesAndTypes()
     };
 }
 
-void StorageSystemIOWorkers::fillData(MutableColumns & res_columns, const ContextPtr context, const SelectQueryInfo & /*query_info*/) const
+void StorageSystemIOWorkers::fillData(MutableColumns & res_columns, const ContextPtr, const SelectQueryInfo & /*query_info*/) const
 {
     IO::Scheduler::IOSchedulerSet& instance = IO::Scheduler::IOSchedulerSet::instance();
     if (!instance.enabled()) {

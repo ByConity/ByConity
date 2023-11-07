@@ -67,9 +67,9 @@ static std::string getPodName() {
 
 std::string TagsToString(const Tags& ts) {
     std::string s;
-    for(auto i = 0; i < (int)ts.size(); i ++) {
+    for(size_t i = 0; i < ts.size(); i ++) {
         s = s + ts[i].first + '=' + ts[i].second ;
-        if(i != (int)(ts.size() -1)) {
+        if(i != ts.size() -1) {
             s = s + '|';
         }
     }
@@ -79,7 +79,7 @@ std::string TagsToString(const Tags& ts) {
 static void InitMetricsHelper(const metrics2::MetricCollectorConf& config, const std::string & custom_tags) {
     std::string pod_name = getPodName();
     std::string vw_name = EMPTY_VALUE;
-    size_t vw_name_pos = pod_name.rfind("-");
+    size_t vw_name_pos = pod_name.rfind('-');
     if (vw_name_pos != std::string::npos)
         vw_name = pod_name.substr(0, vw_name_pos);
     Tags commonTags = {{"vws", vw_name}, {"pod", pod_name}, {"namespace", getPodNamespace()}, {"hostip", getHostIp()}};

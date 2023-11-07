@@ -510,9 +510,44 @@ public:
     /***
      * API to collect all metrics about a table
      */
-    std::unordered_map<String, PartitionFullPtr> getTablePartitionMetrics(const DB::Protos::DataModelTable & table, bool & is_ready);
-
-    std::unordered_map<String, PartitionMetricsPtr> getTablePartitionMetricsFromMetastore(const String & table_uuid);
+    /**
+     * @brief Get parts metrics (partition level) of a table.
+     */
+    std::unordered_map<String, PartitionFullPtr> getPartsInfoMetrics(const DB::Protos::DataModelTable & table, bool & is_ready);
+    /**
+     * @brief Load parts metrics (partition level) snapshots of the table from metastore.
+     * It's designed to initialize parts metrics.
+     */
+    std::unordered_map<String, std::shared_ptr<PartitionMetrics>> loadPartitionMetricsSnapshotFromMetastore(const String & table_uuid);
+    /**
+     * @brief Persistent a parts metrics (partition level) snapshot to metastore.
+     */
+    void savePartitionMetricsSnapshotToMetastore(
+        const String & table_uuid, const String & partition_id, const Protos::PartitionPartsMetricsSnapshot & snapshot);
+    /**
+     * @brief Get partition level metrics for a partition by the time `max_commit_time`.
+     * This is designed to be called when recalculation happens.
+     *
+     * @param table_uuid Target table.
+     * @param partition_id Target partition id of the table.
+     * @param max_commit_time Only the parts that committed before `max_commit_time` will take into account.
+     */
+    PartitionMetrics::PartitionMetricsStore
+    getPartitionMetricsStoreFromMetastore(const String & table_uuid, const String & partition_id, size_t max_commit_time);
+    /**
+     * @brief Recalculate the trash items metrics (table level) data of a table from metastore.
+     * This is designed to be called when recalculation happens.
+     */
+    TableMetrics::TableMetricsData getTableTrashItemsMetricsDataFromMetastore(const String & table_uuid, TxnTimestamp ts);
+    /**
+     * @brief load a trash items (table level) snapshot from metastore.
+     * It's designed to initialize trash items metrics.
+     */
+    Protos::TableTrashItemsMetricsSnapshot loadTableTrashItemsMetricsSnapshotFromMetastore(const String & table_uuid);
+    /**
+     * @brief Persistent the trash items metrics (table level) snapshot of a table to metastore.
+     */
+    void saveTableTrashItemsMetricsToMetastore(const String & table_uuid, const Protos::TableTrashItemsMetricsSnapshot & snapshot);
 
     /// this is periodically called by leader server only
     void updateTopologies(const std::list<CnchServerTopology> & topologies);

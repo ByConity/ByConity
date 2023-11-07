@@ -166,10 +166,10 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr & local_context,
-    unsigned num_streams)
+    unsigned)
 {
     metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
-    HiveWhereOptimizer optimizer(metadata_snapshot, query_info, log);
+    HiveWhereOptimizer optimizer(metadata_snapshot, query_info);
 
     HivePartitions partitions = selectPartitions(local_context, metadata_snapshot, query_info, optimizer);
     HiveFiles hive_files;

@@ -34,8 +34,7 @@ namespace ErrorCodes
 }
 
 HiveWhereOptimizer::HiveWhereOptimizer(
-    const StorageMetadataPtr & metadata_snapshot_, const SelectQueryInfo & query_info_, Poco::Logger * log_)
-    : log(log_)
+    const StorageMetadataPtr & metadata_snapshot_, const SelectQueryInfo & query_info_)
 {
     ASTSelectQuery & select = query_info_.query->as<ASTSelectQuery &>();
     if (!select.where())

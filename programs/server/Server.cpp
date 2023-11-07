@@ -1210,7 +1210,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Disk cache for unique key index
-    size_t uki_disk_cache_max_bytes = 50 * 1024 * 1024 * 1024; // 50GB
+    size_t uki_disk_cache_max_bytes = 50 * 1024 * 1024 * 1024UL; // 50GB
     for (const auto & [name, disk] : global_context->getDisksMap())
     {
         if (disk->getType() == DiskType::Type::Local && disk->getPath() == global_context->getPath())
@@ -1357,8 +1357,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// start background task to sync metadata automatically. consider to remove it later.
     global_context->setMetaChecker();
-
-
 
 
 

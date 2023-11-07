@@ -80,7 +80,6 @@ ExternalCatalogPtr CnchExternalCatalogMgr::tryGetCatalog(const std::string & cat
     {
         LOG_WARNING(log, "The catalog " + catalog_name + " dose not exsit.");
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "cannot get external catalog {}", catalog_name);
-        return nullptr;
     }
     assert(catalog_info.size() == 1);
     const std::string & bin = catalog_info[0];

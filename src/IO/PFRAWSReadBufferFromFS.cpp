@@ -259,7 +259,7 @@ off_t PFRAWSReadBufferFromFS::seek(off_t off, int whence) {
         size_t buffer_start_offset = offset - buffer_begin_offset;
         size_t buffer_end_offset = std::min(buffer_start_offset + opts_.buffer_step_size_,
             internal_buffer.size());
-        
+
         working_buffer = BufferBase::Buffer(internal_buffer.begin() + buffer_start_offset,
             internal_buffer.begin() + buffer_end_offset);
         pos = working_buffer.begin();

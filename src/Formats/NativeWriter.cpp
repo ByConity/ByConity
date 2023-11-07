@@ -116,7 +116,7 @@ size_t NativeWriter::write(const Block & block)
         /// Name
         writeStringBinary(column.name, ostr);
 
-        bool include_version = client_revision >= DBMS_MIN_REVISION_WITH_AGGREGATE_FUNCTIONS_VERSIONING;
+        //bool include_version = client_revision >= DBMS_MIN_REVISION_WITH_AGGREGATE_FUNCTIONS_VERSIONING;
         // setVersionToAggregateFunctions(column.type, include_version, include_version ? std::optional<size_t>(client_revision) : std::nullopt);
 
         /// Type

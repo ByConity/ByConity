@@ -41,7 +41,7 @@ HintsStringSet JoinAlgorithmHintsVisitor::visitJoinNode(JoinNode & node, Void & 
         return left_hints_set;
     }
 
-    JoinAlgorithmType relation_type;
+    JoinAlgorithmType relation_type = JoinAlgorithmType::UNKNOWN;
     for (const auto & hint_str : common_hints)
     {
         if (hint_str.starts_with("USE_GRACE_HASH"))

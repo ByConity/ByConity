@@ -873,10 +873,10 @@ TableScanStep::TableScanStep(
     , column_alias(column_alias_)
     , query_info(query_info_)
     , max_block_size(max_block_size_)
-    , alias(alias_)
     , pushdown_aggregation(std::move(aggregation_))
     , pushdown_projection(std::move(projection_))
     , pushdown_filter(std::move(filter_))
+    , alias(alias_)
 {
     log = &Poco::Logger::get("TableScanStep");
 

@@ -337,6 +337,12 @@ public:
         google::protobuf::Closure * done) override;
 #endif
 
+    void forceRecalculateMetrics(
+        google::protobuf::RpcController * cntl,
+        const Protos::ForceRecalculateMetricsReq * request,
+        Protos::ForceRecalculateMetricsResp * response,
+        google::protobuf::Closure * done) override;
+
 private:
     const UInt64 server_start_time;
     std::optional<GlobalGCManager> global_gc_manager;

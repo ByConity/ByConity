@@ -165,7 +165,7 @@ void extractDatabaseAndTableNames(const ContextPtr & context, const ASTPtr & ast
             ASTSelectQuery::collectAllTables(select_ast, all_tables, dummy);
             for (const auto & db_table : all_tables)
             {
-                auto table_id = (StorageID) db_table;
+                StorageID table_id{db_table};
                 String database_name = table_id.database_name;
                 String table_name = table_id.table_name;
                 if (database_name.empty())

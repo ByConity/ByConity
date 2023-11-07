@@ -70,7 +70,7 @@ PlanReproducer::Query PlanReproducer::getQuery(const std::string & query_id)
 }
 
 void PlanReproducer::loadStats(ContextPtr catalog_adaptor_context, const std::unordered_set<QualifiedTableName> & tables_to_load) {
-    StatsLoader loader = StatsLoader(reproduce_path + '/' + DumpUtils::STATS_FILE, catalog_adaptor_context);
+    StatsLoader loader = StatsLoader(reproduce_path, catalog_adaptor_context, stats);
     auto tables_loaded = loader.loadStats(false, tables_to_load);
     for (const auto & table : tables_loaded)
     {

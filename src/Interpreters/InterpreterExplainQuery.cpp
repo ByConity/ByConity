@@ -704,14 +704,13 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
 
 BlockIO InterpreterExplainQuery::explainAnalyze()
 {
-    auto & ast = query->as<ASTExplainQuery &>();
     auto contxt = getContext();
     auto interpreter = std::make_unique<InterpreterSelectQueryUseOptimizer>(query, contxt, options);
     return interpreter->execute();
 }
 
 void InterpreterExplainQuery::explainPlanWithOptimizer(
-    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr, bool & single_line)
+    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr, bool & /*single_line*/)
 {
     auto settings = checkAndGetSettings<QueryPlanSettings>(explain_ast.getSettings());
     CardinalityEstimator::estimate(plan, contextptr);

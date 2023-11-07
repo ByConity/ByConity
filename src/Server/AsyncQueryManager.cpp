@@ -40,7 +40,7 @@ AsyncQueryManager::~AsyncQueryManager()
 void AsyncQueryManager::insertAndRun(
     String & query,
     ASTPtr ast,
-    ContextMutablePtr context,
+    ContextMutablePtr ctx,
     ReadBuffer * istr,
     SendAsyncQueryIdCallback send_async_query_id,
     AsyncQueryHandlerFunc && func)
@@ -48,22 +48,22 @@ void AsyncQueryManager::insertAndRun(
     if (pool)
     {
         String id = UUIDHelpers::UUIDToString(UUIDHelpers::generateV4());
-        context->setAsyncQueryId(id);
+        ctx->setAsyncQueryId(id);
         AsyncQueryStatus status;
         status.set_id(id);
-        status.set_query_id(context->getClientInfo().current_query_id);
+        status.set_query_id(ctx->getClientInfo().current_query_id);
         status.set_status(AsyncQueryStatus::NotStarted);
         auto c_time = time(nullptr);
         status.set_start_time(c_time);
         status.set_update_time(c_time);
-        status.set_max_execution_time(context->getSettingsRef().max_execution_time.totalSeconds());
-        context->getCnchCatalog()->setAsyncQueryStatus(id, status);
+        status.set_max_execution_time(ctx->getSettingsRef().max_execution_time.totalSeconds());
+        ctx->getCnchCatalog()->setAsyncQueryStatus(id, status);
 
         send_async_query_id(id);
 
         pool->scheduleOrThrowOnError(make_copyable_function<void()>([query = std::move(query),
                                                                      ast = std::move(ast),
-                                                                     context = std::move(context),
+                                                                     context = std::move(ctx),
                                                                      istr,
                                                                      func = std::move(func),
                                                                      id = std::move(id),
@@ -80,7 +80,7 @@ void AsyncQueryManager::insertAndRun(
     }
     else
     {
-        func(query, ast, context, istr);
+        func(query, ast, ctx, istr);
     }
 }
 

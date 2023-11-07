@@ -21,8 +21,6 @@ public:
         , ddl_dumper(dump_path)
         , query_dumper(dump_path)
         {
-            const auto & dump = query_ptr->as<ASTDumpQuery &>();
-            enable_ddl = !dump.without_ddl;
         }
 
     BlockIO execute() override;
@@ -52,6 +50,8 @@ private:
                  const String & sql,
                  const std::shared_ptr<Settings> & settings,
                  const String & current_database);
+
+    void dumpToFile(Poco::JSON::Object::Ptr & dump_res);
 
     ASTPtr query_ptr;
     const std::string dump_path;

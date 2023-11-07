@@ -70,6 +70,7 @@ private:
 
     void restartReplicas(ContextMutablePtr system_context);
     void syncReplica(ASTSystemQuery & query);
+    void recalculateMetrics(ASTSystemQuery & query);
 
     void restoreReplica();
 

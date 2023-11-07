@@ -249,7 +249,7 @@ void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr 
                 {
                     trySetVirtualWarehouseAndWorkerGroup(ast, context);
                 }
-                catch(const Exception & e)
+                catch(const Exception &)
                 {
                     runWithBackupVW();
                 }

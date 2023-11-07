@@ -1486,7 +1486,7 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool incl
     return details.str();
 }
 
-String StepPrinter::printMarkDistinctStep(const MarkDistinctStep & step, bool include_output)
+String StepPrinter::printMarkDistinctStep(const MarkDistinctStep & step, bool /*include_output*/)
 {
     std::stringstream details;
     details << "Marker Symbol:\\n";
@@ -2572,7 +2572,7 @@ void GraphvizPrinter::printLogicalPlan(PlanNodeBase & root, ContextMutablePtr & 
 }
 
 void GraphvizPrinter::printLogicalPlan(
-    QueryPlan & plan, ContextMutablePtr & context, const String & name, StepAggregatedOperatorProfiles profiles)
+    QueryPlan & plan, ContextMutablePtr & context, const String & name, StepAggregatedOperatorProfiles /*profiles*/)
 {
     if (context->getSettingsRef().print_graphviz)
     {

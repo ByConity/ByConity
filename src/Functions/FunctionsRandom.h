@@ -3,7 +3,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Columns/ColumnVector.h>
 #include <Functions/IFunction.h>
-#include <Functions/TargetSpecific.h>
+#include <Common/TargetSpecific.h>
 #include <Functions/PerformanceAdaptors.h>
 #include <IO/WriteHelpers.h>
 

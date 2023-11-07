@@ -34,11 +34,6 @@ class FunctionMap : public IFunction
 public:
     static constexpr auto name = "map";
 
-    static FunctionPtr create(ContextPtr)
-    {
-        return std::make_shared<FunctionMap>();
-    }
-
     String getName() const override
     {
         return name;
@@ -149,9 +144,6 @@ struct NameMapContains { static constexpr auto name = "mapContains"; };
 class FunctionMapContains : public IFunction
 {
 public:
-    static constexpr auto name = NameMapContains::name;
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMapContains>(); }
-
     String getName() const override
     {
         return NameMapContains::name;
@@ -215,7 +207,6 @@ class FunctionMapKeys : public IFunction
 {
 public:
     static constexpr auto name = "mapKeys";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMapKeys>(); }
 
     String getName() const override
     {
@@ -262,7 +253,6 @@ class FunctionMapValues : public IFunction
 {
 public:
     static constexpr auto name = "mapValues";
-    static FunctionPtr create(ContextPtr) { return std::make_shared<FunctionMapValues>(); }
 
     String getName() const override
     {

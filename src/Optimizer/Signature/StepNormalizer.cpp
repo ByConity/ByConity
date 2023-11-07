@@ -161,7 +161,7 @@ StepAndOutputOrder StepNormalizer::visitStep(const IQueryPlanStep & step, StepsA
     return StepAndOutputOrder{normal_step, std::move(output_order)};
 }
 
-StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step, StepsAndOutputOrders & inputs)
+StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step, StepsAndOutputOrders & /*inputs*/)
 {
     // phase 1: skipped because there is no input stream
     // phase 2: reorder column_names, column_alias, and table_output_header

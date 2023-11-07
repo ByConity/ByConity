@@ -1137,6 +1137,7 @@ public:
     BackgroundSchedulePool & getUniqueTableSchedulePool() const;
     BackgroundSchedulePool & getMemoryTableSchedulePool() const;
     BackgroundSchedulePool & getTopologySchedulePool() const;
+    BackgroundSchedulePool & getMetricsRecalculationSchedulePool() const;
 
     ThrottlerPtr getDiskCacheThrottler() const;
 
@@ -1394,6 +1395,8 @@ public:
     }
 
 
+
+
     void setChecksumsCache(size_t cache_size_in_bytes);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
 
@@ -1416,8 +1419,6 @@ public:
     void setPartCacheManager();
     std::shared_ptr<PartCacheManager> getPartCacheManager() const;
 
-    ThreadPool & getPartCacheManagerThreadPool();
-
     /// catalog related
     void initCatalog(const MetastoreConfig & catalog_conf, const String & name_space);
     std::shared_ptr<Catalog::Catalog> tryGetCnchCatalog() const;
@@ -1436,6 +1437,7 @@ public:
     void updateQueueManagerConfig() const;
     void setServerType(const String & type_str);
     ServerType getServerType() const;
+    String getServerTypeString() const;
 
     String getVirtualWarehousePSM() const;
 

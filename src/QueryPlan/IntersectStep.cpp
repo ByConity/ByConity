@@ -35,7 +35,7 @@ IntersectStep::IntersectStep(
 {
 }
 
-QueryPipelinePtr IntersectStep::updatePipeline(QueryPipelines pipelines, const BuildQueryPipelineSettings & context)
+QueryPipelinePtr IntersectStep::updatePipeline(QueryPipelines, const BuildQueryPipelineSettings &)
 {
     throw Exception("intersect step is not implemented", ErrorCodes::NOT_IMPLEMENTED);
     // auto pipeline = std::make_unique<QueryPipeline>();

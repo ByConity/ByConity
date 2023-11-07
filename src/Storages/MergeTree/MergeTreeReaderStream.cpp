@@ -47,7 +47,6 @@ MergeTreeReaderStream::MergeTreeReaderStream(
         data_disk(bin_file_.disk), data_rel_path(bin_file_.rel_path),
         stream_name(stream_name_), marks_count(marks_count_),
         read_settings(settings_.read_settings), data_file_offset(bin_file_.offset),
-        index_granularity_info(index_granularity_info_),
         marks_loader(mrk_file_.disk, mark_cache_, mrk_file_.rel_path, stream_name_,
             marks_count_, *index_granularity_info_, settings_.save_marks_in_cache, mrk_file_.offset,
             mrk_file_.size, settings_.read_settings)

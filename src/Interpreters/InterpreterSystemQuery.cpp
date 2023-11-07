@@ -518,6 +518,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::LOCK_MEMORY_LOCK:
             lockMemoryLock(query, table_id, system_context);
             break;
+        case Type::RECALCULATE_METRICS:
+            recalculateMetrics(query);
+            break;
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "System command {} is not supported in CNCH", ASTSystemQuery::typeToString(query.type));
     }
@@ -1010,6 +1013,21 @@ bool InterpreterSystemQuery::dropReplicaImpl(ASTSystemQuery & query, const Stora
     return true;
 }
 
+void InterpreterSystemQuery::recalculateMetrics(ASTSystemQuery & query)
+{
+    getContext()->checkAccess(AccessType::SYSTEM_RECALCULATE_METRICS, table_id);
+
+    auto mgr = getContext()->getPartCacheManager();
+    if (!mgr)
+        throw Exception("No PartCacheManager found", ErrorCodes::LOGICAL_ERROR);
+
+    StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
+    if (!table) {
+        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} not found.", quoteString(query.database), quoteString(query.table));
+    }
+    mgr->forceRecalculate(table);
+}
+
 void InterpreterSystemQuery::syncReplica(ASTSystemQuery &)
 {
     getContext()->checkAccess(AccessType::SYSTEM_SYNC_REPLICA, table_id);
@@ -1299,6 +1317,11 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
         case Type::RESTART_REPLICAS:
         {
             required_access.emplace_back(AccessType::SYSTEM_RESTART_REPLICA);
+            break;
+        }
+        case Type::RECALCULATE_METRICS:
+        {
+            required_access.emplace_back(AccessType::SYSTEM_RECALCULATE_METRICS, query.database, query.table);
             break;
         }
         case Type::FLUSH_DISTRIBUTED:

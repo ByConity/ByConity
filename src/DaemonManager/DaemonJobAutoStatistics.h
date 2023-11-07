@@ -32,7 +32,6 @@ public:
 
 private:
     Poco::Logger * logger = &Poco::Logger::get("AutoStatsDaemon");
-    bool information_is_valid = false;
 };
 
 }

@@ -174,6 +174,7 @@ public:
     void reportSyncFailedForSyncThread(const String & database_name, const String & sync_thread);
 #endif
 
+    void forceRecalculateMetrics(const StorageID & storage_id);
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;
 };

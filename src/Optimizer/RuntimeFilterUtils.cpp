@@ -142,8 +142,8 @@ std::vector<ASTPtr> RuntimeFilterUtils::createRuntimeFilterForFilter(
 std::vector<ASTPtr> RuntimeFilterUtils::createRuntimeFilterForTableScan(
     const RuntimeFilterDescription & description, const String & query_id, size_t wait_ms, bool need_bf, bool range_cover)
 {
-    auto key = RuntimeFilterManager::makeKey(query_id, description.id);
-    auto dynamic_value = RuntimeFilterManager::getInstance().getDynamicValue(key);
+    auto dynamic_key = RuntimeFilterManager::makeKey(query_id, description.id);
+    auto dynamic_value = RuntimeFilterManager::getInstance().getDynamicValue(dynamic_key);
     const auto & value = dynamic_value->get(wait_ms);
     std::vector<ASTPtr> res;
     if (dynamic_value->isReady())

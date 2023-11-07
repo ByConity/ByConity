@@ -63,7 +63,6 @@ protected:
 private:
     BroadcastReceiverPtr receiver;
     ExchangeOptions options;
-    bool fetch_exception_from_scheduler;
     ExchangeTotalsSourcePtr totals_source;
     ExchangeExtremesSourcePtr extremes_source;
     std::atomic<bool> was_query_canceled {false};

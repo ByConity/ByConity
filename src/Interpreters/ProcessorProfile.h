@@ -40,7 +40,7 @@ struct ProcessorProfile
 
 public:
     ProcessorProfile() = default;
-    explicit ProcessorProfile(String name): processor_name(name) {};
+    explicit ProcessorProfile(String name): processor_name(name) {}
     explicit ProcessorProfile(const IProcessor * processor);
 };
 
