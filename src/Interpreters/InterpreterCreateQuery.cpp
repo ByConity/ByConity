@@ -1098,10 +1098,17 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         if (!columns.empty())
         {
             const ASTExpressionList * foreign_keys = create.columns_list->foreign_keys;
-
+            NameSet used_fk_names;
+            
             for (const auto & foreign_key_child : foreign_keys->children)
             {
                 auto & foreign_key = foreign_key_child->as<ASTForeignKeyDeclaration &>();
+
+                if (!used_fk_names.contains(foreign_key.fk_name))
+                    used_fk_names.insert(foreign_key.fk_name);
+                else
+                    throw Exception("FOREIGN KEY constraint name duplicated with " + foreign_key.fk_name, ErrorCodes::ILLEGAL_COLUMN);
+
                 auto ref_storage_ptr = DatabaseCatalog::instance().tryGetTable({create.database, foreign_key.ref_table_name}, getContext());
                 if (!ref_storage_ptr)
                     throw Exception("FOREIGN KEY references unknown table " + foreign_key.ref_table_name, ErrorCodes::UNKNOWN_TABLE);
@@ -1143,13 +1150,18 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         if (!columns.empty())
         {
             const ASTExpressionList * unique = create.columns_list->unique;
+            NameSet used_uk_names;            
 
             for (const auto & unique_child : unique->children)
             {
                 auto & unique_key = unique_child->as<ASTUniqueNotEnforcedDeclaration &>();
 
-                auto check_res = contains_columns(unique_key.column_names->as<ASTExpressionList &>(), columns);
+                if (!used_uk_names.contains(unique_key.name))
+                    used_uk_names.insert(unique_key.name);
+                else
+                    throw Exception("UNIQUE NOT ENFORCED constraint name duplicated with " + unique_key.name, ErrorCodes::ILLEGAL_COLUMN);
 
+                auto check_res = contains_columns(unique_key.column_names->as<ASTExpressionList &>(), columns);
                 if (!check_res.empty())
                     throw Exception("UNIQUE NOT ENFORCED not exists -- " + check_res, ErrorCodes::ILLEGAL_COLUMN);
             }
