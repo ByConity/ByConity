@@ -21,7 +21,7 @@ namespace DB
 
 std::unordered_set<QualifiedTableName> StatsLoader::loadStats(bool load_all, const std::unordered_set<QualifiedTableName> & tables_to_load)
 {
-    Poco::JSON::Object::Ptr tables = ReproduceUtils::readJsonFromAbsolutePath(json_file_path);
+    Poco::JSON::Object::Ptr tables = stats_json ? stats_json : ReproduceUtils::readJsonFromAbsolutePath(json_file_path);
 
     if (!tables)
     {

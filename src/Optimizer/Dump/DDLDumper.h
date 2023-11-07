@@ -45,9 +45,10 @@ public:
     size_t tables() const { return table_ddls.size(); }
     size_t views() const { return view_ddls.size(); }
 
-    void dump();
+    Poco::JSON::Object::Ptr getJsonDumpResult();
     void dumpStats(const std::optional<std::string> & absolute_path = std::nullopt);
 
+    void setDumpSettings(DumpUtils::DumpSettings & settings_) { settings = settings_; }
 private:
     // returns the first shard_count to avoid planning
     std::optional<size_t> addTableFromSelectQueryImpl(const ASTSelectQuery & select_query, ContextPtr context, const NameSet & with_tables_context);
@@ -59,6 +60,7 @@ private:
     std::unordered_map<QualifiedTableName, String> view_ddls;
     std::unordered_map<QualifiedTableName, size_t> shard_counts;
     std::unordered_set<QualifiedTableName> visited_tables;
+    DumpUtils::DumpSettings settings;
     const Poco::Logger * log = &Poco::Logger::get("DDLDumper");
 };
 

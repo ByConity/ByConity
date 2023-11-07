@@ -109,6 +109,7 @@ std::string getFolder(const std::string & file_path)
         Poco::Zip::Decompress decompress(in_stream, folder_path + '/');
         decompress.decompressAllFiles();
         in_stream.close();
+        folder_path = folder_path + '/' + DumpUtils::DUMP_RESULT_FILE;
     }
 
     return folder_path;

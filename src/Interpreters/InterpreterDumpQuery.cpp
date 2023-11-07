@@ -7,6 +7,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/executeQuery.h>
+#include <Optimizer/Dump/DumpUtils.h>
 #include <Optimizer/Dump/PlanReproducer.h>
 #include <Optimizer/PlanOptimizer.h>
 #include <Parsers/ASTAsterisk.h>
@@ -52,6 +53,9 @@ std::string InterpreterDumpQuery::getDumpPath(ASTPtr & query_ptr_, ContextPtr co
 BlockIO InterpreterDumpQuery::execute()
 {
     auto & dump = query_ptr->as<ASTDumpQuery &>();
+    auto settings = checkAndGetSettings<DumpUtils::DumpSettings>(dump.settings());
+    ddl_dumper.setDumpSettings(settings);
+    enable_ddl = !settings.without_ddl;
     switch (dump.kind)
     {
         case ASTDumpQuery::Kind::DDL:
@@ -74,45 +78,66 @@ BlockIO InterpreterDumpQuery::execute()
         return {};
     }
 
-    if (tables_dumped)
-    {
-        ddl_dumper.dump();
-        LOG_INFO(log, "Dumped {} tables to {}", tables_dumped, dump_path);
-    }
-    if (queries_dumped)
-    {
-        query_dumper.dump();
-        LOG_INFO(log, "Dumped {} queries to {}", queries_dumped, dump_path);
-    }
-
-    DumpUtils::zipDirectory(dump_path);
-
-    Block sample_block;
-
-    ColumnWithTypeAndName col;
-    col.name = "file";
-    col.type = std::make_shared<DataTypeString>();
-    col.column = col.type->createColumn();
-    sample_block.insert(col);
-
-    col.name = "tables dumped";
-    col.type = std::make_shared<DataTypeUInt64>();
-    col.column = col.type->createColumn();
-    sample_block.insert(col);
-
-    col.name = "(distinct) queries dumped";
-    col.type = std::make_shared<DataTypeUInt64>();
-    col.column = col.type->createColumn();
-    sample_block.insert(col);
-
-
-    MutableColumns res_columns = sample_block.cloneEmptyColumns();
-    res_columns[0]->insert(getZipFilePath());
-    res_columns[1]->insert(tables_dumped);
-    res_columns[2]->insert(queries_dumped);
-
     BlockIO res;
-    res.in = std::make_shared<OneBlockInputStream>(sample_block.cloneWithColumns(std::move(res_columns)));
+    Block sample_block;
+    
+
+    Poco::JSON::Object::Ptr dump_json(new Poco::JSON::Object);
+    if (tables_dumped)
+        dump_json = ddl_dumper.getJsonDumpResult();
+    if (queries_dumped)
+        dump_json->set("queries", query_dumper.getJsonDumpResult());
+
+    if (!dump.output_client)
+    {
+        //output to file
+        dumpToFile(dump_json);
+        if (settings.compress_directory)
+            DumpUtils::zipDirectory(dump_path);
+        
+        ColumnWithTypeAndName col;
+        col.name = "file";
+        col.type = std::make_shared<DataTypeString>();
+        col.column = col.type->createColumn();
+        sample_block.insert(col);
+
+        col.name = "tables dumped";
+        col.type = std::make_shared<DataTypeUInt64>();
+        col.column = col.type->createColumn();
+        sample_block.insert(col);
+
+        col.name = "(distinct) queries dumped";
+        col.type = std::make_shared<DataTypeUInt64>();
+        col.column = col.type->createColumn();
+        sample_block.insert(col);
+
+        MutableColumns res_columns = sample_block.cloneEmptyColumns();
+        res_columns[0]->insert(getZipFilePath());
+        res_columns[1]->insert(tables_dumped);
+        res_columns[2]->insert(queries_dumped);
+        res.in = std::make_shared<OneBlockInputStream>(sample_block.cloneWithColumns(std::move(res_columns))); 
+    }
+    else
+    {
+        // output to client
+        std::stringstream output;
+        dump_json->stringify(output, 1);
+
+        ColumnWithTypeAndName col;
+        col.name = "Dump Result";
+        col.type = std::make_shared<DataTypeString>();
+        col.column = col.type->createColumn();
+        sample_block.insert(col);
+
+        MutableColumns res_columns = sample_block.cloneEmptyColumns();
+        auto type = std::make_shared<DataTypeString>();
+        res_columns[0] = type->createColumn();
+        res_columns[0]->insertData(output.str().data(), output.str().size());
+        res.in = std::make_shared<OneBlockInputStream>(sample_block.cloneWithColumns(std::move(res_columns))); 
+    }
+    LOG_INFO(log, "Dumped {} tables to {}", tables_dumped, dump_path);
+    LOG_INFO(log, "Dumped {} queries to {}", queries_dumped, dump_path);
+
     return res;
 }
 
@@ -405,6 +430,17 @@ ASTPtr InterpreterDumpQuery::prepareQueryLogSelectList() const
     selects->children.push_back(std::make_shared<ASTIdentifier>("Settings.Names"));
     selects->children.push_back(std::make_shared<ASTIdentifier>("Settings.Values"));
     return selects;
+}
+
+void InterpreterDumpQuery::dumpToFile(Poco::JSON::Object::Ptr & dump_res)
+{
+    auto start_watch = std::chrono::high_resolution_clock::now();
+
+    DumpUtils::writeJsonToAbsolutePath(*dump_res, dump_path + '/' + DumpUtils::DUMP_RESULT_FILE);
+
+    auto stop_watch = std::chrono::high_resolution_clock::now();
+    LOG_DEBUG(log, "Write files cost: {} ms",
+              std::chrono::duration_cast<std::chrono::milliseconds>(stop_watch - start_watch).count());
 }
 
 }

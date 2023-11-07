@@ -19,6 +19,7 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
 #include <Storages/StorageMaterializedView.h>
+#include <Optimizer/Dump/DumpUtils.h>
 
 #include <chrono>
 #include <string>
@@ -95,14 +96,20 @@ void DDLDumper::addTable(const QualifiedTableName & qualified_table, ContextPtr 
     else
     {
         table_ddls.emplace(qualified_table, serializeAST(*create_query));
-        auto json = getTableStats(database, table, context);
-        if (json)
-            stats->set(qualified_table.getFullName(), json);
+        if (settings.stats)
+        {
+            auto json = getTableStats(database, table, context);
+            if (json)
+                stats->set(qualified_table.getFullName(), json);
+        }
         if (auto storage_distributed = dynamic_pointer_cast<const StorageDistributed>(storage))
         {
             // distributed table
-            auto shard_count = storage_distributed->getShardCount();
-            shard_counts.emplace(qualified_table, shard_count);
+            if (settings.shard_count)
+            {
+                auto shard_count = storage_distributed->getShardCount();
+                shard_counts.emplace(qualified_table, shard_count);
+            }
             // add local table ddl
             addTable(storage_distributed->getRemoteDatabaseName(), storage_distributed->getRemoteTableName(), context);
         }
@@ -220,16 +227,15 @@ void DDLDumper::addTableAll(ContextPtr context)
     }
 }
 
-void DDLDumper::dump()
+Poco::JSON::Object::Ptr DDLDumper::getJsonDumpResult()
 {
-    auto start_watch = std::chrono::high_resolution_clock::now();
-
+    Poco::JSON::Object::Ptr tables_json(new Poco::JSON::Object);
     if (!table_ddls.empty())
     {
         Poco::JSON::Object::Ptr ddl_json(new Poco::JSON::Object);
         for (const auto & ddl : table_ddls)
             ddl_json->set(ddl.first.getFullName(), ddl.second);
-        DumpUtils::writeJsonToAbsolutePath(*ddl_json, getPath(DDL_FILE));
+        tables_json->set("ddls", ddl_json);
     }
 
     if (!view_ddls.empty())
@@ -237,31 +243,26 @@ void DDLDumper::dump()
         Poco::JSON::Object::Ptr view_json(new Poco::JSON::Object);
         for (const auto & view : view_ddls)
             view_json->set(view.first.getFullName(), view.second);
-        DumpUtils::writeJsonToAbsolutePath(*view_json, getPath(VIEWS_FILE));
+        tables_json->set("views", view_json);
     }
 
-    if (stats && stats->size() != 0)
-        DumpUtils::writeJsonToAbsolutePath(*stats, getPath(STATS_FILE));
-
-    if (!shard_counts.empty())
+    if (settings.stats && stats && stats->size() != 0)
+        tables_json->set("stats", stats);
+    
+    if (settings.shard_count && !shard_counts.empty())
     {
         Poco::JSON::Object::Ptr shard_json(new Poco::JSON::Object);
         for (const auto & shard : shard_counts)
             shard_json->set(shard.first.getFullName(), std::to_string(shard.second));
-        DumpUtils::writeJsonToAbsolutePath(*shard_json, getPath(SHARD_COUNT_FILE));
+        tables_json->set("shard_count", shard_json);
     }
-
-    auto stop_watch = std::chrono::high_resolution_clock::now();
-    LOG_DEBUG(log, "Write files cost: {} ms",
-              std::chrono::duration_cast<std::chrono::milliseconds>(stop_watch - start_watch).count());
+    return tables_json;
 }
 
 void DDLDumper::dumpStats(const std::optional<std::string> & absolute_path)
 {
     if (absolute_path.has_value())
         DumpUtils::writeJsonToAbsolutePath(*stats, absolute_path.value());
-    else
-        DumpUtils::writeJsonToAbsolutePath(*stats, getPath(STATS_FILE));
 }
 
 Poco::JSON::Object::Ptr DDLDumper::getTableStats(const std::string & database_name, const std::string & table_name, ContextPtr context)
