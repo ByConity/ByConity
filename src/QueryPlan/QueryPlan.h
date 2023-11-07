@@ -59,6 +59,11 @@ namespace JSONBuilder
     using ItemPtr = std::unique_ptr<IItem>;
 }
 
+namespace Protos
+{
+    class QueryPlan;
+}
+
 /// A tree of query steps.
 /// The goal of QueryPlan is to build QueryPipeline.
 /// QueryPlan let delay pipeline creation which is helpful for pipeline-level optimizations.
@@ -168,6 +173,9 @@ public:
     QueryPlan getSubPlan(QueryPlan::Node * node_);
 
     static UInt32 getPlanNodeCount(PlanNodePtr node);
+
+    void toProto(Protos::QueryPlan & proto) const;
+    void fromProto(Protos::QueryPlan & proto);
 
     void freshPlan();
 

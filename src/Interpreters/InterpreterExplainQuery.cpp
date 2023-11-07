@@ -53,9 +53,10 @@
 #include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/QueryPlan.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/StorageMaterializedView.h>
 #include <Storages/StorageView.h>
+#include <google/protobuf/util/json_util.h>
 #include <Common/JSONBuilder.h>
+#include "Parsers/ASTExplainQuery.h"
 
 namespace DB
 {
@@ -719,6 +720,19 @@ void InterpreterExplainQuery::explainPlanWithOptimizer(
     {
         auto plan_cost = CostCalculator::calculatePlanCost(plan, *contextptr);
         buffer << PlanPrinter::jsonLogicalPlan(plan, settings.stats, true, plan_cost);
+    }
+    else if (settings.pb_json)
+    {
+        Protos::QueryPlan plan_pb;
+        plan.toProto(plan_pb);
+        String json_msg;
+        google::protobuf::util::JsonPrintOptions pb_options;
+        pb_options.preserve_proto_field_names = true;
+        pb_options.always_print_primitive_fields = true;
+        pb_options.add_whitespace = settings.add_whitespace;
+
+        google::protobuf::util::MessageToJsonString(plan_pb, &json_msg, pb_options);
+        buffer << json_msg;
     }
     else
         buffer << PlanPrinter::textLogicalPlan(plan, contextptr, settings.stats, true, costs);
