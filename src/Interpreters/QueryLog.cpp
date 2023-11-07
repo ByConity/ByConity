@@ -156,8 +156,9 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
         {"segment_parallel", std::make_shared<DataTypeInt64>()},
         {"segment_parallel_index", std::make_shared<DataTypeInt64>()},
         {"fallback_reason", std::make_shared<DataTypeString>()},
-        {"segment_profiles", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())}
-
+        {"segment_profiles", std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())},
+        {"virtual_warehouse", std::make_shared<DataTypeString>()},
+        {"worker_group", std::make_shared<DataTypeString>()}
     };
 
 }
@@ -375,6 +376,9 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
     {
         columns[i++]->insertDefault();
     }
+
+    columns[i++]->insert(virtual_warehouse);
+    columns[i++]->insert(worker_group);
 }
 
 void QueryLogElement::appendClientInfo(const ClientInfo & client_info, MutableColumns & columns, size_t & i)

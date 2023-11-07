@@ -100,6 +100,9 @@ struct QueryLogElement
     // if fallback by optimizer, write the ExceptionMessage to query_log
     String fallback_reason;
 
+    String virtual_warehouse;
+    String worker_group;
+
     static std::string name() { return "QueryLog"; }
 
     static NamesAndTypesList getNamesAndTypes();
