@@ -341,10 +341,15 @@ namespace ProfileEvents
     extern const Event SetTablePreallocateVWFailed;
     extern const Event GetTablePreallocateVWSuccess;
     extern const Event GetTablePreallocateVWFailed;
-    extern const Event GetTablePartitionMetricsSuccess;
-    extern const Event GetTablePartitionMetricsFailed;
-    extern const Event GetTablePartitionMetricsFromMetastoreSuccess;
-    extern const Event GetTablePartitionMetricsFromMetastoreFailed;
+    extern const Event GetTrashItemsInfoMetricsSuccess;
+    extern const Event GetTrashItemsInfoMetricsFailed;
+    extern const Event GetPartsInfoMetricsSuccess;
+    extern const Event GetPartsInfoMetricsFailed;
+    extern const Event GetMetricsFromMetastoreSuccess;
+    extern const Event GetPartitionMetricsFromMetastoreFailed;
+    extern const Event GetPartitionMetricsFromMetastoreSuccess;
+    extern const Event GetTableTrashItemsMetricsDataFromMetastoreFailed;
+    extern const Event GetTableTrashItemsMetricsDataFromMetastoreSuccess;
     extern const Event UpdateTopologiesSuccess;
     extern const Event UpdateTopologiesFailed;
     extern const Event GetTopologiesSuccess;
@@ -1714,7 +1719,7 @@ namespace Catalog
                 /// insert new added parts into cache manager
                 if (context.getPartCacheManager())
                     context.getPartCacheManager()->insertDataPartsIntoCache(*storage, commit_parts.parts(),
-                    is_merged_parts, true, PairInt64{0, 0}); // Not be used anymore. Its ok set empty cache version
+                    is_merged_parts, false, PairInt64{0, 0}); // Not be used anymore. Its ok set empty cache version
             },
             ProfileEvents::FinishCommitSuccess,
             ProfileEvents::FinishCommitFailed);
@@ -2060,13 +2065,15 @@ namespace Catalog
             [&] {
                 partition_list.clear();
 
-                IMetaStore::IteratorPtr it = meta_proxy->getPartitionList(name_space, UUIDHelpers::UUIDToString(table.getStorageUUID()));
+                auto table_uuid = UUIDHelpers::UUIDToString(table.getStorageUUID());
+                IMetaStore::IteratorPtr it = meta_proxy->getPartitionList(name_space, table_uuid);
                 while (it->next())
                 {
                     Protos::PartitionMeta partition_meta;
                     partition_meta.ParseFromString(it->value());
                     auto partition_ptr = createPartitionFromMetaModel(table, partition_meta);
-                    partition_list.emplace(partition_meta.id(), std::make_shared<CnchPartitionInfo>(partition_ptr, partition_meta.id()));
+                    partition_list.emplace(
+                        partition_meta.id(), std::make_shared<CnchPartitionInfo>(table_uuid, partition_ptr, partition_meta.id()));
                 }
             },
             ProfileEvents::GetPartitionsFromMetastoreSuccess,
@@ -2682,7 +2689,7 @@ namespace Catalog
 
                 /// insert new added parts into cache manager
                 if (context.getPartCacheManager() && !part_models.parts().empty())
-                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), is_merged_parts, true, host_port.topology_version);
+                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), is_merged_parts, false, host_port.topology_version);
 
                 LOG_DEBUG(log, "Finish write part for txn {}, elapsed {} ms.", txnID, watch.elapsedMilliseconds());
             },
@@ -2853,7 +2860,7 @@ namespace Catalog
                     ,watch.elapsedMilliseconds());
 
                 if (context.getPartCacheManager() && !part_models.parts().empty())
-                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), false, false, host_port.topology_version);
+                    context.getPartCacheManager()->insertDataPartsIntoCache(*table, part_models.parts(), false, true, host_port.topology_version);
                 LOG_DEBUG(log, "Finish set commit time for txn {}, elapsed {} ms.", txn_id, watch.elapsedMilliseconds());
             },
             ProfileEvents::SetCommitTimeSuccess,
@@ -3823,6 +3830,10 @@ namespace Catalog
             items.delete_bitmaps.size(),
             items.staged_parts.size(),
             table->getStorageID().getNameForLogs());
+
+        /// Update trash items metrics.
+        if (auto mgr = context.getPartCacheManager())
+            mgr->updateTrashItemsMetrics(table->getStorageUUID(), items);
     }
 
     void Catalog::clearTrashItems(const StoragePtr & table, const TrashItems & items)
@@ -3848,6 +3859,10 @@ namespace Catalog
         meta_proxy->multiDrop(drop_keys);
 
         LOG_DEBUG(log, "Removed trash record of {} parts and {} delete bitmaps.", items.data_parts.size(), items.delete_bitmaps.size());
+
+        /// Update trash items metrics.
+        if (auto mgr = context.getPartCacheManager())
+            mgr->updateTrashItemsMetrics(table->getStorageUUID(), items, false);
     }
 
     std::vector<TxnTimestamp> Catalog::getSyncList(const StoragePtr & storage)
@@ -4147,7 +4162,7 @@ namespace Catalog
     }
 
     std::unordered_map<String, PartitionFullPtr>
-    Catalog::getTablePartitionMetrics(const DB::Protos::DataModelTable & table, bool & is_ready)
+    Catalog::getPartsInfoMetrics(const DB::Protos::DataModelTable & table, bool & is_ready)
     {
         std::unordered_map<String, PartitionFullPtr> res;
         runWithMetricSupport(
@@ -4157,7 +4172,7 @@ namespace Catalog
                 /// getTablePartitionMetrics can only be called on server, so the second condition should always be true
                 if (storage && context.getPartCacheManager())
                 {
-                    is_ready = context.getPartCacheManager()->getTablePartitionMetrics(*storage, res);
+                    is_ready = context.getPartCacheManager()->getPartsInfoMetrics(*storage, res);
                 }
                 else
                 {
@@ -4165,82 +4180,82 @@ namespace Catalog
                     is_ready = true;
                 }
             },
-            ProfileEvents::GetTablePartitionMetricsSuccess,
-            ProfileEvents::GetTablePartitionMetricsFailed);
+            ProfileEvents::GetPartsInfoMetricsSuccess,
+            ProfileEvents::GetPartsInfoMetricsFailed);
         return res;
     }
 
-    std::unordered_map<String, PartitionMetricsPtr> Catalog::getTablePartitionMetricsFromMetastore(const String & table_uuid)
+    PartitionMetrics::PartitionMetricsStore
+    Catalog::getPartitionMetricsStoreFromMetastore(const String & table_uuid, const String & partition_id, size_t max_commit_time)
+
     {
-        std::unordered_map<String, PartitionMetricsPtr> partition_map;
-        /// calculate metrics partition by partition.
-        auto calculate_metrics_by_partion = [&](std::unordered_map<String, Protos::DataModelPart> & parts, bool calc_visibility) {
-            PartitionMetricsPtr res = std::make_shared<PartitionMetrics>();
-            /// when there is drop range in this partition, we need to calculate visibility.
-            if (calc_visibility)
-            {
-                ServerDataPartsVector server_parts;
-                server_parts.reserve(parts.size());
-                for (auto it = parts.begin(); it != parts.end(); it++)
-                {
-                    DataModelPartWrapperPtr part_model_wrapper = createPartWrapperFromModelBasic(it->second);
-                    server_parts.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
-                }
-                auto visible_parts = CnchPartsHelper::calcVisibleParts(server_parts, false);
-                for (auto s_part : visible_parts)
-                    res->update(*(s_part->part_model_wrapper->part_model));
-            }
-            else
-            {
-                for (auto it = parts.begin(); it != parts.end(); it++)
-                {
-                    /// for those block only has deleted part, just ignore them because the covered part may be already removed by GC
-                    if (it->second.deleted())
-                        continue;
+        auto calculate_metrics_by_partition
+            = [&](const MergeTreeMetaBase & storage, std::unordered_map<String, Protos::DataModelPart> & parts, bool calc_visibility) {
+                  PartitionMetricsStorePtr res = std::make_shared<PartitionMetrics::PartitionMetricsStore>();
 
-                    res->update(it->second);
-                }
-            }
+                  /// when there is drop range in this partition, we need to calculate visibility.
+                  if (calc_visibility)
+                  {
+                      ServerDataPartsVector server_parts;
+                      server_parts.reserve(parts.size());
+                      for (auto & [part_name, part] : parts)
+                      {
+                          DataModelPartWrapperPtr part_model_wrapper = createPartWrapperFromModel(storage, part);
+                          server_parts.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
+                      }
+                      auto visible_parts = CnchPartsHelper::calcVisibleParts(server_parts, false);
+                      for (const auto & s_part : server_parts)
+                          res->update(*(s_part->part_model_wrapper->part_model));
+                  }
+                  else
+                  {
+                      for (auto & [part_name, part] : parts)
+                      {
+                          /// for those block only has deleted part, just ignore them because the covered part may be already removed by GC
+                          if (part.deleted())
+                              continue;
 
-            return res;
-        };
+                          res->update(part);
+                      }
+                  }
 
+                  return res;
+              };
+
+        PartitionMetrics::PartitionMetricsStore ret;
         runWithMetricSupport(
             [&] {
                 Stopwatch watch;
                 SCOPE_EXIT({
                     LOG_DEBUG(
-                        log, "getTablePartitionMetrics for table {}  elapsed: {}ms", table_uuid, watch.elapsedMilliseconds());
+                        log, "getPartitionMetricsStoreFromMetastore for table {} elapsed: {} ms", table_uuid, watch.elapsedMilliseconds());
                 });
 
-                IMetaStore::IteratorPtr it = meta_proxy->getPartsInRange(name_space, table_uuid, "");
+                /// Get latest table version.
+                StoragePtr storage = getTableByUUID(context, table_uuid, max_commit_time);
+                const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
+
+                IMetaStore::IteratorPtr it = meta_proxy->getPartsInRange(name_space, table_uuid, partition_id);
+
                 std::unordered_map<String, Protos::DataModelPart> block_name_to_part;
-                String current_partition = "";
                 bool need_calculate_visibility = false;
-                PartitionMetricsPtr current_metrics = std::make_shared<PartitionMetrics>();
                 while (it->next())
                 {
                     Protos::DataModelPart part_model;
                     part_model.ParseFromString(it->value());
-                    const String & partition_id = part_model.part_info().partition_id();
-
-                    if (current_partition != partition_id)
-                    {
-                        if (!block_name_to_part.empty())
-                        {
-                            PartitionMetricsPtr metrics = calculate_metrics_by_partion(block_name_to_part, need_calculate_visibility);
-                            partition_map.emplace(current_partition, metrics);
-                        }
-
-                        block_name_to_part.clear();
-                        need_calculate_visibility = false;
-                        current_partition = partition_id;
-                    }
 
                     auto part_info = createPartInfoFromModel(part_model.part_info());
                     /// skip partial part.
                     if (part_info->hint_mutation)
                         continue;
+
+                    /// Skip the Uncommitted parts or the parts that
+                    /// cannot be seen by the time `max_commit_time`.
+                    if (part_model.commit_time() == 0 || part_model.commit_time() > max_commit_time)
+                    {
+                        LOG_TRACE(log, "Skip parts: {}, max_commit_time: {}", part_model.ShortDebugString(), max_commit_time);
+                        continue;
+                    }
 
                     /// if there is any drop range in current partition , we need calculate visibility when computing metrics later
                     if (part_model.deleted() && part_info->level == MergeTreePartInfo::MAX_LEVEL)
@@ -4258,13 +4273,12 @@ namespace Catalog
 
                 if (!block_name_to_part.empty())
                 {
-                    PartitionMetricsPtr metrics = calculate_metrics_by_partion(block_name_to_part, need_calculate_visibility);
-                    partition_map.emplace(current_partition, metrics);
+                    ret = *calculate_metrics_by_partition(merge_tree_storage, block_name_to_part, need_calculate_visibility);
                 }
             },
-            ProfileEvents::GetTablePartitionMetricsFromMetastoreSuccess,
-            ProfileEvents::GetTablePartitionMetricsFromMetastoreFailed);
-        return partition_map;
+            ProfileEvents::GetPartitionMetricsFromMetastoreSuccess,
+            ProfileEvents::GetPartitionMetricsFromMetastoreFailed);
+        return ret;
     }
 
     void Catalog::updateTopologies(const std::list<CnchServerTopology> & topologies)
@@ -5451,7 +5465,7 @@ namespace Catalog
 
         if (context.getPartCacheManager())
             context.getPartCacheManager()->insertDataPartsIntoCache(*to_tbl,
-                commit_parts.parts(), false, true, target_host.topology_version);
+                commit_parts.parts(), false, false, target_host.topology_version);
     }
 
     void Catalog::detachAttachedParts(
@@ -5617,7 +5631,7 @@ namespace Catalog
 
         if (context.getPartCacheManager())
             context.getPartCacheManager()->insertDataPartsIntoCache(*tbl,
-                attached_parts.parts(), false, true, target_host.topology_version);
+                attached_parts.parts(), false, false, target_host.topology_version);
     }
 
     void Catalog::detachAttachedPartsRaw(
@@ -5919,6 +5933,73 @@ namespace Catalog
         create_ast->uuid = final_uuid;
         String create_query = serializeAST(*ast);
         d.set_definition(create_query);
+    }
+
+    std::unordered_map<String, std::shared_ptr<PartitionMetrics>>
+    Catalog::loadPartitionMetricsSnapshotFromMetastore(const String & table_uuid)
+    {
+        std::unordered_map<String, std::shared_ptr<PartitionMetrics>> res;
+        LOG_DEBUG(log, "Load parts partition level metrics from metastore, table: {}", table_uuid);
+        auto it = meta_proxy->getTablePartitionMetricsSnapshots(name_space, table_uuid);
+        size_t prefix_length = MetastoreProxy::partitionPartsMetricsSnapshotPrefix(name_space, table_uuid, "").length();
+
+        while (it->next())
+        {
+            const auto & key = it->key();
+            String partition_id = key.substr(prefix_length, String::npos);
+
+            Protos::PartitionPartsMetricsSnapshot snapshot;
+            snapshot.ParseFromString(it->value());
+            res.emplace(partition_id, std::make_shared<PartitionMetrics>(snapshot, table_uuid, partition_id));
+        }
+
+        return res;
+    }
+    void Catalog::savePartitionMetricsSnapshotToMetastore(
+        const String & table_uuid, const String & partition_id, const Protos::PartitionPartsMetricsSnapshot & snapshot)
+    {
+        meta_proxy->updatePartitionMetricsSnapshot(name_space, table_uuid, partition_id, snapshot.SerializeAsString());
+    }
+    TableMetrics::TableMetricsData Catalog::getTableTrashItemsMetricsDataFromMetastore(const String & table_uuid, const TxnTimestamp ts)
+    {
+        TableMetrics::TableMetricsData res;
+        runWithMetricSupport(
+            [&] {
+                auto storage = getTableByUUID(context, table_uuid, TxnTimestamp::maxTS());
+                const auto trash_items = getDataItemsInTrash(storage, 0);
+
+                for (const auto & part : trash_items.data_parts)
+                {
+                    res.update(part, ts);
+                }
+                for (const auto & part : trash_items.staged_parts)
+                {
+                    res.update(part, ts);
+                }
+                for (const auto & bitmap : trash_items.delete_bitmaps)
+                {
+                    res.update(bitmap, ts);
+                }
+            },
+            ProfileEvents::GetTableTrashItemsMetricsDataFromMetastoreSuccess,
+            ProfileEvents::GetTableTrashItemsMetricsDataFromMetastoreFailed);
+        return res;
+    }
+    Protos::TableTrashItemsMetricsSnapshot Catalog::loadTableTrashItemsMetricsSnapshotFromMetastore(const String & table_uuid)
+    {
+        String snapshot_str = meta_proxy->getTableTrashItemsSnapshot(name_space, table_uuid);
+        Protos::TableTrashItemsMetricsSnapshot snapshot;
+        if (!snapshot_str.empty())
+        {
+            snapshot.ParseFromString(snapshot_str);
+        }
+        LOG_DEBUG(
+            log, "Load trash items table level metrics from metastore, table: {}, snapshot: {}", table_uuid, snapshot.ShortDebugString());
+        return snapshot;
+    }
+    void Catalog::saveTableTrashItemsMetricsToMetastore(const String & table_uuid, const Protos::TableTrashItemsMetricsSnapshot & snapshot)
+    {
+        meta_proxy->updateTableTrashItemsSnapshot(name_space, table_uuid, snapshot.SerializeAsString());
     }
 }
 }

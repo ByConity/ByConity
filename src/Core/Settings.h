@@ -302,12 +302,8 @@ enum PreloadLevelSettings : UInt64
       "Number of threads performing background tasks for memory table. Only has meaning at server startup.", \
       0) \
     M(UInt64, background_topology_thread_pool_size, 4, "Number of threads performing topology related background tasks.", 0) \
-    M(UInt64, \
-      local_disk_cache_thread_pool_size, \
-      16, \
-      "Number of threads perforrming background tasks from cache segments from cloud storage to local disk. Only has meaning at server " \
-      "startup.", \
-      0) \
+    M(UInt64, background_metrics_recalculation_schedule_pool_size, 16, "Number of threads performing metrics recalculation related background tasks.", 0) \
+    M(UInt64, local_disk_cache_thread_pool_size, 16, "Number of threads perforrming background tasks from cache segments from cloud storage to local disk. Only has meaning at server startup.", 0) \
     M(UInt64, local_disk_cache_evict_thread_pool_size, 16, "Number of threads perforrming asynchronous remove disk cache file.", 0) \
     M(UInt64, \
       max_bandwidth_for_disk_cache, \
@@ -2036,7 +2032,16 @@ enum PreloadLevelSettings : UInt64
     /** S3 Storage settings*/ \
     M(UInt64, s3_gc_inter_partition_parallelism, 4, "Partition level concurrency when gc s3 table", 0) \
     M(UInt64, s3_gc_intra_partition_parallelism, 16, "Part level concurrency when gc s3 table", 0) \
-\
+    \
+    M(UInt64, \
+      table_partition_metrics_recalculate_recently_used_threshold, \
+      6, \
+      "Recalculate partitions/tables that `last_update_time > last_snapshot_time`, in hours.", 0) \
+    M(UInt64, \
+      table_partition_metrics_recalculate_not_recently_used_threshold, \
+      3, \
+      "Recalculate partitions/tables that not recently updated, in days.", 0) \
+    M(UInt64, table_partition_metrics_snapshot_threshold, 1, "Snapshot partition/tables that get recently updated, in hours", 0) \
     /* Transaction and catalog */ \
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
     M(Bool, bypass_ddl_db_lock, true, "Bypass locking database while creating tables", 0) \

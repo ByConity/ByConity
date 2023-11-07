@@ -808,6 +808,8 @@ void MetastoreProxy::dropAllPartInTable(const String & name_space, const String 
     metastore_ptr->clean(stagedDataPartPrefix(name_space, uuid));
     metastore_ptr->clean(tablePartitionInfoPrefix(name_space, uuid));
     metastore_ptr->clean(detachedPartPrefix(name_space, uuid));
+    metastore_ptr->clean(partitionPartsMetricsSnapshotPrefix(name_space,uuid, ""));
+    metastore_ptr->clean(tableTrashItemsMetricsSnapshotPrefix(name_space, uuid));
 }
 
 void MetastoreProxy::dropAllDeleteBitmapInTable(const String & name_space, const String & uuid)
@@ -2735,6 +2737,26 @@ IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_spac
 IMetaStore::IteratorPtr MetastoreProxy::getAllDeleteBitmaps(const String & name_space, const String & table_uuid)
 {
     return metastore_ptr->getByPrefix(deleteBitmapPrefix(name_space, table_uuid));
+}
+
+void MetastoreProxy::updateTableTrashItemsSnapshot(const String & name_space, const String & table_uuid, const String & snapshot)
+{
+    metastore_ptr->put(tableTrashItemsMetricsSnapshotPrefix(name_space, table_uuid), snapshot);
+}
+void MetastoreProxy::updatePartitionMetricsSnapshot(
+    const String & name_space, const String & table_uuid, const String & partition_id, const String & snapshot)
+{
+    metastore_ptr->put(partitionPartsMetricsSnapshotPrefix(name_space, table_uuid, partition_id), snapshot);
+}
+IMetaStore::IteratorPtr MetastoreProxy::getTablePartitionMetricsSnapshots(const String & name_space, const String & table_uuid)
+{
+    return metastore_ptr->getByPrefix(partitionPartsMetricsSnapshotPrefix(name_space, table_uuid, ""));
+}
+String MetastoreProxy::getTableTrashItemsSnapshot(const String & name_space, const String & table_uuid)
+{
+    String value;
+    metastore_ptr->get(tableTrashItemsMetricsSnapshotPrefix(name_space, table_uuid), value);
+    return value;
 }
 
 } /// end of namespace DB::Catalog

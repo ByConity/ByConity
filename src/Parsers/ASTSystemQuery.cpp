@@ -206,6 +206,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "STOP MATERIALIZEDMYSQL";
         case Type::RESYNC_MATERIALIZEDMYSQL_TABLE:
             return "RESYNC MATERIALIZEDMYSQL TABLE";
+        case Type::RECALCULATE_METRICS:
+            return "RECALCULATE METRICS FOR";
         case Type::UNKNOWN:
         case Type::END:
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown SYSTEM query command");

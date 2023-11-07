@@ -208,6 +208,7 @@ extern const Metric BackgroundMergeSelectSchedulePoolTask;
 extern const Metric BackgroundUniqueTableSchedulePoolTask;
 extern const Metric BackgroundMemoryTableSchedulePoolTask;
 extern const Metric BackgroundCNCHTopologySchedulePoolTask;
+extern const Metric BackgroundPartsMetricsSchedulePoolTask;
 }
 
 namespace DB
@@ -226,6 +227,7 @@ namespace SchedulePool
         UniqueTable,
         MemoryTable,
         CNCHTopology,
+        PartsMetrics,
         Size
     };
 }
@@ -353,7 +355,6 @@ struct ContextSharedPart
     mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
     mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
-    std::optional<ThreadPool> part_cache_manager_thread_pool;  /// A thread pool to collect partition metrics in background.
     mutable ThrottlerPtr disk_cache_throttler;
 
     mutable std::array<std::optional<BackgroundSchedulePool>, SchedulePool::Size> extra_schedule_pools;
@@ -2651,6 +2652,17 @@ BackgroundSchedulePool & Context::getTopologySchedulePool() const
     return *shared->extra_schedule_pools[SchedulePool::CNCHTopology];
 }
 
+BackgroundSchedulePool & Context::getMetricsRecalculationSchedulePool() const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[SchedulePool::PartsMetrics])
+        shared->extra_schedule_pools[SchedulePool::PartsMetrics].emplace(
+            settings.background_metrics_recalculation_schedule_pool_size,
+            CurrentMetrics::BackgroundPartsMetricsSchedulePoolTask,
+            "PtMetricsPol");
+    return *shared->extra_schedule_pools[SchedulePool::PartsMetrics];
+}
+
 ThrottlerPtr Context::getDiskCacheThrottler() const
 {
     auto lock = getLock();
@@ -4662,14 +4674,6 @@ UInt64 Context::getNonHostUpdateTime(const UUID & uuid)
     }
 
     return fetched_nhut;
-}
-
-ThreadPool & Context::getPartCacheManagerThreadPool()
-{
-    auto lock = getLock();
-    if (!shared->part_cache_manager_thread_pool)
-        shared->part_cache_manager_thread_pool.emplace(settings.part_cache_manager_thread_pool_size);
-    return *shared->part_cache_manager_thread_pool;
 }
 
 void Context::initCnchServerClientPool(const String & service_name)

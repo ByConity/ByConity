@@ -107,6 +107,8 @@ namespace DB::Catalog
 #define MATERIALIZEDMYSQL_PREFIX "MMYSQL_"
 #define MATERIALIZEDMYSQL_BG_JOB_STATUS "MATERIALIZEDMYSQL_BGJS_"
 #define DETACHED_DELETE_BITMAP_PREFIX "DDLB_"
+#define PARTITION_PARTS_METRICS_SNAPSHOT_PREFIX "PPS_"
+#define TABLE_TRASHITEMS_METRICS_SNAPSHOT_PREFIX "TTS_"
 
 using EntityType = IAccessEntity::Type;
 struct EntityMetastorePrefix
@@ -751,6 +753,16 @@ public:
         return fmt::format("{}{}", accessEntityUUIDNameMappingPrefix(name_space), uuid);
     }
 
+    static String partitionPartsMetricsSnapshotPrefix(const String & name_space, const String & table_uuid, const String & partition_id)
+    {
+        return escapeString(name_space) + "_" + PARTITION_PARTS_METRICS_SNAPSHOT_PREFIX + table_uuid + "_" + partition_id;
+    }
+
+    static String tableTrashItemsMetricsSnapshotPrefix(const String & name_space, const String & table_uuid)
+    {
+        return escapeString(name_space) + "_" + TABLE_TRASHITEMS_METRICS_SNAPSHOT_PREFIX + table_uuid;
+    }
+
     /// end of Metastore Proxy keying schema
 
     void createTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data);
@@ -1071,6 +1083,23 @@ public:
     String getAccessEntityNameByUUID(const String & name_space, const UUID & id) const;
     bool dropAccessEntity(EntityType type, const String & name_space, const UUID & id, const String & name) const;
     bool putAccessEntity(EntityType type, const String & name_space, const AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists) const;
+    /**
+     * @brief Get parts partition metrics snapshots in table level.
+     */
+    IMetaStore::IteratorPtr getTablePartitionMetricsSnapshots(const String & name_space, const String & table_uuid);
+    /**
+     * @brief Update a partition level parts metrics snapshot.
+     */
+    void updatePartitionMetricsSnapshot(
+        const String & name_space, const String & table_uuid, const String & partition_id, const String & snapshot);
+    /**
+     * @brief Update a table level trash items metrics snapshot.
+     */
+    void updateTableTrashItemsSnapshot(const String & name_space, const String & table_uuid, const String & snapshot);
+    /**
+     * @brief Get a table level trash items metrics snapshot.
+     */
+    String getTableTrashItemsSnapshot(const String & name_space, const String & table_uuid);
 
 private:
 

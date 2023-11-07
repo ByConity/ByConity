@@ -1047,4 +1047,18 @@ void CnchServerClient::reportSyncFailedForSyncThread(const String & database_nam
 }
 #endif
 
+void CnchServerClient::forceRecalculateMetrics(const StorageID & storage_id)
+{
+    brpc::Controller cntl;
+    Protos::ForceRecalculateMetricsReq request;
+    Protos::ForceRecalculateMetricsResp response;
+
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
+
+    stub->forceRecalculateMetrics(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
 }

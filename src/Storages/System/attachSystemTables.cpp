@@ -124,6 +124,8 @@
 #include <Storages/System/StorageSystemCnchPartsColumns.h>
 #include <Storages/System/StorageSystemCnchPartsInfo.h>
 #include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
+#include <Storages/System/StorageSystemCnchTrashItemsInfo.h>
+#include <Storages/System/StorageSystemCnchTrashItemsInfoLocal.h>
 #include <Storages/System/StorageSystemCnchTableHost.h>
 #include <Storages/System/StorageSystemCnchTableInfo.h>
 #include <Storages/System/StorageSystemCnchTables.h>
@@ -251,6 +253,8 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchPartsColumns>(system_database, "cnch_parts_columns");
     attach<StorageSystemCnchPartsInfoLocal>(system_database, "cnch_parts_info_local");
     attach<StorageSystemCnchPartsInfo>(system_database, "cnch_parts_info");
+    attach<StorageSystemCnchTrashItemsInfoLocal>(system_database, "cnch_trash_items_info_local");
+    attach<StorageSystemCnchTrashItemsInfo>(system_database, "cnch_trash_items_info");
     attach<StorageSystemCnchTableInfo>(system_database, "cnch_table_info");
     attach<StorageSystemCnchTablesHistory>(system_database, "cnch_tables_history");
     attach<StorageSystemCnchDatabases>(system_database, "cnch_databases");

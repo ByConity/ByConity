@@ -506,10 +506,11 @@ void CnchMergeMutateThread::writePartMergeLogElement(
 
         std::unordered_map<String, PartitionFullPtr> partition_metrics;
         if (auto cache_manager = local_context->getPartCacheManager())
-            cache_manager->getTablePartitionMetrics(*istorage, partition_metrics, false);
+            cache_manager->getPartsInfoMetrics(*istorage, partition_metrics, false);
         for (auto & [_, p_metric] : partition_metrics)
         {
-            elem.current_parts += p_metric->partition_info_ptr->metrics_ptr->total_parts_number;
+            if (p_metric && p_metric->partition_info_ptr && p_metric->partition_info_ptr->metrics_ptr)
+                elem.current_parts += p_metric->partition_info_ptr->metrics_ptr->read().total_parts_number;
         }
     }
 
