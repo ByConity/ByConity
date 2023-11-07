@@ -16,18 +16,21 @@
 #pragma once
 
 #include <memory>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 #include <Interpreters/Context_fwd.h>
-#include <Interpreters/QueryLog.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
+#include <Interpreters/QueryLog.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/QueryPipeline.h>
+#include <Protos/plan_segment_manager.pb.h>
 #include <boost/core/noncopyable.hpp>
 #include <Poco/Logger.h>
 #include <common/types.h>
-#include <Protos/plan_segment_manager.pb.h>
 
 namespace DB
 {
@@ -58,10 +61,16 @@ struct RuntimeSegmentsMetrics
     }
 };
 
+struct SenderMetrics
+{
+    std::unordered_map<size_t, std::vector<std::pair<UInt64, size_t>>> bytes_sent;
+};
+
 struct RuntimeSegmentsStatus
 {
     String query_id;
     int32_t segment_id;
+    size_t parallel_index;
     bool is_succeed;
     bool is_canceled;
     RuntimeSegmentsMetrics metrics;
@@ -95,6 +104,7 @@ private:
     Poco::Logger * logger;
     RuntimeSegmentsStatus runtime_segment_status;
     std::unique_ptr<QueryLogElement> query_log_element;
+    SenderMetrics sender_metrics;
 
     Processors buildRepartitionExchangeSink(BroadcastSenderPtrs & senders, bool keep_order, size_t output_index, const Block &header, OutputPortRawPtrs &ports);
 

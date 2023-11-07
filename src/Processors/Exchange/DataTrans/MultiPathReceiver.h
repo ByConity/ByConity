@@ -19,15 +19,6 @@
 #include <vector>
 namespace DB
 {
-struct MultiPathReceiverMetric
-{
-    bvar::Adder<UInt32> recv_rows;
-    bvar::Adder<UInt64> recv_bytes;
-    bvar::Adder<UInt64> recv_io_bytes;
-    bvar::Adder<UInt32> recv_counts;
-    bvar::Adder<UInt32> dser_time_ms;
-    std::atomic_int finish_code{0};
-};
 
 class MultiPathReceiver final : public IBroadcastReceiver, private boost::noncopyable
 {
@@ -76,7 +67,6 @@ private:
     String name;
     bool enable_block_compress;
     Poco::Logger * logger;
-    MultiPathReceiverMetric recv_metric;
 };
 
 }

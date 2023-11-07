@@ -145,7 +145,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
         //             + " exception: " + exception_with_code.exception, exception_with_code.code);
         // }
 
-        // If receiver is finihsed and not cancelly by pipeline, we should cancel pipeline here
+        // If receiver is finished and not cancelly by pipeline, we should cancel pipeline here
         if (status.code != BroadcastStatusCode::RECV_CANCELLED)
             throw Exception(
                 getName() + " will cancel with finish message: " + status.message + " code: " + std::to_string(status.code),

@@ -15,28 +15,17 @@
 
 #include <memory>
 #include <set>
-#include <time.h>
-#include <Client/Connection.h>
 #include <CloudServices/CnchServerResource.h>
-#include <IO/ConnectionTimeoutsContext.h>
-#include <IO/MemoryReadWriteBuffer.h>
-#include <Interpreters/Cluster.h>
-#include <Interpreters/Context_fwd.h>
-#include <Interpreters/DistributedStages/PlanSegment.h>
-#include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
-#include <Interpreters/DistributedStages/executePlanSegment.h>
+#include <Interpreters/Scheduler.h>
 #include <Interpreters/SegmentScheduler.h>
-#include <Parsers/queryToString.h>
-#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
-#include <Processors/Exchange/DataTrans/RpcClient.h>
-#include <Protos/plan_segment_manager.pb.h>
-#include <Storages/StorageReplicatedMergeTree.h>
+#include <Interpreters/sendPlanSegment.h>
 #include <butil/endpoint.h>
 #include <Common/Exception.h>
 #include <Common/HostWithPorts.h>
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
-#include <common/getFQDNOrHostName.h>
+#include <Common/Trace/Telemetry.h>
+#include <common/types.h>
 
 namespace ProfileEvents
 {
@@ -47,116 +36,8 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
-    extern const int UNEXPECTED_PACKET_FROM_SERVER;
-    extern const int UNKNOWN_PACKET_FROM_SERVER;
     extern const int QUERY_WITH_SAME_ID_IS_ALREADY_RUNNING;
     extern const int QUERY_CPU_TIMEOUT_EXCEEDED;
-    extern const int UNKNOWN_EXCEPTION;
-    extern const int BRPC_EXCEPTION;
-}
-
-void DAGGraph::joinAsyncRpcPerStage()
-{
-    if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_at_last || query_context->getSettingsRef().send_plan_segment_by_brpc)
-        return;
-    if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_per_stage)
-        joinAsyncRpcWithThrow();
-}
-
-void DAGGraph::joinAsyncRpcWithThrow()
-{
-    auto async_ret = async_context->wait();
-    if (async_ret.status == AsyncContext::AsyncStats::FAILED)
-        throw Exception(
-            "send plan segment async failed error code : " + toString(async_ret.error_code) + " error worker : " + async_ret.failed_worker
-                + " error text : " + async_ret.error_text,
-            ErrorCodes::BRPC_EXCEPTION);
-}
-
-void DAGGraph::joinAsyncRpcAtLast()
-{
-    if (query_context->getSettingsRef().send_plan_segment_by_brpc)
-        return;
-    if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_at_last)
-        joinAsyncRpcWithThrow();
-}
-
-std::vector<size_t> AdaptiveScheduler::getRandomWorkerRank()
-{
-    std::vector<size_t> rank_worker_ids;
-    auto worker_group = query_context->tryGetCurrentWorkerGroup();
-    if (worker_group)
-    {
-        const auto & worker_hosts = worker_group->getHostWithPortsVec();
-        rank_worker_ids.resize(worker_hosts.size(), 0);
-        std::iota(rank_worker_ids.begin(), rank_worker_ids.end(), 0);
-        thread_local std::random_device rd;
-        std::shuffle(rank_worker_ids.begin(), rank_worker_ids.end(), rd);
-    }
-    return rank_worker_ids;
-}
-
-std::vector<size_t> AdaptiveScheduler::getHealthWorkerRank()
-{
-    std::vector<size_t> rank_worker_ids;
-    auto worker_group = query_context->tryGetCurrentWorkerGroup();
-    auto worker_group_status = query_context->getWorkerGroupStatusPtr();
-    if (!worker_group_status || !worker_group)
-        return getRandomWorkerRank();
-    const auto & hostports = worker_group->getHostWithPortsVec();
-    size_t numOfWorker = hostports.size();
-    rank_worker_ids.reserve(numOfWorker);
-    for (size_t i = 0; i < numOfWorker; i++)
-        rank_worker_ids.push_back(i);
-
-    auto & workers_status = worker_group_status->getWorkersStatus();
-    std::stable_sort(rank_worker_ids.begin(), rank_worker_ids.end(), [&](size_t lidx, size_t ridx) {
-        auto lid = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), hostports[lidx].id);
-        auto rid = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), hostports[ridx].id);
-        auto liter = workers_status.find(lid);
-        auto riter = workers_status.find(rid);
-        if (liter == workers_status.end())
-            return true;
-        if (riter == workers_status.end())
-            return false;
-        return liter->second->compare(*riter->second);
-    });
-
-    if (log->trace())
-    {
-        for (auto & idx : rank_worker_ids)
-        {
-            auto worker_id = WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), hostports[idx].id);
-            if (auto iter = workers_status.find(worker_id); iter != workers_status.end())
-                LOG_TRACE(log, iter->second->toDebugString());
-        }
-    }
-
-    thread_local std::random_device rd;
-    //only shuffle health worker
-    std::shuffle(rank_worker_ids.begin(), rank_worker_ids.begin() + worker_group_status->getHealthWorkerSize(), rd);
-    return rank_worker_ids;
-}
-
-AddressInfo getLocalAddress(ContextPtr & query_context)
-{
-    const auto & host = getHostIPFromEnv();
-    auto port = query_context->getTCPPort();
-    const ClientInfo & info = query_context->getClientInfo();
-    return AddressInfo(
-        host, port, info.current_user, info.current_password, query_context->getExchangePort(), query_context->getExchangeStatusPort());
-}
-
-AddressInfo getRemoteAddress(HostWithPorts host_with_ports, ContextPtr & query_context)
-{
-    const ClientInfo & info = query_context->getClientInfo();
-    return AddressInfo(
-        host_with_ports.getHost(),
-        host_with_ports.tcp_port,
-        info.current_user,
-        info.current_password,
-        host_with_ports.exchange_port,
-        host_with_ports.exchange_status_port);
 }
 
 PlanSegmentsStatusPtr
@@ -185,7 +66,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
 
     /// send resource to worker before scheduler
     auto server_resource = query_context->tryGetCnchServerResource();
-    if (server_resource)
+    if (server_resource && !(query_context->getSettingsRef().enable_new_scheduler && query_context->getSettingsRef().enable_send_resource_by_stage))
     {
         server_resource->setSendMutations(true);
         /// TODO: we can skip some worker
@@ -193,7 +74,12 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
     }
 
     if (!dag_ptr->plan_segment_status_ptr->is_final_stage_start)
-        schedule(query_id, query_context, dag_ptr);
+    {
+        if (query_context->getSettingsRef().enable_new_scheduler)
+            scheduleV2(query_id, query_context, dag_ptr);
+        else
+            schedule(query_id, query_context, dag_ptr);
+    }
 #if defined(TASK_ASSIGN_DEBUG)
     String res;
     res += "dump statics:" + std::to_string(dag_ptr->exchange_data_assign_node_mappings.size()) + "\n";
@@ -214,15 +100,16 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
 }
 
 
-CancellationCode
-SegmentScheduler::cancelPlanSegmentsFromCoordinator(const String query_id, const String & exception, ContextPtr query_context)
+CancellationCode SegmentScheduler::cancelPlanSegmentsFromCoordinator(
+    const String query_id, const Int32 & code, const String & exception, ContextPtr query_context)
 {
     const String & coordinator_host = getHostIPFromEnv();
-    return cancelPlanSegments(query_id, exception, coordinator_host, query_context);
+    return cancelPlanSegments(query_id, code, exception, coordinator_host, query_context);
 }
 
 CancellationCode SegmentScheduler::cancelPlanSegments(
     const String & query_id,
+    const Int32 & code,
     const String & exception,
     const String & origin_host_name,
     ContextPtr query_context,
@@ -254,6 +141,7 @@ CancellationCode SegmentScheduler::cancelPlanSegments(
             if (dag_ptr->plan_segment_status_ptr->is_cancel.load(std::memory_order_relaxed))
                 return CancellationCode::CancelSent;
             dag_ptr->plan_segment_status_ptr->is_cancel.store(true, std::memory_order_relaxed);
+            dag_ptr->plan_segment_status_ptr->error_code = code;
             dag_ptr->plan_segment_status_ptr->exception
                 = "query(" + query_id + ") receive exception from host-" + origin_host_name + " with exception:" + exception;
         }
@@ -321,16 +209,34 @@ bool SegmentScheduler::finishPlanSegments(const String & query_id)
         }
     }
 
-    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+    {
+        std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
 
-    auto seg_status_map_ite = segment_status_map.find(query_id);
-    if (seg_status_map_ite != segment_status_map.end())
-        segment_status_map.erase(seg_status_map_ite);
+        auto seg_status_map_ite = segment_status_map.find(query_id);
+        if (seg_status_map_ite != segment_status_map.end())
+            segment_status_map.erase(seg_status_map_ite);
 
-    query_status_map.erase(query_id);
+        query_status_map.erase(query_id);
 
-    query_to_exception_with_code.remove(query_id);
-    query_status_received_counter_map.erase(query_id);
+        query_to_exception_with_code.remove(query_id);
+        query_status_received_counter_map.erase(query_id);
+    }
+
+    {
+        std::unique_lock<bthread::Mutex> bsp_scheduler_map_lock(bsp_scheduler_map_mutex);
+        if (auto bsp_scheduler_map_iterator = bsp_scheduler_map.find(query_id); bsp_scheduler_map_iterator != bsp_scheduler_map.end())
+        {
+            try
+            {
+                bsp_scheduler_map_iterator->second->onQueryFinished();
+            }
+            catch (Exception & e)
+            {
+                tryLogCurrentException(log, e.getStackTraceString());
+            }
+            bsp_scheduler_map.erase(bsp_scheduler_map_iterator);
+        }
+    }
     return true;
 }
 
@@ -458,7 +364,7 @@ void SegmentScheduler::checkQueryCpuTime(const String & query_id)
     }
 }
 
-bool SegmentScheduler::needCheckRecivedSegmentStatusCounter(const String & query_id) const
+bool SegmentScheduler::isExplainQuery(const String & query_id) const
 {
     std::unique_lock<bthread::Mutex> lock(mutex);
     auto query_map_ite = query_map.find(query_id);
@@ -475,15 +381,15 @@ bool SegmentScheduler::needCheckRecivedSegmentStatusCounter(const String & query
     return query_context->isExplainQuery();
 }
 
-void SegmentScheduler::updateReceivedSegmentStausCounter(const String & query_id, const size_t & segment_id)
+void SegmentScheduler::updateReceivedSegmentStatusCounter(const String & query_id, const size_t & segment_id, const UInt64 & parallel_index)
 {
     std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
     auto segment_status_counter_iterator = query_status_received_counter_map[query_id].find(segment_id);
     if (segment_status_counter_iterator == query_status_received_counter_map[query_id].end())
     {
-        query_status_received_counter_map[query_id][segment_id] = 0;
+        query_status_received_counter_map[query_id][segment_id] = {};
     }
-    query_status_received_counter_map[query_id][segment_id] += 1;
+    query_status_received_counter_map[query_id][segment_id].insert(parallel_index);
 }
 
 bool SegmentScheduler::alreadyReceivedAllSegmentStatus(const String & query_id) const
@@ -496,7 +402,9 @@ bool SegmentScheduler::alreadyReceivedAllSegmentStatus(const String & query_id) 
         return true;
 
     if (received_status_segments_counter_iterator == query_status_received_counter_map.end())
+    {
         return false;
+    }
 
     if (all_segments_iterator == query_map.end())
         return true;
@@ -509,11 +417,45 @@ bool SegmentScheduler::alreadyReceivedAllSegmentStatus(const String & query_id) 
         if (parallel.first == 0)
             continue;
 
-        if (received_status_segments_counter[parallel.first] < parallel.second)
+        if (received_status_segments_counter[parallel.first].size() < parallel.second)
+        {
             return false;
+        }
     }
 
     return true;
+}
+
+bool SegmentScheduler::alreadyReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const
+{
+    std::scoped_lock<bthread::Mutex, bthread::Mutex> lock{mutex, segment_status_mutex};
+    auto all_segments_iterator = query_map.find(query_id);
+    auto received_status_segments_counter_iterator = query_status_received_counter_map.find(query_id);
+
+    if (received_status_segments_counter_iterator == query_status_received_counter_map.end() && all_segments_iterator == query_map.end())
+        return true;
+
+    if (received_status_segments_counter_iterator == query_status_received_counter_map.end())
+    {
+        return false;
+    }
+
+    if (all_segments_iterator == query_map.end())
+        return true;
+
+    auto dag_ptr = all_segments_iterator->second;
+    auto received_status_segments_counter = received_status_segments_counter_iterator->second;
+
+    return received_status_segments_counter[segment_id].size() == dag_ptr->segment_paralle_size_map[segment_id];
+}
+
+void SegmentScheduler::onSegmentFinished(const RuntimeSegmentsStatus & status)
+{
+    std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
+    if (auto bsp_scheduler_map_iterator = bsp_scheduler_map.find(status.query_id); bsp_scheduler_map_iterator != bsp_scheduler_map.end())
+    {
+        bsp_scheduler_map_iterator->second->onSegmentFinished(status.segment_id, status.is_succeed, status.is_canceled);
+    }
 }
 
 void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph_ptr)
@@ -668,6 +610,45 @@ void SegmentScheduler::buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::s
     }
 }
 
+void SegmentScheduler::scheduleV2(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
+{
+    Stopwatch sw;
+    try
+    {
+        std::shared_ptr<IScheduler> scheduler;
+        if (query_context->getSettingsRef().bsp_mode)
+        {
+            std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
+            scheduler
+                = bsp_scheduler_map.emplace(query_id, std::make_shared<BSPScheduler>(query_id, query_context, dag_graph_ptr)).first->second;
+        }
+        else
+        {
+            scheduler = std::make_shared<MPPScheduler>(query_id, query_context, dag_graph_ptr);
+        }
+        scheduler->schedule();
+    }
+    catch (const Exception & e)
+    {
+        this->cancelPlanSegments(
+            query_id,
+            ErrorCodes::LOGICAL_ERROR,
+            "receive exception during scheduler:" + e.message(),
+            "coordinator",
+            query_context,
+            dag_graph_ptr);
+        e.rethrow();
+    }
+    catch (...)
+    {
+        this->cancelPlanSegments(
+            query_id, ErrorCodes::LOGICAL_ERROR, "receive unknown exception during scheduler", "coordinator", query_context, dag_graph_ptr);
+        throw;
+    }
+    sw.stop();
+    ProfileEvents::increment(ProfileEvents::ScheduleTimeMilliseconds, sw.elapsedMilliseconds());
+}
+
 bool SegmentScheduler::schedule(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
 {
     Stopwatch sw;
@@ -678,7 +659,7 @@ bool SegmentScheduler::schedule(const String & query_id, ContextPtr query_contex
         /// random pick workers
         AdaptiveScheduler adaptive_scheduler(query_context);
         std::vector<size_t> rank_worker_ids = query_context->getSettingsRef().enable_adaptive_scheduler
-            ? adaptive_scheduler.getHealthWorkerRank()
+            ? adaptive_scheduler.getHealthyWorkerRank()
             : adaptive_scheduler.getRandomWorkerRank();
 
         // scheduler source
@@ -695,7 +676,7 @@ bool SegmentScheduler::schedule(const String & query_id, ContextPtr query_contex
             address_infos = sendPlanSegment(it->second, true, query_context, dag_graph_ptr, rank_worker_ids);
             dag_graph_ptr->joinAsyncRpcPerStage();
             dag_graph_ptr->id_to_address.emplace(std::make_pair(segment_id, std::move(address_infos)));
-            dag_graph_ptr->scheduler_segments.emplace(segment_id);
+            dag_graph_ptr->scheduled_segments.emplace(segment_id);
         }
         total_send_time_ms += watch.elapsedMilliseconds();
 
@@ -708,7 +689,7 @@ bool SegmentScheduler::schedule(const String & query_id, ContextPtr query_contex
                 if (it->first == dag_graph_ptr->final)
                     continue;
                 // already scheduled
-                if (dag_graph_ptr->scheduler_segments.find(it->first) != dag_graph_ptr->scheduler_segments.end())
+                if (dag_graph_ptr->scheduled_segments.find(it->first) != dag_graph_ptr->scheduled_segments.end())
                     continue;
                 // source
                 if (it->second->getPlanSegmentInputs().size() == 1
@@ -723,8 +704,8 @@ bool SegmentScheduler::schedule(const String & query_id, ContextPtr query_contex
                         // segment has more than one input which one is table
                         continue;
                     }
-                    if (dag_graph_ptr->scheduler_segments.find(segment_input->getPlanSegmentId())
-                        != dag_graph_ptr->scheduler_segments.end())
+                    if (dag_graph_ptr->scheduled_segments.find(segment_input->getPlanSegmentId())
+                        != dag_graph_ptr->scheduled_segments.end())
                     {
                         auto address_it = dag_graph_ptr->id_to_address.find(segment_input->getPlanSegmentId());
                         if (address_it == dag_graph_ptr->id_to_address.end())
@@ -749,7 +730,7 @@ bool SegmentScheduler::schedule(const String & query_id, ContextPtr query_contex
                     total_send_time_ms += watch.elapsedMilliseconds();
                     dag_graph_ptr->joinAsyncRpcPerStage();
                     dag_graph_ptr->id_to_address.emplace(std::make_pair(it->first, std::move(address_infos)));
-                    dag_graph_ptr->scheduler_segments.emplace(it->first);
+                    dag_graph_ptr->scheduled_segments.emplace(it->first);
                 }
             }
         }
@@ -770,8 +751,9 @@ bool SegmentScheduler::schedule(const String & query_id, ContextPtr query_contex
             // segment has more than one input which one is table
             if (plan_segment_input->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
                 continue;
-            plan_segment_input->setParallelIndex(1);
-            if (dag_graph_ptr->scheduler_segments.find(plan_segment_input->getPlanSegmentId()) != dag_graph_ptr->scheduler_segments.end())
+            plan_segment_input->setParallelIndex(0);
+            final_it->second->setParallelIndex(0);
+            if (dag_graph_ptr->scheduled_segments.find(plan_segment_input->getPlanSegmentId()) != dag_graph_ptr->scheduled_segments.end())
             {
                 auto address_it = dag_graph_ptr->id_to_address.find(plan_segment_input->getPlanSegmentId());
                 if (address_it == dag_graph_ptr->id_to_address.end())
@@ -793,49 +775,23 @@ bool SegmentScheduler::schedule(const String & query_id, ContextPtr query_contex
     catch (const Exception & e)
     {
         this->cancelPlanSegments(
-            query_id, "receive exception during scheduler:" + e.message(), "coordinator", query_context, dag_graph_ptr);
+            query_id,
+            ErrorCodes::LOGICAL_ERROR,
+            "receive exception during scheduler:" + e.message(),
+            "coordinator",
+            query_context,
+            dag_graph_ptr);
         e.rethrow();
     }
     catch (...)
     {
-        this->cancelPlanSegments(query_id, "receive unknown exception during scheduler", "coordinator", query_context, dag_graph_ptr);
+        this->cancelPlanSegments(
+            query_id, ErrorCodes::LOGICAL_ERROR, "receive unknown exception during scheduler", "coordinator", query_context, dag_graph_ptr);
         throw;
     }
     sw.stop();
     ProfileEvents::increment(ProfileEvents::ScheduleTimeMilliseconds, sw.elapsedMilliseconds());
     return true;
-}
-
-void sendPlanSegmentToLocal(PlanSegment * plan_segment_ptr, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr)
-{
-    const auto local_address = getLocalAddress(query_context);
-    plan_segment_ptr->setCurrentAddress(local_address);
-
-    /// FIXME: deserializePlanSegment is heavy task, using executePlanSegmentRemotely can deserialize plansegment asynchronous
-    // executePlanSegmentLocally(*plan_segment_ptr, query_context);
-    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true, dag_graph_ptr->async_context);
-    if (dag_graph_ptr)
-    {
-        std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
-        dag_graph_ptr->plan_send_addresses.emplace(std::move(local_address));
-    }
-}
-
-void sendPlanSegmentToRemote(
-    AddressInfo & addressinfo,
-    ContextPtr query_context,
-    PlanSegment * plan_segment_ptr,
-    std::shared_ptr<DAGGraph> dag_graph_ptr,
-    const WorkerId & worker_id)
-{
-    plan_segment_ptr->setCurrentAddress(addressinfo);
-
-    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true, dag_graph_ptr->async_context, worker_id);
-    if (dag_graph_ptr)
-    {
-        std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
-        dag_graph_ptr->plan_send_addresses.emplace(addressinfo);
-    }
 }
 
 AddressInfos SegmentScheduler::sendPlanSegment(
@@ -845,9 +801,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
     std::shared_ptr<DAGGraph> dag_graph_ptr,
     std::vector<size_t> rank_worker_ids)
 {
-    LOG_TRACE(
-        &Poco::Logger::get("SegmentScheduler::sendPlanSegment"),
-        "begin sendPlanSegment: " + std::to_string(plan_segment_ptr->getPlanSegmentId()));
+    LOG_TRACE(log, "begin sendPlanSegment: {}", plan_segment_ptr->getPlanSegmentId());
     auto local_address = getLocalAddress(query_context);
     plan_segment_ptr->setCoordinatorAddress(local_address);
 
@@ -859,7 +813,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
         addresses.emplace_back(local_address);
         for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
         {
-            plan_segment_input->setParallelIndex(1);
+            plan_segment_input->setParallelIndex(0);
 #if defined(TASK_ASSIGN_DEBUG)
             if (dag_graph_ptr->exchange_data_assign_node_mappings.find(plan_segment_input->getPlanSegmentId())
                 == dag_graph_ptr->exchange_data_assign_node_mappings.end())
@@ -871,6 +825,7 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                 ->second.emplace_back(std::make_pair(plan_segment_input->getParallelIndex(), local_address));
 #endif
         }
+        plan_segment_ptr->setParallelIndex(0);
         sendPlanSegmentToLocal(plan_segment_ptr, query_context, dag_graph_ptr);
     }
     else
@@ -878,28 +833,26 @@ AddressInfos SegmentScheduler::sendPlanSegment(
         if (plan_segment_ptr->getClusterName().empty())
         {
             throw Exception(
-                "Logical error: can't find workgroup in context which named " + plan_segment_ptr->getClusterName(),
+                "Logical error: can't find worker group in context which named " + plan_segment_ptr->getClusterName(),
                 ErrorCodes::LOGICAL_ERROR);
         }
 
 
         const auto & worker_group = query_context->getCurrentWorkerGroup();
         const auto & worker_endpoints = worker_group->getHostWithPortsVec();
-        size_t parallel_index_id_index = 0;
         // set ParallelIndexId and source address
-        for (auto i : rank_worker_ids)
+        auto parallel_size = plan_segment_ptr->getParallelSize();
+        for (size_t parallel_index = 0; parallel_index < rank_worker_ids.size() && parallel_index < parallel_size; parallel_index++)
         {
-            parallel_index_id_index++;
-            if (parallel_index_id_index > plan_segment_ptr->getParallelSize())
-                break;
-            const auto & worker_endpoint = worker_endpoints[i];
-            for (const auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
+            auto worker_id = rank_worker_ids[parallel_index];
+            const auto & worker_endpoint = worker_endpoints[worker_id];
+            for (const auto& plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
             {
                 if (plan_segment_input->getPlanSegmentType() != PlanSegmentType::EXCHANGE)
                     continue;
-                plan_segment_input->setParallelIndex(parallel_index_id_index);
+                plan_segment_input->setParallelIndex(parallel_index);
 
-                // if input mode is local, set parallel index to 1
+                // if input mode is local, set parallel index to 0
                 auto it = dag_graph_ptr->id_to_segment.find(plan_segment_input->getPlanSegmentId());
                 for (auto & plan_segment_output : it->second->getPlanSegmentOutputs())
                 {
@@ -909,12 +862,13 @@ AddressInfos SegmentScheduler::sendPlanSegment(
                     if (plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
                         || plan_segment_output->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION)
                     {
-                        plan_segment_input->setParallelIndex(1);
+                        plan_segment_input->setParallelIndex(0);
                         plan_segment_input->clearSourceAddresses();
                         plan_segment_input->insertSourceAddress(AddressInfo("localhost", 0, "", ""));
                     }
                 }
             }
+            plan_segment_ptr->setParallelIndex(parallel_index);
             auto worker_address = getRemoteAddress(worker_endpoint, query_context);
             sendPlanSegmentToRemote(
                 worker_address,

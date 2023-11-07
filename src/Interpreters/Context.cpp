@@ -341,6 +341,8 @@ struct ContextSharedPart
         mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     ProcessList process_list; /// Executing queries at the moment.
     SegmentSchedulerPtr segment_scheduler;
+    ExchangeStatusTrackerPtr exchange_data_tracker;
+    DiskExchangeDataManagerPtr disk_exchange_data_manager;
     QueueManagerPtr queue_manager;
     AsyncQueryManagerPtr async_query_manager;
     MergeList merge_list; /// The list of executable merge (for (Replicated)?MergeTree)
@@ -540,6 +542,7 @@ struct ContextSharedPart
 
             if (worker_status_manager)
                 worker_status_manager->shutdown();
+
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
 
@@ -821,6 +824,42 @@ SegmentSchedulerPtr Context::getSegmentScheduler() const
     if (!shared->segment_scheduler)
         shared->segment_scheduler = std::make_shared<SegmentScheduler>();
     return shared->segment_scheduler;
+}
+
+ExchangeStatusTrackerPtr Context::getExchangeDataTracker() const
+{
+    auto lock = getLock();
+    if (!shared->exchange_data_tracker)
+    {
+        if (shared->server_type == ServerType::cnch_server)
+        {
+            shared->exchange_data_tracker = std::make_shared<ExchangeStatusTracker>(global_context);
+        }
+        else
+        {
+            throw Exception("Exchange data tracker is not supported", ErrorCodes::NOT_IMPLEMENTED);
+        }
+    }
+    return shared->exchange_data_tracker;
+}
+
+DiskExchangeDataManagerPtr Context::getDiskExchangeDataManager() const
+{
+    auto lock = getLock();
+    if (!shared->disk_exchange_data_manager)
+    {
+        const auto & bsp_conf = getRootConfig().batch_synchronous_parallel;
+        DiskExchangeDataManagerOptions options{.path = "bsp/v-1.0.0", .storage_policy = bsp_conf.storage_policy, .volume = bsp_conf.volume};
+        shared->disk_exchange_data_manager
+            = DiskExchangeDataManager::createDiskExchangeDataManager(global_context, getGlobalContext(), options);
+    }
+    return shared->disk_exchange_data_manager;
+}
+
+void Context::setMockDiskExchangeDataManager(DiskExchangeDataManagerPtr disk_exchange_data_manager)
+{
+    auto lock = getLock();
+    shared->disk_exchange_data_manager = disk_exchange_data_manager;
 }
 
 BindingCacheManagerPtr Context::getGlobalBindingCacheManager() const

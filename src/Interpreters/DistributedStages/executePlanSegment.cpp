@@ -24,18 +24,21 @@
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
-#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <Protos/plan_segment_manager.pb.h>
+#include <Protos/registry.pb.h>
 #include <brpc/callback.h>
 #include <brpc/controller.h>
 #include <butil/iobuf.h>
+#include <opentelemetry/trace/propagation/http_trace_context.h>
 #include <Poco/Logger.h>
 #include <Common/ThreadPool.h>
+#include <Common/Trace/BRPCCarrier.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -145,6 +148,7 @@ void executePlanSegmentRemotely(
     request.set_coordinator_exchange_status_port(coordinator_address.getExchangeStatusPort());
 
     request.set_database(context->getCurrentDatabase());
+    request.set_check_session(!(context->getSettingsRef().enable_new_scheduler && context->getSettingsRef().enable_send_resource_by_stage));
 
     const auto & client_info = context->getClientInfo();
     const String & quota_key = client_info.quota_key;
@@ -227,5 +231,19 @@ void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr init
     plan_segment_clone->setExchangeParallelSize(plan_segment.getExchangeParallelSize());
 
     executePlanSegmentInternal(std::move(plan_segment_clone), context, true);
+}
+
+void cleanupExchangeDataForQuery(const AddressInfo & address, UInt64 & query_unique_id)
+{
+    auto execute_address = extractExchangeStatusHostPort(address);
+    auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+    Protos::RegistryService_Stub manager_stub(&rpc_channel->getChannel());
+    Protos::CleanupExchangeDataRequest request;
+    request.set_query_unique_id(query_unique_id);
+
+    brpc::Controller cntl;
+    Protos::CleanupExchangeDataResponse response;
+    manager_stub.cleanupExchangeData(&cntl, &request, &response, nullptr);
+    rpc_channel->assertController(cntl);
 }
 }

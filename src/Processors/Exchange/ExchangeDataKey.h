@@ -34,13 +34,23 @@ struct ExchangeDataKey
 
     String toString() const
     {
-        return std::to_string(query_unique_id) + "_" + std::to_string(exchange_id) + "_" + std::to_string(parallel_index);
+        return fmt::format("{}", *this);
     }
 
     bool operator==(const ExchangeDataKey & other) const
     {
-        return query_unique_id == other.query_unique_id && exchange_id == other.exchange_id
-            && parallel_index == other.parallel_index;
+        return query_unique_id == other.query_unique_id && exchange_id == other.exchange_id && parallel_index == other.parallel_index;
+    }
+
+    bool operator<(const ExchangeDataKey & other) const
+    {
+        if (query_unique_id != other.query_unique_id)
+            return query_unique_id < other.query_unique_id;
+        if (exchange_id != other.exchange_id)
+            return exchange_id < other.exchange_id;
+        if (parallel_index != other.parallel_index)
+            return parallel_index < other.parallel_index;
+        return false;
     }
 };
 
@@ -58,6 +68,26 @@ struct ExchangeDataKeyHashFunc
     }
 };
 
+struct ExchangeDataKeyPtrComp
+{
+public:
+    size_t operator()(const ExchangeDataKeyPtr & key) const
+    {
+        return ExchangeDataKeyHashFunc()(*key);
+    }
+    bool operator()(const ExchangeDataKeyPtr & lhs, const ExchangeDataKeyPtr & rhs) const
+    {
+        return *lhs == *rhs;
+    }
+};
+
+struct ExchangeDataKeyPtrLess
+{
+    bool operator()(const ExchangeDataKeyPtr & lhs, const ExchangeDataKeyPtr & rhs) const
+    {
+        return *lhs < *rhs;
+    }
+};
 }
 template <>
 struct fmt::formatter<DB::ExchangeDataKey>
@@ -77,6 +107,6 @@ struct fmt::formatter<DB::ExchangeDataKey>
     template <typename FormatContext>
     auto format(const DB::ExchangeDataKey & key, FormatContext & ctx)
     {
-        return format_to(ctx.out(), "ExchangeKey[{}_{}_{}]", key.query_unique_id, key.exchange_id, key.parallel_index);
+        return format_to(ctx.out(), "ExchangeDataKey[{}_{}_{}]", key.query_unique_id, key.exchange_id, key.parallel_index);
     }
 };

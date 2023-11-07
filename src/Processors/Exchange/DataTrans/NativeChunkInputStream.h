@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <memory>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/MarkInCompressedFile.h>
 #include <DataStreams/NativeBlockInputStream.h>
@@ -43,4 +44,5 @@ private:
     PODArray<double> avg_value_size_hints;
 };
 
+using NativeChunkInputStreamHolder = std::unique_ptr<NativeChunkInputStream>;
 }

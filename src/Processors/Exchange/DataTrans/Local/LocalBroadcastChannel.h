@@ -44,17 +44,15 @@ class LocalBroadcastChannel final : public IBroadcastReceiver,
                                     boost::noncopyable
 {
 public:
-    LocalBroadcastChannel(ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String & name_, ContextPtr context_ = nullptr);
-
     LocalBroadcastChannel(
         ExchangeDataKeyPtr data_key_,
         LocalChannelOptions options_,
         const String & name_,
-        MultiPathQueuePtr collector,
+        MultiPathQueuePtr queue_,
         ContextPtr context_ = nullptr);
 
-    BroadcastStatus send(Chunk chunk) override;
-    RecvDataPacket recv(timespec timeout_ts) override;
+    BroadcastStatus sendImpl(Chunk chunk) override;
+    RecvDataPacket recv(timespec timeout_ms) override;
     void registerToSenders(UInt32 timeout_ms) override;
     void merge(IBroadcastSender &&) override;
     String getName() const override;
@@ -87,8 +85,6 @@ public:
 
 private:
     String name;
-    BrpcRecvMetric recv_metric;
-    BrpcSendMetric send_metric;
     ExchangeDataKeyPtr data_key;
     LocalChannelOptions options;
     MultiPathQueuePtr receive_queue;

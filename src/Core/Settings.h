@@ -1113,23 +1113,10 @@ enum PreloadLevelSettings : UInt64
 \
     M(Bool, log_profile_events, true, "Log query performance statistics into the query_log and query_thread_log.", 0) \
     M(Bool, log_query_settings, true, "Log query settings into the query_log.", 0) \
-    M(Bool, \
-      log_query_threads, \
-      true, \
-      "Log query threads into system.query_thread_log table. This setting have effect only when 'log_queries' is true.", \
-      0) \
-    M(Bool, log_query_exchange, true, "Log query exchange metric.", 0) \
-    M(String, \
-      log_comment, \
-      "", \
-      "Log comment into system.query_log table and server log. It can be set to arbitrary string no longer than max_query_size.", \
-      0) \
-    M(LogsLevel, \
-      send_logs_level, \
-      LogsLevel::fatal, \
-      "Send server text logs with specified minimum level to client. Valid values: 'trace', 'debug', 'information', 'warning', 'error', " \
-      "'fatal', 'none'", \
-      0) \
+    M(Bool, log_query_threads, true, "Log query threads into system.query_thread_log table. This setting have effect only when 'log_queries' is true.", 0) \
+    M(Bool, log_query_exchange, false, "Log query exchange metric.", 0) \
+    M(String, log_comment, "", "Log comment into system.query_log table and server log. It can be set to arbitrary string no longer than max_query_size.", 0) \
+    M(LogsLevel, send_logs_level, LogsLevel::fatal, "Send server text logs with specified minimum level to client. Valid values: 'trace', 'debug', 'information', 'warning', 'error', 'fatal', 'none'", 0) \
     M(Bool, enable_optimize_predicate_expression, 1, "If it is set to true, optimize predicates to subqueries.", 0) \
     M(Bool, enable_optimize_predicate_expression_to_final_subquery, 1, "Allow push predicate to final subquery.", 0) \
     M(Bool, allow_push_predicate_when_subquery_contains_with, 1, "Allows push predicate when subquery contains WITH clause", 0) \
@@ -1733,7 +1720,6 @@ enum PreloadLevelSettings : UInt64
       "Timeout for query shard, if timeout shards beyond this threshold, then throw exception", \
       0) \
     M(Bool, enable_early_stop_metric, 0, "Whether output metrics of early stop", 0) \
-    \
     M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
     M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \
     M(UInt64, query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
@@ -1743,6 +1729,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
     M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback when failed", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
+    M(Bool, enable_new_scheduler, true, "Whether enable new scheduler", 0) \
+    M(Bool, enable_send_resource_by_stage, true, "Whether send resource by stage", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(UInt64, plan_optimizer_rule_warning_time, 1000, "Send warning if a optimize rule optimize time exceed timeout", 0) \
     M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \
@@ -2056,7 +2044,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
     M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel",0) \
     M(Bool,   parquet_parallel_read, false, "whether to read parquet in parallel",0) \
-    \
+    /*start of batch synchronous parallel section*/ \
+    M(Bool, bsp_mode, false, "if enabled, query will execute in bsp mode", 0) \
+    /*end of batch synchronous parallel section*/ \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
     \

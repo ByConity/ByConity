@@ -33,6 +33,10 @@ public:
     BroadcastExchangeSink(Block header_, BroadcastSenderPtrs senders_, ExchangeOptions options_, const String &name_);
     virtual ~BroadcastExchangeSink() override;
     String getName() const override { return name; }
+    BroadcastSenderPtrs getSenders() const
+    {
+        return senders;
+    }
 
     static String generateName(size_t exchange_id)
     {

@@ -80,7 +80,7 @@ public:
             LOG_TRACE(fsm.coordinator_ptr->log, "entering: StateCancel");
             fsm.coordinator_ptr->query_context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(fsm.coordinator_ptr->query_id);
             fsm.coordinator_ptr->query_context->getSegmentScheduler()->cancelPlanSegmentsFromCoordinator(
-                fsm.coordinator_ptr->query_id, event.query_error.message, fsm.coordinator_ptr->query_context);
+                fsm.coordinator_ptr->query_id, event.query_error.code, event.query_error.message, fsm.coordinator_ptr->query_context);
         }
         template <class Event, class FSM>
         void on_exit(Event const &, FSM & fsm)
@@ -199,6 +199,12 @@ BlockIO MPPQueryCoordinator::execute()
         scheduler_status = query_context->getSegmentScheduler()->insertPlanSegments(query_id, plan_segment_tree.get(), query_context);
     }
 
+    if (scheduler_status && !scheduler_status->exception.empty())
+    {
+        throw Exception(
+            "Query failed before final task execution, error message: " + scheduler_status->exception, scheduler_status->error_code);
+    }
+
     if (!scheduler_status || !scheduler_status->is_final_stage_start)
     {
         throw Exception("Cannot get scheduler status from segment scheduler or final stage not started yet", ErrorCodes::LOGICAL_ERROR);
@@ -312,6 +318,10 @@ MPPQueryCoordinator::~MPPQueryCoordinator()
     {
         RuntimeFilterManager::getInstance().removeQuery(query_id);
         query_context->getSegmentScheduler()->finishPlanSegments(query_id);
+        if (query_context->getSettingsRef().bsp_mode)
+        {
+            query_context->getExchangeDataTracker()->unregisterExchanges(query_id);
+        }
     }
     catch (...)
     {

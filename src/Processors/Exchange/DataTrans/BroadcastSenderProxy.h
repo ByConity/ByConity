@@ -31,16 +31,17 @@ namespace DB
 {
 struct SenderProxyOptions
 {
-    UInt32 wait_timeout_ms;
+    uint64_t wait_timeout_ms;
 };
 
 class BroadcastSenderProxy final : public IBroadcastSender, boost::noncopyable
 {
 public:
     virtual ~BroadcastSenderProxy() override;
-    BroadcastStatus send(Chunk chunk) override;
+    BroadcastStatus sendImpl(Chunk chunk) override;
     BroadcastStatus finish(BroadcastStatusCode status_code, String message) override;
     void merge(IBroadcastSender && /*sender*/) override;
+    bool needMetrics() override { return false; }
     String getName() const override;
     BroadcastSenderType getType() override;
     void accept(ContextPtr context_, Block header_);
@@ -52,6 +53,13 @@ public:
     ContextPtr getContext() const;
     Block getHeader() const;
     ExchangeDataKeyPtr getDataKey() const;
+
+    SenderMetrics & getSenderMetrics()
+    {
+        if (!has_real_sender.load(std::memory_order_relaxed))
+            waitBecomeRealSender(wait_timeout_ms);
+        return real_sender->getSenderMetrics();
+    }
 
 private:
     friend class BroadcastSenderProxyRegistry;

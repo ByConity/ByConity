@@ -83,6 +83,11 @@ public:
 
     String dumpPipeline() const;
 
+    bool isExecutionInitialized() const
+    {
+        return is_execution_initialized;
+    }
+
 private:
     Processors & processors;
     std::mutex processors_mutex;

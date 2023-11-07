@@ -1353,7 +1353,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             {
                 elem.segment_id = 0;
                 elem.segment_parallel = 1;
-                elem.segment_parallel_index = 1;
+                elem.segment_parallel_index = 0;
             }
 
             elem.fallback_reason = fallback_reason;

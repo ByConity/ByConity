@@ -13,11 +13,13 @@
  * limitations under the License.
  */
 
+#include <cstddef>
 #include <exception>
 #include <memory>
 #include <vector>
 #include <DataStreams/BlockIO.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
@@ -30,10 +32,10 @@
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
 #include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
-#include <Processors/Exchange/DataTrans/MultiPathReceiver.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
+#include <Processors/Exchange/DataTrans/MultiPathReceiver.h>
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <Processors/Exchange/DataTrans/RpcClient.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
@@ -45,9 +47,9 @@
 #include <Processors/Exchange/RepartitionTransform.h>
 #include <Processors/Exchange/SinglePartitionExchangeSink.h>
 #include <Processors/Executors/PipelineExecutor.h>
+#include <Processors/ResizeProcessor.h>
 #include <Processors/Transforms/BufferedCopyTransform.h>
 #include <Processors/Transforms/CopyTransform.h>
-#include <Processors/ResizeProcessor.h>
 #include <Protos/plan_segment_manager.pb.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/GraphvizPrinter.h>
@@ -59,9 +61,11 @@
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/ThreadStatus.h>
+#include <Common/Trace/Telemetry.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+#include "Processors/Exchange/DataTrans/Batch/Writer/DiskPartitionWriter.h"
 
 namespace ProfileEvents
 {
@@ -146,6 +150,7 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
 
         runtime_segment_status.query_id = plan_segment->getQueryId();
         runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
+        runtime_segment_status.parallel_index = plan_segment->getParallelIndex();
         runtime_segment_status.is_succeed = true;
         runtime_segment_status.is_canceled = false;
         runtime_segment_status.code = 0;
@@ -167,6 +172,7 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
         const auto & host = extractExchangeStatusHostPort(plan_segment->getCurrentAddress());
         runtime_segment_status.query_id = plan_segment->getQueryId();
         runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
+        runtime_segment_status.parallel_index = plan_segment->getParallelIndex();
         runtime_segment_status.is_succeed = false;
         runtime_segment_status.is_canceled = false;
         runtime_segment_status.code = exception_code;
@@ -309,7 +315,30 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
                 + CurrentThread::getGroup()->performance_counters[ProfileEvents::UserTimeMicroseconds];
     }
     for (const auto & sender : senders)
+    {
         sender->finish(BroadcastStatusCode::ALL_SENDERS_DONE, "Upstream pipeline finished");
+    }
+
+
+    if (context->getSettingsRef().bsp_mode)
+    {
+        for (const auto & sender : senders)
+        {
+            // TODO(WangTao): considering merge codition
+            if (const auto sender_proxy = dynamic_pointer_cast<BroadcastSenderProxy>(sender))
+            {
+                const auto & key = sender_proxy->getDataKey();
+                sender_metrics.bytes_sent[key->exchange_id].emplace_back(
+                    key->parallel_index, sender_proxy->getSenderMetrics().send_uncompressed_bytes.get_value());
+            }
+            else if (const auto writer = dynamic_pointer_cast<DiskPartitionWriter>(sender))
+            {
+                const auto & key = writer->getKey();
+                sender_metrics.bytes_sent[key->exchange_id].emplace_back(
+                    key->parallel_index, writer->getSenderMetrics().send_uncompressed_bytes.get_value());
+            }
+        }
+    }
 
     if (context->getSettingsRef().log_queries)
         collectSegmentQueryRuntimeMetric(query_status);
@@ -347,8 +376,18 @@ QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
 void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSenderPtrs & senders)
 {
     UInt64 current_tx_id = context->getCurrentTransactionID().toUInt64();
-
     std::vector<BroadcastSenderPtrs> senders_list;
+    const auto & settings = context->getSettingsRef();
+    auto disk_exchange_mgr = settings.bsp_mode ? context->getDiskExchangeDataManager() : nullptr; // get around with unittest
+    auto sender_options
+        = SenderProxyOptions{.wait_timeout_ms = settings.exchange_wait_accept_max_timeout_ms + settings.wait_runtime_filter_timeout};
+    auto & sender_registry = BroadcastSenderProxyRegistry::instance();
+    auto thread_group = CurrentThread::getGroup();
+
+    /// need to create directory in bsp_mode before submitting write task
+    if (settings.bsp_mode)
+        disk_exchange_mgr->createWriteTaskDirectory(current_tx_id);
+
     for (const auto &cur_plan_segment_output : plan_segment_outputs)
     {
         size_t exchange_parallel_size = cur_plan_segment_output->getExchangeParallelSize();
@@ -363,26 +402,35 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
 
         /// output partitions num = num of plan_segment * exchange size
         /// for example, if downstream plansegment size is 2 (parallel_id is 0 and 1) and exchange_parallel_size is 4
-        /// Exchange Sink will repartition data into 8 partition(2*4), partition id is range from 1 to 8.
+        /// Exchange Sink will repartition data into 8 partition(2*4), partition id is range from 0 to 7.
         /// downstream plansegment and consumed partitions table:
         /// plansegment parallel_id :  partition id
         /// -----------------------------------------------
-        /// 0                       : 1,2,3,4
-        /// 1                       : 5,6,7,8
+        /// 0                       : 0,1,2,3
+        /// 1                       : 4,5,6,7
         size_t total_partition_num = exchange_parallel_size == 0 ? parallel_size : parallel_size * exchange_parallel_size;
 
         if (total_partition_num == 0)
             throw Exception("Total partition number should not be zero", ErrorCodes::LOGICAL_ERROR);
 
-        auto sender_options = SenderProxyOptions{
-            .wait_timeout_ms = static_cast<UInt32>(
-                context->getSettingsRef().exchange_wait_accept_max_timeout_ms + context->getSettingsRef().wait_runtime_filter_timeout)};
         for (size_t i = 0; i < total_partition_num; i++)
         {
-            size_t partition_id = i + 1;
+            size_t partition_id = i;
             auto data_key = std::make_shared<ExchangeDataKey>(current_tx_id, exchange_id, partition_id);
-            BroadcastSenderProxyPtr sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key, sender_options);
-            sender->accept(context, header);
+            BroadcastSenderPtr sender;
+            if (settings.bsp_mode)
+            {
+                auto buf = disk_exchange_mgr->createFileBufferForWrite(data_key);
+                auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, data_key, std::move(buf));
+                disk_exchange_mgr->submitWriteTask(writer, thread_group);
+                sender = writer;
+            }
+            else
+            {
+                auto proxy = sender_registry.getOrCreate(data_key, sender_options);
+                proxy->accept(context, header);
+                sender = proxy;
+            }
             current_exchange_senders.emplace_back(std::move(sender));
         }
 
@@ -789,11 +837,37 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
         Protos::SendPlanSegmentStatusResponse response;
         request.set_query_id(status.query_id);
         request.set_segment_id(status.segment_id);
+        request.set_parallel_index(status.parallel_index);
         request.set_is_succeed(status.is_succeed);
         request.set_is_canceled(status.is_canceled);
         status.metrics.setProtos(*request.mutable_metrics());
         request.set_code(status.code);
         request.set_message(status.message);
+        if (!sender_metrics.bytes_sent.empty())
+        {
+            plan_segment->getCurrentAddress().toProto(*request.mutable_sender_metrics()->mutable_address());
+            for (const auto & cur_plan_segment_output : plan_segment_outputs)
+            {
+                size_t exchange_parallel_size = cur_plan_segment_output->getExchangeParallelSize();
+                size_t parallel_size = cur_plan_segment_output->getParallelSize();
+                size_t exchange_id = cur_plan_segment_output->getExchangeId();
+                const auto & output_for_exchange = sender_metrics.bytes_sent[exchange_id];
+                std::vector<size_t> bytes_sum(parallel_size);
+                std::generate(bytes_sum.begin(), bytes_sum.end(), []() { return 0; });
+                for (const auto & [p_id, b] : output_for_exchange)
+                {
+                    bytes_sum[p_id / exchange_parallel_size] += b;
+                }
+                auto & b = *request.mutable_sender_metrics()->mutable_send_bytes()->Add();
+                b.set_exchange_id(exchange_id);
+                for (size_t i = 0; i < bytes_sum.size(); i++)
+                {
+                    auto & b_i = *b.mutable_bytes_by_index()->Add();
+                    b_i.set_parallel_index(i);
+                    b_i.set_bytes_sent(bytes_sum[i]);
+                }
+            }
+        }
 
         manager.sendPlanSegmentStatus(&cntl, &request, &response, nullptr);
         rpc_client->assertController(cntl);

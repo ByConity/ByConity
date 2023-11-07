@@ -14,6 +14,7 @@
  */
 
 #pragma once
+#include <optional>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <CloudServices/CnchWorkerClient.h>
 #include <Core/Types.h>
@@ -91,6 +92,17 @@ struct AssignedResource
     bool empty() const { return sent_create_query && server_parts.empty(); }
 };
 
+// Send resources separately by UUID
+struct ResourceOption
+{
+    std::unordered_set<UUID> table_ids;
+};
+
+struct ResourceStageInfo
+{
+    std::unordered_set<UUID> sent_resource;
+    void filter_resource(std::optional<ResourceOption> resource_option);
+};
 class CnchServerResource
 {
 public:
@@ -107,11 +119,7 @@ public:
         const String & create_query,
         const String & worker_table_name,
         bool create_local_table = true);
-
-    void setAggregateWorker(HostWithPorts aggregate_worker_)
-    {
-        aggregate_worker = std::move(aggregate_worker_);
-    }
+    void setAggregateWorker(HostWithPorts aggregate_worker_) { aggregate_worker = std::move(aggregate_worker_); }
 
     void setWorkerGroup(WorkerGroupHandle worker_group_)
     {
@@ -135,7 +143,7 @@ public:
     /// Send resource to worker
     void sendResource(const ContextPtr & context, const HostWithPorts & worker);
     /// allocate and send resource to worker_group
-    void sendResources(const ContextPtr & context);
+    void sendResources(const ContextPtr & context, std::optional<ResourceOption> resource_option = std::nullopt);
 
     /// WorkerAction should not throw
     using WorkerAction
@@ -153,7 +161,10 @@ private:
     void cleanResourceInWorker();
 
     /// move resource from assigned_table_resource to assigned_worker_resource
-    void allocateResource(const ContextPtr & context, std::lock_guard<std::mutex> &);
+    void allocateResource(
+        const ContextPtr & context,
+        std::lock_guard<std::mutex> &,
+        std::optional<ResourceOption> resource_option = std::nullopt);
 
     void sendCreateQueries(const ContextPtr & context);
     void sendDataParts(const ContextPtr & context);
@@ -168,6 +179,8 @@ private:
     /// storage_uuid, assigned_resource
     std::unordered_map<UUID, AssignedResource> assigned_table_resource;
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> assigned_worker_resource;
+
+    ResourceStageInfo resource_stage_info;
 
     bool skip_clean_worker{false};
     Poco::Logger * log;

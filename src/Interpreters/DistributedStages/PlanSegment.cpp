@@ -140,6 +140,7 @@ String IPlanSegment::toString(size_t indent) const
     ostr << indent_str << "header: " << header.dumpStructure() << "\n";
     ostr << indent_str << "type: " << planSegmentTypeToString(type) << "\n";
     ostr << indent_str << "exchange_mode: " << exchangeModeToString(exchange_mode) << "\n";
+    ostr << indent_str << "exchange_id: " << exchange_id << "\n";
     ostr << indent_str << "exchange_parallel_size: " << exchange_parallel_size << "\n";
     ostr << indent_str << "shuffle_keys: " << "\n";
     ostr << indent_str;
@@ -292,6 +293,8 @@ void PlanSegment::serialize(WriteBuffer & buf) const
     writeBinary(runtime_filters.size(), buf);
     for (const auto & id : runtime_filters)
         writeBinary(id, buf);
+
+    writeBinary(parallel_index, buf);
 }
 
 void PlanSegment::deserialize(ReadBuffer & buf)
@@ -335,6 +338,8 @@ void PlanSegment::deserialize(ReadBuffer & buf)
         readBinary(id, buf);
         runtime_filters.emplace(id);
     }
+
+    readBinary(parallel_index, buf);
 }
 
 /**
@@ -361,6 +366,7 @@ String PlanSegment::toString() const
 
     ostr << "segment_id: " << segment_id << "\n";
     ostr << "query_id: " << query_id << "\n";
+    ostr << "parallel_index: " << parallel_index << "\n";
 
     WriteBufferFromOwnString plan_str;
     query_plan.explainPlan(plan_str, {});
@@ -389,17 +395,6 @@ void PlanSegment::getRemoteSegmentId(const QueryPlan::Node * node, std::unordere
 
     for (const auto & child : node->children)
         getRemoteSegmentId(child, exchange_to_segment);
-}
-
-size_t PlanSegment::getParallelIndex() const
-{
-    if (!inputs.empty())
-    {
-        auto first_input = inputs.front();
-        return first_input->getParallelIndex();
-    }
-
-    return 1;
 }
 
 std::unordered_map<size_t, PlanSegmentPtr &> PlanSegmentTree::getPlanSegmentsMap()

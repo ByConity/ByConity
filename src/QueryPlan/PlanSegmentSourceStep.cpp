@@ -48,6 +48,8 @@ PlanSegmentSourceStep::PlanSegmentSourceStep(Block header_,
     , num_streams(num_streams_)
     , context(std::move(context_))
 {
+    StoragePtr storage = DatabaseCatalog::instance().getTable({storage_id.database_name, storage_id.table_name}, context);
+    storage_id.uuid = storage->getStorageUUID();
     // std::cout<<" PlanSegmentSourceStep header: " << header_.dumpStructure() << std::endl;
     // std::cout<<" PlanSegmentSourceStep processed_stage: " << QueryProcessingStage::toString(processed_stage) << std::endl;
 }
