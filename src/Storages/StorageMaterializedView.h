@@ -123,8 +123,10 @@ public:
     ASTPtr getInnerQuery() const { return getInMemoryMetadataPtr()->select.inner_query->clone(); }
     bool isRefreshable(bool cascading) const;
     void refresh(const ASTPtr & partition, ContextMutablePtr local_context, bool async);
-    
+    void refreshWhere(ASTPtr partition_expr, ContextMutablePtr local_context, bool async);
+
 private:
+    bool checkPartitionExpr(ASTPtr partition_expr, ContextMutablePtr local_context);
     void refreshImpl(const ASTPtr & partition, ContextPtr local_context);
     void refreshCnchImpl(const ASTPtr & partition, ContextMutablePtr local_context);
 
