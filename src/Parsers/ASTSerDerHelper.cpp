@@ -18,12 +18,12 @@
 #include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTAssignment.h>
 #include <Parsers/ASTAsterisk.h>
+#include <Parsers/ASTBitEngineConstraintDeclaration.h>
 #include <Parsers/ASTCheckQuery.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTColumnsMatcher.h>
 #include <Parsers/ASTColumnsTransformers.h>
 #include <Parsers/ASTConstraintDeclaration.h>
-#include <Parsers/ASTBitEngineConstraintDeclaration.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTCreateQuotaQuery.h>
 #include <Parsers/ASTCreateRoleQuery.h>
@@ -93,6 +93,7 @@
 #include <Parsers/ASTWatchQuery.h>
 #include <Parsers/ASTWindowDefinition.h>
 #include <Parsers/ASTWithElement.h>
+#include <Parsers/queryToString.h>
 
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>
@@ -162,6 +163,7 @@ void serializeASTToProto(const IAST & ast, Protos::AST & proto)
     WriteBufferFromOwnString buf;
     serializeAST(ast, buf);
     proto.set_blob(std::move(buf.str()));
+    proto.set_text(queryToString(ast));
 }
 
 void serializeASTToProto(const ConstASTPtr & ast, Protos::AST & proto)

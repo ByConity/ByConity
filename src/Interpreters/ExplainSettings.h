@@ -22,19 +22,22 @@ struct QueryPlanSettings
     bool json = false;
     bool stats = true;
     bool profile = true;
+    bool pb_json = false;
+    bool add_whitespace = true; // used to pretty print json
 
     constexpr static char name[] = "PLAN";
 
-    std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings =
-    {
-            {"header", query_plan_options.header},
-            {"description", query_plan_options.description},
-            {"actions", query_plan_options.actions},
-            {"indexes", query_plan_options.indexes},
-            {"optimize", optimize},
-            {"json", json},
-            {"stats", stats},
-            {"profile", profile}
+    std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings = {
+        {"header", query_plan_options.header},
+        {"description", query_plan_options.description},
+        {"actions", query_plan_options.actions},
+        {"indexes", query_plan_options.indexes},
+        {"optimize", optimize},
+        {"json", json},
+        {"pb_json", pb_json},
+        {"stats", stats},
+        {"profile", profile},
+        {"add_whitespace", add_whitespace},
     };
 };
 

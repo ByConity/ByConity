@@ -106,7 +106,7 @@ void IPlanSegment::deserialize(ReadBuffer & buf, ContextPtr)
 
 void IPlanSegment::toProtoBase(Protos::IPlanSegment & proto) const
 {
-    serializeBlockToProto(header, *proto.mutable_header());
+    serializeHeaderToProto(header, *proto.mutable_header());
     proto.set_type(PlanSegmentTypeConverter::toProto(type));
     proto.set_exchange_mode(ExchangeModeConverter::toProto(exchange_mode));
     proto.set_exchange_id(exchange_id);
@@ -119,7 +119,7 @@ void IPlanSegment::toProtoBase(Protos::IPlanSegment & proto) const
 
 void IPlanSegment::fromProtoBase(const Protos::IPlanSegment & proto)
 {
-    header = deserializeBlockFromProto(proto.header());
+    header = deserializeHeaderFromProto(proto.header());
     type = PlanSegmentTypeConverter::fromProto(proto.type());
     exchange_mode = ExchangeModeConverter::fromProto(proto.exchange_mode());
     exchange_id = proto.exchange_id();

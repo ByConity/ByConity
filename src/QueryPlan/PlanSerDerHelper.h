@@ -116,8 +116,8 @@ void serializePlanStep(const QueryPlanStepPtr & step, WriteBuffer & buf);
 
 QueryPlanStepPtr deserializePlanStep(ReadBuffer & buf, ContextPtr context);
 
-void serializeBlockToProto(const Block & block, Protos::Block & proto);
-Block deserializeBlockFromProto(const Protos::Block & proto);
+void serializeHeaderToProto(const Block & block, Protos::Block & proto);
+Block deserializeHeaderFromProto(const Protos::Block & proto);
 
 void serializeAssignmentsToProto(const Assignments & assignment, Protos::Assignments & proto);
 Assignments deserializeAssignmentsFromProto(const Protos::Assignments & proto);

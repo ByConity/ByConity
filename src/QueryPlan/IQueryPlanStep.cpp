@@ -39,7 +39,7 @@ namespace ErrorCodes
 
 void DataStream::toProto(Protos::DataStream & proto) const
 {
-    serializeBlockToProto(header, *proto.mutable_header());
+    serializeHeaderToProto(header, *proto.mutable_header());
     for (const auto & element : distinct_columns)
         proto.add_distinct_columns(element);
     std::sort(proto.mutable_distinct_columns()->begin(), proto.mutable_distinct_columns()->end());
@@ -51,7 +51,7 @@ void DataStream::toProto(Protos::DataStream & proto) const
 
 void DataStream::fillFromProto(const Protos::DataStream & proto)
 {
-    header = deserializeBlockFromProto(proto.header());
+    header = deserializeHeaderFromProto(proto.header());
     for (const auto & element : proto.distinct_columns())
         distinct_columns.emplace(element);
     has_single_port = proto.has_single_port();

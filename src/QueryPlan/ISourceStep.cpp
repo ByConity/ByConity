@@ -29,13 +29,13 @@ void ISourceStep::describePipeline(FormatSettings & settings) const
 // this won't be override, so use a different name
 void ISourceStep::serializeToProtoBase(Protos::ISourceStep & proto) const
 {
-    serializeBlockToProto(output_stream->header, *proto.mutable_output_header());
+    serializeHeaderToProto(output_stream->header, *proto.mutable_output_header());
 }
 
 // return base_output_stream and step_description
 Block ISourceStep::deserializeFromProtoBase(const Protos::ISourceStep & proto)
 {
-    Block output_header = deserializeBlockFromProto(proto.output_header());
+    Block output_header = deserializeHeaderFromProto(proto.output_header());
     return output_header;
 }
 }

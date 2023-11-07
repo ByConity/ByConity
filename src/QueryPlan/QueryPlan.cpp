@@ -23,6 +23,7 @@
 #include <Interpreters/ActionsDAG.h>
 #include <Interpreters/ArrayJoinAction.h>
 #include <Processors/QueryPipeline.h>
+#include <Protos/plan_node.pb.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/Optimizations/Optimizations.h>
@@ -32,10 +33,12 @@
 #include <QueryPlan/PlanSerDerHelper.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/TableScanStep.h>
+#include <google/protobuf/util/json_util.h>
 #include <Common/JSONBuilder.h>
 #include <Common/Stopwatch.h>
 #include <common/logger_useful.h>
 #include "PlanSerDerHelper.h"
+
 
 namespace DB
 {
@@ -332,7 +335,7 @@ QueryPipelinePtr QueryPlan::buildQueryPipeline(
 
 void QueryPlan::updatePipelineStepInfo(QueryPipelinePtr & pipeline_ptr, QueryPlanStepPtr & step, size_t step_id)
 {
-    auto *source_step = dynamic_cast<ISourceStep *>(step.get());
+    auto * source_step = dynamic_cast<ISourceStep *>(step.get());
     for (const auto & processor : pipeline_ptr->getProcessors())
         if (processor->getStepId() == -1 || source_step)
             processor->setStepId(step_id);
@@ -590,6 +593,7 @@ void QueryPlan::optimize(const QueryPlanOptimizationSettings & optimization_sett
     QueryPlanOptimizations::optimizeTree(optimization_settings, *root, nodes);
 }
 
+// TODO: deprecate when proto rpc is ready
 void QueryPlan::serialize(WriteBuffer & buffer) const
 {
     // serialize nodes
@@ -677,6 +681,74 @@ void QueryPlan::serialize(WriteBuffer & buffer) const
     }
 }
 
+// we only support optimizer mode
+void QueryPlan::toProto(Protos::QueryPlan & proto) const
+{
+    if (!plan_node)
+        throw Exception("QueryPlan::toProto() only support optimizer mode", ErrorCodes::LOGICAL_ERROR);
+
+    std::queue<PlanNodePtr> queue;
+    queue.push(plan_node);
+
+    proto.set_root_id(plan_node->getId());
+    for (const auto & [cte_id, ptr] : this->cte_info.getCTEs())
+    {
+        queue.push(ptr);
+        (*proto.mutable_cte_id_mapping())[cte_id] = ptr->getId();
+    }
+
+    while (!queue.empty())
+    {
+        auto cur = queue.front();
+
+        auto plan_id = cur->getId();
+        auto * cur_pb = &(*proto.mutable_plan_nodes())[plan_id];
+
+        cur_pb->set_plan_id(plan_id);
+        serializeQueryPlanStepToProto(cur->getStep(), *cur_pb->mutable_step());
+        for (const auto & child : cur->getChildren())
+        {
+            queue.push(child);
+            cur_pb->add_children(child->getId());
+        }
+
+        queue.pop();
+    }
+}
+
+void QueryPlan::fromProto(Protos::QueryPlan & proto)
+{
+    std::unordered_map<Int64, PlanNodePtr> id_to_plan;
+    ContextPtr context = interpreter_context.empty() ? nullptr : interpreter_context.back();
+    for (const auto & [plan_id, plan_pb] : proto.plan_nodes())
+    {
+        if (plan_pb.plan_id() != plan_id)
+            throw Exception("Invalid Proto", ErrorCodes::LOGICAL_ERROR);
+        auto step = deserializeQueryPlanStepFromProto(plan_pb.step(), context);
+        auto plan = PlanNodeBase::createPlanNode(plan_id, step);
+        id_to_plan[plan_id] = std::move(plan);
+    }
+
+    // set children
+    for (const auto & [plan_id, plan_pb] : proto.plan_nodes())
+    {
+        PlanNodes children;
+        for (auto child_id : plan_pb.children())
+        {
+            children.emplace_back(id_to_plan.at(child_id));
+        }
+        id_to_plan.at(plan_id)->replaceChildren(children);
+    }
+
+    for (auto [cte_id, plan_id] : proto.cte_id_mapping())
+    {
+        this->cte_info.add(cte_id, id_to_plan.at(plan_id));
+    }
+    auto root_id = proto.root_id();
+    this->setPlanNodeRoot(id_to_plan.at(root_id));
+}
+
+// TODO: deprecate when proto rpc is ready
 void QueryPlan::deserialize(ReadBuffer & buffer)
 {
     size_t nodes_size;
