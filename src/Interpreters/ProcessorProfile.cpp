@@ -3,6 +3,33 @@
 namespace DB
 {
 
+ProcessorProfile::ProcessorProfile(const IProcessor * processor)
+{
+    processor_name = processor->getName();
+
+    auto get_proc_id = [](const IProcessor & proc) -> UInt64 { return reinterpret_cast<std::uintptr_t>(&proc); };
+
+    std::vector<ProcessorId> parents;
+    for (const auto & port : processor->getOutputs())
+    {
+        if (!port.isConnected())
+            continue;
+        const IProcessor & next = port.getInputPort().getProcessor();
+        parents.push_back(get_proc_id(next));
+    }
+
+    id = get_proc_id(*processor);
+    parent_ids = std::move(parents);
+    step_id = processor->getStepId();
+    elapsed_us = processor->getElapsedUs();
+    input_wait_elapsed_us = processor->getInputWaitElapsedUs();
+    output_wait_elapsed_us = processor->getOutputWaitElapsedUs();
+    input_rows = processor->getProcessorDataStats().input_rows;
+    input_bytes = processor->getProcessorDataStats().input_bytes;
+    output_rows = processor->getProcessorDataStats().output_rows;
+    output_bytes = processor->getProcessorDataStats().output_bytes;
+}
+
 GroupedProcessorProfilePtr GroupedProcessorProfile::getGroupedProfiles(ProcessorProfiles & profiles)
 {
     /// input processor id -> target processor id

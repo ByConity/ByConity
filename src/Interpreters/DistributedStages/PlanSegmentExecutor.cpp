@@ -22,8 +22,9 @@
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Interpreters/ProcessList.h>
-#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
+#include <Interpreters/ProcessorProfile.h>
 #include <Interpreters/ProcessorsProfileLog.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
@@ -50,6 +51,7 @@
 #include <Protos/plan_segment_manager.pb.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/QueryPlan.h>
 #include <fmt/core.h>
@@ -233,6 +235,19 @@ void PlanSegmentExecutor::collectSegmentQueryRuntimeMetric(const QueryStatus * q
     query_log_element->query_tables = query_access_info.tables;
 }
 
+StepAggregatedOperatorProfiles collectStepRuntimeProfiles(int segment_id, const QueryPipelinePtr & pipeline)
+{
+    ProcessorProfiles profiles;
+    for (const auto & processor : pipeline->getProcessors())
+        profiles.push_back(std::make_shared<ProcessorProfile>(processor.get()));
+    GroupedProcessorProfilePtr grouped_profiles = GroupedProcessorProfile::getGroupedProfiles(profiles);
+
+    std::unordered_map<size_t, std::vector<GroupedProcessorProfilePtr>> segment_grouped_profile;
+    segment_grouped_profile[segment_id].emplace_back(grouped_profiles);
+    auto step_profile = StepOperatorProfile::aggregateOperatorProfileToStepLevel(segment_grouped_profile);
+    return AggregatedStepOperatorProfile::aggregateStepOperatorProfileBetweenWorkers(step_profile);
+}
+
 void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 {
     std::optional<CurrentThread::QueryScope> query_scope;
@@ -298,6 +313,14 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 
     if (context->getSettingsRef().log_queries)
         collectSegmentQueryRuntimeMetric(query_status);
+
+    if (context->getSettingsRef().log_segment_profiles)
+    {
+        query_log_element->segment_profiles = std::make_shared<std::vector<String>>();
+        query_log_element->segment_profiles->emplace_back(
+            PlanSegmentDescription::getPlanSegmentDescription(plan_segment, true)
+                ->jsonPlanSegmentDescriptionAsString(collectStepRuntimeProfiles(plan_segment->getPlanSegmentId(), pipeline)));
+    }
 
     if (context->getSettingsRef().log_processors_profiles)
     {

@@ -27,6 +27,7 @@
 #include <Parsers/ASTTEALimit.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/PlanCache.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/QueryPlanner.h>
@@ -152,6 +153,14 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
     context->logOptimizerProfile(
         log, "Optimizer total run time: ", "Optimizer Total", std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms");
+
+    if (context->getSettingsRef().log_segment_profiles)
+    {
+        segment_profiles = std::make_shared<std::vector<String>>();
+        for (auto & node : plan_segment_tree->getNodes())
+            segment_profiles->emplace_back(PlanSegmentDescription::getPlanSegmentDescription(node.plan_segment, true)->jsonPlanSegmentDescriptionAsString({}));
+    }
+
     return std::make_pair(std::move(plan_segment_tree), std::move(used_storage_ids));
 }
 

@@ -1344,6 +1344,15 @@ NodeDescriptionPtr NodeDescription::getPlanDescription(PlanNodePtr node)
     return description;
 }
 
+
+String PlanSegmentDescription::jsonPlanSegmentDescriptionAsString(const StepAggregatedOperatorProfiles & profiles)
+{
+    auto json = jsonPlanSegmentDescription(profiles);
+    std::ostringstream os;
+    json->stringify(os, 1);
+    return os.str();
+}
+
 Poco::JSON::Object::Ptr PlanSegmentDescription::jsonPlanSegmentDescription(const StepAggregatedOperatorProfiles & profiles)
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object(true);
