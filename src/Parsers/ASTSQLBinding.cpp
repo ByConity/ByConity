@@ -5,51 +5,46 @@ namespace DB
 ASTPtr ASTCreateBinding::clone() const
 {
     auto res = std::make_shared<ASTCreateBinding>(*this);
-    res->children.clear();
-    res->positions.clear();
-
-#define CLONE(expr) res->setExpression(expr, getExpression(expr, true))
-
-    CLONE(Expression::QUERY_PATTERN);
-    CLONE(Expression::TARGET);
-    CLONE(Expression::SETTINGS);
-
-#undef CLONE
-
+    if (pattern)
+        res->pattern = pattern->clone();
+    if (settings)
+        res->settings = settings->clone();
+    if (target)
+        res->target = target->clone();
     return res;
 }
 
-void ASTCreateBinding::setExpression(Expression expr, ASTPtr && ast)
-{
-    if (ast)
-    {
-        auto it = positions.find(expr);
-        if (it == positions.end())
-        {
-            positions[expr] = children.size();
-            children.emplace_back(ast);
-        }
-        else
-            children[it->second] = ast;
-    }
-    else if (positions.count(expr))
-    {
-        size_t pos = positions[expr];
-        children.erase(children.begin() + pos);
-        positions.erase(expr);
-        for (auto & pr : positions)
-            if (pr.second > pos)
-                --pr.second;
-    }
-}
+// void ASTCreateBinding::setExpression(Expression expr, ASTPtr && ast)
+// {
+//     if (ast)
+//     {
+//         auto it = positions.find(expr);
+//         if (it == positions.end())
+//         {
+//             positions[expr] = children.size();
+//             children.emplace_back(ast);
+//         }
+//         else
+//             children[it->second] = ast;
+//     }
+//     else if (positions.count(expr))
+//     {
+//         size_t pos = positions[expr];
+//         children.erase(children.begin() + pos);
+//         positions.erase(expr);
+//         for (auto & pr : positions)
+//             if (pr.second > pos)
+//                 --pr.second;
+//     }
+// }
 
-ASTPtr ASTCreateBinding::getExpression(Expression expr, bool clone) const
-{
-    auto it = positions.find(expr);
-    if (it != positions.end())
-        return clone ? children[it->second]->clone() : children[it->second];
-    return {};
-}
+// ASTPtr ASTCreateBinding::getExpression(Expression expr, bool clone) const
+// {
+//     auto it = positions.find(expr);
+//     if (it != positions.end())
+//         return clone ? children[it->second]->clone() : children[it->second];
+//     return {};
+// }
 
 void ASTCreateBinding::formatImpl(const FormatSettings & format, FormatState & state, FormatStateStacked frame) const
 {
@@ -68,29 +63,29 @@ void ASTCreateBinding::formatImpl(const FormatSettings & format, FormatState & s
     if (!re_expression.empty())
     {
         format.ostr << format.nl_or_ws << (format.hilite ? hilite_none : "") << re_expression;
-        if (settings())
+        if (getSettings())
         {
             format.ostr << format.nl_or_ws << (format.hilite ? hilite_keyword : "") << "SETTINGS " << (format.hilite ? hilite_none : "");
-            settings()->formatImpl(format, state, frame);
+            getSettings()->formatImpl(format, state, frame);
         }
     }
     else
     {
-        if (pattern())
+        if (getPattern())
         {
             format.ostr << format.nl_or_ws;
             ++frame.indent;
-            pattern()->formatImpl(format, state, frame);
+            getPattern()->formatImpl(format, state, frame);
             --frame.indent;
         }
 
-        if (target())
+        if (getTarget())
         {
             format.ostr << format.nl_or_ws << (format.hilite ? hilite_keyword : "") << "USING" << (format.hilite ? hilite_none : "");
 
             format.ostr << format.nl_or_ws;
             ++frame.indent;
-            target()->formatImpl(format, state, frame);
+            getTarget()->formatImpl(format, state, frame);
             --frame.indent;
         }
     }
@@ -109,7 +104,10 @@ void ASTShowBindings::formatImpl(const FormatSettings & format, FormatState &, F
 
 ASTPtr ASTDropBinding::clone() const
 {
-    return std::make_shared<ASTDropBinding>(*this);
+    auto res = std::make_shared<ASTDropBinding>(*this);
+    if (pattern_ast)
+        res->pattern_ast = pattern_ast->clone();
+    return res;
 }
 
 void ASTDropBinding::formatImpl(const FormatSettings & format, FormatState & state, FormatStateStacked frame) const

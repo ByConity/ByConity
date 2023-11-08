@@ -11,21 +11,23 @@ drop global binding if exists '^select \* from test\.bindin.*';
 
 CREATE TABLE test.bindings(a Int32, b Int32) ENGINE = CnchMergeTree() PARTITION BY `a` PRIMARY KEY `a` ORDER BY `a`;
 insert into test.bindings values(1,2)(2,3)(3,4);
-
+set send_logs_level='error';
 -- test session sql binding
-create session binding select * from test.bindings order by a using select a+1 from test.bindings order by a;
+create session binding select * FROM test.bindings order by a using select a+1 from test.bindings order by a;
 show bindings;
 set use_sql_binding = 0;
 select * from test.bindings order by a;
 set use_sql_binding = 1;
-select * from test.bindings order by a;
+select * from test.bindings ORDER BY a;
+Select * From test.bindings order By a;
+Select * From test.bindings order by a;
 drop session binding select * from test.bindings order by a;
 show bindings;
 
 -- test drop session sql binding use uuid
 create session binding select * from test.bindings using select b+1 from test.bindings order by a;
 show bindings;
-drop session binding uuid '4c6e2b31-3d7d-d0e8-d71b-80e52e07c90e';
+drop session binding uuid 'c33c6081-cbcd-a444-580b-186393bd058e';
 show bindings;
 
 -- test session regular expression binding

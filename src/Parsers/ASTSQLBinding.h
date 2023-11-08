@@ -25,6 +25,9 @@ public:
     BindingLevel level;
     String query_pattern;
     String re_expression;
+    ASTPtr pattern;
+    ASTPtr target;
+    ASTPtr settings;
 
 
     /** Get the text that identifies this element. */
@@ -37,15 +40,15 @@ public:
     void setExpression(Expression expr, ASTPtr && ast);
     ASTPtr getExpression(Expression expr, bool clone = false) const;
 
-    ASTPtr settings() const { return getExpression(Expression::SETTINGS); }
-    ASTPtr pattern() const { return getExpression(Expression::QUERY_PATTERN); }
-    ASTPtr target() const { return getExpression(Expression::TARGET); }
+    ASTPtr getSettings() const { return settings; }
+    ASTPtr getPattern() const { return pattern; }
+    ASTPtr getTarget() const { return target; }
 
 protected:
     void formatImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const override;
 
-private:
-    std::unordered_map<Expression, size_t> positions;
+// private:
+//     std::unordered_map<Expression, size_t> positions;
 };
 
 class ASTShowBindings : public IAST

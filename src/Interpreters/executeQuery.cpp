@@ -858,23 +858,21 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             ParserQuery parser(end, ParserSettings::valueOf(context->getSettings()));
             parser.setContext(context.get());
 
-            if (settings.use_sql_binding && !internal)
+        /// TODO Parser should fail early when max_query_size limit is reached.
+        ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+        if (settings.use_sql_binding && !internal)
+        {
+            try
             {
-                try
-                {
-                    ast = SQLBindingUtils::getASTFromBindings(begin, end, context);
-                }
-                catch (...)
-                {
-                    LOG_INFO(&Poco::Logger::get("SQL Binding"), "SQL binding match error");
-                }
+                ASTPtr binding_ast = SQLBindingUtils::getASTFromBindings(begin, end, ast, context);
+                if (binding_ast)
+                    ast = binding_ast;
             }
-
-            if (!ast)
+            catch (...)
             {
-                /// TODO Parser should fail early when max_query_size limit is reached.
-                ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+                tryLogWarningCurrentException(&Poco::Logger::get("SQL Binding"), "SQL binding match error.");
             }
+        }
         }
         else
         {

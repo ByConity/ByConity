@@ -1106,7 +1106,12 @@ CheckResults StorageCnchMergeTree::checkDataCommon(const ASTPtr & query, Context
                 is_passed = false;
                 message = e.message();
             }
-            results[i].fs_path = cnch_parts[i]->getFullPath();
+            catch (const Poco::Exception & e)
+            {
+                is_passed = false;
+                message = e.message();
+            }
+            results[i].fs_path = cnch_parts[i]->name;
             results[i].success = is_passed;
             results[i].failure_message = std::move(message);
         });
@@ -1120,6 +1125,30 @@ CheckResults StorageCnchMergeTree::checkData(const ASTPtr & query, ContextPtr lo
 {
     ServerDataPartsVector parts;
     return checkDataCommon(query, local_context, parts);
+}
+
+CheckResults StorageCnchMergeTree::autoRemoveData(const ASTPtr & query, ContextPtr local_context)
+{
+    ServerDataPartsVector error_server_parts;
+    CheckResults check_results =  checkDataCommon(query, local_context, error_server_parts);
+
+    MergeTreeDataPartsCNCHVector error_parts;
+    CheckResults error_results;
+    for (size_t i=0; i<check_results.size(); i++)
+    {
+        if (check_results[i].success)
+            continue;
+        error_parts.push_back(error_server_parts[i]->toCNCHDataPart(*this));
+        error_results.push_back(check_results[i]);
+    }
+
+    if (error_parts.size())
+    {
+        if (auto catalog = local_context->getCnchCatalog())
+            catalog->clearDataPartsMeta(shared_from_this(), error_parts);
+    }
+
+    return error_results;
 }
 
 ServerDataPartsVector StorageCnchMergeTree::getAllParts(ContextPtr local_context) const
@@ -2475,7 +2504,7 @@ StorageCnchMergeTree::MutableDataPartsVector StorageCnchMergeTree::createDropRan
 
     const StorageID target_storage_id = getStorageID();
     std::optional<DaemonManager::BGJobInfo> merge_job_info
-        = daemon_manager_client_ptr->getDMBGJobInfo(target_storage_id.uuid, CnchBGThreadType::MergeMutate);
+        = daemon_manager_client_ptr->getDMBGJobInfo(target_storage_id.uuid, CnchBGThreadType::MergeMutate, query_context->getCurrentQueryId());
 
     if (!merge_job_info || merge_job_info->host_port.empty())
         LOG_DEBUG(

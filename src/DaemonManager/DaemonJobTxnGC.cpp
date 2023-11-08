@@ -189,15 +189,17 @@ void DaemonJobTxnGC::cleanUndoBuffers(const TransactionRecords & txn_records)
         txn_id_set.insert(txn_record.txnID());
     });
 
-    auto txn_undobuffers = catalog->getAllUndoBuffer();
-    std::vector<TxnTimestamp> missing_ids;
-    missing_ids.reserve(txn_undobuffers.size());
-    for (const auto & elem : txn_undobuffers)
+    auto txn_undobuffers_iter = catalog->getUndoBufferIterator();
+    std::vector<TxnTimestamp> missing_ids_set;
+    while(txn_undobuffers_iter.next())
     {
-        const auto & txn_id = elem.first;
+        const UndoResource & undo_resource = txn_undobuffers_iter.getUndoResource();
+        const auto & txn_id = undo_resource.txn_id;
         if (txn_id_set.find(txn_id) == txn_id_set.end())
-            missing_ids.push_back(txn_id);
+            missing_ids_set.push_back(txn_id);
     }
+
+    std::vector<TxnTimestamp> missing_ids(missing_ids_set.begin(), missing_ids_set.end());
 
     auto missing_records = catalog->getTransactionRecords(missing_ids);
     size_t count = 0;

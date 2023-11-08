@@ -59,7 +59,7 @@ public:
 
     void syncTSO();
 
-    void updateTSO(Poco::Timer &);
+    void updateTSO();
 
     String getHostPort() const { return host_port; }
 
@@ -109,8 +109,7 @@ private:
     UInt64 t_next;  /// TSO physical time
     UInt64 t_last;  /// TSO physical time upper bound (persist in KV)
 
-    Poco::Timer timer;
-    Poco::TimerCallback<TSOServer> callback;
+    BackgroundSchedulePool::TaskHolder update_tso_task;
 
     ContextMutablePtr global_context;
 

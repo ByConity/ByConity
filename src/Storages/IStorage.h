@@ -595,6 +595,9 @@ public:
     /// Checks validity of the data
     virtual CheckResults checkData(const ASTPtr & /* query */, ContextPtr /* context */) { throw Exception("Check query is not supported for " + getName() + " storage", ErrorCodes::NOT_IMPLEMENTED); }
 
+    /// Checks validity of the data and auto remove invailid metadata
+    virtual CheckResults autoRemoveData(const ASTPtr & /* query */, ContextPtr /* context */) { throw Exception("Check query with auto remove is not supported for " + getName() + " storage", ErrorCodes::NOT_IMPLEMENTED); }
+
     /// Checks that table could be dropped right now
     /// Otherwise - throws an exception with detailed information.
     /// We do not use mutex because it is not very important that the size could change during the operation.

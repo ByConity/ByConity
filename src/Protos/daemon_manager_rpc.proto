@@ -29,6 +29,7 @@ message GetDMBGJobInfoReq
 {
     required uint32 job_type = 1;
     required UUID storage_uuid = 2;
+    optional string query_id = 3;
 }
 
 message GetDMBGJobInfoResp
@@ -42,6 +43,7 @@ message ControlDaemonJobReq
     required StorageID storage_id = 1;
     required uint32 job_type = 2;
     required uint32 action = 3;
+    optional string query_id = 4;
 }
 
 message ControlDaemonJobResp
