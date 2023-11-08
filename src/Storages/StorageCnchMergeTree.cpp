@@ -2475,7 +2475,7 @@ StorageCnchMergeTree::MutableDataPartsVector StorageCnchMergeTree::createDropRan
 
     const StorageID target_storage_id = getStorageID();
     std::optional<DaemonManager::BGJobInfo> merge_job_info
-        = daemon_manager_client_ptr->getDMBGJobInfo(target_storage_id.uuid, CnchBGThreadType::MergeMutate);
+        = daemon_manager_client_ptr->getDMBGJobInfo(target_storage_id.uuid, CnchBGThreadType::MergeMutate, query_context->getCurrentQueryId());
 
     if (!merge_job_info || merge_job_info->host_port.empty())
         LOG_DEBUG(

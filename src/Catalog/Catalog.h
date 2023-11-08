@@ -352,6 +352,25 @@ public:
     /// return txn_id -> undo resources
     std::unordered_map<UInt64, UndoResources> getAllUndoBuffer();
 
+    class UndoBufferIterator
+    {
+    public:
+        UndoBufferIterator(IMetaStore::IteratorPtr metastore_iter, Poco::Logger * log);
+        const UndoResource & getUndoResource() const;
+        bool next();
+        bool is_valid() const /// for testing
+        {
+            return valid;
+        }
+    private:
+        IMetaStore::IteratorPtr metastore_iter;
+        std::optional<UndoResource> cur_undo_resource;
+        bool valid = false;
+        Poco::Logger * log;
+    };
+
+    UndoBufferIterator getUndoBufferIterator() const;
+
     /// get transaction records, if the records exists, we can check with the transaction coordinator to detect zombie record.
     /// the transaction record will be cleared only after all intents have been cleared and set commit time for all parts.
     /// For zombie record, the intents to be clear can be scanned from intents space with txnid. The parts can be get from undo buffer.

@@ -114,7 +114,7 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
     if (kafka_table_is_active)
     {
         LOG_TRACE(log, "Stop consumption before altering table {}", full_name);
-        daemon_manager->controlDaemonJob(getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop);
+        daemon_manager->controlDaemonJob(getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop, local_context->getCurrentQueryId());
     }
 
     SCOPE_EXIT({
@@ -123,7 +123,7 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
             LOG_TRACE(log, "Restart consumption no matter if ALTER succ for table {}", full_name);
             try
             {
-                daemon_manager->controlDaemonJob(getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Start);
+                daemon_manager->controlDaemonJob(getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Start, local_context->getCurrentQueryId());
             }
             catch (...)
             {

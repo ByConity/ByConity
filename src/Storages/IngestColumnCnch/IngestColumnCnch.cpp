@@ -229,7 +229,7 @@ Pipe ingestPartitionInServer(
     if (!daemon_manager_client_ptr)
         throw Exception("Failed to get daemon manager client", ErrorCodes::SYSTEM_ERROR);
 
-    std::optional<DaemonManager::BGJobInfo> merge_job_info = daemon_manager_client_ptr->getDMBGJobInfo(target_storage_id.uuid, CnchBGThreadType::MergeMutate);
+    std::optional<DaemonManager::BGJobInfo> merge_job_info = daemon_manager_client_ptr->getDMBGJobInfo(target_storage_id.uuid, CnchBGThreadType::MergeMutate, local_context->getCurrentQueryId());
     if (!merge_job_info)
     {
         throw Exception("Failed to get merge job info for " + target_storage_id.getNameForLogs() , ErrorCodes::SYSTEM_ERROR);

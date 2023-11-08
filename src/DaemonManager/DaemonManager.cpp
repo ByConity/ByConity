@@ -62,6 +62,7 @@ namespace DB::ErrorCodes
     extern const int NETWORK_ERROR;
     extern const int BAD_ARGUMENTS;
     extern const int LOGICAL_ERROR;
+    extern const int SYSTEM_ERROR;
 }
 
 namespace DB::DaemonManager
@@ -288,7 +289,7 @@ int DaemonManager::main(const std::vector<std::string> &)
     }
 
     auto storage_cache_size = config().getUInt("daemon_manager.storage_cache_size", 10000);
-    StorageCache cache(storage_cache_size); /* Cache size = storage_cache_size, invalidate an entry every 180s if unused */
+    StorageTraitCache cache(storage_cache_size); /* Cache size = storage_cache_size, invalidate an entry every 180s if unused */
 
     const size_t liveness_check_interval = config().getUInt("daemon_manager.liveness_check_interval", LIVENESS_CHECK_INTERVAL);
 
@@ -305,7 +306,7 @@ int DaemonManager::main(const std::vector<std::string> &)
                     {
                         daemon->init();
                         daemon->setLivenessCheckInterval(liveness_check_interval);
-                        daemon->setStorageCache(&cache);
+                        daemon->setStorageTraitCache(&cache);
                     }
                 );
 
@@ -339,10 +340,7 @@ int DaemonManager::main(const std::vector<std::string> &)
         auto & rpc_server = rpc_servers.back();
 
         if (rpc_server->AddService(daemon_manager_service.get(), brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
-        {
-            LOG_ERROR(log, "Fail to add daemon manager service.");
-            exit(-1);
-        }
+            throw Exception("Fail to add daemon manager service.", ErrorCodes::SYSTEM_ERROR);
 
         LOG_INFO(log, "Added rpc service");
 

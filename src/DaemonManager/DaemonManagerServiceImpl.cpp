@@ -15,6 +15,7 @@
 
 #include <DaemonManager/DaemonManagerServiceImpl.h>
 #include <DaemonManager/DaemonHelper.h>
+#include <DaemonManager/DaemonManagerThreadStatus.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <Protos/RPCHelpers.h>
 #include <brpc/closure_guard.h>
@@ -79,9 +80,11 @@ void DaemonManagerServiceImpl::GetDMBGJobInfo(
     ::DB::Protos::GetDMBGJobInfoResp * response,
     ::google::protobuf::Closure * done)
 {
+    DaemonManagerThreadStatus thread_status;
     brpc::ClosureGuard done_guard(done);
     try
     {
+        thread_status.setQueryID(request->query_id());
         UUID storage_uuid = RPCHelpers::createUUID(request->storage_uuid());
         auto it = daemon_jobs.find(CnchBGThreadType(request->job_type()));
         if (it == daemon_jobs.end())
@@ -113,11 +116,12 @@ void DaemonManagerServiceImpl::ControlDaemonJob(
     ::google::protobuf::Closure * done)
 {
     brpc::ClosureGuard done_guard(done);
-
+    DaemonManagerThreadStatus thread_status;
     try
     {
         StorageID storage_id = RPCHelpers::createStorageID(request->storage_id());
         CnchBGThreadAction action = static_cast<CnchBGThreadAction>(request->action());
+        thread_status.setQueryID(request->query_id());
 
         LOG_INFO(log, "Receive ControlDaemonJob RPC request for storage: {} job type: {} action: {}"
             , storage_id.getNameForLogs()

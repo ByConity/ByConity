@@ -244,6 +244,8 @@ namespace ProfileEvents
     extern const Event GetUndoBufferFailed;
     extern const Event GetAllUndoBufferSuccess;
     extern const Event GetAllUndoBufferFailed;
+    extern const Event GetUndoBufferSuccessIterator;
+    extern const Event GetUndoBufferFailedIterator;
     extern const Event GetTransactionRecordsSuccess;
     extern const Event GetTransactionRecordsFailed;
     extern const Event GetTransactionRecordsTxnIdsSuccess;
@@ -3063,6 +3065,59 @@ namespace Catalog
             ProfileEvents::GetAllUndoBufferSuccess,
             ProfileEvents::GetAllUndoBufferFailed);
         return txn_undobuffers;
+    }
+
+    Catalog::UndoBufferIterator::UndoBufferIterator(IMetaStore::IteratorPtr metastore_iter_, Poco::Logger * log_)
+        : metastore_iter{metastore_iter_}, log{log_}
+    {}
+
+    bool Catalog::UndoBufferIterator::next()
+    {
+        if (!metastore_iter)
+            return false;
+
+        bool ret = false;
+        const String ub_prefix{UNDO_BUFFER_PREFIX};
+        while (true)
+        {
+            ret = metastore_iter->next();
+            if (!ret)
+                break;
+            cur_undo_resource = UndoResource::deserialize(metastore_iter->value());
+            const String & key = metastore_iter->key();
+            auto pos = key.find(ub_prefix);
+            if (pos == std::string::npos || pos + ub_prefix.size() > key.size())
+            {
+                LOG_ERROR(log, "Invalid undobuffer key: {}", metastore_iter->key());
+                continue;
+            }
+
+            UInt64 txn_id = std::stoull(key.substr(pos + ub_prefix.size()));
+            cur_undo_resource->txn_id = txn_id;
+            valid = true;
+            break;
+        }
+        return ret;
+    }
+
+    const UndoResource & Catalog::UndoBufferIterator::getUndoResource() const
+    {
+        if (!valid)
+            throw Exception("iterator is not valid, call next() before using it", ErrorCodes::LOGICAL_ERROR);
+        return cur_undo_resource.value();
+    }
+
+    Catalog::UndoBufferIterator Catalog::getUndoBufferIterator() const
+    {
+        UndoBufferIterator ret{nullptr, log};
+        runWithMetricSupport(
+            [&] {
+                auto it = meta_proxy->getAllUndoBuffer(name_space);
+                ret = UndoBufferIterator{it, log};
+            },
+            ProfileEvents::GetUndoBufferSuccessIterator,
+            ProfileEvents::GetUndoBufferFailedIterator);
+        return ret;
     }
 
     /// get transaction records, if the records exists, we can check with the transaction coordinator to detect zombie record.
