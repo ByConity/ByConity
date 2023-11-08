@@ -133,10 +133,6 @@ std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread 
                     continue;
                 }
 
-                LOG_TRACE(log, "With storage_id {}, server_vw_name {}, daemon job type {}, storage_trait {}",
-                    storage_id.getNameForLogs(), storage_id.server_vw_name,
-                    toString(daemon_job.getType()), storage_trait->getData().to_string());
-
                 if (daemon_job.ifNeedDaemonJob(storage_trait.value(), storage_id))
                     ret.insert(std::make_pair(uuid, storage_id));
             }

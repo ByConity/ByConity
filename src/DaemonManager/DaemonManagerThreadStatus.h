@@ -6,6 +6,7 @@ namespace DB
 namespace DaemonManager
 {
 
+/// This class can not be used inside brpc thread, because multiple brpc thread can shared a single normal thread, causing race condition
 class DaemonManagerThreadStatus : public ThreadStatus
 {
 public:
