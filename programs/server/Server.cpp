@@ -107,8 +107,6 @@
 #include <Common/ThreadFuzzer.h>
 #include <Common/ThreadProfileEvents.h>
 #include <Common/ThreadStatus.h>
-#include <Common/Trace/Telemetry.h>
-#include <Common/Trace/TracerOptions.h>
 #include <Common/ZooKeeper/ZooKeeper.h>
 #include <Common/ZooKeeper/ZooKeeperNodeCache.h>
 #include <Common/getExecutablePath.h>
