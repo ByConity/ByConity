@@ -1212,7 +1212,7 @@ enum PreloadLevelSettings : UInt64
       "partitions. This setting is a safety threshold, because using large number of partitions is a common misconception.", \
       0) \
     M(Int64, max_partitions_to_read, -1, "Limit the max number of partitions that can be accessed in one query. <= 0 means unlimited.", 0) \
-    M(Bool, check_query_single_value_result, true, "Return check query result as single 1/0 value", 0) \
+    M(Bool, check_query_single_value_result, false, "Return check query result as single 1/0 value", 0) \
     M(Bool, allow_drop_detached, false, "Allow ALTER TABLE ... DROP DETACHED PART[ITION] ... queries", 0) \
 \
     M(UInt64, postgresql_connection_pool_size, 16, "Connection pool size for PostgreSQL table engine and database engine.", 0) \

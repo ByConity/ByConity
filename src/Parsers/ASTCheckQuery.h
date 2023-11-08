@@ -32,6 +32,8 @@ struct ASTCheckQuery : public ASTQueryWithTableAndOutput
 {
     ASTPtr partition;
 
+    bool auto_remove = false;
+
     /** Get the text that identifies this element. */
     String getID(char delim) const override { return "CheckQuery" + (delim + database) + delim + table; }
 
@@ -69,6 +71,11 @@ protected:
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << " PARTITION " << (settings.hilite ? hilite_none : "");
             partition->formatImpl(settings, state, frame);
+        }
+
+        if (auto_remove)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << " AUTO REMOVE" << (settings.hilite ? hilite_none : "");
         }
     }
 };

@@ -104,6 +104,8 @@ public:
 
     CheckResults checkData(const ASTPtr & query, ContextPtr local_context) override;
 
+    CheckResults autoRemoveData(const ASTPtr & query, ContextPtr local_context) override;
+
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
 
     ServerDataPartsVector

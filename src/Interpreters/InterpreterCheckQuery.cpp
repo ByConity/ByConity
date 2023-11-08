@@ -41,7 +41,12 @@ BlockIO InterpreterCheckQuery::execute()
 
     getContext()->checkAccess(AccessType::SHOW_TABLES, table_id);
     StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
-    auto check_results = table->checkData(query_ptr, getContext());
+
+    CheckResults check_results;
+    if (check.auto_remove)
+        check_results = table->autoRemoveData(query_ptr, getContext());
+    else
+        check_results = table->checkData(query_ptr, getContext());
 
     Block block;
     if (getContext()->getSettingsRef().check_query_single_value_result)
