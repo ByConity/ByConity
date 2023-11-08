@@ -24,7 +24,6 @@
 #include <Common/HostWithPorts.h>
 #include <Common/Macros.h>
 #include <Common/ProfileEvents.h>
-#include <Common/Trace/Telemetry.h>
 #include <common/types.h>
 
 namespace ProfileEvents

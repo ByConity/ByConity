@@ -35,7 +35,6 @@
 #include <brpc/callback.h>
 #include <brpc/controller.h>
 #include <butil/iobuf.h>
-#include <opentelemetry/trace/propagation/http_trace_context.h>
 #include <Poco/Logger.h>
 #include <Common/ThreadPool.h>
 #include <Common/Trace/BRPCCarrier.h>

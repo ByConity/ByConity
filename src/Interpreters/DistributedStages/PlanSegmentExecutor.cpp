@@ -61,7 +61,6 @@
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include <Common/ThreadStatus.h>
-#include <Common/Trace/Telemetry.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
