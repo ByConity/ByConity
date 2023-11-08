@@ -37,7 +37,6 @@
 #include <butil/iobuf.h>
 #include <Poco/Logger.h>
 #include <Common/ThreadPool.h>
-#include <Common/Trace/BRPCCarrier.h>
 #include <common/logger_useful.h>
 
 namespace DB
