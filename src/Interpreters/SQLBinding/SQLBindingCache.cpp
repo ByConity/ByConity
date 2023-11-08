@@ -105,13 +105,14 @@ void BindingCacheManager::updateGlobalBindingsFromCatalog(const ContextPtr & con
     if (!context->getGlobalBindingCacheManager())
         throw Exception("Catalog has to be initialized", ErrorCodes::LOGICAL_ERROR);
 
+    auto manager_instance = context->getGlobalBindingCacheManager();
+    manager_instance->setTimeStamp(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
     BindingCatalogManager catalog(context);
     auto global_bindings = catalog.getSQLBindings();
     std::sort(global_bindings.begin(), global_bindings.end(), [](const SQLBindingItemPtr & binding1, const SQLBindingItemPtr & binding2) {
         return binding1->timestamp < binding2->timestamp;
     });
 
-    auto manager_instance = context->getGlobalBindingCacheManager();
     auto & global_sql_cache = manager_instance->getSqlCacheInstance();
     global_sql_cache.clear();
     manager_instance->getReCacheInstance().clear();
@@ -130,7 +131,6 @@ void BindingCacheManager::updateGlobalBindingsFromCatalog(const ContextPtr & con
                 global_sql_cache.add(binding->uuid, {binding->pattern, ast, nullptr, nullptr});
         }
     }
-    manager_instance->setTimeStamp(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
 }
 
 std::list<UUID> BindingCacheManager::getReKeys()
