@@ -17,6 +17,7 @@
 #include <memory>
 #include <thread>
 #include <variant>
+#include <ucontext.h>
 #include <Columns/ColumnsNumber.h>
 #include <Compression/CompressedReadBuffer.h>
 #include <Core/Block.h>
@@ -39,6 +40,7 @@
 #include <Processors/LimitTransform.h>
 #include <Processors/QueryPipeline.h>
 #include <Processors/Transforms/AggregatingTransform.h>
+#include <Processors/tests/gtest_exchange_helper.h>
 #include <Processors/tests/gtest_processers_utils.h>
 #include <brpc/server.h>
 #include <gtest/gtest.h>
@@ -52,45 +54,6 @@ using namespace DB;
 using namespace UnitTest;
 
 using Clock = std::chrono::system_clock;
-
-class ExchangeRemoteTest : public ::testing::Test
-{
-protected:
-    static brpc::Server server;
-    static BrpcExchangeReceiverRegistryService service_impl;
-    static void startBrpcServer()
-    {
-        if (server.AddService(&service_impl, brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
-        {
-            LOG(ERROR) << "Fail to add service";
-            return;
-        }
-        LOG(INFO) << "add service success";
-
-        // Start the server.
-        brpc::ServerOptions options;
-        options.idle_timeout_sec = -1;
-        if (server.Start(8001, &options) != 0)
-        {
-            LOG(ERROR) << "Fail to start Server";
-            return;
-        }
-        LOG(INFO) << "start Server";
-    }
-
-    static void SetUpTestCase()
-    {
-        UnitTest::initLogger();
-        Poco::AutoPtr<Poco::Util::MapConfiguration> map_config = new Poco::Util::MapConfiguration;
-        BrpcApplication::getInstance().initialize(*map_config);
-        startBrpcServer();
-    }
-
-    static void TearDownTestCase() { server.Stop(1000); }
-};
-
-brpc::Server ExchangeRemoteTest::server;
-BrpcExchangeReceiverRegistryService ExchangeRemoteTest::service_impl(73400320);
 
 static Block getHeader(size_t column_num)
 {
@@ -107,11 +70,17 @@ void receiver1()
 {
     auto receiver_data = std::make_shared<ExchangeDataKey>(3, 1, 1);
     Block header = getHeader(1);
-    BrpcRemoteBroadcastReceiverShardPtr receiver
-        = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
-    BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(receiver);
-    sink_receiver->registerToSenders(1000);
-    auto packet = sink_receiver->recv(1000);
+    auto queue = std::make_shared<MultiPathBoundedQueue>(getContext().context->getSettingsRef().exchange_remote_receiver_queue_size);
+    BrpcRemoteBroadcastReceiverShardPtr receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
+        receiver_data,
+        "127.0.0.1:8001",
+        getContext().context,
+        header,
+        true,
+        BrpcRemoteBroadcastReceiver::generateNameForTest(),
+        std::move(queue));
+    receiver->registerToSenders(1000);
+    auto packet = std::dynamic_pointer_cast<IBroadcastReceiver>(receiver)->recv(1000);
     EXPECT_TRUE(std::holds_alternative<Chunk>(packet));
     Chunk & chunk = std::get<Chunk>(packet);
     EXPECT_EQ(chunk.getNumRows(), 1000);
@@ -123,11 +92,17 @@ void receiver2()
 {
     auto receiver_data = std::make_shared<ExchangeDataKey>(3, 1, 2);
     Block header = getHeader(1);
-    BrpcRemoteBroadcastReceiverShardPtr receiver
-        = std::make_shared<BrpcRemoteBroadcastReceiver>(receiver_data, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
-    BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(receiver);
-    sink_receiver->registerToSenders(1000);
-    auto packet = sink_receiver->recv(1000);
+    auto queue = std::make_shared<MultiPathBoundedQueue>(getContext().context->getSettingsRef().exchange_remote_receiver_queue_size);
+    BrpcRemoteBroadcastReceiverShardPtr receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
+        receiver_data,
+        "127.0.0.1:8001",
+        getContext().context,
+        header,
+        true,
+        BrpcRemoteBroadcastReceiver::generateNameForTest(),
+        std::move(queue));
+    receiver->registerToSenders(1000);
+    auto packet = std::dynamic_pointer_cast<IBroadcastReceiver>(receiver)->recv(1000);
     EXPECT_TRUE(std::holds_alternative<Chunk>(packet));
     Chunk & chunk = std::get<Chunk>(packet);
     EXPECT_EQ(chunk.getNumRows(), 1000);
@@ -207,8 +182,15 @@ TEST_F(ExchangeRemoteTest, RemoteNormalTest)
     setQueryDuration();
     std::thread thread_sender(sender_thread, sender, std::move(chunk));
 
-    BrpcRemoteBroadcastReceiverShardPtr receiver
-        = std::make_shared<BrpcRemoteBroadcastReceiver>(data_key, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
+    auto queue = std::make_shared<MultiPathBoundedQueue>(getContext().context->getSettingsRef().exchange_remote_receiver_queue_size);
+    BrpcRemoteBroadcastReceiverShardPtr receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
+        data_key,
+        "127.0.0.1:8001",
+        getContext().context,
+        header,
+        true,
+        BrpcRemoteBroadcastReceiver::generateNameForTest(),
+        std::move(queue));
     receiver->registerToSenders(1000);
     auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), receiver, exchange_options);
 
@@ -260,8 +242,15 @@ TEST_F(ExchangeRemoteTest, RemoteSenderLimitTest)
     }
 
     std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-    BrpcRemoteBroadcastReceiverShardPtr receiver
-        = std::make_shared<BrpcRemoteBroadcastReceiver>(data_key, "127.0.0.1:8001", getContext().context, header, true, BrpcRemoteBroadcastReceiver::generateNameForTest());
+    auto queue = std::make_shared<MultiPathBoundedQueue>(getContext().context->getSettingsRef().exchange_remote_receiver_queue_size);
+    BrpcRemoteBroadcastReceiverShardPtr receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
+        data_key,
+        "127.0.0.1:8001",
+        getContext().context,
+        header,
+        true,
+        BrpcRemoteBroadcastReceiver::generateNameForTest(),
+        std::move(queue));
     receiver->registerToSenders(1000);
 
     auto exchange_source = std::make_shared<ExchangeSource>(std::move(header), receiver, exchange_options);

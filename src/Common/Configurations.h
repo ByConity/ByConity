@@ -76,6 +76,39 @@ struct TSOConfiguration final: public TSOConfigurationData
 {
 };
 
+constexpr auto default_otlp_http_exporter_url = "http://localhost:10023/v1/traces";
+#define TRACER_CONFIG_FIELDS_LISTS(M) \
+    M(Bool, enable_tracer_onboot, "", false, ConfigFlag::Default, "") \
+    M(UInt64, max_span_export_batch_size, "", 512, ConfigFlag::Default, "") \
+    M(UInt64, max_span_queue_size, "", 2048, ConfigFlag::Default, "") \
+    M(Float32, sampler_ratio, "", 0.5, ConfigFlag::Default, "") \
+    M(String, tracer_exporter_type, "", "SYSTEM_LOG", ConfigFlag::Default, "") \
+    M(UInt64, export_span_schedule_delay_millis, "", 500, ConfigFlag::Default, "") \
+    M(String, http_exporter_url, "otlp.http_exporter_url", default_otlp_http_exporter_url, ConfigFlag::Default, "") \
+    M(String, database, "system_log.database", "system", ConfigFlag::Default, "") \
+    M(String, table, "system_log.table", "opentelemetry_trace_log", ConfigFlag::Default, "") \
+    M(String, partition_by, "system_log.partition_by", "toYYYYMM(event_date)", ConfigFlag::Default, "") \
+    M(String, order_by, "system_log.order_by", "(span_name, event_date, event_time, trace_id)", ConfigFlag::Default, "") \
+    M(String, ttl, "system_log.ttl", "(span_name, event_date, event_time, trace_id)", ConfigFlag::Default, "") \
+    M(UInt64, flush_interval_milliseconds, "system_log.flush_interval_milliseconds", 7500, ConfigFlag::Default, "") \
+
+
+DECLARE_CONFIG_DATA(TracerConfigurationData, TRACER_CONFIG_FIELDS_LISTS)
+
+struct TracerConfiguration final : public TracerConfigurationData
+{
+};
+
+#define BSP_CONFIG_FIELDS_LISTS(M) \
+    M(String, storage_policy, "", "default", ConfigFlag::Default, "storage policy for bsp mode disk exchange data") \
+    M(String, volume, "", "local", ConfigFlag::Default, "volume to store bsp mode disk exchange data")
+
+DECLARE_CONFIG_DATA(BSPConfigurationData, BSP_CONFIG_FIELDS_LISTS)
+
+struct BSPConfiguration final : public BSPConfigurationData
+{
+};
+
 #define ROOT_CONFIG_FIELDS_LIST(M) \
     M(UInt64, tcp_port, "", 9000, ConfigFlag::Recommended, "") \
     M(UInt64, http_port, "", 8123, ConfigFlag::Recommended, "") \
@@ -161,6 +194,8 @@ struct RootConfiguration final : public RootConfigurationData
     QMConfiguration queue_manager;
     ASConfiguration adaptive_scheduler;
     TSOConfiguration tso_service;
+    BSPConfiguration batch_synchronous_parallel;
+
 
     RootConfiguration()
     {
@@ -170,6 +205,7 @@ struct RootConfiguration final : public RootConfigurationData
         sub_configs.push_back(&queue_manager);
         sub_configs.push_back(&adaptive_scheduler);
         sub_configs.push_back(&tso_service);
+        sub_configs.push_back(&batch_synchronous_parallel);
     }
 
     void loadFromPocoConfigImpl(const PocoAbstractConfig & config, const String & current_prefix) override;

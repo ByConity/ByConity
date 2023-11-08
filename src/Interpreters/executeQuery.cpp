@@ -569,6 +569,12 @@ static void onExceptionBeforeStart(
         setExceptionStackTrace(elem);
     logException(context, elem);
 
+    if (auto worker_group = context->tryGetCurrentWorkerGroup())
+    {
+        elem.virtual_warehouse = worker_group->getVWName();
+        elem.worker_group = worker_group->getID();
+    }
+
     /// Update performance counters before logging to query_log
     CurrentThread::finalizePerformanceCounters();
 
@@ -1330,6 +1336,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             elem.client_info = client_info;
             elem.partition_ids = context->getPartitionIds();
 
+
+            if (auto worker_group = context->tryGetCurrentWorkerGroup())
+            {
+                elem.virtual_warehouse = worker_group->getVWName();
+                elem.worker_group = worker_group->getID();
+            }
+
             if (!context->getSettingsRef().enable_optimizer)
             {
                 elem.segment_id = -1;
@@ -1340,7 +1353,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             {
                 elem.segment_id = 0;
                 elem.segment_parallel = 1;
-                elem.segment_parallel_index = 1;
+                elem.segment_parallel_index = 0;
             }
 
             elem.fallback_reason = fallback_reason;

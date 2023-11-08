@@ -72,6 +72,14 @@ namespace Protos
                 return ret < 0;
             return port < rhs.port;
         }
+        class Hash
+        {
+        public:
+            size_t operator()(const AddressInfo & key) const
+            {
+                return std::hash<std::string_view>{}(key.host_name) + static_cast<size_t>(key.port);
+            }
+        };
 
     private:
         String host_name;

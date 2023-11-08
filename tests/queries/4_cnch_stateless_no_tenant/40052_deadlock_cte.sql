@@ -2,6 +2,7 @@ SET enable_optimizer=1;
 SET cte_mode='ENFORCED';
 SET enable_join_reorder=0;
 SET enable_buffer_for_deadlock_cte=1;
+SET enable_runtime_filter=1; -- TODO(WangTao): remove this
 
 -- { echo }
 explain with c1 as (select rand(1) x) select t1.x from c1 t1 join c1 t2 on t1.x = t2.x;

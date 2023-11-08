@@ -98,6 +98,7 @@ Chunk NativeChunkInputStream::readImpl()
 
     readVarUInt(col_num, istr);
     readVarUInt(row_num, istr);
+    chassert(header.columns() == col_num);
 
     Columns columns;
     for (size_t i = 0; i < col_num; ++i)

@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <memory>
 #include <DataStreams/IBlockOutputStream.h>
 #include <DataTypes/IDataType.h>
 #include <Processors/Chunk.h>
@@ -42,4 +43,5 @@ private:
     bool remove_low_cardinality;
 };
 
+using NativeChunkOutputStreamHolder = std::unique_ptr<NativeChunkOutputStream>;
 }

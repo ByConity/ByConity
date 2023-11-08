@@ -33,8 +33,10 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/DistributedStages/ExchangeDataTracker.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Parsers/IAST_fwd.h>
+#include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
 #include <QueryPlan/SymbolAllocator.h>
 #include <Storages/IStorage_fwd.h>
@@ -1031,6 +1033,10 @@ public:
 
     SegmentSchedulerPtr getSegmentScheduler();
     SegmentSchedulerPtr getSegmentScheduler() const;
+
+    ExchangeStatusTrackerPtr getExchangeDataTracker() const;
+    DiskExchangeDataManagerPtr getDiskExchangeDataManager() const;
+    void setMockDiskExchangeDataManager(DiskExchangeDataManagerPtr disk_exchange_data_manager);
 
     BindingCacheManagerPtr getGlobalBindingCacheManager();
     BindingCacheManagerPtr getGlobalBindingCacheManager() const;

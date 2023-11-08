@@ -268,9 +268,12 @@ RecvDataPacket MultiPathReceiver::recv(timespec timeout_ts)
     else if (std::holds_alternative<Chunk>(data_packet))
     {
         Chunk receive_chunk = std::move(std::get<Chunk>(data_packet));
-        recv_metric.recv_rows << receive_chunk.getNumRows();
-        recv_metric.recv_bytes << receive_chunk.bytes();
-        recv_metric.recv_counts << 1;
+        if (enable_receiver_metrics)
+        {
+            receiver_metrics.recv_rows << receive_chunk.getNumRows();
+            receiver_metrics.recv_bytes << receive_chunk.bytes();
+            receiver_metrics.recv_counts << 1;
+        }
         return RecvDataPacket(std::move(receive_chunk));
     } else {
         SendDoneMark receiver_name = std::get<SendDoneMark>(data_packet);
@@ -340,11 +343,11 @@ BroadcastStatus MultiPathReceiver::finish(BroadcastStatusCode status_code, Strin
         if (is_modifer)
         {
             auto res = *new_status_ptr;
-            recv_metric.finish_code.store(new_status_ptr->code, std::memory_order_relaxed);
+            receiver_metrics.finish_code.store(new_status_ptr->code, std::memory_order_relaxed);
             res.is_modifer = true;
             return res;
         }
-        recv_metric.finish_code.store(old_status.code, std::memory_order_relaxed);
+        receiver_metrics.finish_code.store(old_status.code, std::memory_order_relaxed);
         return old_status;
     }
     else

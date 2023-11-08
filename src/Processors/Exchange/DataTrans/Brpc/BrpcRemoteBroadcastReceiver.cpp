@@ -13,22 +13,25 @@
  * limitations under the License.
  */
 
-#include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
-#include <Processors/Exchange/DataTrans/Brpc/StreamHandler.h>
-#include <Processors/Exchange/DeserializeBufTransform.h>
-#include "BrpcRemoteBroadcastReceiver.h"
-#include "StreamHandler.h"
-#include <Interpreters/QueryExchangeLog.h>
-#include <Processors/Exchange/DataTrans/DataTransException.h>
-#include <Processors/Exchange/ExchangeDataKey.h>
-#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
-#include <Processors/Exchange/DataTrans/RpcClient.h>
-#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
-#include <Processors/Exchange/ExchangeUtils.h>
-#include <Protos/registry.pb.h>
+#include <atomic>
 #include <brpc/stream.h>
 
-#include <atomic>
+#include <IO/WriteBufferFromString.h>
+#include <Interpreters/QueryExchangeLog.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
+#include <Processors/Exchange/DataTrans/Brpc/StreamHandler.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
+#include <Processors/Exchange/DataTrans/MultiPathBoundedQueue.h>
+#include <Processors/Exchange/DataTrans/NativeChunkOutputStream.h>
+#include <Processors/Exchange/DataTrans/RpcChannelPool.h>
+#include <Processors/Exchange/DataTrans/RpcClient.h>
+#include <Processors/Exchange/DeserializeBufTransform.h>
+#include <Processors/Exchange/ExchangeDataKey.h>
+#include <Processors/Exchange/ExchangeUtils.h>
+#include <Protos/registry.pb.h>
+#include <QueryPlan/PlanSerDerHelper.h>
+
 
 namespace DB
 {
@@ -40,28 +43,25 @@ namespace ErrorCodes
 }
 
 BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
-    ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, bool keep_order_, const String & name_)
+    ExchangeDataKeyPtr trans_key_,
+    String registry_address_,
+    ContextPtr context_,
+    Block header_,
+    bool keep_order_,
+    const String & name_,
+    MultiPathQueuePtr queue_,
+    BrpcExchangeReceiverRegistryService::RegisterMode mode_,
+    std::shared_ptr<QueryExchangeLog> query_exchange_log_)
     : name(name_)
     , trans_key(std::move(trans_key_))
     , registry_address(std::move(registry_address_))
     , context(std::move(context_))
     , header(std::move(header_))
-    , queue(std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size))
+    , queue(std::move(queue_))
     , keep_order(keep_order_)
     , initial_query_id(context->getInitialQueryId())
-{
-}
-
-BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
-    ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, MultiPathQueuePtr collator, bool keep_order_, const String &name_)
-    : name(name_)
-    , trans_key(std::move(trans_key_))
-    , registry_address(std::move(registry_address_))
-    , context(std::move(context_))
-    , header(std::move(header_))
-    , queue(collator)
-    , keep_order(keep_order_)
-    , initial_query_id(context->getInitialQueryId())
+    , mode(mode_)
+    , query_exchange_log(std::move(query_exchange_log_))
 {
 }
 
@@ -74,27 +74,25 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
             brpc::StreamClose(stream_id);
             LOG_TRACE(log, "Stream {} for {} @ {} Close", stream_id, name, registry_address);
         }
-        if (context->getSettingsRef().log_query_exchange)
-        {
-            if (auto exchange_log = context->getQueryExchangeLog())
-            {
-                QueryExchangeLogElement element;
-                element.initial_query_id = initial_query_id;
-                element.exchange_id = std::to_string(trans_key->exchange_id);
-                element.partition_id = std::to_string(trans_key->parallel_index);
-                element.event_time
-                    = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                element.recv_time_ms = metric.recv_time_ms;
-                element.register_time_ms = metric.register_time_ms;
-                element.recv_bytes = metric.recv_bytes;
-                element.dser_time_ms = metric.dser_time_ms;
-                element.finish_code = metric.finish_code;
-                element.is_modifier = metric.is_modifier;
-                element.message = metric.message;
-                element.type = "brpc_receiver@reg_addr_" + registry_address;
-                exchange_log->add(element);
-            }
-        }
+        if (!enable_receiver_metrics)
+            return;
+        QueryExchangeLogElement element;
+        element.initial_query_id = initial_query_id;
+        element.exchange_id = std::to_string(trans_key->exchange_id);
+        element.partition_id = std::to_string(trans_key->parallel_index);
+        element.event_time =
+            std::chrono::duration_cast<std::chrono::seconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+        element.recv_time_ms = receiver_metrics.recv_time_ms.get_value();
+        element.register_time_ms = receiver_metrics.register_time_ms.get_value();
+        element.recv_bytes = receiver_metrics.recv_bytes.get_value();
+        element.dser_time_ms = receiver_metrics.dser_time_ms.get_value();
+        element.finish_code = receiver_metrics.finish_code;
+        element.is_modifier = receiver_metrics.is_modifier;
+        element.message = receiver_metrics.message;
+        element.type = "brpc_receiver@reg_addr_" + registry_address;
+        if (query_exchange_log)
+            query_exchange_log->add(element);
     }
     catch (...)
     {
@@ -106,7 +104,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
 {
     Stopwatch s;
     std::shared_ptr<RpcClient> rpc_client = RpcChannelPool::getInstance().getClient(registry_address, BrpcChannelPoolOptions::STREAM_DEFAULT_CONFIG_KEY, true);
-    Protos::RegistryService_Stub stub(Protos::RegistryService_Stub(&rpc_client->getChannel()));
+    Protos::RegistryService_Stub stub = Protos::RegistryService_Stub(&rpc_client->getChannel());
     brpc::Controller cntl;
     brpc::StreamOptions stream_options;
     stream_options.handler = std::make_shared<StreamHandler>(context, shared_from_this(), header, keep_order);
@@ -129,8 +127,8 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
     request.set_exchange_id(trans_key->exchange_id);
     request.set_parallel_id(trans_key->parallel_index);
     request.set_wait_timeout_ms(context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
+    sendRegisterRPC(stub, cntl, &request, &response, nullptr);
 
-    stub.registry(&cntl, &request, &response, nullptr);
     // if exchange_enable_force_remote_mode = 1, sender and receiver in same process and sender stream may close before rpc end
     if (cntl.ErrorCode() == brpc::EREQUEST && cntl.ErrorText().ends_with("was closed before responded"))
     {
@@ -143,7 +141,8 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
         return;
     }
     rpc_client->assertController(cntl);
-    metric.register_time_ms += s.elapsedMilliseconds();
+    if (enable_receiver_metrics)
+        receiver_metrics.register_time_ms << s.elapsedMilliseconds();
     LOG_DEBUG(log, "Receiver register sender successfully, host-{} , data_key-{}, stream_id-{}", registry_address, name, stream_id);
 }
 
@@ -158,7 +157,7 @@ void BrpcRemoteBroadcastReceiver::pushReceiveQueue(MultiPathDataPacket packet)
             return;
         }
         throw Exception(
-            "Push exchange data to receiver for " + getName() + " timeout from " + DateLUT::instance().timeToString(context->getClientInfo().initial_query_start_time) + 
+            "Push exchange data to receiver for " + getName() + " timeout from " + DateLUT::instance().timeToString(context->getClientInfo().initial_query_start_time) +
             " to " + DateLUT::instance().timeToString(context->getQueryExpirationTimeStamp().tv_sec),
             ErrorCodes::DISTRIBUTE_STAGE_QUERY_EXCEPTION);
     }
@@ -170,7 +169,7 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(timespec timeout_ts) noexcept
     MultiPathDataPacket data_packet;
     if (!queue->tryPopUntil(data_packet, timeout_ts))
     {
-        const auto error_msg = "Try pop receive queue for " + getName() + " timeout, from " + 
+        const auto error_msg = "Try pop receive queue for " + getName() + " timeout, from " +
             DateLUT::instance().timeToString(context->getClientInfo().initial_query_start_time) + " to " + DateLUT::instance().timeToString(timeout_ts.tv_sec);
         BroadcastStatus current_status = finish(BroadcastStatusCode::RECV_TIMEOUT, error_msg);
         return std::move(current_status);
@@ -191,20 +190,21 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(timespec timeout_ts) noexcept
             // Allocator (ref srcs/Common/Allocator.cpp) will add the momory of chunk to global memory tacker.
             // When this chunk is poped, we should add this memory to current query momory tacker, and subtract from global memory tacker.
             ExchangeUtils::transferGlobalMemoryToThread(received_chunk.allocatedBytes());
-            metric.recv_bytes += received_chunk.bytes();
+            if (enable_receiver_metrics)
+                receiver_metrics.recv_bytes << received_chunk.bytes();
         }
         else
         {
-            const ChunkInfoPtr & info = received_chunk.getChunkInfo();
-            if (info)
+            if (enable_receiver_metrics)
             {
-                if(auto iobuf_info = std::dynamic_pointer_cast<const DeserializeBufTransform::IOBufChunkInfo>(info))
-                {
-                    metric.recv_bytes += iobuf_info->io_buf.length();
-                }
+                const ChunkInfoPtr & info = received_chunk.getChunkInfo();
+                auto iobuf_info = info ? std::dynamic_pointer_cast<const DeserializeBufTransform::IOBufChunkInfo>(info): nullptr;
+                if (iobuf_info)
+                    receiver_metrics.recv_bytes << iobuf_info->io_buf.length();
             }
         }
-        metric.recv_time_ms += s.elapsedMilliseconds();
+        if (enable_receiver_metrics)
+            receiver_metrics.recv_time_ms << s.elapsedMilliseconds();
         return RecvDataPacket(std::move(received_chunk));
     }
     else
@@ -214,7 +214,7 @@ RecvDataPacket BrpcRemoteBroadcastReceiver::recv(timespec timeout_ts) noexcept
     }
 }
 
-BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_code_, String message)
+BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_code, String message)
 {
     BroadcastStatusCode current_fin_code = finish_status_code.load(std::memory_order_relaxed);
     const auto *const msg = "BrpcRemoteBroadcastReceiver: already has been finished";
@@ -224,17 +224,17 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
             log,
             "Broadcast {} finished and status can't be changed to {} any more. Current status: {}",
             name,
-            status_code_,
+            status_code,
             current_fin_code);
-        metric.finish_code = current_fin_code;
-        metric.is_modifier = 0;
+        receiver_metrics.finish_code = current_fin_code;
+        receiver_metrics.is_modifier = 0;
         return BroadcastStatus(current_fin_code, false, msg);
     }
 
     int actual_status_code = BroadcastStatusCode::RUNNING;
 
-    BroadcastStatusCode new_fin_code = status_code_;
-    if (status_code_ < 0)
+    BroadcastStatusCode new_fin_code = status_code;
+    if (status_code < 0)
     {
         // if send_done_flag has never been set, sender should have some unkown errors.
         if (!send_done_flag.test(std::memory_order_acquire))
@@ -246,23 +246,23 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
         if (new_fin_code > 0)
             queue->close();
         brpc::StreamFinish(stream_id, actual_status_code, new_fin_code, new_fin_code > 0);
-        metric.finish_code = new_fin_code;
-        metric.is_modifier = 1;
-        metric.message = message;
+        receiver_metrics.finish_code = new_fin_code;
+        receiver_metrics.is_modifier = 1;
+        receiver_metrics.message = message;
         return BroadcastStatus(static_cast<BroadcastStatusCode>(new_fin_code), true, message);
     }
     else
     {
-        LOG_TRACE(log, "Fail to change broadcast status to {}, current status is: {} ", new_fin_code, current_fin_code);
-        metric.finish_code = current_fin_code;
-        metric.is_modifier = 0;
+        LOG_TRACE(log, "Fail to change broadcast(name:{}) status to {}, current status is: {}", name, new_fin_code, current_fin_code);
+        receiver_metrics.finish_code = current_fin_code;
+        receiver_metrics.is_modifier = 0;
         return BroadcastStatus(current_fin_code, false, msg);
     }
 }
 
 String BrpcRemoteBroadcastReceiver::getName() const
 {
-    return name;
+    return name + ":" + trans_key->toString();
 }
 
 AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 timeout_ms)
@@ -276,7 +276,7 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     res.response = std::make_unique<Protos::RegistryResponse>();
 
     std::shared_ptr<RpcClient> & rpc_client = res.channel;
-    Protos::RegistryService_Stub stub(Protos::RegistryService_Stub(&rpc_client->getChannel()));
+    Protos::RegistryService_Stub stub = Protos::RegistryService_Stub(&rpc_client->getChannel());
 
     brpc::Controller & cntl = *res.cntl;
     brpc::StreamOptions stream_options;
@@ -300,9 +300,32 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     res.request->set_exchange_id(exchange_key->exchange_id);
     res.request->set_parallel_id(exchange_key->parallel_index);
     res.request->set_wait_timeout_ms(timeout_ms);
-    stub.registry(&cntl, res.request.get(), res.response.get(), brpc::DoNothing());
-    metric.register_time_ms += s.elapsedMilliseconds();
+    sendRegisterRPC(stub, cntl, res.request.get(), res.response.get(), brpc::DoNothing());
+    if (enable_receiver_metrics)
+        receiver_metrics.register_time_ms << s.elapsedMilliseconds();
     return res;
 }
 
+void BrpcRemoteBroadcastReceiver::sendRegisterRPC(
+    Protos::RegistryService_Stub & stub,
+    brpc::Controller & cntl,
+    Protos::RegistryRequest * request,
+    Protos::RegistryResponse * response,
+    google::protobuf::Closure * done)
+{
+    if (mode == BrpcExchangeReceiverRegistryService::BRPC)
+        stub.registry(&cntl, request, response, done);
+    else if (mode == BrpcExchangeReceiverRegistryService::DISK_READER)
+    {
+        Protos::RegistryDiskSenderRequest disk_request;
+        disk_request.mutable_registry()->Swap(request);
+        serializeHeaderToProto(header, *disk_request.mutable_header());
+        auto settings = context->getSettingsRef().dumpToMap();
+        disk_request.mutable_settings()->insert(settings.begin(), settings.end());
+        disk_request.set_initial_query_start_time(context->getClientInfo().initial_query_start_time_microseconds.value);
+        stub.registerBRPCSenderFromDisk(&cntl, &disk_request, response, nullptr);
+    }
+    else
+        throw Exception(fmt::format("unrecognized mode ", mode), ErrorCodes::LOGICAL_ERROR);
+}
 }

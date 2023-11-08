@@ -31,15 +31,16 @@
 #include <Processors/Exchange/DataTrans/Local/LocalBroadcastChannel.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/tests/gtest_processers_utils.h>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/RemoteExchangeSourceStep.h>
-#include <Processors/tests/gtest_processers_utils.h>
 #include <gtest/gtest.h>
 #include <Poco/ConsoleChannel.h>
-#include <common/types.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_utils.h>
+#include <common/types.h>
+#include "Processors/Exchange/DataTrans/MultiPathBoundedQueue.h"
 
 using namespace DB;
 
@@ -74,22 +75,24 @@ TEST(PlanSegmentExecutor, ExecuteTest)
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
     auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
-    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts};
+    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts, false};
 
-    auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 1);
+    auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 0);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
 
-    auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 1);
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 0);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
-    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
+    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
+    auto sink_channel
+        = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
     sink_sender->becomeRealSender(sink_channel);
     BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(sink_channel);
 
     PlanSegmentInputs inputs;
 
     auto input = std::make_shared<PlanSegmentInput>(header, PlanSegmentType::EXCHANGE);
-    input->setParallelIndex(1);
+    input->setParallelIndex(0);
     input->setExchangeParallelSize(1);
     input->setExchangeId(1);
     input->setPlanSegmentId(1);
@@ -177,22 +180,24 @@ TEST(PlanSegmentExecutor, ExecuteAsyncTest)
     auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
-    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts};
+    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts, false};
 
-    auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 1);
+    auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 0);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
 
-    auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 1);
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 0);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
-    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
+    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
+    auto sink_channel
+        = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
     sink_sender->becomeRealSender(sink_channel);
     BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(sink_channel);
 
     PlanSegmentInputs inputs;
 
     auto input = std::make_shared<PlanSegmentInput>(header, PlanSegmentType::EXCHANGE);
-    input->setParallelIndex(1);
+    input->setParallelIndex(0);
     input->setExchangeParallelSize(1);
     input->setExchangeId(1);
     input->setPlanSegmentId(1);
@@ -283,22 +288,24 @@ TEST(PlanSegmentExecutor, ExecuteCancelTest)
     AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);
 
     auto coordinator_address_str = extractExchangeStatusHostPort(coordinator_address);
-    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts};
+    LocalChannelOptions options{10, exchange_options.exchange_timeout_ts, false};
 
-    auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 1);
+    auto source_key = std::make_shared<ExchangeDataKey>(query_tx_id, 1, 0);
     BroadcastSenderProxyPtr source_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(source_key);
     source_sender->accept(context, header);
 
-    auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 1);
+    auto sink_key = std::make_shared<ExchangeDataKey>(query_tx_id, 2, 0);
     BroadcastSenderProxyPtr sink_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(sink_key);
-    auto sink_channel = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest());
+    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
+    auto sink_channel
+        = std::make_shared<LocalBroadcastChannel>(sink_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
     sink_sender->becomeRealSender(sink_channel);
     BroadcastReceiverPtr sink_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(sink_channel);
 
     PlanSegmentInputs inputs;
 
     auto input = std::make_shared<PlanSegmentInput>(header, PlanSegmentType::EXCHANGE);
-    input->setParallelIndex(1);
+    input->setParallelIndex(0);
     input->setExchangeParallelSize(1);
     input->setExchangeId(1);
     input->setPlanSegmentId(1);

@@ -16,49 +16,49 @@
 #pragma once
 
 #include <Core/Block.h>
+#include <Interpreters/QueryExchangeLog.h>
 #include <Processors/Chunk.h>
+#include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
+#include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastSender.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
+#include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
+#include <Processors/Exchange/DataTrans/MultiPathBoundedQueue.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <brpc/stream.h>
 #include <Poco/Logger.h>
-#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
-#include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
-#include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
-#include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
-#include <Processors/Exchange/DataTrans/MultiPathBoundedQueue.h>
 
 #include <atomic>
 #include <vector>
 
 namespace DB
 {
-struct BrpcRecvMetric
-{
-    size_t recv_time_ms{0};
-    size_t register_time_ms{0};
-    size_t recv_bytes{0};
-    size_t dser_time_ms{0};
-    Int32 finish_code{};
-    Int8 is_modifier{-1};
-    String message;
-};
-
 class BrpcRemoteBroadcastReceiver : public std::enable_shared_from_this<BrpcRemoteBroadcastReceiver>, public IBroadcastReceiver
 {
 public:
-    BrpcRemoteBroadcastReceiver(ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, bool keep_order_, const String &name_);
-    BrpcRemoteBroadcastReceiver(ExchangeDataKeyPtr trans_key_, String registry_address_, ContextPtr context_, Block header_, MultiPathQueuePtr collator, bool keep_order_, const String &name_);
+    BrpcRemoteBroadcastReceiver(
+        ExchangeDataKeyPtr trans_key_,
+        String registry_address_,
+        ContextPtr context_,
+        Block header_,
+        bool keep_order_,
+        const String & name_,
+        MultiPathQueuePtr queue_,
+        BrpcExchangeReceiverRegistryService::RegisterMode mode_ = BrpcExchangeReceiverRegistryService::RegisterMode::BRPC,
+        std::shared_ptr<QueryExchangeLog> query_exchange_log_ = nullptr);
 
     ~BrpcRemoteBroadcastReceiver() override;
 
     void registerToSenders(UInt32 timeout_ms) override;
-    RecvDataPacket recv(timespec timeout_ts) noexcept override;
-    BroadcastStatus finish(BroadcastStatusCode status_code_, String message) override;
+    RecvDataPacket recv(timespec timeout_ms) noexcept override;
+    BroadcastStatus finish(BroadcastStatusCode status_code, String message) override;
     String getName() const override;
     void pushReceiveQueue(MultiPathDataPacket packet);
     void setSendDoneFlag() { send_done_flag.test_and_set(std::memory_order_release); }
 
-    static String generateName(
-        size_t exchange_id, size_t write_segment_id, size_t read_segment_id, size_t parallel_index, String& co_host_port)
+    static String
+    generateName(size_t exchange_id, size_t write_segment_id, size_t read_segment_id, size_t parallel_index, const String & co_host_port)
     {
         return fmt::format(
             "BrpcReciver[{}_{}_{}_{}_{}]",
@@ -79,7 +79,6 @@ public:
     }
 
     AsyncRegisterResult registerToSendersAsync(UInt32 timeout_ms);
-    BrpcRecvMetric metric;
 private:
     String name;
     Poco::Logger * log = &Poco::Logger::get("BrpcRemoteBroadcastReceiver");
@@ -93,6 +92,15 @@ private:
     brpc::StreamId stream_id{brpc::INVALID_STREAM_ID};
     bool keep_order;
     String initial_query_id;
+    BrpcExchangeReceiverRegistryService::RegisterMode mode;
+    std::shared_ptr<QueryExchangeLog> query_exchange_log;
+
+    void sendRegisterRPC(
+        Protos::RegistryService_Stub & stub,
+        brpc::Controller & cntl,
+        Protos::RegistryRequest * request,
+        Protos::RegistryResponse * response,
+        google::protobuf::Closure * done);
 };
 
 using BrpcRemoteBroadcastReceiverShardPtr = std::shared_ptr<BrpcRemoteBroadcastReceiver>;
