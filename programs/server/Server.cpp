@@ -30,6 +30,10 @@
 #include <Access/AccessControlManager.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Common/Config/MetastoreConfig.h>
+#include <Catalog/Catalog.h>
+#include "BrpcServerHolder.h"
+#include "MetricsTransmitter.h"
+// #include <Catalog/MetastoreConfig.h>
 #include <CloudServices/CnchServerServiceImpl.h>
 #include <CloudServices/CnchWorkerClientPools.h>
 #include <CloudServices/CnchWorkerServiceImpl.h>
@@ -42,7 +46,6 @@
 #include <IO/HTTPCommon.h>
 #include <IO/Scheduler/IOScheduler.h>
 #include <IO/UseSSL.h>
-#include <IO/Scheduler/IOScheduler.h>
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/DDLWorker.h>
 #include <Interpreters/DNSCacheUpdater.h>
@@ -55,10 +58,10 @@
 #include <Interpreters/JIT/CompiledExpressionCache.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
+#include <Interpreters/SQLBinding/SQLBindingCache.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Interpreters/loadMetadata.h>
-#include <Interpreters/SQLBinding/SQLBindingCache.h>
-#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
+#include <QueryPlan/Hints/registerHints.h>
 #include <QueryPlan/PlanCache.h>
 #include <Server/HTTP/HTTPServer.h>
 #include <Server/HTTPHandlerFactory.h>
@@ -123,10 +126,6 @@
 #include <common/logger_useful.h>
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
-#include "MetricsTransmitter.h"
-#include "BrpcServerHolder.h"
-#include <Catalog/Catalog.h>
-#include <QueryPlan/Hints/registerHints.h>
 #include <Parsers/formatTenantDatabaseName.h>
 
 #include <CloudServices/CnchServerClientPool.h>
@@ -1210,7 +1209,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     /// Disk cache for unique key index
-    size_t uki_disk_cache_max_bytes = 50 * 1024 * 1024 * 1024; // 50GB
+    size_t uki_disk_cache_max_bytes = 50 * 1024 * 1024 * 1024UL; // 50GB
     for (const auto & [name, disk] : global_context->getDisksMap())
     {
         if (disk->getType() == DiskType::Type::Local && disk->getPath() == global_context->getPath())
@@ -1357,8 +1356,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// start background task to sync metadata automatically. consider to remove it later.
     global_context->setMetaChecker();
-
-
 
 
 

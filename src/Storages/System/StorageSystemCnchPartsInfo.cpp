@@ -34,18 +34,18 @@ StorageSystemCnchPartsInfo::StorageSystemCnchPartsInfo(const StorageID & table_i
     : IStorage(table_id_)
 {
     StorageInMemoryMetadata storage_metadata;
-    storage_metadata.setColumns(ColumnsDescription(
-        {
-            {"database", std::make_shared<DataTypeString>()},
-            {"table", std::make_shared<DataTypeString>()},
-            {"partition_id", std::make_shared<DataTypeString>()},
-            {"partition", std::make_shared<DataTypeString>()},
-            {"first_partition", std::make_shared<DataTypeString>()},
-            {"total_parts_number", std::make_shared<DataTypeUInt64>()},
-            {"total_parts_size", std::make_shared<DataTypeUInt64>()},
-            {"total_rows_count", std::make_shared<DataTypeUInt64>()},
-            {"last_update_time", std::make_shared<DataTypeUInt64>()}
-        }));
+    storage_metadata.setColumns(ColumnsDescription({
+        {"database", std::make_shared<DataTypeString>()},
+        {"table", std::make_shared<DataTypeString>()},
+        {"partition_id", std::make_shared<DataTypeString>()},
+        {"partition", std::make_shared<DataTypeString>()},
+        {"first_partition", std::make_shared<DataTypeString>()},
+        {"total_parts_number", std::make_shared<DataTypeUInt64>()},
+        {"total_parts_size", std::make_shared<DataTypeUInt64>()},
+        {"total_rows_count", std::make_shared<DataTypeUInt64>()},
+        {"last_update_time", std::make_shared<DataTypeUInt64>()},
+        {"last_snapshot_time", std::make_shared<DataTypeUInt64>()},
+    }));
     setInMemoryMetadata(storage_metadata);
 }
 

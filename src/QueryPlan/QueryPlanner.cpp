@@ -54,16 +54,17 @@
 #include <QueryPlan/PlanBuilder.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/SortingStep.h>
+#include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/TableScanStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
 #include <QueryPlan/planning_common.h>
 #include <Common/FieldVisitors.h>
+#include <Parsers/formatAST.h>
 
 #include <algorithm>
 #include <memory>
 #include <unordered_set>
-
 namespace DB
 {
 namespace ErrorCodes
@@ -351,9 +352,6 @@ RelationPlan QueryPlannerVisitor::visitASTSelectQuery(ASTPtr & node, const Void 
 
     PlanBuilder builder = planFrom(select_query);
     PRINT_PLAN(builder.plan, plan_from);
-
-    planFilter(builder, select_query, select_query.prewhere());
-    PRINT_PLAN(builder.plan, plan_prewhere);
 
     planFilter(builder, select_query, select_query.where());
     PRINT_PLAN(builder.plan, plan_where);
@@ -951,8 +949,19 @@ QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_
     const auto generated_query = std::make_shared<ASTSelectQuery>();
     generated_query->setExpression(ASTSelectQuery::Expression::SELECT, std::make_shared<ASTExpressionList>());
     const auto select_expression_list = generated_query->select();
-    if (origin_query.prewhere())
-        generated_query->setExpression(ASTSelectQuery::Expression::PREWHERE, origin_query.prewhere()->clone());
+    if (ASTPtr rewritten_prewhere = analysis.tryGetPrewhere(origin_query))
+    {
+        // translate PREWHERE for subcolumn optimization
+        TranslationMap translation{outer_context, table_scope, field_symbols, analysis, context};
+        rewritten_prewhere = translation.translate(rewritten_prewhere);
+        // now change the symbol name back to column name
+        std::unordered_map<String, String> name_mapping;
+        for (const auto & [column, symbol] : columns_with_aliases)
+            name_mapping.emplace(symbol, column);
+        auto symbol_mapper = SymbolMapper::simpleMapper(name_mapping);
+        rewritten_prewhere = symbol_mapper.map(rewritten_prewhere);
+        generated_query->setExpression(ASTSelectQuery::Expression::PREWHERE, std::move(rewritten_prewhere));
+    }
     /*
     if (origin_query.implicitWhere())
         generated_query->setExpression(ASTSelectQuery::Expression::IMPLICITWHERE, origin_query.implicitWhere()->clone());

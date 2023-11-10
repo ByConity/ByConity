@@ -302,12 +302,8 @@ enum PreloadLevelSettings : UInt64
       "Number of threads performing background tasks for memory table. Only has meaning at server startup.", \
       0) \
     M(UInt64, background_topology_thread_pool_size, 4, "Number of threads performing topology related background tasks.", 0) \
-    M(UInt64, \
-      local_disk_cache_thread_pool_size, \
-      16, \
-      "Number of threads perforrming background tasks from cache segments from cloud storage to local disk. Only has meaning at server " \
-      "startup.", \
-      0) \
+    M(UInt64, background_metrics_recalculation_schedule_pool_size, 16, "Number of threads performing metrics recalculation related background tasks.", 0) \
+    M(UInt64, local_disk_cache_thread_pool_size, 16, "Number of threads perforrming background tasks from cache segments from cloud storage to local disk. Only has meaning at server startup.", 0) \
     M(UInt64, local_disk_cache_evict_thread_pool_size, 16, "Number of threads perforrming asynchronous remove disk cache file.", 0) \
     M(UInt64, \
       max_bandwidth_for_disk_cache, \
@@ -628,6 +624,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, log_queries_with_partition_ids, 0, "Log requests partition ids and write the log to the system table.", 0) \
 \
     M(Bool, log_processors_profiles, false, "Log Processors profile events.", 0) \
+    M(Bool, log_segment_profiles, false, "Log profile of each segment info including runtime and planning information.", 0) \
     M(Bool, report_processors_profiles, false, "Report processors profile to coordinator.", 0) \
     M(UInt64, report_processors_profiles_timeout_millseconds, 10, "Report processors profile to coordinator timeout millseconds.", 0) \
     M(DistributedProductMode, \
@@ -1116,23 +1113,10 @@ enum PreloadLevelSettings : UInt64
 \
     M(Bool, log_profile_events, true, "Log query performance statistics into the query_log and query_thread_log.", 0) \
     M(Bool, log_query_settings, true, "Log query settings into the query_log.", 0) \
-    M(Bool, \
-      log_query_threads, \
-      true, \
-      "Log query threads into system.query_thread_log table. This setting have effect only when 'log_queries' is true.", \
-      0) \
-    M(Bool, log_query_exchange, true, "Log query exchange metric.", 0) \
-    M(String, \
-      log_comment, \
-      "", \
-      "Log comment into system.query_log table and server log. It can be set to arbitrary string no longer than max_query_size.", \
-      0) \
-    M(LogsLevel, \
-      send_logs_level, \
-      LogsLevel::fatal, \
-      "Send server text logs with specified minimum level to client. Valid values: 'trace', 'debug', 'information', 'warning', 'error', " \
-      "'fatal', 'none'", \
-      0) \
+    M(Bool, log_query_threads, true, "Log query threads into system.query_thread_log table. This setting have effect only when 'log_queries' is true.", 0) \
+    M(Bool, log_query_exchange, false, "Log query exchange metric.", 0) \
+    M(String, log_comment, "", "Log comment into system.query_log table and server log. It can be set to arbitrary string no longer than max_query_size.", 0) \
+    M(LogsLevel, send_logs_level, LogsLevel::fatal, "Send server text logs with specified minimum level to client. Valid values: 'trace', 'debug', 'information', 'warning', 'error', 'fatal', 'none'", 0) \
     M(Bool, enable_optimize_predicate_expression, 1, "If it is set to true, optimize predicates to subqueries.", 0) \
     M(Bool, enable_optimize_predicate_expression_to_final_subquery, 1, "Allow push predicate to final subquery.", 0) \
     M(Bool, allow_push_predicate_when_subquery_contains_with, 1, "Allows push predicate when subquery contains WITH clause", 0) \
@@ -1228,7 +1212,7 @@ enum PreloadLevelSettings : UInt64
       "partitions. This setting is a safety threshold, because using large number of partitions is a common misconception.", \
       0) \
     M(Int64, max_partitions_to_read, -1, "Limit the max number of partitions that can be accessed in one query. <= 0 means unlimited.", 0) \
-    M(Bool, check_query_single_value_result, true, "Return check query result as single 1/0 value", 0) \
+    M(Bool, check_query_single_value_result, false, "Return check query result as single 1/0 value", 0) \
     M(Bool, allow_drop_detached, false, "Allow ALTER TABLE ... DROP DETACHED PART[ITION] ... queries", 0) \
 \
     M(UInt64, postgresql_connection_pool_size, 16, "Connection pool size for PostgreSQL table engine and database engine.", 0) \
@@ -1280,30 +1264,11 @@ enum PreloadLevelSettings : UInt64
       "For tables in databases with Engine=Atomic show UUID of the table in its CREATE query.", \
       0) \
     M(UInt64, max_threads_for_cnch_dump, 1, "The maximum number of threads for dumping data in cnch.", 0) \
-    M(Bool, \
-      database_atomic_wait_for_drop_and_detach_synchronously, \
-      false, \
-      "When executing DROP or DETACH TABLE in Atomic database, wait for table data to be finally dropped or detached.", \
-      0) \
-    M(Bool, \
-      enable_scalar_subquery_optimization, \
-      true, \
-      "If it is set to true, prevent scalar subqueries from (de)serializing large scalar values and possibly avoid running the same " \
-      "subquery more than once.", \
-      0) \
-    M(Bool, optimize_trivial_count_query, true, "Process trivial 'SELECT count() FROM table' query from metadata.", 0) \
-    M(Bool, \
-      optimize_respect_aliases, \
-      true, \
-      "If it is set to true, it will respect aliases in WHERE/GROUP BY/ORDER BY, that will help with partition pruning/secondary " \
-      "indexes/optimize_aggregation_in_order/optimize_read_in_order/optimize_trivial_count", \
-      0) \
-    M(UInt64, \
-      mutations_sync, \
-      0, \
-      "Wait for synchronous execution of ALTER TABLE UPDATE/DELETE queries (mutations). 0 - execute asynchronously. 1 - wait current " \
-      "server. 2 - wait all replicas if they exist.", \
-      0) \
+    M(Bool, database_atomic_wait_for_drop_and_detach_synchronously, false, "When executing DROP or DETACH TABLE in Atomic database, wait for table data to be finally dropped or detached.", 0) \
+    M(Bool, enable_scalar_subquery_optimization, true, "If it is set to true, prevent scalar subqueries from (de)serializing large scalar values and possibly avoid running the same subquery more than once.", 0) \
+    M(Bool, optimize_trivial_count_query, false, "Process trivial 'SELECT count() FROM table' query from metadata.", 0) \
+    M(Bool, optimize_respect_aliases, true, "If it is set to true, it will respect aliases in WHERE/GROUP BY/ORDER BY, that will help with partition pruning/secondary indexes/optimize_aggregation_in_order/optimize_read_in_order/optimize_trivial_count", 0) \
+    M(UInt64, mutations_sync, 0, "Wait for synchronous execution of ALTER TABLE UPDATE/DELETE queries (mutations). 0 - execute asynchronously. 1 - wait current server. 2 - wait all replicas if they exist.", 0) \
     M(UInt64, mutations_wait_timeout, 0, "Maximum seconds to wait for synchronous mutations. 0 - wait unlimited time", 0) \
     M(String, mutation_query_id, "", "Used to overwrite mutation's query id in tests", 0) \
     M(Bool, enable_lightweight_delete, true, "Enable lightweight DELETE for mergetree tables.", 0) \
@@ -1378,17 +1343,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, allow_experimental_geo_types, false, "Allow geo data types such as Point, Ring, Polygon, MultiPolygon", 0) \
     M(Bool, data_type_default_nullable, false, "Data types without NULL or NOT NULL will make Nullable", 0) \
     M(Bool, cast_keep_nullable, false, "CAST operator keep Nullable for result data type", 0) \
-    M(Bool, \
-      alter_partition_verbose_result, \
-      false, \
-      "Output information about affected parts. Currently works only for FREEZE and ATTACH commands.", \
-      0) \
-    M(Bool, allow_experimental_database_materialize_mysql, false, "Allow to create database with Engine=MaterializeMySQL(...).", 0) \
-    M(Bool, \
-      allow_experimental_database_materialized_postgresql, \
-      false, \
-      "Allow to create database with Engine=MaterializedPostgreSQL(...).", \
-      0) \
+    M(Bool, alter_partition_verbose_result, false, "Output information about affected parts. Currently works only for FREEZE and ATTACH commands.", 0) \
+    M(Bool, allow_experimental_database_materialize_mysql, true, "Allow to create database with Engine=CnchMaterializedMySQL(...).", 0) \
+    M(Bool, allow_experimental_database_materialized_postgresql, false, "Allow to create database with Engine=MaterializedPostgreSQL(...).", 0) \
     M(Bool, system_events_show_zero_values, false, "Include all metrics, even with zero values", 0) \
     M(MySQLDataTypesSupport, \
       mysql_datatypes_support_level, \
@@ -1497,7 +1454,9 @@ enum PreloadLevelSettings : UInt64
       "Limit the total number of optimizations applied to query plan. If zero, ignored. If limit reached, throw exception", \
       0) \
     M(Bool, query_plan_filter_push_down, true, "Allow to push down filter by predicate query plan step", 0) \
-\
+    M(Bool, enable_partition_filter_push_down, false, "Allow to push down partition filter to query info", 0) \
+    M(Bool, enable_optimizer_early_prewhere_push_down, false, "Allow to push down prewhere in the optimizer phase", 0) \
+    \
     M(UInt64, limit, 0, "Limit on read rows from the most 'end' result for select query, default 0 means no limit length", 0) \
     M(UInt64, offset, 0, "Offset on read rows from the most 'end' result for select query", 0) \
 \
@@ -1525,33 +1484,18 @@ enum PreloadLevelSettings : UInt64
     M(Bool, ignore_leader_check, 0, "Ignore leader check while executing some ALTER queries", 0) \
     M(Bool, cascading_refresh_materialized_view, true, "Whether cascading refresh the materialized view", 0) \
     M(Bool, enable_element_mv_rows, false, "Whether enable element query calculate base rows and view rows", 0) \
-    M(UInt64, \
-      max_rows_to_refresh_by_partition, \
-      100000000, \
-      "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", \
-      0) \
-    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0) \
-    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0) \
-    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0) \
-    M(UInt64, \
-      expired_start_hour_to_merge, \
-      12, \
-      "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", \
-      0) \
-    M(UInt64, \
-      expired_end_hour_to_merge, \
-      12, \
-      "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", \
-      0) \
-    M(UInt64, \
-      strict_rows_to_schedule_merge, \
-      50000000, \
-      "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", \
-      0) \
-    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0) \
-    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0) \
-    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0) \
-    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0) \
+    M(UInt64, max_rows_to_refresh_by_partition, 100000000, "The maximum rows to refresh a materialized view by partition. If exceed, we'll refresh the materialized view part by part.", 0) \
+    M(UInt64, max_threads_to_refresh_by_partition, 1, "The maximum threads to refresh a materialized view by partition.", 0) \
+    M(UInt64, slow_query_ms, 0, "Slow query criterial in ms. 0 means all related function will not be executed", 0)\
+    M(UInt64, max_rows_to_schedule_merge, 500000000, "Max rows of merged part for merge scheduler", 0)\
+    M(UInt64, total_rows_to_schedule_merge, 0, "Max total rows of merged parts for merge scheduler, 0 means unlimit", 0)\
+    M(UInt64, expired_start_hour_to_merge, 12, "The hour of UTC time, if current time is greater than it, merge scheduler can lower the merge frequency", 0)\
+    M(UInt64, expired_end_hour_to_merge, 12, "The hour of UTC time, if current time is smaller than it, merge scheduler can lower the merge frequency", 0)\
+    M(UInt64, strict_rows_to_schedule_merge, 50000000, "Max rows of merged part for merge scheduler when the current time is expired according to expired_hour_to_merge", 0)\
+    M(UInt64, max_parts_to_optimize, 1000, "Max number of parts to optimize", 0)\
+    M(Bool, enable_merge_scheduler, false, "Whether to enable MergeScheduler to excute merge", 0)\
+    M(Bool, conservative_merge_predicate, true, "Judge merge tree parts whether can be merged conservatively", 0)\
+    M(Bool, snappy_format_blocked, false, "Using blocked decompress flow for Snappy input", 0)\
     M(String, vw, "", "The vw name set by user on which the query run without tenant information", 0) \
     M(String, virtual_warehouse, "", "The vw name set by user on which the query run", 0) \
     M(String, backup_virtual_warehouse, "", "The backup vw to run query when default vw is not avaiable", 0) \
@@ -1565,27 +1509,14 @@ enum PreloadLevelSettings : UInt64
       "104),GlobalLowDisk(105)}", \
       0) \
     M(DialectType, dialect_type, DialectType::CLICKHOUSE, "Dialect type, e.g. CLICKHOUSE, ANSI, MYSQL", 0) \
-    M(Bool, adaptive_type_cast, false, "Performs type cast operations adaptively, according to the value", 0) \
+    M(Bool, adaptive_type_cast, true, "Performs type cast operations adaptively, according to the value", 0) \
     M(Bool, parse_literal_as_decimal, false, "Parse numeric literal as decimal instead of float", 0) \
-    M(Bool, \
-      formatdatetime_f_prints_single_zero, \
-      false, \
-      "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no " \
-      "fractional seconds.", \
-      0) \
-    M(Bool, \
-      formatdatetime_parsedatetime_m_is_month_name, \
-      true, \
-      "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", \
-      0) \
-    M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0) \
-    M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0) \
-    M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0) \
-    M(Milliseconds, \
-      meta_sync_task_interval_ms, \
-      1 * 60 * 60 * 1000, \
-      "Interval of background schedule task for metasore synchronization", \
-      0) \
+    M(Bool, formatdatetime_f_prints_single_zero, false, "Formatter '%f' in function 'formatDateTime()' produces a single zero instead of six zeros if the formatted value has no fractional seconds.", 0) \
+    M(Bool, formatdatetime_parsedatetime_m_is_month_name, false, "Formatter '%M' in functions 'formatDateTime()' and 'parseDateTime()' produces the month name instead of minutes.", 0) \
+    M(Bool, tealimit_order_keep, false, "Whether tealimit output keep order by clause", 0)\
+    M(UInt64, early_limit_for_map_virtual_columns, 0, "Enable early limit while quering _map_column_keys column", 0)\
+    M(Bool, skip_nullinput_notnull_col, false, "Skip null value in JSON for not null column", 0)\
+    M(Milliseconds, meta_sync_task_interval_ms, 1*60*60*1000, "Interval of background schedule task for metasore synchronization", 0)\
     M(Bool, enable_fetch_part_incrementally, true, "Whether to enable fetching part incrementally", 0) \
     M(String, \
       blocklist_for_merge_thread_regex, \
@@ -1687,6 +1618,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_skip_non_cnch_tables_for_cnch_parts, 0, "Allow to skip non cnch tables for system.cnch_parts", 0) \
     M(Bool, enable_query_level_profiling, false, "Enable profiling at query and operator level", 0) \
     M(Bool, enable_kafka_log_profiling, false, "Enable query profiling for cnch_kafka_log table", 0) \
+    M(Bool, enable_materialized_mysql_log_profiling, false, "Enable query profiling for cnch_materialized_mysql_log table", 0) \
     M(Bool, enable_query_metrics_tables_profiling, false, "Enable query profiling for query_metrics and query worker_metrics tables", 0) \
     M(UInt64, cloud_task_auto_stop_timeout, 60, "We will remove this task when heartbeat can't find this task more than retries_count times.", 0)\
     M(UInt64, parts_preload_level, 1, "used for global preload(manual alter&table auto), 0=close preload;1=preload meta;2=preload data;3=preload meta&data, Note: for table auto preload, 0 will disable all table preload, > 0 will use table preload setting", 0) \
@@ -1737,22 +1669,18 @@ enum PreloadLevelSettings : UInt64
       "Max remote filesystem cache size that can be downloaded by a single query", \
       0) \
     M(Bool, skip_download_if_exceeds_query_cache, true, "Skip download from remote filesystem if exceeds query cache size", 0) \
-\
-    /** Complex query settings **/ \
-    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0) \
-    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0) \
-    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0) \
-    M(Bool, send_plan_segment_by_brpc, true, "Whether to send plan segment by BRPC", 0) \
-    M(Bool, \
-      send_plan_segment_by_brpc_join_per_stage, \
-      false, \
-      "Whether to send plan segment by BRPC and join async rpc request per stage", \
-      0) \
-    M(Bool, send_plan_segment_by_brpc_join_at_last, false, "Whether to send plan segment by BRPC and join async rpc request at last", 0) \
-\
-    /** Brpc config **/ \
-    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0) \
-\
+    \
+    /** Complex query settings **/\
+    M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
+    M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
+    M(Bool, send_plan_segment_by_brpc, false, "Whether to send plan segment by BRPC", 0)\
+    M(Bool, send_plan_segment_by_brpc_join_per_stage, false, "Whether to send plan segment by BRPC and join async rpc request per stage", 0)\
+    M(Bool, send_plan_segment_by_brpc_join_at_last, true, "Whether to send plan segment by BRPC and join async rpc request at last", 0)\
+    \
+    /** Brpc config **/\
+    M(Bool, enable_brpc_builtin_services, true, "Whether to enable brpc builtin services", 0)\
+    \
     /** Obsolete settings that do nothing but left for compatibility reasons. Remove each one after half a year of obsolescence. */ \
     M(UInt64, max_memory_usage_for_all_queries, 0, "Obsolete setting, does nothing.", 0) \
     M(UInt64, multiple_joins_rewriter_version, 0, "Obsolete setting, does nothing.", 0) \
@@ -1792,7 +1720,6 @@ enum PreloadLevelSettings : UInt64
       "Timeout for query shard, if timeout shards beyond this threshold, then throw exception", \
       0) \
     M(Bool, enable_early_stop_metric, 0, "Whether output metrics of early stop", 0) \
-    \
     M(UInt64, query_queue_size, 100, "Max query queue size", 0) \
     M(Bool, enable_query_queue, false, "Whether enable query queue", 0) \
     M(UInt64, query_queue_timeout_ms, 100000, "Max queue pending time in ms", 0) \
@@ -1802,6 +1729,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_optimizer, false, "Whether enable query optimizer", 0) \
     M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback when failed", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
+    M(Bool, enable_new_scheduler, true, "Whether enable new scheduler", 0) \
+    M(Bool, enable_send_resource_by_stage, true, "Whether send resource by stage", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(UInt64, plan_optimizer_rule_warning_time, 1000, "Send warning if a optimize rule optimize time exceed timeout", 0) \
     M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \
@@ -1889,7 +1818,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_down_limit_into_window, true, "Whether to enable PushdownLimitIntoWindow rule", 0) \
     M(Bool, enable_push_limit_into_sorting_rule, true, "Whether to enable PushLimitIntoSorting rule", 0) \
     M(Bool, enable_push_down_apply_through_join, true, "Whether to enable PushDownApplyThroughJoin rule", 0) \
-    M(Bool, enable_push_query_info_filter_into_table_scan, true, "Whether to enable PushQueryInfoFilterIntoTableScan rule", 0) \
+    M(Bool, enable_push_storage_filter, true, "Whether to enable PushStorageFilter rule", 0) \
     M(Bool, enable_push_limit_into_table_scan, true, "Whether to enable PushLimitIntoTableScan rule", 0) \
     M(Bool, enable_push_aggregation_into_table_scan, true, "Whether to enable PushAggregationIntoTableScan rule", 0) \
     M(Bool, enable_push_projection_into_table_scan, true, "Whether to enable PushProjectionIntoTableScan rule", 0) \
@@ -1983,6 +1912,7 @@ enum PreloadLevelSettings : UInt64
     M(CTEMode, cte_mode, CTEMode::AUTO, "CTE mode: SHARED|INLINED|AUTO|ENFORCED", 0) \
     M(Bool, enable_cte_property_enum, false, "Whether enumerate all possible properties for cte", 0) \
     M(Bool, enable_cte_common_property, true, "Whether search common property for cte", 0) \
+    M(Bool, enable_windows_parallel, false, "Whether run windows in parallel", 0) \
     M(Bool, enable_materialized_view_rewrite, true, "Whether enable materialized view based rewriter for query", 0) \
     M(String, enable_push_partial_block_list, "", "Aggregate names who can push partial agg, split by ',' => axxx,bxxx,cxxx", 0) \
     M(Bool, enable_materialized_view_ast_rewrite, false, "Whether enable materialized view based rewriter for query", 0) \
@@ -2075,7 +2005,16 @@ enum PreloadLevelSettings : UInt64
     /** S3 Storage settings*/ \
     M(UInt64, s3_gc_inter_partition_parallelism, 4, "Partition level concurrency when gc s3 table", 0) \
     M(UInt64, s3_gc_intra_partition_parallelism, 16, "Part level concurrency when gc s3 table", 0) \
-\
+    \
+    M(UInt64, \
+      table_partition_metrics_recalculate_recently_used_threshold, \
+      6, \
+      "Recalculate partitions/tables that `last_update_time > last_snapshot_time`, in hours.", 0) \
+    M(UInt64, \
+      table_partition_metrics_recalculate_not_recently_used_threshold, \
+      3, \
+      "Recalculate partitions/tables that not recently updated, in days.", 0) \
+    M(UInt64, table_partition_metrics_snapshot_threshold, 1, "Snapshot partition/tables that get recently updated, in hours", 0) \
     /* Transaction and catalog */ \
     M(Bool, ignore_duplicate_insertion_label, true, "Throw an exception if false", 0) \
     M(Bool, bypass_ddl_db_lock, true, "Bypass locking database while creating tables", 0) \
@@ -2105,9 +2044,13 @@ enum PreloadLevelSettings : UInt64
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
     M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel",0) \
     M(Bool,   parquet_parallel_read, false, "whether to read parquet in parallel",0) \
-    \
+    /*start of batch synchronous parallel section*/ \
+    M(Bool, bsp_mode, false, "if enabled, query will execute in bsp mode", 0) \
+    /*end of batch synchronous parallel section*/ \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
+    \
+    M(Bool, force_manipulate_materialized_mysql_table, false, "For tables of materialized mysql engine, force to manipulate it.", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
@@ -2195,6 +2138,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, input_format_orc_allow_missing_columns, false, "Allow missing columns while reading ORC input formats", 0) \
     M(Bool, input_format_parquet_allow_missing_columns, false, "Allow missing columns while reading Parquet input formats", 0) \
     M(Bool, input_format_arrow_allow_missing_columns, false, "Allow missing columns while reading Arrow input formats", 0) \
+    M(UInt64, input_format_parquet_max_block_size, 8192, "Max block size for parquet reader.", 0) \
     M(String, output_format_avro_codec, "", "Compression codec used for output. Possible values: 'null', 'deflate', 'snappy'.", 0) \
     M(UInt64, output_format_avro_sync_interval, 16 * 1024, "Sync interval in bytes.", 0) \
     M(Bool, output_format_tsv_crlf_end_of_line, false, "If it is set true, end of line in TSV format will be \\r\\n instead of \\n.", 0) \
@@ -2272,6 +2216,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, offloading_with_query_plan, false, "utilize query plan to offload the computation comoetely to worker", 0) \
     M(Seconds, access_entity_ttl, 60 * 60, "TTL for access entities stored in memory in seconds", 0) \
 \
+    M(Bool, debug_enable_early_partition_pruning, false, "Whether we can prune parts via query filter and partition value", 0) \
+    \
     M(String, s3_ak_id, "", "The access_key set by user when accessing ve s3.", 0) \
     M(String, s3_ak_secret, "", "The secret_key set by user when accessing ve s3.", 0) \
     M(String, s3_region, "", "The region set by user when accessing ve s3.", 0) \

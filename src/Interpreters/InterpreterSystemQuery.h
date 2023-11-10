@@ -70,6 +70,7 @@ private:
 
     void restartReplicas(ContextMutablePtr system_context);
     void syncReplica(ASTSystemQuery & query);
+    void recalculateMetrics(ASTSystemQuery & query);
 
     void restoreReplica();
 
@@ -82,6 +83,8 @@ private:
     void startStopAction(StorageActionBlockType action_type, bool start);
     void controlConsume(ASTSystemQuery::Type type);
     void resetConsumeOffset(ASTSystemQuery & query, ContextMutablePtr & system_context);
+
+    void executeMaterializedMyQLInCnchServer(const ASTSystemQuery & query);
 
     void executeMetastoreCmd(ASTSystemQuery & query) const;
 

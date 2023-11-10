@@ -22,6 +22,7 @@
 #include <string.h>
 #include <Catalog/MetastoreCommon.h>
 #include <Catalog/MetastoreProxy.h>
+#include <Databases/MySQL/MaterializedMySQLCommon.h>
 #include <DaemonManager/BGJobStatusInCatalog.h>
 #include <IO/ReadHelpers.h>
 #include <Protos/DataModelHelpers.h>
@@ -807,6 +808,8 @@ void MetastoreProxy::dropAllPartInTable(const String & name_space, const String 
     metastore_ptr->clean(stagedDataPartPrefix(name_space, uuid));
     metastore_ptr->clean(tablePartitionInfoPrefix(name_space, uuid));
     metastore_ptr->clean(detachedPartPrefix(name_space, uuid));
+    metastore_ptr->clean(partitionPartsMetricsSnapshotPrefix(name_space,uuid, ""));
+    metastore_ptr->clean(tableTrashItemsMetricsSnapshotPrefix(name_space, uuid));
 }
 
 void MetastoreProxy::dropAllDeleteBitmapInTable(const String & name_space, const String & uuid)
@@ -993,6 +996,25 @@ bool MetastoreProxy::updateTransactionRecordWithOffsets(const String &name_space
 
     return metastore_ptr->multiWriteCAS(keys, new_values, old_values);
      **/
+}
+
+bool MetastoreProxy::updateTransactionRecordWithBinlog(const String & name_space, const UInt64 & txn_id,
+                                                       const String & txn_data_old, const String & txn_data_new,
+                                                       const String & binlog_name, const std::shared_ptr<Protos::MaterializedMySQLBinlogMetadata> & binlog)
+{
+    BatchCommitRequest multi_write;
+    BatchCommitResponse resp;
+
+    multi_write.AddPut(SinglePutRequest(transactionRecordKey(name_space, txn_id), txn_data_new, txn_data_old));
+
+    String value;
+    if (!binlog->SerializeToString(&value))
+        throw Exception("Failed to serialize metadata of Binlog to string", ErrorCodes::LOGICAL_ERROR);
+
+    auto binlog_key = materializedMySQLMetadataKey(name_space, binlog_name);
+    multi_write.AddPut(SinglePutRequest(binlog_key, value));
+
+    return metastore_ptr->batchWrite(multi_write, resp);
 }
 
 std::pair<bool, String> MetastoreProxy::MetastoreProxy::updateTransactionRecordWithRequests(
@@ -1474,6 +1496,11 @@ void MetastoreProxy::setBGJobStatus(const String & name_space, const String & uu
             consumerBGJobStatusKey(name_space, uuid),
             String{BGJobStatusInCatalog::serializeToChar(status)}
         );
+    else if (type == CnchBGThreadType::MaterializedMySQL)
+        metastore_ptr->put(
+            mmysqlBGJobStatusKey(name_space, uuid),
+            String{BGJobStatusInCatalog::serializeToChar(status)}
+        );
     else if (type == CnchBGThreadType::DedupWorker)
         metastore_ptr->put(
             dedupWorkerBGJobStatusKey(name_space, uuid),
@@ -1494,6 +1521,8 @@ std::optional<CnchBGThreadStatus> MetastoreProxy::getBGJobStatus(const String & 
         metastore_ptr->get(partGCBGJobStatusKey(name_space, uuid), status_store_data);
     else if (type == CnchBGThreadType::Consumer)
         metastore_ptr->get(consumerBGJobStatusKey(name_space, uuid), status_store_data);
+    else if (type == CnchBGThreadType::MaterializedMySQL)
+        metastore_ptr->get(mmysqlBGJobStatusKey(name_space, uuid), status_store_data);
     else if (type == CnchBGThreadType::DedupWorker)
         metastore_ptr->get(dedupWorkerBGJobStatusKey(name_space, uuid), status_store_data);
     else
@@ -1526,6 +1555,8 @@ std::unordered_map<UUID, CnchBGThreadStatus> MetastoreProxy::getBGJobStatuses(co
                 return metastore_ptr->getByPrefix(allPartGCBGJobStatusKeyPrefix(name_space));
             else if (type == CnchBGThreadType::Consumer)
                 return metastore_ptr->getByPrefix(allConsumerBGJobStatusKeyPrefix(name_space));
+            else if (type == CnchBGThreadType::MaterializedMySQL)
+                return metastore_ptr->getByPrefix(allMmysqlBGJobStatusKeyPrefix(name_space));
             else if (type == CnchBGThreadType::DedupWorker)
                 return metastore_ptr->getByPrefix(allDedupWorkerBGJobStatusKeyPrefix(name_space));
             else
@@ -1562,6 +1593,9 @@ void MetastoreProxy::dropBGJobStatus(const String & name_space, const String & u
             break;
         case CnchBGThreadType::Consumer:
             metastore_ptr->drop(consumerBGJobStatusKey(name_space, uuid));
+            break;
+        case CnchBGThreadType::MaterializedMySQL:
+            metastore_ptr->drop(mmysqlBGJobStatusKey(name_space, uuid));
             break;
         case CnchBGThreadType::DedupWorker:
             metastore_ptr->drop(dedupWorkerBGJobStatusKey(name_space, uuid));
@@ -2002,56 +2036,92 @@ UInt64 MetastoreProxy::getMergeMutateThreadStartTime(const String & name_space, 
         return std::stoull(meta_str);
 }
 
+std::shared_ptr<Protos::MaterializedMySQLManagerMetadata> MetastoreProxy::tryGetMaterializedMySQLManagerMetadata(const String & name_space, const UUID & uuid)
+{
+    String value;
+    auto manager_key = materializedMySQLMetadataKey(name_space, getNameForMaterializedMySQLManager(uuid));
+    metastore_ptr->get(manager_key, value);
+    if (value.empty())
+        return nullptr;
+
+    auto res = std::make_shared<Protos::MaterializedMySQLManagerMetadata>();
+    if (!res->ParseFromString(value))
+        throw Exception("Failed to parse metadata of MaterializedMySQL manager", ErrorCodes::LOGICAL_ERROR);
+    return res;
+}
+
+void MetastoreProxy::setMaterializedMySQLManagerMetadata(const String & name_space, const UUID & uuid, const Protos::MaterializedMySQLManagerMetadata & metadata)
+{
+    String value;
+    if (!metadata.SerializeToString(&value))
+        throw Exception("Failed to serialize metadata of MaterializedMySQL manager to string", ErrorCodes::LOGICAL_ERROR);
+
+    auto manager_key = materializedMySQLMetadataKey(name_space, getNameForMaterializedMySQLManager(uuid));
+    metastore_ptr->put(manager_key, value);
+}
+
+void MetastoreProxy::removeMaterializedMySQLManagerMetadata(const String & name_space, const UUID & uuid)
+{
+    auto manager_key = materializedMySQLMetadataKey(name_space, getNameForMaterializedMySQLManager(uuid));
+    metastore_ptr->drop(manager_key);
+}
+
+std::shared_ptr<Protos::MaterializedMySQLBinlogMetadata> MetastoreProxy::getMaterializedMySQLBinlogMetadata(const String & name_space, const String & binlog_name)
+{
+    String value;
+    auto log_key = materializedMySQLMetadataKey(name_space, binlog_name);
+    metastore_ptr->get(log_key, value);
+    if (value.empty())
+        return nullptr;
+
+    auto res = std::make_shared<Protos::MaterializedMySQLBinlogMetadata>();
+    res->ParseFromString(value);
+    return res;
+}
+
+void MetastoreProxy::setMaterializedMySQLBinlogMetadata(const String & name_space, const String & binlog_name, const Protos::MaterializedMySQLBinlogMetadata & metadata)
+{
+    String value;
+    if (!metadata.SerializeToString(&value))
+        throw Exception("Failed to serialize metadata of Binlog to string", ErrorCodes::LOGICAL_ERROR);
+
+    auto manager_key = materializedMySQLMetadataKey(name_space, binlog_name);
+    metastore_ptr->put(manager_key, value);
+}
+
+void MetastoreProxy::removeMaterializedMySQLBinlogMetadata(const String & name_space, const String & binlog_name)
+{
+    auto manager_key = materializedMySQLMetadataKey(name_space, binlog_name);
+    metastore_ptr->drop(manager_key);
+}
+
+void MetastoreProxy::updateMaterializedMySQLMetadataInBatch(const String & name_space, const Strings &names, const Strings &values, const Strings &delete_names)
+{
+    if (names.size() != values.size())
+        throw Exception("Unmatched keys and values while updating metadata in batch", ErrorCodes::BAD_ARGUMENTS);
+
+    BatchCommitRequest multi_writer;
+    BatchCommitResponse resp;
+
+    for (size_t i = 0; i < names.size(); ++i)
+        multi_writer.AddPut(SinglePutRequest(materializedMySQLMetadataKey(name_space, names[i]), values[i]));
+
+    for (const auto & delete_key : delete_names)
+        multi_writer.AddDelete(materializedMySQLMetadataKey(name_space, delete_key));
+
+    metastore_ptr->batchWrite(multi_writer, resp);
+}
+
 // TODO(WangTao): For bytekv we use TTL to expire the async query status, while for other metastore we need a background job to clean the expired status.
 void MetastoreProxy::setAsyncQueryStatus(
-    const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl) const
+    const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64) const
 {
-    // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
-    // {
-    //     if (status.status() == AsyncQueryStatus::NotStarted || status.status() == AsyncQueryStatus::Running)
-    //     {
-    //         bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
-    //     }
-    //     else
-    //     {
-    //         DB::Catalog::BatchCommitRequest update_request;
-    //         DB::Catalog::BatchCommitResponse update_response;
-    //         update_request.AddDelete(asyncQueryStatusKey(name_space, id));
-    //         update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl));
-    //         if (!bytekv->batchWrite(update_request, update_response))
-    //         {
-    //             throw Exception(
-    //                 fmt::format("Update async query status fail with ns {} and id {}.", name_space, id), ErrorCodes::LOGICAL_ERROR);
-    //         }
-    //     }
-    //     return;
-    // }
     metastore_ptr->put(asyncQueryStatusKey(name_space, id), status.SerializeAsString());
 }
 
 void MetastoreProxy::markBatchAsyncQueryStatusFailed(
-    const String & name_space, std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason, UInt64 ttl) const
+    const String & name_space, std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason, UInt64) const
 {
-    // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
-    // {
-    //     DB::Catalog::BatchCommitRequest update_request;
-    //     DB::Catalog::BatchCommitResponse update_response;
-    //     for (auto & status : statuses)
-    //     {
-    //         status.set_status(Protos::AsyncQueryStatus::Failed);
-    //         status.set_error_msg(reason);
-    //         status.set_update_time(time(nullptr));
-    //         update_request.AddDelete(asyncQueryStatusKey(name_space, status.id()));
-    //         update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, status.id()), status.SerializeAsString(), ttl));
-    //     }
-    //     if (!bytekv->batchWrite(update_request, update_response))
-    //     {
-    //         throw Exception(
-    //             fmt::format("Mark batch async query status fail with ns {} and size {}.", name_space, statuses.size()),
-    //             ErrorCodes::LOGICAL_ERROR);
-    //     }
-    //     return;
-    // }
     for (auto & status : statuses)
     {
         status.set_status(Protos::AsyncQueryStatus::Failed);
@@ -2627,6 +2697,26 @@ IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_spac
 IMetaStore::IteratorPtr MetastoreProxy::getAllDeleteBitmaps(const String & name_space, const String & table_uuid)
 {
     return metastore_ptr->getByPrefix(deleteBitmapPrefix(name_space, table_uuid));
+}
+
+void MetastoreProxy::updateTableTrashItemsSnapshot(const String & name_space, const String & table_uuid, const String & snapshot)
+{
+    metastore_ptr->put(tableTrashItemsMetricsSnapshotPrefix(name_space, table_uuid), snapshot);
+}
+void MetastoreProxy::updatePartitionMetricsSnapshot(
+    const String & name_space, const String & table_uuid, const String & partition_id, const String & snapshot)
+{
+    metastore_ptr->put(partitionPartsMetricsSnapshotPrefix(name_space, table_uuid, partition_id), snapshot);
+}
+IMetaStore::IteratorPtr MetastoreProxy::getTablePartitionMetricsSnapshots(const String & name_space, const String & table_uuid)
+{
+    return metastore_ptr->getByPrefix(partitionPartsMetricsSnapshotPrefix(name_space, table_uuid, ""));
+}
+String MetastoreProxy::getTableTrashItemsSnapshot(const String & name_space, const String & table_uuid)
+{
+    String value;
+    metastore_ptr->get(tableTrashItemsMetricsSnapshotPrefix(name_space, table_uuid), value);
+    return value;
 }
 
 } /// end of namespace DB::Catalog

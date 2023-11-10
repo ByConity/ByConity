@@ -16,29 +16,35 @@
 #include <CloudServices/CnchServerServiceImpl.h>
 
 #include <Catalog/Catalog.h>
-#include <Catalog/CatalogUtils.h>
-#include <CloudServices/CnchDataWriter.h>
-#include <CloudServices/CnchMergeMutateThread.h>
-#include <CloudServices/DedupWorkerManager.h>
-#include <CloudServices/DedupWorkerStatus.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
 #include <Interpreters/Context.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Protos/RPCHelpers.h>
-#include <Storages/Kafka/CnchKafkaConsumeManager.h>
-#include <Storages/PartCacheManager.h>
 #include <Transaction/LockManager.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Transaction/TxnTimestamp.h>
-#include <WorkerTasks/ManipulationType.h>
 #include "Common/tests/gtest_global_context.h"
 #include <Statistics/AutoStatisticsHelper.h>
 #include <Statistics/AutoStatisticsRpcUtils.h>
 #include <Statistics/AutoStatisticsManager.h>
 #include <Common/Exception.h>
 #include <Access/AccessControlManager.h>
+#include <Interpreters/DatabaseCatalog.h>
+#include <CloudServices/CnchMergeMutateThread.h>
+#include <CloudServices/CnchDataWriter.h>
+#include <CloudServices/DedupWorkerManager.h>
+#include <CloudServices/DedupWorkerStatus.h>
+#include <Catalog/CatalogUtils.h>
+#include <WorkerTasks/ManipulationType.h>
+#include <Storages/Kafka/CnchKafkaConsumeManager.h>
+#include <Storages/PartCacheManager.h>
+
+#if USE_MYSQL
+#include <Storages/StorageMaterializeMySQL.h>
+#include <Databases/MySQL/MaterializedMySQLSyncThreadManager.h>
+#endif
 
 namespace DB
 {
@@ -93,7 +99,14 @@ void CnchServerServiceImpl::commitParts(
                 auto storage = database_catalog.tryGetTable(table_id, rpc_context);
                 if (!storage)
                     throw Exception("Table " + table_id.getFullTableName() + " not found while committing parts", ErrorCodes::LOGICAL_ERROR);
-
+#if USE_MYSQL
+                /// For materialized mysql
+                if (auto * proxy = dynamic_cast<StorageMaterializeMySQL *>(storage.get()))
+                {
+                    auto nested = proxy->getNested();
+                    storage.swap(nested);
+                }
+#endif
                 auto * cnch = dynamic_cast<MergeTreeMetaBase *>(storage.get());
                 if (!cnch)
                     throw Exception("MergeTree is expected, but got " + storage->getName() + " for " + table_id.getFullTableName(), ErrorCodes::BAD_ARGUMENTS);
@@ -118,13 +131,25 @@ void CnchServerServiceImpl::commitParts(
 
                     LOG_TRACE(&Poco::Logger::get("CnchServerService"), "parsed tpl to commit with size: {}\n", tpl.size());
                 }
+
+                MySQLBinLogInfo binlog;
+                if (req->has_binlog())
+                {
+                    auto & binlog_req = req->binlog();
+                    binlog.binlog_file = binlog_req.binlog_file();
+                    binlog.binlog_position = binlog_req.binlog_position();
+                    binlog.executed_gtid_set = binlog_req.executed_gtid_set();
+                    binlog.meta_version = binlog_req.meta_version();
+                }
+
                 CnchDataWriter cnch_writer(
                     *cnch,
                     rpc_context,
                     ManipulationType(req->type()),
                     req->task_id(),
                     std::move(consumer_group),
-                    tpl);
+                    tpl,
+                    binlog);
 
                 TxnTimestamp commit_time
                     = cnch_writer.commitPreparedCnchParts(DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts)});
@@ -599,7 +624,7 @@ void CnchServerServiceImpl::fetchUniqueTableMeta(
 }
 
 void CnchServerServiceImpl::getBackgroundThreadStatus(
-    google::protobuf::RpcController * cntl,
+    google::protobuf::RpcController *,
     const Protos::BackgroundThreadStatusReq * request,
     Protos::BackgroundThreadStatusResp * response,
     google::protobuf::Closure * done)
@@ -615,12 +640,7 @@ void CnchServerServiceImpl::getBackgroundThreadStatus(
                 std::map<StorageID, CnchBGThreadStatus> res;
 
                 auto type = CnchBGThreadType(request->type());
-                if (
-                    type == CnchBGThreadType::PartGC ||
-                    type == CnchBGThreadType::MergeMutate ||
-                    type == CnchBGThreadType::Consumer ||
-                    type == CnchBGThreadType::DedupWorker ||
-                    type == CnchBGThreadType::Clustering)
+                if (type >= CnchBGThreadType::ServerMinType && type <= CnchBGThreadType::ServerMaxType)
                 {
 #if 0
                     auto threads = global_context.getCnchBGThreads(type);
@@ -1395,6 +1415,116 @@ void CnchServerServiceImpl::submitPreloadTask(
     });
 }
 
+#if USE_MYSQL
+void CnchServerServiceImpl::submitMaterializedMySQLDDLQuery(
+    [[maybe_unused]] google::protobuf::RpcController * cntl,
+    const Protos::SubmitMaterializedMySQLDDLQueryReq * request,
+    Protos::SubmitMaterializedMySQLDDLQueryResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, global_context = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+
+            try
+            {
+                auto database_ptr = DatabaseCatalog::instance().getDatabase(request->database_name(), global_context);
+                auto * materialized_mysql = dynamic_cast<DatabaseCnchMaterializedMySQL*>(database_ptr.get());
+                if (!materialized_mysql)
+                    throw Exception("Expect CnchMaterializedMySQL but got " + database_ptr->getEngineName(), ErrorCodes::LOGICAL_ERROR);
+
+                MySQLBinLogInfo binlog;
+                binlog.binlog_file = request->binlog_file();
+                binlog.binlog_position = request->binlog_position();
+                binlog.executed_gtid_set = request->executed_gtid_set();
+                binlog.meta_version = request->meta_version();
+
+                auto bg_thread = global_context->getCnchBGThread(CnchBGThreadType::MaterializedMySQL, materialized_mysql->getStorageID());
+                auto * manager = dynamic_cast<MaterializedMySQLSyncThreadManager*>(bg_thread.get());
+                if (!manager)
+                    throw Exception("Convert to MaterializedMySQLSyncThreadManager from bg_thread failed", ErrorCodes::LOGICAL_ERROR);
+                manager->executeDDLQuery(request->ddl_query(), request->thread_key(), binlog);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__ );
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
+}
+
+void CnchServerServiceImpl::reportHeartbeatForSyncThread(
+    [[maybe_unused]] google::protobuf::RpcController * cntl,
+    const Protos::ReportHeartbeatForSyncThreadReq * request,
+    Protos::ReportHeartbeatForSyncThreadResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, global_context = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+
+            try
+            {
+                auto database_ptr = DatabaseCatalog::instance().getDatabase(request->database_name(), global_context);
+                auto * materialized_mysql = dynamic_cast<DatabaseCnchMaterializedMySQL*>(database_ptr.get());
+                if (!materialized_mysql)
+                    throw Exception("Expect CnchMaterializedMySQL but got " + database_ptr->getEngineName(), ErrorCodes::LOGICAL_ERROR);
+
+                auto bg_thread = global_context->getCnchBGThread(CnchBGThreadType::MaterializedMySQL, materialized_mysql->getStorageID());
+                auto * manager = dynamic_cast<MaterializedMySQLSyncThreadManager*>(bg_thread.get());
+                if (!manager)
+                    throw Exception("Convert to MaterializedMySQLSyncThreadManager from bg_thread failed", ErrorCodes::LOGICAL_ERROR);
+                manager->handleHeartbeatOfSyncThread(request->thread_key());
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__ );
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
+}
+
+void CnchServerServiceImpl::reportSyncFailedForSyncThread(
+    [[maybe_unused]] google::protobuf::RpcController * cntl,
+    const Protos::ReportSyncFailedForSyncThreadReq * request,
+    Protos::ReportSyncFailedForSyncThreadResp * response,
+    google::protobuf::Closure * done)
+{
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, global_context = getContext(), log = log] {
+            brpc::ClosureGuard done_guard(done);
+
+            try
+            {
+                auto database_ptr = DatabaseCatalog::instance().getDatabase(request->database_name(), global_context);
+                auto * materialized_mysql = dynamic_cast<DatabaseCnchMaterializedMySQL*>(database_ptr.get());
+                if (!materialized_mysql)
+                    throw Exception("Expect CnchMaterializedMySQL but got " + database_ptr->getEngineName(), ErrorCodes::LOGICAL_ERROR);
+
+                auto bg_thread = global_context->getCnchBGThread(CnchBGThreadType::MaterializedMySQL, materialized_mysql->getStorageID());
+                auto * manager = dynamic_cast<MaterializedMySQLSyncThreadManager*>(bg_thread.get());
+                if (!manager)
+                    throw Exception("Convert to MaterializedMySQLSyncThreadManager from bg_thread failed", ErrorCodes::LOGICAL_ERROR);
+                manager->handleSyncFailedThread(request->thread_key());
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__ );
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
+}
+#endif
+
 void CnchServerServiceImpl::executeOptimize(
     google::protobuf::RpcController *,
     const Protos::ExecuteOptimizeQueryReq * request,
@@ -1446,6 +1576,36 @@ void CnchServerServiceImpl::notifyAccessEntityChange(
             // AccessControlManager::find will find the newly update/deleted access entity and notify all subscribers
             if (toString(type) == entity_type)
                 getContext()->getAccessControlManager().find(type, name);
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
+void CnchServerServiceImpl::forceRecalculateMetrics(
+    google::protobuf::RpcController *,
+    const Protos::ForceRecalculateMetricsReq * request,
+    Protos::ForceRecalculateMetricsResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+
+        auto istorage = getContext()->getCnchCatalog()->getTable(*getContext(), storage_id.database_name, storage_id.table_name);
+
+        if (auto mgr = getContext()->getPartCacheManager(); mgr)
+        {
+            mgr->forceRecalculate(istorage);
+        }
+        else
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "PartCacheManager not found");
         }
     }
     catch (...)

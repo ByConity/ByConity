@@ -4,7 +4,10 @@
 #include <random>
 #include <string>
 #include <utility>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 #include <benchmark/benchmark.h>
+#pragma clang diagnostic pop
 
 #include <Disks/DiskLocal.h>
 #include <Disks/VolumeJBOD.h>

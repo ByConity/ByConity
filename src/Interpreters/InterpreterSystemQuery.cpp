@@ -96,6 +96,10 @@
 #include <Storages/Kafka/CnchKafkaOffsetManager.h>
 #endif
 
+#if USE_MYSQL
+#include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
+#endif
+
 namespace DB
 {
 namespace ErrorCodes
@@ -473,6 +477,11 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::RESTART_CONSUME:
             controlConsume(query.type);
             break;
+        case Type::START_MATERIALIZEDMYSQL:
+        case Type::STOP_MATERIALIZEDMYSQL:
+        case Type::RESYNC_MATERIALIZEDMYSQL_TABLE:
+            executeMaterializedMyQLInCnchServer(query);
+            break;
         case Type::RESET_CONSUME_OFFSET:
             resetConsumeOffset(query, system_context);
             break;
@@ -484,6 +493,8 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::FORCE_GC:
         case Type::START_DEDUP_WORKER:
         case Type::STOP_DEDUP_WORKER:
+        case Type::START_CLUSTER:
+        case Type::STOP_CLUSTER:
             executeBGTaskInCnchServer(system_context, query.type);
             break;
         case Type::DEDUP:
@@ -506,6 +517,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             break;
         case Type::LOCK_MEMORY_LOCK:
             lockMemoryLock(query, table_id, system_context);
+            break;
+        case Type::RECALCULATE_METRICS:
+            recalculateMetrics(query);
             break;
         default:
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "System command {} is not supported in CNCH", ASTSystemQuery::typeToString(query.type));
@@ -610,28 +624,34 @@ void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & syste
     switch (type)
     {
         case Type::START_MERGES:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Start);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString());
             break;
         case Type::STOP_MERGES:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Stop);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString());
             break;
         case Type::REMOVE_MERGES:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Remove);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Remove, CurrentThread::getQueryId().toString());
             break;
         case Type::START_GC:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Start);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString());
             break;
         case Type::STOP_GC:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Stop);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString());
             break;
         case Type::FORCE_GC:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Wakeup);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::PartGC, CnchBGThreadAction::Wakeup, CurrentThread::getQueryId().toString());
             break;
         case Type::START_DEDUP_WORKER:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::DedupWorker, CnchBGThreadAction::Start);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::DedupWorker, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString());
             break;
         case Type::STOP_DEDUP_WORKER:
-            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::DedupWorker, CnchBGThreadAction::Stop);
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::DedupWorker, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString());
+            break;
+        case Type::START_CLUSTER:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::Clustering, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString());
+            break;
+        case Type::STOP_CLUSTER:
+            daemon_manager->controlDaemonJob(storage->getStorageID(), CnchBGThreadType::Clustering, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString());
             break;
         default:
             throw Exception("Unknown command type " + toString(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
@@ -662,25 +682,26 @@ void InterpreterSystemQuery::controlConsume(ASTSystemQuery::Type type)
     if (!cnch_kafka)
         throw Exception("CnchKafka is supported but provided " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
 
-    auto daemon_manager = getContext()->getDaemonManagerClient();
+    auto local_context = getContext();
+    auto daemon_manager = local_context->getDaemonManagerClient();
 
-    auto catalog = getContext()->getCnchCatalog();
+    auto catalog = local_context->getCnchCatalog();
     using Type = ASTSystemQuery::Type;
     switch (type)
     {
         case Type::START_CONSUME:
-            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Start);
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Start, local_context->getCurrentQueryId());
             break;
         case Type::STOP_CONSUME:
-            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop);
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop, local_context->getCurrentQueryId());
             break;
         case Type::RESTART_CONSUME:
-            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop);
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop, local_context->getCurrentQueryId());
             usleep(500 * 1000);
-            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Start);
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Start, local_context->getCurrentQueryId());
             break;
         case Type::DROP_CONSUME:
-            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Drop);
+            daemon_manager->controlDaemonJob(cnch_kafka->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Drop, local_context->getCurrentQueryId());
             break;
         default:
             throw Exception("Unknown command type " + String(ASTSystemQuery::typeToString(type)), ErrorCodes::LOGICAL_ERROR);
@@ -738,6 +759,35 @@ void InterpreterSystemQuery::resetConsumeOffset(ASTSystemQuery & query, ContextM
     else
         throw Exception("offset should be set by one of the parameters: timestamp, offset_value, offset_values. input: "
                             + query.string_data, ErrorCodes::BAD_ARGUMENTS);
+}
+
+void InterpreterSystemQuery::executeMaterializedMyQLInCnchServer(const ASTSystemQuery & query)
+{
+    ContextPtr local_context = getContext();
+    auto database = DatabaseCatalog::instance().getDatabase(query.database, local_context);
+    auto * materialized_mysql = dynamic_cast<DatabaseCnchMaterializedMySQL*>(database.get());
+    if (!materialized_mysql)
+        throw Exception("Expect CnchMaterializedMySQL, but got " + database->getEngineName(), ErrorCodes::BAD_ARGUMENTS);
+
+    auto daemon_manager = getContext()->getDaemonManagerClient();
+
+    using Type = ASTSystemQuery::Type;
+    switch (query.type)
+    {
+        /// TODO: record the status in catalog for persistent
+        case Type::START_MATERIALIZEDMYSQL:
+            daemon_manager->controlDaemonJob(materialized_mysql->getStorageID(), CnchBGThreadType::MaterializedMySQL, CnchBGThreadAction::Start, local_context->getCurrentQueryId());
+            break;
+        case Type::STOP_MATERIALIZEDMYSQL:
+            daemon_manager->controlDaemonJob(materialized_mysql->getStorageID(), CnchBGThreadType::MaterializedMySQL, CnchBGThreadAction::Stop, local_context->getCurrentQueryId());
+            break;
+        case Type::RESYNC_MATERIALIZEDMYSQL_TABLE:
+            /// Here we use getContext() rather than system_context as query forwarding needs process_list_entry
+            materialized_mysql->manualResyncTable(query.table, getContext());
+            break;
+        default:
+            throw Exception(String(ASTSystemQuery::typeToString(query.type)) + " is not supported now", ErrorCodes::NOT_IMPLEMENTED);
+    }
 }
 
 void InterpreterSystemQuery::restoreReplica()
@@ -963,6 +1013,21 @@ bool InterpreterSystemQuery::dropReplicaImpl(ASTSystemQuery & query, const Stora
     LOG_TRACE(log, "Dropped replica {} of {}", query.replica, table->getStorageID().getNameForLogs());
 
     return true;
+}
+
+void InterpreterSystemQuery::recalculateMetrics(ASTSystemQuery & query)
+{
+    getContext()->checkAccess(AccessType::SYSTEM_RECALCULATE_METRICS, table_id);
+
+    auto mgr = getContext()->getPartCacheManager();
+    if (!mgr)
+        throw Exception("No PartCacheManager found", ErrorCodes::LOGICAL_ERROR);
+
+    StoragePtr table = DatabaseCatalog::instance().getTable(table_id, getContext());
+    if (!table) {
+        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} not found.", quoteString(query.database), quoteString(query.table));
+    }
+    mgr->forceRecalculate(table);
 }
 
 void InterpreterSystemQuery::syncReplica(ASTSystemQuery &)
@@ -1256,6 +1321,11 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
             required_access.emplace_back(AccessType::SYSTEM_RESTART_REPLICA);
             break;
         }
+        case Type::RECALCULATE_METRICS:
+        {
+            required_access.emplace_back(AccessType::SYSTEM_RECALCULATE_METRICS, query.database, query.table);
+            break;
+        }
         case Type::FLUSH_DISTRIBUTED:
         {
             required_access.emplace_back(AccessType::SYSTEM_FLUSH_DISTRIBUTED, query.database, query.table);
@@ -1424,6 +1494,8 @@ void InterpreterSystemQuery::executeActionOnCNCHLog(const String & table_name, A
 {
     if (table_name == CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME)
         executeActionOnCNCHLogImpl(getContext()->getCloudKafkaLog(), type, table_name, log);
+    else if (table_name == CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME)
+        executeActionOnCNCHLogImpl(getContext()->getCloudMaterializedMySQLLog(), type, table_name, log);
     else if (table_name == CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME)
         executeActionOnCNCHLogImpl(getContext()->getQueryMetricsLog(), type, table_name, log);
     else if (table_name == CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME)
@@ -1432,9 +1504,10 @@ void InterpreterSystemQuery::executeActionOnCNCHLog(const String & table_name, A
         executeActionOnCNCHLogImpl(getContext()->getCnchQueryLog(), type, table_name, log);
     else
         throw Exception(ErrorCodes::BAD_ARGUMENTS,
-            "there is no log corresponding to table name {}, available names are {}, {}, {}",
+            "there is no log corresponding to table name {}, available names are {}, {}, {}, {}",
             table_name,
             CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME,
+            CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME,
             CNCH_SYSTEM_LOG_QUERY_LOG_TABLE_NAME);

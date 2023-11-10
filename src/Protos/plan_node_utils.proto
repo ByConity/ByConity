@@ -6,7 +6,8 @@ package DB.Protos;
 
 message Field {
   required FieldType.Enum type = 1;
-  required bytes blob = 2;
+  optional bytes blob = 2;
+  // TODO use oneof
 }
 
 message FillColumnDescription {
@@ -16,11 +17,11 @@ message FillColumnDescription {
 }
 
 message Collator {
-  required bytes locale = 1;
+  required string locale = 1;
 }
 
 message SortColumnDescription {
-  required bytes column_name = 1;
+  required string column_name = 1;
   required uint64 column_number = 2;
   required int32 direction = 3;
   required int32 nulls_direction = 4;
@@ -29,8 +30,20 @@ message SortColumnDescription {
   required FillColumnDescription fill_description = 7;
 }
 
+message DataType {
+  required string type_name = 1;
+}
+
+message NameAndTypePair {
+  required string name = 1;
+  required DataType type = 2;
+  required DataType type_in_storage = 3;
+  optional uint64 subcolumn_delimiter_position = 4;
+}
+
 message Block {
-  required bytes blob = 1;
+  optional bytes blob = 1;
+  repeated NameAndTypePair names_and_types = 2;
 }
 
 message DataStream {
@@ -42,7 +55,7 @@ message DataStream {
     }
   }
   required Block header = 1;
-  repeated bytes distinct_columns = 2;
+  repeated string distinct_columns = 2;
   required bool has_single_port = 3;
   repeated SortColumnDescription sort_description = 4;
   required SortMode.Enum sort_mode = 5;
@@ -83,35 +96,25 @@ message Partitioning {
   }
 
   required Handle.Enum handle = 1;
-  repeated bytes columns = 2;
+  repeated string columns = 2;
   required bool require_handle = 3;
   required uint64 buckets = 4;
   required bool enforce_round_robin = 5;
   required Component.Enum component = 6;
 }
 
-message DataType {
-  required bytes type_name = 1;
-}
-
-message NameAndTypePair {
-  required bytes name = 1;
-  required DataType type = 2;
-  required DataType type_in_storage = 3;
-  optional uint64 subcolumn_delimiter_position = 4;
-}
-
 // possibly nullptr
 message AST {
   // empty bytes means nullptr
-  required bytes blob = 1;
+  required bytes blob = 1; // exact binary 
+  optional string text = 2; // only for read
   // TODO: use better serialize method
 }
 
 // LinkedHashTable must keep order
 message Assignments {
   message KV {
-    required bytes key = 1;
+    required string key = 1;
     required AST value = 2;
   }
   repeated KV pairs = 1;
@@ -123,14 +126,14 @@ message RuntimeFilterBuildInfos {
 }
 
 message GroupingSetsParams {
-  repeated bytes used_key_names = 1;
+  repeated string used_key_names = 1;
   repeated uint64 used_keys = 2;
   repeated uint64 missing_keys = 3;
 }
 
 message GroupingDescription {
-  repeated bytes argument_names = 1;
-  required bytes output_name = 2;
+  repeated string argument_names = 1;
+  required string output_name = 2;
 }
 
 message FieldVector {
@@ -138,7 +141,7 @@ message FieldVector {
 }
 
 message AggregateFunction {
-  required bytes func_name = 1;
+  required string func_name = 1;
   repeated DataType arg_types = 2;
   required FieldVector parameters = 3;
 }
@@ -146,9 +149,9 @@ message AggregateFunction {
 message AggregateDescription {
   required AggregateFunction function = 1;
   repeated uint64 arguments = 3;
-  repeated bytes argument_names = 4;
-  required bytes column_name = 5;
-  required bytes mask_column = 6;
+  repeated string argument_names = 4;
+  required string column_name = 5;
+  required string mask_column = 6;
 }
 
 message AggregatorParams {
@@ -180,22 +183,23 @@ message InputOrderInfo {
 }
 
 message ArrayJoinAction {
-  repeated bytes columns = 1;
+  repeated string columns = 1;
   required bool is_left = 2;
 }
 
 message SelectQueryInfo {
   required AST query = 1;
   required AST view_query = 2;
+  optional AST partition_filter = 3;
 }
 
 message NameWithAliasPair {
-  required bytes name = 1;
-  required bytes alias = 2;
+  required string name = 1;
+  required string alias = 2;
 }
 
 message AddressInfo {
-  required bytes host_name = 1;
+  required string host_name = 1;
   required uint32 port = 2;
   required bytes user = 3;
   required bytes password = 4;
@@ -209,9 +213,9 @@ message IPlanSegment {
   required ExchangeMode.Enum exchange_mode = 3;
   required uint64 exchange_id = 4;
   required uint64 exchange_parallel_size = 5;
-  required bytes name = 6;
+  required string name = 6;
   required uint64 segment_id = 7;
-  repeated bytes shuffle_keys = 8;
+  repeated string shuffle_keys = 8;
 }
 
 message PlanSegmentInput {
@@ -259,13 +263,13 @@ message WindowFrame {
 }
 
 message WindowFunctionDescription {
-  required bytes column_name = 1;
+  required string column_name = 1;
   required AggregateFunction aggregate_function = 2;
-  repeated bytes argument_names = 4;
+  repeated string argument_names = 4;
 }
 
 message WindowDescription {
-  required bytes window_name = 1;
+  required string window_name = 1;
   repeated SortColumnDescription partition_by = 2;
   repeated SortColumnDescription order_by = 3;
   repeated SortColumnDescription full_sort_description = 4;

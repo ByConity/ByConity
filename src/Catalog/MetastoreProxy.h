@@ -104,7 +104,11 @@ namespace DB::Catalog
 #define MERGEMUTATE_THREAD_START_TIME "MTST_"
 #define DETACHED_PART_PREFIX "DP_"
 #define ENTITY_UUID_MAPPING "EUM_"
+#define MATERIALIZEDMYSQL_PREFIX "MMYSQL_"
+#define MATERIALIZEDMYSQL_BG_JOB_STATUS "MATERIALIZEDMYSQL_BGJS_"
 #define DETACHED_DELETE_BITMAP_PREFIX "DDLB_"
+#define PARTITION_PARTS_METRICS_SNAPSHOT_PREFIX "PPS_"
+#define TABLE_TRASHITEMS_METRICS_SNAPSHOT_PREFIX "TTS_"
 
 using EntityType = IAccessEntity::Type;
 struct EntityMetastorePrefix
@@ -553,6 +557,16 @@ public:
         return allConsumerBGJobStatusKeyPrefix(name_space) + uuid;
     }
 
+    static std::string allMmysqlBGJobStatusKeyPrefix(const std::string & name_space)
+    {
+        return escapeString(name_space) + '_' + MATERIALIZEDMYSQL_BG_JOB_STATUS;
+    }
+
+    static std::string mmysqlBGJobStatusKey(const std::string & name_space, const std::string & uuid)
+    {
+        return allMmysqlBGJobStatusKeyPrefix(name_space) + uuid;
+    }
+
     static std::string allDedupWorkerBGJobStatusKeyPrefix(const std::string & name_space)
     {
         return escapeString(name_space) + '_' + DEDUPWORKER_BG_JOB_STATUS;
@@ -683,6 +697,11 @@ public:
         return escapeString(name_space) + '_' + MERGEMUTATE_THREAD_START_TIME + uuid;
     }
 
+    static String materializedMySQLMetadataKey(const String & name_space, const String & name)
+    {
+        return escapeString(name_space) + "_" + MATERIALIZEDMYSQL_PREFIX + escapeString(name);
+    }
+
     inline static String AYSNC_QUERY_STATUS_PREFIX = "ASYNC_QUERY_STATUS_";
     inline static String FINAL_AYSNC_QUERY_STATUS_PREFIX = "F_ASYNC_QUERY_STATUS_";
 
@@ -734,6 +753,16 @@ public:
         return fmt::format("{}{}", accessEntityUUIDNameMappingPrefix(name_space), uuid);
     }
 
+    static String partitionPartsMetricsSnapshotPrefix(const String & name_space, const String & table_uuid, const String & partition_id)
+    {
+        return escapeString(name_space) + "_" + PARTITION_PARTS_METRICS_SNAPSHOT_PREFIX + table_uuid + "_" + partition_id;
+    }
+
+    static String tableTrashItemsMetricsSnapshotPrefix(const String & name_space, const String & table_uuid)
+    {
+        return escapeString(name_space) + "_" + TABLE_TRASHITEMS_METRICS_SNAPSHOT_PREFIX + table_uuid;
+    }
+
     /// end of Metastore Proxy keying schema
 
     void createTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data);
@@ -745,6 +774,7 @@ public:
     std::vector<std::pair<String, UInt64>> getTransactionRecords(const String & name_space, const std::vector<TxnTimestamp> & txn_ids);
 
     bool updateTransactionRecordWithOffsets(const String & name_space, const UInt64 & txn_id, const String & txn_data_old, const String & txn_data_new, const String & consumer_group, const cppkafka::TopicPartitionList &);
+    bool updateTransactionRecordWithBinlog(const String & name_space, const UInt64 & txn_id, const String & txn_data_old, const String & txn_data_new, const String & binlog_name, const std::shared_ptr<Protos::MaterializedMySQLBinlogMetadata> & binlog);
     void setTransactionRecord(const String & name_space, const UInt64 & txn_id, const String & txn_data, UInt64 ttl = 0);
 
     std::pair<bool, String> updateTransactionRecordWithRequests(
@@ -969,6 +999,14 @@ public:
     void setMergeMutateThreadStartTime(const String & name_space, const String & uuid, const UInt64 & start_time);
     UInt64 getMergeMutateThreadStartTime(const String & name_space, const String & uuid);
 
+    std::shared_ptr<Protos::MaterializedMySQLManagerMetadata> tryGetMaterializedMySQLManagerMetadata(const String & name_space, const UUID & uuid);
+    void setMaterializedMySQLManagerMetadata(const String & name_space, const UUID & uuid, const Protos::MaterializedMySQLManagerMetadata & metadata);
+    void removeMaterializedMySQLManagerMetadata(const String & name_space, const UUID & uuid);
+    std::shared_ptr<Protos::MaterializedMySQLBinlogMetadata> getMaterializedMySQLBinlogMetadata(const String & name_space, const String & binlog_name);
+    void setMaterializedMySQLBinlogMetadata(const String & name_space, const String & binlog_name, const Protos::MaterializedMySQLBinlogMetadata & metadata);
+    void removeMaterializedMySQLBinlogMetadata(const String & name_space, const String & binlog_name);
+    void updateMaterializedMySQLMetadataInBatch(const String & name_space, const Strings & names, const Strings & values, const Strings & delete_names);
+
     void setAsyncQueryStatus(
         const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl /* 1 day */ = 86400) const;
     void markBatchAsyncQueryStatusFailed(
@@ -1045,6 +1083,23 @@ public:
     String getAccessEntityNameByUUID(const String & name_space, const UUID & id) const;
     bool dropAccessEntity(EntityType type, const String & name_space, const UUID & id, const String & name) const;
     bool putAccessEntity(EntityType type, const String & name_space, const AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists) const;
+    /**
+     * @brief Get parts partition metrics snapshots in table level.
+     */
+    IMetaStore::IteratorPtr getTablePartitionMetricsSnapshots(const String & name_space, const String & table_uuid);
+    /**
+     * @brief Update a partition level parts metrics snapshot.
+     */
+    void updatePartitionMetricsSnapshot(
+        const String & name_space, const String & table_uuid, const String & partition_id, const String & snapshot);
+    /**
+     * @brief Update a table level trash items metrics snapshot.
+     */
+    void updateTableTrashItemsSnapshot(const String & name_space, const String & table_uuid, const String & snapshot);
+    /**
+     * @brief Get a table level trash items metrics snapshot.
+     */
+    String getTableTrashItemsSnapshot(const String & name_space, const String & table_uuid);
 
 private:
 

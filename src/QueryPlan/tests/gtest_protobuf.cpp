@@ -675,9 +675,9 @@ TEST_F(ProtobufTest, TableWriteStep)
         std::string step_description = fmt::format("description {}", eng() % 100);
         auto base_input_stream = generateDataStream(eng);
         auto target = generateTableWriteStepInsertTarget(eng);
-        auto step = std::make_shared<TableWriteStep>(base_input_stream, target);
-        step->setStepDescription(step_description);
-        return step;
+        auto s = std::make_shared<TableWriteStep>(base_input_stream, target);
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -701,9 +701,9 @@ TEST_F(ProtobufTest, TableFinishStep)
         auto base_input_stream = generateDataStream(eng);
         auto target = generateTableWriteStepInsertTarget(eng);
         auto output_affected_row_count_symbol = fmt::format("text{}", eng() % 100);
-        auto step = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol);
-        step->setStepDescription(step_description);
-        return step;
+        auto s = std::make_shared<TableFinishStep>(base_input_stream, target, output_affected_row_count_symbol);
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -727,9 +727,9 @@ TEST_F(ProtobufTest, FilterStep)
         auto base_input_stream = generateDataStream(eng);
         auto filter = generateAST(eng);
         auto remove_filter_column = eng() % 2 == 1;
-        auto step = std::make_shared<FilterStep>(base_input_stream, filter, remove_filter_column);
-        step->setStepDescription(step_description);
-        return step;
+        auto s = std::make_shared<FilterStep>(base_input_stream, filter, remove_filter_column);
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -759,9 +759,9 @@ TEST_F(ProtobufTest, ProjectionStep)
             (void)v;
         }
         auto final_project = eng() % 2 == 1;
-        auto step = std::make_shared<ProjectionStep>(base_input_stream, assignments, name_to_type, final_project);
-        step->setStepDescription(step_description);
-        return step;
+        auto s = std::make_shared<ProjectionStep>(base_input_stream, assignments, name_to_type, final_project);
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -811,7 +811,7 @@ TEST_F(ProtobufTest, JoinStep)
         LinkedHashMap<String, RuntimeFilterBuildInfos> runtime_filter_builders;
         runtime_filter_builders.emplace("a", generateRuntimeFilterBuildInfos(eng));
         runtime_filter_builders.emplace("b", generateRuntimeFilterBuildInfos(eng));
-        auto step = std::make_shared<JoinStep>(
+        auto s = std::make_shared<JoinStep>(
             input_streams,
             output_stream,
             kind,
@@ -829,8 +829,8 @@ TEST_F(ProtobufTest, JoinStep)
             is_magic,
             is_ordered,
             simple_reordered);
-        step->setStepDescription(step_description);
-        return step;
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -862,7 +862,7 @@ TEST_F(ProtobufTest, MergeSortingStep)
         auto max_bytes_before_external_sort = eng() % 1000;
         auto tmp_volume = context ? context->getTemporaryVolume() : nullptr;
         auto min_free_disk_space = eng() % 1000;
-        auto step = std::make_shared<MergeSortingStep>(
+        auto s = std::make_shared<MergeSortingStep>(
             base_input_stream,
             description,
             max_merged_block_size,
@@ -872,8 +872,8 @@ TEST_F(ProtobufTest, MergeSortingStep)
             max_bytes_before_external_sort,
             tmp_volume,
             min_free_disk_space);
-        step->setStepDescription(step_description);
-        return step;
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -908,7 +908,7 @@ TEST_F(ProtobufTest, MergingAggregatedStep)
         auto memory_efficient_aggregation = eng() % 2 == 1;
         auto max_threads = eng() % 1000;
         auto memory_efficient_merge_threads = eng() % 1000;
-        auto step = std::make_shared<MergingAggregatedStep>(
+        auto s = std::make_shared<MergingAggregatedStep>(
             base_input_stream,
             keys,
             grouping_sets_params,
@@ -917,8 +917,8 @@ TEST_F(ProtobufTest, MergingAggregatedStep)
             memory_efficient_aggregation,
             max_threads,
             memory_efficient_merge_threads);
-        step->setStepDescription(step_description);
-        return step;
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -963,7 +963,7 @@ TEST_F(ProtobufTest, AggregatingStep)
         for (int i = 0; i < 2; ++i)
             groupings.emplace_back(generateGroupingDescription(eng));
         auto should_produce_results_in_order_of_bucket_number = eng() % 2 == 1;
-        auto step = std::make_shared<AggregatingStep>(
+        auto s = std::make_shared<AggregatingStep>(
             base_input_stream,
             keys,
             keys_not_hashed,
@@ -979,8 +979,8 @@ TEST_F(ProtobufTest, AggregatingStep)
             groupings,
             false,
             should_produce_results_in_order_of_bucket_number);
-        step->setStepDescription(step_description);
-        return step;
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -1003,9 +1003,9 @@ TEST_F(ProtobufTest, ArrayJoinStep)
         std::string step_description = fmt::format("description {}", eng() % 100);
         auto base_input_stream = generateDataStream(eng, true);
         auto array_join = generateArrayJoinAction(eng);
-        auto step = std::make_shared<ArrayJoinStep>(base_input_stream, array_join);
-        step->setStepDescription(step_description);
-        return step;
+        auto s = std::make_shared<ArrayJoinStep>(base_input_stream, array_join);
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -1033,7 +1033,7 @@ TEST_F(ProtobufTest, TableScanStep)
         std::shared_ptr<ProjectionStep> pushdown_projection = nullptr;
         std::shared_ptr<FilterStep> pushdown_filter = nullptr;
 
-        auto step = std::make_shared<TableScanStep>(
+        auto s = std::make_shared<TableScanStep>(
             context,
             storage_id,
             column_alias,
@@ -1045,7 +1045,7 @@ TEST_F(ProtobufTest, TableScanStep)
             pushdown_projection,
             pushdown_filter);
 
-        return step;
+        return s;
     }();
 
     // serialize to protobuf
@@ -1068,9 +1068,9 @@ TEST_F(ProtobufTest, RemoteExchangeSourceStep)
         auto input_stream = generateDataStream(eng);
         auto step_description = fmt::format("text{}", eng() % 100);
         auto inputs = std::vector{generatePlanSegmentInput(eng)};
-        auto step = std::make_shared<RemoteExchangeSourceStep>(inputs, input_stream, false, false);
-        step->setStepDescription(step_description);
-        return step;
+        auto s = std::make_shared<RemoteExchangeSourceStep>(inputs, input_stream, false, false);
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -1094,9 +1094,9 @@ TEST_F(ProtobufTest, FinalSampleStep)
         auto base_input_stream = generateDataStream(eng);
         auto sample_size = eng() % 1000;
         auto max_chunk_size = eng() % 1000;
-        auto step = std::make_shared<FinalSampleStep>(base_input_stream, sample_size, max_chunk_size);
-        step->setStepDescription(step_description);
-        return step;
+        auto s = std::make_shared<FinalSampleStep>(base_input_stream, sample_size, max_chunk_size);
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -1121,9 +1121,9 @@ TEST_F(ProtobufTest, ReadStorageRowCountStep)
         auto query = generateAST(eng);
         auto agg_desc = generateAggregateDescription(eng);
         auto num_rows = eng() % 1000;
-        auto step = std::make_shared<ReadStorageRowCountStep>(base_output_header, storage_id, query, agg_desc, num_rows);
+        auto s = std::make_shared<ReadStorageRowCountStep>(base_output_header, storage_id, query, agg_desc, num_rows);
 
-        return step;
+        return s;
     }();
 
     // serialize to protobuf
@@ -1201,9 +1201,9 @@ TEST_F(ProtobufTest, WindowStep)
             functions.emplace_back(function);
         }
 
-        auto step = std::make_shared<WindowStep>(output_stream, desc, functions, true);
-        step->setStepDescription(step_description);
-        return step;
+        auto s = std::make_shared<WindowStep>(output_stream, desc, functions, true);
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf
@@ -1228,8 +1228,8 @@ TEST_F(ProtobufTest, IntersectOrExceptStep)
             input_streams.emplace_back(generateDataStream(eng));
         auto current_operator = static_cast<IntersectOrExceptStep::Operator>(eng() % 3);
         auto max_threads = eng() % 1000;
-        auto step = std::make_shared<IntersectOrExceptStep>(input_streams, current_operator, max_threads);
-        return step;
+        auto s = std::make_shared<IntersectOrExceptStep>(input_streams, current_operator, max_threads);
+        return s;
     }();
 
     // serialize to protobuf
@@ -1251,9 +1251,9 @@ TEST_F(ProtobufTest, BufferStep)
     auto step = [&eng] {
         std::string step_description = fmt::format("description {}", eng() % 100);
         auto base_input_stream = generateDataStream(eng);
-        auto step = std::make_shared<BufferStep>(base_input_stream);
-        step->setStepDescription(step_description);
-        return step;
+        auto s = std::make_shared<BufferStep>(base_input_stream);
+        s->setStepDescription(step_description);
+        return s;
     }();
 
     // serialize to protobuf

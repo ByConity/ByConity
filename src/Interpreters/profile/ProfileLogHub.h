@@ -6,7 +6,7 @@
 #include <vector>
 #include <Interpreters/profile/ProfileElementConsumer.h>
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
-#include <bthread/mtx_cv_base.h>
+#include <bthread/mutex.h>
 #include <Common/ThreadPool.h>
 #include <common/logger_useful.h>
 
@@ -44,14 +44,38 @@ public:
 
     bool hasConsumer() const { return !profile_element_consumers.empty(); }
 
-    void tryPushElement(const std::string & query_id, const ProfileElement & element, const UInt64 & timeout_millseconds = 0);
+    inline void tryPushElement(const std::string & query_id, const ProfileElement & element, const UInt64 & timeout_millseconds = 0)
+    {
+        tryPushElementImpl(query_id, element, timeout_millseconds);
+    }
 
-    void tryPushElement(const std::string & query_id, const ProfileElements & elements, const UInt64 & timeout_millseconds = 0);
+    inline void tryPushElement(const std::string & query_id, ProfileElement && element, const UInt64 & timeout_millseconds = 0)
+    {
+        tryPushElementImpl(query_id, std::move(element), timeout_millseconds);
+    }
+
+    inline void tryPushElement(const std::string & query_id, const ProfileElements & elements, const UInt64 & timeout_millseconds = 0)
+    {
+        for (const auto & element : elements)
+        {
+            tryPushElementImpl(query_id, element, timeout_millseconds);
+        }
+    }
+
+    inline void tryPushElement(const std::string & query_id, ProfileElements && elements, const UInt64 & timeout_millseconds = 0)
+    {
+        for (auto & element : elements)
+        {
+            tryPushElementImpl(query_id, std::move(element), timeout_millseconds);
+        }
+    }
 
     void stopConsume(const std::string & query_id);
 
 private:
     void registerConsumer(Consumer consumer);
+    template <typename E>
+    void tryPushElementImpl(const std::string & query_id, E && element, const UInt64 & timeout_millseconds = 0);
 
     ProfileElementQueues profile_element_queue_map;
     Consumers profile_element_consumers;
@@ -120,13 +144,14 @@ void ProfileLogHub<ProfileElement>::registerConsumer(const Consumer consumer)
     });
 }
 
+/// the E is used here to ensure perfect forwarding in template class method
 template <typename ProfileElement>
-void ProfileLogHub<ProfileElement>::tryPushElement(
-    const std::string & query_id, const ProfileElement & element, const UInt64 & timeout_millseconds)
+template <typename E>
+void ProfileLogHub<ProfileElement>::tryPushElementImpl(const std::string & query_id, E && element, const UInt64 & timeout_millseconds)
 {
     auto & element_queue = profile_element_queue_map.find(query_id)->second;
     auto time_start = std::chrono::system_clock::now();
-    while (!element_queue->tryPush(std::move(element), timeout_millseconds / 10))
+    while (!element_queue->tryPush(std::forward<E>(element), timeout_millseconds / 10))
     {
         LOG_WARNING(logger, "Query id:{} push profile element to coordinator log queue fail.Retrying!!!", query_id);
         auto now = std::chrono::system_clock::now();
@@ -137,16 +162,6 @@ void ProfileLogHub<ProfileElement>::tryPushElement(
             LOG_ERROR(logger, "Query id:{} push profile element to coordinator log queue fail after retry.", query_id);
             throw Exception("Push profile element to coordinator fail.", ErrorCodes::EXPLAIN_COLLECT_PROFILE_METRIC_TIMEOUT);
         }
-    }
-}
-
-template <typename ProfileElement>
-void ProfileLogHub<ProfileElement>::tryPushElement(
-    const std::string & query_id, const ProfileElements & elements, const UInt64 & timeout_millseconds)
-{
-    for (auto & element : elements)
-    {
-        tryPushElement(query_id, element, timeout_millseconds);
     }
 }
 

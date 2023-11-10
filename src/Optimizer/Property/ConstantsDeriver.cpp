@@ -1,5 +1,3 @@
-#pragma once
-
 #include <algorithm>
 #include <Optimizer/DomainTranslator.h>
 #include <Optimizer/FunctionInvoker.h>
@@ -163,7 +161,7 @@ Constants ConstantsDeriverVisitor::visitUnionStep(const UnionStep & step, Consta
     return Constants{filter_values};
 }
 
-Constants ConstantsDeriverVisitor::visitTableScanStep(const TableScanStep & step, ConstantsDeriverContext & context)
+Constants ConstantsDeriverVisitor::visitTableScanStep(const TableScanStep & /*step*/, ConstantsDeriverContext & /*context*/)
 {
     // NameToNameMap translation;
     // for (const auto & item : step.getColumnAlias())

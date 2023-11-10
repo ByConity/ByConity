@@ -240,8 +240,8 @@ void Aggregator::Params::explain(JSONBuilder::JSONMap & map) const
 
 void Aggregator::Params::toProto(Protos::AggregatorParams & proto) const
 {
-    serializeBlockToProto(src_header, *proto.mutable_src_header());
-    serializeBlockToProto(intermediate_header, *proto.mutable_intermediate_header());
+    serializeHeaderToProto(src_header, *proto.mutable_src_header());
+    serializeHeaderToProto(intermediate_header, *proto.mutable_intermediate_header());
     for (const auto & element : keys)
         proto.add_keys(element);
     for (const auto & element : aggregates)
@@ -262,8 +262,8 @@ void Aggregator::Params::toProto(Protos::AggregatorParams & proto) const
 
 Aggregator::Params Aggregator::Params::fromProto(const Protos::AggregatorParams & proto, ContextPtr context)
 {
-    auto src_header = deserializeBlockFromProto(proto.src_header());
-    auto intermediate_header = deserializeBlockFromProto(proto.intermediate_header());
+    auto src_header = deserializeHeaderFromProto(proto.src_header());
+    auto intermediate_header = deserializeHeaderFromProto(proto.intermediate_header());
     ColumnNumbers keys;
     for (const auto & element : proto.keys())
         keys.emplace_back(element);

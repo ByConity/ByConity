@@ -569,21 +569,34 @@ template <typename Name, typename Tag> struct ConvertImpl<DataTypeDate32, DataTy
 
 /// Implementation of toDate function.
 
-template <typename FromType, typename ToType>
+template <typename FromType, typename ToType, bool adaptive = false>
 struct ToDateTransform32Or64
 {
     static constexpr auto name = "toDate";
 
     static inline NO_SANITIZE_UNDEFINED ToType execute(const FromType & from, const DateLUTImpl & time_zone)
     {
-        // since converting to Date, no need in values outside of default LUT range.
-        return (from < DATE_LUT_MAX_DAY_NUM)
-               ? from
-               : std::min<Int32>(Int32(time_zone.toDayNum(from)), Int32(DATE_LUT_MAX_DAY_NUM));
+        if (from <= DATE_LUT_MAX_DAY_NUM)
+            return from;
+
+        if constexpr (std::is_same_v<FromType, UInt32>)
+            return time_zone.toDayNum(from);
+
+        if (from <= 0xFFFFFFFF)
+            return time_zone.toDayNum(from);
+
+        if constexpr (adaptive)
+            return time_zone.toDayNum(std::min(time_t(from / 1000), time_t(0xFFFFFFFF)));
+
+        throw Exception(std::string("Input timestamps for toDate operator overflow (> 0xFFFFFFFF). ") +
+                        "Out-of-bound values are no longer implicitly handled as millisecond timestamps by default. " +
+                        "Please set adaptive_type_cast=1 to enable this implicit conversion. " +
+                        "Or, use specific function for millisecond timestamps : fromUnixTimestampMilli/fromUnixTimestamp64Milli",
+                        ErrorCodes::ARGUMENT_OUT_OF_BOUND);
     }
 };
 
-template <typename FromType, typename ToType>
+template <typename FromType, typename ToType, bool adaptive = false>
 struct ToDateTransform32Or64Signed
 {
     static constexpr auto name = "toDate";
@@ -594,9 +607,23 @@ struct ToDateTransform32Or64Signed
         if (from < 0)
             return 0;
 
-        return (from < DATE_LUT_MAX_DAY_NUM)
-               ? static_cast<ToType>(from)
-               : time_zone.toDayNum(std::min(Int64(from), Int64(0xFFFFFFFF)));
+        if (from <= DATE_LUT_MAX_DAY_NUM)
+            return from;
+
+        if constexpr (std::is_same_v<FromType, Int32>)
+            return time_zone.toDayNum(from);
+
+        if (from <= 0xFFFFFFFF)
+            return time_zone.toDayNum(from);
+
+        if constexpr (adaptive)
+            return time_zone.toDayNum(std::min(time_t(from / 1000), time_t(0xFFFFFFFF)));
+
+        throw Exception(std::string("Input timestamps for toDate operator overflow (> 0xFFFFFFFF). ") +
+                        "Out-of-bound values are no longer implicitly handled as millisecond timestamps by default. " +
+                        "Please set adaptive_type_cast=1 to enable this implicit conversion. " +
+                        "Or, use specific function for millisecond timestamps : fromUnixTimestampMilli/fromUnixTimestamp64Milli",
+                        ErrorCodes::ARGUMENT_OUT_OF_BOUND);
     }
 };
 
@@ -667,22 +694,22 @@ struct ToDate32Transform8Or16Signed
   *  when user write toDate(UInt32), expecting conversion of unix timestamp to Date.
   *  (otherwise such usage would be frequent mistake).
   */
-template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeUInt32, DataTypeDate, Name, Tag, Mode>
-    : DateTimeTransformImpl<DataTypeUInt32, DataTypeDate, ToDateTransform32Or64<UInt32, UInt16>> {};
-template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeUInt64, DataTypeDate, Name, Tag, Mode>
-    : DateTimeTransformImpl<DataTypeUInt64, DataTypeDate, ToDateTransform32Or64<UInt64, UInt16>> {};
+template <typename Name, typename Tag, ConvertExceptionMode Mode, bool Adaptive> struct ConvertImpl<DataTypeUInt32, DataTypeDate, Name, Tag, Mode, Adaptive>
+    : DateTimeTransformImpl<DataTypeUInt32, DataTypeDate, ToDateTransform32Or64<UInt32, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, ConvertExceptionMode Mode, bool Adaptive> struct ConvertImpl<DataTypeUInt64, DataTypeDate, Name, Tag, Mode, Adaptive>
+    : DateTimeTransformImpl<DataTypeUInt64, DataTypeDate, ToDateTransform32Or64<UInt64, UInt16, Adaptive>> {};
 template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt8, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt8, DataTypeDate, ToDateTransform8Or16Signed<Int8, UInt16>> {};
 template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt16, DataTypeDate, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeInt16, DataTypeDate, ToDateTransform8Or16Signed<Int16, UInt16>> {};
-template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt32, DataTypeDate, Name, Tag, Mode>
-    : DateTimeTransformImpl<DataTypeInt32, DataTypeDate, ToDateTransform32Or64Signed<Int32, UInt16>> {};
-template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeInt64, DataTypeDate, Name, Tag, Mode>
-    : DateTimeTransformImpl<DataTypeInt64, DataTypeDate, ToDateTransform32Or64Signed<Int64, UInt16>> {};
-template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeFloat32, DataTypeDate, Name, Tag, Mode>
-    : DateTimeTransformImpl<DataTypeFloat32, DataTypeDate, ToDateTransform32Or64Signed<Float32, UInt16>> {};
-template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeFloat64, DataTypeDate, Name, Tag, Mode>
-    : DateTimeTransformImpl<DataTypeFloat64, DataTypeDate, ToDateTransform32Or64Signed<Float64, UInt16>> {};
+template <typename Name, typename Tag, ConvertExceptionMode Mode, bool Adaptive> struct ConvertImpl<DataTypeInt32, DataTypeDate, Name, Tag, Mode, Adaptive>
+    : DateTimeTransformImpl<DataTypeInt32, DataTypeDate, ToDateTransform32Or64Signed<Int32, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, ConvertExceptionMode Mode, bool Adaptive> struct ConvertImpl<DataTypeInt64, DataTypeDate, Name, Tag, Mode, Adaptive>
+    : DateTimeTransformImpl<DataTypeInt64, DataTypeDate, ToDateTransform32Or64Signed<Int64, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, ConvertExceptionMode Mode, bool Adaptive> struct ConvertImpl<DataTypeFloat32, DataTypeDate, Name, Tag, Mode, Adaptive>
+    : DateTimeTransformImpl<DataTypeFloat32, DataTypeDate, ToDateTransform32Or64Signed<Float32, UInt16, Adaptive>> {};
+template <typename Name, typename Tag, ConvertExceptionMode Mode, bool Adaptive> struct ConvertImpl<DataTypeFloat64, DataTypeDate, Name, Tag, Mode, Adaptive>
+    : DateTimeTransformImpl<DataTypeFloat64, DataTypeDate, ToDateTransform32Or64Signed<Float64, UInt16, Adaptive>> {};
 
 template <typename Name, typename Tag, ConvertExceptionMode Mode> struct ConvertImpl<DataTypeUInt32, DataTypeDate32, Name, Tag, Mode>
     : DateTimeTransformImpl<DataTypeUInt32, DataTypeDate32, ToDate32Transform32Or64<UInt32, Int32>> {};
@@ -2128,9 +2155,10 @@ private:
                 const auto * dt64 = assert_cast<const DataTypeDateTime64 *>(arguments[0].type.get());
                 result_column = ConvertImpl<LeftDataType, RightDataType, Name, SpecialTag, exception_mode>::execute(arguments, result_type, input_rows_count, dt64->getScale());
             }
-            else if constexpr (std::is_same_v<RightDataType, DataTypeDateTime> &&
-                                 (std::is_same_v<LeftDataType, DataTypeUInt64> || std::is_same_v<LeftDataType, DataTypeInt64> ||
-                                  std::is_same_v<LeftDataType, DataTypeFloat32> || std::is_same_v<LeftDataType, DataTypeFloat64>))
+            else if constexpr (
+                    (std::is_same_v<RightDataType, DataTypeDateTime> || std::is_same_v<RightDataType, DataTypeDate>) &&
+                    (std::is_same_v<LeftDataType, DataTypeUInt64> || std::is_same_v<LeftDataType, DataTypeInt64> ||
+                     std::is_same_v<LeftDataType, DataTypeFloat32> || std::is_same_v<LeftDataType, DataTypeFloat64>))
            {
                 if (adaptive_conversion)
                     result_column = ConvertImpl<LeftDataType, RightDataType, Name, ConvertDefaultBehaviorTag, exception_mode, true>::execute(
@@ -2934,7 +2962,7 @@ private:
         }
         else if (!can_apply_accurate_cast)
         {
-            if constexpr (std::is_same_v<ToDataType, DataTypeDateTime>)
+            if constexpr (std::is_same_v<ToDataType, DataTypeDate> || std::is_same_v<ToDataType, DataTypeDateTime>)		
             {
                 if (which.isInt64() || which.isUInt64() || which.isFloat32() || which.isFloat64())
                 {

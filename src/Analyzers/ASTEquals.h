@@ -79,6 +79,9 @@ namespace ASTEquality
     };
 }
 
+template <typename ASTType = ASTPtr>
+using ASTSet = std::unordered_set<ASTType, ASTEquality::ASTHash, ASTEquality::ASTEquals>;
+
 template <typename T, typename ASTType = ASTPtr>
 using ASTMap = std::unordered_map<ASTType, T, ASTEquality::ASTHash, ASTEquality::ASTEquals>;
 

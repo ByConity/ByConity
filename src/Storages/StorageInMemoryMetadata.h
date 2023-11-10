@@ -200,6 +200,9 @@ struct StorageInMemoryMetadata
     /// Block with ordinary columns + functional columns(if include_func_columns is true).
     Block getSampleBlockNonMaterialized(bool include_func_columns = false) const;
 
+    /// Block with ordinary + materialized columns + delete_flag. If not contain delete_flag, throw Exception.
+    Block getSampleBlockWithDeleteFlag() const;
+
     /// Block with ordinary + materialized + virtuals. Virtuals have to be
     /// explicitly specified, because they are part of Storage type, not
     /// Storage metadata.

@@ -15,30 +15,30 @@
 #pragma once
 
 #include <memory>
-#include <Interpreters/Context.h>
-#include <Interpreters/SegmentScheduler.h>
-#include <Interpreters/ProcessList.h>
-#include <Protos/plan_segment_manager.pb.h>
-#include <brpc/server.h>
-#include <common/types.h>
-#include <common/logger_useful.h>
-
-#include <Common/ResourceMonitor.h>
-#include <ResourceManagement/CommonData.h>
 #include <Core/BackgroundSchedulePool.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/MPPQueryCoordinator.h>
 #include <Interpreters/DistributedStages/MPPQueryManager.h>
+#include <Interpreters/ProcessList.h>
 #include <Interpreters/ProcessorsProfileLog.h>
+#include <Interpreters/SegmentScheduler.h>
 #include <Interpreters/profile/ProfileLogHub.h>
+#include <Protos/plan_segment_manager.pb.h>
+#include <ResourceManagement/CommonData.h>
+#include <brpc/server.h>
 #include <Common/Brpc/BrpcServiceDefines.h>
+#include <Common/ResourceMonitor.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
 
 namespace DB
 {
+class SegmentScheduler;
 class Context;
 
 class ResourceMonitorTimer : public RepeatedTimerTask {
 public:
-    ResourceMonitorTimer(ContextMutablePtr & global_context_, UInt64 interval_, const std::string& name_, Poco::Logger* log_) : 
+    ResourceMonitorTimer(ContextMutablePtr & global_context_, UInt64 interval_, const std::string& name_, Poco::Logger* log_) :
         RepeatedTimerTask(global_context_->getSchedulePool(), interval_, name_), resource_monitor(global_context_) {
         log = log_;
     }
@@ -90,62 +90,14 @@ public:
         ::google::protobuf::RpcController * /*controller*/,
         const ::DB::Protos::CancelQueryRequest * request,
         ::DB::Protos::CancelQueryResponse * response,
-        ::google::protobuf::Closure * done) override
-    {
-        brpc::ClosureGuard done_guard(done);
-        auto cancel_code
-            = context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(request->query_id(), request->coordinator_address());
-        response->set_ret_code(std::to_string(static_cast<int>(cancel_code)));
-    }
+        ::google::protobuf::Closure * done) override;
 
     /// send plan segment status (segment executor host --> coordinator host)
     void sendPlanSegmentStatus(
         ::google::protobuf::RpcController * /*controller*/,
         const ::DB::Protos::SendPlanSegmentStatusRequest * request,
         ::DB::Protos::SendPlanSegmentStatusResponse * /*response*/,
-        ::google::protobuf::Closure * done) override
-    {
-        brpc::ClosureGuard done_guard(done);
-        RuntimeSegmentsStatus status{
-            request->query_id(), request->segment_id(), request->is_succeed(), request->is_canceled(), RuntimeSegmentsMetrics(request->metrics()), request->message(), request->code()};
-        SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
-        scheduler->updateSegmentStatus(status);
-        scheduler->updateQueryStatus(status);
-
-        if (scheduler->needCheckRecivedSegmentStatusCounter(request->query_id()))
-        {
-            scheduler->updateReceivedSegmentStausCounter(request->query_id(), request->segment_id());
-            auto already_received_all_segment_status = scheduler->alreadyReceivedAllSegmentStatus(status.query_id);
-            if (already_received_all_segment_status)
-            {
-                ProfileLogHub<ProcessorProfileLogElement>::getInstance().stopConsume(status.query_id);
-                LOG_DEBUG(log, "Query:{} have received all segment status.", status.query_id);
-            }
-        }
-
-        if (!status.is_canceled && status.code == 0)
-        {
-            try
-            {
-                scheduler->checkQueryCpuTime(status.query_id);
-            }
-            catch (const Exception & e)
-            {
-                status.message = e.message();
-                status.code = e.code();
-                status.is_succeed = false;
-            }
-        }
-
-        // this means exception happened during execution.
-        if (!status.is_succeed && !status.is_canceled)
-        {
-            auto coodinator = MPPQueryManager::instance().getCoordinator(request->query_id());
-            if(coodinator)
-                coodinator->updateSegmentInstanceStatus(status);
-        }
-        // todo  scheduler.cancelSchedule
-    }
+        ::google::protobuf::Closure * done) override;
 
     void reportProcessorProfileMetrics(
         ::google::protobuf::RpcController * /*controller*/,

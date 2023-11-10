@@ -1851,8 +1851,8 @@ void HashJoin::buildBloomFilterRF(
     const RuntimeFilterBuildInfos & rf_info, const String & name, size_t ht_size, RuntimeFilterConsumer * rf_consumer) const
 {
     bool is_null_safe = isEqualNull(name);
-    const auto & col = data->blocks.front().getByName(name);
-    const auto type = removeNullable(recursiveRemoveLowCardinality(col.type));
+    const auto & column = data->blocks.front().getByName(name);
+    const auto type = removeNullable(recursiveRemoveLowCardinality(column.type));
     WhichDataType which(type);
     BloomFilterWithRangePtr bf_with_range = std::make_shared<BloomFilterWithRange>(ht_size, type);
 
@@ -1910,8 +1910,8 @@ void HashJoin::buildBloomFilterRF(
 
 void HashJoin::buildValueSetRF(const RuntimeFilterBuildInfos & rf_info, const String & name, RuntimeFilterConsumer * rf_consumer) const
 {
-    const auto & col = data->blocks.front().getByName(name);
-    const auto type = removeNullable(recursiveRemoveLowCardinality(col.type));
+    const auto & column = data->blocks.front().getByName(name);
+    const auto type = removeNullable(recursiveRemoveLowCardinality(column.type));
     ValueSetWithRangePtr vs_with_range = std::make_shared<ValueSetWithRange>(type);
 
     for (const auto & block : data->blocks)

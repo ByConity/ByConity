@@ -166,10 +166,10 @@ PrepareContextResult StorageCnchHive::prepareReadContext(
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info,
     ContextPtr & local_context,
-    unsigned num_streams)
+    unsigned)
 {
     metadata_snapshot->check(column_names, getVirtuals(), getStorageID());
-    HiveWhereOptimizer optimizer(metadata_snapshot, query_info, log);
+    HiveWhereOptimizer optimizer(metadata_snapshot, query_info);
 
     HivePartitions partitions = selectPartitions(local_context, metadata_snapshot, query_info, optimizer);
     HiveFiles hive_files;
@@ -350,7 +350,7 @@ void StorageCnchHive::alter(const AlterCommands & params, ContextPtr local_conte
     // converter.check(new_metadata);
 
     TransactionCnchPtr txn = local_context->getCurrentTransaction();
-    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef());
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), local_context->getSettingsRef(), local_context->getCurrentQueryId());
     auto & alter_act = action->as<DDLAlterAction &>();
     /// replace table schema in catalog
     {

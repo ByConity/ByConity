@@ -17,7 +17,7 @@ void RemoveRedundantDistinct::rewrite(QueryPlan & plan, ContextMutablePtr contex
     plan.update(result);
 }
 
-PlanNodePtr RemoveRedundantAggregateVisitor::visitPlanNode(PlanNodeBase & node, RemoveRedundantAggregateContext & context)
+PlanNodePtr RemoveRedundantAggregateVisitor::visitPlanNode(PlanNodeBase & node, RemoveRedundantAggregateContext & ctx)
 {
     //By default, the context is not passed to the parent node
     if (node.getChildren().empty())
@@ -26,13 +26,13 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitPlanNode(PlanNodeBase & node, 
     DataStreams inputs;
     for (const auto & item : node.getChildren())
     {
-        RemoveRedundantAggregateContext child_context{context.context, {}};
+        RemoveRedundantAggregateContext child_context{ctx.context, {}};
         PlanNodePtr child = VisitorUtil::accept(*item, *this, child_context);
         children.emplace_back(child);
         inputs.push_back(child->getStep()->getOutputStream());
     }
 
-    auto new_step = node.getStep()->copy(context.context);
+    auto new_step = node.getStep()->copy(ctx.context);
     new_step->setInputStreams(inputs);
     node.setStep(new_step);
 
@@ -40,34 +40,34 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitPlanNode(PlanNodeBase & node, 
     return node.shared_from_this();
 }
 
-PlanNodePtr RemoveRedundantAggregateVisitor::resetChildren(PlanNodeBase & node,PlanNodes & children, RemoveRedundantAggregateContext & context)
+PlanNodePtr RemoveRedundantAggregateVisitor::resetChildren(PlanNodeBase & node,PlanNodes & children, RemoveRedundantAggregateContext & ctx)
 {
     DataStreams inputs;
     for(auto & child : children)
         inputs.push_back(child->getStep()->getOutputStream());
-    auto new_step = node.getStep()->copy(context.context);
+    auto new_step = node.getStep()->copy(ctx.context);
     new_step->setInputStreams(inputs);
     node.setStep(new_step);
     node.replaceChildren(children);
     return node.shared_from_this();
 }
-PlanNodePtr RemoveRedundantAggregateVisitor::visitLimitByNode(LimitByNode & node, RemoveRedundantAggregateContext & context)
+PlanNodePtr RemoveRedundantAggregateVisitor::visitLimitByNode(LimitByNode & node, RemoveRedundantAggregateContext & ctx)
 {
-    auto child = VisitorUtil::accept(node.getChildren()[0], *this, context);
+    auto child = VisitorUtil::accept(node.getChildren()[0], *this, ctx);
     PlanNodes children{child};
-    return resetChildren(node, children, context);
+    return resetChildren(node, children, ctx);
 
 }
-PlanNodePtr RemoveRedundantAggregateVisitor::visitFilterNode(FilterNode & node, RemoveRedundantAggregateContext & context)
+PlanNodePtr RemoveRedundantAggregateVisitor::visitFilterNode(FilterNode & node, RemoveRedundantAggregateContext & ctx)
 {
-    auto child = VisitorUtil::accept(node.getChildren()[0], *this, context);
+    auto child = VisitorUtil::accept(node.getChildren()[0], *this, ctx);
     PlanNodes children{child};
-    return resetChildren(node, children, context);
+    return resetChildren(node, children, ctx);
 }
-PlanNodePtr RemoveRedundantAggregateVisitor::visitDistinctNode(DistinctNode & node, RemoveRedundantAggregateContext & context)
+PlanNodePtr RemoveRedundantAggregateVisitor::visitDistinctNode(DistinctNode & node, RemoveRedundantAggregateContext & ctx)
 {
     auto step = node.getStep();
-    RemoveRedundantAggregateContext child_context{context.context, {}};
+    RemoveRedundantAggregateContext child_context{ctx.context, {}};
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_context);
 
     //The distinct columns keys contains all the distinct keys of child nodes, remove distinct node.
@@ -79,7 +79,7 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitDistinctNode(DistinctNode & no
     }
     if (flag_distinct)
     {
-        context.distincts = std::move(child_context.distincts);
+        ctx.distincts = std::move(child_context.distincts);
         return child;
     }
     //Equivalent group by, generate new distinct keys
@@ -88,19 +88,19 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitDistinctNode(DistinctNode & no
         NameSet distinct_set;
         for (auto & column : columns)
             distinct_set.insert(column);
-        context.distincts.emplace_back(distinct_set);
+        ctx.distincts.emplace_back(distinct_set);
     }
 
     PlanNodes children{child};
-    return resetChildren(node, children, context);
+    return resetChildren(node, children, ctx);
 }
-PlanNodePtr RemoveRedundantAggregateVisitor::visitAggregatingNode(AggregatingNode & node, RemoveRedundantAggregateContext & context)
+PlanNodePtr RemoveRedundantAggregateVisitor::visitAggregatingNode(AggregatingNode & node, RemoveRedundantAggregateContext & ctx)
 {
     auto step = node.getStep();
 
     const AggregateDescriptions & descs = step->getAggregates();
     auto keys = step->getKeys();
-    RemoveRedundantAggregateContext child_context{context.context, {}};
+    RemoveRedundantAggregateContext child_context{ctx.context, {}};
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_context);
     bool flag_distinct = false;
     for (auto & distinct_set : child_context.distincts)
@@ -110,7 +110,7 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitAggregatingNode(AggregatingNod
     //when distinct columns keys contains all the distinct keys of child nodes and func is empty, equivalent distinct node, remove
     if (flag_distinct && descs.empty())
     {
-        context.distincts = std::move(child_context.distincts);
+        ctx.distincts = std::move(child_context.distincts);
         return child;
     }
 
@@ -120,18 +120,18 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitAggregatingNode(AggregatingNod
         NameSet distinct_set;
         for (auto & key : keys)
             distinct_set.insert(key);
-        context.distincts.emplace_back(distinct_set);
+        ctx.distincts.emplace_back(distinct_set);
     }
 
     PlanNodes children{child};
-    return resetChildren(node, children, context);
+    return resetChildren(node, children, ctx);
 }
-PlanNodePtr RemoveRedundantAggregateVisitor::visitProjectionNode(ProjectionNode & node, RemoveRedundantAggregateContext & context)
+PlanNodePtr RemoveRedundantAggregateVisitor::visitProjectionNode(ProjectionNode & node, RemoveRedundantAggregateContext & ctx)
 {
     auto step = node.getStep();
 
     //from child node get child distinct keys;
-    RemoveRedundantAggregateContext child_context{context.context, {}};
+    RemoveRedundantAggregateContext child_context{ctx.context, {}};
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_context);
 
     NameSet input_symbols;
@@ -171,20 +171,20 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitProjectionNode(ProjectionNode 
     {
         if (isDistinctNames(output_symbols, distinct_set))
         {
-            context.distincts.emplace_back(distinct_set);
+            ctx.distincts.emplace_back(distinct_set);
         }
     }
 
     PlanNodes children{child};
-    return resetChildren(node, children, context);
+    return resetChildren(node, children, ctx);
 }
 
-PlanNodePtr RemoveRedundantAggregateVisitor::visitCTERefNode(CTERefNode & node, RemoveRedundantAggregateContext & context)
+PlanNodePtr RemoveRedundantAggregateVisitor::visitCTERefNode(CTERefNode & node, RemoveRedundantAggregateContext & ctx)
 {
     //in order to visit with {subquery} and remove redundant aggregate in subquery.
     auto with_step = node.getStep();
 
-    RemoveRedundantAggregateContext child_context{context.context, {}};
+    RemoveRedundantAggregateContext child_context{ctx.context, {}};
     CTEId cte_id = with_step->getId();
     bool visited_flag = cte_helper.hasVisited(cte_id);
     auto cte_plan = cte_helper.acceptAndUpdate(cte_id, *this, child_context);
@@ -212,7 +212,7 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitCTERefNode(CTERefNode & node, 
             }
             distincts.emplace_back(distinct_set_alias);
         }
-        context.distincts = std::move(distincts);
+        ctx.distincts = std::move(distincts);
     }
 //    context.distincts = std::move(child_context.distincts);
 
@@ -236,13 +236,13 @@ bool RemoveRedundantAggregateVisitor::isDistinctNames(const Names & names, const
     return true;
 }
 
-PlanNodePtr RemoveRedundantAggregateVisitor::visitJoinNode(JoinNode & node, RemoveRedundantAggregateContext & context)
+PlanNodePtr RemoveRedundantAggregateVisitor::visitJoinNode(JoinNode & node, RemoveRedundantAggregateContext & ctx)
 {
     auto step  = node.getStep();
 
-    RemoveRedundantAggregateContext left_context{context.context, {}};
+    RemoveRedundantAggregateContext left_context{ctx.context, {}};
     auto left = VisitorUtil::accept(node.getChildren()[0], *this, left_context);
-    RemoveRedundantAggregateContext right_context{context.context, {}};
+    RemoveRedundantAggregateContext right_context{ctx.context, {}};
     auto right = VisitorUtil::accept(node.getChildren()[1], *this, right_context);
 
     const Names & left_names = step->getLeftKeys();
@@ -266,7 +266,7 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitJoinNode(JoinNode & node, Remo
         {
             //step->getStrictness() == ASTTableJoin::Strictness::Semi
             if (step->getStrictness() == ASTTableJoin::Strictness::Any || right_distinct_flag == true)
-                context.distincts = std::move(left_context.distincts);
+                ctx.distincts = std::move(left_context.distincts);
         }
     }
     else if (kind == ASTTableJoin::Kind::Right)
@@ -275,7 +275,7 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitJoinNode(JoinNode & node, Remo
         {
             //step->getStrictness() == ASTTableJoin::Strictness::Semi ||
             if (step->getStrictness() == ASTTableJoin::Strictness::Any || left_distinct_flag == true)
-                context.distincts = std::move(right_context.distincts);
+                ctx.distincts = std::move(right_context.distincts);
         }
     }
     //only left_distinct_flag and right_distinct_flag is true
@@ -288,16 +288,16 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitJoinNode(JoinNode & node, Remo
                 distincts_all.emplace_back(distinct_set);
             for (auto distinct_set : right_context.distincts)
                 distincts_all.emplace_back(distinct_set);
-            context.distincts = std::move(distincts_all);
+            ctx.distincts = std::move(distincts_all);
         }
     }
 
     //reset input stream and children;
     PlanNodes children{left, right};
-    return resetChildren(node, children, context);
+    return resetChildren(node, children, ctx);
 }
 
-PlanNodePtr RemoveRedundantAggregateVisitor::visitTableScanNode(TableScanNode & node, RemoveRedundantAggregateContext & context)
+PlanNodePtr RemoveRedundantAggregateVisitor::visitTableScanNode(TableScanNode & node, RemoveRedundantAggregateContext & ctx)
 {
     const auto * step = dynamic_cast<const TableScanStep *>(node.getStep().get());
     String database = step->getDatabase();
@@ -331,7 +331,7 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitTableScanNode(TableScanNode & 
     if (distinct_set.size() == distinct_alias.size())
     {
         distincts_.emplace_back(distinct_alias);
-        context.distincts = std::move(distincts_);
+        ctx.distincts = std::move(distincts_);
     }
 
     return node.shared_from_this();

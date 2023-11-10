@@ -1,15 +1,15 @@
 #pragma once
 
-#include <brpc/server.h>
-#include <bthread/bthread.h>
-#include <Interpreters/Context.h>
-#include <common/logger_useful.h>
-#include <Common/Exception.h>
 #include <CloudServices/CnchServerServiceImpl.h>
 #include <CloudServices/CnchWorkerServiceImpl.h>
-#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
-#include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
+#include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
+#include <brpc/server.h>
+#include <bthread/bthread.h>
+#include <Common/Exception.h>
+#include <common/logger_useful.h>
 
 #define SERVER_REGISTER_SERVICE(service_name) \
 { \
@@ -29,11 +29,11 @@
 }
 
 #define REGISTER_COMPLEX_QUERY_SERVICES() \
-{ \
-    SERVER_REGISTER_SERVICE(BrpcExchangeReceiverRegistryService); \
-    SERVER_REGISTER_SERVICE(RuntimeFilterService); \
-    SERVER_REGISTER_SERVICE(PlanSegmentManagerRpcService); \
-}
+    { \
+        SERVER_REGISTER_SERVICE(BrpcExchangeReceiverRegistryService); \
+        SERVER_REGISTER_SERVICE(RuntimeFilterService); \
+        SERVER_REGISTER_SERVICE(PlanSegmentManagerRpcService); \
+    }
 
 namespace DB
 {

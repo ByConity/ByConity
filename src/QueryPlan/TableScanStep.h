@@ -74,6 +74,8 @@ public:
         , log(&Poco::Logger::get("TableScanStep"))
         , alias(alias_)
     {
+        if (storage)
+            storage_id.uuid = storage->getStorageUUID();
     }
 
     String getName() const override { return "TableScan"; }
@@ -119,10 +121,10 @@ public:
 
     void formatOutputStream();
 
-    bool setQueryInfoFilter(const std::vector<ConstASTPtr> & filters) const;
-    bool hasQueryInfoFilter() const;
     bool setLimit(size_t limit, const ContextMutablePtr & context);
     bool hasLimit() const;
+    bool hasPrewhere() const;
+    ASTPtr getPrewhere() const;
 
     void optimizeWhereIntoPrewhre(ContextPtr context);
 
@@ -139,8 +141,24 @@ public:
     void setStorage(ContextPtr context) { storage = DatabaseCatalog::instance().getTable(storage_id, context); }
     std::shared_ptr<IStorage> getStorage() const;
     const SelectQueryInfo & getQueryInfo() const { return query_info; }
+    SelectQueryInfo & getQueryInfo()
+    {
+        return query_info;
+    }
     const StorageID & getStorageID() const { return storage_id; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr context) const override;
+
+    enum GetFlags : UInt32
+    {
+        Output = 1,
+        Prewhere = 2,
+        // BitmapIndex = 4,
+
+        OutputAndPrewhere = Output | Prewhere,
+        All = Output | Prewhere /*| BitmapIndex */,
+    };
+
+    Names getRequiredColumns(GetFlags flags = All) const;
 
 private:
     StoragePtr storage;
@@ -148,6 +166,11 @@ private:
     String original_table;
     Names column_names;
     NamesWithAliases column_alias;
+    // Used for passing some important information to instruct data reading processing, including
+    // - query.where(), condition of this storage, used for index pruning
+    // - query.prewhere(), user specified PREWHERE of this storage. TODO: move move_where_to_prewhere optimize into PlanOptimizer
+    // - partition_filter, condition on partition keys, used for partition pruning
+    // - query.limit(), result limit of table scan
     SelectQueryInfo query_info;
     size_t max_block_size;
 

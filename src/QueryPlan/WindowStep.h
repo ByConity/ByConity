@@ -63,6 +63,7 @@ private:
     Block input_header;
     bool need_sort;
     SortDescription prefix_description;
+    void scatterByPartitionIfNeeded(QueryPipeline& pipeline);
 };
 
 }

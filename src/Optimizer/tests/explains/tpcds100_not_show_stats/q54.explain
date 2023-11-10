@@ -41,38 +41,34 @@ Projection
                                     │     │  │           Outputs: [d_month_seq], d_date_sk_1:=d_date_sk
                                     │     │  └─ Broadcast Exchange
                                     │     │     └─ EnforceSingleRow
-                                    │     │        └─ Union
-                                    │     │           │     OutputToInputs: expr#plus(d_month_seq, 1) = [expr#plus(d_month_seq, 1)]
-                                    │     │           └─ Gather Exchange
-                                    │     │              └─ MergingAggregated
-                                    │     │                 └─ Repartition Exchange
-                                    │     │                    │     Partition by: {expr#plus(d_month_seq, 1)}
-                                    │     │                    └─ Aggregating
-                                    │     │                       │     Group by: {expr#plus(d_month_seq, 1)}
-                                    │     │                       └─ Projection
-                                    │     │                          │     Expressions: expr#plus(d_month_seq, 1):=d_month_seq_1 + 1
-                                    │     │                          └─ Filter
-                                    │     │                             │     Condition: (d_year_1 = 1998) AND (d_moy_1 = 12)
-                                    │     │                             └─ TableScan tpcds100.date_dim
-                                    │     │                                      Where: (d_year = 1998) AND (d_moy = 12)
-                                    │     │                                      Outputs: d_month_seq_1:=d_month_seq, d_year_1:=d_year, d_moy_1:=d_moy
+                                    │     │        └─ Gather Exchange
+                                    │     │           └─ MergingAggregated
+                                    │     │              └─ Repartition Exchange
+                                    │     │                 │     Partition by: {expr#plus(d_month_seq, 1)}
+                                    │     │                 └─ Aggregating
+                                    │     │                    │     Group by: {expr#plus(d_month_seq, 1)}
+                                    │     │                    └─ Projection
+                                    │     │                       │     Expressions: expr#plus(d_month_seq, 1):=d_month_seq_1 + 1
+                                    │     │                       └─ Filter
+                                    │     │                          │     Condition: (d_year_1 = 1998) AND (d_moy_1 = 12)
+                                    │     │                          └─ TableScan tpcds100.date_dim
+                                    │     │                                   Where: (d_year = 1998) AND (d_moy = 12)
+                                    │     │                                   Outputs: d_month_seq_1:=d_month_seq, d_year_1:=d_year, d_moy_1:=d_moy
                                     │     └─ Broadcast Exchange
                                     │        └─ EnforceSingleRow
-                                    │           └─ Union
-                                    │              │     OutputToInputs: expr#plus(d_month_seq, 3) = [expr#plus(d_month_seq, 3)]
-                                    │              └─ Gather Exchange
-                                    │                 └─ MergingAggregated
-                                    │                    └─ Repartition Exchange
-                                    │                       │     Partition by: {expr#plus(d_month_seq, 3)}
-                                    │                       └─ Aggregating
-                                    │                          │     Group by: {expr#plus(d_month_seq, 3)}
-                                    │                          └─ Projection
-                                    │                             │     Expressions: expr#plus(d_month_seq, 3):=d_month_seq_2 + 3
-                                    │                             └─ Filter
-                                    │                                │     Condition: (d_year_2 = 1998) AND (d_moy_2 = 12)
-                                    │                                └─ TableScan tpcds100.date_dim
-                                    │                                         Where: (d_year = 1998) AND (d_moy = 12)
-                                    │                                         Outputs: d_month_seq_2:=d_month_seq, d_year_2:=d_year, d_moy_2:=d_moy
+                                    │           └─ Gather Exchange
+                                    │              └─ MergingAggregated
+                                    │                 └─ Repartition Exchange
+                                    │                    │     Partition by: {expr#plus(d_month_seq, 3)}
+                                    │                    └─ Aggregating
+                                    │                       │     Group by: {expr#plus(d_month_seq, 3)}
+                                    │                       └─ Projection
+                                    │                          │     Expressions: expr#plus(d_month_seq, 3):=d_month_seq_2 + 3
+                                    │                          └─ Filter
+                                    │                             │     Condition: (d_year_2 = 1998) AND (d_moy_2 = 12)
+                                    │                             └─ TableScan tpcds100.date_dim
+                                    │                                      Where: (d_year = 1998) AND (d_moy = 12)
+                                    │                                      Outputs: d_month_seq_2:=d_month_seq, d_year_2:=d_year, d_moy_2:=d_moy
                                     └─ Repartition Exchange
                                        │     Partition by: {ss_sold_date_sk}
                                        └─ Inner Join

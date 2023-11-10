@@ -174,9 +174,11 @@ const ImmutableDeleteBitmapPtr & ServerDataPart::getDeleteBitmap(const MergeTree
                 return delete_bitmap;
             throw Exception("No metadata for delete bitmap of part " + name(), ErrorCodes::LOGICAL_ERROR);
         }
+        
         Stopwatch watch;
         auto cache = storage.getContext()->getDeleteBitmapCache();
-        String cache_key = DeleteBitmapCache::buildKey(storage.getStorageUUID(), info().partition_id, info().min_block, info().max_block);
+        /// TODO (zuochuang.zema): how to get the value of _row_exists.
+        String cache_key = DeleteBitmapCache::buildKey(storage.getStorageUUID(), info().partition_id, info().min_block, info().max_block, 0);
         ImmutableDeleteBitmapPtr cached_bitmap;
         UInt64 cached_version = 0; /// 0 is an invalid value and acts as a sentinel
         bool hit_cache = cache->lookup(cache_key, cached_version, cached_bitmap);

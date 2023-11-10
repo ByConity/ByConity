@@ -152,7 +152,8 @@ void rewriteEntityInAst(ASTPtr ast, const String & column_name, const Field & va
     }
 }
 
-bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block block, ASTPtr & expression_ast)
+
+bool prepareFilterBlockByPredicates(const std::vector<ASTPtr> & predicates, ContextPtr context, Block block, ASTPtr & expression_ast)
 {
     if (block.rows() == 0)
         throw Exception("Cannot prepare filter with empty block", ErrorCodes::LOGICAL_ERROR);
@@ -168,11 +169,6 @@ bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block
             const_columns[i] = ColumnConst::create(columns[i]->cloneResized(1), 1);
     }
     block.setColumns(const_columns);
-
-    bool unmodified = true;
-    const auto & select = query->as<ASTSelectQuery &>();
-    if (!select.where() && !select.prewhere())
-        return unmodified;
 
     // Provide input columns as constant columns to check if an expression is constant.
     std::function<bool(const ASTPtr &)> is_constant = [&block, &context](const ASTPtr & node)
@@ -206,24 +202,40 @@ bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block
         return block_with_constants.has(column_name) && isColumnConst(*block_with_constants.getByName(column_name).column);
     };
 
-    /// Create an expression that evaluates the expressions in WHERE and PREWHERE, depending only on the existing columns.
+    bool unmodified = true;
     std::vector<ASTPtr> functions;
-    if (select.where())
-        unmodified &= extractFunctions(select.where(), is_constant, functions);
-    if (select.prewhere())
-        unmodified &= extractFunctions(select.prewhere(), is_constant, functions);
+    for (const auto & predicate : predicates)
+        unmodified &= extractFunctions(predicate, is_constant, functions);
 
     expression_ast = buildWhereExpression(functions);
     return unmodified;
 }
 
-void filterBlockWithQuery(const ASTPtr & query, Block & block, ContextPtr context, ASTPtr expression_ast)
+bool prepareFilterBlockWithQuery(const ASTPtr & query, ContextPtr context, Block block, ASTPtr & expression_ast, ASTPtr partition_filter)
+{
+    if (partition_filter)
+        return prepareFilterBlockByPredicates({partition_filter}, context, block, expression_ast);
+
+    const auto & select = query->as<ASTSelectQuery &>();
+    if (!select.where() && !select.prewhere())
+        return true;
+
+    std::vector<ASTPtr> predicates;
+    if (select.where())
+        predicates.push_back(select.where());
+    if (select.prewhere())
+        predicates.push_back(select.prewhere());
+
+    return prepareFilterBlockByPredicates(predicates, context, block, expression_ast);
+}
+
+void filterBlockWithQuery(const ASTPtr & query, Block & block, ContextPtr context, ASTPtr expression_ast, ASTPtr partition_filter)
 {
     if (block.rows() == 0)
         return;
 
     if (!expression_ast)
-        prepareFilterBlockWithQuery(query, context, block, expression_ast);
+        prepareFilterBlockWithQuery(query, context, block, expression_ast, partition_filter);
 
     if (!expression_ast)
         return;

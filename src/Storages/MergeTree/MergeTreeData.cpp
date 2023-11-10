@@ -286,7 +286,7 @@ std::optional<UInt64> MergeTreeData::totalRowsByPartitionPredicateImpl(
     Block virtual_columns_block = getBlockWithVirtualPartColumns(parts, true /* one_part */);
 
     // Generate valid expressions for filtering
-    bool valid = VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, virtual_columns_block, expression_ast);
+    bool valid = VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, virtual_columns_block, expression_ast, query_info.partition_filter);
 
     PartitionPruner partition_pruner(metadata_snapshot, query_info, local_context, true /* strict */);
     if (partition_pruner.isUseless() && !valid)
@@ -296,7 +296,7 @@ std::optional<UInt64> MergeTreeData::totalRowsByPartitionPredicateImpl(
     if (valid && expression_ast)
     {
         virtual_columns_block = getBlockWithVirtualPartColumns(parts, false /* one_part */);
-        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context, expression_ast);
+        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context, expression_ast, query_info.partition_filter);
         part_values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_part");
         if (part_values.empty())
             return 0;
@@ -322,7 +322,7 @@ MergeTreeData::DataPartsVector MergeTreeData::getRequiredPartitions(const Select
     Block virtual_columns_block = getBlockWithVirtualPartColumns(parts, true /* one_part */);
 
     // Generate valid expressions for filtering
-    bool valid = VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, virtual_columns_block, expression_ast);
+    bool valid = VirtualColumnUtils::prepareFilterBlockWithQuery(query_info.query, local_context, virtual_columns_block, expression_ast, query_info.partition_filter);
 
     PartitionPruner partition_pruner(metadata_snapshot, query_info, local_context, true /* strict */);
     if (partition_pruner.isUseless() && !valid)
@@ -332,7 +332,7 @@ MergeTreeData::DataPartsVector MergeTreeData::getRequiredPartitions(const Select
     if (valid && expression_ast)
     {
         virtual_columns_block = getBlockWithVirtualPartColumns(parts, false /* one_part */);
-        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context, expression_ast);
+        VirtualColumnUtils::filterBlockWithQuery(query_info.query, virtual_columns_block, local_context, expression_ast, query_info.partition_filter);
         part_values = VirtualColumnUtils::extractSingleValueFromBlock<String>(virtual_columns_block, "_part");
         if (part_values.empty())
             return {};
@@ -345,48 +345,6 @@ MergeTreeData::DataPartsVector MergeTreeData::getRequiredPartitions(const Select
             required_parts.emplace_back(part);
     }
     return required_parts;
-}
-
-void MergeTreeData::checkColumnsValidity(const ColumnsDescription & columns) const
-{
-    NamesAndTypesList func_columns = getInMemoryMetadataPtr()->getFuncColumns();
-
-    for (auto & column: columns.getAll())
-    {
-        /// check func columns
-        for (auto & [name, type]: func_columns)
-        {
-            if (name == column.name)
-                throw Exception("Column " + backQuoteIfNeed(column.name) + " is reserved column", ErrorCodes::ILLEGAL_COLUMN);
-        }
-
-        /// block implicit key name for MergeTree family
-        if (isMapImplicitKey(column.name))
-            throw Exception("Column " + backQuoteIfNeed(column.name) + " contains reserved prefix word", ErrorCodes::ILLEGAL_COLUMN);
-
-        if (column.type && column.type->isMap())
-        {
-            auto escape_name = escapeForFileName(column.name + getMapSeparator());
-            auto pos = escape_name.find(getMapSeparator());
-            /// The name of map column should not contain map separator, which is convenient for extracting map column name from a implicit column name.
-            if (pos + getMapSeparator().size() != escape_name.size())
-                throw Exception(
-                    ErrorCodes::ILLEGAL_COLUMN,
-                    "Map column name {} is invalid because its escaped name {} contains reserved word {}",
-                    backQuoteIfNeed(column.name),
-                    backQuoteIfNeed(escape_name),
-                    getMapSeparator());
-
-            if (storage_settings.get()->enable_compact_map_data)
-            {
-                const auto & type_map = typeid_cast<const DataTypeByteMap &>(*column.type);
-                if (type_map.getValueType()->lowCardinality())
-                {
-                    throw Exception("Column " + backQuoteIfNeed(column.name) + " compact map type not compatible with LowCardinality type, you need remove LowCardinality or disable compact map", ErrorCodes::ILLEGAL_COLUMN);
-                }
-            }
-        }
-    }
 }
 
 Int64 MergeTreeData::getMaxBlockNumber() const
@@ -1685,7 +1643,7 @@ void MergeTreeData::checkAlterIsPossible(const AlterCommands & commands, Context
 void MergeTreeData::checkMutationIsPossible(const MutationCommands & commands, const Settings & /*settings*/) const
 {
     int num_fast_deletes = 0;
-    for (auto & command : commands)
+    for (const auto & command : commands)
         num_fast_deletes += command.type == MutationCommand::Type::FAST_DELETE;
     if (num_fast_deletes > 1)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute multiple FASTDELETE commands");

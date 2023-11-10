@@ -331,6 +331,11 @@ struct Analysis
     void registerCTE(ASTSubquery & subquery);
     std::optional<CTEAnalysis> tryGetCTEAnalysis(ASTSubquery & subquery);
 
+    // Prewhere
+    std::unordered_map<ASTSelectQuery *, ASTPtr> prewheres;
+    void setPrewhere(ASTSelectQuery & select_query, const ASTPtr & prewhere);
+    ASTPtr tryGetPrewhere(ASTSelectQuery & select_query);
+
     /// Join
     std::unordered_map<ASTTableJoin *, JoinUsingAnalysis> join_using_results;
     JoinUsingAnalysis & getJoinUsingAnalysis(ASTTableJoin &);

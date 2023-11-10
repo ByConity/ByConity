@@ -34,17 +34,19 @@ StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID
     : IStorage(table_id_)
 {
     StorageInMemoryMetadata storage_metadata;
-    storage_metadata.setColumns(ColumnsDescription(
-        {{"database", std::make_shared<DataTypeString>()},
-         {"table", std::make_shared<DataTypeString>()},
-         {"partition_id", std::make_shared<DataTypeString>()},
-         {"partition", std::make_shared<DataTypeString>()},
-         {"first_partition", std::make_shared<DataTypeString>()},
-         {"metrics_available", std::make_shared<DataTypeUInt8>()},
-         {"total_parts_number", std::make_shared<DataTypeInt64>()},
-         {"total_parts_size", std::make_shared<DataTypeInt64>()},
-         {"total_rows_count", std::make_shared<DataTypeInt64>()},
-         {"last_update_time", std::make_shared<DataTypeUInt64>()}}));
+    storage_metadata.setColumns(ColumnsDescription({
+        {"database", std::make_shared<DataTypeString>()},
+        {"table", std::make_shared<DataTypeString>()},
+        {"partition_id", std::make_shared<DataTypeString>()},
+        {"partition", std::make_shared<DataTypeString>()},
+        {"first_partition", std::make_shared<DataTypeString>()},
+        {"metrics_available", std::make_shared<DataTypeUInt8>()},
+        {"total_parts_number", std::make_shared<DataTypeInt64>()},
+        {"total_parts_size", std::make_shared<DataTypeInt64>()},
+        {"total_rows_count", std::make_shared<DataTypeInt64>()},
+        {"last_update_time", std::make_shared<DataTypeUInt64>()},
+        {"last_snapshot_time", std::make_shared<DataTypeUInt64>()},
+    }));
     setInMemoryMetadata(storage_metadata);
 }
 
@@ -137,7 +139,7 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
 
     for (size_t i=0; i<max_threads; i++)
     {
-        collect_metrics_pool.trySchedule([&, thread_group = CurrentThread::getGroup()]() {
+        collect_metrics_pool.scheduleOrThrowOnError([&, thread_group = CurrentThread::getGroup()]() {
             DB::ThreadStatus thread_status;
 
             if (thread_group)
@@ -153,7 +155,7 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
                     PartitionData & metrics_data = metrics_collection[current_task];
                     storage = DatabaseCatalog::instance().getTable({entry->database, entry->table}, context);
                     if (storage)
-                        cache_manager->getTablePartitionMetrics(*storage, metrics_data, require_partition_info);
+                        cache_manager->getPartsInfoMetrics(*storage, metrics_data, require_partition_info);
                 }
                 catch (Exception & e)
                 {
@@ -171,12 +173,12 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
     {
         auto entry = active_tables[(*filtered_index_column)[i].get<UInt64>()];
         PartitionData & metrics = metrics_collection[i];
-        for (auto it=metrics.begin(); it!=metrics.end(); it++)
+        for (auto it = metrics.begin(); it != metrics.end(); it++)
         {
             size_t src_index = 0;
             size_t dest_index = 0;
-            const auto & metrics_ptr = it->second->partition_info_ptr->metrics_ptr;
-            bool is_valid_metrics = metrics_ptr->validateMetrics();
+            const auto & metrics_ptr = it->second->partition_info_ptr->metrics_ptr->read();
+            bool is_valid_metrics = metrics_ptr.validateMetrics();
             if (columns_mask[src_index++])
                 res_columns[dest_index++]->insert(entry->database);
             if (columns_mask[src_index++])
@@ -187,20 +189,47 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
                 res_columns[dest_index++]->insert(it->second->partition);
             if (columns_mask[src_index++])
                 res_columns[dest_index++]->insert(it->second->first_partition);
-            if (columns_mask[src_index++])
-                res_columns[dest_index++]->insert(is_valid_metrics);
-            if (columns_mask[src_index++])
-                res_columns[dest_index++]->insert(Int64(is_valid_metrics ? metrics_ptr->total_parts_number.load() : 0));
-            if (columns_mask[src_index++])
-                res_columns[dest_index++]->insert(Int64(is_valid_metrics ? metrics_ptr->total_parts_size.load() : 0));
-            if (columns_mask[src_index++])
-                res_columns[dest_index++]->insert(Int64(is_valid_metrics ? metrics_ptr->total_rows_count.load() : 0));
-            if (columns_mask[src_index++])
+            if (is_valid_metrics)
             {
-                UInt64 last_update_time = entry->metrics_last_update_time;
-                if (last_update_time == TxnTimestamp::maxTS())
-                    last_update_time = current_ts;
-                res_columns[dest_index++]->insert((last_update_time>>18)/1000);
+                // valid metrics
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(true);
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(metrics_ptr.total_parts_number);
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(metrics_ptr.total_parts_size);
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(metrics_ptr.total_rows_count);
+                if (columns_mask[src_index++])
+                {
+                    UInt64 last_update_time = metrics_ptr.last_update_time;
+                    if (last_update_time == TxnTimestamp::maxTS())
+                        last_update_time = current_ts;
+                    res_columns[dest_index++]->insert(TxnTimestamp(last_update_time).toSecond());
+                }
+                if (columns_mask[src_index++])
+                {
+                    UInt64 last_snapshot_time = metrics_ptr.last_snapshot_time;
+                    if (last_snapshot_time == TxnTimestamp::maxTS())
+                        last_snapshot_time = current_ts;
+                    res_columns[dest_index++]->insert(TxnTimestamp(last_snapshot_time).toSecond());
+                }
+            }
+            else
+            {
+                // invalid metrics
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(false);
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(0);
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(0);
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(0);
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(0);
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(0);
             }
         }
     }

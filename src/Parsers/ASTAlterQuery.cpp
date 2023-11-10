@@ -515,16 +515,13 @@ void ASTAlterCommand::formatImpl(
     else if (type == ASTAlterCommand::FAST_DELETE)
     {
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "FASTDELETE " << (settings.hilite ? hilite_none : "");
-        if (columns)
-        {
-            columns->formatImpl(settings, state, frame);
-            settings.ostr << settings.nl_or_ws;
-        }
+        
         if (partition)
         {
             settings.ostr << (settings.hilite ? hilite_keyword : "") << " IN PARTITION " << (settings.hilite ? hilite_none : "");
             partition->formatImpl(settings, state, frame);
         }
+
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "WHERE " << (settings.hilite ? hilite_none : "");
         predicate->formatImpl(settings, state, frame);
     }
@@ -616,6 +613,11 @@ void ASTAlterCommand::formatImpl(
         settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ENGINE " << (settings.hilite ? hilite_none : "") << "= ";
         engine->formatImpl(settings, state, frame);
     }
+    else if (type == ASTAlterCommand::MODIFY_DATABASE_SETTING)
+    {
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "MODIFY SETTING " << (settings.hilite ? hilite_none : "");
+        settings_changes->formatImpl(settings, state, frame);
+    }
     else
         throw Exception("Unexpected type of ALTER", ErrorCodes::UNEXPECTED_AST_STRUCTURE);
 }
@@ -670,12 +672,24 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
     frame.need_parens = false;
 
     std::string indent_str = settings.one_line ? "" : std::string(4u * frame.indent, ' ');
+    settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str;
 
-    if (is_live_view)
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ALTER LIVE VIEW " << (settings.hilite ? hilite_none : "");
-    else
-        settings.ostr << (settings.hilite ? hilite_keyword : "") << indent_str << "ALTER TABLE " << (settings.hilite ? hilite_none : "");
+    switch (alter_object)
+    {
+        case AlterObjectType::TABLE:
+            settings.ostr << "ALTER TABLE ";
+            break;
+        case AlterObjectType::DATABASE:
+            settings.ostr << "ALTER DATABASE ";
+            break;
+        case AlterObjectType::LIVE_VIEW:
+            settings.ostr << "ALTER LIVE VIEW ";
+            break;
+        default:
+            break;
+    }
 
+    settings.ostr << (settings.hilite ? hilite_none : "");
     if (!table.empty())
     {
         if (!database.empty())
@@ -684,6 +698,10 @@ void ASTAlterQuery::formatQueryImpl(const FormatSettings & settings, FormatState
             settings.ostr << ".";
         }
         settings.ostr << indent_str << backQuoteIfNeed(table);
+    }
+    else if (alter_object == AlterObjectType::DATABASE && !database.empty())
+    {
+        settings.ostr << indent_str << backQuoteIfNeed(database);
     }
     formatOnCluster(settings);
     settings.ostr << settings.nl_or_ws;

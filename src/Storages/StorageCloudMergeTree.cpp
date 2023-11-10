@@ -173,10 +173,6 @@ void StorageCloudMergeTree::checkMutationIsPossible(const MutationCommands & com
 {
     for (const auto & command : commands)
     {
-        if (command.type == MutationCommand::Type::FAST_DELETE)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute FASTDELETE commands");
-        if (command.type == MutationCommand::Type::DELETE)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute DELETE commands");
         if (command.type == MutationCommand::Type::UPDATE)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute UPDATE commands");
         if (command.type == MutationCommand::Type::MATERIALIZE_TTL)
@@ -255,7 +251,7 @@ static UInt64 getDataVersion(const std::shared_ptr<const IMergeTreeDataPart> & p
 MutationCommands StorageCloudMergeTree::getFirstAlterMutationCommandsForPart(const DataPartPtr & part) const
 {
     auto data_version = getDataVersion(part);
-    std::lock_guard lock(mutations_by_verison_mutex);
+    std::lock_guard lock(mutations_by_version_mutex);
     auto it = mutations_by_version.upper_bound(data_version);
     if (it == mutations_by_version.end())
         return {};

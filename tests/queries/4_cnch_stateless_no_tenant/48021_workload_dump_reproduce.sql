@@ -7,8 +7,8 @@ CREATE TABLE test_workload_dump.test_tb(a Int32 not null, b Int32 not null) ENGI
 insert into test_workload_dump.test_tb values(1,2)(2,3)(3,4);
 create stats all format Null;
 
-dump ddl from test_workload_dump into '/tmp/test_dump_ddl.zip';
-dump query (select a, count(b) from test_workload_dump.test_tb group by a) into '/tmp/test_dump_query.zip';
+dump compress_directory=1 ddl from test_workload_dump into '/tmp/test_dump_ddl.zip';
+dump compress_directory=1 query (select a, count(b) from test_workload_dump.test_tb group by a) into '/tmp/test_dump_query.zip';
 
 drop database test_workload_dump;
 use default;

@@ -57,6 +57,7 @@ public:
     void extendQueryLogElemImpl(QueryLogElement & elem, const ASTPtr &, ContextPtr) const override
     {
         elem.query_kind = "Select";
+        elem.segment_profiles = segment_profiles;
     }
 
 private:
@@ -67,6 +68,8 @@ private:
     SelectQueryOptions options;
     Poco::Logger * log;
     bool interpret_sub_query;
+
+    std::shared_ptr<std::vector<String>> segment_profiles;
 };
 
 /**

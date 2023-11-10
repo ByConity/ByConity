@@ -55,13 +55,12 @@ namespace DB::TSO
 {
 
 TSOServer::TSOServer()
-    : timer(0, TSO_UPDATE_INTERVAL)
-    , callback(*this, &TSOServer::updateTSO)
-    , num_yielded_leadership(0)
+   : num_yielded_leadership(0)
 {
 }
 
 TSOServer::~TSOServer() = default;
+
 
 void TSOServer::defineOptions(Poco::Util::OptionSet &_options)
 {
@@ -140,7 +139,7 @@ void TSOServer::syncTSO()
     }
 }
 
-void TSOServer::updateTSO(Poco::Timer &)
+void TSOServer::updateTSO()
 {
     try
     {
@@ -190,6 +189,7 @@ void TSOServer::updateTSO(Poco::Timer &)
         // and let TSO service recover with another replica.
         Poco::ErrorHandler::handle();
     }
+    update_tso_task->scheduleAfter(TSO_UPDATE_INTERVAL);
 }
 
 Poco::Net::SocketAddress makeSocketAddress(const std::string & host, UInt16 port, Poco::Logger * log)
@@ -251,7 +251,8 @@ Poco::Net::SocketAddress TSOServer::socketBindListen(Poco::Net::ServerSocket & s
 bool TSOServer::onLeader()
 {
     syncTSO();
-    timer.start(callback);
+    if (update_tso_task)
+        update_tso_task->activateAndSchedule();
 
     LOG_INFO(log, "Current node {} become leader", host_port);
     return true;
@@ -260,7 +261,8 @@ bool TSOServer::onLeader()
 bool TSOServer::onFollower()
 {
     num_yielded_leadership++;
-    timer.stop();
+    if (update_tso_task)
+        update_tso_task->deactivate();
 
     LOG_INFO(log, "Current node {} become follower", host_port);
     return true;
@@ -335,8 +337,6 @@ int TSOServer::main(const std::vector<std::string> &)
     proxy_ptr = std::make_shared<TSOProxy>(std::move(tso_metastore), metastore_conf.key_name);
     tso_service = std::make_shared<TSOImpl>(*this);
 
-    /// leader election for tso-server
-    initLeaderElection();
 
     bool listen_try = config().getBool("listen_try", false);
     auto listen_hosts = getMultipleValuesFromConfig(config(), "", "listen_host");
@@ -354,6 +354,10 @@ int TSOServer::main(const std::vector<std::string> &)
     static KillingErrorHandler error_handler;
     Poco::ErrorHandler::set(&error_handler);
 
+    /// update_tso_task has to be initialized before leader election
+    update_tso_task = global_context->getSchedulePool().createTask("UpdateTSOTask", [this]() { updateTSO(); });
+    /// leader election for tso-server
+    initLeaderElection();
     /// launch brpc service on multiple interface
     std::vector<std::unique_ptr<brpc::Server>> rpc_servers;
     for (const auto & listen : listen_hosts)
@@ -488,12 +492,16 @@ int TSOServer::main(const std::vector<std::string> &)
             }
         );
 
-        global_context->shutdown();
 
         /// Wait server pool to avoid use-after-free of destroyed context in the handlers
         server_pool.joinAll();
         if (leader_election)
             leader_election.reset();
+
+        if (update_tso_task)
+            update_tso_task->deactivate();
+
+        global_context->shutdown();
 
         /** Explicitly destroy Context. It is more convenient than in destructor of Server, because logger is still available.
           * At this moment, no one could own shared part of Context.
@@ -505,6 +513,7 @@ int TSOServer::main(const std::vector<std::string> &)
     });
 
     waitForTerminationRequest();
+
     return Application::EXIT_OK;
 }
 

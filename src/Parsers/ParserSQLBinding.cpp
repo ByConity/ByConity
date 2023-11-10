@@ -73,9 +73,9 @@ bool ParserCreateBinding::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     create_binding_query->level = level;
     create_binding_query->query_pattern = query_pattern;
     create_binding_query->re_expression = re_expression;
-    create_binding_query->setExpression(ASTCreateBinding::Expression::QUERY_PATTERN, std::move(pattern));
-    create_binding_query->setExpression(ASTCreateBinding::Expression::TARGET, std::move(target));
-    create_binding_query->setExpression(ASTCreateBinding::Expression::SETTINGS, std::move(settings));
+    create_binding_query->pattern = pattern;
+    create_binding_query->target = target;
+    create_binding_query->settings = settings;
 
     node = create_binding_query;
     return true;

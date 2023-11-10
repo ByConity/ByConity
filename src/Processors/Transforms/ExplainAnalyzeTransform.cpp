@@ -29,10 +29,7 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
 {
     chunk.clear();
     if (!input.isFinished())
-    {
-        has_final_transform = true;
         return;
-    }
 
     ///segment_id, worker_address -> profiles
     std::unordered_map<size_t, std::unordered_map<String, ProcessorProfiles>> segment_profiles;
@@ -88,16 +85,70 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
     InterpreterExplainQuery::fillColumn(*cols[0], explain);
     size_t row_num = cols[0]->size();
     has_final_transform = false;
+    has_output = true;
     chunk.setColumns(std::move(cols), row_num);
 }
 
 ISimpleTransform::Status ExplainAnalyzeTransform::prepare()
 {
-    if (((!has_input && input.isFinished()) || output.isFinished()) && has_final_transform)
+    /// Check can output.
+
+    if (output.isFinished())
     {
-        return Status::Ready;
+        input.close();
+        return Status::Finished;
     }
-    return ISimpleTransform::prepare();
+
+    if (!output.canPush())
+    {
+        input.setNotNeeded();
+        return Status::PortFull;
+    }
+
+    /// Output if has data.
+    if (has_output)
+    {
+        output.pushData(std::move(output_data));
+        has_output = false;
+
+        if (!no_more_data_needed)
+            return Status::PortFull;
+    }
+
+    /// Stop if don't need more data.
+    if (no_more_data_needed)
+    {
+        input.close();
+        output.finish();
+        return Status::Finished;
+    }
+
+    /// Check can input.
+    if (!has_input)
+    {
+        if (input.isFinished())
+        {
+            if (has_final_transform)
+                return Status::Ready;
+            output.finish();
+            return Status::Finished;
+        }
+
+        input.setNeeded();
+
+        if (!input.hasData())
+            return Status::NeedData;
+
+        input_data = input.pullData(set_input_not_needed_after_read);
+        has_input = true;
+
+        if (input_data.exception)
+            /// No more data needed. Exception will be thrown (or swallowed) later.
+            input.setNotNeeded();
+    }
+
+    /// Now transform.
+    return Status::Ready;
 }
 
 void ExplainAnalyzeTransform::getRemoteProcessorProfiles(std::unordered_map<size_t, std::unordered_map<String, ProcessorProfiles>> & segment_profiles)

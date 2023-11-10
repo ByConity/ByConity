@@ -434,7 +434,8 @@ TxnTimestamp CnchServerClient::commitParts(
     const String & task_id,
     const bool from_server,
     const String & consumer_group,
-    const cppkafka::TopicPartitionList & tpl)
+    const cppkafka::TopicPartitionList & tpl,
+    const MySQLBinLogInfo & binlog)
 {
     /// TODO: check txn_id & start_ts
 
@@ -498,6 +499,16 @@ TxnTimestamp CnchServerClient::commitParts(
         }
     }
 
+    /// add binlog for MaterializedMySQL
+    if (!binlog.binlog_file.empty())
+    {
+        auto * binlog_req = request.mutable_binlog();
+        binlog_req->set_binlog_file(binlog.binlog_file);
+        binlog_req->set_binlog_position(binlog.binlog_position);
+        binlog_req->set_executed_gtid_set(binlog.executed_gtid_set);
+        binlog_req->set_meta_version(binlog.meta_version);
+    }
+
     /// add delete bitmaps for table with unique key
     for (const auto & delete_bitmap : delete_bitmaps)
     {
@@ -523,7 +534,8 @@ TxnTimestamp CnchServerClient::precommitParts(
     const String & task_id,
     const bool from_server,
     const String & consumer_group,
-    const cppkafka::TopicPartitionList & tpl)
+    const cppkafka::TopicPartitionList & tpl,
+    const MySQLBinLogInfo & binlog)
 {
     // TODO: this method only apply to ManipulationType which supports 2pc
     if (type != ManipulationType::Insert)
@@ -572,7 +584,8 @@ TxnTimestamp CnchServerClient::precommitParts(
             task_id,
             from_server,
             consumer_group,
-            tpl);
+            tpl,
+            binlog);
     }
 
     // no commit_time for precommit
@@ -975,6 +988,74 @@ void CnchServerClient::notifyAccessEntityChange(IAccessEntity::Type type, const 
     request.set_type(toString(type));
     request.set_name(name);
     stub->notifyAccessEntityChange(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+#if USE_MYSQL
+void CnchServerClient::submitMaterializedMySQLDDLQuery(
+    const String & database_name, const String & sync_thread, const String & query, const MySQLBinLogInfo & binlog)
+{
+    brpc::Controller cntl;
+    Protos::SubmitMaterializedMySQLDDLQueryReq request;
+    Protos::SubmitMaterializedMySQLDDLQueryResp response;
+
+    request.set_database_name(database_name);
+    request.set_thread_key(sync_thread);
+    request.set_ddl_query(query);
+
+    request.set_binlog_file(binlog.binlog_file);
+    request.set_binlog_position(binlog.binlog_position);
+    request.set_executed_gtid_set(binlog.executed_gtid_set);
+    request.set_meta_version(binlog.meta_version);
+
+    stub->submitMaterializedMySQLDDLQuery(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchServerClient::reportHeartBeatForSyncThread(const String & database_name, const String & sync_thread)
+{
+    brpc::Controller cntl;
+    Protos::ReportHeartbeatForSyncThreadReq request;
+    Protos::ReportHeartbeatForSyncThreadResp response;
+
+    request.set_database_name(database_name);
+    request.set_thread_key(sync_thread);
+
+    stub->reportHeartbeatForSyncThread(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+
+void CnchServerClient::reportSyncFailedForSyncThread(const String & database_name, const String & sync_thread)
+{
+    brpc::Controller cntl;
+    Protos::ReportSyncFailedForSyncThreadReq request;
+    Protos::ReportSyncFailedForSyncThreadResp response;
+
+    request.set_database_name(database_name);
+    request.set_thread_key(sync_thread);
+
+    stub->reportSyncFailedForSyncThread(&cntl, &request, &response, nullptr);
+
+    assertController(cntl);
+    RPCHelpers::checkResponse(response);
+}
+#endif
+
+void CnchServerClient::forceRecalculateMetrics(const StorageID & storage_id)
+{
+    brpc::Controller cntl;
+    Protos::ForceRecalculateMetricsReq request;
+    Protos::ForceRecalculateMetricsResp response;
+
+    RPCHelpers::fillStorageID(storage_id, *request.mutable_storage_id());
+
+    stub->forceRecalculateMetrics(&cntl, &request, &response, nullptr);
 
     assertController(cntl);
     RPCHelpers::checkResponse(response);

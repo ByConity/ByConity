@@ -305,11 +305,16 @@ public:
     const std::unordered_set<RuntimeFilterId> & getRuntimeFilters() const { return runtime_filters; }
 
     static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
-    size_t getParallelIndex() const;
+    inline size_t getParallelIndex() const { return parallel_index; }
+    inline void setParallelIndex(size_t parallel_index_)
+    {
+        parallel_index = parallel_index_;
+    }
 
 private:
     size_t segment_id;
     String query_id;
+    size_t parallel_index = 0;
     QueryPlan query_plan;
 
     PlanSegmentInputs inputs;

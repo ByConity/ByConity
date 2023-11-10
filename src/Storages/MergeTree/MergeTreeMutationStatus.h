@@ -35,13 +35,14 @@ namespace DB
 struct MergeTreeMutationStatus
 {
     String id;
-    String query_id; /// Currently only supported by HaMergeTree
+    String query_id;
     String command;
     time_t create_time = 0;
     std::map<String, Int64> block_numbers;
 
     /// Parts that should be mutated/merged or otherwise moved to Obsolete state for this mutation to complete.
     Names parts_to_do_names;
+    UInt64 parts_to_do = 0;
 
     /// If the mutation is done. Note that in case of ReplicatedMergeTree parts_to_do == 0 doesn't imply is_done == true.
     bool is_done = false;
@@ -58,5 +59,7 @@ struct MergeTreeMutationStatus
 /// optional). mutation_ids passed separately, because status may be empty and
 /// we can execute multiple mutations at once
 void checkMutationStatus(std::optional<MergeTreeMutationStatus> & status, const std::set<String> & mutation_ids);
+
+using MergeTreeMutationStatusVector = std::vector<MergeTreeMutationStatus>;
 
 }

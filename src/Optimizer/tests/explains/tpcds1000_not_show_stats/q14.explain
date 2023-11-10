@@ -357,16 +357,14 @@ Projection
                │     │                             │           Outputs: [d_week_seq], d_date_sk_27:=d_date_sk
                │     │                             └─ Broadcast Exchange
                │     │                                └─ EnforceSingleRow
-               │     │                                   └─ Union
-               │     │                                      │     OutputToInputs: d_week_seq_1 = [d_week_seq_1]
-               │     │                                      └─ Gather Exchange
-               │     │                                         └─ Projection
-               │     │                                            │     Expressions: [d_week_seq_1]
-               │     │                                            └─ Filter
-               │     │                                               │     Condition: (d_year_27 = 2000) AND (d_moy_3 = 12) AND (d_dom = 11)
-               │     │                                               └─ TableScan tpcds1000.date_dim
-               │     │                                                        Where: (d_year = 2000) AND (d_moy = 12) AND (d_dom = 11)
-               │     │                                                        Outputs: [d_dom], d_week_seq_1:=d_week_seq, d_year_27:=d_year, d_moy_3:=d_moy
+               │     │                                   └─ Gather Exchange
+               │     │                                      └─ Projection
+               │     │                                         │     Expressions: [d_week_seq_1]
+               │     │                                         └─ Filter
+               │     │                                            │     Condition: (d_year_27 = 2000) AND (d_moy_3 = 12) AND (d_dom = 11)
+               │     │                                            └─ TableScan tpcds1000.date_dim
+               │     │                                                     Where: (d_year = 2000) AND (d_moy = 12) AND (d_dom = 11)
+               │     │                                                     Outputs: [d_dom], d_week_seq_1:=d_week_seq, d_year_27:=d_year, d_moy_3:=d_moy
                │     └─ Broadcast Exchange
                │        └─ EnforceSingleRow
                │           └─ CTERef[1]
@@ -420,16 +418,14 @@ Projection
                      │                             │           Outputs: d_date_sk_34:=d_date_sk, d_week_seq_2:=d_week_seq
                      │                             └─ Broadcast Exchange
                      │                                └─ EnforceSingleRow
-                     │                                   └─ Union
-                     │                                      │     OutputToInputs: d_week_seq_3 = [d_week_seq_3]
-                     │                                      └─ Gather Exchange
-                     │                                         └─ Projection
-                     │                                            │     Expressions: [d_week_seq_3]
-                     │                                            └─ Filter
-                     │                                               │     Condition: (d_year_34 = 1999) AND (d_moy_4 = 12) AND (d_dom_1 = 11)
-                     │                                               └─ TableScan tpcds1000.date_dim
-                     │                                                        Where: (d_year = 1999) AND (d_moy = 12) AND (d_dom = 11)
-                     │                                                        Outputs: d_week_seq_3:=d_week_seq, d_year_34:=d_year, d_moy_4:=d_moy, d_dom_1:=d_dom
+                     │                                   └─ Gather Exchange
+                     │                                      └─ Projection
+                     │                                         │     Expressions: [d_week_seq_3]
+                     │                                         └─ Filter
+                     │                                            │     Condition: (d_year_34 = 1999) AND (d_moy_4 = 12) AND (d_dom_1 = 11)
+                     │                                            └─ TableScan tpcds1000.date_dim
+                     │                                                     Where: (d_year = 1999) AND (d_moy = 12) AND (d_dom = 11)
+                     │                                                     Outputs: d_week_seq_3:=d_week_seq, d_year_34:=d_year, d_moy_4:=d_moy, d_dom_1:=d_dom
                      └─ Broadcast Exchange
                         └─ EnforceSingleRow
                            └─ CTERef[1]

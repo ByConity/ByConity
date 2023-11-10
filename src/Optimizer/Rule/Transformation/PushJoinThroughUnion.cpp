@@ -41,7 +41,6 @@ TransformResult PushJoinThroughUnion::transformImpl(PlanNodePtr node, const Capt
     auto union_node = node->getChildren()[0];
     const auto & unionn = dynamic_cast<const UnionStep &>(*union_node->getStep());
     auto & context = rule_context.context;
-    auto & symbol_allocator = *context->getSymbolAllocator();
 
     DataStreams input_streams;
     std::unordered_map<String, std::vector<String>> new_output_to_inputs;

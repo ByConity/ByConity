@@ -16,11 +16,10 @@
 #include <Transaction/Actions/DDLAlterAction.h>
 
 #include <Catalog/Catalog.h>
-// #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
-// #include <Storages/StorageCnchMergeTree.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
 #include <Storages/StorageCnchMergeTree.h>
-#include <Transaction/TransactionCoordinatorRcCnch.h>
+#include "Storages/MutationCommands.h"
 
 namespace DB
 {
@@ -54,22 +53,29 @@ void DDLAlterAction::executeV1(TxnTimestamp commit_time)
     LOG_DEBUG(log, "Wait for change schema in Catalog.");
     auto catalog = global_context.getCnchCatalog();
     bool is_recluster = false;
+    /// only used for materialized mysql
+    if (params.is_database)
+    {
+        // updateTsCache(params.storage_id.uuid, commit_time);
+        catalog->alterDatabase(params.storage_id.database_name, txn_id, commit_time, params.statement, params.engine_name);
+        return;
+    }
     try
     {
         if (!mutation_commands.empty())
         {
             final_mutation_entry.emplace();
             final_mutation_entry->txn_id = txn_id;
+            final_mutation_entry->query_id = query_id;
             final_mutation_entry->commit_time = commit_time;
             final_mutation_entry->commands = mutation_commands;
             final_mutation_entry->columns_commit_time = mutation_commands.changeSchema() ? commit_time : table->commit_time;
-            catalog->createMutation(table->getStorageID(), final_mutation_entry->txn_id.toString(), final_mutation_entry->toString());
 
             // Don't create mutation task for reclustering. It will manually triggered by user
             is_recluster = table->isBucketTable() && final_mutation_entry->isReclusterMutation();
             if (!is_recluster)
                 catalog->createMutation(table->getStorageID(), final_mutation_entry->txn_id.toString(), final_mutation_entry->toString());
-            LOG_DEBUG(log, "Successfully create mutation entry for alter query: {}", final_mutation_entry->toString());
+            LOG_DEBUG(log, "Created mutation entry in Catalog: {}", final_mutation_entry->toString());
         }
 
         // auto cache = global_context.getMaskingPolicyCache();

@@ -20,7 +20,7 @@ NameSet FunctionalDependencies::simplify(NameSet srcs) const
 {
     if (srcs.empty())
         return srcs;
-    
+
     std::string str;
     for (const auto & name : srcs)
         str += name + ",";
@@ -52,7 +52,7 @@ NameSet FunctionalDependencies::simplify(NameSet srcs) const
     return srcs; // can't simplify
 }
 
-void FunctionalDependencies::eraseNotExist(const Names & names_)
+void FunctionalDependencies::eraseNotExist(const Names & /*names_*/)
 {
     // TODO
 }

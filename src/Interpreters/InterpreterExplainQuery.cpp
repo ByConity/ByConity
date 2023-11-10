@@ -53,9 +53,10 @@
 #include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/QueryPlan.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/StorageMaterializedView.h>
 #include <Storages/StorageView.h>
+#include <google/protobuf/util/json_util.h>
 #include <Common/JSONBuilder.h>
+#include "Parsers/ASTExplainQuery.h"
 
 namespace DB
 {
@@ -107,9 +108,8 @@ BlockIO InterpreterExplainQuery::execute()
     BlockIO res;
 
     const auto & ast = query->as<ASTExplainQuery &>();
-
     if ((ast.getKind() == ASTExplainQuery::DistributedAnalyze || ast.getKind() == ASTExplainQuery::LogicalAnalyze)
-        && QueryUseOptimizerChecker::check(query, getContext()))
+        && QueryUseOptimizerChecker::check(query, getContext(), true))
     {
         if (!getContext()->getSettingsRef().log_processors_profiles || !getContext()->getSettingsRef().report_processors_profiles)
         {
@@ -121,6 +121,8 @@ BlockIO InterpreterExplainQuery::execute()
         ProfileLogHub<ProcessorProfileLogElement>::getInstance().initLogChannel(getContext()->getCurrentQueryId(), consumer);
         getContext()->setProcessorProfileElementConsumer(consumer);
         getContext()->setIsExplainQuery(true);
+        // Explain in bsp mode makes no sense.
+        getContext()->getSettingsRef().bsp_mode = false;
         try
         {
             res = explainAnalyze();
@@ -704,14 +706,13 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
 
 BlockIO InterpreterExplainQuery::explainAnalyze()
 {
-    auto & ast = query->as<ASTExplainQuery &>();
     auto contxt = getContext();
     auto interpreter = std::make_unique<InterpreterSelectQueryUseOptimizer>(query, contxt, options);
     return interpreter->execute();
 }
 
 void InterpreterExplainQuery::explainPlanWithOptimizer(
-    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr, bool & single_line)
+    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr, bool & /*single_line*/)
 {
     auto settings = checkAndGetSettings<QueryPlanSettings>(explain_ast.getSettings());
     CardinalityEstimator::estimate(plan, contextptr);
@@ -720,6 +721,19 @@ void InterpreterExplainQuery::explainPlanWithOptimizer(
     {
         auto plan_cost = CostCalculator::calculatePlanCost(plan, *contextptr);
         buffer << PlanPrinter::jsonLogicalPlan(plan, settings.stats, true, plan_cost);
+    }
+    else if (settings.pb_json)
+    {
+        Protos::QueryPlan plan_pb;
+        plan.toProto(plan_pb);
+        String json_msg;
+        google::protobuf::util::JsonPrintOptions pb_options;
+        pb_options.preserve_proto_field_names = true;
+        pb_options.always_print_primitive_fields = true;
+        pb_options.add_whitespace = settings.add_whitespace;
+
+        google::protobuf::util::MessageToJsonString(plan_pb, &json_msg, pb_options);
+        buffer << json_msg;
     }
     else
         buffer << PlanPrinter::textLogicalPlan(plan, contextptr, settings.stats, true, costs);
@@ -742,7 +756,7 @@ void InterpreterExplainQuery::explainDistributedWithOptimizer(
 
     PlanSegmentDescriptions plan_segment_descriptions;
     for (auto & node : plan_segment_context.plan_segment_tree->getNodes())
-        plan_segment_descriptions.emplace_back(PlanSegmentDescription::getPlanSegmentDescription(node.plan_segment, true));
+        plan_segment_descriptions.emplace_back(PlanSegmentDescription::getPlanSegmentDescription(node.plan_segment, settings.json));
 
     if (settings.json)
         buffer << PlanPrinter::jsonDistributedPlan(plan_segment_descriptions, {});

@@ -114,7 +114,8 @@ public:
     void removeSQLBinding(const String & uuid, const bool & is_re_expression);
 
     ///database related interface
-    void createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts);
+    void createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts,
+                        const String & create_query = "", const String & engine_name = "");
 
     DatabasePtr getDatabase(const String & database, const ContextPtr & context, const TxnTimestamp & ts = 0);
 
@@ -123,6 +124,10 @@ public:
     void dropDatabase(const String & database, const TxnTimestamp & previous_version, const TxnTimestamp & txnID, const TxnTimestamp & ts);
 
     void renameDatabase(const String & from_database, const String & to_database, const TxnTimestamp & txnID, const TxnTimestamp & ts);
+
+    ///currently only used for materialized mysql
+    void alterDatabase(const String & alter_database, const TxnTimestamp & txnID, const TxnTimestamp & ts,
+                       const String & create_query = "", const String & engine_name = "");
 
     ///table related interface
     void createTable(
@@ -279,6 +284,12 @@ public:
         const String & consumer_group,
         const cppkafka::TopicPartitionList & tpl);
 
+    bool setTransactionRecordStatusWithBinlog(
+        const TransactionRecord & expected_record,
+        TransactionRecord & record,
+        const String & binlog_name,
+        const std::shared_ptr<Protos::MaterializedMySQLBinlogMetadata> & binlog);
+
     /// just set transaction status to aborted
     void rollbackTransaction(TransactionRecord record);
 
@@ -340,6 +351,25 @@ public:
 
     /// return txn_id -> undo resources
     std::unordered_map<UInt64, UndoResources> getAllUndoBuffer();
+
+    class UndoBufferIterator
+    {
+    public:
+        UndoBufferIterator(IMetaStore::IteratorPtr metastore_iter, Poco::Logger * log);
+        const UndoResource & getUndoResource() const;
+        bool next();
+        bool is_valid() const /// for testing
+        {
+            return valid;
+        }
+    private:
+        IMetaStore::IteratorPtr metastore_iter;
+        std::optional<UndoResource> cur_undo_resource;
+        bool valid = false;
+        Poco::Logger * log;
+    };
+
+    UndoBufferIterator getUndoBufferIterator() const;
 
     /// get transaction records, if the records exists, we can check with the transaction coordinator to detect zombie record.
     /// the transaction record will be cleared only after all intents have been cleared and set commit time for all parts.
@@ -486,12 +516,57 @@ public:
     void setTablePreallocateVW(const UUID & table_uuid, const String vw);
     void getTablePreallocateVW(const UUID & table_uuid, String & vw);
 
+    /// APIs for MaterializedMySQL
+    std::shared_ptr<Protos::MaterializedMySQLManagerMetadata> getOrSetMaterializedMySQLManagerMetadata(const StorageID & storage_id);
+    void updateMaterializedMySQLManagerMetadata(const StorageID & storage_id, const Protos::MaterializedMySQLManagerMetadata & metadata);
+    void removeMaterializedMySQLManagerMetadata(const UUID & uuid);
+    void setMaterializedMySQLBinlogMetadata(const String & binlog_name, const Protos::MaterializedMySQLBinlogMetadata & binlog_data);
+    std::shared_ptr<Protos::MaterializedMySQLBinlogMetadata> getMaterializedMySQLBinlogMetadata(const String & binlog_name);
+    void removeMaterializedMySQLBinlogMetadata(const String & binlog_name);
+    // This API would be used for some DDL actions which need to update both manager metadata as well as binlog metadata
+    void updateMaterializedMySQLMetadataInBatch(const Strings & keys, const Strings & values, const Strings & delete_keys);
+
     /***
      * API to collect all metrics about a table
      */
-    std::unordered_map<String, PartitionFullPtr> getTablePartitionMetrics(const DB::Protos::DataModelTable & table, bool & is_ready);
-
-    std::unordered_map<String, PartitionMetricsPtr> getTablePartitionMetricsFromMetastore(const String & table_uuid);
+    /**
+     * @brief Get parts metrics (partition level) of a table.
+     */
+    std::unordered_map<String, PartitionFullPtr> getPartsInfoMetrics(const DB::Protos::DataModelTable & table, bool & is_ready);
+    /**
+     * @brief Load parts metrics (partition level) snapshots of the table from metastore.
+     * It's designed to initialize parts metrics.
+     */
+    std::unordered_map<String, std::shared_ptr<PartitionMetrics>> loadPartitionMetricsSnapshotFromMetastore(const String & table_uuid);
+    /**
+     * @brief Persistent a parts metrics (partition level) snapshot to metastore.
+     */
+    void savePartitionMetricsSnapshotToMetastore(
+        const String & table_uuid, const String & partition_id, const Protos::PartitionPartsMetricsSnapshot & snapshot);
+    /**
+     * @brief Get partition level metrics for a partition by the time `max_commit_time`.
+     * This is designed to be called when recalculation happens.
+     *
+     * @param table_uuid Target table.
+     * @param partition_id Target partition id of the table.
+     * @param max_commit_time Only the parts that committed before `max_commit_time` will take into account.
+     */
+    PartitionMetrics::PartitionMetricsStore
+    getPartitionMetricsStoreFromMetastore(const String & table_uuid, const String & partition_id, size_t max_commit_time);
+    /**
+     * @brief Recalculate the trash items metrics (table level) data of a table from metastore.
+     * This is designed to be called when recalculation happens.
+     */
+    TableMetrics::TableMetricsData getTableTrashItemsMetricsDataFromMetastore(const String & table_uuid, TxnTimestamp ts);
+    /**
+     * @brief load a trash items (table level) snapshot from metastore.
+     * It's designed to initialize trash items metrics.
+     */
+    Protos::TableTrashItemsMetricsSnapshot loadTableTrashItemsMetricsSnapshotFromMetastore(const String & table_uuid);
+    /**
+     * @brief Persistent the trash items metrics (table level) snapshot of a table to metastore.
+     */
+    void saveTableTrashItemsMetricsToMetastore(const String & table_uuid, const Protos::TableTrashItemsMetricsSnapshot & snapshot);
 
     /// this is periodically called by leader server only
     void updateTopologies(const std::list<CnchServerTopology> & topologies);

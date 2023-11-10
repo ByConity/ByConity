@@ -26,11 +26,13 @@
 #include <Interpreters/CancellationCode.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/DAGGraph.h>
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/PlanSegmentExecutor.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
+#include <Interpreters/Scheduler.h>
 #include <Interpreters/WorkerStatusManager.h>
 #include <Parsers/IAST_fwd.h>
 #include <Processors/Exchange/DataTrans/ConcurrentShardMap.h>
@@ -41,32 +43,8 @@
 #include <Common/Stopwatch.h>
 #include <common/types.h>
 
-#ifndef NDEBUG
-#    define TASK_ASSIGN_DEBUG
-#endif
-
 namespace DB
 {
-
-class AdaptiveScheduler 
-{
-public:
-    AdaptiveScheduler(const ContextPtr & context) : query_context(context), log(&Poco::Logger::get("AdaptiveScheduler")) {}
-    std::vector<size_t> getRandomWorkerRank();
-    std::vector<size_t> getHealthWorkerRank();
-   
-private:
-    const ContextPtr query_context;
-    Poco::Logger * log;
-};
-
-struct PlanSegmentsStatus
-{
-    //TODO dongyifeng add when PlanSegmentInfo is merged
-    volatile bool is_final_stage_start = false;
-    std::atomic<bool> is_cancel{false};
-    String exception;
-};
 
 struct ExceptionWithCode
 {
@@ -75,52 +53,14 @@ struct ExceptionWithCode
     int code;
 };
 
-using PlanSegmentsStatusPtr = std::shared_ptr<PlanSegmentsStatus>;
 using RuntimeSegmentsStatusPtr = std::shared_ptr<RuntimeSegmentsStatus>;
 using PlanSegmentsPtr = std::vector<PlanSegmentPtr>;
-using Source = std::vector<size_t>;
-// <query_id, <segment_id, number of segment's received status >>
-using RuntimeSegmentsStatusCounter = std::unordered_map<size_t, UInt64>;
+// <query_id, <segment_id, set of segment's received status for each instance >>
+using RuntimeSegmentsStatusCounter = std::unordered_map<size_t, std::unordered_set<UInt64>>;
 // <query_id, <segment_id, status>>
 using SegmentStatusMap = std::map<String, std::map<size_t, RuntimeSegmentsStatusPtr>>;
+using BspSchedulerMap = std::unordered_map<String, std::shared_ptr<BSPScheduler>>;
 enum class OverflowMode;
-
-struct DAGGraph {
-    DAGGraph() { async_context = std::make_shared<AsyncContext>(); }
-    DAGGraph(const DAGGraph & other)
-    {
-        std::unique_lock lock(other.status_mutex);
-        sources = other.sources;
-        final = other.final;
-        scheduler_segments = std::move(other.scheduler_segments);
-        id_to_segment = std::move(other.id_to_segment);
-        id_to_address = std::move(other.id_to_address);
-        plan_segment_status_ptr = std::move(other.plan_segment_status_ptr);
-        query_context = other.query_context;
-        segment_paralle_size_map = std::move(other.segment_paralle_size_map);
-        async_context = std::move(other.async_context);
-    }
-    void joinAsyncRpcWithThrow();
-    void joinAsyncRpcPerStage();
-    void joinAsyncRpcAtLast();
-
-    Source sources;
-    size_t final = std::numeric_limits<size_t>::max();
-    std::set<size_t> scheduler_segments;
-    std::unordered_map<size_t, PlanSegment *> id_to_segment;
-    std::unordered_map<size_t, AddressInfos> id_to_address;
-    std::set<AddressInfo> plan_send_addresses;
-    PlanSegmentsStatusPtr plan_segment_status_ptr;
-    ContextPtr query_context = nullptr;
-#if defined(TASK_ASSIGN_DEBUG)
-    std::unordered_map<size_t, std::vector<std::pair<size_t, AddressInfo>>> exchange_data_assign_node_mappings;
-#endif
-    mutable bthread::Mutex status_mutex;
-    std::unordered_map<size_t, UInt64> segment_paralle_size_map;
-    AsyncContextPtr async_context;
-};
-
-using DAGGraphPtr = std::shared_ptr<DAGGraph>;
 
 class SegmentScheduler
 {
@@ -131,9 +71,11 @@ public:
                                              PlanSegmentTree * plan_segments_ptr,
                                              ContextPtr query_context);
 
-    CancellationCode cancelPlanSegmentsFromCoordinator(const String query_id, const String & exception, ContextPtr query_context);
+    CancellationCode
+    cancelPlanSegmentsFromCoordinator(const String query_id, const Int32 & code, const String & exception, ContextPtr query_context);
     CancellationCode cancelPlanSegments(
         const String & query_id,
+        const Int32 & code,
         const String & exception,
         const String & origin_host_name,
         ContextPtr query_context,
@@ -149,10 +91,12 @@ public:
     void checkQueryCpuTime(const String & query_id);
     void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
     void updateQueryStatus(const RuntimeSegmentsStatus & segment_status);
-    
-    bool needCheckRecivedSegmentStatusCounter(const String & query_id) const;
+
+    bool isExplainQuery(const String & query_id) const;
     bool alreadyReceivedAllSegmentStatus(const String & query_id) const;
-    void updateReceivedSegmentStausCounter(const String & query_id, const size_t & segment_id);
+    void updateReceivedSegmentStatusCounter(const String & query_id, const size_t & segment_id, const UInt64 & parallel_index);
+    bool alreadyReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const;
+    void onSegmentFinished(const RuntimeSegmentsStatus & status);
 
 private:
     std::unordered_map<String, std::shared_ptr<DAGGraph>> query_map;
@@ -165,8 +109,12 @@ private:
     Poco::Logger * log;
     std::unordered_map<String, RuntimeSegmentsStatusCounter> query_status_received_counter_map;
 
+    bthread::Mutex bsp_scheduler_map_mutex;
+    BspSchedulerMap bsp_scheduler_map;
+
     void buildDAGGraph(PlanSegmentTree * plan_segments_ptr, std::shared_ptr<DAGGraph> graph);
     bool schedule(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph);
+    void scheduleV2(const String & query_id, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph_ptr);
 
 protected:
     virtual AddressInfos sendPlanSegment(PlanSegment * plan_segment_ptr, bool is_source, ContextPtr query_context, std::shared_ptr<DAGGraph> dag_graph, std::vector<size_t> rank_worker_ids);

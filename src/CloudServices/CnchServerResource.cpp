@@ -22,22 +22,16 @@
 #include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <brpc/controller.h>
-#include "common/logger_useful.h"
+#include <common/logger_useful.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
 #include "Interpreters/Context_fwd.h"
 #include "Storages/Hive/HiveFile/IHiveFile.h"
 #include "Storages/Hive/StorageCnchHive.h"
 
-#include <Storages/StorageCnchMergeTree.h>
 #include <Storages/RemoteFile/StorageCnchHDFS.h>
 #include <Storages/RemoteFile/StorageCnchS3.h>
 #include <Storages/StorageCnchMergeTree.h>
-#include <brpc/controller.h>
-#include <Common/Exception.h>
-#include "Interpreters/Context_fwd.h"
-#include "Storages/Hive/HiveFile/IHiveFile.h"
-#include "Storages/Hive/StorageCnchHive.h"
 
 namespace ProfileEvents
 {
@@ -101,6 +95,26 @@ void AssignedResource::addDataParts(const FileDataPartsCNCHVector & parts)
             file_parts.emplace_back(file);
         }
     }
+}
+
+void ResourceStageInfo::filter_resource(std::optional<ResourceOption> resource_option)
+{
+    if (resource_option)
+    {
+        for (auto iter = resource_option->table_ids.begin(); iter != resource_option->table_ids.end();)
+        {
+            if (sent_resource.find(*iter) != sent_resource.end())
+            {
+                iter = resource_option->table_ids.erase(iter);
+            }
+            else
+            {
+                sent_resource.insert(*iter);
+                iter++;
+            }
+        }
+    }
+
 }
 
 void CnchServerResource::cleanResource()
@@ -214,16 +228,18 @@ void CnchServerResource::sendResource(const ContextPtr & context, const HostWith
     ProfileEvents::increment(ProfileEvents::CnchSendResourceElapsedMilliseconds, watch.elapsedMilliseconds());
 }
 
-void CnchServerResource::sendResources(const ContextPtr & context)
+void CnchServerResource::sendResources(const ContextPtr & context, std::optional<ResourceOption> resource_option)
 {
     Stopwatch watch;
     auto send_lock = getLockForSend("ALL_WORKER");
 
+    // filter resource for stage send resource
+    resource_stage_info.filter_resource(resource_option);
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
     std::vector<brpc::CallId> call_ids;
     {
         auto lock = getLock();
-        allocateResource(context, lock);
+        allocateResource(context, lock, resource_option);
 
         if (!worker_group)
             return;
@@ -231,6 +247,8 @@ void CnchServerResource::sendResources(const ContextPtr & context)
         std::swap(all_resources, assigned_worker_resource);
     }
 
+    if (all_resources.empty())
+        return;
     auto handler = std::make_shared<ExceptionHandlerWithFailedInfo>();
     call_ids.resize(all_resources.size());
     auto worker_send_resources = [&](const HostWithPorts & host_ports, const std::vector<AssignedResource> & resources_to_send, size_t i)
@@ -319,13 +337,17 @@ void CnchServerResource::sendResources(const ContextPtr & context, WorkerAction 
     handler->throwIfException();
 }
 
-void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_guard<std::mutex> &)
+void CnchServerResource::allocateResource(
+    const ContextPtr & context, std::lock_guard<std::mutex> &, std::optional<ResourceOption> resource_option)
 {
     std::vector<AssignedResource> resource_to_allocate;
 
     for (auto & [table_id, resource] : assigned_table_resource)
     {
         if (resource.empty())
+            continue;
+
+        if (resource_option && !(*resource_option).table_ids.count(table_id))
             continue;
 
         resource_to_allocate.emplace_back(std::move(resource));
@@ -357,8 +379,13 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
             {
                 // NOTE: server_parts maybe moved due to splitCnchParts and cannot be used again
                 std::tie(bucket_parts, leftover_server_parts) = splitCnchParts(context, *storage, server_parts);
-                if (bucket_parts.size() > 0 && leftover_server_parts.size() > 0) {
-                    LOG_TRACE(log, "Cnch part allocation has been split. Bucket parts size = [{}], Server parts size = [{}]", bucket_parts.size(), leftover_server_parts.size());
+                if (bucket_parts.size() > 0 && leftover_server_parts.size() > 0)
+                {
+                    LOG_TRACE(
+                        log,
+                        "Cnch part allocation has been split. Bucket parts size = [{}], Server parts size = [{}]",
+                        bucket_parts.size(),
+                        leftover_server_parts.size());
                     ProfileEvents::increment(ProfileEvents::CnchPartAllocationSplits);
                 }
                 assigned_map = assignCnchParts(worker_group, leftover_server_parts);
@@ -376,11 +403,14 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
                 else if (auto * cnch_s3 = dynamic_cast<StorageCnchS3 *>(storage.get()))
                     file_storage = cnch_s3->getName();
 
-                if (cnch_file->settings.resourcesAssignType() == StorageResourcesAssignType::SERVER_PUSH){
+                if (cnch_file->settings.resourcesAssignType() == StorageResourcesAssignType::SERVER_PUSH)
+                {
                     bool use_simple_hash = cnch_file->settings.simple_hash_resources;
-                    LOG_TRACE(log,"{} assignCnchFileParts use server push and use_simple_hash =  {}",  file_storage, use_simple_hash);
+                    LOG_TRACE(log, "{} assignCnchFileParts use server push and use_simple_hash =  {}", file_storage, use_simple_hash);
                     assigned_file_map = assignCnchFileParts(worker_group, resource.file_parts);
-                } else {
+                }
+                else
+                {
                     LOG_TRACE(log, "{} assignCnchFileParts use server local", file_storage);
                 }
             }
@@ -405,7 +435,13 @@ void CnchServerResource::allocateResource(const ContextPtr & context, std::lock_
                 if (auto it = assigned_file_map.find(host_ports.id); it != assigned_file_map.end())
                 {
                     assigned_file_parts = std::move(it->second);
-                    LOG_TRACE(log, "assign {}.{} file data parts to works {}, size = {}", storage->getDatabaseName(), storage->getTableName(), host_ports.toDebugString(), assigned_file_parts.size());
+                    LOG_TRACE(
+                        log,
+                        "assign {}.{} file data parts to works {}, size = {}",
+                        storage->getDatabaseName(),
+                        storage->getTableName(),
+                        host_ports.toDebugString(),
+                        assigned_file_parts.size());
                 }
 
                 std::set<Int64> assigned_bucket_numbers;

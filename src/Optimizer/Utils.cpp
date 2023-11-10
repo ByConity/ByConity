@@ -27,6 +27,7 @@
 #include <Optimizer/SymbolsExtractor.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Storages/StorageDistributed.h>
 #include <boost/math/special_functions/math_fwd.hpp>
 #include <common/logger_useful.h>
 
@@ -292,6 +293,18 @@ std::optional<NameToType> extractNameToType(const PlanNodeBase & node)
     std::optional<NameToType> res = NameToType{};
     extractNameToTypeImpl(const_cast<PlanNodeBase *>(&node), res);
     return res;
+}
+
+StoragePtr getLocalStorage(StoragePtr storage, ContextPtr context)
+{
+    if (const auto * distributed = dynamic_cast<StorageDistributed *>(storage.get()))
+    {
+        auto remote_db = distributed->getRemoteDatabaseName();
+        auto remote_table = distributed->getRemoteTableName();
+        storage = DatabaseCatalog::instance().getTable(StorageID{remote_db, remote_table}, context);
+    }
+
+    return storage;
 }
 }
 }

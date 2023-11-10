@@ -16,6 +16,9 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 
 #include <Catalog/Catalog.h>
+#include <Common/escapeForFileName.h>
+#include <Common/quoteString.h>
+#include <Common/RowExistsColumnInfo.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -578,13 +581,13 @@ MergeTreeMetaBase::AlterConversions MergeTreeMetaBase::getAlterConversionsForPar
 
 void MergeTreeMetaBase::addMutationEntry(const CnchMergeTreeMutationEntry & entry)
 {
-    std::lock_guard lock(mutations_by_verison_mutex);
+    std::lock_guard lock(mutations_by_version_mutex);
     mutations_by_version.try_emplace(entry.commit_time, entry);
 }
 
 void MergeTreeMetaBase::removeMutationEntry(TxnTimestamp create_time)
 {
-    std::lock_guard lock(mutations_by_verison_mutex);
+    std::lock_guard lock(mutations_by_version_mutex);
     /// Maybe erase all entries <= create_time?
     mutations_by_version.erase(create_time);
 }
@@ -592,7 +595,7 @@ void MergeTreeMetaBase::removeMutationEntry(TxnTimestamp create_time)
 Strings MergeTreeMetaBase::getPlainMutationEntries()
 {
     Strings res;
-    std::lock_guard lock(mutations_by_verison_mutex);
+    std::lock_guard lock(mutations_by_version_mutex);
     res.reserve(mutations_by_version.size());
     for (auto const & [_, entry] : mutations_by_version)
     {
@@ -677,7 +680,54 @@ NamesAndTypesList MergeTreeMetaBase::getVirtuals() const
         NameAndTypePair("_partition_value", getPartitionValueType()),
         NameAndTypePair("_sample_factor", std::make_shared<DataTypeFloat64>()),
         NameAndTypePair("_part_row_number", std::make_shared<DataTypeUInt64>()),
+        RowExistsColumn::ROW_EXISTS_COLUMN,
     };
+}
+
+void MergeTreeMetaBase::checkColumnsValidity(const ColumnsDescription & columns) const
+{
+    NamesAndTypesList func_columns = getInMemoryMetadataPtr()->getFuncColumns();
+
+    for (auto & column: columns.getAll())
+    {
+        /// check func columns
+        for (auto & [name, type]: func_columns)
+        {
+            if (name == column.name)
+                throw Exception("Column " + backQuoteIfNeed(column.name) + " is reserved column", ErrorCodes::ILLEGAL_COLUMN);
+        }
+
+        /// block implicit key name for MergeTree family
+        if (isMapImplicitKey(column.name))
+            throw Exception("Column " + backQuoteIfNeed(column.name) + " contains reserved prefix word", ErrorCodes::ILLEGAL_COLUMN);
+
+        if (column.type && column.type->isMap())
+        {
+            auto escape_name = escapeForFileName(column.name + getMapSeparator());
+            auto pos = escape_name.find(getMapSeparator());
+            /// The name of map column should not contain map separator, which is convenient for extracting map column name from a implicit column name.
+            if (pos + getMapSeparator().size() != escape_name.size())
+                throw Exception(
+                    ErrorCodes::ILLEGAL_COLUMN,
+                    "Map column name {} is invalid because its escaped name {} contains reserved word {}",
+                    backQuoteIfNeed(column.name),
+                    backQuoteIfNeed(escape_name),
+                    getMapSeparator());
+
+            if (storage_settings.get()->enable_compact_map_data)
+            {
+                const auto & type_map = typeid_cast<const DataTypeByteMap &>(*column.type);
+                if (type_map.getValueType()->lowCardinality())
+                {
+                    throw Exception("Column " + backQuoteIfNeed(column.name) + " compact map type not compatible with LowCardinality type, you need remove LowCardinality or disable compact map", ErrorCodes::ILLEGAL_COLUMN);
+                }
+            }
+        }
+
+        // _row_exists is reserved for DELETE mutation.
+        if (column.name == RowExistsColumn::ROW_EXISTS_COLUMN.name)
+            throw Exception("Column name " + backQuoteIfNeed(column.name) + " is reserved for DELETE mutation.", ErrorCodes::ILLEGAL_COLUMN);
+    }
 }
 
 void MergeTreeMetaBase::insertQueryIdOrThrow(const String & query_id, size_t max_queries) const
@@ -713,6 +763,25 @@ DataTypePtr MergeTreeMetaBase::getPartitionValueType() const
     else
         partition_value_type = std::make_shared<DataTypeTuple>(std::move(partition_types));
     return partition_value_type;
+}
+
+ASTs MergeTreeMetaBase::getPartVirtualExpr() const
+{
+    return {
+        std::make_shared<ASTIdentifier>("_part"),
+        std::make_shared<ASTIdentifier>("_partition_id"),
+        std::make_shared<ASTIdentifier>("_part_uuid"),
+        std::make_shared<ASTIdentifier>("_partition_value")};
+}
+
+Block MergeTreeMetaBase::getSampleBlockWithVirtualColumns() const
+{
+    DataTypePtr partition_value_type = getPartitionValueType();
+    return {
+        ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_part"),
+        ColumnWithTypeAndName(ColumnString::create(), std::make_shared<DataTypeString>(), "_partition_id"),
+        ColumnWithTypeAndName(ColumnUUID::create(), std::make_shared<DataTypeUUID>(), "_part_uuid"),
+        ColumnWithTypeAndName(partition_value_type->createColumn(), partition_value_type, "_partition_value")};
 }
 
 Block MergeTreeMetaBase::getBlockWithVirtualPartColumns(const DataPartsVector & parts, bool one_part) const
@@ -1584,7 +1653,7 @@ bool MergeTreeMetaBase::isBitEngineEncodeColumn(const String & name) const
  BitEngineDictionaryTableMapping MergeTreeMetaBase::parseUnderlyingDictionaryDependency(const String & mapping_str) const
  {
     BitEngineDictionaryTableMapping dict_dependencies;
-    
+
     try
     {
         auto parsed_map = BitEngineHelper::parseUnderlyingDictionarySetting(mapping_str);
@@ -1630,7 +1699,7 @@ void MergeTreeMetaBase::parseAndCheckForBitEngine()
     /// Not a bitengine table, just return
     if (bitengine_columns.empty())
         return;
-    
+
     /// Now do some syntax check for a bitengine table
     /// 1. Unique keys are not allowed for BitEngine
     if (metadata_snapshot->hasUniqueKey())
@@ -1646,7 +1715,7 @@ void MergeTreeMetaBase::parseAndCheckForBitEngine()
     else if (metadata_snapshot->getClusterByKey().column_names.size() != 1U)
         throw Exception("Only 1 field is allowed in cluster by for a BitEngine table: " + getStorageID().getFullTableName(),
             ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
-    
+
     /// Now, parse and check the 2nd constraint:
     /// the mapping info of bitengine table and underlying dictionary table
     bitengine_dictionary_tables_mapping = parseUnderlyingDictionaryDependency(storage_settings.get()->underlying_dictionary_tables);

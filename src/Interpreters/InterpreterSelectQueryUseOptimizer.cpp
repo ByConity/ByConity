@@ -27,6 +27,7 @@
 #include <Parsers/ASTTEALimit.h>
 #include <Processors/Executors/PullingAsyncPipelineExecutor.h>
 #include <QueryPlan/GraphvizPrinter.h>
+#include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/PlanCache.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/QueryPlanner.h>
@@ -152,6 +153,14 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
     GraphvizPrinter::printPlanSegment(plan_segment_tree, context);
     context->logOptimizerProfile(
         log, "Optimizer total run time: ", "Optimizer Total", std::to_string(total_watch.elapsedMillisecondsAsDouble()) + "ms");
+
+    if (context->getSettingsRef().log_segment_profiles)
+    {
+        segment_profiles = std::make_shared<std::vector<String>>();
+        for (auto & node : plan_segment_tree->getNodes())
+            segment_profiles->emplace_back(PlanSegmentDescription::getPlanSegmentDescription(node.plan_segment, true)->jsonPlanSegmentDescriptionAsString({}));
+    }
+
     return std::make_pair(std::move(plan_segment_tree), std::move(used_storage_ids));
 }
 
@@ -324,7 +333,7 @@ BlockIO InterpreterSelectQueryUseOptimizer::execute()
 {
     std::pair<PlanSegmentTreePtr, std::set<StorageID>> plan_segment_tree_and_used_storage_ids = getPlanSegment();
     auto & plan_segment_tree = plan_segment_tree_and_used_storage_ids.first;
-    size_t plan_segment_num = plan_segment_tree->getPlanSegmentsMap().size();
+    size_t plan_segment_num = plan_segment_tree->getNodes().size();
     UInt64 max_plan_segment_num = context->getSettingsRef().max_plan_segment_num;
     if (max_plan_segment_num != 0 && plan_segment_num > max_plan_segment_num)
         throw Exception(
@@ -550,8 +559,8 @@ void ExplainAnalyzeVisitor::visitExplainAnalyzeNode(QueryPlan::Node * node, Plan
     if (explain->getKind() != ASTExplainQuery::ExplainKind::DistributedAnalyze)
         return;
     PlanSegmentDescriptions plan_segment_descriptions;
-    for (auto & node : nodes)
-        plan_segment_descriptions.emplace_back(PlanSegmentDescription::getPlanSegmentDescription(node.plan_segment, true));
+    for (auto & segment_node : nodes)
+        plan_segment_descriptions.emplace_back(PlanSegmentDescription::getPlanSegmentDescription(segment_node.plan_segment, explain->getSetting().json));
     explain->setPlanSegmentDescriptions(plan_segment_descriptions);
 }
 

@@ -403,6 +403,8 @@
     M(DropDatabaseFailed, "") \
     M(RenameDatabaseSuccess, "") \
     M(RenameDatabaseFailed, "") \
+    M(AlterDatabaseSuccess, "") \
+    M(AlterDatabaseFailed, "") \
     M(CreateTableSuccess, "") \
     M(CreateTableFailed, "") \
     M(DropTableSuccess, "") \
@@ -547,6 +549,8 @@
     M(GetUndoBufferFailed, "") \
     M(GetAllUndoBufferSuccess, "") \
     M(GetAllUndoBufferFailed, "") \
+    M(GetUndoBufferSuccessIterator, "") \
+    M(GetUndoBufferFailedIterator, "") \
     M(GetTransactionRecordsSuccess, "") \
     M(GetTransactionRecordsFailed, "") \
     M(GetTransactionRecordsTxnIdsSuccess, "") \
@@ -647,8 +651,8 @@
     M(GetTablePreallocateVWFailed, "") \
     M(GetTablePartitionMetricsSuccess, "") \
     M(GetTablePartitionMetricsFailed, "") \
-    M(GetTablePartitionMetricsFromMetastoreSuccess, "") \
-    M(GetTablePartitionMetricsFromMetastoreFailed, "") \
+    M(GetPartitionMetricsFromMetastoreSuccess, "") \
+    M(GetPartitionMetricsFromMetastoreFailed, "") \
     M(UpdateTopologiesSuccess, "") \
     M(UpdateTopologiesFailed, "") \
     M(GetTopologiesSuccess, "") \
@@ -745,6 +749,10 @@
     M(GetBGJobStatusesFailed, "") \
     M(DropBGJobStatusSuccess, "") \
     M(DropBGJobStatusFailed, "") \
+    M(GetTableTrashItemsMetricsDataFromMetastoreSuccess, "") \
+    M(GetTableTrashItemsMetricsDataFromMetastoreFailed, "") \
+    M(GetPartsInfoMetricsSuccess, "") \
+    M(GetPartsInfoMetricsFailed, "") \
     \
     M(PartsToAttach, "") \
     M(NumOfRowsToAttach, "") \

@@ -18,6 +18,7 @@
 #include <Parsers/CommonParsers.h>
 #include <Parsers/parseDatabaseAndTableName.h>
 #include <Parsers/ParserPartition.h>
+#include <Parsers/ExpressionListParsers.h>
 
 
 namespace DB
@@ -29,9 +30,11 @@ namespace DB
 
         ParserKeyword s_refresh_view("REFRESH MATERIALIZED VIEW");
         ParserKeyword s_partition("PARTITION");
+        ParserKeyword s_where("WHERE");
         ParserKeyword s_sync("SYNC");
         ParserKeyword s_async("ASYNC");
         ParserPartition parser_partition(dt);
+        ParserExpression parser_exp(dt);
 
         if (!s_refresh_view.ignore(pos, expected))
             return false;
@@ -42,6 +45,11 @@ namespace DB
         if (s_partition.ignore(pos, expected))
         {
             if (!parser_partition.parse(pos, query->partition, expected))
+                return false;
+        }
+        else if (s_where.ignore(pos, expected))
+        {
+            if (!parser_exp.parse(pos, query->where_expr, expected))
                 return false;
         }
 

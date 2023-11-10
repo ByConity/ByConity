@@ -27,7 +27,7 @@ namespace DB
 
 class IStorage;
 using StoragePtr = std::shared_ptr<IStorage>;
-class StorageID;
+struct StorageID;
 
 using TableName = std::pair<String, String>;  // database and table pair
 using TableData = std::pair<UInt64, StoragePtr>; //identify table with commit time
@@ -61,8 +61,7 @@ public:
 
     /***
      * Insert storage into cache.
-     * @param db databasename
-     * @param table tablename
+     * @param storage_id database name and table name
      * @param ts timestamp
      * @param storage_ptr storageptr
      */
@@ -78,7 +77,6 @@ public:
 
     /***
      * Get storage from cache.
-     * @param uuid
      * @return nullptr if the storage is not cached.
      */
     StoragePtr get(const UUID & uuid);

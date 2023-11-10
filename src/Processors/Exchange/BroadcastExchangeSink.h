@@ -20,7 +20,7 @@
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <Processors/Exchange/IExchangeSink.h>
 #include <Processors/IProcessor.h>
-#include <bthread/mtx_cv_base.h>
+#include <bthread/mutex.h>
 #include <Poco/Logger.h>
 
 namespace DB
@@ -33,6 +33,10 @@ public:
     BroadcastExchangeSink(Block header_, BroadcastSenderPtrs senders_, ExchangeOptions options_, const String &name_);
     virtual ~BroadcastExchangeSink() override;
     String getName() const override { return name; }
+    BroadcastSenderPtrs getSenders() const
+    {
+        return senders;
+    }
 
     static String generateName(size_t exchange_id)
     {

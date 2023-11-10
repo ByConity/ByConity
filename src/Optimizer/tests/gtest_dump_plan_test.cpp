@@ -92,13 +92,17 @@ TEST_F(PlanDumpTest, testDumpWithoutStats)
     std::string explain = DB::ReproduceUtils::obtainExplainString(workload_query.query, query_context);
     workload_query.info.emplace(DB::DumpUtils::QueryInfo::explain, explain);
 
-    query_dumper.dump();
-    ddl_dumper.dump();
+    // test dump ddl
+    Poco::JSON::Object::Ptr dump_json(new Poco::JSON::Object);
+    dump_json = ddl_dumper.getJsonDumpResult();
+    DB::DumpUtils::writeJsonToAbsolutePath(*dump_json, dump_path + "/dump_result.json");
+    EXPECT_TRUE(checkFile(dump_path + "/dump_result.json", expected_folder + "/dump_result.json"));
 
+    // test reproduce query
+    dump_json = ddl_dumper.getJsonDumpResult();
+    dump_json->set("queries", query_dumper.getJsonDumpResult());
+    DB::DumpUtils::writeJsonToAbsolutePath(*dump_json, dump_path + "/dump_result.json");
     DB::DumpUtils::zipDirectory(dump_path);
-
-    EXPECT_TRUE(checkFile(dump_path + "/ddl.json", expected_folder + "/ddl.json"));
-
     DB::PlanReproducer reproducer(dump_path + ".zip", context);
     DB::PlanReproducer::Query reproduced_query = reproducer.getQuery(query_id);
     EXPECT_TRUE(sql == reproduced_query.query);
@@ -111,7 +115,7 @@ TEST_F(PlanDumpTest, testDumpMaterializedView)
     const char * folder = "test";
     tester->execute("create table test_table(a Int32 not null, b Int32 not null) engine=Memory()");
     tester->execute("create materialized view test_view(a Int32 not null, b Int32 not null) engine=Memory() as select * from test_table");
-    tester->execute(String{"dump ddl from "} + tester->getDefaultDatabase() + " into '" + PLAN_DUMP_PATH + folder + ".zip'");
+    tester->execute(String{"dump compress_directory=1 ddl from "} + tester->getDefaultDatabase() + " into '" + PLAN_DUMP_PATH + folder + "'");
     auto database = DB::DatabaseCatalog::instance().tryGetDatabase(tester->getDefaultDatabase(), tester->createQueryContext());
     ASSERT_TRUE(database);
     database->detachTable("test_table");

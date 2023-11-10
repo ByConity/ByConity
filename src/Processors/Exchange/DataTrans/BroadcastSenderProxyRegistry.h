@@ -21,10 +21,11 @@
 #include <vector>
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Chunk.h>
-#include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
+#include <Processors/Exchange/ExchangeOptions.h>
 #include <boost/noncopyable.hpp>
-#include <bthread/mtx_cv_base.h>
+#include <bthread/mutex.h>
 #include <Poco/Logger.h>
 #include <common/types.h>
 
@@ -32,8 +33,6 @@ namespace DB
 {
 class BroadcastSenderProxy;
 struct SenderProxyOptions;
-using BroadcastSenderProxyPtr = std::shared_ptr<BroadcastSenderProxy>;
-using BroadcastSenderProxyPtrs = std::vector<BroadcastSenderProxyPtr>;
 
 class BroadcastSenderProxyRegistry final : private boost::noncopyable
 {

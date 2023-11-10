@@ -104,6 +104,8 @@ public:
 
     CheckResults checkData(const ASTPtr & query, ContextPtr local_context) override;
 
+    CheckResults autoRemoveData(const ASTPtr & query, ContextPtr local_context) override;
+
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
 
     ServerDataPartsVector
@@ -189,6 +191,8 @@ public:
     void reclusterPartition(const PartitionCommand & command, ContextPtr query_context);
 
     String genCreateTableQueryForWorker(const String & suffix);
+
+    Strings getPartitionsByPredicate(const ASTPtr & predicate, ContextPtr local_context);
 
     ServerDataPartsVector
     getServerPartsByPredicate(const ASTPtr & predicate, const std::function<ServerDataPartsVector()> & get_parts, ContextPtr local_context);

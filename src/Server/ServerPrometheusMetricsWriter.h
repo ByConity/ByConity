@@ -148,6 +148,8 @@ namespace ProfileEvents
     extern const Event DropDatabaseFailed;
     extern const Event RenameDatabaseSuccess;
     extern const Event RenameDatabaseFailed;
+    extern const Event AlterDatabaseSuccess;
+    extern const Event AlterDatabaseFailed;
     extern const Event CreateTableSuccess;
     extern const Event CreateTableFailed;
     extern const Event DropTableSuccess;
@@ -392,10 +394,10 @@ namespace ProfileEvents
     extern const Event SetTablePreallocateVWFailed;
     extern const Event GetTablePreallocateVWSuccess;
     extern const Event GetTablePreallocateVWFailed;
-    extern const Event GetTablePartitionMetricsSuccess;
-    extern const Event GetTablePartitionMetricsFailed;
-    extern const Event GetTablePartitionMetricsFromMetastoreSuccess;
-    extern const Event GetTablePartitionMetricsFromMetastoreFailed;
+    extern const Event GetTableTrashItemsMetricsDataFromMetastoreSuccess;
+    extern const Event GetTableTrashItemsMetricsDataFromMetastoreFailed;
+    extern const Event GetPartsInfoMetricsSuccess;
+    extern const Event GetPartsInfoMetricsFailed;
     // extern const Event GetOrSetBufferManagerMetadataSuccess;
     // extern const Event GetOrSetBufferManagerMetadataFailed;
     // extern const Event RemoveBufferManagerMetadataSuccess;
@@ -639,7 +641,7 @@ private:
         {BUILD_INFO_KEY, "Build info"},
     };
 
-    const std::vector<ProfileEvents::Event> catalog_profile_events_list ={
+    const std::vector<ProfileEvents::Event> catalog_profile_events_list = {
         ProfileEvents::CatalogConstructorSuccess,
         ProfileEvents::CatalogConstructorFailed,
         ProfileEvents::UpdateTableStatisticsSuccess,
@@ -676,6 +678,8 @@ private:
         ProfileEvents::DropDatabaseFailed,
         ProfileEvents::RenameDatabaseSuccess,
         ProfileEvents::RenameDatabaseFailed,
+        ProfileEvents::AlterDatabaseSuccess,
+        ProfileEvents::AlterDatabaseFailed,
         ProfileEvents::CreateTableSuccess,
         ProfileEvents::CreateTableFailed,
         ProfileEvents::DropTableSuccess,
@@ -920,10 +924,10 @@ private:
         ProfileEvents::SetTablePreallocateVWFailed,
         ProfileEvents::GetTablePreallocateVWSuccess,
         ProfileEvents::GetTablePreallocateVWFailed,
-        ProfileEvents::GetTablePartitionMetricsSuccess,
-        ProfileEvents::GetTablePartitionMetricsFailed,
-        ProfileEvents::GetTablePartitionMetricsFromMetastoreSuccess,
-        ProfileEvents::GetTablePartitionMetricsFromMetastoreFailed,
+        ProfileEvents::GetTableTrashItemsMetricsDataFromMetastoreSuccess,
+        ProfileEvents::GetTableTrashItemsMetricsDataFromMetastoreFailed,
+        ProfileEvents::GetPartsInfoMetricsSuccess,
+        ProfileEvents::GetPartsInfoMetricsFailed,
         // ProfileEvents::GetOrSetBufferManagerMetadataSuccess,
         // ProfileEvents::GetOrSetBufferManagerMetadataFailed,
         // ProfileEvents::RemoveBufferManagerMetadataSuccess,

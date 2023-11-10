@@ -18,24 +18,26 @@
 #include <DataTypes/MapHelpers.h>
 #include <IO/LimitReadBuffer.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
+#include <Storages/DiskCache/FileDiskCacheSegment.h>
 #include <Storages/DiskCache/MetaFileDiskCacheSegment.h>
+#include <Storages/DiskCache/PartFileDiskCacheSegment.h>
 #include <Storages/HDFS/ReadBufferFromByteHDFS.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
+#include <Storages/MergeTree/MergeTreeIOSettings.h>
+#include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Storages/MergeTree/MergeTreeDataPartWriterWide.h>
 #include <Storages/MergeTree/MergeTreeReaderCNCH.h>
+#include <Storages/MergeTree/MarkRange.h>
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
-#include "common/logger_useful.h"
+#include <common/logger_useful.h>
 #include <Common/Exception.h>
-#include <Common/StringUtils/StringUtils.h>
-#include "Core/Settings.h"
-#include "Core/SettingsEnums.h"
-#include "DataTypes/DataTypeByteMap.h"
-#include "Interpreters/StorageID.h"
-#include "Storages/DiskCache/FileDiskCacheSegment.h"
-#include "Storages/DiskCache/PartFileDiskCacheSegment.h"
-#include "Storages/MergeTree/MergeTreeSuffix.h"
+#include <Common/RowExistsColumnInfo.h>
+#include <Core/Settings.h>
+#include <Core/SettingsEnums.h>
+#include <DataTypes/DataTypeByteMap.h>
+#include <Interpreters/StorageID.h>
 
 namespace ProfileEvents
 {
@@ -377,15 +379,13 @@ UniqueKeyIndexPtr MergeTreeDataPartCNCH::getUniqueKeyIndex() const
         return const_cast<MergeTreeDataPartCNCH *>(this)->loadUniqueKeyIndex();
 }
 
-const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getDeleteBitmap(bool allow_null) const
+const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getCombinedDeleteBitmapForUniqueTable(bool allow_null) const
 {
-    if (parent_part)
-        throw Exception("Projection part has no bitmap", ErrorCodes::LOGICAL_ERROR);
-
-    if (!storage.getInMemoryMetadataPtr()->hasUniqueKey() || deleted)
+    if (deleted)
     {
         if (delete_bitmap != nullptr)
             throw Exception("Delete bitmap for part " + name + " is not null", ErrorCodes::LOGICAL_ERROR);
+        /// DropPart will return a nullptr.
         return delete_bitmap;
     }
 
@@ -398,9 +398,12 @@ const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getDeleteBitmap(bool all
                 return delete_bitmap;
             throw Exception("No metadata for delete bitmap of part " + name, ErrorCodes::LOGICAL_ERROR);
         }
+
+        bool has_row_exists_column = hasRowExistsImplicitColumn();
+        Int64 row_exists_mutation = has_row_exists_column ? getMutationOfRowExists() : 0;
         Stopwatch watch;
         auto cache = storage.getContext()->getDeleteBitmapCache();
-        String cache_key = DeleteBitmapCache::buildKey(storage.getStorageUUID(), info.partition_id, info.min_block, info.max_block);
+        String cache_key = DeleteBitmapCache::buildKey(storage.getStorageUUID(), info.partition_id, info.min_block, info.max_block, row_exists_mutation);
         ImmutableDeleteBitmapPtr cached_bitmap;
         UInt64 cached_version = 0; /// 0 is an invalid value and acts as a sentinel
         bool hit_cache = cache->lookup(cache_key, cached_version, cached_bitmap);
@@ -442,9 +445,7 @@ const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getDeleteBitmap(bool all
                     }
                     else
                     {
-                        throw Exception(
-                            "Part " + name + " doesn't contain delete bitmap meta at " + toString(cached_version),
-                            ErrorCodes::LOGICAL_ERROR);
+                        throw Exception("Part " + name + " doesn't contain delete bitmap meta at " + toString(cached_version), ErrorCodes::LOGICAL_ERROR);
                     }
                 }
             }
@@ -453,23 +454,125 @@ const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getDeleteBitmap(bool all
             for (auto & meta : to_reads)
                 deserializeDeleteBitmapInfo(storage, meta, bitmap);
 
+            if (has_row_exists_column)
+                combineWithRowExists(bitmap);
+
             const_cast<MergeTreeDataPartCNCH *>(this)->delete_bitmap = std::move(bitmap);
             if (target_version > cached_version)
             {
                 cache->insert(cache_key, target_version, delete_bitmap);
             }
-            LOG_DEBUG(
-                storage.log,
-                "Loaded delete bitmap at commit_time {} of {} in {} ms, bitmap cardinality: {}, it was generated in txn_id: {}",
-                target_version,
+
+            LOG_DEBUG(storage.log,
+                "Loaded delete bitmap for unique table part {} in {} ms, commit_time: {}, bitmap cardinality: {}, generated in txn: {}",
                 name,
                 watch.elapsedMilliseconds(),
+                target_version,
                 delete_bitmap->cardinality(),
-                txn_id);
+                txn_id
+            );
         }
     }
     assert(delete_bitmap != nullptr);
     return delete_bitmap;
+}
+
+const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getCombinedDeleteBitmapForNormalTable(bool /*allow_null*/) const
+{
+    bool has_row_exists_column = hasRowExistsImplicitColumn();
+
+    /// If the normal part is deleted or has no _row_exists, then the delete_bitmap must be null.
+    if (deleted || !has_row_exists_column)
+    {
+        if (delete_bitmap != nullptr)
+            throw Exception("Delete bitmap for part " + name + " is not null", ErrorCodes::LOGICAL_ERROR);
+        return delete_bitmap;
+    }
+
+    /// If the normal part contains _row_exists, then load it as delete_bitmap.
+    Int64 row_exists_mutation = getMutationOfRowExists();
+    Stopwatch watch;
+    auto cache = storage.getContext()->getDeleteBitmapCache();
+    String cache_key = DeleteBitmapCache::buildKey(storage.getStorageUUID(), info.partition_id, info.min_block, info.max_block, row_exists_mutation);
+    ImmutableDeleteBitmapPtr cached_bitmap;
+    UInt64 cached_version = 0;
+    bool hit_cache = cache->lookup(cache_key, cached_version, cached_bitmap);
+
+    /// use max as the placeholder for normal part's cache version.
+    UInt64 target_version = std::numeric_limits<std::int64_t>::max();
+    if (hit_cache && cached_version == target_version)
+    {
+        const_cast<MergeTreeDataPartCNCH *>(this)->delete_bitmap = std::move(cached_bitmap);
+    }
+    else
+    {
+        DeleteBitmapPtr bitmap = std::make_shared<Roaring>();
+        combineWithRowExists(bitmap);
+        const_cast<MergeTreeDataPartCNCH *>(this)->delete_bitmap = std::move(bitmap);
+        cache->insert(cache_key, target_version, delete_bitmap);
+
+        LOG_DEBUG(storage.log,
+            "Loaded delete bitmap for normal part {} in {} ms, bitmap cardinality: {}, DELETE mutation task: {}",
+            name,
+            watch.elapsedMilliseconds(),
+            delete_bitmap->cardinality(),
+            row_exists_mutation
+        );
+    }
+    assert(delete_bitmap != nullptr);
+    return delete_bitmap;
+}
+
+void MergeTreeDataPartCNCH::combineWithRowExists(DeleteBitmapPtr & bitmap) const
+{
+    if (!hasRowExistsImplicitColumn())
+        return;
+
+    NamesAndTypesList columns_to_read;
+    columns_to_read.emplace_back(RowExistsColumn::ROW_EXISTS_COLUMN);
+
+    auto reader = getReader(
+        columns_to_read,
+        storage.getInMemoryMetadataPtr(),
+        MarkRanges{MarkRange(0, getMarksCount())},
+        storage.getContext()->getUncompressedCache().get(),
+        storage.getContext()->getMarkCache().get(),
+        MergeTreeReaderSettings {
+            .save_marks_in_cache = false,
+        },
+        /*avg_value_size_hints*/ {},
+        /*profile_callback*/ {}
+    );
+
+    size_t deleted_count = 0;
+    Columns columns(1);
+    auto read_rows = reader->readRows(0, false, rows_count, columns);
+    if (read_rows != rows_count)
+    {
+        throw Exception(
+            fmt::format("Can't read all rows of _row_exists. rows_in_file:{}, read_rows:{}", rows_count, read_rows),
+            ErrorCodes::LOGICAL_ERROR);
+    }
+
+    auto column = columns[0];
+    for (size_t i = 0; i < rows_count; ++i)
+    {
+        auto row_exists = column->getBool(i);
+        if (!row_exists)
+        {
+            bitmap->add(i);
+            ++deleted_count;
+        }
+    }
+    LOG_TRACE(storage.log, "Part {} has {} rows are marked as deleted by _row_exists.", name, deleted_count);
+}
+
+const ImmutableDeleteBitmapPtr & MergeTreeDataPartCNCH::getDeleteBitmap(bool allow_null) const
+{
+    if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
+        return getCombinedDeleteBitmapForUniqueTable(allow_null);
+
+    return getCombinedDeleteBitmapForNormalTable(allow_null);
 }
 
 MergeTreeDataPartChecksums::FileChecksums MergeTreeDataPartCNCH::loadPartDataFooter() const

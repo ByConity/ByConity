@@ -25,9 +25,9 @@
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxy.h>
 #include <Processors/Exchange/DataTrans/BroadcastSenderProxyRegistry.h>
-#include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
+#include <Processors/Exchange/ExchangeDataKey.h>
 #include <Poco/Logger.h>
 #include <Common/Exception.h>
 #include <common/logger_useful.h>
@@ -60,7 +60,7 @@ BroadcastSenderProxy::~BroadcastSenderProxy()
 }
 
 
-BroadcastStatus BroadcastSenderProxy::send(Chunk chunk)
+BroadcastStatus BroadcastSenderProxy::sendImpl(Chunk chunk)
 {
     if (!has_real_sender.load(std::memory_order_acquire))
         waitBecomeRealSender(wait_timeout_ms);

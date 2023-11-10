@@ -136,12 +136,12 @@ class StablePersistentStoreProxy : public IBGJobStatusPersistentStoreProxy
 {
 public:
     StablePersistentStoreProxy() = default;
-    std::optional<CnchBGThreadStatus> createStatusIfNotExist(const StorageID & storage_id, CnchBGThreadStatus init_status) const override
+    std::optional<CnchBGThreadStatus> createStatusIfNotExist(const UUID & uuid, CnchBGThreadStatus init_status) const override
     {
-        auto it = stored_statuses.find(storage_id.uuid);
+        auto it = stored_statuses.find(uuid);
         if (it != stored_statuses.end())
             return it->second;
-        stored_statuses.insert(std::make_pair(storage_id.uuid, init_status));
+        stored_statuses.insert(std::make_pair(uuid, init_status));
         return {};
     }
 

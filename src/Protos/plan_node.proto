@@ -2,12 +2,11 @@ syntax = "proto2";
 import "enum.proto";
 import "plan_node_utils.proto";
 import "cnch_common.proto";
-import "google/protobuf/any.proto";
 
 package DB.Protos;
 
 message ITransformingStep {
-  required bytes step_description = 1;
+  required string step_description = 1;
   required DataStream input_stream = 2;
 }
 
@@ -23,7 +22,7 @@ message SetOperationStep {
 
 message AssignUniqueIdStep {
   required ITransformingStep query_plan_base = 1;
-  required bytes unique_id = 2;
+  required string unique_id = 2;
 }
 
 message EnforceSingleRowStep {
@@ -51,7 +50,7 @@ message LimitByStep {
   required ITransformingStep query_plan_base = 1;
   required uint64 group_length = 2;
   required uint64 group_offset = 3;
-  repeated bytes columns = 4;
+  repeated string columns = 4;
 }
 
 message LimitStep {
@@ -66,8 +65,8 @@ message LimitStep {
 
 message MarkDistinctStep {
   required ITransformingStep query_plan_base = 1;
-  required bytes marker_symbol = 2;
-  repeated bytes distinct_symbols = 3;
+  required string marker_symbol = 2;
+  repeated string distinct_symbols = 3;
 }
 
 message MergingSortedStep {
@@ -130,7 +129,7 @@ message DistinctStep {
   required ITransformingStep query_plan_base = 1;
   required SizeLimits set_size_limits = 2;
   required uint64 limit_hint = 3;
-  repeated bytes columns = 4;
+  repeated string columns = 4;
   required bool pre_distinct = 5;
 }
 
@@ -143,8 +142,8 @@ message PartialSortingStep {
 
 message PartitionTopNStep {
   required ITransformingStep query_plan_base = 1;
-  repeated bytes partition = 2;
-  repeated bytes order_by = 3;
+  repeated string partition = 2;
+  repeated string order_by = 3;
   required uint64 limit = 4;
   required TopNModel.Enum model = 5;
 }
@@ -199,7 +198,7 @@ message TableWriteStep {
 message TableFinishStep {
   required ITransformingStep query_plan_base = 1;
   required TableWriteStep.Target target = 2;
-  required bytes output_affected_row_count_symbol = 3;
+  required string output_affected_row_count_symbol = 3;
 }
 
 message FilterStep {
@@ -218,18 +217,18 @@ message ProjectionStep {
 
 message JoinStep {
   message RuntimeFilterBuilders {
-    required bytes key = 1;
+    required string key = 1;
     required RuntimeFilterBuildInfos value = 2;
   }
   repeated DataStream input_streams = 1;
   optional DataStream output_stream = 2;
-  required bytes step_description = 3;
+  required string step_description = 3;
   required ASTTableJoin.Kind.Enum kind = 4;
   required ASTTableJoin.Strictness.Enum strictness = 5;
   required uint64 max_streams = 6;
   required bool keep_left_read_in_order = 7;
-  repeated bytes left_keys = 8;
-  repeated bytes right_keys = 9;
+  repeated string left_keys = 8;
+  repeated string right_keys = 9;
   required AST filter = 10;
   required bool has_using = 11;
   required bool flag_require_right_keys = 12;
@@ -255,7 +254,7 @@ message MergeSortingStep {
 
 message MergingAggregatedStep {
   required ITransformingStep query_plan_base = 1;
-  repeated bytes keys = 2;
+  repeated string keys = 2;
   repeated GroupingSetsParams grouping_sets_params = 3;
   repeated GroupingDescription groupings = 4;
   required AggregatingTransformParams params = 5;
@@ -266,7 +265,7 @@ message MergingAggregatedStep {
 
 message AggregatingStep {
   required ITransformingStep query_plan_base = 1;
-  repeated bytes keys = 2;
+  repeated string keys = 2;
   required AggregatorParams params = 3;
   repeated GroupingSetsParams grouping_sets_params = 4;
   required bool final = 5;
@@ -278,7 +277,7 @@ message AggregatingStep {
   repeated SortColumnDescription group_by_sort_description = 11;
   repeated GroupingDescription groupings = 12;
   required bool should_produce_results_in_order_of_bucket_number = 13;
-  repeated bytes keys_not_hashed = 14;
+  repeated string keys_not_hashed = 14;
 }
 
 message TotalsHavingStep {
@@ -309,7 +308,7 @@ message TableScanStep {
 
 message RemoteExchangeSourceStep {
   required DataStream input_stream = 1;
-  required bytes step_description = 2;
+  required string step_description = 2;
   repeated PlanSegmentInput inputs = 3;
   optional bool is_add_totals = 4;
   optional bool is_add_extremes = 5;
@@ -400,4 +399,21 @@ message QueryPlanStep {
     ExplainAnalyzeStep explain_analyze_step = 44;
     TotalsHavingStep totals_having_step = 50;
   }
+}
+
+
+message QueryPlanNode 
+{
+    required int64 plan_id = 1;
+    // plan_ids of children
+    repeated int64 children = 2;
+    required QueryPlanStep step = 3;
+}
+
+message QueryPlan
+{
+    required int64 root_id = 1;
+    map<int64, QueryPlanNode> plan_nodes = 2;
+    // CteId -> plan_id
+    map<int64, int64> cte_id_mapping = 3;
 }

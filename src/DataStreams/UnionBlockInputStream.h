@@ -244,7 +244,7 @@ private:
 
         void onFinish()
         {
-            parent.output_queue.finish();
+            [[maybe_unused]] auto success = parent.output_queue.emplace(Payload{});
         }
 
         void onFinishThread(size_t /*thread_num*/)

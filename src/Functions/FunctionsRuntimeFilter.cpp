@@ -146,8 +146,8 @@ ColumnPtr RuntimeFilterBloomFilterExists::executeImpl(const ColumnsWithTypeAndNa
     if (total_count.load(std::memory_order_relaxed) < 10 && (eval_count.fetch_add(1, std::memory_order_relaxed) & 3) == 0)
     {
         total_count.fetch_add(1, std::memory_order_relaxed);
-        size_t num_filtered_rows = countBytesInFilter(vec_to);
-        double ratio = (double) num_filtered_rows / input_rows_count;
+        double num_filtered_rows = countBytesInFilter(vec_to);
+        double ratio =  num_filtered_rows / input_rows_count;
         if (ratio > 0.5)
             bypass = BypassType::BYPASS_LARGE_HT;
     }

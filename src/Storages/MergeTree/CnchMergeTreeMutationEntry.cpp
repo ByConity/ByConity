@@ -19,12 +19,19 @@
 #include <IO/ReadBufferFromString.h>
 #include <IO/WriteBufferFromString.h>
 
+namespace
+{
+    constexpr UInt8 FORMAT_VERSION = 2;
+    constexpr UInt8 MIN_VERSION_FOR_QUERY_ID = 2;
+}
+
 namespace DB
 {
 
 void CnchMergeTreeMutationEntry::writeText(WriteBuffer & out) const
 {
-    out << "format version: 1\n"
+    out << "format version: " << FORMAT_VERSION << "\n"
+        << "query_id: " << query_id << "\n"
         << "txn_id: " << txn_id.toUInt64() << "\n"
         << "commit_ts: " << commit_time.toUInt64() << "\n"
         << "storage_commit_ts: " << columns_commit_time.toUInt64() << "\n";
@@ -36,13 +43,20 @@ void CnchMergeTreeMutationEntry::writeText(WriteBuffer & out) const
 
 void CnchMergeTreeMutationEntry::readText(ReadBuffer & in)
 {
-    UInt64 txn_id_, commit_ts_, columns_commit_ts_;
-    in >> "format version: 1\n" >> "txn_id: " >> txn_id_ >> "\n" >> "commit_ts: " >> commit_ts_ >> "\n" >> "storage_commit_ts: "
-        >> columns_commit_ts_ >> "\n";
+    UInt8 version;
+    UInt64 i_txn_id, i_commit_ts, i_columns_commit_ts;
 
-    txn_id = txn_id_;
-    commit_time = commit_ts_;
-    columns_commit_time = columns_commit_ts_;
+    in >> "format version: " >> version >> "\n";
+    if (version >= MIN_VERSION_FOR_QUERY_ID)
+        in >> "query_id: " >> query_id >> "\n";
+
+    in >> "txn_id: " >> i_txn_id >> "\n"
+       >> "commit_ts: " >> i_commit_ts >> "\n"
+       >> "storage_commit_ts: " >> i_columns_commit_ts >> "\n";
+
+    txn_id = i_txn_id;
+    commit_time = i_commit_ts;
+    columns_commit_time = i_columns_commit_ts;
     in >> "commands: ";
     commands.readText(in);
     in >> "\n";
@@ -68,10 +82,12 @@ CnchMergeTreeMutationEntry CnchMergeTreeMutationEntry::parse(const String & str)
 
 bool CnchMergeTreeMutationEntry::isReclusterMutation() const
 {
-    if (commands.size() == 1 && commands[0].type==MutationCommand::Type::RECLUSTER)
-        return true;
-    else
-        return false;
+    return commands.size() == 1 && commands[0].type==MutationCommand::Type::RECLUSTER;
+}
+
+void CnchMergeTreeMutationEntry::setPartitionIDs(const Strings & _partition_ids)
+{
+    partition_ids.emplace(_partition_ids);
 }
 
 }

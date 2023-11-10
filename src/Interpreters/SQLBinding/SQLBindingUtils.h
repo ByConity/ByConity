@@ -13,8 +13,8 @@ namespace DB
 class SQLBindingUtils
 {
 public:
-    static ASTPtr getASTFromBindings(const char * begin, const char * end, ContextMutablePtr & context);
-    static UUID getQueryHash(const char * begin, const char * end);
+    static ASTPtr getASTFromBindings(const char * begin, const char * end, ASTPtr ast, ContextMutablePtr & context);
+    static UUID getQueryASTHash(ASTPtr query);
     static UUID getReExpressionHash(const char * begin, const char * end);
 //    static bool matchPattern(const char * begin, const char * end, const String & pattern);
     static bool isMatchBinding(const char * begin, const char * end, SQLBindingObject & binding);

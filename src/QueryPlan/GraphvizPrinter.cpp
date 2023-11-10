@@ -1486,7 +1486,7 @@ String StepPrinter::printAggregatingStep(const AggregatingStep & step, bool incl
     return details.str();
 }
 
-String StepPrinter::printMarkDistinctStep(const MarkDistinctStep & step, bool include_output)
+String StepPrinter::printMarkDistinctStep(const MarkDistinctStep & step, bool /*include_output*/)
 {
     std::stringstream details;
     details << "Marker Symbol:\\n";
@@ -1816,6 +1816,13 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
         details << "Limit : \\n";
         Field converted = convertFieldToType(query->refLimitLength()->as<ASTLiteral>()->value, DataTypeUInt64());
         details << converted.safeGet<UInt64>();
+        details << "|";
+    }
+
+    if (query_info.partition_filter)
+    {
+        details << "Partition Filter : \\n";
+        details << printFilter(query_info.partition_filter);
         details << "|";
     }
     //
@@ -2565,7 +2572,7 @@ void GraphvizPrinter::printLogicalPlan(PlanNodeBase & root, ContextMutablePtr & 
 }
 
 void GraphvizPrinter::printLogicalPlan(
-    QueryPlan & plan, ContextMutablePtr & context, const String & name, StepAggregatedOperatorProfiles profiles)
+    QueryPlan & plan, ContextMutablePtr & context, const String & name, StepAggregatedOperatorProfiles /*profiles*/)
 {
     if (context->getSettingsRef().print_graphviz)
     {

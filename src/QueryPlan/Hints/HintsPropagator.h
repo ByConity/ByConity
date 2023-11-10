@@ -27,8 +27,8 @@ private:
 class HintsVisitor : public PlanNodeVisitor<void, HintsVisitorContext>
 {
 public:
-    explicit HintsVisitor(ContextMutablePtr & context_, CTEInfo & cte_info_, PlanNodePtr & root)
-        : context(context_), post_order_cte_helper(cte_info_, root)
+    explicit HintsVisitor(ContextMutablePtr & /*context_*/, CTEInfo & cte_info_, PlanNodePtr & root)
+        : post_order_cte_helper(cte_info_, root)
     {
     }
 
@@ -44,7 +44,6 @@ private:
     void attachPlanHints(PlanNodeBase & node, HintOptions & hint_options);
     void processNodeWithHints(PlanNodeBase & node, HintsVisitorContext & node_options, HintOptions & hint_options);
 
-    ContextMutablePtr & context;
     CTEPostorderVisitHelper post_order_cte_helper;
     HintsList hints_list;
 };

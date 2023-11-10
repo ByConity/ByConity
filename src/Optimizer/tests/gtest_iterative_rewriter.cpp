@@ -37,7 +37,7 @@ struct MergeRule : public Rule
 
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;};    
+    bool isEnabled(ContextPtr) const override { return true;}
     PatternPtr getPattern() const override { return filter().withSingle(filter().capturedAs(subNodeCap)).result(); }
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext &) override
     {
@@ -60,7 +60,7 @@ struct RemoveRule : public Rule
     RemoveRule(int target_) : target(target_) { }
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;};        
+    bool isEnabled(ContextPtr) const override { return true;}
     PatternPtr getPattern() const override { return filter().result(); }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override
     {
@@ -77,7 +77,7 @@ struct RecorderRule : public Rule
     std::unordered_set<PlanNodePtr> seen;
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;};        
+    bool isEnabled(ContextPtr) const override { return true;}
     PatternPtr getPattern() const override { return DB::Patterns::any().result(); }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override
     {
@@ -93,7 +93,7 @@ struct AddExchangeRule : public Rule
 
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;};        
+    bool isEnabled(ContextPtr) const override { return true;}
     PatternPtr getPattern() const override
     {
         return join().withAny(
@@ -135,7 +135,7 @@ struct FillDbNameRule : public Rule
 {
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;};        
+    bool isEnabled(ContextPtr) const override { return true;}
     PatternPtr getPattern() const override
     {
         return tableScan().matchingStep<MockedTableScanStep>([](auto & step) { return step.database == ""; }).result();
@@ -155,7 +155,7 @@ struct RemoveFilterNodeRule : public Rule
 {
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;};        
+    bool isEnabled(ContextPtr) const override { return true;}
     PatternPtr getPattern() const override { return filter().result(); }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override
     {
@@ -168,7 +168,7 @@ struct SortRule : public Rule
 {
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;};    
+    bool isEnabled(ContextPtr) const override { return true;}
     PatternPtr getPattern() const override
     {
         static Capture outerValCap;
@@ -193,7 +193,7 @@ struct NeverEndRule : public Rule
 {
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;};    
+    bool isEnabled(ContextPtr) const override { return true;}
     PatternPtr getPattern() const override { return DB::Patterns::any().result(); }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override { return node; }
 };
@@ -206,7 +206,7 @@ struct SleepRule : public Rule
     int64_t sleep;
     RuleType getType() const override { return RuleType::NUM_RULES; }
     String getName() const override { return "NUM_RULES"; }
-    bool isEnabled(ContextPtr) const override { return true;};        
+    bool isEnabled(ContextPtr) const override { return true;}
     PatternPtr getPattern() const override { return DB::Patterns::any().result(); }
     TransformResult transformImpl(PlanNodePtr node, const Captures &, RuleContext &) override
     {

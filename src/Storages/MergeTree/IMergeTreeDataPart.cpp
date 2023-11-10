@@ -2051,6 +2051,21 @@ void IMergeTreeDataPart::enumeratePreviousParts(const std::function<void(const I
     }
 }
 
+Int64 IMergeTreeDataPart::getMutationOfRowExists() const
+{
+    /// For base part
+    if (!isPartial())
+        throw Exception("There is no _row_exists column for a base part. This is bug.", ErrorCodes::LOGICAL_ERROR);
+
+    /// For delta part
+    auto checksums = getChecksums();
+    auto it = checksums->files.find(RowExistsColumn::ROW_EXISTS_COLUMN.name + ".bin");
+    if (it == checksums->files.end())
+        throw Exception("Cannot find _row_exists column data in checksums of part: " + relative_path + ". This is bug.", ErrorCodes::LOGICAL_ERROR);
+    return it->second.mutation;
+}
+
+
 String IMergeTreeDataPart::getZeroLevelPartBlockID() const
 {
     auto checksums = getChecksums();

@@ -21,7 +21,15 @@
 #include <Storages/StorageMaterializedView.h>
 #include <Storages/StorageCnchMergeTree.h>
 
-namespace DB::DaemonManager
+namespace DB
+{
+
+namespace ErrorCodes
+{
+    extern const int BAD_REQUEST_PARAMETER;
+}
+
+namespace DaemonManager
 {
 
 TargetServerCalculator::TargetServerCalculator(Context & context_, CnchBGThreadType type_, Poco::Logger * log_)
@@ -39,9 +47,7 @@ CnchServerClientPtr TargetServerCalculator::getTargetServer(const StorageID & st
 CnchServerClientPtr TargetServerCalculator::getTargetServerForCnchMergeTree(const StorageID & storage_id, UInt64 ts) const
 {
     ts = (ts == 0) ? context.getTimestamp() : ts;
-    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(storage_id.uuid), storage_id.server_vw_name, ts, true);
-    if (target_server.empty())
-        return nullptr;
+    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(storage_id.uuid), storage_id.server_vw_name, ts, false);
     return context.getCnchServerClientPool().get(target_server);
 }
 
@@ -51,50 +57,35 @@ CnchServerClientPtr TargetServerCalculator::getTargetServerForCnchKafka(const St
     /// Consume manager should be on the same server as the target table
     auto kafka_storage = catalog->tryGetTableByUUID(context, UUIDHelpers::UUIDToString(storage_id.uuid), TxnTimestamp::maxTS());
     if (!kafka_storage)
-    {
-        LOG_WARNING(log, "Cannot get table by UUID for {}, return empty target server", storage_id.getNameForLogs());
-        return nullptr;
-    }
+        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "Cannot get table by UUID for {}, return empty target server", storage_id.getNameForLogs());
+
     auto dependencies = catalog->getAllViewsOn(context, kafka_storage, TxnTimestamp::maxTS());
     if (dependencies.empty())
-    {
-        LOG_WARNING(log, "No dependencies found for {}, return empty target server", storage_id.getNameForLogs());
-        return nullptr;
-    }
+        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "No dependencies found for {}", storage_id.getNameForLogs());
+
     if (dependencies.size() > 1)
-    {
-        LOG_ERROR(log, "More than one MV found for {}", storage_id.getNameForLogs());
-        return nullptr;
-    }
+        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "More than one MV found for {}", storage_id.getNameForLogs());
 
     auto * mv_table = dynamic_cast<StorageMaterializedView*>(dependencies[0].get());
     if (!mv_table)
-    {
-        LOG_ERROR(log, "Unknown MV table {}", dependencies[0]->getTableName());
-        return nullptr;
-    }
+        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "Unknown MV table {}", dependencies[0]->getTableName());
 
     /// XXX: We cannot get target table from context here, we may store target table storageID in MV later
     auto cnch_table = catalog->tryGetTable(context, mv_table->getTargetDatabaseName(), mv_table->getTargetTableName(), TxnTimestamp::maxTS());
     if (!cnch_table)
-    {
-        LOG_ERROR(log, "Target table not found for MV {}.{}",
+        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "Target table not found for MV {}.{}",
                         mv_table->getTargetDatabaseName(), mv_table->getTargetTableName());
-        return nullptr;
-    }
 
     auto * cnch_storage = dynamic_cast<StorageCnchMergeTree*>(cnch_table.get());
     if (!cnch_storage)
-    {
-        LOG_ERROR(log, "Target table should be CnchMergeTree for {}", storage_id.getNameForLogs());
-        return nullptr;
-    }
+        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "Target table should be CnchMergeTree for {}", storage_id.getNameForLogs());
+
     /// TODO: refactor this function
-    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(cnch_storage->getStorageUUID()), cnch_storage->getServerVwName(), true);
-    if (target_server.empty())
-        return nullptr;
+    auto target_server = context.getCnchTopologyMaster()->getTargetServer(toString(cnch_storage->getStorageUUID()), cnch_storage->getServerVwName(), false);
 
     return context.getCnchServerClientPool().get(target_server);
 }
 
 } /// end namespace
+
+}

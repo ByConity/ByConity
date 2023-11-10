@@ -69,12 +69,12 @@ TEST_F(ProtobufTest, Block)
     auto obj = generateBlock(eng);
     // serialize to protobuf
     Protos::Block pb;
-    serializeBlockToProto(obj, pb);
+    serializeHeaderToProto(obj, pb);
     // deserialize from protobuf
-    Block obj2 = deserializeBlockFromProto(pb);
+    Block obj2 = deserializeHeaderFromProto(pb);
     // re-serialize to protobuf
     Protos::Block pb2;
-    serializeBlockToProto(obj2, pb2);
+    serializeHeaderToProto(obj2, pb2);
     compareProto(pb, pb2);
 }
 

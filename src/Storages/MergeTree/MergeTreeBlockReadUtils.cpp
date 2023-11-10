@@ -23,6 +23,7 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Core/NamesAndTypes.h>
 #include <Common/checkStackSize.h>
+#include <Common/RowExistsColumnInfo.h>
 #include <Common/typeid_cast.h>
 #include "Storages/ColumnsDescription.h"
 #include <Columns/ColumnConst.h>
@@ -116,7 +117,7 @@ NameSet injectRequiredColumns(const MergeTreeMetaBase & storage,
         alter_conversions = storage.getAlterConversionsForPart(part);
     for (size_t i = 0; i < columns.size(); ++i)
     {
-        if (columns[i] == "_part_row_number")
+        if (columns[i] == "_part_row_number" || columns[i] == RowExistsColumn::ROW_EXISTS_COLUMN.name)
         {
             /// _part_row_number is read by IMergeTreeReader::readRows, just like other physical columns
             have_at_least_one_physical_column = true;

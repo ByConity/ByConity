@@ -26,7 +26,7 @@ namespace DB::DaemonManager
 BackgroundJob::BackgroundJob(StorageID storage_id_, DaemonJobServerBGThread & daemon_job_)
     : storage_id{std::move(storage_id_)}, daemon_job{daemon_job_}, status{CnchBGThreadStatus::Stopped}, expected_status{CnchBGThreadStatus::Running}, host_port{}, log{daemon_job_.getLog()}
 {
-    std::optional<CnchBGThreadStatus> stored_status = daemon_job.getStatusPersistentStore().createStatusIfNotExist(storage_id, CnchBGThreadStatus::Running);
+    std::optional<CnchBGThreadStatus> stored_status = daemon_job.getStatusPersistentStore().createStatusIfNotExist(storage_id.uuid, CnchBGThreadStatus::Running);
     if (stored_status)
         expected_status = *stored_status;
 }
@@ -34,7 +34,7 @@ BackgroundJob::BackgroundJob(StorageID storage_id_, DaemonJobServerBGThread & da
 BackgroundJob::BackgroundJob(StorageID storage_id_, CnchBGThreadStatus status_, DaemonJobServerBGThread & daemon_job_, String host_port_)
         : storage_id{std::move(storage_id_)}, daemon_job{daemon_job_}, status{status_}, expected_status{status_}, host_port{std::move(host_port_)}, log{daemon_job_.getLog()}
 {
-    std::optional<CnchBGThreadStatus> stored_status = daemon_job.getStatusPersistentStore().createStatusIfNotExist(storage_id, status);
+    std::optional<CnchBGThreadStatus> stored_status = daemon_job.getStatusPersistentStore().createStatusIfNotExist(storage_id.uuid, status);
     if (stored_status)
         expected_status = *stored_status;
 }

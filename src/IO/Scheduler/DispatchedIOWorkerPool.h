@@ -19,7 +19,7 @@
 #include <Poco/JSON/JSON.h>
 #include <Common/Stopwatch.h>
 #include <common/scope_guard.h>
-#include <base/defines.h>
+#include <common/defines.h>
 #include <common/logger_useful.h>
 #include <Common/ThreadPool.h>
 #include <Common/BlockingQueue.h>
@@ -255,7 +255,7 @@ private:
                                     status_.retrieve_from_other_queue_count_ += requests.size();
                                     break;
                                 }
-                                
+
                                 if (unlikely(opts_.log_level_ >= LogLevel::TRACE)) {
                                     LOG_INFO(logger_, fmt::format("Retrieve {} requests from other worker {}",
                                         requests.size(), static_cast<void*>(ctx)));

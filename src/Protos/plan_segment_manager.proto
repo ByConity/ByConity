@@ -2,6 +2,7 @@ syntax = "proto2";
 package DB.Protos;
 
 import "data_models.proto";
+import "plan_node_utils.proto";
 
 option cc_generic_services = true;
 
@@ -20,6 +21,21 @@ message RuntimeSegmentsMetrics {
       required int64 cpu_micros = 1;
 }
 
+message SendBytesByParallelIndex {
+  optional uint64 parallel_index = 1;
+  optional uint64 bytes_sent = 2;
+}
+
+message SendBytes {
+  optional uint64 exchange_id = 1;
+  repeated SendBytesByParallelIndex bytes_by_index = 2;
+}
+
+message SenderMetrics {
+  optional AddressInfo address = 1;
+  repeated SendBytes send_bytes = 2;
+}
+
 message SendPlanSegmentStatusRequest {
   required string query_id = 1;
   required int32 segment_id = 2;
@@ -28,6 +44,8 @@ message SendPlanSegmentStatusRequest {
   optional RuntimeSegmentsMetrics metrics = 5;
   required int32 code = 6;
   optional string message = 7;
+  optional uint64 parallel_index = 8;
+  optional SenderMetrics sender_metrics = 9;
 }
 
 message SendPlanSegmentStatusResponse {
@@ -85,8 +103,9 @@ message ExecutePlanSegmentRequest {
   optional uint64 primary_txn_id = 26;
   // Opentelemetry protocol v2
   optional TraceMeta trace_meta = 27;
-  
+
   optional string initial_user = 28;
+  optional bool check_session = 29;
 }
 
 message ExecutePlanSegmentResponse {

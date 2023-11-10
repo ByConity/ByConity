@@ -27,6 +27,7 @@
 #include <Parsers/ASTWindowDefinition.h>
 #include <QueryPlan/Assignment.h>
 #include <QueryPlan/PlanNode.h>
+#include <Storages/IStorage_fwd.h>
 
 #include <unordered_map>
 
@@ -112,6 +113,17 @@ namespace Utils
 
     // return nullopt if ambiguous symbol exists(rarely)
     std::optional<NameToType> extractNameToType(const PlanNodeBase & node);
+
+    template <template <typename, typename...> typename Map, typename K, typename V>
+    Map<V, K> reverseMap(const Map<K, V> & map)
+    {
+        Map<V, K> reversed;
+        for (const auto & entry : map)
+            reversed.emplace(entry.second, entry.first);
+        return reversed;
+    }
+
+    StoragePtr getLocalStorage(StoragePtr storage, ContextPtr context);
 }
 
 }

@@ -37,7 +37,12 @@
 
 namespace DB
 {
-static void changeASTSettings(ASTPtr & node)
+namespace ErrorCodes
+{
+    extern const int INCORRECT_QUERY;
+}
+
+void changeASTSettings(ASTPtr &node)
 {
     if (!node)
         return;
@@ -103,9 +108,9 @@ static bool checkDatabaseAndTable(String database_name, String table_name, Conte
         || dynamic_cast<const IStorageCnchFile *>(storage_table.get());
 }
 
-bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, [[maybe_unused]] bool insert_select_from_table)
+bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, bool throw_exception)
 {
-    if (!node || (!context->getSettingsRef().enable_optimizer && !insert_select_from_table))
+    if (!node || (!context->getSettingsRef().enable_optimizer))
     {
         turnOffOptimizer(context, node);
         return false;
@@ -122,6 +127,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, [[m
         return false;
     }
 
+    String reason;
     if (auto * explain = node->as<ASTExplainQuery>())
     {
         bool explain_plan = explain->getKind() == ASTExplainQuery::ExplainKind::OptimizerPlan
@@ -134,7 +140,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, [[m
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizerRule
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizer
             || explain->getKind() ==  ASTExplainQuery::MetaData;
-        return explain_plan && check(explain->getExplainedQuery(), context);
+         return explain_plan && check(explain->getExplainedQuery(), context, throw_exception);
     }
 
     bool support = false;
@@ -158,14 +164,22 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, [[m
         }
 
         if (!support)
-            LOG_INFO(&Poco::Logger::get("QueryUseOptimizerChecker"), "query is unsupported for optimizer, reason: " + checker.getReason());
+        {
+            LOG_INFO(
+                &Poco::Logger::get("QueryUseOptimizerChecker"), "query is unsupported for optimizer, reason: " + checker.getReason());
+            reason = checker.getReason();
+        }
+
     }
     else if (node->as<ASTInsertQuery>())
     {
         support = true;
         auto * insert_query = node->as<ASTInsertQuery>();
         if (insert_query->in_file || insert_query->table_function || !insert_query->select)
+        {
+            reason = "unsupported function/in file/no select";
             support = false;
+        }
         else
         {
             auto database = insert_query->table_id.database_name;
@@ -173,7 +187,10 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, [[m
                 database = context->getCurrentDatabase();
 
             if (!checkDatabaseAndTable(database, insert_query->table_id.getTableName(), context, {}))
+            {
+                reason = "unsupported storage";
                 support = false;
+            }
         }
 
         // only disable optimizer when insert in interactive session
@@ -184,11 +201,16 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, [[m
             &Poco::Logger::get("QueryUseOptimizerChecker"),
             fmt::format("support: {}, check: {}", support, check(insert_query->select, context)));
         if (support)
-            support = check(insert_query->select, context, true);
+            support = check(insert_query->select, context, throw_exception);
     }
 
     if (!support)
-        turnOffOptimizer(context, node);
+    {
+        if (throw_exception)
+            throw Exception("query is unsupported for optimizer, reason: " + reason, ErrorCodes::INCORRECT_QUERY);
+        else
+            turnOffOptimizer(context, node);
+    }
 
     return support;
 }

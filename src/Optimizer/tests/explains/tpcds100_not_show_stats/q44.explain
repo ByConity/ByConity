@@ -41,22 +41,20 @@ Projection
                │     │     │              │                    Outputs: [ss_item_sk, ss_store_sk, ss_net_profit]
                │     │     │              └─ Broadcast Exchange
                │     │     │                 └─ EnforceSingleRow
-               │     │     │                    └─ Union
-               │     │     │                       │     OutputToInputs: expr#avg(ss_net_profit)_1 = [expr#avg(ss_net_profit)_1]
-               │     │     │                       └─ Gather Exchange
-               │     │     │                          └─ Projection
-               │     │     │                             │     Expressions: [expr#avg(ss_net_profit)_1]
-               │     │     │                             └─ MergingAggregated
-               │     │     │                                └─ Repartition Exchange
-               │     │     │                                   │     Partition by: {ss_store_sk_1}
-               │     │     │                                   └─ Aggregating
-               │     │     │                                      │     Group by: {ss_store_sk_1}
-               │     │     │                                      │     Aggregates: expr#avg(ss_net_profit)_1:=AggNull(avg)(ss_net_profit_1)
-               │     │     │                                      └─ Filter
-               │     │     │                                         │     Condition: (ss_store_sk_1 = 4) AND isNull(ss_addr_sk)
-               │     │     │                                         └─ TableScan tpcds100.store_sales
-               │     │     │                                                  Where: (ss_store_sk = 4) AND isNull(ss_addr_sk)
-               │     │     │                                                  Outputs: [ss_addr_sk], ss_store_sk_1:=ss_store_sk, ss_net_profit_1:=ss_net_profit
+               │     │     │                    └─ Gather Exchange
+               │     │     │                       └─ Projection
+               │     │     │                          │     Expressions: [expr#avg(ss_net_profit)_1]
+               │     │     │                          └─ MergingAggregated
+               │     │     │                             └─ Repartition Exchange
+               │     │     │                                │     Partition by: {ss_store_sk_1}
+               │     │     │                                └─ Aggregating
+               │     │     │                                   │     Group by: {ss_store_sk_1}
+               │     │     │                                   │     Aggregates: expr#avg(ss_net_profit)_1:=AggNull(avg)(ss_net_profit_1)
+               │     │     │                                   └─ Filter
+               │     │     │                                      │     Condition: (ss_store_sk_1 = 4) AND isNull(ss_addr_sk)
+               │     │     │                                      └─ TableScan tpcds100.store_sales
+               │     │     │                                               Where: (ss_store_sk = 4) AND isNull(ss_addr_sk)
+               │     │     │                                               Outputs: [ss_addr_sk], ss_store_sk_1:=ss_store_sk, ss_net_profit_1:=ss_net_profit
                │     │     └─ Repartition Exchange
                │     │        │     Partition by: {expr#rank() OVER (ORDER BY rank_col DESC)}
                │     │        └─ Filter
@@ -79,22 +77,20 @@ Projection
                │     │                    │                    Outputs: ss_item_sk_1:=ss_item_sk, ss_store_sk_2:=ss_store_sk, ss_net_profit_2:=ss_net_profit
                │     │                    └─ Broadcast Exchange
                │     │                       └─ EnforceSingleRow
-               │     │                          └─ Union
-               │     │                             │     OutputToInputs: expr#avg(ss_net_profit)_3 = [expr#avg(ss_net_profit)_3]
-               │     │                             └─ Gather Exchange
-               │     │                                └─ Projection
-               │     │                                   │     Expressions: [expr#avg(ss_net_profit)_3]
-               │     │                                   └─ MergingAggregated
-               │     │                                      └─ Repartition Exchange
-               │     │                                         │     Partition by: {ss_store_sk_3}
-               │     │                                         └─ Aggregating
-               │     │                                            │     Group by: {ss_store_sk_3}
-               │     │                                            │     Aggregates: expr#avg(ss_net_profit)_3:=AggNull(avg)(ss_net_profit_3)
-               │     │                                            └─ Filter
-               │     │                                               │     Condition: (ss_store_sk_3 = 4) AND isNull(ss_addr_sk_1)
-               │     │                                               └─ TableScan tpcds100.store_sales
-               │     │                                                        Where: (ss_store_sk = 4) AND isNull(ss_addr_sk)
-               │     │                                                        Outputs: ss_addr_sk_1:=ss_addr_sk, ss_store_sk_3:=ss_store_sk, ss_net_profit_3:=ss_net_profit
+               │     │                          └─ Gather Exchange
+               │     │                             └─ Projection
+               │     │                                │     Expressions: [expr#avg(ss_net_profit)_3]
+               │     │                                └─ MergingAggregated
+               │     │                                   └─ Repartition Exchange
+               │     │                                      │     Partition by: {ss_store_sk_3}
+               │     │                                      └─ Aggregating
+               │     │                                         │     Group by: {ss_store_sk_3}
+               │     │                                         │     Aggregates: expr#avg(ss_net_profit)_3:=AggNull(avg)(ss_net_profit_3)
+               │     │                                         └─ Filter
+               │     │                                            │     Condition: (ss_store_sk_3 = 4) AND isNull(ss_addr_sk_1)
+               │     │                                            └─ TableScan tpcds100.store_sales
+               │     │                                                     Where: (ss_store_sk = 4) AND isNull(ss_addr_sk)
+               │     │                                                     Outputs: ss_addr_sk_1:=ss_addr_sk, ss_store_sk_3:=ss_store_sk, ss_net_profit_3:=ss_net_profit
                │     └─ Repartition Exchange
                │        │     Partition by: {i_item_sk}
                │        └─ TableScan tpcds100.item

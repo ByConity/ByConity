@@ -240,7 +240,7 @@ void IStorageCnchFile::alter(const AlterCommands & commands, ContextPtr query_co
     StorageInMemoryMetadata old_metadata = getInMemoryMetadata();
 
     TransactionCnchPtr txn = query_context->getCurrentTransaction();
-    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), query_context->getSettingsRef());
+    auto action = txn->createAction<DDLAlterAction>(shared_from_this(), query_context->getSettingsRef(), query_context->getCurrentQueryId());
     auto & alter_act = action->as<DDLAlterAction &>();
     alter_act.setMutationCommands(commands.getMutationCommands(
         old_metadata, false, query_context));

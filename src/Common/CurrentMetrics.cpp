@@ -54,6 +54,7 @@
     M(BackgroundUniqueTableSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old data parts, altering data parts, replica re-initialization, etc.") \
     M(BackgroundMemoryTableSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for memory table threads, etc.") \
     M(BackgroundCNCHTopologySchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for topology related background threads.") \
+    M(BackgroundPartsMetricsSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for parts metrics related background threads.") \
     M(BackgroundQueueManagerSchedulePoolTask, "Number of active tasks in BackgroundSchedulePool. This pool is used for queue manager threads.") \
     M(BackgroundRMHeartbeatSchedulePoolTask, "Number of active tasks in BackgroundRMHeartBeatSchedulePool. This pool is used for update worker status.") \
     M(CacheDictionaryUpdateQueueBatches, "Number of 'batches' (a set of keys) in update queue in CacheDictionaries.") \
@@ -137,6 +138,9 @@
     M(FilesystemCacheElements, "Filesystem cache elements (file segments)") \
     M(TemporaryFilesForJoin, "Number of temporary files created for JOIN") \
     M(TemporaryFilesUnknown, "Number of temporary files created without known purpose") \
+    \
+    M(SystemCnchPartsInfoRecalculationTasksSize, "Number of background threads in recalculate cnch_parts_info system table.") \
+    M(SystemCnchTrashItemsInfoRecalculationTasksSize, "Number of background threads in recalculate cnch_trash_items_info system table.") \
     \
     M(IOSchUserRequests, "UserRequests in io scheduler") \
     M(IOSchRawRequests, "RawRequests in deadline scheduler") \

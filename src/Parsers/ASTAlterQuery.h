@@ -126,6 +126,8 @@ public:
         SAMPLE_PARTITION_WHERE,
 
         CHANGE_ENGINE,
+
+        MODIFY_DATABASE_SETTING,
     };
 
     Type type = NO_TYPE;
@@ -234,7 +236,7 @@ public:
     /// For CLEAR MAP KEY map_column('map_key1', 'map_key2'...)
     ASTPtr map_keys;
 
-    /// For FASTDELETE / INGESTION query, the optional list of columns to overwrite
+    /// For INGESTION query, the optional list of columns to overwrite
     ASTPtr columns;
     /// For Ingestion columns
     ASTPtr keys;
@@ -309,7 +311,15 @@ protected:
 class ASTAlterQuery : public ASTQueryWithTableAndOutput, public ASTQueryWithOnCluster
 {
 public:
-    bool is_live_view{false}; /// true for ALTER LIVE VIEW
+    enum class AlterObjectType
+    {
+        TABLE,
+        DATABASE,
+        LIVE_VIEW,
+        UNKNOWN,
+    };
+
+    AlterObjectType alter_object = AlterObjectType::UNKNOWN;
 
     ASTExpressionList * command_list = nullptr;
 

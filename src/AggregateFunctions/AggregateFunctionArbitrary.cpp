@@ -1,5 +1,3 @@
-#pragma once
-
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/Helpers.h>
 #include <AggregateFunctions/IAggregateFunction.h>
@@ -97,7 +95,7 @@ public:
     explicit AggregateFunctionArbitrary(const DataTypePtr & type)
         : IAggregateFunctionDataHelper<Data, AggregateFunctionArbitrary<Data>>({type}, {})
         , serialization(type->getDefaultSerialization()) {}
-    
+
     String getName() const override { return "groupArbitrary"; }
 
     DataTypePtr getReturnType() const override

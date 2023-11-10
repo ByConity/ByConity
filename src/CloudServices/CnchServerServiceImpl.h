@@ -15,6 +15,10 @@
 
 #pragma once
 
+#if !defined(ARCADIA_BUILD)
+#    include "config_core.h"
+#endif
+
 #include <MergeTreeCommon/GlobalGCManager.h>
 #include <Interpreters/Context_fwd.h>
 #include <Protos/cnch_server_rpc.pb.h>
@@ -312,6 +316,32 @@ public:
     const Protos::notifyAccessEntityChangeReq * request,
     Protos::notifyAccessEntityChangeResp * response,
     google::protobuf::Closure *done) override;
+
+#if USE_MYSQL
+    void submitMaterializedMySQLDDLQuery(
+        google::protobuf::RpcController * cntl,
+        const Protos::SubmitMaterializedMySQLDDLQueryReq * request,
+        Protos::SubmitMaterializedMySQLDDLQueryResp * response,
+        google::protobuf::Closure * done) override;
+
+    void reportHeartbeatForSyncThread(
+        google::protobuf::RpcController * cntl,
+        const Protos::ReportHeartbeatForSyncThreadReq * request,
+        Protos::ReportHeartbeatForSyncThreadResp * response,
+        google::protobuf::Closure * done) override;
+
+    void reportSyncFailedForSyncThread(
+        google::protobuf::RpcController * cntl,
+        const Protos::ReportSyncFailedForSyncThreadReq * request,
+        Protos::ReportSyncFailedForSyncThreadResp * response,
+        google::protobuf::Closure * done) override;
+#endif
+
+    void forceRecalculateMetrics(
+        google::protobuf::RpcController * cntl,
+        const Protos::ForceRecalculateMetricsReq * request,
+        Protos::ForceRecalculateMetricsResp * response,
+        google::protobuf::Closure * done) override;
 
 private:
     const UInt64 server_start_time;

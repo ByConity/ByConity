@@ -165,7 +165,7 @@ void extractDatabaseAndTableNames(const ContextPtr & context, const ASTPtr & ast
             ASTSelectQuery::collectAllTables(select_ast, all_tables, dummy);
             for (const auto & db_table : all_tables)
             {
-                auto table_id = (StorageID) db_table;
+                StorageID table_id{db_table};
                 String database_name = table_id.database_name;
                 String table_name = table_id.table_name;
                 if (database_name.empty())
@@ -200,7 +200,8 @@ static bool checkSelectForFilteredTables(const ASTPtr & ast, const ContextPtr & 
             if ((database == CNCH_SYSTEM_LOG_DB_NAME || database == "system")
                 && ((!context->getSettingsRef().enable_query_metrics_tables_profiling
                         && (table == CNCH_SYSTEM_LOG_QUERY_METRICS_TABLE_NAME || table == CNCH_SYSTEM_LOG_QUERY_WORKER_METRICS_TABLE_NAME))
-                    || (!context->getSettingsRef().enable_kafka_log_profiling && table == CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME)))
+                    || (!context->getSettingsRef().enable_kafka_log_profiling && table == CNCH_SYSTEM_LOG_KAFKA_LOG_TABLE_NAME)
+                    || (!context->getSettingsRef().enable_materialized_mysql_log_profiling && table == CNCH_SYSTEM_LOG_MATERIALIZED_MYSQL_LOG_TABLE_NAME)))
             {
                 return true;
             }
@@ -228,7 +229,7 @@ void insertCnchQueryMetric(
     if (ast && checkSelectForFilteredTables(ast, context))
     {
         LOG_DEBUG(&Poco::Logger::get("QueryMetricLogHelper"),
-            "Not inserting query metric for SELECT query from query metrics or kafka log tables");
+            "Not inserting query metric for SELECT query from query metrics or kafka/materialized_mysql log tables");
         return;
     }
     else

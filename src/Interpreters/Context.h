@@ -33,11 +33,14 @@
 #include <Interpreters/ClientInfo.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/DistributedStages/ExchangeDataTracker.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Parsers/IAST_fwd.h>
+#include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
 #include <QueryPlan/SymbolAllocator.h>
 #include <Storages/IStorage_fwd.h>
+#include <Storages/MergeTree/MergeTreeMutationStatus.h>
 #include <Transaction/TxnTimestamp.h>
 #include <Common/CGroup/CGroupManager.h>
 #include <Common/MultiVersion.h>
@@ -142,6 +145,7 @@ class OpenTelemetrySpanLog;
 class MutationLog;
 class KafkaLog;
 class CloudKafkaLog;
+class CloudMaterializedMySQLLog;
 class ProcessorsProfileLog;
 class ZooKeeperLog;
 class QueryMetricLog;
@@ -1030,6 +1034,10 @@ public:
     SegmentSchedulerPtr getSegmentScheduler();
     SegmentSchedulerPtr getSegmentScheduler() const;
 
+    ExchangeStatusTrackerPtr getExchangeDataTracker() const;
+    DiskExchangeDataManagerPtr getDiskExchangeDataManager() const;
+    void setMockDiskExchangeDataManager(DiskExchangeDataManagerPtr disk_exchange_data_manager);
+
     BindingCacheManagerPtr getGlobalBindingCacheManager();
     BindingCacheManagerPtr getGlobalBindingCacheManager() const;
     void setGlobalBindingCacheManager(std::shared_ptr<BindingCacheManager> && manager);
@@ -1135,6 +1143,7 @@ public:
     BackgroundSchedulePool & getUniqueTableSchedulePool() const;
     BackgroundSchedulePool & getMemoryTableSchedulePool() const;
     BackgroundSchedulePool & getTopologySchedulePool() const;
+    BackgroundSchedulePool & getMetricsRecalculationSchedulePool() const;
 
     ThrottlerPtr getDiskCacheThrottler() const;
 
@@ -1182,6 +1191,7 @@ public:
     std::shared_ptr<MutationLog> getMutationLog() const;
     std::shared_ptr<KafkaLog> getKafkaLog() const;
     std::shared_ptr<CloudKafkaLog> getCloudKafkaLog() const;
+    std::shared_ptr<CloudMaterializedMySQLLog> getCloudMaterializedMySQLLog() const;
     std::shared_ptr<ProcessorsProfileLog> getProcessorsProfileLog() const;
     std::shared_ptr<ZooKeeperLog> getZooKeeperLog() const;
 
@@ -1391,6 +1401,8 @@ public:
     }
 
 
+
+
     void setChecksumsCache(size_t cache_size_in_bytes);
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
 
@@ -1413,8 +1425,6 @@ public:
     void setPartCacheManager();
     std::shared_ptr<PartCacheManager> getPartCacheManager() const;
 
-    ThreadPool & getPartCacheManagerThreadPool();
-
     /// catalog related
     void initCatalog(const MetastoreConfig & catalog_conf, const String & name_space);
     std::shared_ptr<Catalog::Catalog> tryGetCnchCatalog() const;
@@ -1433,6 +1443,7 @@ public:
     void updateQueueManagerConfig() const;
     void setServerType(const String & type_str);
     ServerType getServerType() const;
+    String getServerTypeString() const;
 
     String getVirtualWarehousePSM() const;
 
@@ -1491,6 +1502,8 @@ public:
     bool isResourceReportRegistered();
 
     CnchBGThreadPtr tryGetDedupWorkerManager(const StorageID & storage_id) const;
+
+    std::multimap<StorageID, MergeTreeMutationStatus> collectMutationStatusesByTables(std::unordered_set<UUID> table_uuids) const;
 
     InterserverCredentialsPtr getCnchInterserverCredentials();
     std::shared_ptr<Cluster> mockCnchServersCluster() const;

@@ -36,6 +36,7 @@
 #include "Interpreters/DatabaseCatalog.h"
 #include "Interpreters/StorageID.h"
 #include "Storages/StorageCnchMergeTree.h"
+#include "Storages/StorageMaterializeMySQL.h"
 
 
 namespace DB
@@ -62,7 +63,7 @@ static bool trySetVirtualWarehouseFromTable(
     if (!storage)
         return false;
 
-    if (auto cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
+    if (auto *cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
     {
         String vw_name = vw_type == VirtualWarehouseType::Write ? cnch_table->getSettings()->cnch_vw_write
                                                                 : cnch_table->getSettings()->cnch_vw_default;
@@ -83,14 +84,11 @@ static bool trySetVirtualWarehouseFromTable(
     }
     else if (auto * cnchfile = dynamic_cast<IStorageCnchFile *>(storage.get()))
     {
-        String vw_name = vw_type == VirtualWarehouseType::Write ? cnchfile->settings.cnch_vw_write : cnchfile->settings.cnch_vw_default;
+        String name = vw_type == VirtualWarehouseType::Write
+                         ? cnchfile->settings.cnch_vw_write
+                         : cnchfile->settings.cnch_vw_default;
 
-        setVirtualWarehouseByName(vw_name, context);
-        LOG_DEBUG(
-            &Poco::Logger::get("VirtualWarehouse"),
-            "CnchHDFS/CnchS3 Set virtual warehouse {} from {}",
-            context->getCurrentVW()->getName(),
-            storage->getStorageID().getNameForLogs());
+        setVirtualWarehouseByName(name, context);
         return true;
     }
     else if (auto * view_table = dynamic_cast<StorageView *>(storage.get()))
@@ -102,6 +100,24 @@ static bool trySetVirtualWarehouseFromTable(
     {
         if (trySetVirtualWarehouseFromAST(mv_table->getInnerQuery(), context))
             return true;
+    }
+    else if (auto * materialize_mysql_table = dynamic_cast<StorageMaterializeMySQL *>(storage.get()))
+    {
+        auto * nested_table = dynamic_cast<StorageCnchMergeTree *>(materialize_mysql_table->getNested().get());
+        if (!nested_table)
+            return false;
+
+        String nested_vw_name = vw_type == VirtualWarehouseType::Write
+                                ? nested_table->getSettings()->cnch_vw_write
+                                : nested_table->getSettings()->cnch_vw_default;
+
+        LOG_DEBUG(
+            &Poco::Logger::get("trySetVirtualWarehouse"),
+            "try get warehouse from {}, type is WRITE {}",
+            nested_vw_name,
+            VirtualWarehouseType::Write == vw_type);
+        setVirtualWarehouseByName(nested_vw_name, context);
+        return true;
     }
 
     return false;
@@ -216,9 +232,9 @@ static String tryGetVirtualWarehouseNameFromTable(
     }
     else if (auto * cnhfile = dynamic_cast<IStorageCnchFile *>(storage.get()))
     {
-        String vw_name = vw_type == VirtualWarehouseType::Write ? cnhfile->settings.cnch_vw_write : cnhfile->settings.cnch_vw_default;
+        String name = vw_type == VirtualWarehouseType::Write ? cnhfile->settings.cnch_vw_write : cnhfile->settings.cnch_vw_default;
 
-        return vw_name;
+        return name;
     }
     else if (auto * view_table = dynamic_cast<StorageView *>(storage.get()))
     {
@@ -399,7 +415,7 @@ bool trySetVirtualWarehouse(const ASTPtr & ast, ContextMutablePtr & context)
     }
 }
 
-bool trySetVirtualWarehouseAndWorkerGroup(const std::string& vw_name, ContextMutablePtr & context)
+bool trySetVirtualWarehouseAndWorkerGroup(const std::string & vw_name, ContextMutablePtr & context)
 {
     if (context->tryGetCurrentWorkerGroup())
         return true;

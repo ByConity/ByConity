@@ -13,9 +13,9 @@ CREATE TABLE customer_address (
   ca_country Nullable(String),
   ca_gmt_offset Nullable(Float64),
   ca_location_type Nullable(String),
-  constraint un unique(ca_address_sk),
-  constraint un unique(ca_address_id)
-) ENGINE = CnchMergeTree() 
+  constraint un1 unique(ca_address_sk),
+  constraint un2 unique(ca_address_id)
+) ENGINE = MergeTree() 
 ORDER BY ca_address_sk;
 
 create table customer_demographics (
@@ -28,8 +28,8 @@ create table customer_demographics (
   cd_dep_count Nullable(Int64),
   cd_dep_employed_count Nullable(Int64),
   cd_dep_college_count Nullable(Int64),
-  constraint un unique(cd_demo_sk)
-) ENGINE = CnchMergeTree() 
+  constraint un1 unique(cd_demo_sk)
+) ENGINE = MergeTree() 
 ORDER BY cd_demo_sk;
 
 create table date_dim (
@@ -61,17 +61,17 @@ create table date_dim (
   d_current_month Nullable(String),
   d_current_quarter Nullable(String),
   d_current_year Nullable(String),
-  constraint un unique(d_date_sk),
-  constraint un unique(d_date_id)
-) ENGINE = CnchMergeTree() 
+  constraint un1 unique(d_date_sk),
+  constraint un2 unique(d_date_id)
+) ENGINE = MergeTree() 
 ORDER BY d_date_sk;
 
 create table income_band (
   ib_income_band_sk Int64,
   ib_lower_bound Nullable(Int64),
   ib_upper_bound Nullable(Int64),
-  constraint un unique(ib_income_band_sk)
-) ENGINE = CnchMergeTree() 
+  constraint un1 unique(ib_income_band_sk)
+) ENGINE = MergeTree() 
 ORDER BY ib_income_band_sk;
 
 create table household_demographics (
@@ -80,9 +80,9 @@ create table household_demographics (
   hd_buy_potential Nullable(String),
   hd_dep_count Nullable(Int64),
   hd_vehicle_count Nullable(Int64),
-  constraint fk foreign key(hd_income_band_sk) references income_band(ib_income_band_sk),
-  constraint un unique(hd_demo_sk)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(hd_income_band_sk) references income_band(ib_income_band_sk),
+  constraint un1 unique(hd_demo_sk)
+) ENGINE = MergeTree() 
 ORDER BY hd_demo_sk;
 
 
@@ -105,15 +105,15 @@ CREATE TABLE customer (
   c_login Nullable(String),
   c_email_address Nullable(String),
   c_last_review_date_sk Nullable(Int64),
-  constraint fk foreign key(c_current_cdemo_sk) references customer_demographics(cd_demo_sk),
-  constraint fk foreign key(c_current_hdemo_sk) references household_demographics(hd_demo_sk),
-  constraint fk foreign key(c_current_addr_sk) references customer_address(ca_address_sk),
-  constraint fk foreign key(c_first_shipto_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(c_first_sales_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(c_last_review_date_sk) references date_dim(d_date_sk),
-  constraint un unique(c_customer_sk),
-  constraint un unique(c_customer_id)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(c_current_cdemo_sk) references customer_demographics(cd_demo_sk),
+  constraint fk2 foreign key(c_current_hdemo_sk) references household_demographics(hd_demo_sk),
+  constraint fk3 foreign key(c_current_addr_sk) references customer_address(ca_address_sk),
+  constraint fk4 foreign key(c_first_shipto_date_sk) references date_dim(d_date_sk),
+  constraint fk5 foreign key(c_first_sales_date_sk) references date_dim(d_date_sk),
+  constraint fk6 foreign key(c_last_review_date_sk) references date_dim(d_date_sk),
+  constraint un1 unique(c_customer_sk),
+  constraint un2 unique(c_customer_id)
+) ENGINE = MergeTree() 
 ORDER BY c_customer_sk;
 
 create table web_page (
@@ -131,11 +131,11 @@ create table web_page (
   wp_link_count Nullable(Int64),
   wp_image_count Nullable(Int64),
   wp_max_ad_count Nullable(Int64),
-  constraint fk foreign key(wp_creation_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(wp_access_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(wp_customer_sk) references customer(c_customer_sk),
-  constraint un unique(wp_web_page_sk)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(wp_creation_date_sk) references date_dim(d_date_sk),
+  constraint fk2 foreign key(wp_access_date_sk) references date_dim(d_date_sk),
+  constraint fk3 foreign key(wp_customer_sk) references customer(c_customer_sk),
+  constraint un1 unique(wp_web_page_sk)
+) ENGINE = MergeTree() 
 ORDER BY wp_web_page_sk;
 
 create table item (
@@ -161,8 +161,8 @@ create table item (
   i_container Nullable(String),
   i_manager_id Nullable(Int64),
   i_product_name Nullable(String),
-  constraint un unique(i_item_sk)
-) ENGINE = CnchMergeTree() 
+  constraint un1 unique(i_item_sk)
+) ENGINE = MergeTree() 
 ORDER BY i_item_sk;
 
 create table promotion (
@@ -185,21 +185,21 @@ create table promotion (
   p_channel_details Nullable(String),
   p_purpose Nullable(String),
   p_discount_active Nullable(String),
-  constraint fk foreign key(p_start_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(p_end_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(p_item_sk) references item(i_item_sk),
-  constraint un unique(p_promo_sk),
-  constraint un unique(p_promo_id)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(p_start_date_sk) references date_dim(d_date_sk),
+  constraint fk2 foreign key(p_end_date_sk) references date_dim(d_date_sk),
+  constraint fk3 foreign key(p_item_sk) references item(i_item_sk),
+  constraint un1 unique(p_promo_sk),
+  constraint un2 unique(p_promo_id)
+) ENGINE = MergeTree() 
 ORDER BY p_promo_sk;
 
 create table reason (
   r_reason_sk Int64,
   r_reason_id Nullable(String),
   r_reason_desc Nullable(String),
-  constraint un unique(r_reason_sk),
-  constraint un unique(r_reason_id)
-) ENGINE = CnchMergeTree() 
+  constraint un1 unique(r_reason_sk),
+  constraint un2 unique(r_reason_id)
+) ENGINE = MergeTree() 
 ORDER BY r_reason_sk;
 
 create table ship_mode (
@@ -209,9 +209,9 @@ create table ship_mode (
   sm_code Nullable(String),
   sm_carrier Nullable(String),
   sm_contract Nullable(String),
-  constraint un unique(sm_ship_mode_sk),
-  constraint un unique(sm_ship_mode_id)
-) ENGINE = CnchMergeTree() 
+  constraint un1 unique(sm_ship_mode_sk),
+  constraint un2 unique(sm_ship_mode_id)
+) ENGINE = MergeTree() 
 ORDER BY sm_ship_mode_sk;
 
 create table store (
@@ -244,9 +244,9 @@ create table store (
   s_country Nullable(String),
   s_gmt_offset Nullable(Float64),
   s_tax_percentage Nullable(Float64),
-  constraint fk foreign key(s_closed_date_sk) references date_dim(d_date_sk),
-  constraint un unique(s_store_sk)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(s_closed_date_sk) references date_dim(d_date_sk),
+  constraint un1 unique(s_store_sk)
+) ENGINE = MergeTree() 
 ORDER BY s_store_sk;
 
 create table time_dim (
@@ -260,9 +260,9 @@ create table time_dim (
   t_shift Nullable(String),
   t_sub_shift Nullable(String),
   t_meal_time Nullable(String),
-  constraint un unique(t_time_sk),
-  constraint un unique(t_time_id)
-) ENGINE = CnchMergeTree() 
+  constraint un1 unique(t_time_sk),
+  constraint un2 unique(t_time_id)
+) ENGINE = MergeTree() 
 ORDER BY t_time_sk;
 
 create table warehouse (
@@ -280,9 +280,9 @@ create table warehouse (
   w_zip Nullable(String),
   w_country Nullable(String),
   w_gmt_offset Nullable(Float64),
-  constraint un unique(w_warehouse_sk),
-  constraint un unique(w_warehouse_id)
-) ENGINE = CnchMergeTree() 
+  constraint un1 unique(w_warehouse_sk),
+  constraint un2 unique(w_warehouse_id)
+) ENGINE = MergeTree() 
 ORDER BY w_warehouse_sk;
 
 create table web_site (
@@ -312,10 +312,10 @@ create table web_site (
   web_country Nullable(String),
   web_gmt_offset Nullable(Float64),
   web_tax_percentage Nullable(Float64),
-  constraint fk foreign key(web_open_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(web_close_date_sk) references date_dim(d_date_sk),
-  constraint un unique(web_site_sk)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(web_open_date_sk) references date_dim(d_date_sk),
+  constraint fk2 foreign key(web_close_date_sk) references date_dim(d_date_sk),
+  constraint un1 unique(web_site_sk)
+) ENGINE = MergeTree() 
 ORDER BY web_site_sk;
 
 create table call_center (
@@ -350,10 +350,10 @@ create table call_center (
   cc_country Nullable(String),
   cc_gmt_offset Nullable(Float64),
   cc_tax_percentage Nullable(Float64),
-  constraint fk foreign key(cc_closed_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(cc_open_date_sk) references date_dim(d_date_sk),
-  constraint un unique(cc_call_center_sk)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(cc_closed_date_sk) references date_dim(d_date_sk),
+  constraint fk2 foreign key(cc_open_date_sk) references date_dim(d_date_sk),
+  constraint un1 unique(cc_call_center_sk)
+) ENGINE = MergeTree() 
 ORDER BY cc_call_center_sk;
 
 
@@ -367,11 +367,11 @@ create table catalog_page (
   cp_catalog_page_number Nullable(Int64),
   cp_description Nullable(String),
   cp_type Nullable(String),
-  constraint fk foreign key(cp_start_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(cp_end_date_sk) references date_dim(d_date_sk),
-  constraint un unique(cp_catalog_page_sk),
-  constraint un unique(cp_catalog_page_id)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(cp_start_date_sk) references date_dim(d_date_sk),
+  constraint fk2 foreign key(cp_end_date_sk) references date_dim(d_date_sk),
+  constraint un1 unique(cp_catalog_page_sk),
+  constraint un2 unique(cp_catalog_page_id)
+) ENGINE = MergeTree() 
 ORDER BY cp_catalog_page_sk;
 
 
@@ -403,24 +403,24 @@ create table catalog_returns (
   cr_reversed_charge Nullable(Float64),
   cr_store_credit Nullable(Float64),
   cr_net_loss Nullable(Float64),
-  constraint fk foreign key(cr_returned_time_sk) references time_dim(t_time_sk),
-  constraint fk foreign key(cr_returned_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(cr_item_sk) references item(i_item_sk),
-  constraint fk foreign key(cr_refunded_customer_sk) references customer(c_customer_sk),
-  constraint fk foreign key(cr_refunded_cdemo_sk) references customer_demographics(cd_demo_sk),
-  constraint fk foreign key(cr_refunded_hdemo_sk) references household_demographics(hd_demo_sk),
-  constraint fk foreign key(cr_refunded_addr_sk) references customer_address(ca_address_sk),
-  constraint fk foreign key(cr_returning_customer_sk) references customer(c_customer_sk),
-  constraint fk foreign key(cr_returning_cdemo_sk) references customer_demographics(cd_demo_sk),
-  constraint fk foreign key(cr_returning_hdemo_sk) references household_demographics(hd_demo_sk),
-  constraint fk foreign key(cr_returning_addr_sk) references customer_address(ca_address_sk),
-  constraint fk foreign key(cr_call_center_sk) references call_center(cc_call_center_sk),
-  constraint fk foreign key(cr_catalog_page_sk) references catalog_page(cp_catalog_page_sk),
-  constraint fk foreign key(cr_ship_mode_sk) references ship_mode(sm_ship_mode_sk),
-  constraint fk foreign key(cr_warehouse_sk) references warehouse(w_warehouse_sk),
-  constraint fk foreign key(cr_reason_sk) references reason(r_reason_sk),
-  constraint un unique(cr_item_sk, cr_order_number)
-) ENGINE = CnchMergeTree()
+  constraint fk1 foreign key(cr_returned_time_sk) references time_dim(t_time_sk),
+  constraint fk2 foreign key(cr_returned_date_sk) references date_dim(d_date_sk),
+  constraint fk3 foreign key(cr_item_sk) references item(i_item_sk),
+  constraint fk4 foreign key(cr_refunded_customer_sk) references customer(c_customer_sk),
+  constraint fk5 foreign key(cr_refunded_cdemo_sk) references customer_demographics(cd_demo_sk),
+  constraint fk6 foreign key(cr_refunded_hdemo_sk) references household_demographics(hd_demo_sk),
+  constraint fk7 foreign key(cr_refunded_addr_sk) references customer_address(ca_address_sk),
+  constraint fk8 foreign key(cr_returning_customer_sk) references customer(c_customer_sk),
+  constraint fk9 foreign key(cr_returning_cdemo_sk) references customer_demographics(cd_demo_sk),
+  constraint fk10 foreign key(cr_returning_hdemo_sk) references household_demographics(hd_demo_sk),
+  constraint fk11 foreign key(cr_returning_addr_sk) references customer_address(ca_address_sk),
+  constraint fk12 foreign key(cr_call_center_sk) references call_center(cc_call_center_sk),
+  constraint fk13 foreign key(cr_catalog_page_sk) references catalog_page(cp_catalog_page_sk),
+  constraint fk14 foreign key(cr_ship_mode_sk) references ship_mode(sm_ship_mode_sk),
+  constraint fk15 foreign key(cr_warehouse_sk) references warehouse(w_warehouse_sk),
+  constraint fk16 foreign key(cr_reason_sk) references reason(r_reason_sk),
+  constraint un1 unique(cr_item_sk, cr_order_number)
+) ENGINE = MergeTree()
 order by cr_item_sk;
 
 create table catalog_sales (
@@ -458,25 +458,25 @@ create table catalog_sales (
   cs_net_paid_inc_ship Nullable(Float64),
   cs_net_paid_inc_ship_tax Nullable(Float64),
   cs_net_profit Nullable(Float64),
-  constraint fk foreign key(cs_sold_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(cs_sold_time_sk) references time_dim(t_time_sk),
-  constraint fk foreign key(cs_ship_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(cs_bill_customer_sk) references customer(c_customer_sk),
-  constraint fk foreign key(cs_bill_cdemo_sk) references customer_demographics(cd_demo_sk),
-  constraint fk foreign key(cs_bill_hdemo_sk) references household_demographics(hd_demo_sk),
-  constraint fk foreign key(cs_bill_addr_sk) references customer_address(ca_address_sk),
-  constraint fk foreign key(cs_ship_customer_sk) references customer(c_customer_sk),
-  constraint fk foreign key(cs_ship_cdemo_sk) references customer_demographics(cd_demo_sk),
-  constraint fk foreign key(cs_ship_hdemo_sk) references household_demographics(hd_demo_sk),
-  constraint fk foreign key(cs_ship_addr_sk) references customer_address(ca_address_sk),
-  constraint fk foreign key(cs_call_center_sk) references call_center(cc_call_center_sk),
-  constraint fk foreign key(cs_catalog_page_sk) references catalog_page(cp_catalog_page_sk),
-  constraint fk foreign key(cs_ship_mode_sk) references ship_mode(sm_ship_mode_sk),
-  constraint fk foreign key(cs_warehouse_sk) references warehouse(w_warehouse_sk),
-  constraint fk foreign key(cs_item_sk) references item(i_item_sk),
-  constraint fk foreign key(cs_promo_sk) references promotion(p_promo_sk),
-  constraint un unique(cs_item_sk, cs_order_number)
-) ENGINE = CnchMergeTree()
+  constraint fk1 foreign key(cs_sold_date_sk) references date_dim(d_date_sk),
+  constraint fk2 foreign key(cs_sold_time_sk) references time_dim(t_time_sk),
+  constraint fk3 foreign key(cs_ship_date_sk) references date_dim(d_date_sk),
+  constraint fk4 foreign key(cs_bill_customer_sk) references customer(c_customer_sk),
+  constraint fk5 foreign key(cs_bill_cdemo_sk) references customer_demographics(cd_demo_sk),
+  constraint fk6 foreign key(cs_bill_hdemo_sk) references household_demographics(hd_demo_sk),
+  constraint fk7 foreign key(cs_bill_addr_sk) references customer_address(ca_address_sk),
+  constraint fk8 foreign key(cs_ship_customer_sk) references customer(c_customer_sk),
+  constraint fk9 foreign key(cs_ship_cdemo_sk) references customer_demographics(cd_demo_sk),
+  constraint fk10 foreign key(cs_ship_hdemo_sk) references household_demographics(hd_demo_sk),
+  constraint fk11 foreign key(cs_ship_addr_sk) references customer_address(ca_address_sk),
+  constraint fk12 foreign key(cs_call_center_sk) references call_center(cc_call_center_sk),
+  constraint fk13 foreign key(cs_catalog_page_sk) references catalog_page(cp_catalog_page_sk),
+  constraint fk14 foreign key(cs_ship_mode_sk) references ship_mode(sm_ship_mode_sk),
+  constraint fk15 foreign key(cs_warehouse_sk) references warehouse(w_warehouse_sk),
+  constraint fk16 foreign key(cs_item_sk) references item(i_item_sk),
+  constraint fk17 foreign key(cs_promo_sk) references promotion(p_promo_sk),
+  constraint un1 unique(cs_item_sk, cs_order_number)
+) ENGINE = MergeTree()
 order by cs_item_sk;
 
 create table inventory (
@@ -484,11 +484,11 @@ create table inventory (
   inv_item_sk Int64,
   inv_warehouse_sk Nullable(Int64),
   inv_quantity_on_hand Nullable(Int64),
-  constraint fk foreign key(inv_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(inv_item_sk) references item(i_item_sk),
-  constraint fk foreign key(inv_warehouse_sk) references warehouse(w_warehouse_sk),
-  constraint un unique(inv_date_sk, inv_item_sk, inv_warehouse_sk)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(inv_date_sk) references date_dim(d_date_sk),
+  constraint fk2 foreign key(inv_item_sk) references item(i_item_sk),
+  constraint fk3 foreign key(inv_warehouse_sk) references warehouse(w_warehouse_sk),
+  constraint un1 unique(inv_date_sk, inv_item_sk, inv_warehouse_sk)
+) ENGINE = MergeTree() 
 order by inv_item_sk;
 
 create table store_returns (
@@ -512,17 +512,17 @@ create table store_returns (
   sr_reversed_charge Nullable(Float64),
   sr_store_credit Nullable(Float64),
   sr_net_loss Nullable(Float64),
-  constraint fk foreign key(sr_returned_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(sr_return_time_sk) references time_dim(t_time_sk),
-  constraint fk foreign key(sr_item_sk) references item(i_item_sk),
-  constraint fk foreign key(sr_customer_sk) references customer(c_customer_sk),
-  constraint fk foreign key(sr_cdemo_sk) references customer_demographics(cd_demo_sk),
-  constraint fk foreign key(sr_hdemo_sk) references household_demographics(hd_demo_sk),
-  constraint fk foreign key(sr_addr_sk) references customer_address(ca_address_sk),
-  constraint fk foreign key(sr_store_sk) references store(s_store_sk),
-  constraint fk foreign key(sr_reason_sk) references reason(r_reason_sk),
-  constraint un unique(sr_item_sk, sr_ticket_number)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(sr_returned_date_sk) references date_dim(d_date_sk),
+  constraint fk2 foreign key(sr_return_time_sk) references time_dim(t_time_sk),
+  constraint fk3 foreign key(sr_item_sk) references item(i_item_sk),
+  constraint fk4 foreign key(sr_customer_sk) references customer(c_customer_sk),
+  constraint fk5 foreign key(sr_cdemo_sk) references customer_demographics(cd_demo_sk),
+  constraint fk6 foreign key(sr_hdemo_sk) references household_demographics(hd_demo_sk),
+  constraint fk7 foreign key(sr_addr_sk) references customer_address(ca_address_sk),
+  constraint fk8 foreign key(sr_store_sk) references store(s_store_sk),
+  constraint fk9 foreign key(sr_reason_sk) references reason(r_reason_sk),
+  constraint un1 unique(sr_item_sk, sr_ticket_number)
+) ENGINE = MergeTree() 
 order by sr_item_sk;
 
 create table store_sales (
@@ -549,17 +549,17 @@ create table store_sales (
   ss_net_paid Nullable(Float64),
   ss_net_paid_inc_tax Nullable(Float64),
   ss_net_profit Nullable(Float64),
-  constraint fk foreign key(ss_sold_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(ss_sold_time_sk) references time_dim(t_time_sk),
-  constraint fk foreign key(ss_item_sk) references item(i_item_sk),
-  constraint fk foreign key(ss_customer_sk) references customer(c_customer_sk),
-  constraint fk foreign key(ss_cdemo_sk) references customer_demographics(cd_demo_sk),
-  constraint fk foreign key(ss_hdemo_sk) references household_demographics(hd_demo_sk),
-  constraint fk foreign key(ss_addr_sk) references customer_address(ca_address_sk),
-  constraint fk foreign key(ss_store_sk) references store(s_store_sk),
-  constraint fk foreign key(ss_promo_sk) references promotion(p_promo_sk),
-  constraint un unique(ss_item_sk, ss_ticket_number)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(ss_sold_date_sk) references date_dim(d_date_sk),
+  constraint fk2 foreign key(ss_sold_time_sk) references time_dim(t_time_sk),
+  constraint fk3 foreign key(ss_item_sk) references item(i_item_sk),
+  constraint fk4 foreign key(ss_customer_sk) references customer(c_customer_sk),
+  constraint fk5 foreign key(ss_cdemo_sk) references customer_demographics(cd_demo_sk),
+  constraint fk6 foreign key(ss_hdemo_sk) references household_demographics(hd_demo_sk),
+  constraint fk7 foreign key(ss_addr_sk) references customer_address(ca_address_sk),
+  constraint fk8 foreign key(ss_store_sk) references store(s_store_sk),
+  constraint fk9 foreign key(ss_promo_sk) references promotion(p_promo_sk),
+  constraint un1 unique(ss_item_sk, ss_ticket_number)
+) ENGINE = MergeTree() 
 order by ss_item_sk;
 
 create table web_returns (
@@ -587,21 +587,21 @@ create table web_returns (
   wr_reversed_charge Nullable(Float64),
   wr_account_credit Nullable(Float64),
   wr_net_loss Nullable(Float64),
-  constraint fk foreign key(wr_returned_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(wr_returned_time_sk) references time_dim(t_time_sk),
-  constraint fk foreign key(wr_item_sk) references item(i_item_sk),
-  constraint fk foreign key(wr_refunded_customer_sk) references customer(c_customer_sk),
-  constraint fk foreign key(wr_refunded_cdemo_sk) references customer_demographics(cd_demo_sk),
-  constraint fk foreign key(wr_refunded_hdemo_sk) references household_demographics(hd_demo_sk),
-  constraint fk foreign key(wr_refunded_addr_sk) references customer_address(ca_address_sk),
-  constraint fk foreign key(wr_returning_customer_sk) references customer(c_customer_sk),
-  constraint fk foreign key(wr_returning_cdemo_sk) references customer_demographics(cd_demo_sk),
-  constraint fk foreign key(wr_returning_hdemo_sk) references household_demographics(hd_demo_sk),
-  constraint fk foreign key(wr_returning_addr_sk) references customer_address(ca_address_sk),
-  constraint fk foreign key(wr_web_page_sk) references web_page(wp_web_page_sk),
-  constraint fk foreign key(wr_reason_sk) references reason(r_reason_sk),
-  constraint un unique(wr_item_sk, wr_order_number)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(wr_returned_date_sk) references date_dim(d_date_sk),
+  constraint fk2 foreign key(wr_returned_time_sk) references time_dim(t_time_sk),
+  constraint fk3 foreign key(wr_item_sk) references item(i_item_sk),
+  constraint fk4 foreign key(wr_refunded_customer_sk) references customer(c_customer_sk),
+  constraint fk5 foreign key(wr_refunded_cdemo_sk) references customer_demographics(cd_demo_sk),
+  constraint fk6 foreign key(wr_refunded_hdemo_sk) references household_demographics(hd_demo_sk),
+  constraint fk7 foreign key(wr_refunded_addr_sk) references customer_address(ca_address_sk),
+  constraint fk8 foreign key(wr_returning_customer_sk) references customer(c_customer_sk),
+  constraint fk9 foreign key(wr_returning_cdemo_sk) references customer_demographics(cd_demo_sk),
+  constraint fk10 foreign key(wr_returning_hdemo_sk) references household_demographics(hd_demo_sk),
+  constraint fk11 foreign key(wr_returning_addr_sk) references customer_address(ca_address_sk),
+  constraint fk12 foreign key(wr_web_page_sk) references web_page(wp_web_page_sk),
+  constraint fk13 foreign key(wr_reason_sk) references reason(r_reason_sk),
+  constraint un1 unique(wr_item_sk, wr_order_number)
+) ENGINE = MergeTree() 
 order by wr_item_sk;
 
 create table web_sales (
@@ -639,23 +639,23 @@ create table web_sales (
   ws_net_paid_inc_ship Nullable(Float64),
   ws_net_paid_inc_ship_tax Nullable(Float64),
   ws_net_profit Nullable(Float64),
-  constraint fk foreign key(ws_sold_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(ws_sold_time_sk) references time_dim(t_time_sk),
-  constraint fk foreign key(ws_ship_date_sk) references date_dim(d_date_sk),
-  constraint fk foreign key(ws_item_sk) references item(i_item_sk),
-  constraint fk foreign key(ws_bill_customer_sk) references customer(c_customer_sk),
-  constraint fk foreign key(ws_bill_cdemo_sk) references customer_demographics(cd_demo_sk),
-  constraint fk foreign key(ws_bill_hdemo_sk) references household_demographics(hd_demo_sk),
-  constraint fk foreign key(ws_bill_addr_sk) references customer_address(ca_address_sk),
-  constraint fk foreign key(ws_ship_customer_sk) references customer(c_customer_sk),
-  constraint fk foreign key(ws_ship_cdemo_sk) references customer_demographics(cd_demo_sk),
-  constraint fk foreign key(ws_ship_hdemo_sk) references household_demographics(hd_demo_sk),
-  constraint fk foreign key(ws_ship_addr_sk) references customer_address(ca_address_sk),
-  constraint fk foreign key(ws_web_page_sk) references web_page(wp_web_page_sk),
-  constraint fk foreign key(ws_web_site_sk) references web_site(web_site_sk),
-  constraint fk foreign key(ws_ship_mode_sk) references ship_mode(sm_ship_mode_sk),
-  constraint fk foreign key(ws_warehouse_sk) references warehouse(w_warehouse_sk),
-  constraint fk foreign key(ws_promo_sk) references promotion(p_promo_sk),
-  constraint un unique(ws_item_sk, ws_order_number)
-) ENGINE = CnchMergeTree() 
+  constraint fk1 foreign key(ws_sold_date_sk) references date_dim(d_date_sk),
+  constraint fk2 foreign key(ws_sold_time_sk) references time_dim(t_time_sk),
+  constraint fk3 foreign key(ws_ship_date_sk) references date_dim(d_date_sk),
+  constraint fk4 foreign key(ws_item_sk) references item(i_item_sk),
+  constraint fk5 foreign key(ws_bill_customer_sk) references customer(c_customer_sk),
+  constraint fk6 foreign key(ws_bill_cdemo_sk) references customer_demographics(cd_demo_sk),
+  constraint fk7 foreign key(ws_bill_hdemo_sk) references household_demographics(hd_demo_sk),
+  constraint fk8 foreign key(ws_bill_addr_sk) references customer_address(ca_address_sk),
+  constraint fk9 foreign key(ws_ship_customer_sk) references customer(c_customer_sk),
+  constraint fk10 foreign key(ws_ship_cdemo_sk) references customer_demographics(cd_demo_sk),
+  constraint fk11 foreign key(ws_ship_hdemo_sk) references household_demographics(hd_demo_sk),
+  constraint fk12 foreign key(ws_ship_addr_sk) references customer_address(ca_address_sk),
+  constraint fk13 foreign key(ws_web_page_sk) references web_page(wp_web_page_sk),
+  constraint fk14 foreign key(ws_web_site_sk) references web_site(web_site_sk),
+  constraint fk15 foreign key(ws_ship_mode_sk) references ship_mode(sm_ship_mode_sk),
+  constraint fk16 foreign key(ws_warehouse_sk) references warehouse(w_warehouse_sk),
+  constraint fk17 foreign key(ws_promo_sk) references promotion(p_promo_sk),
+  constraint un1 unique(ws_item_sk, ws_order_number)
+) ENGINE = MergeTree() 
 order by ws_item_sk;

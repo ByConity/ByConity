@@ -52,7 +52,7 @@ public:
 
     size_t size() const { return query_buffer.size(); }
 
-    void dump();
+    Poco::JSON::Object::Ptr getJsonDumpResult();
 
     std::unordered_map<UInt64, size_t> query_hash_frequencies;
 

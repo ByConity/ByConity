@@ -22,9 +22,13 @@
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/Kafka/StorageCnchKafka.h>
 #include <CloudServices/CnchServerClientPool.h>
+#include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
+#include <Parsers/ASTCreateQuery.h>
 
 namespace DB::DaemonManager
 {
+
+StorageTrait constructStorageTrait(StoragePtr storage);
 
 DaemonJobServerBGThread::DaemonJobServerBGThread(
     ContextMutablePtr global_context_,
@@ -44,7 +48,7 @@ void DaemonJobServerBGThread::init()
     if (getType() == CnchBGThreadType::Consumer)
         fixKafkaActiveStatuses(this);
     status_persistent_store =
-        std::make_unique<BGJobStatusInCatalog::CatalogBGJobStatusPersistentStoreProxy>(getContext()->getCnchCatalog(), type);
+        std::make_unique<BGJobStatusInCatalog::CatalogBGJobStatusPersistentStoreProxy>(getContext()->getCnchCatalog(), type, getLog());
     bg_job_executor = std::make_unique<BackgroundJobExecutor>(*getContext(), getType());
     target_server_calculator = std::make_unique<TargetServerCalculator>(*getContext(), getType(), getLog());
     /// fetchCnchBGThreadStatus must be called after initialisation of status_persistent_store and etc
@@ -55,57 +59,93 @@ void DaemonJobServerBGThread::init()
 std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread & daemon_job)
 {
     const Context & context = *daemon_job.getContext();
-    auto data_models = context.getCnchCatalog()->getAllTables();
     std::unordered_map<UUID, StorageID> ret;
     Poco::Logger * log = daemon_job.getLog();
-    for (const auto & data_model : data_models)
+
+    if (daemon_job.getType() == CnchBGThreadType::MaterializedMySQL)
     {
-        auto uuid = RPCHelpers::createUUID(data_model.uuid());
-
-        if (Status::isDetached(data_model.status()) || Status::isDeleted(data_model.status()))
-            continue;
-
-        try
+        auto data_models = context.getCnchCatalog()->getAllDataBases();
+        for (const auto & data_model : data_models)
         {
-            StoragePtr storage = nullptr;
-            if (auto cache = daemon_job.getStorageCache(); cache)
-            {
-                auto res = cache->getOrSet(data_model.definition(), [&]()
-                {
-                    return Catalog::CatalogFactory::getTableByDefinition(
-                        daemon_job.getContext(),
-                        data_model.database(),
-                        data_model.name(),
-                        data_model.definition());
-                });
-                storage = std::move(res.first);
-            }
-            else
-            {
-                storage = Catalog::CatalogFactory::getTableByDefinition(
-                        daemon_job.getContext(),
-                        data_model.database(),
-                        data_model.name(),
-                        data_model.definition());
-            }
-
-            if (!storage)
-            {
-                LOG_WARNING(log, "Fail to get storagePtr for {}.{}", data_model.database(), data_model.name());
+            if (Status::isDetached(data_model.status()) || Status::isDeleted(data_model.status()))
                 continue;
+
+            if (data_model.has_type() && data_model.type() == DB::Protos::CnchDatabaseType::MaterializedMySQL)
+            {
+                auto uuid = RPCHelpers::createUUID(data_model.uuid());
+                StorageID storage_id(data_model.name(), uuid);
+
+                try
+                {
+                    /// For MaterializedMySQL, using nullptr for StoragePtr param
+                    if (daemon_job.ifNeedDaemonJob(StorageTrait{}, storage_id))
+                        ret.insert(std::make_pair(uuid, storage_id));
+                }
+                catch(...)
+                {
+                    LOG_WARNING(log, "Fail to schedule for " + storage_id.getFullTableName() + ". Error: " + getCurrentExceptionMessage(true));
+                }
             }
-            if (daemon_job.isTargetTable(storage))
-                ret.insert(std::make_pair(uuid, storage->getStorageID()));
         }
-        catch (Exception & e)
+    }
+    else    /// For Table daemon job
+    {
+        auto data_models = context.getCnchCatalog()->getAllTables();
+        for (const auto & data_model : data_models)
         {
-            LOG_WARNING(log, "Fail to schedule for {}.{}. Error: {}", data_model.database(), data_model.name(), e.message());
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        }
-        catch (...)
-        {
-            LOG_WARNING(log, "Fail to construct storage for {}.{}", data_model.database(), data_model.name());
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            if (Status::isDetached(data_model.status()) || Status::isDeleted(data_model.status()))
+                continue;
+
+            auto uuid = RPCHelpers::createUUID(data_model.uuid());
+            StorageID storage_id(data_model.database(), data_model.name(), uuid);
+            if (!data_model.server_vw_name().empty())
+                storage_id.server_vw_name = data_model.server_vw_name();
+
+            try
+            {
+                std::optional<StorageTrait> storage_trait;
+                if (auto cache = daemon_job.getStorageTraitCache(); cache)
+                {
+                    auto res = cache->getOrSet(data_model.definition(), [&]()
+                    {
+                        StorageTrait s = constructStorageTrait(
+                            daemon_job.getContext(),
+                            data_model.database(),
+                            data_model.name(),
+                            data_model.definition()
+                        );
+                        return std::make_shared<StorageTrait>(s);
+                    });
+                    storage_trait = *res.first;
+                }
+                else
+                {
+                    storage_trait = constructStorageTrait(
+                        daemon_job.getContext(),
+                        data_model.database(),
+                        data_model.name(),
+                        data_model.definition());
+                }
+
+                if (!storage_trait)
+                {
+                    LOG_WARNING(log, "Fail to get StorageTrait for {}.{}", data_model.database(), data_model.name());
+                    continue;
+                }
+
+                if (daemon_job.ifNeedDaemonJob(storage_trait.value(), storage_id))
+                    ret.insert(std::make_pair(uuid, storage_id));
+            }
+            catch (Exception & e)
+            {
+                LOG_WARNING(log, "Fail to schedule for {}.{}. Error: ", data_model.database(), data_model.name(), e.message());
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            }
+            catch (...)
+            {
+                LOG_WARNING(log, "Fail to construct storage for {}.{}", data_model.database(), data_model.name());
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            }
         }
     }
 
@@ -627,15 +667,26 @@ bool DaemonJobServerBGThread::executeImpl()
     watch.restart();
     if ((!remove_uuids.empty()) || (!add_uuids.empty()))
     {
-        std::unique_lock lock(bg_jobs_mutex);
-        std::for_each(remove_uuids.begin(), remove_uuids.end(), [this] (UUID uuid)
-            {
-                background_jobs.erase(uuid);
-            });
+        {
+            std::unique_lock lock(bg_jobs_mutex);
+            std::for_each(remove_uuids.begin(), remove_uuids.end(), [this] (UUID uuid)
+                {
+                    background_jobs.erase(uuid);
+                });
+        }
 
-        std::for_each(add_uuids.begin(), add_uuids.end(), [this, & new_uuid_map, &new_bg_jobs] (UUID uuid)
+        /// never hold a bg_jobs_mutex while call BackgroundJob ctor
+        /// because this mutex is using in the callback of brpc
+        std::map<UUID, BackgroundJobPtr> new_background_jobs;
+        std::for_each(add_uuids.begin(), add_uuids.end(), [this, & new_uuid_map, & new_background_jobs] (UUID uuid)
+        {
+            new_background_jobs.insert(std::make_pair(uuid, std::make_shared<BackgroundJob>(new_uuid_map.at(uuid), *this)));
+        });
+
+        std::unique_lock lock(bg_jobs_mutex);
+        std::for_each(new_background_jobs.begin(), new_background_jobs.end(), [this, &new_bg_jobs] (auto & p)
             {
-                auto ret = background_jobs.insert(std::make_pair(uuid, std::make_shared<BackgroundJob>(new_uuid_map.at(uuid), *this)));
+                auto ret = background_jobs.insert(p);
                 if (ret.second)
                     new_bg_jobs.push_back(ret.first->second);
             });
@@ -911,6 +962,14 @@ void DaemonJobForMergeMutate::executeOptimize(const StorageID & storage_id, cons
 
 BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
 {
+    Stopwatch watch;
+    watch.restart();
+    // fetch statuses in batch
+    auto cache_clearer = status_persistent_store->fetchStatusesIntoCache();
+    UInt64 milliseconds = watch.elapsedMilliseconds();
+    if (milliseconds >= SLOW_EXECUTION_THRESHOLD_MS)
+        LOG_DEBUG(log, "fetch bg job statuses took {} ms", milliseconds);
+
     BackgroundJobs ret;
     CnchServerClientPtrs cnch_servers = getContext()->getCnchServerClientPool().getAll();
 
@@ -973,23 +1032,34 @@ BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
             }
         }
     }
+
+    milliseconds = watch.elapsedMilliseconds();
+    if (milliseconds >= SLOW_EXECUTION_THRESHOLD_MS)
+        LOG_DEBUG(log, "fetchBackgroundJobsFromServer took {} ms.", milliseconds);
     return ret;
 }
 
-bool isCnchMergeTree(const StoragePtr & storage)
+bool isCnchMergeTree(const StorageTrait & storage_trait, const StorageID &, const ContextPtr &)
 {
-    return dynamic_cast<StorageCnchMergeTree *>(storage.get()) != nullptr;
+    return storage_trait.isCnchMergeTree();
 }
 
-bool isCnchKafka(const StoragePtr & storage)
+bool isCnchKafka(const StorageTrait & storage_trait, const StorageID &, const ContextPtr &)
 {
-    return dynamic_cast<StorageCnchKafka *>(storage.get()) != nullptr;
+    return storage_trait.isCnchKafka();
 }
 
-bool isCnchUniqueTableAndNeedDedup(const StoragePtr & storage)
+bool isMaterializedMySQL(const StorageTrait &, const StorageID & storage_id, const ContextPtr & context)
 {
-    auto t = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-    return t && t->getInMemoryMetadataPtr()->hasUniqueKey();
+    if (!storage_id.isDatabase())
+        return false;
+    auto database = context->getCnchCatalog()->getDatabase(storage_id.getDatabaseName(), context, TxnTimestamp::maxTS());
+    return dynamic_cast<DatabaseCnchMaterializedMySQL *>(database.get()) != nullptr;
+};
+
+bool isCnchUniqueTableAndNeedDedup(const StorageTrait & storage_trait, const StorageID &, const ContextPtr &)
+{
+    return storage_trait.isCnchUniqueAndNeedDedup();
 }
 
 void registerServerBGThreads(DaemonFactory & factory)
@@ -999,6 +1069,7 @@ void registerServerBGThreads(DaemonFactory & factory)
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Clustering, isCnchMergeTree>>("PART_CLUSTERING");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::Consumer, isCnchKafka>>("CONSUMER");
     factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::DedupWorker, isCnchUniqueTableAndNeedDedup>>("DEDUP_WORKER");
+    factory.registerDaemonJobForBGThreadInServer<DaemonJobForCnch<CnchBGThreadType::MaterializedMySQL, isMaterializedMySQL>>("MATERIALIZED_MYSQL");
 }
 
 void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
@@ -1026,7 +1097,7 @@ void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
                 continue;
             }
 
-            if (daemon_job->isTargetTable(storage))
+            if (daemon_job->ifNeedDaemonJob(constructStorageTrait(storage), storage->getStorageID()))
             {
                 if (!catalog->getTableActiveness(storage, TxnTimestamp::maxTS()))
                 {
@@ -1047,6 +1118,85 @@ void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     }
+}
+
+StorageTrait::StorageTrait(StorageTrait::Param param)
+{
+    std::bitset<3> bs;
+    if (param.is_cnch_merge_tree)
+        bs.set(0);
+    if (param.is_cnch_kafka)
+        bs.set(1);
+    if (param.is_cnch_unique)
+        bs.set(2);
+
+    data = bs;
+}
+
+StorageTrait constructStorageTrait(StoragePtr storage)
+{
+    if (dynamic_cast<StorageCnchKafka *>(storage.get()) != nullptr)
+        return StorageTrait{StorageTrait::Param {
+                .is_cnch_merge_tree = false,
+                .is_cnch_kafka = true,
+                .is_cnch_unique = false
+            }};
+
+    StorageCnchMergeTree * cnch_storage = dynamic_cast<StorageCnchMergeTree *>(storage.get());
+    if (cnch_storage)
+    {
+        if (cnch_storage->getInMemoryMetadataPtr()->hasUniqueKey())
+        {
+            return StorageTrait{StorageTrait::Param {
+                    .is_cnch_merge_tree = true,
+                    .is_cnch_kafka = false,
+                    .is_cnch_unique = true
+                }};
+        }
+        else
+        {
+            return StorageTrait{StorageTrait::Param {
+                    .is_cnch_merge_tree = true,
+                    .is_cnch_kafka = false,
+                    .is_cnch_unique = false
+                }};
+        }
+    }
+
+    return StorageTrait{StorageTrait::Param {
+            .is_cnch_merge_tree = false,
+            .is_cnch_kafka = false,
+            .is_cnch_unique = false
+        }};
+}
+
+StorageTrait constructStorageTrait(ContextMutablePtr context, const String & db, const String & table, const String & create_query)
+{
+    auto ast = getASTCreateQueryFromString(create_query, context);
+    /// make shortcut because CnchHive and other remote table contructor could take long time
+    if (ast->storage &&
+        ast->storage->engine &&
+        (ast->storage->engine->name != "CnchMergeTree") &&
+        (ast->storage->engine->name != "CnchKafka")
+    )
+        return StorageTrait{StorageTrait::Param {
+                .is_cnch_merge_tree = false,
+                .is_cnch_kafka = false,
+                .is_cnch_unique = false
+            }};
+
+    StoragePtr storage_ptr = Catalog::CatalogFactory::getTableByDefinition(
+                            context,
+                            db,
+                            table,
+                            create_query);
+
+    return constructStorageTrait(std::move(storage_ptr));
+}
+
+bool operator == (const StorageTrait & lhs, const StorageTrait & rhs)
+{
+    return lhs.getData() == rhs.getData();
 }
 
 }

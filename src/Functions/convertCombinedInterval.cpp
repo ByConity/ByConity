@@ -232,7 +232,7 @@ public:
         {
             std::string_view delta = arguments[0].column->getDataAt(r).toView();
             std::reverse_iterator<const char *> iter = delta.crbegin();
-            
+
             Int64 sign = getSign(delta);
             internal_data[r] = sign * ConvertImpl::execute(delta, iter);
 

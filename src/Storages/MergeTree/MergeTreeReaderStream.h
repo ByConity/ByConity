@@ -67,8 +67,6 @@ private:
 
     off_t data_file_offset;
 
-    const MergeTreeIndexGranularityInfo * index_granularity_info;
-
     std::unique_ptr<CachedCompressedReadBuffer> cached_buffer;
     std::unique_ptr<CompressedReadBufferFromFile> non_cached_buffer;
 

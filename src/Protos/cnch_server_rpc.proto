@@ -7,115 +7,82 @@ import "auto_statistics.proto";
 
 option cc_generic_services = true;
 
-message ReportTaskHeartbeatReq
-{
-  required string task_id = 1;
-}
+message ReportTaskHeartbeatReq { required string task_id = 1; }
 
-message ReportTaskHeartbeatResp
-{
-  optional string exception = 1;
-}
+message ReportTaskHeartbeatResp { optional string exception = 1; }
 
-message ReportDeduperHeartbeatReq
-{
+message ReportDeduperHeartbeatReq {
   required StorageID cnch_storage_id = 1;
   required string worker_table_name = 2;
 }
 
-message ReportDeduperHeartbeatResp
-{
+message ReportDeduperHeartbeatResp {
   optional uint32 code = 1;
   optional string exception = 2;
 }
 
-message CheckConsumerValidityReq
-{
+message CheckConsumerValidityReq {
   required UUID uuid = 1;
   required uint64 consumer_index = 2;
   required string table_name = 3;
 }
 
-message CheckConsumerValidityResp
-{
-  optional string exception = 1;
-}
+message CheckConsumerValidityResp { optional string exception = 1; }
 
-message CreateKafkaTransactionReq
-{
+message CreateKafkaTransactionReq {
   required UUID uuid = 1;
   required uint64 consumer_index = 2;
   required string table_name = 3;
 };
 
-message CreateKafkaTransactionResp
-{
+message CreateKafkaTransactionResp {
   optional string exception = 1;
   optional uint64 txn_id = 2;
   optional uint64 start_time = 3;
 };
 
-message CreateTransactionReq
-{
-  optional uint64 primary_txn_id = 1;
-};
+message CreateTransactionReq { optional uint64 primary_txn_id = 1; };
 
-message CreateTransactionResp
-{
+message CreateTransactionResp {
   optional string exception = 1;
   required uint64 txn_id = 2;
   required uint64 start_time = 3;
 };
 
-message FinishTransactionReq
-{
-  required uint64 txn_id = 1;
-};
+message FinishTransactionReq { required uint64 txn_id = 1; };
 
-message FinishTransactionResp
-{
-  optional string exception = 1;
-};
+message FinishTransactionResp { optional string exception = 1; };
 
-message CommitTransactionReq
-{
+message CommitTransactionReq {
   required uint64 txn_id = 1;
   optional string insertion_label = 2;
   optional StorageID kafka_storage_id = 3;
   optional uint64 kafka_consumer_index = 4;
 };
 
-message CommitTransactionResp
-{
+message CommitTransactionResp {
   optional string exception = 1;
   optional uint64 commit_ts = 2;
 };
 
-message PrecommitTransactionReq
-{
+message PrecommitTransactionReq {
   required uint64 txn_id = 1;
   required UUID main_table_uuid = 2;
 };
 
-message PrecommitTransactionResp
-{
-  optional string exception = 1;
-};
+message PrecommitTransactionResp { optional string exception = 1; };
 
-message RollbackTransactionReq
-{
+message RollbackTransactionReq {
   required uint64 txn_id = 1;
   optional bool only_clean_data = 2;
 };
 
-message RollbackTransactionResp
-{
+message RollbackTransactionResp {
   optional string exception = 1;
   optional uint64 commit_ts = 2;
 };
 
-message CommitPartsReq
-{
+message CommitPartsReq {
   required string database = 1;
   required string table = 2;
   required UUID uuid = 3;
@@ -129,10 +96,12 @@ message CommitPartsReq
   repeated DataModelDeleteBitmap delete_bitmaps = 11;
   repeated DataModelPart staged_parts = 12;
   repeated string staged_parts_paths = 13;
+
+  // Binlog will be committed with parts while sync MaterializedMySQL
+  optional MySQLBinlogModel binlog = 14;
 };
 
-message CommitPartsResp
-{
+message CommitPartsResp {
   optional string exception = 1;
   optional uint64 commit_timestamp = 2;
 }
@@ -145,39 +114,25 @@ message SubmitPreloadTaskReq {
   optional uint64 ts = 5;
 }
 
-message SubmitPreloadTaskResp {
-  optional string exception = 1;
-}
+message SubmitPreloadTaskResp { optional string exception = 1; }
 
-message GetMinActiveTimestampReq
-{
-  required StorageID storage_id = 1;
-}
+message GetMinActiveTimestampReq { required StorageID storage_id = 1; }
 
-message GetMinActiveTimestampResp
-{
+message GetMinActiveTimestampResp {
   optional string exception = 1;
   optional uint64 timestamp = 2;
 }
 
-message ControlCnchBGThreadReq
-{
+message ControlCnchBGThreadReq {
   required StorageID storage_id = 1;
   required uint32 type = 2;
   required uint32 action = 3;
 };
 
-message ControlCnchBGThreadResp
-{
-  optional string exception = 1;
-}
+message ControlCnchBGThreadResp { optional string exception = 1; }
 
-enum BackgroundTaskAction
-{
-  Launch = 0;
-  Stop = 1;
-  Wakeup = 2;
-  Remove = 3; // drop table
+enum BackgroundTaskAction {
+  Launch = 0; Stop = 1; Wakeup = 2; Remove = 3; // drop table
 };
 
 message BackgroundThreadStatus {
@@ -185,39 +140,25 @@ message BackgroundThreadStatus {
   required uint32 status = 2;
 }
 
-message BackgroundThreadStatusReq {
-  required uint32 type = 1;
-}
+message BackgroundThreadStatusReq { required uint32 type = 1; }
 
-message BackgroundThreadStatusResp
-{
+message BackgroundThreadStatusResp {
   repeated BackgroundThreadStatus status = 1;
   optional string exception = 2;
 }
 
-message BackgroundThreadNumReq
-{
-  required uint32 type = 1;
-}
+message BackgroundThreadNumReq { required uint32 type = 1; }
 
-message CommitWorkerRPCByKeyReq
-{
-  required string key = 1;
-}
+message CommitWorkerRPCByKeyReq { required string key = 1; }
 
-message BackgroundThreadNumResp
-{
+message BackgroundThreadNumResp {
   optional uint32 num = 1;
   optional string exception = 2;
- }
-
-message CommitWorkerRPCByKeyResp
-{
-  optional string exception = 1;
 }
 
-message FetchPartitionsReq
-{
+message CommitWorkerRPCByKeyResp { optional string exception = 1; }
+
+message FetchPartitionsReq {
   required string remote_host = 1;
   required string database = 2;
   required string table = 3;
@@ -225,15 +166,13 @@ message FetchPartitionsReq
   repeated string column_name_filter = 5;
 }
 
-message FetchPartitionsResp
-{
+message FetchPartitionsResp {
   required uint64 total_size = 1;
   repeated string partitions = 2;
   optional string exception = 3;
 }
 
-message FetchDataPartsReq
-{
+message FetchDataPartsReq {
   required string remote_host = 1;
   required string database = 2;
   required string table = 3;
@@ -242,14 +181,12 @@ message FetchDataPartsReq
   required uint64 timestamp = 6;
 }
 
-message FetchDataPartsResp
-{
+message FetchDataPartsResp {
   optional string exception = 1;
   repeated DataModelPart parts = 2;
 }
 
-message FetchUniqueTableMetaReq
-{
+message FetchUniqueTableMetaReq {
   // storage id for the cnch table
   required StorageID storage_id = 1;
   // if specified, only return meta for the given partitions
@@ -259,200 +196,121 @@ message FetchUniqueTableMetaReq
   required uint64 timestamp = 3;
 }
 
-message FetchUniqueTableMetaResp
-{
+message FetchUniqueTableMetaResp {
   optional string exception = 1;
   repeated DataModelPart parts = 2;
   repeated DataModelDeleteBitmap bitmaps = 3;
 }
 
-message GetTablePartitionInfoReq
-{
-  repeated DataModelTable tables = 1;
-}
+message GetTablePartitionInfoReq { repeated DataModelTable tables = 1; }
 
-message GetTablePartitionInfoResp
-{
+message GetTablePartitionInfoResp {
   optional string exception = 1;
   repeated DataModelTablePartitionInfo table_partitions = 2;
 }
 
-message GetTableInfoReq
-{
-  repeated TableIdentifier table_ids = 1;
-}
+message GetTableInfoReq { repeated TableIdentifier table_ids = 1; }
 
-message GetTableInfoResp
-{
+message GetTableInfoResp {
   optional string exception = 1;
   repeated DataModelTableInfo table_infos = 2;
 }
 
-message InvalidateBytepondReq
-{
-  required string table_name = 1;
-}
+message InvalidateBytepondReq { required string table_name = 1; }
 
-message InvalidateBytepondResp
-{
-  optional string exception = 1;
-}
+message InvalidateBytepondResp { optional string exception = 1; }
 
-message GetTransactionStatusReq
-{
+message GetTransactionStatusReq {
   required uint64 txn_id = 1;
   required bool need_search_catalog = 2;
 }
 
-message GetTransactionStatusResp
-{
+message GetTransactionStatusResp {
   optional string exception = 1;
   optional TransactionStatus status = 2;
 }
 
-message CleanTransactionReq
-{
+message CleanTransactionReq {
   required DataModelTransactionRecord txn_record = 1;
 }
 
-message CleanTransactionResp
-{
-  optional string exception = 1;
-}
+message CleanTransactionResp { optional string exception = 1; }
 
-message GetServerStartTimeReq
-{
-}
+message GetServerStartTimeReq {}
 
-message GetServerStartTimeResp
-{
-  required uint64 server_start_time = 1;
-}
+message GetServerStartTimeResp { required uint64 server_start_time = 1; }
 
-message AcquireLockReq
-{
-  required DataModelLockInfo lock = 1;
-}
+message AcquireLockReq { required DataModelLockInfo lock = 1; }
 
-message AcquireLockResp
-{
+message AcquireLockResp {
   optional string exception = 1;
   optional uint32 lock_status = 2;
 }
 
-message ReleaseLockReq
-{
-  required DataModelLockInfo lock = 1;
-}
+message ReleaseLockReq { required DataModelLockInfo lock = 1; }
 
-message ReleaseLockResp
-{
-  optional string exception = 1;
-}
+message ReleaseLockResp { optional string exception = 1; }
 
-message AssertLockReq
-{
+message AssertLockReq {
   optional uint64 txn_id = 1;
   optional uint64 lock_id = 2;
 }
 
-message AssertLockResp
-{
-  optional string exception = 1;
-}
+message AssertLockResp { optional string exception = 1; }
 
-message ReportCnchLockHeartBeatReq
-{
+message ReportCnchLockHeartBeatReq {
   required uint64 txn_id = 1;
   optional uint64 expire_time = 2;
 }
 
-message ReportCnchLockHeartBeatResp
-{
-  optional string exception = 1;
-}
+message ReportCnchLockHeartBeatResp { optional string exception = 1; }
 
-message ScheduleGlobalGCReq
-{
-  repeated DataModelTable tables = 1;
-}
+message ScheduleGlobalGCReq { repeated DataModelTable tables = 1; }
 
-message ScheduleGlobalGCResp
-{
+message ScheduleGlobalGCResp {
   optional bool ret = 1;
   optional string exception = 2;
 }
-message RedirectUdiCounterReq
-{
+message RedirectUdiCounterReq {
   repeated UUID tables = 1;
   repeated uint64 udi_counts = 2;
 }
 
-message RedirectUdiCounterResp  
-{
-  optional string exception = 1;
-}
+message RedirectUdiCounterResp { optional string exception = 1; }
 
-message QueryUdiCounterReq
-{
-}
+message QueryUdiCounterReq {}
 
-message QueryUdiCounterResp
-{
+message QueryUdiCounterResp {
   optional string exception = 1;
   repeated UUID tables = 2;
   repeated uint64 udi_counts = 3;
 }
 
-message ScheduleDistributeUdiCountReq
-{
-}
+message ScheduleDistributeUdiCountReq {}
 
-message ScheduleDistributeUdiCountResp
-{
-  optional string exception = 1;
-}
+message ScheduleDistributeUdiCountResp { optional string exception = 1; }
 
-message ScheduleAutoStatsCollectReq
-{
-}
+message ScheduleAutoStatsCollectReq {}
 
-message ScheduleAutoStatsCollectResp
-{
-  optional string exception = 1;
-}
+message ScheduleAutoStatsCollectResp { optional string exception = 1; }
 
-message RedirectAsyncStatsTasksReq
-{
+message RedirectAsyncStatsTasksReq {
   repeated AutoStats.TaskInfoCore tasks = 1;
 }
 
-message RedirectAsyncStatsTasksResp
-{
-  optional string exception = 1;
-}
+message RedirectAsyncStatsTasksResp { optional string exception = 1; }
 
+message GetNumOfTablesCanSendForGlobalGCReq {}
 
-message GetNumOfTablesCanSendForGlobalGCReq
-{
-}
-
-message GetNumOfTablesCanSendForGlobalGCResp
-{
+message GetNumOfTablesCanSendForGlobalGCResp {
   required uint64 num_of_tables_can_send = 1;
 }
 
-message GetDeletingTablesInGlobalGCReq
-{
-}
+message GetDeletingTablesInGlobalGCReq {}
 
-message GetDeletingTablesInGlobalGCResp
-{
-  repeated UUID uuids = 1;
-}
+message GetDeletingTablesInGlobalGCResp { repeated UUID uuids = 1; }
 
-message RedirectCommitPartsReq
-{
+message RedirectCommitPartsReq {
   required string database = 1;
   required string table = 2;
   required UUID uuid = 3;
@@ -465,27 +323,19 @@ message RedirectCommitPartsReq
   optional bool preallocate_mode = 11;
 }
 
-message RedirectCommitPartsResp
-{
-  optional string exception = 1;
-}
+message RedirectCommitPartsResp { optional string exception = 1; }
 
-enum DetachAttachType
-{
-  ATTACH_DETACHED_PARTS = 1;
-  DETACH_ATTACHED_PARTS = 2;
-  ATTACH_DETACHED_RAW = 3;
+enum DetachAttachType {
+  ATTACH_DETACHED_PARTS = 1; DETACH_ATTACHED_PARTS = 2; ATTACH_DETACHED_RAW = 3;
   DETACH_ATTACHED_RAW = 4;
 }
 
-message DetachMeta
-{
+message DetachMeta {
   required string name = 1;
   required string meta = 2;
 }
 
-message RedirectAttachDetachedS3PartsReq
-{
+message RedirectAttachDetachedS3PartsReq {
   required DetachAttachType type = 1;
   optional UUID from_table_uuid = 2;
   optional UUID to_table_uuid = 3;
@@ -497,13 +347,9 @@ message RedirectAttachDetachedS3PartsReq
   repeated DataModelDeleteBitmap bitmaps = 9;
 }
 
-message RedirectAttachDetachedS3PartsResp
-{
-  optional string exception = 1;
-}
+message RedirectAttachDetachedS3PartsResp { optional string exception = 1; }
 
-message RedirectDetachAttachedS3PartsReq
-{
+message RedirectDetachAttachedS3PartsReq {
   required DetachAttachType type = 1;
   optional UUID from_table_uuid = 2;
   optional UUID to_table_uuid = 3;
@@ -518,35 +364,25 @@ message RedirectDetachAttachedS3PartsReq
   repeated DetachMeta detached_bitmap_metas = 12;
 }
 
-message RedirectDetachAttachedS3PartsResp
-{
-  optional string exception = 1;
-}
+message RedirectDetachAttachedS3PartsResp { optional string exception = 1; }
 
-message RemoveMergeMutateTasksOnPartitionsReq
-{
+message RemoveMergeMutateTasksOnPartitionsReq {
   required StorageID storage_id = 1;
   repeated string partitions = 2;
 }
 
-message RemoveMergeMutateTasksOnPartitionsResp
-{
+message RemoveMergeMutateTasksOnPartitionsResp {
   optional bool ret = 1;
   optional string exception = 2;
 }
 
-message SubmitQueryWorkerMetricsReq
-{
+message SubmitQueryWorkerMetricsReq {
   required QueryWorkerMetricElement element = 1;
 }
 
-message SubmitQueryWorkerMetricsResp
-{
-  optional string exception = 1;
-}
+message SubmitQueryWorkerMetricsResp { optional string exception = 1; }
 
-message ExecuteOptimizeQueryReq
-{
+message ExecuteOptimizeQueryReq {
   required StorageID storage_id = 1;
   required string partition_id = 2;
   required bool enable_try = 3;
@@ -554,10 +390,7 @@ message ExecuteOptimizeQueryReq
   optional uint64 timeout_ms = 5;
 }
 
-message ExecuteOptimizeQueryResp
-{
-  optional string exception = 1;
-}
+message ExecuteOptimizeQueryResp { optional string exception = 1; }
 
 message notifyAccessEntityChangeReq
 {
@@ -570,91 +403,158 @@ message notifyAccessEntityChangeResp
   optional string exception = 1;
 }
 
-service CnchServerService
-{
-  rpc reportTaskHeartbeat(ReportTaskHeartbeatReq) returns (ReportTaskHeartbeatResp);
-  rpc reportDeduperHeartbeat(ReportDeduperHeartbeatReq) returns (ReportDeduperHeartbeatResp);
+message SubmitMaterializedMySQLDDLQueryReq {
+  required string database_name = 1;
+  required string thread_key = 2;
+  required string ddl_query = 3;
+  optional string binlog_file = 4;
+  optional uint64 binlog_position = 5;
+  optional string executed_gtid_set = 6;
+  optional uint32 meta_version = 7;
+}
 
-  rpc checkConsumerValidity(CheckConsumerValidityReq) returns (CheckConsumerValidityResp);
-  rpc createTransactionForKafka(CreateKafkaTransactionReq) returns (CreateKafkaTransactionResp);
+message SubmitMaterializedMySQLDDLQueryResp { optional string exception = 1; }
 
-  rpc createTransaction(CreateTransactionReq) returns (CreateTransactionResp);
+message ReportHeartbeatForSyncThreadReq {
+  required string database_name = 1;
+  required string thread_key = 2;
+  optional string table = 3;
+}
 
-  rpc finishTransaction(FinishTransactionReq) returns (FinishTransactionResp);
+message ReportHeartbeatForSyncThreadResp { optional string exception = 1; }
 
-  rpc commitTransaction(CommitTransactionReq) returns (CommitTransactionResp);
+message ReportSyncFailedForSyncThreadReq {
+  required string database_name = 1;
+  required string thread_key = 2;
+  optional string table = 3;
+}
 
-  rpc precommitTransaction(PrecommitTransactionReq) returns (PrecommitTransactionResp);
+message ReportSyncFailedForSyncThreadResp { optional string exception = 1; }
 
-  rpc rollbackTransaction(RollbackTransactionReq) returns (RollbackTransactionResp);
+message ForceRecalculateMetricsReq { required StorageID storage_id = 1; }
 
-  rpc commitParts(CommitPartsReq) returns (CommitPartsResp);
+message ForceRecalculateMetricsResp { optional string exception = 1; }
 
-  rpc getMinActiveTimestamp(GetMinActiveTimestampReq) returns (GetMinActiveTimestampResp);
+service CnchServerService {
+  rpc reportTaskHeartbeat(ReportTaskHeartbeatReq)
+      returns(ReportTaskHeartbeatResp);
+  rpc reportDeduperHeartbeat(ReportDeduperHeartbeatReq)
+      returns(ReportDeduperHeartbeatResp);
 
-  rpc controlCnchBGThread(ControlCnchBGThreadReq) returns (ControlCnchBGThreadResp);
+  rpc checkConsumerValidity(CheckConsumerValidityReq)
+      returns(CheckConsumerValidityResp);
+  rpc createTransactionForKafka(CreateKafkaTransactionReq)
+      returns(CreateKafkaTransactionResp);
 
-  rpc getBackgroundThreadStatus(BackgroundThreadStatusReq) returns (BackgroundThreadStatusResp);
+  rpc createTransaction(CreateTransactionReq) returns(CreateTransactionResp);
 
-  rpc getNumBackgroundThreads(BackgroundThreadNumReq) returns (BackgroundThreadNumResp);
+  rpc finishTransaction(FinishTransactionReq) returns(FinishTransactionResp);
 
-  rpc fetchDataParts(FetchDataPartsReq) returns (FetchDataPartsResp);
+  rpc commitTransaction(CommitTransactionReq) returns(CommitTransactionResp);
 
-  rpc fetchPartitions(FetchPartitionsReq) returns (FetchPartitionsResp);
+  rpc precommitTransaction(PrecommitTransactionReq)
+      returns(PrecommitTransactionResp);
 
-  rpc fetchUniqueTableMeta(FetchUniqueTableMetaReq) returns (FetchUniqueTableMetaResp);
+  rpc rollbackTransaction(RollbackTransactionReq)
+      returns(RollbackTransactionResp);
 
-  rpc getTablePartitionInfo(GetTablePartitionInfoReq) returns (GetTablePartitionInfoResp);
+  rpc commitParts(CommitPartsReq) returns(CommitPartsResp);
 
-  rpc getTableInfo(GetTableInfoReq) returns (GetTableInfoResp);
+  rpc getMinActiveTimestamp(GetMinActiveTimestampReq)
+      returns(GetMinActiveTimestampResp);
 
-  rpc invalidateBytepond(InvalidateBytepondReq) returns (InvalidateBytepondResp);
+  rpc controlCnchBGThread(ControlCnchBGThreadReq)
+      returns(ControlCnchBGThreadResp);
 
-  rpc getTransactionStatus(GetTransactionStatusReq) returns (GetTransactionStatusResp);
+  rpc getBackgroundThreadStatus(BackgroundThreadStatusReq)
+      returns(BackgroundThreadStatusResp);
 
-  rpc commitWorkerRPCByKey(CommitWorkerRPCByKeyReq) returns (CommitWorkerRPCByKeyResp);
+  rpc getNumBackgroundThreads(BackgroundThreadNumReq)
+      returns(BackgroundThreadNumResp);
 
-  rpc cleanTransaction(CleanTransactionReq) returns (CleanTransactionResp);
+  rpc fetchDataParts(FetchDataPartsReq) returns(FetchDataPartsResp);
 
-  rpc acquireLock(AcquireLockReq) returns (AcquireLockResp);
+  rpc fetchPartitions(FetchPartitionsReq) returns(FetchPartitionsResp);
 
-  rpc releaseLock(ReleaseLockReq) returns (ReleaseLockResp);
+  rpc fetchUniqueTableMeta(FetchUniqueTableMetaReq)
+      returns(FetchUniqueTableMetaResp);
 
-  rpc assertLockAcquired(AssertLockReq) returns (AssertLockResp);
+  rpc getTablePartitionInfo(GetTablePartitionInfoReq)
+      returns(GetTablePartitionInfoResp);
 
-  rpc reportCnchLockHeartBeat(ReportCnchLockHeartBeatReq) returns (ReportCnchLockHeartBeatResp);
+  rpc getTableInfo(GetTableInfoReq) returns(GetTableInfoResp);
 
-  rpc getServerStartTime(GetServerStartTimeReq) returns (GetServerStartTimeResp);
+  rpc invalidateBytepond(InvalidateBytepondReq) returns(InvalidateBytepondResp);
 
-  rpc scheduleGlobalGC(ScheduleGlobalGCReq) returns (ScheduleGlobalGCResp);
+  rpc getTransactionStatus(GetTransactionStatusReq)
+      returns(GetTransactionStatusResp);
 
+  rpc commitWorkerRPCByKey(CommitWorkerRPCByKeyReq)
+      returns(CommitWorkerRPCByKeyResp);
+
+  rpc cleanTransaction(CleanTransactionReq) returns(CleanTransactionResp);
+
+  rpc acquireLock(AcquireLockReq) returns(AcquireLockResp);
+
+  rpc releaseLock(ReleaseLockReq) returns(ReleaseLockResp);
+
+  rpc assertLockAcquired(AssertLockReq) returns(AssertLockResp);
+
+  rpc reportCnchLockHeartBeat(ReportCnchLockHeartBeatReq)
+      returns(ReportCnchLockHeartBeatResp);
+
+  rpc getServerStartTime(GetServerStartTimeReq) returns(GetServerStartTimeResp);
+
+  rpc scheduleGlobalGC(ScheduleGlobalGCReq) returns(ScheduleGlobalGCResp);
 
   // for auto statistics
-  rpc queryUdiCounter(QueryUdiCounterReq) returns (QueryUdiCounterResp);
-  rpc redirectUdiCounter(RedirectUdiCounterReq) returns (RedirectUdiCounterResp);
-  rpc scheduleDistributeUdiCount(ScheduleDistributeUdiCountReq) returns (ScheduleDistributeUdiCountResp);
-  rpc scheduleAutoStatsCollect(ScheduleAutoStatsCollectReq) returns (ScheduleAutoStatsCollectResp);
-  rpc redirectAsyncStatsTasks(RedirectAsyncStatsTasksReq) returns (RedirectAsyncStatsTasksResp);
+  rpc queryUdiCounter(QueryUdiCounterReq) returns(QueryUdiCounterResp);
+  rpc redirectUdiCounter(RedirectUdiCounterReq) returns(RedirectUdiCounterResp);
+  rpc scheduleDistributeUdiCount(ScheduleDistributeUdiCountReq)
+      returns(ScheduleDistributeUdiCountResp);
+  rpc scheduleAutoStatsCollect(ScheduleAutoStatsCollectReq)
+      returns(ScheduleAutoStatsCollectResp);
+  rpc redirectAsyncStatsTasks(RedirectAsyncStatsTasksReq)
+      returns(RedirectAsyncStatsTasksResp);
 
-  rpc getNumOfTablesCanSendForGlobalGC(GetNumOfTablesCanSendForGlobalGCReq) returns (GetNumOfTablesCanSendForGlobalGCResp);
+  rpc getNumOfTablesCanSendForGlobalGC(GetNumOfTablesCanSendForGlobalGCReq)
+      returns(GetNumOfTablesCanSendForGlobalGCResp);
 
-  rpc getDeletingTablesInGlobalGC(GetDeletingTablesInGlobalGCReq) returns (GetDeletingTablesInGlobalGCResp);
+  rpc getDeletingTablesInGlobalGC(GetDeletingTablesInGlobalGCReq)
+      returns(GetDeletingTablesInGlobalGCResp);
 
-  rpc redirectCommitParts(RedirectCommitPartsReq) returns (RedirectCommitPartsResp);
+  rpc redirectCommitParts(RedirectCommitPartsReq)
+      returns(RedirectCommitPartsResp);
 
-  rpc redirectSetCommitTime(RedirectCommitPartsReq) returns (RedirectCommitPartsResp);
+  rpc redirectSetCommitTime(RedirectCommitPartsReq)
+      returns(RedirectCommitPartsResp);
 
-  rpc redirectAttachDetachedS3Parts(RedirectAttachDetachedS3PartsReq) returns (RedirectAttachDetachedS3PartsResp);
+  rpc redirectAttachDetachedS3Parts(RedirectAttachDetachedS3PartsReq)
+      returns(RedirectAttachDetachedS3PartsResp);
 
-  rpc redirectDetachAttachedS3Parts(RedirectDetachAttachedS3PartsReq) returns (RedirectDetachAttachedS3PartsResp);
+  rpc redirectDetachAttachedS3Parts(RedirectDetachAttachedS3PartsReq)
+      returns(RedirectDetachAttachedS3PartsResp);
 
-  rpc removeMergeMutateTasksOnPartitions(RemoveMergeMutateTasksOnPartitionsReq) returns (RemoveMergeMutateTasksOnPartitionsResp);
+  rpc removeMergeMutateTasksOnPartitions(RemoveMergeMutateTasksOnPartitionsReq)
+      returns(RemoveMergeMutateTasksOnPartitionsResp);
 
-  rpc submitQueryWorkerMetrics(SubmitQueryWorkerMetricsReq) returns (SubmitQueryWorkerMetricsResp);
+  rpc submitQueryWorkerMetrics(SubmitQueryWorkerMetricsReq)
+      returns(SubmitQueryWorkerMetricsResp);
 
-  rpc executeOptimize(ExecuteOptimizeQueryReq) returns (ExecuteOptimizeQueryResp);
+  rpc executeOptimize(ExecuteOptimizeQueryReq)
+      returns(ExecuteOptimizeQueryResp);
 
   rpc notifyAccessEntityChange(notifyAccessEntityChangeReq) returns (notifyAccessEntityChangeResp);
 
-  rpc submitPreloadTask(SubmitPreloadTaskReq) returns (SubmitPreloadTaskResp);
+  rpc submitPreloadTask(SubmitPreloadTaskReq) returns(SubmitPreloadTaskResp);
+
+  rpc submitMaterializedMySQLDDLQuery(SubmitMaterializedMySQLDDLQueryReq)
+      returns(SubmitMaterializedMySQLDDLQueryResp);
+  rpc reportHeartbeatForSyncThread(ReportHeartbeatForSyncThreadReq)
+      returns(ReportHeartbeatForSyncThreadResp);
+  rpc reportSyncFailedForSyncThread(ReportSyncFailedForSyncThreadReq)
+      returns(ReportSyncFailedForSyncThreadResp);
+
+  rpc forceRecalculateMetrics(ForceRecalculateMetricsReq)
+      returns(ForceRecalculateMetricsResp);
 };

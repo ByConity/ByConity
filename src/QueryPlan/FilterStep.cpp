@@ -179,7 +179,7 @@ std::shared_ptr<IQueryPlanStep> FilterStep::copy(ContextPtr) const
 }
 
 ConstASTPtr
-FilterStep::rewriteRuntimeFilter(const ConstASTPtr & filter, QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context)
+FilterStep::rewriteRuntimeFilter(const ConstASTPtr & filter, QueryPipeline & /*pipeline*/, const BuildQueryPipelineSettings & build_context)
 {
     auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter);
     if (filters.first.empty())

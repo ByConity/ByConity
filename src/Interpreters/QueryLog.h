@@ -89,12 +89,19 @@ struct QueryLogElement
     /// available when print_graphviz=1
     std::shared_ptr<std::vector<std::pair<String, String>>> graphviz;
 
+    /// profile info in json format
+    std::shared_ptr<std::vector<String>> segment_profiles;
+
+    String trace_id;
     Int64 segment_id{};
     Int64 segment_parallel{};
     Int64 segment_parallel_index{};
 
     // if fallback by optimizer, write the ExceptionMessage to query_log
     String fallback_reason;
+
+    String virtual_warehouse;
+    String worker_group;
 
     static std::string name() { return "QueryLog"; }
 

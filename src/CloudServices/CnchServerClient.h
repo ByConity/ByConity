@@ -27,6 +27,7 @@
 #include <Catalog/CatalogUtils.h>
 #include <Access/IAccessEntity.h>
 #include <Statistics/AutoStatisticsHelper.h>
+#include <Databases/MySQL/MaterializedMySQLCommon.h>
 
 namespace DB
 {
@@ -122,7 +123,8 @@ public:
         const String & task_id = {},
         const bool from_server = false,
         const String & consumer_group = {},
-        const cppkafka::TopicPartitionList & tpl = {});
+        const cppkafka::TopicPartitionList & tpl = {},
+        const MySQLBinLogInfo & binlog = {});
 
     TxnTimestamp precommitParts(
         ContextPtr context,
@@ -135,7 +137,8 @@ public:
         const String & task_id = {},
         const bool from_server = false,
         const String & consumer_group = {},
-        const cppkafka::TopicPartitionList & tpl = {});
+        const cppkafka::TopicPartitionList & tpl = {},
+        const MySQLBinLogInfo & binlog = {});
 
     google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>
     getTableInfo(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & tables);
@@ -164,6 +167,14 @@ public:
 
     void executeOptimize(const StorageID & storage_id, const String & partition_id, bool enable_try, bool mutations_sync, UInt64 timeout_ms);
     void notifyAccessEntityChange(IAccessEntity::Type type, const String & name);
+
+#if USE_MYSQL
+    void submitMaterializedMySQLDDLQuery(const String & database_name, const String & sync_thread, const String & query, const MySQLBinLogInfo & binlog);
+    void reportHeartBeatForSyncThread(const String & database_name, const String & sync_thread);
+    void reportSyncFailedForSyncThread(const String & database_name, const String & sync_thread);
+#endif
+
+    void forceRecalculateMetrics(const StorageID & storage_id);
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;
 };

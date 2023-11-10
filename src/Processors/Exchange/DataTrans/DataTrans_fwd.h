@@ -23,10 +23,13 @@ namespace DB
 {
 class IBroadcastReceiver;
 class IBroadcastSender;
+class BroadcastSenderProxy;
 using BroadcastReceiverPtr = std::shared_ptr<IBroadcastReceiver>;
 using BroadcastReceiverPtrs = std::vector<BroadcastReceiverPtr>;
 using BroadcastSenderPtr = std::shared_ptr<IBroadcastSender>;
 using BroadcastSenderPtrs = std::vector<BroadcastSenderPtr>;
+using BroadcastSenderProxyPtr = std::shared_ptr<BroadcastSenderProxy>;
+using BroadcastSenderProxyPtrs = std::vector<BroadcastSenderProxyPtr>;
 
 /// Status code indicates the status of the broadcaster which consists by connected senders and receiver.
 /// We should cancel data transport immediately when return positive status code and close gracefully when meet negative code.

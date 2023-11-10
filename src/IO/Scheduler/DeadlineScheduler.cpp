@@ -12,7 +12,7 @@
 #include <ratio>
 #include <cassert>
 #include <common/scope_guard.h>
-#include <base/defines.h>
+#include <common/defines.h>
 #include <common/logger_useful.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
@@ -93,7 +93,7 @@ OpenedFile DeadlineScheduler::open(const String& file_name,
 }
 
 /**
- * @brief Based on given file and <offset, size>, merge with exsiting requests if overlapped, 
+ * @brief Based on given file and <offset, size>, merge with exsiting requests if overlapped,
  *        then split by max_request_size_ and replace original requests.
  */
 void DeadlineScheduler::readAsync(FileMeta* file, uint64_t offset, uint64_t size, char* buffer,
@@ -171,7 +171,7 @@ void DeadlineScheduler::readAsync(FileMeta* file, uint64_t offset, uint64_t size
     std::map<RequestPos, std::unique_ptr<DeadlineRawRequest>>::iterator inserted_end;
     // Split requests by max_request_size_
     for (uint64_t merging_offset = range_begin; merging_offset < range_end; merging_offset += opts_.max_request_size_) {
-        // Construct new request, the size of last request should be the remaining size 
+        // Construct new request, the size of last request should be the remaining size
         std::unique_ptr<DeadlineRawRequest> new_request = std::make_unique<DeadlineRawRequest>(
             file, merging_offset, std::min(range_end - merging_offset, opts_.max_request_size_));
         new_request->min_reach_submit_time_ = req_ddl_iter->submit_time_;
@@ -450,13 +450,13 @@ std::unique_ptr<DeadlineRawRequest> DeadlineScheduler::clearRequestDependency(
 
     // Remove raw dependency from user request which depends on this raw request
     for (auto dependent : raw_request->payload_.user_dependency_) {
-        auto iter = dependent->request_.payload_.raw_dependency_.find(raw_request->offset_);
+        auto it = dependent->request_.payload_.raw_dependency_.find(raw_request->offset_);
         assert("UserRequest and RawRequest's dependency mismatch"
-            && iter != dependent->request_.payload_.raw_dependency_.end());
+            && it != dependent->request_.payload_.raw_dependency_.end());
         assert("UserRequest have a different DeadlineRawRequest in same position"
-            && (iter->second == raw_request.get()));
+            && (it->second == raw_request.get()));
 
-        dependent->request_.payload_.raw_dependency_.erase(iter);
+        dependent->request_.payload_.raw_dependency_.erase(it);
     }
 
     return raw_request;

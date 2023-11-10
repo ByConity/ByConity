@@ -26,6 +26,8 @@
 #include <Processors/Transforms/MergeSortingTransform.h>
 #include <Processors/Transforms/PartialSortingTransform.h>
 #include <Processors/Transforms/WindowTransform.h>
+#include <Processors/ResizeProcessor.h>
+#include <Processors/Transforms/ScatterByPartitionTransform.h>
 #include <QueryPlan/MergeSortingStep.h>
 #include <QueryPlan/MergingSortedStep.h>
 #include <QueryPlan/PartialSortingStep.h>
@@ -95,11 +97,14 @@ void WindowStep::setInputStreams(const DataStreams & input_streams_)
 
 void WindowStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPipelineSettings & s)
 {
-    // TODO: re-enable WINDOW PARALLEL
-    auto enable_windows_parallel = false;
+    auto enable_windows_parallel = s.context->getSettingsRef().enable_windows_parallel;
     if (need_sort && !window_description.full_sort_description.empty())
     {
+        if (enable_windows_parallel)
+            scatterByPartitionIfNeeded(pipeline);
+
         // finish sorting
+
         DataStream input_stream{input_header};
         if (!prefix_description.empty() && !enable_windows_parallel)
         {
@@ -151,7 +156,8 @@ void WindowStep::transformPipeline(QueryPipeline & pipeline, const BuildQueryPip
     // This resize is needed for cases such as `over ()` when we don't have a
     // sort node, and the input might have multiple streams. The sort node would
     // have resized it.
-    pipeline.resize(1);
+    if (!enable_windows_parallel || window_description.full_sort_description.empty())
+        pipeline.resize(1);
 
     pipeline.addSimpleTransform([&](const Block & /*header*/) {
         return std::make_shared<WindowTransform>(
@@ -257,4 +263,54 @@ std::shared_ptr<WindowStep> WindowStep::fromProto(const Protos::WindowStep & pro
     step->setStepDescription(step_description);
     return step;
 }
+
+void WindowStep::scatterByPartitionIfNeeded(QueryPipeline& pipeline)
+{
+    size_t threads = pipeline.getNumThreads();
+    size_t streams = pipeline.getNumStreams();
+
+    if (!window_description.partition_by.empty() && threads > 1)
+    {
+        Block stream_header = pipeline.getHeader();
+
+        ColumnNumbers key_columns;
+        key_columns.reserve(window_description.partition_by.size());
+        for (auto & col : window_description.partition_by)
+        {
+            key_columns.push_back(stream_header.getPositionByName(col.column_name));
+        }
+
+        pipeline.transform([&](OutputPortRawPtrs ports)
+        {
+            Processors processors;
+            for (auto * port : ports)
+            {
+                auto scatter = std::make_shared<ScatterByPartitionTransform>(stream_header, threads, key_columns);
+                connect(*port, scatter->getInputs().front());
+                processors.push_back(scatter);
+            }
+            return processors;
+        });
+
+        if (streams > 1)
+        {
+            pipeline.transform([&](OutputPortRawPtrs ports)
+            {
+                Processors processors;
+                for (size_t i = 0; i < threads; ++i)
+                {
+                    size_t output_it = i;
+                    auto resize = std::make_shared<ResizeProcessor>(ports[output_it]->getHeader(), streams, 1);
+                    auto & inputs = resize->getInputs();
+
+                    for (auto input_it = inputs.begin(); input_it != inputs.end(); output_it += threads, ++input_it)
+                        connect(*ports[output_it], *input_it);
+                    processors.push_back(resize);
+                }
+                return processors;
+            });
+        }
+    }
+}
+
 }

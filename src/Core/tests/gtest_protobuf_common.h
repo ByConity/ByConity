@@ -491,7 +491,7 @@ public:
         return step;
     }
 
-    static SelectQueryInfo generateSelectQueryInfo(std::default_random_engine & eng)
+    static SelectQueryInfo generateSelectQueryInfo(std::default_random_engine &)
     {
         SelectQueryInfo res;
         auto list = std::make_shared<ASTExpressionList>();
@@ -518,7 +518,7 @@ public:
         return AddressInfo(host_name, port, user, password, exchange_port, exchange_status_port);
     }
 
-    static std::shared_ptr<PlanSegmentInput> generatePlanSegmentInput(std::default_random_engine & eng)
+    static std::shared_ptr<PlanSegmentInput> generatePlanSegmentInput(std::default_random_engine &)
     {
         Block header = {ColumnWithTypeAndName(ColumnUInt8::create(), std::make_shared<DataTypeUInt8>(), "local_exchange_test")};
         AddressInfo local_address("localhost", 0, "test", "123456", 9999, 6666);

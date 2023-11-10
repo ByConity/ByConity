@@ -92,11 +92,6 @@ static bool inFunctionIsNullSkipped(const String & func_name)
     return func_name == "in" || func_name == "globalIn" || func_name == "notIn" || func_name == "globalNotIn";
 }
 
-static bool inFunctionIsNotNullSkipped(const String & func_name)
-{
-    return func_name == "nullIn" || func_name == "globalNullIn" || func_name == "notNullIn" || func_name == "globalNotNullIn";
-}
-
 static bool isInFunction(const String & func_name)
 {
     return inFunctionIsPositive(func_name) || inFunctionIsNegative(func_name);

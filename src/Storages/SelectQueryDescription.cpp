@@ -39,6 +39,7 @@ extern const int LOGICAL_ERROR;
 
 SelectQueryDescription::SelectQueryDescription(const SelectQueryDescription & other)
     : select_table_id(other.select_table_id)
+    , base_table_ids(other.base_table_ids)
     , select_query(other.select_query ? other.select_query->clone() : nullptr)
     , inner_query(other.inner_query ? other.inner_query->clone() : nullptr)
 {
@@ -50,6 +51,7 @@ SelectQueryDescription & SelectQueryDescription::SelectQueryDescription::operato
         return *this;
 
     select_table_id = other.select_table_id;
+    base_table_ids = other.base_table_ids;
     if (other.select_query)
         select_query = other.select_query->clone();
     else
@@ -65,6 +67,22 @@ SelectQueryDescription & SelectQueryDescription::SelectQueryDescription::operato
 
 namespace
 {
+
+std::vector<std::shared_ptr<StorageID>> getBaseTableIds(ASTSelectQuery & query, ContextPtr context)
+{
+    std::vector<std::shared_ptr<StorageID>> table_ids;
+    std::vector<ASTPtr> all_tables;
+
+    bool has_table_function = false;
+    ASTSelectQuery::collectAllTables(&query, all_tables, has_table_function);
+    for (auto & table_ast : all_tables)
+    {
+        DatabaseAndTableWithAlias db_and_table(table_ast, context->getCurrentDatabase());
+        table_ids.emplace_back(std::make_shared<StorageID>(db_and_table.database, db_and_table.table));
+    }
+
+    return table_ids;
+}
 
 StorageID extractDependentTableFromSelectQuery(ASTSelectQuery & query, ContextPtr context, bool add_default_db = true)
 {
@@ -148,6 +166,7 @@ SelectQueryDescription SelectQueryDescription::getSelectQueryFromASTForMatView(c
 
     SelectQueryDescription result;
     result.select_table_id = extractDependentTableFromSelectQuery(select_query, context);
+    result.base_table_ids = getBaseTableIds(select_query, context);
     result.select_query = select->as<ASTSelectWithUnionQuery &>().clone();
     result.inner_query = new_inner_query->clone();
     return result;

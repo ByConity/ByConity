@@ -37,7 +37,7 @@ BlockIO InterpreterDropBinding::execute()
         }
         else if (!drop->pattern.empty())
         {
-            pattern_uuid = SQLBindingUtils::getQueryHash(drop->pattern.data(), drop->pattern.data() + drop->pattern.size());
+            pattern_uuid = SQLBindingUtils::getQueryASTHash(drop->pattern_ast);
             if (binding_cache_manager->hasSqlBinding(pattern_uuid))
                 binding_cache_manager->removeSqlBinding(pattern_uuid);
             else

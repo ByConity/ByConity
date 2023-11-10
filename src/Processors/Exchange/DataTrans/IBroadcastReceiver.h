@@ -19,14 +19,30 @@
 #include <Processors/Chunk.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Common/time.h>
+#include <bvar/reducer.h>
 #include <common/types.h>
+#include <Interpreters/QueryExchangeLog.h>
 
 namespace DB
 {
+
 using RecvDataPacket = std::variant<Chunk, BroadcastStatus>;
 class IBroadcastReceiver
 {
 public:
+    struct ReceiverMetrics
+    {
+        bvar::Adder<size_t> recv_time_ms;
+        bvar::Adder<size_t> register_time_ms;
+        bvar::Adder<size_t> recv_rows;
+        bvar::Adder<size_t> recv_bytes;
+        bvar::Adder<size_t> recv_io_bytes;
+        bvar::Adder<size_t> recv_counts;
+        bvar::Adder<size_t> dser_time_ms;
+        std::atomic<Int32> finish_code{0};
+        std::atomic<Int8> is_modifier{-1};
+        String message;
+    };
     virtual void registerToSenders(UInt32 timeout_ms) = 0;
     virtual RecvDataPacket recv(UInt32 timeout_ms)
     {
@@ -35,9 +51,13 @@ public:
         return recv(timeout_ts);
     }
     virtual RecvDataPacket recv(timespec timeout_ts) = 0;
-    virtual BroadcastStatus finish(BroadcastStatusCode status_code_, String message) = 0;
+    virtual BroadcastStatus finish(BroadcastStatusCode status_code, String message) = 0;
     virtual String getName() const = 0;
     virtual ~IBroadcastReceiver() = default;
+    void setEnableReceiverMetrics(bool enable_) { enable_receiver_metrics = enable_; }
+
+    bool enable_receiver_metrics = false;
+    ReceiverMetrics receiver_metrics; // by default, metrics are disabled
 };
 
 }

@@ -108,8 +108,17 @@ public:
 DatabaseCnch::DatabaseCnch(const String & name_, UUID uuid, ContextPtr local_context)
     : IDatabase(name_)
     , WithContext(local_context->getGlobalContext())
-    , db_uuid(uuid)
     , log(&Poco::Logger::get("DatabaseCnch (" + name_ + ")"))
+    , db_uuid(uuid)
+{
+    LOG_DEBUG(log, "Create database {} in query {}", database_name, local_context->getCurrentQueryId());
+}
+
+DatabaseCnch::DatabaseCnch(const String & name_, UUID uuid, const String & logger, ContextPtr local_context)
+    : IDatabase(name_)
+    , WithContext(local_context->getGlobalContext())
+    , log(&Poco::Logger::get(logger))
+    , db_uuid(uuid)
 {
     LOG_DEBUG(log, "Create database {} in query {}", database_name, local_context->getCurrentQueryId());
 }
