@@ -283,8 +283,12 @@ Packet MultiplexedConnections::drain()
     if (!cancelled)
         throw Exception("Cannot drain connections: cancel first.", ErrorCodes::LOGICAL_ERROR);
 
+
     Packet res;
     res.type = Protocol::Server::EndOfStream;
+
+    if (!hasActiveConnections())
+        return res;
 
     Packet packet = receivePacketUnlocked({});
 
