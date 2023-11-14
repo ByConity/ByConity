@@ -213,6 +213,10 @@
 /// Heavy assertions (that run loops or call complex functions) are allowed in debug builds only.
 /// Also it makes sense to call abort() instead of __builtin_unreachable() in debug builds,
 /// because SIGABRT is easier to debug than SIGTRAP (the second one makes gdb crazy)
+#ifdef UNREACHABLE
+#undef UNREACHABLE
+#endif
+
 #if !defined(chassert)
     #if defined(ABORT_ON_LOGICAL_ERROR)
         #define chassert(x) static_cast<bool>(x) ? void(0) : ::DB::abortOnFailedAssertion(#x)
