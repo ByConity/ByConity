@@ -3815,6 +3815,7 @@ namespace Catalog
 
         String table_uuid = UUIDHelpers::UUIDToString(table->getStorageUUID());
         String part_meta_prefix = MetastoreProxy::dataPartPrefix(name_space, table_uuid);
+        String staged_part_meta_prefix = MetastoreProxy::stagedDataPartPrefix(name_space, table_uuid);
         String trash_item_prefix = MetastoreProxy::trashItemsPrefix(name_space, table_uuid);
 
         bool need_invalid_cache = context.getPartCacheManager() && !skip_part_cache;
@@ -3830,27 +3831,52 @@ namespace Catalog
             if (parts_index < items.data_parts.size())
             {
                 // Drop part metadata and add new one in trash;
-                const auto & server_part = items.data_parts[parts_index];
-                batch_writes.AddDelete(part_meta_prefix + server_part->info().getPartName());
-                batch_writes.AddPut(SinglePutRequest(
-                    MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, server_part->name()),
-                    server_part->part_model_wrapper->part_model->SerializeAsString()));
+                const auto & part = items.data_parts[parts_index];
+                batch_writes.AddDelete(part_meta_prefix + part->info().getPartName());
+                batch_writes.AddPut(
+                    {MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, part->name()),
+                     part->part_model_wrapper->part_model->SerializeAsString()});
                 parts_index++;
+                LOG_DEBUG(
+                    log,
+                    "Will move part of table {} to trash: {} {} {}",
+                    table_uuid,
+                    part->name(),
+                    part->getCommitTime(),
+                    (part->deleted() ? "tombstone" : ""));
             }
             else if (delete_bitmaps_index < items.delete_bitmaps.size())
             {
                 // Drop delete bitmap metadata and add new one in trash;
-                const auto & model = *(items.delete_bitmaps[delete_bitmaps_index]->getModel());
+                const auto & bitmap = items.delete_bitmaps[delete_bitmaps_index];
+                const auto & model = *(bitmap->getModel());
                 batch_writes.AddDelete(MetastoreProxy::deleteBitmapKey(name_space, table_uuid, model));
                 batch_writes.AddPut(
                     SinglePutRequest(MetastoreProxy::deleteBitmapKeyInTrash(name_space, table_uuid, model), model.SerializeAsString()));
                 delete_bitmaps_index++;
+                LOG_DEBUG(
+                    log,
+                    "Will move delete bitmap of table {} to trash: {} {} {}",
+                    table_uuid,
+                    bitmap->getNameForLogs(),
+                    bitmap->getCommitTime(),
+                    (bitmap->isTombstone() ? "tombstone" : ""));
             }
             else if (staged_parts_index < items.staged_parts.size())
             {
-                // Drop staged part metadata;
-                batch_writes.AddDelete(part_meta_prefix + items.staged_parts[staged_parts_index]->info().getPartName());
+                // Drop staged part metadata instead of moving to trash because:
+                // after staged part is published, it no longer own the underlying data file,
+                // therfore garbage collection of staged parts only needs metadata cleaning.
+                const auto & part = items.staged_parts[staged_parts_index];
+                batch_writes.AddDelete(staged_part_meta_prefix + part->info().getPartName());
                 staged_parts_index++;
+                LOG_DEBUG(
+                    log,
+                    "Will remove staged part metadata of table {}: {} {} {}",
+                    table_uuid,
+                    part->name(),
+                    part->getCommitTime(),
+                    (part->deleted() ? "tombstone" : ""));
             }
             else
                 // Stop loop if no more drop item.
@@ -4764,7 +4790,7 @@ namespace Catalog
             /// detach or attach table
             if (is_detach)
             {
-                table_id->set_detached(true);  
+                table_id->set_detached(true);
                 table->set_status(Status::setDetached(table->status()));
             }
             else
