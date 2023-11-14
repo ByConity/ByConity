@@ -170,7 +170,7 @@ void IScheduler::genTopology()
 
 void IScheduler::sendResource(SegmentTask task, PlanSegment * plan_segment_ptr)
 {
-    if (query_context->getSettingsRef().enable_send_resource_by_stage)     
+    if (query_context->getSettingsRef().bsp_mode)
     {
         LOG_TRACE(log, "Send resource for segment {}", task.task_id);
         ResourceOption option;

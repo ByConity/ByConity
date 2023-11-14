@@ -146,7 +146,7 @@ void executePlanSegmentRemotely(
     request.set_coordinator_exchange_status_port(coordinator_address.getExchangeStatusPort());
 
     request.set_database(context->getCurrentDatabase());
-    request.set_check_session(!(context->getSettingsRef().enable_new_scheduler && context->getSettingsRef().enable_send_resource_by_stage));
+    request.set_check_session(!(context->getSettingsRef().enable_new_scheduler && context->getSettingsRef().bsp_mode));
 
     const auto & client_info = context->getClientInfo();
     const String & quota_key = client_info.quota_key;

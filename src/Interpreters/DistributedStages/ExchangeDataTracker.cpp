@@ -18,7 +18,7 @@
 namespace DB
 {
 
-std::vector<std::pair<size_t, ExchangeStatus>> fromSenderMerics(const Protos::SenderMetrics & sender_metrics)
+std::vector<std::pair<size_t, ExchangeStatus>> fromSenderMetrics(const Protos::SenderMetrics & sender_metrics)
 {
     std::vector<std::pair<size_t, ExchangeStatus>> ret;
     for (const auto & sb : sender_metrics.send_bytes())
