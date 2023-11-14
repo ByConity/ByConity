@@ -42,6 +42,12 @@ TEST(StorageTraitTest, operations_test)
         EXPECT_FALSE(s.isCnchKafka());
         EXPECT_TRUE(s.isCnchUniqueAndNeedDedup());
     }
+    {
+        StorageTrait s;
+        EXPECT_FALSE(s.isCnchMergeTree());
+        EXPECT_FALSE(s.isCnchKafka());
+        EXPECT_FALSE(s.isCnchUniqueAndNeedDedup());
+    }
 }
 
 TEST(StorageTraitTest, StorageTraitForHive)

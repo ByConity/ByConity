@@ -164,6 +164,8 @@ void TSOServer::updateTSO()
                 log,
                 "No update for physical time on {}: [t_now = {}], [t_next = {}], [t_last = {}], [cur_ts.physical = {}], [cur_ts.logical = {}]",
                 host_port, t_now, t_next, t_last, cur_ts.physical, cur_ts.logical);
+
+            update_tso_task->scheduleAfter(TSO_UPDATE_INTERVAL);
             return;
         }
 

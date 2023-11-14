@@ -167,8 +167,7 @@ void DaemonJobTxnGC::cleanTxnRecord(
 
 bool DaemonJobTxnGC::triggerCleanUndoBuffers()
 {
-    // disable clean undobuffer by default. This task fetch all undobuffers from bytekv and may cause high memory usage
-    const int clean_undobuffer_interval = getContext()->getConfigRef().getInt("clean_undobuffer_interval_minutes", 0);
+    const int clean_undobuffer_interval = getContext()->getConfigRef().getInt("clean_undobuffer_interval_minutes", 6 * 60); // default 6 hour
     if (clean_undobuffer_interval == 0)
         return false;
 
@@ -190,35 +189,50 @@ void DaemonJobTxnGC::cleanUndoBuffers(const TransactionRecords & txn_records)
     });
 
     auto txn_undobuffers_iter = catalog->getUndoBufferIterator();
+    const size_t max_missing_ids_set_size = 1000000;
     std::vector<TxnTimestamp> missing_ids_set;
-    while(txn_undobuffers_iter.next())
+    try
     {
-        const UndoResource & undo_resource = txn_undobuffers_iter.getUndoResource();
-        const auto & txn_id = undo_resource.txn_id;
-        if (txn_id_set.find(txn_id) == txn_id_set.end())
-            missing_ids_set.push_back(txn_id);
+        while(txn_undobuffers_iter.next())
+        {
+            const UndoResource & undo_resource = txn_undobuffers_iter.getUndoResource();
+            const auto & txn_id = undo_resource.txn_id;
+            if (txn_id_set.find(txn_id) == txn_id_set.end())
+                missing_ids_set.push_back(txn_id);
+
+            if (missing_ids_set.size() > max_missing_ids_set_size)
+                break;
+        }
+    }
+    catch (...)
+    {
+        LOG_INFO(log, "Got exception while iterating undo buffer iterator: " + getCurrentExceptionMessage(false));
     }
 
     std::vector<TxnTimestamp> missing_ids(missing_ids_set.begin(), missing_ids_set.end());
-
-    auto missing_records = catalog->getTransactionRecords(missing_ids);
     size_t count = 0;
-    for (auto & record : missing_records)
+    const size_t batch_size = getContext()->getConfigRef().getInt("clean_undobuffer_batch_size", 1000);
+    while(!missing_ids.empty())
     {
-        if (record.status() == CnchTransactionStatus::Unknown)
+        std::vector<TxnTimestamp> missing_id_small_batch = extractLastElements(missing_ids, batch_size);
+        auto missing_records = catalog->getTransactionRecords(missing_id_small_batch);
+        for (auto & record : missing_records)
         {
-            // clean process for UNKNOWN is the same as ABORTED
-            count++;
-            record.setStatus(CnchTransactionStatus::Aborted);
+            if (record.status() == CnchTransactionStatus::Unknown)
+            {
+                // clean process for UNKNOWN is the same as ABORTED
+                count++;
+                record.setStatus(CnchTransactionStatus::Aborted);
 
-            try
-            {
-                auto client = server_pool.get();
-                client->cleanTransaction(record);
-            }
-            catch (...)
-            {
-                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                try
+                {
+                    auto client = server_pool.get();
+                    client->cleanTransaction(record);
+                }
+                catch (...)
+                {
+                    tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                }
             }
         }
     }
@@ -229,6 +243,20 @@ void DaemonJobTxnGC::cleanUndoBuffers(const TransactionRecords & txn_records)
 void registerTxnGCDaemon(DaemonFactory & factory)
 {
     factory.registerLocalDaemonJob<DaemonJobTxnGC>("TXN_GC");
+}
+
+std::vector<TxnTimestamp> extractLastElements(std::vector<TxnTimestamp> & from, size_t n)
+{
+    std::vector<TxnTimestamp> res;
+    if (from.size() <= n)
+    {
+        res.swap(from);
+        return res;
+    }
+
+    std::copy(from.end() - n, from.end(), std::back_inserter(res));
+    from.resize(from.size() - n);
+    return res;
 }
 
 }

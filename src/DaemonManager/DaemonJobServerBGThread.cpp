@@ -103,7 +103,7 @@ std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread 
 
             try
             {
-                std::optional<StorageTrait> storage_trait;
+                StorageTrait storage_trait;
                 if (auto cache = daemon_job.getStorageTraitCache(); cache)
                 {
                     auto res = cache->getOrSet(data_model.definition(), [&]()
@@ -127,13 +127,7 @@ std::unordered_map<UUID, StorageID> getUUIDsFromCatalog(DaemonJobServerBGThread 
                         data_model.definition());
                 }
 
-                if (!storage_trait)
-                {
-                    LOG_WARNING(log, "Fail to get StorageTrait for {}.{}", data_model.database(), data_model.name());
-                    continue;
-                }
-
-                if (daemon_job.ifNeedDaemonJob(storage_trait.value(), storage_id))
+                if (daemon_job.ifNeedDaemonJob(storage_trait, storage_id))
                     ret.insert(std::make_pair(uuid, storage_id));
             }
             catch (Exception & e)
@@ -641,7 +635,7 @@ bool DaemonJobServerBGThread::executeImpl()
     std::unordered_map<UUID, StorageID> new_uuid_map = getUUIDsFromCatalog(*this);
     milliseconds = watch.elapsedMilliseconds();
     if (milliseconds >= SLOW_EXECUTION_THRESHOLD_MS)
-        LOG_DEBUG(log, "getUUIDsFromCatalog took {} ms.", milliseconds);
+        LOG_DEBUG(log, "getUUIDsFromCatalog with size {} took {} ms.", new_uuid_map.size(), milliseconds);
 
     std::map<String, UInt64> new_server_start_times = fetchServerStartTimes(context, *topology_master, log);
     if (new_server_start_times.empty())
@@ -741,14 +735,26 @@ bool DaemonJobServerBGThread::executeImpl()
             LOG_DEBUG(log, "fetch bg job statuses took {} ms.", milliseconds);
 
         watch.restart();
+        const size_t max_thread_pool_size =
+            context.getConfigRef().getInt("daemon_job_for_bg_thread_max_thread_pool_size", 10);
+        const size_t thread_pool_size = std::min(server_info.alive_servers.size() * 3, max_thread_pool_size);
+        ThreadPool thread_pool{thread_pool_size, thread_pool_size, thread_pool_size * 4, false};
+
         std::for_each(
             background_jobs_clone.begin(),
             background_jobs_clone.end(),
-            [&server_info] (const auto & p)
+            [& server_info, & thread_pool] (const auto & p)
             {
-                p.second->sync(server_info);
+                const BackgroundJobPtr & bg_job = p.second;
+                thread_pool.scheduleOrThrowOnError(
+                    [& bg_job, & server_info] ()
+                    {
+                        bg_job->sync(server_info);
+                    });
             }
         );
+
+        thread_pool.wait();
     }
 
     milliseconds = watch.elapsedMilliseconds();
