@@ -150,6 +150,8 @@ public:
     void setNNProxyHa(bool val) { use_nnproxy_ha = val; }
 
     void lookupOnNeed();
+    std::vector<IpWithPort> lookupAndShuffle() const;
+    void shuffleAddrs(HostWithPortsVec & addrs) const;
     void setNNProxyBroken();
 
     Poco::URI formatPath([[maybe_unused]] const String & path) const;
