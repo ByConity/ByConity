@@ -18,6 +18,7 @@
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageCnchMergeTree.h>
@@ -50,6 +51,7 @@ NamesAndTypesList StorageSystemCnchStagedParts::getNamesAndTypes()
         {"partition_id", std::make_shared<DataTypeString>()},
         {"bucket_number", std::make_shared<DataTypeInt64>()},
         {"hdfs_path", std::make_shared<DataTypeString>()},
+        {"part_id", std::make_shared<DataTypeUUID>()},
     };
 }
 
@@ -124,45 +126,43 @@ void StorageSystemCnchStagedParts::fillData(MutableColumns & res_columns, Contex
     auto current_visible = visible_parts.cbegin();
 
     //get CNCH staged parts
-    for (size_t i = 0, size = all_parts.size(); i != size; ++i)
+    for (const auto & part : all_parts)
     {
-        if (all_parts[i]->deleted)
+        if (part->deleted)
             continue;
         size_t col_num = 0;
         {
             WriteBufferFromOwnString out;
-            all_parts[i]->partition.serializeText(*data, out, format_settings);
+            part->partition.serializeText(*data, out, format_settings);
             res_columns[col_num++]->insert(out.str());
         }
-        res_columns[col_num++]->insert(all_parts[i]->name);
+        res_columns[col_num++]->insert(part->name);
         res_columns[col_num++]->insert(only_selected_db);
         res_columns[col_num++]->insert(only_selected_table);
 
         /// all_parts and visible_parts are both ordered by info.
         /// For each part within all_parts, we find the first part greater than or equal to it in visible_parts,
         /// which means the part is visible if they are equal to each other
-        while (current_visible != visible_parts.cend() && (*current_visible)->info < all_parts[i]->info)
+        while (current_visible != visible_parts.cend() && (*current_visible)->info < part->info)
             ++current_visible;
-        bool to_publish = current_visible != visible_parts.cend() && all_parts[i]->info == (*current_visible)->info;
+        bool to_publish = current_visible != visible_parts.cend() && part->info == (*current_visible)->info;
         res_columns[col_num++]->insert(to_publish);
         res_columns[col_num++]->insert(!to_publish);
 
-        res_columns[col_num++]->insert(all_parts[i]->getBytesOnDisk());
-        res_columns[col_num++]->insert(all_parts[i]->rows_count);
-        res_columns[col_num++]->insert(all_parts[i]->getColumnsPtr()->toString());
-        res_columns[col_num++]->insert(all_parts[i]->getMarksCount());
+        res_columns[col_num++]->insert(part->getBytesOnDisk());
+        res_columns[col_num++]->insert(part->rows_count);
+        res_columns[col_num++]->insert(part->getColumnsPtr()->toString());
+        res_columns[col_num++]->insert(part->getMarksCount());
 
-        String ttl = std::to_string(all_parts[i]->ttl_infos.table_ttl.min) + "," + std::to_string(all_parts[i]->ttl_infos.table_ttl.max);
+        String ttl = std::to_string(part->ttl_infos.table_ttl.min) + "," + std::to_string(part->ttl_infos.table_ttl.max);
         res_columns[col_num++]->insert(ttl);
-
-        // first 48 bits represent times
-        res_columns[col_num++]->insert((all_parts[i]->commit_time.toUInt64() >> 18) / 1000);
-        res_columns[col_num++]->insert((all_parts[i]->columns_commit_time.toUInt64() >> 18) / 1000);
-
-        res_columns[col_num++]->insert(all_parts[i]->info.hint_mutation);
-        res_columns[col_num++]->insert(all_parts[i]->info.partition_id);
-        res_columns[col_num++]->insert(all_parts[i]->bucket_number);
-        res_columns[col_num++]->insert(all_parts[i]->getFullPath());
+        res_columns[col_num++]->insert(part->commit_time.toSecond());
+        res_columns[col_num++]->insert(part->columns_commit_time.toSecond());
+        res_columns[col_num++]->insert(part->info.hint_mutation);
+        res_columns[col_num++]->insert(part->info.partition_id);
+        res_columns[col_num++]->insert(part->bucket_number);
+        res_columns[col_num++]->insert(part->getFullPath());
+        res_columns[col_num++]->insert(part->getUUID());
     }
 }
 }

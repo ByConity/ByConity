@@ -223,7 +223,7 @@ void PartWriter::execute()
         }
         for (const auto & temp_part : parts)
         {
-            cnch_dumper.dumpTempPart(temp_part, false, remote_disk);
+            cnch_dumper.dumpTempPart(temp_part, remote_disk);
             LOG_DEBUG(log, "Dumped part {}", temp_part->name);
         }
     }

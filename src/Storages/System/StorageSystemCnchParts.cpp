@@ -13,25 +13,26 @@
  * limitations under the License.
  */
 
+#include <map>
 #include <Catalog/Catalog.h>
+#include <CloudServices/CnchPartsHelper.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeDateTime.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
+#include <DataTypes/DataTypeUUID.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTSelectQuery.h>
-#include <CloudServices/CnchPartsHelper.h>
-#include <Storages/System/StorageSystemCnchParts.h>
 #include <Storages/StorageCnchMergeTree.h>
-#include <Storages/VirtualColumnUtils.h>
-#include <Transaction/ICnchTransaction.h>
-#include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <Storages/System/CollectWhereClausePredicate.h>
 #include <Storages/System/StorageSystemCnchCommon.h>
+#include <Storages/System/StorageSystemCnchParts.h>
+#include <Storages/VirtualColumnUtils.h>
 #include <TSO/TSOClient.h>
+#include <Transaction/ICnchTransaction.h>
+#include <Transaction/TransactionCoordinatorRcCnch.h>
 #include <fmt/format.h>
-#include <map>
 
 namespace DB
 {
@@ -71,6 +72,7 @@ NamesAndTypesList StorageSystemCnchParts::getNamesAndTypes()
         {"outdated", std::make_shared<DataTypeUInt8>()},
         {"visible", std::make_shared<DataTypeUInt8>()},
         {"part_type", std::move(type_enum)},
+        {"part_id", std::make_shared<DataTypeUUID>()},
     };
 }
 
@@ -244,6 +246,13 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
                     type = PartType::DroppedPart;
 
                 res_columns[col_num++]->insert(static_cast<Int8>(type));
+
+                UUID part_id = UUIDHelpers::Nil;
+                if (curr_part->part_model().has_part_id())
+                {
+                    part_id = RPCHelpers::createUUID(curr_part->part_model().part_id());
+                }
+                res_columns[col_num++]->insert(part_id);
 
                 curr_part = curr_part->tryGetPreviousPart();
 
