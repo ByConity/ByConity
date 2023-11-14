@@ -422,7 +422,7 @@ public:
 
     DataModelDBs getAllDataBases();
 
-    DataModelTables getAllTables();
+    DataModelTables getAllTables(const String & database_name = "");
 
     IMetaStore::IteratorPtr getTrashTableIDIterator(uint32_t iterator_internal_batch_size);
 

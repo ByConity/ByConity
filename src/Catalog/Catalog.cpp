@@ -3488,7 +3488,7 @@ namespace Catalog
         return res;
     }
 
-    Catalog::DataModelTables Catalog::getAllTables()
+    Catalog::DataModelTables Catalog::getAllTables(const String & database_name)
     {
         DataModelTables res;
         runWithMetricSupport(
@@ -3499,7 +3499,8 @@ namespace Catalog
                 while (it->next())
                 {
                     table_data.ParseFromString(it->value());
-
+                    if (!database_name.empty() && table_data.database() != database_name)
+                        continue;
                     if (latest_version.name().empty())
                     {
                         // initialize latest_version;
@@ -4750,7 +4751,8 @@ namespace Catalog
 
     void Catalog::detachOrAttachTable(const String & db, const String & name, const TxnTimestamp & ts, bool is_detach)
     {
-        String table_uuid = meta_proxy->getTableUUID(name_space, db, name);
+        auto table_id = meta_proxy->getTableID(name_space, db, name);
+        const String & table_uuid = table_id->uuid();
         if (table_uuid.empty())
             throw Exception("Table not found.", ErrorCodes::UNKNOWN_TABLE);
 
@@ -4761,11 +4763,17 @@ namespace Catalog
         {
             /// detach or attach table
             if (is_detach)
+            {
+                table_id->set_detached(true);  
                 table->set_status(Status::setDetached(table->status()));
+            }
             else
+            {
+                table_id->set_detached(false);
                 table->set_status(Status::setAttached(table->status()));
+            }
             /// directly rewrite the old table metadata rather than adding a new version
-            meta_proxy->updateTable(name_space, table_uuid, table->SerializeAsString(), table->commit_time());
+            meta_proxy->updateTableWithID(name_space, *table_id, *table);
             if (auto cache_manager = context.getPartCacheManager(); cache_manager)
                 cache_manager->removeStorageCache(db, name);
         }

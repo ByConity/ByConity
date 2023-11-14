@@ -30,6 +30,11 @@
 namespace DB
 {
 
+namespace Protos
+{
+    class DataModelTable;
+}
+
 namespace ErrorCodes
 {
     extern const int SUPPORT_IS_DISABLED;
@@ -76,6 +81,9 @@ public:
     bool isTableExist(const String & name, ContextPtr local_context) const override;
     StoragePtr tryGetTable(const String & name, ContextPtr local_context) const override;
     DatabaseTablesIteratorPtr getTablesIterator(ContextPtr local_context, const FilterByNameFunction & filter_by_table_name) override;
+    /// used to optimize visiting of system.tables
+    DatabaseTablesIteratorPtr getTablesIteratorWithCommonSnapshot(ContextPtr local_context, const std::vector<Protos::DataModelTable> & snapshot);
+    DatabaseTablesIteratorPtr getTablesIteratorLightweight(ContextPtr local_context, const FilterByNameFunction & filter_by_table_name = {});
     bool empty() const override;
     void shutdown() override {}
     void createEntryInCnchCatalog(ContextPtr local_context) const;
