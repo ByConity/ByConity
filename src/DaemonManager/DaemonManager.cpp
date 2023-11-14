@@ -288,7 +288,7 @@ int DaemonManager::main(const std::vector<std::string> &)
         thread_pool.wait();
     }
 
-    auto storage_cache_size = config().getUInt("daemon_manager.storage_cache_size", 10000);
+    auto storage_cache_size = config().getUInt("daemon_manager.storage_cache_size", 1000000);
     StorageTraitCache cache(storage_cache_size); /* Cache size = storage_cache_size, invalidate an entry every 180s if unused */
 
     const size_t liveness_check_interval = config().getUInt("daemon_manager.liveness_check_interval", LIVENESS_CHECK_INTERVAL);
@@ -304,9 +304,10 @@ int DaemonManager::main(const std::vector<std::string> &)
                 auto & daemon = p.second;
                 bool scheduled = thread_pool.trySchedule([liveness_check_interval, & cache, & daemon] ()
                     {
+                        /// set cache first so it can be used in init
+                        daemon->setStorageTraitCache(&cache);
                         daemon->init();
                         daemon->setLivenessCheckInterval(liveness_check_interval);
-                        daemon->setStorageTraitCache(&cache);
                     }
                 );
 

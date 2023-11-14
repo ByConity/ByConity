@@ -244,8 +244,8 @@ namespace ProfileEvents
     extern const Event GetUndoBufferFailed;
     extern const Event GetAllUndoBufferSuccess;
     extern const Event GetAllUndoBufferFailed;
-    extern const Event GetUndoBufferSuccessIterator;
-    extern const Event GetUndoBufferFailedIterator;
+    extern const Event GetUndoBufferIteratorSuccess;
+    extern const Event GetUndoBufferIteratorFailed;
     extern const Event GetTransactionRecordsSuccess;
     extern const Event GetTransactionRecordsFailed;
     extern const Event GetTransactionRecordsTxnIdsSuccess;
@@ -3115,8 +3115,8 @@ namespace Catalog
                 auto it = meta_proxy->getAllUndoBuffer(name_space);
                 ret = UndoBufferIterator{it, log};
             },
-            ProfileEvents::GetUndoBufferSuccessIterator,
-            ProfileEvents::GetUndoBufferFailedIterator);
+            ProfileEvents::GetUndoBufferIteratorSuccess,
+            ProfileEvents::GetUndoBufferIteratorFailed);
         return ret;
     }
 

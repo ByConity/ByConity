@@ -549,8 +549,8 @@
     M(GetUndoBufferFailed, "") \
     M(GetAllUndoBufferSuccess, "") \
     M(GetAllUndoBufferFailed, "") \
-    M(GetUndoBufferSuccessIterator, "") \
-    M(GetUndoBufferFailedIterator, "") \
+    M(GetUndoBufferIteratorSuccess, "") \
+    M(GetUndoBufferIteratorFailed, "") \
     M(GetTransactionRecordsSuccess, "") \
     M(GetTransactionRecordsFailed, "") \
     M(GetTransactionRecordsTxnIdsSuccess, "") \
