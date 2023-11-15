@@ -36,9 +36,11 @@ public:
         , cluster(std::nullopt)
         , latest_context(Context::createCopy(from_context))
     {
-        ddls = readJsonFile(DumpUtils::DDL_FILE);
-        views = readJsonFile(DumpUtils::VIEWS_FILE);
-        queries = readJsonFile(DumpUtils::QUERIES_FILE);
+        Poco::JSON::Object::Ptr client_file_json = readJsonFile();
+        ddls =  client_file_json->getObject("ddls");
+        views = client_file_json->getObject("views");
+        stats = client_file_json->getObject("stats");
+        queries = client_file_json->getObject("queries");
     }
 
     void setCluster(const std::string & cluster_name) {cluster = std::make_optional(cluster_name);}
@@ -51,9 +53,9 @@ public:
         const std::optional<std::string> & database_name = std::nullopt,
         const std::optional<std::string> & memory_catalog_worker_size = std::nullopt);
 
-    Poco::JSON::Object::Ptr readJsonFile(const char * file_name)
+    Poco::JSON::Object::Ptr readJsonFile()
     {
-        return ReproduceUtils::readJsonFromAbsolutePath(reproduce_path + '/' + file_name);
+        return ReproduceUtils::readJsonFromAbsolutePath(reproduce_path);
     }
 
     void createTables(bool load_stats);
@@ -76,6 +78,7 @@ private:
     Poco::JSON::Object::Ptr ddls;
     Poco::JSON::Object::Ptr views;
     Poco::JSON::Object::Ptr queries;
+    Poco::JSON::Object::Ptr stats;
     std::optional<String> cluster;
     ContextMutablePtr latest_context;
     const Poco::Logger * log = &Poco::Logger::get("PlanReproducer");

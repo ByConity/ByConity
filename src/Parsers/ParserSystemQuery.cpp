@@ -193,6 +193,7 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             break;
         }
 
+        case Type::RECALCULATE_METRICS:
         case Type::RESTART_REPLICA:
         case Type::SYNC_REPLICA:
             if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))

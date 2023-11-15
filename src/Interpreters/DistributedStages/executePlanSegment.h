@@ -122,4 +122,5 @@ void executePlanSegmentRemotely(
 
 void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr initial_query_context);
 
+void cleanupExchangeDataForQuery(const AddressInfo & address, UInt64 & query_unique_id);
 }

@@ -46,6 +46,7 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <DataTypes/MapHelpers.h>
 #include <Common/Exception.h>
+#include <Common/RowExistsColumnInfo.h>
 #include <Interpreters/Context.h>
 #include <Storages/IStorage.h>
 #include <Common/typeid_cast.h>
@@ -478,6 +479,11 @@ NamesAndTypesList ColumnsDescription::getByNames(GetFlags flags, const Names & n
         else if (name == "_part_row_number")
         {
             res.emplace_back("_part_row_number", std::make_shared<DataTypeUInt64>());
+            continue;
+        }
+        else if (name == RowExistsColumn::ROW_EXISTS_COLUMN.name)
+        {
+            res.emplace_back(RowExistsColumn::ROW_EXISTS_COLUMN);
             continue;
         }
         else if (with_subcolumns)

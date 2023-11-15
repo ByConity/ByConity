@@ -119,7 +119,7 @@ void StorageSystemCnchParts::fillData(MutableColumns & res_columns, ContextPtr c
 
     if (value_by_column_names.size() == 1)
     {
-        const auto value_by_column_name = value_by_column_names.at(0);
+        const auto & value_by_column_name = value_by_column_names.at(0);
         auto db_it = value_by_column_name.find("database");
         auto table_it = value_by_column_name.find("table");
         auto partition_it = value_by_column_name.find("partition_id");

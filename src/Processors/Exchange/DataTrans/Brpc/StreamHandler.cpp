@@ -75,7 +75,8 @@ int StreamHandler::on_received_messages([[maybe_unused]] brpc::StreamId stream_i
                 buf = std::move(read_buffer);
             NativeChunkInputStream chunk_in(*buf, header);
             Chunk chunk = chunk_in.readImpl();
-            receiver_ptr->metric.dser_time_ms += s.elapsedMilliseconds();
+            if (receiver_ptr->enable_receiver_metrics)
+                receiver_ptr->receiver_metrics.dser_time_ms << s.elapsedMilliseconds();
 #ifndef NDEBUG
             LOG_TRACE(
                 log,

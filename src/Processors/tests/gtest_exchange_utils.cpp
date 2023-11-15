@@ -44,9 +44,11 @@ TEST(ExchangeUtils, mergeSenderTest)
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_nsec += 1000 * 1000000;
-    LocalChannelOptions options{10, ts};
+    LocalChannelOptions options{10, ts, false};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
-    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
+    auto queue = std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_local_receiver_queue_size);
+    auto channel
+        = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->becomeRealSender(channel);
 

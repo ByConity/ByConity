@@ -381,7 +381,10 @@ TEST(BigHash, ConcurrentRead)
 
     struct MockLookupHelper
     {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-member-function"
         MOCK_METHOD2(call, void(HashedKey, BufferView));
+#pragma clang diagnostic pop
     };
     MockLookupHelper helper;
     EXPECT_CALL(helper, call(makeHashKey("key 1"), makeView("1")));

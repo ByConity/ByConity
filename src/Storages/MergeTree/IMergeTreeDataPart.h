@@ -25,6 +25,7 @@
 
 #include <Core/Block.h>
 #include <common/types.h>
+#include <Common/RowExistsColumnInfo.h>
 #include <Core/NamesAndTypes.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
@@ -509,6 +510,11 @@ public:
     void enumeratePreviousParts(const std::function<void(const IMergeTreeDataPartPtr &)> &) const;
 
     bool isPartial() const { return info.hint_mutation; }
+
+    bool hasRowExistsImplicitColumn() const { return isPartial() && hasColumnFiles(RowExistsColumn::ROW_EXISTS_COLUMN); }
+
+    /// Return _row_exists' mutation which point to the part that contains the column file.
+    Int64 getMutationOfRowExists() const;
 
     bool isDropRangePart() const { return deleted && info.min_block == 0 && info.level == MergeTreePartInfo::MAX_LEVEL; }
 

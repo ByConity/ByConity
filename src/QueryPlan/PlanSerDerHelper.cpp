@@ -84,6 +84,7 @@
 #include <google/protobuf/util/message_differencer.h>
 #include "Common/SipHash.h"
 #include <Common/ClickHouseRevision.h>
+#include "Core/NamesAndTypes.h"
 #include "IO/ReadBufferFromString.h"
 #include "IO/WriteBuffer.h"
 #include "IO/WriteBufferFromString.h"
@@ -173,17 +174,25 @@ Block deserializeBlock(ReadBuffer & buf)
     return block_in->read();
 }
 
-void serializeBlockToProto(const Block & block, Protos::Block & proto)
+void serializeHeaderToProto(const Block & block, Protos::Block & proto)
 {
-    WriteBufferFromOwnString buf;
-    serializeBlock(block, buf);
-    proto.set_blob(std::move(buf.str()));
+    // we only handle header
+    for (const auto & pair : block.getNamesAndTypes())
+    {
+        pair.toProto(*proto.add_names_and_types());
+    }
 }
 
-Block deserializeBlockFromProto(const Protos::Block & proto)
+Block deserializeHeaderFromProto(const Protos::Block & proto)
 {
-    ReadBufferFromString buf(proto.blob());
-    return deserializeBlock(buf);
+    std::vector<NameAndTypePair> pairs;
+    for (const auto & pair_pb : proto.names_and_types())
+    {
+        NameAndTypePair pair;
+        pair.fillFromProto(pair_pb);
+        pairs.emplace_back(std::move(pair));
+    }
+    return Block(std::move(pairs));
 }
 
 

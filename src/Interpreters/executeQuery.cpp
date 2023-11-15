@@ -249,7 +249,7 @@ void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr 
                 {
                     trySetVirtualWarehouseAndWorkerGroup(ast, context);
                 }
-                catch(const Exception & e)
+                catch(const Exception &)
                 {
                     runWithBackupVW();
                 }
@@ -569,6 +569,12 @@ static void onExceptionBeforeStart(
         setExceptionStackTrace(elem);
     logException(context, elem);
 
+    if (auto worker_group = context->tryGetCurrentWorkerGroup())
+    {
+        elem.virtual_warehouse = worker_group->getVWName();
+        elem.worker_group = worker_group->getID();
+    }
+
     /// Update performance counters before logging to query_log
     CurrentThread::finalizePerformanceCounters();
 
@@ -852,23 +858,21 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             ParserQuery parser(end, ParserSettings::valueOf(context->getSettings()));
             parser.setContext(context.get());
 
-            if (settings.use_sql_binding && !internal)
+        /// TODO Parser should fail early when max_query_size limit is reached.
+        ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+        if (settings.use_sql_binding && !internal)
+        {
+            try
             {
-                try
-                {
-                    ast = SQLBindingUtils::getASTFromBindings(begin, end, context);
-                }
-                catch (...)
-                {
-                    LOG_INFO(&Poco::Logger::get("SQL Binding"), "SQL binding match error");
-                }
+                ASTPtr binding_ast = SQLBindingUtils::getASTFromBindings(begin, end, ast, context);
+                if (binding_ast)
+                    ast = binding_ast;
             }
-
-            if (!ast)
+            catch (...)
             {
-                /// TODO Parser should fail early when max_query_size limit is reached.
-                ast = parseQuery(parser, begin, end, "", max_query_size, context->getSettings().max_parser_depth);
+                tryLogWarningCurrentException(&Poco::Logger::get("SQL Binding"), "SQL binding match error.");
             }
+        }
         }
         else
         {
@@ -1330,6 +1334,13 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             elem.client_info = client_info;
             elem.partition_ids = context->getPartitionIds();
 
+
+            if (auto worker_group = context->tryGetCurrentWorkerGroup())
+            {
+                elem.virtual_warehouse = worker_group->getVWName();
+                elem.worker_group = worker_group->getID();
+            }
+
             if (!context->getSettingsRef().enable_optimizer)
             {
                 elem.segment_id = -1;
@@ -1340,7 +1351,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             {
                 elem.segment_id = 0;
                 elem.segment_parallel = 1;
-                elem.segment_parallel_index = 1;
+                elem.segment_parallel_index = 0;
             }
 
             elem.fallback_reason = fallback_reason;

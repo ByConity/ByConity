@@ -37,6 +37,7 @@ void RootConfiguration::loadFromPocoConfigImpl(const PocoAbstractConfig & config
     queue_manager.loadFromPocoConfig(config, "queue_manager");
     adaptive_scheduler.loadFromPocoConfig(config, "adaptive_scheduler");
     tso_service.loadFromPocoConfig(config, "tso_service");
+    batch_synchronous_parallel.loadFromPocoConfig(config, "batch_synchronous_parallel");
 }
 
 }

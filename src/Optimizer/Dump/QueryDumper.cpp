@@ -24,7 +24,7 @@ ContextMutablePtr QueryDumper::Query::buildQueryContextFrom(ContextPtr context) 
     return query_context;
 }
 
-void QueryDumper::dump()
+Poco::JSON::Object::Ptr QueryDumper::getJsonDumpResult()
 {
     Poco::JSON::Object::Ptr queries(new Poco::JSON::Object);
     for (const auto & query : query_buffer)
@@ -46,7 +46,7 @@ void QueryDumper::dump()
 
         queries->set(query.query_id, query_object);
     }
-    writeJsonToAbsolutePath(*queries, dump_path + '/' + QUERIES_FILE);
+    return queries;
 }
 
 }

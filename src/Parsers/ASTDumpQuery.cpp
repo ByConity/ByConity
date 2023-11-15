@@ -34,6 +34,7 @@ ASTPtr ASTDumpQuery::clone() const
     CLONE(Expression::LIMIT_LENGTH);
     CLONE(Expression::CLUSTER);
     CLONE(Expression::DUMP_PATH);
+    CLONE(Expression::SETTING);
 
 #undef CLONE
 
@@ -80,8 +81,6 @@ void ASTDumpQuery::formatQueryImpl(const FormatSettings & settings, FormatState 
             break;
         case ASTDumpQuery::Kind::Query:
             settings.ostr << " QUERY" << (settings.hilite ? hilite_none : "");
-            if (without_ddl)
-                settings.ostr << " WITHOUT DDL";
             if (subquery())
             {
                 settings.ostr << settings.nl_or_ws;
@@ -98,8 +97,6 @@ void ASTDumpQuery::formatQueryImpl(const FormatSettings & settings, FormatState 
             break;
         case ASTDumpQuery::Kind::Workload:
             settings.ostr << " WORKLOAD" << (settings.hilite ? hilite_none : "");
-            if (without_ddl)
-                settings.ostr << " WITHOUT DDL";
             if (cluster())
             {
                 settings.ostr << (settings.hilite ? hilite_keyword : "") << " ON CLUSTER " << (settings.hilite ? hilite_none : "");

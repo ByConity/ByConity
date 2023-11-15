@@ -116,9 +116,6 @@ Chunk MergeTreeBaseSelectProcessor::generate()
 
 void MergeTreeBaseSelectProcessor::initializeRangeReaders(MergeTreeReadTask & current_task)
 {
-    if (metadata_snapshot->hasUniqueKey() && !task->delete_bitmap)
-        throw Exception("Expected delete bitmap exists for a unique table part: " + task->data_part->name, ErrorCodes::LOGICAL_ERROR);
-
     if (prewhere_info)
     {
         if (reader->getColumns().empty())
@@ -254,6 +251,7 @@ namespace
         virtual void insertArrayOfStringsColumn(const ColumnPtr & column, const String & name) = 0;
         virtual void insertStringColumn(const ColumnPtr & column, const String & name) = 0;
         virtual void insertUInt64Column(const ColumnPtr & column, const String & name) = 0;
+        virtual void insertUInt8Column(const ColumnPtr & column, const String & name) = 0;
         virtual void insertUUIDColumn(const ColumnPtr & column, const String & name) = 0;
 
         virtual void insertPartitionValueColumn(
@@ -379,6 +377,11 @@ namespace
         {
             block.insert({column, std::make_shared<DataTypeUInt64>(), name});
         }
+        
+        void insertUInt8Column(const ColumnPtr & column, const String & name) final
+        {
+            block.insert({column, std::make_shared<DataTypeUInt8>(), name});
+        }
 
         void insertUUIDColumn(const ColumnPtr & column, const String & name) final
         {
@@ -423,6 +426,11 @@ namespace
         }
 
         void insertUInt64Column(const ColumnPtr & column, const String &) final
+        {
+            columns.push_back(column);
+        }
+
+        void insertUInt8Column(const ColumnPtr & column, const String &) final
         {
             columns.push_back(column);
         }

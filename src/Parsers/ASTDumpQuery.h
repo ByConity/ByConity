@@ -28,6 +28,7 @@ public:
         LIMIT_LENGTH,
         CLUSTER,
         DUMP_PATH,
+        SETTING,
     };
 
     String getID(char) const override;
@@ -47,6 +48,7 @@ public:
     ASTPtr limitLength()    const { return getExpression(Expression::LIMIT_LENGTH); }
     ASTPtr cluster()    const { return getExpression(Expression::CLUSTER); }
     ASTPtr dumpPath()    const { return getExpression(Expression::DUMP_PATH); }
+    ASTPtr settings()    const { return getExpression(Expression::SETTING); }
 
     ASTPtr getExpression(Expression expr, bool clone = false) const
     {
@@ -57,7 +59,7 @@ public:
     }
 
     Kind kind;
-    bool without_ddl{false};
+    bool output_client{false};
 protected:
     void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
 private:

@@ -182,6 +182,8 @@ public:
 
     NamesAndTypesList getVirtuals() const override;
 
+    void checkColumnsValidity(const ColumnsDescription & columns) const override;
+
     bool mayBenefitFromIndexForIn(const ASTPtr & left_in_operand , ContextPtr query_context, const StorageMetadataPtr & metadata_snapshot) const override;
 
     /// Logger
@@ -448,7 +450,7 @@ protected:
     /// It's different from CnchMergeMutateThread::current_mutations_by_version which is fetched from KV every time.
     /// We need know all mutations when query processing to do column name conversion.
     /// See #getFirstAlterMutationCommandsForPart.
-    mutable std::mutex mutations_by_verison_mutex;
+    mutable std::mutex mutations_by_version_mutex;
     std::map<TxnTimestamp, CnchMergeTreeMutationEntry> mutations_by_version;
 
     /// Work with data parts

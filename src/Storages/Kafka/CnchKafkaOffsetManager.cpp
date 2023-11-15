@@ -95,7 +95,7 @@ void CnchKafkaOffsetManager::resetOffsetImpl(const cppkafka::TopicPartitionList 
     /// Record the original status of table as the new version of STOP action will change the status
     bool kafka_table_is_active = kafka_table->tableIsActive();
     if (kafka_table_is_active)
-        daemon_manager->controlDaemonJob(kafka_table->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop);
+        daemon_manager->controlDaemonJob(kafka_table->getStorageID(), CnchBGThreadType::Consumer, CnchBGThreadAction::Stop, CurrentThread::getQueryId().toString());
     std::this_thread::sleep_for(std::chrono::seconds(RESET_CONSUME_OFFSET_BREAK_TIME));
     SCOPE_EXIT({
                std::this_thread::sleep_for(std::chrono::seconds(RESET_CONSUME_OFFSET_BREAK_TIME));
@@ -103,7 +103,7 @@ void CnchKafkaOffsetManager::resetOffsetImpl(const cppkafka::TopicPartitionList 
                {
                    if (kafka_table_is_active)
                        daemon_manager->controlDaemonJob(kafka_table->getStorageID(), CnchBGThreadType::Consumer,
-                                                        CnchBGThreadAction::Start);
+                                                        CnchBGThreadAction::Start, CurrentThread::getQueryId().toString());
                }
                catch (...)
                {

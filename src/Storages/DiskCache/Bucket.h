@@ -27,7 +27,6 @@ public:
     private:
         friend Bucket;
 
-        Iterator() = default;
         explicit Iterator(BucketStorage::Allocation itr) : itr_{itr} { }
 
         BucketStorage::Allocation itr_;
@@ -88,7 +87,10 @@ private:
 
     UInt32 checksum_{};
     UInt64 generation_time_{};
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wflexible-array-extensions"
     BucketStorage storage_;
+#pragma clang diagnostic pop
 };
 
 

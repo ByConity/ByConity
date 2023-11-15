@@ -67,7 +67,7 @@
 #include <Columns/ColumnByteMap.h>
 #include <Functions/IFunction.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/TargetSpecific.h>
+#include <Common/TargetSpecific.h>
 #include <Functions/PerformanceAdaptors.h>
 #include <Functions/hiveCityHash.h>
 #include <common/range.h>

@@ -25,6 +25,7 @@
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/tests/gtest_processers_utils.h>
 #include <gtest/gtest.h>
+#include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_utils.h>
 #include <Common/tests/gtest_global_context.h>
 
@@ -38,9 +39,12 @@ TEST(ExchangeLocalBroadcast, LocalBroadcastRegistryTest)
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_nsec += 1000 * 1000000;
-    LocalChannelOptions options{10, ts};
+    LocalChannelOptions options{10, ts, false};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
-    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
+    auto context = getContext().context;
+    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
+    auto channel
+        = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->becomeRealSender(channel);
 
@@ -56,9 +60,12 @@ TEST(ExchangeLocalBroadcast, NormalSendRecvTest)
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_nsec += 1000 * 1000000;
-    LocalChannelOptions options{10, ts};
+    LocalChannelOptions options{10, ts, false};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
-    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
+    auto context = getContext().context;
+    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
+    auto channel
+        = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->becomeRealSender(channel);
     BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
@@ -81,9 +88,12 @@ TEST(ExchangeLocalBroadcast, SendTimeoutTest)
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_nsec += 200 * 1000000;
-    LocalChannelOptions options{1, ts};
+    LocalChannelOptions options{1, ts, false};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
-    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
+    auto context = getContext().context;
+    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
+    auto channel
+        = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->becomeRealSender(channel);
     BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);
@@ -102,9 +112,12 @@ TEST(ExchangeLocalBroadcast, AllSendDoneTest)
     timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     ts.tv_nsec += 1000 * 1000000;
-    LocalChannelOptions options{10, ts};
+    LocalChannelOptions options{10, ts, false};
     auto data_key = std::make_shared<ExchangeDataKey>(1, 1, 1);
-    auto channel = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest());
+    auto context = getContext().context;
+    auto queue = std::make_shared<MultiPathBoundedQueue>(options.queue_size);
+    auto channel
+        = std::make_shared<LocalBroadcastChannel>(data_key, options, LocalBroadcastChannel::generateNameForTest(), std::move(queue));
     BroadcastSenderProxyPtr local_sender = BroadcastSenderProxyRegistry::instance().getOrCreate(data_key);
     local_sender->becomeRealSender(channel);
     BroadcastReceiverPtr local_receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(channel);

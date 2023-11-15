@@ -724,7 +724,7 @@ PlanNodePtr PredicateVisitor::visitWindowNode(WindowNode & node, PredicateContex
     }
 
     auto predicate = predicate_context.predicate;
-    ContextMutablePtr context = predicate_context.context;
+    ContextMutablePtr ctx = predicate_context.context;
     auto conjuncts = PredicateUtils::extractConjuncts(predicate);
 
     /// guarantee the predicates which can be pushed down through window step
@@ -734,7 +734,7 @@ PlanNodePtr PredicateVisitor::visitWindowNode(WindowNode & node, PredicateContex
     for (auto & conjunct : conjuncts)
     {
         std::set<String> unique_symbols = SymbolsExtractor::extract(conjunct);
-        if (ExpressionDeterminism::isDeterministic(conjunct, context) && PredicateUtils::containsAll(partition_symbols, unique_symbols))
+        if (ExpressionDeterminism::isDeterministic(conjunct, ctx) && PredicateUtils::containsAll(partition_symbols, unique_symbols))
         {
             push_down_conjuncts.emplace_back(conjunct);
         }
@@ -747,7 +747,7 @@ PlanNodePtr PredicateVisitor::visitWindowNode(WindowNode & node, PredicateContex
     PredicateContext window_context{
         .predicate = PredicateUtils::combineConjuncts(push_down_conjuncts),
         .extra_predicate_for_simplify_outer_join = predicate_context.extra_predicate_for_simplify_outer_join,
-        .context = context};
+        .context = ctx};
     PlanNodePtr rewritten = processChild(node, window_context);
 
     ASTPtr non_push_down_predicate = PredicateUtils::combineConjuncts(non_push_down_conjuncts);
@@ -755,7 +755,7 @@ PlanNodePtr PredicateVisitor::visitWindowNode(WindowNode & node, PredicateContex
     {
         ASTPtr extra_predicate = PredicateUtils::combineConjuncts(non_push_down_conjuncts);
         auto filter_step = std::make_shared<FilterStep>(rewritten->getStep()->getOutputStream(), extra_predicate);
-        auto filter_node = std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
+        auto filter_node = std::make_shared<FilterNode>(ctx->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
         return filter_node;
     }
     return rewritten;
@@ -769,7 +769,7 @@ PlanNodePtr PredicateVisitor::visitMarkDistinctNode(MarkDistinctNode & node, Pre
     const Strings & distinct_symbols = step.getDistinctSymbols();
 
     auto predicate = predicate_context.predicate;
-    ContextMutablePtr context = predicate_context.context;
+    ContextMutablePtr ctx = predicate_context.context;
     auto conjuncts = PredicateUtils::extractConjuncts(predicate);
 
     /// guarantee the predicates which can be pushed down through mark distinct step
@@ -779,7 +779,7 @@ PlanNodePtr PredicateVisitor::visitMarkDistinctNode(MarkDistinctNode & node, Pre
     for (auto & conjunct : conjuncts)
     {
         std::set<String> unique_symbols = SymbolsExtractor::extract(conjunct);
-        if (ExpressionDeterminism::isDeterministic(conjunct, context) && PredicateUtils::containsAll(distinct_symbols, unique_symbols))
+        if (ExpressionDeterminism::isDeterministic(conjunct, ctx) && PredicateUtils::containsAll(distinct_symbols, unique_symbols))
         {
             push_down_conjuncts.emplace_back(conjunct);
         }
@@ -792,7 +792,7 @@ PlanNodePtr PredicateVisitor::visitMarkDistinctNode(MarkDistinctNode & node, Pre
     PredicateContext window_context{
         .predicate = PredicateUtils::combineConjuncts(push_down_conjuncts),
         .extra_predicate_for_simplify_outer_join = predicate_context.extra_predicate_for_simplify_outer_join,
-        .context = context};
+        .context = ctx};
     PlanNodePtr rewritten = processChild(node, window_context);
 
     ASTPtr non_push_down_predicate = PredicateUtils::combineConjuncts(non_push_down_conjuncts);
@@ -800,7 +800,7 @@ PlanNodePtr PredicateVisitor::visitMarkDistinctNode(MarkDistinctNode & node, Pre
     {
         ASTPtr extra_predicate = PredicateUtils::combineConjuncts(non_push_down_conjuncts);
         auto filter_step = std::make_shared<FilterStep>(rewritten->getStep()->getOutputStream(), extra_predicate);
-        auto filter_node = std::make_shared<FilterNode>(context->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
+        auto filter_node = std::make_shared<FilterNode>(ctx->nextNodeId(), std::move(filter_step), PlanNodes{rewritten});
         return filter_node;
     }
     return rewritten;

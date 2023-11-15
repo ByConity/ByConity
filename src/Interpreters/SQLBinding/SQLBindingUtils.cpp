@@ -3,6 +3,7 @@
 #include <Interpreters/SQLBinding/SQLBinding.h>
 #include <Interpreters/SQLBinding/SQLBindingUtils.h>
 #include <Parsers/formatAST.h>
+#include <Analyzers/ASTEquals.h>
 #include <Common/OptimizedRegularExpression.h>
 #include <boost/regex.hpp>
 
@@ -13,16 +14,21 @@ namespace DB
 //using Searcher = std::conditional_t<false, VolnitskyCaseInsensitiveUTF8, VolnitskyUTF8>;
 
 //The priority of bindings matching： Session bindings > global bindings; sql bindings > regular expression bindings;
-ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end, ContextMutablePtr & context)
+ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end, ASTPtr ast, ContextMutablePtr & context)
 {
     if (!context->hasSessionContext() || !BindingCacheManager::getSessionBindingCacheManager(context))
         return nullptr;
 
-    const auto * new_begin = begin;
-    const auto * new_end = end;
+    const char * new_begin = begin;
+    const char * new_end = end;
 
     // get query hash
-    UUID query_hash = getQueryHash(new_begin, new_end);
+    UUID query_hash = UUIDHelpers::Nil;
+    if (ast)
+        query_hash = getQueryASTHash(ast);
+
+    if (ast && query_hash == UUIDHelpers::Nil)
+        return nullptr;
 
     // normalize query remove meaningless symbols
     String query = getNormalizedQuery(new_begin, new_end);
@@ -57,7 +63,6 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
     auto session_re_keys = session_binding_cache_manager->getReKeys();
     if (is_match_re_bindings(session_re_keys, session_binding_cache_manager->getReCacheInstance()))
         return nullptr;
-
     if (!context->getGlobalBindingCacheManager())
         return nullptr;
 
@@ -72,7 +77,7 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
         }
         catch (...)
         {
-            LOG_INFO(&Poco::Logger::get("SQL Binding"), "Update Global BindingsCache Failed");
+            tryLogWarningCurrentException(&Poco::Logger::get("SQL Binding"), "Update Global BindingsCache Failed.");
         }
     }
 
@@ -91,24 +96,13 @@ ASTPtr SQLBindingUtils::getASTFromBindings(const char * begin, const char * end,
     return nullptr;
 }
 
-UUID SQLBindingUtils::getQueryHash(const char * begin, const char * end)
+UUID SQLBindingUtils::getQueryASTHash(ASTPtr query)
 {
     SipHash hash;
+    WriteBufferFromOwnString buf;
+    query->serialize(buf);
     UInt128 key{};
-    Lexer lexer(begin, end);
-
-    while (true)
-    {
-        Token token = lexer.nextToken();
-
-        if (!token.isSignificant())
-            continue;
-
-        if (token.isEnd() || token.isError() || token.type == TokenType::Semicolon)
-            break;
-
-        hash.update(token.begin, token.size());
-    }
+    hash.update(buf.str());
     hash.get128(key);
     return UUID(key);
 }

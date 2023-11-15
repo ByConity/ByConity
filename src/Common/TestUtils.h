@@ -7,8 +7,8 @@ namespace DB
 
 inline bool isCIEnv()
 {
-    auto * ci_job_name = getenv("CI_JOB_NAME");
-    return ci_job_name != nullptr;
+    auto * is_ci_env = getenv("IS_CI_ENV");
+    return is_ci_env != nullptr;
 }
 
 }

@@ -77,4 +77,6 @@ private:
     std::chrono::time_point<std::chrono::system_clock> lastCleanUBtime {std::chrono::system_clock::now()};
 };
 
+std::vector<TxnTimestamp> extractLastElements(std::vector<TxnTimestamp> & from, size_t n);
+
 }

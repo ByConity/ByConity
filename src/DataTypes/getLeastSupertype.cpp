@@ -150,7 +150,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conve
         {
             if (!all_arrays)
                 return throwOrReturn<on_error>(types, "because some of them are Array and some of them are not", ErrorCodes::NO_COMMON_TYPE);
-                
+
             auto nested_type = getLeastSupertype<on_error>(nested_types, allow_extended_conversion);
             /// When on_error == LeastSupertypeOnError::Null and we cannot get least supertype,
             /// nested_type will be nullptr, we should return nullptr in this case.
@@ -405,7 +405,7 @@ DataTypePtr getLeastSupertype(const DataTypes & types, bool allow_extended_conve
 
         if (have_decimal32 || have_decimal64 || have_decimal128 || have_decimal256)
         {
-            UInt32 num_supported = have_decimal32 + have_decimal64 + have_decimal128 + have_decimal256;;
+            UInt32 num_supported = have_decimal32 + have_decimal64 + have_decimal128 + have_decimal256;
 
             std::vector<TypeIndex> int_ids = {TypeIndex::Int8, TypeIndex::UInt8, TypeIndex::Int16, TypeIndex::UInt16,
                                             TypeIndex::Int32, TypeIndex::UInt32, TypeIndex::Int64, TypeIndex::UInt64};

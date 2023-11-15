@@ -53,9 +53,10 @@
 #include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/QueryPlan.h>
 #include <Storages/StorageDistributed.h>
-#include <Storages/StorageMaterializedView.h>
 #include <Storages/StorageView.h>
+#include <google/protobuf/util/json_util.h>
 #include <Common/JSONBuilder.h>
+#include "Parsers/ASTExplainQuery.h"
 
 namespace DB
 {
@@ -120,6 +121,8 @@ BlockIO InterpreterExplainQuery::execute()
         ProfileLogHub<ProcessorProfileLogElement>::getInstance().initLogChannel(getContext()->getCurrentQueryId(), consumer);
         getContext()->setProcessorProfileElementConsumer(consumer);
         getContext()->setIsExplainQuery(true);
+        // Explain in bsp mode makes no sense.
+        getContext()->getSettingsRef().bsp_mode = false;
         try
         {
             res = explainAnalyze();
@@ -703,14 +706,13 @@ void InterpreterExplainQuery::explainUsingOptimizer(const ASTPtr & ast, WriteBuf
 
 BlockIO InterpreterExplainQuery::explainAnalyze()
 {
-    auto & ast = query->as<ASTExplainQuery &>();
     auto contxt = getContext();
     auto interpreter = std::make_unique<InterpreterSelectQueryUseOptimizer>(query, contxt, options);
     return interpreter->execute();
 }
 
 void InterpreterExplainQuery::explainPlanWithOptimizer(
-    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr, bool & single_line)
+    const ASTExplainQuery & explain_ast, QueryPlan & plan, WriteBuffer & buffer, ContextMutablePtr & contextptr, bool & /*single_line*/)
 {
     auto settings = checkAndGetSettings<QueryPlanSettings>(explain_ast.getSettings());
     CardinalityEstimator::estimate(plan, contextptr);
@@ -719,6 +721,19 @@ void InterpreterExplainQuery::explainPlanWithOptimizer(
     {
         auto plan_cost = CostCalculator::calculatePlanCost(plan, *contextptr);
         buffer << PlanPrinter::jsonLogicalPlan(plan, settings.stats, true, plan_cost);
+    }
+    else if (settings.pb_json)
+    {
+        Protos::QueryPlan plan_pb;
+        plan.toProto(plan_pb);
+        String json_msg;
+        google::protobuf::util::JsonPrintOptions pb_options;
+        pb_options.preserve_proto_field_names = true;
+        pb_options.always_print_primitive_fields = true;
+        pb_options.add_whitespace = settings.add_whitespace;
+
+        google::protobuf::util::MessageToJsonString(plan_pb, &json_msg, pb_options);
+        buffer << json_msg;
     }
     else
         buffer << PlanPrinter::textLogicalPlan(plan, contextptr, settings.stats, true, costs);

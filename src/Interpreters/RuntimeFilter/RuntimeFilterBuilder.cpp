@@ -186,10 +186,10 @@ std::unordered_map<RuntimeFilterId, InternalDynamicData> RuntimeFilterBuilder::e
 
                 if (!enable_range_cover && data.runtime_filters[id].values_set->has_min_max)
                 {
-                    Array array;
-                    array.emplace_back(data.runtime_filters[id].values_set->min);
-                    array.emplace_back(data.runtime_filters[id].values_set->max);
-                    filter.range = std::move(array);
+                    Array arr;
+                    arr.emplace_back(data.runtime_filters[id].values_set->min);
+                    arr.emplace_back(data.runtime_filters[id].values_set->max);
+                    filter.range = std::move(arr);
                 }
                 res[id] = std::move(filter);
             }

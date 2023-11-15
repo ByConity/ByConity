@@ -266,6 +266,11 @@ if (USE_INTERNAL_GRPC_LIBRARY)
     add_subdirectory(grpc-cmake)
 endif ()
 
+if (ENABLE_MSGPACK)
+    add_library(_msgpack INTERFACE)
+    target_include_directories(_msgpack SYSTEM BEFORE INTERFACE "${ClickHouse_SOURCE_DIR}/contrib/msgpack-c/include")
+    add_library(ch_contrib::msgpack ALIAS _msgpack)
+endif()
 
 if (USE_INTERNAL_AWS_S3_LIBRARY OR USE_INTERNAL_AWS_GLUE_LIBRARY)
     add_subdirectory(aws-core-cmake)

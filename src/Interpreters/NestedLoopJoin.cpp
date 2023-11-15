@@ -240,9 +240,9 @@ void NestedLoopJoin::joinImpl(
 
     for (size_t left_row_index = 0; left_row_index < left_block.rows(); left_row_index++)
     {
-        if (right_blocks.size() == 0 )
+        if (right_blocks.empty())
             break;
-        
+
         auto index = 0;
         BlockFilterDescriptions block_filter_descriptions;
         for (Block right_block : right_blocks)
@@ -307,13 +307,13 @@ void NestedLoopJoin::joinImpl(
             }
         }
 
-        int i = 0;
+        int j = 0;
         for (Block b : right_blocks)
         {
-            i++;
-            auto right_block = block_filter_descriptions.getBlockByIndex(i-1);
-            auto filtered_size = block_filter_descriptions.getFilteredSizeByIndex(i-1);
-            auto filter_and_holder = block_filter_descriptions.getHolderByIndex(i-1);
+            j++;
+            auto right_block = block_filter_descriptions.getBlockByIndex(j-1);
+            auto filtered_size = block_filter_descriptions.getFilteredSizeByIndex(j-1);
+            auto filter_and_holder = block_filter_descriptions.getHolderByIndex(j-1);
 
             if (new_block.columns() == 0)
             {

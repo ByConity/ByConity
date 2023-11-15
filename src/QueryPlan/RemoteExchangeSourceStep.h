@@ -18,6 +18,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
+#include <Processors/Exchange/DataTrans/Local/LocalChannelOptions.h>
 #include <Processors/Exchange/ExchangeOptions.h>
 #include <QueryPlan/ISourceStep.h>
 #include <Poco/Logger.h>
@@ -65,6 +66,20 @@ public:
 
 private:
     void registerAllReceivers(BrpcReceiverPtrs receivers, UInt32 timeout_ms);
+    BroadcastReceiverPtr createReceiver(
+        DiskExchangeDataManagerPtr disk_mgr,
+        bool is_local_exchange,
+        const LocalChannelOptions & local_options,
+        size_t write_plan_segment_id,
+        size_t exchange_id,
+        size_t partition_id,
+        ExchangeDataKeyPtr data_key,
+        const Block & exchange_header,
+        bool keep_order,
+        bool enable_metrics,
+        const String & write_address_info,
+        MultiPathQueuePtr collector,
+        BrpcExchangeReceiverRegistryService::RegisterMode register_mode);
     PlanSegmentInputs inputs;
     PlanSegment * plan_segment = nullptr;
     Poco::Logger * logger;

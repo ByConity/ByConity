@@ -27,6 +27,8 @@
 #include <Parsers/ParserPartition.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/queryToString.h>
+#include <Parsers/ASTAsterisk.h>
+#include <Parsers/ASTPartition.h>
 
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -40,6 +42,7 @@
 #include <Interpreters/predicateExpressionsUtils.h>
 #include <Interpreters/TreeRewriter.h>
 #include <Interpreters/executeQuery.h>
+#include <Optimizer/SelectQueryInfoHelper.h>
 
 #include <Access/AccessFlags.h>
 #include <DataStreams/IBlockInputStream.h>
@@ -49,6 +52,7 @@
 #include <Storages/StorageFactory.h>
 #include <Storages/ReadInOrderOptimizer.h>
 #include <Storages/SelectQueryDescription.h>
+#include <Storages/MergeTree/MergeTreePartition.h>
 
 #include <Common/typeid_cast.h>
 #include <Common/checkStackSize.h>
@@ -652,6 +656,102 @@ void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextMutableP
         refreshImpl(partition, local_context);
 }
 
+bool StorageMaterializedView::checkPartitionExpr(ASTPtr partition_expr, ContextMutablePtr local_context)
+{
+    auto * cnch_target_table = dynamic_cast<StorageCnchMergeTree*>(getTargetTable().get());
+    const auto partition_key = MergeTreePartition::adjustPartitionKey(cnch_target_table->getInMemoryMetadataPtr(), local_context);
+
+    IdentifierNameSet id_set;
+    partition_expr->collectIdentifierNames(id_set);
+
+    for (const auto & name : id_set)
+    {
+        LOG_TRACE(&Poco::Logger::get("checkPartitionExpr"), "partition_expr name: {}", name);
+    }
+
+    IdentifierNameSet id_set_target;
+    partition_key.expression_list_ast->collectIdentifierNames(id_set_target);
+
+    for (const auto & name : id_set_target)
+    {
+        LOG_TRACE(&Poco::Logger::get("checkPartitionExpr"), "target table partition key name: {}", name);
+        if (id_set.count(name))
+            return true;
+    }
+
+    return false;
+}
+
+//  refresh mv where toDate(ts) > '2023-10-01' and toDate(ts) < '2024-10-01'
+void StorageMaterializedView::refreshWhere(ASTPtr partition_expr, ContextMutablePtr local_context, bool /*async*/)
+{
+    auto * cnch_target_table = dynamic_cast<StorageCnchMergeTree*>(getTargetTable().get());
+    if (!cnch_target_table)
+        throw Exception("Materialized view target table is not CnchMergeTree", ErrorCodes::LOGICAL_ERROR);
+    
+    const auto & mv_select_query = getInMemoryMetadataPtr()->getSelectQuery();
+    auto select_table = DatabaseCatalog::instance().getTable(mv_select_query.select_table_id, local_context);
+    if (!select_table)
+        throw Exception("Materialized view select table " + mv_select_query.select_table_id.getFullTableName() +
+                         " is not exist.", ErrorCodes::LOGICAL_ERROR);
+
+    auto * cnch_select_table = dynamic_cast<StorageCnchMergeTree*>(select_table.get());
+    if (!cnch_select_table)
+        throw Exception("Materialized view select table is not CnchMergeTree", ErrorCodes::LOGICAL_ERROR);
+
+    LOG_DEBUG(&Poco::Logger::get("refreshWhere"), "partition_expr: {}", serializeAST(*partition_expr));
+    if (!checkPartitionExpr(partition_expr, local_context))
+        throw Exception("Refresh Materialized view without partition key", ErrorCodes::LOGICAL_ERROR);
+
+    auto select_query = std::make_shared<ASTSelectQuery>();
+    auto select_expr = std::make_shared<ASTExpressionList>();
+    Names column_names_to_return;
+    select_expr->children.push_back(std::make_shared<ASTAsterisk>());
+    column_names_to_return.push_back("*");
+
+    select_query->setExpression(ASTSelectQuery::Expression::SELECT, std::move(select_expr));
+    select_query->replaceDatabaseAndTable(mv_select_query.select_table_id);
+    select_query->setExpression(ASTSelectQuery::Expression::WHERE, std::move(partition_expr));
+
+    SelectQueryInfo query_info = buildSelectQueryInfoForQuery(select_query, local_context);
+
+    auto required_partitions = cnch_select_table->getPrunedPartitions(query_info, column_names_to_return, local_context).partitions;
+
+    if (local_context->getSettingsRef().max_threads_to_refresh_by_partition > 1)
+    {
+        ExceptionHandler exception_handler;
+        ThreadPool thread_pool(local_context->getSettingsRef().max_threads_to_refresh_by_partition);
+        for (const auto & part_string: required_partitions)
+        {
+            LOG_DEBUG(&Poco::Logger::get("refreshWhere"), "thread_pool begin: {}", part_string);
+            thread_pool.scheduleOrThrowOnError(createExceptionHandledJob(
+                    [this, local_context, part_string]()
+                    {
+                        auto refresh_context = Context::createCopy(local_context);
+                        LOG_DEBUG(&Poco::Logger::get("refreshWhere"), "refresh partition begin: {}", part_string);
+                        auto partition = std::make_shared<ASTPartition>();
+                        partition->id = part_string;
+                        refreshCnchImpl(partition, refresh_context);
+                    },
+                    exception_handler));
+        }
+        thread_pool.wait();
+        exception_handler.throwIfException();
+        LOG_DEBUG(&Poco::Logger::get("refreshWhere"), "refresh partition end.");
+    }
+    else
+    {
+        for (const auto & part_string: required_partitions)
+        {
+            LOG_DEBUG(&Poco::Logger::get("refreshWhere"), "refresh partition begin: {}", part_string);
+
+            auto partition = std::make_shared<ASTPartition>();
+            partition->id = part_string;
+            refreshCnchImpl(partition, local_context);
+        }
+    }
+}
+
 void StorageMaterializedView::refreshCnchImpl(const ASTPtr & partition, ContextMutablePtr local_context)
 {
     /** Compose the operation into a sequence of command within an interactive transaction session
@@ -667,13 +767,15 @@ void StorageMaterializedView::refreshCnchImpl(const ASTPtr & partition, ContextM
 
     const_cast<Context &>(*local_context).setCurrentTransaction(explicit_txn, true);
 
-    auto create_command_context = [local_context]() {
+    auto create_command_context = [local_context, partition]() {
         auto command_context = Context::createCopy(local_context);
         command_context->setCurrentTransaction(nullptr, false);
         command_context->setCurrentVW(nullptr);
         command_context->setCurrentWorkerGroup(nullptr);
         command_context->setSessionContext(local_context);
         command_context->setQueryContext(command_context);
+        String query_id0 = fmt::format("{}_{}", command_context->getCurrentQueryId(), serializeAST(*partition));
+        command_context->setCurrentQueryId(query_id0);
         return command_context;
     };
 

@@ -1585,6 +1585,36 @@ void CnchServerServiceImpl::notifyAccessEntityChange(
     }
 }
 
+void CnchServerServiceImpl::forceRecalculateMetrics(
+    google::protobuf::RpcController *,
+    const Protos::ForceRecalculateMetricsReq * request,
+    Protos::ForceRecalculateMetricsResp * response,
+    google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+
+        auto istorage = getContext()->getCnchCatalog()->getTable(*getContext(), storage_id.database_name, storage_id.table_name);
+
+        if (auto mgr = getContext()->getPartCacheManager(); mgr)
+        {
+            mgr->forceRecalculate(istorage);
+        }
+        else
+        {
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "PartCacheManager not found");
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
 #if defined(__clang__)
     #pragma clang diagnostic pop
 #else

@@ -15,6 +15,7 @@
 
 #include <DaemonManager/DaemonManagerServiceImpl.h>
 #include <DaemonManager/DaemonHelper.h>
+#include <DaemonManager/DaemonManagerThreadStatus.h>
 #include <CloudServices/CnchBGThreadCommon.h>
 #include <Protos/RPCHelpers.h>
 #include <brpc/closure_guard.h>
@@ -79,31 +80,39 @@ void DaemonManagerServiceImpl::GetDMBGJobInfo(
     ::DB::Protos::GetDMBGJobInfoResp * response,
     ::google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
-        UUID storage_uuid = RPCHelpers::createUUID(request->storage_uuid());
-        auto it = daemon_jobs.find(CnchBGThreadType(request->job_type()));
-        if (it == daemon_jobs.end())
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "No daemon job found for {}, this may always be caused by lack of config",
-                toString(CnchBGThreadType(request->job_type())));
-        auto daemon_job = it->second;
-        BackgroundJobPtr bg_job_ptr = daemon_job->getBackgroundJob(storage_uuid);
-        if (!bg_job_ptr)
-        {
-            LOG_INFO(log, "No background job found for uuid: {}", toString(storage_uuid));
-            return;
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, this, log = log] {
+            DaemonManagerThreadStatus thread_status;
+            brpc::ClosureGuard done_guard(done);
+            try
+            {
+                thread_status.setQueryID(request->query_id());
+                UUID storage_uuid = RPCHelpers::createUUID(request->storage_uuid());
+                auto it = daemon_jobs.find(CnchBGThreadType(request->job_type()));
+                if (it == daemon_jobs.end())
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "No daemon job found for {}, this may always be caused by lack of config",
+                        toString(CnchBGThreadType(request->job_type())));
+                auto daemon_job = it->second;
+                BackgroundJobPtr bg_job_ptr = daemon_job->getBackgroundJob(storage_uuid);
+                if (!bg_job_ptr)
+                {
+                    LOG_INFO(log, "No background job found for uuid: {}", toString(storage_uuid));
+                    return;
+                }
+                BGJobInfo bg_job_data = bg_job_ptr->getBGJobInfo();
+                fillDMBGJobInfo(bg_job_data, *response->mutable_dm_bg_job_info());
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
         }
-        BGJobInfo bg_job_data = bg_job_ptr->getBGJobInfo();
-        fillDMBGJobInfo(bg_job_data, *response->mutable_dm_bg_job_info());
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    );
 }
 
 void DaemonManagerServiceImpl::ControlDaemonJob(
@@ -112,34 +121,41 @@ void DaemonManagerServiceImpl::ControlDaemonJob(
     ::DB::Protos::ControlDaemonJobResp * response,
     ::google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
+    RPCHelpers::serviceHandler(
+        done,
+        response,
+        [request = request, response = response, done = done, this , log = log] {
+            DaemonManagerThreadStatus thread_status;
+            brpc::ClosureGuard done_guard(done);
+            try
+            {
+                StorageID storage_id = RPCHelpers::createStorageID(request->storage_id());
+                CnchBGThreadAction action = static_cast<CnchBGThreadAction>(request->action());
+                thread_status.setQueryID(request->query_id());
 
-    try
-    {
-        StorageID storage_id = RPCHelpers::createStorageID(request->storage_id());
-        CnchBGThreadAction action = static_cast<CnchBGThreadAction>(request->action());
+                LOG_INFO(log, "Receive ControlDaemonJob RPC request for storage: {} job type: {} action: {}"
+                    , storage_id.getNameForLogs()
+                    , toString(CnchBGThreadType(request->job_type()))
+                    , toString(action));
 
-        LOG_INFO(log, "Receive ControlDaemonJob RPC request for storage: {} job type: {} action: {}"
-            , storage_id.getNameForLogs()
-            , toString(CnchBGThreadType(request->job_type()))
-            , toString(action));
+                if (daemon_jobs.find(CnchBGThreadType(request->job_type())) == daemon_jobs.end())
+                    throw Exception(
+                        ErrorCodes::LOGICAL_ERROR,
+                        "No daemon job found for {}, this may always be caused by lack of config",
+                        toString(CnchBGThreadType(request->job_type())));
+                auto daemon_job = daemon_jobs[CnchBGThreadType(request->job_type())];
 
-        if (daemon_jobs.find(CnchBGThreadType(request->job_type())) == daemon_jobs.end())
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "No daemon job found for {}, this may always be caused by lack of config",
-                toString(CnchBGThreadType(request->job_type())));
-        auto daemon_job = daemon_jobs[CnchBGThreadType(request->job_type())];
-
-        Result res = daemon_job->executeJobAction(storage_id, action);
-        if (!res.res)
-            throw Exception(res.error_str, ErrorCodes::LOGICAL_ERROR);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+                Result res = daemon_job->executeJobAction(storage_id, action);
+                if (!res.res)
+                    throw Exception(res.error_str, ErrorCodes::LOGICAL_ERROR);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+                RPCHelpers::handleException(response->mutable_exception());
+            }
+        }
+    );
 }
 
 void DaemonManagerServiceImpl::ForwardOptimizeQuery(

@@ -16,19 +16,20 @@
 #pragma once
 
 #include <Catalog/CatalogUtils.h>
-#include <Core/Types.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
-#include <Storages/CnchPartitionInfo.h>
-#include <Common/RWLock.h>
-#include <Common/HostWithPorts.h>
-#include <Common/CurrentThread.h>
-#include <Common/ScanWaitFreeMap.h>
-#include <Interpreters/Context_fwd.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
+#include <Core/BackgroundSchedulePool.h>
+#include <Core/Types.h>
+#include <Interpreters/Context_fwd.h>
+#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Protos/DataModelHelpers.h>
 #include <Storages/CnchPartitionInfo.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
-#include <Core/BackgroundSchedulePool.h>
+#include <Storages/CnchTablePartitionMetricsHelper.h>
+#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
+#include <Storages/TableMetaEntry.h>
+#include <Common/CurrentThread.h>
+#include <Common/HostWithPorts.h>
+#include <Common/RWLock.h>
+#include <Common/ScanWaitFreeMap.h>
 
 namespace DB
 {
@@ -40,90 +41,13 @@ class CnchServerTopology;
 class CnchStorageCache;
 using CnchStorageCachePtr = std::shared_ptr<CnchStorageCache>;
 
-class CacheVersion
-{
-public:
-    PairInt64 get()
-    {
-        std::shared_lock lock(mutex_);
-        return cache_version;
-    }
-
-    void set(const PairInt64 & new_version)
-    {
-        std::unique_lock lock(mutex_);
-        cache_version = new_version;
-    }
-
-private:
-    PairInt64 cache_version{0};
-    mutable std::shared_mutex mutex_;
-};
-
-struct TableMetaEntry
-{
-    typedef RWLockImpl::LockHolder TableLockHolder;
-
-    TableLockHolder readLock() const
-    {
-        return meta_mutex->getLock(RWLockImpl::Read, CurrentThread::getQueryId().toString());
-    }
-
-    TableLockHolder writeLock() const
-    {
-        return meta_mutex->getLock(RWLockImpl::Write, CurrentThread::getQueryId().toString());
-    }
-
-    TableMetaEntry(const String & database_, const String & table_, const RWLock & lock = nullptr)
-        : database(database_), table(table_)
-    {
-        if (!lock)
-            meta_mutex = RWLockImpl::create();
-        else
-            meta_mutex = lock;
-    }
-
-    String database;
-    String table;
-    /// track the timestamp when last data ingestion or removal happens to this table; initialized with current time
-    UInt64 last_update_time {0};
-    /// track the metrics change. Because metrics update time is not the same with data update time, so we track them separately.
-    UInt64 metrics_last_update_time {0};
-    /// Needs to wait for mayUpdateTableMeta to load all needed info from KV
-    std::atomic<UInt32> cache_status {CacheStatus::UINIT};
-    bool is_clustered {true};
-    std::atomic_uint64_t table_definition_hash{0};
-    String preallocate_vw;
-    mutable RWLock meta_mutex;
-    std::atomic_bool partition_metrics_loaded= false;
-    std::atomic_bool loading_metrics = false;
-    std::atomic_bool load_parts_by_partition = false;
-    std::mutex fetch_mutex;
-    std::condition_variable fetch_cv;
-    /// used to decide if the part/partition cache are still valid when enable write ha. If the fetched
-    /// NHUT from metastore differs with cached one, we should update cache with metastore.
-    std::atomic_uint64_t cached_non_host_update_ts {0};
-    std::atomic_bool need_invalid_cache {false};
-    /// Check the cache version each time when visit the cache. To make sure the visited cache is still valid
-    CacheVersion cache_version;
-
-    ScanWaitFreeMap<String, PartitionInfoPtr> partitions;
-    String server_vw_name;
-
-    Catalog::PartitionMap getPartitions(const Strings & wanted_partition_ids);
-    Strings getPartitionIDs();
-    std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList();
-};
-
-using TableMetaEntryPtr = std::shared_ptr<TableMetaEntry>;
-
 class PartCacheManager: WithMutableContext
 {
 public:
     using DataPartPtr = std::shared_ptr<const MergeTreeDataPartCNCH>;
     using DataPartsVector = std::vector<DataPartPtr>;
 
-    PartCacheManager(ContextMutablePtr context_);
+    explicit PartCacheManager(ContextMutablePtr context_);
     ~PartCacheManager();
 
     void mayUpdateTableMeta(const IStorage & storage, const PairInt64 & topology_version);
@@ -142,7 +66,36 @@ public:
 
     String getTablePreallocateVW(const UUID & uuid);
 
-    bool getTablePartitionMetrics(const IStorage & i_storage, std::unordered_map<String, PartitionFullPtr> & partitions, bool require_partition_info = true);
+    /**
+     * @brief Get partition level metrics of parts info with the given table.
+     *
+     * @param i_storage The table we want to query.
+     * @param partitions A reference to the results.
+     * @param require_partition_info Return `first_partition` info.
+     * @return If there is a valid table_entry.
+     */
+    bool getPartsInfoMetrics(
+        const IStorage & i_storage, std::unordered_map<String, PartitionFullPtr> & partitions, bool require_partition_info = true);
+    /**
+     * @brief Get table level metrics of trash items info.
+     *
+     * @param i_storage The table we want to query.
+     * @return A `shared_ptr` to metrics info.
+     */
+    std::shared_ptr<TableMetrics> getTrashItemsInfoMetrics(const IStorage & i_storage);
+    /**
+     * @brief Update trash items metrics info.
+     *
+     * @param table_uuid UUID of the table.
+     * @param items Added/deleted trash items.
+     * @param positive A mark whether it's added or deleted.
+     */
+    void updateTrashItemsMetrics(const UUID & table_uuid, const Catalog::TrashItems & items, bool positive = true);
+
+    /**
+     * @brief Forcely trigger a recalculation for the table.
+     */
+    bool forceRecalculate(StoragePtr table);
 
     bool getPartitionList(const IStorage & storage, std::vector<std::shared_ptr<MergeTreePartition>> & partition_list, const PairInt64 & topology_version);
 
@@ -203,6 +156,9 @@ public:
 
     void shutDown();
 
+    std::unordered_map<UUID, TableMetaEntryPtr> getTablesSnapshot();
+    friend class CnchTablePartitionMetricsHelper;
+
 private:
     mutable std::mutex cache_mutex;
     CnchDataPartCachePtr part_cache_ptr;
@@ -219,13 +175,10 @@ private:
     /// The lock is cleaned by a background task if it is no longer be used by any table meta entry.
     std::unordered_map<UUID, RWLock> meta_lock_container;
 
-    BackgroundSchedulePool::TaskHolder metrics_updater;   // Used to correct the metrics periodically.
-    BackgroundSchedulePool::TaskHolder metrics_initializer;  // Used to collect metrics if it is not ready.
     BackgroundSchedulePool::TaskHolder active_table_loader; // Used to load table when server start up, only execute once;
     BackgroundSchedulePool::TaskHolder meta_lock_cleaner; // remove unused meta lock periodically;
 
-    void updateTablePartitionsMetrics(bool skip_if_already_loaded);
-    void reloadPartitionMetrics(const UUID & uuid, const TableMetaEntryPtr & table_meta);
+    CnchTablePartitionMetricsHelper table_partition_metrics;
     void cleanMetaLock();
     // load tables belongs to current server according to the topology. The task is performed asynchronously.
     void loadActiveTables();

@@ -242,7 +242,7 @@ public:
 
     const Settings & getSettingsRef() override { return context->getSettingsRef(); }
 
-    UInt64 fetchAddUdiCount(const StatsTableIdentifier & table_identifier, UInt64 count) override
+    UInt64 fetchAddUdiCount(const StatsTableIdentifier &, UInt64) override
     {
         throw Exception("Unimplemented", ErrorCodes::NOT_IMPLEMENTED);
         // auto & sms = getStatisticsMemoryStore();
@@ -262,7 +262,7 @@ public:
         // return old_count;
     }
 
-    void removeUdiCount(const StatsTableIdentifier & table) override
+    void removeUdiCount(const StatsTableIdentifier &) override
     {
         // DO NOTHING
     }

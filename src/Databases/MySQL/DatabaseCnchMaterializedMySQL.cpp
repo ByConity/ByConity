@@ -277,7 +277,7 @@ void DatabaseCnchMaterializedMySQL::applySettingsChanges(const SettingsChanges &
             create->storage->set(create->storage->settings, storage_settings->clone());
         }
 
-        AlterDatabaseActionParams params = {{getDatabaseName(), "fake", getUUID()}, queryToString(*create)};
+        AlterDatabaseActionParams params = {{getDatabaseName(), "fake", getUUID()}, queryToString(*create), false, ""};
         params.is_database = true;
         params.engine_name = "CnchMaterializedMySQL";
         auto action = std::make_shared<DDLAlterAction>(query_context, txn->getTransactionID(), params, query_context->getSettingsRef());

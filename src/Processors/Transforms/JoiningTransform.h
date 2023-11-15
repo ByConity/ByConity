@@ -168,8 +168,6 @@ public:
 private:
     DelayedBlocksTaskPtr task;
     Chunk output_chunk;
-
-    bool finished = false;
 };
 
 }

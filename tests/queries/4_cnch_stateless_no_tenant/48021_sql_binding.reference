@@ -1,8 +1,8 @@
 Create SQL Binding succeeded
 ***************************1. row ***************************
-Session Binding UUID: 818f66da-2eb1-6120-25d9-8f3848566c16
+Session Binding UUID: d7235039-225b-fba0-18d9-b80359eb46e5
 Pattern:
-select * from test.bindings order by a ;
+select * FROM test.bindings order by a ;
 Bound Query:
 SELECT a + 1 FROM test.bindings ORDER BY a ASC
 1	2
@@ -11,9 +11,15 @@ SELECT a + 1 FROM test.bindings ORDER BY a ASC
 2
 3
 4
+2
+3
+4
+2
+3
+4
 Create SQL Binding succeeded
 ***************************1. row ***************************
-Session Binding UUID: 4c6e2b31-3d7d-d0e8-d71b-80e52e07c90e
+Session Binding UUID: c33c6081-cbcd-a444-580b-186393bd058e
 Pattern:
 select * from test.bindings ;
 Bound Query:
@@ -44,7 +50,7 @@ Create SQL Binding succeeded
 3
 4
 ***************************1. row ***************************
-Global Binding UUID: 4c6e2b31-3d7d-d0e8-d71b-80e52e07c90e
+Global Binding UUID: c33c6081-cbcd-a444-580b-186393bd058e
 Pattern:
 select * from test.bindings ;
 Bound Query:
@@ -59,7 +65,7 @@ Create SQL Binding succeeded
 Create SQL Binding succeeded
 Create SQL Binding succeeded
 ***************************1. row ***************************
-Session Binding UUID: 818f66da-2eb1-6120-25d9-8f3848566c16
+Session Binding UUID: d7235039-225b-fba0-18d9-b80359eb46e5
 Pattern:
 select * from test.bindings  order by a ;
 Bound Query:
@@ -69,7 +75,7 @@ Session Binding UUID: 831ac44d-b812-34d5-0d00-8dac0e0575d3
 Pattern: ^select \\* from test\\.bindings.*
 Settings: enable_execute_query = 0
 ***************************3. row ***************************
-Global Binding UUID: 818f66da-2eb1-6120-25d9-8f3848566c16
+Global Binding UUID: d7235039-225b-fba0-18d9-b80359eb46e5
 Pattern:
 select * from test.bindings order by a ;
 Bound Query:

@@ -62,9 +62,9 @@ bool DaemonJobAutoStatistics::executeImpl()
     return true;
 }
 
-HostWithPortsVec DaemonJobAutoStatistics::getServerList(const ContextPtr & context)
+HostWithPortsVec DaemonJobAutoStatistics::getServerList(const ContextPtr & ctx)
 {
-    auto topology_master = context->getCnchTopologyMaster();
+    auto topology_master = ctx->getCnchTopologyMaster();
     if (!topology_master)
     {
         throw Exception("Failed to get topology master, skip iteration", ErrorCodes::LOGICAL_ERROR);

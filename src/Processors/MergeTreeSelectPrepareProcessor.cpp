@@ -18,7 +18,7 @@ MergeTreeSelectPrepareProcessor::MergeTreeSelectPrepareProcessor(
     Block header,
     const std::vector<RuntimeFilterId> & ids_,
     UInt64 wait_time)
-    : step(step_), settings(build_settings), ISource(std::move(header)), rf_wait_time_ns(wait_time * 1000000UL)
+    : ISource(std::move(header)), step(step_), settings(build_settings), rf_wait_time_ns(wait_time * 1000000UL)
 {
     for (const auto id : ids_)
         runtime_filters.emplace_back(RuntimeFilterManager::makeKey(build_settings.distributed_settings.query_id, id));

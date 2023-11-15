@@ -87,8 +87,8 @@ public:
         : TemporaryDataOnDiskScope(std::move(parent_), /* limit_ = */ 0)
     {}
 
-    explicit TemporaryDataOnDisk(TemporaryDataOnDiskScopePtr parent_, CurrentMetrics::Value metric_scope)
-        : TemporaryDataOnDiskScope(std::move(parent_), /* limit_ = */ 0), current_metric_scope(metric_scope)
+    explicit TemporaryDataOnDisk(TemporaryDataOnDiskScopePtr parent_, CurrentMetrics::Value)
+        : TemporaryDataOnDiskScope(std::move(parent_), /* limit_ = */ 0)
     {
     }
 
@@ -106,8 +106,6 @@ private:
 
     mutable std::mutex mutex;
     std::vector<TemporaryFileStreamPtr> streams TSA_GUARDED_BY(mutex);
-
-    typename CurrentMetrics::Value current_metric_scope = CurrentMetrics::TemporaryFilesUnknown;
 };
 
 /*

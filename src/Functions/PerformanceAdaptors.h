@@ -1,6 +1,6 @@
 #pragma once
 
-#include <Functions/TargetSpecific.h>
+#include <Common/TargetSpecific.h>
 #include <Functions/IFunction.h>
 
 #include <Common/Stopwatch.h>

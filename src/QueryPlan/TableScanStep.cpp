@@ -873,10 +873,10 @@ TableScanStep::TableScanStep(
     , column_alias(column_alias_)
     , query_info(query_info_)
     , max_block_size(max_block_size_)
-    , alias(alias_)
     , pushdown_aggregation(std::move(aggregation_))
     , pushdown_projection(std::move(projection_))
     , pushdown_filter(std::move(filter_))
+    , alias(alias_)
 {
     log = &Poco::Logger::get("TableScanStep");
 
@@ -886,6 +886,7 @@ TableScanStep::TableScanStep(
     }
 
     storage = DatabaseCatalog::instance().getTable(storage_id, context);
+    storage_id.uuid = storage->getStorageUUID();
 
     // TODO: in long term, we should use different constructor for server/worker
     Block header = storage->getInMemoryMetadataPtr()->getSampleBlockForColumns(getRequiredColumns(), storage->getVirtuals());
@@ -1567,6 +1568,7 @@ void TableScanStep::allocate(ContextPtr context)
         storage_id.database_name = cnch_merge_tree->getDatabaseName();
         auto prepare_res = cnch_merge_tree->prepareReadContext(column_names, cnch_merge_tree->getInMemoryMetadataPtr(),query_info, context);
         storage_id.table_name = prepare_res.local_table_name;
+        storage_id.uuid = cnch_merge_tree->getStorageUUID();
     }
     else if (cnch_hive)
     {
@@ -1580,6 +1582,7 @@ void TableScanStep::allocate(ContextPtr context)
         storage_id.database_name = cnch_hive->getDatabaseName();
         auto prepare_res = cnch_hive->prepareReadContext(column_names, cnch_hive->getInMemoryMetadataPtr(),query_info, context, max_streams);
         storage_id.table_name = prepare_res.local_table_name;
+        storage_id.uuid = cnch_hive->getStorageUUID();
     }
     else if (cnch_file)
     {
@@ -1587,7 +1590,6 @@ void TableScanStep::allocate(ContextPtr context)
         auto prepare_res = cnch_file->prepareReadContext(column_names, cnch_file->getInMemoryMetadataPtr(), query_info, context, context->getSettingsRef().max_threads);
         storage_id.table_name = prepare_res.local_table_name;
     }
-    storage_id.uuid = UUIDHelpers::Nil;
     if (query_info.query)
     {
         query_info = fillQueryInfo(context);

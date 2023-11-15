@@ -36,7 +36,10 @@ namespace DB
         StoragePtr storage_ptr = DatabaseCatalog::instance().getTable({refresh.database, refresh.table}, getContext());
         if (auto * view = dynamic_cast<StorageMaterializedView *>(storage_ptr.get()))
         {
-            view->refresh(refresh.partition, getContext(), refresh.async);
+            if (refresh.where_expr)
+                view->refreshWhere(refresh.where_expr, getContext(), refresh.async);
+            else if (refresh.partition)
+                view->refresh(refresh.partition, getContext(), refresh.async);
         }
         else
         {

@@ -58,6 +58,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS 1) # Write compile_commands.json
 set(CMAKE_LINK_DEPENDS_NO_SHARED 1) # Do not relink all depended targets on .so
 set(CMAKE_CONFIGURATION_TYPES "RelWithDebInfo;Debug;Release;MinSizeRel" CACHE STRING "" FORCE)
 set(CMAKE_DEBUG_POSTFIX "d" CACHE STRING "Generate debug library name with a postfix.")    # To be consistent with CMakeLists from contrib libs.
+set(CMAKE_COMPILE_WARNING_AS_ERROR ON)
 
 # Enable the ability to organize targets into hierarchies of "folders" for capable GUI-based IDEs.
 # For more info see https://cmake.org/cmake/help/latest/prop_gbl/USE_FOLDERS.html
@@ -635,6 +636,17 @@ include (cmake/warnings.cmake)
 
 # Check if needed compiler flags are supported
 include (cmake/check_flags.cmake)
+
+# ClickHouse developers may use platform-dependent code under some macro (e.g. `#ifdef ENABLE_MULTITARGET`).
+# If turned ON, this option defines such macro.
+# See `src/Functions/TargetSpecific.h`
+option(ENABLE_MULTITARGET_CODE "Enable platform-dependent code" ON)
+
+if (ENABLE_MULTITARGET_CODE)
+    add_compile_definitions(ENABLE_MULTITARGET_CODE=1)
+else()
+    add_compile_definitions(ENABLE_MULTITARGET_CODE=0)
+endif()
 
 add_subdirectory (base)
 add_subdirectory (src)

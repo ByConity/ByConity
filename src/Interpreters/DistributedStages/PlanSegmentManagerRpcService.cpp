@@ -72,7 +72,7 @@ void PlanSegmentManagerRpcService::executeQuery(
         /// Create session context for worker
         if (context->getServerType() == ServerType::cnch_worker)
         {
-            auto named_session = context->acquireNamedCnchSession(txn_id, {}, true);
+            auto named_session = context->acquireNamedCnchSession(txn_id, {}, request->check_session());
             query_context = Context::createCopy(named_session->context);
             query_context->setSessionContext(query_context);
             query_context->setTemporaryTransaction(txn_id, primary_txn_id);
@@ -164,6 +164,106 @@ void PlanSegmentManagerRpcService::executeQuery(
         auto error_msg = getCurrentExceptionMessage(false);
         cntl->SetFailed(error_msg);
         LOG_ERROR(log, "executeQuery failed: {}", error_msg);
+    }
+}
+
+void PlanSegmentManagerRpcService::cancelQuery(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::CancelQueryRequest * request,
+    ::DB::Protos::CancelQueryResponse * response,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
+
+    try
+    {
+        auto cancel_code
+            = context->getPlanSegmentProcessList().tryCancelPlanSegmentGroup(request->query_id(), request->coordinator_address());
+        response->set_ret_code(std::to_string(static_cast<int>(cancel_code)));
+    }
+    catch (...)
+    {
+        auto error_msg = getCurrentExceptionMessage(false);
+        cntl->SetFailed(error_msg);
+        LOG_ERROR(log, "cancelQuery failed: {}", error_msg);
+    }
+}
+
+void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::SendPlanSegmentStatusRequest * request,
+    ::DB::Protos::SendPlanSegmentStatusResponse * /*response*/,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
+
+    try
+    {
+        RuntimeSegmentsStatus status{
+            request->query_id(),
+            request->segment_id(),
+            request->parallel_index(),
+            request->is_succeed(),
+            request->is_canceled(),
+            RuntimeSegmentsMetrics(request->metrics()),
+            request->message(),
+            request->code()};
+        SegmentSchedulerPtr scheduler = context->getSegmentScheduler();
+        scheduler->updateSegmentStatus(status);
+        scheduler->updateQueryStatus(status);
+        if (request->has_sender_metrics())
+        {
+            for (const auto & [ex_id, exg_status] : fromSenderMerics(request->sender_metrics()))
+            {
+                context->getExchangeDataTracker()->registerExchangeStatus(
+                    request->query_id(), ex_id, request->parallel_index(), exg_status);
+            }
+        }
+        // TODO(WangTao): fine grained control, conbining with retrying.
+        if (status.is_succeed)
+            scheduler->updateReceivedSegmentStatusCounter(request->query_id(), request->segment_id(), request->parallel_index());
+
+
+        if (scheduler->isExplainQuery(request->query_id()) && scheduler->alreadyReceivedAllSegmentStatus(request->query_id()))
+        {
+            ProfileLogHub<ProcessorProfileLogElement>::getInstance().stopConsume(status.query_id);
+            LOG_DEBUG(log, "Query:{} have received all segment status.", status.query_id);
+        }
+
+        if (scheduler->alreadyReceivedAllStatusOfSegment(request->query_id(), request->segment_id()))
+            scheduler->onSegmentFinished(status);
+
+        if (!status.is_canceled && status.code == 0)
+        {
+            try
+            {
+                scheduler->checkQueryCpuTime(status.query_id);
+            }
+            catch (const Exception & e)
+            {
+                status.message = e.message();
+                status.code = e.code();
+                status.is_succeed = false;
+            }
+        }
+
+        // this means exception happened during execution.
+        if (!status.is_succeed && !status.is_canceled)
+        {
+            auto coodinator = MPPQueryManager::instance().getCoordinator(request->query_id());
+            if (coodinator)
+                coodinator->updateSegmentInstanceStatus(status);
+            scheduler->onSegmentFinished(status);
+        }
+        // todo  scheduler.cancelSchedule
+    }
+    catch (...)
+    {
+        auto error_msg = getCurrentExceptionMessage(false);
+        cntl->SetFailed(error_msg);
+        LOG_ERROR(log, "sendPlanSegmentStatus failed: {}", error_msg);
     }
 }
 

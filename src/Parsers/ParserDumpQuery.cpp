@@ -1,6 +1,8 @@
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/ParserDumpQuery.h>
+#include <Parsers/ParserSetQuery.h>
+#include <Parsers/ASTIdentifier.h>
 
 namespace DB
 {
@@ -35,7 +37,7 @@ bool ParserDumpQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserSelectWithUnionQuery select_p(dt);
 
     ASTDumpQuery::Kind kind;
-    bool without_ddl = false;
+    bool output_client = false;
     ASTPtr cluster_name;
     ASTPtr databases;
     ASTPtr query_ids;
@@ -45,16 +47,21 @@ bool ParserDumpQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ASTPtr end_time;
     ASTPtr where_expression;
     ASTPtr dump_path;
+    ASTPtr settings;
 
     /// DUMP
     if (!s_dump.ignore(pos, expected))
         return false;
 
+    ParserSetQuery parser_settings(true);
+    auto begin = pos;
+    if (!parser_settings.parse(pos, settings, expected))
+        pos = begin;
+
     /// DDL
     if (s_ddl.ignore(pos, expected))
     {
         kind = ASTDumpQuery::Kind::DDL;
-        without_ddl = false;
         /// FROM db1, db2, ...
         if (s_from.ignore(pos, expected))
         {
@@ -66,15 +73,6 @@ bool ParserDumpQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     else if (s_query.ignore(pos, expected))
     {
         kind = ASTDumpQuery::Kind::Query;
-
-        /// WITHOUT DDL
-        if (s_without.ignore(pos, expected))
-        {
-            if (!s_ddl.ignore(pos, expected))
-                return false;
-
-            without_ddl = true;
-        }
 
         /// IDS['query_id1', 'query_id2', ...]
         if (s_ids.ignore(pos, expected))
@@ -90,14 +88,6 @@ bool ParserDumpQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     else if (s_workload.ignore(pos, expected))
     {
         kind = ASTDumpQuery::Kind::Workload;
-        /// WITHOUT DDL
-        if (s_without.ignore(pos, expected))
-        {
-            if (!s_ddl.ignore(pos, expected))
-                return false;
-
-            without_ddl = true;
-        }
 
         /// ON CLUSTER cluster_name
         if (s_on.ignore(pos, expected))
@@ -143,10 +133,12 @@ bool ParserDumpQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         if (!literal_p.parse(pos, dump_path, expected))
             return false;
     }
+    else
+        output_client = true;
 
     auto dump_query = std::make_shared<ASTDumpQuery>();
     dump_query->kind = kind;
-    dump_query->without_ddl = without_ddl;
+    dump_query->output_client = output_client;
     dump_query->setExpression(ASTDumpQuery::Expression::DATABASES, std::move(databases));
     dump_query->setExpression(ASTDumpQuery::Expression::SUBQUERY, std::move(subquery));
     dump_query->setExpression(ASTDumpQuery::Expression::QUERY_IDS, std::move(query_ids));
@@ -156,6 +148,13 @@ bool ParserDumpQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     dump_query->setExpression(ASTDumpQuery::Expression::LIMIT_LENGTH, std::move(limit_length));
     dump_query->setExpression(ASTDumpQuery::Expression::CLUSTER, std::move(cluster_name));
     dump_query->setExpression(ASTDumpQuery::Expression::DUMP_PATH, std::move(dump_path));
+    dump_query->setExpression(ASTDumpQuery::Expression::SETTING, std::move(settings));
+
+    if (output_client)
+    {
+        dump_query->format = std::make_shared<ASTIdentifier>("TabSeparatedRaw");
+        setIdentifierSpecial(dump_query->format);
+    }
 
     node = dump_query;
     return true;

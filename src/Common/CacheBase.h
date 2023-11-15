@@ -12,7 +12,7 @@
 #include <mutex>
 #include <unordered_map>
 
-#include <base/defines.h>
+#include <common/defines.h>
 
 namespace DB
 {

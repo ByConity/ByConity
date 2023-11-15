@@ -808,6 +808,8 @@ void MetastoreProxy::dropAllPartInTable(const String & name_space, const String 
     metastore_ptr->clean(stagedDataPartPrefix(name_space, uuid));
     metastore_ptr->clean(tablePartitionInfoPrefix(name_space, uuid));
     metastore_ptr->clean(detachedPartPrefix(name_space, uuid));
+    metastore_ptr->clean(partitionPartsMetricsSnapshotPrefix(name_space,uuid, ""));
+    metastore_ptr->clean(tableTrashItemsMetricsSnapshotPrefix(name_space, uuid));
 }
 
 void MetastoreProxy::dropAllDeleteBitmapInTable(const String & name_space, const String & uuid)
@@ -2100,7 +2102,7 @@ void MetastoreProxy::updateMaterializedMySQLMetadataInBatch(const String & name_
 
     BatchCommitRequest multi_writer;
     BatchCommitResponse resp;
-    
+
     for (size_t i = 0; i < names.size(); ++i)
         multi_writer.AddPut(SinglePutRequest(materializedMySQLMetadataKey(name_space, names[i]), values[i]));
 
@@ -2112,54 +2114,14 @@ void MetastoreProxy::updateMaterializedMySQLMetadataInBatch(const String & name_
 
 // TODO(WangTao): For bytekv we use TTL to expire the async query status, while for other metastore we need a background job to clean the expired status.
 void MetastoreProxy::setAsyncQueryStatus(
-    const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64 ttl) const
+    const String & name_space, const String & id, const Protos::AsyncQueryStatus & status, UInt64) const
 {
-    // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
-    // {
-    //     if (status.status() == AsyncQueryStatus::NotStarted || status.status() == AsyncQueryStatus::Running)
-    //     {
-    //         bytekv->putTTL(asyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl);
-    //     }
-    //     else
-    //     {
-    //         DB::Catalog::BatchCommitRequest update_request;
-    //         DB::Catalog::BatchCommitResponse update_response;
-    //         update_request.AddDelete(asyncQueryStatusKey(name_space, id));
-    //         update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, id), status.SerializeAsString(), ttl));
-    //         if (!bytekv->batchWrite(update_request, update_response))
-    //         {
-    //             throw Exception(
-    //                 fmt::format("Update async query status fail with ns {} and id {}.", name_space, id), ErrorCodes::LOGICAL_ERROR);
-    //         }
-    //     }
-    //     return;
-    // }
     metastore_ptr->put(asyncQueryStatusKey(name_space, id), status.SerializeAsString());
 }
 
 void MetastoreProxy::markBatchAsyncQueryStatusFailed(
-    const String & name_space, std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason, UInt64 ttl) const
+    const String & name_space, std::vector<Protos::AsyncQueryStatus> & statuses, const String & reason, UInt64) const
 {
-    // if (auto * bytekv = dynamic_cast<MetastoreByteKVImpl *>(metastore_ptr.get()))
-    // {
-    //     DB::Catalog::BatchCommitRequest update_request;
-    //     DB::Catalog::BatchCommitResponse update_response;
-    //     for (auto & status : statuses)
-    //     {
-    //         status.set_status(Protos::AsyncQueryStatus::Failed);
-    //         status.set_error_msg(reason);
-    //         status.set_update_time(time(nullptr));
-    //         update_request.AddDelete(asyncQueryStatusKey(name_space, status.id()));
-    //         update_request.AddPut(SinglePutRequest(finalAsyncQueryStatusKey(name_space, status.id()), status.SerializeAsString(), ttl));
-    //     }
-    //     if (!bytekv->batchWrite(update_request, update_response))
-    //     {
-    //         throw Exception(
-    //             fmt::format("Mark batch async query status fail with ns {} and size {}.", name_space, statuses.size()),
-    //             ErrorCodes::LOGICAL_ERROR);
-    //     }
-    //     return;
-    // }
     for (auto & status : statuses)
     {
         status.set_status(Protos::AsyncQueryStatus::Failed);
@@ -2735,6 +2697,26 @@ IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_spac
 IMetaStore::IteratorPtr MetastoreProxy::getAllDeleteBitmaps(const String & name_space, const String & table_uuid)
 {
     return metastore_ptr->getByPrefix(deleteBitmapPrefix(name_space, table_uuid));
+}
+
+void MetastoreProxy::updateTableTrashItemsSnapshot(const String & name_space, const String & table_uuid, const String & snapshot)
+{
+    metastore_ptr->put(tableTrashItemsMetricsSnapshotPrefix(name_space, table_uuid), snapshot);
+}
+void MetastoreProxy::updatePartitionMetricsSnapshot(
+    const String & name_space, const String & table_uuid, const String & partition_id, const String & snapshot)
+{
+    metastore_ptr->put(partitionPartsMetricsSnapshotPrefix(name_space, table_uuid, partition_id), snapshot);
+}
+IMetaStore::IteratorPtr MetastoreProxy::getTablePartitionMetricsSnapshots(const String & name_space, const String & table_uuid)
+{
+    return metastore_ptr->getByPrefix(partitionPartsMetricsSnapshotPrefix(name_space, table_uuid, ""));
+}
+String MetastoreProxy::getTableTrashItemsSnapshot(const String & name_space, const String & table_uuid)
+{
+    String value;
+    metastore_ptr->get(tableTrashItemsMetricsSnapshotPrefix(name_space, table_uuid), value);
+    return value;
 }
 
 } /// end of namespace DB::Catalog

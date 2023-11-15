@@ -3,6 +3,7 @@
 #include <Poco/JSON/Object.h>
 
 #include <string>
+#include <unordered_map>
 
 namespace DB::DumpUtils
 {
@@ -20,17 +21,31 @@ enum class QueryInfo
     frequency = 5,
 };
 
-constexpr const char * DDL_FILE = "ddl.json";
-constexpr const char * VIEWS_FILE = "views.json";
-constexpr const char * STATS_FILE = "stats.json";
-constexpr const char * QUERIES_FILE = "queries.json";
-constexpr const char * SHARD_COUNT_FILE = "shard_count.json";
+constexpr const char * DUMP_RESULT_FILE = "dump_result.json";
 
 const char * toString(QueryInfo type);
 std::string simplifyPath(const std::string & path);
 void createFolder(const std::string & simplified_path_to_folder);
 void zipDirectory(const std::string & simplified_path_to_folder);
 void writeJsonToAbsolutePath(const Poco::JSON::Object & json, const std::string & absolute_path);
+
+struct DumpSettings
+{
+    bool without_ddl = false;
+    bool stats = true;
+    bool shard_count = true;
+    bool compress_directory = false;
+
+    constexpr static char name[] = "Dump";
+
+    std::unordered_map<std::string, std::reference_wrapper<bool>> boolean_settings =
+    {
+        {"without_ddl", without_ddl},
+        {"stats", stats},
+        {"shard_count", shard_count},
+        {"compress_directory", compress_directory}
+    };
+};
 }
 
 

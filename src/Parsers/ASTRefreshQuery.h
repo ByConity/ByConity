@@ -24,6 +24,7 @@ namespace DB
     {
     public:
         ASTPtr partition; // partition to refresh
+        ASTPtr where_expr;
         bool async = false;
 
         String getID(char delimiter) const override

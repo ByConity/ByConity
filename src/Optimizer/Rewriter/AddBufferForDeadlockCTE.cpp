@@ -154,8 +154,7 @@ namespace
 
     void UpdateParentExecuteOrderVisitor::visitPlanNode(PlanNodeBase & node, const Void & ctx)
     {
-        auto join_path = visit_path.back().second;
-        assert(join_path == JoinPath::RIGHT);
+        assert(visit_path.back().second == JoinPath::RIGHT);
         visit_path.pop_back();
         execute_orders[node.getId()].emplace(cur_execute_order);
 

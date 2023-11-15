@@ -51,14 +51,7 @@ void ManipulationTask::setManipulationEntry()
 
 void ManipulationTask::execute()
 {
-    try
-    {
-        executeImpl();
-    }
-    catch (...)
-    {
-        tryLogCurrentException(__PRETTY_FUNCTION__);
-    }
+    executeImpl();
 }
 
 void executeManipulationTask(ManipulationTaskPtr task, MergeTreeMutableDataPartsVector all_parts)

@@ -40,7 +40,9 @@ using StorageMetadataPtr = std::shared_ptr<const StorageInMemoryMetadata>;
 class HiveWhereOptimizer : private boost::noncopyable
 {
 public:
-    HiveWhereOptimizer(const StorageMetadataPtr & metadata_snapshot_, const SelectQueryInfo & query_info_, Poco::Logger * log_);
+    HiveWhereOptimizer(
+        const StorageMetadataPtr & metadata_snapshot_,
+        const SelectQueryInfo & query_info_);
 
     using Conditions = ASTs;
 
@@ -65,7 +67,6 @@ private:
 
     NameSet partition_key_names;
     NameSet cluster_key_names;
-    Poco::Logger * log;
 };
 
 }

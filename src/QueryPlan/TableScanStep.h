@@ -74,6 +74,8 @@ public:
         , log(&Poco::Logger::get("TableScanStep"))
         , alias(alias_)
     {
+        if (storage)
+            storage_id.uuid = storage->getStorageUUID();
     }
 
     String getName() const override { return "TableScan"; }

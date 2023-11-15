@@ -286,6 +286,9 @@ Packet MultiplexedConnections::drain()
     Packet res;
     res.type = Protocol::Server::EndOfStream;
 
+    if (!hasActiveConnections())
+        return res;
+
     Packet packet = receivePacketUnlocked({});
 
     switch (packet.type)

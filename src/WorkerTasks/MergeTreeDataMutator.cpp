@@ -33,13 +33,15 @@
 #include <Common/typeid_cast.h>
 #include <Common/escapeForFileName.h>
 #include <Common/Endian.h>
+#include <Common/RowExistsColumnInfo.h>
 #include <Parsers/queryToString.h>
 #include <Columns/ColumnByteMap.h>
 #include <Common/FieldVisitorToString.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Storages/MergeTree/MergeTreeDataPartType.h>
-#include <WorkerTasks/ManipulationTaskParams.h>
 #include <Storages/MergeTree/MergeTreeDataMergerMutator.h>
+#include <Storages/ProjectionsDescription.h>
+#include <WorkerTasks/ManipulationTaskParams.h>
 
 #include <cmath>
 #include <ctime>
@@ -190,6 +192,7 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
     TableLockHolder & holder)
 {
     auto metadata_snapshot = params.storage->getInMemoryMetadataPtr();
+    // auto mutable_metadata = const_pointer_cast<StorageInMemoryMetadata>(metadata_snapshot);
     auto * table = dynamic_cast<MergeTreeMetaBase *>(params.storage.get());
 
     if (!table)
@@ -201,8 +204,17 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
     {
         auto estimated_space_for_result = static_cast<size_t>(part->getBytesOnDisk() * DISK_USAGE_COEFFICIENT_TO_RESERVE);
         ReservationPtr reserved_space = table->reserveSpace(estimated_space_for_result, IStorage::StorageLocation::AUXILITY);  // TODO: calc estimated_space_for_result
-        new_partial_parts.push_back(
-            mutatePartToTemporaryPart(part, metadata_snapshot, *params.mutation_commands, manipulation_entry, params.txn_id, context, reserved_space, holder));
+
+        new_partial_parts.push_back(mutatePartToTemporaryPart(
+            part,
+            metadata_snapshot,
+            *params.mutation_commands,
+            manipulation_entry,
+            params.txn_id,
+            context,
+            reserved_space,
+            holder));
+
         new_partial_parts.back()->columns_commit_time = params.columns_commit_time;
         new_partial_parts.back()->mutation_commit_time = params.mutation_commit_time;
         /// Copy bucket info for bucket table
@@ -220,6 +232,11 @@ IMutableMergeTreeDataPartsVector MergeTreeDataMutator::mutatePartsToTemporaryPar
     return new_partial_parts;
 }
 
+bool isDeleteCommand(const MutationCommands & commands)
+{
+    return commands.size() == 1 && commands.front().type == MutationCommand::FAST_DELETE;
+}
+
 IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
     const IMergeTreeDataPartPtr & source_part,
     const StorageMetadataPtr & metadata_snapshot,
@@ -233,10 +250,7 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
     checkOperationIsNotCanceled(manipulation_entry);
 
     LOG_TRACE(log, "Mutating part {}", source_part->name);
-
     CurrentMetrics::Increment num_mutations{CurrentMetrics::Manipulation};
-    // const auto & source_part = future_part.parts[0];
-    auto storage_from_source_part = StorageFromMergeTreeDataPart::create(source_part);
 
     /// prevent other data modification tasks (recode/build bitmap index) from execution during part mutation
     auto mutate_lock = std::unique_lock<std::mutex>(source_part->mutate_mutex);
@@ -248,43 +262,26 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
     context_for_reading->setSetting("force_index_by_date", Field(0));
     context_for_reading->setSetting("force_primary_key", Field(0));
 
-    MutationCommands commands_for_part;
-    for (const auto & command : commands)
-    {
-        if (!command.partition || source_part->info.partition_id == data.getPartitionIDFromQuery(command.partition, context_for_reading))
-        {
-            /// FAST_DELETE can't handle non-wide part and projections, convert to DELETE in those cases
-            if (command.type == MutationCommand::FAST_DELETE && (!isWidePart(source_part) || !metadata_snapshot->getProjections().empty()))
-                commands_for_part.emplace_back(MutationCommand{.type = MutationCommand::DELETE, .predicate = command.predicate, .partition = command.partition});
-            else
-                commands_for_part.emplace_back(command);
-        }
-    }
-
-    if (source_part->isStoredOnDisk() && !isStorageTouchedByMutations(
-        storage_from_source_part, metadata_snapshot, commands_for_part, Context::createCopy(context_for_reading)))
-    {
-        LOG_TRACE(log, "Part {} doesn't change up to mutation version {}", source_part->name, source_part->info.mutation);
-        return data.cloneAndLoadDataPartOnSameDisk(source_part, "tmp_clone_", source_part->info, metadata_snapshot);
-    }
-
     BlockInputStreamPtr in;
     Block updated_header;
-    ImmutableDeleteBitmapPtr updated_delete_bitmap;
+    // ImmutableDeleteBitmapPtr updated_delete_bitmap;
     std::unique_ptr<MutationsInterpreter> interpreter;
 
     const auto data_settings = data.getSettings();
     MutationCommands for_interpreter;
     MutationCommands for_file_renames;
 
-    splitMutationCommands(source_part, metadata_snapshot, commands_for_part, for_interpreter, for_file_renames);
+    splitMutationCommands(source_part, metadata_snapshot, commands, for_interpreter, for_file_renames);
 
-    /// for modify column mutations, the new column data files should contain the same number of rows as before,
-    /// thus an empty delete bitmap is used for read.
-    if (for_interpreter.allOf(MutationCommand::READ_COLUMN))
-    {
-        storage_from_source_part->setDeleteBitmap(source_part, nullptr);
-    }
+    /// Ignore delete_bitmap in case of:
+    /// 1. Only READ_COLUMN:
+    ///     for modify column mutations, the new column data files should contain the same number of rows as before,
+    ///     thus an empty delete bitmap is used for read.
+    /// 2. FAST_DELETE:
+    ///     we need to read the content of old delete_bitmap to generate a new one.
+    bool without_delete_bitmap = isDeleteCommand(commands) || for_interpreter.allOf(MutationCommand::READ_COLUMN);
+
+    auto storage_from_source_part = StorageFromMergeTreeDataPart::create(source_part, without_delete_bitmap);
 
     UInt64 watch_prev_elapsed = 0;
     MutateStageProgress stage_progress(1.0);
@@ -305,13 +302,13 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
         if (in)
             in->setProgressCallback(MutateProgressCallback(manipulation_entry, watch_prev_elapsed, stage_progress));
         updated_header = interpreter->getUpdatedHeader();
-        updated_delete_bitmap = interpreter->getUpdatedDeleteBitmap();
     }
 
     auto new_part_info = source_part->info;
     new_part_info.level += 1;
     new_part_info.hint_mutation = new_part_info.mutation;
     new_part_info.mutation = context->getTimestamp();
+    
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + source_part->name, space_reservation->getDisk(), 0);
     auto new_part_name = new_part_info.getPartName();
     auto new_data_part = data.createPart(
@@ -325,7 +322,7 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
 
     /// It shouldn't be changed by mutation.
     new_data_part->index_granularity_info = source_part->index_granularity_info;
-    new_data_part->setColumns(getColumnsForNewDataPart(source_part, updated_header, storage_columns, for_file_renames));
+    new_data_part->setColumns(getColumnsForNewDataPart(source_part, updated_header, storage_columns, for_file_renames, isDeleteCommand(commands)));
     new_data_part->partition.assign(source_part->partition);
 
     LOG_TRACE(log, "Mutating part {} to mutation version {}", source_part->name, new_data_part->info.mutation);
@@ -410,11 +407,6 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
                 }
                 new_data_part->checksums_ptr->files.erase(rename_from);
             }
-        }
-
-        if (updated_delete_bitmap)
-        {
-            // new_data_part->writeDeleteFile(updated_delete_bitmap, need_sync);
         }
 
         finalizeMutatedPart(source_part, new_data_part, compression_codec);
@@ -681,7 +673,8 @@ NamesAndTypesList MergeTreeDataMutator::getColumnsForNewDataPart(
     MergeTreeData::DataPartPtr source_part,
     const Block & updated_header,
     NamesAndTypesList storage_columns,
-    const MutationCommands & commands_for_removes)
+    const MutationCommands & commands_for_removes,
+    bool with_row_exists_column)
 {
     /// In compact parts we read all columns, because they all stored in a single file
     if (!isWidePart(source_part) || !isCnchPart(source_part))
@@ -748,6 +741,11 @@ NamesAndTypesList MergeTreeDataMutator::getColumnsForNewDataPart(
                 it = storage_columns.erase(it);
             }
         }
+    }
+
+    if (with_row_exists_column)
+    {
+        storage_columns.push_back(RowExistsColumn::ROW_EXISTS_COLUMN);
     }
 
     return storage_columns;
@@ -1199,7 +1197,7 @@ void MergeTreeDataMutator::finalizeMutatedPart(
     const CompressionCodecPtr & codec)
 {
     auto disk = new_data_part->volume->getDisk();
-    // when generage empty partial parts, the directory will not be created before, so we should manully create it.
+    // when generating empty partial parts, the directory will not be created before, so we should create it manually.
     String new_part_tmp_rel_path = new_data_part->getFullRelativePath();
     if (!disk->exists(new_part_tmp_rel_path))
         disk->createDirectories(new_part_tmp_rel_path);

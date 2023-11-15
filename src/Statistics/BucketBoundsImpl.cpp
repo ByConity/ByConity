@@ -59,8 +59,11 @@ String BucketBoundsImpl<T>::serializeToJson() const
     {
         object_json.set("type_id", type_string);
         for (auto ptr : bounds_)
-        {
-            array_json.add(ptr);
+        {   
+            if constexpr (std::is_same_v<T, UInt8>)
+                array_json.add(static_cast<uint8_t>(ptr));
+            else
+                array_json.add(ptr);
         }
     }
     else if constexpr (std::is_same_v<T, UInt128> || std::is_same_v<T, Int128> || std::is_same_v<T, UInt256> || std::is_same_v<T, Int256>)

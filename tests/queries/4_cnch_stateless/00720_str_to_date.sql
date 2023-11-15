@@ -9,6 +9,7 @@ SELECT STR_TO_DATE('2023-01-01 12:00 PM', '%Y-%m-%d %r');
 set dialect_type='MYSQL';
 SELECT STR_TO_DATE('2023-01-01 12:00:00 PM', '%Y-%m-%d %r');
 SELECT STR_TO_DATE('01-01-2023', '%d-%m-%Y');
+set formatdatetime_parsedatetime_m_is_month_name = 1;
 SELECT STR_TO_DATE('01-January-2023', '%d-%M-%Y');
 SELECT STR_TO_DATE('01-Jan-2023', '%d-%b-%Y');
 SELECT STR_TO_DATE('01/01/2023', '%d-%m-%Y');

@@ -69,7 +69,6 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
     Times cur_times;
     [[maybe_unused]] ssize_t truncate_index = -1;
 
-    size_t i = 0;
     std::vector<size_t> funnel_index;
     funnel_index.reserve(m_num_events);
     std::vector<size_t> reuse_funnel_index;
@@ -169,6 +168,7 @@ void calculateFunnelByTimes(std::function<UInt32(UInt32)> && getGroup, EventList
         }
     };
 
+    size_t i = 0;
     while (true)
     {
         UInt32 slot_idx = 0; // count base by slot

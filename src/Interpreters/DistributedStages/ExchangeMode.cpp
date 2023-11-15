@@ -47,6 +47,4 @@ String exchangeModeToString(const ExchangeMode & exchange_mode)
 
     return ostr.str();
 }
-
-
 }

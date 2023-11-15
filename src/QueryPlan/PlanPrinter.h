@@ -183,6 +183,7 @@ struct PlanSegmentDescription
     NodeDescriptionPtr node_description;
 
     Poco::JSON::Object::Ptr jsonPlanSegmentDescription(const StepAggregatedOperatorProfiles & profiles);
+    String jsonPlanSegmentDescriptionAsString(const StepAggregatedOperatorProfiles & profiles);
     static PlanSegmentDescriptionPtr getPlanSegmentDescription(PlanSegmentPtr & segment, bool record_plan_detail = false);
 };
 

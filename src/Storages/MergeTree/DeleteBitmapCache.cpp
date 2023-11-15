@@ -99,13 +99,14 @@ void DeleteBitmapCache::erase(const String & key)
     cache->Erase(key);
 }
 
-String DeleteBitmapCache::buildKey(UUID storage_uuid, const String & partition_id, Int64 min_block, Int64 max_block)
+String DeleteBitmapCache::buildKey(UUID storage_uuid, const String & partition_id, Int64 min_block, Int64 max_block, Int64 mutation)
 {
     WriteBufferFromOwnString buf;
     writeBinary(storage_uuid, buf);
     writeString(partition_id, buf);
     writeBinary(min_block, buf);
     writeBinary(max_block, buf);
+    writeBinary(mutation, buf);
     return std::move(buf.str());
 }
 

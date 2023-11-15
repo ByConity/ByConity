@@ -55,7 +55,6 @@ ExchangeSource::ExchangeSource(
     : SourceWithProgress(std::move(header_), false)
     , receiver(std::move(receiver_))
     , options(options_)
-    , fetch_exception_from_scheduler(false)
     , totals_source(std::move(totals_source_))
     , extremes_source(std::move(extremes_source_))
     , logger(&Poco::Logger::get("ExchangeSource"))
@@ -66,13 +65,12 @@ ExchangeSource::ExchangeSource(
     Block header_,
     BroadcastReceiverPtr receiver_,
     ExchangeOptions options_,
-    bool fetch_exception_from_scheduler_,
+    bool,
     ExchangeTotalsSourcePtr totals_source_,
     ExchangeExtremesSourcePtr extremes_source_)
     : SourceWithProgress(std::move(header_), false)
     , receiver(std::move(receiver_))
     , options(options_)
-    , fetch_exception_from_scheduler(fetch_exception_from_scheduler_)
     , totals_source(std::move(totals_source_))
     , extremes_source(std::move(extremes_source_))
     , logger(&Poco::Logger::get("ExchangeSource"))
@@ -135,8 +133,8 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
             throw Exception(
                 getName() + " fail to receive data: " + status.message + " code: " + std::to_string(status.code),
                 ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
-        
-        // FIXME 
+
+        // FIXME
         // if (fetch_exception_from_scheduler)
         // {
         //     auto context = CurrentThread::get().getQueryContext();
@@ -147,7 +145,7 @@ std::optional<Chunk> ExchangeSource::tryGenerate()
         //             + " exception: " + exception_with_code.exception, exception_with_code.code);
         // }
 
-        // If receiver is finihsed and not cancelly by pipeline, we should cancel pipeline here
+        // If receiver is finished and not cancelly by pipeline, we should cancel pipeline here
         if (status.code != BroadcastStatusCode::RECV_CANCELLED)
             throw Exception(
                 getName() + " will cancel with finish message: " + status.message + " code: " + std::to_string(status.code),

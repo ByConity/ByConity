@@ -31,9 +31,9 @@ public:
     }
 };
 
-#define VERIFY(candidate, args...) \
+#define VERIFY(candidate, ...) \
     do { \
-        ASSERT_NO_FATAL_FAILURE(verify(candidate, args)); \
+        ASSERT_NO_FATAL_FAILURE(verify(candidate, __VA_ARGS__)); \
     } while (0)
 
 TEST_F(BlockingQueueTest, InsertBasic) {
@@ -132,15 +132,15 @@ TEST_F(BlockingQueueTest, ExtractWaiting) {
     VERIFY(vals, {});
 
     std::future<void> extract_res = std::async(std::launch::async, [&]() {
-        std::vector<int> res = queue.extractBatch(7, std::nullopt);
+        std::vector<int> result = queue.extractBatch(7, std::nullopt);
         VERIFY(queue, {});
-        VERIFY(res, {6, 7, 8, 9, 10, 11, 12});
+        VERIFY(result, {6, 7, 8, 9, 10, 11, 12});
     });
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     std::future<void> insert_res = std::async(std::launch::async, [&]() {
-        std::vector<int> vals {7, 8, 9, 10, 11, 12};
-        queue.insertBatch(vals, std::nullopt);
-        VERIFY(vals, {});
+        std::vector<int> vec_vals {7, 8, 9, 10, 11, 12};
+        queue.insertBatch(vec_vals, std::nullopt);
+        VERIFY(vec_vals, {});
     });
 
     extract_res.get();

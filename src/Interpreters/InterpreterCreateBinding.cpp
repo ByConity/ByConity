@@ -19,7 +19,7 @@ BlockIO InterpreterCreateBinding::execute()
     WriteBufferFromOwnString ast_buffer;
     UUID pattern_uuid;
     SQLBindingItemPtr binding;
-    if (!create->re_expression.empty() && create->settings())
+    if (!create->re_expression.empty() && create->getSettings())
     {
         // get re_expression UUID
         pattern_uuid = SQLBindingUtils::getReExpressionHash(
@@ -31,37 +31,38 @@ BlockIO InterpreterCreateBinding::execute()
         {
             auto session_binding_cache_manager = BindingCacheManager::getSessionBindingCacheManager(context);
             session_binding_cache_manager->addReBinding(
-                pattern_uuid, {create->re_expression, nullptr, create->settings()->clone(), re_ptr});
+                pattern_uuid, {create->re_expression, nullptr, create->getSettings()->clone(), re_ptr});
         }
         else
         {
             auto global_binding_cache_manager = context->getGlobalBindingCacheManager();
-            serializeAST(create->settings(), ast_buffer);
+            serializeAST(create->getSettings(), ast_buffer);
             UInt64 time_stamp
                 = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
             binding = std::make_shared<SQLBindingItem>(pattern_uuid, create->re_expression, ast_buffer.str(), true, time_stamp);
             // update cache
             global_binding_cache_manager->addReBinding(
-                pattern_uuid, {create->re_expression, nullptr, create->settings()->clone(), re_ptr});
+                pattern_uuid, {create->re_expression, nullptr, create->getSettings()->clone(), re_ptr});
         }
     }
-    else if (!create->query_pattern.empty() && create->target())
+    else if (!create->query_pattern.empty() && create->getTarget())
     {
-        pattern_uuid
-            = SQLBindingUtils::getQueryHash(create->query_pattern.data(), create->query_pattern.data() + create->query_pattern.size());
+        pattern_uuid = SQLBindingUtils::getQueryASTHash(create->getPattern());
+        if (create->getPattern() && pattern_uuid == UUIDHelpers::Nil)
+            throw Exception("Get binding pattern uuid failed", ErrorCodes::LOGICAL_ERROR);
         if (create->level == BindingLevel::SESSION)
         {
             auto session_binding_cache_manager = BindingCacheManager::getSessionBindingCacheManager(context);
             session_binding_cache_manager->addSqlBinding(
-                pattern_uuid, {create->query_pattern, create->target()->clone(), nullptr, nullptr});
+                pattern_uuid, {create->query_pattern, create->getTarget()->clone(), nullptr, nullptr});
         }
         else
         {
             auto global_binding_cache_manager = context->getGlobalBindingCacheManager();
-            serializeAST(create->target(), ast_buffer);
+            serializeAST(create->getTarget(), ast_buffer);
             binding = std::make_shared<SQLBindingItem>(pattern_uuid, create->query_pattern, ast_buffer.str(), false);
             // update cache
-            global_binding_cache_manager->addSqlBinding(pattern_uuid, {create->query_pattern, create->target()->clone(), nullptr, nullptr});
+            global_binding_cache_manager->addSqlBinding(pattern_uuid, {create->query_pattern, create->getTarget()->clone(), nullptr, nullptr});
         }
     }
     else

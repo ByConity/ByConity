@@ -208,6 +208,7 @@ extern const Metric BackgroundMergeSelectSchedulePoolTask;
 extern const Metric BackgroundUniqueTableSchedulePoolTask;
 extern const Metric BackgroundMemoryTableSchedulePoolTask;
 extern const Metric BackgroundCNCHTopologySchedulePoolTask;
+extern const Metric BackgroundPartsMetricsSchedulePoolTask;
 }
 
 namespace DB
@@ -226,6 +227,7 @@ namespace SchedulePool
         UniqueTable,
         MemoryTable,
         CNCHTopology,
+        PartsMetrics,
         Size
     };
 }
@@ -248,6 +250,8 @@ namespace ErrorCodes
     extern const int NOT_IMPLEMENTED;
     extern const int RESOURCE_MANAGER_NO_LEADER_ELECTED;
     extern const int CNCH_SERVER_NOT_FOUND;
+    extern const int CNCH_BG_THREAD_NOT_FOUND;
+    extern const int CATALOG_SERVICE_INTERNAL_ERROR;
     extern const int NOT_A_LEADER;
     extern const int INVALID_SETTING_VALUE;
 }
@@ -337,6 +341,8 @@ struct ContextSharedPart
         mmap_cache; /// Cache of mmapped files to avoid frequent open/map/unmap/close and to reuse from several threads.
     ProcessList process_list; /// Executing queries at the moment.
     SegmentSchedulerPtr segment_scheduler;
+    ExchangeStatusTrackerPtr exchange_data_tracker;
+    DiskExchangeDataManagerPtr disk_exchange_data_manager;
     QueueManagerPtr queue_manager;
     AsyncQueryManagerPtr async_query_manager;
     MergeList merge_list; /// The list of executable merge (for (Replicated)?MergeTree)
@@ -351,7 +357,6 @@ struct ContextSharedPart
     mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
     mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
 
-    std::optional<ThreadPool> part_cache_manager_thread_pool;  /// A thread pool to collect partition metrics in background.
     mutable ThrottlerPtr disk_cache_throttler;
 
     mutable std::array<std::optional<BackgroundSchedulePool>, SchedulePool::Size> extra_schedule_pools;
@@ -537,6 +542,7 @@ struct ContextSharedPart
 
             if (worker_status_manager)
                 worker_status_manager->shutdown();
+
             /// Preemptive destruction is important, because these objects may have a refcount to ContextShared (cyclic reference).
             /// TODO: Get rid of this.
 
@@ -818,6 +824,42 @@ SegmentSchedulerPtr Context::getSegmentScheduler() const
     if (!shared->segment_scheduler)
         shared->segment_scheduler = std::make_shared<SegmentScheduler>();
     return shared->segment_scheduler;
+}
+
+ExchangeStatusTrackerPtr Context::getExchangeDataTracker() const
+{
+    auto lock = getLock();
+    if (!shared->exchange_data_tracker)
+    {
+        if (shared->server_type == ServerType::cnch_server)
+        {
+            shared->exchange_data_tracker = std::make_shared<ExchangeStatusTracker>(global_context);
+        }
+        else
+        {
+            throw Exception("Exchange data tracker is not supported", ErrorCodes::NOT_IMPLEMENTED);
+        }
+    }
+    return shared->exchange_data_tracker;
+}
+
+DiskExchangeDataManagerPtr Context::getDiskExchangeDataManager() const
+{
+    auto lock = getLock();
+    if (!shared->disk_exchange_data_manager)
+    {
+        const auto & bsp_conf = getRootConfig().batch_synchronous_parallel;
+        DiskExchangeDataManagerOptions options{.path = "bsp/v-1.0.0", .storage_policy = bsp_conf.storage_policy, .volume = bsp_conf.volume};
+        shared->disk_exchange_data_manager
+            = DiskExchangeDataManager::createDiskExchangeDataManager(global_context, getGlobalContext(), options);
+    }
+    return shared->disk_exchange_data_manager;
+}
+
+void Context::setMockDiskExchangeDataManager(DiskExchangeDataManagerPtr disk_exchange_data_manager)
+{
+    auto lock = getLock();
+    shared->disk_exchange_data_manager = disk_exchange_data_manager;
 }
 
 BindingCacheManagerPtr Context::getGlobalBindingCacheManager() const
@@ -2649,6 +2691,17 @@ BackgroundSchedulePool & Context::getTopologySchedulePool() const
     return *shared->extra_schedule_pools[SchedulePool::CNCHTopology];
 }
 
+BackgroundSchedulePool & Context::getMetricsRecalculationSchedulePool() const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[SchedulePool::PartsMetrics])
+        shared->extra_schedule_pools[SchedulePool::PartsMetrics].emplace(
+            settings.background_metrics_recalculation_schedule_pool_size,
+            CurrentMetrics::BackgroundPartsMetricsSchedulePoolTask,
+            "PtMetricsPol");
+    return *shared->extra_schedule_pools[SchedulePool::PartsMetrics];
+}
+
 ThrottlerPtr Context::getDiskCacheThrottler() const
 {
     auto lock = getLock();
@@ -3026,12 +3079,12 @@ std::pair<String, UInt16> Context::getInterserverIOAddress() const
     return {shared->interserver_io_host, shared->interserver_io_port};
 }
 
-UInt16 Context::getExchangePort(bool check_port_exists) const
+UInt16 Context::getExchangePort(bool) const
 {
     return getRPCPort();
 }
 
-UInt16 Context::getExchangeStatusPort(bool check_port_exists) const
+UInt16 Context::getExchangeStatusPort(bool) const
 {
     return getRPCPort();
 }
@@ -4644,6 +4697,38 @@ ServerType Context::getServerType() const
     return shared->server_type;
 }
 
+String Context::getServerTypeString() const
+{
+    String type_str;
+    switch (shared->server_type)
+    {
+        case ServerType::standalone:
+            type_str = "standalone";
+            break;
+        case ServerType::cnch_server:
+            type_str = "cnch_server";
+            break;
+        case ServerType::cnch_worker:
+            type_str = "cnch_worker";
+            break;
+        case ServerType::cnch_daemon_manager:
+            type_str = "cnch_daemon_manager";
+            break;
+        case ServerType::cnch_resource_manager:
+            type_str = "cnch_resource_manager";
+            break;
+        case ServerType::cnch_tso_server:
+            type_str = "cnch_tso_server";
+            break;
+        case ServerType::cnch_bytepond:
+            type_str = "cnch_bytepond";
+            break;
+        default:
+            throw Exception("Unknown server type: " + std::to_string(static_cast<int>(shared->server_type)), ErrorCodes::BAD_ARGUMENTS);
+    }
+    return type_str;
+}
+
 UInt64 Context::getNonHostUpdateTime(const UUID & uuid)
 {
     {
@@ -4660,14 +4745,6 @@ UInt64 Context::getNonHostUpdateTime(const UUID & uuid)
     }
 
     return fetched_nhut;
-}
-
-ThreadPool & Context::getPartCacheManagerThreadPool()
-{
-    auto lock = getLock();
-    if (!shared->part_cache_manager_thread_pool)
-        shared->part_cache_manager_thread_pool.emplace(settings.part_cache_manager_thread_pool_size);
-    return *shared->part_cache_manager_thread_pool;
 }
 
 void Context::initCnchServerClientPool(const String & service_name)
@@ -4918,6 +4995,56 @@ bool Context::isResourceReportRegistered()
 CnchBGThreadPtr Context::tryGetDedupWorkerManager(const StorageID & storage_id) const
 {
     return tryGetCnchBGThread(CnchBGThreadType::DedupWorker, storage_id);
+}
+
+std::multimap<StorageID, MergeTreeMutationStatus> Context::collectMutationStatusesByTables(std::unordered_set<UUID> table_uuids) const
+{
+    /// If the query is for a specified table's mutation status,
+    /// we need to ensure always return correct result, or throw exception when result is not available.
+    bool throw_on_fail = table_uuids.size() == 1;
+
+    std::multimap<StorageID, MergeTreeMutationStatus> res;
+
+    auto threads = getCnchBGThreadsMap(CnchBGThreadType::MergeMutate)->getAll();
+
+    for (const auto & [uuid, task]: threads)
+    {
+        if (!table_uuids.count(uuid))
+            continue;
+
+        if (task->getThreadStatus() == CnchBGThreadStatus::Stopped)
+        {
+            if (throw_on_fail)
+                throw Exception("Table's MergeMutateThread is stopped. Please start it first.", ErrorCodes::CNCH_BG_THREAD_NOT_FOUND);
+            continue;
+        }
+
+        try
+        {
+            auto * merge_mutate_thread = dynamic_cast<CnchMergeMutateThread *>(task.get());
+            auto statuses = merge_mutate_thread->getAllMutationStatuses();
+            for (auto & status : statuses)
+                res.emplace(task->getStorageID(), status);
+
+            table_uuids.erase(uuid);
+        }
+        catch (Exception & e)
+        {
+            // Can't get Table by uuid, table maybe already deleted.
+            if (e.code() != ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR)
+            {
+                tryLogCurrentException(__PRETTY_FUNCTION__);
+                throw;
+            }
+            else
+                LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), "Can't get Table by uuid, table maybe already deleted, skip it.");
+        }
+    }
+
+    if (throw_on_fail && !table_uuids.empty())
+        throw Exception("Table's MergeMutateThread is not found on the server. Please check table's host server first.", ErrorCodes::CNCH_BG_THREAD_NOT_FOUND);
+
+    return res;
 }
 
 void Context::initCnchTransactionCoordinator()

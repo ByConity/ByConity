@@ -23,8 +23,8 @@ private:
 class JoinAlgorithmHintsVisitor : public PlanNodeVisitor<HintsStringSet, Void>
 {
 public:
-    explicit JoinAlgorithmHintsVisitor(ContextMutablePtr & context_, CTEInfo & cte_info_, PlanNodePtr & root)
-        : context(context_), post_order_cte_helper(cte_info_, root), cte_info(cte_info_)
+    explicit JoinAlgorithmHintsVisitor(ContextMutablePtr & /*context_*/, CTEInfo & cte_info_, PlanNodePtr & root)
+        : post_order_cte_helper(cte_info_, root)
     {
     }
 
@@ -34,9 +34,7 @@ private:
     HintsStringSet visitCTERefNode(CTERefNode & node, Void &) override;
     HintsStringSet visitTableScanNode(TableScanNode & node, Void &) override;
 
-    ContextMutablePtr & context;
     CTEPostorderVisitHelper post_order_cte_helper;
-    CTEInfo & cte_info;
 };
 
 }

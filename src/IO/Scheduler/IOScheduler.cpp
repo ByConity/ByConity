@@ -6,7 +6,7 @@
 #include <shared_mutex>
 #include <sstream>
 #include <fmt/format.h>
-#include <base/defines.h>
+#include <common/defines.h>
 #include <common/logger_useful.h>
 #include <Common/thread_local_rng.h>
 #include <Common/Exception.h>
@@ -99,7 +99,7 @@ void IOSchedulerSet::initialize(const Poco::Util::AbstractConfiguration& cfg,
     String allocation_policy_str = cfg.getString(prefix + ".allocation_policy_type", "hash");
 
     Options opts;
-    
+
     opts.scheduler_type_ = Options::str2SchedulerType(scheduler_type_str);
     opts.worker_pool_type_ = Options::str2WorkerPoolType(worker_pool_type_str);
     opts.allocation_policy_type_ = Options::str2AllocationPolicy(allocation_policy_str);
@@ -306,7 +306,7 @@ IOScheduler* IOSchedulerSet::schedulerForPath(const String& path) {
         }
         case Options::AllocationPolicyType::HYBRID: {
             std::hash<String> hasher;
-            size_t bucket = hasher(path) % opts_.allocation_level0_buckets_; 
+            size_t bucket = hasher(path) % opts_.allocation_level0_buckets_;
             std::uniform_int_distribution<size_t> dist(
                 bucket * opts_.allocation_level0_buckets_,
                 (bucket + 1) * opts_.allocation_level1_buckets_ - 1);

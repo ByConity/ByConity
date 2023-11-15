@@ -1,4 +1,6 @@
 syntax = "proto2";
+import "plan_node_utils.proto";
+
 package DB.Protos;
 
 option cc_generic_services = true;
@@ -12,10 +14,53 @@ message RegistryRequest {
   optional uint64 query_unique_id = 6;
 };
 
+message RegistryDiskSenderRequest {
+  optional RegistryRequest registry = 1;
+  optional Block header = 2; // needed for registerBRPCSenderFromDisk
+  map<string, string> settings = 3; // needed for registerBRPCSenderFromDisk
+  optional int64 initial_query_start_time = 4; // needed for registerBRPCSenderFromDisk  
+}
+
 message RegistryResponse {
   optional string message = 1;
 };
 
+message GetExchangeStatusRequest {
+  optional string query_id = 1;
+  optional uint64 exchange_id = 2;
+};
+
+message ExchangeStatus {
+  optional uint64 parallel_index = 1;
+  optional string host_port = 2;
+  repeated uint64 length = 3;
+}
+
+message GetExchangeStatusResponse {
+  optional uint64 num_sinks = 1;
+  repeated ExchangeStatus status = 2;
+}
+
+message CancelExchangeDataReaderRequest {
+  optional uint64 query_unique_id = 1;
+  optional uint64 exchange_id = 2;
+}
+
+message CancelExchangeDataReaderResponse {
+  optional string message = 1;
+}
+
+message CleanupExchangeDataRequest {
+  optional uint64 query_unique_id = 1;
+}
+
+message CleanupExchangeDataResponse {
+  optional string message = 1;
+}
+
 service RegistryService {
   rpc registry(RegistryRequest) returns (RegistryResponse);
+  rpc registerBRPCSenderFromDisk(RegistryDiskSenderRequest) returns (RegistryResponse);
+  rpc cancelExchangeDataReader(CancelExchangeDataReaderRequest) returns (CancelExchangeDataReaderResponse);
+  rpc cleanupExchangeData(CleanupExchangeDataRequest) returns (CleanupExchangeDataResponse);
 };

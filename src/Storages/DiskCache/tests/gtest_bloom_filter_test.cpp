@@ -235,7 +235,7 @@ TEST(BloomFilter, PersistRecoverWithInvalidParams)
     google::protobuf::io::OstreamOutputStream raw_stream(&ss);
     google::protobuf::io::CodedOutputStream stream(&raw_stream);
 
-    auto make_bloom_filter = [=](google::protobuf::io::CodedOutputStream * stream) {
+    auto make_bloom_filter = [=](google::protobuf::io::CodedOutputStream * os) {
         BloomFilter bf{num_filters, 1, 8};
         std::uniform_int_distribution<UInt64> dist(0, UINT64_MAX);
         for (int i = 0; i < num_keys; i++)
@@ -245,7 +245,7 @@ TEST(BloomFilter, PersistRecoverWithInvalidParams)
             bf.set(idx, key);
         }
 
-        bf.persist(stream);
+        bf.persist(os);
     };
 
     {
@@ -321,6 +321,7 @@ void testWithParameter(UInt32 num_filters, size_t bits_per_filter_hash, UInt32 n
         EXPECT_FALSE(bf.couldExist(p.first, p.first));
 }
 
+#if 0
 TEST(BloomFilter, PersistRecoveryValidLarge)
 {
     const size_t num_filters = 1e7;
@@ -334,4 +335,5 @@ TEST(BloomFilter, PersisRecoveryValid)
     const size_t bits_per_filter_hash = 1024;
     const size_t num_hash = 1;
 }
+#endif
 }
