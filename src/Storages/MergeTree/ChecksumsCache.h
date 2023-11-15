@@ -39,6 +39,7 @@ enum class ChecksumsCacheState
 {
     Caching,
     Cached,
+    Deleting,
 };
 using ChecksumsCacheItem = std::pair<ChecksumsCacheState, std::shared_ptr<MergeTreeDataPartChecksums>>;
 
@@ -89,9 +90,9 @@ public:
 public:
     explicit ChecksumsCache(const ChecksumsCacheSettings & settings)
     : cache_shard_num(settings.cache_shard_num),
-      first_level_containers(new std::unordered_map<String, std::set<ChecksumsName>>[settings.cache_shard_num]), 
-      first_level_containers_locks(new std::mutex[settings.cache_shard_num]),
-      second_level_cache(
+      table_to_parts_cache(new std::unordered_map<String, std::set<ChecksumsName>>[settings.cache_shard_num]), 
+      table_to_parts_cache_locks(new std::mutex[settings.cache_shard_num]),
+      parts_to_checksums_cache(
           settings.cache_shard_num,
           BucketLRUCache<ChecksumsName, ChecksumsCacheItem, std::hash<ChecksumsName>, ChecksumsWeightFunction>::Options{
               .lru_update_interval = static_cast<UInt32>(settings.lru_update_interval),
@@ -100,9 +101,9 @@ public:
               .max_nums = std::numeric_limits<size_t>::max(),
               .enable_customize_evict_handler = true,
               .customize_evict_handler
-              = [](
-                    const ChecksumsName&, const std::shared_ptr<ChecksumsCacheItem>&, size_t ) {
-                    return std::make_pair(true, nullptr);
+              = [this](
+                    const ChecksumsName& key, const std::shared_ptr<ChecksumsCacheItem>& item, size_t sz) {
+                    return onEvictChecksums(key, item, sz);
                 },
               .customize_post_evict_handler =
                   [this](
@@ -121,7 +122,7 @@ public:
 
         std::shared_ptr<MergeTreeDataPartChecksums> result;
 
-        auto& shard = second_level_cache.shard(key);
+        auto& shard = parts_to_checksums_cache.shard(key);
         std::shared_ptr<ChecksumsCacheItem> cache_result = shard.get(key);
         if (!cache_result || cache_result->first != ChecksumsCacheState::Cached)
         {
@@ -134,12 +135,12 @@ public:
             {
                 {
                     size_t first_level_bucket = std::hash<String>()(name) % cache_shard_num;
-                    std::unique_lock<std::mutex> guard(first_level_containers_locks[first_level_bucket]);
-                    first_level_containers[first_level_bucket][name].insert(key);
+                    std::unique_lock<std::mutex> guard(table_to_parts_cache_locks[first_level_bucket]);
+                    table_to_parts_cache[first_level_bucket][name].insert(key);
                     LOG_DEBUG(&Poco::Logger::get("checksumsCache"), "checksums insert table {} part {} bucket {}", name, key, first_level_bucket);
                 }
 
-                shard.upsert(key, std::make_shared<ChecksumsCacheItem>(std::make_pair(ChecksumsCacheState::Cached, result)));
+                shard.update(key, std::make_shared<ChecksumsCacheItem>(std::make_pair(ChecksumsCacheState::Cached, result)));
 
                 flag = true;
             }
@@ -155,12 +156,12 @@ public:
 
     size_t count() const
     {
-        return second_level_cache.count();
+        return parts_to_checksums_cache.count();
     }
 
     size_t weight() const
     {
-        return second_level_cache.weight();
+        return parts_to_checksums_cache.weight();
     }
 
     void dropChecksumCache(const String & name, bool with_lock = false)
@@ -170,26 +171,26 @@ public:
         std::unique_lock<std::mutex> guard; 
         if (!with_lock)
         {
-            guard = std::unique_lock(first_level_containers_locks[first_level_bucket]);
+            guard = std::unique_lock(table_to_parts_cache_locks[first_level_bucket]);
         }
 
-        auto & keys = first_level_containers[first_level_bucket][name];
+        auto & keys = table_to_parts_cache[first_level_bucket][name];
         for (const auto & key: keys) 
         {
-            auto & shard = second_level_cache.shard(key);
+            auto & shard = parts_to_checksums_cache.shard(key);
             shard.erase(key);
         }
 
-        first_level_containers[first_level_bucket][name].erase(name);
+        table_to_parts_cache[first_level_bucket][name].erase(name);
     }
 
     void reset()
     {
         for (size_t i = 0; i < cache_shard_num; i++) 
         {
-            std::unique_lock<std::mutex> guard(first_level_containers_locks[i]);
-            auto iter = first_level_containers[i].begin();
-            while (iter != first_level_containers[i].end())
+            std::unique_lock<std::mutex> guard(table_to_parts_cache_locks[i]);
+            auto iter = table_to_parts_cache[i].begin();
+            while (iter != table_to_parts_cache[i].end())
             {
                 auto name = iter->first;
                 iter++;
@@ -199,10 +200,21 @@ public:
     }
 
 private:
-    void afterEvictChecksums(const std::vector<std::pair<ChecksumsName, std::shared_ptr<ChecksumsCacheItem>>>& removed_elements,
-         [[maybe_unused]] const std::vector<std::pair<ChecksumsName, std::shared_ptr<ChecksumsCacheItem>>>& updated_elements) 
+    std::pair<bool, std::shared_ptr<ChecksumsCacheItem>> onEvictChecksums(
+            [[maybe_unused]]const ChecksumsName& key, const std::shared_ptr<ChecksumsCacheItem>& item, size_t)
     {
-        for (const auto & pair : removed_elements)
+        if (item->first != ChecksumsCacheState::Cached)
+        {
+            return {false, nullptr};
+        }
+
+        return {false, std::make_shared<ChecksumsCacheItem>(std::make_pair(ChecksumsCacheState::Deleting, nullptr))};
+    }
+
+    void afterEvictChecksums([[maybe_unused]] const std::vector<std::pair<ChecksumsName, std::shared_ptr<ChecksumsCacheItem>>>& removed_elements,
+         const std::vector<std::pair<ChecksumsName, std::shared_ptr<ChecksumsCacheItem>>>& updated_elements) 
+    {
+        for (const auto & pair : updated_elements)
         {
             auto key = pair.first;
             auto name = getStorageUniqueId(key);
@@ -212,29 +224,28 @@ private:
             auto & cache_item = pair.second;
             if (cache_item->first != ChecksumsCacheState::Cached) 
             {
-                LOG_DEBUG(&Poco::Logger::get("checksumsCache"), "afterEvictChecksums table {} part {} bucket {} state {}", 
+                LOG_DEBUG(&Poco::Logger::get("ChecksumsCache"), "afterEvictChecksums table {} part {} bucket {} state {}", 
                     name, key, first_level_bucket, cache_item->first);
                 continue;
             }
 
             {
-                std::unique_lock<std::mutex> guard(first_level_containers_locks[first_level_bucket]);
-                first_level_containers[first_level_bucket][name].erase(key);
-
+                std::unique_lock<std::mutex> guard(table_to_parts_cache_locks[first_level_bucket]);
+                table_to_parts_cache[first_level_bucket][name].erase(key);
             }
 
-            auto& shard = second_level_cache.shard(key);
+            auto& shard = parts_to_checksums_cache.shard(key);
             shard.erase(key);
         }
     }
 
 private:
     size_t cache_shard_num;
-    std::unique_ptr<std::unordered_map<String, std::set<ChecksumsName>>[]> first_level_containers;
-    std::unique_ptr<std::mutex[]> first_level_containers_locks;
+    std::unique_ptr<std::unordered_map<String, std::set<ChecksumsName>>[]> table_to_parts_cache;
+    std::unique_ptr<std::mutex[]> table_to_parts_cache_locks;
 
     ShardCache<ChecksumsName, std::hash<ChecksumsName>, 
-        BucketLRUCache<ChecksumsName, ChecksumsCacheItem, std::hash<ChecksumsName>, ChecksumsWeightFunction>> second_level_cache;
+        BucketLRUCache<ChecksumsName, ChecksumsCacheItem, std::hash<ChecksumsName>, ChecksumsWeightFunction>> parts_to_checksums_cache;
 };
 
 using ChecksumsCachePtr = std::shared_ptr<ChecksumsCache>;
