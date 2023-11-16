@@ -13,7 +13,7 @@ concurrency:
 jobs:
   scm_build:
     name: Build binary and run stateless tests
-    container: byconity/byconity-ci:18Oct2023
+    container: byconity/byconity-ci:14Nov2023
     runs-on: self-hosted
     steps:
       - name: Set environment variables
@@ -89,6 +89,7 @@ jobs:
           mkdir -p test_output
           ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/external_table_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          mv test_output/test_result.txt /test_output/external_table_test_suite_test_result.txt
           cd ..
           rm -rf ci_external_table
       - name: Run ByConity FuntionalStateless (w.o optimizer)
@@ -105,6 +106,7 @@ jobs:
           mkdir -p test_output
           ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          mv test_output/test_result.txt /test_output/functional_stateless_wo_optimizer_test_suite_test_result.txt
           cd ..
           rm -rf ci_stateless_without_optimizer
       - name: Run ByConity FuntionalStateless no tenant (w.o optimizer)
@@ -121,6 +123,7 @@ jobs:
           mkdir -p test_output
           ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_without_optimizer_no_tenant_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          mv test_output/test_result.txt /test_output/functional_stateless_wo_optimizer_no_tenant_test_suite_test_result.txt
           cd ..
           rm -rf ci_stateless_without_optimizer_no_tenant
       - name: Run ByConity FuntionalStateless (w optimizer)
@@ -137,8 +140,26 @@ jobs:
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1'
           ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_with_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          mv test_output/test_result.txt /test_output/functional_stateless_w_optimizer_test_suite_test_result.txt
           cd ..
           rm -rf ci_stateless_with_optimizer
+      - name: Run ByConity FuntionalStateless (w optimizer + bsp_mode)
+        continue-on-error: true
+        run: |
+          mkdir -p ci_stateless_with_optimizer_bsp
+          cd ci_stateless_with_optimizer_bsp
+          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
+          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
+          mkdir queries
+          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless queries/
+          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
+          mkdir -p test_output
+          rm -f ./queries/4_cnch_stateless/00956_join_use_nulls_with_array_column.* # TODO(WangTaoTheTonic): the right table system.numbers will hang in bsp mode, skip it for now
+          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1 bsp_mode=1 cte_mode='INLINED' enable_runtime_filter=0'
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_with_optimizer_bsp_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          cd ..
+          rm -rf ci_stateless_with_optimizer_bsp
       - name: Run ByConity FuntionalStateless no tenant (w optimizer)
         continue-on-error: true
         run: |
@@ -154,8 +175,26 @@ jobs:
           export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1'
           ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
           ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_no_tenant_with_optimizer_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          mv test_output/test_result.txt /test_output/functional_stateless_w_optimizer_test_suite_test_result.txt
           cd ..
           rm -rf ci_stateless_with_optimizer_no_tenant
+      - name: Run ByConity FuntionalStateless no tenant (w optimizer bsp)
+        continue-on-error: true
+        run: |
+          printf '%s\n' "$CNCH_WRITE_WORKER_HOST"
+          mkdir -p ci_stateless_with_optimizer_bsp_no_tenant
+          cd ci_stateless_with_optimizer_bsp_no_tenant
+          cp -r $GITHUB_WORKSPACE/docker/test/stateless/process_functional_tests_result.py ./
+          cp -r $GITHUB_WORKSPACE/tests/clickhouse-test ./
+          mkdir queries
+          cp -r $GITHUB_WORKSPACE/tests/queries/4_cnch_stateless_no_tenant queries/
+          cp -r $GITHUB_WORKSPACE/tests/queries/shell_config.sh queries/
+          mkdir -p test_output
+          export EXTRA_OPTIONS='enable_optimizer_fallback=0 enable_optimizer=1 bsp_mode=1 cte_mode='INLINED' enable_runtime_filter=0'
+          ./clickhouse-test -b $GITHUB_WORKSPACE/build/programs/clickhouse --stop --hung-check --jobs 4 --order asc --print-time --client-option ${EXTRA_OPTIONS} 2>&1 | ts '%Y-%m-%d %H:%M:%S' | tee -a test_output/test_result.txt
+          ./process_functional_tests_result.py --in-results-dir ./test_output/ --out-results-file /test_output/stateless_no_tenant_with_optimizer_bsp_test_results.txt --out-status-file /test_output/check_status.tsv || echo -e "failure\tCannot parse results" > /test_output/check_status.tsv
+          cd ..
+          rm -rf ci_stateless_with_optimizer_bsp_no_tenant
       - name: Run ByConity ClickhouseSQL FuntionalStateless (w.o optimizer)
         continue-on-error: true
         run: |
@@ -178,15 +217,15 @@ jobs:
         continue-on-error: true
         run: |
           docker ps -a --format "{{.ID}} {{.Names}} {{.Image}}" --filter name=$COMPOSE_PROJECT_NAME | grep "byconity/debian:buster-runit-fdb7.1.27" | awk {'print $1"\t"$2'} | xargs -n 2 sh -c 'mkdir -p /test_output/$2; docker cp -q $1:/var/byconity/log /test_output/$2/log' sh || true
-          mv /test_output /Artifacts  && tar --warning=no-file-changed -zcf  /Artifacts.tar.gz /Artifacts/*  || true
+          mv /test_output /Artifacts || true
           bash .codebase/ci_scripts/common_component/block_ci.sh || true # check block_ci_flag
       - name: Upload Artifact
         if: always()
         continue-on-error: true
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: Artifacts
-          path: /Artifacts.tar.gz
+          path: /Artifacts
       - name: Analyse Result
         run:
           /bin/bash $GITHUB_WORKSPACE/docker/test/result.sh
