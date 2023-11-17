@@ -280,7 +280,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     {
         dump_pool.scheduleOrThrowOnError([&, i]() {
             const auto & temp_part = temp_parts[i];
-            auto dumped_part = dumper.dumpTempPart(temp_part, false, part_disks[i]);
+            auto dumped_part = dumper.dumpTempPart(temp_part, part_disks[i]);
             LOG_TRACE(storage.getLogger(), "Dumped part {}", temp_part->name);
             result.parts[i] = std::move(dumped_part);
         });
@@ -293,7 +293,7 @@ DumpedData CnchDataWriter::dumpCnchParts(
     {
         dump_pool.scheduleOrThrowOnError([&, i]() {
             const auto & temp_staged_part = temp_staged_parts[i];
-            auto staged_part = dumper.dumpTempPart(temp_staged_part, false, part_disks[i + temp_parts.size()]);
+            auto staged_part = dumper.dumpTempPart(temp_staged_part, part_disks[i + temp_parts.size()]);
             LOG_TRACE(storage.getLogger(), "Dumped staged part {}", temp_staged_part->name);
             result.staged_parts[i] = std::move(staged_part);
         });

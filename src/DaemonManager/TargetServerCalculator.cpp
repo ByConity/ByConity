@@ -57,11 +57,17 @@ CnchServerClientPtr TargetServerCalculator::getTargetServerForCnchKafka(const St
     /// Consume manager should be on the same server as the target table
     auto kafka_storage = catalog->tryGetTableByUUID(context, UUIDHelpers::UUIDToString(storage_id.uuid), TxnTimestamp::maxTS());
     if (!kafka_storage)
-        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "Cannot get table by UUID for {}, return empty target server", storage_id.getNameForLogs());
+    {
+        LOG_INFO(log, "Cannot get table by UUID for {}", storage_id.getNameForLogs());
+        throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "Cannot get table by UUID for {}", storage_id.getNameForLogs());
+    }
 
     auto dependencies = catalog->getAllViewsOn(context, kafka_storage, TxnTimestamp::maxTS());
     if (dependencies.empty())
+    {
+        LOG_INFO(log, "No dependencies found for {}", storage_id.getNameForLogs());
         throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "No dependencies found for {}", storage_id.getNameForLogs());
+    }
 
     if (dependencies.size() > 1)
         throw Exception(ErrorCodes::BAD_REQUEST_PARAMETER, "More than one MV found for {}", storage_id.getNameForLogs());

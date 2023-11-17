@@ -16,6 +16,7 @@
 #include <hive_metastore_types.h>
 #include <Catalog/Catalog.h>
 #include <Interpreters/executeQuery.h>
+#include <Interpreters/StorageID.h>
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
 #include <Statistics/HiveConverter.h>
@@ -255,13 +256,10 @@ std::vector<StatsTableIdentifier> CatalogAdaptorCnch::getAllTablesID(const Strin
         return {};
     }
 
+    auto table_identifiers = context->getCnchCatalog()->getAllTablesID(database_name);
     std::vector<StatsTableIdentifier> results;
-    for (auto iter = db->getTablesIterator(context); iter->isValid(); iter->next())
-    {
-        auto table = iter->table();
-        StatsTableIdentifier table_id(table->getStorageID());
-        results.emplace_back(table_id);
-    }
+    for (auto & identifier : table_identifiers)
+        results.emplace_back(StorageID{identifier->database(), identifier->name(), UUIDHelpers::toUUID(identifier->uuid())});
     return results;
 }
 

@@ -17,11 +17,12 @@ message PartitionMeta {
 }
 
 message TableIdentifier {
-  required string database = 1;
-  required string name = 2;
-  required string uuid = 3;
-  optional uint32 meta_version = 4;
-  optional string server_vw_name = 5;
+    required string database = 1;
+    required string name = 2;
+    required string uuid = 3;
+    optional uint32 meta_version = 4;
+    optional string server_vw_name = 5;
+    optional bool detached = 6;
 }
 
 enum CnchDatabaseType { Cnch = 0; MaterializedMySQL = 1; }

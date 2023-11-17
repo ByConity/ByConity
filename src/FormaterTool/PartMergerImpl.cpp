@@ -346,7 +346,7 @@ void PartMergerImpl::executeMergeTask(MergeTreeMetaBase & merge_tree, DiskPtr & 
     MergeTreeCNCHDataDumper dumper(merge_tree, part_generator_id);
 
     LOG_DEBUG(log, "Start dumping {} part", merged_part->name);
-    auto dumped_part = dumper.dumpTempPart(merged_part, false, disk);
+    auto dumped_part = dumper.dumpTempPart(merged_part, disk);
 
     LOG_INFO(log, "Finish dumping local part {} to remote part {}", merged_part->name, dumped_part->name);
 }

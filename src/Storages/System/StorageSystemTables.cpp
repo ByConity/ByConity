@@ -28,6 +28,7 @@
 #include <Storages/SelectQueryInfo.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Databases/IDatabase.h>
+#include <Databases/DatabaseCnch.h>
 #include <Access/ContextAccess.h>
 #include <Interpreters/Context.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -40,6 +41,7 @@
 #include <Processors/Sources/SourceWithProgress.h>
 #include <Processors/Pipe.h>
 #include <DataTypes/DataTypeUUID.h>
+#include <Catalog/Catalog.h>
 
 
 namespace DB
@@ -105,7 +107,7 @@ static ColumnPtr getFilteredDatabases(const SelectQueryInfo & query_info, Contex
 /// Otherwise it will require table initialization for Lazy database.
 static bool needLockStructure(const DatabasePtr & database, const Block & header)
 {
-    if (database->getEngineName() != "Lazy")
+    if (database->getEngineName() != "Lazy" && database->getEngineName() != "Cnch")
         return true;
 
     static const std::set<std::string> columns_without_lock = { "database", "name", "uuid", "metadata_modification_time" };
@@ -279,10 +281,25 @@ protected:
 
             const bool check_access_for_tables = check_access_for_databases && !access->isGranted(AccessType::SHOW_TABLES, database_name);
 
-            if (!tables_it || !tables_it->isValid())
-                tables_it = database->getTablesIterator(context);
-
             const bool need_lock_structure = needLockStructure(database, getPort().getHeader());
+
+            if (!tables_it || !tables_it->isValid())
+            {
+                DatabaseCnch * cnch_db = dynamic_cast<DatabaseCnch *>(database.get());
+                if (cnch_db)
+                {
+                    if (!need_lock_structure)
+                        tables_it = cnch_db->getTablesIteratorLightweight(context);
+                    else
+                    {
+                        if (!cnch_tables_snapshot)
+                            cnch_tables_snapshot = context->getCnchCatalog()->getAllTables();
+                        tables_it = cnch_db->getTablesIteratorWithCommonSnapshot(context, *cnch_tables_snapshot);
+                    }
+                }
+                else
+                    tables_it = database->getTablesIterator(context);
+            }
 
             for (; rows_count < max_block_size && tables_it->isValid(); tables_it->next())
             {
@@ -520,6 +537,7 @@ private:
     bool done = false;
     DatabasePtr database;
     std::string database_name;
+    std::optional<std::vector<Protos::DataModelTable>> cnch_tables_snapshot;
 };
 
 

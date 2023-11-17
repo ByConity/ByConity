@@ -350,6 +350,15 @@ void MetastoreProxy::updateTable(const String & name_space, const String & table
     metastore_ptr->put(tableStoreKey(name_space, table_uuid, ts), table_info_new);
 }
 
+void MetastoreProxy::updateTableWithID(const String & name_space, const Protos::TableIdentifier & table_id, const DB::Protos::DataModelTable & table_data)
+{
+    BatchCommitRequest batch_write;
+    batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, table_id.database(), table_id.name()), table_id.SerializeAsString()));
+    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, table_id.uuid(), table_data.commit_time()), table_data.SerializeAsString()));
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
+}
+
 void MetastoreProxy::getTableByUUID(const String & name_space, const String & table_uuid, Strings & tables_info)
 {
     auto it = metastore_ptr->getByPrefix(tableStorePrefix(name_space, table_uuid));

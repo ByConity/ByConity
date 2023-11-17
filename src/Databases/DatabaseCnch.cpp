@@ -17,6 +17,7 @@
 #include <Databases/DatabaseCnch.h>
 
 #include <Catalog/Catalog.h>
+#include <Catalog/CatalogFactory.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ExternalDictionariesLoader.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -28,8 +29,9 @@
 #include <Transaction/Actions/DDLRenameAction.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
-#include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
+#include <Common/Exception.h>
+#include <Common/Status.h>
 #include <common/logger_useful.h>
 #include <common/scope_guard.h>
 
@@ -98,11 +100,87 @@ void checkCreateIsAllowedInCnch(const ASTPtr & query)
 
 }
 
-class CnchDatabaseTablesSnapshotIterator final : public DatabaseTablesSnapshotIterator
+using TablesMeta = std::map<String, Protos::DataModelTable>;
+
+class CnchDatabaseTablesSnapshotIterator final : public IDatabaseTablesIterator
 {
+private:
+    ContextPtr context;
+    TablesMeta tables;
+    TablesMeta::iterator it;
+    mutable std::list<StoragePtr> storages{nullptr};
 public:
-    using DatabaseTablesSnapshotIterator::DatabaseTablesSnapshotIterator;
-    UUID uuid() const override { return table()->getStorageID().uuid; }
+    CnchDatabaseTablesSnapshotIterator(const ContextPtr & context_, const TablesMeta & tables_, const String & database_name_)
+    : IDatabaseTablesIterator(database_name_), context(context_), tables(tables_), it(tables.begin())
+    {
+    }
+
+    void next() override
+    {
+        ++it;
+        storages.emplace_back(nullptr);
+    }
+
+    bool isValid() const override { return it != tables.end(); }
+
+    const String & name() const override { return it->first; }
+
+    /// NOTE: may returns nullptr, users should handle this.
+    const StoragePtr & table() const override
+    {
+        if (storages.back())
+            return storages.back();
+
+        StoragePtr current_storage;
+        try
+        {
+            current_storage = Catalog::CatalogFactory::getTableByDataModel(context, &(it->second));
+            storages.pop_back();
+            storages.push_back(current_storage);
+        }
+        catch (...)
+        {
+        }
+        return storages.back();
+    }
+
+    UUID uuid() const override
+    {
+        const StoragePtr & storage = table();
+        if (storage)
+            return storage->getStorageID().uuid;
+        else
+            return UUIDHelpers::Nil;
+    }
+};
+
+// The ligth weight iterator only contains informations about tables StorageID. It is used when no need to
+// contruct storage object.
+using TablesID = std::vector<Protos::TableIdentifier>;
+class CnchDatabaseTablesLightWeightIterator final : public IDatabaseTablesIterator
+{
+private:
+    TablesID tables;
+    TablesID::iterator it;
+
+public:
+    CnchDatabaseTablesLightWeightIterator(const TablesID & tables_, const String & database_name_)
+    : IDatabaseTablesIterator(database_name_), tables(tables_), it(tables.begin())
+    {
+    }
+
+    void next() override { it++; }
+
+    bool isValid() const override { return it != tables.end(); }
+
+    const String & name() const override { return it->name(); }
+
+    const StoragePtr & table() const override
+    {
+        throw Exception("Shouldn't call table() in light weight iterator.", ErrorCodes::NOT_IMPLEMENTED);
+    }
+
+    UUID uuid() const override { return UUIDHelpers::toUUID(it->uuid()); }
 };
 
 DatabaseCnch::DatabaseCnch(const String & name_, UUID uuid, ContextPtr local_context)
@@ -203,6 +281,8 @@ void DatabaseCnch::drop(ContextPtr local_context)
     for (auto iterator = getTablesIterator(getContext(), [](const String &) { return true; }); iterator->isValid(); iterator->next())
     {
         StoragePtr table = iterator->table();
+        if (!table)
+            continue;
         const auto & storage_id = table->getStorageID();
         locks.emplace_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, storage_id.database_name, storage_id.table_name));
         tables_to_drop.emplace_back(table);
@@ -295,33 +375,58 @@ StoragePtr DatabaseCnch::tryGetTable(const String & name, ContextPtr local_conte
 
 DatabaseTablesIteratorPtr DatabaseCnch::getTablesIterator(ContextPtr local_context, const FilterByNameFunction & filter_by_table_name)
 {
-    Tables tables;
-    Strings names = local_context->getCnchCatalog()->getTablesInDB(getDatabaseName());
-    std::for_each(names.begin(), names.end(), [this, &local_context, &tables](const String & name) {
-        StoragePtr storage = tryGetTable(name, local_context);
-        if (!storage || storage->is_detached || storage->is_dropped)
-            return;
-        /// debug
-        StorageID storage_id = storage->getStorageID();
-        LOG_DEBUG(
-            log,
-            "UUID {} database {} table {}",
-            UUIDHelpers::UUIDToString(storage_id.uuid),
-            storage_id.getDatabaseName(),
-            storage_id.getTableName());
-        /// end debug
-        tables.try_emplace(name, std::move(storage));
-    });
+    TablesMeta tables;
+    std::vector<Protos::DataModelTable> table_models = local_context->getCnchCatalog()->getAllTables(database_name);
+
+    for (auto & table_meta : table_models)
+    {
+        if (Status::isVisible(table_meta.status()))
+            tables.emplace(table_meta.name(), std::move(table_meta));
+    }
 
     if (!filter_by_table_name)
-        return std::make_unique<CnchDatabaseTablesSnapshotIterator>(std::move(tables), database_name);
+        return std::make_unique<CnchDatabaseTablesSnapshotIterator>(local_context, std::move(tables), database_name);
 
-    Tables filtered_tables;
-    for (const auto & [table_name, storage] : tables)
+    TablesMeta filtered_tables;
+    for (const auto & [table_name, table_meta] : tables)
         if (filter_by_table_name(table_name))
-            filtered_tables.emplace(table_name, storage);
+            filtered_tables.emplace(table_name, table_meta);
 
-    return std::make_unique<CnchDatabaseTablesSnapshotIterator>(std::move(filtered_tables), database_name);
+    return std::make_unique<CnchDatabaseTablesSnapshotIterator>(local_context, std::move(filtered_tables), database_name);
+}
+
+DatabaseTablesIteratorPtr DatabaseCnch::getTablesIteratorWithCommonSnapshot(ContextPtr local_context, const std::vector<Protos::DataModelTable> & snapshot)
+{
+    TablesMeta tables;
+    for (const auto & table_meta : snapshot)
+    {
+        if (table_meta.database()==database_name && Status::isVisible(table_meta.status()))
+            tables.emplace(table_meta.name(), table_meta);
+    }
+    return std::make_unique<CnchDatabaseTablesSnapshotIterator>(local_context, std::move(tables), database_name);
+}
+
+DatabaseTablesIteratorPtr DatabaseCnch::getTablesIteratorLightweight(ContextPtr local_context, const FilterByNameFunction & filter_by_table_name)
+{
+    TablesID tables;
+    auto tables_id = local_context->getCnchCatalog()->getAllTablesID(database_name);
+
+    for (auto & table_id : tables_id)
+    {
+        if (table_id->has_detached() && table_id->detached())
+            continue;
+        tables.push_back(std::move(*table_id));
+    }
+
+    if (!filter_by_table_name)
+        return std::make_unique<CnchDatabaseTablesLightWeightIterator>(std::move(tables), database_name);
+
+    TablesID filtered_tables;
+    for (const auto & table_id : tables)
+        if (filter_by_table_name(table_id.name()))
+            filtered_tables.push_back(table_id);
+
+    return std::make_unique<CnchDatabaseTablesLightWeightIterator>(std::move(filtered_tables), database_name);
 }
 
 bool DatabaseCnch::empty() const

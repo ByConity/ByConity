@@ -194,6 +194,8 @@ public:
         for (auto iter = db->getTablesIterator(context); iter->isValid(); iter->next())
         {
             auto table = iter->table();
+            if (!table)
+                continue;
             StatsTableIdentifier table_id(table->getStorageID());
             results.emplace_back(table_id);
         }
