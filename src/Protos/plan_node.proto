@@ -346,8 +346,7 @@ message BufferStep {
   required ITransformingStep query_plan_base = 1;
 }
 
-message ExplainAnalyzeStep {
-}
+message ExplainAnalyzeStep {}
 
 // this must be identical to APPLY_STEP_PROTOBUF_TYPES_AND_NAMES
 //    with Step/_step postfix
@@ -401,19 +400,23 @@ message QueryPlanStep {
   }
 }
 
-
-message QueryPlanNode 
-{
-    required int64 plan_id = 1;
-    // plan_ids of children
-    repeated int64 children = 2;
-    required QueryPlanStep step = 3;
+message QueryPlanNode {
+  required uint64 plan_id = 1;
+  // plan_ids of children
+  repeated uint64 children = 2;
+  required QueryPlanStep step = 3;
 }
 
-message QueryPlan
-{
-    required int64 root_id = 1;
-    map<int64, QueryPlanNode> plan_nodes = 2;
-    // CteId -> plan_id
-    map<int64, int64> cte_id_mapping = 3;
+message QueryPlan {
+  message PlanMode {
+    enum Enum{
+      TreeLike = 1;
+      Flatten = 2;
+    }
+  }
+  required uint64 root_id = 1;
+  map<uint64, QueryPlanNode> plan_nodes = 2;
+  // CteId -> plan_id
+  map<uint64, uint64> cte_id_mapping = 3;
+  required PlanMode.Enum mode = 4;
 }

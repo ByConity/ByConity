@@ -19,6 +19,7 @@
 #include <IO/ReadBufferFromString.h>
 
 #include <gtest/gtest.h>
+#include <QueryPlan/ReadNothingStep.h>
 
 using namespace DB;
 
@@ -35,6 +36,9 @@ PlanSegmentPtr createPlanSegment()
     plan_segment->appendPlanSegmentOutput(output);
 
     QueryPlan query_plan;
+    auto step = std::make_shared<ReadNothingStep>(Block{});
+    QueryPlan::Node remote_node{.step = std::move(step), .children = {}};
+    query_plan.addRoot(std::move(remote_node));
     plan_segment->setQueryPlan(std::move(query_plan));
 
     return plan_segment;
