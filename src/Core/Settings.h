@@ -1767,7 +1767,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
     M(Bool, enable_distinct_remove, true, "Whether to eliminate redundancy during execution", 0) \
     M(Bool, enable_single_distinct_to_group_by, true, "Whether enable convert single count distinct to group by", 0) \
-    M(Bool, enable_mark_distinct_optimization, false, "Whether enable Mark distinct optimization", 0)                                            \
+    M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0)                                            \
     M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
     M(Bool, enable_common_join_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
     M(Bool, enable_swap_predicate_rewrite, true, "Whether enable swap predicate rewrite", 0) \
@@ -1926,7 +1926,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_eliminate_join_by_fk, false, "Whether to enable RBO -- eliminate join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join, false, "Whether to eliminate complicated join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join_without_top_join, false, "Whether to allow eliminate complicated join by fk pull through pass the multi-child node even if no top join", 0) \
-    M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0)                                            \
     M(Bool, enable_filtered_pk_selectivity, 1, "Enable the selectivity of filtered pk table", 0) \
     \
     /** remote disk cache*/ \
