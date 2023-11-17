@@ -46,6 +46,7 @@ public:
         DistributedAnalyze, /// 'EXPLAIN ANALYZE DISTRIBUTED SELECT...'
         Distributed, /// 'EXPLAIN DISTRIBUTED SELECT...'
         LogicalAnalyze,    /// 'EXPLAIN ANALYZE SELECT...'
+        PipelineAnalyze,    /// 'EXPLAIN ANALYZE PIPELINE SELECT...'
         TraceOptimizer,    /// 'EXPLAIN TRACE_OPT SELECT...'
         TraceOptimizerRule,    /// 'EXPLAIN TRACE_OPT RULE SELECT...'
         MetaData, // 'EXPLAIN METADATA...'
@@ -122,6 +123,7 @@ private:
             case PreWhereEffect: return "EXPLAIN PREWHERE_EFFECT";
             case DistributedAnalyze: return "EXPLAIN ANALYZE DISTRIBUTED";
             case LogicalAnalyze: return "EXPLAIN ANALYZE";
+            case PipelineAnalyze: return "EXPLAIN ANALYZE";
             case Distributed: return "EXPLAIN DISTRIBUTED";
             case TraceOptimizer: return "EXPLAIN TRACE_OPT";
             case TraceOptimizerRule: return "EXPLAIN TRACE_OPT RULE";

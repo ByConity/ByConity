@@ -1,3 +1,4 @@
+#include <set>
 #include <Processors/Transforms/ExplainAnalyzeTransform.h>
 #include <DataTypes/DataTypeString.h>
 #include <Interpreters/InterpreterExplainQuery.h>
@@ -45,39 +46,58 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
 
     ///segment_id -> grouped_profile_tree
     std::unordered_map<size_t, std::vector<GroupedProcessorProfilePtr>> segment_grouped_profile;
+    SegmentAndWorkerToGroupedProfile worker_grouped_profiles;
     for (auto & [segment_id, segment_profile_in_worker] : segment_profiles)
     {
         for (auto & [address, segment_profile] : segment_profile_in_worker)
-            segment_grouped_profile[segment_id].emplace_back(GroupedProcessorProfile::getGroupedProfiles(segment_profile));
+        {
+            auto input_profile_root = GroupedProcessorProfile::getGroupedProfiles(segment_profile);
+            if (kind == ASTExplainQuery::ExplainKind::PipelineAnalyze)
+            {
+                std::set<ProcessorId> visited;
+                worker_grouped_profiles[segment_id][address] = GroupedProcessorProfile::fillChildren(input_profile_root, visited);
+            }
+            else
+                segment_grouped_profile[segment_id].emplace_back(input_profile_root);
+        }
     }
-
-
-    auto steps_profiles = StepOperatorProfile::aggregateOperatorProfileToStepLevel(segment_grouped_profile);
-    auto step_agg_operator_profiles = AggregatedStepOperatorProfile::aggregateStepOperatorProfileBetweenWorkers(steps_profiles);
-
-    CardinalityEstimator::estimate(*query_plan_ptr, context);
-    std::unordered_map<PlanNodeId, double> costs = CostCalculator::calculate(*query_plan_ptr, *context);
 
     String explain;
-    if (settings.json)
+    if ((kind == ASTExplainQuery::ExplainKind::LogicalAnalyze || kind == ASTExplainQuery::ExplainKind::DistributedAnalyze) && !segment_grouped_profile.empty())
     {
-        if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
-        {
-            auto plan_cost = CostCalculator::calculatePlanCost(*query_plan_ptr, *context);
-            explain = PlanPrinter::jsonLogicalPlan(*query_plan_ptr, settings.stats, true, plan_cost, step_agg_operator_profiles);
-        }
-        else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze && !segment_descriptions.empty())
-            explain = PlanPrinter::jsonDistributedPlan(segment_descriptions, step_agg_operator_profiles);
-    }
-    else
-    {
-        if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
-            explain = PlanPrinter::textLogicalPlan(*query_plan_ptr, context, settings.stats, true, costs, step_agg_operator_profiles, settings.profile);
-        else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze && !segment_descriptions.empty())
-            explain = PlanPrinter::textDistributedPlan(segment_descriptions, settings.stats, true, costs, step_agg_operator_profiles, *query_plan_ptr, settings.profile);
-    }
+        auto steps_profiles = StepOperatorProfile::aggregateOperatorProfileToStepLevel(segment_grouped_profile);
+        auto step_agg_operator_profiles = AggregatedStepOperatorProfile::aggregateStepOperatorProfileBetweenWorkers(steps_profiles);
 
-    GraphvizPrinter::printLogicalPlan(*query_plan_ptr, context, "3999_explain_analyze", step_agg_operator_profiles);
+        CardinalityEstimator::estimate(*query_plan_ptr, context);
+        std::unordered_map<PlanNodeId, double> costs = CostCalculator::calculate(*query_plan_ptr, *context);
+        if (settings.json)
+        {
+            if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
+            {
+                auto plan_cost = CostCalculator::calculatePlanCost(*query_plan_ptr, *context);
+                explain = PlanPrinter::jsonLogicalPlan(*query_plan_ptr, settings.stats, true, plan_cost, step_agg_operator_profiles);
+            }
+            else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze && !segment_descriptions.empty())
+                explain = PlanPrinter::jsonDistributedPlan(segment_descriptions, step_agg_operator_profiles);
+        }
+        else
+        {
+            if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
+                explain = PlanPrinter::textLogicalPlan(*query_plan_ptr, context, settings.stats, true, costs, step_agg_operator_profiles, settings.profile);
+            else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze && !segment_descriptions.empty())
+                explain = PlanPrinter::textDistributedPlan(segment_descriptions, settings.stats, true, costs, step_agg_operator_profiles, *query_plan_ptr, settings.profile);
+        }
+        GraphvizPrinter::printLogicalPlan(*query_plan_ptr, context, "5999_explain_analyze", step_agg_operator_profiles);
+    }
+    else if (kind == ASTExplainQuery::ExplainKind::PipelineAnalyze && !worker_grouped_profiles.empty())
+    {
+        if (settings.aggregate_profiles)
+            worker_grouped_profiles = GroupedProcessorProfile::aggregateProfileBetweenWorkers(worker_grouped_profiles);
+        if (settings.json)
+            explain = PlanPrinter::jsonPipelineProfile(segment_descriptions, worker_grouped_profiles);
+        else
+            explain = PlanPrinter::textPipelineProfile(segment_descriptions, worker_grouped_profiles);
+    }
 
     MutableColumns cols(1);
     auto type = std::make_shared<DataTypeString>();
