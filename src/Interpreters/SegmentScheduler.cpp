@@ -65,7 +65,7 @@ SegmentScheduler::insertPlanSegments(const String & query_id, PlanSegmentTree * 
 
     /// send resource to worker before scheduler
     auto server_resource = query_context->tryGetCnchServerResource();
-    if (server_resource && !(query_context->getSettingsRef().enable_new_scheduler && query_context->getSettingsRef().enable_send_resource_by_stage))
+    if (server_resource && !(query_context->getSettingsRef().enable_new_scheduler && query_context->getSettingsRef().bsp_mode))
     {
         server_resource->setSendMutations(true);
         /// TODO: we can skip some worker

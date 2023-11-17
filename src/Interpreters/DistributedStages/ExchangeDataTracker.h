@@ -31,7 +31,7 @@ struct ExchangeStatus
     std::vector<size_t> status;
 };
 
-std::vector<std::pair<size_t, ExchangeStatus>> fromSenderMerics(const Protos::SenderMetrics & sender_metrics);
+std::vector<std::pair<size_t, ExchangeStatus>> fromSenderMetrics(const Protos::SenderMetrics & sender_metrics);
 
 /// Output of one exchange.
 struct ExchangeStatuses

@@ -32,19 +32,6 @@ struct DAGGraph
     {
         async_context = std::make_shared<AsyncContext>();
     }
-    DAGGraph(const DAGGraph & other)
-    {
-        std::unique_lock lock(other.status_mutex);
-        sources = other.sources;
-        final = other.final;
-        scheduled_segments = std::move(other.scheduled_segments);
-        id_to_segment = std::move(other.id_to_segment);
-        id_to_address = std::move(other.id_to_address);
-        plan_segment_status_ptr = std::move(other.plan_segment_status_ptr);
-        query_context = other.query_context;
-        async_context = std::move(other.async_context);
-        segment_paralle_size_map = std::move(other.segment_paralle_size_map);
-    }
     void joinAsyncRpcWithThrow();
     void joinAsyncRpcPerStage();
     void joinAsyncRpcAtLast();

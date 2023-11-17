@@ -215,7 +215,7 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
         scheduler->updateQueryStatus(status);
         if (request->has_sender_metrics())
         {
-            for (const auto & [ex_id, exg_status] : fromSenderMerics(request->sender_metrics()))
+            for (const auto & [ex_id, exg_status] : fromSenderMetrics(request->sender_metrics()))
             {
                 context->getExchangeDataTracker()->registerExchangeStatus(
                     request->query_id(), ex_id, request->parallel_index(), exg_status);
