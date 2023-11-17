@@ -304,6 +304,8 @@ message TableScanStep {
   optional AggregatingStep pushdown_aggregation = 5;
   optional ProjectionStep pushdown_projection = 6;
   optional FilterStep pushdown_filter = 7;
+
+  optional Assignments inline_expressions = 14;
 }
 
 message RemoteExchangeSourceStep {

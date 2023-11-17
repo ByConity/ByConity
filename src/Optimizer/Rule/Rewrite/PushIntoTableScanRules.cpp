@@ -111,8 +111,7 @@ ASTPtr PushStorageFilter::pushStorageFilter(TableScanStep & table_step, ASTPtr q
     // push filter into storage
     if (!PredicateUtils::isTruePredicate(push_filter))
     {
-        auto storage = Utils::getLocalStorage(table_step.getStorage(), context);
-        auto * merge_tree = dynamic_cast<MergeTreeData *>(storage.get());
+        auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(table_step.getStorage().get());
         push_filter = pushFilterIntoStorage(push_filter, merge_tree, table_step.getQueryInfo(), context);
     }
 
@@ -171,7 +170,7 @@ TransformResult PushAggregationIntoTableScan::transformImpl(PlanNodePtr node, co
         return {};
 
     copy_table_step->setPushdownAggregation(node->getStep()->copy(rule_context.context));
-    copy_table_step->formatOutputStream();
+    copy_table_step->formatOutputStream(rule_context.context);
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }
 
@@ -197,7 +196,7 @@ TransformResult PushProjectionIntoTableScan::transformImpl(PlanNodePtr node, con
         return {};
 
     copy_table_step->setPushdownProjection(node->getStep()->copy(rule_context.context));
-    copy_table_step->formatOutputStream();
+    copy_table_step->formatOutputStream(rule_context.context);
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }
 
@@ -232,7 +231,7 @@ TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const C
     }
 
     // coverity[var_deref_model]
-    copy_table_step->formatOutputStream();
+    copy_table_step->formatOutputStream(rule_context.context);
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }
 

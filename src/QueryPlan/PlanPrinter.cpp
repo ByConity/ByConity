@@ -948,6 +948,12 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             out << converted.safeGet<UInt64>();
         }
 
+        std::vector<String> inline_expressions;
+        for (const auto & assignment : table_scan->getInlineExpressions())
+            inline_expressions.emplace_back(assignment.first + ":=" + serializeAST(*assignment.second));
+        if (!inline_expressions.empty())
+            out << intent.detailIntent() << "Inline expressions: " << join(inline_expressions, ", ", "[", "]");
+
         if (!identities.empty())
         {
             std::stringstream ss;
@@ -1248,6 +1254,10 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
 
         for (auto & assignment : assignments)
             step_vector_detail["Outputs"].emplace_back(assignment);
+
+        std::vector<String> inline_expressions;
+        for (const auto & assignment : table_scan->getInlineExpressions())
+            step_vector_detail["InlineExpressions"].emplace_back(assignment.first + ":=" + serializeAST(*assignment.second));
 
         if (table_scan->getPushdownFilter())
         {

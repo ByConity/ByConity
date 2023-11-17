@@ -2,16 +2,13 @@ SET enable_optimizer=1;
 
 CREATE DATABASE IF NOT EXISTS test;
 DROP TABLE IF EXISTS test.t40053;
-DROP TABLE IF EXISTS test.t40053_local;
 
-CREATE TABLE test.t40053_local (`tea_app_id` UInt32, `event` LowCardinality(String), `event_date` Date, `hash_uid` UInt64, `event_priority` UInt16, `user_unique_id` String, `string_params` Map(String, LowCardinality(Nullable(String))))
-ENGINE = MergeTree
+CREATE TABLE test.t40053 (`tea_app_id` UInt32, `event` LowCardinality(String), `event_date` Date, `hash_uid` UInt64, `event_priority` UInt16, `user_unique_id` String, `string_params` Map(String, LowCardinality(Nullable(String))))
+ENGINE = CnchMergeTree
 PARTITION BY (tea_app_id, event_date, event_priority)
 ORDER BY (tea_app_id, event, event_date, hash_uid, user_unique_id)
 SAMPLE BY hash_uid;
 
-CREATE TABLE test.t40053 (`tea_app_id` UInt32, `event` LowCardinality(String), `event_date` Date, `hash_uid` UInt64, `event_priority` UInt16, `user_unique_id` String, `string_params` Map(String, LowCardinality(Nullable(String))))
-ENGINE = Distributed(test_shard_localhost, 'test', 't40053_local');
 
 EXPLAIN
 SELECT count()
@@ -38,11 +35,11 @@ SELECT count()
 FROM test.t40053 AS ds_2
 PREWHERE `__string_params__'enter_from'` IN ('homepage_fresh'); -- { serverError 47}
 
-insert into test.t40053_local (`tea_app_id` , `event` , `event_date`, `hash_uid` , `event_priority` , `string_params`)
+insert into test.t40053 (`tea_app_id` , `event` , `event_date`, `hash_uid` , `event_priority` , `string_params`)
 values (1001, 'foo', '2023-08-01', 1, 1, {'enter_from': 'homepage_fresh'});
-insert into test.t40053_local (`tea_app_id` , `event` , `event_date`, `hash_uid` , `event_priority` , `string_params`)
+insert into test.t40053 (`tea_app_id` , `event` , `event_date`, `hash_uid` , `event_priority` , `string_params`)
 values (1001, 'foo', '2023-08-01', 1, 1, {'enter_from': 'xxx'});
-insert into test.t40053_local (`tea_app_id` , `event` , `event_date`, `hash_uid` , `event_priority` , `string_params`)
+insert into test.t40053 (`tea_app_id` , `event` , `event_date`, `hash_uid` , `event_priority` , `string_params`)
 values (1001, 'foo', '2023-08-01', 1, 1, {'enter_to': 'homepage_fresh'});
 
 SELECT count()
@@ -50,4 +47,3 @@ FROM test.t40053 AS ds_2
 PREWHERE string_params{'enter_from'} IN ('homepage_fresh');
 
 DROP TABLE IF EXISTS test.t40053;
-DROP TABLE IF EXISTS test.t40053_local;

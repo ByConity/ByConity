@@ -15,15 +15,16 @@
 
 #pragma once
 
-#include <Core/Types.h>
-#include <Core/NamesAndTypes.h>
-#include <Core/Block.h>
-#include <Parsers/IAST_fwd.h>
 #include <Analyzers/ScopeAwareEquals.h>
+#include <Core/Block.h>
+#include <Core/Names.h>
+#include <Core/NamesAndTypes.h>
+#include <Core/Types.h>
+#include <Optimizer/Utils.h>
+#include <Parsers/IAST_fwd.h>
 #include <QueryPlan/Assignment.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/planning_models.h>
-#include <Optimizer/Utils.h>
 
 namespace DB
 {
@@ -79,6 +80,5 @@ inline void putIdentities(const Block & block, Assignments & assignments, NameTo
     putIdentities(block.getNamesAndTypes(), assignments, types);
 }
 
-FieldSymbolInfos mapSymbols(const FieldSymbolInfos & field_symbol_infos, const std::unordered_map<String, String> & old_to_new);
-
+void mapFieldSymbolInfos(FieldSymbolInfos & symbol_infos, const NameToNameMap & name_mapping, bool map_sub_column);
 }

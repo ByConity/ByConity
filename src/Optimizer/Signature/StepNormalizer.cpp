@@ -178,6 +178,9 @@ StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step
         header_sorted.insert(column);
     }
 
+    if (step.hasInlineExpressions())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "TableScan with inline expression is not supported yet");
+
     // phase 3: normalize output symbols, the order is from reordered table_output_header
     SymbolMapping symbol_mapping{};
     size_t cumulative_pos = 0;
@@ -197,6 +200,7 @@ StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step
         step.getMaxBlockSize(),
         step.getTableAlias(), // alias
         PlanHints{}, // hints set later
+        Assignments{}, // TODO: support inline expression
         nullptr, // push down agg
         nullptr, // push down projection
         nullptr, // push down filter
@@ -208,7 +212,7 @@ StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step
         StepsAndOutputOrders table_scan_result{StepAndOutputOrder{normal_table_scan, std::move(header_sorted)}};
         StepAndOutputOrder filter_result = normalize(push_down_filter, std::move(table_scan_result));
         normal_table_scan->setPushdownFilter(filter_result.normal_step);
-        normal_table_scan->formatOutputStream(); // format because we use this output stream immediately
+        normal_table_scan->formatOutputStream(context); // format because we use this output stream immediately
         header_sorted = std::move(filter_result.output_order);
     }
 
@@ -217,7 +221,7 @@ StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step
         StepsAndOutputOrders table_scan_result{StepAndOutputOrder{normal_table_scan, std::move(header_sorted)}};
         StepAndOutputOrder projection_result = normalize(push_down_projection, std::move(table_scan_result));
         normal_table_scan->setPushdownProjection(projection_result.normal_step);
-        normal_table_scan->formatOutputStream(); // format because we use this output stream immediately
+        normal_table_scan->formatOutputStream(context); // format because we use this output stream immediately
         header_sorted = std::move(projection_result.output_order);
     }
 
@@ -226,7 +230,7 @@ StepAndOutputOrder StepNormalizer::visitTableScanStep(const TableScanStep & step
         StepsAndOutputOrders table_scan_result{StepAndOutputOrder{normal_table_scan, std::move(header_sorted)}};
         StepAndOutputOrder aggregation_result = normalize(push_down_aggregation, std::move(table_scan_result));
         normal_table_scan->setPushdownAggregation(aggregation_result.normal_step);
-        normal_table_scan->formatOutputStream(); // format because we use this output stream immediately
+        normal_table_scan->formatOutputStream(context); // format because we use this output stream immediately
         header_sorted = std::move(aggregation_result.output_order);
     }
 

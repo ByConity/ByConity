@@ -40,6 +40,7 @@ public:
         size_t max_block_size_,
         String alias_ = "",
         PlanHints hints_ = {},
+        Assignments inline_expressions_ = {},
         std::shared_ptr<AggregatingStep> aggregation_ = nullptr,
         std::shared_ptr<ProjectionStep> projection_ = nullptr,
         std::shared_ptr<FilterStep> filter_ = nullptr);
@@ -55,6 +56,7 @@ public:
         size_t max_block_size_,
         String alias_,
         PlanHints hints_,
+        Assignments inline_expressions_,
         std::shared_ptr<AggregatingStep> aggregation_,
         std::shared_ptr<ProjectionStep> projection_,
         std::shared_ptr<FilterStep> filter_,
@@ -67,6 +69,7 @@ public:
         , column_alias(std::move(column_alias_))
         , query_info(std::move(query_info_))
         , max_block_size(max_block_size_)
+        , inline_expressions(std::move(inline_expressions_))
         , pushdown_aggregation(std::move(aggregation_))
         , pushdown_projection(std::move(projection_))
         , pushdown_filter(std::move(filter_))
@@ -93,6 +96,8 @@ public:
     const String & getOriginalTable() const { return original_table.empty() ? storage_id.table_name : original_table; }
     const Names & getColumnNames() const { return column_names; }
     const NamesWithAliases & getColumnAlias() const { return column_alias; }
+    NameToNameMap getColumnToAliasMap() const;
+    NameToNameMap getAliasToColumnMap() const;
     QueryProcessingStage::Enum getProcessedStage() const;
     size_t getMaxBlockSize() const;
 
@@ -114,12 +119,25 @@ public:
     AggregatingStep * getPushdownAggregationCast() { return dynamic_cast<AggregatingStep *>(pushdown_aggregation.get()); }
     ProjectionStep * getPushdownProjectionCast() { return dynamic_cast<ProjectionStep *>(pushdown_projection.get()); }
     FilterStep * getPushdownFilterCast() { return dynamic_cast<FilterStep *>(pushdown_filter.get()); }
-    const DataStream & getTableOutputStream() const { return table_output_stream; }
 
+    void setInlineExpressions(Assignments new_inline_expressions, ContextPtr context);
+    const Assignments & getInlineExpressions() const
+    {
+        return inline_expressions;
+    }
+    bool hasInlineExpressions() const
+    {
+        return !inline_expressions.empty();
+    }
+
+    const DataStream & getTableOutputStream() const
+    {
+        return table_output_stream;
+    }
 
     void setReadOrder(SortDescription read_order);
 
-    void formatOutputStream();
+    void formatOutputStream(ContextPtr context);
 
     bool setLimit(size_t limit, const ContextMutablePtr & context);
     bool hasLimit() const;
@@ -174,6 +192,11 @@ private:
     SelectQueryInfo query_info;
     size_t max_block_size;
 
+    // Expressions which can be calculated by IStorage::read/readFromParts, including
+    // - bitmap index expressions
+    // - sub expression of prewhere
+    Assignments inline_expressions;
+
     // Pushdown steps. Now TableScanStep is not like a single step anymore, but more like a sub plan
     // with structure `Partial Aggregate->Projection->Filter->ReadTable`. And we are able to use
     // **clickhouse projection** to optimize its execution.
@@ -193,7 +216,8 @@ private:
     ASTPtr rewriteRuntimeFilter(
         const ASTPtr & filter, const String & query_id, size_t wait_ms, bool is_prewhere, bool enable_bf, bool range_cover);
     bool rewriteDynamicFilterIntoPrewhere(ASTSelectQuery * query);
-    void aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings &);
+    // enforce calculating inline expressions(an example is to calculate arraySetCheck for data parts without index), then alias outputs
+    void aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings &, const String & pipeline_name);
     void setQuotaAndLimits(QueryPipeline & pipeline, const SelectQueryOptions & options, const BuildQueryPipelineSettings &);
 };
 

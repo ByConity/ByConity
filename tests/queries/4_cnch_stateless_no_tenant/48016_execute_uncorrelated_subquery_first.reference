@@ -140,15 +140,15 @@ Projection Est. 1000 rows, cost 7.496000e+01
             │     Order by: {followed_counter_td desc nulls_last}
             │     Limit: 1000
             └─ Inner Join Est. ? rows, cost 8.000000e-01
-               │     Condition: date == expr#max(date)
+               │     Condition: date == expr#max(date)_1
                ├─ Repartition Exchange Est. ? rows, cost 3.200000e-01
                │  │     Partition by: {date}
                │  └─ TableScan test.dm_mint_crm_creator_stats_df Est. ? rows, cost 0.000000e+00
                │           Outputs: [date, followed_counter_td, user_id]
                └─ Repartition Exchange Est. ? rows, cost 4.800000e-01
-                  │     Partition by: {expr#max(date)}
+                  │     Partition by: {expr#max(date)_1}
                   └─ Projection Est. ? rows, cost 1.600000e-01
-                     │     Expressions: expr#max(date):=cast(`expr#max(date)`, \'Nullable(Date)\')
+                     │     Expressions: expr#max(date)_1:=cast(`expr#max(date)`, \'Nullable(Date)\')
                      └─ MergingAggregated Est. ? rows, cost 1.600000e-01
                         └─ Gather Exchange Est. ? rows, cost 1.600000e-01
                            └─ Aggregating Est. ? rows, cost 0.000000e+00

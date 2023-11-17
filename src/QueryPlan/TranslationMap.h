@@ -15,9 +15,10 @@
 
 #pragma once
 
-#include <Analyzers/Scope.h>
 #include <Analyzers/Analysis.h>
+#include <Analyzers/Scope.h>
 #include <Analyzers/ScopeAwareEquals.h>
+#include <QueryPlan/planning_common.h>
 #include <QueryPlan/planning_models.h>
 
 #include <unordered_map>
@@ -92,6 +93,11 @@ struct TranslationMap
     ASTPtr translate(ASTPtr expression) const;
     String translateToSymbol(const ASTPtr & expression) const;
     bool canTranslateToSymbol(const ASTPtr & expression) const;
+
+    void mapSymbols(const NameToNameMap & name_mapping)
+    {
+        mapFieldSymbolInfos(field_symbol_infos, name_mapping, false);
+    }
 };
 
 }
