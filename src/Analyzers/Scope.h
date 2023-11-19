@@ -207,6 +207,7 @@ public:
     size_t getHierarchyOffset() const;
     size_t getHierarchySize() const;
     Names getOriginColumns() const;
+    NameSet getNamesSet() const;
 
 private:
     template <typename T, bool check_ambiguous>

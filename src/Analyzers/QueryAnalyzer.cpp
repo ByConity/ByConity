@@ -121,10 +121,17 @@ private:
 
     /// FROM clause
     ScopePtr analyzeWithoutFrom(ASTSelectQuery & select_query);
-    ScopePtr analyzeFrom(ASTTablesInSelectQuery & tables_in_select, ASTSelectQuery & select_query);
-    ScopePtr
-    analyzeTableExpression(ASTTableExpression & table_expression, const QualifiedName & column_prefix, ASTSelectQuery & select_query);
-    ScopePtr analyzeTable(ASTTableIdentifier & db_and_table, const QualifiedName & column_prefix, ASTSelectQuery & select_query);
+    ScopePtr analyzeFrom(ASTTablesInSelectQuery & tables_in_select, ASTSelectQuery & select_query, const Aliases & query_aliases);
+    ScopePtr analyzeTableExpression(
+        ASTTableExpression & table_expression,
+        const QualifiedName & column_prefix,
+        ASTSelectQuery & select_query,
+        const Aliases & query_aliases);
+    ScopePtr analyzeTable(
+        ASTTableIdentifier & db_and_table,
+        const QualifiedName & column_prefix,
+        ASTSelectQuery & select_query,
+        const Aliases & query_aliases);
     ScopePtr analyzeSubquery(ASTPtr & node, const QualifiedName & column_prefix);
     ScopePtr analyzeTableFunction(ASTFunction & table_function, const QualifiedName & column_prefix);
     ScopePtr analyzeJoin(
@@ -143,7 +150,7 @@ private:
     ScopePtr analyzeArrayJoin(ASTArrayJoin & array_join, ASTSelectQuery & select_query, ScopePtr source_scope);
 
     void analyzeWindow(ASTSelectQuery & select_query);
-    void analyzePrewhere(ASTSelectQuery & select_query, ScopePtr source_scope, ASTPtr & alias_columns);
+    void analyzePrewhere(ASTSelectQuery & select_query, ScopePtr source_scope, ASTPtr & alias_columns, const Aliases & query_aliases);
     void analyzeWhere(ASTSelectQuery & select_query, ScopePtr source_scope);
     ASTs analyzeSelect(ASTSelectQuery & select_query, ScopePtr source_scope);
     void analyzeGroupBy(ASTSelectQuery & select_query, ASTs & select_expressions, ScopePtr source_scope);
@@ -161,7 +168,9 @@ private:
     void verifyNoFreeReferencesToLambdaArgument(ASTSelectQuery & select_query);
     UInt64 analyzeUIntConstExpression(const ASTPtr & expression);
     void countLeadingHint(const IAST & ast);
-    void normalizeAliases(ASTPtr & expr, ASTPtr & aliases);
+    void rewriteAliasesForANSI(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set);
+    void normalizeAliases(ASTPtr & expr, ASTPtr & aliases_expr);
+    void normalizeAliases(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set);
 };
 
 static NameSet collectNames(ScopePtr scope);
@@ -291,11 +300,18 @@ Void QueryAnalyzerVisitor::visitASTSelectQuery(ASTPtr & node, const Void &)
     auto & select_query = node->as<ASTSelectQuery &>();
     ScopePtr source_scope;
 
+    // Collect query aliases for aliases rewritting, for ANSI only.
+    // since aliases rewritting for CLICKHOUSE is done by QueryRewriter
+    Aliases query_aliases;
+    if (use_ansi_semantic)
+        QueryAliasesVisitor(query_aliases).visit(node);
+
     if (select_query.tables())
-        source_scope = analyzeFrom(select_query.refTables()->as<ASTTablesInSelectQuery &>(), select_query);
+        source_scope = analyzeFrom(select_query.refTables()->as<ASTTablesInSelectQuery &>(), select_query, query_aliases);
     else
         source_scope = analyzeWithoutFrom(select_query);
 
+    rewriteAliasesForANSI(node, query_aliases, source_scope->getNamesSet());
     analyzeWindow(select_query);
     analyzeWhere(select_query, source_scope);
     // analyze SELECT first since SELECT item may be referred in GROUP BY/ORDER BY
@@ -446,7 +462,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeWithoutFrom(ASTSelectQuery & select_query)
     return scope;
 }
 
-ScopePtr QueryAnalyzerVisitor::analyzeFrom(ASTTablesInSelectQuery & tables_in_select, ASTSelectQuery & select_query)
+ScopePtr
+QueryAnalyzerVisitor::analyzeFrom(ASTTablesInSelectQuery & tables_in_select, ASTSelectQuery & select_query, const Aliases & query_aliases)
 {
     if (tables_in_select.children.empty())
         throw Exception("ASTTableInSelectQuery can not be empty.", ErrorCodes::LOGICAL_ERROR);
@@ -461,7 +478,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeFrom(ASTTablesInSelectQuery & tables_in_se
             if (!table_expression)
                 throw Exception("Invalid Table Expression", ErrorCodes::LOGICAL_ERROR);
             auto table_with_alias = extractTableWithAlias(*table_expression);
-            return analyzeTableExpression(*table_expression, QualifiedName::extractQualifiedName(table_with_alias), select_query);
+            return analyzeTableExpression(
+                *table_expression, QualifiedName::extractQualifiedName(table_with_alias), select_query, query_aliases);
         }
         else
         {
@@ -481,8 +499,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeFrom(ASTTablesInSelectQuery & tables_in_se
             if (!table_expression)
                 throw Exception("Invalid Table Expression", ErrorCodes::LOGICAL_ERROR);
             auto table_with_alias = extractTableWithAlias(*table_expression);
-            ScopePtr joined_table_scope
-                = analyzeTableExpression(*table_expression, QualifiedName::extractQualifiedName(table_with_alias), select_query);
+            ScopePtr joined_table_scope = analyzeTableExpression(
+                *table_expression, QualifiedName::extractQualifiedName(table_with_alias), select_query, query_aliases);
             auto & table_join = table_element.table_join->as<ASTTableJoin &>();
             current_scope = analyzeJoin(table_join, current_scope, joined_table_scope, table_with_alias.getQualifiedNamePrefix(true), select_query);
         }
@@ -500,12 +518,16 @@ ScopePtr QueryAnalyzerVisitor::analyzeFrom(ASTTablesInSelectQuery & tables_in_se
 }
 
 ScopePtr QueryAnalyzerVisitor::analyzeTableExpression(
-    ASTTableExpression & table_expression, const QualifiedName & column_prefix, ASTSelectQuery & select_query)
+    ASTTableExpression & table_expression,
+    const QualifiedName & column_prefix,
+    ASTSelectQuery & select_query,
+    const Aliases & query_aliases)
 {
     ScopePtr scope;
 
     if (table_expression.database_and_table_name)
-        scope = analyzeTable(table_expression.database_and_table_name->as<ASTTableIdentifier &>(), column_prefix, select_query);
+        scope = analyzeTable(
+            table_expression.database_and_table_name->as<ASTTableIdentifier &>(), column_prefix, select_query, query_aliases);
     else if (table_expression.subquery)
         scope = analyzeSubquery(table_expression.subquery, column_prefix);
     else if (table_expression.table_function)
@@ -517,8 +539,8 @@ ScopePtr QueryAnalyzerVisitor::analyzeTableExpression(
     return scope;
 }
 
-ScopePtr
-QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, const QualifiedName & column_prefix, ASTSelectQuery & select_query)
+ScopePtr QueryAnalyzerVisitor::analyzeTable(
+    ASTTableIdentifier & db_and_table, const QualifiedName & column_prefix, ASTSelectQuery & select_query, const Aliases & query_aliases)
 {
     // get storage information
     StoragePtr storage;
@@ -615,7 +637,7 @@ QueryAnalyzerVisitor::analyzeTable(ASTTableIdentifier & db_and_table, const Qual
         if (!alias_columns->children.empty())
             normalizeAliases(alias_columns, alias_columns);
 
-        analyzePrewhere(select_query, scope, alias_columns);
+        analyzePrewhere(select_query, scope, alias_columns, query_aliases);
 
         ExprAnalyzerOptions options{"alias column"s};
         options.recordUsedObject(false);
@@ -1243,7 +1265,8 @@ void QueryAnalyzerVisitor::analyzeWindow(ASTSelectQuery & select_query)
     }
 }
 
-void QueryAnalyzerVisitor::analyzePrewhere(ASTSelectQuery & select_query, ScopePtr source_scope, ASTPtr & alias_columns)
+void QueryAnalyzerVisitor::analyzePrewhere(
+    ASTSelectQuery & select_query, ScopePtr source_scope, ASTPtr & alias_columns, const Aliases & query_aliases)
 {
     if (!select_query.prewhere())
         return;
@@ -1252,6 +1275,9 @@ void QueryAnalyzerVisitor::analyzePrewhere(ASTSelectQuery & select_query, ScopeP
         throw Exception("Prewhere is not supported in query with join", ErrorCodes::ILLEGAL_PREWHERE);
 
     auto prewhere = select_query.prewhere()->clone();
+    // normalize query aliases
+    rewriteAliasesForANSI(prewhere, query_aliases, source_scope->getNamesSet());
+    // normalize ALIAS columns
     normalizeAliases(prewhere, alias_columns);
 
     ExprAnalyzerOptions expr_options{"PREWHERE expression"};
@@ -1947,13 +1973,32 @@ void QueryAnalyzerVisitor::countLeadingHint(const IAST & ast)
     }
 }
 
-void QueryAnalyzerVisitor::normalizeAliases(ASTPtr & expr, ASTPtr & aliases)
+void QueryAnalyzerVisitor::rewriteAliasesForANSI(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set)
 {
-    NameSet source_columns_set;
-    QueryAliasesVisitor::Data aliases_data;
-    QueryAliasesVisitor(aliases_data).visit(aliases);
+    if (use_ansi_semantic)
+        normalizeAliases(expr, aliases, source_columns_set);
+}
+
+void QueryAnalyzerVisitor::normalizeAliases(ASTPtr & expr, ASTPtr & aliases_expr)
+{
+    Aliases aliases;
+    QueryAliasesVisitor(aliases).visit(aliases_expr);
+    normalizeAliases(expr, aliases, {});
+}
+
+void QueryAnalyzerVisitor::normalizeAliases(ASTPtr & expr, const Aliases & aliases, const NameSet & source_columns_set)
+{
     QueryNormalizer::Data normalizer_data(
-        aliases_data, source_columns_set, false, context->getSettingsRef(), true, context, nullptr, nullptr);
+        aliases,
+        source_columns_set,
+        false, /* ignore_alias */
+        context->getSettingsRef(),
+        true, /* allow_self_aliases */
+        context,
+        nullptr, /* storage */
+        nullptr, /* metadata_snapshot */
+        false, /* rewrite_map_col */
+        use_ansi_semantic /* aliases_rewrite_scope */);
     QueryNormalizer(normalizer_data).visit(expr);
 }
 

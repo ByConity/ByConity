@@ -130,7 +130,7 @@ BlockIO InterpreterExplainQuery::execute()
         catch (...)
         {
             if (getContext()->getProcessorProfileElementConsumer())
-                getContext()->getProcessorProfileElementConsumer()->finish();
+                getContext()->getProcessorProfileElementConsumer()->stop();
             throw;
         }
 

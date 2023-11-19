@@ -325,7 +325,7 @@ void QueryNormalizer::visit(ASTIdentifier & node, ASTPtr & ast, Data & data)
     if (!IdentifierSemantic::getColumnName(node))
         return;
 
-    if (data.settings.prefer_column_name_to_alias)
+    if (data.settings.prefer_column_name_to_alias && !(data.aliases_rewrite_scope && data.is_order_by_clause))
     {
         if (data.source_columns_set.find(node.name()) != data.source_columns_set.end())
             return;
@@ -414,11 +414,13 @@ void QueryNormalizer::visit(ASTSelectQuery & select, const ASTPtr &, Data & data
 {
     for (auto & child : select.children)
     {
-        if (data.aliases_rewrite_scope && child.get() == select.refSelect().get())
-            continue;
+        if (child == select.orderBy())
+            data.is_order_by_clause = true;
 
         if (needVisitChild(child))
             visit(child, data);
+
+        data.is_order_by_clause = false;
     }
 
     /// If the WHERE clause or HAVING consists of a single alias, the reference must be replaced not only in children,

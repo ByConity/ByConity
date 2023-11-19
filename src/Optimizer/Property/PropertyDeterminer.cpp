@@ -46,7 +46,6 @@ PropertySets PropertyDeterminer::determineRequiredProperty(QueryPlanStepPtr step
 }
 
 
-
 PropertySets DeterminerVisitor::visitStep(const IQueryPlanStep &, DeterminerContext & context)
 {
     return {{context.getRequired()}};
@@ -129,6 +128,17 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
 
     if (step.getDistributionType() == DistributionType::BROADCAST)
     {
+        // for replicate-join, consider distributed_perfect_shard settings
+        if (context.getContext().getSettingsRef().distributed_perfect_shard)
+        {
+            Property left{Partitioning{Partitioning::Handle::ARBITRARY}};
+            Property right{Partitioning{Partitioning::Handle::ARBITRARY}};
+            PropertySet set;
+            set.emplace_back(left);
+            set.emplace_back(right);
+            return {set};
+        }
+
         return {{Property{Partitioning{Partitioning::Handle::ARBITRARY}}, Property{Partitioning{Partitioning::Handle::FIXED_BROADCAST}}}};
     }
 
@@ -136,6 +146,17 @@ PropertySets DeterminerVisitor::visitJoinStep(const JoinStep & step, DeterminerC
     {
         Property left{Partitioning{Partitioning::Handle::SINGLE}};
         Property right{Partitioning{Partitioning::Handle::SINGLE}};
+        PropertySet set;
+        set.emplace_back(left);
+        set.emplace_back(right);
+        return {set};
+    }
+
+    // for repartition-join, consider distributed_perfect_shard settings
+    if (context.getContext().getSettingsRef().distributed_perfect_shard)
+    {
+        Property left{Partitioning{Partitioning::Handle::ARBITRARY}};
+        Property right{Partitioning{Partitioning::Handle::ARBITRARY}};
         PropertySet set;
         set.emplace_back(left);
         set.emplace_back(right);
@@ -201,6 +222,14 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
         return {set};
     }
 
+    // for group by keys not empty, consider distributed_perfect_shard setting.
+    if (!keys.empty() && context.getContext().getSettingsRef().distributed_perfect_shard)
+    {
+        PropertySet set;
+        set.emplace_back(Property{Partitioning{Partitioning::Handle::ARBITRARY}});
+        return {set};
+    }
+
     PropertySets sets;
     auto required_keys = context.getRequired().getNodePartitioning().getPartitioningColumns();
     if (context.getContext().getSettingsRef().enable_merge_require_property && !required_keys.empty() && keys.size() > required_keys.size())
@@ -231,8 +260,7 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     }
     else
     {
-        sets.emplace_back(
-            PropertySet{Property{Partitioning{Partitioning::Handle::FIXED_HASH, keys}}});
+        sets.emplace_back(PropertySet{Property{Partitioning{Partitioning::Handle::FIXED_HASH, keys}}});
     }
 
     if (step.isGroupingSet())
@@ -245,7 +273,7 @@ PropertySets DeterminerVisitor::visitAggregatingStep(const AggregatingStep & ste
     return sets;
 }
 
-PropertySets DeterminerVisitor::visitTotalsHavingStep(const TotalsHavingStep & , DeterminerContext & )
+PropertySets DeterminerVisitor::visitTotalsHavingStep(const TotalsHavingStep &, DeterminerContext &)
 {
     return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
@@ -450,8 +478,7 @@ PropertySets DeterminerVisitor::visitWindowStep(const WindowStep & step, Determi
     else
     {
         PropertySet set;
-        set.emplace_back(Property{
-            Partitioning{Partitioning::Handle::FIXED_HASH, group_bys, false}});
+        set.emplace_back(Property{Partitioning{Partitioning::Handle::FIXED_HASH, group_bys, false}});
         sets.emplace_back(set);
     }
     return sets;

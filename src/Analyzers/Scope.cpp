@@ -111,6 +111,17 @@ Names Scope::getOriginColumns() const
     return columns;
 }
 
+NameSet Scope::getNamesSet() const
+{
+    NameSet columns;
+    columns.reserve(field_descriptions.size());
+
+    for (const auto & field : field_descriptions)
+        columns.emplace(field.name);
+
+    return columns;
+}
+
 ScopePtr ScopeFactory::createScope(Scope::ScopeType type, ScopePtr parent, bool query_boundary, FieldDescriptions field_descriptions)
 {
     scopes.emplace_back(type, parent, query_boundary, std::move(field_descriptions));
