@@ -170,7 +170,7 @@ void MergeTreeDataMerger::prepareColumnNamesAndTypes(
         std::copy(index_columns_vec.cbegin(), index_columns_vec.cend(), std::inserter(key_columns, key_columns.end()));
 
         /// also need version column when building unique key index file
-        if (!merging_params.hasExplicitVersionColumn())
+        if (merging_params.hasExplicitVersionColumn())
             key_columns.insert(merging_params.version_column);
     }
 

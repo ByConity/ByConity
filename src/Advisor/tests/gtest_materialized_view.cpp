@@ -6,9 +6,10 @@
 #include <Optimizer/PlanNodeSearcher.h>
 #include <QueryPlan/PlanPrinter.h>
 
-#include <gtest/gtest.h>
-#include <Advisor/tests/gtest_workload_test.h>
 #include <iostream>
+#include <Advisor/tests/gtest_workload_test.h>
+#include <Optimizer/tests/gtest_base_tpcds_plan_test.h>
+#include <gtest/gtest.h>
 
 namespace DB
 {
@@ -17,7 +18,7 @@ class MaterializedViewAdviseTest : public ::testing::Test
 public:
     static void SetUpTestSuite()
     {
-        tester = std::make_shared<BaseWorkloadTest>();
+        tester = std::make_shared<BaseTpcdsPlanTest>(BasePlanTest::getDefaultOptimizerSettings());
         tester->execute("CREATE TABLE IF NOT EXISTS emps("
                         "  empid UInt32 not null,"
                         "  deptno UInt32 not null,"
@@ -48,10 +49,10 @@ public:
         return advises;
     }
 
-    static std::shared_ptr<BaseWorkloadTest> tester;
+    static std::shared_ptr<BaseTpcdsPlanTest> tester;
 };
 
-std::shared_ptr<BaseWorkloadTest> MaterializedViewAdviseTest::tester;
+std::shared_ptr<BaseTpcdsPlanTest> MaterializedViewAdviseTest::tester;
 
 namespace
 {

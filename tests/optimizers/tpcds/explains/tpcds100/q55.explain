@@ -1,0 +1,41 @@
+Projection Est. 100 rows
+│     Expressions: brand:=i_brand, brand_id:=i_brand_id, ext_price:=`expr#sum(ss_ext_sales_price)`
+└─ Limit Est. 100 rows
+   │     Limit: 100
+   └─ Sorting Est. 100 rows
+      │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, i_brand_id asc}
+      │     Limit: 100
+      └─ Gather Exchange Est. 192 rows
+         └─ Sorting Est. 100 rows
+            │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, i_brand_id asc}
+            │     Limit: 100
+            └─ MergingAggregated Est. 192 rows
+               └─ Repartition Exchange Est. 192 rows
+                  │     Partition by: {i_brand, i_brand_id}
+                  └─ Aggregating Est. 192 rows
+                     │     Group by: {i_brand, i_brand_id}
+                     │     Aggregates: expr#sum(ss_ext_sales_price):=AggNull(sum)(ss_ext_sales_price)
+                     └─ Inner Join Est. 81254 rows
+                        │     Condition: ss_item_sk == i_item_sk
+                        │     Runtime Filters Builder: {i_item_sk}
+                        ├─ Inner Join Est. 4581411 rows
+                        │  │     Condition: ss_sold_date_sk == d_date_sk
+                        │  │     Runtime Filters Builder: {d_date_sk}
+                        │  ├─ Filter Est. 287997024 rows
+                        │  │  │     Condition: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
+                        │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
+                        │  │           Where: Runtime Filters: {ss_item_sk, ss_sold_date_sk}
+                        │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_ext_sales_price]
+                        │  └─ Broadcast Exchange Est. 29 rows
+                        │     └─ Filter Est. 29 rows
+                        │        │     Condition: (d_year = 1999) AND (d_moy = 11)
+                        │        └─ TableScan tpcds100.date_dim Est. 73049 rows
+                        │                 Where: (d_year = 1999) AND (d_moy = 11)
+                        │                 Outputs: [d_date_sk, d_year, d_moy]
+                        └─ Broadcast Exchange Est. 3618 rows
+                           └─ Filter Est. 3618 rows
+                              │     Condition: i_manager_id = 28
+                              └─ TableScan tpcds100.item Est. 204000 rows
+                                       Where: i_manager_id = 28
+                                       Outputs: [i_item_sk, i_brand_id, i_brand, i_manager_id]
+note: Runtime Filter is applied for 2 times.

@@ -1,0 +1,46 @@
+Projection Est. 10 rows
+│     Expressions: [l_orderkey, o_orderdate, o_shippriority], revenue:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))`
+└─ Limit Est. 10 rows
+   │     Limit: 10
+   └─ Sorting Est. 10 rows
+      │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) desc nulls_last, o_orderdate asc}
+      │     Limit: 10
+      └─ Gather Exchange Est. 2933756505 rows
+         └─ Sorting Est. 10 rows
+            │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) desc nulls_last, o_orderdate asc}
+            │     Limit: 10
+            └─ Aggregating Est. 2933756505 rows
+               │     Group by: {l_orderkey, o_orderdate, o_shippriority}
+               │     Aggregates: expr#sum(multiply(l_extendedprice, minus(1, l_discount))):=AggNull(sum)(expr#multiply(l_extendedprice, minus(1, l_discount)))
+               └─ Projection Est. 2933756505 rows
+                  │     Expressions: [l_orderkey, o_orderdate, o_shippriority], expr#multiply(l_extendedprice, minus(1, l_discount)):=l_extendedprice * (1 - l_discount)
+                  └─ Inner (PARALLEL_HASH) Join Est. 2933756505 rows
+                     │     Condition: l_orderkey == o_orderkey
+                     │     Runtime Filters Builder: {o_orderkey}
+                     ├─ Repartition Exchange Est. 3236618778 rows
+                     │  │     Partition by: {l_orderkey}
+                     │  └─ Filter Est. 3236618778 rows
+                     │     │     Condition: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
+                     │     └─ TableScan tpch1000_sample.lineitem Est. 5999989709 rows
+                     │              Where: l_shipdate > cast(9204, 'Date') Runtime Filters: {l_orderkey}
+                     │              Outputs: [l_orderkey, l_extendedprice, l_discount, l_shipdate]
+                     └─ Repartition Exchange Est. 487728199 rows
+                        │     Partition by: {o_orderkey}
+                        └─ Inner (PARALLEL_HASH) Join Est. 487728199 rows
+                           │     Condition: o_custkey == c_custkey
+                           │     Runtime Filters Builder: {c_custkey}
+                           ├─ Repartition Exchange Est. 728803385 rows
+                           │  │     Partition by: {o_custkey}
+                           │  └─ Filter Est. 728803385 rows
+                           │     │     Condition: o_orderdate < cast(9204, 'Date') Runtime Filters: {o_custkey}
+                           │     └─ TableScan tpch1000_sample.orders Est. 1500000000 rows
+                           │              Where: o_orderdate < cast(9204, 'Date') Runtime Filters: {o_custkey}
+                           │              Outputs: [o_orderkey, o_custkey, o_orderdate, o_shippriority]
+                           └─ Repartition Exchange Est. 29989996 rows
+                              │     Partition by: {c_custkey}
+                              └─ Filter Est. 29989996 rows
+                                 │     Condition: c_mktsegment = 'BUILDING'
+                                 └─ TableScan tpch1000_sample.customer Est. 150000000 rows
+                                          Where: c_mktsegment = 'BUILDING'
+                                          Outputs: [c_custkey, c_mktsegment]
+note: Runtime Filter is applied for 2 times.

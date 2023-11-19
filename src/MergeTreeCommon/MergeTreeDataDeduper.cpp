@@ -612,10 +612,11 @@ MergeTreeDataDeduper::DedupTasks MergeTreeDataDeduper::convertIntoSubDedupTasks(
     /// Mark whether we can split dedup tasks into bucket granule.
     bool table_level_valid_bucket = data.getInMemoryMetadataPtr()->checkIfClusterByKeySameWithUniqueKey();
     auto table_definition_hash = data.getTableHashForClusterBy();
+    auto settings = data.getSettings();
     /// Check whether all parts has same table_definition_hash.
     /// Otherwise, we can not split dedup task to bucket granule.
-    auto checkBucketTable = [&table_definition_hash](const IMergeTreeDataPartsVector & all_parts, bool & valid_bucket) {
-        if (!valid_bucket)
+    auto checkBucketTable = [&settings, &table_definition_hash](const IMergeTreeDataPartsVector & all_parts, bool & valid_bucket) {
+        if (!valid_bucket || settings->enable_bucket_level_unique_keys)
             return;
         auto it = std::find_if(all_parts.begin(), all_parts.end(), [&](const auto & part) {
             return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
@@ -628,7 +629,7 @@ MergeTreeDataDeduper::DedupTasks MergeTreeDataDeduper::convertIntoSubDedupTasks(
     /// Prepare all new parts (staged + uncommitted) that need to be dedupped with visible parts.
     /// NOTE: the order of new parts is significant because it reflects the write order of the same key.
     IMergeTreeDataPartsVector all_new_parts = all_staged_parts;
-    if (data.getSettings()->partition_level_unique_keys)
+    if (settings->partition_level_unique_keys)
     {
         /// New parts are first sorted by partition, and then within each partition sorted by part's written time
         std::sort(all_new_parts.begin(), all_new_parts.end(), [](auto & lhs, auto & rhs) {

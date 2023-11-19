@@ -1,0 +1,35 @@
+Projection
+│     Expressions: [i_brand, i_category, i_class, i_product_name], qoh:=`expr#avg(inv_quantity_on_hand)`
+└─ Limit
+   │     Limit: 100
+   └─ Sorting
+      │     Order by: {expr#avg(inv_quantity_on_hand) asc, i_product_name asc, i_brand asc, i_class asc, i_category asc}
+      │     Limit: 100
+      └─ Gather Exchange
+         └─ Sorting
+            │     Order by: {expr#avg(inv_quantity_on_hand) asc, i_product_name asc, i_brand asc, i_class asc, i_category asc}
+            │     Limit: 100
+            └─ MergingAggregated
+               └─ Repartition Exchange
+                  │     Partition by: {i_product_name, i_brand, i_class, i_category, __grouping_set}
+                  └─ Aggregating
+                     │     Group by: {i_product_name, i_brand, i_class, i_category}
+                     │     Aggregates: expr#avg(inv_quantity_on_hand):=AggNull(avg)(inv_quantity_on_hand)
+                     └─ Inner Join
+                        │     Condition: inv_date_sk == d_date_sk
+                        ├─ Inner Join
+                        │  │     Condition: inv_item_sk == i_item_sk
+                        │  ├─ Repartition Exchange
+                        │  │  │     Partition by: {inv_item_sk}
+                        │  │  └─ TableScan tpcds1000.inventory
+                        │  │           Outputs: [inv_date_sk, inv_item_sk, inv_quantity_on_hand]
+                        │  └─ Repartition Exchange
+                        │     │     Partition by: {i_item_sk}
+                        │     └─ TableScan tpcds1000.item
+                        │              Outputs: [i_item_sk, i_brand, i_class, i_category, i_product_name]
+                        └─ Broadcast Exchange
+                           └─ Filter
+                              │     Condition: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                              └─ TableScan tpcds1000.date_dim
+                                       Where: (d_month_seq >= 1200) AND (d_month_seq <= 1211)
+                                       Outputs: [d_date_sk, d_month_seq]

@@ -152,4 +152,87 @@ Block filterBlock(const Block & block, const FilterInfo & filter_info)
     return res;
 }
 
+CnchDedupHelper::DedupScope
+getDedupScope(MergeTreeMetaBase & storage, IMergeTreeDataPartsVector & data_parts, bool force_normal_dedup)
+{
+    MutableMergeTreeDataPartsCNCHVector cnch_parts;
+    cnch_parts.reserve(data_parts.size());
+    for (auto & part : data_parts)
+        cnch_parts.emplace_back(const_pointer_cast<MergeTreeDataPartCNCH>(dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part)));
+    return getDedupScope(storage, cnch_parts, force_normal_dedup);
+}
+
+CnchDedupHelper::DedupScope
+getDedupScope(MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & preload_parts, bool force_normal_dedup)
+{
+    auto settings = storage.getSettings();
+    auto checkIfUseBucketLock = [&]() -> bool {
+        if (force_normal_dedup)
+            return false;
+        if (storage.isBucketTable() && settings->enable_bucket_level_unique_keys)
+            return true;
+
+        /// If it's partition/table level dedup, we will convert into bucket level dedup only when cluster by key is same with unique key and table definition of all parts are same.
+        if (!storage.getInMemoryMetadataPtr()->checkIfClusterByKeySameWithUniqueKey())
+            return false;
+        auto table_definition_hash = storage.getTableHashForClusterBy();
+        /// Check whether all parts has same table_definition_hash.
+        auto it = std::find_if(preload_parts.begin(), preload_parts.end(), [&](const auto & part) {
+            return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
+        });
+        return it == preload_parts.end();
+    };
+
+    if (checkIfUseBucketLock())
+    {
+        if (settings->partition_level_unique_keys)
+        {
+            CnchDedupHelper::DedupScope::BucketWithPartitionSet bucket_with_partition_set;
+            for (const auto & part : preload_parts)
+                bucket_with_partition_set.insert({part->info.partition_id, part->bucket_number});
+            return CnchDedupHelper::DedupScope::PartitionDedupWithBucket(bucket_with_partition_set);
+        }
+        else
+        {
+            CnchDedupHelper::DedupScope::BucketSet buckets;
+            for (const auto & part : preload_parts)
+                buckets.insert(part->bucket_number);
+            return CnchDedupHelper::DedupScope::TableDedupWithBucket(buckets);
+        }
+    }
+    else
+    {
+        /// acquire locks for all the written partitions
+        NameOrderedSet sorted_partitions;
+        for (const auto & part : preload_parts)
+            sorted_partitions.insert(part->info.partition_id);
+
+        return settings->partition_level_unique_keys ? CnchDedupHelper::DedupScope::PartitionDedup(sorted_partitions)
+                                                            : CnchDedupHelper::DedupScope::TableDedup();
+    }
+}
+
+bool checkBucketParts(
+    MergeTreeMetaBase & storage,
+    const MergeTreeDataPartsCNCHVector & visible_parts,
+    const MergeTreeDataPartsCNCHVector & staged_parts)
+{
+    auto settings = storage.getSettings();
+    /// If use bucket level dedup directly, just return true
+    if (settings->enable_bucket_level_unique_keys)
+        return true;
+
+    /// If use partition/table level dedup, we can convert to bucket level dedup only when cluster by key is same with unique key and table definition of all parts are same.
+    if (!storage.getInMemoryMetadataPtr()->checkIfClusterByKeySameWithUniqueKey())
+        return false;
+    auto table_definition_hash = storage.getTableHashForClusterBy();
+    auto checkIfBucketPartValid = [&table_definition_hash](const MergeTreeDataPartsCNCHVector & parts) -> bool {
+        auto it = std::find_if(parts.begin(), parts.end(), [&](const auto & part) {
+            return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
+        });
+        return it == parts.end();
+    };
+    return checkIfBucketPartValid(visible_parts) && checkIfBucketPartValid(staged_parts);
+}
+
 }
