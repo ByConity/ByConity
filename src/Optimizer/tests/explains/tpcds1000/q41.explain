@@ -16,7 +16,7 @@ Projection Est. 100 rows
                      │     Group by: {i_product_name}
                      └─ Inner Join Est. 3636 rows
                         │     Condition: 
-                        │     Filter: coalesce(`expr#count()`, countIf) > 0
+                        │     Filter: coalesce(`expr#count()`, countIf) != 0
                         ├─ Left Join Est. 3636 rows
                         │  │     Condition: i_manufact == i_manufact_1
                         │  ├─ Filter Est. 3636 rows

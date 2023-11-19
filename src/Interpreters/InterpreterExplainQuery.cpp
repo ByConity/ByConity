@@ -108,7 +108,7 @@ BlockIO InterpreterExplainQuery::execute()
     BlockIO res;
 
     const auto & ast = query->as<ASTExplainQuery &>();
-    if ((ast.getKind() == ASTExplainQuery::DistributedAnalyze || ast.getKind() == ASTExplainQuery::LogicalAnalyze)
+    if ((ast.getKind() == ASTExplainQuery::DistributedAnalyze || ast.getKind() == ASTExplainQuery::LogicalAnalyze || ast.getKind() == ASTExplainQuery::PipelineAnalyze)
         && QueryUseOptimizerChecker::check(query, getContext(), true))
     {
         if (!getContext()->getSettingsRef().log_processors_profiles || !getContext()->getSettingsRef().report_processors_profiles)

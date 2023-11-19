@@ -1,0 +1,19 @@
+Projection Est. ? rows
+│     Expressions: cntq00:=`expr#count(hash_uid)`, g0:=`expr#1`, t:=`expr#toUInt32(divide(minus(multiIf(less(server_time, 1606406400), server_time, greater(time, 2000000000), toUInt32(divide(time, 1000)), time), 1676304000), 604800))`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#toUInt32(divide(minus(multiIf(less(server_time, 1606406400), server_time, greater(time, 2000000000), toUInt32(divide(time, 1000)), time), 1676304000), 604800)), expr#1}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#toUInt32(divide(minus(multiIf(less(server_time, 1606406400), server_time, greater(time, 2000000000), toUInt32(divide(time, 1000)), time), 1676304000), 604800)), expr#1}
+            │     Aggregates: expr#count(hash_uid):=AggNull(count)(hash_uid)
+            └─ Projection Est. ? rows
+               │     Expressions: [hash_uid], expr#1:=1, expr#toUInt32(divide(minus(multiIf(less(server_time, 1606406400), server_time, greater(time, 2000000000), toUInt32(divide(time, 1000)), time), 1676304000), 604800)):=toUInt32((`expr#multiIf(less(server_time, 1606406400), server_time, greater(time, 2000000000), toUInt32(divide(time, 1000)), time)` - 1676304000) / 604800)
+               └─ Filter Est. ? rows
+                  │     Condition: (`expr#multiIf(less(server_time, 1606406400), server_time, greater(time, 2000000000), toUInt32(divide(time, 1000)), time)` >= 1616304000) AND (`expr#multiIf(less(server_time, 1606406400), server_time, greater(time, 2000000000), toUInt32(divide(time, 1000)), time)` <= 1696563199)
+                  └─ Projection Est. ? rows
+                     │     Expressions: [hash_uid], expr#multiIf(less(server_time, 1606406400), server_time, greater(time, 2000000000), toUInt32(divide(time, 1000)), time):=multiIf(server_time < 1606406400, server_time, time > 2000000000, toUInt32(time / 1000), time)
+                     └─ TableScan default.ut40068_apps Est. ? rows
+                              Partition filter: (tea_app_id = 41514) AND (event_date >= cast(18707, \'Date\')) AND (event_date <= cast(19592, \'Date\'))
+                              Where: (multiIf(server_time < 1606406400, server_time, time > 2000000000, toUInt32(time / 1000), time) >= 1616304000) AND (multiIf(server_time < 1606406400, server_time, time > 2000000000, toUInt32(time / 1000), time) <= 1696563199)
+                              Outputs: [hash_uid, server_time, time]

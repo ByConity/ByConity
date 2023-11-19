@@ -273,6 +273,12 @@ void PlanSegment::serialize(WriteBuffer & buf) const
     writeBinary(query_id, buf);
 
     query_plan.serialize(buf);
+    // TODO: change to the following when implement plan segment rpc
+    // TODO: here don't change for compatibility
+    // Protos::QueryPlan proto;
+    // query_plan.toProto(proto);
+    // auto blob = proto.SerializeAsString();
+    // writeBinary(blob, buf);
 
     writeBinary(inputs.size(), buf);
     for (const auto & input : inputs)
@@ -303,7 +309,15 @@ void PlanSegment::deserialize(ReadBuffer & buf)
     readBinary(query_id, buf);
 
     query_plan.addInterpreterContext(context);
+
     query_plan.deserialize(buf);
+    // TODO: change to the following when implement plan segment rpc
+    // TODO: here don't change for compatibility
+    // std::string blob;
+    // readBinary(blob, buf);
+    // Protos::QueryPlan proto;
+    // proto.ParseFromString(blob);
+    // query_plan.fromProto(proto);
 
     size_t input_size;
     readBinary(input_size, buf);

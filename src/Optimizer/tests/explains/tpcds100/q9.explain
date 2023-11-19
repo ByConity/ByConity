@@ -1,6 +1,6 @@
 Gather Exchange Est. 1 rows
 └─ Projection Est. 1 rows
-   │     Expressions: bucket1:=multiIf(`expr#count()` > 74129, `expr#avg(ss_ext_discount_amt)`, `expr#avg(ss_net_paid)`), bucket2:=multiIf(`expr#count()_1` > 122840, `expr#avg(ss_ext_discount_amt)_1`, `expr#avg(ss_net_paid)_1`), bucket3:=multiIf(`expr#count()_2` > 56580, `expr#avg(ss_ext_discount_amt)_2`, `expr#avg(ss_net_paid)_2`), bucket4:=multiIf(`expr#count()_3` > 10097, `expr#avg(ss_ext_discount_amt)_3`, `expr#avg(ss_net_paid)_3`), bucket5:=multiIf(`expr#count()_4` > 165306, `expr#avg(ss_ext_discount_amt)_4`, `expr#avg(ss_net_paid)_4`)
+   │     Expressions: bucket1:=multiIf(`expr#count()_1` > 74129, `expr#avg(ss_ext_discount_amt)`, `expr#avg(ss_net_paid)`), bucket2:=multiIf(`expr#count()_3` > 122840, `expr#avg(ss_ext_discount_amt)_1`, `expr#avg(ss_net_paid)_1`), bucket3:=multiIf(`expr#count()_5` > 56580, `expr#avg(ss_ext_discount_amt)_2`, `expr#avg(ss_net_paid)_2`), bucket4:=multiIf(`expr#count()_7` > 10097, `expr#avg(ss_ext_discount_amt)_3`, `expr#avg(ss_net_paid)_3`), bucket5:=multiIf(`expr#count()_9` > 165306, `expr#avg(ss_ext_discount_amt)_4`, `expr#avg(ss_net_paid)_4`)
    └─ Inner Join Est. 1 rows
       │     Condition: 
       ├─ Inner Join Est. 1 rows
@@ -38,7 +38,7 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │  │           Outputs: [r_reason_sk]
       │  │  │  │  │  │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │     └─ Projection Est. 1 rows
-      │  │  │  │  │  │  │  │  │  │  │  │  │  │        │     Expressions: expr#count():=cast(`expr#count()`, 'Nullable(UInt64)')
+      │  │  │  │  │  │  │  │  │  │  │  │  │  │        │     Expressions: expr#count()_1:=cast(`expr#count()`, 'Nullable(UInt64)')
       │  │  │  │  │  │  │  │  │  │  │  │  │  │        └─ MergingAggregated Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │           └─ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │  │  │              └─ Aggregating Est. 1 rows
@@ -73,12 +73,12 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │  │                          Outputs: [ss_net_paid], ss_quantity_2:=ss_quantity
       │  │  │  │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │     └─ Projection Est. 1 rows
-      │  │  │  │  │  │  │  │  │  │  │        │     Expressions: expr#count()_1:=cast(`expr#count()_1`, 'Nullable(UInt64)')
+      │  │  │  │  │  │  │  │  │  │  │        │     Expressions: expr#count()_3:=cast(`expr#count()_2`, 'Nullable(UInt64)')
       │  │  │  │  │  │  │  │  │  │  │        └─ MergingAggregated Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │           └─ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │              └─ Aggregating Est. 1 rows
       │  │  │  │  │  │  │  │  │  │  │                 │     Group by: {}
-      │  │  │  │  │  │  │  │  │  │  │                 │     Aggregates: expr#count()_1:=AggNull(count)()
+      │  │  │  │  │  │  │  │  │  │  │                 │     Aggregates: expr#count()_2:=AggNull(count)()
       │  │  │  │  │  │  │  │  │  │  │                 └─ Filter Est. 57597082 rows
       │  │  │  │  │  │  │  │  │  │  │                    │     Condition: (ss_quantity_3 >= 21) AND (ss_quantity_3 <= 40)
       │  │  │  │  │  │  │  │  │  │  │                    └─ TableScan tpcds100.store_sales Est. 287997024 rows
@@ -108,12 +108,12 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │  │                          Outputs: ss_quantity_5:=ss_quantity, ss_net_paid_1:=ss_net_paid
       │  │  │  │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │  │  │  │     └─ Projection Est. 1 rows
-      │  │  │  │  │  │  │  │        │     Expressions: expr#count()_2:=cast(`expr#count()_2`, 'Nullable(UInt64)')
+      │  │  │  │  │  │  │  │        │     Expressions: expr#count()_5:=cast(`expr#count()_4`, 'Nullable(UInt64)')
       │  │  │  │  │  │  │  │        └─ MergingAggregated Est. 1 rows
       │  │  │  │  │  │  │  │           └─ Gather Exchange Est. 1 rows
       │  │  │  │  │  │  │  │              └─ Aggregating Est. 1 rows
       │  │  │  │  │  │  │  │                 │     Group by: {}
-      │  │  │  │  │  │  │  │                 │     Aggregates: expr#count()_2:=AggNull(count)()
+      │  │  │  │  │  │  │  │                 │     Aggregates: expr#count()_4:=AggNull(count)()
       │  │  │  │  │  │  │  │                 └─ Filter Est. 57601128 rows
       │  │  │  │  │  │  │  │                    │     Condition: (ss_quantity_6 >= 41) AND (ss_quantity_6 <= 60)
       │  │  │  │  │  │  │  │                    └─ TableScan tpcds100.store_sales Est. 287997024 rows
@@ -143,12 +143,12 @@ Gather Exchange Est. 1 rows
       │  │  │  │  │  │                          Outputs: ss_quantity_8:=ss_quantity, ss_net_paid_2:=ss_net_paid
       │  │  │  │  │  └─ Broadcast Exchange Est. 1 rows
       │  │  │  │  │     └─ Projection Est. 1 rows
-      │  │  │  │  │        │     Expressions: expr#count()_3:=cast(`expr#count()_3`, 'Nullable(UInt64)')
+      │  │  │  │  │        │     Expressions: expr#count()_7:=cast(`expr#count()_6`, 'Nullable(UInt64)')
       │  │  │  │  │        └─ MergingAggregated Est. 1 rows
       │  │  │  │  │           └─ Gather Exchange Est. 1 rows
       │  │  │  │  │              └─ Aggregating Est. 1 rows
       │  │  │  │  │                 │     Group by: {}
-      │  │  │  │  │                 │     Aggregates: expr#count()_3:=AggNull(count)()
+      │  │  │  │  │                 │     Aggregates: expr#count()_6:=AggNull(count)()
       │  │  │  │  │                 └─ Filter Est. 57587170 rows
       │  │  │  │  │                    │     Condition: (ss_quantity_9 >= 61) AND (ss_quantity_9 <= 80)
       │  │  │  │  │                    └─ TableScan tpcds100.store_sales Est. 287997024 rows
@@ -178,12 +178,12 @@ Gather Exchange Est. 1 rows
       │  │  │                          Outputs: ss_quantity_11:=ss_quantity, ss_net_paid_3:=ss_net_paid
       │  │  └─ Broadcast Exchange Est. 1 rows
       │  │     └─ Projection Est. 1 rows
-      │  │        │     Expressions: expr#count()_4:=cast(`expr#count()_4`, 'Nullable(UInt64)')
+      │  │        │     Expressions: expr#count()_9:=cast(`expr#count()_8`, 'Nullable(UInt64)')
       │  │        └─ MergingAggregated Est. 1 rows
       │  │           └─ Gather Exchange Est. 1 rows
       │  │              └─ Aggregating Est. 1 rows
       │  │                 │     Group by: {}
-      │  │                 │     Aggregates: expr#count()_4:=AggNull(count)()
+      │  │                 │     Aggregates: expr#count()_8:=AggNull(count)()
       │  │                 └─ Filter Est. 57588650 rows
       │  │                    │     Condition: (ss_quantity_12 >= 81) AND (ss_quantity_12 <= 100)
       │  │                    └─ TableScan tpcds100.store_sales Est. 287997024 rows

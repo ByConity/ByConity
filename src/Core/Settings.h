@@ -1849,6 +1849,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_topn_filtering_through_projection, true, "Whether to enable PushTopNFilteringThroughProjection rules", 0) \
     M(Bool, enable_cascades_optimizer, true, "Whether to enable CascadesOptimizer", 0) \
     M(Bool, enable_iterative_rewriter, true, "Whether to enable InterativeRewriter", 0) \
+    M(Bool, enable_common_expression_sharing, true, "Whether to share common expression between steps", 0) \
+    M(Bool, enable_common_expression_sharing_for_prewhere, true, "Whether to share common expression between steps and PREWHERE", 0) \
+    M(UInt64, common_expression_sharing_threshold, 3, "The minimal cost to share a common expression, the cost is defined by (complexity * (occurrence - 1))", 0) \
     /** Optimizer relative settings, statistics */ \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
     M(Bool, statistics_collect_histogram, true, "Enable histogram collection", 0) \

@@ -77,44 +77,37 @@ public:
         bool enable_function_simplify = false;
     };
 
-    template <typename T, std::enable_if_t<std::is_same_v<T, Field> || std::is_same_v<T, ColumnPtr>, int> = 0>
-    struct ResultBase
+    struct InterpretResult
     {
-        using ValueType = T;
-
         DataTypePtr type;
 
         // one of members is valid
         ASTPtr ast;
-        T value;
+        Field value;
 
-        bool isAST() const { return ast != nullptr; }
-        bool isValue() const { return ast == nullptr; }
-
-        ResultBase() = default;
-        ResultBase(DataTypePtr type_, ASTPtr ast_): type(std::move(type_)), ast(std::move(ast_)) {}
-        ResultBase(DataTypePtr type_, T value_): type(std::move(type_)), value(std::move(value_)) {}
-
-        ASTPtr convertToAST(const ContextMutablePtr & ctx) const
+        InterpretResult() = default;
+        InterpretResult(DataTypePtr type_, ASTPtr ast_) : type(std::move(type_)), ast(std::move(ast_))
         {
-            if (isAST())
-                return ast;
-
-            return LiteralEncoder::encode(getField(), type, ctx);
+        }
+        InterpretResult(DataTypePtr type_, Field value_) : type(std::move(type_)), value(std::move(value_))
+        {
         }
 
-        decltype(auto) getField() const
+        bool isAST() const
+        {
+            return ast != nullptr;
+        }
+        bool isValue() const
+        {
+            return ast == nullptr;
+        }
+        const Field & getField() const
         {
             assert(isValue());
-
-            if constexpr (std::is_same_v<T, Field>)
-                return (value);
-            else
-                return (*value)[0];
+            return value;
         }
+        ASTPtr convertToAST(const ContextMutablePtr & ctx) const;
     };
-
-    using InterpretResult = ResultBase<Field>;
 
     ExpressionInterpreter(InterpretSetting setting_, ContextMutablePtr context_);
     static ExpressionInterpreter basicInterpreter(IdentifierTypes types, ContextMutablePtr context);
@@ -132,11 +125,40 @@ private:
 
 /// public for type alias
 public:
-
-    struct InterpretIMResult: public ResultBase<ColumnPtr>
+    struct InterpretIMResult
     {
-        using ResultBase::ResultBase;
-        InterpretIMResult(DataTypePtr type_, const Field & field);
+        DataTypePtr type;
+
+        // value and ast can be both valid, the ast will be used if the value is not suitable for ASTLiteral
+        ASTPtr ast;
+        ColumnPtr value;
+
+        InterpretIMResult() = default;
+        InterpretIMResult(DataTypePtr type_, ASTPtr ast_) : type(std::move(type_)), ast(std::move(ast_))
+        {
+        }
+        InterpretIMResult(DataTypePtr type_, ASTPtr ast_, ColumnPtr value_)
+            : type(std::move(type_)), ast(std::move(ast_)), value(std::move(value_))
+        {
+        }
+        InterpretIMResult(DataTypePtr type_, ASTPtr ast_, const Field & field);
+
+        bool isAST() const
+        {
+            return value == nullptr;
+        }
+        bool isValue() const
+        {
+            return value != nullptr;
+        }
+        Field getField() const
+        {
+            assert(isValue());
+            return (*value)[0];
+        }
+        bool isNull() const;
+        bool isSuitablyRepresentedByValue() const;
+        ASTPtr convertToAST(const ContextMutablePtr & ctx) const;
     };
 
     using InterpretIMResults = std::vector<InterpretIMResult>;

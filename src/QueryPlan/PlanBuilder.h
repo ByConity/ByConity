@@ -90,6 +90,10 @@ struct PlanBuilder
     {
         return translation->withAdditionalMappings(expression_symbols);
     }
+    void mapSymbols(const NameToNameMap & name_mapping)
+    {
+        translation->mapSymbols(name_mapping);
+    }
 
     // utils
     Names translateToSymbols(ASTs & expressions) const;

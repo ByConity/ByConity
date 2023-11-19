@@ -96,7 +96,7 @@ public:
     Void visitASTSubquery(ASTPtr & node, const Void &) override;
     Void visitASTExplainQuery(ASTPtr & node, const Void &) override;
 
-    QueryAnalyzerVisitor(ContextMutablePtr context_, Analysis & analysis_, ScopePtr outer_query_scope_)
+    QueryAnalyzerVisitor(ContextPtr context_, Analysis & analysis_, ScopePtr outer_query_scope_)
         : context(std::move(context_))
         , analysis(analysis_)
         , outer_query_scope(outer_query_scope_)
@@ -108,7 +108,7 @@ public:
     {}
 
 private:
-    ContextMutablePtr context;
+    ContextPtr context;
     Analysis & analysis;
     const ScopePtr outer_query_scope;
     const bool use_ansi_semantic;
@@ -168,14 +168,14 @@ static NameSet collectNames(ScopePtr scope);
 static String
 qualifyJoinedName(const String & name, const String & table_qualifier, const NameSet & source_names, bool check_identifier_begin_valid);
 
-AnalysisPtr QueryAnalyzer::analyze(ASTPtr & ast, ContextMutablePtr context)
+AnalysisPtr QueryAnalyzer::analyze(ASTPtr & ast, ContextPtr context)
 {
     AnalysisPtr analysis_ptr = std::make_unique<Analysis>();
     analyze(ast, nullptr, std::move(context), *analysis_ptr);
     return analysis_ptr;
 }
 
-void QueryAnalyzer::analyze(ASTPtr & query, ScopePtr outer_query_scope, ContextMutablePtr context, Analysis & analysis)
+void QueryAnalyzer::analyze(ASTPtr & query, ScopePtr outer_query_scope, ContextPtr context, Analysis & analysis)
 {
     QueryAnalyzerVisitor analyzer_visitor {std::move(context), analysis, outer_query_scope};
     analyzer_visitor.process(query);
@@ -336,7 +336,9 @@ Void QueryAnalyzerVisitor::visitASTSubquery(ASTPtr & node, const Void &)
 Void QueryAnalyzerVisitor::visitASTExplainQuery(ASTPtr & node, const Void &)
 {
     ASTExplainQuery & explain = node->as<ASTExplainQuery &>();
-    if (explain.getKind() != ASTExplainQuery::ExplainKind::LogicalAnalyze && explain.getKind() != ASTExplainQuery::ExplainKind::DistributedAnalyze)
+    if (explain.getKind() != ASTExplainQuery::ExplainKind::LogicalAnalyze
+        && explain.getKind() != ASTExplainQuery::ExplainKind::DistributedAnalyze
+        && explain.getKind() != ASTExplainQuery::ExplainKind::PipelineAnalyze)
         throw Exception("Unexpected explain kind", ErrorCodes::LOGICAL_ERROR);
     if (!explain.getExplainedQuery())
         throw Exception("Explain query has syntax error ", ErrorCodes::LOGICAL_ERROR);

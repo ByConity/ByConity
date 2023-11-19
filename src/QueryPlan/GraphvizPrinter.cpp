@@ -1835,6 +1835,13 @@ String StepPrinter::printTableScanStep(const TableScanStep & step)
     //    }
     //    details << "|";
 
+    details << "Inline Expressions: \\n";
+    for (const auto & assigment : step.getInlineExpressions())
+    {
+        details << assigment.first << ": " << serializeAST(*assigment.second) << "\\n";
+    }
+    details << "|";
+
     if (const auto * pushdown_filter = step.getPushdownFilterCast())
     {
         details << "Pushdown Filter |";

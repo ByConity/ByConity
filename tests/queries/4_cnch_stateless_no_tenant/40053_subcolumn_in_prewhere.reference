@@ -4,10 +4,10 @@ Projection Est. ? rows
    └─ Gather Exchange Est. ? rows
       └─ Aggregating Est. ? rows
          │     Group by: {}
-         │     Aggregates: expr#count():=count()
+         │     Aggregates: expr#count():=AggNull(count)()
          └─ TableScan test.t40053 Est. ? rows
                   Prewhere: `__string_params__\'enter_from\'` IN (\'homepage_fresh\')
-                  Outputs: [string_params]
+                  Outputs: [__string_params__\'enter_from\']
 Projection Est. ? rows
 │     Expressions: x:=`expr#count()`, y:=`expr#count()_1`
 └─ Inner Join Est. ? rows
@@ -16,17 +16,17 @@ Projection Est. ? rows
    │  └─ Gather Exchange Est. ? rows
    │     └─ Aggregating Est. ? rows
    │        │     Group by: {}
-   │        │     Aggregates: expr#count():=count()
+   │        │     Aggregates: expr#count():=AggNull(count)()
    │        └─ TableScan test.t40053 Est. ? rows
    │                 Prewhere: `__string_params__\'enter_from\'` IN (\'homepage_fresh\')
-   │                 Outputs: [string_params]
+   │                 Outputs: [__string_params__\'enter_from\']
    └─ Broadcast Exchange Est. ? rows
       └─ MergingAggregated Est. ? rows
          └─ Gather Exchange Est. ? rows
             └─ Aggregating Est. ? rows
                │     Group by: {}
-               │     Aggregates: expr#count()_1:=count()
+               │     Aggregates: expr#count()_1:=AggNull(count)()
                └─ TableScan test.t40053 Est. ? rows
                         Prewhere: `__string_params__\'enter_to\'` IN (\'homepage_click\')
-                        Outputs: string_params_1:=string_params
+                        Outputs: [__string_params__\'enter_to\']
 1

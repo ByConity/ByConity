@@ -16,7 +16,7 @@ Projection
                      │     Group by: {i_product_name}
                      └─ Inner Join
                         │     Condition: 
-                        │     Filter: coalesce(`expr#count()`, countIf) > 0
+                        │     Filter: coalesce(`expr#count()`, countIf) != 0
                         ├─ Left Join
                         │  │     Condition: i_manufact == i_manufact_1
                         │  ├─ Filter

@@ -470,10 +470,13 @@ std::shared_ptr<TableScanStep> SymbolMapper::map(const TableScanStep & scan)
     NamesWithAliases mapped_column_alias = map(scan.getColumnAlias());
     DataStream mapped_table_output_stream = map(scan.getTableOutputStream());
 
+    Assignments mapped_inline_expressions;
+
+    for (const auto & inline_expr : scan.getInlineExpressions())
+        mapped_inline_expressions.emplace_back(mapping_function(inline_expr.first), inline_expr.second);
+
     // order matters as symbol mapper should traverse plan nodes bottom-up
     std::shared_ptr<FilterStep> mapped_filter = scan.getPushdownFilterCast() ? map(*scan.getPushdownFilterCast()) : nullptr;
-    std::shared_ptr<ProjectionStep> mapped_index_projection
-        = scan.getPushdownProjectionCast() ? map(*scan.getPushdownProjectionCast()) : nullptr;
     std::shared_ptr<ProjectionStep> mapped_projection = scan.getPushdownProjectionCast() ? map(*scan.getPushdownProjectionCast()) : nullptr;
     std::shared_ptr<AggregatingStep> mapped_aggregation = scan.getPushdownAggregationCast() ? map(*scan.getPushdownAggregationCast()) : nullptr;
 
@@ -488,6 +491,7 @@ std::shared_ptr<TableScanStep> SymbolMapper::map(const TableScanStep & scan)
         scan.getMaxBlockSize(),
         scan.getTableAlias(),
         scan.getHints(),
+        std::move(mapped_inline_expressions),
         std::move(mapped_aggregation),
         std::move(mapped_projection),
         std::move(mapped_filter),

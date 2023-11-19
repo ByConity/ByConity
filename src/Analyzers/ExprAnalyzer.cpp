@@ -77,20 +77,20 @@ public:
     ColumnWithTypeAndName visitASTQuantifiedComparison(ASTPtr & node, const Void &) override;
     ColumnWithTypeAndName visitASTTableColumnReference(ASTPtr & node, const Void &) override;
 
-    ExprAnalyzerVisitor(ContextMutablePtr context_, Analysis & analysis_, ScopePtr scope_, ExprAnalyzerOptions options_):
-        context(std::move(context_)),
-        analysis(analysis_),
-        options(std::move(options_)),
-        use_ansi_semantic(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE),
-        enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion),
-        allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion),
-        scopes({scope_})
+    ExprAnalyzerVisitor(ContextPtr context_, Analysis & analysis_, ScopePtr scope_, ExprAnalyzerOptions options_)
+        : context(std::move(context_))
+        , analysis(analysis_)
+        , options(std::move(options_))
+        , use_ansi_semantic(context->getSettingsRef().dialect_type != DialectType::CLICKHOUSE)
+        , enable_implicit_type_conversion(context->getSettingsRef().enable_implicit_type_conversion)
+        , allow_extended_conversion(context->getSettingsRef().allow_extended_type_conversion)
+        , scopes({scope_})
     {}
 
     void setInWindow(bool x) { in_window = x; }
 
 private:
-    ContextMutablePtr context;
+    ContextPtr context;
     Analysis & analysis;
     const ExprAnalyzerOptions options;
     const bool use_ansi_semantic;
@@ -151,11 +151,7 @@ private:
     static String getFunctionColumnName(const String & func_name, const ColumnsWithTypeAndName & arguments);
 };
 
-DataTypePtr ExprAnalyzer::analyze(ASTPtr expression,
-                                  ScopePtr scope,
-                                  ContextMutablePtr context,
-                                  Analysis & analysis,
-                                  ExprAnalyzerOptions options)
+DataTypePtr ExprAnalyzer::analyze(ASTPtr expression, ScopePtr scope, ContextPtr context, Analysis & analysis, ExprAnalyzerOptions options)
 {
     ExprAnalyzerVisitor expr_visitor {context, analysis, scope, options};
     return expr_visitor.process(expression).type;

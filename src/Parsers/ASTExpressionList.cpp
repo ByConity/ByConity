@@ -112,4 +112,16 @@ ASTPtr ASTExpressionList::deserialize(ReadBuffer & buf)
     return expression;
 }
 
+void ASTExpressionList::appendColumnName(WriteBuffer & ostr) const
+{
+    writeChar('(', ostr);
+    for (auto it = children.begin(); it != children.end(); ++it)
+    {
+        if (it != children.begin())
+            writeCString(", ", ostr);
+
+        (*it)->appendColumnName(ostr);
+    }
+    writeChar(')', ostr);
+}
 }

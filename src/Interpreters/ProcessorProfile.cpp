@@ -1,3 +1,5 @@
+#include <set>
+#include <string>
 #include <Interpreters/ProcessorProfile.h>
 
 namespace DB
@@ -64,14 +66,15 @@ GroupedProcessorProfilePtr GroupedProcessorProfile::getGroupedProfiles(Processor
     {
         auto & group_parents = root->parents;
         auto & root_profile = profile_map[id];
-        if (!group_parents.contains(root_profile->processor_name))
+        auto parent_processor_name = root_profile->processor_name + (root_profile->step_id > 0 ? std::to_string(root_profile->step_id) : "");
+        if (!group_parents.contains(parent_processor_name))
         {
             auto parent = std::make_shared<GroupedProcessorProfile>(groups.size(), root_profile->processor_name);
-            group_parents.emplace(root_profile->processor_name, parent);
+            group_parents.emplace(parent_processor_name, parent);
             groups.emplace_back(parent);
         }
-        group_parents[root_profile->processor_name]->add(id, root_profile);
-        profile_to_group.emplace(id, group_parents[root_profile->processor_name]);
+        group_parents[parent_processor_name]->add(id, root_profile);
+        profile_to_group.emplace(id, group_parents[parent_processor_name]);
     }
 
     for (size_t i = 1; i < groups.size(); i++)
@@ -90,20 +93,20 @@ GroupedProcessorProfilePtr GroupedProcessorProfile::getGroupedProfiles(Processor
                 const auto & parent_processor = profile_map[parent_processor_id];
                 if (!parent_processor)
                     continue;
-
-                if (!group_parents.contains(parent_processor->processor_name))
+                auto parent_processor_name = parent_processor->processor_name + (parent_processor->step_id > 0 ? std::to_string(parent_processor->step_id) : "");
+                if (!group_parents.contains(parent_processor_name))
                 {
                     if (profile_to_group.count(parent_processor_id))
-                        group_parents.emplace(parent_processor->processor_name, profile_to_group[parent_processor_id]);
+                        group_parents.emplace(parent_processor_name, profile_to_group[parent_processor_id]);
                     else
                     {
                         auto child = std::make_shared<GroupedProcessorProfile>(groups.size(), parent_processor->processor_name);
-                        group_parents.emplace(parent_processor->processor_name, child);
+                        group_parents.emplace(parent_processor_name, child);
                         groups.emplace_back(child);
                     }
                 }
-                group_parents[parent_processor->processor_name]->add(parent_processor_id, parent_processor);
-                profile_to_group.emplace(parent_processor_id, group_parents[parent_processor->processor_name]);
+                group_parents[parent_processor_name]->add(parent_processor_id, parent_processor);
+                profile_to_group.emplace(parent_processor_id, group_parents[parent_processor_name]);
             }
         }
     }
@@ -119,6 +122,7 @@ void GroupedProcessorProfile::add(ProcessorId processor_id, const ProcessorProfi
     if (profile->step_id != -1)
         step_id = profile->step_id;
     processor_ids.emplace(processor_id);
+    parallel_size += 1;
     grouped_elapsed_us = std::max(grouped_elapsed_us, profile->elapsed_us);
     grouped_input_wait_elapsed_us = std::max(grouped_input_wait_elapsed_us, profile->input_wait_elapsed_us);
     grouped_output_wait_elapsed_us = std::max(grouped_output_wait_elapsed_us, profile->output_wait_elapsed_us);
@@ -126,6 +130,92 @@ void GroupedProcessorProfile::add(ProcessorId processor_id, const ProcessorProfi
     grouped_input_bytes +=  profile->input_bytes;
     grouped_output_rows +=  profile->output_rows;
     grouped_output_bytes +=  profile->output_bytes;
+}
+
+GroupedProcessorProfilePtr GroupedProcessorProfile::fillChildren(GroupedProcessorProfilePtr & input_processor, std::set<ProcessorId> & visited)
+{
+    if (input_processor->parents.empty())
+        return input_processor;
+    visited.emplace(input_processor->id);
+    GroupedProcessorProfilePtr output_root;
+    for (auto & item : input_processor->parents)
+    {
+        if (input_processor->processor_name != "input_root")
+            item.second->children.emplace_back(input_processor);
+        if (visited.contains(item.second->id))
+            continue;
+        auto new_root = fillChildren(item.second, visited);
+        if (new_root)
+            output_root = new_root;
+    }
+    return output_root;
+}
+
+SegmentAndWorkerToGroupedProfile GroupedProcessorProfile::aggregateProfileBetweenWorkers(SegmentAndWorkerToGroupedProfile & worker_grouped_profiles)
+{
+    SegmentAndWorkerToGroupedProfile res;
+    for (auto [segment, woker_profile_map] : worker_grouped_profiles)
+    {
+        String workers_ip_list_str = "[";
+        GroupedProcessorProfilePtr aggregate_profile = nullptr;
+        for (auto & [worker_ip, profile] : woker_profile_map)
+        {
+            if (!aggregate_profile)
+            {
+                workers_ip_list_str = workers_ip_list_str + worker_ip;
+                aggregate_profile = profile;
+                continue;
+            }
+            workers_ip_list_str = workers_ip_list_str + "," + worker_ip;
+            aggregate_profile->addProfileRecursively(profile);
+        }
+        workers_ip_list_str = workers_ip_list_str + "]";
+        res[segment][workers_ip_list_str] = aggregate_profile;
+    }
+    return res;
+}
+
+void GroupedProcessorProfile::addProfileRecursively(GroupedProcessorProfilePtr & profile)
+{
+    if (!profile)
+        return;
+
+    parallel_size += profile->parallel_size;
+    grouped_elapsed_us = std::max(grouped_elapsed_us, profile->grouped_elapsed_us);
+    grouped_input_wait_elapsed_us = std::max(grouped_input_wait_elapsed_us, profile->grouped_input_wait_elapsed_us);
+    grouped_output_wait_elapsed_us = std::max(grouped_output_wait_elapsed_us, profile->grouped_output_wait_elapsed_us);
+    grouped_input_rows +=  profile->grouped_input_rows;
+    grouped_input_bytes +=  profile->grouped_input_bytes;
+    grouped_output_rows +=  profile->grouped_output_rows;
+    grouped_output_bytes +=  profile->grouped_output_bytes;
+
+    for (size_t i = 0; i < children.size(); i++)
+    {
+        if (i < profile->children.size() && profile->children[i])
+            children[i]->addProfileRecursively(profile->children[i]);
+    }
+}
+
+Poco::JSON::Object::Ptr GroupedProcessorProfile::getJsonProfiles()
+{
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object(true);
+    json->set("ProcessorName", processor_name);
+    json->set("StepId", step_id);
+    json->set("ParallelSize", parallel_size);
+    json->set("ElapsedUs", grouped_elapsed_us);
+    json->set("InputWaitElapsedUs", grouped_input_wait_elapsed_us);
+    json->set("OutputWaitElapsedUs", grouped_output_wait_elapsed_us);
+    json->set("InputRows", grouped_input_rows);
+    json->set("InputBytes", grouped_input_bytes);
+    json->set("OutputRows", grouped_output_rows);
+    json->set("OutputBytes", grouped_output_bytes);
+    Poco::JSON::Array inputs;
+    for (auto & child : children)
+        inputs.add(child->getJsonProfiles());
+
+    if (!children.empty())
+        json->set("Inputs", inputs);
+    return json;
 }
 
 StepsOperatorProfiles StepOperatorProfile::aggregateOperatorProfileToStepLevel(std::unordered_map<size_t, std::vector<GroupedProcessorProfilePtr>> & segment_profile_tree)

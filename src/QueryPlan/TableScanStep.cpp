@@ -17,6 +17,7 @@
 #include <Processors/ResizeProcessor.h>
 #include <QueryPlan/TableScanStep.h>
 
+#include <Analyzers/TypeAnalyzer.h>
 #include <Formats/FormatSettings.h>
 #include <Interpreters/ActionsVisitor.h>
 #include <Interpreters/InterpreterSelectQuery.h>
@@ -352,6 +353,8 @@ private:
         ASTPtr flatten_ast;
     };
 
+    bool match_projection = false;
+
     StoragePtr storage;
     StorageMetadataPtr storage_metadata;
     const MergeTreeMetaBase & merge_tree_data;
@@ -381,6 +384,9 @@ TableScanExecutor::TableScanExecutor(TableScanStep & step, ContextPtr context_)
     , log(&Poco::Logger::get("TableScanExecutor"))
 {
     if (storage_metadata->projections.empty())
+        return;
+
+    if (step.hasInlineExpressions())
         return;
 
     has_aggregate = step.getPushdownAggregation() != nullptr;
@@ -443,11 +449,13 @@ TableScanExecutor::TableScanExecutor(TableScanStep & step, ContextPtr context_)
         if (const StorageReplicatedMergeTree * replicated = dynamic_cast<const StorageReplicatedMergeTree *>(storage.get()))
             max_added_blocks = std::make_shared<PartitionIdToMaxBlock>(replicated->getMaxAddedBlocks());
     }
+
+    match_projection = true;
 }
 
 ExecutePlan TableScanExecutor::buildExecutePlan()
 {
-    if (storage_metadata->projections.empty())
+    if (!match_projection)
         return {};
 
     PartGroups part_groups;
@@ -865,6 +873,7 @@ TableScanStep::TableScanStep(
     size_t max_block_size_,
     String alias_,
     PlanHints hints_,
+    Assignments inline_expressions_,
     std::shared_ptr<AggregatingStep> aggregation_,
     std::shared_ptr<ProjectionStep> projection_,
     std::shared_ptr<FilterStep> filter_)
@@ -873,13 +882,20 @@ TableScanStep::TableScanStep(
     , column_alias(column_alias_)
     , query_info(query_info_)
     , max_block_size(max_block_size_)
+    , inline_expressions(std::move(inline_expressions_))
     , pushdown_aggregation(std::move(aggregation_))
     , pushdown_projection(std::move(projection_))
     , pushdown_filter(std::move(filter_))
+    , log(&Poco::Logger::get("TableScanStep"))
     , alias(alias_)
 {
-    log = &Poco::Logger::get("TableScanStep");
+    formatOutputStream(context);
+}
 
+void TableScanStep::formatOutputStream(ContextPtr context)
+{
+    column_names.clear();
+    table_output_stream.header.clear();
     for (auto & item : column_alias)
     {
         column_names.emplace_back(item.first);
@@ -909,19 +925,32 @@ TableScanStep::TableScanStep(
         }
     }
 
-    formatOutputStream();
-}
+    TypeAnalyzer type_analyzer = TypeAnalyzer::create(context, header.getNamesToTypes());
+    for (const auto & inline_expr : inline_expressions)
+    {
+        select_expression_list->children.emplace_back(inline_expr.second->clone());
+        table_output_stream.header.insert(ColumnWithTypeAndName{type_analyzer.getType(inline_expr.second), inline_expr.first});
+    }
 
-void TableScanStep::formatOutputStream()
-{
-    if (pushdown_aggregation != nullptr)
-        *output_stream = pushdown_aggregation->getOutputStream();
-    else if (pushdown_projection != nullptr)
-        *output_stream = pushdown_projection->getOutputStream();
-    else if (pushdown_filter != nullptr)
+    *output_stream = table_output_stream;
+
+    if (pushdown_filter != nullptr)
+    {
+        pushdown_filter->setInputStreams({*output_stream});
         *output_stream = pushdown_filter->getOutputStream();
-    else
-        *output_stream = table_output_stream;
+    }
+
+    if (pushdown_projection != nullptr)
+    {
+        pushdown_projection->setInputStreams({*output_stream});
+        *output_stream = pushdown_projection->getOutputStream();
+    }
+
+    if (pushdown_aggregation != nullptr)
+    {
+        pushdown_aggregation->setInputStreams({*output_stream});
+        *output_stream = pushdown_aggregation->getOutputStream();
+    }
 }
 
 void TableScanStep::optimizeWhereIntoPrewhre(ContextPtr context)
@@ -1189,7 +1218,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         if (auto * source = dynamic_cast<ISourceStep *>(step.get()))
             source->initializePipeline(pipeline, build_context);
 
-        aliasColumns(pipeline, build_context);
+        aliasColumns(pipeline, build_context, "normal read");
         setQuotaAndLimits(pipeline, options, build_context);
 
         if (auto * filter_step = getPushdownFilterCast())
@@ -1289,7 +1318,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             sub_pipeline = read_plan->buildQueryPipeline(QueryPlanOptimizationSettings::fromContext(context),
                                                          BuildQueryPipelineSettings::fromContext(context));
 
-            aliasColumns(*sub_pipeline, build_context);
+            aliasColumns(*sub_pipeline, build_context, "execute plan read");
 
             if (pushdown_filter)
                 getPushdownFilterCast()->transformPipeline(*sub_pipeline, build_context);
@@ -1453,6 +1482,8 @@ void TableScanStep::toProto(Protos::TableScanStep & proto, bool) const
     query_info.toProto(*proto.mutable_query_info());
     proto.set_max_block_size(max_block_size);
 
+    serializeAssignmentsToProto(inline_expressions, *proto.mutable_inline_expressions());
+
     if (pushdown_aggregation)
     {
         pushdown_aggregation->toProto(*proto.mutable_pushdown_aggregation());
@@ -1481,6 +1512,8 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
     query_info.fillFromProto(proto.query_info());
     auto max_block_size = proto.max_block_size();
 
+    auto inline_expressions = deserializeAssignmentsFromProto(proto.inline_expressions());
+
     std::shared_ptr<AggregatingStep> pushdown_aggregation;
     std::shared_ptr<ProjectionStep> pushdown_projection;
     std::shared_ptr<FilterStep> pushdown_filter;
@@ -1499,6 +1532,7 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
         max_block_size,
         String{} /*alias*/,
         PlanHints{},
+        inline_expressions,
         pushdown_aggregation,
         pushdown_projection,
         pushdown_filter);
@@ -1522,6 +1556,7 @@ std::shared_ptr<IQueryPlanStep> TableScanStep::copy(ContextPtr /*context*/) cons
         max_block_size,
         alias,
         hints,
+        inline_expressions,
         pushdown_aggregation,
         pushdown_projection,
         pushdown_filter,
@@ -1566,7 +1601,8 @@ void TableScanStep::allocate(ContextPtr context)
     if (cnch_merge_tree)
     {
         storage_id.database_name = cnch_merge_tree->getDatabaseName();
-        auto prepare_res = cnch_merge_tree->prepareReadContext(column_names, cnch_merge_tree->getInMemoryMetadataPtr(),query_info, context);
+        auto prepare_res
+            = cnch_merge_tree->prepareReadContext(getRequiredColumns(), cnch_merge_tree->getInMemoryMetadataPtr(), query_info, context);
         storage_id.table_name = prepare_res.local_table_name;
         storage_id.uuid = cnch_merge_tree->getStorageUUID();
     }
@@ -1688,18 +1724,41 @@ ASTPtr TableScanStep::rewriteRuntimeFilter(
     return res;
 }
 
-void TableScanStep::aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context)
+void TableScanStep::aliasColumns(QueryPipeline & pipeline, const BuildQueryPipelineSettings & build_context, const String & pipeline_name)
 {
-    // simple fix, remove this.
-    if (!blocksHaveEqualStructure(pipeline.getHeader(), table_output_stream.header))
+    const auto & cur_header = pipeline.getHeader();
+    const auto & header_for_alias = table_output_stream.header;
+    LOG_DEBUG(
+        log,
+        fmt::format(
+            "aliasColumns({}), current header: {}, desired header: {}",
+            pipeline_name,
+            cur_header.dumpStructure(),
+            header_for_alias.dumpStructure()));
+
+    if (!blocksHaveEqualStructure(cur_header, header_for_alias))
     {
+        NamesWithAliases aliases;
         ASTPtr select = std::make_shared<ASTExpressionList>();
+
         for (const auto & column : column_alias)
         {
             select->children.emplace_back(std::make_shared<ASTIdentifier>(column.first));
+            aliases.emplace_back(column);
         }
-        auto actions
-            = createExpressionActions(build_context.context, pipeline.getHeader().getNamesAndTypesList(), column_alias, select, true);
+
+        for (const auto & inline_expr : inline_expressions)
+        {
+            auto expr_col_name = inline_expr.second->getColumnName();
+            if (cur_header.has(expr_col_name))
+                select->children.emplace_back(std::make_shared<ASTIdentifier>(expr_col_name));
+            else
+                select->children.emplace_back(inline_expr.second->clone());
+            aliases.emplace_back(expr_col_name, inline_expr.first);
+        }
+
+        auto actions = createExpressionActions(build_context.context, cur_header.getNamesAndTypesList(), aliases, select, true);
+        LOG_DEBUG(log, fmt::format("aliasColumns({}), actions: {}", pipeline_name, actions->dumpDAG()));
         auto expression = std::make_shared<ExpressionActions>(actions, build_context.getActionsSettings());
         pipeline.addSimpleTransform(
             [&](const Block & header) -> ProcessorPtr { return std::make_shared<ExpressionTransform>(header, expression); });
@@ -1803,5 +1862,27 @@ bool TableScanStep::hasPrewhere() const
 ASTPtr TableScanStep::getPrewhere() const
 {
     return query_info.getSelectQuery()->prewhere();
+}
+
+void TableScanStep::setInlineExpressions(Assignments new_inline_expressions, ContextPtr context)
+{
+    inline_expressions = std::move(new_inline_expressions);
+    formatOutputStream(context);
+}
+
+NameToNameMap TableScanStep::getColumnToAliasMap() const
+{
+    NameToNameMap ret;
+    for (const auto & column_to_alias : column_alias)
+        ret.emplace(column_to_alias.first, column_to_alias.second);
+    return ret;
+}
+
+NameToNameMap TableScanStep::getAliasToColumnMap() const
+{
+    NameToNameMap ret;
+    for (const auto & column_to_alias : column_alias)
+        ret.emplace(column_to_alias.second, column_to_alias.first);
+    return ret;
 }
 }

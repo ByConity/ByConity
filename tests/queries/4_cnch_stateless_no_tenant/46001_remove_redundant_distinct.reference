@@ -135,22 +135,22 @@ Gather Exchange Est. ? rows
                │     Expressions: expr#plus(id3, 10):=id3 + 10
                └─ Inner Join Est. ? rows
                   │     Condition: 
-                  │     Filter: id3 > `expr#divide(sum(avg_id), 20)`
+                  │     Filter: id3 > `expr#divide(sum(avg_id), 20)_1`
                   ├─ Inner Join Est. ? rows
                   │  │     Condition: 
-                  │  │     Filter: id3 > `expr#divide(sum(avg_id), 25)`
+                  │  │     Filter: id3 > `expr#divide(sum(avg_id), 25)_1`
                   │  ├─ TableScan test_distinct.unique_3 Est. ? rows
                   │  │        Outputs: [id3]
                   │  └─ Broadcast Exchange Est. ? rows
                   │     └─ Projection Est. ? rows
-                  │        │     Expressions: expr#divide(sum(avg_id), 25):=cast(`expr#sum(avg_id)` / 25, \'Nullable(Float64)\')
+                  │        │     Expressions: expr#divide(sum(avg_id), 25)_1:=cast(`expr#sum(avg_id)` / 25, \'Nullable(Float64)\')
                   │        └─ Aggregating Est. ? rows
                   │           │     Group by: {}
                   │           │     Aggregates: expr#sum(avg_id):=AggNull(sum)(id_1)
                   │           └─ CTERef[0] Est. ? rows
                   └─ Broadcast Exchange Est. ? rows
                      └─ Projection Est. ? rows
-                        │     Expressions: expr#divide(sum(avg_id), 20):=cast(`expr#sum(avg_id)_1` / 20, \'Nullable(Float64)\')
+                        │     Expressions: expr#divide(sum(avg_id), 20)_1:=cast(`expr#sum(avg_id)_1` / 20, \'Nullable(Float64)\')
                         └─ Aggregating Est. ? rows
                            │     Group by: {}
                            │     Aggregates: expr#sum(avg_id)_1:=AggNull(sum)(id_2)

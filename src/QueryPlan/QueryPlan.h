@@ -175,7 +175,15 @@ public:
     static UInt32 getPlanNodeCount(PlanNodePtr node);
 
     void toProto(Protos::QueryPlan & proto) const;
-    void fromProto(Protos::QueryPlan & proto);
+    void fromProto(const Protos::QueryPlan & proto);
+
+    // handle when plan is tree-like, i.e., plan_node + cte_info
+    void toProtoTreeLike(Protos::QueryPlan & proto) const;
+    void fromProtoTreeLike(const Protos::QueryPlan & proto);
+
+    // handle when plan is flatten, i.e., root + nodes + cte_nodes
+    void toProtoFlatten(Protos::QueryPlan & proto) const;
+    void fromProtoFlatten(const Protos::QueryPlan & proto);
 
     void freshPlan();
 
@@ -186,12 +194,15 @@ public:
     QueryPlanPtr copy(ContextMutablePtr context);
 private:
     Poco::Logger * log = &Poco::Logger::get("QueryPlan");
+    // Flatten, in segment only
     Nodes nodes;
-    CTENodes cte_nodes;
-
+    CTENodes cte_nodes; // won't serialize
     Node * root = nullptr;
+
+    // Tree-Like, for optimizer
     PlanNodePtr plan_node = nullptr;
     CTEInfo cte_info;
+
     PlanNodeIdAllocatorPtr id_allocator;
 
     void checkInitialized() const;

@@ -6,6 +6,7 @@
 #include <Processors/IProcessor.h>
 
 #include <chrono>
+#include <string>
 
 namespace DB
 {
@@ -47,6 +48,7 @@ public:
 struct GroupedProcessorProfile;
 using GroupedProcessorProfilePtr = std::shared_ptr<GroupedProcessorProfile>;
 using GroupedProcessorProfiles = std::vector<GroupedProcessorProfilePtr>;
+using SegmentAndWorkerToGroupedProfile = std::unordered_map<size_t, std::unordered_map<String, GroupedProcessorProfilePtr>>;
 
 struct GroupedProcessorProfile
 {
@@ -62,16 +64,23 @@ struct GroupedProcessorProfile
     UInt64 grouped_input_bytes{};
     UInt64 grouped_output_rows{};
     UInt64 grouped_output_bytes{};
+    size_t parallel_size = 0;
 
     std::unordered_set<ProcessorId> processor_ids;
     bool visited = false;
     std::unordered_map<String, GroupedProcessorProfilePtr> parents;
+    std::vector<GroupedProcessorProfilePtr> children;
 public:
     GroupedProcessorProfile() = default;
-    explicit GroupedProcessorProfile(ProcessorId id_, String name_) : id(id_), processor_name(name_) { }
+    explicit GroupedProcessorProfile(ProcessorId id_, String name_) : id(id_), processor_name(name_) {}
     static GroupedProcessorProfilePtr getGroupedProfiles(ProcessorProfiles & profiles);
-
+    static GroupedProcessorProfilePtr fillChildren(GroupedProcessorProfilePtr & input_processor, std::set<ProcessorId> & visited);
     void add(ProcessorId processor_id, const ProcessorProfilePtr & profile);
+
+    static SegmentAndWorkerToGroupedProfile aggregateProfileBetweenWorkers(SegmentAndWorkerToGroupedProfile & worker_grouped_profiles);
+    void addProfileRecursively(GroupedProcessorProfilePtr & profile);
+
+    Poco::JSON::Object::Ptr getJsonProfiles();
 };
 
 
