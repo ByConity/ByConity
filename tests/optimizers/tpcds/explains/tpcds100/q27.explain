@@ -1,0 +1,58 @@
+Projection Est. 100 rows
+│     Expressions: [i_item_id, s_state], agg1:=`expr#avg(ss_quantity)`, agg2:=`expr#avg(ss_list_price)`, agg3:=`expr#avg(ss_coupon_amt)`, agg4:=`expr#avg(ss_sales_price)`, g_state:=`expr#grouping(s_state)`
+└─ Limit Est. 100 rows
+   │     Limit: 100
+   └─ Sorting Est. 100 rows
+      │     Order by: {i_item_id asc, s_state asc}
+      │     Limit: 100
+      └─ Gather Exchange Est. 102098 rows
+         └─ Sorting Est. 100 rows
+            │     Order by: {i_item_id asc, s_state asc}
+            │     Limit: 100
+            └─ MergingAggregated Est. 102098 rows
+               └─ Repartition Exchange Est. 102098 rows
+                  │     Partition by: {i_item_id, s_state, __grouping_set}
+                  └─ Aggregating Est. 102098 rows
+                     │     Group by: {i_item_id, s_state}
+                     │     Aggregates: expr#avg(ss_quantity):=AggNull(avg)(ss_quantity), expr#avg(ss_list_price):=AggNull(avg)(ss_list_price), expr#avg(ss_coupon_amt):=AggNull(avg)(ss_coupon_amt), expr#avg(ss_sales_price):=AggNull(avg)(ss_sales_price)
+                     └─ Inner Join Est. 183964 rows
+                        │     Condition: i_item_sk == ss_item_sk
+                        ├─ Repartition Exchange Est. 204000 rows
+                        │  │     Partition by: {i_item_sk}
+                        │  └─ TableScan tpcds100.item Est. 204000 rows
+                        │           Outputs: [i_item_sk, i_item_id]
+                        └─ Repartition Exchange Est. 183910 rows
+                           │     Partition by: {ss_item_sk}
+                           └─ Inner Join Est. 183910 rows
+                              │     Condition: ss_store_sk == s_store_sk
+                              │     Runtime Filters Builder: {s_store_sk}
+                              ├─ Inner Join Est. 821467 rows
+                              │  │     Condition: ss_sold_date_sk == d_date_sk
+                              │  │     Runtime Filters Builder: {d_date_sk}
+                              │  ├─ Inner Join Est. 4114107 rows
+                              │  │  │     Condition: ss_cdemo_sk == cd_demo_sk
+                              │  │  │     Runtime Filters Builder: {cd_demo_sk}
+                              │  │  ├─ Filter Est. 287997024 rows
+                              │  │  │  │     Condition: Runtime Filters: {ss_cdemo_sk, ss_sold_date_sk, ss_store_sk}
+                              │  │  │  └─ TableScan tpcds100.store_sales Est. 287997024 rows
+                              │  │  │           Where: Runtime Filters: {ss_cdemo_sk, ss_sold_date_sk, ss_store_sk}
+                              │  │  │           Outputs: [ss_sold_date_sk, ss_item_sk, ss_cdemo_sk, ss_store_sk, ss_quantity, ss_list_price, ss_sales_price, ss_coupon_amt]
+                              │  │  └─ Broadcast Exchange Est. 27440 rows
+                              │  │     └─ Filter Est. 27440 rows
+                              │  │        │     Condition: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
+                              │  │        └─ TableScan tpcds100.customer_demographics Est. 1920800 rows
+                              │  │                 Where: (cd_education_status = 'College') AND (cd_gender = 'M') AND (cd_marital_status = 'S')
+                              │  │                 Outputs: [cd_demo_sk, cd_gender, cd_marital_status, cd_education_status]
+                              │  └─ Broadcast Exchange Est. 365 rows
+                              │     └─ Filter Est. 365 rows
+                              │        │     Condition: d_year = 2002
+                              │        └─ TableScan tpcds100.date_dim Est. 73049 rows
+                              │                 Where: d_year = 2002
+                              │                 Outputs: [d_date_sk, d_year]
+                              └─ Broadcast Exchange Est. 45 rows
+                                 └─ Filter Est. 45 rows
+                                    │     Condition: s_state = 'TN'
+                                    └─ TableScan tpcds100.store Est. 402 rows
+                                             Where: s_state = 'TN'
+                                             Outputs: [s_store_sk, s_state]
+note: Runtime Filter is applied for 3 times.

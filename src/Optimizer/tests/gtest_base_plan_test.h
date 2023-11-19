@@ -69,6 +69,9 @@ public:
         return settings;
     }
 
+    ContextMutablePtr getSessionContext() { return session_context; }
+    std::string getDatabaseName() { return database_name; }
+
 
 protected:
     String database_name;
