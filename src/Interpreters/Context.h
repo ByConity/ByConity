@@ -587,7 +587,7 @@ private:
     bool read_from_client_finished = false;
 
     bool is_explain_query = false;
-
+    
     Context();
     Context(const Context &);
     Context & operator=(const Context &);
