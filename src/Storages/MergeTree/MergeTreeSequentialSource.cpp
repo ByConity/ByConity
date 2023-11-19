@@ -151,14 +151,11 @@ try
     if (!isCancelled() && current_row < data_part->rows_count)
     {
         size_t rows_to_read = data_part->index_granularity.getMarkRows(current_mark);
-        continue_reading = (current_mark != 0);
 
         const auto & sample = reader->getColumns();
         Columns columns(sample.size());
-        size_t rows_read = reader->readRows(current_mark, continue_reading, rows_to_read, columns); 
-        /// if the column is null, rows_read is zero, we should still fill it with default value
-        if (rows_read == 0)
-            rows_read = std::min(data_part->rows_count - current_row, rows_to_read);
+        size_t rows_read = reader->readRows(current_mark, continue_reading, rows_to_read, columns);
+        continue_reading = true;
 
         if (rows_read)
         {
