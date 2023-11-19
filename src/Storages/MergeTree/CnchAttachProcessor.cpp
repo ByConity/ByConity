@@ -1286,14 +1286,16 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                             String bitmap_rel_path = std::filesystem::path(tbl_rel_path) / part_delete_file_relative_path;
                             String bitmap_target_path = std::filesystem::path(bitmap_rel_path) / (part->name + ".meta");
                             attach_ctx.writeMetaFilesNameRecord(part->volume->getDefaultDisk(), bitmap_target_path);
+                            String to_path
+                                = std::filesystem::path(tbl_rel_path) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*attach_meta);
+                            String from_path = to_path;
                             if (attach_meta->cardinality() > DeleteBitmapMeta::kInlineBitmapMaxCardinality)
                             {
                                 // Write delete bitmap rename record
-                                String from_path = std::filesystem::path(bitmap_rel_path) / (part->name + ".bitmap");
-                                String to_path
-                                    = std::filesystem::path(tbl_rel_path) / DeleteBitmapMeta::deleteBitmapFileRelativePath(*attach_meta);
-                                attach_ctx.writeRenameRecord(part->volume->getDefaultDisk(), from_path, to_path);
+                                from_path = std::filesystem::path(bitmap_rel_path) / (part->name + ".bitmap");
                             }
+                            /// It's necessary to write rename record no matter if it has bitmap file, because we need to write undo buffer to KV.
+                            attach_ctx.writeRenameRecord(part->volume->getDefaultDisk(), from_path, to_path);
                         }
                     }
                 }

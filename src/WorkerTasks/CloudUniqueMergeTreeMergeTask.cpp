@@ -14,6 +14,7 @@
  */
 
 #include <Catalog/Catalog.h>
+#include <CloudServices/CnchDedupHelper.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchDataWriter.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
@@ -22,6 +23,7 @@
 #include <Transaction/CnchLock.h>
 #include <WorkerTasks/CloudUniqueMergeTreeMergeTask.h>
 #include <WorkerTasks/MergeTreeDataMerger.h>
+#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
@@ -232,21 +234,69 @@ void CloudUniqueMergeTreeMergeTask::executeImpl()
     auto dumped_data = cnch_writer.dumpCnchParts(parts_to_dump, bitmaps_to_dump, /*staged parts*/ {});
 
     /// enter commit phase
+    auto settings = storage.getSettings();
+    bool force_normal_dedup = false;
+    bool lock_success = false;
+    int num_try = std::max(static_cast<int>(1), static_cast<int>(settings->unique_merge_acquire_lock_retry_time.value));
     Stopwatch lock_watch;
-    LockInfoPtr partition_lock = std::make_shared<LockInfo>(txn_id);
-    partition_lock->setMode(LockMode::X);
-    partition_lock->setTimeout(storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds());
-    partition_lock->setUUID(storage.getStorageUUID());
-    /// need to lock table instead of partition for table-level uniqueness
-    if (storage.getSettings()->partition_level_unique_keys)
+    CnchLockHolderPtr cnch_lock;
+    do
     {
-        partition_lock->setPartition(partition_id);
-    }
-    auto ctx = getContext();
-    auto cnch_lock = txn->createLockHolder({std::move(partition_lock)});
+        if (num_try <= 0)
+            break;
+        CnchDedupHelper::DedupScope scope = CnchDedupHelper::getDedupScope(storage, params.source_data_parts, force_normal_dedup);
 
-    /// TODO: better msg
-    if (!cnch_lock->tryLock())
+        std::vector<LockInfoPtr> locks_to_acquire = CnchDedupHelper::getLocksToAcquire(
+            scope, txn->getTransactionID(), storage, settings->unique_acquire_write_lock_timeout.value.totalMilliseconds());
+
+        if (locks_to_acquire.size() != 1)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Merge task {} acquires more than one lock.", params.task_id);
+        String lock_debug_info = locks_to_acquire[0]->toDebugString();
+        cnch_lock = txn->createLockHolder(std::move(locks_to_acquire));
+        while (num_try--)
+        {
+            LOG_TRACE(log, "Try lock: {}", lock_debug_info);
+            if (cnch_lock->tryLock())
+            {
+                lock_success = true;
+                LOG_DEBUG(log, "Merge task {} acquired lock in {} ms", params.task_id, lock_watch.elapsedMilliseconds());
+                break;
+            }
+        }
+        if (!lock_success)
+            break;
+
+        /// In some case, visible parts or staged parts doesn't have same bucket definition or not a bucket part, we need to convert bucket lock to normal lock.
+        /// Otherwise, it may lead to duplicated data.
+        if (scope.isBucketLock() && !settings->enable_bucket_level_unique_keys)
+        {
+            /// Get cnch table.
+            TxnTimestamp ts = context->getTimestamp(); /// must get a new ts after locks are acquired
+            auto table = catalog->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(params.storage->getStorageUUID()), ts);
+            if (!table)
+                throw Exception("Table " + params.storage->getStorageID().getNameForLogs() + " has been dropped", ErrorCodes::ABORTED);
+            StorageCnchMergeTreePtr cnch_table = dynamic_pointer_cast<StorageCnchMergeTree>(table);
+            if (!cnch_table)
+                throw Exception(
+                    "Table " + params.storage->getStorageID().getNameForLogs() + " is not cnch merge tree", ErrorCodes::LOGICAL_ERROR);
+
+            MergeTreeDataPartsCNCHVector visible_parts = CnchDedupHelper::getVisiblePartsToDedup(scope, *cnch_table, ts);
+            MergeTreeDataPartsCNCHVector staged_parts = CnchDedupHelper::getStagedPartsToDedup(scope, *cnch_table, ts);
+            if (!CnchDedupHelper::checkBucketParts(*cnch_table, visible_parts, staged_parts))
+            {
+                force_normal_dedup = true;
+                cnch_lock->unlock();
+                LOG_TRACE(log, "Check bucket parts failed, switch to normal lock to acquire lock for merge task.");
+                continue;
+            }
+            else
+                break;
+        }
+        else
+            break;
+    } while (true);
+
+    if (!lock_success)
         throw Exception("Failed to acquire lock for merge task " + params.task_id, ErrorCodes::ABORTED);
 
     lock_watch.restart();
