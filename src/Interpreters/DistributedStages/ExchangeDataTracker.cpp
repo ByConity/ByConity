@@ -103,16 +103,14 @@ ExchangeStatusTracker::getExchangeDataAddrs(PlanSegment * plan_segment, UInt64 s
     std::vector<AddressInfo> addrs;
     addrs.reserve(end_parallel_index - start_parallel_index);
     std::unordered_map<UInt64, std::unordered_map<AddressInfo, size_t, AddressInfo::Hash>> acc;
-    for (const auto & output : plan_segment->getPlanSegmentOutputs())
-    {
-        if (output->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION)
-            return {};
-    }
     for (const auto & input : plan_segment->getPlanSegmentInputs())
     {
-        // TODO(WangTao): considering LOCAL_NO_NEED_REPARTITION while scheduling
-        if (input->getExchangeMode() == ExchangeMode::UNKNOWN || input->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION)
+        // We skip the local table scan and those broadcast inputs whose size is relative small.
+        if (input->getExchangeMode() == ExchangeMode::UNKNOWN || input->getExchangeMode() == ExchangeMode::BROADCAST)
             continue;
+        chassert(
+            input->getExchangeMode() != ExchangeMode::LOCAL_NO_NEED_REPARTITION
+            && input->getExchangeMode() != ExchangeMode::LOCAL_MAY_NEED_REPARTITION);
         std::lock_guard<std::mutex> g(exchange_status_mutex);
         const auto & statuses = getExchangeStatusesRef(plan_segment->getQueryId(), input->getExchangeId());
         for (const auto & status : statuses.getStatusesRef())
