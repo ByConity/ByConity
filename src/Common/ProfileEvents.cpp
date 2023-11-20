@@ -285,7 +285,6 @@
     M(NotCreatedLogEntryForMutation, "Log entry to mutate parts in ReplicatedMergeTree is not created due to concurrent log update by another replica.") \
     \
     M(S3ReadMicroseconds, "Time of GET and HEAD requests to S3 storage.") \
-    M(S3ReadBytes, "Read bytes (incoming) in GET and HEAD requests to S3 storage.") \
     M(S3ReadRequestsCount, "Number of GET and HEAD requests to S3 storage.") \
     M(S3ReadRequestsErrors, "Number of non-throttling errors in GET and HEAD requests to S3 storage.") \
     M(S3ReadRequestsThrottling, "Number of 429 and 503 errors in GET and HEAD requests to S3 storage.") \
@@ -783,11 +782,12 @@
     M(WriteBufferFromS3WriteMicro, "s3 write op time") \
     M(WriteBufferFromS3WriteBytes, "s3 write op size") \
     \
-    M(ReadBufferFromS3Read, "remote s3 read op count") \
-    M(ReadBufferFromS3ReadFailed, "remote s3 read failed count") \
-    M(ReadBufferFromS3ReadBytes, "remote s3 read op size") \
-    M(ReadBufferFromS3ReadMicroseconds, "remote s3 read op time") \
-    M(ReadBufferFromS3InitMicroseconds, "Time spent initializing connection to S3.") \
+    M(ReadBufferFromS3ReadCount, "The count of ReadBufferFromS3 read from s3 stream") \
+    M(ReadBufferFromS3FailedCount, "ReadBuffer from s3 failed count") \
+    M(ReadBufferFromS3ReadBytes, "Bytes size ReadBufferFromS3 read from s3 stream") \
+    M(ReadBufferFromS3ReadMicro, "The time spent ReadBufferFromS3 read from s3 stream") \
+    M(S3StreamInitMicroseconds, "Time spent initializing connection to S3.") \
+    M(ReadBufferFromS3SeekTimes, "The seek times of read buffer from s3.") \
     \
     M(IOSchedulerOpenFileMicro, "Time used in open file when using io scheduler") \
     M(IOSchedulerScheduleMicro, "Time used in schedule io request") \
@@ -810,11 +810,17 @@
     M(S3TrivialReaderReadCount, "S3TrivialReader read count") \
     M(S3TrivialReaderReadMicroseconds, "S3TrivialReader read micro seconds") \
     M(S3TrivialReaderReadBytes, "S3TrivialReader read bytes") \
-    M(S3ReadAheadReaderReadCount, "S3ReadAheadReader read count") \
-    M(S3ReadAheadReaderRemoteReadCount, "S3ReadAheadReader remote read count") \
-    M(S3ReadAheadReaderReadMicro, "S3ReadAheadReader read micro seconds") \
-    M(S3ReadAheadReaderExpectReadBytes, "S3ReadAheadReader expected read bytes") \
-    M(S3ReadAheadReaderReadBytes, "S3ReadAheadReader readed bytes") \
+    M(S3ReadAheadReaderReadCount, "The count of S3ReadAheadReader read from s3 stream") \
+    M(S3ReadAheadReaderReadBytes, "The bytes number of S3ReadAheadReader read from s3 stream") \
+    M(S3ReadAheadReaderReadMicro, "The time spent on S3ReadAheadReader read from s3 stream") \
+    M(S3ReadAheadReaderIgnoreCount, "The count of S3ReadAheadReader ignore from s3 stream") \
+    M(S3ReadAheadReaderIgnoreBytes, "The bytes number of S3ReadAheadReader ignore from s3 stream") \
+    M(S3ReadAheadReaderIgnoreMicro, "The time spent on S3ReadAheadReader ignore from s3 stream") \
+    M(S3ReadAheadReaderGetRequestCount, "The count of S3ReadAheadReader invokes s3 get request.") \
+    M(S3ReadAheadReaderExpectReadBytes, "The expected read bytes from S3ReadAheadReader's get request.") \
+    M(S3ReadAheadReaderGetRequestMicro, "The time spent on S3ReadAheadReader sends s3 get request.") \
+    M(S3ReadAheadReaderSeekTimes, "The seek times of S3ReadAheadReader.") \
+    M(S3ReadAheadReaderExpandTimes, "The stream range expand times of S3ReadAheadReader.") \
     M(S3ResetSessions, "Number of HTTP sessions that were reset in S3 read.") \
     M(S3PreservedSessions, "Number of HTTP sessions that were preserved in S3 read.") \
     M(ConnectionPoolIsFullMicroseconds, "Total time spent waiting for a slot in connection pool.") \
@@ -822,6 +828,9 @@
     M(PocoHTTPS3GetCount, "") \
     M(PocoHTTPS3GetTime, "") \
     M(PocoHTTPS3GetSessionTime, "") \
+    M(CRTHTTPS3GetCount, "") \
+    M(CRTHTTPS3GetTime, "") \
+    M(CRTHTTPS3WriteBytes, "") \
     \
     M(BigHashEvictionCount, "") \
     M(BigHashEvictionExpiredCount, "") \

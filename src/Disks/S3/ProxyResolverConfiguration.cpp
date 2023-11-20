@@ -21,7 +21,7 @@ ProxyResolverConfiguration::ProxyResolverConfiguration(const Poco::URI & endpoin
 {
 }
 
-Aws::Client::ClientConfigurationPerRequest ProxyResolverConfiguration::getConfiguration(const Aws::Http::HttpRequest &)
+ClientConfigurationPerRequest ProxyResolverConfiguration::getConfiguration(const Aws::Http::HttpRequest &)
 {
     LOG_DEBUG(&Poco::Logger::get("AWSClient"), "Obtain proxy using resolver: {}", endpoint.toString());
 
@@ -34,7 +34,7 @@ Aws::Client::ClientConfigurationPerRequest ProxyResolverConfiguration::getConfig
     );
     auto session = makeHTTPSession(endpoint, timeouts);
 
-    Aws::Client::ClientConfigurationPerRequest cfg;
+    ClientConfigurationPerRequest cfg;
     try
     {
         /// It should be just empty GET request.
@@ -53,9 +53,9 @@ Aws::Client::ClientConfigurationPerRequest ProxyResolverConfiguration::getConfig
 
         LOG_DEBUG(&Poco::Logger::get("AWSClient"), "Use proxy: {}://{}:{}", proxy_scheme, proxy_host, proxy_port);
 
-        cfg.proxyScheme = Aws::Http::SchemeMapper::FromString(proxy_scheme.c_str());
-        cfg.proxyHost = proxy_host;
-        cfg.proxyPort = proxy_port;
+        cfg.proxy_scheme = Aws::Http::SchemeMapper::FromString(proxy_scheme.c_str());
+        cfg.proxy_host = proxy_host;
+        cfg.proxy_port = proxy_port;
 
         return cfg;
     }

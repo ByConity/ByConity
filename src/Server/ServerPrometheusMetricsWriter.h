@@ -534,7 +534,7 @@ namespace ProfileEvents
     // extern const Event WriteBufferFromS3WriteFailed;
     // extern const Event WriteBufferFromS3WriteMicro;
     // extern const Event WriteBufferFromS3WriteBytes;
-    // extern const Event ReadBufferFromS3Read;
+    // extern const Event ReadFromS3BufferCount;
     // extern const Event ReadBufferFromS3ReadFailed;
     // extern const Event ReadBufferFromS3ReadBytes;
     // extern const Event ReadBufferFromS3ReadMicroseconds;
