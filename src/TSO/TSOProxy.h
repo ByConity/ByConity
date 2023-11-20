@@ -27,9 +27,10 @@ namespace TSO
 class TSOProxy
 {
 public:
-    explicit TSOProxy(std::shared_ptr<Catalog::IMetaStore> metastore_ptr_, std::string key_)
+    explicit TSOProxy(std::shared_ptr<Catalog::IMetaStore> metastore_ptr_, std::string key_, Poco::Logger * logger_)
         : metastore_ptr(std::move(metastore_ptr_))
         , key(std::move(key_))
+        , log{logger_}
     {}
 
     ~TSOProxy() = default;
@@ -41,6 +42,7 @@ public:
 private:
     std::shared_ptr<Catalog::IMetaStore> metastore_ptr;
     std::string key;
+    Poco::Logger * log;
 };
 
 }

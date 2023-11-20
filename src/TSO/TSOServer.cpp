@@ -336,9 +336,8 @@ int TSOServer::main(const std::vector<std::string> &)
 
     auto metastore_conf = MetastoreConfig{config(), TSO_SERVICE_CONFIGURE};
     auto tso_metastore = Catalog::getMetastorePtr(metastore_conf);
-    proxy_ptr = std::make_shared<TSOProxy>(std::move(tso_metastore), metastore_conf.key_name);
+    proxy_ptr = std::make_shared<TSOProxy>(std::move(tso_metastore), metastore_conf.key_name, log);
     tso_service = std::make_shared<TSOImpl>(*this);
-
 
     bool listen_try = config().getBool("listen_try", false);
     auto listen_hosts = getMultipleValuesFromConfig(config(), "", "listen_host");
