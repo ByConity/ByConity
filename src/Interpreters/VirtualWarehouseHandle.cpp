@@ -367,6 +367,8 @@ WorkerGroupHandle VirtualWarehouseHandleImpl::pickLocally([[maybe_unused]] const
 
 CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorkerByHash(const String & key)
 {
+    tryUpdateWorkerGroups(TryUpdate);
+
     /// TODO: Should we expand the worker list first?
     UInt64 val = std::hash<String>{}(key);
     std::lock_guard lock(state_mutex);
@@ -384,6 +386,8 @@ CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorker()
 
 std::vector<CnchWorkerClientPtr> VirtualWarehouseHandleImpl::getAllWorkers()
 {
+    tryUpdateWorkerGroups(TryUpdate);
+
     std::vector<CnchWorkerClientPtr> res;
     std::lock_guard lock(state_mutex);
     for (const auto & [_, wg_handle] : worker_groups)
