@@ -4,7 +4,7 @@ set -e
 
 #TestSuite Result Analysis
 success_count=$(cut -f1 /Artifacts/check_status.tsv | awk '/success/{++count} END {print count}')
-total_count=$(wc -l < temp/check_status.tsv | awk '{print $1}')
+total_count=$(wc -l < /Artifacts/check_status.tsv | awk '{print $1}')
 
 if [[ success_count -eq total_count ]]
 then
