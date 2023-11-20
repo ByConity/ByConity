@@ -16,6 +16,8 @@
 #include <TSO/TSOProxy.h>
 //#include <TSO/TSOMetaByteKVImpl.h>
 #include <TSO/TSOMetaFDBImpl.h>
+#include <common/logger_useful.h>
+#include <Common/Stopwatch.h>
 
 namespace DB
 {
@@ -27,16 +29,26 @@ namespace ErrorCodes
 
 namespace TSO
 {
+constexpr int32_t SLOW_THRESHOLD_MS = 1500;
 
 void TSOProxy::setTimestamp(UInt64 timestamp)
 {
+    Stopwatch watch;
     metastore_ptr->put(key, std::to_string(timestamp));
+    UInt64 milliseconds = watch.elapsedMilliseconds();
+    if (milliseconds >= SLOW_THRESHOLD_MS)
+        LOG_DEBUG(log, "setTimestamp to Catalog took {} ms", milliseconds);
 }
 
 UInt64 TSOProxy::getTimestamp()
 {
     String timestamp_str;
+    Stopwatch watch;
     metastore_ptr->get(key, timestamp_str);
+    UInt64 milliseconds = watch.elapsedMilliseconds();
+    if (milliseconds >= SLOW_THRESHOLD_MS)
+        LOG_DEBUG(log, "getTimestamp to Catalog took {} ms", milliseconds);
+
     if (timestamp_str.empty())
     {
         return 0;
