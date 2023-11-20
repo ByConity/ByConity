@@ -117,7 +117,7 @@ static void OnSendPlanSegmentCallback(
 }
 
 void executePlanSegmentRemotely(
-    const PlanSegment & plan_segment, ContextPtr context, bool async, AsyncContextPtr & async_context, const WorkerId & worker_id)
+    const PlanSegment & plan_segment, ContextPtr context, AsyncContextPtr & async_context, const WorkerId & worker_id)
 {
     auto execute_address = extractExchangeStatusHostPort(plan_segment.getCurrentAddress());
     auto rpc_channel = RpcChannelPool::getInstance().getClient(execute_address, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
@@ -173,26 +173,15 @@ void executePlanSegmentRemotely(
     plan_segment.serialize(write_buf);
     butil::IOBuf & iobuf = const_cast<butil::IOBuf &>(write_buf.getFinishedBuf());
 
-    if (async)
-    {
-        /// async call
-        brpc::Controller * cntl = new brpc::Controller();
-        Protos::ExecutePlanSegmentResponse * response = new Protos::ExecutePlanSegmentResponse();
-        auto call_id = cntl->call_id();
-        cntl->request_attachment().append(iobuf.movable());
-        google::protobuf::Closure * done = brpc::NewCallback(
-            &OnSendPlanSegmentCallback, response, cntl, rpc_channel, context->getWorkerStatusManager(), async_context, worker_id);
-        async_context->addCallId(call_id);
-        manager_stub.executeQuery(cntl, &request, response, done);
-    }
-    else
-    {
-        brpc::Controller cntl;
-        Protos::ExecutePlanSegmentResponse response;
-        cntl.request_attachment().append(iobuf.movable());
-        manager_stub.executeQuery(&cntl, &request, &response, nullptr);
-        rpc_channel->assertController(cntl);
-    }
+    /// async call
+    brpc::Controller * cntl = new brpc::Controller();
+    Protos::ExecutePlanSegmentResponse * response = new Protos::ExecutePlanSegmentResponse();
+    auto call_id = cntl->call_id();
+    cntl->request_attachment().append(iobuf.movable());
+    google::protobuf::Closure * done = brpc::NewCallback(
+        &OnSendPlanSegmentCallback, response, cntl, rpc_channel, context->getWorkerStatusManager(), async_context, worker_id);
+    async_context->addCallId(call_id);
+    manager_stub.executeQuery(cntl, &request, response, done);
 }
 
 void executePlanSegmentLocally(const PlanSegment & plan_segment, ContextPtr initial_query_context)
