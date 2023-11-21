@@ -36,6 +36,10 @@ static void checkDedupScope(const DedupScope & scope, const MergeTreeMetaBase & 
 std::vector<LockInfoPtr>
 getLocksToAcquire(const DedupScope & scope, TxnTimestamp txn_id, const MergeTreeMetaBase & storage, UInt64 timeout_ms)
 {
+    /// Attention: must make sure that storage has right UUID, it's important.
+    if (storage.getStorageUUID() == UUIDHelpers::Nil)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unique table {} doesn't have UUID, it's a bug!", storage.getStorageID().getNameForLogs());
+
     checkDedupScope(scope, storage);
 
     std::vector<LockInfoPtr> res;

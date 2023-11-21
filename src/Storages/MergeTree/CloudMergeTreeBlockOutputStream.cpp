@@ -348,10 +348,10 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
     Stopwatch lock_watch;
     do
     {
-        CnchDedupHelper::DedupScope scope = CnchDedupHelper::getDedupScope(storage, preload_parts, force_normal_dedup);
+        CnchDedupHelper::DedupScope scope = CnchDedupHelper::getDedupScope(*cnch_table, preload_parts, force_normal_dedup);
 
         std::vector<LockInfoPtr> locks_to_acquire = CnchDedupHelper::getLocksToAcquire(
-            scope, txn->getTransactionID(), storage, storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds());
+            scope, txn->getTransactionID(), *cnch_table, storage.getSettings()->unique_acquire_write_lock_timeout.value.totalMilliseconds());
         lock_watch.restart();
         cnch_lock = txn->createLockHolder(std::move(locks_to_acquire));
         if (!cnch_lock->tryLock())
@@ -364,8 +364,8 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
 
         /// In some case, visible parts or staged parts doesn't have same bucket definition or not a bucket part, we need to convert bucket lock to normal lock.
         /// Otherwise, it may lead to duplicated data.
-        if (scope.isBucketLock() && !storage.getSettings()->enable_bucket_level_unique_keys
-            && !CnchDedupHelper::checkBucketParts(storage, visible_parts, staged_parts))
+        if (scope.isBucketLock() && !cnch_table->getSettings()->enable_bucket_level_unique_keys
+            && !CnchDedupHelper::checkBucketParts(*cnch_table, visible_parts, staged_parts))
         {
             force_normal_dedup = true;
             cnch_lock->unlock();
@@ -376,7 +376,7 @@ void CloudMergeTreeBlockOutputStream::writeSuffixForUpsert()
             break;
     } while (true);
 
-    MergeTreeDataDeduper deduper(storage, context);
+    MergeTreeDataDeduper deduper(*cnch_table, context);
     LocalDeleteBitmaps bitmaps_to_dump = deduper.dedupParts(
         txn->getTransactionID(),
         CnchPartsHelper::toIMergeTreeDataPartsVector(visible_parts),
