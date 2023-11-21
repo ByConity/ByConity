@@ -1,41 +1,98 @@
 #include "getNumberOfPhysicalCPUCores.h"
 
-#if USE_CPUID
-#    include <libcpuid/libcpuid.h>
+#if defined(OS_LINUX)
+#include <cmath>
+#include <fstream>
 #endif
 
 #include <thread>
+#include <sched.h>
+#include <unistd.h>
+
+#if defined(OS_LINUX)
+static int32_t readFrom(const char * filename, int default_value)
+{
+    std::ifstream infile(filename);
+    if (!infile.is_open())
+        return default_value;
+    int idata;
+    if (infile >> idata)
+        return idata;
+    else
+        return default_value;
+}
+
+// Try to look at cgroups limit if it is available
+unsigned getCGroupLimitedCPUCores(unsigned default_cpu_count)
+{
+    unsigned quota_count = default_cpu_count;
+    // Return the number of milliseconds per period process is guaranteed to run.
+    // -1 for no quota
+    int cgroup_quota = readFrom("/sys/fs/cgroup/cpu/cpu.cfs_quota_us", -1);
+    int cgroup_period = readFrom("/sys/fs/cgroup/cpu/cpu.cfs_period_us", -1);
+    if (cgroup_quota > -1 && cgroup_period > 0)
+    {
+        quota_count = static_cast<uint32_t>(ceil(static_cast<float>(cgroup_quota) / static_cast<float>(cgroup_period)));
+    }
+
+    return std::min(default_cpu_count, quota_count);
+}
+
+static unsigned getAffinityCnt(unsigned default_cpu_count)
+{
+    cpu_set_t cpu_mask = {0};
+
+    // Get the CPU affinity mask for the calling thread
+    if (sched_getaffinity(getpid(), sizeof(cpu_mask), &cpu_mask) == -1)
+        return default_cpu_count;
+
+    // Count the number of set bits in the mask to get the number of CPU cores
+    unsigned num_cores = 0;
+    for (int i = 0; i < __CPU_SETSIZE; i++)
+    {
+        if (!__CPU_ISSET_S(i, __CPU_SETSIZE, &cpu_mask))
+            continue;
+
+        num_cores++;
+    }
+
+    if (num_cores < default_cpu_count)
+        return num_cores;
+
+    return default_cpu_count;
+}
+#endif
+
+static unsigned getNumberOfPhysicalCPUCoresImpl()
+{
+    unsigned cpu_count = std::thread::hardware_concurrency();
+
+#if defined(OS_LINUX)
+    cpu_count = getAffinityCnt(cpu_count);
+#endif
+
+    /// Most of x86_64 CPUs have 2-way Hyper-Threading
+    /// Aarch64 and RISC-V don't have SMT so far.
+    /// POWER has SMT and it can be multiple way (like 8-way), but we don't know how ClickHouse really behaves, so use all of them.
+#if defined(__x86_64__)
+    /// Let's limit ourself to the number of physical cores.
+    /// But if the number of logical cores is small - maybe it is a small machine
+    /// or very limited cloud instance and it is reasonable to use all the cores.
+    if (cpu_count >= 32)
+        cpu_count /= 2;
+#endif
+
+#if defined(OS_LINUX)
+    cpu_count = getCGroupLimitedCPUCores(cpu_count);
+#endif
+
+    return cpu_count;
+}
 
 
 unsigned getNumberOfPhysicalCPUCores()
 {
-    static const unsigned number = []
-    {
-#       if USE_CPUID
-            cpu_raw_data_t raw_data;
-            cpu_id_t data;
-
-            /// On Xen VMs, libcpuid returns wrong info (zero number of cores). Fallback to alternative method.
-            /// Also, libcpuid does not support some CPUs like AMD Hygon C86 7151.
-            if (0 != cpuid_get_raw_data(&raw_data) || 0 != cpu_identify(&raw_data, &data) || data.num_logical_cpus == 0)
-                return std::thread::hardware_concurrency();
-
-            unsigned res = data.num_cores * data.total_logical_cpus / data.num_logical_cpus;
-
-            /// Also, libcpuid gives strange result on Google Compute Engine VMs.
-            /// Example:
-            ///  num_cores = 12,            /// number of physical cores on current CPU socket
-            ///  total_logical_cpus = 1,    /// total number of logical cores on all sockets
-            ///  num_logical_cpus = 24.     /// number of logical cores on current CPU socket
-            /// It means two-way hyper-threading (24 / 12), but contradictory, 'total_logical_cpus' == 1.
-
-            if (res != 0)
-                return res;
-#       endif
-
-        /// As a fallback (also for non-x86 architectures) assume there are no hyper-threading on the system.
-        /// (Actually, only Aarch64 is supported).
-        return std::thread::hardware_concurrency();
-    }();
-    return number;
+    /// Calculate once.
+    static auto res = getNumberOfPhysicalCPUCoresImpl();
+    return res;
 }

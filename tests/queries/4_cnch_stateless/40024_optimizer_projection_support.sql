@@ -4,6 +4,8 @@ SET force_optimize_projection=1;
 
 CREATE DATABASE IF NOT EXISTS test_proj_support_db;
 USE test_proj_support_db;
+SET max_threads=8;
+SET exchange_source_pipeline_threads=1;
 
 SELECT '-- 1. use projection data only';
 DROP TABLE IF EXISTS test_proj_support;
