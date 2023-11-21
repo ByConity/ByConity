@@ -13,10 +13,10 @@ BucketStorage::Allocation BucketStorage::allocate(UInt32 size)
     if (!canAllocate(size))
         return {};
 
-    auto * slot = new (data_ + end_offset_) Slot(size);
-    end_offset_ += slotSize(size);
-    num_allocations_++;
-    return {MutableBufferView{slot->size, slot->data}, num_allocations_ - 1};
+    auto * slot = new (data + end_offset) Slot(size);
+    end_offset += slotSize(size);
+    num_allocations++;
+    return {MutableBufferView{slot->size, slot->data}, num_allocations - 1};
 }
 
 void BucketStorage::remove(Allocation alloc)
@@ -41,30 +41,30 @@ void BucketStorage::remove(const std::vector<Allocation> & allocs)
     UInt32 dst_offset = 0;
     for (const auto & alloc : allocs)
     {
-        UInt32 alloc_offset = alloc.view().data() - data_;
+        UInt32 alloc_offset = alloc.view().data() - data;
         UInt32 removed_offset = alloc_offset - kAllocationOverhead;
         // We have valid data from [srcOffset, removedOffset)
         if (src_offset != removed_offset)
         {
             UInt32 len = removed_offset - src_offset;
             if (dst_offset != src_offset)
-                std::memmove(data_ + dst_offset, data_ + src_offset, len);
+                std::memmove(data + dst_offset, data + src_offset, len);
             dst_offset += len;
         }
         // update the offset which (could) contain next valid data
         src_offset = alloc_offset + alloc.view().size();
-        num_allocations_--;
+        num_allocations--;
     }
 
     // copy the rest of data after the last removed alloc if any
-    if (src_offset != end_offset_)
+    if (src_offset != end_offset)
     {
-        UInt32 len = end_offset_ - src_offset;
-        std::memmove(data_ + dst_offset, data_ + src_offset, len);
+        UInt32 len = end_offset - src_offset;
+        std::memmove(data + dst_offset, data + src_offset, len);
         dst_offset += len;
     }
     // update end offset to point the right next byte of the data copied
-    end_offset_ = dst_offset;
+    end_offset = dst_offset;
 }
 
 void BucketStorage::removeUntil(Allocation alloc)
@@ -82,20 +82,20 @@ void BucketStorage::removeUntil(Allocation alloc)
     if (alloc.done())
         return;
 
-    UInt32 offset = alloc.view().data() + alloc.view().size() - data_;
-    if (offset > end_offset_)
+    UInt32 offset = alloc.view().data() + alloc.view().size() - data;
+    if (offset > end_offset)
         return;
 
-    std::memmove(data_, data_ + offset, end_offset_ - offset);
-    end_offset_ -= offset;
-    num_allocations_ -= alloc.position() + 1;
+    std::memmove(data, data + offset, end_offset - offset);
+    end_offset -= offset;
+    num_allocations -= alloc.position() + 1;
 }
 
 BucketStorage::Allocation BucketStorage::getFirst() const
 {
-    if (end_offset_ == 0)
+    if (end_offset == 0)
         return {};
-    auto * slot = reinterpret_cast<Slot *>(data_);
+    auto * slot = reinterpret_cast<Slot *>(data);
     return {MutableBufferView{slot->size, slot->data}, 0};
 }
 
@@ -105,7 +105,7 @@ BucketStorage::Allocation BucketStorage::getNext(BucketStorage::Allocation alloc
         return {};
 
     auto * next = reinterpret_cast<Slot *>(alloc.view().data() + alloc.view().size());
-    if (reinterpret_cast<UInt8 *>(next) - data_ >= end_offset_)
+    if (reinterpret_cast<UInt8 *>(next) - data >= end_offset)
         return {};
     return {MutableBufferView{next->size, next->data}, alloc.position() + 1};
 }

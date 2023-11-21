@@ -586,9 +586,9 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
     FieldDescriptions fields;
     ASTIdentifier * origin_table_ast = &db_and_table;
 
-    auto add_field = [&](const String & name, const DataTypePtr & type, bool substitude_for_asterisk)
-    {
-        fields.emplace_back(name, type, column_prefix, storage, origin_table_ast, name, fields.size(), substitude_for_asterisk);
+    auto add_field = [&](const String & name, const DataTypePtr & type, bool substitude_for_asterisk) {
+        fields.emplace_back(
+            name, type, column_prefix, storage, storage_metadata, origin_table_ast, name, fields.size(), substitude_for_asterisk);
     };
 
     // get columns
@@ -687,8 +687,16 @@ ScopePtr QueryAnalyzerVisitor::analyzeTableFunction(ASTFunction & table_function
 
     for (const auto & column : columns_description.getAllPhysical())
     {
-        field_descriptions.emplace_back(column.name, column.type, column_prefix, storage, &table_function,
-                                        column.name, field_descriptions.size(), true);
+        field_descriptions.emplace_back(
+            column.name,
+            column.type,
+            column_prefix,
+            storage,
+            storage_metadata,
+            &table_function,
+            column.name,
+            field_descriptions.size(),
+            true);
     }
 
     const auto * table_function_scope = createScope(field_descriptions);

@@ -41,25 +41,11 @@ namespace
             std::uniform_int_distribution<UInt32> dist(INT_MIN, INT_MAX);
             auto id = dist(thread_local_rng);
             sprintf(key_buf, "key_%08X", id);
-            HashedKey hk(key_buf);
-            if ((hk.keyHash() % num_buckets) == bid)
-            {
+            HashedKey key(key_buf);
+            if ((key.keyHash() % num_buckets) == bid)
                 break;
-            }
         }
         return key_buf;
-    }
-
-    template <typename T>
-    std::pair<double, double> getMeanDeviation(std::vector<T> v)
-    {
-        double sum = std::accumulate(v.begin(), v.end(), 0.0);
-        double mean = sum / v.size();
-
-        double accum = 0.0;
-        std::for_each(v.begin(), v.end(), [&](const T & d) { accum += (static_cast<double>(d) - mean) * (static_cast<double>(d) - mean); });
-
-        return std::make_pair(mean, sqrt(accum / v.size()));
     }
 }
 

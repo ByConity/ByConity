@@ -22,6 +22,7 @@
 #include <Optimizer/Property/Property.h>
 #include <Optimizer/Property/SymbolEquivalencesDeriver.h>
 #include <Optimizer/Rule/Transformation/JoinEnumOnGraph.h>
+#include <Optimizer/DataDependency/DataDependency.h>
 
 #include <memory>
 #include <string>
@@ -134,6 +135,11 @@ public:
         return constants;
     }
 
+    const std::optional<DataDependency> & getDataDependency() const
+    {
+        return data_dependency;
+    }
+
     const SymbolEquivalencesPtr & getEquivalences() const { return equivalences; }
 
     const std::unordered_set<CTEId> & getCTESet() const { return cte_set; }
@@ -178,6 +184,7 @@ private:
 
     SymbolEquivalencesPtr equivalences;
     std::optional<Constants> constants;
+    std::optional<DataDependency> data_dependency;
 
     bool simple_children = true;
     bool is_table_scan = false;

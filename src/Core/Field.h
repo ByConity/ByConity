@@ -663,6 +663,71 @@ public:
         __builtin_unreachable();
     }
 
+    /// Do some conversion or deserialization work base on type
+    template <typename F>
+    static Field dispatch(F && f, Field::Types::Which type)
+    {
+        switch (type)
+        {
+            case Types::Null:
+                return f.template operator()<Null>();
+            case Types::NegativeInfinity:
+                return f.template operator()<NegativeInfinity>();
+            case Types::PositiveInfinity:
+                return f.template operator()<PositiveInfinity>();
+// gcc 8.2.1
+#if !defined(__clang__)
+#    pragma GCC diagnostic push
+#    pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+#endif
+            case Types::UInt64:
+                return f.template operator()<UInt64>();
+            case Types::UInt128:
+                return f.template operator()<UInt128>();
+            case Types::UInt256:
+                return f.template operator()<UInt256>();
+            case Types::Int64:
+                return f.template operator()<Int64>();
+            case Types::Int128:
+                return f.template operator()<Int128>();
+            case Types::Int256:
+                return f.template operator()<Int256>();
+            case Types::UUID:
+                return f.template operator()<UUID>();
+            case Types::Float64:
+                return f.template operator()<Float64>();
+            case Types::String:
+                return f.template operator()<String>();
+            case Types::SketchBinary:
+                return f.template operator()<String>();
+            case Types::Array:
+                return f.template operator()<Array>();
+            case Types::Tuple:
+                return f.template operator()<Tuple>();
+            case Types::Map:
+                return f.template operator()<Map>();
+            case Types::ByteMap:
+                return f.template operator()<ByteMap>();
+            case Types::Decimal32:
+                return f.template operator()<Decimal32>();
+            case Types::Decimal64:
+                return f.template operator()<Decimal64>();
+            case Types::Decimal128:
+                return f.template operator()<Decimal128>();
+            case Types::Decimal256:
+                return f.template operator()<Decimal256>();
+            case Types::AggregateFunctionState:
+                return f.template operator()<AggregateFunctionStateData>();
+            case Types::BitMap64:
+                return f.template operator()<BitMap64>();
+#if !defined(__clang__)
+#    pragma GCC diagnostic pop
+#endif
+        }
+
+        __builtin_unreachable();
+    }
+
     String dump() const;
     static Field restoreFromDump(const std::string_view & dump_);
 

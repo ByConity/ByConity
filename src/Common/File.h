@@ -3,14 +3,13 @@
 #include <fcntl.h>
 #include <common/StringRef.h>
 
-namespace DB::HybridCache
+namespace DB
 {
-
 class File
 {
 public:
-    File() noexcept : fd_(-1), owns_fd_(false) { }
-    explicit File(int fd, bool owns_fd = false) noexcept;
+    File() noexcept : fd(-1), owns_fd(false) { }
+    explicit File(int fd_, bool owns_fd_ = false) noexcept;
 
     explicit File(const char * name, int flags = O_RDONLY, mode_t mode = 0666);
     explicit File(const std::string & name, int flags = O_RDONLY, mode_t mode = 0666);
@@ -18,9 +17,9 @@ public:
 
     ~File();
 
-    int fd() const { return fd_; }
+    int getFd() const { return fd; }
 
-    explicit operator bool() const { return fd_ != -1; }
+    explicit operator bool() const { return fd != -1; }
 
     void close();
 
@@ -48,8 +47,7 @@ private:
     void doLock(int op) const;
     bool doTryLock(int op) const;
 
-    int fd_;
-    bool owns_fd_;
+    int fd;
+    bool owns_fd;
 };
-
 }

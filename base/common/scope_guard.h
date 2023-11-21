@@ -11,18 +11,22 @@ public:
     constexpr basic_scope_guard() = default;
     constexpr basic_scope_guard(basic_scope_guard && src) : function{src.release()} {}
 
+    void dismiss() noexcept { dismissed = true; }
+    void rehire() noexcept { dismissed = false; }
+
     constexpr basic_scope_guard & operator=(basic_scope_guard && src)
     {
         if (this != &src)
         {
             invoke();
             function = src.release();
+            dismissed = src.dismissed;
         }
         return *this;
     }
 
     template <typename G, typename = std::enable_if_t<std::is_convertible_v<G, F>, void>>
-    constexpr basic_scope_guard(basic_scope_guard<G> && src) : function{src.release()} {}
+    constexpr basic_scope_guard(basic_scope_guard<G> && src) : function{src.release()}, dismissed{src.dismissed} {}
 
     template <typename G, typename = std::enable_if_t<std::is_convertible_v<G, F>, void>>
     constexpr basic_scope_guard & operator=(basic_scope_guard<G> && src)
@@ -31,6 +35,7 @@ public:
         {
             invoke();
             function = src.release();
+            dismissed = src.dismissed;
         }
         return *this;
     }
@@ -86,6 +91,8 @@ public:
 private:
     void invoke()
     {
+        if (dismissed)
+            return;
         if constexpr (is_nullable)
         {
             if (!function)
@@ -95,6 +102,7 @@ private:
     }
 
     F function = F{};
+    bool dismissed{};
 };
 
 using scope_guard = basic_scope_guard<std::function<void(void)>>;

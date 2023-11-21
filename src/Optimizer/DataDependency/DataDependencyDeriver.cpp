@@ -5,6 +5,7 @@
 #include <Optimizer/DataDependency/DataDependencyDeriver.h>
 #include <Optimizer/DataDependency/ForeignKeysTuple.h>
 #include <Optimizer/DataDependency/FunctionalDependency.h>
+#include <Optimizer/DataDependency/InclusionDependency.h>
 #include <Optimizer/DomainTranslator.h>
 #include <Optimizer/SymbolsExtractor.h>
 #include <Optimizer/Utils.h>
@@ -55,12 +56,12 @@ DataDependency DataDependencyDeriver::deriveDataDependency(
 DataDependency
 DataDependencyDeriver::deriveStorageDataDependency(const StoragePtr & storage, ContextMutablePtr &)
 {
-    ForeignKeyOrPrimaryKeys fp_keys;
-    OrdinaryKeys ordinary_keys;
     FunctionalDependencies functional_dependencies;
+    InclusionDependency inclusion_dependency;
 
     if (dynamic_cast<const MergeTreeMetaBase *>(storage.get()) || dynamic_cast<const StorageMemory *>(storage.get()))
     {
+        // fill functioonal_dependencies
         std::vector<Names> unique_columns = storage->getInMemoryMetadataPtr()->getUniqueNotEnforced().getUniqueNames();
         Names all_columns = storage->getInMemoryMetadataPtr()->getColumns().getAll().getNames();
 
@@ -73,9 +74,25 @@ DataDependencyDeriver::deriveStorageDataDependency(const StoragePtr & storage, C
                     functional_dependencies.update(FunctionalDependency{us, {dependent_column}});
             }
         }
+
+        // fill inclusion_dependency using pk
+        for (const auto & unique_names : unique_columns)
+        {
+            if (unique_names.size() == 1)
+            {
+                inclusion_dependency.emplace(unique_names[0], std::pair<bool, String>{false, storage->getStorageID().getTableName() + '.' + unique_names[0]});
+            }
+        }
+
+        // fill inclusion_dependency using fk
+        auto fk_tuples = storage->getInMemoryMetadataPtr()->getForeignKeys().getForeignKeysTuple();
+        for (const auto & fk_tuple : fk_tuples)
+        {
+            inclusion_dependency.emplace(fk_tuple.fk_column_name, std::pair<bool, String>{true, fk_tuple.ref_table_name + '.' + fk_tuple.ref_column_name});
+        }
     }
 
-    return DataDependency{functional_dependencies};
+    return DataDependency{functional_dependencies, inclusion_dependency};
 }
 
 DataDependency DataDependencyDeriverVisitor::visitStep(const IQueryPlanStep &, DataDependencyDeriverContext & context)
@@ -127,9 +144,15 @@ DataDependency DataDependencyDeriverVisitor::visitJoinStep(const JoinStep & step
     DataDependency translated;
     if (step.getKind() == ASTTableJoin::Kind::Inner && !step.getLeftKeys().empty())
     {
-        FunctionalDependencies left_translated_fd = context.getInput()[0].getFunctionalDependencies().translate(identities);
-        FunctionalDependencies right_translated_fd = context.getInput()[1].getFunctionalDependencies().translate(identities);
-        translated.setFunctionalDependencies(left_translated_fd | right_translated_fd);
+        // functional dependency:
+        DataDependency left_translated = context.getInput()[0].translate(identities);
+        DataDependency right_translated = context.getInput()[1].translate(identities);
+        translated.setFunctionalDependencies(left_translated.getFunctionalDependenciesRef() | right_translated.getFunctionalDependenciesRef());
+
+        // inclusion dependency:
+        translated.setInclusionDependency(left_translated.getInclusionDependencyRef() | right_translated.getInclusionDependencyRef());
+        // remove all pk info if fitler has side-effect.
+        std::erase_if(translated.getInclusionDependencyRef(), [&](const auto & pair) { return !pair.second.first; });
     }
 
     return translated;
@@ -162,7 +185,14 @@ DataDependency DataDependencyDeriverVisitor::visitFilterStep(const FilterStep & 
                 }
             }
         }
+    
+        // inclusion dependency:
+        // remove all pk info if fitler has side-effect.
+        if (!PredicateUtils::isTruePredicate(step.getFilter()))
+            std::erase_if(data_dependency.getInclusionDependencyRef(), [&](const auto & pair) { return !pair.second.first; });
     }
+
+
     return data_dependency;
 }
 
@@ -170,8 +200,13 @@ DataDependency DataDependencyDeriverVisitor::visitAggregatingStep(const Aggregat
 {
     if (step.getKeys().empty() || !step.isNormal())
         return context.getInput()[0].clearFunctionalDependency();
+    
+    auto data_dependency = context.getInput()[0];
+    NameSet group_by_keys(step.getKeys().begin(), step.getKeys().end());
 
-    return context.getInput()[0];
+    std::erase_if(data_dependency.getInclusionDependencyRef(), [&](const auto & pair) { return !group_by_keys.contains(pair.first) && !pair.second.first; });
+
+    return data_dependency;
 }
 
 DataDependency DataDependencyDeriverVisitor::visitUnionStep(const UnionStep & step, DataDependencyDeriverContext & context)
@@ -194,7 +229,8 @@ DataDependency DataDependencyDeriverVisitor::visitUnionStep(const UnionStep & st
     DataDependency result = transformed_children_prop[0];
     for (size_t i = 1; i < transformed_children_prop.size(); i++)
     {
-        result.setFunctionalDependencies(result.getFunctionalDependencies() | transformed_children_prop[i].getFunctionalDependencies());
+        result.setFunctionalDependencies(result.getFunctionalDependenciesRef() | transformed_children_prop[i].getFunctionalDependenciesRef());
+        result.setInclusionDependency(result.getInclusionDependencyRef() | transformed_children_prop[i].getInclusionDependencyRef());
     }
 
     return result;
@@ -217,6 +253,9 @@ DataDependency DataDependencyDeriverVisitor::visitSortingStep(const SortingStep 
 
 DataDependency DataDependencyDeriverVisitor::visitCTERefStep(const CTERefStep & step, DataDependencyDeriverContext & context)
 {
+    if (context.getInput().empty())
+        return DataDependency{};
+
     std::unordered_map<String, String> revert_identifies;
     for (const auto & item : step.getOutputColumns())
     {

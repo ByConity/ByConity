@@ -1,4 +1,4 @@
-#include <Storages/DiskCache/File.h>
+#include <Common/File.h>
 
 #include <string>
 #include <unistd.h>
@@ -9,27 +9,27 @@
 #include <common/defines.h>
 
 
-namespace DB::ErrorCodes
+namespace DB
 {
-extern const int CANNOT_OPEN_FILE;
-extern const int CANNOT_CLOSE_FILE;
-extern const int FILE_LOCK_ERROR;
+namespace ErrorCodes
+{
+    extern const int CANNOT_OPEN_FILE;
+    extern const int CANNOT_CLOSE_FILE;
+    extern const int FILE_LOCK_ERROR;
 }
 
-namespace DB::HybridCache
-{
-File::File(int fd, bool owns_fd) noexcept : fd_(fd), owns_fd_(owns_fd)
+File::File(int fd_, bool owns_fd_) noexcept : fd(fd_), owns_fd(owns_fd_)
 {
     chassert(fd >= -1);
     chassert(fd != -1 || !owns_fd);
 }
 
-File::File(const char * name, int flags, mode_t mode) : fd_(::open(name, flags, mode)), owns_fd_(false)
+File::File(const char * name, int flags, mode_t mode) : fd(::open(name, flags, mode)), owns_fd(false)
 {
-    if (fd_ == -1)
+    if (fd == -1)
         throwFromErrno(fmt::format("open {}, {} {} failed", name, flags, mode), ErrorCodes::CANNOT_OPEN_FILE);
 
-    owns_fd_ = true;
+    owns_fd = true;
 }
 
 File::File(const std::string & name, int flags, mode_t mode) : File(name.c_str(), flags, mode)
@@ -40,7 +40,7 @@ File::File(StringRef name, int flags, mode_t mode) : File(name.toString(), flags
 {
 }
 
-File::File(File && other) noexcept : fd_(other.fd_), owns_fd_(other.owns_fd_)
+File::File(File && other) noexcept : fd(other.fd), owns_fd(other.owns_fd)
 {
     other.release();
 }
@@ -60,16 +60,16 @@ File::~File()
 
 int File::release() noexcept
 {
-    int released = fd_;
-    fd_ = -1;
-    owns_fd_ = false;
+    int released = fd;
+    fd = -1;
+    owns_fd = false;
     return released;
 }
 
 void File::swap(File & other) noexcept
 {
-    std::swap(fd_, other.fd_);
-    std::swap(owns_fd_, other.owns_fd_);
+    std::swap(fd, other.fd);
+    std::swap(owns_fd, other.owns_fd);
 }
 
 void File::close()
@@ -80,7 +80,7 @@ void File::close()
 
 bool File::closeNoThrow()
 {
-    int r = owns_fd_ ? ::close(fd_) : 0;
+    int r = owns_fd ? ::close(fd) : 0;
     release();
     return r == 0;
 }
@@ -120,14 +120,14 @@ bool File::tryLockShared()
 
 void File::doLock(int op) const
 {
-    int r = flockNoInt(fd_, op);
+    int r = flockNoInt(fd, op);
     if (r == -1)
         throwFromErrno("flock() failed (lock)", ErrorCodes::FILE_LOCK_ERROR);
 }
 
 bool File::doTryLock(int op) const
 {
-    int r = flockNoInt(fd_, op | LOCK_NB);
+    int r = flockNoInt(fd, op | LOCK_NB);
     if (r == -1 && errno == EWOULDBLOCK)
         return false;
     if (r == -1)
@@ -138,7 +138,7 @@ bool File::doTryLock(int op) const
 
 void File::unlock() const
 {
-    int r = flockNoInt(fd_, LOCK_UN);
+    int r = flockNoInt(fd, LOCK_UN);
     if (r == -1)
         throwFromErrno("flock() failed (unlock)", ErrorCodes::FILE_LOCK_ERROR);
 }

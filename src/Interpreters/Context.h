@@ -300,6 +300,9 @@ using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
 
 class VETosConnectionParams;
 
+class NvmCache;
+using NvmCachePtr = std::shared_ptr<NvmCache>;
+
 enum class ServerType
 {
     standalone,
@@ -1094,6 +1097,10 @@ public:
     // TODO: check if this knob is redundant
     void setEnableSSL(bool v);
     bool isEnableSSL() const;
+
+    void setNvmCache(const Poco::Util::AbstractConfiguration & config);
+    std::shared_ptr<NvmCache> getNvmCache() const;
+    void dropNvmCache() const;
 
     /// Create a cache of uncompressed blocks of specified size. This can be done only once.
     void setUncompressedCache(size_t max_size_in_bytes);

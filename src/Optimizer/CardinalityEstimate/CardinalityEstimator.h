@@ -20,6 +20,7 @@
 #include <Optimizer/CardinalityEstimate/PlanNodeStatistics.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/CTEVisitHelper.h>
+#include <Optimizer/DataDependency/InclusionDependency.h>
 
 namespace DB
 {
@@ -32,7 +33,8 @@ public:
         std::vector<PlanNodeStatisticsPtr> children_stats,
         ContextMutablePtr context,
         bool simple_children,
-        std::vector<bool> is_table_scan);
+        std::vector<bool> is_table_scany,
+        const InclusionDependency & inclusion_dependency);
 
     static std::optional<PlanNodeStatisticsPtr> estimate(PlanNodeBase & node,
         CTEInfo & cte_info,
@@ -52,6 +54,7 @@ struct CardinalityContext
     std::vector<bool> children_are_table_scan = {};
     bool is_table_scan = false;
     bool re_estimate = false;
+    InclusionDependency inclusion_dependency;
 };
 
 class CardinalityVisitor : public StepVisitor<PlanNodeStatisticsPtr, CardinalityContext>

@@ -1,0 +1,108 @@
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Inner Join Est. ? rows
+            │     Condition: __m__\'foo\'_5 == mapElement(m_7, \'dd\')
+            ├─ Repartition Exchange Est. ? rows
+            │  │     Partition by: {__m__\'foo\'_5}
+            │  └─ Inner Join Est. ? rows
+            │     │     Condition: __m__\'foo\'_3 == __m__\'cc\'_5
+            │     ├─ Repartition Exchange Est. ? rows
+            │     │  │     Partition by: {__m__\'foo\'_3}
+            │     │  └─ Inner Join Est. ? rows
+            │     │     │     Condition: __m__\'aa\'_1 == __m__\'bb\'_2
+            │     │     ├─ Repartition Exchange Est. ? rows
+            │     │     │  │     Partition by: {__m__\'aa\'_1}
+            │     │     │  └─ Buffer Est. ? rows
+            │     │     │     └─ CTERef[0] Est. ? rows
+            │     │     └─ Repartition Exchange Est. ? rows
+            │     │        │     Partition by: {__m__\'bb\'_2}
+            │     │        └─ Buffer Est. ? rows
+            │     │           └─ CTERef[0] Est. ? rows
+            │     └─ Repartition Exchange Est. ? rows
+            │        │     Partition by: {__m__\'cc\'_5}
+            │        └─ Union Est. ? rows
+            │           │     OutputToInputs: __m__\'cc\'_5 = [__m__\'cc\'_3,__m__\'cc\'_4]
+            │           ├─ Buffer Est. ? rows
+            │           │  └─ CTERef[0] Est. ? rows
+            │           └─ Buffer Est. ? rows
+            │              └─ CTERef[0] Est. ? rows
+            └─ Repartition Exchange Est. 1 rows
+               │     Partition by: {mapElement(m_7, \'dd\')}
+               └─ Projection Est. 1 rows
+                  │     Expressions: mapElement(m_7, \'dd\'):=m_7{\'dd\'}
+                  └─ Union Est. 1 rows
+                     │     OutputToInputs: m_7 = [m_6,expr#map(\'1\', \'a\', \'2\', \'b\')]
+                     ├─ Projection Est. ? rows
+                     │  │     Expressions: [m_6]
+                     │  └─ Filter Est. ? rows
+                     │     │     Condition: `__m__\'cc\'_6` != \'\'
+                     │     └─ Buffer Est. ? rows
+                     │        └─ CTERef[0] Est. ? rows
+                     └─ Projection Est. 1 rows
+                        │     Expressions: expr#map(\'1\', \'a\', \'2\', \'b\'):={\'1\':\'a\', \'2\':\'b\'}
+                        └─ Values Est. 1 rows
+CTEDef [0]
+   Projection Est. ? rows
+   │     Expressions: [__m__\'aa\', __m__\'bb\', __m__\'cc\', m], __m__\'foo\'_1:=`__m__\'foo\'`
+   └─ TableScan test.t40075_subcol_cte Est. ? rows
+            Outputs: [m, __m__\'cc\', __m__\'aa\', __m__\'bb\', __m__\'foo\']
+note: CTE(Common Table Expression) is applied for 5 times.
+
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#count():=AggNull(count)()
+         └─ Inner Join Est. ? rows
+            │     Condition: __m__\'foo\'_3 == mapElement(m_6, \'dd\')
+            ├─ Repartition Exchange Est. ? rows
+            │  │     Partition by: {__m__\'foo\'_3}
+            │  └─ Inner Join Est. ? rows
+            │     │     Condition: __m__\'foo\'_1 == __m__\'cc\'_2
+            │     ├─ Repartition Exchange Est. ? rows
+            │     │  │     Partition by: {__m__\'foo\'_1}
+            │     │  └─ Inner Join Est. ? rows
+            │     │     │     Condition: __m__\'aa\' == __m__\'bb\'
+            │     │     ├─ Repartition Exchange Est. ? rows
+            │     │     │  │     Partition by: {__m__\'aa\'}
+            │     │     │  └─ Projection Est. ? rows
+            │     │     │     │     Expressions: [__m__\'aa\'], __m__\'foo\'_1:=`__m__\'foo\'`
+            │     │     │     └─ TableScan test.t40075_subcol_cte Est. ? rows
+            │     │     │              Outputs: [__m__\'aa\', __m__\'foo\']
+            │     │     └─ Repartition Exchange Est. ? rows
+            │     │        │     Partition by: {__m__\'bb\'}
+            │     │        └─ Projection Est. ? rows
+            │     │           │     Expressions: [__m__\'bb\'], __m__\'foo\'_3:=`__m__\'foo\'_2`
+            │     │           └─ TableScan test.t40075_subcol_cte Est. ? rows
+            │     │                    Outputs: [__m__\'bb\'], __m__\'foo\'_2:=__m__\'foo\'
+            │     └─ Repartition Exchange Est. ? rows
+            │        │     Partition by: {__m__\'cc\'_2}
+            │        └─ Union Est. ? rows
+            │           │     OutputToInputs: __m__\'cc\'_2 = [__m__\'cc\',__m__\'cc\'_1]
+            │           ├─ TableScan test.t40075_subcol_cte Est. ? rows
+            │           │        Outputs: [__m__\'cc\']
+            │           └─ TableScan test.t40075_subcol_cte Est. ? rows
+            │                    Outputs: __m__\'cc\'_1:=__m__\'cc\'
+            └─ Repartition Exchange Est. 1 rows
+               │     Partition by: {mapElement(m_6, \'dd\')}
+               └─ Projection Est. 1 rows
+                  │     Expressions: mapElement(m_6, \'dd\'):=m_6{\'dd\'}
+                  └─ Union Est. 1 rows
+                     │     OutputToInputs: m_6 = [m_5,expr#map(\'1\', \'a\', \'2\', \'b\')]
+                     ├─ Projection Est. ? rows
+                     │  │     Expressions: [m_5]
+                     │  └─ Filter Est. ? rows
+                     │     │     Condition: `__m__\'cc\'_3` != \'\'
+                     │     └─ TableScan test.t40075_subcol_cte Est. ? rows
+                     │              Where: `__m__\'cc\'` != \'\'
+                     │              Outputs: m_5:=m, __m__\'cc\'_3:=__m__\'cc\'
+                     └─ Projection Est. 1 rows
+                        │     Expressions: expr#map(\'1\', \'a\', \'2\', \'b\'):={\'1\':\'a\', \'2\':\'b\'}
+                        └─ Values Est. 1 rows

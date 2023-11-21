@@ -23,6 +23,7 @@
 
 #include <IO/WriteHelpers.h>
 #include <Compression/LZ4_decompress_faster.h>
+#include "IO/BufferWithOwnMemory.h"
 
 #include <utility>
 
@@ -73,9 +74,13 @@ bool CachedCompressedReadBuffer::nextImpl()
 
         if (cell->compressed_size)
         {
+            // * a little bit hack here for reducing memory copy
+            // * allocate 12 more bytes to store {size_decompressed} and {size_decompressed}, padding at the end of the data
             cell->additional_bytes = codec->getAdditionalSizeAtTheEndOfBuffer();
-            cell->data.resize(size_decompressed + cell->additional_bytes);
-            decompressTo(cell->data.data(), size_decompressed, size_compressed_without_checksum);
+            auto buffer = HybridCache::Buffer{size_decompressed + cell->additional_bytes + sizeof(cell->compressed_size) + sizeof(cell->additional_bytes)};
+            cell->data = std::move(buffer);
+            cell->data.shrink(size_decompressed + cell->additional_bytes);
+            decompressTo(reinterpret_cast<char *>(cell->data.data()), size_decompressed, size_compressed_without_checksum);
         }
 
         return cell;
@@ -84,7 +89,7 @@ bool CachedCompressedReadBuffer::nextImpl()
     if (owned_cell->data.size() == 0)
         return false;
 
-    working_buffer = Buffer(owned_cell->data.data(), owned_cell->data.data() + owned_cell->data.size() - owned_cell->additional_bytes);
+    working_buffer = Buffer(reinterpret_cast<char *>(owned_cell->data.data()), reinterpret_cast<char *>(owned_cell->data.data()) + owned_cell->data.size() - owned_cell->additional_bytes);
 
     file_pos += owned_cell->compressed_size;
 

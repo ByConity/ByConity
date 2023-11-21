@@ -103,6 +103,7 @@ struct URI
 {
     Poco::URI uri;
     // Custom endpoint if URI scheme is not S3.
+    String region;
     String endpoint;
     String bucket;
     String key;
@@ -110,14 +111,15 @@ struct URI
 
     bool is_virtual_hosted_style;
 
-    explicit URI(const Poco::URI & uri_);
-    explicit URI(const std::string & uri_) : URI(Poco::URI(uri_)) {}
+    explicit URI(const Poco::URI & uri_, bool parse_region_ = false);
+    explicit URI(const std::string & uri_, bool parse_region_ = false) : URI(Poco::URI(uri_), parse_region_) {}
 
     String toString() const
     {
         return fmt::format(
-            "storage_name = {}, url = {}/{}/{}, is_virtual_hosted_style = {}",
+            "`storage_name = {}, region = {}, url = {}/{}/{}, is_virtual_hosted_style = {}`",
             storage_name,
+            region,
             endpoint,
             bucket,
             key,

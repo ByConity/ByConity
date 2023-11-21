@@ -118,7 +118,7 @@ TEST_P(DeviceParamTest, RAID0IO)
     for (const auto & file : files)
     {
         auto f = File(file.c_str(), O_RDWR | O_CREAT);
-        auto ret = ::fallocate(f.fd(), 0, 0, size);
+        auto ret = ::fallocate(f.getFd(), 0, 0, size);
         EXPECT_EQ(0, ret);
         fvec.push_back(std::move(f));
     }
@@ -197,7 +197,7 @@ TEST_P(DeviceParamTest, RAID0IOAlignment)
     for (const auto & file : files)
     {
         auto f = File(file.c_str(), O_RDWR | O_CREAT);
-        auto ret = ::fallocate(f.fd(), 0, 0, size);
+        auto ret = ::fallocate(f.getFd(), 0, 0, size);
         EXPECT_EQ(0, ret);
         fvec.push_back(std::move(f));
     }

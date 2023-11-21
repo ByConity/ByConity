@@ -1,3 +1,4 @@
+#include "common/types.h"
 #include <Common/config.h>
 
 #if USE_AWS_S3
@@ -36,7 +37,8 @@
 namespace DB
 {
 
-Strings ListKeysWithRegexpMatching(const std::shared_ptr<const Aws::S3::S3Client> client, const S3::URI & globbed_s3_uri)
+Strings ListKeysWithRegexpMatching(
+    const std::shared_ptr<const Aws::S3::S3Client> client, const S3::URI & globbed_s3_uri, const UInt64 max_list_nums)
 {
     Strings keys;
 
@@ -51,29 +53,45 @@ Strings ListKeysWithRegexpMatching(const std::shared_ptr<const Aws::S3::S3Client
     }
 
     Aws::S3::Model::ListObjectsV2Request request;
+    Aws::S3::Model::ListObjectsV2Outcome outcome;
 
+    bool is_finished = false;
     request.SetBucket(globbed_s3_uri.bucket);
     request.SetPrefix(key_prefix);
+    request.SetMaxKeys(max_list_nums);
+
     auto matcher = std::make_unique<re2::RE2>(makeRegexpPatternFromGlobs(globbed_s3_uri.key));
-
-    auto outcome = client->ListObjectsV2(request);
-    if (!outcome.IsSuccess())
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            fmt::format("list {}/{}/{} prefix objects failed, error = {}", globbed_s3_uri.endpoint, globbed_s3_uri.bucket, key_prefix, outcome.GetError().GetMessage()));
-
-    const auto & result_batch = outcome.GetResult().GetContents();
-
-    for (const auto & row : result_batch)
+    UInt64 total_keys = 0;
+    while (!is_finished)
     {
-        const String & key = row.GetKey();
-        if (re2::RE2::FullMatch(key, *matcher) && key.back() != '/')
+        outcome = client->ListObjectsV2(request);
+        if (!outcome.IsSuccess())
+            throw Exception(
+                fmt::format("List {} object with prefix {} failed, error = {}",
+                globbed_s3_uri.toString(),
+                key_prefix,
+                outcome.GetError().GetMessage()),
+                ErrorCodes::LOGICAL_ERROR);
+
+        total_keys += outcome.GetResult().GetKeyCount();
+        const auto & result_batch = outcome.GetResult().GetContents();
+        for (const auto & object : result_batch)
         {
-            LOG_TRACE(&Poco::Logger::get("StorageCnchS3"), "glob path match key: {}", key);
-            keys.emplace_back(key);
+            const String & key = object.GetKey();
+            if (re2::RE2::FullMatch(key, *matcher) && key.back() != '/')
+                keys.emplace_back(key);
+            request.SetContinuationToken(outcome.GetResult().GetNextContinuationToken());
+            is_finished = !outcome.GetResult().GetIsTruncated();
         }
     }
 
+    LOG_TRACE(
+        &Poco::Logger::get("StorageCnchS3"),
+        "List {} with prefix `{}`, total keys = {}, filter keys = {} ",
+        globbed_s3_uri.toString(),
+        key_prefix,
+        total_keys,
+        keys.size());
     return keys;
 }
 
@@ -96,7 +114,7 @@ void StorageCnchS3::readByLocal(
 Strings StorageCnchS3::readFileList()
 {
     if (arguments.is_glob_path)
-        return ListKeysWithRegexpMatching(config.client, config.uri);
+        return ListKeysWithRegexpMatching(config.client, config.uri, config.max_list_nums);
     return file_list;
 }
 
