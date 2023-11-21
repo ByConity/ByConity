@@ -88,7 +88,7 @@ private:
 
 // Single source of parts collection, will calcVisibleParts for each source.
 // For example, a table's detached directory is a single source. For attach
-// from path, if it may contains multiple subdirectory, each subdirectory have 
+// from path, if it may contains multiple subdirectory, each subdirectory have
 // it's own parts, then each subdirectory will consider as a single source
 class CollectSource
 {
@@ -158,7 +158,7 @@ private:
     std::unique_ptr<ThreadPool> worker_pool;
 
     std::mutex mu;
-    /// Temporary resource created during ATTACH, including temp dictionary, file movement records... 
+    /// Temporary resource created during ATTACH, including temp dictionary, file movement records...
     std::map<String, TempResource> resources;
     std::map<String, TempResource> meta_files_to_delete;
 

@@ -34,7 +34,7 @@ void sendPlanSegmentToLocal(PlanSegment * plan_segment_ptr, ContextPtr query_con
     LOG_TRACE(
         &Poco::Logger::get("SegmentScheduler::sendPlanSegment"),
         "begin sendPlanSegment locally: " + std::to_string(plan_segment_ptr->getPlanSegmentId()) + " : " + plan_segment_ptr->toString());
-    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true, dag_graph_ptr->async_context);
+    executePlanSegmentRemotely(*plan_segment_ptr, query_context, dag_graph_ptr->async_context);
     if (dag_graph_ptr)
     {
         std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);
@@ -53,7 +53,7 @@ void sendPlanSegmentToRemote(
     LOG_TRACE(
         &Poco::Logger::get("SegmentScheduler::sendPlanSegment"),
         "begin sendPlanSegment remotely: " + std::to_string(plan_segment_ptr->getPlanSegmentId()) + " : " + plan_segment_ptr->toString());
-    executePlanSegmentRemotely(*plan_segment_ptr, query_context, true, dag_graph_ptr->async_context, worker_id);
+    executePlanSegmentRemotely(*plan_segment_ptr, query_context, dag_graph_ptr->async_context, worker_id);
     if (dag_graph_ptr)
     {
         std::unique_lock<bthread::Mutex> lock(dag_graph_ptr->status_mutex);

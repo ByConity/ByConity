@@ -26,13 +26,14 @@ void StorageS3Configuration::updateS3Client(const ContextPtr & ctx, const CnchFi
     else if (!arguments.access_key_secret.empty())
         auth_settings.access_key_secret = arguments.access_key_secret;
 
-    S3::PocoHTTPClientConfiguration client_configuration = S3::ClientFactory::instance().createClientConfiguration(
-        auth_settings.region, ctx->getRemoteHostFilter(), static_cast<unsigned>(ctx->getSettingsRef().s3_max_redirects),
-        ctx->getConfigRef().getUInt("s3.http_keep_alive_timeout_ms", 5000),
-        ctx->getConfigRef().getUInt("s3.http_connection_pool_size", 1024), false);
+    std::shared_ptr<Aws::Client::ClientConfiguration> client_configuration =
+        S3::ClientFactory::instance().createClientConfiguration(
+            auth_settings.region, ctx->getRemoteHostFilter(), static_cast<unsigned>(ctx->getSettingsRef().s3_max_redirects),
+            ctx->getConfigRef().getUInt("s3.http_keep_alive_timeout_ms", 5000),
+            ctx->getConfigRef().getUInt("s3.http_connection_pool_size", 1024), false);
 
-    client_configuration.endpointOverride = uri.endpoint.empty() ? s3_settings.endpoint : uri.endpoint;
-    client_configuration.maxConnections = static_cast<unsigned>(rw_settings.max_connections);
+    client_configuration->endpointOverride = uri.endpoint.empty() ? s3_settings.endpoint : uri.endpoint;
+    client_configuration->maxConnections = static_cast<unsigned>(rw_settings.max_connections);
 
     auto credentials = Aws::Auth::AWSCredentials(auth_settings.access_key_id, auth_settings.access_key_secret);
     auto headers = auth_settings.headers;

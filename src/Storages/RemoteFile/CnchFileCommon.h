@@ -137,7 +137,7 @@ struct StorageS3Configuration
     S3Settings::ReadWriteSettings rw_settings;
 
     /// Headers from ast is a part of static configuration.
-    HeaderCollection headers_from_ast{};
+    HTTPHeaderEntries headers_from_ast{};
 
     bool updated{false};
 
@@ -145,7 +145,7 @@ struct StorageS3Configuration
         const String & url_,
         const S3::AuthSettings & auth_settings_ = {},
         const S3Settings::ReadWriteSettings & rw_settings_ = {},
-        const HeaderCollection & headers_from_ast_ = {})
+        const HTTPHeaderEntries & headers_from_ast_ = {})
         : uri(S3::URI(url_)), auth_settings(auth_settings_), rw_settings(rw_settings_), headers_from_ast(headers_from_ast_)
     {
     }

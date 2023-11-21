@@ -2214,7 +2214,7 @@ enum PreloadLevelSettings : UInt64
     M(String, tenant_id, "", "tenant_id of cnch user", 0) \
     M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
     M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \
-    M(Bool, offloading_with_query_plan, false, "utilize query plan to offload the computation comoetely to worker", 0) \
+    M(Bool, offloading_with_query_plan, false, "utilize query plan to offload the computation completely to worker", 0) \
     M(Seconds, access_entity_ttl, 60 * 60, "TTL for access entities stored in memory in seconds", 0) \
 \
     M(Bool, debug_enable_early_partition_pruning, false, "Whether we can prune parts via query filter and partition value", 0) \

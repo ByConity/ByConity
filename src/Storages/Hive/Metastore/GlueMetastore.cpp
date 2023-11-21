@@ -1,6 +1,7 @@
 #include <memory>
 #include <hive_metastore_types.h>
 #include <IO/S3Common.h>
+#include <IO/S3/CustomCRTHttpClient.h>
 #include <Storages/Hive/Metastore/GlueMetastore.h>
 #include <Storages/Hive/Metastore/MetastoreConvertUtils.h>
 #include <aws/core/auth/AWSCredentials.h>
@@ -259,10 +260,10 @@ GlueMetastoreClientPtr GlueMetastoreClientFactory::getOrCreate(const ExternalCat
     auto use_instance_profile = cfg->getBool(GlueConfigKey::aws_glue_use_instance_profile, false);
 
     // TODO(renming):: use config in catalog.
-    DB::S3::PocoHTTPClientConfiguration conf
+    std::shared_ptr<Aws::Client::ClientConfiguration> conf
         = DB::S3::ClientFactory::instance().createClientConfiguration(region, DB::RemoteHostFilter(), 3, 10000, 1024, false);
-    conf.endpointOverride = endpoint;
-    conf.region = region;
+    conf->endpointOverride = endpoint;
+    conf->region = region;
 
 
     Aws::Auth::AWSCredentials aws_credential(glue_ak, glue_sk);
@@ -270,7 +271,7 @@ GlueMetastoreClientPtr GlueMetastoreClientFactory::getOrCreate(const ExternalCat
     auto glue_credential = credential_chain.GetAWSCredentials();
 
     GlueClientAuxParams params{.catalog_id = catalog_id};
-    auto client = std::make_shared<GlueMetastoreClient>(glue_credential, conf, params);
+    std::shared_ptr<GlueMetastoreClient> client = std::make_shared<GlueMetastoreClient>(glue_credential, *conf, params);
     clients.emplace(catalog_id, client);
     return client;
 }

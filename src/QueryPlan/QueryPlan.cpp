@@ -335,7 +335,7 @@ QueryPipelinePtr QueryPlan::buildQueryPipeline(
     for (auto & context : interpreter_context)
         last_pipeline->addInterpreterContext(std::move(context));
 
-    LOG_DEBUG(log, "Build pipeline takes:{}", watch.elapsedMilliseconds());
+    LOG_DEBUG(log, "Build pipeline takes: {}ms", watch.elapsedMilliseconds());
     return last_pipeline;
 }
 

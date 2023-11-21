@@ -43,14 +43,13 @@ Aws::Auth::AWSCredentials getCredentials(po::variables_map& opts)
   }
 }
 
-Aws::Client::ClientConfiguration getClientConfig(po::variables_map& opts)
+std::shared_ptr<Aws::Client::ClientConfiguration> getClientConfig(po::variables_map& opts)
 {
-
-  DB::S3::PocoHTTPClientConfiguration conf
-            = DB::S3::ClientFactory::instance().createClientConfiguration(opts["endpoint"].as<std::string>(), DB::RemoteHostFilter(), 3, 10*1000, 1024, false);
-  conf.endpointOverride = opts["endpoint"].as<std::string>();
-  conf.region= opts["region"].as<std::string>();
-  return std::move(conf);
+  std::shared_ptr<Aws::Client::ClientConfiguration> conf
+    = DB::S3::ClientFactory::instance().createClientConfiguration(opts["endpoint"].as<std::string>(), DB::RemoteHostFilter(), 3, 10*1000, 1024, false);
+  conf->endpointOverride = opts["endpoint"].as<std::string>();
+  conf->region= opts["region"].as<std::string>();
+  return conf;
 }
 
 DB::GlueMetastoreClientPtr getClient(po::variables_map& opts)

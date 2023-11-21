@@ -194,7 +194,7 @@ void PartWriter::execute()
     CloudMergeTreeBlockOutputStream * cloud_stream = static_cast<CloudMergeTreeBlockOutputStream *>(out.get());
     bool is_enable_squash = settings.input_format_parquet_max_block_size;
 
-    LOG_DEBUG(log, "is_enable_squash = {}, min_insert_block_size_rows = {}, min_insert_block_size_bytes = {}", 
+    LOG_DEBUG(log, "is_enable_squash = {}, min_insert_block_size_rows = {}, min_insert_block_size_bytes = {}",
         is_enable_squash, settings.min_insert_block_size_rows, settings.min_insert_block_size_bytes);
 
     auto input_stream = InterpreterInsertQuery::buildInputStreamFromSource(getContext(), sample_block, settings, source_path, data_format, is_enable_squash);

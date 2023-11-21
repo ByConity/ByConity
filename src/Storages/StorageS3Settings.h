@@ -7,7 +7,6 @@
 #include <vector>
 #include <Core/Types.h>
 #include <Interpreters/Context_fwd.h>
-#include <Common/HeaderCollection.h>
 
 #include <IO/S3Common.h>
 

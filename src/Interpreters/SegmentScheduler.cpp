@@ -199,11 +199,13 @@ void SegmentScheduler::cancelWorkerPlanSegments(const String & query_id, const D
 
 bool SegmentScheduler::finishPlanSegments(const String & query_id)
 {
+    bool bsp_mode = false;
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
         auto query_map_ite = query_map.find(query_id);
         if (query_map_ite != query_map.end())
         {
+            bsp_mode = query_map_ite->second != nullptr && query_map_ite->second->query_context->getSettingsRef().bsp_mode;
             query_map.erase(query_map_ite);
         }
     }
@@ -221,6 +223,7 @@ bool SegmentScheduler::finishPlanSegments(const String & query_id)
         query_status_received_counter_map.erase(query_id);
     }
 
+    if (bsp_mode)
     {
         std::unique_lock<bthread::Mutex> bsp_scheduler_map_lock(bsp_scheduler_map_mutex);
         if (auto bsp_scheduler_map_iterator = bsp_scheduler_map.find(query_id); bsp_scheduler_map_iterator != bsp_scheduler_map.end())
@@ -363,23 +366,6 @@ void SegmentScheduler::checkQueryCpuTime(const String & query_id)
     }
 }
 
-bool SegmentScheduler::isExplainQuery(const String & query_id) const
-{
-    std::unique_lock<bthread::Mutex> lock(mutex);
-    auto query_map_ite = query_map.find(query_id);
-    if (query_map_ite == query_map.end())
-    {
-        LOG_INFO(log, "query_id-" + query_id + " is not exist in scheduler query map");
-        return false;
-    }
-
-    std::shared_ptr<DAGGraph> dag_ptr = query_map_ite->second;
-    if (dag_ptr == nullptr)
-        return false;
-    ContextPtr query_context = dag_ptr->query_context;
-    return query_context->isExplainQuery();
-}
-
 void SegmentScheduler::updateReceivedSegmentStatusCounter(const String & query_id, const size_t & segment_id, const UInt64 & parallel_index)
 {
     std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
@@ -391,24 +377,32 @@ void SegmentScheduler::updateReceivedSegmentStatusCounter(const String & query_i
     query_status_received_counter_map[query_id][segment_id].insert(parallel_index);
 }
 
-bool SegmentScheduler::alreadyReceivedAllSegmentStatus(const String & query_id) const
+bool SegmentScheduler::explainQueryHasReceivedAllSegmentStatus(const String & query_id) const
 {
-    std::scoped_lock<bthread::Mutex, bthread::Mutex> lock{mutex, segment_status_mutex};
-    auto all_segments_iterator = query_map.find(query_id);
-    auto received_status_segments_counter_iterator = query_status_received_counter_map.find(query_id);
-
-    if (received_status_segments_counter_iterator == query_status_received_counter_map.end() && all_segments_iterator == query_map.end())
-        return true;
-
-    if (received_status_segments_counter_iterator == query_status_received_counter_map.end())
+    std::shared_ptr<DAGGraph> dag_ptr;
     {
-        return false;
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        auto all_segments_iterator = query_map.find(query_id);
+        if (all_segments_iterator == query_map.end())
+        {
+            LOG_INFO(log, "query_id-" + query_id + " is not exist in scheduler query map");
+            return false;
+        }
+
+        dag_ptr = all_segments_iterator->second;
+
+        if (dag_ptr == nullptr)
+            return false;
+        if (!dag_ptr->query_context->isExplainQuery())
+            return false;
     }
 
-    if (all_segments_iterator == query_map.end())
+    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+    auto received_status_segments_counter_iterator = query_status_received_counter_map.find(query_id);
+
+    if (received_status_segments_counter_iterator == query_status_received_counter_map.end())
         return true;
 
-    auto dag_ptr = all_segments_iterator->second;
     auto received_status_segments_counter = received_status_segments_counter_iterator->second;
 
     for (auto & parallel : dag_ptr->segment_paralle_size_map)
@@ -425,24 +419,34 @@ bool SegmentScheduler::alreadyReceivedAllSegmentStatus(const String & query_id) 
     return true;
 }
 
-bool SegmentScheduler::alreadyReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const
+bool SegmentScheduler::bspQueryReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const
 {
-    std::scoped_lock<bthread::Mutex, bthread::Mutex> lock{mutex, segment_status_mutex};
-    auto all_segments_iterator = query_map.find(query_id);
-    auto received_status_segments_counter_iterator = query_status_received_counter_map.find(query_id);
+    std::shared_ptr<DAGGraph> dag_ptr;
+    {
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        auto all_segments_iterator = query_map.find(query_id);
+        if (all_segments_iterator == query_map.end())
+        {
+            LOG_INFO(log, "query_id-" + query_id + " is not exist in scheduler query map");
+            return false;
+        }
 
-    if (received_status_segments_counter_iterator == query_status_received_counter_map.end() && all_segments_iterator == query_map.end())
-        return true;
+        dag_ptr = all_segments_iterator->second;
+
+        if (dag_ptr == nullptr)
+            return false;
+        if (!dag_ptr->query_context->getSettingsRef().bsp_mode)
+            return false;
+    }
+
+    std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
+    auto received_status_segments_counter_iterator = query_status_received_counter_map.find(query_id);
 
     if (received_status_segments_counter_iterator == query_status_received_counter_map.end())
     {
         return false;
     }
 
-    if (all_segments_iterator == query_map.end())
-        return true;
-
-    auto dag_ptr = all_segments_iterator->second;
     auto received_status_segments_counter = received_status_segments_counter_iterator->second;
 
     return received_status_segments_counter[segment_id].size() == dag_ptr->segment_paralle_size_map[segment_id];

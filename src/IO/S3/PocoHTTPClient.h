@@ -7,6 +7,7 @@
 #if USE_AWS_S3
 
 #include <Common/RemoteHostFilter.h>
+#include <Common/HTTPHeaderEntries.h>
 #include <IO/ConnectionTimeouts.h>
 #include <IO/HTTPCommon.h>
 #include <IO/S3/SessionAwareIOStream.h>
@@ -30,22 +31,31 @@ namespace DB::S3
 {
 class ClientFactory;
 
+struct ClientConfigurationPerRequest
+{
+    Aws::Http::Scheme proxy_scheme = Aws::Http::Scheme::HTTPS;
+    String proxy_host;
+    unsigned proxy_port = 0;
+};
+
 struct PocoHTTPClientConfiguration : public Aws::Client::ClientConfiguration
 {
+    std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration = [] (const Aws::Http::HttpRequest &) { return ClientConfigurationPerRequest(); };
     String force_region;
     const RemoteHostFilter & remote_host_filter;
     unsigned int s3_max_redirects;
 
+    HTTPHeaderEntries extra_headers;
     /// Not a client parameter in terms of HTTP and we won't send it to the server. Used internally to determine when connection have to be re-established.
     uint32_t http_keep_alive_timeout_ms = 0;
     /// Zero means pooling will not be used.
     size_t http_connection_pool_size = 0;
     /// See PoolBase::BehaviourOnLimit
     bool wait_on_pool_size_limit = false;
+    size_t slow_read_ms{100};
 
     void updateSchemeAndRegion();
 
-private:
     PocoHTTPClientConfiguration(const String & force_region_,
         const RemoteHostFilter & remote_host_filter_, unsigned int s3_max_redirects_,
         uint32_t http_keep_alive_timeout_ms_, size_t http_connection_pool_size_,
@@ -112,13 +122,15 @@ private:
         Aws::Utils::RateLimits::RateLimiterInterface * readLimiter,
         Aws::Utils::RateLimits::RateLimiterInterface * writeLimiter) const;
 
-    std::function<Aws::Client::ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration;
+    std::function<ClientConfigurationPerRequest(const Aws::Http::HttpRequest &)> per_request_configuration;
     ConnectionTimeouts timeouts;
     const RemoteHostFilter & remote_host_filter;
     unsigned int s3_max_redirects;
 
+    const HTTPHeaderEntries extra_headers;
     size_t http_connection_pool_size;
     bool wait_on_pool_size_limit;
+    size_t slow_read_ms{100};
 };
 
 }

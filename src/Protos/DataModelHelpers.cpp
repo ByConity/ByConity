@@ -101,25 +101,27 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
     DiskPtr remote_disk = getDiskForPathId(storage.getStoragePolicy(IStorage::StorageLocation::MAIN), path_id);
     auto mock_volume = std::make_shared<SingleDiskVolume>("volume_mock", remote_disk, 0);
     UUID part_id = UUIDHelpers::Nil;
-    switch (remote_disk->getType())
+    switch(remote_disk->getType())
     {
-        case DiskType::Type::ByteS3: {
+        case DiskType::Type::ByteS3:
+        {
             part_id = RPCHelpers::createUUID(part_model.part_id());
             if (!relative_path.has_value())
                 relative_path = UUIDHelpers::UUIDToString(part_id);
             break;
         }
-        case DiskType::Type::ByteHDFS: {
+        case DiskType::Type::ByteHDFS:
+        {
             if (!relative_path.has_value())
                 relative_path = info->getPartNameWithHintMutation();
             break;
         }
         default:
-            throw Exception(
-                fmt::format("Unsupported disk type {} in createPartFromModelCommon", DiskType::toString(remote_disk->getType())),
-                ErrorCodes::LOGICAL_ERROR);
+            throw Exception(fmt::format("Unsupported disk type {} in createPartFromModelCommon",
+                DiskType::toString(remote_disk->getType())), ErrorCodes::LOGICAL_ERROR);
     }
-    auto part = std::make_shared<MergeTreeDataPartCNCH>(storage, part_name, *info, mock_volume, relative_path, nullptr, part_id);
+    auto part = std::make_shared<MergeTreeDataPartCNCH>(storage, part_name, *info,
+        mock_volume, relative_path, nullptr, part_id);
 
     if (part_model.has_staging_txn_id())
     {
@@ -225,8 +227,7 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModel(
     return part;
 }
 
-void fillPartModel(
-    const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time)
+void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time)
 {
     /// fill part info
     Protos::DataModelPartInfo * model_info = part_model.mutable_part_info();
@@ -316,6 +317,9 @@ void fillPartModel(
 
     for (const auto & projection : part.getProjectionPartsNames())
         part_model.add_projections(projection);
+
+    // For part in hdfs, it's id will be filled with 0
+    RPCHelpers::fillUUID(part.getUUID(), *(part_model.mutable_part_id()));
 }
 
 void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInfo & part_info_model)

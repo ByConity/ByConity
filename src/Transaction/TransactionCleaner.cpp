@@ -63,7 +63,7 @@ void TransactionCleaner::cleanTransaction(const TransactionCnchPtr & txn)
         }
         catch (...)
         {
-            /// if abort transaction failed (e.g., bytekv is not stable at this moment), 
+            /// if abort transaction failed (e.g., bytekv is not stable at this moment),
             /// we are not 100% sure how is the status going, we let dm to make the correct decision.
             txn->force_clean_by_dm = true;
             throw;
@@ -119,7 +119,7 @@ void TransactionCleaner::cleanCommittedTxn(const TransactionRecord & txn_record)
             StoragePtr table = catalog->tryGetTableByUUID(global_context, uuid, TxnTimestamp::maxTS(), true);
             if (!table)
                 continue;
-        
+
             auto host_port = global_context.getCnchTopologyMaster()->getTargetServer(uuid, table->getServerVwName(), false);
             auto rpc_address = host_port.getRPCAddress();
             if (!isLocalServer(rpc_address, std::to_string(global_context.getRPCPort())))
