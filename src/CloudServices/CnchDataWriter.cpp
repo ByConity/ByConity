@@ -267,8 +267,8 @@ DumpedData CnchDataWriter::dumpCnchParts(
 
     /// Parallel dumping to shared storage
     DumpedData result;
-    S3ObjectMetadata::PartGeneratorID part_generator_id(
-        S3ObjectMetadata::PartGeneratorID::TRANSACTION, curr_txn->getTransactionID().toString());
+    S3ObjectMetadata::PartGeneratorID part_generator_id(S3ObjectMetadata::PartGeneratorID::TRANSACTION,
+        curr_txn->getTransactionID().toString());
     MergeTreeCNCHDataDumper dumper(storage, part_generator_id);
 
     watch.restart();
@@ -762,12 +762,12 @@ void CnchDataWriter::preload(const MutableMergeTreeDataPartsCNCHVector & dumped_
     }
 }
 
-UUID CnchDataWriter::newPartID(const MergeTreePartInfo & part_info, UInt64 txn_timestamp)
+UUID CnchDataWriter::newPartID(const MergeTreePartInfo& part_info, UInt64 txn_timestamp)
 {
     UUID random_id = UUIDHelpers::generateV4();
     PairInt64 random_id_pair = UUIDHelpers::UUIDToPairInt64(random_id);
-    UInt64 & random_id_low = random_id_pair.low;
-    UInt64 & random_id_high = random_id_pair.high;
+    UInt64& random_id_low = random_id_pair.low;
+    UInt64& random_id_high = random_id_pair.high;
     boost::hash_combine(random_id_low, part_info.min_block);
     boost::hash_combine(random_id_high, part_info.max_block);
     boost::hash_combine(random_id_low, part_info.mutation);

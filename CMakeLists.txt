@@ -577,6 +577,7 @@ include (cmake/find/breakpad.cmake)
 include (cmake/find/benchmark.cmake)
 include (cmake/find/hivemetastore.cmake)
 include (cmake/find/java-extensions.cmake)
+include (cmake/find/cjson.cmake)
 
 set (USE_INTERNAL_CITYHASH_LIBRARY ON CACHE INTERNAL "")
 find_contrib_lib(cityhash)
