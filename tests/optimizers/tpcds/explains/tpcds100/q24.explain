@@ -37,7 +37,7 @@ Projection Est. 12540 rows
             │                       │     │     └─ TableScan tpcds100.store_returns Est. 28795080 rows
             │                       │     │              Where: Runtime Filters: {sr_item_sk, sr_ticket_number}
             │                       │     │              Outputs: sr_item_sk_1:=sr_item_sk, sr_ticket_number_1:=sr_ticket_number
-            │                       │     └─ Repartition Exchange Est. 1143235 rows
+            │                       │     └─ Repartition Exchange Est. 1139174 rows
             │                       │        │     Partition by: {i_item_sk_1, ss_ticket_number_1}
             │                       │        └─ Inner Join Est. 1143235 rows
             │                       │           │     Condition: c_customer_sk_1 == ss_customer_sk_1
@@ -179,7 +179,7 @@ Projection Est. 12430 rows
             │                       │     │     └─ TableScan tpcds100.store_returns Est. 28795080 rows
             │                       │     │              Where: Runtime Filters: {sr_item_sk, sr_ticket_number}
             │                       │     │              Outputs: sr_item_sk_4:=sr_item_sk, sr_ticket_number_4:=sr_ticket_number
-            │                       │     └─ Repartition Exchange Est. 1139174 rows
+            │                       │     └─ Repartition Exchange Est. 1135128 rows
             │                       │        │     Partition by: {i_item_sk_4, ss_ticket_number_4}
             │                       │        └─ Inner Join Est. 1139174 rows
             │                       │           │     Condition: c_customer_sk_4 == ss_customer_sk_4

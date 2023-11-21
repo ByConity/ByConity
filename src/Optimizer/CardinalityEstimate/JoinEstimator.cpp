@@ -25,7 +25,8 @@ PlanNodeStatisticsPtr JoinEstimator::estimate(
     const JoinStep & join_step,
     Context & context,
     bool is_left_base_table,
-    bool is_right_base_table)
+    bool is_right_base_table,
+    const InclusionDependency & inclusion_dependency)
 {
     if (!opt_left_stats || !opt_right_stats)
     {
@@ -40,7 +41,7 @@ PlanNodeStatisticsPtr JoinEstimator::estimate(
 
     ASTTableJoin::Kind kind = join_step.getKind();
 
-    return computeCardinality(left_stats, right_stats, left_keys, right_keys, kind, context, is_left_base_table, is_right_base_table, join_step.getFilter());
+    return computeCardinality(left_stats, right_stats, left_keys, right_keys, kind, context, is_left_base_table, is_right_base_table, join_step.getFilter(), inclusion_dependency);
 }
 
 PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
@@ -52,7 +53,8 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
     Context & context,
     bool is_left_base_table,
     bool is_right_base_table,
-    ConstASTPtr filter)
+    ConstASTPtr filter,
+    const InclusionDependency & inclusion_dependency)
 {
     UInt64 left_rows = left_stats.getRowCount();
     UInt64 right_rows = right_stats.getRowCount();
@@ -111,6 +113,27 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
         UInt64 pre_key_join_card;
         std::unordered_map<String, SymbolStatisticsPtr> pre_key_join_output_statistics;
         bool enable_pk_fk = context.getSettingsRef().enable_pk_fk;
+        bool enable_real_pk_fk = context.getSettingsRef().enable_real_pk_fk;
+
+        auto match_real_pk_fk = [&](const String & pk_name, const String & fk_name) -> bool
+        {
+            if (inclusion_dependency.empty())
+                return false;
+
+            auto pk_iter= inclusion_dependency.find(pk_name);
+            auto fk_iter = inclusion_dependency.find(fk_name);
+            if (pk_iter == inclusion_dependency.end() || fk_iter == inclusion_dependency.end())
+                return false;
+            if (fk_iter->second.first && !pk_iter->second.first) // check type of fk/pk.
+            {
+                if (fk_iter->second.second == pk_iter->second.second) // check ref_original_pk_name with original_pk_name.
+                {
+                    return true;
+                }
+            }
+            return false;
+        };
+
 
         // case 1 : left join key equals to right join key. (self-join)
         if (left_db_table_column == right_db_table_column)
@@ -120,7 +143,7 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
         }
 
         // case 2 : PK join FK
-        else if (enable_pk_fk && matchPKFK(left_rows, right_rows, left_ndv, right_ndv))
+        else if ((enable_pk_fk && matchPKFK(left_rows, right_rows, left_ndv, right_ndv)) || (enable_real_pk_fk && match_real_pk_fk(left_key, right_key)))
         {
             pre_key_join_card = computeCardinalityByFKPK(
                 right_rows,
@@ -139,7 +162,7 @@ PlanNodeStatisticsPtr JoinEstimator::computeCardinality(
         }
 
         // case 3 : FK join PK
-        else if (enable_pk_fk && matchFKPK(left_rows, right_rows, left_ndv, right_ndv))
+        else if ((enable_pk_fk && matchFKPK(left_rows, right_rows, left_ndv, right_ndv)) || (enable_real_pk_fk && match_real_pk_fk(right_key, left_key)))
         {
             pre_key_join_card = computeCardinalityByFKPK(
                 left_rows,

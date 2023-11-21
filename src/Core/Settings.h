@@ -1884,8 +1884,9 @@ enum PreloadLevelSettings : UInt64
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
     M(Float, stats_estimator_join_filter_selectivity, 1, "Join filter selectivity", 0) \
     M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
-    M(Float, pk_selectivity, 1, "PK selectivity for join estimation", 0) \
-    /** Optimizer relative settings, CBO/CTE/MV/RF/MS */ \
+    M(Bool, enable_real_pk_fk, true, "Whether enable Real PK-FK join estimation", 0) \
+    M(Float, pk_selectivity, 1.0, "PK selectivity for join estimation", 0) \
+    /** Optimizer relative settings, CBO, CTE, MagicSet, MV */ \
     M(Bool, enable_join_reorder, true, "Whether enable join reorder", 0) \
     M(UInt64, cascades_optimizer_timeout, 10000, "Max running time of a single cascades optimizer in ms", 0) \
     M(UInt64 , max_graph_reorder_size, 6, "Max tables join order enum on graph", 0) \
