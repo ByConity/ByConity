@@ -2226,13 +2226,14 @@ enum PreloadLevelSettings : UInt64
     M(String, s3_ak_secret, "", "The secret_key set by user when accessing ve s3.", 0) \
     M(String, s3_region, "", "The region set by user when accessing ve s3.", 0) \
     M(String, s3_endpoint, "", "The endpoint set by user when accessing ve s3.", 0) \
-\
+    M(Bool, s3_use_virtual_hosted_style, false, "is virtual hosted style or not, default false", 0) \
+    \
     M(Bool, enable_cache_reader_buffer_reuse, false, "Decpreated settings, only a place holder", 0) \
     M(Bool, enable_auto_query_forwarding, true, "Auto forward query to target server when having multiple servers", 0) \
     \
-    M(Bool, merge_partition_stats,false, "merge all partition stats",0 ) \
-    M(Bool, enable_three_part_identifier, true, "merge all partition stats",0 ) \
-    M(String, default_catalog, "", "current catalog",0 ) \
+    M(Bool, merge_partition_stats,false, "merge all partition stats", 0) \
+    M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \
+    M(String, default_catalog, "", "current catalog", 0) \
     \
     /** BitEngine related settings */ \
     M(Bool, use_encoded_bitmap, true, "Whether to read the encoded bitmap column", 0) \

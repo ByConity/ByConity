@@ -1868,7 +1868,7 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
 
         String compression_method_str;
         UInt64 compression_level = 1;
-        OutfileTarget::setOufileCompression(ast_query_with_output, compression_method_str, compression_level);
+        OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
 
         const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
         OutfileTargetPtr outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
@@ -2095,7 +2095,7 @@ void executeQuery(
                 auto out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
                 String compression_method_str;
                 UInt64 compression_level = 1;
-                OutfileTarget::setOufileCompression(ast_query_with_output, compression_method_str, compression_level);
+                OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
                 outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
                 auto out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
                 out = FormatFactory::instance().getOutputStreamParallelIfPossible(
@@ -2142,7 +2142,7 @@ void executeQuery(
                 const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
                 String compression_method_str;
                 UInt64 compression_level = 1;
-                OutfileTarget::setOufileCompression(ast_query_with_output, compression_method_str, compression_level);
+                OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
                 outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
                 out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
             }

@@ -95,7 +95,7 @@ std::shared_ptr<WriteBuffer> OutfileTarget::getOutfileBuffer(const ContextPtr & 
             context->getSettingsRef().s3_endpoint.toString() : s3_uri.endpoint;
         S3::S3Config s3_cfg(endpoint, context->getSettingsRef().s3_region.toString(),
             s3_uri.bucket, context->getSettingsRef().s3_ak_id, context->getSettingsRef().s3_ak_secret,
-            "");
+            "", "", context->getSettingsRef().s3_use_virtual_hosted_style);
         out_buf_raw = std::make_unique<WriteBufferFromS3>(s3_cfg.create(), s3_cfg.bucket, s3_uri.key,
             context->getSettingsRef().s3_min_upload_part_size, context->getSettingsRef().s3_max_single_part_upload_size);
     }
@@ -128,7 +128,7 @@ OutfileTargetPtr OutfileTarget::getOutfileTarget(
         compression_level);
 }
 
-void OutfileTarget::setOufileCompression(
+void OutfileTarget::setOutfileCompression(
     const ASTQueryWithOutput * query_with_output, String & outfile_compression_method_str, UInt64 & outfile_compression_level)
 {
     if (query_with_output->compression_method)
