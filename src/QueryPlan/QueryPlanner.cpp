@@ -405,19 +405,23 @@ RelationPlan QueryPlannerVisitor::visitASTSubquery(ASTPtr & node, const Void &)
 
             std::unordered_map<String, String> output_columns;
             NamesAndTypes mapped_name_and_types;
-            FieldSymbolInfos field_symbol_infos;
+            NameToNameMap old_name_to_new_name;
             for (const auto & name_and_type : cte_ref.getRoot()->getCurrentDataStream().header.getNamesAndTypes())
             {
                 auto new_name = context->getSymbolAllocator()->newSymbol(name_and_type.name);
                 output_columns.emplace(new_name, name_and_type.name);
                 mapped_name_and_types.emplace_back(new_name, name_and_type.type);
-                field_symbol_infos.emplace_back(FieldSymbolInfo{new_name});
+                old_name_to_new_name.emplace(name_and_type.name, new_name);
             }
 
             PlanNodePtr plan = PlanNodeBase::createPlanNode(
                 context->nextNodeId(), std::make_shared<CTERefStep>(DataStream{mapped_name_and_types}, cte_id, output_columns, false));
             PRINT_PLAN(plan, plan_cte);
-            return RelationPlan{plan, field_symbol_infos};
+
+            FieldSymbolInfos mapped_field_symbol_infos = cte_ref.getFieldSymbolInfos();
+            mapFieldSymbolInfos(mapped_field_symbol_infos, old_name_to_new_name, true);
+
+            return RelationPlan{plan, mapped_field_symbol_infos};
         }
     }
 
@@ -1722,11 +1726,6 @@ RelationPlan QueryPlannerVisitor::projectFieldSymbols(const RelationPlan & plan,
         new_mappings[field_id].sub_column_symbols[sub_col_id] = *sub_col_sym;
     }
 
-    if (Utils::isIdentity(assignments) && sub_column_positions.empty())
-    {
-        return {old_root, old_mappings};
-    }
-
     auto project_step = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, output_types);
     new_root = old_root->addStep(context->nextNodeId(), std::move(project_step));
 
@@ -2210,9 +2209,12 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
     {
         auto & select = selects[select_id];
         auto & sub_plan = sub_plans[select_id];
-        // prune invisible columns, copy duplicated columns
+        // prune invisible columns, copy duplicated columns, sort columns by a specific order(primary columns + sub columns)
         sub_plan = projectFieldSymbols(sub_plan, sub_column_positions);
 
+#ifndef NDEBUG
+        auto column_names1 = sub_plan.getRoot()->getOutputNames();
+#endif
         // coerce to common type
         if (enable_implicit_type_conversion && analysis.hasRelationTypeCoercion(*select))
         {
@@ -2233,6 +2235,16 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
             sub_plan = RelationPlan{coercion_result.plan, field_symbol_infos};
         }
 
+#ifndef NDEBUG
+        auto column_names2 = sub_plan.getRoot()->getOutputNames();
+
+        // check column order unmodified after implicit type conversion
+        for (size_t i = 0; i < column_names1.size(); ++i)
+        {
+            auto it = std::find(column_names2.begin(), column_names2.end(), column_names1.at(i));
+            assert(it == column_names2.end() || it - column_names2.begin() == static_cast<long>(i));
+        }
+#endif
         assert(
             sub_plan.getRoot()->getCurrentDataStream().header.columns() == sub_plans[0].getRoot()->getCurrentDataStream().header.columns());
         assert(sub_plan.getFieldSymbolInfos().size() == sub_plans[0].getFieldSymbolInfos().size());

@@ -400,19 +400,19 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
         {
             const auto & resolved_field = column_reference->getFieldDescription();
-            auto type_id = resolved_field.type->getTypeId();
-            if (type_id == TypeIndex::Map || type_id == TypeIndex::ByteMap)
+            if (check_subcolumn(resolved_field, [](const auto & origin_col) -> bool {
+                    if (!origin_col.storage->supportsMapImplicitColumn())
+                        return false;
+
+                    DataTypePtr type = origin_col.metadata_snapshot->columns.getPhysical(origin_col.column).type;
+                    return type->isMap() && !type->isMapKVStore();
+                }))
             {
-                if (resolved_field.hasOriginInfo() && !resolved_field.type->isMapKVStore()
-                    && check_subcolumn(
-                        resolved_field, [](const auto & origin_col) { return origin_col.storage->supportsMapImplicitColumn(); }))
+                if (auto * key_lit = function->arguments->children[1]->as<ASTLiteral>())
                 {
-                    if (auto * key_lit = function->arguments->children[1]->as<ASTLiteral>())
-                    {
-                        auto key_name = key_lit->getColumnName();
-                        auto column_id = SubColumnID::mapElement(key_name);
-                        register_subcolumn(function, *column_reference, column_id);
-                    }
+                    auto key_name = key_lit->getColumnName();
+                    auto column_id = SubColumnID::mapElement(key_name);
+                    register_subcolumn(function, *column_reference, column_id);
                 }
             }
         }
@@ -422,13 +422,33 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
         {
             const auto & resolved_field = column_reference->getFieldDescription();
-            if (resolved_field.hasOriginInfo() &&
-                resolved_field.type->isMap() &&
-                (check_subcolumn(resolved_field, [](const auto & origin_col) { return !origin_col.storage->supportsMapImplicitColumn(); })
-                || resolved_field.type->isMapKVStore()))
+            if (check_subcolumn(resolved_field, [](const auto & origin_col) -> bool {
+                    if (!origin_col.storage->supportsMapImplicitColumn())
+                        return false;
+
+                    DataTypePtr type = origin_col.metadata_snapshot->columns.getPhysical(origin_col.column).type;
+                    return type->isMap() && type->isMapKVStore();
+                }))
             {
                 auto column_id = SubColumnID::mapKeys();
-                analysis.setSubColumnReference(function, SubColumnReference {*column_reference, column_id});
+                register_subcolumn(function, *column_reference, column_id);
+            }
+        }
+    }
+    if (startsWith(func_name_lowercase, "mapvalues") && function->arguments->children.size() == 1)
+    {
+        if (auto column_reference = analysis.tryGetColumnReference(function->arguments->children[0]))
+        {
+            const auto & resolved_field = column_reference->getFieldDescription();
+            if (check_subcolumn(resolved_field, [](const auto & origin_col) -> bool {
+                    if (!origin_col.storage->supportsMapImplicitColumn())
+                        return false;
+
+                    DataTypePtr type = origin_col.metadata_snapshot->columns.getPhysical(origin_col.column).type;
+                    return type->isMap() && type->isMapKVStore();
+                }))
+            {
+                auto column_id = SubColumnID::mapValues();
                 register_subcolumn(function, *column_reference, column_id);
             }
         }

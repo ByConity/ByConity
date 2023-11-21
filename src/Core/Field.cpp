@@ -428,6 +428,11 @@ void writeFieldBinaryBlobImpl(const Field & field, Field::Types::Which type, Wri
             writeStringBinary(field.get<AggregateFunctionStateData>().data, buf);
             return;
         }
+        case Field::Types::ByteMap:
+        {
+            writeBinary(field.get<ByteMap>(), buf);
+            return;
+        }
         default:
             throw Exception("Bad type of Field when serializing.", ErrorCodes::BAD_TYPE_OF_FIELD);
     }
@@ -561,6 +566,13 @@ void readFieldBinaryBlobImpl(Field & field, Field::Types::Which type, ReadBuffer
             AggregateFunctionStateData value;
             DB::readStringBinary(value.name, buf);
             DB::readStringBinary(value.data, buf);
+            field = value;
+            return;
+        }
+        case Field::Types::ByteMap:
+        {
+            ByteMap value;
+            readBinary(value, buf);
             field = value;
             return;
         }
