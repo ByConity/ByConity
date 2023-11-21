@@ -321,19 +321,68 @@ void testWithParameter(UInt32 num_filters, size_t bits_per_filter_hash, UInt32 n
         EXPECT_FALSE(bf.couldExist(p.first, p.first));
 }
 
-#if 0
-TEST(BloomFilter, PersistRecoveryValidLarge)
+void testPersistRecoveryWithParams(UInt32 num_filters, size_t bits_per_filter_hash, UInt32 num_hash)
 {
-    const size_t num_filters = 1e7;
-    const size_t bits_per_filter_hash = 1024;
-    const size_t num_hash = 1;
+    const int num_keys = 1024;
+
+    std::vector<std::pair<size_t, UInt64>> keys_added;
+    std::vector<std::pair<size_t, UInt64>> keys_not_present;
+    std::uniform_int_distribution<UInt64> dist;
+    std::stringstream ss;
+    {
+        BloomFilter bf{num_filters, num_hash, bits_per_filter_hash};
+        for (int i = 0; i < num_keys; i++)
+        {
+            auto key = dist(thread_local_rng);
+            auto idx = dist(thread_local_rng) % num_filters;
+            bf.set(idx, key);
+            keys_added.push_back(std::make_pair(idx, key));
+        }
+
+        while (keys_not_present.size() < num_keys)
+        {
+            auto key = dist(thread_local_rng);
+            auto idx = dist(thread_local_rng) % num_filters;
+            if (!bf.couldExist(idx, key))
+            {
+                keys_not_present.push_back(std::make_pair(idx, key));
+            }
+        }
+
+        google::protobuf::io::OstreamOutputStream raw_stream(&ss);
+        google::protobuf::io::CodedOutputStream stream(&raw_stream);
+        bf.persist(&stream);
+    }
+
+    google::protobuf::io::IstreamInputStream raw_istream(&ss);
+    google::protobuf::io::CodedInputStream istream(&raw_istream);
+    BloomFilter bf(num_filters, num_hash, bits_per_filter_hash);
+    bf.recover(&istream);
+
+    EXPECT_EQ(bf.numHashes(), num_hash);
+    EXPECT_EQ(bf.numBitsPerFilter(), bits_per_filter_hash * num_hash);
+    EXPECT_EQ(bf.numFilters(), num_filters);
+    for (const auto & p : keys_added)
+        EXPECT_TRUE(bf.couldExist(p.first, p.second));
+
+    for (const auto & p : keys_not_present)
+        EXPECT_FALSE(bf.couldExist(p.first, p.second));
 }
+
+// FIXME(@max.chenxi): fix case later
+// TEST(BloomFilter, PersistRecoveryValidLarge)
+// {
+//     const size_t num_filters = 1e7;
+//     const size_t bits_per_filter_hash = 1024;
+//     const size_t num_hash = 1;
+//     testPersistRecoveryWithParams(num_filters, bits_per_filter_hash, num_hash);
+// }
 
 TEST(BloomFilter, PersisRecoveryValid)
 {
     const size_t num_filters = 10;
     const size_t bits_per_filter_hash = 1024;
     const size_t num_hash = 1;
+    testPersistRecoveryWithParams(num_filters, bits_per_filter_hash, num_hash);
 }
-#endif
 }

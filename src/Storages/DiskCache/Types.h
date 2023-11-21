@@ -4,6 +4,12 @@
 
 namespace DB::HybridCache
 {
+enum class EngineTag : UInt32
+{
+    MarkCache = 0,
+    UncompressedCache = 1,
+};
+
 enum class Status
 {
     Ok,
@@ -34,7 +40,7 @@ enum class DestructorEvent
     PutFailed,
 };
 
-using DestructorCallback = std::function<void(HashedKey hk, BufferView value, DestructorEvent event)>;
+using DestructorCallback = std::function<void(HashedKey key, BufferView value, DestructorEvent event)>;
 
 // Checking NvmItem expired
 using ExpiredCheck = std::function<bool(BufferView value)>;
@@ -61,4 +67,81 @@ inline StringRef getIoEngineName(IoEngine e)
     return "invalid";
 }
 
+class RegionId
+{
+public:
+    RegionId() = default;
+    explicit RegionId(UInt32 idx_) : idx(idx_) { }
+
+    bool valid() const noexcept { return idx != kInvalid; }
+
+    UInt32 index() const noexcept { return idx; }
+
+    bool operator==(const RegionId & other) const noexcept { return idx == other.idx; }
+
+    bool operator!=(const RegionId & other) const noexcept { return !(*this == other); }
+
+private:
+    static constexpr UInt32 kInvalid{~0u};
+    UInt32 idx{kInvalid};
+};
+
+/**
+ * Device address as a flat 64-bit byte offset
+ */
+class AbsAddress
+{
+public:
+    AbsAddress() = default;
+    explicit AbsAddress(UInt64 o) : off{o} { }
+
+    UInt64 offset() const { return off; }
+
+    AbsAddress add(UInt64 ofs) const { return AbsAddress{off + ofs}; }
+
+
+    AbsAddress sub(UInt64 ofs) const
+    {
+        chassert(ofs <= off);
+        return AbsAddress{off - ofs};
+    }
+
+    bool operator==(AbsAddress other) const { return off == other.off; }
+    bool operator!=(AbsAddress other) const { return !(*this == other); }
+
+private:
+    UInt64 off{};
+};
+
+/**
+ *  Device address as 32-bit region id and 32-bit offset
+ *  inside that region.
+ */
+class RelAddress
+{
+public:
+    RelAddress() = default;
+    explicit RelAddress(RegionId r, UInt32 o = 0) : region_id{r}, off{o} { }
+
+    RegionId rid() const { return region_id; }
+
+    UInt32 offset() const { return off; }
+
+    RelAddress add(UInt32 ofs) const { return RelAddress{region_id, off + ofs}; }
+
+    RelAddress sub(UInt32 ofs) const
+    {
+        chassert(ofs <= off);
+        return RelAddress{region_id, off - ofs};
+    }
+
+    bool operator==(RelAddress other) const { return off == other.off && region_id == other.region_id; }
+    bool operator!=(RelAddress other) const { return !(*this == other); }
+
+private:
+    RegionId region_id;
+    UInt32 off{};
+};
+
+constexpr UInt32 kMaxKeySize{255};
 }

@@ -48,4 +48,22 @@ public:
     // get key and buffer for a random sample
     virtual std::pair<Status, std::string> getRandomAlloc(Buffer & value) = 0;
 };
+
+class NoopEngine final : public CacheEngine
+{
+public:
+    ~NoopEngine() override = default;
+    UInt64 getSize() const override { return 0; }
+    Status insert(HashedKey, BufferView) override { return Status::Rejected; }
+    bool couldExist(HashedKey) override { return false; }
+    UInt64 estimateWriteSize(HashedKey, BufferView) const override { return 0; }
+    Status lookup(HashedKey, Buffer &) override { return Status::NotFound; }
+    Status remove(HashedKey) override { return Status::NotFound; }
+    void flush() override { }
+    void reset() override { }
+    void persist(std::ostream *) override { }
+    bool recover(std::istream *) override { return true; }
+    UInt64 getMaxItemSize() const override { return UINT32_MAX; }
+    std::pair<Status, std::string> getRandomAlloc(Buffer &) override { return std::make_pair(Status::NotFound, ""); }
+};
 }

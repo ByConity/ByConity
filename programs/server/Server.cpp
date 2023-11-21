@@ -1224,6 +1224,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     size_t unique_key_index_file_cache_size = config().getUInt64("unique_key_index_disk_cache_max_bytes", uki_disk_cache_max_bytes);
     global_context->setUniqueKeyIndexFileCache(unique_key_index_file_cache_size);
 
+    global_context->setNvmCache(config());
+
 #if USE_EMBEDDED_COMPILER
     constexpr size_t compiled_expression_cache_size_default = 1024 * 1024 * 128;
     size_t compiled_expression_cache_size = config().getUInt64("compiled_expression_cache_size", compiled_expression_cache_size_default);

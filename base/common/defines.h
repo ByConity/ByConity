@@ -56,10 +56,12 @@
 #    define ALWAYS_INLINE __forceinline
 #    define NO_INLINE static __declspec(noinline)
 #    define MAY_ALIAS
+#    define PACKED_LINLINE
 #else
 #    define ALWAYS_INLINE __attribute__((__always_inline__))
 #    define NO_INLINE __attribute__((__noinline__))
 #    define MAY_ALIAS __attribute__((__may_alias__))
+#    define PACKED_LINLINE __attribute__((__packed__))
 #endif
 
 #if !defined(__x86_64__) && !defined(__aarch64__) && !defined(__PPC__)

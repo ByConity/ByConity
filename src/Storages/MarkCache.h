@@ -7,6 +7,7 @@
 #include <Common/SipHash.h>
 #include <Interpreters/AggregationCommon.h>
 #include <DataStreams/MarkInCompressedFile.h>
+#include <Storages/DiskCache/NvmCache.h>
 
 
 namespace ProfileEvents
@@ -41,7 +42,9 @@ private:
 
 public:
     MarkCache(size_t max_size_in_bytes)
-        : Base(max_size_in_bytes) {}
+        : Base(max_size_in_bytes)
+        {
+        }
 
     /// Calculate key from path to file and offset.
     static UInt128 hash(const String & path_to_file)
@@ -66,6 +69,48 @@ public:
 
         return result.first;
     }
+
+    void setNvmCache(std::shared_ptr<NvmCache> nvm_cache_) { nvm_cache = nvm_cache_; }
+
+private:
+
+    void removeExternal(const Key & key, const MappedPtr & value, size_t size) override
+    {
+        if (nvm_cache && nvm_cache->isEnabled() && size)
+        {
+            auto hash_key = HybridCache::makeHashKey(&key, sizeof(Key));
+            auto token = nvm_cache->createPutToken(hash_key.key());
+            nvm_cache->put(hash_key, std::move(value), std::move(token), [](void * obj) {
+                auto * ptr = reinterpret_cast<Mapped *>(obj);
+                return HybridCache::BufferView{ptr->size() * sizeof(MarkInCompressedFile), reinterpret_cast<const UInt8 *>(ptr->raw_data())};
+            }, HybridCache::EngineTag::MarkCache); 
+        }
+    }
+
+    MappedPtr loadExternal(const Key & key) override
+    {
+        if (nvm_cache && nvm_cache->isEnabled())
+        {
+            auto handle = nvm_cache->find<Mapped>(HybridCache::makeHashKey(&key, sizeof(Key)), [&key, this](std::shared_ptr<void> ptr, HybridCache::Buffer buffer) {
+                auto cell = std::static_pointer_cast<Mapped>(ptr);
+                auto * begin = reinterpret_cast<MarkInCompressedFile *>(buffer.data());
+                auto * end = reinterpret_cast<MarkInCompressedFile *>(buffer.data() + buffer.size());
+                // TODO(@max.chenxi): memory copy at here, optimize or not ?
+                cell->assign(begin, end);
+                setInternal(key, cell, true);
+            }, HybridCache::EngineTag::MarkCache);
+            if (auto ptr = handle.get())
+            {
+                auto mapped = std::static_pointer_cast<Mapped>(ptr);
+                if (mapped->empty())
+                    return nullptr;
+                return mapped;
+            }
+        }
+        return nullptr;
+    }
+
+    std::shared_ptr<NvmCache> nvm_cache{};
 };
 
 using MarkCachePtr = std::shared_ptr<MarkCache>;

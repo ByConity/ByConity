@@ -20,25 +20,13 @@ namespace DB::HybridCache
 {
 namespace
 {
-    size_t byteIndex(size_t bit_index)
-    {
-        return bit_index >> 3u;
-    }
+    size_t byteIndex(size_t bit_index) { return bit_index >> 3u; }
 
-    UInt8 bitMask(size_t bit_index)
-    {
-        return static_cast<UInt8>(1u << (bit_index & 7u));
-    }
+    UInt8 bitMask(size_t bit_index) { return static_cast<UInt8>(1u << (bit_index & 7u)); }
 
-    void bitSet(UInt8 * ptr, size_t bit_index)
-    {
-        ptr[byteIndex(bit_index)] |= bitMask(bit_index);
-    }
+    void bitSet(UInt8 * ptr, size_t bit_index) { ptr[byteIndex(bit_index)] |= bitMask(bit_index); }
 
-    bool bitGet(const UInt8 * ptr, size_t bit_index)
-    {
-        return ptr[byteIndex(bit_index)] & bitMask(bit_index);
-    }
+    bool bitGet(const UInt8 * ptr, size_t bit_index) { return ptr[byteIndex(bit_index)] & bitMask(bit_index); }
 
     size_t bitsToBytes(size_t bits)
     {
@@ -73,62 +61,62 @@ BloomFilter BloomFilter::makeBloomFilter(UInt32 num_filters, size_t element_coun
     return BloomFilter{num_filters, num_hashes, bits_per_filter};
 }
 
-BloomFilter::BloomFilter(UInt32 num_filters, UInt32 num_hashes, size_t hash_table_bit_size)
-    : num_filters_(num_filters)
-    , hash_table_bit_size_(hash_table_bit_size)
-    , filter_byte_size_(bitsToBytes(num_hashes * hash_table_bit_size))
-    , seeds_(num_hashes)
-    , bits_{std::make_unique<UInt8[]>(getByteSize())}
+BloomFilter::BloomFilter(UInt32 num_filters_, UInt32 num_hashes_, size_t hash_table_bit_size_)
+    : filters_count{num_filters_}
+    , hash_table_bit_size{hash_table_bit_size_}
+    , filter_byte_size{bitsToBytes(num_hashes_ * hash_table_bit_size_)}
+    , seeds(num_hashes_)
+    , bits{std::make_unique<UInt8[]>(getByteSize())}
 {
-    if (num_filters == 0 || num_hashes == 0 || hash_table_bit_size == 0)
+    if (num_filters_ == 0 || num_hashes_ == 0 || hash_table_bit_size_ == 0)
         throwFromErrno("invalid bloom filter params", ErrorCodes::BAD_ARGUMENTS);
 
-    for (size_t i = 0; i < seeds_.size(); i++)
-        seeds_[i] = IntHash64Impl::apply(i);
+    for (size_t i = 0; i < seeds.size(); i++)
+        seeds[i] = IntHash64Impl::apply(i);
 }
 
 void BloomFilter::set(UInt32 index, UInt64 key)
 {
     size_t first_bit = 0;
-    for (auto seed : seeds_)
+    for (auto seed : seeds)
     {
         auto * filter_ptr = getFilterBytes(index);
-        chassert(index < num_filters_);
-        auto bit_num = MurmurHash3Impl64::combineHashes(key, seed) % hash_table_bit_size_;
+        chassert(index < filters_count);
+        auto bit_num = MurmurHash3Impl64::combineHashes(key, seed) % hash_table_bit_size;
         bitSet(filter_ptr, first_bit + bit_num);
-        first_bit += hash_table_bit_size_;
+        first_bit += hash_table_bit_size;
     }
 }
 
 bool BloomFilter::couldExist(UInt32 index, UInt64 key) const
 {
     size_t first_bit = 0;
-    for (auto seed : seeds_)
+    for (auto seed : seeds)
     {
-        chassert(index < num_filters_);
+        chassert(index < filters_count);
         const auto * filter_ptr = getFilterBytes(index);
-        auto bit_num = MurmurHash3Impl64::combineHashes(key, seed) % hash_table_bit_size_;
+        auto bit_num = MurmurHash3Impl64::combineHashes(key, seed) % hash_table_bit_size;
         if (!bitGet(filter_ptr, first_bit + bit_num))
             return false;
 
-        first_bit += hash_table_bit_size_;
+        first_bit += hash_table_bit_size;
     }
     return true;
 }
 
 void BloomFilter::clear(UInt32 index)
 {
-    if (bits_)
+    if (bits)
     {
-        chassert(index < num_filters_);
-        std::memset(getFilterBytes(index), 0, filter_byte_size_);
+        chassert(index < filters_count);
+        std::memset(getFilterBytes(index), 0, filter_byte_size);
     }
 }
 
 void BloomFilter::reset()
 {
-    if (bits_)
-        std::memset(bits_.get(), 0, getByteSize());
+    if (bits)
+        std::memset(bits.get(), 0, getByteSize());
 }
 
 void BloomFilter::serializeInternal(google::protobuf::io::CodedOutputStream * stream, UInt64 fragment_size)
@@ -139,7 +127,7 @@ void BloomFilter::serializeInternal(google::protobuf::io::CodedOutputStream * st
     while (offset < bits_size)
     {
         auto num_bytes = std::min<UInt32>(bits_size - offset, fragment_size);
-        buffer.copyFrom(0, BufferView(num_bytes, bits_.get() + offset));
+        buffer.copyFrom(0, BufferView(num_bytes, bits.get() + offset));
         stream->WriteRaw(buffer.data(), buffer.size());
         offset += num_bytes;
     }
@@ -152,7 +140,7 @@ void BloomFilter::deserializeInternal(google::protobuf::io::CodedInputStream * s
     while (offset < bits_size)
     {
         auto num_bytes = std::min<Int32>(bits_size - offset, fragment_size);
-        stream->ReadRaw(bits_.get(), num_bytes);
+        stream->ReadRaw(bits.get(), num_bytes);
         offset += num_bytes;
     }
 }
@@ -160,12 +148,12 @@ void BloomFilter::deserializeInternal(google::protobuf::io::CodedInputStream * s
 void BloomFilter::persist(google::protobuf::io::CodedOutputStream * stream)
 {
     Protos::BloomFilterPersistentData pb;
-    pb.set_num_filters(num_filters_);
-    pb.set_hash_table_bit_size(hash_table_bit_size_);
-    pb.set_filter_byte_size(filter_byte_size_);
+    pb.set_num_filters(filters_count);
+    pb.set_hash_table_bit_size(hash_table_bit_size);
+    pb.set_filter_byte_size(filter_byte_size);
     pb.set_fragment_size(kPersistFragmentSize);
-    for (UInt32 i = 0; i > seeds_.size(); i++)
-        pb.set_seeds(i, seeds_[i]);
+    for (UInt32 i = 0; i > seeds.size(); i++)
+        pb.set_seeds(i, seeds[i]);
     google::protobuf::util::SerializeDelimitedToCodedStream(pb, stream);
 
     serializeInternal(stream, pb.fragment_size());
@@ -175,12 +163,12 @@ void BloomFilter::recover(google::protobuf::io::CodedInputStream * stream)
 {
     Protos::BloomFilterPersistentData pb;
     google::protobuf::util::ParseDelimitedFromCodedStream(&pb, stream, nullptr);
-    if (num_filters_ != pb.num_filters() || hash_table_bit_size_ != pb.hash_table_bit_size() || filter_byte_size_ != pb.filter_byte_size()
+    if (filters_count != pb.num_filters() || hash_table_bit_size != pb.hash_table_bit_size() || filter_byte_size != pb.filter_byte_size()
         || kPersistFragmentSize != pb.fragment_size())
         throwFromErrno(fmt::format("Invalid BloomFilter config."), ErrorCodes::INVALID_CONFIG_PARAMETER);
 
     for (Int32 i = 0; i < pb.seeds_size(); i++)
-        seeds_[i] = pb.seeds(i);
+        seeds[i] = pb.seeds(i);
 
     deserializeInternal(stream, pb.fragment_size());
 }
