@@ -12,9 +12,11 @@ void StorageS3Configuration::updateS3Client(const ContextPtr & ctx, const CnchFi
     auto s3_settings = ctx->getStorageS3Settings().getSettings(uri.endpoint);
     s3_settings.rw_settings.updateFromSettingsIfEmpty(ctx->getSettingsRef());
 
+    use_read_ahead = ctx->getSettingsRef().s3_use_read_ahead;
+
     auth_settings = s3_settings.auth_settings;
     rw_settings = s3_settings.rw_settings;
-    use_read_ahead = ctx->getSettingsRef().s3_use_read_ahead;
+    max_list_nums = rw_settings.max_list_nums;
 
     if (!ctx->getSettingsRef().s3_access_key_id.value.empty())
         auth_settings.access_key_id = ctx->getSettingsRef().s3_access_key_id;
@@ -34,6 +36,9 @@ void StorageS3Configuration::updateS3Client(const ContextPtr & ctx, const CnchFi
 
     client_configuration->endpointOverride = uri.endpoint.empty() ? s3_settings.endpoint : uri.endpoint;
     client_configuration->maxConnections = static_cast<unsigned>(rw_settings.max_connections);
+    client_configuration->region = auth_settings.region.empty() ? uri.region : auth_settings.region;
+    client_configuration->connectTimeoutMs = rw_settings.max_timeout_ms;
+    client_configuration->requestTimeoutMs = rw_settings.max_timeout_ms;
 
     auto credentials = Aws::Auth::AWSCredentials(auth_settings.access_key_id, auth_settings.access_key_secret);
     auto headers = auth_settings.headers;

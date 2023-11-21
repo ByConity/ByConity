@@ -661,7 +661,7 @@ namespace S3
         }
     }
 
-    URI::URI(const Poco::URI & uri_)
+    URI::URI(const Poco::URI & uri_, bool parse_region)
     {
         /// Case when bucket name represented in domain name of S3 URL.
         /// E.g. (https://bucket-name.s3.Region.amazonaws.com/key)
@@ -750,6 +750,29 @@ namespace S3
         }
         else
             throw Exception("Bucket or key name are invalid in S3 URI: " + uri.toString(), ErrorCodes::BAD_ARGUMENTS);
+
+        if (!parse_region)
+            return;
+
+        // try parse region
+        std::vector<String> endpoint_splices;
+        boost::split(endpoint_splices, endpoint, boost::is_any_of("."));
+        if (endpoint_splices.empty())
+            return;
+
+        if (storage_name == COSN || storage_name == S3)
+        {
+            if (endpoint_splices.size() < 2)
+                return;
+            region = endpoint_splices[1];
+        }
+        else if (storage_name == TOS)
+        {
+            if (endpoint_splices.size() < 1)
+                return;
+            region = endpoint_splices[0].starts_with("tos-s3") ? endpoint_splices[0].substr(7) : endpoint_splices[0].substr(4);
+        }
+
     }
 
     void URI::validateBucket(const String & bucket, const Poco::URI & uri)

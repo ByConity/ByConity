@@ -11,6 +11,7 @@
 #include <Storages/StorageS3Settings.h>
 #include <aws/core/auth/AWSCredentials.h>
 #include <Poco/URI.h>
+#include "common/types.h"
 #include <Common/RemoteHostFilter.h>
 #include <Common/SettingsChanges.h>
 #include <Storages/RemoteFile/CnchFileSettings.h>
@@ -132,6 +133,7 @@ struct StorageS3Configuration
     S3::URI uri;
     S3ClientPtr client;
     bool use_read_ahead{true};
+    UInt64 max_list_nums{1000};
 
     S3::AuthSettings auth_settings;
     S3Settings::ReadWriteSettings rw_settings;
@@ -146,7 +148,7 @@ struct StorageS3Configuration
         const S3::AuthSettings & auth_settings_ = {},
         const S3Settings::ReadWriteSettings & rw_settings_ = {},
         const HTTPHeaderEntries & headers_from_ast_ = {})
-        : uri(S3::URI(url_)), auth_settings(auth_settings_), rw_settings(rw_settings_), headers_from_ast(headers_from_ast_)
+        : uri(S3::URI(url_, true)), auth_settings(auth_settings_), rw_settings(rw_settings_), headers_from_ast(headers_from_ast_)
     {
     }
 
