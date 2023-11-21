@@ -28,6 +28,7 @@
 #include <IO/WriteHelpers.h>
 #include <IO/readDecimalText.h>
 #include <Protos/plan_node_utils.pb.h>
+#include <Common/FieldVisitorCompatibleBinary.h>
 #include <Common/FieldVisitorDump.h>
 #include <Common/FieldVisitorToString.h>
 #include <Common/FieldVisitorWriteBinary.h>
@@ -571,16 +572,18 @@ void readFieldBinaryBlobImpl(Field & field, Field::Types::Which type, ReadBuffer
 void writeFieldBinary(const Field & field, WriteBuffer & buf)
 {
     auto type = field.getType();
-    writeBinary(UInt8(type), buf);
-    writeFieldBinaryBlobImpl(field, type, buf);
+    writeBinary(static_cast<UInt8>(type), buf);
+
+    Field::dispatch([&buf](const auto & value) { FieldVisitorCompatibleWriteBinary()(value, buf); }, field);
 }
 
 void readFieldBinary(Field & field, ReadBuffer & buf)
 {
     UInt8 read_type = 0;
     readBinary(read_type, buf);
-    auto type = Field::Types::Which(read_type);
-    readFieldBinaryBlobImpl(field, type, buf);
+    auto type = static_cast<Field::Types::Which>(read_type);
+
+    field = Field::dispatch(FieldVisitorCompatibleReadBinary(buf), type);
 }
 
 void Field::toProto(Protos::Field & proto) const
