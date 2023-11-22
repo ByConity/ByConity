@@ -1,10 +1,10 @@
 Projection
 │     Expressions: [n_name], revenue:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))`
 └─ Sorting
-   │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) desc nulls_last}
+   │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST}
    └─ Gather Exchange
       └─ Sorting
-         │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) desc nulls_last}
+         │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST}
          └─ MergingAggregated
             └─ Repartition Exchange
                │     Partition by: {n_name}

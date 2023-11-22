@@ -11,10 +11,10 @@
 Projection Est. ? rows
 │     Expressions: [a, b]
 └─ Sorting Est. ? rows
-   │     Order by: {a asc}
+   │     Order by: {a ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
-         │     Order by: {a asc}
+         │     Order by: {a ASC NULLS LAST}
          └─ Filter Est. ? rows
             │     Condition: multiIf(a = 6, a + a, b + a) > 10
             └─ TableScan test.multiIf Est. ? rows
@@ -23,10 +23,10 @@ Projection Est. ? rows
 Projection Est. ? rows
 │     Expressions: [a, b]
 └─ Sorting Est. ? rows
-   │     Order by: {a asc}
+   │     Order by: {a ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
-         │     Order by: {a asc}
+         │     Order by: {a ASC NULLS LAST}
          └─ Filter Est. ? rows
             │     Condition: multiIf(a = 3, b + b, a * a) > 10
             └─ TableScan test.multiIf Est. ? rows
@@ -43,10 +43,10 @@ Projection Est. ? rows
 Projection Est. ? rows
 │     Expressions: [a, b]
 └─ Sorting Est. ? rows
-   │     Order by: {a asc}
+   │     Order by: {a ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
-         │     Order by: {a asc}
+         │     Order by: {a ASC NULLS LAST}
          └─ Filter Est. ? rows
             │     Condition: (a + 2) < 10
             └─ TableScan test.multiIf Est. ? rows
@@ -55,10 +55,10 @@ Projection Est. ? rows
 Projection Est. ? rows
 │     Expressions: [a, b]
 └─ Sorting Est. ? rows
-   │     Order by: {a asc}
+   │     Order by: {a ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
-         │     Order by: {a asc}
+         │     Order by: {a ASC NULLS LAST}
          └─ TableScan test.multiIf Est. ? rows
                   Outputs: [a, b]
 5	6
@@ -70,10 +70,10 @@ Projection Est. ? rows
 Projection Est. ? rows
 │     Expressions: [a, b]
 └─ Sorting Est. ? rows
-   │     Order by: {a asc}
+   │     Order by: {a ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
-         │     Order by: {a asc}
+         │     Order by: {a ASC NULLS LAST}
          └─ Filter Est. ? rows
             │     Condition: (a + 4) < 10
             └─ TableScan test.multiIf Est. ? rows
@@ -82,9 +82,9 @@ Projection Est. ? rows
 Projection Est. ? rows
 │     Expressions: [a, b]
 └─ Sorting Est. ? rows
-   │     Order by: {a asc}
+   │     Order by: {a ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
-         │     Order by: {a asc}
+         │     Order by: {a ASC NULLS LAST}
          └─ TableScan test.multiIf Est. ? rows
                   Outputs: [a, b]

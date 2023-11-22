@@ -1,10 +1,10 @@
 Projection
 │     Expressions: ca_county:=ca_county_1, d_year:=d_year_1, store_q1_q2_increase:=`expr#divide(ss2.store_sales, ss1.store_sales)`, store_q2_q3_increase:=`expr#divide(ss3.store_sales, ss2.store_sales)`, web_q1_q2_increase:=`expr#divide(ws2.web_sales, ws1.web_sales)`, web_q2_q3_increase:=`expr#divide(ws3.web_sales, ws2.web_sales)`
 └─ Sorting
-   │     Order by: {ca_county_1 asc}
+   │     Order by: {ca_county_1 ASC NULLS LAST}
    └─ Gather Exchange
       └─ Sorting
-         │     Order by: {ca_county_1 asc}
+         │     Order by: {ca_county_1 ASC NULLS LAST}
          └─ Projection
             │     Expressions: [ca_county_1, d_year_1], expr#divide(ss2.store_sales, ss1.store_sales):=`expr#sum(ss_ext_sales_price)_2` / `expr#sum(ss_ext_sales_price)_1`, expr#divide(ss3.store_sales, ss2.store_sales):=`expr#sum(ss_ext_sales_price)_3` / `expr#sum(ss_ext_sales_price)_2`, expr#divide(ws2.web_sales, ws1.web_sales):=`expr#sum(ws_ext_sales_price)_2` / `expr#sum(ws_ext_sales_price)_1`, expr#divide(ws3.web_sales, ws2.web_sales):=`expr#sum(ws_ext_sales_price)_3` / `expr#sum(ws_ext_sales_price)_2`
             └─ Inner Join

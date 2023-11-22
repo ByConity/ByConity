@@ -3,7 +3,7 @@ Projection Est. 1 rows
 └─ Limit Est. 1 rows
    │     Limit: 100
    └─ Sorting Est. 1 rows
-      │     Order by: {expr#count() asc}
+      │     Order by: {expr#count() ASC NULLS LAST}
       │     Limit: 100
       └─ MergingAggregated Est. 1 rows
          └─ Gather Exchange Est. 1 rows

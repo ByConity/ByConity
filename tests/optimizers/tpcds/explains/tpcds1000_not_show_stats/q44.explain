@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#rank() OVER (ORDER BY rank_col ASC) asc}
+      │     Order by: {expr#rank() OVER (ORDER BY rank_col ASC) ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#rank() OVER (ORDER BY rank_col ASC) asc}
+            │     Order by: {expr#rank() OVER (ORDER BY rank_col ASC) ASC NULLS LAST}
             │     Limit: 100
             └─ Inner Join
                │     Condition: ss_item_sk_1 == i_item_sk_1

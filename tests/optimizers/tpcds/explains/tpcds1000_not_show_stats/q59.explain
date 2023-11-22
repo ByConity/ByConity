@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {s_store_name asc, s_store_id asc, d_week_seq_1 asc}
+      │     Order by: {s_store_name ASC NULLS LAST, s_store_id ASC NULLS LAST, d_week_seq_1 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {s_store_name asc, s_store_id asc, d_week_seq_1 asc}
+            │     Order by: {s_store_name ASC NULLS LAST, s_store_id ASC NULLS LAST, d_week_seq_1 ASC NULLS LAST}
             │     Limit: 100
             └─ Inner Join
                │     Condition: d_week_seq_1 == minus(d_week_seq_3, 52), s_store_id == s_store_id_1

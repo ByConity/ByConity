@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#'store channel'_1 asc, expr#concat('store', s_store_id)_1 asc}
+      │     Order by: {expr#'store channel'_1 ASC NULLS LAST, expr#concat('store', s_store_id)_1 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#'store channel'_1 asc, expr#concat('store', s_store_id)_1 asc}
+            │     Order by: {expr#'store channel'_1 ASC NULLS LAST, expr#concat('store', s_store_id)_1 ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange

@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {d_year asc, expr#sum(ss_ext_sales_price) desc nulls_last, i_brand_id asc}
+      │     Order by: {d_year ASC NULLS LAST, expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 204 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {d_year asc, expr#sum(ss_ext_sales_price) desc nulls_last, i_brand_id asc}
+            │     Order by: {d_year ASC NULLS LAST, expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
             │     Limit: 100
             └─ Projection Est. 204 rows
                │     Expressions: [expr#sum(ss_ext_sales_price), i_brand, i_brand_id], d_year:=2000

@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, d_year asc, i_category_id asc, i_category asc}
+      │     Order by: {expr#sum(ss_ext_sales_price) DESC NULLS LAST, d_year ASC NULLS LAST, i_category_id ASC NULLS LAST, i_category ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, d_year asc, i_category_id asc, i_category asc}
+            │     Order by: {expr#sum(ss_ext_sales_price) DESC NULLS LAST, d_year ASC NULLS LAST, i_category_id ASC NULLS LAST, i_category ASC NULLS LAST}
             │     Limit: 100
             └─ Projection
                │     Expressions: [expr#sum(ss_ext_sales_price), i_category, i_category_id], d_year:=2000

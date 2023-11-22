@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {s_store_name asc, i_item_desc asc}
+      │     Order by: {s_store_name ASC NULLS LAST, i_item_desc ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 150300000 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {s_store_name asc, i_item_desc asc}
+            │     Order by: {s_store_name ASC NULLS LAST, i_item_desc ASC NULLS LAST}
             │     Limit: 100
             └─ Inner Join Est. 150300000 rows
                │     Condition: ss_store_sk_1 == s_store_sk

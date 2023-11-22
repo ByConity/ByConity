@@ -1,10 +1,10 @@
 Projection Est. 19800 rows
 │     Expressions: Call_Center:=cc_call_center_id, Call_Center_Name:=cc_name, Manager:=cc_manager, Returns_Loss:=`expr#sum(cr_net_loss)`
 └─ Sorting Est. 19800 rows
-   │     Order by: {expr#sum(cr_net_loss) desc nulls_last}
+   │     Order by: {expr#sum(cr_net_loss) DESC NULLS LAST}
    └─ Gather Exchange Est. 19800 rows
       └─ Sorting Est. 19800 rows
-         │     Order by: {expr#sum(cr_net_loss) desc nulls_last}
+         │     Order by: {expr#sum(cr_net_loss) DESC NULLS LAST}
          └─ MergingAggregated Est. 19800 rows
             └─ Repartition Exchange Est. 19800 rows
                │     Partition by: {cc_call_center_id, cc_name, cc_manager, cd_marital_status, cd_education_status}

@@ -1,10 +1,10 @@
 Projection
 │     Expressions: [s_address, s_name, s_phone, s_suppkey], total_revenue:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))_1`
 └─ Sorting
-   │     Order by: {s_suppkey asc}
+   │     Order by: {s_suppkey ASC NULLS LAST}
    └─ Gather Exchange
       └─ Sorting
-         │     Order by: {s_suppkey asc}
+         │     Order by: {s_suppkey ASC NULLS LAST}
          └─ Inner Join
             │     Condition: s_suppkey == l_suppkey_1
             │     Runtime Filters Builder: {l_suppkey_1}

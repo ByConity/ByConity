@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
+      │     Order by: {i_category ASC NULLS LAST, i_class ASC NULLS LAST, i_item_id ASC NULLS LAST, i_item_desc ASC NULLS LAST, expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)) ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 8293371 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
+            │     Order by: {i_category ASC NULLS LAST, i_class ASC NULLS LAST, i_item_id ASC NULLS LAST, i_item_desc ASC NULLS LAST, expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)) ASC NULLS LAST}
             │     Limit: 100
             └─ Projection Est. 8293371 rows
                │     Expressions: [expr#sum(cs_ext_sales_price), i_category, i_class, i_current_price, i_item_desc, i_item_id], expr#divide(multiply(sum(cs_ext_sales_price), 100), sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)):=(`expr#sum(cs_ext_sales_price)` * 100) / `expr#sum(sum(cs_ext_sales_price)) OVER (PARTITION BY i_class)`

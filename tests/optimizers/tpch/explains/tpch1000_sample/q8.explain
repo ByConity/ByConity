@@ -1,10 +1,10 @@
 Projection Est. 729 rows
 │     Expressions: mkt_share:=`expr#divide(sum(multiIf(equals(nation, 'BRAZIL'), volume, 0)), sum(volume))`, o_year:=`expr#toYear(o_orderdate)`
 └─ Sorting Est. 729 rows
-   │     Order by: {expr#toYear(o_orderdate) asc}
+   │     Order by: {expr#toYear(o_orderdate) ASC NULLS LAST}
    └─ Gather Exchange Est. 729 rows
       └─ Sorting Est. 729 rows
-         │     Order by: {expr#toYear(o_orderdate) asc}
+         │     Order by: {expr#toYear(o_orderdate) ASC NULLS LAST}
          └─ Projection Est. 729 rows
             │     Expressions: [expr#toYear(o_orderdate)], expr#divide(sum(multiIf(equals(nation, 'BRAZIL'), volume, 0)), sum(volume)):=`expr#sum(multiIf(equals(nation, 'BRAZIL'), volume, 0))` / `expr#sum(volume)`
             └─ MergingAggregated Est. 729 rows

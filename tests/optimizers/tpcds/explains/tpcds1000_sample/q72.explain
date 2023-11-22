@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {expr#count() desc nulls_last, i_item_desc asc, w_warehouse_name asc, d_week_seq asc}
+      │     Order by: {expr#count() DESC NULLS LAST, i_item_desc ASC NULLS LAST, w_warehouse_name ASC NULLS LAST, d_week_seq ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 215213076 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {expr#count() desc nulls_last, i_item_desc asc, w_warehouse_name asc, d_week_seq asc}
+            │     Order by: {expr#count() DESC NULLS LAST, i_item_desc ASC NULLS LAST, w_warehouse_name ASC NULLS LAST, d_week_seq ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated Est. 215213076 rows
                └─ Repartition Exchange Est. 215213076 rows

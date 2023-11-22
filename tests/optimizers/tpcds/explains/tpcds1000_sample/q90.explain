@@ -3,7 +3,7 @@ Projection Est. 1 rows
 └─ Limit Est. 1 rows
    │     Limit: 100
    └─ Sorting Est. 1 rows
-      │     Order by: {expr#divide(CAST(amc, 'decimal(15, 4)'), CAST(pmc, 'decimal(15, 4)')) asc}
+      │     Order by: {expr#divide(CAST(amc, 'decimal(15, 4)'), CAST(pmc, 'decimal(15, 4)')) ASC NULLS LAST}
       │     Limit: 100
       └─ Projection Est. 1 rows
          │     Expressions: expr#divide(CAST(amc, 'decimal(15, 4)'), CAST(pmc, 'decimal(15, 4)')):=CAST(`expr#count()`, 'decimal(15, 4)') / CAST(`expr#count()_1`, 'decimal(15, 4)')

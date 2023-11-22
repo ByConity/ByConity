@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {o_totalprice desc nulls_last, o_orderdate asc}
+      │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 9401727122 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {o_totalprice desc nulls_last, o_orderdate asc}
+            │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
             │     Limit: 100
             └─ Aggregating Est. 8353329596 rows
                │     Group by: {c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice}

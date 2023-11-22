@@ -3,7 +3,7 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#uniqExact(ws_order_number) asc}
+      │     Order by: {expr#uniqExact(ws_order_number) ASC NULLS LAST}
       │     Limit: 100
       └─ MergingAggregated
          └─ Gather Exchange

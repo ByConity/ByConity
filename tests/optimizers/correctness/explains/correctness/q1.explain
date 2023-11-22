@@ -8,11 +8,11 @@ Projection Est. 2 rows
       └─ Limit Est. 2 rows
          │     Limit: 2
          └─ Sorting Est. 2 rows
-            │     Order by: {a_1 asc}
+            │     Order by: {a_1 ASC NULLS LAST}
             │     Limit: 2
             └─ Gather Exchange Est. 2 rows
                └─ Sorting Est. 2 rows
-                  │     Order by: {a_1 asc}
+                  │     Order by: {a_1 ASC NULLS LAST}
                   │     Limit: 2
                   └─ TableScan correctness.q1_t1 Est. ? rows
                            Outputs: a_1:=a, b_1:=b

@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {expr#plus(grouping(s_state), grouping(s_county)) desc nulls_last, expr#multiIf(equals(plus(grouping(s_state), grouping(s_county)), 0), s_state, NULL) asc, expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC) asc}
+      │     Order by: {expr#plus(grouping(s_state), grouping(s_county)) DESC NULLS LAST, expr#multiIf(equals(plus(grouping(s_state), grouping(s_county)), 0), s_state, NULL) ASC NULLS LAST, expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC) ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 513 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {expr#plus(grouping(s_state), grouping(s_county)) desc nulls_last, expr#multiIf(equals(plus(grouping(s_state), grouping(s_county)), 0), s_state, NULL) asc, expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC) asc}
+            │     Order by: {expr#plus(grouping(s_state), grouping(s_county)) DESC NULLS LAST, expr#multiIf(equals(plus(grouping(s_state), grouping(s_county)), 0), s_state, NULL) ASC NULLS LAST, expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC) ASC NULLS LAST}
             │     Limit: 100
             └─ Projection Est. 513 rows
                │     Expressions: [expr#plus(grouping(s_state), grouping(s_county)), expr#rank() OVER (PARTITION BY grouping(s_state) + grouping(s_county), multiIf(grouping(s_county) = 0, s_state, NULL) ORDER BY sum(ss_net_profit) DESC), expr#sum(ss_net_profit)_1, s_county, s_state], expr#multiIf(equals(plus(grouping(s_state), grouping(s_county)), 0), s_state, NULL):=multiIf(`expr#plus(grouping(s_state), grouping(s_county))` = 0, s_state, NULL)

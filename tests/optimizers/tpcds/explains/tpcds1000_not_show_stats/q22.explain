@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#avg(inv_quantity_on_hand) asc, i_product_name asc, i_brand asc, i_class asc, i_category asc}
+      │     Order by: {expr#avg(inv_quantity_on_hand) ASC NULLS LAST, i_product_name ASC NULLS LAST, i_brand ASC NULLS LAST, i_class ASC NULLS LAST, i_category ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#avg(inv_quantity_on_hand) asc, i_product_name asc, i_brand asc, i_class asc, i_category asc}
+            │     Order by: {expr#avg(inv_quantity_on_hand) ASC NULLS LAST, i_product_name ASC NULLS LAST, i_brand ASC NULLS LAST, i_class ASC NULLS LAST, i_category ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange

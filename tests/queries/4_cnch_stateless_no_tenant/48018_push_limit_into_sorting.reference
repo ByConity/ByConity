@@ -3,11 +3,11 @@ Projection Est. 3 rows, cost 1.502000e+00
 └─ Limit Est. 3 rows, cost 1.280000e+00
    │     Limit: 3 Offset: 4
    └─ Sorting Est. 7 rows, cost 1.280000e+00
-      │     Order by: {a asc}
+      │     Order by: {a ASC NULLS LAST}
       │     Limit: 7
       └─ Gather Exchange Est. 7 rows, cost 1.280000e+00
          └─ Sorting Est. 7 rows, cost 0.000000e+00
-            │     Order by: {a asc}
+            │     Order by: {a ASC NULLS LAST}
             │     Limit: 7
             └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
                      Outputs: [a, b]
@@ -16,11 +16,11 @@ Projection Est. 10 rows, cost 2.500000e+00
 └─ Limit Est. 10 rows, cost 1.760000e+00
    │     Limit: 10
    └─ Sorting Est. 10 rows, cost 1.760000e+00
-      │     Order by: {a asc}
+      │     Order by: {a ASC NULLS LAST}
       │     Limit: 10
       └─ Gather Exchange Est. 10 rows, cost 1.760000e+00
          └─ Sorting Est. 10 rows, cost 0.000000e+00
-            │     Order by: {a asc}
+            │     Order by: {a ASC NULLS LAST}
             │     Limit: 10
             └─ TableScan test.t1 Est. ? rows, cost 0.000000e+00
                      Outputs: [a]

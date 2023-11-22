@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#'store channel'_1 asc, s_store_sk_2 asc}
+      │     Order by: {expr#'store channel'_1 ASC NULLS LAST, s_store_sk_2 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#'store channel'_1 asc, s_store_sk_2 asc}
+            │     Order by: {expr#'store channel'_1 ASC NULLS LAST, s_store_sk_2 ASC NULLS LAST}
             │     Limit: 100
             └─ Aggregating
                │     Group by: {expr#'store channel'_1, s_store_sk_2}

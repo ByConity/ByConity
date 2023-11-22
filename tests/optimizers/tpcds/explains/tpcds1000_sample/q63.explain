@@ -3,11 +3,11 @@ Projection Est. 1 rows
 └─ Limit Est. 1 rows
    │     Limit: 100
    └─ Sorting Est. 1 rows
-      │     Order by: {i_manager_id asc, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id) asc, expr#sum(ss_sales_price) asc}
+      │     Order by: {i_manager_id ASC NULLS LAST, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id) ASC NULLS LAST, expr#sum(ss_sales_price) ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 1 rows
          └─ Sorting Est. 1 rows
-            │     Order by: {i_manager_id asc, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id) asc, expr#sum(ss_sales_price) asc}
+            │     Order by: {i_manager_id ASC NULLS LAST, expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id) ASC NULLS LAST, expr#sum(ss_sales_price) ASC NULLS LAST}
             │     Limit: 100
             └─ Filter Est. 1 rows
                │     Condition: multiIf(`expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)` > 0, abs(`expr#sum(ss_sales_price)` - `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)`) / `expr#avg(sum(ss_sales_price)) OVER (PARTITION BY i_manager_id)`, NULL) > '0.1'

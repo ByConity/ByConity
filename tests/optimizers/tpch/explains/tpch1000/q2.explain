@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {s_acctbal desc nulls_last, n_name asc, s_name asc, p_partkey asc}
+      │     Order by: {s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, p_partkey ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 2863901 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {s_acctbal desc nulls_last, n_name asc, s_name asc, p_partkey asc}
+            │     Order by: {s_acctbal DESC NULLS LAST, n_name ASC NULLS LAST, s_name ASC NULLS LAST, p_partkey ASC NULLS LAST}
             │     Limit: 100
             └─ Inner Join Est. 2863900 rows
                │     Condition: ps_suppkey == s_suppkey

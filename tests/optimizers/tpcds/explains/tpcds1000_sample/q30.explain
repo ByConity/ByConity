@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {c_customer_id asc, c_salutation asc, c_first_name asc, c_last_name asc, c_preferred_cust_flag asc, c_birth_day asc, c_birth_month asc, c_birth_year asc, c_birth_country asc, c_login asc, c_email_address asc, c_last_review_date_sk asc, expr#sum(wr_return_amt)_1 asc}
+      │     Order by: {c_customer_id ASC NULLS LAST, c_salutation ASC NULLS LAST, c_first_name ASC NULLS LAST, c_last_name ASC NULLS LAST, c_preferred_cust_flag ASC NULLS LAST, c_birth_day ASC NULLS LAST, c_birth_month ASC NULLS LAST, c_birth_year ASC NULLS LAST, c_birth_country ASC NULLS LAST, c_login ASC NULLS LAST, c_email_address ASC NULLS LAST, c_last_review_date_sk ASC NULLS LAST, expr#sum(wr_return_amt)_1 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 645759 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {c_customer_id asc, c_salutation asc, c_first_name asc, c_last_name asc, c_preferred_cust_flag asc, c_birth_day asc, c_birth_month asc, c_birth_year asc, c_birth_country asc, c_login asc, c_email_address asc, c_last_review_date_sk asc, expr#sum(wr_return_amt)_1 asc}
+            │     Order by: {c_customer_id ASC NULLS LAST, c_salutation ASC NULLS LAST, c_first_name ASC NULLS LAST, c_last_name ASC NULLS LAST, c_preferred_cust_flag ASC NULLS LAST, c_birth_day ASC NULLS LAST, c_birth_month ASC NULLS LAST, c_birth_year ASC NULLS LAST, c_birth_country ASC NULLS LAST, c_login ASC NULLS LAST, c_email_address ASC NULLS LAST, c_last_review_date_sk ASC NULLS LAST, expr#sum(wr_return_amt)_1 ASC NULLS LAST}
             │     Limit: 100
             └─ Inner Join Est. 676798 rows
                │     Condition: ca_state_1 == ca_state_3

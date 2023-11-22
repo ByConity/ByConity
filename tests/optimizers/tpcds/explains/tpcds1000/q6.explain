@@ -3,11 +3,11 @@ Projection Est. 46 rows
 └─ Limit Est. 46 rows
    │     Limit: 100
    └─ Sorting Est. 46 rows
-      │     Order by: {expr#count() asc, ca_state asc}
+      │     Order by: {expr#count() ASC NULLS LAST, ca_state ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 46 rows
          └─ Sorting Est. 46 rows
-            │     Order by: {expr#count() asc, ca_state asc}
+            │     Order by: {expr#count() ASC NULLS LAST, ca_state ASC NULLS LAST}
             │     Limit: 100
             └─ Filter Est. 46 rows
                │     Condition: `expr#count()` >= 10

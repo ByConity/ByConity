@@ -1,10 +1,10 @@
 Projection Est. 12030 rows
 │     Expressions: [C_NATION], d_year:=`expr#toYear(LO_ORDERDATE)`, profit:=`expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST))`
 └─ Sorting Est. 12030 rows
-   │     Order by: {expr#toYear(LO_ORDERDATE) asc, C_NATION asc}
+   │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, C_NATION ASC NULLS LAST}
    └─ Gather Exchange Est. 12030 rows
       └─ Sorting Est. 12030 rows
-         │     Order by: {expr#toYear(LO_ORDERDATE) asc, C_NATION asc}
+         │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, C_NATION ASC NULLS LAST}
          └─ MergingAggregated Est. 12030 rows
             └─ Repartition Exchange Est. 12030 rows
                │     Partition by: {expr#toYear(LO_ORDERDATE), C_NATION}

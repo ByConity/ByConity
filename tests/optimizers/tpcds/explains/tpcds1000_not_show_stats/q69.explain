@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {cd_gender asc, cd_marital_status asc, cd_education_status asc, cd_purchase_estimate asc, cd_credit_rating asc}
+      │     Order by: {cd_gender ASC NULLS LAST, cd_marital_status ASC NULLS LAST, cd_education_status ASC NULLS LAST, cd_purchase_estimate ASC NULLS LAST, cd_credit_rating ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {cd_gender asc, cd_marital_status asc, cd_education_status asc, cd_purchase_estimate asc, cd_credit_rating asc}
+            │     Order by: {cd_gender ASC NULLS LAST, cd_marital_status ASC NULLS LAST, cd_education_status ASC NULLS LAST, cd_purchase_estimate ASC NULLS LAST, cd_credit_rating ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange

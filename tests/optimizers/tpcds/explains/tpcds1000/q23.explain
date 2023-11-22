@@ -179,11 +179,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {c_last_name_2 asc, c_first_name_2 asc, expr#sum(multiply(cs_quantity, cs_list_price))_1 asc}
+      │     Order by: {c_last_name_2 ASC NULLS LAST, c_first_name_2 ASC NULLS LAST, expr#sum(multiply(cs_quantity, cs_list_price))_1 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 29557361 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {c_last_name_2 asc, c_first_name_2 asc, expr#sum(multiply(cs_quantity, cs_list_price))_1 asc}
+            │     Order by: {c_last_name_2 ASC NULLS LAST, c_first_name_2 ASC NULLS LAST, expr#sum(multiply(cs_quantity, cs_list_price))_1 ASC NULLS LAST}
             │     Limit: 100
             └─ Union Est. 29557361 rows
                │     OutputToInputs: c_first_name_2 = [c_first_name,c_first_name_1], expr#sum(multiply(cs_quantity, cs_list_price))_1 = [expr#sum(multiply(cs_quantity, cs_list_price)),expr#sum(multiply(ws_quantity, ws_list_price))], c_last_name_2 = [c_last_name,c_last_name_1]

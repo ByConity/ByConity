@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {ca_zip asc, ca_city asc}
+      │     Order by: {ca_zip ASC NULLS LAST, ca_city ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {ca_zip asc, ca_city asc}
+            │     Order by: {ca_zip ASC NULLS LAST, ca_city ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange

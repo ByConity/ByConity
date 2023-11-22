@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#sum(act_sales) asc, ss_customer_sk asc}
+      │     Order by: {expr#sum(act_sales) ASC NULLS LAST, ss_customer_sk ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#sum(act_sales) asc, ss_customer_sk asc}
+            │     Order by: {expr#sum(act_sales) ASC NULLS LAST, ss_customer_sk ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange

@@ -1,10 +1,10 @@
 Projection Est. 40261 rows
 │     Expressions: [s_address, s_name]
 └─ Sorting Est. 40261 rows
-   │     Order by: {s_name asc}
+   │     Order by: {s_name ASC NULLS LAST}
    └─ Gather Exchange Est. 40261 rows
       └─ Sorting Est. 40261 rows
-         │     Order by: {s_name asc}
+         │     Order by: {s_name ASC NULLS LAST}
          └─ Inner Join Est. 40198 rows
             │     Condition: ps_suppkey == s_suppkey
             │     Runtime Filters Builder: {s_suppkey}

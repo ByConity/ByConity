@@ -60,10 +60,10 @@ EXPLAIN SELECT -a AS a, b FROM t40073_ansi_alias ORDER BY a ASC;
 Projection Est. ? rows
 │     Expressions: [b], a:=`expr#negate(a)`
 └─ Sorting Est. ? rows
-   │     Order by: {expr#negate(a) asc}
+   │     Order by: {expr#negate(a) ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
-         │     Order by: {expr#negate(a) asc}
+         │     Order by: {expr#negate(a) ASC NULLS LAST}
          └─ Projection Est. ? rows
             │     Expressions: [b], expr#negate(a):=-a
             └─ TableScan default.t40073_ansi_alias Est. ? rows

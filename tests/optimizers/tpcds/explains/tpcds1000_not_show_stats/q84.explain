@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {c_customer_id asc}
+      │     Order by: {c_customer_id ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {c_customer_id asc}
+            │     Order by: {c_customer_id ASC NULLS LAST}
             │     Limit: 100
             └─ Inner Join
                │     Condition: sr_cdemo_sk == c_current_cdemo_sk

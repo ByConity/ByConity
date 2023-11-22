@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {i_category asc, i_class asc, i_brand asc, i_product_name asc, d_year asc, d_qoy asc, d_moy asc, s_store_id asc, expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)) asc, expr#rank() OVER (PARTITION BY i_category ORDER BY sumsales DESC) asc}
+      │     Order by: {i_category ASC NULLS LAST, i_class ASC NULLS LAST, i_brand ASC NULLS LAST, i_product_name ASC NULLS LAST, d_year ASC NULLS LAST, d_qoy ASC NULLS LAST, d_moy ASC NULLS LAST, s_store_id ASC NULLS LAST, expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)) ASC NULLS LAST, expr#rank() OVER (PARTITION BY i_category ORDER BY sumsales DESC) ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 474889957 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {i_category asc, i_class asc, i_brand asc, i_product_name asc, d_year asc, d_qoy asc, d_moy asc, s_store_id asc, expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)) asc, expr#rank() OVER (PARTITION BY i_category ORDER BY sumsales DESC) asc}
+            │     Order by: {i_category ASC NULLS LAST, i_class ASC NULLS LAST, i_brand ASC NULLS LAST, i_product_name ASC NULLS LAST, d_year ASC NULLS LAST, d_qoy ASC NULLS LAST, d_moy ASC NULLS LAST, s_store_id ASC NULLS LAST, expr#sum(coalesce(multiply(ss_sales_price, ss_quantity), 0)) ASC NULLS LAST, expr#rank() OVER (PARTITION BY i_category ORDER BY sumsales DESC) ASC NULLS LAST}
             │     Limit: 100
             └─ Filter Est. 474889957 rows
                │     Condition: `expr#rank() OVER (PARTITION BY i_category ORDER BY sumsales DESC)` <= 100

@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {expr#'store channel'_1 asc, expr#concat('store', s_store_id)_1 asc}
+      │     Order by: {expr#'store channel'_1 ASC NULLS LAST, expr#concat('store', s_store_id)_1 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 30528 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {expr#'store channel'_1 asc, expr#concat('store', s_store_id)_1 asc}
+            │     Order by: {expr#'store channel'_1 ASC NULLS LAST, expr#concat('store', s_store_id)_1 ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated Est. 30528 rows
                └─ Repartition Exchange Est. 30528 rows

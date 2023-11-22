@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {expr#CAST(divide(revenue, 50), 'int') asc, expr#count() asc}
+      │     Order by: {expr#CAST(divide(revenue, 50), 'int') ASC NULLS LAST, expr#count() ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 2240 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {expr#CAST(divide(revenue, 50), 'int') asc, expr#count() asc}
+            │     Order by: {expr#CAST(divide(revenue, 50), 'int') ASC NULLS LAST, expr#count() ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated Est. 2240 rows
                └─ Repartition Exchange Est. 2240 rows

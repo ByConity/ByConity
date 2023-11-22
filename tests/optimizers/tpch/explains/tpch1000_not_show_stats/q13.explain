@@ -1,10 +1,10 @@
 Projection
 │     Expressions: c_count:=`expr#count(o_orderkey)`, custdist:=`expr#count()`
 └─ Sorting
-   │     Order by: {expr#count() desc nulls_last, expr#count(o_orderkey) desc nulls_last}
+   │     Order by: {expr#count() DESC NULLS LAST, expr#count(o_orderkey) DESC NULLS LAST}
    └─ Gather Exchange
       └─ Sorting
-         │     Order by: {expr#count() desc nulls_last, expr#count(o_orderkey) desc nulls_last}
+         │     Order by: {expr#count() DESC NULLS LAST, expr#count(o_orderkey) DESC NULLS LAST}
          └─ MergingAggregated
             └─ Repartition Exchange
                │     Partition by: {expr#count(o_orderkey)}

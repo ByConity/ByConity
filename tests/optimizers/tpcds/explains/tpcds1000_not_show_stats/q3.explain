@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {d_year asc, expr#sum(ss_ext_sales_price) desc nulls_last, i_brand_id asc}
+      │     Order by: {d_year ASC NULLS LAST, expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {d_year asc, expr#sum(ss_ext_sales_price) desc nulls_last, i_brand_id asc}
+            │     Order by: {d_year ASC NULLS LAST, expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange

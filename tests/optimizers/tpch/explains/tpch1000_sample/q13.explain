@@ -1,10 +1,10 @@
 Projection Est. 80166750 rows
 │     Expressions: c_count:=`expr#count(o_orderkey)`, custdist:=`expr#count()`
 └─ Sorting Est. 80166750 rows
-   │     Order by: {expr#count() desc nulls_last, expr#count(o_orderkey) desc nulls_last}
+   │     Order by: {expr#count() DESC NULLS LAST, expr#count(o_orderkey) DESC NULLS LAST}
    └─ Gather Exchange Est. 80166750 rows
       └─ Sorting Est. 80166750 rows
-         │     Order by: {expr#count() desc nulls_last, expr#count(o_orderkey) desc nulls_last}
+         │     Order by: {expr#count() DESC NULLS LAST, expr#count(o_orderkey) DESC NULLS LAST}
          └─ MergingAggregated Est. 80166750 rows
             └─ Repartition Exchange Est. 80166750 rows
                │     Partition by: {expr#count(o_orderkey)}

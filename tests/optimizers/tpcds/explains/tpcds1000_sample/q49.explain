@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {expr#'web'_1 asc, expr#rank() OVER (ORDER BY return_ratio ASC)_3 asc, expr#rank() OVER (ORDER BY currency_ratio ASC)_3 asc, ws_item_sk_1 asc}
+      │     Order by: {expr#'web'_1 ASC NULLS LAST, expr#rank() OVER (ORDER BY return_ratio ASC)_3 ASC NULLS LAST, expr#rank() OVER (ORDER BY currency_ratio ASC)_3 ASC NULLS LAST, ws_item_sk_1 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 228324 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {expr#'web'_1 asc, expr#rank() OVER (ORDER BY return_ratio ASC)_3 asc, expr#rank() OVER (ORDER BY currency_ratio ASC)_3 asc, ws_item_sk_1 asc}
+            │     Order by: {expr#'web'_1 ASC NULLS LAST, expr#rank() OVER (ORDER BY return_ratio ASC)_3 ASC NULLS LAST, expr#rank() OVER (ORDER BY currency_ratio ASC)_3 ASC NULLS LAST, ws_item_sk_1 ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated Est. 228324 rows
                └─ Repartition Exchange Est. 228324 rows

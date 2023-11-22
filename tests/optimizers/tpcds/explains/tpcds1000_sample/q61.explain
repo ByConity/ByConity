@@ -3,7 +3,7 @@ Projection Est. 1 rows
 └─ Limit Est. 1 rows
    │     Limit: 100
    └─ Sorting Est. 1 rows
-      │     Order by: {expr#sum(ss_ext_sales_price) asc, expr#sum(ss_ext_sales_price)_1 asc}
+      │     Order by: {expr#sum(ss_ext_sales_price) ASC NULLS LAST, expr#sum(ss_ext_sales_price)_1 ASC NULLS LAST}
       │     Limit: 100
       └─ Inner Join Est. 1 rows
          │     Condition: 

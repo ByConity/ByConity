@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#count() asc, ca_state asc}
+      │     Order by: {expr#count() ASC NULLS LAST, ca_state ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#count() asc, ca_state asc}
+            │     Order by: {expr#count() ASC NULLS LAST, ca_state ASC NULLS LAST}
             │     Limit: 100
             └─ Filter
                │     Condition: `expr#count()` >= 10

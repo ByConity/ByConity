@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#count() desc nulls_last, s_name asc}
+      │     Order by: {expr#count() DESC NULLS LAST, s_name ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#count() desc nulls_last, s_name asc}
+            │     Order by: {expr#count() DESC NULLS LAST, s_name ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange
