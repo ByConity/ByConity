@@ -550,9 +550,10 @@ public:
      * @param table_uuid Target table.
      * @param partition_id Target partition id of the table.
      * @param max_commit_time Only the parts that committed before `max_commit_time` will take into account.
+     * @param need_abort A lambda function that quickly decide if the callee need to abort ASAP.
      */
-    PartitionMetrics::PartitionMetricsStore
-    getPartitionMetricsStoreFromMetastore(const String & table_uuid, const String & partition_id, size_t max_commit_time);
+    PartitionMetrics::PartitionMetricsStore getPartitionMetricsStoreFromMetastore(
+        const String & table_uuid, const String & partition_id, size_t max_commit_time, std::function<bool()> need_abort);
     /**
      * @brief Recalculate the trash items metrics (table level) data of a table from metastore.
      * This is designed to be called when recalculation happens.

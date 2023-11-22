@@ -93,9 +93,9 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
 
             stage_watch.restart();
             AnalysisPtr analysis = QueryAnalyzer::analyze(cloned_query, context);
+            fillContextQueryAccessInfo(context, analysis);
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Analyzer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
-
             stage_watch.restart();
             query_plan = QueryPlanner().plan(cloned_query, *analysis, context);
             context->logOptimizerProfile(
@@ -107,7 +107,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
                 log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
             if (enable_plan_cache && query_hash && query_plan)
             {
-               if (addPlanToCache(query_hash, query_plan))
+               if (addPlanToCache(query_hash, query_plan, analysis))
                    LOG_INFO(log, "plan cache added");
             }
         }
@@ -376,6 +376,14 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::getPlanFromCache(UInt128 query_
         for (auto & cte : plan_object->cte_map)
             cte_tmp.add(cte.first, PlanCacheManager::getNewPlanNode(cte.second, context, false, max_id));
 
+        if (plan_object->query_info && context->hasQueryContext())
+        {
+            for (auto & [database, table_info] : plan_object->query_info->query_access_info)
+            {
+                for (auto & [table, columns] : table_info)
+                    context->addQueryAccessInfo(database, table, columns);
+            }
+        }
         auto node_id_allocator = std::make_shared<PlanNodeIdAllocator>(max_id+1);
         return  std::make_unique<QueryPlan>(root, cte_tmp, node_id_allocator);
 
@@ -387,7 +395,7 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::getPlanFromCache(UInt128 query_
     }
 }
 
-bool InterpreterSelectQueryUseOptimizer::addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan)
+bool InterpreterSelectQueryUseOptimizer::addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan, AnalysisPtr analysis)
 {
     if (!context->getPlanCacheManager())
         throw Exception("plan cache has to be initialized", ErrorCodes::LOGICAL_ERROR);
@@ -400,12 +408,25 @@ bool InterpreterSelectQueryUseOptimizer::addPlanToCache(UInt128 query_hash, Quer
         return false;
 
     PlanNodeId max_id;
-    PlanCacheManager::PlanObjectValue plan_object;
+    PlanCacheManager::PlanObjectValue plan_object{};
     plan_object.plan_root = PlanCacheManager::getNewPlanNode(root, context, true, max_id);
 
     for (const auto & cte : plan->getCTEInfo().getCTEs())
         plan_object.cte_map.emplace(cte.first, PlanCacheManager::getNewPlanNode(cte.second, context, true, max_id));
 
+    plan_object.query_info = std::make_shared<PlanCacheManager::QueryInfo>();
+    const auto & used_columns_map = analysis->getUsedColumns();
+    for (const auto & [table_ast, storage_analysis] : analysis->getStorages())
+    {
+        if (!storage_analysis.storage)
+            continue;
+        auto storage_id = storage_analysis.storage->getStorageID();
+        if (auto it = used_columns_map.find(storage_analysis.storage->getStorageID()); it != used_columns_map.end())
+        {
+            for (const auto & column : it->second)
+                plan_object.query_info->query_access_info[backQuoteIfNeed(storage_id.getDatabaseName())][storage_id.getFullTableName()].emplace_back(column);
+        }
+    }
     cache.add(query_hash, plan_object);
     return true;
 }
@@ -417,6 +438,28 @@ void InterpreterSelectQueryUseOptimizer::setPlanSegmentInfoForExplainAnalyze(Pla
     {
         ExplainAnalyzeVisitor explain_visitor;
         VisitorUtil::accept(final_segment->getQueryPlan().getRoot(), explain_visitor, plan_segment_tree->getNodes());
+    }
+}
+
+void InterpreterSelectQueryUseOptimizer::fillContextQueryAccessInfo(ContextPtr context, AnalysisPtr & analysis)
+{
+    if (context->hasQueryContext())
+    {
+        const auto & used_columns_map = analysis->getUsedColumns();
+        for (const auto & [table_ast, storage_analysis] : analysis->getStorages())
+        {
+            Names required_columns;
+            auto storage_id = storage_analysis.storage->getStorageID();
+            if (auto it = used_columns_map.find(storage_analysis.storage->getStorageID()); it != used_columns_map.end())
+            {
+                for (const auto & column : it->second)
+                    required_columns.emplace_back(column);
+            }
+            context->getQueryContext()->addQueryAccessInfo(
+                backQuoteIfNeed(storage_id.getDatabaseName()),
+                storage_id.getFullTableName(),
+                required_columns);
+        }
     }
 }
 
