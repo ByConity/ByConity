@@ -285,6 +285,7 @@ Strings CnchBGThreadPartitionSelector::selectForGC(const StoragePtr & storage)
         LOG_TRACE(log, "{} GCThread: do round-robin as estimators is empty.", storage_id.getNameForLogs());
         return doRoundRobinPick(storage, GCType, n);
     }
+    LOG_TRACE(log, "{} GCThread: estimators size - {}", storage_id.getNameForLogs(), estimators.size());
 
     for (const auto & [_, estimator] : estimators)
     {
@@ -297,6 +298,7 @@ Strings CnchBGThreadPartitionSelector::selectForGC(const StoragePtr & storage)
         LOG_TRACE(log, "{} GCThread: do round-robin as candidates is empty.", storage_id.getNameForLogs());
         return doRoundRobinPick(storage, GCType, n);
     }
+    LOG_TRACE(log, "{} GCThread: candidates size - {}", storage_id.getNameForLogs(), candidates.size());
 
     Strings res{};
     size_t i = 0;

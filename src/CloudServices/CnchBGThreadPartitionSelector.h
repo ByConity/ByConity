@@ -20,7 +20,6 @@ struct StorageID;
 
 constexpr double GC_SPEED_FAST_ENOUGH = 0.95;
 constexpr double MERGE_SPEED_FAST_ENOUGH = 1.2;
-constexpr size_t MIN_GC_PART_SIZE = 100;
 constexpr size_t POSTPONE_DURATION_SEC = 30;
 
 struct MergeGCSpeedEstimator
@@ -79,7 +78,7 @@ struct MergeGCSpeedEstimator
 
     bool eligibleForGC() const
     {
-        return remove_parts >= MIN_GC_PART_SIZE && gc_speed <= GC_SPEED_FAST_ENOUGH;
+        return gc_speed <= GC_SPEED_FAST_ENOUGH;
     }
 
 private:

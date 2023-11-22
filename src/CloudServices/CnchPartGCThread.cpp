@@ -425,6 +425,8 @@ Strings CnchPartGCThread::selectPartitions(const StoragePtr & storage)
 {
     StringSet res;
     swapCandidatePartitions(res);
+    LOG_TRACE(log, "Candidate partitions: {}", fmt::format("{}", fmt::join(res, ",")));
+
     auto from_partition_selector = partition_selector->selectForGC(storage);
     if (from_partition_selector.empty())
     {

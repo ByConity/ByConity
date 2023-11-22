@@ -76,7 +76,7 @@ using StringSet = std::set<String>;
     auto getLastWakeupTime() const { return last_wakeup_time.load(std::memory_order_relaxed); }
     auto getNumWakeup() const { return num_wakeup.load(std::memory_order_relaxed); }
 
-    void addCandidatePartition(String & p)
+    void addCandidatePartition(const String & p)
     {
        std::lock_guard lock(candidate_partitions_mutex);
        candidate_partitions.insert(p);
