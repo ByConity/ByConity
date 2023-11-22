@@ -205,7 +205,7 @@ brpc::CallId CnchWorkerClient::preloadDataParts(
     auto * response = new Protos::PreloadDataPartsResp();
     /// adjust the timeout to prevent timeout if there are too many parts to send,
     const auto & settings = context->getSettingsRef();
-    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
+    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, settings.brpc_data_parts_timeout_ms.totalMilliseconds());
     cntl->set_timeout_ms(send_timeout);
 
     auto call_id = cntl->call_id();
@@ -227,7 +227,7 @@ brpc::CallId CnchWorkerClient::dropPartDiskCache(
     Protos::DropPartDiskCacheResp response;
 
     const auto & settings = context->getSettingsRef();
-    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
+    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, settings.brpc_data_parts_timeout_ms.totalMilliseconds());
     cntl.set_timeout_ms(send_timeout);
 
     request.set_txn_id(txn_id);
@@ -276,7 +276,7 @@ brpc::CallId CnchWorkerClient::sendQueryDataParts(
     auto * response = new Protos::SendDataPartsResp();
     /// adjust the timeout to prevent timeout if there are too many parts to send,
     const auto & settings = context->getSettingsRef();
-    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, 30 * 1000L);
+    auto send_timeout = std::max(settings.max_execution_time.value.totalMilliseconds() >> 1, settings.brpc_data_parts_timeout_ms.totalMilliseconds());
     cntl->set_timeout_ms(send_timeout);
 
     auto call_id = cntl->call_id();
@@ -370,8 +370,8 @@ brpc::CallId CnchWorkerClient::sendResources(
 
     brpc::Controller * cntl = new brpc::Controller;
     /// send_timeout refers to the time to send resource to worker
-    /// If max_execution_time is not set, the send_timeout will be set to 30s
-    auto send_timeout_ms = max_execution_time ? max_execution_time * 1000L : 30 * 1000L;
+    /// If max_execution_time is not set, the send_timeout will be set to brpc_data_parts_timeout_ms
+    auto send_timeout_ms = max_execution_time ? max_execution_time * 1000L : settings.brpc_data_parts_timeout_ms.totalMilliseconds();
     cntl->set_timeout_ms(send_timeout_ms);
     const auto call_id = cntl->call_id();
     auto * response = new Protos::SendResourcesResp();
