@@ -5,11 +5,11 @@ Projection Est. 100 rows
    └─ Projection Est. 100 rows
       │     Expressions: [expr#concat('DHL', ',', 'BARIAN')_2, expr#sum(apr_net), expr#sum(apr_sales), expr#sum(aug_net), expr#sum(aug_sales), expr#sum(dec_net), expr#sum(dec_sales), expr#sum(divide(apr_sales, w_warehouse_sq_ft)), expr#sum(divide(aug_sales, w_warehouse_sq_ft)), expr#sum(divide(dec_sales, w_warehouse_sq_ft)), expr#sum(divide(feb_sales, w_warehouse_sq_ft)), expr#sum(divide(jan_sales, w_warehouse_sq_ft)), expr#sum(divide(jul_sales, w_warehouse_sq_ft)), expr#sum(divide(jun_sales, w_warehouse_sq_ft)), expr#sum(divide(mar_sales, w_warehouse_sq_ft)), expr#sum(divide(may_sales, w_warehouse_sq_ft)), expr#sum(divide(nov_sales, w_warehouse_sq_ft)), expr#sum(divide(oct_sales, w_warehouse_sq_ft)), expr#sum(divide(sep_sales, w_warehouse_sq_ft)), expr#sum(feb_net), expr#sum(feb_sales), expr#sum(jan_net), expr#sum(jan_sales), expr#sum(jul_net), expr#sum(jul_sales), expr#sum(jun_net), expr#sum(jun_sales), expr#sum(mar_net), expr#sum(mar_sales), expr#sum(may_net), expr#sum(may_sales), expr#sum(nov_net), expr#sum(nov_sales), expr#sum(oct_net), expr#sum(oct_sales), expr#sum(sep_net), expr#sum(sep_sales), w_city_2, w_country_2, w_county_2, w_state_2, w_warehouse_name_2, w_warehouse_sq_ft_2], d_year_2:=2001
       └─ Sorting Est. 100 rows
-         │     Order by: {w_warehouse_name_2 asc}
+         │     Order by: {w_warehouse_name_2 ASC NULLS LAST}
          │     Limit: 100
          └─ Gather Exchange Est. 1576848 rows
             └─ Sorting Est. 100 rows
-               │     Order by: {w_warehouse_name_2 asc}
+               │     Order by: {w_warehouse_name_2 ASC NULLS LAST}
                │     Limit: 100
                └─ Aggregating Est. 1576848 rows
                   │     Group by: {w_warehouse_name_2, w_warehouse_sq_ft_2, w_city_2, w_county_2, w_state_2, w_country_2, expr#concat('DHL', ',', 'BARIAN')_2}

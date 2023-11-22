@@ -5,11 +5,11 @@ Projection
    └─ Projection
       │     Expressions: block_number:=`expr#block_number`, expr#sum(multiply(gas, gas_price)):=`expr#sumMerge(gas_fee)`
       └─ Sorting
-         │     Order by: {expr#block_number asc}
+         │     Order by: {expr#block_number ASC NULLS LAST}
          │     Limit: 10
          └─ Gather Exchange
             └─ Sorting
-               │     Order by: {expr#block_number asc}
+               │     Order by: {expr#block_number ASC NULLS LAST}
                │     Limit: 10
                └─ MergingAggregated
                   └─ Repartition Exchange
@@ -20,7 +20,7 @@ Projection
                         └─ Projection
                            │     Expressions: expr#block_number:=block_number, expr#gas_fee:=gas_fee
                            └─ TopNFiltering
-                              │     Order by: {block_number asc}
+                              │     Order by: {block_number ASC NULLS LAST}
                               │     Size: 10
                               └─ TableScan test.block_number_agg_sum_hit_mv_target
                                        Outputs: [gas_fee, block_number]
@@ -30,11 +30,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {block_number_2 desc nulls_last, transaction_index_2 desc nulls_last}
+      │     Order by: {block_number_2 DESC NULLS LAST, transaction_index_2 DESC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {block_number_2 desc nulls_last, transaction_index_2 desc nulls_last}
+            │     Order by: {block_number_2 DESC NULLS LAST, transaction_index_2 DESC NULLS LAST}
             │     Limit: 100
             └─ Union
                │     OutputToInputs: input_2 = [input,input_1], transaction_hash_2 = [transaction_hash,transaction_hash_1], transaction_index_2 = [transaction_index,transaction_index_1], block_number_2 = [block_number,block_number_1]

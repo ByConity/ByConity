@@ -1,10 +1,10 @@
 Projection Est. 134284017 rows
 │     Expressions: cntrycode:=`expr#substring(c_phone, 1, 2)`, numcust:=`expr#count()`, totacctbal:=`expr#sum(c_acctbal)`
 └─ Sorting Est. 134284017 rows
-   │     Order by: {expr#substring(c_phone, 1, 2) asc}
+   │     Order by: {expr#substring(c_phone, 1, 2) ASC NULLS LAST}
    └─ Gather Exchange Est. 134284017 rows
       └─ Sorting Est. 134284017 rows
-         │     Order by: {expr#substring(c_phone, 1, 2) asc}
+         │     Order by: {expr#substring(c_phone, 1, 2) ASC NULLS LAST}
          └─ MergingAggregated Est. 134284017 rows
             └─ Repartition Exchange Est. 134284017 rows
                │     Partition by: {expr#substring(c_phone, 1, 2)}

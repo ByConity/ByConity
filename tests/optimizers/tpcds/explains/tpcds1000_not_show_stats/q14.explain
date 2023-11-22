@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#'store'_1 asc, i_brand_id_9 asc, i_class_id_9 asc, i_category_id_9 asc}
+      │     Order by: {expr#'store'_1 ASC NULLS LAST, i_brand_id_9 ASC NULLS LAST, i_class_id_9 ASC NULLS LAST, i_category_id_9 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#'store'_1 asc, i_brand_id_9 asc, i_class_id_9 asc, i_category_id_9 asc}
+            │     Order by: {expr#'store'_1 ASC NULLS LAST, i_brand_id_9 ASC NULLS LAST, i_class_id_9 ASC NULLS LAST, i_category_id_9 ASC NULLS LAST}
             │     Limit: 100
             └─ Aggregating
                │     Group by: {expr#'store'_1, i_brand_id_9, i_class_id_9, i_category_id_9}
@@ -299,11 +299,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#'store'_2 asc, i_brand_id_20 asc, i_class_id_20 asc, i_category_id_20 asc}
+      │     Order by: {expr#'store'_2 ASC NULLS LAST, i_brand_id_20 ASC NULLS LAST, i_class_id_20 ASC NULLS LAST, i_category_id_20 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#'store'_2 asc, i_brand_id_20 asc, i_class_id_20 asc, i_category_id_20 asc}
+            │     Order by: {expr#'store'_2 ASC NULLS LAST, i_brand_id_20 ASC NULLS LAST, i_class_id_20 ASC NULLS LAST, i_category_id_20 ASC NULLS LAST}
             │     Limit: 100
             └─ Inner Join
                │     Condition: i_brand_id_20 == i_brand_id_27, i_category_id_20 == i_category_id_27, i_class_id_20 == i_class_id_27

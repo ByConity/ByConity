@@ -1,10 +1,10 @@
 Projection Est. 31909611 rows
 │     Expressions: [ps_partkey], value:=`expr#sum(multiply(ps_supplycost, ps_availqty))`
 └─ Sorting Est. 31909611 rows
-   │     Order by: {expr#sum(multiply(ps_supplycost, ps_availqty)) desc nulls_last}
+   │     Order by: {expr#sum(multiply(ps_supplycost, ps_availqty)) DESC NULLS LAST}
    └─ Gather Exchange Est. 31909611 rows
       └─ Sorting Est. 31909611 rows
-         │     Order by: {expr#sum(multiply(ps_supplycost, ps_availqty)) desc nulls_last}
+         │     Order by: {expr#sum(multiply(ps_supplycost, ps_availqty)) DESC NULLS LAST}
          └─ Inner Join Est. 31909611 rows
             │     Condition: 
             │     Filter: `expr#sum(multiply(ps_supplycost, ps_availqty))` > `expr#multiply(sum(multiply(ps_supplycost, ps_availqty)), '0.0001')`

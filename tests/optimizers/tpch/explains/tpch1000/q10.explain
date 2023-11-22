@@ -3,11 +3,11 @@ Projection Est. 20 rows
 └─ Limit Est. 20 rows
    │     Limit: 20
    └─ Sorting Est. 20 rows
-      │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) desc nulls_last}
+      │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST}
       │     Limit: 20
       └─ Gather Exchange Est. 322891680 rows
          └─ Sorting Est. 20 rows
-            │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) desc nulls_last}
+            │     Order by: {expr#sum(multiply(l_extendedprice, minus(1, l_discount))) DESC NULLS LAST}
             │     Limit: 20
             └─ MergingAggregated Est. 322891680 rows
                └─ Repartition Exchange Est. 322891680 rows

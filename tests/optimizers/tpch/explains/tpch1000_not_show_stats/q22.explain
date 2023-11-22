@@ -1,10 +1,10 @@
 Projection
 │     Expressions: cntrycode:=`expr#substring(c_phone, 1, 2)`, numcust:=`expr#count()`, totacctbal:=`expr#sum(c_acctbal)`
 └─ Sorting
-   │     Order by: {expr#substring(c_phone, 1, 2) asc}
+   │     Order by: {expr#substring(c_phone, 1, 2) ASC NULLS LAST}
    └─ Gather Exchange
       └─ Sorting
-         │     Order by: {expr#substring(c_phone, 1, 2) asc}
+         │     Order by: {expr#substring(c_phone, 1, 2) ASC NULLS LAST}
          └─ MergingAggregated
             └─ Repartition Exchange
                │     Partition by: {expr#substring(c_phone, 1, 2)}

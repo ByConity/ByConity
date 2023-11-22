@@ -1,10 +1,10 @@
 Projection Est. 131451 rows
 │     Expressions: [t_hour, t_minute], brand:=i_brand, brand_id:=i_brand_id, ext_price:=`expr#sum(ext_price)`
 └─ Sorting Est. 131451 rows
-   │     Order by: {expr#sum(ext_price) desc nulls_last, i_brand_id asc}
+   │     Order by: {expr#sum(ext_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
    └─ Gather Exchange Est. 131451 rows
       └─ Sorting Est. 131451 rows
-         │     Order by: {expr#sum(ext_price) desc nulls_last, i_brand_id asc}
+         │     Order by: {expr#sum(ext_price) DESC NULLS LAST, i_brand_id ASC NULLS LAST}
          └─ MergingAggregated Est. 131451 rows
             └─ Repartition Exchange Est. 131451 rows
                │     Partition by: {i_brand, i_brand_id, t_hour, t_minute}

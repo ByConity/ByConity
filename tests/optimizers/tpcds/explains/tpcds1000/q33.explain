@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {expr#sum(total_sales) asc}
+      │     Order by: {expr#sum(total_sales) ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 3000 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {expr#sum(total_sales) asc}
+            │     Order by: {expr#sum(total_sales) ASC NULLS LAST}
             │     Limit: 100
             └─ Aggregating Est. 3000 rows
                │     Group by: {i_manufact_id_6}

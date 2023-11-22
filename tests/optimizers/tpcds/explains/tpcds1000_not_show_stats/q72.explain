@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#count() desc nulls_last, i_item_desc asc, w_warehouse_name asc, d_week_seq asc}
+      │     Order by: {expr#count() DESC NULLS LAST, i_item_desc ASC NULLS LAST, w_warehouse_name ASC NULLS LAST, d_week_seq ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#count() desc nulls_last, i_item_desc asc, w_warehouse_name asc, d_week_seq asc}
+            │     Order by: {expr#count() DESC NULLS LAST, i_item_desc ASC NULLS LAST, w_warehouse_name ASC NULLS LAST, d_week_seq ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange

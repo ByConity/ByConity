@@ -546,6 +546,9 @@ struct Settings;
     M(Bool, bitengine_use_key_string, false, "BitEngine support String key", 0) \
     M(Bool, bitengine_use_key_int, true, "BitEngine support UInt64 key, default way", 0) \
     M(String, underlying_dictionary_tables, "{}", "To specify a table to store BitEngine dictionary data, only in Cnch", 0) \
+    M(Bool, enable_hybrid_allocation, false, "Whether or not enable hybrid allocation, default disabled", 0) \
+    M(UInt64, min_rows_per_vp, 2000000, "Minimum size of a virtual part", 0) \
+    M(Float, part_to_vw_size_ratio, 0.1, "Part to vw worker size's ration", 0) \
     \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \

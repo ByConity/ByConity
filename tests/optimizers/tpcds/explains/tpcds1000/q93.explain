@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {expr#sum(act_sales) asc, ss_customer_sk asc}
+      │     Order by: {expr#sum(act_sales) ASC NULLS LAST, ss_customer_sk ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 11950709 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {expr#sum(act_sales) asc, ss_customer_sk asc}
+            │     Order by: {expr#sum(act_sales) ASC NULLS LAST, ss_customer_sk ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated Est. 11950709 rows
                └─ Repartition Exchange Est. 11950709 rows

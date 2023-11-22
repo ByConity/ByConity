@@ -1,10 +1,10 @@
 Projection
 │     Expressions: nation:=n_name, o_year:=`expr#toYear(o_orderdate)`, sum_profit:=`expr#sum(amount)`
 └─ Sorting
-   │     Order by: {n_name asc, expr#toYear(o_orderdate) desc nulls_last}
+   │     Order by: {n_name ASC NULLS LAST, expr#toYear(o_orderdate) DESC NULLS LAST}
    └─ Gather Exchange
       └─ Sorting
-         │     Order by: {n_name asc, expr#toYear(o_orderdate) desc nulls_last}
+         │     Order by: {n_name ASC NULLS LAST, expr#toYear(o_orderdate) DESC NULLS LAST}
          └─ MergingAggregated
             └─ Repartition Exchange
                │     Partition by: {n_name, expr#toYear(o_orderdate)}

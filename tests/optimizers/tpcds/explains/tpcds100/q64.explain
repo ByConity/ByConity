@@ -1,10 +1,10 @@
 Projection Est. 46148863 rows
 │     Expressions: b_city:=ca_city_2, b_street_name:=ca_street_name_2, b_street_number:=ca_street_number_2, b_zip:=ca_zip_2, c_city:=ca_city_3, c_street_name:=ca_street_name_3, c_street_number:=ca_street_number_3, c_zip:=ca_zip_3, cnt:=`expr#count()_1`, cnt_1:=`expr#count()_2`, product_name:=i_product_name_1, s11:=`expr#sum(ss_wholesale_cost)_1`, s12:=`expr#sum(ss_wholesale_cost)_2`, s21:=`expr#sum(ss_list_price)_1`, s22:=`expr#sum(ss_list_price)_2`, s31:=`expr#sum(ss_coupon_amt)_1`, s32:=`expr#sum(ss_coupon_amt)_2`, store_name:=s_store_name_1, store_zip:=s_zip_1, syear:=d_year_3, syear_1:=d_year_6
 └─ Sorting Est. 46148863 rows
-   │     Order by: {i_product_name_1 asc, s_store_name_1 asc, expr#count()_2 asc, expr#sum(ss_wholesale_cost)_1 asc, expr#sum(ss_wholesale_cost)_2 asc}
+   │     Order by: {i_product_name_1 ASC NULLS LAST, s_store_name_1 ASC NULLS LAST, expr#count()_2 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_1 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_2 ASC NULLS LAST}
    └─ Gather Exchange Est. 46148863 rows
       └─ Sorting Est. 46148863 rows
-         │     Order by: {i_product_name_1 asc, s_store_name_1 asc, expr#count()_2 asc, expr#sum(ss_wholesale_cost)_1 asc, expr#sum(ss_wholesale_cost)_2 asc}
+         │     Order by: {i_product_name_1 ASC NULLS LAST, s_store_name_1 ASC NULLS LAST, expr#count()_2 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_1 ASC NULLS LAST, expr#sum(ss_wholesale_cost)_2 ASC NULLS LAST}
          └─ Inner Join Est. 46148863 rows
             │     Condition: i_item_sk_2 == i_item_sk_1, s_store_name_2 == s_store_name_1, s_zip_2 == s_zip_1
             │     Filter: `expr#count()_2` <= `expr#count()_1`

@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {c_customer_id asc, c_salutation asc, c_first_name asc, c_last_name asc, ca_street_number asc, ca_street_name asc, ca_street_type asc, ca_suite_number asc, ca_city asc, ca_county asc, ca_state_2 asc, ca_zip asc, ca_country asc, ca_gmt_offset asc, ca_location_type asc, expr#sum(cr_return_amt_inc_tax)_1 asc}
+      │     Order by: {c_customer_id ASC NULLS LAST, c_salutation ASC NULLS LAST, c_first_name ASC NULLS LAST, c_last_name ASC NULLS LAST, ca_street_number ASC NULLS LAST, ca_street_name ASC NULLS LAST, ca_street_type ASC NULLS LAST, ca_suite_number ASC NULLS LAST, ca_city ASC NULLS LAST, ca_county ASC NULLS LAST, ca_state_2 ASC NULLS LAST, ca_zip ASC NULLS LAST, ca_country ASC NULLS LAST, ca_gmt_offset ASC NULLS LAST, ca_location_type ASC NULLS LAST, expr#sum(cr_return_amt_inc_tax)_1 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 1387236 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {c_customer_id asc, c_salutation asc, c_first_name asc, c_last_name asc, ca_street_number asc, ca_street_name asc, ca_street_type asc, ca_suite_number asc, ca_city asc, ca_county asc, ca_state_2 asc, ca_zip asc, ca_country asc, ca_gmt_offset asc, ca_location_type asc, expr#sum(cr_return_amt_inc_tax)_1 asc}
+            │     Order by: {c_customer_id ASC NULLS LAST, c_salutation ASC NULLS LAST, c_first_name ASC NULLS LAST, c_last_name ASC NULLS LAST, ca_street_number ASC NULLS LAST, ca_street_name ASC NULLS LAST, ca_street_type ASC NULLS LAST, ca_suite_number ASC NULLS LAST, ca_city ASC NULLS LAST, ca_county ASC NULLS LAST, ca_state_2 ASC NULLS LAST, ca_zip ASC NULLS LAST, ca_country ASC NULLS LAST, ca_gmt_offset ASC NULLS LAST, ca_location_type ASC NULLS LAST, expr#sum(cr_return_amt_inc_tax)_1 ASC NULLS LAST}
             │     Limit: 100
             └─ Inner Join Est. 1409802 rows
                │     Condition: ca_state_1 == ca_state_3

@@ -820,8 +820,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         const auto *sort = dynamic_cast<const SortingStep *>(plan.get());
         std::vector<String> sort_columns;
         for (const auto & desc : sort->getSortDescription())
-            sort_columns.emplace_back(
-                desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+            sort_columns.emplace_back(desc.format());
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
         if (sort->getLimit())
             out << intent.detailIntent() << "Limit: " << sort->getLimit();
@@ -978,8 +977,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         const auto *topn_filter = dynamic_cast<const TopNFilteringStep *>(plan.get());
         std::vector<String> sort_columns;
         for (const auto & desc : topn_filter->getSortDescription())
-            sort_columns.emplace_back(
-                desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+            sort_columns.emplace_back(desc.format());
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
         out << intent.detailIntent() << "Size: " << topn_filter->getSize();
     }
@@ -1095,7 +1093,7 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
         const auto * sort = dynamic_cast<const SortingStep *>(step.get());
         std::vector<String> sort_columns;
         for (const auto & desc : sort->getSortDescription())
-            step_vector_detail["OrderBy"].emplace_back(desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+            step_vector_detail["OrderBy"].emplace_back(desc.format());
         if (sort->getLimit())
             step_detail["Limit"] = std::to_string(sort->getLimit());
     }
@@ -1286,8 +1284,7 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
         const auto *topn_filter = dynamic_cast<const TopNFilteringStep *>(step.get());
         std::vector<String> sort_columns;
         for (const auto & desc : topn_filter->getSortDescription())
-            step_vector_detail["OrderBy"].emplace_back(
-                desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+            step_vector_detail["OrderBy"].emplace_back(desc.format());
         step_detail["Size"] = std::to_string(topn_filter->getSize());
     }
 

@@ -3,7 +3,7 @@ Projection Est. 1 rows
 └─ Limit Est. 1 rows
    │     Limit: 100
    └─ Sorting Est. 1 rows
-      │     Order by: {expr#uniqExact(cs_order_number) asc}
+      │     Order by: {expr#uniqExact(cs_order_number) ASC NULLS LAST}
       │     Limit: 100
       └─ MergingAggregated Est. 1 rows
          └─ Gather Exchange Est. 1 rows

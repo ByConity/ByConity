@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, i_brand asc, i_brand_id asc, i_manufact_id asc, i_manufact asc}
+      │     Order by: {expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand ASC NULLS LAST, i_brand_id ASC NULLS LAST, i_manufact_id ASC NULLS LAST, i_manufact ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 58956 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {expr#sum(ss_ext_sales_price) desc nulls_last, i_brand asc, i_brand_id asc, i_manufact_id asc, i_manufact asc}
+            │     Order by: {expr#sum(ss_ext_sales_price) DESC NULLS LAST, i_brand ASC NULLS LAST, i_brand_id ASC NULLS LAST, i_manufact_id ASC NULLS LAST, i_manufact ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated Est. 58956 rows
                └─ Repartition Exchange Est. 58956 rows

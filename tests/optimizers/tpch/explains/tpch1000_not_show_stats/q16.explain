@@ -1,10 +1,10 @@
 Projection
 │     Expressions: [p_brand, p_size, p_type], supplier_cnt:=`expr#uniqExact(ps_suppkey)`
 └─ Sorting
-   │     Order by: {expr#uniqExact(ps_suppkey) desc nulls_last, p_brand asc, p_type asc, p_size asc}
+   │     Order by: {expr#uniqExact(ps_suppkey) DESC NULLS LAST, p_brand ASC NULLS LAST, p_type ASC NULLS LAST, p_size ASC NULLS LAST}
    └─ Gather Exchange
       └─ Sorting
-         │     Order by: {expr#uniqExact(ps_suppkey) desc nulls_last, p_brand asc, p_type asc, p_size asc}
+         │     Order by: {expr#uniqExact(ps_suppkey) DESC NULLS LAST, p_brand ASC NULLS LAST, p_type ASC NULLS LAST, p_size ASC NULLS LAST}
          └─ MergingAggregated
             └─ Repartition Exchange
                │     Partition by: {p_brand, p_type, p_size}

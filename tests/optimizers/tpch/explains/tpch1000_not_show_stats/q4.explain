@@ -1,10 +1,10 @@
 Projection
 │     Expressions: [o_orderpriority], order_count:=`expr#count()`
 └─ Sorting
-   │     Order by: {o_orderpriority asc}
+   │     Order by: {o_orderpriority ASC NULLS LAST}
    └─ Gather Exchange
       └─ Sorting
-         │     Order by: {o_orderpriority asc}
+         │     Order by: {o_orderpriority ASC NULLS LAST}
          └─ MergingAggregated
             └─ Repartition Exchange
                │     Partition by: {o_orderpriority}

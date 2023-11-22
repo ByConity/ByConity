@@ -1,10 +1,10 @@
 Projection
 │     Expressions: [s_address, s_name]
 └─ Sorting
-   │     Order by: {s_name asc}
+   │     Order by: {s_name ASC NULLS LAST}
    └─ Gather Exchange
       └─ Sorting
-         │     Order by: {s_name asc}
+         │     Order by: {s_name ASC NULLS LAST}
          └─ Inner Join
             │     Condition: s_suppkey == ps_suppkey
             │     Runtime Filters Builder: {ps_suppkey}

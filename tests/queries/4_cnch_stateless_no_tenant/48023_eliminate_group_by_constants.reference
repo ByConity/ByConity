@@ -3,11 +3,11 @@ Projection Est. 100 rows, cost 9.720000e+00
 └─ Limit Est. 100 rows, cost 2.320000e+00
    │     Limit: 100
    └─ Sorting Est. 100 rows, cost 2.320000e+00
-      │     Order by: {expr#\'store\'_1 asc, ss_store_sk_1 asc, i_category_3 asc}
+      │     Order by: {expr#\'store\'_1 ASC NULLS LAST, ss_store_sk_1 ASC NULLS LAST, i_category_3 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. ? rows, cost 2.320000e+00
          └─ Sorting Est. 100 rows, cost 2.160000e+00
-            │     Order by: {expr#\'store\'_1 asc, ss_store_sk_1 asc, i_category_3 asc}
+            │     Order by: {expr#\'store\'_1 ASC NULLS LAST, ss_store_sk_1 ASC NULLS LAST, i_category_3 ASC NULLS LAST}
             │     Limit: 100
             └─ Projection Est. ? rows, cost 2.160000e+00
                │     Expressions: [expr#\'store\'_1, expr#count(), i_category_3], ss_store_sk_1:=NULL

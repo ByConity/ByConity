@@ -1,10 +1,10 @@
 Projection Est. 844506 rows
 │     Expressions: [P_BRAND, S_CITY], d_year:=`expr#toYear(LO_ORDERDATE)`, profit:=`expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST))`
 └─ Sorting Est. 844506 rows
-   │     Order by: {expr#toYear(LO_ORDERDATE) asc, S_CITY asc, P_BRAND asc}
+   │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, S_CITY ASC NULLS LAST, P_BRAND ASC NULLS LAST}
    └─ Gather Exchange Est. 844506 rows
       └─ Sorting Est. 844506 rows
-         │     Order by: {expr#toYear(LO_ORDERDATE) asc, S_CITY asc, P_BRAND asc}
+         │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, S_CITY ASC NULLS LAST, P_BRAND ASC NULLS LAST}
          └─ MergingAggregated Est. 844506 rows
             └─ Repartition Exchange Est. 844506 rows
                │     Partition by: {expr#toYear(LO_ORDERDATE), S_CITY, P_BRAND}

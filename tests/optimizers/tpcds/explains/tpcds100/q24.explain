@@ -1,10 +1,10 @@
 Projection Est. 12540 rows
 │     Expressions: c_first_name:=c_first_name_1, c_last_name:=c_last_name_1, paid:=`expr#sum(netpaid)`, s_store_name:=s_store_name_1
 └─ Sorting Est. 12540 rows
-   │     Order by: {c_last_name_1 asc, c_first_name_1 asc, s_store_name_1 asc}
+   │     Order by: {c_last_name_1 ASC NULLS LAST, c_first_name_1 ASC NULLS LAST, s_store_name_1 ASC NULLS LAST}
    └─ Gather Exchange Est. 12540 rows
       └─ Sorting Est. 12540 rows
-         │     Order by: {c_last_name_1 asc, c_first_name_1 asc, s_store_name_1 asc}
+         │     Order by: {c_last_name_1 ASC NULLS LAST, c_first_name_1 ASC NULLS LAST, s_store_name_1 ASC NULLS LAST}
          └─ Inner Join Est. 12540 rows
             │     Condition: 
             │     Filter: `expr#sum(netpaid)` > `expr#multiply('0.05', avg(netpaid))`
@@ -143,10 +143,10 @@ note: Runtime Filter is applied for 6 times.
 Projection Est. 12430 rows
 │     Expressions: c_first_name:=c_first_name_6, c_last_name:=c_last_name_6, paid:=`expr#sum(netpaid)_1`, s_store_name:=s_store_name_6
 └─ Sorting Est. 12430 rows
-   │     Order by: {c_last_name_6 asc, c_first_name_6 asc, s_store_name_6 asc}
+   │     Order by: {c_last_name_6 ASC NULLS LAST, c_first_name_6 ASC NULLS LAST, s_store_name_6 ASC NULLS LAST}
    └─ Gather Exchange Est. 12430 rows
       └─ Sorting Est. 12430 rows
-         │     Order by: {c_last_name_6 asc, c_first_name_6 asc, s_store_name_6 asc}
+         │     Order by: {c_last_name_6 ASC NULLS LAST, c_first_name_6 ASC NULLS LAST, s_store_name_6 ASC NULLS LAST}
          └─ Inner Join Est. 12430 rows
             │     Condition: 
             │     Filter: `expr#sum(netpaid)_1` > `expr#multiply('0.05', avg(netpaid))_1`

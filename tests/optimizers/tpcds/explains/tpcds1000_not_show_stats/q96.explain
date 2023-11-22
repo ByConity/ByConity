@@ -3,7 +3,7 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#count() asc}
+      │     Order by: {expr#count() ASC NULLS LAST}
       │     Limit: 100
       └─ MergingAggregated
          └─ Gather Exchange

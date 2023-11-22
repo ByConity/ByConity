@@ -1,10 +1,10 @@
 Projection Est. 2 rows
 │     Expressions: [l_linestatus, l_returnflag], avg_disc:=`expr#avg(l_discount)`, avg_price:=`expr#avg(l_extendedprice)`, avg_qty:=`expr#avg(l_quantity)`, count_order:=`expr#count()`, sum_base_price:=`expr#sum(l_extendedprice)`, sum_charge:=`expr#sum(multiply(multiply(l_extendedprice, minus(1, l_discount)), plus(1, l_tax)))`, sum_disc_price:=`expr#sum(multiply(l_extendedprice, minus(1, l_discount)))`, sum_qty:=`expr#sum(l_quantity)`
 └─ Sorting Est. 2 rows
-   │     Order by: {l_returnflag asc, l_linestatus asc}
+   │     Order by: {l_returnflag ASC NULLS LAST, l_linestatus ASC NULLS LAST}
    └─ Gather Exchange Est. 2 rows
       └─ Sorting Est. 2 rows
-         │     Order by: {l_returnflag asc, l_linestatus asc}
+         │     Order by: {l_returnflag ASC NULLS LAST, l_linestatus ASC NULLS LAST}
          └─ MergingAggregated Est. 2 rows
             └─ Repartition Exchange Est. 2 rows
                │     Partition by: {l_returnflag, l_linestatus}

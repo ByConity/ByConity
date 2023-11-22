@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {o_totalprice desc nulls_last, o_orderdate asc}
+      │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {o_totalprice desc nulls_last, o_orderdate asc}
+            │     Order by: {o_totalprice DESC NULLS LAST, o_orderdate ASC NULLS LAST}
             │     Limit: 100
             └─ Aggregating
                │     Group by: {c_name, c_custkey, o_orderkey, o_orderdate, o_totalprice}

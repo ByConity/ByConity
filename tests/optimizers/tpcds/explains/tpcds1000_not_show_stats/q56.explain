@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#sum(total_sales) asc, i_item_id_6 asc}
+      │     Order by: {expr#sum(total_sales) ASC NULLS LAST, i_item_id_6 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#sum(total_sales) asc, i_item_id_6 asc}
+            │     Order by: {expr#sum(total_sales) ASC NULLS LAST, i_item_id_6 ASC NULLS LAST}
             │     Limit: 100
             └─ Aggregating
                │     Group by: {i_item_id_6}

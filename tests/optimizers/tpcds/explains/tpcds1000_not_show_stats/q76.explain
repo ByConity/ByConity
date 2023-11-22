@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#'store'_1 asc, expr#'ss_store_sk'_1 asc, d_year_3 asc, d_qoy_3 asc, i_category_3 asc}
+      │     Order by: {expr#'store'_1 ASC NULLS LAST, expr#'ss_store_sk'_1 ASC NULLS LAST, d_year_3 ASC NULLS LAST, d_qoy_3 ASC NULLS LAST, i_category_3 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#'store'_1 asc, expr#'ss_store_sk'_1 asc, d_year_3 asc, d_qoy_3 asc, i_category_3 asc}
+            │     Order by: {expr#'store'_1 ASC NULLS LAST, expr#'ss_store_sk'_1 ASC NULLS LAST, d_year_3 ASC NULLS LAST, d_qoy_3 ASC NULLS LAST, i_category_3 ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated
                └─ Repartition Exchange

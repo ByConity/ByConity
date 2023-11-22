@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {c_customer_id asc}
+      │     Order by: {c_customer_id ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 5579451 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {c_customer_id asc}
+            │     Order by: {c_customer_id ASC NULLS LAST}
             │     Limit: 100
             └─ Inner Join Est. 5579451 rows
                │     Condition: sr_cdemo_sk == c_current_cdemo_sk

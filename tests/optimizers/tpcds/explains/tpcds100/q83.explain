@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {i_item_id asc, expr#sum(sr_return_quantity) asc}
+      │     Order by: {i_item_id ASC NULLS LAST, expr#sum(sr_return_quantity) ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 65882 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {i_item_id asc, expr#sum(sr_return_quantity) asc}
+            │     Order by: {i_item_id ASC NULLS LAST, expr#sum(sr_return_quantity) ASC NULLS LAST}
             │     Limit: 100
             └─ Inner Join Est. 65882 rows
                │     Condition: i_item_id_1 == i_item_id

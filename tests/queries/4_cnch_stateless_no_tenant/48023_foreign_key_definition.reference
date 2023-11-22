@@ -2,10 +2,10 @@ CREATE TABLE test.child\n(\n    `id` Nullable(UInt8),\n    `parent_id` Nullable(
 Projection Est. ? rows
 │     Expressions: [description, id, parent_id]
 └─ Sorting Est. ? rows
-   │     Order by: {id asc}
+   │     Order by: {id ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
-         │     Order by: {id asc}
+         │     Order by: {id ASC NULLS LAST}
          └─ Filter Est. ? rows
             │     Condition: isNotNull(parent_id)
             └─ TableScan test.child Est. ? rows

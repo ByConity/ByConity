@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {i_product_name asc}
+      │     Order by: {i_product_name ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 3657 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {i_product_name asc}
+            │     Order by: {i_product_name ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated Est. 3657 rows
                └─ Repartition Exchange Est. 3657 rows

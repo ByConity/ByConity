@@ -3,11 +3,11 @@ Projection Est. 10 rows
 └─ Limit Est. 10 rows
    │     Limit: 100
    └─ Sorting Est. 10 rows
-      │     Order by: {s_store_name asc}
+      │     Order by: {s_store_name ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 10 rows
          └─ Sorting Est. 10 rows
-            │     Order by: {s_store_name asc}
+            │     Order by: {s_store_name ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated Est. 10 rows
                └─ Repartition Exchange Est. 10 rows

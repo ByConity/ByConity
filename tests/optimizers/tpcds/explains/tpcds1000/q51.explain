@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) asc, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) asc}
+      │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) ASC NULLS LAST, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 30368196797 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) asc, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) asc}
+            │     Order by: {expr#multiIf(isNotNull(web.item_sk), web.item_sk, store.item_sk) ASC NULLS LAST, expr#multiIf(isNotNull(web.d_date), web.d_date, store.d_date) ASC NULLS LAST}
             │     Limit: 100
             └─ Filter Est. 30368196797 rows
                │     Condition: `expr#max(web_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)` > `expr#max(store_sales) OVER (PARTITION BY item_sk ORDER BY d_date ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)`

@@ -1,10 +1,10 @@
 Projection Est. 28590981 rows
 │     Expressions: [i_category, i_class, i_current_price, i_item_desc, i_item_id], itemrevenue:=`expr#sum(ss_ext_sales_price)`, revenueratio:=`expr#divide(multiply(sum(ss_ext_sales_price), 100), sum(sum(ss_ext_sales_price)) OVER (PARTITION BY i_class))`
 └─ Sorting Est. 28590981 rows
-   │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(ss_ext_sales_price), 100), sum(sum(ss_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
+   │     Order by: {i_category ASC NULLS LAST, i_class ASC NULLS LAST, i_item_id ASC NULLS LAST, i_item_desc ASC NULLS LAST, expr#divide(multiply(sum(ss_ext_sales_price), 100), sum(sum(ss_ext_sales_price)) OVER (PARTITION BY i_class)) ASC NULLS LAST}
    └─ Gather Exchange Est. 28590981 rows
       └─ Sorting Est. 28590981 rows
-         │     Order by: {i_category asc, i_class asc, i_item_id asc, i_item_desc asc, expr#divide(multiply(sum(ss_ext_sales_price), 100), sum(sum(ss_ext_sales_price)) OVER (PARTITION BY i_class)) asc}
+         │     Order by: {i_category ASC NULLS LAST, i_class ASC NULLS LAST, i_item_id ASC NULLS LAST, i_item_desc ASC NULLS LAST, expr#divide(multiply(sum(ss_ext_sales_price), 100), sum(sum(ss_ext_sales_price)) OVER (PARTITION BY i_class)) ASC NULLS LAST}
          └─ Projection Est. 28590981 rows
             │     Expressions: [expr#sum(ss_ext_sales_price), i_category, i_class, i_current_price, i_item_desc, i_item_id], expr#divide(multiply(sum(ss_ext_sales_price), 100), sum(sum(ss_ext_sales_price)) OVER (PARTITION BY i_class)):=(`expr#sum(ss_ext_sales_price)` * 100) / `expr#sum(sum(ss_ext_sales_price)) OVER (PARTITION BY i_class)`
             └─ Window Est. 28590981 rows

@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {ca_zip asc, ca_city asc}
+      │     Order by: {ca_zip ASC NULLS LAST, ca_city ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 3199176 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {ca_zip asc, ca_city asc}
+            │     Order by: {ca_zip ASC NULLS LAST, ca_city ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated Est. 3199176 rows
                └─ Repartition Exchange Est. 3199176 rows

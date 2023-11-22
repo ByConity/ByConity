@@ -1,10 +1,10 @@
 Projection Est. 3 rows
 │     Expressions: [P_BRAND, S_CITY], profit:=`expr#sum(minus(LO_REVENUE, LO_SUPPLYCOST))`, year:=`expr#toYear(LO_ORDERDATE)`
 └─ Sorting Est. 3 rows
-   │     Order by: {expr#toYear(LO_ORDERDATE) asc, S_CITY asc, P_BRAND asc}
+   │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, S_CITY ASC NULLS LAST, P_BRAND ASC NULLS LAST}
    └─ Gather Exchange Est. 3 rows
       └─ Sorting Est. 3 rows
-         │     Order by: {expr#toYear(LO_ORDERDATE) asc, S_CITY asc, P_BRAND asc}
+         │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, S_CITY ASC NULLS LAST, P_BRAND ASC NULLS LAST}
          └─ MergingAggregated Est. 3 rows
             └─ Repartition Exchange Est. 3 rows
                │     Partition by: {expr#toYear(LO_ORDERDATE), S_CITY, P_BRAND}

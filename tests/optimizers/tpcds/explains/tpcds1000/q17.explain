@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {i_item_id asc, i_item_desc asc, s_state asc}
+      │     Order by: {i_item_id ASC NULLS LAST, i_item_desc ASC NULLS LAST, s_state ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 666256009 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {i_item_id asc, i_item_desc asc, s_state asc}
+            │     Order by: {i_item_id ASC NULLS LAST, i_item_desc ASC NULLS LAST, s_state ASC NULLS LAST}
             │     Limit: 100
             └─ MergingAggregated Est. 666256009 rows
                └─ Repartition Exchange Est. 666256009 rows

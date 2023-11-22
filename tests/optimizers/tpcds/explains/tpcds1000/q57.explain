@@ -3,11 +3,11 @@ Projection Est. 100 rows
 └─ Limit Est. 100 rows
    │     Limit: 100
    └─ Sorting Est. 100 rows
-      │     Order by: {expr#minus(sum_sales, avg_monthly_sales) asc, cc_name_1 asc}
+      │     Order by: {expr#minus(sum_sales, avg_monthly_sales) ASC NULLS LAST, cc_name_1 ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange Est. 6593832000 rows
          └─ Sorting Est. 100 rows
-            │     Order by: {expr#minus(sum_sales, avg_monthly_sales) asc, cc_name_1 asc}
+            │     Order by: {expr#minus(sum_sales, avg_monthly_sales) ASC NULLS LAST, cc_name_1 ASC NULLS LAST}
             │     Limit: 100
             └─ Projection Est. 6593832000 rows
                │     Expressions: [cc_name_1, d_moy_1, d_year_1, expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1, expr#sum(cs_sales_price)_1, expr#sum(cs_sales_price)_2, expr#sum(cs_sales_price)_3, i_brand_1, i_category_1], expr#minus(sum_sales, avg_monthly_sales):=`expr#sum(cs_sales_price)_1` - `expr#avg(sum(cs_sales_price)) OVER (PARTITION BY i_category, i_brand, cc_name, d_year)_1`

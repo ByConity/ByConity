@@ -3,11 +3,11 @@ Projection
 └─ Limit
    │     Limit: 100
    └─ Sorting
-      │     Order by: {expr#substring(r_reason_desc, 1, 20) asc, expr#avg(ws_quantity) asc, expr#avg(wr_refunded_cash) asc, expr#avg(wr_fee) asc}
+      │     Order by: {expr#substring(r_reason_desc, 1, 20) ASC NULLS LAST, expr#avg(ws_quantity) ASC NULLS LAST, expr#avg(wr_refunded_cash) ASC NULLS LAST, expr#avg(wr_fee) ASC NULLS LAST}
       │     Limit: 100
       └─ Gather Exchange
          └─ Sorting
-            │     Order by: {expr#substring(r_reason_desc, 1, 20) asc, expr#avg(ws_quantity) asc, expr#avg(wr_refunded_cash) asc, expr#avg(wr_fee) asc}
+            │     Order by: {expr#substring(r_reason_desc, 1, 20) ASC NULLS LAST, expr#avg(ws_quantity) ASC NULLS LAST, expr#avg(wr_refunded_cash) ASC NULLS LAST, expr#avg(wr_fee) ASC NULLS LAST}
             │     Limit: 100
             └─ Projection
                │     Expressions: [expr#avg(wr_fee), expr#avg(wr_refunded_cash), expr#avg(ws_quantity)], expr#substring(r_reason_desc, 1, 20):=substring(r_reason_desc, 1, 20)
