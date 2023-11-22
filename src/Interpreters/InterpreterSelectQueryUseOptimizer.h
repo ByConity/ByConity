@@ -30,6 +30,9 @@ class Logger;
 
 namespace DB
 {
+struct Analysis;
+using AnalysisPtr = std::shared_ptr<Analysis>;
+
 class InterpreterSelectQueryUseOptimizer : public IInterpreter
 {
 public:
@@ -48,7 +51,7 @@ public:
     QueryPlanPtr buildQueryPlan();
     std::pair<PlanSegmentTreePtr, std::set<StorageID>> getPlanSegment();
     QueryPlanPtr getPlanFromCache(UInt128 query_hash);
-    bool addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan);
+    bool addPlanToCache(UInt128 query_hash, QueryPlanPtr & plan, AnalysisPtr analysis);
 
     static void setPlanSegmentInfoForExplainAnalyze(PlanSegmentTreePtr & plan_segment_tree);
 
@@ -59,6 +62,8 @@ public:
         elem.query_kind = "Select";
         elem.segment_profiles = segment_profiles;
     }
+
+    static void fillContextQueryAccessInfo(ContextPtr context, AnalysisPtr & analysis);
 
 private:
     ASTPtr query_ptr;
