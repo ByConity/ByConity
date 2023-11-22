@@ -73,11 +73,13 @@ bool CnchTopologyMaster::fetchTopologies()
             if (getContext()->getServerType() == ServerType::cnch_server && !last_topology.empty())
             {
                 /// reset cache if the server fails to sync topology for a while, prevent from ABA problem
-                if (topologies.front().getExpiration() > last_topology.front().getExpiration() + 2 * settings.topology_lease_life_ms.totalMilliseconds())
+                if (topologies.front().getExpiration()
+                        > last_topology.front().getExpiration() + 2 * settings.topology_lease_life_ms.totalMilliseconds()
+                    && topologies.front().getTerm() > last_topology.front().getTerm() + 1)
                 {
                     LOG_WARNING(log, "Reset part and table cache because of topology change");
                     if (auto cache_manager = getContext()->getPartCacheManager(); cache_manager)
-                            cache_manager->reset();
+                        cache_manager->reset();
                 }
                 else if (!topologies.front().isSameTopologyWith(last_topology.front()))
                 {
@@ -192,8 +194,8 @@ HostWithPorts CnchTopologyMaster::getTargetServerImpl(
     if (target_server.empty())
     {
         if (!allow_empty_result)
-            throw Exception("No available topology for server vw: " + server_vw_name 
-                + ", current commit time : " + std::to_string(commit_time_ms) 
+            throw Exception("No available topology for server vw: " + server_vw_name
+                + ", current commit time : " + std::to_string(commit_time_ms)
                 + ". Available topology : " + dumpTopologies(current_topology)
                 + ". Current time : " + std::to_string(time(nullptr))
                 + ". Fetch time : " + std::to_string(fetch_time)

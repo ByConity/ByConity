@@ -80,6 +80,8 @@ struct TableMetaEntry
     Catalog::PartitionMap getPartitions(const Strings & wanted_partition_ids);
     Strings getPartitionIDs();
     std::vector<std::shared_ptr<MergeTreePartition>> getPartitionList();
+
+    void forEachPartition(std::function<void(PartitionInfoPtr)> callback);
 };
 
 using TableMetaEntryPtr = std::shared_ptr<TableMetaEntry>;

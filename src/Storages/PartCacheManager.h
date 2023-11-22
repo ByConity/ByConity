@@ -165,6 +165,8 @@ private:
     std::unordered_map<UUID, TableMetaEntryPtr> active_tables;
     CnchStorageCachePtr storageCachePtr;
 
+    mutable std::mutex trashed_active_tables_mutex;
+    std::list<TableMetaEntryPtr> trashed_active_tables;
     /// A cache for the NHUT which has been written to bytekv. Do not need to update NHUT each time when non-host server commit parts
     /// bacause tso has 3 seconds interval. We just cache the latest updated NHUT and only write to metastore if current ts is
     /// different from it.
@@ -177,8 +179,11 @@ private:
 
     BackgroundSchedulePool::TaskHolder active_table_loader; // Used to load table when server start up, only execute once;
     BackgroundSchedulePool::TaskHolder meta_lock_cleaner; // remove unused meta lock periodically;
+    /// release lock periodically;
+    BackgroundSchedulePool::TaskHolder trashed_active_tables_cleaner;
 
     CnchTablePartitionMetricsHelper table_partition_metrics;
+    void cleanTrashedActiveTables();
     void cleanMetaLock();
     // load tables belongs to current server according to the topology. The task is performed asynchronously.
     void loadActiveTables();

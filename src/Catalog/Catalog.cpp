@@ -4268,42 +4268,29 @@ namespace Catalog
         return res;
     }
 
-    PartitionMetrics::PartitionMetricsStore
-    Catalog::getPartitionMetricsStoreFromMetastore(const String & table_uuid, const String & partition_id, size_t max_commit_time)
+    PartitionMetrics::PartitionMetricsStore Catalog::getPartitionMetricsStoreFromMetastore(
+        const String & table_uuid, const String & partition_id, size_t max_commit_time, std::function<bool()> need_abort)
 
     {
-        auto calculate_metrics_by_partition
-            = [&](const MergeTreeMetaBase & storage, std::unordered_map<String, Protos::DataModelPart> & parts, bool calc_visibility) {
-                  PartitionMetricsStorePtr res = std::make_shared<PartitionMetrics::PartitionMetricsStore>();
+        auto calculate_metrics_by_partition = [&](std::unordered_map<String, Protos::DataModelPart> & parts) {
+            PartitionMetricsStorePtr res = std::make_shared<PartitionMetrics::PartitionMetricsStore>();
 
-                  /// when there is drop range in this partition, we need to calculate visibility.
-                  if (calc_visibility)
-                  {
-                      ServerDataPartsVector server_parts;
-                      server_parts.reserve(parts.size());
-                      for (auto & [part_name, part] : parts)
-                      {
-                          DataModelPartWrapperPtr part_model_wrapper = createPartWrapperFromModel(storage, part);
-                          server_parts.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
-                      }
-                      auto visible_parts = CnchPartsHelper::calcVisibleParts(server_parts, false);
-                      for (const auto & s_part : server_parts)
-                          res->update(*(s_part->part_model_wrapper->part_model));
-                  }
-                  else
-                  {
-                      for (auto & [part_name, part] : parts)
-                      {
-                          /// for those block only has deleted part, just ignore them because the covered part may be already removed by GC
-                          if (part.deleted())
-                              continue;
+            for (auto & [part_name, part] : parts)
+            {
+                if (unlikely(need_abort()))
+                {
+                    LOG_WARNING(log, "getPartitionMetricsStoreFromMetastore is aborted by caller.");
+                    break;
+                }
+                /// for those block only has deleted part, just ignore them because the covered part may be already removed by GC
+                if (part.deleted())
+                    continue;
 
-                          res->update(part);
-                      }
-                  }
+                res->update(part);
+            }
 
-                  return res;
-              };
+            return res;
+        };
 
         PartitionMetrics::PartitionMetricsStore ret;
         runWithMetricSupport(
@@ -4316,14 +4303,17 @@ namespace Catalog
 
                 /// Get latest table version.
                 StoragePtr storage = getTableByUUID(context, table_uuid, max_commit_time);
-                const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
 
                 IMetaStore::IteratorPtr it = meta_proxy->getPartsInRange(name_space, table_uuid, partition_id);
 
                 std::unordered_map<String, Protos::DataModelPart> block_name_to_part;
-                bool need_calculate_visibility = false;
                 while (it->next())
                 {
+                    if (unlikely(need_abort()))
+                    {
+                        LOG_WARNING(log, "getPartitionMetricsStoreFromMetastore is aborted by caller.");
+                        break;
+                    }
                     Protos::DataModelPart part_model;
                     part_model.ParseFromString(it->value());
 
@@ -4340,10 +4330,6 @@ namespace Catalog
                         continue;
                     }
 
-                    /// if there is any drop range in current partition , we need calculate visibility when computing metrics later
-                    if (part_model.deleted() && part_info->level == MergeTreePartInfo::MAX_LEVEL)
-                        need_calculate_visibility = true;
-
                     String block_name = part_info->getBlockName();
                     auto it = block_name_to_part.find(block_name);
                     /// When there are parts with same block ID, it means the part has been marked as deleted (Remember, we have filter out partial part).
@@ -4356,7 +4342,7 @@ namespace Catalog
 
                 if (!block_name_to_part.empty())
                 {
-                    ret = *calculate_metrics_by_partition(merge_tree_storage, block_name_to_part, need_calculate_visibility);
+                    ret = *calculate_metrics_by_partition(block_name_to_part);
                 }
             },
             ProfileEvents::GetPartitionMetricsFromMetastoreSuccess,

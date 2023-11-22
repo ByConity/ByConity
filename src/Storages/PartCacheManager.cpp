@@ -73,10 +73,22 @@ PartCacheManager::PartCacheManager(ContextMutablePtr context_)
             tryLogDebugCurrentException(__PRETTY_FUNCTION__);
         }
     });
+    trashed_active_tables_cleaner = getContext()->getSchedulePool().createTask("TrashedActiveTablesCleaner", [this]() {
+        try
+        {
+            cleanTrashedActiveTables();
+        }
+        catch (...)
+        {
+            tryLogDebugCurrentException(__PRETTY_FUNCTION__);
+        }
+        this->trashed_active_tables_cleaner->scheduleAfter(5 * 60 * 1000);
+    });
     if (getContext()->getServerType() == ServerType::cnch_server)
     {
         meta_lock_cleaner->activateAndSchedule();
         active_table_loader->activateAndSchedule();
+        trashed_active_tables_cleaner->activateAndSchedule();
     }
 }
 
@@ -446,6 +458,16 @@ void PartCacheManager::invalidCacheWithNewTopology(const CnchServerTopology & to
             LOG_DEBUG(&Poco::Logger::get("PartCacheManager::invalidCacheWithNewTopology"), "Dropping part cache of {}", UUIDHelpers::UUIDToString(it->first));
             part_cache_ptr->dropCache(it->first);
             storageCachePtr->remove(it->second->database, it->second->table);
+
+            /// Send to-be-removed `TableMetaEntryPtr` to trash in order to destruct it asynchronously.
+            it->second->forEachPartition([](PartitionInfoPtr ptr) {
+                if (ptr->metrics_ptr)
+                    ptr->metrics_ptr->notifyShutDown();
+            });
+            {
+                std::unique_lock<std::mutex> lock_of_trashcan(trashed_active_tables_mutex);
+                trashed_active_tables.push_back(it->second);
+            }
             it = active_tables.erase(it);
         }
         else
@@ -457,7 +479,20 @@ void PartCacheManager::invalidCacheWithNewTopology(const CnchServerTopology & to
 
 void PartCacheManager::invalidPartCacheWithoutLock(const UUID & uuid, std::unique_lock<std::mutex> &)
 {
-    active_tables.erase(uuid);
+    /// Send to-be-removed `TableMetaEntryPtr` to trash in order to destruct it asynchronously.
+    auto it = active_tables.find(uuid);
+    if (it != active_tables.end())
+    {
+        it->second->forEachPartition([](PartitionInfoPtr ptr) {
+            if (ptr->metrics_ptr)
+                ptr->metrics_ptr->notifyShutDown();
+        });
+        {
+            std::unique_lock<std::mutex> lock_of_trashcan(trashed_active_tables_mutex);
+            trashed_active_tables.push_back(it->second);
+        }
+        active_tables.erase(it);
+    }
     LOG_DEBUG(&Poco::Logger::get("PartCacheManager::invalidPartCacheWithoutLock"), "Dropping part cache of {}", UUIDHelpers::UUIDToString(uuid));
     part_cache_ptr->dropCache(uuid);
 }
@@ -1291,11 +1326,47 @@ void PartCacheManager::reset()
 {
     LOG_DEBUG(&Poco::Logger::get("PartCacheManager::reset"), "Resetting part cache manager.");
     std::unique_lock<std::mutex> lock(cache_mutex);
+    {
+        std::unique_lock<std::mutex> lock_of_trashcan(trashed_active_tables_mutex);
+        /// We notify all the `PartitionMetrics` to shutdown in order to abort recalculation tasks ASAP.
+        /// This is a lightweight operation.
+        transform(
+            active_tables.begin(),
+            active_tables.end(),
+            std::back_inserter(trashed_active_tables),
+            [](std::unordered_map<UUID, TableMetaEntryPtr>::value_type val) {
+                val.second->forEachPartition([](PartitionInfoPtr ptr) {
+                    if (ptr->metrics_ptr)
+                        ptr->metrics_ptr->notifyShutDown();
+                });
+                return val.second;
+            });
+    }
     active_tables.clear();
+
     part_cache_ptr->reset();
     storageCachePtr->reset();
     /// reload active tables when topology change.
     active_table_loader->schedule();
+}
+
+void PartCacheManager::cleanTrashedActiveTables() {
+    while (true)
+    {
+        TableMetaEntryPtr cur;
+        {
+            std::unique_lock<std::mutex> lock(trashed_active_tables_mutex);
+            if (trashed_active_tables.size() == 0)
+            {
+                return;
+            }
+            cur = trashed_active_tables.front();
+            trashed_active_tables.pop_front();
+        }
+
+        /// The `TableMetaEntryPtr` will be released at the end
+        /// of the scope without holding the lock.
+    }
 }
 
 void PartCacheManager::shutDown()
@@ -1304,6 +1375,7 @@ void PartCacheManager::shutDown()
     table_partition_metrics.shutDown();
     active_table_loader->deactivate();
     meta_lock_cleaner->deactivate();
+    trashed_active_tables_cleaner->deactivate();
 }
 
 StoragePtr PartCacheManager::getStorageFromCache(const UUID & uuid, const PairInt64 & topology_version)

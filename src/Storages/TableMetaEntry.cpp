@@ -55,4 +55,9 @@ std::vector<std::shared_ptr<MergeTreePartition>> TableMetaEntry::getPartitionLis
     return partition_list;
 }
 
+void TableMetaEntry::forEachPartition(std::function<void(PartitionInfoPtr)> callback)
+{
+    for (auto it = partitions.begin(); it != partitions.end(); it++)
+        callback(*it);
+}
 }
