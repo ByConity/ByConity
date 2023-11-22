@@ -30,6 +30,7 @@
 #include <Processors/Pipe.h>
 #include <QueryPlan/QueryPlan.h>
 #include <bthread/mutex.h>
+#include <Poco/Logger.h>
 #include "common/types.h"
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
@@ -50,13 +51,19 @@ namespace ErrorCodes
 DiskExchangeDataManagerPtr DiskExchangeDataManager::createDiskExchangeDataManager(
     const ContextWeakMutablePtr & global_context, const ContextPtr & curr_context, const DiskExchangeDataManagerOptions & options)
 {
-    VolumePtr volume = curr_context->getStoragePolicy(options.storage_policy)->getVolumeByName(options.volume, true);
-    /// for now, we only support single disk deployment for bsp mode.
-    if (volume->getDisks().size() != 1)
-        throw Exception("volume " + options.volume + " for bsp mode should only contain one disk", ErrorCodes::LOGICAL_ERROR);
     if (options.path.empty())
         throw Exception("relative path configuration for bsp mode should not be empty", ErrorCodes::LOGICAL_ERROR);
-    DiskPtr disk = volume->getDisk();
+    VolumePtr volume = curr_context->getStoragePolicy(options.storage_policy)->getVolumeByName(options.volume, true);
+    chassert(volume);
+    /// for now, we only support single disk deployment for bsp mode.
+    DiskPtr disk = volume->getDefaultDisk();
+    chassert(disk);
+    if (volume->getDisks().size() != 1)
+        LOG_INFO(
+            &Poco::Logger::get("DiskExchangeDataManager"),
+            "bsp mode now only supports single disk, will use default disk:{} of volume:{}",
+            disk->getName(),
+            volume->getName());
     disk->createDirectories(options.path);
     /// for now we only support local disk, for new type of disks to be used, below requests must be satisfied
     /// 1. New disk type must allow *ATOMIC* create file operation.
