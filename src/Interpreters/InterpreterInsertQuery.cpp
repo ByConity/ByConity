@@ -662,7 +662,8 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
                     String bucket = s3_uri.bucket;
                     String key = s3_uri.key;
                     S3::S3Config s3_cfg(endpoint, context_ptr->getSettingsRef().s3_region.toString(), bucket,
-                        context_ptr->getSettingsRef().s3_ak_id.toString(), context_ptr->getSettingsRef().s3_ak_secret.toString(), "");
+                        context_ptr->getSettingsRef().s3_ak_id.toString(), context_ptr->getSettingsRef().s3_ak_secret.toString(),
+                        "", "", context_ptr->getSettingsRef().s3_use_virtual_hosted_style);
                     const std::shared_ptr<Aws::S3::S3Client> client = s3_cfg.create();
                     read_buf = std::make_unique<RAReadBufferFromS3>(client, bucket, key, 3,
                         DBMS_DEFAULT_BUFFER_SIZE, nullptr, 0,

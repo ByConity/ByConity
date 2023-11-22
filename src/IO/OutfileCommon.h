@@ -50,7 +50,7 @@ public:
         const std::string & compression_method_str = "",
         int compression_level = 1);
 
-    static void setOufileCompression(
+    static void setOutfileCompression(
         const ASTQueryWithOutput * query_with_output, String & outfile_compression_method_str, UInt64 & outfile_compression_level);
 
     // return true if it can export on server with tcp

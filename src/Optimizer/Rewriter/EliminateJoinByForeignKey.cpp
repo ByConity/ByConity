@@ -600,7 +600,24 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitProjectionNode(Projectio
     for (const auto & [name, ast] : assignments)
     {
         if (!Utils::isIdentifierOrIdentifierCast(ast))
+        {
+            NameOrderedSet symbols = SymbolsExtractor::extract(ast);
+            NameSet invalid_tables;
+
+            for (const auto & key : old_fp_keys.getKeysInCurrentNames(symbols))
+            {
+                invalid_tables.insert(key.getTableName());
+            }
+            for (const auto & key : old_ordinary_keys.getKeysInCurrentNames(symbols))
+            {
+                invalid_tables.insert(key.getTableName());
+            }
+            translated.downgradePkTables(invalid_tables);
+            std::unordered_map<String, JoinInfo::JoinWinner> old_winners = c.reset(invalid_tables, {c});
+            collectEliminableJoin(old_winners);
+            
             continue;
+        }
 
         // cast(pk, 'Nullable(pk_type)') is allowed, it has no effect on pk side.
         if (auto identifier = Utils::tryUnwrapCast(ast, context, names_and_types)->as<ASTIdentifier>())

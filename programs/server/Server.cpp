@@ -574,6 +574,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // ignore `max_thread_pool_size` in configs we fetch from ZK, but oh well.
     GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 10000));
 
+    do
+    {
+        unsigned cores = getNumberOfPhysicalCPUCores() * 2;
+
+        if (cores < 4)
+            break;
+
+        int res = bthread_setconcurrency(cores);
+        if (res)
+            LOG_ERROR(log, "Error when calling bthread_setconcurrency. Error number {}.", res);
+    } while (false);
+
     // Init bRPC
     BrpcApplication::getInstance().initialize(config());
 

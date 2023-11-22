@@ -2277,7 +2277,7 @@ private:
                     String compression_method_str;
                     UInt64 compression_level = 1;
 
-                    OutfileTarget::setOufileCompression(query_with_output, compression_method_str, compression_level);
+                    OutfileTarget::setOutfileCompression(query_with_output, compression_method_str, compression_level);
 
                     outfile_target = OutfileTarget::getOutfileTarget(*out_path, "", compression_method_str, compression_level);
                     out_buf = outfile_target->getOutfileBuffer(context, true).get();
