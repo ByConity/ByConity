@@ -28,3 +28,95 @@ INSERT INTO unique_with_version VALUES ('2020-10-29 23:50:00', 10001, '10001B', 
 SELECT event_time, id, s, m1, m2 FROM unique_with_version ORDER BY event_time, id;
 
 DROP TABLE IF EXISTS unique_with_version;
+
+drop table if exists unique_with_partition_version_r1;
+drop table if exists unique_with_partition_version_r2;
+drop table if exists unique_with_partition_version_r3;
+drop table if exists unique_with_partition_version_r4;
+drop table if exists unique_with_partition_version_r5;
+drop table if exists unique_with_partition_version_r6;
+drop table if exists unique_with_partition_version_r7;
+
+CREATE TABLE unique_with_partition_version_r1
+(
+    id Int64,
+    version UInt8
+)
+ENGINE=CnchMergeTree(version)
+partition by version
+order by (id, version)
+unique key (id, version);
+
+insert into unique_with_partition_version_r1 values (3, 3);
+select 'r1', * from unique_with_partition_version_r1;
+
+CREATE TABLE unique_with_partition_version_r2
+(
+    id Int64,
+    version UInt64
+)
+ENGINE=CnchMergeTree(version)
+partition by version
+order by (id, version)
+unique key (id, version);
+
+insert into unique_with_partition_version_r2 values (4, 4);
+select 'r2', * from unique_with_partition_version_r2;
+
+CREATE TABLE unique_with_partition_version_r3
+(
+    id Int64,
+    version Int64
+)
+ENGINE=CnchMergeTree(version)
+partition by version
+order by (id, version)
+unique key (id, version); -- { serverError 36 }
+
+CREATE TABLE unique_with_partition_version_r4
+(
+    id Int64,
+    version Int256
+)
+ENGINE=CnchMergeTree(version)
+partition by version
+order by (id, version)
+unique key id; -- { serverError 36 }
+
+CREATE TABLE unique_with_partition_version_r5
+(
+    id Int64,
+    version Int64
+)
+ENGINE=CnchMergeTree(toInt64(version))
+partition by toInt64(version)
+order by (id, version)
+unique key id; -- { serverError 36 }
+
+CREATE TABLE unique_with_partition_version_r6
+(
+    id Int64,
+    version Int64
+)
+ENGINE=CnchMergeTree(toUInt32(version))
+partition by toUInt32(version)
+order by (id, version)
+unique key id;
+
+CREATE TABLE unique_with_partition_version_r7
+(
+    id Int64,
+    version Int64
+)
+ENGINE=CnchMergeTree((version, id))
+partition by (version, id)
+order by (id, version)
+unique key id; -- { serverError 36 }
+
+drop table if exists unique_with_partition_version_r1;
+drop table if exists unique_with_partition_version_r2;
+drop table if exists unique_with_partition_version_r3;
+drop table if exists unique_with_partition_version_r4;
+drop table if exists unique_with_partition_version_r5;
+drop table if exists unique_with_partition_version_r6;
+drop table if exists unique_with_partition_version_r7;
