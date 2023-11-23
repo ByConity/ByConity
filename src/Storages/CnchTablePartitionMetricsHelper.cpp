@@ -218,7 +218,6 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(
     auto mgr = getContext()->getPartCacheManager();
     if (mgr == nullptr)
         return;
-    auto tables_snapshot = mgr->getTablesSnapshot();
     auto cnch_catalog = getContext()->getCnchCatalog();
 
     /// Recalculate table level `is_fully_clustered` and `load_parts_by_partition`.
