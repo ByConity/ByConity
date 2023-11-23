@@ -642,6 +642,8 @@ protected:
 
     virtual void removeImpl(bool keep_shared_data) const;
 
+    virtual void setChecksumsPtrIfNeed(const ChecksumsPtr & checksums);
+
 private:
     /// In compact parts order of columns is necessary
     NameToNumber column_name_to_position;
