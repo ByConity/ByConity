@@ -30,13 +30,13 @@ namespace DB
 {
 class Context;
 
-enum DiskCacheType {
+enum class DiskCacheType {
     File, // for generic file disk cache
     MergeTree,
     Hive
 };
 
-std::string diskCacheTypeToString(const DiskCacheType type);
+std::string diskCacheTypeToString(DiskCacheType type);
 DiskCacheType stringToDiskCacheType(const std::string & type);
 
 class DiskCacheFactory : public ext::singleton<DiskCacheFactory>

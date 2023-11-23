@@ -87,13 +87,24 @@ private:
 template <typename ProfileElement>
 void ProfileLogHub<ProfileElement>::initLogChannel(const std::string & query_id, Consumer consumer [[maybe_unused]])
 {
-    std::unique_lock<bthread::Mutex> lock(mutex);
-    if (!profile_element_queue_map.contains(query_id))
     {
-        auto queue = std::make_shared<ProfileElementQueue>(256);
-        profile_element_queue_map.emplace(query_id, queue);
+        std::unique_lock<bthread::Mutex> lock(mutex);
+        if (!profile_element_queue_map.contains(query_id))
+        {
+            auto queue = std::make_shared<ProfileElementQueue>(256);
+            profile_element_queue_map.emplace(query_id, queue);
+        }
     }
-    registerConsumer(consumer);
+    
+    try
+    {
+        registerConsumer(consumer);
+    }
+    catch (...)
+    {
+        auto err = DB::getCurrentExceptionMessage(true);
+        LOG_ERROR(logger, "Profile element log channel init occur error: " + err);
+    }
 }
 
 template <typename ProfileElement>
@@ -116,32 +127,36 @@ void ProfileLogHub<ProfileElement>::registerConsumer(const Consumer consumer)
 
     profile_element_consumers.emplace(query_id, consumer);
 
-    consume_thread_pool->scheduleOrThrowOnError([consumer, this]() {
-        try
-        {
-            LOG_DEBUG(logger, "Consumer of query:{} start consuming.", consumer->getQueryId());
-            auto & queue = profile_element_queue_map.find(consumer->getQueryId())->second;
-
-            while (consumer->stillRunning())
+    consume_thread_pool->scheduleOrThrow(
+        [consumer, this]() {
+            try
             {
-                ProfileElement element;
-                if (queue->tryPop(element, consumer->getFetchTimeout()))
-                    consumer->consume(element);
-            }
+                LOG_DEBUG(logger, "Consumer of query:{} start consuming.", consumer->getQueryId());
+                auto & queue = profile_element_queue_map.find(consumer->getQueryId())->second;
 
-            while (!queue->empty())
-            {
-                ProfileElement element;
-                if (queue->tryPop(element, consumer->getFetchTimeout()))
-                    consumer->consume(element);
+                while (consumer->stillRunning())
+                {
+                    ProfileElement element;
+                    if (queue->tryPop(element, consumer->getFetchTimeout()))
+                        consumer->consume(element);
+                }
+
+                while (!queue->empty())
+                {
+                    ProfileElement element;
+                    if (queue->tryPop(element, consumer->getFetchTimeout()))
+                        consumer->consume(element);
+                }
+                finalizeLogChannel(consumer->getQueryId());
             }
-            finalizeLogChannel(consumer->getQueryId());
-        }
-        catch (...)
-        {
-            LOG_ERROR(logger, "Profile element consume occur error.");
-        }
-    });
+            catch (...)
+            {
+                LOG_ERROR(logger, "Profile element consume occur error.");
+                throw;
+            }
+        },
+        0,
+        30 * 1000 * 1000);
 }
 
 /// the E is used here to ensure perfect forwarding in template class method

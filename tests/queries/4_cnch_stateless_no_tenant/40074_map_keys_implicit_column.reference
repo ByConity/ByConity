@@ -1,0 +1,16 @@
+-- { echo }
+-- storage that support mapKeys/mapValues implicit column optimisation
+explain select mapKeys(m) AS a, mapValues(m) AS b FROM test40074_map_keys;
+Projection Est. ? rows
+│     Expressions: a:=`m.key`, b:=`m.value`
+└─ Gather Exchange Est. ? rows
+   └─ TableScan test.test40074_map_keys Est. ? rows
+            Outputs: [m.value, m.key]
+select mapKeys(m) AS a, mapValues(m) AS b FROM test40074_map_keys;
+['foo','bar']	[1,10]
+-- storage that doesn't support mapKeys/mapValues implicit column optimisation
+explain select Settings.Names, Settings.Values from system.processes;
+Projection Est. ? rows
+│     Expressions: Settings.Names:=mapKeys(Settings), Settings.Values:=mapValues(Settings)
+└─ TableScan system.processes Est. ? rows
+         Outputs: [Settings]

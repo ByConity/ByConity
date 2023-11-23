@@ -145,7 +145,7 @@ public:
     LocalityNodeSelector(const ClusterNodes & cluster_nodes_, Poco::Logger * log_) : CommonNodeSelector(cluster_nodes_, log_)
     {
     }
-    NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context);
+    NodeSelectorResult select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr);
 };
 
 class SourceNodeSelector : public CommonNodeSelector<SourceNodeSelector>

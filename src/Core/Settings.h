@@ -236,6 +236,8 @@ enum PreloadLevelSettings : UInt64
     M(String, s3_access_key_id, "", "S3 table access key id", 0) \
     M(String, s3_access_key_secret, "", "S3 table access key secret", 0) \
     M(Bool, s3_use_read_ahead, true, "Enable read ahead buffer when read s3, now it is just for CnchS3", 0) \
+    M(UInt64, s3_max_list_nums, 1000, "Sets the maximum number of keys returned in the response, now it is just for CnchS3", 0) \
+    M(UInt64, s3_max_request_ms, 30000, "Request max timeout ms , now it is just for CnchS3", 0) \
     M(Bool, overwrite_current_file, false, "Enable overwrite current file, now it is just for CnchS3/CnchHDFS", 0) \
     M(Bool, insert_new_file, true, "Create new file when write data into the file, now it is just for CnchS3/CnchHDFS", 0) \
     M(Bool, extremes, false, "Calculate minimums and maximums of the result columns. They can be output in JSON-formats.", IMPORTANT) \
@@ -1730,7 +1732,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_optimizer_fallback, true, "Whether enable query optimizer fallback when failed", 0) \
     M(Bool, log_optimizer_run_time, false, "Whether Log optimizer runtime", 0) \
     M(Bool, enable_new_scheduler, true, "Whether enable new scheduler", 0) \
-    M(Bool, enable_send_resource_by_stage, true, "Whether send resource by stage", 0) \
     M(UInt64, plan_optimizer_timeout, 600000, "Max running time of a plan rewriter optimizer in ms", 0) \
     M(UInt64, plan_optimizer_rule_warning_time, 1000, "Send warning if a optimize rule optimize time exceed timeout", 0) \
     M(Bool, enable_plan_cache, false, "Whether enable plan cache", 0) \
@@ -1768,7 +1769,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_distinct_to_aggregate, true, "Whether enable convert distinct to group by", 0) \
     M(Bool, enable_distinct_remove, true, "Whether to eliminate redundancy during execution", 0) \
     M(Bool, enable_single_distinct_to_group_by, true, "Whether enable convert single count distinct to group by", 0) \
-    M(Bool, enable_mark_distinct_optimization, false, "Whether enable Mark distinct optimization", 0)                                            \
+    M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0)                                            \
     M(Bool, enable_common_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
     M(Bool, enable_common_join_predicate_rewrite, true, "Whether enable common predicate rewrite", 0) \
     M(Bool, enable_swap_predicate_rewrite, true, "Whether enable swap predicate rewrite", 0) \
@@ -1850,6 +1851,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_push_topn_filtering_through_projection, true, "Whether to enable PushTopNFilteringThroughProjection rules", 0) \
     M(Bool, enable_cascades_optimizer, true, "Whether to enable CascadesOptimizer", 0) \
     M(Bool, enable_iterative_rewriter, true, "Whether to enable InterativeRewriter", 0) \
+    M(Bool, enable_common_expression_sharing, true, "Whether to share common expression between steps", 0) \
+    M(Bool, enable_common_expression_sharing_for_prewhere, true, "Whether to share common expression between steps and PREWHERE", 0) \
+    M(UInt64, common_expression_sharing_threshold, 3, "The minimal cost to share a common expression, the cost is defined by (complexity * (occurrence - 1))", 0) \
     /** Optimizer relative settings, statistics */ \
     M(Bool, create_stats_time_output, true, "Enable time output in create stats, should be disabled at regression test", 0) \
     M(Bool, statistics_collect_histogram, true, "Enable histogram collection", 0) \
@@ -1880,8 +1884,9 @@ enum PreloadLevelSettings : UInt64
     M(Float, cost_calculator_projection_weight, 0.1, "CTE output weight for cost calculator", 0) \
     M(Float, stats_estimator_join_filter_selectivity, 1, "Join filter selectivity", 0) \
     M(Bool, enable_pk_fk, true, "Whether enable PK-FK join estimation", 0) \
-    M(Float, pk_selectivity, 1, "PK selectivity for join estimation", 0) \
-    /** Optimizer relative settings, CBO/CTE/MV/RF/MS */ \
+    M(Bool, enable_real_pk_fk, true, "Whether enable Real PK-FK join estimation", 0) \
+    M(Float, pk_selectivity, 1.0, "PK selectivity for join estimation", 0) \
+    /** Optimizer relative settings, CBO, CTE, MagicSet, MV */ \
     M(Bool, enable_join_reorder, true, "Whether enable join reorder", 0) \
     M(UInt64, cascades_optimizer_timeout, 10000, "Max running time of a single cascades optimizer in ms", 0) \
     M(UInt64 , max_graph_reorder_size, 6, "Max tables join order enum on graph", 0) \
@@ -1927,7 +1932,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_eliminate_join_by_fk, false, "Whether to enable RBO -- eliminate join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join, false, "Whether to eliminate complicated join by fk optimization", 0) \
     M(Bool, enable_eliminate_complicated_pk_fk_join_without_top_join, false, "Whether to allow eliminate complicated join by fk pull through pass the multi-child node even if no top join", 0) \
-    M(Bool, enable_mark_distinct_optimzation, false, "Whether enable Mark distinct optimization", 0)                                            \
     M(Bool, enable_filtered_pk_selectivity, 1, "Enable the selectivity of filtered pk table", 0) \
     \
     /** remote disk cache*/ \
@@ -2213,7 +2217,7 @@ enum PreloadLevelSettings : UInt64
     M(String, tenant_id, "", "tenant_id of cnch user", 0) \
     M(Bool, cnch_enable_merge_prefetch, true, "Enable prefetching while merge", 0) \
     M(UInt64, cnch_merge_prefetch_segment_size, 256 * 1024 * 1024, "Min segment size of file when prefetching for merge", 0) \
-    M(Bool, offloading_with_query_plan, false, "utilize query plan to offload the computation comoetely to worker", 0) \
+    M(Bool, offloading_with_query_plan, false, "utilize query plan to offload the computation completely to worker", 0) \
     M(Seconds, access_entity_ttl, 60 * 60, "TTL for access entities stored in memory in seconds", 0) \
 \
     M(Bool, debug_enable_early_partition_pruning, false, "Whether we can prune parts via query filter and partition value", 0) \
@@ -2222,13 +2226,14 @@ enum PreloadLevelSettings : UInt64
     M(String, s3_ak_secret, "", "The secret_key set by user when accessing ve s3.", 0) \
     M(String, s3_region, "", "The region set by user when accessing ve s3.", 0) \
     M(String, s3_endpoint, "", "The endpoint set by user when accessing ve s3.", 0) \
-\
+    M(Bool, s3_use_virtual_hosted_style, false, "is virtual hosted style or not, default false", 0) \
+    \
     M(Bool, enable_cache_reader_buffer_reuse, false, "Decpreated settings, only a place holder", 0) \
     M(Bool, enable_auto_query_forwarding, true, "Auto forward query to target server when having multiple servers", 0) \
     \
-    M(Bool, merge_partition_stats,false, "merge all partition stats",0 ) \
-    M(Bool, enable_three_part_identifier, true, "merge all partition stats",0 ) \
-    M(String, default_catalog, "", "current catalog",0 ) \
+    M(Bool, merge_partition_stats,false, "merge all partition stats", 0) \
+    M(Bool, enable_three_part_identifier, true, "merge all partition stats", 0) \
+    M(String, default_catalog, "", "current catalog", 0) \
     \
     /** BitEngine related settings */ \
     M(Bool, use_encoded_bitmap, true, "Whether to read the encoded bitmap column", 0) \

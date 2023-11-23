@@ -15,23 +15,28 @@
 
 #include <Optimizer/ExpressionInterpreter.h>
 
-#include <Common/FieldVisitorConvertToNumber.h>
+#include <Columns/ColumnAggregateFunction.h>
+#include <Columns/ColumnArray.h>
+#include <Columns/ColumnMap.h>
+#include <Columns/ColumnSet.h>
+#include <Columns/IColumn.h>
+#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeNothing.h>
 #include <DataTypes/DataTypeNullable.h>
-#include <DataTypes/DataTypeLowCardinality.h>
 #include <DataTypes/DataTypeSet.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
 #include <Functions/FunctionsLogical.h>
 #include <Functions/InternalFunctionRuntimeFilter.h>
+#include <Interpreters/ActionsVisitor.h>
+#include <Interpreters/convertFieldToType.h>
+#include <Interpreters/join_common.h>
 #include <Optimizer/FunctionInvoker.h>
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/Utils.h>
-#include <Interpreters/convertFieldToType.h>
-#include <Interpreters/ActionsVisitor.h>
-#include <Interpreters/join_common.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/formatAST.h>
+#include <Common/FieldVisitorConvertToNumber.h>
 
 namespace DB
 {
@@ -130,8 +135,12 @@ using namespace FunctionsLogicalDetail;
 template <typename FunctionName, typename FunctionImpl>
 struct LogicalFunctionRewriter
 {
-    static bool apply(const ASTFunction & function, InterpretIMResults argument_results, InterpretIMResult & rewrite_result,
-                      const ContextMutablePtr & context)
+    static bool apply(
+        const ASTFunction & function,
+        const ASTPtr & node,
+        InterpretIMResults argument_results,
+        InterpretIMResult & rewrite_result,
+        const ContextMutablePtr & context)
     {
         if (function.name != FunctionName::name)
             return false;
@@ -177,7 +186,7 @@ struct LogicalFunctionRewriter
             if (FunctionImpl::isSaturatedValueTernary(const_value))
             {
                 // `x AND 0` returns `0`
-                rewrite_result = {std::make_shared<DataTypeUInt8>(), ternary_to_field(const_value)};
+                rewrite_result = {std::make_shared<DataTypeUInt8>(), node, ternary_to_field(const_value)};
                 return true;
             }
             else if (FunctionImpl::isNeutralValueTernary(const_value))
@@ -187,7 +196,7 @@ struct LogicalFunctionRewriter
             else
             {
                 // `x AND NULL` return `x AND NULL`
-                argument_results.emplace_back(JoinCommon::tryConvertTypeToNullable(std::make_shared<DataTypeNothing>()), Null());
+                argument_results.emplace_back(JoinCommon::tryConvertTypeToNullable(std::make_shared<DataTypeNothing>()), node, Null());
             }
         }
 
@@ -223,7 +232,8 @@ using RewriteOr = LogicalFunctionRewriter<NameOr, OrImpl>;
 // suppose x is a non-nullable column, infer
 //   x IS NULL      ==> FALSE
 //   x IS NOT NULL  ==> TRUE
-bool simplifyNullPrediction(const ASTFunction & function, const InterpretIMResults & argument_results, InterpretIMResult & simplify_result)
+bool simplifyNullPrediction(
+    const ASTFunction & function, const ASTPtr & node, const InterpretIMResults & argument_results, InterpretIMResult & simplify_result)
 {
     bool is_null = function.name == "isNull";
     bool is_not_null = function.name == "isNotNull";
@@ -231,27 +241,32 @@ bool simplifyNullPrediction(const ASTFunction & function, const InterpretIMResul
     if (!(is_null || is_not_null) || isNullableOrLowCardinalityNullable(argument_results.front().type))
         return false;
 
-    simplify_result = {std::make_shared<DataTypeUInt8>(), is_null ? 0U : 1U};
+    simplify_result = {std::make_shared<DataTypeUInt8>(), node, is_null ? 0U : 1U};
     return true;
 }
 
 // `a = a` ==> TRUE
-bool simplifyTrivialEquals(const ASTFunction & function, const InterpretIMResults & argument_results, InterpretIMResult & simplify_result)
+bool simplifyTrivialEquals(
+    const ASTFunction & function, const ASTPtr & node, const InterpretIMResults & argument_results, InterpretIMResult & simplify_result)
 {
     String left, right;
 
     if (function.name == "equals" && isIdentifier(argument_results[0], left) &&
         isIdentifier(argument_results[1], right) && left == right)
     {
-        simplify_result = {std::make_shared<DataTypeUInt8>(), 1U};
+        simplify_result = {std::make_shared<DataTypeUInt8>(), node, 1U};
         return true;
     }
 
     return false;
 }
 
-bool simplifyIf(const ASTFunction & function, const InterpretIMResults & argument_results, InterpretIMResult & simplify_result,
-                bool & reevaluate)
+bool simplifyIf(
+    const ASTFunction & function,
+    const ASTPtr & node,
+    const InterpretIMResults & argument_results,
+    InterpretIMResult & simplify_result,
+    bool & reevaluate)
 {
     if (function.name != "if")
         return false;
@@ -261,7 +276,7 @@ bool simplifyIf(const ASTFunction & function, const InterpretIMResults & argumen
     // if(isNull(`ws_order_number`), NULL, cast(multiIf(`build_side_non_null_symbol` = 1, 1, NULL, 0, 0), 'UInt8'))
     if (isBoolValue<false>(argument_results[1]) && isBoolValue<false>(argument_results[2]))
     {
-        simplify_result = {std::make_shared<DataTypeUInt8>(), 0U};
+        simplify_result = {std::make_shared<DataTypeUInt8>(), node, Field{0U}};
         return true;
     }
 
@@ -277,9 +292,14 @@ bool simplifyIf(const ASTFunction & function, const InterpretIMResults & argumen
     return false;
 }
 
-bool simplifyMultiIf(const ASTFunction & function, const InterpretIMResults & argument_results, InterpretIMResult & simplify_result, const ContextMutablePtr & context)
+bool simplifyMultiIf(
+    const ASTFunction & function,
+    const ASTPtr &,
+    const InterpretIMResults & argument_results,
+    InterpretIMResult & simplify_result,
+    const ContextMutablePtr & context)
 {
-    if (function.name != "multiIf" || !(argument_results.size() >= 3 && argument_results.size() % 2 == 1))
+    if (function.name != "multiIf" || argument_results.size() < 3 || argument_results.size() % 2 == 0)
         return false;
 
     InterpretIMResult new_default;
@@ -383,17 +403,82 @@ InterpretResult ExpressionInterpreter::evaluate(const ConstASTPtr & expression) 
 {
     auto im_result = visit(expression);
 
-    if (im_result.isAST())
+    if (im_result.isAST() || !im_result.isSuitablyRepresentedByValue())
         return {im_result.type, im_result.ast};
     else
         return {im_result.type, im_result.getField()};
 }
 
-InterpretIMResult::InterpretIMResult(DataTypePtr type_, const Field & field)
+ASTPtr InterpretResult::convertToAST(const ContextMutablePtr & ctx) const
 {
-    type = std::move(type_);
+    if (isAST())
+        return ast;
+
+    return LiteralEncoder::encode(getField(), type, ctx);
+}
+
+InterpretIMResult::InterpretIMResult(DataTypePtr type_, ASTPtr ast_, const Field & field) : type(std::move(type_)), ast(std::move(ast_))
+{
     // TODO: we don't have to call convertFieldToType if we have done in Parser/Analyzer
     value = type->createColumnConst(1, convertFieldToType(field, *type));
+}
+
+bool InterpretIMResult::isNull() const
+{
+    assert(isValue());
+
+    ColumnPtr column = value;
+
+    if (const auto * column_const = checkAndGetColumn<ColumnConst>(*column))
+        column = column_const->getDataColumnPtr();
+    if (const auto * column_lc = checkAndGetColumn<ColumnLowCardinality>(*column))
+        column = column_lc->convertToFullColumn();
+
+    if (const auto * column_null = checkAndGetColumn<ColumnNullable>(*column))
+        return column_null->isNullAt(0);
+
+    return false;
+}
+
+bool InterpretIMResult::isSuitablyRepresentedByValue() const
+{
+    assert(isValue());
+
+    ColumnPtr column = value;
+
+    if (const auto * column_const = checkAndGetColumn<ColumnConst>(*column))
+        column = column_const->getDataColumnPtr();
+    if (const auto * column_lc = checkAndGetColumn<ColumnLowCardinality>(*column))
+        column = column_lc->convertToFullColumn();
+    if (const auto * column_null = checkAndGetColumn<ColumnNullable>(*column))
+        column = column_null->getNestedColumnPtr();
+
+    if (checkColumn<ColumnAggregateFunction>(*column))
+        return false;
+
+    if (checkColumn<ColumnSet>(*column))
+        return false;
+
+    if (const auto * column_array = checkAndGetColumn<ColumnArray>(*column))
+        return column_array->sizeAt(0) <= 100;
+
+    if (const auto * column_map = checkAndGetColumn<ColumnMap>(*column))
+        return column_map->byteSizeAt(0) <= 1000;
+
+    return true;
+}
+
+ASTPtr InterpretIMResult::convertToAST(const ContextMutablePtr & ctx) const
+{
+    assert(ast != nullptr);
+
+    if (isAST())
+        return ast;
+
+    if (!isSuitablyRepresentedByValue())
+        return ast;
+
+    return LiteralEncoder::encode(getField(), type, ctx);
 }
 
 InterpretIMResult ExpressionInterpreter::visit(const ConstASTPtr & node) const
@@ -428,14 +513,14 @@ InterpretIMResult ExpressionInterpreter::visit(const ConstASTPtr & node) const
 
 InterpretIMResult ExpressionInterpreter::visitASTLiteral(const ASTLiteral & literal, const ConstASTPtr & node) const
 {
-    return {getType(node), literal.value};
+    return {getType(node), node->clone(), literal.value};
 }
 
 InterpretIMResult ExpressionInterpreter::visitASTIdentifier(const ASTIdentifier & identifier, const ConstASTPtr & node) const
 {
     if (auto it = setting.identifier_values.find(identifier.name());
         it != setting.identifier_values.end())
-        return {getType(node), it->second};
+        return {getType(node), node->clone(), it->second};
 
     return originalNode(node);
 }
@@ -473,7 +558,7 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
 
                 if (argument_result.isAST())
                     all_const = false;
-                else if (argument_result.getField().isNull())
+                else if (argument_result.isNull())
                     has_null_argument = true;
             }
             else
@@ -482,6 +567,8 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
             argument_results.push_back(std::move(argument_result));
         }
     }
+
+    ASTPtr simplified_node = makeFunction(function.name, argument_results, context);
 
     auto function_builder = FunctionFactory::instance().get(function.name, context);
     auto function_builder_params = convertToFunctionBuilderParams(argument_results);
@@ -511,20 +598,13 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
                 res_col = res_col->cloneResized(1);
 
             if (res_col->size() == 1)
-            {
-                try
-                {
-                    (*res_col)[0];
-                    return {function_ret_type, res_col};
-                }
-                catch (Exception & ) {}
-            }
+                return {function_ret_type, simplified_node, res_col};
         }
     }
 
     // === Null simplify ===
     if (has_null_argument && function_builder->useDefaultImplementationForNulls() && setting.enable_null_simplify)
-        return {JoinCommon::tryConvertTypeToNullable(std::make_shared<DataTypeNothing>()), Null()};
+        return {JoinCommon::tryConvertTypeToNullable(std::make_shared<DataTypeNothing>()), simplified_node, Null()};
 
     // === Function simplify ===
     using namespace function_simplify_rules_;
@@ -536,17 +616,16 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
     if (setting.enable_function_simplify)
     {
         // TODO: simplify CASE expr
-        simplified =
-            RewriteAnd::apply(function, argument_results, simplify_result, context) ||
-            RewriteOr::apply(function, argument_results, simplify_result, context) ||
-            simplifyNullPrediction(function, argument_results, simplify_result) ||
-            simplifyTrivialEquals(function, argument_results, simplify_result) ||
-            simplifyIf(function, argument_results, simplify_result, reevaluate) ||
-            simplifyMultiIf(function, argument_results, simplify_result, context);
+        simplified = RewriteAnd::apply(function, simplified_node, argument_results, simplify_result, context)
+            || RewriteOr::apply(function, simplified_node, argument_results, simplify_result, context)
+            || simplifyNullPrediction(function, simplified_node, argument_results, simplify_result)
+            || simplifyTrivialEquals(function, simplified_node, argument_results, simplify_result)
+            || simplifyIf(function, simplified_node, argument_results, simplify_result, reevaluate)
+            || simplifyMultiIf(function, simplified_node, argument_results, simplify_result, context);
     }
 
     if (!simplified)
-        return {function_ret_type, makeFunction(function.name, argument_results, context)};
+        return {function_ret_type, simplified_node};
     else if (!reevaluate)
         return simplify_result;
     else
@@ -604,7 +683,7 @@ InterpretIMResult ExpressionInterpreter::visitInFunction(const ASTFunction & fun
         columns_with_types.emplace_back(left_arg_result.value, left_arg_result.type, "");
         columns_with_types.emplace_back(const_column_set, std::make_shared<DataTypeSet>(), "");
         auto result = FunctionInvoker::execute(function.name, columns_with_types, context);
-        return {result.type, result.value};
+        return {result.type, rewritten_in_func, result.value};
     }
 
     // convert Set to AST

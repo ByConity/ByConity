@@ -144,18 +144,19 @@ class HostWithPorts
 public:
     HostWithPorts() = default;
     HostWithPorts(const std::string & host_, uint16_t rpc_port_ = 0, uint16_t tcp_port_ = 0, uint16_t http_port_ = 0, [[maybe_unused]] uint16_t exchange_port_ = 0, [[maybe_unused]] uint16_t exchange_status_port_ = 0, std::string id_ = {})
-        : id{std::move(id_)},
+        : host{removeBracketsIfIpv6(host_)}, 
+            id{std::move(id_)},
           rpc_port{rpc_port_},
           tcp_port{tcp_port_},
           http_port{http_port_},
           exchange_port{rpc_port_},
-          exchange_status_port{rpc_port_},
-          host{removeBracketsIfIpv6(host_)}
+          exchange_status_port{rpc_port_}
     {
         (void)exchange_port_;
         (void)exchange_status_port_;
     }
 
+    std::string host;
     std::string id;
     uint16_t rpc_port{0};
     uint16_t tcp_port{0};
@@ -163,8 +164,6 @@ public:
     uint16_t exchange_port{0};
     uint16_t exchange_status_port{0};
     PairInt64 topology_version = PairInt64{0, 0};
-private:
-    std::string host;
 public:
 
     bool empty() const { return host.empty() || (rpc_port == 0 && tcp_port == 0); }

@@ -300,6 +300,9 @@ using VWCustomizedSettingsPtr = std::shared_ptr<VWCustomizedSettings>;
 
 class VETosConnectionParams;
 
+class NvmCache;
+using NvmCachePtr = std::shared_ptr<NvmCache>;
+
 enum class ServerType
 {
     standalone,
@@ -526,9 +529,11 @@ private:
     ExcludedRulesMap exclude_rules_map;
     mutable std::shared_ptr<BindingCacheManager> session_binding_cache_manager = nullptr;
 
-    std::unordered_map<std::string, bool> function_deterministic;
-
+    // make sure a context not be passed to ExprAnalyzer::analyze concurrently
+    mutable std::unordered_map<std::string, bool> function_deterministic;
+    // worker status
     WorkerGroupStatusPtr worker_group_status;
+
     std::shared_ptr<OptimizerProfile> optimizer_profile =  nullptr;
     /// Temporary data for query execution accounting.
     TemporaryDataOnDiskScopePtr temp_data_on_disk;
@@ -585,7 +590,7 @@ private:
     bool read_from_client_finished = false;
 
     bool is_explain_query = false;
-
+    
     Context();
     Context(const Context &);
     Context & operator=(const Context &);
@@ -1093,6 +1098,10 @@ public:
     void setEnableSSL(bool v);
     bool isEnableSSL() const;
 
+    void setNvmCache(const Poco::Util::AbstractConfiguration & config);
+    std::shared_ptr<NvmCache> getNvmCache() const;
+    void dropNvmCache() const;
+
     /// Create a cache of uncompressed blocks of specified size. This can be done only once.
     void setUncompressedCache(size_t max_size_in_bytes);
     std::shared_ptr<UncompressedCache> getUncompressedCache() const;
@@ -1354,7 +1363,7 @@ public:
     void createOptimizerMetrics();
     OptimizerMetricsPtr & getOptimizerMetrics() { return optimizer_metrics; }
 
-    void setFunctionDeterministic(const std::string & fun_name, bool deterministic)
+    void setFunctionDeterministic(const std::string & fun_name, bool deterministic) const
     {
         function_deterministic[fun_name] = deterministic;
     }

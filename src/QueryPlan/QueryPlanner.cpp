@@ -405,19 +405,23 @@ RelationPlan QueryPlannerVisitor::visitASTSubquery(ASTPtr & node, const Void &)
 
             std::unordered_map<String, String> output_columns;
             NamesAndTypes mapped_name_and_types;
-            FieldSymbolInfos field_symbol_infos;
+            NameToNameMap old_name_to_new_name;
             for (const auto & name_and_type : cte_ref.getRoot()->getCurrentDataStream().header.getNamesAndTypes())
             {
                 auto new_name = context->getSymbolAllocator()->newSymbol(name_and_type.name);
                 output_columns.emplace(new_name, name_and_type.name);
                 mapped_name_and_types.emplace_back(new_name, name_and_type.type);
-                field_symbol_infos.emplace_back(FieldSymbolInfo{new_name});
+                old_name_to_new_name.emplace(name_and_type.name, new_name);
             }
 
             PlanNodePtr plan = PlanNodeBase::createPlanNode(
                 context->nextNodeId(), std::make_shared<CTERefStep>(DataStream{mapped_name_and_types}, cte_id, output_columns, false));
             PRINT_PLAN(plan, plan_cte);
-            return RelationPlan{plan, field_symbol_infos};
+
+            FieldSymbolInfos mapped_field_symbol_infos = cte_ref.getFieldSymbolInfos();
+            mapFieldSymbolInfos(mapped_field_symbol_infos, old_name_to_new_name, true);
+
+            return RelationPlan{plan, mapped_field_symbol_infos};
         }
     }
 
@@ -775,9 +779,13 @@ QueryPlannerVisitor::prepareJoinUsingKeys(ASTTableJoin & table_join, PlanBuilder
         Names join_key_symbols;
         join_key_symbols.reserve(join_key_indices.size());
 
-        for (auto & join_key_index : join_key_indices)
-            join_key_symbols.push_back(builder.getFieldSymbol(join_key_index));
+        auto make_join_key_symbols = [&]() {
+            join_key_symbols.clear();
+            for (auto & join_key_index : join_key_indices)
+                join_key_symbols.push_back(builder.getFieldSymbol(join_key_index));
+        };
 
+        make_join_key_symbols();
         assert(join_key_symbols.size() == coercion.size());
         NameToType name_to_type;
 
@@ -786,7 +794,12 @@ QueryPlannerVisitor::prepareJoinUsingKeys(ASTTableJoin & table_join, PlanBuilder
                 name_to_type.emplace(join_key_symbols[i], coercion[i]);
 
         if (!name_to_type.empty())
-            coerceTypesForSymbols(builder, name_to_type, true);
+        {
+            auto name_mapping = coerceTypesForSymbols(builder, name_to_type, true);
+            builder.mapSymbols(name_mapping);
+            make_join_key_symbols();
+        }
+
         return join_key_symbols;
     };
 
@@ -928,18 +941,14 @@ QueryPlannerVisitor::planReadFromStorage(const IAST & table_ast, ScopePtr table_
     {
         NamesAndTypesList source_columns;
         std::unordered_map<String, size_t> name_to_index_map;
-        NameSet required;
 
         for (size_t i = 0; i < primary_column_size; ++i)
         {
             source_columns.emplace_back(table_scope->at(i).getOriginColumnName(), table_scope->at(i).type);
             name_to_index_map.emplace(table_scope->at(i).getOriginColumnName(), i);
         }
-        ColumnPruning::selectColumnWithMinSize(std::move(source_columns), storage, required);
-        if (required.empty())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "no columns is allocated for TableScan");
 
-        auto & column_name = *required.begin();
+        auto column_name = ColumnPruning::selectColumnWithMinSize(std::move(source_columns), storage);
         auto column_symbol = context->getSymbolAllocator()->newSymbol(column_name);
         columns_with_aliases.emplace_back(column_name, column_symbol);
         field_symbols[name_to_index_map.at(column_name)] = FieldSymbolInfo(column_symbol);
@@ -1717,11 +1726,6 @@ RelationPlan QueryPlannerVisitor::projectFieldSymbols(const RelationPlan & plan,
         new_mappings[field_id].sub_column_symbols[sub_col_id] = *sub_col_sym;
     }
 
-    if (Utils::isIdentity(assignments) && sub_column_positions.empty())
-    {
-        return {old_root, old_mappings};
-    }
-
     auto project_step = std::make_shared<ProjectionStep>(old_root->getCurrentDataStream(), assignments, output_types);
     new_root = old_root->addStep(context->nextNodeId(), std::move(project_step));
 
@@ -2205,13 +2209,16 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
     {
         auto & select = selects[select_id];
         auto & sub_plan = sub_plans[select_id];
-        // prune invisible columns, copy duplicated columns
+        // prune invisible columns, copy duplicated columns, sort columns by a specific order(primary columns + sub columns)
         sub_plan = projectFieldSymbols(sub_plan, sub_column_positions);
 
+#ifndef NDEBUG
+        auto column_names1 = sub_plan.getRoot()->getOutputNames();
+#endif
         // coerce to common type
         if (enable_implicit_type_conversion && analysis.hasRelationTypeCoercion(*select))
         {
-            const auto & field_symbol_infos = sub_plan.getFieldSymbolInfos();
+            auto field_symbol_infos = sub_plan.getFieldSymbolInfos();
             const auto & target_types = analysis.getRelationTypeCoercion(*select);
             assert(target_types.size() == field_symbol_infos.size());
             NameToType symbols_and_types;
@@ -2223,10 +2230,21 @@ RelationPlan QueryPlannerVisitor::planSetOperation(ASTs & selects, ASTSelectWith
                     symbols_and_types.emplace(field_symbol_infos[i].getPrimarySymbol(), target_type);
             }
 
-            auto coerced_plan = coerceTypesForSymbols(sub_plan.getRoot(), symbols_and_types, true);
-            sub_plan = RelationPlan{coerced_plan.plan, field_symbol_infos};
+            auto coercion_result = coerceTypesForSymbols(sub_plan.getRoot(), symbols_and_types, true);
+            mapFieldSymbolInfos(field_symbol_infos, coercion_result.mappings, false);
+            sub_plan = RelationPlan{coercion_result.plan, field_symbol_infos};
         }
 
+#ifndef NDEBUG
+        auto column_names2 = sub_plan.getRoot()->getOutputNames();
+
+        // check column order unmodified after implicit type conversion
+        for (size_t i = 0; i < column_names1.size(); ++i)
+        {
+            auto it = std::find(column_names2.begin(), column_names2.end(), column_names1.at(i));
+            assert(it == column_names2.end() || it - column_names2.begin() == static_cast<long>(i));
+        }
+#endif
         assert(
             sub_plan.getRoot()->getCurrentDataStream().header.columns() == sub_plans[0].getRoot()->getCurrentDataStream().header.columns());
         assert(sub_plan.getFieldSymbolInfos().size() == sub_plans[0].getFieldSymbolInfos().size());
@@ -2311,6 +2329,7 @@ QueryPlannerVisitor::coerceTypesForSymbols(const PlanNodePtr & node, const NameT
     Assignments assignments;
     NameToType output_types;
     NameToNameMap symbol_mappings;
+    bool necessary = false;
 
     for (const auto & input_symbol_and_type : node->getCurrentDataStream().header)
     {
@@ -2320,18 +2339,18 @@ QueryPlannerVisitor::coerceTypesForSymbols(const PlanNodePtr & node, const NameT
         if (auto it = symbol_and_types.find(input_symbol); it != symbol_and_types.end() && it->second)
         {
             const auto & output_type = it->second;
-            String output_symbol = input_symbol;
+            String output_symbol = context->getSymbolAllocator()->newSymbol(input_symbol);
+            symbol_mappings.emplace(input_symbol, output_symbol);
 
             if (!replace_symbol)
             {
-                output_symbol = context->getSymbolAllocator()->newSymbol(input_symbol);
                 assignments.emplace_back(input_symbol, toSymbolRef(input_symbol));
                 output_types[input_symbol] = input_type;
-                symbol_mappings.emplace(input_symbol, output_symbol);
             }
 
             assignments.emplace_back(output_symbol, makeCastFunction(toSymbolRef(input_symbol), output_type));
             output_types[output_symbol] = output_type;
+            necessary = true;
         }
         else
         {
@@ -2340,7 +2359,7 @@ QueryPlannerVisitor::coerceTypesForSymbols(const PlanNodePtr & node, const NameT
         }
     }
 
-    if (Utils::isIdentity(assignments))
+    if (!necessary)
     {
         return {node, symbol_mappings};
     }
@@ -2363,6 +2382,7 @@ void QueryPlannerVisitor::coerceTypeForSubquery(RelationPlan & plan, const DataT
     NameToType symbol_and_types{{plan.getFirstPrimarySymbol(), type}};
     auto plan_with_mapping = coerceTypesForSymbols(plan.getRoot(), symbol_and_types, true);
     plan.withNewRoot(plan_with_mapping.plan);
+    mapFieldSymbolInfos(plan.field_symbol_infos, plan_with_mapping.mappings, false);
 }
 
 SizeLimits QueryPlannerVisitor::extractDistinctSizeLimits()

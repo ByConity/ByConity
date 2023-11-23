@@ -1,9 +1,10 @@
 #include <unordered_map>
+#include <Interpreters/DistributedStages/AddressInfo.h>
+#include <Interpreters/DistributedStages/ExchangeMode.h>
 #include <Interpreters/NodeSelector.h>
 #include <Interpreters/sendPlanSegment.h>
-#include "common/logger_useful.h"
-#include "common/types.h"
-#include "Interpreters/DistributedStages/AddressInfo.h"
+#include <common/logger_useful.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -134,10 +135,31 @@ NodeSelectorResult ComputeNodeSelector::select(PlanSegment * plan_segment_ptr, C
     return result;
 }
 
-NodeSelectorResult LocalityNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context)
+NodeSelectorResult LocalityNodeSelector::select(PlanSegment * plan_segment_ptr, ContextPtr query_context, DAGGraph * dag_graph_ptr)
 {
     checkClusterInfo(plan_segment_ptr);
     NodeSelectorResult result;
+    const auto & inputs = plan_segment_ptr->getPlanSegmentInputs();
+    if (auto it = std::find_if(
+            inputs.begin(),
+            inputs.end(),
+            [](PlanSegmentInputPtr input) {
+                return input->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION
+                    || input->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION;
+            });
+        it != inputs.end())
+    {
+        auto address_it = dag_graph_ptr->id_to_address.find(it->get()->getPlanSegmentId());
+        if (address_it == dag_graph_ptr->id_to_address.end())
+            throw Exception(
+                "Logical error: address of segment " + std::to_string(it->get()->getPlanSegmentId()) + " not found",
+                ErrorCodes::LOGICAL_ERROR);
+        for (const auto & addr : address_it->second)
+        {
+            result.worker_nodes.emplace_back(addr);
+        }
+        return result;
+    }
     auto local_address = getLocalAddress(query_context);
     for (const AddressInfo & addr :
          query_context->getExchangeDataTracker()->getExchangeDataAddrs(plan_segment_ptr, 0, plan_segment_ptr->getParallelSize()))
@@ -172,7 +194,7 @@ NodeSelectorResult NodeSelector::select(PlanSegment * plan_segment_ptr, bool is_
         node_select_policy = NodeSelectorPolicy::ComputePolicy;
         if (query_context->getSettingsRef().bsp_mode)
         {
-            result = locality_node_selector.select(plan_segment_ptr, query_context);
+            result = locality_node_selector.select(plan_segment_ptr, query_context, dag_graph_ptr);
             if (result.worker_nodes.empty() || result.worker_nodes.size() != plan_segment_ptr->getParallelSize())
             {
                 // TODO(WangTao): change it to warning and fix it.

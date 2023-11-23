@@ -1,0 +1,22 @@
+Projection Est. ? rows
+│     Expressions: count():=`expr#count()_2`
+└─ MergingAggregated Est. ? rows
+   └─ Gather Exchange Est. ? rows
+      └─ Aggregating Est. ? rows
+         │     Group by: {}
+         │     Aggregates: expr#count()_2:=AggNull(count)()
+         └─ Inner Join Est. ? rows
+            │     Condition: 
+            │     Filter: a > `expr#count()_1`
+            ├─ TableScan correctness.q16_t1 Est. ? rows
+            │        Outputs: [a]
+            └─ Broadcast Exchange Est. ? rows
+               └─ Projection Est. ? rows
+                  │     Expressions: expr#count()_1:=cast(`expr#count()`, 'Nullable(UInt64)')
+                  └─ MergingAggregated Est. ? rows
+                     └─ Gather Exchange Est. ? rows
+                        └─ Aggregating Est. ? rows
+                           │     Group by: {}
+                           │     Aggregates: expr#count():=AggNull(count)()
+                           └─ TableScan correctness.q16_t2 Est. ? rows
+                                    Outputs: [a.null]

@@ -793,13 +793,13 @@ HDFSConnectionParams::HDFSConnectionParams()
 HDFSConnectionParams::HDFSConnectionParams(HDFSConnectionType t, const String & hdfs_user_, const String & hdfs_service_)
     : conn_type(t), hdfs_user(hdfs_user_), hdfs_service(hdfs_service_), addrs()
 {
-    lookupOnNeed();
+    // lookupOnNeed();
 }
 
 HDFSConnectionParams::HDFSConnectionParams(HDFSConnectionType t, const String & hdfs_user_, const std::vector<IpWithPort>& addrs_ )
     : conn_type(t), hdfs_user(hdfs_user_), hdfs_service(""), addrs(addrs_)
 {
-    lookupOnNeed();
+    // lookupOnNeed();
 }
 
 HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(
@@ -838,7 +838,7 @@ HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(
     {
         connect_params = HDFSConnectionParams(CONN_HA, hdfs_user, config.getString(hdfs_ha_key));
     }
-    else if (config.has(hdfs_nnproxy_key))
+    else
     {
         // hdfs_nnproxy could refer to both cfs and nnproxy.
         String hdfs_nnproxy = config.getString(hdfs_nnproxy_key, "nnproxy");
@@ -856,10 +856,6 @@ HDFSConnectionParams HDFSConnectionParams::parseHdfsFromConfig(
             // this is a nnproxy.
             connect_params = HDFSConnectionParams(CONN_NNPROXY, hdfs_user, hdfs_nnproxy);
         }
-    }
-    else
-    {
-        connect_params = HDFSConnectionParams();
     }
 
     connect_params.krb5_params = HDFSKrb5Params::parseKrb5FromConfig(config, config_prefix);
@@ -889,23 +885,49 @@ HDFSConnectionParams HDFSConnectionParams::parseFromMisusedNNProxyStr(String hdf
 
 void HDFSConnectionParams::lookupOnNeed()
 {
+    // if (conn_type != CONN_NNPROXY)
+    //     return;
+
+    // HostWithPortsVec nnproxys = lookupNNProxy(hdfs_service);
+    // assert(nnproxys.size() > 0);
+    // for (auto it : nnproxys)
+    // {
+    //     addrs.emplace_back(it.getHost(), it.tcp_port);
+    // }
+    // // ensure the nnproxy picked is not the same as the broken one.
+    // nnproxy_index = brokenNNs.findOneGoodNN(nnproxys);
+    inited = true;
+}
+
+std::vector<HDFSConnectionParams::IpWithPort> HDFSConnectionParams::lookupAndShuffle() const 
+{
+    std::vector<IpWithPort> ret;
     if (conn_type != CONN_NNPROXY)
-        return;
+        return ret;
 
     HostWithPortsVec nnproxys = lookupNNProxy(hdfs_service);
     assert(nnproxys.size() > 0);
+    shuffleAddrs(nnproxys);
     for (auto it : nnproxys)
     {
-        addrs.emplace_back(it.getHost(), it.tcp_port);
+        ret.emplace_back(it.host, it.tcp_port);
     }
-    // ensure the nnproxy picked is not the same as the broken one.
-    nnproxy_index = brokenNNs.findOneGoodNN(nnproxys);
-    inited = true;
+    return ret;
+}
+
+void HDFSConnectionParams::shuffleAddrs(HostWithPortsVec & shuffle_addrs) const
+{
+    if (shuffle_addrs.size() < 2)
+        return;
+
+    static thread_local std::random_device shuffle_rd{};
+    auto dist = std::mt19937{shuffle_rd()};
+    std::shuffle(shuffle_addrs.begin(),shuffle_addrs.end(), dist);
 }
 
 void HDFSConnectionParams::setNNProxyBroken()
 {
-    if( conn_type != CONN_NNPROXY || !inited) {
+    if (conn_type != CONN_NNPROXY || !inited) {
         return;
     }
     brokenNNs.insert(addrs[nnproxy_index].first);
@@ -917,6 +939,7 @@ Poco::URI HDFSConnectionParams::formatPath(const String & path) const
     switch (conn_type)
     {
         case CONN_NNPROXY: {
+            auto addrs_from_nnproxy = lookupAndShuffle();
             uri.setScheme("hdfs");
             if (use_nnproxy_ha)
             {
@@ -924,8 +947,8 @@ Poco::URI HDFSConnectionParams::formatPath(const String & path) const
             }
             else
             {
-                uri.setHost(addrs[nnproxy_index].first);
-                uri.setPort(addrs[nnproxy_index].second);
+                uri.setHost(addrs_from_nnproxy[0].first);
+                uri.setPort(addrs_from_nnproxy[0].second);
             }
             return uri;
         }
@@ -998,14 +1021,15 @@ HDFSBuilderPtr HDFSConnectionParams::createBuilder(const Poco::URI & uri) const
     switch (conn_type)
     {
         case CONN_NNPROXY: {
+            auto addrs_from_nnproxy = lookupAndShuffle();
             if (use_nnproxy_ha)
             {
-                setHdfsHaConfig(builder, hdfs_service, hdfs_user, addrs);
+                setHdfsHaConfig(builder, hdfs_service, hdfs_user, addrs_from_nnproxy);
                 return builder;
             }
             else
             {
-                IpWithPort targetNode = addrs[nnproxy_index];
+                IpWithPort targetNode = addrs_from_nnproxy[0];
                 setHdfsDirectConfig(builder, hdfs_user, "hdfs://" + std::get<0>(safeNormalizeHost(targetNode.first)), targetNode.second);
                 return builder;
             }

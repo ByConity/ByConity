@@ -107,6 +107,12 @@ struct SortColumnDescription
         return fmt::format("{}:{}:dir {}nulls ", column_name, column_number, direction, nulls_direction);
     }
 
+    std::string format() const
+    {
+        return fmt::format(
+            "{} {} {}", column_name, direction == 1 ? "ASC" : "DESC", nulls_direction == direction ? "NULLS LAST" : "NULLS FIRST");
+    }
+
     void explain(JSONBuilder::JSONMap & map, const Block & header) const;
 
     /// It seems that the current construction of SortColumnDescription only uses the first four fields,

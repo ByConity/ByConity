@@ -1,0 +1,9 @@
+Projection Est. ? rows
+│     Expressions: [a]
+└─ Sorting Est. ? rows
+   │     Order by: {a ASC NULLS LAST, b ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {a ASC NULLS LAST, b ASC NULLS LAST}
+         └─ TableScan correctness.q2_t1 Est. ? rows
+                  Outputs: [a, b]

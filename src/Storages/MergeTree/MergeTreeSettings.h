@@ -495,15 +495,13 @@ struct Settings;
     M(MaxThreads, cnch_parallel_dumping_threads, 8, "", 0) \
     M(MaxThreads, unique_table_dedup_threads, 8, "", 0) \
     M(UInt64, max_delete_bitmap_meta_depth, 100, "", 0) \
+    M(UInt64, unique_merge_acquire_lock_retry_time, 10, "", 0) \
+    M(Bool, enable_bucket_level_unique_keys, false, "", 0) \
     \
     /* Metastore settings */\
-    M(Bool, enable_metastore, true, "Use KV metastore to manage data parts.", 0) \
-    M(Bool, \
-      enable_persistent_checksum, \
-      true, \
-      "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", \
-      0) \
-\
+    M(Bool, enable_metastore, false, "Use KV metastore to manage data parts.", 0) \
+    M(Bool, enable_persistent_checksum, true, "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
+    \
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
     /*keep enable_preload_parts for compitable*/ \
     M(Bool, enable_preload_parts, false, "Enable preload parts", 0) \
@@ -548,6 +546,9 @@ struct Settings;
     M(Bool, bitengine_use_key_string, false, "BitEngine support String key", 0) \
     M(Bool, bitengine_use_key_int, true, "BitEngine support UInt64 key, default way", 0) \
     M(String, underlying_dictionary_tables, "{}", "To specify a table to store BitEngine dictionary data, only in Cnch", 0) \
+    M(Bool, enable_hybrid_allocation, false, "Whether or not enable hybrid allocation, default disabled", 0) \
+    M(UInt64, min_rows_per_vp, 2000000, "Minimum size of a virtual part", 0) \
+    M(Float, part_to_vw_size_ratio, 0.1, "Part to vw worker size's ration", 0) \
     \
     /// Settings that should not change after the creation of a table.
 #define APPLY_FOR_IMMUTABLE_MERGE_TREE_SETTINGS(M) \

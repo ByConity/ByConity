@@ -44,19 +44,21 @@ public:
     // auto analyzer = TypeAnalyzer::create(context, input_types);
     // for (...) {...; analyzer.getType(expr); ...;}
     // ```
-    static DataTypePtr getType(const ConstASTPtr & expr, ContextMutablePtr context, const NamesAndTypes & input_types);
+    static DataTypePtr getType(const ConstASTPtr & expr, ContextPtr context, const NamesAndTypes & input_types);
 
-    static TypeAnalyzer create(ContextMutablePtr context, const NameToType & input_types);
-    static TypeAnalyzer create(ContextMutablePtr context, const NamesAndTypes & input_types);
+    static TypeAnalyzer create(ContextPtr context, const NameToType & input_types);
+    static TypeAnalyzer create(ContextPtr context, const NamesAndTypes & input_types);
     DataTypePtr getType(const ConstASTPtr & expr) const;
     ExpressionTypes getExpressionTypes(const ConstASTPtr & expr) const;
 
     TypeAnalyzer(TypeAnalyzer && other) = default;
 
 private:
-    TypeAnalyzer(ContextMutablePtr context_, Scope && scope_) : context(std::move(context_)), scope(std::move(scope_)) { }
+    TypeAnalyzer(ContextPtr context_, Scope && scope_) : context(std::move(context_)), scope(std::move(scope_))
+    {
+    }
 
-    ContextMutablePtr context;
+    ContextPtr context;
     Scope scope;
 };
 

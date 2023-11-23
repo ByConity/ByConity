@@ -24,6 +24,13 @@ explain analyze distributed json=1 select t1.a, t2.b, t2.a+1 from t48028 t1 join
 explain pb_json=1 select t1.a, t2.b, t2.a+1 from t48028 t1 join t480282 t2 on t1.a=t2.a FORMAT Null;
 explain pb_json=1, add_whitespace=0 select t1.a, t2.b, t2.a+1 from t48028 t1 join t480282 t2 on t1.a=t2.a FORMAT Null;
 
+explain analyze pipeline aggregate_profiles=1, json=1 with t1 as (select * from t48028) select t1.a, t2.b from t1 t1 join t1 t2 on t1.a=t2.a format Null;
+
+explain analyze pipeline aggregate_profiles=1, json=0 select t1.a, t2.b, t2.a+1 from t48028 t1 join t480282 t2 on t1.a=t2.a format Null;
+
+explain analyze pipeline aggregate_profiles=0, json=1 with t1 as (select * from t48028) select t1.a, t2.b from t1 t1 join t1 t2 on t1.a=t2.a format Null;
+
+explain analyze pipeline aggregate_profiles=0, json=0 select t1.a, t2.b, t2.a+1 from t48028 t1 join t480282 t2 on t1.a=t2.a format Null;
 
 DROP TABLE IF EXISTS t48028;
 DROP TABLE IF EXISTS t480282;

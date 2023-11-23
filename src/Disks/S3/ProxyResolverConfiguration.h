@@ -19,7 +19,7 @@ class ProxyResolverConfiguration : public ProxyConfiguration
 {
 public:
     ProxyResolverConfiguration(const Poco::URI & endpoint_, String proxy_scheme_, unsigned proxy_port_);
-    Aws::Client::ClientConfigurationPerRequest getConfiguration(const Aws::Http::HttpRequest & request) override;
+    ClientConfigurationPerRequest getConfiguration(const Aws::Http::HttpRequest & request) override;
 
 private:
     /// Endpoint to obtain a proxy host.

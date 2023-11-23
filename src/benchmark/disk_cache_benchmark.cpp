@@ -4,6 +4,7 @@
 #include <random>
 #include <string>
 #include <utility>
+#include <vector>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
 #include <benchmark/benchmark.h>
@@ -11,34 +12,37 @@
 
 #include <Disks/DiskLocal.h>
 #include <Disks/VolumeJBOD.h>
-#include <Disks/registerDisks.h>
 #include <IO/ReadBuffer.h>
 #include <Storages/DiskCache/BigHash.h>
+#include <Storages/DiskCache/BlockCache.h>
 #include <Storages/DiskCache/BloomFilter.h>
 #include <Storages/DiskCache/Bucket.h>
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/Device.h>
 #include <Storages/DiskCache/DiskCacheLRU.h>
-#include <Storages/DiskCache/File.h>
+#include <Storages/DiskCache/DiskCacheSimpleStrategy.h>
 #include <Storages/DiskCache/HashKey.h>
+#include <Storages/DiskCache/JobScheduler.h>
+#include <Storages/DiskCache/LruPolicy.h>
+#include <Storages/DiskCache/NvmCache.h>
+#include <Storages/DiskCache/Types.h>
 #include <Storages/DiskCache/WorkerPool.h>
 #include <Storages/DiskCache/tests/BufferGen.h>
+#include <Storages/DiskCache/tests/MockJobScheduler.h>
 #include <Storages/DiskCache/tests/MultithreadTestUtil.h>
 #include <benchmark/benchmark_util/BenchMarkConfig.h>
 #include <Common/Stopwatch.h>
 #include <Common/tests/gtest_global_context.h>
 #include <common/types.h>
-#include "Storages/DiskCache/DiskCacheSimpleStrategy.h"
 
 namespace DB
 {
-
 using HybridCache::BigHash;
+using HybridCache::BlockCache;
 using HybridCache::BloomFilter;
 using HybridCache::BucketEntry;
 using HybridCache::Buffer;
 using HybridCache::Device;
-using HybridCache::File;
 
 namespace fs = std::filesystem;
 
@@ -47,42 +51,76 @@ class BigHashBenchmark : public benchmark::Fixture
 public:
     void SetUp(const benchmark::State &) final
     {
-        key_permutation_.reserve(num_keys_);
-        for (UInt32 i = 0; i < num_keys_; i++)
-            key_permutation_[i] = i;
-        std::shuffle(key_permutation_.begin(), key_permutation_.end(), generator_);
+        key_permutation.reserve(num_keys);
+        for (UInt32 i = 0; i < num_keys; i++)
+            key_permutation[i] = i;
+        std::shuffle(key_permutation.begin(), key_permutation.end(), generator);
 
-        HybridCache::BufferGen generator;
+        HybridCache::BufferGen buffer_generator;
         for (UInt32 i = 0; i < 100; i++)
-            buffer_permutation_.emplace_back(generator.gen(100, 1024));
+            buffer_permutation.emplace_back(buffer_generator.gen(100, 1024));
 
-        file_path_ = "./Benchmark-Test";
+        file_path = "./Benchmark-Test";
 
-        fs::create_directory(file_path_);
+        fs::create_directory(file_path);
 
-        file_path_ = fmt::format("{}/BigHashBenchmark-{}", file_path_, ::getpid());
+        file_path = fmt::format("{}/BigHashBenchmark-{}", file_path, ::getpid());
 
         std::vector<File> f_vec;
-        f_vec.emplace_back(File(file_path_, O_RDWR | O_CREAT, S_IRWXU));
+        f_vec.emplace_back(File(file_path, O_RDWR | O_CREAT, S_IRWXU));
 
-        fs::resize_file(fs::path{file_path_}, cache_size_);
+        fs::resize_file(fs::path{file_path}, cache_size);
 
-        device_ = HybridCache::createDirectIoFileDevice(std::move(f_vec), cache_size_, 4096, 0, 0);
+        device = HybridCache::createDirectIoFileDevice(std::move(f_vec), cache_size, 4096, 0, 0);
     }
 
-    void TearDown(const benchmark::State &) final { fs::remove_all(fs::path{file_path_}); }
+    void TearDown(const benchmark::State &) final { fs::remove_all(fs::path{file_path}); }
 
-    const UInt32 num_keys_ = 1'000'000;
+    const UInt32 num_keys = 1'000'000;
 
-    std::string file_path_;
+    std::string file_path;
 
-    const UInt32 cache_size_ = 1 * 1024 * 1024 * 1024;
+    const UInt64 cache_size = 1 * GiB;
 
-    std::unique_ptr<Device> device_;
+    std::unique_ptr<Device> device;
 
-    std::default_random_engine generator_;
-    std::vector<Int64> key_permutation_;
-    std::vector<Buffer> buffer_permutation_;
+    std::default_random_engine generator;
+    std::vector<Int64> key_permutation;
+    std::vector<Buffer> buffer_permutation;
+};
+
+class NvmCacheBenchmark : public benchmark::Fixture
+{
+public:
+    void SetUp(const benchmark::State &) final
+    {
+        key_permutation.reserve(num_keys);
+        for (UInt32 i = 0; i < num_keys; i++)
+            key_permutation[i] = i;
+        std::shuffle(key_permutation.begin(), key_permutation.end(), generator);
+
+        HybridCache::BufferGen buffer_generator;
+        for (UInt32 i = 0; i < 100; i++)
+            buffer_permutation.emplace_back(buffer_generator.gen(100, 4 * 1024 * 1024)); // 1M ~ 4M
+
+        file_path = "./Benchmark-Test";
+
+        fs::create_directory(file_path);
+
+        file_path = fmt::format("{}/NvmCacheBenchmark-{}", file_path, ::getpid());
+    }
+
+    void TearDown(const benchmark::State &) final { fs::remove_all(fs::path{file_path}); }
+
+    const UInt32 num_keys = 1'000'000;
+
+    std::string file_path;
+
+    const UInt64 cache_size = 10 * GiB;
+
+    std::default_random_engine generator;
+    std::vector<Int64> key_permutation;
+    std::vector<Buffer> buffer_permutation;
 };
 
 class DiskCacheLRUBenchmark : public benchmark::Fixture
@@ -90,96 +128,93 @@ class DiskCacheLRUBenchmark : public benchmark::Fixture
 public:
     void SetUp(const benchmark::State &) final
     {
-        key_permutation_.reserve(num_keys_);
-        for (UInt32 i = 0; i < num_keys_; i++)
-            key_permutation_[i] = i;
-        std::shuffle(key_permutation_.begin(), key_permutation_.end(), generator_);
+        key_permutation.reserve(num_keys);
+        for (UInt32 i = 0; i < num_keys; i++)
+            key_permutation[i] = i;
+        std::shuffle(key_permutation.begin(), key_permutation.end(), generator);
 
-        HybridCache::BufferGen generator;
+        HybridCache::BufferGen buffer_generator;
         for (UInt32 i = 0; i < 100; i++)
-            buffer_permutation_.emplace_back(generator.gen(100, 1024));
+            buffer_permutation.emplace_back(buffer_generator.gen(100, 1024));
 
-        ctx_ = getContext().context;
-
-        fs::create_directories("./disks/");
-
-        fs::create_directory("./disk_cache/");
-        fs::create_directory("./disk_cache_v1/");
+        ctx = getContext().context;
         fs::create_directory("./tmp");
-        fs::create_directory("./tmp/disk_cache/");
         fs::create_directory("./tmp/disk_cache_v1/");
-        registerDisks();
     }
 
-    void TearDown(const benchmark::State &) final { ctx_->shutdown(); }
+    void TearDown(const benchmark::State &) final { ctx->shutdown(); }
 
-    template <bool IS_V1_FORMAT>
-    static void generateData(const DiskPtr & disk, int depth, int num_per_level, Strings & names, Strings & partial_key)
-    {
-        static int counter = 0;
-        if (depth == 0)
-        {
-            for (int i = 0; i < num_per_level; i++)
-            {
-                partial_key.push_back(std::to_string(counter++));
-
-                String cache_name;
-                std::filesystem::path rel_path;
-                cache_name = fmt::format("{}.{}", fmt::join(partial_key, "/"), "bin");
-                if constexpr (IS_V1_FORMAT)
-                    rel_path = DiskCacheLRU::getPath(DiskCacheLRU::hash(cache_name), "disk_cache_v1", "", "");
-                else
-                    rel_path = std::filesystem::path("disk_cache") / cache_name;
-                partial_key.pop_back();
-
-                disk->createDirectories(rel_path.parent_path());
-                WriteBufferFromFile writer(std::filesystem::path(disk->getPath()) / rel_path);
-                String content = String(std::abs(random()) % 100, 'a');
-                writer.write(content.data(), content.size());
-                names.push_back(cache_name);
-            }
-        }
-        else
-        {
-            for (int i = 0; i < num_per_level; i++)
-            {
-                partial_key.push_back(std::to_string(counter++));
-                generateData<IS_V1_FORMAT>(disk, depth - 1, num_per_level, names, partial_key);
-                partial_key.pop_back();
-            }
-        }
-    }
-
-    static Strings generateData(const DiskPtr & disk, int depth, int num_per_level)
-    {
-        Strings seg_names;
-        Strings partial_name;
-        generateData<true>(disk, depth, num_per_level, seg_names, partial_name);
-        return seg_names;
-    }
-
-    static DB::VolumePtr newDualDiskVolume()
+    static DB::VolumePtr newDiskVolume()
     {
         fs::create_directory("./tmp/local1/");
-        fs::create_directory("./tmp/local2/");
         DB::Disks disks;
         disks.emplace_back(std::make_shared<DB::DiskLocal>("local1", "./tmp/local1/", 0));
-        disks.emplace_back(std::make_shared<DB::DiskLocal>("local2", "./tmp/local2/", 0));
-        return std::make_shared<DB::VolumeJBOD>("dual_disk", disks, disks.front()->getName(), 0, false);
+        return std::make_shared<DB::VolumeJBOD>("local_disk", disks, disks.front()->getName(), 0, false);
     }
 
-    const UInt32 num_keys_ = 1'000'000;
+    const UInt32 num_keys = 1'000'000;
 
-    std::string file_path_;
+    std::shared_ptr<Context> ctx;
 
-    const UInt32 cache_size_ = 1 * 1024 * 1024 * 1024;
-
-    std::shared_ptr<Context> ctx_;
-
-    std::default_random_engine generator_;
-    std::vector<Int64> key_permutation_;
-    std::vector<Buffer> buffer_permutation_;
+    std::default_random_engine generator;
+    std::vector<Int64> key_permutation;
+    std::vector<Buffer> buffer_permutation;
 };
+
+// NOLINTNEXTLINE
+BENCHMARK_DEFINE_F(NvmCacheBenchmark, SimpleInsert)(benchmark::State & state)
+{
+    HybridCache::WorkerPool pool(BenchmarkConfig::num_threads, {});
+    pool.startup();
+
+    for (auto _ : state)
+    {
+        std::vector<File> f_vec;
+        f_vec.emplace_back(File(file_path, O_RDWR | O_CREAT, S_IRWXU));
+        fs::resize_file(fs::path{file_path}, cache_size);
+        auto config = NvmCache::Config();
+        config.device = HybridCache::createDirectIoFileDevice(std::move(f_vec), cache_size, 4096, 0, 0);
+        config.scheduler = HybridCache::createOrderedThreadPoolJobScheduler(1, 1, 10);
+
+        auto bh_config = BigHash::Config();
+        bh_config.cache_size = 1 * GiB;
+        bh_config.cache_start_offset = 9 * GiB;
+        bh_config.device = config.device.get();
+
+        auto bc_config = BlockCache::Config();
+        bc_config.cache_size = 9 * GiB;
+        bc_config.num_in_mem_buffers = 2;
+        bc_config.device = config.device.get();
+        bc_config.scheduler = config.scheduler.get();
+        bc_config.eviction_policy = std::make_unique<HybridCache::LruPolicy>(bc_config.getNumberRegions());
+
+        NvmCache::Pair pair{nullptr, nullptr, 2048};
+        pair.small_item_cache = std::make_unique<BigHash>(std::move(bh_config));
+        pair.large_item_cache = std::make_unique<BlockCache>(std::move(bc_config));
+        config.pairs.push_back(std::move(pair));
+
+        auto * nvm_cache = new NvmCache(std::move(config));
+
+        auto workload = [&](UInt32 id) {
+            UInt32 start_key = num_keys / BenchmarkConfig::num_threads * id;
+            UInt32 end_key = start_key + num_keys / BenchmarkConfig::num_threads;
+
+            for (UInt32 i = start_key; i < end_key; i++)
+                nvm_cache->insertAsync(
+                    HybridCache::makeHashKey(&key_permutation[i], sizeof(Int64)),
+                    buffer_permutation[i % 100].view(),
+                    nullptr,
+                    HybridCache::EngineTag::MarkCache);
+        };
+
+        Stopwatch watch;
+        HybridCache::MultithreadTestUtil::runThreadUntilFinish(&pool, BenchmarkConfig::num_threads, workload);
+        nvm_cache->flush();
+        state.SetIterationTime(watch.elapsedSeconds());
+        delete nvm_cache;
+    }
+    state.SetItemsProcessed(state.iterations() * num_keys);
+}
 
 // NOLINTNEXTLINE
 BENCHMARK_DEFINE_F(BigHashBenchmark, SimpleInsert)(benchmark::State & state)
@@ -190,22 +225,22 @@ BENCHMARK_DEFINE_F(BigHashBenchmark, SimpleInsert)(benchmark::State & state)
     for (auto _ : state)
     {
         auto config = BigHash::Config();
-        config.cache_size = cache_size_;
-        config.device = device_.get();
+        config.cache_size = cache_size;
+        config.device = device.get();
 
         const uint32_t item_min_size = BucketEntry::computeSize(sizeof(Int64), 100);
 
-        auto bf = BloomFilter::makeBloomFilter(cache_size_ / config.bucket_size, config.bucket_size / item_min_size, 0.1);
+        auto bf = BloomFilter::makeBloomFilter(cache_size / config.bucket_size, config.bucket_size / item_min_size, 0.1);
         config.bloom_filters = std::make_unique<BloomFilter>(std::move(bf));
 
         auto * big_hash = new BigHash(std::move(config));
 
         auto workload = [&](UInt32 id) {
-            UInt32 start_key = num_keys_ / BenchmarkConfig::num_threads * id;
-            UInt32 end_key = start_key + num_keys_ / BenchmarkConfig::num_threads;
+            UInt32 start_key = num_keys / BenchmarkConfig::num_threads * id;
+            UInt32 end_key = start_key + num_keys / BenchmarkConfig::num_threads;
 
             for (UInt32 i = start_key; i < end_key; i++)
-                big_hash->insert(HybridCache::makeHashKey(&key_permutation_[i], sizeof(Int64)), buffer_permutation_[i % 100].view());
+                big_hash->insert(HybridCache::makeHashKey(&key_permutation[i], sizeof(Int64)), buffer_permutation[i % 100].view());
         };
 
         Stopwatch watch;
@@ -213,19 +248,14 @@ BENCHMARK_DEFINE_F(BigHashBenchmark, SimpleInsert)(benchmark::State & state)
         state.SetIterationTime(watch.elapsedSeconds());
         delete big_hash;
     }
-    state.SetItemsProcessed(state.iterations() * num_keys_);
+    state.SetItemsProcessed(state.iterations() * num_keys);
 }
+
 
 // NOLINTNEXTLINE
 BENCHMARK_DEFINE_F(DiskCacheLRUBenchmark, SimpleInsert)(benchmark::State & state)
 {
-    auto volume = newDualDiskVolume();
-    std::vector<std::pair<DiskPtr, std::vector<std::string>>> metas;
-    for (const DiskPtr & disk : volume->getDisks())
-    {
-        std::vector<String> metas_in_disk = generateData(disk, 3, 4);
-        metas.push_back({disk, metas_in_disk});
-    }
+    auto volume = newDiskVolume();
 
     DB::DiskCacheSettings settings;
 
@@ -238,18 +268,19 @@ BENCHMARK_DEFINE_F(DiskCacheLRUBenchmark, SimpleInsert)(benchmark::State & state
         fs::create_directories("./tmp/");
         IDiskCache::init(*getContext().context);
 
-        DiskCacheLRU * cache = new DiskCacheLRU("test", volume, getContext().context->getDiskCacheThrottler(), settings, std::make_shared<DiskCacheSimpleStrategy>(settings));
+        DiskCacheLRU * cache = new DiskCacheLRU(
+            "test", volume, getContext().context->getDiskCacheThrottler(), settings, std::make_shared<DiskCacheSimpleStrategy>(settings));
         cache->load();
 
         auto workload = [&](UInt32 id) {
-            UInt32 start_key = num_keys_ / BenchmarkConfig::num_threads * id;
-            UInt32 end_key = start_key + num_keys_ / BenchmarkConfig::num_threads;
+            UInt32 start_key = num_keys / BenchmarkConfig::num_threads * id;
+            UInt32 end_key = start_key + num_keys / BenchmarkConfig::num_threads;
 
             for (UInt32 i = start_key; i < end_key; i++)
             {
-                auto & buffer = buffer_permutation_[i % 100];
+                auto & buffer = buffer_permutation[i % 100];
                 auto read_buffer = ReadBuffer(reinterpret_cast<char *>(buffer.data()), buffer.size());
-                cache->set(fmt::format("{}/", key_permutation_[i]), read_buffer, buffer.size());
+                cache->set(fmt::format("{}/", key_permutation[i]), read_buffer, buffer.size());
             }
         };
 
@@ -264,7 +295,7 @@ BENCHMARK_DEFINE_F(DiskCacheLRUBenchmark, SimpleInsert)(benchmark::State & state
         fs::remove_all("./tmp/");
         DB::IDiskCache::close();
     }
-    state.SetItemsProcessed(state.iterations() * num_keys_);
+    state.SetItemsProcessed(state.iterations() * num_keys);
 }
 
 // ----------------------------------------------------------------------------
@@ -272,6 +303,11 @@ BENCHMARK_DEFINE_F(DiskCacheLRUBenchmark, SimpleInsert)(benchmark::State & state
 // ----------------------------------------------------------------------------
 // clang-format off
 BENCHMARK_REGISTER_F(BigHashBenchmark, SimpleInsert)
+    ->Unit(benchmark::kMillisecond)
+    ->UseManualTime()
+    ->MinTime(3);
+
+BENCHMARK_REGISTER_F(NvmCacheBenchmark, SimpleInsert)
     ->Unit(benchmark::kMillisecond)
     ->UseManualTime()
     ->MinTime(3);
@@ -301,6 +337,7 @@ BigHashBenchmark/SimpleInsert/8 threads                              2315 ms    
 DiskCacheLRUBenchmark/SimpleInsert/min_time:3.000/manual_time       29336 ms         13.9 ms            1 items_per_second=34.0877k/s
 DiskCacheLRUBenchmark/SimpleInsert/4 threads                        25275 ms         10.4 ms            1 items_per_second=39.5654k/s
 DiskCacheLRUBenchmark/SimpleInsert/8 threads                        25109 ms         10.8 ms            1 items_per_second=39.8267k/s
+NvmCacheBenchmark/SimpleInsert/min_time:3.000/manual_time            240 ms          197 ms            17 items_per_second=4.16463M/s  (ASYNC API)
 */
 // clang-format on
 }

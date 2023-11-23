@@ -30,7 +30,7 @@ namespace DB
 class SymbolTransformMap
 {
 public:
-    static std::optional<SymbolTransformMap> buildFrom(PlanNodeBase & plan);
+    static std::optional<SymbolTransformMap> buildFrom(PlanNodeBase & plan, std::optional<PlanNodeId> stop_node = std::nullopt);
 
     ASTPtr inlineReferences(const ConstASTPtr & expression) const;
     ASTPtr inlineReferences(const String & column) const
@@ -64,12 +64,22 @@ private:
 class SymbolTranslationMap
 {
 public:
+    void addTranslation(ASTPtr ast, String name)
+    {
+        translation.emplace(std::move(ast), std::move(name));
+    }
     // rewrite table column to ASTColumnReference before adding translation
     void addStorageTranslation(ASTPtr ast, String name, const IStorage * storage, UInt32 unique_id);
     std::optional<String> tryGetTranslation(const ASTPtr & expr) const;
+    ASTPtr translate(ASTPtr ast) const
+    {
+        return translateImpl(ast);
+    }
 
 private:
     ASTMap<String> translation;
+
+    ASTPtr translateImpl(ASTPtr ast) const;
 };
 
 class IdentifierToColumnReference : public SimpleExpressionRewriter<Void>
@@ -85,5 +95,12 @@ private:
 public:
     IdentifierToColumnReference(const IStorage * storage_, UInt32 unique_id_);
     ASTPtr visitASTIdentifier(ASTPtr & node, Void & context) override;
+};
+
+class ColumnReferenceToIdentifier : public SimpleExpressionRewriter<Void>
+{
+public:
+    static ASTPtr rewrite(ASTPtr ast, bool clone = true);
+    ASTPtr visitASTTableColumnReference(ASTPtr & node, Void & context) override;
 };
 }

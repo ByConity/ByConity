@@ -33,6 +33,8 @@ String SubColumnID::getSubColumnName(const String & primary_column) const
             return getImplicitColNameForMapKey(primary_column, map_element_key);
         case Type::MAP_KEYS:
             return primary_column + ".key";
+        case Type::MAP_VALUES:
+            return primary_column + ".value";
     }
     throw Exception("Not implemented for this type.", ErrorCodes::NOT_IMPLEMENTED);
 }

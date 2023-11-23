@@ -64,7 +64,7 @@ void EliminateJoinByFK::rewrite(QueryPlan & plan, ContextMutablePtr context) con
         for (const auto & unique_keys : metadata->getUniqueNotEnforced().getUniqueNames())
             if (unique_keys.size() == 1)
                 table_uniques[cur_tbl_name].push_back(unique_keys[0]);
-    
+
     for (const auto & [cur_tbl_name, metadata] : metadatas)
     {
         auto foreign_keys_desc = metadata->getForeignKeys().getForeignKeysTuple();
@@ -78,7 +78,7 @@ void EliminateJoinByFK::rewrite(QueryPlan & plan, ContextMutablePtr context) con
             {
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "foreign key definition error: column not exists - " + cur_tbl_name + '.' + fk_pk_pair.fk_column_name);
             }
-            
+
             if (!metadatas.at(ref_table_name)->getColumns().has(fk_pk_pair.ref_column_name))
             {
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "foreign key definition error: column not exists - " + ref_table_name + '.' + fk_pk_pair.ref_column_name);
@@ -187,7 +187,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
     auto & winners = join_info.getWinnersRef();
     const auto & candidate = node.shared_from_this();
     auto step = static_cast<const JoinStep &>(*node.getStep());
-    
+
     std::unordered_map<String, String> identities;
     for (const auto & item : step.getOutputStream().header)
     {
@@ -217,7 +217,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
     bool is_inner_join = step.getKind() == ASTTableJoin::Kind::Inner;
     bool is_outer_join = step.isOuterJoin() && step.getKind() != ASTTableJoin::Kind::Full; // only allow left outer/right outer join.
     bool is_semi_join = (step.getKind() == ASTTableJoin::Kind::Left || step.getKind() == ASTTableJoin::Kind::Right) && step.getStrictness() == ASTTableJoin::Strictness::Semi;
-    
+
     NameSet invalid_tables;
     // Only one condition in join can be accepted in foreign key dependency optimization.
     if (step.getLeftKeys().size() == 1 && (is_inner_join || is_outer_join || is_semi_join))
@@ -237,12 +237,12 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
             {
                 is_left_pk_column = true;
                 left_table_column = TableColumn{keys.begin()->getTableName(), keys.begin()->getColumnName()};
-            }    
+            }
             if (auto keys = right_fp_keys.getPrimaryKeySet().getKeysInCurrentNames(step.getRightKeys()); !keys.empty())
             {
                 is_right_pk_column = true;
                 right_table_column = TableColumn{keys.begin()->getTableName(), keys.begin()->getColumnName()};
-            }    
+            }
 
             if (auto keys = left_fp_keys.getForeignKeySet().getKeysInCurrentNames(step.getLeftKeys()); !keys.empty() && left_table_column.empty())
             {
@@ -253,7 +253,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
             {
                 is_right_fk_column = true;
                 right_table_column = TableColumn{keys.begin()->getTableName(), keys.begin()->getColumnName()};
-            }    
+            }
 
             // cases when cardinaliry of pk table will be changed, we add tbl_name to 'invalid_tables':
             // special: 'pk column' join 'pk column', we always allow it.
@@ -296,7 +296,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
             {
                 if (step.getKind() == ASTTableJoin::Kind::Left)
                     invalid_tables.insert(right_table_column.tbl_name);
-                else 
+                else
                 {
                     assert(step.getKind() == ASTTableJoin::Kind::Right);
                     invalid_tables.insert(left_table_column.tbl_name);
@@ -308,7 +308,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
 
                 if (step.getKind() == ASTTableJoin::Kind::Left)
                     invalid_tables.insert(left_table_column.tbl_name);
-                else 
+                else
                 {
                     assert(step.getKind() == ASTTableJoin::Kind::Right);
                     invalid_tables.insert(right_table_column.tbl_name);
@@ -316,10 +316,10 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
             }
 
             {
-                // The pk-fk info failure may occur because fk left outer join pk. 
-                // In this case, the pk table information cannot be passed upward. 
+                // The pk-fk info failure may occur because fk left outer join pk.
+                // In this case, the pk table information cannot be passed upward.
                 // However, we can check whether only the current join needs to be deleted.
-                
+
                 const auto & fp_keys = old_common_fp_keys;
                 // 1. only occur on bottom joins:
                 // pk inner join fk: allow and elect
@@ -394,7 +394,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
                         candidate, JoinInfo::JoinWinner::BottomJoinInfo{can_remove_directly, is_fk_in_right, std::move(current_pk_to_fk), original_pk_name_from_definition});
                 }
             }
-            
+
             if (invalid_tables.empty())
             {
                 const auto & fp_keys = translated.getFPKeys();
@@ -403,7 +403,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
                 // pk inner join pk: allow and elect
                 // fk inner join fk: allow and ignore
                 // fk inner join other: allow and ignore
-                
+
                 // pk inner join other: impossible
                 // other inner join other: impossible
                 NameSet converted_pk_tables; // contains pk from fk.
@@ -445,7 +445,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
                 invalid_tables.insert(invalid_pk_tables.begin(), invalid_pk_tables.end());
             }
         }
-    
+
         // If a child does not have fk information, make the pk table corresponding to ordinary keys in the child invalid.
         // because when pk info is invalidating, pk_keys will be dropped, but ordinary_keys in same table will preserve.
         {
@@ -455,8 +455,8 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
                 partial_invalid_tables.insert(key.getTableName());
             for (const auto & key : left_fp_keys)
                 partial_invalid_tables.erase(key.getTableName());
-            
-            invalid_tables.insert(partial_invalid_tables.begin(), partial_invalid_tables.end());        
+
+            invalid_tables.insert(partial_invalid_tables.begin(), partial_invalid_tables.end());
             partial_invalid_tables.clear();
 
             for (const auto & key : right_ordinary_keys)
@@ -470,16 +470,16 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitJoinNode(JoinNode & node
         NameSet filter_invalid_tables = visitFilterExpression(step.getFilter(), translated);
         invalid_tables.insert(filter_invalid_tables.begin(), filter_invalid_tables.end());
     }
-    else 
+    else
     {
         invalid_tables = translated.downgradeAllPkTables();
     }
 
     translated.downgradePkTables(invalid_tables);
-    
+
     std::unordered_map<String, JoinInfo::JoinWinner> old_winners = join_info.reset(invalid_tables, join_infos);
     collectEliminableJoin(old_winners);
-    
+
 
     return translated;
 }
@@ -494,7 +494,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitTableScanNode(TableScanN
         auto table_columns = info.table_columns.find(storage->getStorageID().getTableName());
         if (table_columns != info.table_columns.end())
             fp_keys = table_columns->second;
-        
+
         auto table_ordinary_columns = info.table_ordinary_columns.find(storage->getStorageID().getTableName());
         if (table_ordinary_columns != info.table_ordinary_columns.end())
             ordinary_keys = table_ordinary_columns->second;
@@ -600,7 +600,24 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitProjectionNode(Projectio
     for (const auto & [name, ast] : assignments)
     {
         if (!Utils::isIdentifierOrIdentifierCast(ast))
+        {
+            NameOrderedSet symbols = SymbolsExtractor::extract(ast);
+            NameSet invalid_tables;
+
+            for (const auto & key : old_fp_keys.getKeysInCurrentNames(symbols))
+            {
+                invalid_tables.insert(key.getTableName());
+            }
+            for (const auto & key : old_ordinary_keys.getKeysInCurrentNames(symbols))
+            {
+                invalid_tables.insert(key.getTableName());
+            }
+            translated.downgradePkTables(invalid_tables);
+            std::unordered_map<String, JoinInfo::JoinWinner> old_winners = c.reset(invalid_tables, {c});
+            collectEliminableJoin(old_winners);
+            
             continue;
+        }
 
         // cast(pk, 'Nullable(pk_type)') is allowed, it has no effect on pk side.
         if (auto identifier = Utils::tryUnwrapCast(ast, context, names_and_types)->as<ASTIdentifier>())
@@ -668,7 +685,7 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitUnionNode(UnionNode & no
         {
             common_pk_tables.insert(winner.first);
         }
-        
+
         for (size_t i = 1; i < children_size; i++)
         {
             // only can merge same pk table from children, otherwise can't align at pk/fk in eliminating.
@@ -916,7 +933,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::visitJoinNode(JoinNode & node, JoinEl
             PlanNodePtr fk_node = node.getChildren()[is_fk_in_right];
 
             String current_fk_name = c.current_pk_to_fk.begin()->second.first;
-            
+
             if (winner.second.winner->getType() != IQueryPlanStep::Type::Join)
             {
                 if (is_fk_in_right == 0)
@@ -1084,7 +1101,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::visitAggregatingNode(AggregatingNode 
             else if (!step->getKeysNotHashed().contains(key)) // remove keys not participate in calculating.
                 new_keys.push_back(key);
         }
-        
+
         auto input_stream = step->getInputStreams().at(0);
 
         if (!c.additional_fk_for_multi_child_node.empty())
@@ -1156,7 +1173,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::createNewJoinThenEnd(const String & f
     //            /              \
     // current_node(join/union) new_table_scan
     */
-    
+
     auto first_bottom_join = *std::min_element(winner.second.bottom_joins.begin(), winner.second.bottom_joins.end(), 
         [](const auto & pair, const auto & pair2){ return pair.first->getId() < pair2.first->getId(); });
 
@@ -1183,9 +1200,20 @@ PlanNodePtr EliminateJoinByFK::Eliminator::createNewJoinThenEnd(const String & f
         column_alias.emplace_back(column.name, context->getSymbolAllocator()->newSymbol(column.name));
     }
 
-    table_scan_ptr = TableScanNode::createPlanNode(context->nextNodeId(), std::make_shared<TableScanStep>(context, tb_step->getStorageID(), column_alias, 
-        tb_step->getQueryInfo(), tb_step->getMaxBlockSize(), tb_step->getTableAlias(), tb_step->getHints(), 
-        tb_step->getPushdownAggregation(), tb_step->getPushdownProjection(), tb_step->getPushdownFilter()));
+    table_scan_ptr = TableScanNode::createPlanNode(
+        context->nextNodeId(),
+        std::make_shared<TableScanStep>(
+            context,
+            tb_step->getStorageID(),
+            column_alias,
+            tb_step->getQueryInfo(),
+            tb_step->getMaxBlockSize(),
+            tb_step->getTableAlias(),
+            tb_step->getHints(),
+            tb_step->getInlineExpressions(),
+            tb_step->getPushdownAggregation(),
+            tb_step->getPushdownProjection(),
+            tb_step->getPushdownFilter()));
 
     auto new_table_scan_node = table_scan_ptr->copy(context->nextNodeId(), context);
 
@@ -1193,7 +1221,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::createNewJoinThenEnd(const String & f
     NameToNameMap table_scan_translation;
     for (const auto & item : static_cast<const TableScanStep &>(*table_scan_ptr->getStep()).getColumnAlias())
         table_scan_translation.emplace(item.first, item.second);
-    
+
     String pk_name = table_scan_translation.at(first_bottom_join.second.original_pk_name_from_definition);
 
     // 3. create new_join_node.
@@ -1229,7 +1257,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::createNewJoinThenEnd(const String & f
 
         auto new_projection_step
             = std::make_shared<ProjectionStep>(new_table_scan_node->getCurrentDataStream(), new_assignments, new_name_to_type);
-        
+
         new_table_scan_node = ProjectionNode::createPlanNode(context->nextNodeId(), std::move(new_projection_step), {new_table_scan_node});
     }
 
@@ -1345,7 +1373,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::visitUnionNode(UnionNode & node, Join
                 output_to_inputs[item.name] = step->getOutToInputs().at(item.name);
             }
         }
-        
+
         String fk_name;
         if (winner.second.winner->getId() == node.getId())
         {
@@ -1371,7 +1399,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::visitUnionNode(UnionNode & node, Join
         }
         auto union_step = std::make_shared<UnionStep>(inputs, output_stream, output_to_inputs, step->getMaxThreads(), step->isLocal());
         // at present, just reuse current node.getId(), because mutli-winner save the same nodeId, change nodeId may render latter winner failed.
-        auto current_union_node = UnionNode::createPlanNode(node.getId(), std::move(union_step), children); 
+        auto current_union_node = UnionNode::createPlanNode(node.getId(), std::move(union_step), children);
 
         if (winner.second.winner->getId() == node.getId())
         {

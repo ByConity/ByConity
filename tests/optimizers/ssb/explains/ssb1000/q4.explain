@@ -1,0 +1,42 @@
+Projection Est. 93834 rows
+│     Expressions: [P_BRAND], d_year:=`expr#toYear(LO_ORDERDATE)`, sum(LO_REVENUE):=`expr#sum(LO_REVENUE)`
+└─ Sorting Est. 93834 rows
+   │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, P_BRAND ASC NULLS LAST}
+   └─ Gather Exchange Est. 93834 rows
+      └─ Sorting Est. 93834 rows
+         │     Order by: {expr#toYear(LO_ORDERDATE) ASC NULLS LAST, P_BRAND ASC NULLS LAST}
+         └─ MergingAggregated Est. 93834 rows
+            └─ Repartition Exchange Est. 93834 rows
+               │     Partition by: {expr#toYear(LO_ORDERDATE), P_BRAND}
+               └─ Aggregating Est. 93834 rows
+                  │     Group by: {expr#toYear(LO_ORDERDATE), P_BRAND}
+                  │     Aggregates: expr#sum(LO_REVENUE):=AggNull(sum)(LO_REVENUE)
+                  └─ Projection Est. 68200689 rows
+                     │     Expressions: [LO_REVENUE, P_BRAND], expr#toYear(LO_ORDERDATE):=toYear(LO_ORDERDATE)
+                     └─ Inner Join Est. 68200689 rows
+                        │     Condition: LO_SUPPKEY == S_SUPPKEY
+                        │     Runtime Filters Builder: {S_SUPPKEY}
+                        ├─ Repartition Exchange Est. 341042808 rows
+                        │  │     Partition by: {LO_SUPPKEY}
+                        │  └─ Inner Join Est. 341042808 rows
+                        │     │     Condition: LO_PARTKEY == P_PARTKEY
+                        │     │     Runtime Filters Builder: {P_PARTKEY}
+                        │     ├─ Filter Est. 5999989813 rows
+                        │     │  │     Condition: Runtime Filters: {LO_PARTKEY, LO_SUPPKEY}
+                        │     │  └─ TableScan ssb1000.lineorder Est. 5999989813 rows
+                        │     │           Where: Runtime Filters: {LO_PARTKEY, LO_SUPPKEY}
+                        │     │           Outputs: [LO_PARTKEY, LO_SUPPKEY, LO_ORDERDATE, LO_REVENUE]
+                        │     └─ Broadcast Exchange Est. 79584 rows
+                        │        └─ Filter Est. 79584 rows
+                        │           │     Condition: P_CATEGORY = 'MFGR#12'
+                        │           └─ TableScan ssb1000.part Est. 2000000 rows
+                        │                    Where: P_CATEGORY = 'MFGR#12'
+                        │                    Outputs: [P_PARTKEY, P_CATEGORY, P_BRAND]
+                        └─ Repartition Exchange Est. 399954 rows
+                           │     Partition by: {S_SUPPKEY}
+                           └─ Filter Est. 399954 rows
+                              │     Condition: S_REGION = 'AMERICA'
+                              └─ TableScan ssb1000.supplier Est. 2000000 rows
+                                       Where: S_REGION = 'AMERICA'
+                                       Outputs: [S_SUPPKEY, S_REGION]
+note: Runtime Filter is applied for 2 times.

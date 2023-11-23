@@ -425,6 +425,8 @@ Strings CnchPartGCThread::selectPartitions(const StoragePtr & storage)
 {
     StringSet res;
     swapCandidatePartitions(res);
+    LOG_TRACE(log, "Candidate partitions: {}", fmt::format("{}", fmt::join(res, ",")));
+
     auto from_partition_selector = partition_selector->selectForGC(storage);
     if (from_partition_selector.empty())
     {
@@ -656,7 +658,7 @@ size_t CnchPartGCThread::clearDataFileInTrash(const StoragePtr & istorage, Stora
                 String name = part->name();
                 try
                 {
-                    LOG_TRACE(log, "Will remove part: {}", name);
+                    LOG_DEBUG(log, "Will remove part: {}", name);
                     auto cnch_part = part->toCNCHDataPart(storage);
                     cnch_part->remove();
                     trash_items_removed.data_parts.push_back(part);
@@ -673,7 +675,7 @@ size_t CnchPartGCThread::clearDataFileInTrash(const StoragePtr & istorage, Stora
                 const auto & bitmap = trash_items.delete_bitmaps[i];
                 try
                 {
-                    LOG_TRACE(log, "Will remove delete bitmap : {}", bitmap->getNameForLogs());
+                    LOG_DEBUG(log, "Will remove delete bitmap : {}", bitmap->getNameForLogs());
                     bitmap->removeFile();
                     trash_items_removed.delete_bitmaps.push_back(bitmap);
                 }
@@ -769,7 +771,7 @@ ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataParts
     if (transactions.empty())
         return {};
 
-    // now collect zombie intermediate parts to remove and put back visible intermediate parts for further processing 
+    // now collect zombie intermediate parts to remove and put back visible intermediate parts for further processing
     ServerDataPartsVector zombie_intermediate_parts;
     for (const auto & part : intermediate_parts)
     {

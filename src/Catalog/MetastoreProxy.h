@@ -832,6 +832,7 @@ public:
     void createUDF(const String & name_space, const DB::Protos::DataModelUDF & udf_data);
     void dropUDF(const String & name_space, const String &db_name, const String &function_name);
     void updateTable(const String & name_space, const String & table_uuid, const String & table_info_new, const UInt64 & ts);
+    void updateTableWithID(const String & name_space, const Protos::TableIdentifier & table_id, const DB::Protos::DataModelTable & table_data);
     void getTableByUUID(const String & name_space, const String & table_uuid, Strings & tables_info);
     void clearTableMeta(const String & name_space, const String & database, const String & table, const String & uuid, const Strings & dependencies, const UInt64 & ts = 0);
     void renameTable(const String & name_space, Protos::DataModelTable & table, const String & old_db_name, const String & old_table_name, const String & uuid, BatchCommitRequest & batch_write);

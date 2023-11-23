@@ -13,10 +13,10 @@
 Projection Est. ? rows
 │     Expressions: [s, x], t2.s:=s_1, t2.x:=x_1
 └─ Sorting Est. ? rows
-   │     Order by: {x asc}
+   │     Order by: {x ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
-         │     Order by: {x asc}
+         │     Order by: {x ASC NULLS LAST}
          └─ Inner (GRACE_HASH) Join Est. ? rows
             │     Condition: x == x_1
             ├─ Repartition Exchange Est. ? rows
@@ -50,10 +50,10 @@ Projection Est. ? rows
 Projection Est. ? rows
 │     Expressions: t1.s:=s, t1.x:=x, t2.s:=s_1, t2.x:=x_1, t3.s:=s_2, t3.x:=x_2
 └─ Sorting Est. ? rows
-   │     Order by: {x asc}
+   │     Order by: {x ASC NULLS LAST}
    └─ Gather Exchange Est. ? rows
       └─ Sorting Est. ? rows
-         │     Order by: {x asc}
+         │     Order by: {x ASC NULLS LAST}
          └─ Inner (GRACE_HASH) Join Est. ? rows
             │     Condition: x == x_2
             ├─ Inner Join Est. ? rows

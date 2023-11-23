@@ -338,6 +338,7 @@ protected:
         MappedPtr value;
         size_t size;
         LRUQueueIterator queue_iterator;
+        bool load_from_external{false};
     };
 
     using Cells = std::unordered_map<Key, Cell, HashFunction>;
@@ -345,6 +346,39 @@ protected:
     Cells cells;
 
     mutable std::mutex mutex;
+
+    void setInternal(const Key & key, const MappedPtr & mapped, bool from_external = false)
+    {
+        auto [it, inserted] = cells.emplace(std::piecewise_construct,
+            std::forward_as_tuple(key),
+            std::forward_as_tuple());
+
+        Cell & cell = it->second;
+
+        if (inserted)
+        {
+            try
+            {
+                cell.queue_iterator = queue.insert(queue.end(), key);
+            }
+            catch (...)
+            {
+                cells.erase(it);
+                throw;
+            }
+        }
+        else
+        {
+            current_size -= cell.size;
+            queue.splice(queue.end(), queue, cell.queue_iterator);
+        }
+
+        cell.load_from_external = from_external;
+        cell.value = mapped;
+        cell.size = cell.value ? weight_function(*cell.value) : 0;
+        current_size += cell.size;
+    }
+
 private:
 
     /// Represents pending insertion attempt.
@@ -428,9 +462,7 @@ private:
     {
         auto it = cells.find(key);
         if (it == cells.end())
-        {
-            return MappedPtr();
-        }
+            return loadExternal(key);
 
         Cell & cell = it->second;
 
@@ -442,34 +474,7 @@ private:
 
     void setImpl(const Key & key, const MappedPtr & mapped, [[maybe_unused]] std::lock_guard<std::mutex> & cache_lock)
     {
-        auto [it, inserted] = cells.emplace(std::piecewise_construct,
-            std::forward_as_tuple(key),
-            std::forward_as_tuple());
-
-        Cell & cell = it->second;
-
-        if (inserted)
-        {
-            try
-            {
-                cell.queue_iterator = queue.insert(queue.end(), key);
-            }
-            catch (...)
-            {
-                cells.erase(it);
-                throw;
-            }
-        }
-        else
-        {
-            current_size -= cell.size;
-            queue.splice(queue.end(), queue, cell.queue_iterator);
-        }
-
-        cell.value = mapped;
-        cell.size = cell.value ? weight_function(*cell.value) : 0;
-        current_size += cell.size;
-
+        setInternal(key, mapped);
         removeOverflow();
     }
 
@@ -493,7 +498,9 @@ private:
             current_size -= cell.size;
             current_weight_lost += cell.size;
 
-            removeExternal(key, cell.value, cell.size);
+            if (!cell.load_from_external)
+                removeExternal(key, cell.value, cell.size);
+            
             cells.erase(it);
             queue.pop_front();
             --queue_size;
@@ -511,6 +518,7 @@ private:
     /// Override this method if you want to track how much weight was lost in removeOverflow method.
     virtual void onRemoveOverflowWeightLoss(size_t /*weight_loss*/) {}
     virtual void removeExternal(const Key & /*key*/, const MappedPtr &/*value*/, size_t /*weight*/) {}
+    virtual MappedPtr loadExternal(const Key &) { return MappedPtr(); }
 };
 
 

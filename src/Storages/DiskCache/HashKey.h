@@ -17,21 +17,21 @@ public:
 
     HashedKey(const char * key, size_t size) : HashedKey{{key, size}} { }
 
-    StringRef key() const { return key_; }
+    StringRef key() const { return key_ref; }
 
-    UInt64 keyHash() const { return key_hash_; }
+    UInt64 keyHash() const { return hash_key; }
 
-    bool operator==(HashedKey other) const { return key_hash_ == other.keyHash() && key_ == other.key(); }
+    bool operator==(HashedKey other) const { return hash_key == other.keyHash() && key_ref == other.key(); }
 
     bool operator!=(HashedKey other) const { return !(*this == other); }
 
 private:
-    HashedKey(StringRef key, UInt64 key_hash) : key_{key}, key_hash_{key_hash} { }
+    HashedKey(StringRef key, UInt64 key_hash) : key_ref{key}, hash_key{key_hash} { }
 
     static UInt64 hashBuffer(StringRef key, UInt64 seed = 0) { return MurmurHash3Impl64WithSeed::apply(key.data, key.size, seed); }
 
-    StringRef key_;
-    UInt64 key_hash_{};
+    StringRef key_ref;
+    UInt64 hash_key{};
 };
 
 UInt64 hashBuffer(BufferView key, UInt64 seed = 0);

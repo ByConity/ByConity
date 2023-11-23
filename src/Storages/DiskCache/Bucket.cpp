@@ -16,29 +16,29 @@ namespace
 
 BufferView Bucket::Iterator::key() const
 {
-    return getIteratorEntry(itr_)->key();
+    return getIteratorEntry(iterator)->key();
 }
 
 UInt64 Bucket::Iterator::keyHash() const
 {
-    return getIteratorEntry(itr_)->keyHash();
+    return getIteratorEntry(iterator)->keyHash();
 }
 
 BufferView Bucket::Iterator::value() const
 {
-    return getIteratorEntry(itr_)->value();
+    return getIteratorEntry(iterator)->value();
 }
 
-bool Bucket::Iterator::keyEqualsTo(HashedKey hk) const
+bool Bucket::Iterator::keyEqualsTo(HashedKey key) const
 {
-    return getIteratorEntry(itr_)->keyEqualsTo(hk);
+    return getIteratorEntry(iterator)->keyEqualsTo(key);
 }
 
 UInt32 Bucket::computeChecksum(BufferView view)
 {
-    constexpr auto k_checksum_start = sizeof(checksum_);
+    constexpr auto k_checksum_start = sizeof(checksum);
     auto data = view.slice(k_checksum_start, view.size() - k_checksum_start);
-    return checksum(data);
+    return HybridCache::checksum(data);
 }
 
 Bucket & Bucket::initNew(MutableBufferView view, UInt64 generation_time)
@@ -46,29 +46,29 @@ Bucket & Bucket::initNew(MutableBufferView view, UInt64 generation_time)
     return *new (view.data()) Bucket(generation_time, view.size() - sizeof(Bucket));
 }
 
-BufferView Bucket::find(HashedKey hk) const
+BufferView Bucket::find(HashedKey key) const
 {
-    auto itr = storage_.getFirst();
+    auto itr = storage.getFirst();
     while (!itr.done())
     {
         const auto * entry = getIteratorEntry(itr);
-        if (entry->keyEqualsTo(hk))
+        if (entry->keyEqualsTo(key))
             return entry->value();
-        itr = storage_.getNext(itr);
+        itr = storage.getNext(itr);
     }
     return {};
 }
 
 std::pair<UInt32, UInt32>
-Bucket::insert(HashedKey hk, BufferView value, const ExpiredCheck & check_expired, const DestructorCallback & destructor_callback)
+Bucket::insert(HashedKey key, BufferView value, const ExpiredCheck & check_expired, const DestructorCallback & destructor_callback)
 {
-    const auto size = BucketEntry::computeSize(hk.key().size, value.size());
-    chassert(size <= storage_.capacity());
+    const auto size = BucketEntry::computeSize(key.key().size, value.size());
+    chassert(size <= storage.capacity());
 
     auto ret = makeSpace(size, check_expired, destructor_callback);
-    auto alloc = storage_.allocate(size);
+    auto alloc = storage.allocate(size);
     chassert(!alloc.done());
-    BucketEntry::create(alloc.view(), hk, value);
+    BucketEntry::create(alloc.view(), key, value);
 
     return ret;
 }
@@ -76,21 +76,21 @@ Bucket::insert(HashedKey hk, BufferView value, const ExpiredCheck & check_expire
 std::pair<UInt32, UInt32> Bucket::makeSpace(UInt32 size, const ExpiredCheck & check_expired, const DestructorCallback & destructor_callback)
 {
     const auto required_size = BucketStorage::slotSize(size);
-    chassert(required_size <= storage_.capacity());
+    chassert(required_size <= storage.capacity());
 
-    if (storage_.remainingCapacity() >= required_size)
+    if (storage.remainingCapacity() >= required_size)
         return {};
 
-    UInt32 eviction_expired = removeExpired(storage_.getFirst(), check_expired, destructor_callback);
+    UInt32 eviction_expired = removeExpired(storage.getFirst(), check_expired, destructor_callback);
     UInt32 evictions = eviction_expired;
     // Check available space again after evictions
-    auto cur_free_space = storage_.remainingCapacity();
+    auto cur_free_space = storage.remainingCapacity();
     if (eviction_expired > 0 && cur_free_space >= required_size)
     {
         return std::make_pair(evictions, eviction_expired);
     }
 
-    auto itr = storage_.getFirst();
+    auto itr = storage.getFirst();
     while (true)
     {
         evictions++;
@@ -104,10 +104,10 @@ std::pair<UInt32, UInt32> Bucket::makeSpace(UInt32 size, const ExpiredCheck & ch
         cur_free_space += BucketStorage::slotSize(itr.view().size());
         if (cur_free_space >= required_size)
         {
-            storage_.removeUntil(itr);
+            storage.removeUntil(itr);
             break;
         }
-        itr = storage_.getNext(itr);
+        itr = storage.getNext(itr);
         chassert(!itr.done());
     }
     return std::make_pair(evictions, eviction_expired);
@@ -126,7 +126,7 @@ Bucket::removeExpired(BucketStorage::Allocation itr, const ExpiredCheck & check_
         const auto * entry = getIteratorEntry(itr);
         if (!check_expired(entry->value()))
         {
-            itr = storage_.getNext(itr);
+            itr = storage.getNext(itr);
             continue;
         }
 
@@ -134,27 +134,27 @@ Bucket::removeExpired(BucketStorage::Allocation itr, const ExpiredCheck & check_
         if (destructor_callback)
             destructor_callback(entry->hashedKey(), entry->value(), DestructorEvent::Recycled);
         removed.emplace_back(itr);
-        itr = storage_.getNext(itr);
+        itr = storage.getNext(itr);
         evictions++;
     }
-    storage_.remove(removed);
+    storage.remove(removed);
     return evictions;
 }
 
-UInt32 Bucket::remove(HashedKey hk, const DestructorCallback & destructor_callback)
+UInt32 Bucket::remove(HashedKey key, const DestructorCallback & destructor_callback)
 {
-    auto itr = storage_.getFirst();
+    auto itr = storage.getFirst();
     while (!itr.done())
     {
         const auto * entry = getIteratorEntry(itr);
-        if (entry->keyEqualsTo(hk))
+        if (entry->keyEqualsTo(key))
         {
             if (destructor_callback)
                 destructor_callback(entry->hashedKey(), entry->value(), DestructorEvent::Removed);
-            storage_.remove(itr);
+            storage.remove(itr);
             return 1;
         }
-        itr = storage_.getNext(itr);
+        itr = storage.getNext(itr);
     }
     return 0;
 }
@@ -162,31 +162,31 @@ UInt32 Bucket::remove(HashedKey hk, const DestructorCallback & destructor_callba
 std::pair<std::string, BufferView> Bucket::getRandomAlloc()
 {
     pcg64 thread_local_rng;
-    std::uniform_int_distribution<UInt64> dis(0, storage_.capacity());
+    std::uniform_int_distribution<UInt64> dis(0, storage.capacity());
     const auto rand_offset = dis(thread_local_rng);
 
-    auto itr = storage_.getFirst();
+    auto itr = storage.getFirst();
     while (!itr.done())
     {
-        auto offset = storage_.getOffset(itr);
+        auto offset = storage.getOffset(itr);
         auto size = itr.view().size();
         if (rand_offset < offset + size)
         {
             const auto * entry = getIteratorEntry(itr);
             return std::make_pair(reinterpret_cast<const char *>(entry->key().data()), entry->value());
         }
-        itr = storage_.getNext(itr);
+        itr = storage.getNext(itr);
     }
     return {};
 }
 
 Bucket::Iterator Bucket::getFirst() const
 {
-    return Iterator{storage_.getFirst()};
+    return Iterator{storage.getFirst()};
 }
 
 Bucket::Iterator Bucket::getNext(Iterator itr) const
 {
-    return Iterator{storage_.getNext(itr.itr_)};
+    return Iterator{storage.getNext(itr.iterator)};
 }
 }

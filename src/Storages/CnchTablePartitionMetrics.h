@@ -158,6 +158,8 @@ public:
 
     String getTraceID() { return table_uuid + " " + partition_id; }
     void shutDown();
+    /// This is called before `shutDown` to quickly notify the recalculation task to abort itself.
+    void notifyShutDown() { shutdown = true; }
 
     ~PartitionMetrics() { shutDown(); }
 

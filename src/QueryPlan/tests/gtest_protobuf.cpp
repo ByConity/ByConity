@@ -1041,6 +1041,7 @@ TEST_F(ProtobufTest, TableScanStep)
             max_block_size,
             String{} /*alias*/,
             PlanHints{},
+            Assignments{},
             pushdown_aggregation,
             pushdown_projection,
             pushdown_filter);

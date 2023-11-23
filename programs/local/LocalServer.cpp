@@ -21,49 +21,50 @@
 
 #include "LocalServer.h"
 
-#include <Poco/Util/XMLConfiguration.h>
-#include <Poco/Util/HelpFormatter.h>
-#include <Poco/Util/OptionCallback.h>
-#include <Poco/String.h>
-#include <Poco/Logger.h>
-#include <Poco/NullChannel.h>
-#include <Databases/DatabaseMemory.h>
-#include <Storages/System/attachSystemTables.h>
-#include <Interpreters/ProcessList.h>
-#include <Interpreters/executeQuery.h>
-#include <Interpreters/loadMetadata.h>
-#include <Interpreters/DatabaseCatalog.h>
-#include <Common/Exception.h>
-#include <Common/Macros.h>
-#include <Common/Config/ConfigProcessor.h>
-#include <Common/escapeForFileName.h>
-#include <Common/ClickHouseRevision.h>
-#include <Common/ThreadStatus.h>
-#include <Common/UnicodeBar.h>
-#include <Common/config_version.h>
-#include <Common/quoteString.h>
-#include <IO/ReadBufferFromFile.h>
-#include <IO/ReadBufferFromString.h>
-#include <IO/WriteBufferFromFileDescriptor.h>
-#include <IO/UseSSL.h>
-#include <IO/ReadHelpers.h>
-#include <Parsers/parseQuery.h>
-#include <Parsers/IAST.h>
-#include <common/ErrorHandlers.h>
-#include <Common/StatusFile.h>
-#include <Functions/registerFunctions.h>
+#include <filesystem>
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <TableFunctions/registerTableFunctions.h>
-#include <Storages/registerStorages.h>
+#include <Databases/DatabaseMemory.h>
 #include <Dictionaries/registerDictionaries.h>
 #include <Disks/registerDisks.h>
 #include <Formats/registerFormats.h>
-#include <boost/program_options/options_description.hpp>
+#include <Functions/registerFunctions.h>
+#include <IO/ReadBufferFromFile.h>
+#include <IO/ReadBufferFromString.h>
+#include <IO/ReadHelpers.h>
+#include <IO/UseSSL.h>
+#include <IO/WriteBufferFromFileDescriptor.h>
+#include <Interpreters/DatabaseCatalog.h>
+#include <Interpreters/ProcessList.h>
+#include <Interpreters/executeQuery.h>
+#include <Interpreters/loadMetadata.h>
+#include <Parsers/IAST.h>
+#include <Parsers/parseQuery.h>
+#include <Storages/System/attachSystemTables.h>
+#include <Storages/registerStorages.h>
+#include <TableFunctions/registerTableFunctions.h>
 #include <boost/program_options.hpp>
-#include <common/argsToConfig.h>
+#include <boost/program_options/options_description.hpp>
+#include <Poco/Logger.h>
+#include <Poco/NullChannel.h>
+#include <Poco/String.h>
+#include <Poco/Util/HelpFormatter.h>
+#include <Poco/Util/OptionCallback.h>
+#include <Poco/Util/XMLConfiguration.h>
+#include <Common/ClickHouseRevision.h>
+#include <Common/Config/ConfigProcessor.h>
+#include <Common/Exception.h>
+#include <Common/Macros.h>
+#include <Common/StatusFile.h>
 #include <Common/TerminalSize.h>
+#include <Common/ThreadStatus.h>
+#include <Common/UnicodeBar.h>
+#include <Common/config_version.h>
+#include <Common/escapeForFileName.h>
+#include <Common/getNumberOfPhysicalCPUCores.h>
+#include <Common/quoteString.h>
 #include <Common/randomSeed.h>
-#include <filesystem>
+#include <common/ErrorHandlers.h>
+#include <common/argsToConfig.h>
 
 namespace fs = std::filesystem;
 
@@ -266,6 +267,18 @@ try
     global_context->setExternalAuthenticatorsConfig(config());
 
     setupUsers();
+
+    do
+    {
+        unsigned cores = getNumberOfPhysicalCPUCores() * 2;
+
+        if (cores < 4)
+            break;
+
+        int res = bthread_setconcurrency(cores);
+        if (res)
+            LOG_ERROR(log, "Error when calling bthread_setconcurrency. Error number {}.", res);
+    } while (false);
 
     /// Limit on total number of concurrently executing queries.
     /// There is no need for concurrent queries, override max_concurrent_queries.

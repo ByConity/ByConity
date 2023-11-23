@@ -1,0 +1,124 @@
+Projection Est. 1 rows
+│     Expressions: order count:=`expr#uniqExact(ws_order_number)`, total net profit:=`expr#sum(ws_net_profit)`, total shipping cost:=`expr#sum(ws_ext_ship_cost)`
+└─ Limit Est. 1 rows
+   │     Limit: 100
+   └─ Sorting Est. 1 rows
+      │     Order by: {expr#uniqExact(ws_order_number) ASC NULLS LAST}
+      │     Limit: 100
+      └─ MergingAggregated Est. 1 rows
+         └─ Gather Exchange Est. 1 rows
+            └─ Aggregating Est. 1 rows
+               │     Group by: {}
+               │     Aggregates: expr#uniqExact(ws_order_number):=AggNull(uniqExact)(ws_order_number), expr#sum(ws_ext_ship_cost):=AggNull(sum)(ws_ext_ship_cost), expr#sum(ws_net_profit):=AggNull(sum)(ws_net_profit)
+               └─ Inner Join Est. 15110 rows
+                  │     Condition: ws_web_site_sk == web_site_sk
+                  │     Runtime Filters Builder: {web_site_sk}
+                  ├─ Inner Join Est. 101999 rows
+                  │  │     Condition: ca_address_sk == ws_ship_addr_sk
+                  │  │     Runtime Filters Builder: {ws_ship_addr_sk}
+                  │  ├─ Repartition Exchange Est. 188699 rows
+                  │  │  │     Partition by: {ca_address_sk}
+                  │  │  └─ Filter Est. 188699 rows
+                  │  │     │     Condition: ca_state = 'IL' Runtime Filters: {ca_address_sk}
+                  │  │     └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
+                  │  │              Where: ca_state = 'IL' Runtime Filters: {ca_address_sk}
+                  │  │              Outputs: [ca_address_sk, ca_state]
+                  │  └─ Repartition Exchange Est. 100620 rows
+                  │     │     Partition by: {ws_ship_addr_sk}
+                  │     └─ Inner Join Est. 36540 rows
+                  │        │     Condition: ws_ship_date_sk == d_date_sk
+                  │        │     Runtime Filters Builder: {d_date_sk}
+                  │        ├─ Inner Join Est. 1205217 rows
+                  │        │  │     Condition: ws_order_number == wr_order_number
+                  │        │  │     Runtime Filters Builder: {wr_order_number}
+                  │        │  ├─ Filter Est. 720000376 rows
+                  │        │  │  │     Condition: isNotNull(ws_order_number) Runtime Filters: {ws_order_number, ws_ship_date_sk, ws_web_site_sk}
+                  │        │  │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
+                  │        │  │           Where: isNotNull(ws_order_number) Runtime Filters: {ws_order_number, ws_ship_date_sk, ws_web_site_sk}
+                  │        │  │           Outputs: [ws_ship_date_sk, ws_ship_addr_sk, ws_web_site_sk, ws_order_number, ws_ext_ship_cost, ws_net_profit]
+                  │        │  └─ Broadcast Exchange Est. 100621 rows
+                  │        │     └─ Aggregating Est. 100621 rows
+                  │        │        │     Group by: {wr_order_number}
+                  │        │        └─ Inner (PARALLEL_HASH) Join Est. 27922002 rows
+                  │        │           │     Condition: wr_order_number == ws_order_number_4
+                  │        │           ├─ Repartition Exchange Est. 71997522 rows
+                  │        │           │  │     Partition by: {wr_order_number}
+                  │        │           │  └─ Filter Est. 71997522 rows
+                  │        │           │     │     Condition: isNotNull(wr_order_number) Runtime Filters: {wr_order_number}
+                  │        │           │     └─ TableScan tpcds1000_sample.web_returns Est. 71997522 rows
+                  │        │           │              Where: isNotNull(wr_order_number) Runtime Filters: {wr_order_number}
+                  │        │           │              Outputs: [wr_order_number]
+                  │        │           └─ Repartition Exchange Est. 14435848 rows
+                  │        │              │     Partition by: {ws_order_number_4}
+                  │        │              └─ Inner Join Est. 14435841 rows
+                  │        │                 │     Condition: ws_order_number_6 == ws_order_number_4
+                  │        │                 │     Filter: ws_warehouse_sk_6 != ws_warehouse_sk_7
+                  │        │                 │     Runtime Filters Builder: {ws_order_number_4}
+                  │        │                 ├─ Filter Est. 720000376 rows
+                  │        │                 │  │     Condition: isNotNull(ws_order_number_6) Runtime Filters: {ws_order_number_6}
+                  │        │                 │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
+                  │        │                 │           Where: isNotNull(ws_order_number) Runtime Filters: {ws_order_number}
+                  │        │                 │           Outputs: ws_warehouse_sk_7:=ws_warehouse_sk, ws_order_number_6:=ws_order_number
+                  │        │                 └─ Broadcast Exchange Est. 1205217 rows
+                  │        │                    └─ Inner Join Est. 1205217 rows
+                  │        │                       │     Condition: ws_order_number_4 == ws_order_number_7
+                  │        │                       │     Runtime Filters Builder: {ws_order_number_7}
+                  │        │                       ├─ Filter Est. 720000376 rows
+                  │        │                       │  │     Condition: isNotNull(ws_order_number_4) Runtime Filters: {ws_order_number_4}
+                  │        │                       │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
+                  │        │                       │           Where: isNotNull(ws_order_number) Runtime Filters: {ws_order_number}
+                  │        │                       │           Outputs: ws_warehouse_sk_6:=ws_warehouse_sk, ws_order_number_4:=ws_order_number
+                  │        │                       └─ Broadcast Exchange Est. 100621 rows
+                  │        │                          └─ MergingAggregated Est. 100621 rows
+                  │        │                             └─ Repartition Exchange Est. 100621 rows
+                  │        │                                │     Partition by: {ws_order_number_7}
+                  │        │                                └─ Aggregating Est. 100621 rows
+                  │        │                                   │     Group by: {ws_order_number_7}
+                  │        │                                   └─ Projection Est. 100621 rows
+                  │        │                                      │     Expressions: ws_order_number_7:=ws_order_number
+                  │        │                                      └─ Inner Join Est. 100621 rows
+                  │        │                                         │     Condition: ws_web_site_sk == web_site_sk
+                  │        │                                         │     Runtime Filters Builder: {web_site_sk}
+                  │        │                                         ├─ Inner Join Est. 679192 rows
+                  │        │                                         │  │     Condition: ws_ship_addr_sk == ca_address_sk
+                  │        │                                         │  │     Runtime Filters Builder: {ca_address_sk}
+                  │        │                                         │  ├─ Inner Join Est. 21829405 rows
+                  │        │                                         │  │  │     Condition: ws_ship_date_sk == d_date_sk
+                  │        │                                         │  │  │     Runtime Filters Builder: {d_date_sk}
+                  │        │                                         │  │  ├─ Filter Est. 720000376 rows
+                  │        │                                         │  │  │  │     Condition: isNotNull(ws_order_number) Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
+                  │        │                                         │  │  │  └─ TableScan tpcds1000_sample.web_sales Est. 720000376 rows
+                  │        │                                         │  │  │           Where: isNotNull(ws_order_number) Runtime Filters: {ws_ship_addr_sk, ws_ship_date_sk, ws_web_site_sk}
+                  │        │                                         │  │  │           Outputs: [ws_ship_date_sk, ws_ship_addr_sk, ws_web_site_sk, ws_order_number]
+                  │        │                                         │  │  └─ Broadcast Exchange Est. 59 rows
+                  │        │                                         │  │     └─ Filter Est. 59 rows
+                  │        │                                         │  │        │     Condition: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
+                  │        │                                         │  │        └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                  │        │                                         │  │                 Where: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
+                  │        │                                         │  │                 Outputs: [d_date_sk, d_date]
+                  │        │                                         │  └─ Broadcast Exchange Est. 188699 rows
+                  │        │                                         │     └─ Filter Est. 188699 rows
+                  │        │                                         │        │     Condition: ca_state = 'IL'
+                  │        │                                         │        └─ TableScan tpcds1000_sample.customer_address Est. 6000000 rows
+                  │        │                                         │                 Where: ca_state = 'IL'
+                  │        │                                         │                 Outputs: [ca_address_sk, ca_state]
+                  │        │                                         └─ Broadcast Exchange Est. 8 rows
+                  │        │                                            └─ Filter Est. 8 rows
+                  │        │                                               │     Condition: web_company_name = 'pri'
+                  │        │                                               └─ TableScan tpcds1000_sample.web_site Est. 54 rows
+                  │        │                                                        Where: web_company_name = 'pri'
+                  │        │                                                        Outputs: [web_site_sk, web_company_name]
+                  │        └─ Broadcast Exchange Est. 59 rows
+                  │           └─ Filter Est. 59 rows
+                  │              │     Condition: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
+                  │              └─ TableScan tpcds1000_sample.date_dim Est. 73049 rows
+                  │                       Where: (d_date >= cast(10623, 'Date')) AND (d_date <= cast(10683, 'Date'))
+                  │                       Outputs: [d_date_sk, d_date]
+                  └─ Broadcast Exchange Est. 8 rows
+                     └─ Filter Est. 8 rows
+                        │     Condition: web_company_name = 'pri'
+                        └─ TableScan tpcds1000_sample.web_site Est. 54 rows
+                                 Where: web_company_name = 'pri'
+                                 Outputs: [web_site_sk, web_company_name]
+note: Magic Set is applied for 1 parts.
+note: Runtime Filter is applied for 10 times.

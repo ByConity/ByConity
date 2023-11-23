@@ -19,8 +19,10 @@
 #include <Storages/StorageCnchMergeTree.h>
 
 #include <Catalog/Catalog.h>
+#include <CloudServices/CnchBGThreadCommon.h>
 #include <CloudServices/CnchCreateQueryHelper.h>
 #include <CloudServices/CnchMergeMutateThread.h>
+#include <CloudServices/CnchPartGCThread.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchServerResource.h>
 #include <CloudServices/CnchWorkerClient.h>
@@ -1056,6 +1058,14 @@ bool StorageCnchMergeTree::optimize(
 
     if (query_context->getSettingsRef().mutations_sync != 0)
         merge_mutate_thread->waitTasksFinish(task_ids, timeout_ms);
+
+    auto bg_gc_thread = query_context->tryGetCnchBGThread(CnchBGThreadType::PartGC, getStorageID());
+    if (bg_gc_thread)
+    {
+        auto * gc_thread = dynamic_cast<CnchPartGCThread *>(bg_gc_thread.get());
+        for (const auto & partition_id : partition_ids)
+            gc_thread->addCandidatePartition(partition_id);
+    }
 
     return true;
 }

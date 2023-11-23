@@ -1,0 +1,1 @@
+set(CJSON_SRC_FILE ${ClickHouse_SOURCE_DIR}/contrib/cJSON/cJSON.cpp) 

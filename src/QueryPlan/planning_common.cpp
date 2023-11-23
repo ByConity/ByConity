@@ -27,30 +27,19 @@ void putIdentities(const NamesAndTypes & columns, Assignments & assignments, Nam
     }
 }
 
-FieldSymbolInfos mapSymbols(const FieldSymbolInfos & field_symbol_infos, const std::unordered_map<String, String> & old_to_new)
+void mapFieldSymbolInfos(FieldSymbolInfos & symbol_infos, const NameToNameMap & name_mapping, bool map_sub_column)
 {
-    FieldSymbolInfos result;
-
-    auto find_new_symbol = [&](const auto & old)
+    for (auto & symbol_info : symbol_infos)
     {
-        if (auto it = old_to_new.find(old); it != old_to_new.end())
-            return it->second;
+        if (auto it = name_mapping.find(symbol_info.primary_symbol); it != name_mapping.end())
+            symbol_info.primary_symbol = it->second;
 
-        throw Exception("Symbol not found", ErrorCodes::LOGICAL_ERROR);
-    };
-
-    for (const auto & old_info : field_symbol_infos)
-    {
-        const auto & sub_column_symbols = old_info.sub_column_symbols;
-        FieldSymbolInfo::SubColumnToSymbol new_sub_column_symbols;
-
-        for (const auto & sub_col_item: sub_column_symbols)
-            new_sub_column_symbols.emplace(sub_col_item.first, find_new_symbol(sub_col_item.second));
-
-        result.emplace_back(find_new_symbol(old_info.primary_symbol), new_sub_column_symbols);
+        if (map_sub_column)
+        {
+            for (auto & sub_symbol_info : symbol_info.sub_column_symbols)
+                if (auto it = name_mapping.find(sub_symbol_info.second); it != name_mapping.end())
+                    sub_symbol_info.second = it->second;
+        }
     }
-
-    return result;
 }
-
 }

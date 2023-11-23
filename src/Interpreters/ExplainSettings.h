@@ -24,6 +24,7 @@ struct QueryPlanSettings
     bool profile = true;
     bool pb_json = false;
     bool add_whitespace = true; // used to pretty print json
+    bool aggregate_profiles = true; 
 
     constexpr static char name[] = "PLAN";
 
@@ -38,6 +39,7 @@ struct QueryPlanSettings
         {"stats", stats},
         {"profile", profile},
         {"add_whitespace", add_whitespace},
+        {"aggregate_profiles", aggregate_profiles},
     };
 };
 

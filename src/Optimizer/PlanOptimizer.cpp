@@ -28,13 +28,14 @@
 #include <Optimizer/Rewriter/OptimizeTrivialCount.h>
 #include <Optimizer/Rewriter/PredicatePushdown.h>
 #include <Optimizer/Rewriter/RemoveApply.h>
+#include <Optimizer/Rewriter/RemoveRedundantAggregate.h>
 #include <Optimizer/Rewriter/RemoveRedundantSort.h>
 #include <Optimizer/Rewriter/RemoveUnusedCTE.h>
+#include <Optimizer/Rewriter/ShareCommonExpression.h>
 #include <Optimizer/Rewriter/SimpleReorderJoin.h>
 #include <Optimizer/Rewriter/SimplifyCrossJoin.h>
 #include <Optimizer/Rewriter/UnifyJoinOutputs.h>
 #include <Optimizer/Rewriter/UnifyNullableType.h>
-#include <Optimizer/Rewriter/RemoveRedundantAggregate.h>
 #include <Optimizer/Rewriter/UseSortingProperty.h>
 #include <Optimizer/Rule/Rules.h>
 #include <QueryPlan/GraphvizPrinter.h>
@@ -109,8 +110,10 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
 
         std::make_shared<OptimizeTrivialCount>(),
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
-
+        std::make_shared<ShareCommonExpression>(), // this rule depends on enable_optimizer_early_prewhere_push_down
         std::make_shared<ColumnPruning>(),
+        std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
+        std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */
         std::make_shared<AddBufferForDeadlockCTE>(),
@@ -260,9 +263,11 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<OptimizeTrivialCount>(),
         // push predicate into storage
         std::make_shared<IterativeRewriter>(Rules::pushIntoTableScanRules(), "PushIntoTableScan"),
+        std::make_shared<ShareCommonExpression>(), // this rule depends on enable_optimizer_early_prewhere_push_down
         // TODO cost-based projection push down
-
         std::make_shared<ColumnPruning>(),
+        std::make_shared<IterativeRewriter>(Rules::removeRedundantRules(), "RemoveRedundant"),
+        std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
         std::make_shared<UnifyNullableType>(), /* some rules generates incorrect column ptr for DataStream,
                                                   e.g. use a non-nullable column ptr for a nullable column */
         std::make_shared<AddBufferForDeadlockCTE>(),

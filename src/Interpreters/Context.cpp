@@ -151,7 +151,11 @@
 #include <Common/setThreadName.h>
 #include <Common/thread_local_rng.h>
 #include <common/logger_useful.h>
+#include "Disks/DiskType.h"
 #include "Server/AsyncQueryManager.h"
+#include <Storages/DiskCache/AbstractCache.h>
+#include <Storages/DiskCache/NvmCacheConfig.h>
+#include <Storages/DiskCache/Types.h>
 
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
@@ -175,6 +179,7 @@
 #include <IO/VETosCommon.h>
 
 #include <Statistics/AutoStatisticsManager.h>
+#include <fmt/core.h>
 
 namespace fs = std::filesystem;
 
@@ -334,6 +339,7 @@ struct ContextSharedPart
     String buffer_profile_name; /// Profile used by Buffer engine for flushing to the underlying
     AccessControlManager access_control_manager;
     mutable ResourceGroupManagerPtr resource_group_manager; /// Known resource groups
+    mutable NvmCachePtr nvm_cache; /// nvm cache
     mutable UncompressedCachePtr uncompressed_cache; /// The cache of decompressed blocks.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable QueryCachePtr query_cache;         /// Cache of query results.
@@ -2391,6 +2397,54 @@ ProcessList::Element * Context::getProcessListElement() const
     return process_list_elem;
 }
 
+void Context::setNvmCache(const Poco::Util::AbstractConfiguration &config)
+{
+    auto lock = getLock();
+
+    if (shared->nvm_cache)
+        throw Exception("Nvmcache cache has been already created.", ErrorCodes::LOGICAL_ERROR);
+
+    NvmCacheConfig conf;
+    conf.loadFromConfig("nvm_cache", config);
+
+    if (!conf.isEnable())
+        return;
+
+    std::vector<std::string> paths;
+    auto disks = getStoragePolicy(conf.getPolicyName())->getVolumeByName(conf.getVolumeName(), true)->getDisks();
+    for  (auto & disk : disks)
+    {
+        chassert(disk->getType() == DiskType::Type::Local);
+        paths.push_back(std::filesystem::path(disk->getPath()) / NvmCacheConfig::FILE_NAME);
+    }
+
+    if (paths.size() > 1)
+        conf.setRaidFiles(paths, conf.getFileSize(), true);
+    else
+        conf.setSimpleFile(paths[0], conf.getFileSize(), true);
+    conf.setEnginesSelector([](HybridCache::EngineTag tag){ return static_cast<size_t>(tag); });
+
+    auto cache = createNvmCache(std::move(conf), nullptr, nullptr, false, false);
+    std::shared_ptr<HybridCache::AbstractCache> cache_ptr = std::move(cache);
+
+    shared->nvm_cache = std::static_pointer_cast<NvmCache>(cache_ptr);
+    shared->mark_cache->setNvmCache(shared->nvm_cache);
+    shared->uncompressed_cache->setNvmCache(shared->nvm_cache);
+}
+
+NvmCachePtr Context::getNvmCache() const
+{
+    auto lock = getLock();
+    return shared->nvm_cache;
+}
+
+void Context::dropNvmCache() const
+{
+    auto lock = getLock();
+    if (shared->nvm_cache)
+        shared->nvm_cache->reset();
+}
+
 
 void Context::setUncompressedCache(size_t max_size_in_bytes)
 {
@@ -2508,6 +2562,9 @@ void Context::dropCaches() const
 
     if (shared->mmap_cache)
         shared->mmap_cache->reset();
+
+    if (shared->nvm_cache)
+        shared->nvm_cache->reset();
 }
 
 

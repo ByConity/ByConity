@@ -25,7 +25,7 @@ class ColumnPruning : public Rewriter
 {
 public:
     String name() const override { return "ColumnPruning"; }
-    static void selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage, NameSet & required);
+    static String selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage);
 
 private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_column_pruning; }

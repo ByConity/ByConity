@@ -46,7 +46,7 @@ std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromStorage(const IStorage & st
     return getASTCreateQueryFromString(storage.getCreateTableSql(), context);
 }
 
-StoragePtr createStorageFromQuery(const String & query, ContextMutablePtr & context)
+StoragePtr createStorageFromQuery(const String & query, const ContextPtr & context)
 {
     auto ast = getASTCreateQueryFromString(query, context);
 
@@ -74,7 +74,7 @@ StoragePtr createStorageFromQuery(const String & query, ContextMutablePtr & cont
     return StorageFactory::instance().get(
         *ast,
         "",
-        context,
+        Context::createCopy(context),
         context->getGlobalContext(),
         // Set attach = true to avoid making columns nullable due to ANSI settings, because the dialect change
         // should NOT affect existing tables.

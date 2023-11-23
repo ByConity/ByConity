@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <Storages/DiskCache/Buffer.h>
+#include <DataStreams/MarkInCompressedFile.h>
 
 namespace DB::HybridCache
 {
@@ -117,5 +118,30 @@ TEST(Buffer, CopyTo)
 
     view.copyTo(dst + 6);
     EXPECT_STREQ("hello 12345.", dst);
+}
+
+TEST(Buffer, MarksInCompressedFile)
+{
+    MarksInCompressedFile marks(2);
+    marks[0].offset_in_compressed_file = 1;
+    marks[0].offset_in_decompressed_block = 2;
+    marks[1].offset_in_compressed_file = 3;
+    marks[1].offset_in_decompressed_block = 4;
+
+    auto view = HybridCache::BufferView{marks.size() * sizeof(MarkInCompressedFile), reinterpret_cast<const UInt8 *>(marks.raw_data())};
+
+    HybridCache::Buffer buffer(view);
+    auto * mark0= reinterpret_cast<MarkInCompressedFile *>(buffer.data());
+    ASSERT_EQ(1, mark0->offset_in_compressed_file);
+    ASSERT_EQ(2, mark0->offset_in_decompressed_block);
+
+    MarksInCompressedFile marks2;
+    MarkInCompressedFile * begin = reinterpret_cast<MarkInCompressedFile *>(buffer.data());
+    MarkInCompressedFile * end = reinterpret_cast<MarkInCompressedFile *>(buffer.data() + buffer.size());
+    marks2.assign(begin, end);
+    ASSERT_EQ(1, marks2[0].offset_in_compressed_file);
+    ASSERT_EQ(2, marks2[0].offset_in_decompressed_block);
+    ASSERT_EQ(3, marks2[1].offset_in_compressed_file);
+    ASSERT_EQ(4, marks2[1].offset_in_decompressed_block);
 }
 }

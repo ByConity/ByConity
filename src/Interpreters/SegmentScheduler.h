@@ -92,10 +92,11 @@ public:
     void updateSegmentStatus(const RuntimeSegmentsStatus & segment_status);
     void updateQueryStatus(const RuntimeSegmentsStatus & segment_status);
 
-    bool isExplainQuery(const String & query_id) const;
-    bool alreadyReceivedAllSegmentStatus(const String & query_id) const;
+    // Return true if only the query is explain query and it has received statuses of all segment.
+    bool explainQueryHasReceivedAllSegmentStatus(const String & query_id) const;
     void updateReceivedSegmentStatusCounter(const String & query_id, const size_t & segment_id, const UInt64 & parallel_index);
-    bool alreadyReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const;
+    // Return true if only the query runs in bsp mode and all statuses of specified segment has been received.
+    bool bspQueryReceivedAllStatusOfSegment(const String & query_id, const size_t & segment_id) const;
     void onSegmentFinished(const RuntimeSegmentsStatus & status);
 
 private:

@@ -136,6 +136,7 @@ bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, boo
             || explain->getKind() ==  ASTExplainQuery::AnalyzedSyntax
             || explain->getKind() ==  ASTExplainQuery::DistributedAnalyze
             || explain->getKind() ==  ASTExplainQuery::LogicalAnalyze
+            || explain->getKind() ==  ASTExplainQuery::PipelineAnalyze
             || explain->getKind() ==  ASTExplainQuery::Distributed
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizerRule
             || explain->getKind() ==  ASTExplainQuery::TraceOptimizer

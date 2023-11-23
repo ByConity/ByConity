@@ -17,7 +17,7 @@
 #include <IO/S3/PocoHTTPClient.h>
 #include <IO/BufferBase.h>
 #include <Poco/URI.h>
-#include <Common/HeaderCollection.h>
+#include <Common/HTTPHeaderEntries.h>
 #include <aws/core/auth/AWSCredentialsProviderChain.h>
 namespace Aws::S3
 {
@@ -67,16 +67,18 @@ public:
     static ClientFactory & instance();
 
     std::shared_ptr<Aws::S3::S3Client> create(
-        const PocoHTTPClientConfiguration & cfg,
+        std::shared_ptr<Aws::Client::ClientConfiguration> client_configuration,
         bool is_virtual_hosted_style,
         const String & access_key_id,
         const String & secret_access_key,
         const String & server_side_encryption_customer_key_base64,
-        HeaderCollection headers,
+        HTTPHeaderEntries headers,
         bool use_environment_credentials,
         bool use_insecure_imds_request);
 
-    PocoHTTPClientConfiguration createClientConfiguration(
+    std::shared_ptr<Aws::Client::ClientConfiguration> createCRTHttpClientConfiguration();
+
+    std::shared_ptr<Aws::Client::ClientConfiguration> createClientConfiguration(
         const String & force_region,
         const RemoteHostFilter & remote_host_filter,
         unsigned int s3_max_redirects,
@@ -101,6 +103,7 @@ struct URI
 {
     Poco::URI uri;
     // Custom endpoint if URI scheme is not S3.
+    String region;
     String endpoint;
     String bucket;
     String key;
@@ -108,14 +111,15 @@ struct URI
 
     bool is_virtual_hosted_style;
 
-    explicit URI(const Poco::URI & uri_);
-    explicit URI(const std::string & uri_) : URI(Poco::URI(uri_)) {}
+    explicit URI(const Poco::URI & uri_, bool parse_region_ = false);
+    explicit URI(const std::string & uri_, bool parse_region_ = false) : URI(Poco::URI(uri_), parse_region_) {}
 
     String toString() const
     {
         return fmt::format(
-            "storage_name = {}, url = {}/{}/{}, is_virtual_hosted_style = {}",
+            "`storage_name = {}, region = {}, url = {}/{}/{}, is_virtual_hosted_style = {}`",
             storage_name,
+            region,
             endpoint,
             bucket,
             key,
@@ -136,14 +140,14 @@ public:
         const String & session_token_ = "", bool is_virtual_hosted_style_ = false,
         int connect_timeout_ms_ = 10000, int request_timeout_ms_ = 30000,
         int max_redirects_ = 10, int max_connections_ = 100, uint32_t http_keep_alive_timeout_ms_ = 5000,
-        size_t http_connection_pool_size_ = 1024):
+        size_t http_connection_pool_size_ = 1024, size_t slow_read_ms_ = 100):
             max_redirects(max_redirects_), connect_timeout_ms(connect_timeout_ms_),
             request_timeout_ms(request_timeout_ms_), max_connections(max_connections_),
             endpoint(endpoint_), region(region_), bucket(bucket_), ak_id(ak_id_),
             ak_secret(ak_secret_), root_prefix(root_prefix_),
             session_token(session_token_), is_virtual_hosted_style(is_virtual_hosted_style_),
             http_keep_alive_timeout_ms(http_keep_alive_timeout_ms_),
-            http_connection_pool_size(http_connection_pool_size_) {}
+            http_connection_pool_size(http_connection_pool_size_), slow_read_ms(slow_read_ms_) {}
 
     S3Config(const Poco::Util::AbstractConfiguration& cfg, const String& cfg_prefix);
 
@@ -165,6 +169,7 @@ public:
     bool is_virtual_hosted_style;
     uint32_t http_keep_alive_timeout_ms;
     size_t http_connection_pool_size;
+    size_t slow_read_ms{100};
 };
 
 class S3Util
@@ -266,7 +271,7 @@ struct AuthSettings
     std::string region;
     std::string server_side_encryption_customer_key_base64;
 
-    HeaderCollection headers;
+    HTTPHeaderEntries headers;
 
     std::optional<bool> use_environment_credentials;
     std::optional<bool> use_insecure_imds_request;
@@ -288,7 +293,7 @@ namespace Auth
     {
     public:
         explicit S3CredentialsProviderChain(
-            const DB::S3::PocoHTTPClientConfiguration & configuration,
+            std::shared_ptr<Aws::Client::ClientConfiguration> configuration,
             const Aws::Auth::AWSCredentials & credentials,
             bool use_environment_credentials,
             bool use_insecure_imds_request);

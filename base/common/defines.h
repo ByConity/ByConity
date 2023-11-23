@@ -56,10 +56,12 @@
 #    define ALWAYS_INLINE __forceinline
 #    define NO_INLINE static __declspec(noinline)
 #    define MAY_ALIAS
+#    define PACKED_LINLINE
 #else
 #    define ALWAYS_INLINE __attribute__((__always_inline__))
 #    define NO_INLINE __attribute__((__noinline__))
 #    define MAY_ALIAS __attribute__((__may_alias__))
+#    define PACKED_LINLINE __attribute__((__packed__))
 #endif
 
 #if !defined(__x86_64__) && !defined(__aarch64__) && !defined(__PPC__)
@@ -213,6 +215,10 @@
 /// Heavy assertions (that run loops or call complex functions) are allowed in debug builds only.
 /// Also it makes sense to call abort() instead of __builtin_unreachable() in debug builds,
 /// because SIGABRT is easier to debug than SIGTRAP (the second one makes gdb crazy)
+#ifdef UNREACHABLE
+#undef UNREACHABLE
+#endif
+
 #if !defined(chassert)
     #if defined(ABORT_ON_LOGICAL_ERROR)
         #define chassert(x) static_cast<bool>(x) ? void(0) : ::DB::abortOnFailedAssertion(#x)

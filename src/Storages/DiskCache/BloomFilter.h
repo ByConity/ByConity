@@ -25,19 +25,19 @@ class BloomFilter
 public:
     BloomFilter() = default;
 
-    BloomFilter(UInt32 num_filters, UInt32 num_hashes, size_t hash_table_bit_size);
+    BloomFilter(UInt32 num_filters_, UInt32 num_hashes_, size_t hash_table_bit_size_);
 
-    static BloomFilter makeBloomFilter(UInt32 num_filter, size_t element_count, double pf_prob);
+    static BloomFilter makeBloomFilter(UInt32 num_filters, size_t element_count, double pf_prob);
 
     BloomFilter(const BloomFilter &) = delete;
     BloomFilter & operator=(const BloomFilter &) = delete;
 
     BloomFilter(BloomFilter && other) noexcept
-        : num_filters_(other.num_filters_)
-        , hash_table_bit_size_(other.hash_table_bit_size_)
-        , filter_byte_size_(other.filter_byte_size_)
-        , seeds_(std::exchange(other.seeds_, {}))
-        , bits_(std::move(other.bits_))
+        : filters_count(other.filters_count)
+        , hash_table_bit_size(other.hash_table_bit_size)
+        , filter_byte_size(other.filter_byte_size)
+        , seeds(std::exchange(other.seeds, {}))
+        , bits(std::move(other.bits))
     {
     }
 
@@ -58,13 +58,13 @@ public:
 
     void reset();
 
-    UInt32 numFilters() const { return num_filters_; }
+    UInt32 numFilters() const { return filters_count; }
 
-    UInt32 numHashes() const { return static_cast<UInt32>(seeds_.size()); }
+    UInt32 numHashes() const { return static_cast<UInt32>(seeds.size()); }
 
-    size_t numBitsPerFilter() const { return filter_byte_size_ * 8ULL; }
+    size_t numBitsPerFilter() const { return filter_byte_size * 8ULL; }
 
-    size_t getByteSize() const { return num_filters_ * filter_byte_size_; }
+    size_t getByteSize() const { return filters_count * filter_byte_size; }
 
     void persist(google::protobuf::io::CodedOutputStream * stream);
     void recover(google::protobuf::io::CodedInputStream * stream);
@@ -72,8 +72,8 @@ public:
 private:
     UInt8 * getFilterBytes(UInt32 index) const
     {
-        chassert(bits_);
-        return bits_.get() + index * filter_byte_size_;
+        chassert(bits);
+        return bits.get() + index * filter_byte_size;
     }
 
     static constexpr UInt32 kPersistFragmentSize = 1024 * 1024;
@@ -81,10 +81,10 @@ private:
     void serializeInternal(google::protobuf::io::CodedOutputStream * stream, UInt64 fragment_size);
     void deserializeInternal(google::protobuf::io::CodedInputStream * stream, UInt64 fragment_size);
 
-    const UInt32 num_filters_{};
-    const size_t hash_table_bit_size_{};
-    const size_t filter_byte_size_{};
-    std::vector<UInt64> seeds_;
-    std::unique_ptr<UInt8[]> bits_;
+    const UInt32 filters_count{};
+    const size_t hash_table_bit_size{};
+    const size_t filter_byte_size{};
+    std::vector<UInt64> seeds;
+    std::unique_ptr<UInt8[]> bits;
 };
 }

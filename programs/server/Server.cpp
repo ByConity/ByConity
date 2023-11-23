@@ -575,6 +575,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // ignore `max_thread_pool_size` in configs we fetch from ZK, but oh well.
     GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 10000));
 
+    do
+    {
+        unsigned cores = getNumberOfPhysicalCPUCores() * 2;
+
+        if (cores < 4)
+            break;
+
+        int res = bthread_setconcurrency(cores);
+        if (res)
+            LOG_ERROR(log, "Error when calling bthread_setconcurrency. Error number {}.", res);
+    } while (false);
+
     // Init bRPC
     BrpcApplication::getInstance().initialize(config());
 
@@ -968,7 +980,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // FIXME logging-related things need synchronization -- see the 'Logger * log' saved
             // in a lot of places. For now, disable updating log configuration without server restart.
             //setTextLog(global_context->getTextLog());
-            //buildLoggers(*config, logger());
+            updateLevels(*config, logger());
             global_context->setClustersConfig(config);
             global_context->setMacros(std::make_unique<Macros>(*config, "macros", log));
             global_context->setExternalAuthenticatorsConfig(*config);
@@ -1231,6 +1243,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
     size_t unique_key_index_file_cache_size = config().getUInt64("unique_key_index_disk_cache_max_bytes", uki_disk_cache_max_bytes);
     global_context->setUniqueKeyIndexFileCache(unique_key_index_file_cache_size);
+
+    global_context->setNvmCache(config());
 
 #if USE_EMBEDDED_COMPILER
     constexpr size_t compiled_expression_cache_size_default = 1024 * 1024 * 128;

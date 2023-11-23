@@ -38,12 +38,11 @@
 
 namespace ProfileEvents
 {
-    extern const Event S3ReadMicroseconds;
-    extern const Event S3ReadBytes;
-
-    extern const Event ReadBufferFromS3ReadMicroseconds;
-    extern const Event ReadBufferFromS3InitMicroseconds;
+    extern const Event ReadBufferFromS3ReadCount;
     extern const Event ReadBufferFromS3ReadBytes;
+    extern const Event ReadBufferFromS3ReadMicro;
+    extern const Event S3StreamInitMicroseconds;
+    extern const Event ReadBufferFromS3SeekTimes;
 }
 
 namespace DB
@@ -102,8 +101,9 @@ bool ReadBufferFromS3::nextImpl()
     while (true)
     {
         Stopwatch watch;
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadCount);
         SCOPE_EXIT({
-            ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadMicroseconds, watch.elapsedMicroseconds());
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadMicro, watch.elapsedMicroseconds());
         });
         try
         {
@@ -131,15 +131,12 @@ bool ReadBufferFromS3::nextImpl()
             impl.reset();
         }
     }
-
-    if (!next_result)
-    {
+    if (!next_result) {
         read_all_range_successfully = true;
         return false;
     }
 
     BufferBase::set(impl->buffer().begin(), impl->buffer().size(), impl->offset());
-    ProfileEvents::increment(ProfileEvents::S3ReadBytes, working_buffer.size());
     ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadBytes, working_buffer.size());
     offset += working_buffer.size();
     return true;
@@ -147,8 +144,6 @@ bool ReadBufferFromS3::nextImpl()
 
 off_t ReadBufferFromS3::seek(off_t offset_, int whence)
 {
-    read_all_range_successfully = false;
-
     if (impl && restricted_seek)
         throw Exception("Seek is allowed only before first read attempt from the buffer.", ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
 
@@ -187,6 +182,7 @@ off_t ReadBufferFromS3::seek(off_t offset_, int whence)
         {
             impl.reset();
         }
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromS3SeekTimes);
     }
     offset = offset_;
     return offset;
@@ -256,7 +252,7 @@ Aws::S3::Model::GetObjectResult ReadBufferFromS3::sendRequest(size_t range_begin
 
     if (outcome.IsSuccess())
     {
-        ProfileEvents::increment(ProfileEvents::ReadBufferFromS3InitMicroseconds, watch.elapsedMicroseconds());
+        ProfileEvents::increment(ProfileEvents::S3StreamInitMicroseconds, watch.elapsedMicroseconds());
         return outcome.GetResultWithOwnership();
     }
     else
@@ -278,7 +274,7 @@ size_t ReadBufferFromS3::readBigAt(char * to, size_t n, size_t range_begin, cons
         std::optional<Aws::S3::Model::GetObjectResult> result;
         bool all_data_read = false;
         SCOPE_EXIT_SAFE({
-            ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadMicroseconds, watch.elapsedMicroseconds());
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadMicro, watch.elapsedMicroseconds());
             S3::resetSessionIfNeeded(all_data_read, result);
         });
 
@@ -289,7 +285,6 @@ size_t ReadBufferFromS3::readBigAt(char * to, size_t n, size_t range_begin, cons
 
             size_t bytes = copyFromIStreamWithProgressCallback(istr, to, n, progress_callback);
 
-            ProfileEvents::increment(ProfileEvents::S3ReadBytes, bytes);
             ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadBytes, bytes);
             /// TODO: test for chunked encoding
             /// Read remaining bytes after the end of the payload for chunked encoding

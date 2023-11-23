@@ -209,8 +209,8 @@ void PartitionMetrics::recalculateBottomHalf(ContextPtr context)
         {
             /// 3. Get from KV.
             LOG_TRACE(log, "{} Get from KV", getTraceID());
-            auto metrics
-                = context->getCnchCatalog()->getPartitionMetricsStoreFromMetastore(table_uuid, partition_id, old_store.value().first);
+            auto metrics = context->getCnchCatalog()->getPartitionMetricsStoreFromMetastore(
+                table_uuid, partition_id, old_store.value().first, [this]() { return shutdown.load(); });
             LOG_TRACE(log, "{} After recalculate: {}", getTraceID(), metrics.toString());
 
             /// 4. Replace the old value.
@@ -238,7 +238,9 @@ void PartitionMetrics::recalculateBottomHalf(ContextPtr context)
         }
 
         /// Try to trigger a snapshot.
-        if (auto info = read(); need_snapshot(info.last_update_time, info.last_snapshot_time, current_time, context))
+        /// Abortion may happens during recalculation, which will leave a damaged metrics.
+        /// We must test `shutdown` again to explicitly avoid this.
+        if (auto info = read(); need_snapshot(info.last_update_time, info.last_snapshot_time, current_time, context) && !shutdown)
         {
             LOG_TRACE(log, "{} recalculate {} {}, snapshot triggered at {}", getTraceID(), table_uuid, partition_id, current_time);
 

@@ -158,6 +158,70 @@ String PlanPrinter::jsonLogicalPlan(QueryPlan & plan, bool print_stats, bool, st
     return os.str();
 }
 
+String PlanPrinter::getPlanSegmentHeaderText(PlanSegmentDescriptionPtr & segment_desc)
+{
+    auto f = [](ExchangeMode mode) {
+        switch (mode)
+        {
+            case ExchangeMode::LOCAL_NO_NEED_REPARTITION:
+                return "LOCAL_NO_NEED_REPARTITION";
+            case ExchangeMode::LOCAL_MAY_NEED_REPARTITION:
+                return "LOCAL_MAY_NEED_REPARTITION";
+            case ExchangeMode::BROADCAST:
+                return "BROADCAST";
+            case ExchangeMode::REPARTITION:
+                return "REPARTITION";
+            case ExchangeMode::GATHER:
+                return "GATHER";
+            default:
+                return "UNKNOWN";
+        }
+    };
+
+    std::ostringstream os;
+
+    size_t segment_id = segment_desc->segment_id;
+    os << "Segment[" << segment_id << "] [" + segment_desc->segment_type + "]\n";
+
+    ExchangeMode mode = segment_desc->mode;
+    String exchange = (segment_id == 0) ? "Output" : f(mode);
+    os << "   Output Exchange: " << exchange;
+    if (exchange == "REPARTITION") // print shuffle keys
+    {
+        os << "[";
+        bool first = true;
+        for (auto & key : segment_desc->shuffle_keys)
+        {
+            if (first)
+            {
+                os << key;
+            }
+            os << ", " << key;
+        }
+        os << "]";
+    }
+    os << "\n";
+
+    os << "   Parallel Size: " << segment_desc->parallel;
+    os << ", Cluster Name: " << (segment_desc->cluster_name.empty() ? "server" : segment_desc->cluster_name);
+    os << ", Exchange Parallel Size: " << segment_desc->exchange_parallel_size  << "\n";
+    if (!segment_desc->outputs_desc.empty())
+    {
+        os << "   Outputs: [";
+        bool first = true;
+        for (auto & output : segment_desc->outputs_desc)
+        {
+            if (!first)
+                os << "\n             ";
+            os << "( SegmentID:" << output->segment_id << " PlanSegmentType:" << output->plan_segment_type
+                << " ParallelSize:" << output->parallel_size << ")";
+            first = false;
+        }
+        os << "]\n";
+    }
+    return os.str();
+}
+
 String PlanPrinter::textDistributedPlan(
     PlanSegmentDescriptions & segments_desc,
     bool print_stats,
@@ -191,24 +255,6 @@ String PlanPrinter::textDistributedPlan(
         segment_desc->plan_node = plan_node;
     }
 
-    auto f = [](ExchangeMode mode) {
-        switch (mode)
-        {
-            case ExchangeMode::LOCAL_NO_NEED_REPARTITION:
-                return "LOCAL_NO_NEED_REPARTITION";
-            case ExchangeMode::LOCAL_MAY_NEED_REPARTITION:
-                return "LOCAL_MAY_NEED_REPARTITION";
-            case ExchangeMode::BROADCAST:
-                return "BROADCAST";
-            case ExchangeMode::REPARTITION:
-                return "REPARTITION";
-            case ExchangeMode::GATHER:
-                return "GATHER";
-            default:
-                return "UNKNOWN";
-        }
-    };
-
     std::ostringstream os;
 
     auto cmp = [](const PlanSegmentDescriptionPtr & s1, const PlanSegmentDescriptionPtr & s2) { return s1->segment_id < s2->segment_id; };
@@ -216,46 +262,7 @@ String PlanPrinter::textDistributedPlan(
 
     for (auto & segment_ptr : segments_desc)
     {
-        size_t segment_id = segment_ptr->segment_id;
-        os << "Segment[" << segment_id << "] [" + segment_ptr->segment_type + "]\n";
-
-        ExchangeMode mode = segment_ptr->mode;
-        String exchange = (segment_id == 0) ? "Output" : f(mode);
-        os << "   Output Exchange: " << exchange;
-        if (exchange == "REPARTITION") // print shuffle keys
-        {
-            os << "[";
-            bool first = true;
-            for (auto & key : segment_ptr->shuffle_keys)
-            {
-                if (first)
-                {
-                    os << key;
-                }
-                os << ", " << key;
-            }
-            os << "]";
-        }
-        os << "\n";
-
-        os << "   Parallel Size: " << segment_ptr->parallel;
-        os << ", Cluster Name: " << (segment_ptr->cluster_name.empty() ?"server" : segment_ptr->cluster_name);
-        os << ", Exchange Parallel Size: " << segment_ptr->exchange_parallel_size  << "\n";
-        if (!segment_ptr->outputs_desc.empty())
-        {
-            os << "   Outputs: [";
-            bool first = true;
-            for (auto & output : segment_ptr->outputs_desc)
-            {
-                if (!first)
-                    os << "\n             ";
-                os << "( SegmentID:" << output->segment_id << " PlanSegmentType:" << output->plan_segment_type
-                   << " ParallelSize:" << output->parallel_size << ")";
-                first = false;
-            }
-            os << "]\n";
-        }
-
+        os << getPlanSegmentHeaderText(segment_ptr);
         if (!segment_ptr->plan_node)
             continue;
 
@@ -289,6 +296,60 @@ String PlanPrinter::textDistributedPlan(
         os << "\n";
     }
 
+    return os.str();
+}
+
+
+String PlanPrinter::textPipelineProfile(PlanSegmentDescriptions & segment_descs, SegmentAndWorkerToGroupedProfile & worker_grouped_profiles)
+{
+    std::ostringstream os;
+
+    auto cmp = [](const PlanSegmentDescriptionPtr & s1, const PlanSegmentDescriptionPtr & s2) { return s1->segment_id < s2->segment_id; };
+    std::sort(segment_descs.begin(), segment_descs.end(), cmp);
+
+    for (auto & segment_ptr : segment_descs)
+    {
+        size_t segment_id = segment_ptr->segment_id;
+        os << getPlanSegmentHeaderText(segment_ptr);
+        if (!worker_grouped_profiles.contains(segment_id) || worker_grouped_profiles.at(segment_id).empty())
+            continue;
+
+        for (auto & [address, segment_profile] : worker_grouped_profiles.at(segment_id))
+        {
+            if (!segment_profile)
+                continue;
+            TextPrinterIntent print{3, false};
+            os << print.print() << address << "\n";
+            TextPrinter printer{false, false, {}};
+            bool has_children = !segment_profile->children.empty();
+            auto output = printer.printPipelineProfile(segment_profile, TextPrinterIntent{3, has_children});
+            os << output;
+        }
+        os << "\n";
+    }
+
+    return os.str();
+}
+
+String PlanPrinter::jsonPipelineProfile(PlanSegmentDescriptions & segment_descs, SegmentAndWorkerToGroupedProfile & worker_grouped_profiles)
+{
+    Poco::JSON::Object::Ptr distributed_plan = new Poco::JSON::Object(true);
+    Poco::JSON::Array segments;
+    for (auto & segment_desc : segment_descs)
+    {
+        Poco::JSON::Object::Ptr segment_json = segment_desc->jsonPlanSegmentDescription({}, true);
+        if (worker_grouped_profiles.contains(segment_desc->segment_id))
+        {
+            Poco::JSON::Object::Ptr worker_profiles_json = new Poco::JSON::Object(true);
+            for (auto [woker_ip, profile] : worker_grouped_profiles[segment_desc->segment_id])
+                worker_profiles_json->set(woker_ip, profile->getJsonProfiles());
+            segment_json->set("profiles", worker_profiles_json);
+        }
+        segments.add(segment_json);
+    }
+    distributed_plan->set("PipelineProfiles", segments);
+    std::ostringstream os;
+    distributed_plan->stringify(os, 1);
     return os.str();
 }
 
@@ -437,6 +498,30 @@ String PlanPrinter::TextPrinter::printLogicalPlan(PlanNodeBase & plan, const Tex
         out << printLogicalPlan(*child, intent.forChild(last, has_children), profiles);
     }
 
+    return out.str();
+}
+
+String PlanPrinter::TextPrinter::printPipelineProfile(GroupedProcessorProfilePtr & input_root, const TextPrinterIntent & intent)
+{
+    std::stringstream out;
+    out << intent.print() << printProcessorDetail(input_root, intent) << "\n";
+
+    for (auto it = input_root->children.begin(); it != input_root->children.end();)
+    {
+        auto child = *it++;
+        bool last = it == input_root->children.end();
+        bool has_children = !child->children.empty() && child->children[0];
+        out << printPipelineProfile(child, intent.forChild(last, has_children));
+    }
+    return out.str();
+}
+
+String PlanPrinter::TextPrinter::printProcessorDetail(GroupedProcessorProfilePtr profile, const TextPrinterIntent & intent)
+{
+    std::stringstream out;
+    out << profile->processor_name <<"  x" << profile->parallel_size << " ElapsedTime:" << prettySeconds(profile->grouped_elapsed_us);
+    out << intent.detailIntent() << "(Input:[WaitTime:" << prettySeconds(profile->grouped_input_wait_elapsed_us) << " Rows:" << prettyNum(profile->grouped_input_rows) << " (" << prettyBytes(profile->grouped_input_bytes) << ")]"
+        << " Output:[WaitTime:" << prettySeconds(profile->grouped_input_wait_elapsed_us) << " Rows:" << prettyNum(profile->grouped_output_rows) << " (" << prettyBytes(profile->grouped_output_bytes) << ")])";
     return out.str();
 }
 
@@ -735,8 +820,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         const auto *sort = dynamic_cast<const SortingStep *>(plan.get());
         std::vector<String> sort_columns;
         for (const auto & desc : sort->getSortDescription())
-            sort_columns.emplace_back(
-                desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+            sort_columns.emplace_back(desc.format());
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
         if (sort->getLimit())
             out << intent.detailIntent() << "Limit: " << sort->getLimit();
@@ -863,6 +947,12 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
             out << converted.safeGet<UInt64>();
         }
 
+        std::vector<String> inline_expressions;
+        for (const auto & assignment : table_scan->getInlineExpressions())
+            inline_expressions.emplace_back(assignment.first + ":=" + serializeAST(*assignment.second));
+        if (!inline_expressions.empty())
+            out << intent.detailIntent() << "Inline expressions: " << join(inline_expressions, ", ", "[", "]");
+
         if (!identities.empty())
         {
             std::stringstream ss;
@@ -887,8 +977,7 @@ String PlanPrinter::TextPrinter::printDetail(QueryPlanStepPtr plan, const TextPr
         const auto *topn_filter = dynamic_cast<const TopNFilteringStep *>(plan.get());
         std::vector<String> sort_columns;
         for (const auto & desc : topn_filter->getSortDescription())
-            sort_columns.emplace_back(
-                desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+            sort_columns.emplace_back(desc.format());
         out << intent.detailIntent() << "Order by: " << join(sort_columns, ", ", "{", "}");
         out << intent.detailIntent() << "Size: " << topn_filter->getSize();
     }
@@ -1004,7 +1093,7 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
         const auto * sort = dynamic_cast<const SortingStep *>(step.get());
         std::vector<String> sort_columns;
         for (const auto & desc : sort->getSortDescription())
-            step_vector_detail["OrderBy"].emplace_back(desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+            step_vector_detail["OrderBy"].emplace_back(desc.format());
         if (sort->getLimit())
             step_detail["Limit"] = std::to_string(sort->getLimit());
     }
@@ -1164,6 +1253,10 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
         for (auto & assignment : assignments)
             step_vector_detail["Outputs"].emplace_back(assignment);
 
+        std::vector<String> inline_expressions;
+        for (const auto & assignment : table_scan->getInlineExpressions())
+            step_vector_detail["InlineExpressions"].emplace_back(assignment.first + ":=" + serializeAST(*assignment.second));
+
         if (table_scan->getPushdownFilter())
         {
             NodeDescriptionPtr push_down_filter_detail = std::make_shared<NodeDescription>();
@@ -1180,7 +1273,7 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
 
         if (table_scan->getPushdownAggregation())
         {
-            NodeDescriptionPtr push_down_aggregation_detail  = std::make_shared<NodeDescription>();
+            NodeDescriptionPtr push_down_aggregation_detail = std::make_shared<NodeDescription>();
             push_down_aggregation_detail->setStepDetail(table_scan->getPushdownAggregation());
             descriptions_in_step["PushDownAggregation"] = push_down_aggregation_detail;
         }
@@ -1191,8 +1284,7 @@ void NodeDescription::setStepDetail(QueryPlanStepPtr step)
         const auto *topn_filter = dynamic_cast<const TopNFilteringStep *>(step.get());
         std::vector<String> sort_columns;
         for (const auto & desc : topn_filter->getSortDescription())
-            step_vector_detail["OrderBy"].emplace_back(
-                desc.column_name + (desc.direction == -1 ? " desc" : " asc") + (desc.nulls_direction == -1 ? " nulls_last" : ""));
+            step_vector_detail["OrderBy"].emplace_back(desc.format());
         step_detail["Size"] = std::to_string(topn_filter->getSize());
     }
 
@@ -1344,7 +1436,6 @@ NodeDescriptionPtr NodeDescription::getPlanDescription(PlanNodePtr node)
     return description;
 }
 
-
 String PlanSegmentDescription::jsonPlanSegmentDescriptionAsString(const StepAggregatedOperatorProfiles & profiles)
 {
     auto json = jsonPlanSegmentDescription(profiles);
@@ -1353,7 +1444,7 @@ String PlanSegmentDescription::jsonPlanSegmentDescriptionAsString(const StepAggr
     return os.str();
 }
 
-Poco::JSON::Object::Ptr PlanSegmentDescription::jsonPlanSegmentDescription(const StepAggregatedOperatorProfiles & profiles)
+Poco::JSON::Object::Ptr PlanSegmentDescription::jsonPlanSegmentDescription(const StepAggregatedOperatorProfiles & profiles, bool is_pipeline)
 {
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object(true);
 
@@ -1411,10 +1502,11 @@ Poco::JSON::Object::Ptr PlanSegmentDescription::jsonPlanSegmentDescription(const
         json->set("Outputs", outputs);
     }
 
-    if (node_description)
+    if (node_description && !is_pipeline)
         json->set("QueryPlan", node_description->jsonNodeDescription(profiles, false));
     return json;
 }
+
 PlanSegmentDescriptionPtr PlanSegmentDescription::getPlanSegmentDescription(PlanSegmentPtr & segment, bool record_plan_detail)
 {
     auto plan_segment_desc = std::make_shared<PlanSegmentDescription>();

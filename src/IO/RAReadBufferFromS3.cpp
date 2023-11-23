@@ -29,10 +29,8 @@
 
 namespace ProfileEvents
 {
-    extern const Event ReadBufferFromS3Read;
-    extern const Event ReadBufferFromS3ReadFailed;
-    extern const Event ReadBufferFromS3ReadBytes;
-    extern const Event ReadBufferFromS3ReadMicroseconds;
+    extern const Event ReadBufferFromS3FailedCount;
+    extern const Event S3ReadAheadReaderSeekTimes;
 }
 
 namespace DB
@@ -63,31 +61,20 @@ bool RAReadBufferFromS3::nextImpl()
         auto offset = reader_.offset();
         try
         {
-            uint64_t readed = 0;
-            {
-                Stopwatch watch;
-                ProfileEvents::increment(ProfileEvents::ReadBufferFromS3Read);
-                SCOPE_EXIT({
-                    ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadMicroseconds, watch.elapsedMicroseconds());
-                });
+            uint64_t read_bytes = reader_.read(buffer().begin(), internalBuffer().size());
 
-                readed = reader_.read(buffer().begin(), internalBuffer().size());
-
-                ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadBytes, readed);
-            }
-
-            buffer().resize(readed);
+            buffer().resize(read_bytes);
 
             if (throttler_)
             {
-                throttler_->add(readed);
+                throttler_->add(read_bytes);
             }
 
-            return readed > 0;
+            return read_bytes > 0;
         }
         catch (Exception & e)
         {
-            ProfileEvents::increment(ProfileEvents::ReadBufferFromS3ReadFailed, 1);
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromS3FailedCount, 1);
 
             if (!S3::processReadException(e, reader_.logger(), reader_.bucket(), reader_.key(), offset, ++attempt)
                 || attempt >= read_retry_)
@@ -104,6 +91,7 @@ off_t RAReadBufferFromS3::seek(off_t off, int whence)
     if (whence != SEEK_SET)
         throw Exception("Only SEEK_SET mode is allowed.", ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
 
+    ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderSeekTimes);
     off_t buffer_start_offset = reader_.offset() - static_cast<off_t>(working_buffer.size());
     if (hasPendingData() && off <= static_cast<off_t>(reader_.offset()) && off >= buffer_start_offset)
     {

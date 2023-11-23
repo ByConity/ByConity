@@ -9,7 +9,8 @@
 namespace DB
 {
 
-ASTPtr pushFilterIntoStorage(ASTPtr query_filter, const MergeTreeData * merge_tree_data, SelectQueryInfo & query_info, ContextPtr context)
+ASTPtr
+pushFilterIntoStorage(ASTPtr query_filter, const MergeTreeMetaBase * merge_tree_data, SelectQueryInfo & query_info, ContextPtr context)
 {
     ASTs conjuncts = PredicateUtils::extractConjuncts(query_filter);
     const auto & settings = context->getSettingsRef();

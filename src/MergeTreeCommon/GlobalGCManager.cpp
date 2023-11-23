@@ -31,7 +31,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
-}   
+}
 
 GlobalGCManager::GlobalGCManager(
     ContextMutablePtr global_context_,
@@ -93,7 +93,7 @@ size_t amountOfWorkCanReceive(size_t max_threads, size_t deleting_table_num)
 
 namespace {
     void cleanS3Disks(const StoragePtr & storage, const MergeTreeMetaBase & mergetree_meta, const Context & context, Poco::Logger * log)
-    {   
+    {
         auto catalog = context.getCnchCatalog();
         Strings partition_ids = catalog->getPartitionIDs(storage, &context);
 
@@ -196,7 +196,7 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
     try
     {
         auto catalog = context.getCnchCatalog();
-        
+
         auto storage = catalog->tryGetTableByUUID(context, UUIDHelpers::UUIDToString(storage_id.uuid), TxnTimestamp::maxTS(), true);
         if (!storage)
         {
@@ -211,8 +211,8 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
             StoragePolicyPtr remote_storage_policy = mergetree->getStoragePolicy(IStorage::StorageLocation::MAIN);
 
             DiskType::Type remote_disk_type = remote_storage_policy->getAnyDisk()->getType();
-            switch (remote_disk_type) 
-            {   
+            switch (remote_disk_type)
+            {
                 /// delete data directory of the table from hdfs
                 case DiskType::Type::ByteHDFS: {
                     Disks remote_disks = remote_storage_policy->getDisks();
@@ -420,7 +420,7 @@ bool GlobalGCManager::schedule(std::vector<Protos::DataModelTable> tables)
             }
         }
     }
-    
+
     // coverity[use_after_move]
     if ((!tables_bucket.empty()) &&
         (!scheduleImpl(std::move(tables_bucket)))
