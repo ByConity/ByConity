@@ -156,6 +156,13 @@ bool StorageElector::isLeader()
     return !isLeaderExpired();
 }
 
+void StorageElector::yieldLeadership()
+{
+    stop();
+    std::this_thread::sleep_for(std::chrono::milliseconds(local_info.expired_interval_ms));
+    start();
+}
+
 bool StorageElector::isLeaseExpired(const Protos::LeaderInfo & remote_info)
 {
     auto now = getCurrentTimeMs();
