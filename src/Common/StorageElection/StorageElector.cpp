@@ -256,6 +256,14 @@ void StorageElector::tryUpdateRemoteRecord(bool refreshed, bool yield)
 
     auto result = store->putCAS(election_key, leader_info_string, last_leader_info_string, true);
 
+    if (!yield)
+    {
+        auto now_after_put = getCurrentTimeMs();
+        auto local_expired_interval_ms = last_leader_info.lease().expired_interval_ms();
+        if (now_after_put >= last_refresh_local_time + local_expired_interval_ms)
+            LOG_WARNING(logger, "Elect or refresh operation cost too much time, now: {}, last_refresh_local_time: {}", now_after_put, last_refresh_local_time);
+    }
+    
     if (result.first)
     {
         if (tryUpdateLocalRecord(new_leader_info, leader_info_string, !yield))
@@ -419,10 +427,11 @@ void StorageElector::doYield(bool soft)
         return;
 
     setRole(Role::Follower);
+     // You can not try to become a leader immediately. Wait for a longer time.
+    sleep_time = std::chrono::milliseconds(2 * local_info.expired_interval_ms);
+
     if (soft)
         return;
-    // You can not try to become a leader immediately. Wait for a longer time.
-    sleep_time = std::chrono::milliseconds(2 * local_info.expired_interval_ms);
 
     try
     {
