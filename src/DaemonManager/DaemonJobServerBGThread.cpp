@@ -1191,8 +1191,7 @@ StorageTrait constructStorageTrait(ContextMutablePtr context, const String & db,
     /// make shortcut because CnchHive and other remote table contructor could take long time
     if (ast->storage &&
         ast->storage->engine &&
-        (ast->storage->engine->name != "CnchMergeTree") &&
-        (ast->storage->engine->name != "CnchKafka")
+        (!isCnchMergeTreeOrKafka(ast->storage->engine->name))
     )
         return StorageTrait{StorageTrait::Param {
                 .is_cnch_merge_tree = false,
@@ -1212,6 +1211,17 @@ StorageTrait constructStorageTrait(ContextMutablePtr context, const String & db,
 bool operator == (const StorageTrait & lhs, const StorageTrait & rhs)
 {
     return lhs.getData() == rhs.getData();
+}
+
+bool isCnchMergeTreeOrKafka(const std::string & engine_name)
+{
+    bool found_cnch = (engine_name.find("Cnch") != std::string::npos);
+    bool found_merge_tree = (engine_name.find("MergeTree") != std::string::npos);
+    bool found_kafka = (engine_name.find("Kafka") != std::string::npos);
+    if ((!found_cnch) ||
+        (!found_merge_tree && !found_kafka))
+        return false;
+    return true;
 }
 
 }

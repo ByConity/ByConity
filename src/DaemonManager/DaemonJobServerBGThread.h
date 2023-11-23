@@ -200,4 +200,6 @@ std::vector<BGJobInfoFromServer> findZombieJobsInServer(
 
 StorageTrait constructStorageTrait(ContextMutablePtr context, const String & db, const String & table, const String & create_query);
 
+bool isCnchMergeTreeOrKafka(const std::string & engine_name);
+
 } /// end namespace DB::DaemonManager

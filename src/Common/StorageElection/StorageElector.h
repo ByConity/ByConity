@@ -51,6 +51,7 @@ public:
 
     ~StorageElector();
 
+    void yieldLeadership();
     bool isLeader();
 
     std::optional<HostWithPorts> getLeaderInfo() const;
