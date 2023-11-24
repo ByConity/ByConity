@@ -145,6 +145,7 @@ class OpenTelemetrySpanLog;
 class MutationLog;
 class KafkaLog;
 class CloudKafkaLog;
+class CloudMaterializedMySQLLog;
 class ProcessorsProfileLog;
 class ZooKeeperLog;
 class QueryMetricLog;
