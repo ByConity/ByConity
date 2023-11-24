@@ -4501,12 +4501,12 @@ void Context::setMetaCheckerStatus(bool stop)
     shared->stop_sync = stop;
 }
 
-void Context::setChecksumsCache(size_t cache_size_in_bytes)
+void Context::setChecksumsCache(const ChecksumsCacheSettings & settings)
 {
     if (shared->checksums_cache)
         throw Exception("Checksums cache has been already created.", ErrorCodes::LOGICAL_ERROR);
 
-    shared->checksums_cache = std::make_shared<ChecksumsCache>(cache_size_in_bytes);
+    shared->checksums_cache = std::make_shared<ChecksumsCache>(settings);
 }
 
 std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const

@@ -16,7 +16,7 @@
 #pragma once
 
 #include <vector>
-#include <Storages/DiskCache/BucketLRUCache.h>
+#include <Common/BucketLRUCache.h>
 #include <Poco/Logger.h>
 
 namespace DB

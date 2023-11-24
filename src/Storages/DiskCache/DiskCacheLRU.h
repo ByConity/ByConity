@@ -19,8 +19,8 @@
 #include <filesystem>
 #include <Common/HashTable/Hash.h>
 #include <Storages/DiskCache/IDiskCache.h>
-#include <Storages/DiskCache/BucketLRUCache.h>
-#include <Storages/DiskCache/ShardCache.h>
+#include <Common/BucketLRUCache.h>
+#include <Common/ShardCache.h>
 #include <sys/types.h>
 #include <Poco/Logger.h>
 
