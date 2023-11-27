@@ -30,6 +30,13 @@ class StorageSystemCnchPartsInfoLocal final : public shared_ptr_helper<StorageSy
 public:
     std::string getName() const override { return "StorageSystemCnchPartsInfoLocal"; }
 
+    enum ReadyState
+    {
+        Unloaded = 1,
+        Loading = 2,
+        Loaded = 3,
+    };
+
     Pipe read(
         const Names & column_names,
         const StorageMetadataPtr & metadata_snapshot,

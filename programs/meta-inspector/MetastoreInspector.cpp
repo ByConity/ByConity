@@ -192,6 +192,8 @@ protected:
         if (config().has("namespace"))
             name_space = config().getString("namespace");
         loadConfiguration(conf_path);
+        if (name_space.empty() && config().has("catalog.name_space"))
+            name_space = config().getString("catalog.name_space");
         initializeMetastore();
 
         Application::initialize(self);

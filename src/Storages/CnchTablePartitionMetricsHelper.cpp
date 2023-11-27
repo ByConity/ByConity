@@ -31,7 +31,6 @@ CnchTablePartitionMetricsHelper::CnchTablePartitionMetricsHelper(ContextPtr cont
     metrics_initializer = getContext()->getSchedulePool().createTask("PartMetricsInitializer", [this]() {
         try
         {
-            LOG_TRACE(log, "Initialization scheduled.");
             initTablePartitionsMetrics();
         }
         catch (...)
@@ -62,42 +61,39 @@ bool CnchTablePartitionMetricsHelper::getPartsInfoMetrics(
 
     if (table_entry)
     {
-        if (table_entry->partition_metrics_loaded)
-        {
-            const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(&i_storage);
-            if (!storage)
-                return true;
-            FormatSettings format_settings{};
-            auto & table_partitions = table_entry->partitions;
-            for (auto it = table_partitions.begin(); it != table_partitions.end(); it++)
-            {
-                PartitionFullPtr partition_ptr = std::make_shared<CnchPartitionInfoFull>(*it);
-                const auto & partition_key_sample = storage->getInMemoryMetadataPtr()->getPartitionKey().sample_block;
-                if (partition_key_sample.columns() > 0 && require_partition_info)
-                {
-                    {
-                        WriteBufferFromOwnString out;
-                        partition_ptr->partition_info_ptr->partition_ptr->serializeText(*storage, out, format_settings);
-                        partition_ptr->partition = out.str();
-                    }
-                    if (partition_key_sample.columns() == 1)
-                    {
-                        partition_ptr->first_partition = partition_ptr->partition;
-                    }
-                    else
-                    {
-                        WriteBufferFromOwnString out;
-                        const DataTypePtr & type = partition_key_sample.getByPosition(0).type;
-                        auto column = type->createColumn();
-                        column->insert(partition_ptr->partition_info_ptr->partition_ptr->value[0]);
-                        type->getDefaultSerialization()->serializeTextQuoted(*column, 0, out, format_settings);
-                        partition_ptr->first_partition = out.str();
-                    }
-                }
-                partitions.emplace(partition_ptr->partition_info_ptr->partition_id, partition_ptr);
-            }
+        const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(&i_storage);
+        if (!storage)
             return true;
+        FormatSettings format_settings{};
+        auto & table_partitions = table_entry->partitions;
+        for (auto it = table_partitions.begin(); it != table_partitions.end(); it++)
+        {
+            PartitionFullPtr partition_ptr = std::make_shared<CnchPartitionInfoFull>(*it);
+            const auto & partition_key_sample = storage->getInMemoryMetadataPtr()->getPartitionKey().sample_block;
+            if (partition_key_sample.columns() > 0 && require_partition_info)
+            {
+                {
+                    WriteBufferFromOwnString out;
+                    partition_ptr->partition_info_ptr->partition_ptr->serializeText(*storage, out, format_settings);
+                    partition_ptr->partition = out.str();
+                }
+                if (partition_key_sample.columns() == 1)
+                {
+                    partition_ptr->first_partition = partition_ptr->partition;
+                }
+                else
+                {
+                    WriteBufferFromOwnString out;
+                    const DataTypePtr & type = partition_key_sample.getByPosition(0).type;
+                    auto column = type->createColumn();
+                    column->insert(partition_ptr->partition_info_ptr->partition_ptr->value[0]);
+                    type->getDefaultSerialization()->serializeTextQuoted(*column, 0, out, format_settings);
+                    partition_ptr->first_partition = out.str();
+                }
+            }
+            partitions.emplace(partition_ptr->partition_info_ptr->partition_id, partition_ptr);
         }
+        return true;
     }
     return false;
 }
