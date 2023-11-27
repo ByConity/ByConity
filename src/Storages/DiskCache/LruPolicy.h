@@ -2,9 +2,9 @@
 
 #include <chrono>
 
-#include <common/chrono_io.h>
 #include <Storages/DiskCache/EvictionPolicy.h>
 #include <Storages/DiskCache/Types.h>
+#include <common/chrono_io.h>
 
 namespace DB::HybridCache
 {
@@ -14,7 +14,7 @@ public:
     explicit LruPolicy(UInt32 expected_num_regions);
 
     LruPolicy(const LruPolicy &) = delete;
-    LruPolicy& operator=(const LruPolicy &) = delete;
+    LruPolicy & operator=(const LruPolicy &) = delete;
 
     ~LruPolicy() override = default;
 
@@ -28,9 +28,6 @@ public:
 
     size_t memorySize() const override;
 
-    void persist(google::protobuf::io::CodedOutputStream * stream) const override;
-
-    void recover(google::protobuf::io::CodedInputStream * stream) override;
 private:
     Poco::Logger * log = &Poco::Logger::get("LruPolicy");
 

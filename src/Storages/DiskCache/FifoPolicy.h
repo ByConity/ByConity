@@ -42,9 +42,6 @@ public:
         return sizeof(*this) + sizeof(detail::Node) * queue.size();
     }
 
-    void persist(google::protobuf::io::CodedOutputStream * stream) const override;
-    void recover(google::protobuf::io::CodedInputStream * stream) override;
-
 private:
     Poco::Logger * log = &Poco::Logger::get("FifoPolicy");
 
@@ -69,10 +66,6 @@ public:
     void reset() override;
 
     size_t memorySize() const override;
-
-    void persist(google::protobuf::io::CodedOutputStream * stream) const override;
-
-    void recover(google::protobuf::io::CodedInputStream * stream) override;
 
 private:
     void rebalanceLocked();

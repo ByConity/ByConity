@@ -4,6 +4,9 @@
 #include <limits>
 #include <memory>
 
+#include <google/protobuf/io/zero_copy_stream.h>
+
+#include <Protos/disk_cache.pb.h>
 #include <Storages/DiskCache/Allocator.h>
 #include <Storages/DiskCache/BlockCacheReinsertionPolicy.h>
 #include <Storages/DiskCache/Buffer.h>
@@ -90,9 +93,9 @@ public:
 
     void reset() override;
 
-    void persist(std::ostream * os) override;
+    void persist(google::protobuf::io::ZeroCopyOutputStream * stream) override;
 
-    bool recover(std::istream * is) override;
+    bool recover(google::protobuf::io::ZeroCopyInputStream * stream) override;
 
     UInt64 getMaxItemSize() const override { return region_size - sizeof(EntryDesc); }
 
@@ -149,6 +152,8 @@ private:
 
     void onRegionCleanup(RegionId rid, BufferView buffer);
 
+    static Protos::BlockCacheConfig serializeConfig(const Config & config);
+
     UInt32 calcAllocAlignSize() const;
 
     static UInt16 encodeSizeHint(UInt32 size_hint)
@@ -182,6 +187,8 @@ private:
     void validate(Config & config) const;
 
     std::shared_ptr<BlockCacheReinsertionPolicy> makeReinsertionPolicy(const BlockCacheReinsertionConfig & reinsertion_config);
+
+    const Protos::BlockCacheConfig serialized_config;
 
     const UInt16 num_priorities;
     const ExpiredCheck check_expired;

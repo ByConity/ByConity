@@ -18,6 +18,3 @@ drop database if exists test_workload_dump;
 
 reproduce ddl source '/tmp/test_dump_query.zip';
 reproduce source '/tmp/test_dump_query.zip' format Null;
-
-
-

@@ -7,8 +7,6 @@
 #include <utility>
 #include <vector>
 
-#include <Poco/AtomicCounter.h>
-
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/Device.h>
 #include <Storages/DiskCache/EvictionPolicy.h>

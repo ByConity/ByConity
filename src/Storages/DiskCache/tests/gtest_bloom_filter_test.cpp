@@ -1,19 +1,24 @@
+#include <climits>
 #include <random>
-#include <sstream>
 #include <utility>
 #include <vector>
 #include <stdint.h>
+#include <sys/param.h>
+
 #include <gmock/gmock.h>
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include <gtest/gtest.h>
 
 #include <Functions/FunctionsHashing.h>
 #include <Interpreters/BloomFilter.h>
 #include <Storages/DiskCache/BloomFilter.h>
+#include <Storages/DiskCache/Buffer.h>
 #include <Common/Exception.h>
 #include <Common/thread_local_rng.h>
 #include <common/types.h>
+#include <common/unit.h>
 
 namespace DB::HybridCache
 {
@@ -328,7 +333,8 @@ void testPersistRecoveryWithParams(UInt32 num_filters, size_t bits_per_filter_ha
     std::vector<std::pair<size_t, UInt64>> keys_added;
     std::vector<std::pair<size_t, UInt64>> keys_not_present;
     std::uniform_int_distribution<UInt64> dist;
-    std::stringstream ss;
+    size_t buffer_size = INT_MAX;
+    Buffer metadata(buffer_size);
     {
         BloomFilter bf{num_filters, num_hash, bits_per_filter_hash};
         for (int i = 0; i < num_keys; i++)
@@ -344,17 +350,15 @@ void testPersistRecoveryWithParams(UInt32 num_filters, size_t bits_per_filter_ha
             auto key = dist(thread_local_rng);
             auto idx = dist(thread_local_rng) % num_filters;
             if (!bf.couldExist(idx, key))
-            {
                 keys_not_present.push_back(std::make_pair(idx, key));
-            }
         }
 
-        google::protobuf::io::OstreamOutputStream raw_stream(&ss);
+        google::protobuf::io::ArrayOutputStream raw_stream(metadata.data(), buffer_size);
         google::protobuf::io::CodedOutputStream stream(&raw_stream);
         bf.persist(&stream);
     }
 
-    google::protobuf::io::IstreamInputStream raw_istream(&ss);
+    google::protobuf::io::ArrayInputStream raw_istream(metadata.data(), buffer_size);
     google::protobuf::io::CodedInputStream istream(&raw_istream);
     BloomFilter bf(num_filters, num_hash, bits_per_filter_hash);
     bf.recover(&istream);
@@ -369,14 +373,13 @@ void testPersistRecoveryWithParams(UInt32 num_filters, size_t bits_per_filter_ha
         EXPECT_FALSE(bf.couldExist(p.first, p.second));
 }
 
-// FIXME(@max.chenxi): fix case later
-// TEST(BloomFilter, PersistRecoveryValidLarge)
-// {
-//     const size_t num_filters = 1e7;
-//     const size_t bits_per_filter_hash = 1024;
-//     const size_t num_hash = 1;
-//     testPersistRecoveryWithParams(num_filters, bits_per_filter_hash, num_hash);
-// }
+TEST(BloomFilter, PersistRecoveryValidLarge)
+{
+    const size_t num_filters = 1000;
+    const size_t bits_per_filter_hash = 1024;
+    const size_t num_hash = 1;
+    testPersistRecoveryWithParams(num_filters, bits_per_filter_hash, num_hash);
+}
 
 TEST(BloomFilter, PersisRecoveryValid)
 {

@@ -17,6 +17,7 @@
 
 #include <common/shared_ptr_helper.h>
 #include <Storages/IStorage.h>
+#include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
 
 namespace DB
 {

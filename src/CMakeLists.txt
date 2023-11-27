@@ -529,7 +529,7 @@ if (USE_LDAP)
     dbms_target_include_directories (SYSTEM BEFORE PRIVATE ${OPENLDAP_INCLUDE_DIRS})
     dbms_target_link_libraries (PRIVATE ${OPENLDAP_LIBRARIES})
 endif ()
-dbms_target_include_directories (SYSTEM BEFORE PRIVATE ${SPARSEHASH_INCLUDE_DIR})
+dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${SPARSEHASH_INCLUDE_DIR})
 
 if (USE_PROTOBUF)
     target_link_libraries(clickhouse_common_io PUBLIC brpc-static ${DYNAMIC_LIB})

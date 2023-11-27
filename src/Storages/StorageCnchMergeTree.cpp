@@ -2454,6 +2454,16 @@ void StorageCnchMergeTree::dropPartsImpl(
             StorageLocation::AUXILITY);
         drop_part->partition.assign(part->partition());
         drop_part->deleted = true;
+        /// Get parts chain and update `coverd_xxx` fields for metrics.
+        {
+            drop_part->covered_parts_rows += part->rowsCount();
+            auto cur_part = part;
+            do
+            {
+                drop_part->covered_parts_size += cur_part->part_model().size();
+                drop_part->covered_parts_count += 1;
+            } while ((cur_part = cur_part->tryGetPreviousPart()));
+        }
 
         if (txn->isSecondary())
         {
@@ -2488,9 +2498,17 @@ StorageCnchMergeTree::MutableDataPartsVector StorageCnchMergeTree::createDropRan
             iter->second.value.assign(part->partition());
 
         iter->second.max_block = std::max(iter->second.max_block, part->info().max_block);
-        iter->second.rows_count += part->rowsCount();
-        iter->second.size += part->part_model().size();
-        iter->second.parts_count += 1;
+
+        /// Get parts chain and update `coverd_xxx` fields for metrics.
+        {
+            iter->second.rows_count += part->rowsCount();
+            auto cur_part = part;
+            do
+            {
+                iter->second.size += cur_part->part_model().size();
+                iter->second.parts_count += 1;
+            } while ((cur_part = cur_part->tryGetPreviousPart()));
+        }
     }
 
     /// Remove related merge mutate tasks before creating DropRange to avoid merged parts become visible.

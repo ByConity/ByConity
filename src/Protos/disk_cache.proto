@@ -1,6 +1,43 @@
 syntax = "proto2";
 package DB.Protos;
 
+message IndexEntry {
+    required uint32 key = 1;
+    required uint32 address = 2;
+    optional uint32 size_hint = 3;
+    optional uint32 total_hits = 4;
+    optional uint32 current_hits = 5;
+}
+
+message IndexBucket {
+    required uint32 bucket_id = 1;
+    repeated IndexEntry entries = 2;
+}
+
+message Region {
+    required uint32 region_id = 1;
+    required uint32 last_entry_end_offset = 2;
+    required uint32 num_items = 3;
+    optional uint32 priority = 4;
+}
+
+message RegionData {
+    repeated Region regions = 1;
+    required uint32 region_size = 2;
+}
+
+message BlockCacheConfig {
+    required uint64 version = 1;
+    required uint64 cache_base_offset = 2;
+    required uint64 cache_size = 3;
+    required uint32 alloc_align_size = 4;
+    required bool checksum = 5;
+    optional uint64 hole_count = 6;
+    optional uint64 hole_size_total = 7;
+    optional bool reinsertion_policy_enabled = 8;
+    optional uint64 used_size_bytes = 9;
+}
+
 message BigHashPersistentData {
     required uint32 format_version = 1;
     required uint64 generation_time = 2;
@@ -8,7 +45,7 @@ message BigHashPersistentData {
     required uint64 bucket_size = 4;
     required uint64 cache_base_offset = 5;
     required uint64 num_buckets = 6;
-    required uint64 used_size_bytes = 7;
+    optional uint64 used_size_bytes = 7;
 }
 
 message BloomFilterPersistentData {

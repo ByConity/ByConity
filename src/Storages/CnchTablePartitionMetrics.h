@@ -47,6 +47,8 @@ public:
         explicit TableMetricsData(Protos::TableTrashItemsMetricsSnapshot & snapshot);
         TableMetricsData(const TableMetricsData & rhs);
         TableMetricsData & operator=(const TableMetricsData & rhs);
+        TableMetricsData operator+(const TableMetricsData & rhs) const;
+        TableMetricsData & operator+=(const TableMetricsData & rhs);
 
         /**
          * @brief Generate a snapshot.

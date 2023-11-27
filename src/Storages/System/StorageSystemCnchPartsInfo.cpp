@@ -13,19 +13,20 @@
  * limitations under the License.
  */
 
-#include <Storages/System/StorageSystemCnchPartsInfo.h>
-#include <Interpreters/Context.h>
-#include <Interpreters/ClusterProxy/SelectStreamFactory.h>
-#include <Interpreters/ClusterProxy/executeQuery.h>
-#include <Interpreters/InterpreterSelectQuery.h>
+#include <DataStreams/materializeBlock.h>
+#include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/ClusterProxy/SelectStreamFactory.h>
+#include <Interpreters/ClusterProxy/executeQuery.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/InterpreterSelectQuery.h>
 #include <Parsers/ParserSelectQuery.h>
 #include <Parsers/parseQuery.h>
-#include <DataStreams/materializeBlock.h>
-#include <boost/algorithm/string/join.hpp>
-#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
+#include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <Storages/System/StorageSystemCnchPartsInfo.h>
+#include <boost/algorithm/string/join.hpp>
 
 namespace DB
 {
@@ -34,6 +35,12 @@ StorageSystemCnchPartsInfo::StorageSystemCnchPartsInfo(const StorageID & table_i
     : IStorage(table_id_)
 {
     StorageInMemoryMetadata storage_metadata;
+    auto ready_state = std::make_shared<DataTypeEnum8>(DataTypeEnum8::Values{
+        {"Unloaded", static_cast<Int8>(StorageSystemCnchPartsInfoLocal::ReadyState::Unloaded)},
+        {"Loading", static_cast<Int8>(StorageSystemCnchPartsInfoLocal::ReadyState::Loading)},
+        {"Loaded", static_cast<Int8>(StorageSystemCnchPartsInfoLocal::ReadyState::Loaded)},
+    });
+
     storage_metadata.setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
         {"table", std::make_shared<DataTypeString>()},
@@ -43,6 +50,9 @@ StorageSystemCnchPartsInfo::StorageSystemCnchPartsInfo(const StorageID & table_i
         {"total_parts_number", std::make_shared<DataTypeUInt64>()},
         {"total_parts_size", std::make_shared<DataTypeUInt64>()},
         {"total_rows_count", std::make_shared<DataTypeUInt64>()},
+        {"ready_state", std::move(ready_state)},
+        /// Boolean
+        {"recalculating", std::make_shared<DataTypeUInt8>()},
         {"last_update_time", std::make_shared<DataTypeUInt64>()},
         {"last_snapshot_time", std::make_shared<DataTypeUInt64>()},
     }));

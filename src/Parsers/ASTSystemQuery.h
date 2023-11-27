@@ -61,6 +61,7 @@ public:
         DROP_DNS_CACHE,
         DROP_MARK_CACHE,
         DROP_UNCOMPRESSED_CACHE,
+        DROP_NVM_CACHE,
         DROP_MMAP_CACHE,
         DROP_QUERY_CACHE,
         DROP_CHECKSUMS_CACHE,

@@ -6,17 +6,20 @@
 #include <unistd.h>
 
 #include <fmt/core.h>
+#include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/util/delimited_message_util.h>
 
+#include <Protos/disk_cache.pb.h>
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/EvictionPolicy.h>
 #include <Storages/DiskCache/JobScheduler.h>
 #include <Storages/DiskCache/Region.h>
 #include <Storages/DiskCache/RegionManager.h>
 #include <Storages/DiskCache/Types.h>
-#include "Common/Stopwatch.h"
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
+#include <Common/Stopwatch.h>
 #include <common/chrono_io.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
@@ -39,6 +42,11 @@ namespace CurrentMetrics
 extern const Metric RegionManagerExternalFragmentation;
 extern const Metric RegionManagerNumInMemBufActive;
 extern const Metric RegionManagerNumInMemBufWaitingFlush;
+}
+
+namespace DB::ErrorCodes
+{
+extern const int INVALID_CONFIG_PARAMETER;
 }
 
 namespace DB::HybridCache
@@ -392,12 +400,40 @@ void RegionManager::doEviction(RegionId rid, BufferView buffer) const
     }
 }
 
-void RegionManager::persist(google::protobuf::io::CodedOutputStream * /*stream*/) const
+void RegionManager::persist(google::protobuf::io::CodedOutputStream * stream) const
 {
+    Protos::RegionData region_data;
+    region_data.set_region_size(region_size);
+    for (UInt32 i = 0; i < num_regions; i++)
+    {
+        auto * region = region_data.add_regions();
+        region->set_region_id(i);
+        region->set_last_entry_end_offset(regions[i]->getLastEntryEndOffset());
+        region->set_priority(regions[i]->getPriority());
+        region->set_num_items(regions[i]->getNumItems());
+    }
+    google::protobuf::util::SerializeDelimitedToCodedStream(region_data, stream);
 }
 
-void RegionManager::recover(google::protobuf::io::CodedInputStream * /*stream*/)
+void RegionManager::recover(google::protobuf::io::CodedInputStream * stream)
 {
+    Protos::RegionData region_data;
+    google::protobuf::util::ParseDelimitedFromCodedStream(&region_data, stream, nullptr);
+    if (static_cast<UInt32>(region_data.regions_size()) != num_regions || region_data.region_size() != region_size)
+        throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Could not recover RegionManager. Invalid RegionData.");
+
+    for (auto & region_proto : *region_data.mutable_regions())
+    {
+        UInt32 index = region_proto.region_id();
+        if (index >= num_regions || region_proto.last_entry_end_offset() > region_size)
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Could not recover RegionManager. Invalid RegionId.");
+
+        if (num_priorities > 0 && region_proto.priority() >= num_priorities)
+            region_proto.set_priority(num_priorities - 1);
+
+        regions[index] = std::make_unique<Region>(region_proto, region_data.region_size());
+    }
+
     resetEvictionPolicy();
 }
 

@@ -7,7 +7,6 @@
 #include <sys/types.h>
 
 #include <fmt/core.h>
-#include <Poco/AtomicCounter.h>
 #include <Poco/Logger.h>
 
 #include <Storages/DiskCache/Buffer.h>
@@ -221,8 +220,6 @@ namespace
         const IoEngine io_engine;
 
         const UInt32 q_depth_per_context;
-
-        Poco::AtomicCounter num_processed{0};
 
         friend class IoContext;
     };

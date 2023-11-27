@@ -1,7 +1,10 @@
 #include <thread>
 
+#include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include <gtest/gtest.h>
 
+#include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/Index.h>
 #include <common/types.h>
 
@@ -150,6 +153,41 @@ TEST(Index, ThreadSafe)
 
     EXPECT_EQ(200, index.peek(key).getTotalHits());
     EXPECT_EQ(200, index.peek(key).getCurrentHits());
+}
+
+TEST(Index, Recovery)
+{
+    Index index;
+    std::vector<std::pair<UInt64, UInt32>> log;
+    for (UInt64 i = 0; i < 16; i++)
+    {
+        for (UInt64 j = 0; j < 10; j++)
+        {
+            UInt64 key = i << 32 | j;
+            UInt32 val = j + i;
+            index.insert(key, val, 0);
+            log.emplace_back(key, val);
+        }
+    }
+
+    Buffer metadata(INT_MAX);
+
+    {
+        google::protobuf::io::ArrayOutputStream raw_stream(metadata.data(), INT_MAX);
+        google::protobuf::io::CodedOutputStream ostream(&raw_stream);
+
+        index.persist(&ostream);
+    }
+
+    Index new_index;
+    google::protobuf::io::ArrayInputStream raw_stream(metadata.data(), INT_MAX);
+    google::protobuf::io::CodedInputStream istream(&raw_stream);
+    new_index.recover(&istream);
+    for (auto & entry : log)
+    {
+        auto lr = new_index.lookup(entry.first);
+        EXPECT_EQ(entry.second, lr.getAddress());
+    }
 }
 
 }
