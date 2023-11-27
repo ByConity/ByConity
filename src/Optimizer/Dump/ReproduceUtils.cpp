@@ -117,20 +117,13 @@ std::string getFolder(const std::string & file_path)
 
 Poco::JSON::Object::Ptr readJsonFromAbsolutePath(const std::string & absolute_path)
 {
-    try
-    {
-        std::filesystem::path file_path(absolute_path);
-        if (!std::filesystem::exists(file_path))
-            return nullptr;
-        std::ifstream fin(file_path);
-        std::stringstream buffer;
-        buffer << fin.rdbuf();
-        return Poco::JSON::Parser().parse(buffer.str()).extract<Poco::JSON::Object::Ptr>();
-    }
-    catch (...)
-    {
-        return nullptr;
-    }
+    std::filesystem::path file_path(absolute_path);
+    if (!std::filesystem::exists(file_path))
+        throw Exception("file not found: " + absolute_path, ErrorCodes::FILE_NOT_FOUND);
+    std::ifstream fin(file_path);
+    std::stringstream buffer;
+    buffer << fin.rdbuf();
+    return Poco::JSON::Parser().parse(buffer.str()).extract<Poco::JSON::Object::Ptr>();
 }
 
 }
