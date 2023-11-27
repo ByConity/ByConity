@@ -543,6 +543,9 @@ struct ContextSharedPart
 
             access_control_manager.stopBgJobForKVStorage();
 
+            if (nvm_cache)
+                nvm_cache->shutDown();
+
             if (queue_manager)
                 queue_manager->shutdown();
 

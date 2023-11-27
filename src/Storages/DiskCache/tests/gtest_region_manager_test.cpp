@@ -1,6 +1,8 @@
 #include <chrono>
 #include <memory>
 #include <thread>
+#include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include <gtest/gtest.h>
 
 #include <Storages/DiskCache/Buffer.h>
@@ -13,7 +15,9 @@
 #include <Storages/DiskCache/tests/BufferGen.h>
 #include <Storages/DiskCache/tests/MockDevice.h>
 #include <Storages/DiskCache/tests/MockJobScheduler.h>
+#include <Storages/DiskCache/tests/MockPolicy.h>
 #include <Storages/DiskCache/tests/SeqPoints.h>
+#include "Common/CurrentMetrics.h"
 #include <common/types.h>
 
 
@@ -267,7 +271,7 @@ TEST(RegionManager, cleanupRegionFailureAsync)
     region.close(std::move(wdesc));
 
     SeqPoints sp;
-    std::thread read_thread([&sp, &region]{
+    std::thread read_thread([&sp, &region] {
         auto rdesc = region.openForRead();
         EXPECT_EQ(OpenStatus::Ready, rdesc.getStatus());
         sp.reached(0);
@@ -280,7 +284,7 @@ TEST(RegionManager, cleanupRegionFailureAsync)
         EXPECT_CALL(*device, writeImpl(_, _, _)).WillRepeatedly(Return(false));
         sp.wait(0);
         rm->doFlush(rid, true);
-        while(js.getQueueSize() > 0)
+        while (js.getQueueSize() > 0)
             js.runFirst();
     });
 
@@ -293,5 +297,170 @@ TEST(RegionManager, cleanupRegionFailureAsync)
     read_thread.join();
     flush_thread.join();
     cthread.join();
+}
+
+TEST(RegionManager, Recovery)
+{
+    constexpr UInt32 k_num_regions = 4;
+    constexpr UInt32 k_region_size = 4 * 1024;
+    auto device = createMemoryDevice(k_num_regions * k_region_size);
+
+    Buffer metadata(1024);
+
+    {
+        std::vector<UInt32> hits(4);
+        auto policy = std::make_unique<MockPolicy>(&hits);
+        expectRegionsTracked(*policy, {0, 1, 2, 3});
+        RegionEvictCallback evict_cb{[](RegionId, BufferView) { return 0; }};
+        RegionCleanupCallback cleanup_cb{[](RegionId, BufferView) {}};
+        MockJobScheduler js;
+        auto rm = std::make_unique<RegionManager>(
+            k_num_regions,
+            k_region_size,
+            0,
+            *device,
+            1,
+            js,
+            std::move(evict_cb),
+            std::move(cleanup_cb),
+            std::move(policy),
+            k_num_regions,
+            0,
+            kFlushRetryLimit);
+
+        for (int i = 0; i < 20; i++)
+        {
+            auto [desc, addr] = rm->getRegion(RegionId{1}).openAndAllocate(101);
+            rm->getRegion(RegionId{1}).close(std::move(desc));
+        }
+        for (int i = 0; i < 30; i++)
+        {
+            auto [desc, addr] = rm->getRegion(RegionId{2}).openAndAllocate(101);
+            rm->getRegion(RegionId{2}).close(std::move(desc));
+        }
+
+        google::protobuf::io::ArrayOutputStream raw_stream(metadata.data(), 1024);
+        google::protobuf::io::CodedOutputStream stream(&raw_stream);
+        rm->persist(&stream);
+    }
+
+    {
+        std::vector<UInt32> hits(4);
+        auto policy = std::make_unique<MockPolicy>(&hits);
+        {
+            testing::InSequence s;
+            EXPECT_CALL(*policy, reset());
+            expectRegionsTracked(*policy, {0, 1, 2, 3});
+            EXPECT_CALL(*policy, reset());
+            expectRegionsTracked(*policy, {0, 3, 1, 2});
+        }
+
+        RegionEvictCallback evict_cb{[](RegionId, BufferView) { return 0; }};
+        RegionCleanupCallback cleanup_cb{[](RegionId, BufferView) {}};
+        MockJobScheduler js;
+        auto rm = std::make_unique<RegionManager>(
+            k_num_regions,
+            k_region_size,
+            0,
+            *device,
+            1,
+            js,
+            std::move(evict_cb),
+            std::move(cleanup_cb),
+            std::move(policy),
+            k_num_regions,
+            0,
+            kFlushRetryLimit);
+
+        google::protobuf::io::ArrayInputStream raw_stream(metadata.data(), 1024);
+        google::protobuf::io::CodedInputStream stream(&raw_stream);
+        rm->recover(&stream);
+
+        EXPECT_EQ(0, rm->getRegion(RegionId{0}).getLastEntryEndOffset());
+        EXPECT_EQ(0, rm->getRegion(RegionId{0}).getNumItems());
+
+        EXPECT_EQ(2020, rm->getRegion(RegionId{1}).getLastEntryEndOffset());
+        EXPECT_EQ(20, rm->getRegion(RegionId{1}).getNumItems());
+
+        EXPECT_EQ(3030, rm->getRegion(RegionId{2}).getLastEntryEndOffset());
+        EXPECT_EQ(30, rm->getRegion(RegionId{2}).getNumItems());
+
+        EXPECT_EQ(0, rm->getRegion(RegionId{3}).getLastEntryEndOffset());
+        EXPECT_EQ(0, rm->getRegion(RegionId{3}).getNumItems());
+    }
+}
+
+TEST(RegionManager, RecoveryLRUOrder)
+{
+    constexpr UInt32 k_num_regions = 4;
+    constexpr UInt32 k_region_size = 4 * 1024;
+    auto device = createMemoryDevice(k_num_regions * k_region_size);
+
+    Buffer metadata(1024);
+
+    {
+        auto policy = std::make_unique<LruPolicy>(k_num_regions);
+        RegionEvictCallback evict_cb{[](RegionId, BufferView) { return 0; }};
+        RegionCleanupCallback cleanup_cb{[](RegionId, BufferView) {}};
+        MockJobScheduler ex;
+        auto rm = std::make_unique<RegionManager>(
+            k_num_regions,
+            k_region_size,
+            0,
+            *device,
+            1,
+            ex,
+            std::move(evict_cb),
+            std::move(cleanup_cb),
+            std::move(policy),
+            k_num_regions,
+            0,
+            kFlushRetryLimit);
+
+        for (int i = 0; i < 10; i++)
+        {
+            auto [desc, addr] = rm->getRegion(RegionId{0}).openAndAllocate(200);
+            rm->getRegion(RegionId{0}).close(std::move(desc));
+        }
+        for (int i = 0; i < 20; i++)
+        {
+            auto [desc, addr] = rm->getRegion(RegionId{3}).openAndAllocate(150);
+            rm->getRegion(RegionId{3}).close(std::move(desc));
+        }
+
+        google::protobuf::io::ArrayOutputStream raw_stream(metadata.data(), 1024);
+        google::protobuf::io::CodedOutputStream stream(&raw_stream);
+        rm->persist(&stream);
+    }
+
+    {
+        auto policy = std::make_unique<LruPolicy>(k_num_regions);
+        RegionEvictCallback evict_cb{[](RegionId, BufferView) { return 0; }};
+        RegionCleanupCallback cleanup_cb{[](RegionId, BufferView) {}};
+        MockJobScheduler ex;
+        auto rm = std::make_unique<RegionManager>(
+            k_num_regions,
+            k_region_size,
+            0,
+            *device,
+            1,
+            ex,
+            std::move(evict_cb),
+            std::move(cleanup_cb),
+            std::move(policy),
+            k_num_regions,
+            0,
+            kFlushRetryLimit);
+
+        google::protobuf::io::ArrayInputStream raw_stream(metadata.data(), 1024);
+        google::protobuf::io::CodedInputStream stream(&raw_stream);
+        rm->recover(&stream);
+
+        EXPECT_EQ(RegionId{1}, rm->evict());
+        EXPECT_EQ(RegionId{2}, rm->evict());
+        EXPECT_EQ(RegionId{0}, rm->evict());
+        EXPECT_EQ(RegionId{3}, rm->evict());
+        EXPECT_EQ(RegionId{}, rm->evict());
+    }
 }
 }

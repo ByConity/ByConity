@@ -36,12 +36,6 @@ public:
             policy.reset();
         }));
         ON_CALL(*this, memorySize()).WillByDefault(Invoke([this] { return policy.memorySize(); }));
-        ON_CALL(*this, persist(_)).WillByDefault(Invoke([this](google::protobuf::io::CodedOutputStream * stream) {
-            policy.persist(stream);
-        }));
-        ON_CALL(*this, recover(_)).WillByDefault(Invoke([this](google::protobuf::io::CodedInputStream * stream) {
-            policy.recover(stream);
-        }));
     }
 
     MOCK_METHOD1(track, void(const Region & region));
@@ -49,9 +43,6 @@ public:
     MOCK_METHOD0(evict, RegionId());
     MOCK_METHOD0(reset, void());
     MOCK_CONST_METHOD0(memorySize, size_t());
-
-    MOCK_CONST_METHOD1(persist, void(google::protobuf::io::CodedOutputStream *));
-    MOCK_METHOD1(recover, void(google::protobuf::io::CodedInputStream *));
 
 private:
     std::vector<UInt32> & hits;
@@ -61,5 +52,27 @@ private:
 MATCHER_P(EqRegionPri, pri, "region should have the same pri")
 {
     return arg.getPriority() == static_cast<UInt32>(pri);
+}
+
+MATCHER_P(EqRegion, rid, "region should have the same id")
+{
+    return arg.id().index() == rid.index();
+}
+
+MATCHER_P2(EqRegion, rid, pri, "region should have the same id and pri")
+{
+    return arg.id().index() == rid.index() && arg.getPriority() == static_cast<UInt32>(pri);
+}
+
+inline void expectRegionsTracked(MockPolicy & policy, std::vector<UInt32> regionIds, bool sticky = true)
+{
+    testing::InSequence s;
+    for (auto id : regionIds)
+        EXPECT_CALL(policy, track(EqRegion(RegionId{id}))).RetiresOnSaturation();
+
+    if (sticky)
+        EXPECT_CALL(policy, track(testing::_)).Times(0);
+    else
+        EXPECT_CALL(policy, track(testing::_)).Times(testing::AtLeast(0));
 }
 }

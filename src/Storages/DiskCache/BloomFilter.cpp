@@ -128,7 +128,7 @@ void BloomFilter::serializeInternal(google::protobuf::io::CodedOutputStream * st
     {
         auto num_bytes = std::min<UInt32>(bits_size - offset, fragment_size);
         buffer.copyFrom(0, BufferView(num_bytes, bits.get() + offset));
-        stream->WriteRaw(buffer.data(), buffer.size());
+        stream->WriteRaw(buffer.data(), num_bytes);
         offset += num_bytes;
     }
 }
@@ -152,8 +152,8 @@ void BloomFilter::persist(google::protobuf::io::CodedOutputStream * stream)
     pb.set_hash_table_bit_size(hash_table_bit_size);
     pb.set_filter_byte_size(filter_byte_size);
     pb.set_fragment_size(kPersistFragmentSize);
-    for (UInt32 i = 0; i > seeds.size(); i++)
-        pb.set_seeds(i, seeds[i]);
+    for (auto seed : seeds)
+        pb.add_seeds(seed);
     google::protobuf::util::SerializeDelimitedToCodedStream(pb, stream);
 
     serializeInternal(stream, pb.fragment_size());

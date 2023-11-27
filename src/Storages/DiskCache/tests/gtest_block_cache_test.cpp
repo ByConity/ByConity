@@ -1,16 +1,22 @@
+#include <climits>
 #include <memory>
 #include <semaphore>
 #include <thread>
+
 #include <fmt/core.h>
 #include <gmock/gmock.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include <gtest/gtest.h>
+#include <Poco/Logger.h>
 
+#include <Storages/DiskCache/AbstractCache.h>
 #include <Storages/DiskCache/BlockCache.h>
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/CacheEngine.h>
 #include <Storages/DiskCache/Device.h>
 #include <Storages/DiskCache/HashKey.h>
 #include <Storages/DiskCache/JobScheduler.h>
+#include <Storages/DiskCache/RecordIO.h>
 #include <Storages/DiskCache/Types.h>
 #include <Storages/DiskCache/tests/BufferGen.h>
 #include <Storages/DiskCache/tests/Callbacks.h>
@@ -18,7 +24,7 @@
 #include <Storages/DiskCache/tests/MockJobScheduler.h>
 #include <Storages/DiskCache/tests/MockPolicy.h>
 #include <Storages/DiskCache/tests/SeqPoints.h>
-#include <Poco/Logger.h>
+#include <Common/Exception.h>
 #include <common/logger_useful.h>
 
 namespace DB::HybridCache
@@ -95,9 +101,31 @@ void finishAllJobs(MockJobScheduler & ex)
 class Driver
 {
 public:
-    Driver(std::unique_ptr<BlockCache> cache_, std::unique_ptr<JobScheduler> scheduler_)
-        : cache{std::move(cache_)}, scheduler{std::move(scheduler_)}
+    Driver(
+        std::unique_ptr<BlockCache> cache_,
+        std::unique_ptr<JobScheduler> scheduler_,
+        std::unique_ptr<Device> device_,
+        size_t metadata_size_ = 0)
+        : cache{std::move(cache_)}, scheduler{std::move(scheduler_)}, device{std::move(device_)}, metadata_size{metadata_size_}
     {
+    }
+
+    void persist()
+    {
+        auto stream = createMetadataOutputStream(*device, metadata_size);
+        cache->persist(stream.get());
+    }
+
+    void reset()
+    {
+        scheduler->finish();
+        cache->reset();
+    }
+
+    bool recover()
+    {
+        auto stream = createMetadataInputStream(*device, metadata_size);
+        return cache->recover(stream.get());
     }
 
     void flush()
@@ -106,12 +134,17 @@ public:
         cache->flush();
     }
 
-    Status insertAsync(const HashedKey & key, const BufferView & value)
+    Status insertAsync(const HashedKey & key, const BufferView & value, InsertCallback cb = nullptr)
     {
         scheduler->enqueue(
-            [this, key, value]() {
-                if (cache->insert(key, value) == Status::Retry)
+            [this, cb = std::move(cb), key, value]() {
+                auto status = cache->insert(key, value);
+                if (status == Status::Retry)
                     return JobExitCode::Reschedule;
+
+                if (cb)
+                    cb(status, key);
+
                 return JobExitCode::Done;
             },
             "insert",
@@ -169,6 +202,8 @@ public:
 private:
     std::unique_ptr<BlockCache> cache;
     std::unique_ptr<JobScheduler> scheduler;
+    std::unique_ptr<Device> device;
+    size_t metadata_size;
 };
 
 TEST(BlockCache, InsertLookup)
@@ -181,7 +216,7 @@ TEST(BlockCache, InsertLookup)
     auto js = makeJobScheduler();
     auto config = makeConfig(*js, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(js));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(js), std::move(device));
 
     BufferGen generator;
     {
@@ -227,7 +262,7 @@ TEST(BlockCache, InsertLookupSync)
     auto config = makeConfig(*ex, std::move(policy), *device);
     config.num_in_mem_buffers = 1;
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen generator;
     for (size_t i = 0; i < 17; i++)
@@ -264,7 +299,7 @@ TEST(BlockCache, CouldExist)
     auto ex = makeJobScheduler();
     auto config = makeConfig(*ex, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen gen;
     for (size_t i = 0; i < 17; i++)
@@ -288,7 +323,7 @@ TEST(BlockCache, Remove)
     auto ex = makeJobScheduler();
     auto config = makeConfig(*ex, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
     BufferGen bg;
     {
         CacheEntry e{strzBuffer("cat"), bg.gen(800)};
@@ -327,7 +362,7 @@ TEST(BlockCache, SimpleReclaim)
     auto ex = makeJobScheduler();
     auto config = makeConfig(*ex, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen bg;
     std::vector<CacheEntry> log;
@@ -373,7 +408,7 @@ TEST(BlockCache, StackAlloc)
     auto config = makeConfig(*ex, std::move(policy), *device);
     config.read_buffer_size = 2048;
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
     BufferGen bg;
 
     CacheEntry e1{bg.gen(8), bg.gen(1800)};
@@ -413,7 +448,7 @@ TEST(BlockCache, RegionUnderflow)
     config.read_buffer_size = 2048;
 
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen bg;
 
@@ -439,7 +474,7 @@ TEST(BlockCache, SmallReadBuffer)
     config.read_buffer_size = 5120;
 
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen bg;
     CacheEntry e{bg.gen(8), bg.gen(5800)};
@@ -461,7 +496,7 @@ TEST(BlockCache, SmallAllocAlignment)
     auto config = makeConfig(*ex, std::move(policy), *device);
     config.num_in_mem_buffers = 4;
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     std::vector<CacheEntry> log;
     BufferGen bg;
@@ -512,7 +547,7 @@ TEST(BlockCache, MultipleAllocAlignmentSizeItems)
     auto config = makeConfig(*ex, std::move(policy), *device);
     config.num_in_mem_buffers = 4;
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     std::vector<CacheEntry> log;
     BufferGen bg;
@@ -563,7 +598,7 @@ TEST(BlockCache, StackAllocReclaim)
     auto ex = makeJobScheduler();
     auto config = makeConfig(*ex, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen bg;
     { // 2k
@@ -648,7 +683,7 @@ TEST(BlockCache, ReadRegionDuringEviction)
     auto * ex_ptr = ex.get();
     auto config = makeConfig(*ex, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen bg;
     for (size_t j = 0; j < 3; j++)
@@ -726,7 +761,7 @@ TEST(BlockCache, DeviceFailure)
     auto ex = makeJobScheduler();
     auto config = makeConfig(*ex, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen bg;
     auto value1 = bg.gen(800);
@@ -759,7 +794,7 @@ TEST(BlockCache, Flush)
     auto ex = makeJobScheduler();
     auto config = makeConfig(*ex, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen bg;
     CacheEntry e{bg.gen(8), bg.gen(800)};
@@ -769,13 +804,13 @@ TEST(BlockCache, Flush)
 
 TEST(BlockCache, RegionLastOffset)
 {
-    std::vector<uint32_t> hits(4);
+    std::vector<UInt32> hits(4);
     auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
     auto device = createMemoryDevice(kDeviceSize);
     auto ex = makeJobScheduler();
     auto config = makeConfig(*ex, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen bg;
     std::vector<CacheEntry> log;
@@ -840,7 +875,7 @@ TEST(BlockCache, SmallerSlotSizes)
     auto config = makeConfig(*ex, std::move(policy), *device, my_device_size);
     config.num_in_mem_buffers = 4;
     auto cache = makeCache(std::move(config), metadata_size);
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device), metadata_size);
 
     BufferGen bg;
     std::vector<CacheEntry> log;
@@ -870,14 +905,16 @@ TEST(BlockCache, SmallerSlotSizes)
         EXPECT_EQ(Status::Ok, driver->lookup(log[i].getKey(), value));
         EXPECT_EQ(log[i].getValue(), value.view());
     }
-    //   driver->persist();
-    //   driver->reset();
-    //   EXPECT_TRUE(driver->recover());
-    //   for (size_t i = 0; i < 8; i++) {
-    //     Buffer value;
-    //     EXPECT_EQ(Status::Ok, driver->lookup(log[i].key(), value));
-    //     EXPECT_EQ(log[i].value(), value.view());
-    //   }
+
+    driver->persist();
+    driver->reset();
+    EXPECT_TRUE(driver->recover());
+    for (size_t i = 0; i < 8; i++)
+    {
+        Buffer value;
+        EXPECT_EQ(Status::Ok, driver->lookup(log[i].getKey(), value));
+        EXPECT_EQ(log[i].getValue(), value.view());
+    }
 }
 
 TEST(BlockCache, NoJobsOnStartup)
@@ -889,7 +926,7 @@ TEST(BlockCache, NoJobsOnStartup)
     auto * ex_ptr = ex.get();
     auto config = makeConfig(*ex, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     EXPECT_EQ(0, ex_ptr->getQueueSize());
 }
@@ -900,13 +937,14 @@ TEST(BlockCache, Checksum)
     auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
     constexpr UInt32 k_io_align_size = 1024;
     auto device = createMemoryDevice(kDeviceSize, k_io_align_size);
+    auto & device_obj = *device;
     auto ex = std::make_unique<MockSingleThreadJobScheduler>();
     auto * ex_ptr = ex.get();
     auto config = makeConfig(*ex, std::move(policy), *device);
     config.read_buffer_size = 2048;
     config.checksum = true;
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen bg;
     CacheEntry e1{bg.gen(8), bg.gen(1800)};
@@ -930,7 +968,7 @@ TEST(BlockCache, Checksum)
 
     Buffer buf{2 * k_io_align_size, k_io_align_size};
     memcpy(buf.data() + buf.size() - 4, "hack", 4);
-    EXPECT_TRUE(device->write(0, std::move(buf)));
+    EXPECT_TRUE(device_obj.write(0, std::move(buf)));
     EXPECT_EQ(Status::DeviceError, driver->lookup(e1.getKey(), value));
 
     const char corruption[k_io_align_size]{"hack"};
@@ -938,7 +976,8 @@ TEST(BlockCache, Checksum)
     //     2 * k_io_align_size, Buffer{BufferView{k_io_align_size, reinterpret_cast<const UInt8 *>(corruption)}, k_io_align_size}));
     // EXPECT_EQ(Status::NotFound, driver->lookup(e2.getKey(), value));
 
-    EXPECT_TRUE(device->write(3 * k_io_align_size, Buffer{BufferView{1024, reinterpret_cast<const UInt8 *>(corruption)}, k_io_align_size}));
+    EXPECT_TRUE(
+        device_obj.write(3 * k_io_align_size, Buffer{BufferView{1024, reinterpret_cast<const UInt8 *>(corruption)}, k_io_align_size}));
     EXPECT_EQ(Status::DeviceError, driver->lookup(e3.getKey(), value));
 
     EXPECT_EQ(0, ex_ptr->getQueueSize());
@@ -953,7 +992,7 @@ TEST(BlockCache, HitsReinsertionPolicy)
     auto config = makeConfig(*ex, std::move(policy), *device);
     config.reinsertion_config = makeHitsReinsertionConfig(1);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen bg;
     std::vector<CacheEntry> log;
@@ -1012,7 +1051,7 @@ TEST(BlockCache, HitsReinsertionPolicy)
 
 TEST(BlockCache, UsePriorities)
 {
-    std::vector<uint32_t> hits(4);
+    std::vector<UInt32> hits(4);
     auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
     auto & mp = *policy;
     size_t metadata_size = 3 * 1024 * 1024;
@@ -1024,8 +1063,8 @@ TEST(BlockCache, UsePriorities)
     config.reinsertion_config = makeHitsReinsertionConfig(1);
     config.num_in_mem_buffers = 3;
     config.clean_regions_pool = 3;
-    auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto cache = makeCache(std::move(config), metadata_size);
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     std::vector<CacheEntry> log;
     BufferGen bg;
@@ -1063,7 +1102,7 @@ TEST(BlockCache, UsePriorities)
 
 TEST(BlockCache, UsePrioritiesSizeClass)
 {
-    std::vector<uint32_t> hits(4);
+    std::vector<UInt32> hits(4);
     auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
     auto & mp = *policy;
     size_t metadata_size = 3 * 1024 * 1024;
@@ -1076,7 +1115,7 @@ TEST(BlockCache, UsePrioritiesSizeClass)
     config.num_in_mem_buffers = 3;
     config.clean_regions_pool = 3;
     auto cache = makeCache(std::move(config), metadata_size);
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     std::vector<CacheEntry> log;
     BufferGen bg;
@@ -1177,7 +1216,7 @@ TEST(BlockCache, testItemDestructor)
     config.destructor_callback = toCallback(cb);
     config.item_destructor_enabled = true;
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     mockRegionsEvicted(mp, {0, 1, 2, 3, 1});
     for (size_t i = 0; i < 7; i++)
@@ -1213,14 +1252,14 @@ TEST(BlockCache, RandomAlloc)
     std::unordered_map<std::string, CacheEntry> log;
     SeqPoints sp;
 
-    std::vector<uint32_t> hits(4);
+    std::vector<UInt32> hits(4);
     auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
     auto device = createMemoryDevice(kDeviceSize);
     auto ex = std::make_unique<MockJobScheduler>();
     auto * ex_ptr = ex.get();
     auto config = makeConfig(*ex, std::move(policy), *device);
     auto cache = makeCache(std::move(config));
-    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex));
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device));
 
     BufferGen bg;
     for (size_t j = 0; j < 3; j++)
@@ -1267,7 +1306,7 @@ TEST(BlockCache, SizeAndAlignment)
     auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
 
     const UInt32 align_size = 1024;
-    auto device = std::make_unique<SizeMockDevice>(align_size * (static_cast<uint64_t>(1) << 32));
+    auto device = std::make_unique<SizeMockDevice>(align_size * (static_cast<UInt64>(1) << 32));
     auto ex = makeJobScheduler();
     auto config = makeConfig(*ex, std::move(policy), *device);
     config.num_in_mem_buffers = 9;
@@ -1283,6 +1322,265 @@ TEST(BlockCache, SizeAndAlignment)
 
     auto huge_value = bg.gen(align_size - 24 - 3 + 1);
     EXPECT_EQ(cache->estimateWriteSize(HashedKey{"key"}, huge_value.view()), align_size * 2);
+}
+
+TEST(BlockCache, Recovery)
+{
+    std::vector<UInt32> hits(4);
+    UInt32 io_align_size = 4096;
+    auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
+    auto & mp = *policy;
+    size_t metadata_size = 3 * 1024 * 1024;
+    auto device_size = metadata_size + kDeviceSize;
+    auto device = createMemoryDevice(device_size, io_align_size);
+    auto ex = makeJobScheduler();
+    auto config = makeConfig(*ex, std::move(policy), *device);
+    config.num_in_mem_buffers = 2;
+    auto cache = makeCache(std::move(config), metadata_size);
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device), metadata_size);
+
+    expectRegionsTracked(mp, {0, 1, 2});
+    BufferGen bg;
+    std::vector<CacheEntry> log;
+    for (size_t i = 0; i < 3; i++)
+    {
+        for (size_t j = 0; j < 4; j++)
+        {
+            CacheEntry e{bg.gen(8), bg.gen(3200)};
+            EXPECT_EQ(Status::Ok, driver->insert(e.getKey(), e.getValue()));
+            log.push_back(std::move(e));
+        }
+    }
+
+    driver->flush();
+    driver->persist();
+
+    {
+        testing::InSequence s;
+        EXPECT_CALL(mp, reset());
+        expectRegionsTracked(mp, {0, 1, 2, 3});
+        EXPECT_CALL(mp, reset());
+        expectRegionsTracked(mp, {3, 0, 1, 2, 3});
+    }
+    EXPECT_TRUE(driver->recover());
+
+    for (auto & entry : log)
+    {
+        Buffer value;
+        EXPECT_EQ(Status::Ok, driver->lookup(entry.getKey(), value));
+        EXPECT_EQ(entry.getValue(), value.view());
+    }
+
+    for (size_t i = 0; i < 3; i++)
+    {
+        CacheEntry e{bg.gen(8), bg.gen(3200)};
+        EXPECT_EQ(Status::Ok, driver->insert(e.getKey(), e.getValue()));
+        log.push_back(std::move(e));
+    }
+    driver->flush();
+
+    for (size_t i = 0; i < 4; i++)
+    {
+        Buffer value;
+        EXPECT_EQ(Status::NotFound, driver->lookup(log[i].getKey(), value));
+    }
+    for (size_t i = 4; i < log.size(); i++)
+    {
+        Buffer value;
+        EXPECT_EQ(Status::Ok, driver->lookup(log[i].getKey(), value));
+        EXPECT_EQ(log[i].getValue(), value.view());
+    }
+}
+
+TEST(BlockCache, RecoveryWithDifferentCacheSize)
+{
+    std::vector<UInt32> hits(4);
+    size_t metadata_size = 3 * 1024 * 1024;
+    auto device_size = metadata_size + kDeviceSize;
+    auto device = createMemoryDevice(device_size);
+    auto ex = makeJobScheduler();
+
+    std::vector<std::string> keys;
+    Buffer original_metadata(INT_MAX);
+    {
+        auto config = makeConfig(*ex, std::make_unique<NiceMock<MockPolicy>>(&hits), *device);
+        auto cache = makeCache(std::move(config), metadata_size);
+
+        auto num_items = kDeviceSize / kRegionSize;
+        for (UInt64 i = 0; i < num_items; i++)
+        {
+            auto key = fmt::format("key_{}", i);
+            while (true)
+            {
+                if (Status::Ok
+                    == cache->insert(makeHashKey(BufferView{key.size(), reinterpret_cast<UInt8 *>(key.data())}), makeView("value")))
+                {
+                    break;
+                }
+                ex->finish();
+            }
+            if (i > 0)
+            {
+                keys.push_back(key);
+            }
+        }
+        ex->finish();
+        cache->flush();
+
+        for (auto & key : keys)
+        {
+            Buffer buffer;
+            ASSERT_EQ(Status::Ok, cache->lookup(makeHashKey(BufferView{key.size(), reinterpret_cast<UInt8 *>(key.data())}), buffer));
+        }
+
+        auto ostream = google::protobuf::io::ArrayOutputStream(original_metadata.data(), INT_MAX);
+        cache->persist(&ostream);
+    }
+
+    {
+        auto config = makeConfig(*ex, std::make_unique<NiceMock<MockPolicy>>(&hits), *device);
+        auto cache = makeCache(std::move(config), metadata_size);
+
+        auto istream = google::protobuf::io::ArrayInputStream(original_metadata.data(), INT_MAX);
+        ASSERT_TRUE(cache->recover(&istream));
+
+        for (auto & key : keys)
+        {
+            Buffer buffer;
+            ASSERT_EQ(Status::Ok, cache->lookup(makeHashKey(BufferView{key.size(), reinterpret_cast<UInt8 *>(key.data())}), buffer));
+        }
+    }
+
+    {
+        auto config = makeConfig(*ex, std::make_unique<NiceMock<MockPolicy>>(&hits), *device);
+        config.cache_size += 4096;
+        ASSERT_ANY_THROW(makeCache(std::move(config), metadata_size));
+    }
+}
+
+TEST(BlockCache, RecoveryBadConfig)
+{
+    {
+        std::vector<UInt32> hits(4);
+        auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
+        auto & mp = *policy;
+        size_t metadata_size = 3 * 1024 * 1024;
+        auto device_size = metadata_size + kDeviceSize;
+        auto device = createMemoryDevice(device_size);
+        auto ex = makeJobScheduler();
+        auto config = makeConfig(*ex, std::move(policy), *device);
+        auto cache = makeCache(std::move(config), metadata_size);
+        auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device), metadata_size);
+
+        expectRegionsTracked(mp, {0, 1, 2});
+        BufferGen bg;
+        std::vector<CacheEntry> log;
+        for (size_t i = 0; i < 3; i++)
+        {
+            for (size_t j = 0; j < 4; j++)
+            {
+                CacheEntry e{bg.gen(8), bg.gen(3200)};
+                EXPECT_EQ(Status::Ok, driver->insertAsync(e.getKey(), e.getValue()));
+                log.push_back(std::move(e));
+            }
+            driver->flush();
+        }
+
+        driver->persist();
+    }
+
+    {
+        std::vector<UInt32> hits(4);
+        auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
+        size_t metadata_size = 3 * 1024 * 1024;
+        auto device_size = metadata_size + kDeviceSize;
+        auto device = createMemoryDevice(device_size);
+        auto ex = makeJobScheduler();
+        auto config = makeConfig(*ex, std::move(policy), *device);
+        config.region_size = 8 * 1024;
+        auto cache = makeCache(std::move(config), metadata_size);
+        auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device), metadata_size);
+
+        EXPECT_FALSE(driver->recover());
+    }
+    {
+        std::vector<UInt32> hits(4);
+        auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
+        size_t metadata_size = 3 * 1024 * 1024;
+        auto device_size = metadata_size + kDeviceSize;
+        auto device = createMemoryDevice(device_size);
+        auto ex = makeJobScheduler();
+        auto config = makeConfig(*ex, std::move(policy), *device);
+        config.checksum = true;
+        auto cache = makeCache(std::move(config));
+        auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device), metadata_size);
+
+        EXPECT_FALSE(driver->recover());
+    }
+}
+
+TEST(BlockCache, RecoveryCorruptedData)
+{
+    std::vector<UInt32> hits(4);
+    auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
+    std::unique_ptr<Driver> driver;
+    {
+        size_t metadata_size = 3 * 1024 * 1024;
+        auto device_size = metadata_size + kDeviceSize;
+        auto device = createMemoryDevice(device_size);
+        auto & device_obj = *device;
+        auto ex = makeJobScheduler();
+        auto config = makeConfig(*ex, std::move(policy), *device);
+        auto cache = makeCache(std::move(config), metadata_size);
+        driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device), metadata_size);
+
+        driver->persist();
+
+        BufferGen gen;
+        auto buffer = gen.gen(512);
+
+        device_obj.write(0, buffer.view());
+    }
+
+    EXPECT_FALSE(driver->recover());
+}
+
+TEST(BlockCache, HitsReinsertionPolicyRecovery)
+{
+    std::vector<UInt32> hits(4);
+    UInt32 io_align_size = 4096;
+    auto policy = std::make_unique<NiceMock<MockPolicy>>(&hits);
+    size_t metadata_size = 3 * 1024 * 1024;
+    auto device_size = metadata_size + kDeviceSize;
+    auto device = createMemoryDevice(device_size, io_align_size);
+    auto ex = makeJobScheduler();
+    auto config = makeConfig(*ex, std::move(policy), *device);
+    config.reinsertion_config = makeHitsReinsertionConfig(1);
+    auto cache = makeCache(std::move(config), metadata_size);
+    auto driver = std::make_unique<Driver>(std::move(cache), std::move(ex), std::move(device), metadata_size);
+
+    BufferGen bg;
+    std::vector<CacheEntry> log;
+    for (size_t i = 0; i < 3; i++)
+    {
+        for (size_t j = 0; j < 4; j++)
+        {
+            CacheEntry e{bg.gen(8), bg.gen(3200)};
+            EXPECT_EQ(Status::Ok, driver->insert(e.getKey(), e.getValue()));
+            log.push_back(std::move(e));
+        }
+    }
+
+    driver->flush();
+    driver->persist();
+    EXPECT_TRUE(driver->recover());
+
+    for (auto & entry : log)
+    {
+        Buffer value;
+        EXPECT_EQ(Status::Ok, driver->lookup(entry.getKey(), value));
+        EXPECT_EQ(entry.getValue(), value.view());
+    }
 }
 
 }

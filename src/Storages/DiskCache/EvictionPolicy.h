@@ -25,11 +25,5 @@ public:
 
     // Gets memory used by the policy.
     virtual size_t memorySize() const = 0;
-
-    // Persists metadata associated with this policy.
-    virtual void persist(google::protobuf::io::CodedOutputStream * stream) const = 0;
-
-    // Recovers from previously persisted metadata associated with this policy.
-    virtual void recover(google::protobuf::io::CodedInputStream * stream) = 0;
 };
 }

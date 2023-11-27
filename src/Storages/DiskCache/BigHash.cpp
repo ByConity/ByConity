@@ -9,12 +9,13 @@
 #include <random>
 #include <shared_mutex>
 #include <utility>
+#include <sys/param.h>
+
 #include <fmt/core.h>
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <google/protobuf/util/delimited_message_util.h>
-#include <sys/param.h>
 
 #include <IO/ReadBuffer.h>
 #include <Protos/disk_cache.pb.h>
@@ -172,7 +173,7 @@ std::pair<Status, std::string> BigHash::getRandomAlloc(Buffer & value)
     return std::make_pair(Status::Ok, key);
 }
 
-void BigHash::persist(std::ostream * os)
+void BigHash::persist(google::protobuf::io::ZeroCopyOutputStream * stream)
 {
     LOG_INFO(log, "Starting bighash persist");
     Protos::BigHashPersistentData pb;
@@ -183,27 +184,25 @@ void BigHash::persist(std::ostream * os)
     pb.set_cache_base_offset(cache_base_offset);
     pb.set_num_buckets(num_buckets);
     pb.set_used_size_bytes(CurrentMetrics::values[CurrentMetrics::BigHashUsedSizeBytes].load(std::memory_order_relaxed));
-    google::protobuf::util::SerializeDelimitedToOstream(pb, os);
-    auto raw_stream = google::protobuf::io::OstreamOutputStream(os);
-    google::protobuf::io::CodedOutputStream stream(&raw_stream);
+    google::protobuf::io::CodedOutputStream ostream(stream);
+    google::protobuf::util::SerializeDelimitedToCodedStream(pb, &ostream);
 
     if (bloom_filters)
     {
-        bloom_filters->persist(&stream);
+        bloom_filters->persist(&ostream);
         LOG_INFO(log, "Bloom filter persist done");
     }
     LOG_INFO(log, "Finished bighash persist");
 }
 
-bool BigHash::recover(std::istream * is)
+bool BigHash::recover(google::protobuf::io::ZeroCopyInputStream * stream)
 {
     LOG_INFO(log, "Starting bighash recovery");
     try
     {
         Protos::BigHashPersistentData pb;
-        google::protobuf::io::IstreamInputStream raw_stream(is);
-        google::protobuf::io::CodedInputStream stream(&raw_stream);
-        google::protobuf::util::ParseDelimitedFromCodedStream(&pb, &stream, nullptr);
+        google::protobuf::io::CodedInputStream istream(stream);
+        google::protobuf::util::ParseDelimitedFromCodedStream(&pb, &istream, nullptr);
         if (pb.format_version() != kFormatVersion)
             throwFromErrno(
                 fmt::format("Invalid format version {}, expected {}", pb.format_version(), kFormatVersion),
@@ -219,7 +218,7 @@ bool BigHash::recover(std::istream * is)
         CurrentMetrics::set(CurrentMetrics::BigHashUsedSizeBytes, pb.used_size_bytes());
         if (bloom_filters)
         {
-            bloom_filters->recover(&stream);
+            bloom_filters->recover(&istream);
             LOG_INFO(log, "Recovered bloom filter");
         }
     }

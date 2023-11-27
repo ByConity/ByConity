@@ -73,6 +73,7 @@
 #include <ServiceDiscovery/registerServiceDiscovery.h>
 #include <Statistics/CacheManager.h>
 #include <Storages/DiskCache/DiskCacheFactory.h>
+#include <Storages/DiskCache/NvmCache.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/StorageReplicatedMergeTree.h>
@@ -1841,6 +1842,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
             /// Killing remaining queries.
             global_context->getProcessList().killAllQueries();
+            auto nvm_cache = global_context->getNvmCache();
+            if (nvm_cache)
+                nvm_cache->shutDown();
 
             if (current_connections)
                 current_connections = waitServersToFinish(*servers, config().getInt("shutdown_wait_unfinished", 5));

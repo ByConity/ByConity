@@ -51,16 +51,6 @@ void FifoPolicy::reset()
     queue.clear();
 }
 
-void FifoPolicy::persist(google::protobuf::io::CodedOutputStream * /*stream*/) const
-{
-    //TODO(@max.chenxi)
-}
-
-void FifoPolicy::recover(google::protobuf::io::CodedInputStream * /*stream*/)
-{
-    //TODO(@max.chenxi)
-}
-
 SegmentedFifoPolicy::SegmentedFifoPolicy(std::vector<unsigned int> segment_ratio_)
     : segment_ratio{std::move(segment_ratio_)}, total_ratio_weight{detail::accumulate(segment_ratio)}, segments{segment_ratio.size()}
 {
@@ -134,15 +124,5 @@ size_t SegmentedFifoPolicy::memorySize() const
     for (const auto & segment : segments)
         mem_size += sizeof(std::deque<detail::Node>) + sizeof(detail::Node) * segment.size();
     return mem_size;
-}
-
-void SegmentedFifoPolicy::persist(google::protobuf::io::CodedOutputStream * /*stream*/) const
-{
-    //TODO(@max.chenxi)
-}
-
-void SegmentedFifoPolicy::recover(google::protobuf::io::CodedInputStream * /*stream*/)
-{
-    //TODO(@max.chenxi)
 }
 }

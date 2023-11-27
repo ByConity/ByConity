@@ -9,9 +9,11 @@
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/CacheEngine.h>
 #include <Storages/DiskCache/Contexts.h>
+#include <Storages/DiskCache/Device.h>
 #include <Storages/DiskCache/HashKey.h>
 #include <Storages/DiskCache/JobScheduler.h>
 #include <Storages/DiskCache/NvmCache.h>
+#include <Storages/DiskCache/RecordIO.h>
 #include <Storages/DiskCache/Types.h>
 #include <Storages/MarkCache.h>
 #include <Common/CurrentMetrics.h>
@@ -249,13 +251,46 @@ void NvmCache::flush()
 
 void NvmCache::persist() const
 {
-    //TODO(@max.chenxi)
+    auto stream = createMetadataOutputStream(*device, metadata_size);
+    if (stream)
+    {
+        for (const auto & pair : pairs)
+        {
+            pair.small_item_cache->persist(stream.get());
+            pair.large_item_cache->persist(stream.get());
+        }
+    }
 }
 
 bool NvmCache::recover()
 {
-    //TODO(@max.chenxi)
-    return false;
+    auto stream = createMetadataInputStream(*device, metadata_size);
+    if (!stream)
+        return false;
+
+    bool recovered = true;
+    for (const auto & pair : pairs)
+    {
+        recovered &= pair.small_item_cache->recover(stream.get());
+        if (!recovered)
+            break;
+        recovered &= pair.large_item_cache->recover(stream.get());
+        if (!recovered)
+            break;
+    }
+
+    if (!recovered)
+        reset();
+
+    if (recovered)
+    {
+        auto output_stream = createMetadataOutputStream(*device, metadata_size);
+        if (output_stream)
+            return output_stream->invalidate();
+        else
+            recovered = false;
+    }
+    return recovered;
 }
 
 void NvmCache::Pair::validate()
@@ -326,12 +361,8 @@ bool NvmCache::shutDown()
     enabled = false;
     try
     {
-        scheduler->finish();
-        for (auto & pair : pairs)
-        {
-            pair.small_item_cache->flush();
-            pair.large_item_cache->flush();
-        }
+        flush();
+        persist();
     }
     catch (std::exception & ex)
     {

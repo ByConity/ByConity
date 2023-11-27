@@ -4,9 +4,11 @@
 #include <memory>
 #include <sstream>
 #include <thread>
+
 #include <gmock/gmock-nice-strict.h>
 #include <gmock/gmock-spec-builders.h>
 #include <gmock/gmock.h>
+#include <google/protobuf/io/zero_copy_stream_impl_lite.h>
 #include <gtest/gtest.h>
 
 #include <Storages/DiskCache/BigHash.h>
@@ -14,6 +16,7 @@
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/Device.h>
 #include <Storages/DiskCache/HashKey.h>
+#include <Storages/DiskCache/RecordIO.h>
 #include <Storages/DiskCache/Types.h>
 #include <Storages/DiskCache/tests/BufferGen.h>
 #include <Storages/DiskCache/tests/Callbacks.h>
@@ -23,7 +26,6 @@
 
 namespace DB::HybridCache
 {
-
 namespace
 {
     void setLayout(BigHash::Config & config, uint32_t bs, uint32_t numBuckets)
@@ -286,10 +288,12 @@ TEST(BigHash, Recovery)
     EXPECT_EQ(Status::Ok, bh.lookup(makeHashKey("key"), value));
     EXPECT_EQ(makeView("12345"), value.view());
 
-    std::stringstream ss;
-    bh.persist(&ss);
+    Buffer metadata(1024);
+    auto ostream = google::protobuf::io::ArrayOutputStream(metadata.data(), 1024);
+    bh.persist(&ostream);
 
-    ASSERT_TRUE(bh.recover(&ss));
+    auto istream = google::protobuf::io::ArrayInputStream(metadata.data(), 1024);
+    ASSERT_TRUE(bh.recover(&istream));
 
     EXPECT_EQ(Status::Ok, bh.lookup(makeHashKey("key"), value));
     EXPECT_EQ(makeView("12345"), value.view());
@@ -297,7 +301,7 @@ TEST(BigHash, Recovery)
 
 TEST(BigHash, RecoveryBadConfig)
 {
-    std::stringstream ss;
+    Buffer metadata(1024);
     {
         BigHash::Config config;
         config.cache_size = 16 * 1024;
@@ -312,7 +316,8 @@ TEST(BigHash, RecoveryBadConfig)
         EXPECT_EQ(Status::Ok, bh.lookup(makeHashKey("key"), value));
         EXPECT_EQ(makeView("12345"), value.view());
 
-        bh.persist(&ss);
+        auto ostream = google::protobuf::io::ArrayOutputStream(metadata.data(), 1024);
+        bh.persist(&ostream);
     }
 
     {
@@ -323,7 +328,8 @@ TEST(BigHash, RecoveryBadConfig)
         config.device = device.get();
 
         BigHash bh(std::move(config));
-        ASSERT_FALSE(bh.recover(&ss));
+        auto istream = google::protobuf::io::ArrayInputStream(metadata.data(), 1024);
+        ASSERT_FALSE(bh.recover(&istream));
     }
 }
 
@@ -342,13 +348,12 @@ TEST(BigHash, RecoveryCorruptedData)
     EXPECT_EQ(Status::Ok, bh.lookup(makeHashKey("key"), value));
     EXPECT_EQ(makeView("12345"), value.view());
 
-    std::stringstream ss;
     Buffer buffer(512);
     std::generate(buffer.data(), buffer.data() + buffer.size(), std::minstd_rand());
 
-    ss.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
+    auto istream = google::protobuf::io::ArrayInputStream(buffer.data(), 512);
 
-    ASSERT_FALSE(bh.recover(&ss));
+    ASSERT_FALSE(bh.recover(&istream));
     EXPECT_EQ(Status::NotFound, bh.lookup(makeHashKey("key"), value));
 }
 
@@ -449,13 +454,11 @@ TEST(BigHash, BloomFilterRecoveryFail)
     Buffer value;
     EXPECT_EQ(Status::NotFound, bh.lookup(makeHashKey("100"), value));
 
-    std::stringstream ss;
     Buffer buffer(512);
     std::generate(buffer.data(), buffer.data() + buffer.size(), std::minstd_rand());
 
-
-    ss.write(reinterpret_cast<const char *>(buffer.data()), buffer.size());
-    ASSERT_FALSE(bh.recover(&ss));
+    auto istream = google::protobuf::io::ArrayInputStream(buffer.data(), 512);
+    ASSERT_FALSE(bh.recover(&istream));
 
     EXPECT_EQ(Status::NotFound, bh.lookup(makeHashKey("100"), value));
 }
@@ -463,7 +466,7 @@ TEST(BigHash, BloomFilterRecoveryFail)
 TEST(BigHash, BloomFilterRecovery)
 {
     std::unique_ptr<Device> actual;
-    std::stringstream ss;
+    Buffer metadata(1024);
 
     {
         BigHash::Config config;
@@ -478,7 +481,8 @@ TEST(BigHash, BloomFilterRecovery)
         EXPECT_EQ(Status::Ok, bh.insert(makeHashKey("100"), makeView("cat")));
         Buffer value;
         EXPECT_EQ(Status::NotFound, bh.lookup(makeHashKey("200"), value));
-        bh.persist(&ss);
+        auto ostream = google::protobuf::io::ArrayOutputStream(metadata.data(), 1024);
+        bh.persist(&ostream);
 
         actual = device->releaseRealDevice();
     }
@@ -494,7 +498,8 @@ TEST(BigHash, BloomFilterRecovery)
         config.bloom_filters = std::make_unique<BloomFilter>(2, 1, 4);
 
         BigHash bh(std::move(config));
-        ASSERT_TRUE(bh.recover(&ss));
+        auto istream = google::protobuf::io::ArrayInputStream(metadata.data(), 1024);
+        ASSERT_TRUE(bh.recover(&istream));
 
         EXPECT_EQ(Status::NotFound, bh.remove(makeHashKey("200")));
 

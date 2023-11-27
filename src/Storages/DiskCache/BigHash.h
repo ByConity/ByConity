@@ -15,6 +15,7 @@
 #include <Storages/DiskCache/Device.h>
 #include <Storages/DiskCache/HashKey.h>
 #include <Storages/DiskCache/Types.h>
+#include <google/protobuf/io/zero_copy_stream.h>
 #include <Common/SharedMutex.h>
 #include <common/strong_typedef.h>
 #include <common/types.h>
@@ -70,9 +71,9 @@ public:
 
     void reset() override;
 
-    void persist(std::ostream * os) override;
+    void persist(google::protobuf::io::ZeroCopyOutputStream * stream) override;
 
-    bool recover(std::istream * is) override;
+    bool recover(google::protobuf::io::ZeroCopyInputStream * stream) override;
 
     UInt64 getMaxItemSize() const override;
 

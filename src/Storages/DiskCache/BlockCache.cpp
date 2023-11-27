@@ -1,14 +1,18 @@
-#include <Storages/DiskCache/BlockCache.h>
-
 #include <algorithm>
 #include <cmath>
+#include <exception>
 #include <memory>
 #include <random>
 #include <utility>
 #include <math.h>
 
 #include <fmt/core.h>
+#include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/io/zero_copy_stream.h>
+#include <google/protobuf/util/delimited_message_util.h>
 
+#include <Protos/disk_cache.pb.h>
+#include <Storages/DiskCache/BlockCache.h>
 #include <Storages/DiskCache/BlockCacheReinsertionPolicy.h>
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/HashKey.h>
@@ -124,7 +128,8 @@ BlockCache::BlockCache(Config && config) : BlockCache{std::move(config.validate(
 }
 
 BlockCache::BlockCache(Config && config, ValidConfigTag)
-    : num_priorities{config.num_priorities}
+    : serialized_config{serializeConfig(config)}
+    , num_priorities{config.num_priorities}
     , check_expired{std::move(config.check_expired)}
     , destructor_callback{std::move(config.destructor_callback)}
     , checksum_data{config.checksum}
@@ -639,14 +644,71 @@ void BlockCache::reset()
     LOG_INFO(log, "Reset block cache");
     index.reset();
     allocator.reset();
+
+    CurrentMetrics::set(CurrentMetrics::BlockCacheUsedSizeBytes, 0);
+    CurrentMetrics::set(CurrentMetrics::BlockCacheHoleCount, 0);
+    CurrentMetrics::set(CurrentMetrics::BlockCacheHoleBytesTotal, 0);
 }
 
-void BlockCache::persist(std::ostream * /*os*/)
+void BlockCache::persist(google::protobuf::io::ZeroCopyOutputStream * stream)
 {
+    LOG_INFO(log, "Starting block cache persist");
+    Protos::BlockCacheConfig config = serialized_config;
+    config.set_alloc_align_size(alloc_align_size);
+    config.set_hole_count(CurrentMetrics::values[CurrentMetrics::BlockCacheHoleCount].load(std::memory_order_relaxed));
+    config.set_hole_size_total(CurrentMetrics::values[CurrentMetrics::BlockCacheHoleBytesTotal].load(std::memory_order_relaxed));
+    config.set_used_size_bytes(CurrentMetrics::values[CurrentMetrics::BlockCacheUsedSizeBytes].load(std::memory_order_relaxed));
+    config.set_reinsertion_policy_enabled(reinsertion_policy != nullptr);
+    google::protobuf::io::CodedOutputStream ostream(stream);
+    google::protobuf::util::SerializeDelimitedToCodedStream(config, &ostream);
+    region_manager.persist(&ostream);
+    index.persist(&ostream);
+
+    LOG_INFO(log, "Finished block cache persist");
 }
 
-bool BlockCache::recover(std::istream * /*is*/)
+bool BlockCache::recover(google::protobuf::io::ZeroCopyInputStream * stream)
 {
-    return false;
+    LOG_INFO(log, "Starting block cache recovery");
+    reset();
+    try
+    {
+        Protos::BlockCacheConfig config;
+        google::protobuf::io::CodedInputStream istream(stream);
+        google::protobuf::util::ParseDelimitedFromCodedStream(&config, &istream, nullptr);
+
+        if (config.cache_base_offset() != serialized_config.cache_base_offset() || config.cache_size() != serialized_config.cache_size()
+            || config.checksum() != serialized_config.checksum() || config.version() != serialized_config.version()
+            || config.alloc_align_size() != alloc_align_size)
+        {
+            LOG_ERROR(log, "Recovery config: {}", config.DebugString());
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Recovery config does not match cache config");
+        }
+
+        CurrentMetrics::set(CurrentMetrics::BlockCacheHoleCount, config.hole_count());
+        CurrentMetrics::set(CurrentMetrics::BlockCacheHoleBytesTotal, config.hole_size_total());
+        CurrentMetrics::set(CurrentMetrics::BlockCacheUsedSizeBytes, config.used_size_bytes());
+        region_manager.recover(&istream);
+        index.recover(&istream);
+    }
+    catch (const std::exception & e)
+    {
+        LOG_ERROR(log, "Exception: {}", e.what());
+        LOG_ERROR(log, "Failed to recover block cache. Resetting cache.");
+        reset();
+        return false;
+    }
+    LOG_INFO(log, "Finished block cache recovery");
+    return true;
+}
+
+Protos::BlockCacheConfig BlockCache::serializeConfig(const Config & config)
+{
+    Protos::BlockCacheConfig serialized_config;
+    serialized_config.set_cache_base_offset(config.cache_base_offset);
+    serialized_config.set_cache_size(config.cache_size);
+    serialized_config.set_checksum(config.checksum);
+    serialized_config.set_version(kFormatVersion);
+    return serialized_config;
 }
 }

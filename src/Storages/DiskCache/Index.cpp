@@ -4,6 +4,17 @@
 #include <mutex>
 #include <shared_mutex>
 
+#include <google/protobuf/io/coded_stream.h>
+#include <google/protobuf/util/delimited_message_util.h>
+
+#include <Protos/disk_cache.pb.h>
+#include <Common/Exception.h>
+
+namespace DB::ErrorCodes
+{
+extern const int INVALID_CONFIG_PARAMETER;
+}
+
 namespace DB::HybridCache
 {
 namespace
@@ -159,12 +170,46 @@ size_t Index::compuiteSize() const
     return size;
 }
 
-void Index::persist(google::protobuf::io::CodedOutputStream * /*stream*/) const
+void Index::persist(google::protobuf::io::CodedOutputStream * stream) const
 {
+    Protos::IndexBucket bucket;
+    for (UInt32 i = 0; i < kNumBuckets; i++)
+    {
+        bucket.set_bucket_id(i);
+        for (const auto & [key, v] : buckets[i])
+        {
+            auto * entry = bucket.add_entries();
+            entry->set_key(key);
+            entry->set_address(v.address);
+            entry->set_size_hint(v.size_hint);
+            entry->set_total_hits(v.total_hits);
+            entry->set_current_hits(v.current_hits);
+        }
+
+        google::protobuf::util::SerializeDelimitedToCodedStream(bucket, stream);
+        bucket.clear_entries();
+    }
 }
 
-void Index::recover(google::protobuf::io::CodedInputStream * /*stream*/)
+void Index::recover(google::protobuf::io::CodedInputStream * stream)
 {
+    Protos::IndexBucket bucket;
+    for (UInt32 i = 0; i < kNumBuckets; i++)
+    {
+        google::protobuf::util::ParseDelimitedFromCodedStream(&bucket, stream, nullptr);
+        UInt32 id = bucket.bucket_id();
+        if (id >= kNumBuckets)
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "Invalid bucket id. Max buckets: {}, bucket id: {}", kNumBuckets, id);
+
+        for (const auto & entry : bucket.entries())
+        {
+            buckets[id][entry.key()] = ItemRecord{
+                entry.address(),
+                static_cast<UInt16>(entry.size_hint()),
+                static_cast<UInt8>(entry.total_hits()),
+                static_cast<UInt8>(entry.current_hits())};
+        }
+    }
 }
 
 }

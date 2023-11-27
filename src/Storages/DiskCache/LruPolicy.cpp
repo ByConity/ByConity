@@ -2,9 +2,9 @@
 #include <unistd.h>
 
 #include <Storages/DiskCache/LruPolicy.h>
+#include <Storages/DiskCache/Types.h>
 #include <common/chrono_io.h>
 #include <common/logger_useful.h>
-#include <Storages/DiskCache/Types.h>
 
 namespace DB::HybridCache
 {
@@ -122,15 +122,5 @@ void LruPolicy::linkAtTail(UInt32 i)
 size_t LruPolicy::memorySize() const
 {
     return sizeof(*this) + sizeof(ListNode) * array.capacity();
-}
-
-void LruPolicy::persist(google::protobuf::io::CodedOutputStream * /*stream*/) const
-{
-
-}
-
-void LruPolicy::recover(google::protobuf::io::CodedInputStream * /*stream*/)
-{
-    
 }
 }

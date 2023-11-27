@@ -3,6 +3,7 @@
 #include <memory>
 #include <mutex>
 
+#include <Protos/disk_cache.pb.h>
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/Types.h>
 #include <common/defines.h>
@@ -39,6 +40,15 @@ class Region
 {
 public:
     Region(RegionId id, UInt64 region_size_) : region_id{id}, region_size{region_size_} { }
+
+    Region(const Protos::Region & region_, UInt64 region_size_)
+        : region_id{region_.region_id()}
+        , region_size{region_size_}
+        , priority{static_cast<UInt16>(region_.priority())}
+        , last_entry_end_offset{region_.last_entry_end_offset()}
+        , num_items{region_.num_items()}
+    {
+    }
 
     Region(const Region &) = delete;
     Region & operator=(const Region &) = delete;
