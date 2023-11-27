@@ -937,10 +937,33 @@ void MetastoreProxy::removeTransactionRecords(const String & name_space, const s
     BatchCommitRequest batch_write;
     BatchCommitResponse resp;
 
-    for (const auto & txn_id : txn_ids)
-        batch_write.AddDelete(transactionRecordKey(name_space, txn_id.toUInt64()));
+    // Define the maximum byte size per batch.
+    const size_t maxBatchByteSize = 10000000; // 10 million bytes
+    size_t currentBatchByteSize = 0;
 
-    metastore_ptr->batchWrite(batch_write, resp);
+    for (const auto & txn_id : txn_ids) {
+        std::string key = transactionRecordKey(name_space, txn_id.toUInt64());
+        size_t keySize = key.size(); // Get the byte size of the key
+
+        // Check if adding this key would exceed the limit
+        if (currentBatchByteSize + keySize > maxBatchByteSize) {
+            // Commit the current batch if it's not empty
+            if (currentBatchByteSize > 0) {
+                metastore_ptr->batchWrite(batch_write, resp);
+                batch_write.ClearDelete(); // Clear the batch_write for the next batch
+                currentBatchByteSize = 0;
+            }
+        }
+
+        // Add the key to the batch
+        batch_write.AddDelete(key);
+        currentBatchByteSize += keySize;
+    }
+
+    // Don't forget to process the last batch if it's not empty
+    if (currentBatchByteSize > 0) {
+        metastore_ptr->batchWrite(batch_write, resp);
+    }  
 }
 
 String MetastoreProxy::getTransactionRecord(const String & name_space, const UInt64 & txn_id)
