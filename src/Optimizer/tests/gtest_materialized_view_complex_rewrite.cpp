@@ -1310,51 +1310,46 @@ TEST_F(MaterializedViewRewriteComplexTest, DISABLED_testJoinQueryProjectWithBetw
 TEST_F(MaterializedViewRewriteComplexTest, testViewProjectWithBetween)
 {
     sql("select s.time_id, s.time_id between 1 and 3"
-            " from foodmart.sales_fact_1997 as s"
-            " where s.store_id = 1",
+        " from foodmart.sales_fact_1997 as s"
+        " where s.store_id = 1",
         "select s.time_id"
-            " from foodmart.sales_fact_1997 as s"
-            " where s.store_id = 1")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: [time_id]\n"
-                                    "└─ Gather Exchange\n"
-                                    "   └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "            Outputs: [time_id]")
+        " from foodmart.sales_fact_1997 as s"
+        " where s.store_id = 1")
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "         Outputs: [time_id]")
         .ok();
 }
 
 TEST_F(MaterializedViewRewriteComplexTest, testQueryAndViewProjectWithBetween)
 {
     sql("select s.time_id, s.time_id between 1 and 3"
-            " from foodmart.sales_fact_1997 as s"
-            " where s.store_id = 1",
+        " from foodmart.sales_fact_1997 as s"
+        " where s.store_id = 1",
         "select s.time_id between 1 and 3"
-            " from foodmart.sales_fact_1997 as s"
-            " where s.store_id = 1")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: [and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3))]\n"
-                                    "└─ Gather Exchange\n"
-                                    "   └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "            Outputs: and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3)):=and(greaterOrEquals(time_id, 1), lessOrEquals(time_id, 3))")
+        " from foodmart.sales_fact_1997 as s"
+        " where s.store_id = 1")
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "         Outputs: and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, "
+                                    "3)):=and(greaterOrEquals(time_id, 1), lessOrEquals(time_id, 3))")
         .ok();
 }
 
 TEST_F(MaterializedViewRewriteComplexTest, testViewProjectWithMultifieldExpressions)
 {
     sql("select s.time_id, s.time_id >= 1 and s.time_id < 3,"
-            " s.time_id >= 1 or s.time_id < 3, "
-            " s.time_id + s.time_id, "
-            " s.time_id * s.time_id"
-            " from foodmart.sales_fact_1997 as s"
-            " where s.store_id = 1",
+        " s.time_id >= 1 or s.time_id < 3, "
+        " s.time_id + s.time_id, "
+        " s.time_id * s.time_id"
+        " from foodmart.sales_fact_1997 as s"
+        " where s.store_id = 1",
         "select s.time_id"
-            " from foodmart.sales_fact_1997 as s"
-            " where s.store_id = 1")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: [time_id]\n"
-                                    "└─ Gather Exchange\n"
-                                    "   └─ TableScan test_mview.MV0_MV_DATA\n"
-                                    "            Outputs: [time_id]")
+        " from foodmart.sales_fact_1997 as s"
+        " where s.store_id = 1")
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "         Outputs: [time_id]")
         .ok();
 }
 

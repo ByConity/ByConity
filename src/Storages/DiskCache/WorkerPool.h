@@ -12,116 +12,113 @@
 
 namespace DB::HybridCache
 {
-
 using TaskQueue = std::queue<std::function<void()>>;
 
 class WorkerPool
 {
 public:
-    WorkerPool(UInt32 num_workers, TaskQueue task_queue)
-        : num_workers_(num_workers), is_running_(false), task_queue_(std::move(task_queue)), busy_workers_(0)
+    WorkerPool(UInt32 num_workers, TaskQueue task_queue_)
+        : workers_count(num_workers), is_running(false), task_queue(std::move(task_queue_)), busy_workers(0)
     {
     }
 
     ~WorkerPool()
     {
-        std::unique_lock<std::mutex> lock(task_lock_);
-        is_running_ = false;
-        task_cv_.notify_all();
+        std::unique_lock<std::mutex> lock(task_lock);
+        is_running = false;
+        task_cv.notify_all();
         lock.unlock();
-        for (auto & thread : workers_)
+        for (auto & thread : workers)
             thread.join();
     }
 
     void startup()
     {
         {
-            std::lock_guard lock(task_lock_);
-            is_running_ = true;
+            std::lock_guard lock(task_lock);
+            is_running = true;
         }
 
-        while (workers_.size() < num_workers_)
-        {
+        while (workers.size() < workers_count)
             addThread();
-        }
 
-        if (workers_.size() > num_workers_)
-            workers_.resize(num_workers_);
+        if (workers.size() > workers_count)
+            workers.resize(workers_count);
     }
 
     void shutdown()
     {
         {
-            std::lock_guard<std::mutex> lock(task_lock_);
-            is_running_ = false;
+            std::lock_guard<std::mutex> lock(task_lock);
+            is_running = false;
         }
 
-        task_cv_.notify_all();
-        for (auto & worker : workers_)
+        task_cv.notify_all();
+        for (auto & worker : workers)
             worker.join();
 
-        workers_.clear();
+        workers.clear();
     }
 
     template <typename F>
     void submitTask(const F & func)
     {
         {
-            std::lock_guard<std::mutex> lock(task_lock_);
-            task_queue_.emplace(std::move(func));
+            std::lock_guard<std::mutex> lock(task_lock);
+            task_queue.emplace(std::move(func));
         }
-        task_cv_.notify_one();
+        task_cv.notify_one();
     }
 
     void waitUntilAllFinished()
     {
-        std::unique_lock<std::mutex> lock(task_lock_);
-        finished_cv_.wait(lock, [&] { return busy_workers_ == 0 && task_queue_.empty(); });
+        std::unique_lock<std::mutex> lock(task_lock);
+        finished_cv.wait(lock, [&] { return busy_workers == 0 && task_queue.empty(); });
     }
 
-    UInt32 numWorkers() const { return num_workers_; }
+    UInt32 numWorkers() const { return workers_count; }
 
-    void setNumWorkers(UInt32 num) { num_workers_ = num; }
+    void setNumWorkers(UInt32 num) { workers_count = num; }
 
 private:
-    std::vector<std::thread> workers_;
-    UInt32 num_workers_;
-    bool is_running_;
+    std::vector<std::thread> workers;
+    UInt32 workers_count;
+    bool is_running;
 
-    TaskQueue task_queue_;
+    TaskQueue task_queue;
 
-    UInt32 busy_workers_;
+    UInt32 busy_workers;
 
-    std::mutex task_lock_;
+    std::mutex task_lock;
 
-    std::condition_variable task_cv_;
-    std::condition_variable finished_cv_;
+    std::condition_variable task_cv;
+    std::condition_variable finished_cv;
 
     void addThread()
     {
-        workers_.emplace_back([this] {
+        workers.emplace_back([this] {
             std::function<void(void)> task;
 
             while (true)
             {
                 {
-                    std::unique_lock<std::mutex> lock(task_lock_);
-                    task_cv_.wait(lock, [&] { return !is_running_ || !task_queue_.empty(); });
-                    if (!is_running_)
+                    std::unique_lock<std::mutex> lock(task_lock);
+                    task_cv.wait(lock, [&] { return !is_running || !task_queue.empty(); });
+                    if (!is_running)
                         return;
 
-                    task = std::move(task_queue_.front());
-                    task_queue_.pop();
-                    ++busy_workers_;
+                    task = std::move(task_queue.front());
+                    task_queue.pop();
+                    ++busy_workers;
                 }
 
                 task();
                 {
-                    std::lock_guard<std::mutex> lock(task_lock_);
-                    --busy_workers_;
+                    std::lock_guard<std::mutex> lock(task_lock);
+                    --busy_workers;
                 }
 
-                finished_cv_.notify_one();
+                finished_cv.notify_one();
             }
         });
     }

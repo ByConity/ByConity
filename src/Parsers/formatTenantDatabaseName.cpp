@@ -74,7 +74,8 @@ static bool isInternalDatabaseName(const String & database_name)
 static String formatTenantDatabaseNameImpl(const String & database_name, char separator = '.')
 {
     auto tenant_id = getTenantId();
-    if (!tenant_id.empty() && !isInternalDatabaseName(database_name) && database_name.find(tenant_id) != 0)
+    if (!tenant_id.empty() && !isInternalDatabaseName(database_name) && 
+        (database_name.find(tenant_id) != 0 || database_name.size() == tenant_id.size() || database_name[tenant_id.size()] != separator))
     {
         String result = tenant_id;
         result += separator;
@@ -88,7 +89,8 @@ static String formatTenantDatabaseNameImpl(const String & database_name, char se
 static String formatTenantUserNameImpl(const String & user_name, char separator = '`')
 {
     auto tenant_id = getTenantId();
-    if (!tenant_id.empty() && user_name.find(tenant_id) != 0)
+    if (!tenant_id.empty() && user_name.find(tenant_id) != 0 && 
+        (user_name.find(tenant_id) != 0 || user_name.size() == tenant_id.size() || user_name[tenant_id.size()] != separator))
     {
         String result = tenant_id;
         result += separator;

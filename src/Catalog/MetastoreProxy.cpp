@@ -350,6 +350,15 @@ void MetastoreProxy::updateTable(const String & name_space, const String & table
     metastore_ptr->put(tableStoreKey(name_space, table_uuid, ts), table_info_new);
 }
 
+void MetastoreProxy::updateTableWithID(const String & name_space, const Protos::TableIdentifier & table_id, const DB::Protos::DataModelTable & table_data)
+{
+    BatchCommitRequest batch_write;
+    batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, table_id.database(), table_id.name()), table_id.SerializeAsString()));
+    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, table_id.uuid(), table_data.commit_time()), table_data.SerializeAsString()));
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
+}
+
 void MetastoreProxy::getTableByUUID(const String & name_space, const String & table_uuid, Strings & tables_info)
 {
     auto it = metastore_ptr->getByPrefix(tableStorePrefix(name_space, table_uuid));
@@ -928,10 +937,33 @@ void MetastoreProxy::removeTransactionRecords(const String & name_space, const s
     BatchCommitRequest batch_write;
     BatchCommitResponse resp;
 
-    for (const auto & txn_id : txn_ids)
-        batch_write.AddDelete(transactionRecordKey(name_space, txn_id.toUInt64()));
+    // Define the maximum byte size per batch.
+    const size_t maxBatchByteSize = 10000000; // 10 million bytes
+    size_t currentBatchByteSize = 0;
 
-    metastore_ptr->batchWrite(batch_write, resp);
+    for (const auto & txn_id : txn_ids) {
+        std::string key = transactionRecordKey(name_space, txn_id.toUInt64());
+        size_t keySize = key.size(); // Get the byte size of the key
+
+        // Check if adding this key would exceed the limit
+        if (currentBatchByteSize + keySize > maxBatchByteSize) {
+            // Commit the current batch if it's not empty
+            if (currentBatchByteSize > 0) {
+                metastore_ptr->batchWrite(batch_write, resp);
+                batch_write.ClearDelete(); // Clear the batch_write for the next batch
+                currentBatchByteSize = 0;
+            }
+        }
+
+        // Add the key to the batch
+        batch_write.AddDelete(key);
+        currentBatchByteSize += keySize;
+    }
+
+    // Don't forget to process the last batch if it's not empty
+    if (currentBatchByteSize > 0) {
+        metastore_ptr->batchWrite(batch_write, resp);
+    }  
 }
 
 String MetastoreProxy::getTransactionRecord(const String & name_space, const UInt64 & txn_id)

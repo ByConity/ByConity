@@ -6,13 +6,13 @@
       item,
       date_dim
  where sr_item_sk = i_item_sk
- and   d_date    in
-	(select d_date
-	from date_dim
-	where d_week_seq in
-		(select d_week_seq
-		from date_dim
-	  where d_date in ('2000-11-17','2000-09-27','2000-06-30')))
+ and   d_date    in 
+ (select d_date
+ from date_dim
+ where d_week_seq in 
+  (select d_week_seq
+  from date_dim
+   where d_date in ('2000-11-17','2000-09-27','2000-06-30')))
  and   sr_returned_date_sk   = d_date_sk
  group by i_item_id),
  cr_items as
@@ -22,13 +22,13 @@
       item,
       date_dim
  where cr_item_sk = i_item_sk
- and   d_date    in
-	(select d_date
-	from date_dim
-	where d_week_seq in
-		(select d_week_seq
-		from date_dim
-	  where d_date in ('2000-11-17','2000-09-27','2000-06-30')))
+ and   d_date    in 
+ (select d_date
+ from date_dim
+ where d_week_seq in 
+  (select d_week_seq
+  from date_dim
+   where d_date in ('2000-11-17','2000-09-27','2000-06-30')))
  and   cr_returned_date_sk   = d_date_sk
  group by i_item_id),
  wr_items as
@@ -38,13 +38,13 @@
       item,
       date_dim
  where wr_item_sk = i_item_sk
- and   d_date    in
-	(select d_date
-	from date_dim
-	where d_week_seq in
-		(select d_week_seq
-		from date_dim
-		where d_date in ('2000-11-17','2000-09-27','2000-06-30')))
+ and   d_date    in 
+ (select d_date
+ from date_dim
+ where d_week_seq in 
+  (select d_week_seq
+  from date_dim
+  where d_date in ('2000-11-17','2000-09-27','2000-06-30')))
  and   wr_returned_date_sk   = d_date_sk
  group by i_item_id)
  select sr_items.item_id

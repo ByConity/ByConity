@@ -19,7 +19,7 @@
 #include <string>
 #include <thread>
 #include <gtest/gtest.h>
-#include <Storages/DiskCache/BucketLRUCache.h>
+#include <Common/BucketLRUCache.h>
 
 using namespace DB;
 

@@ -153,6 +153,9 @@ MergeTreeMetaBase::MergeTreeMetaBase(
             throw Exception("Partition key has type " + partition_key_type->getName() + ", can't be used as version", ErrorCodes::BAD_ARGUMENTS);
     }
 
+    if (metadata_.hasUniqueKey() && !attach_)
+        checkVersionColumnConstraint();
+
     parseAndCheckForBitEngine();
 
     if (metadata_.sampling_key.definition_ast != nullptr)
@@ -1334,6 +1337,20 @@ MergeTreeMetaBase::DataPartPtr MergeTreeMetaBase::getAnyPartInPartition(
     //     return *it;
 
     return nullptr;
+}
+
+void MergeTreeMetaBase::checkVersionColumnConstraint()
+{
+    if (merging_params.partitionValueAsVersion())
+    {
+        auto partition_types = getInMemoryMetadataPtr()->partition_key.sample_block.getDataTypes();
+        if (partition_types.size() >= 1)
+        {
+            auto & type = partition_types[0];
+            if (TypeIndex::UInt64 < type->getTypeId() && type->getTypeId() <= TypeIndex::Int256)
+                throw Exception(ErrorCodes::BAD_ARGUMENTS, "The type of version column is {}, it is not compatible with UInt64", type->getName());
+        }
+    }
 }
 
 void MergeTreeMetaBase::MergingParams::check(const StorageInMemoryMetadata & metadata, bool has_unique_key) const

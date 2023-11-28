@@ -1,0 +1,17 @@
+-- { echo }
+EXPLAIN SELECT range(5);
+Projection Est. 1 rows, cost 1.480000e-01
+│     Expressions: range(5):=[0, 1, 2, 3, 4]
+└─ Values Est. 1 rows, cost 7.400000e-02
+EXPLAIN SELECT range(5000);
+Projection Est. 1 rows, cost 1.480000e-01
+│     Expressions: range(5000):=range(5000)
+└─ Values Est. 1 rows, cost 7.400000e-02
+EXPLAIN SELECT length(range(5000));
+Projection Est. 1 rows, cost 1.480000e-01
+│     Expressions: length(range(5000)):=cast(5000, \'UInt64\')
+└─ Values Est. 1 rows, cost 7.400000e-02
+EXPLAIN SELECT range(2000 + 3000);
+Projection Est. 1 rows, cost 1.480000e-01
+│     Expressions: range(plus(2000, 3000)):=range(cast(5000, \'UInt32\'))
+└─ Values Est. 1 rows, cost 7.400000e-02

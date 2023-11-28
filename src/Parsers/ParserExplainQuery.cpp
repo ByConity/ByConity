@@ -75,6 +75,8 @@ bool ParserExplainQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
         {
             if (s_distributed.ignore(pos, expected))
                 kind = ASTExplainQuery::ExplainKind::DistributedAnalyze;
+            else if (s_pipeline.ignore(pos, expected))
+                kind = ASTExplainQuery::ExplainKind::PipelineAnalyze;
             else
                 kind = ASTExplainQuery::ExplainKind::LogicalAnalyze;
         }

@@ -46,4 +46,6 @@ UInt64 setInActive(const UInt64 & status, const bool is_active)
 
 bool isInActive(const UInt64 & status) { return status & STATUS_INACTIVE; }
 
+
+bool isVisible(const UInt64 status) { return !(status & (STATUS_DELETE | STATUS_DETACH)); }
 }

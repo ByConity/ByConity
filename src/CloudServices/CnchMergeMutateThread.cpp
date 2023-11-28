@@ -62,7 +62,30 @@ namespace
     constexpr auto max_mutate_part_num = 100UL;
     constexpr auto max_mutate_part_size = 20UL * 1024 * 1024 * 1024; // 20GB
 
-    ServerCanMergeCallback getMergePred(const NameSet & merging_mutating_parts_snapshot)
+    bool needMutate(const ServerDataPartPtr & part, const TxnTimestamp & commit_ts, bool change_schema)
+    {
+        /// Some mutation commands (@see MutationCommands::changeSchema()) will not change the table schema
+        /// which means it will not update columns_commit_time. To track those mutation commands,
+        /// we add a new field `mutation_commit_time` in part metadata. And it's set to 0 for a new part by default.
+        /// To check whether a part `p` need to do a mutation `m`.
+        /// if (m change schema): check p.columns_commit_time < m.commit_time.
+        /// if (m not change schema): check p.mutation_commit_time < m.commit_time and p.min_block < m.commit_time.
+        /// As mutation_commit_time is 0 by default, we need use part's min_block when mutation_commit_time is 0.
+        if (change_schema)
+            return part->getColumnsCommitTime() < commit_ts;
+        else
+            return part->getMutationCommitTime() < commit_ts && static_cast<UInt64>(part->info().min_block) < commit_ts;
+    }
+
+    TxnTimestamp getFirstMutation(const ServerDataPartPtr & part, const std::vector<std::pair<TxnTimestamp, bool>> & mutations)
+    {
+        for (const auto & [commit_time, change_schema] : mutations)
+            if (needMutate(part, commit_time, change_schema))
+                return commit_time;
+        return TxnTimestamp::maxTS();
+    }
+
+    ServerCanMergeCallback getMergePred(const NameSet & merging_mutating_parts_snapshot, const std::vector<std::pair<TxnTimestamp, bool>> & mutations)
     {
         return [&](const ServerDataPartPtr & lhs, const ServerDataPartPtr & rhs) -> bool
         {
@@ -74,7 +97,6 @@ namespace
 
             auto lhs_columns_commit_time = lhs->getColumnsCommitTime();
             auto rhs_columns_commit_time = rhs->getColumnsCommitTime();
-
             /// We can't find the right table_schema for parts which column_commit_time = 0
             if (!lhs_columns_commit_time || !rhs_columns_commit_time)
                 return false;
@@ -87,12 +109,26 @@ namespace
 
             /// We can't merge part part_1 and part_2 between T2 and T3 as their columns_commit_time are different.
             /// We can merge part_1 and part_2 after T3 as their columns_commit_time both are b.
+            if (lhs_columns_commit_time != rhs_columns_commit_time)
+                return false;
 
             /// The same as above for mutation_commit_time.
             auto lhs_mutation_commit_time = lhs->getMutationCommitTime();
             auto rhs_mutation_commit_time = rhs->getMutationCommitTime();
+            if (lhs_mutation_commit_time != rhs_mutation_commit_time)
+                return false;
 
-            return lhs_mutation_commit_time == rhs_mutation_commit_time;
+            /// Consider this case:
+            ///     T0: create table                                       | table columns_commit_time: a
+            ///     T1: commit part_1                                      | part_1 columns_commit_time: a, mutation_commit_time: 0
+            ///     T2: alter table (not change schema): mutation_1        | not update columns_commit_time
+            ///     T3: commit part_2                                      | part_2 columns_commit_time: a, mutation_commit_time: 0
+            /// part_1 and part_2 have the same columns_commit_time and mutation_commit_time.
+            /// But obviously we should not merge part_1 and part_2. part_1's next mutation is mutation_1 which is invisible for part_2.
+            /// In a word, the first needed mutation for parts should be the same.
+            auto lhs_first_mutation = getFirstMutation(lhs, mutations);
+            auto rhs_first_mutation = getFirstMutation(rhs, mutations);
+            return lhs_first_mutation == rhs_first_mutation;
         };
     }
 }
@@ -572,19 +608,25 @@ bool CnchMergeMutateThread::tryMergeParts(StoragePtr & istorage, StorageCnchMerg
 
 bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, StorageCnchMergeTree & storage, MergeSelectionMetrics & metrics)
 {
+    /// 6 steps of selecting parts to merge. (the order is important)
+    /// 1. copy currently_merging_mutating_parts (do it before getting parts to avoid removing parts after we get a part list).
+    /// 2. get parts & calculate visible parts.
+    /// 3. get mutation list (do it after getting parts to make sure we capture all mutations of those parts).
+    /// 4. create merge predicate based on merging_mutating_parts_snapshot and mutation list.
+    /// 5. do selecting based on merge predicate.
+    /// 6. push tasks to pending queue.
     auto storage_settings = storage.getSettings();
-    const bool enable_batch_select = storage_settings->cnch_merge_enable_batch_select;
 
     SCOPE_EXIT(if (metrics.totalElapsed() >= 200 * 1000) {
         LOG_DEBUG(log, "trySelectPartsToMerge digest: {}", metrics.toDebugString());
     });
 
     /// Step 1: copy currently_merging_mutating_parts
-    /// Must do it before getting data parts so that the copy won't change during selection
+    /// Must do it before getting data parts so that the copy won't change during selection.
     /// Because we can accept stale data parts but cannot accept stale merging_mutating_parts
     auto merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
 
-    /// Step 2: get parts & calc visible parts
+    /// Step 2: get parts & calculate visible parts.
     Stopwatch watch;
     ServerDataPartsVector data_parts;
 
@@ -635,6 +677,14 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
         return false;
     }
 
+    /// Step 3: get mutation list
+    /// We need to find the first mutation in the mutation list for each part, and compare mutation versions in the merge predicate.
+    std::map<TxnTimestamp, CnchMergeTreeMutationEntry> mutation_entries;
+    std::vector<std::pair<TxnTimestamp, bool>> mutation_timestamps;
+    catalog->fillMutationsByStorage(storage_id, mutation_entries);
+    for (const auto & [_, mutation_entry] : mutation_entries)
+        mutation_timestamps.emplace_back(mutation_entry.commit_time, mutation_entry.commands.changeSchema());
+
     /// Calc merge parts
     /// visible_parts = calcServerMergeParts(storage, visible_parts, partitions_from_cache);
     /// metrics.elapsed_calc_merge_parts = watch.elapsedMicroseconds();
@@ -671,13 +721,15 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
     }
     metrics.num_legal_visible_parts = visible_parts.size();
 
-    /// Step 3: selection
+    /// Step 5: do selecting.
+    const bool enable_batch_select = storage_settings->cnch_merge_enable_batch_select;
     std::vector<ServerDataPartsVector> res;
     [[maybe_unused]] auto decision = selectPartsToMerge(
         storage,
         res,
         visible_parts,
-        getMergePred(merging_mutating_parts_snapshot),
+        /// Step 4: create merge predicate
+        getMergePred(merging_mutating_parts_snapshot, mutation_timestamps),
         max_bytes,
         false, /// aggressive
         enable_batch_select,
@@ -696,7 +748,7 @@ bool CnchMergeMutateThread::trySelectPartsToMerge(StoragePtr & istorage, Storage
         return false;
     }
 
-    /// Step 4: Save to pending queue
+    /// Step 6: push tasks to pending queue
     std::unordered_set<String> postpone_partitions(partitions.begin(), partitions.end());
     for (auto & selected_parts : res)
     {
@@ -903,12 +955,14 @@ String CnchMergeMutateThread::triggerPartMerge(
 
     std::lock_guard lock(try_merge_parts_mutex);
 
+    /// Step 1: copy currently_merging_mutating_parts
     NameSet merging_mutating_parts_snapshot;
     merging_mutating_parts_snapshot = copyCurrentlyMergingMutatingParts();
 
     if (try_select)
         LOG_TRACE(log, fmt::format("merging_mutating_parts:\n{}", fmt::join(merging_mutating_parts_snapshot, "\n")));
 
+    /// Step 2: get parts & calculate visible parts.
     ServerDataPartsVector data_parts;
     if (partition_id.empty() || partition_id == "all")
         data_parts = catalog->getAllServerDataParts(istorage, local_context->getTimestamp(), nullptr);
@@ -922,6 +976,13 @@ String CnchMergeMutateThread::triggerPartMerge(
         LOG_DEBUG(log, "triggerPartMerge(): size of visible_parts <= 1");
         return {};
     }
+    
+    /// Step 3: get mutation list
+    std::map<TxnTimestamp, CnchMergeTreeMutationEntry> mutation_entries;
+    std::vector<std::pair<TxnTimestamp, bool>> mutation_timestamps;
+    catalog->fillMutationsByStorage(storage_id, mutation_entries);
+    for (const auto & [_, mutation_entry] : mutation_entries)
+        mutation_timestamps.emplace_back(mutation_entry.commit_time, mutation_entry.commands.changeSchema());
 
     auto & storage = checkAndGetCnchTable(istorage);
     auto storage_settings = storage.getSettings();
@@ -945,13 +1006,14 @@ String CnchMergeMutateThread::triggerPartMerge(
         );
     }
 
-
+    /// Step 5: do selecting
     std::vector<ServerDataPartsVector> res;
     [[maybe_unused]] auto decision = selectPartsToMerge(
         storage,
         res,
         visible_parts,
-        getMergePred(merging_mutating_parts_snapshot),
+        /// Step 4: create merge predicate
+        getMergePred(merging_mutating_parts_snapshot, mutation_timestamps),
         storage_settings->max_bytes_to_merge_at_max_space_in_pool,
         aggressive, /// aggressive
         false, /// enable_batch_select
@@ -1043,6 +1105,8 @@ void CnchMergeMutateThread::finishTask(const String & task_id, const MergeTreeDa
         if (it == task_records.end())
             throw Exception(ErrorCodes::ABORTED, "Task {} not found in this node.", task_id);
         removeTaskImpl(task_id, lock, &curr_task);
+        if (!curr_task)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Failed to move task {} ", task_id);
     }
 
     if (local_context->getRootConfig().debug_disable_merge_commit.safeGet())
@@ -1174,15 +1238,6 @@ void CnchMergeMutateThread::calcMutationPartitions(CnchMergeTreeMutationEntry & 
         mutate_entry.setPartitionIDs(catalog->getPartitionIDs(istorage, nullptr));
 }
 
-static bool needMutate(const ServerDataPartPtr & part, const TxnTimestamp & commit_ts)
-{
-    /// We wouldn't commit new storage version for BUILD_BITMAP, MATERIALIZED_INDEX, CLEAR_MAP_KEY command
-    /// so we use mutation_commit_time to check whether the part already has executed this alter command.
-    /// And to avoid mutating new parts after the mutation, we need to check the part's min_block.
-    return part->getColumnsCommitTime() < commit_ts
-        && part->getMutationCommitTime() < commit_ts
-        && static_cast<UInt64>(part->info().min_block) < commit_ts;
-}
 
 /// Mutate
 /// There are 3 steps in the main schedule loop:
@@ -1224,6 +1279,8 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
     if (current_mutate_entry->isReclusterMutation() && !getContext()->getTableReclusterTaskStatus(storage_id))
         return false;
 
+    bool change_schema = current_mutate_entry->commands.changeSchema();
+
     /// Function to generating new tasks. Return true if we can still generate new tasks.
     auto generate_tasks = [&](const ServerDataPartsVector & visible_parts, const NameSet & snapshot)
     {
@@ -1261,7 +1318,7 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
         {
             for (const auto & part : visible_parts)
             {
-                if (!needMutate(part, commit_ts))
+                if (!needMutate(part, commit_ts, change_schema))
                     continue;
 
                 if (snapshot.count(part->name()))
@@ -1319,12 +1376,12 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
         const auto & commit_ts = current_mutate_entry->commit_time;
         for (const auto & part : visible_parts)
         {
-            if (needMutate(part, commit_ts))
+            if (needMutate(part, commit_ts, change_schema))
                 return false;
         }
         for (const auto & part : visible_staged_parts)
         {
-            if (needMutate(part, commit_ts))
+            if (needMutate(part, commit_ts, change_schema))
                 return false;
         }
         return true;
@@ -1334,6 +1391,7 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
     bool is_finish = true;
     bool is_recluster_partition_finish = false;
 
+    auto timestamp = getContext()->getTimestamp();
     if (storage.getInMemoryMetadataPtr()->getPartitionKeyAST())
     {
         calcMutationPartitions(*current_mutate_entry, istorage, storage);
@@ -1348,7 +1406,6 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
             if (finish_mutation_partitions.find(partition_id) != finish_mutation_partitions.end())
                 continue;
 
-            auto timestamp = getContext()->getTimestamp();
             auto parts = catalog->getServerDataPartsInPartitions(istorage, {partition_id}, timestamp, nullptr);
             auto visible_parts = CnchPartsHelper::calcVisibleParts(parts, false);
 
@@ -1389,27 +1446,25 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
     else
     {
         /// We don't maintain finish_mutation_partitions/scheduled_mutation_partitions for tables without partition key.
-        auto snapshot = copyCurrentlyMergingMutatingParts();
-        auto parts = catalog->getAllServerDataParts(istorage, getContext()->getTimestamp(), nullptr);
+        auto parts = catalog->getAllServerDataParts(istorage, timestamp, nullptr);
         auto visible_parts = CnchPartsHelper::calcVisibleParts(parts, false);
 
         /// There is still new pending tasks, then no need to do check_all_done (just submit new tasks and go into next round).
-        if (generate_tasks(visible_parts, snapshot))
+        if (generate_tasks(visible_parts, merging_mutating_parts_snapshot))
         {
             is_finish = false;
         }
         else
         {
             /// All tasks are scheduled, now we can do check_all_done.
-            auto ts = getContext()->getTimestamp();
-            auto current_parts = catalog->getAllServerDataParts(istorage, ts, nullptr);
+            auto current_parts = catalog->getAllServerDataParts(istorage, timestamp, nullptr);
             auto current_visible_parts = CnchPartsHelper::calcVisibleParts(current_parts, false);
             ServerDataPartsVector current_visible_staged_parts;
             if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
             {
                 auto staged_parts = createServerPartsFromDataParts(
                     storage,
-                    catalog->getStagedParts(istorage, ts));
+                    catalog->getStagedParts(istorage, timestamp));
                 current_visible_staged_parts = CnchPartsHelper::calcVisibleParts(staged_parts, false);
             }
 
@@ -1472,10 +1527,11 @@ MergeTreeMutationStatusVector CnchMergeMutateThread::getAllMutationStatuses()
 
         calcMutationPartitions(entry, istorage, storage);
         auto & partitions = entry.partition_ids.value();
+        bool change_schema = entry.commands.changeSchema();
         for (auto & part : visible_parts)
         {
             bool partition_match = std::find(partitions.begin(), partitions.end(), part->info().partition_id) != partitions.end();
-            if (partition_match && needMutate(part, commit_ts))
+            if (partition_match && needMutate(part, commit_ts, change_schema))
                 ++status.parts_to_do;
         }
 
@@ -1496,6 +1552,8 @@ MergeTreeMutationStatusVector CnchMergeMutateThread::getAllMutationStatuses()
 void CnchMergeMutateThread::removeMutationEntryFromKV(const CnchMergeTreeMutationEntry & entry, bool recluster_finish, std::lock_guard<std::mutex> &)
 {
     const auto & commit_time = entry.commit_time;
+    /// FIXME: (zuochuang.zema) buggy: we don't touch active timestamp for insertion,
+    ///   so the mutation_entry may be deleted before T4.
     /// When is mutation allowed to be deleted?
     /// Consider the following case:
     ///     T1: Insert part_1(invisible, using metadata in T1).

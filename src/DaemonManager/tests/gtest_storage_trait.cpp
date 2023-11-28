@@ -81,5 +81,38 @@ SETTINGS region = 'S3_REGION', endpoint = 'S3_ENDPOINT', ak_id = 'S3_ACCESS_KEY'
 
     EXPECT_EQ(storage_trait, expected_result);
 }
+
+TEST(StorageTraitTest, isCnchMergeTreeOrKafkaTest)
+{
+    {
+        String engine_name{"CnchAggregatingMergeTree"};
+        EXPECT_TRUE(isCnchMergeTreeOrKafka(engine_name));
+    }
+
+    {
+        String engine_name{"CnchVersionedCollapsingMergeTree"};
+        EXPECT_TRUE(isCnchMergeTreeOrKafka(engine_name));
+    }
+
+    {
+        String engine_name{"CnchKafka"};
+        EXPECT_TRUE(isCnchMergeTreeOrKafka(engine_name));
+    }
+
+    {
+        String engine_name{"CnchHive"};
+        EXPECT_FALSE(isCnchMergeTreeOrKafka(engine_name));
+    }
+
+    {
+        String engine_name{"CnchS3"};
+        EXPECT_FALSE(isCnchMergeTreeOrKafka(engine_name));
+    }
+
+    {
+        String engine_name{"AggregatingMergeTree"};
+        EXPECT_FALSE(isCnchMergeTreeOrKafka(engine_name));
+    }
+}
 } // end namespace
 

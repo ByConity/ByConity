@@ -41,6 +41,7 @@ public:
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
     void formatImplMultiline(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const;
+    void appendColumnName(WriteBuffer &) const override;
 
     char separator;
 

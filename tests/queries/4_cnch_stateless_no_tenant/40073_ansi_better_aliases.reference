@@ -1,0 +1,74 @@
+-- { echo }
+
+-- regular alias
+
+EXPLAIN SELECT a + 1 AS p, count() AS cnt FROM t40073_ansi_alias GROUP BY p;
+Projection Est. ? rows
+│     Expressions: cnt:=`expr#count()`, p:=`expr#plus(a, 1)`
+└─ Gather Exchange Est. ? rows
+   └─ MergingAggregated Est. ? rows
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#plus(a, 1)}
+         └─ Aggregating Est. ? rows
+            │     Group by: {expr#plus(a, 1)}
+            │     Aggregates: expr#count():=AggNull(count)()
+            └─ Projection Est. ? rows
+               │     Expressions: expr#plus(a, 1):=a + 1
+               └─ TableScan default.t40073_ansi_alias Est. ? rows
+                        Outputs: [a]
+SELECT a + 1 AS p, count() AS cnt FROM t40073_ansi_alias GROUP BY p ORDER BY p;
+1	1
+2	1
+3	1
+-- alias in prewhere
+
+EXPLAIN SELECT a + 1 AS p FROM t40073_ansi_alias PREWHERE p > 1;
+Projection Est. ? rows
+│     Expressions: p:=a + 1
+└─ Gather Exchange Est. ? rows
+   └─ TableScan default.t40073_ansi_alias Est. ? rows
+            Prewhere: (a + 1) > 1
+            Outputs: [a]
+SELECT a + 1 AS p FROM t40073_ansi_alias PREWHERE p > 1 ORDER BY p;
+2
+3
+-- prefer source column
+
+EXPLAIN SELECT a + 1 AS a FROM t40073_ansi_alias WHERE a > 1;
+Projection Est. ? rows
+│     Expressions: a:=a + 1
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: a > 1
+      └─ TableScan default.t40073_ansi_alias Est. ? rows
+               Where: a > 1
+               Outputs: [a]
+SELECT a + 1 AS a FROM t40073_ansi_alias WHERE a > 1 ORDER BY a;
+3
+EXPLAIN SELECT a + 1 AS a FROM t40073_ansi_alias PREWHERE a > 1;
+Projection Est. ? rows
+│     Expressions: a:=a + 1
+└─ Gather Exchange Est. ? rows
+   └─ TableScan default.t40073_ansi_alias Est. ? rows
+            Prewhere: a > 1
+            Outputs: [a]
+SELECT a + 1 AS a FROM t40073_ansi_alias PREWHERE a > 1 ORDER BY a;
+3
+-- prefer source column ignoring ORDER BY
+
+EXPLAIN SELECT -a AS a, b FROM t40073_ansi_alias ORDER BY a ASC;
+Projection Est. ? rows
+│     Expressions: [b], a:=`expr#negate(a)`
+└─ Sorting Est. ? rows
+   │     Order by: {expr#negate(a) ASC NULLS LAST}
+   └─ Gather Exchange Est. ? rows
+      └─ Sorting Est. ? rows
+         │     Order by: {expr#negate(a) ASC NULLS LAST}
+         └─ Projection Est. ? rows
+            │     Expressions: [b], expr#negate(a):=-a
+            └─ TableScan default.t40073_ansi_alias Est. ? rows
+                     Outputs: [a, b]
+SELECT -a AS a, b FROM t40073_ansi_alias ORDER BY a ASC;
+-2	2
+-1	1
+0	0

@@ -128,11 +128,8 @@ public:
      *
      * !! Caution: expression will be modified in these cases: `untuple` function
      */
-    static DataTypePtr analyze(ASTPtr expression,
-                               ScopePtr scope,
-                               ContextMutablePtr context,
-                               Analysis & analysis,
-                               ExprAnalyzerOptions options = ExprAnalyzerOptions {});
+    static DataTypePtr analyze(
+        ASTPtr expression, ScopePtr scope, ContextPtr context, Analysis & analysis, ExprAnalyzerOptions options = ExprAnalyzerOptions{});
 };
 
 }

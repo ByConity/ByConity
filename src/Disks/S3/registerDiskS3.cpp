@@ -33,6 +33,7 @@
 
 #include <aws/core/client/DefaultRetryStrategy.h> // Y_IGNORE
 #include <IO/S3Common.h>
+#include <IO/S3/AWSOptionsConfig.h>
 #include "DiskS3.h"
 #include "Disks/DiskCacheWrapper.h"
 #include "Storages/StorageS3Settings.h"
@@ -134,7 +135,7 @@ std::shared_ptr<S3::ProxyConfiguration> getProxyConfiguration(const String & pre
 std::shared_ptr<Aws::S3::S3Client>
 getClient(const Poco::Util::AbstractConfiguration & config, const String & config_prefix, ContextPtr context)
 {
-    S3::PocoHTTPClientConfiguration client_configuration = S3::ClientFactory::instance().createClientConfiguration(
+    std::shared_ptr<Aws::Client::ClientConfiguration> client_configuration = S3::ClientFactory::instance().createClientConfiguration(
         config.getString(config_prefix + ".region", ""),
         context->getRemoteHostFilter(), context->getGlobalContext()->getSettingsRef().s3_max_redirects,
         config.getUInt(config_prefix + ".http_keep_alive_timeout_ms", 5000),
@@ -144,17 +145,20 @@ getClient(const Poco::Util::AbstractConfiguration & config, const String & confi
     if (uri.key.back() != '/')
         throw Exception("S3 path must ends with '/', but '" + uri.key + "' doesn't.", ErrorCodes::BAD_ARGUMENTS);
 
-    client_configuration.connectTimeoutMs = config.getUInt(config_prefix + ".connect_timeout_ms", 10000);
-    client_configuration.requestTimeoutMs = config.getUInt(config_prefix + ".request_timeout_ms", 5000);
-    client_configuration.maxConnections = config.getUInt(config_prefix + ".max_connections", 100);
-    client_configuration.endpointOverride = uri.endpoint;
+    client_configuration->connectTimeoutMs = config.getUInt(config_prefix + ".connect_timeout_ms", 10000);
+    client_configuration->requestTimeoutMs = config.getUInt(config_prefix + ".request_timeout_ms", 5000);
+    client_configuration->maxConnections = config.getUInt(config_prefix + ".max_connections", 100);
+    client_configuration->endpointOverride = uri.endpoint;
 
     auto proxy_config = getProxyConfiguration(config_prefix, config);
-    if (proxy_config)
-        client_configuration.perRequestConfiguration
+    if (proxy_config && !DB::S3::AWSOptionsConfig::instance().use_crt_http_client) {
+        std::shared_ptr<DB::S3::PocoHTTPClientConfiguration> poco_config =
+            std::static_pointer_cast<DB::S3::PocoHTTPClientConfiguration>(client_configuration);
+        poco_config->per_request_configuration
             = [proxy_config](const auto & request) { return proxy_config->getConfiguration(request); };
+    }
 
-    client_configuration.retryStrategy
+    client_configuration->retryStrategy
         = std::make_shared<Aws::Client::DefaultRetryStrategy>(config.getUInt(config_prefix + ".retry_attempts", 10));
 
     return S3::ClientFactory::instance().create(

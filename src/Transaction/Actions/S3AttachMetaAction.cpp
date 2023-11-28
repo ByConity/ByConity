@@ -79,7 +79,7 @@ void S3AttachMetaAction::executeV2()
     {
         String part_name = part == nullptr ? "" : part->info.getPartName();
         detached_part_names.push_back(part_name);
-        LOG_TRACE(log, "Attach Detached part name:{}", part_name); 
+        LOG_TRACE(log, "Attach Detached part name:{}", part_name);
     }
 
     global_context.getCnchCatalog()->attachDetachedParts(
@@ -133,7 +133,7 @@ void S3AttachMetaAction::collectUndoResourcesForCommit(const UndoResources & res
     // Committed, only set commit time, it required part name with hint mutation.
     // We store both name and name with hint mutation to avoid parse a data model again.
     // From undo resource, we don't know whether a part is belong to commit part or staged part.
-    // Because all part name is unique, we add each part name to both part_names and staged_part_names. 
+    // Because all part name is unique, we add each part name to both part_names and staged_part_names.
     for (const UndoResource & resource : resources)
     {
         if (resource.type() == UndoResourceType::S3AttachPart)

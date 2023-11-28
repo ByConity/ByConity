@@ -27,9 +27,8 @@ namespace DB
 class BaseTpcdsPlanTest : public AbstractPlanTestSuite
 {
 public:
-    explicit BaseTpcdsPlanTest(const std::unordered_map<String, Field> & settings = {}, int sf_ = 1000)
-        : AbstractPlanTestSuite("tpcds" + std::to_string(sf_), settings)
-        , sf(sf_)
+    explicit BaseTpcdsPlanTest(const std::unordered_map<String, Field> & settings, int sf_ = 1000, bool use_sample = false)
+        : AbstractPlanTestSuite("tpcds" + std::to_string(sf_) + (use_sample ? "_sample" : ""), settings), sf(sf_)
     {
         if (sf_ != 1000 && sf_ != 100)
             throw Exception("sf only support 100 or 1000", ErrorCodes::BAD_ARGUMENTS);
@@ -41,22 +40,18 @@ public:
     std::vector<std::filesystem::path> getTableDDLFiles() override { return {TPCDS_TABLE_DDL_FILE}; }
     std::filesystem::path getStatisticsFile() override
     {
-        if (sf == 100)
-            return TPCDS100_TABLE_STATISTICS_FILE;
-
-        return TPCDS1000_TABLE_STATISTICS_FILE;
+        return std::filesystem::path(TPCDS_TABLE_STATISTICS_FOLDER) / fmt::format("{}.bin", getDatabaseName());
     }
     std::filesystem::path getQueriesDir() override { return TPCDS_QUERIES_DIR; }
     std::filesystem::path getExpectedExplainDir() override
     {
-        std::string dir = "tpcds" + std::to_string(sf) + label;
+        std::string dir = getDatabaseName() + label;
         return std::filesystem::path(TPCDS_EXPECTED_EXPLAIN_RESULT) / dir;
     }
     void setLabel(const std::string & label_) { this->label = "_" + label_; }
 
     int sf;
     std::string label;
-
 };
 
 }

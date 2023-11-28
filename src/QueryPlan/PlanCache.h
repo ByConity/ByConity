@@ -18,10 +18,16 @@ namespace PlanCacheConfig
 class PlanCacheManager
 {
 public:
+    struct QueryInfo
+    {
+        // database_name->table_name->column_names
+        std::unordered_map<String, std::unordered_map<String, std::vector<String>>> query_access_info;
+    };
     struct PlanObjectValue
     {
         PlanNodePtr plan_root;
         std::unordered_map<CTEId, PlanNodePtr> cte_map;
+        std::shared_ptr<QueryInfo> query_info;
     };
     using CacheType = Poco::ExpireLRUCache<UInt128, PlanObjectValue>;
 

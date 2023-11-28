@@ -285,7 +285,6 @@
     M(NotCreatedLogEntryForMutation, "Log entry to mutate parts in ReplicatedMergeTree is not created due to concurrent log update by another replica.") \
     \
     M(S3ReadMicroseconds, "Time of GET and HEAD requests to S3 storage.") \
-    M(S3ReadBytes, "Read bytes (incoming) in GET and HEAD requests to S3 storage.") \
     M(S3ReadRequestsCount, "Number of GET and HEAD requests to S3 storage.") \
     M(S3ReadRequestsErrors, "Number of non-throttling errors in GET and HEAD requests to S3 storage.") \
     M(S3ReadRequestsThrottling, "Number of 429 and 503 errors in GET and HEAD requests to S3 storage.") \
@@ -783,11 +782,12 @@
     M(WriteBufferFromS3WriteMicro, "s3 write op time") \
     M(WriteBufferFromS3WriteBytes, "s3 write op size") \
     \
-    M(ReadBufferFromS3Read, "remote s3 read op count") \
-    M(ReadBufferFromS3ReadFailed, "remote s3 read failed count") \
-    M(ReadBufferFromS3ReadBytes, "remote s3 read op size") \
-    M(ReadBufferFromS3ReadMicroseconds, "remote s3 read op time") \
-    M(ReadBufferFromS3InitMicroseconds, "Time spent initializing connection to S3.") \
+    M(ReadBufferFromS3ReadCount, "The count of ReadBufferFromS3 read from s3 stream") \
+    M(ReadBufferFromS3FailedCount, "ReadBuffer from s3 failed count") \
+    M(ReadBufferFromS3ReadBytes, "Bytes size ReadBufferFromS3 read from s3 stream") \
+    M(ReadBufferFromS3ReadMicro, "The time spent ReadBufferFromS3 read from s3 stream") \
+    M(S3StreamInitMicroseconds, "Time spent initializing connection to S3.") \
+    M(ReadBufferFromS3SeekTimes, "The seek times of read buffer from s3.") \
     \
     M(IOSchedulerOpenFileMicro, "Time used in open file when using io scheduler") \
     M(IOSchedulerScheduleMicro, "Time used in schedule io request") \
@@ -810,11 +810,17 @@
     M(S3TrivialReaderReadCount, "S3TrivialReader read count") \
     M(S3TrivialReaderReadMicroseconds, "S3TrivialReader read micro seconds") \
     M(S3TrivialReaderReadBytes, "S3TrivialReader read bytes") \
-    M(S3ReadAheadReaderReadCount, "S3ReadAheadReader read count") \
-    M(S3ReadAheadReaderRemoteReadCount, "S3ReadAheadReader remote read count") \
-    M(S3ReadAheadReaderReadMicro, "S3ReadAheadReader read micro seconds") \
-    M(S3ReadAheadReaderExpectReadBytes, "S3ReadAheadReader expected read bytes") \
-    M(S3ReadAheadReaderReadBytes, "S3ReadAheadReader readed bytes") \
+    M(S3ReadAheadReaderReadCount, "The count of S3ReadAheadReader read from s3 stream") \
+    M(S3ReadAheadReaderReadBytes, "The bytes number of S3ReadAheadReader read from s3 stream") \
+    M(S3ReadAheadReaderReadMicro, "The time spent on S3ReadAheadReader read from s3 stream") \
+    M(S3ReadAheadReaderIgnoreCount, "The count of S3ReadAheadReader ignore from s3 stream") \
+    M(S3ReadAheadReaderIgnoreBytes, "The bytes number of S3ReadAheadReader ignore from s3 stream") \
+    M(S3ReadAheadReaderIgnoreMicro, "The time spent on S3ReadAheadReader ignore from s3 stream") \
+    M(S3ReadAheadReaderGetRequestCount, "The count of S3ReadAheadReader invokes s3 get request.") \
+    M(S3ReadAheadReaderExpectReadBytes, "The expected read bytes from S3ReadAheadReader's get request.") \
+    M(S3ReadAheadReaderGetRequestMicro, "The time spent on S3ReadAheadReader sends s3 get request.") \
+    M(S3ReadAheadReaderSeekTimes, "The seek times of S3ReadAheadReader.") \
+    M(S3ReadAheadReaderExpandTimes, "The stream range expand times of S3ReadAheadReader.") \
     M(S3ResetSessions, "Number of HTTP sessions that were reset in S3 read.") \
     M(S3PreservedSessions, "Number of HTTP sessions that were preserved in S3 read.") \
     M(ConnectionPoolIsFullMicroseconds, "Total time spent waiting for a slot in connection pool.") \
@@ -822,19 +828,77 @@
     M(PocoHTTPS3GetCount, "") \
     M(PocoHTTPS3GetTime, "") \
     M(PocoHTTPS3GetSessionTime, "") \
-    \
-    M(BigHashEvictionCount, "") \
-    M(BigHashEvictionExpiredCount, "") \
-    M(BigHashLogicalWrittenCount, "") \
-    M(BigHashPhysicalWrittenCount, "") \
-    M(BigHashInsertCount, "") \
-    M(BigHashSuccInsertCount, "") \
-    M(BigHashRemoveCount, "") \
-    M(BigHashSuccRemoveCount, "") \
-    M(BigHashSuccLookupCount, "") \
-    M(BigHashIOErrorCount, "") \
-    M(BigHashBFFalsePositiveCount, "") \
-    \
+    M(CRTHTTPS3GetCount, "") \
+    M(CRTHTTPS3GetTime, "") \
+    M(CRTHTTPS3WriteBytes, "") \
+\
+    M(BigHashEvictionCount, "BigHash eviction count") \
+    M(BigHashEvictionExpiredCount, "BigHash eviction expired count") \
+    M(BigHashLogicalWrittenCount, "BigHash logical written bytes") \
+    M(BigHashPhysicalWrittenCount, "BigHash physical written bytes") \
+    M(BigHashInsertCount, "BigHash insert count") \
+    M(BigHashSuccInsertCount, "BigHash insert succeed count") \
+    M(BigHashRemoveCount, "BigHash remove count") \
+    M(BigHashSuccRemoveCount, "BigHash remove succeed count") \
+    M(BigHashLookupCount, "BigHash lookup count") \
+    M(BigHashSuccLookupCount, "BigHash lookup succeed count") \
+    M(BigHashIOErrorCount, "BigHash IO error count") \
+    M(BigHashBFFalsePositiveCount, "BigHash bloom filter false positive count") \
+    M(BigHashBFProbCount, "BigHash bloom filter prob count") \
+    M(BigHashBFRejectCount, "BigHash bloom filter reject count") \
+\
+    M(BlockCacheInsertCount, "BlockCache insert count") \
+    M(BlockCacheInsertHashCollisionCount, "BlockCache insert hash collision count") \
+    M(BlockCacheSuccInsertCount, "BlockCache insert succeed count") \
+    M(BlockCacheLookupFalsePositiveCount, "BlockCache lookup false positive count") \
+    M(BlockCacheLookupEntryHeaderChecksumErrorCount, "BlockCache lookup entry header checksum error count") \
+    M(BlockCacheLookupValueChecksumErrorCount, "BlockCache lookup value checksum error count") \
+    M(BlockCacheRemoveCount, "BlockCache remove count") \
+    M(BlockCacheSuccRemoveCount, "BlockCache remove succeed count") \
+    M(BlockCacheEvictionLookupMissCount, "BlockCache eviction looukup miss count") \
+    M(BlockCacheEvictionExpiredCount, "BlockCache eviction expired count") \
+    M(BlockCacheAllocErrorCount, "BlockCache alloc error count") \
+    M(BlockCacheLogicWrittenCount, "BlockCache logic written count") \
+    M(BlockCacheLookupCount, "BlockCache lookup count") \
+    M(BlockCacheSuccLookupCount, "BlockCache succeed lookup count") \
+    M(BlockCacheReinsertionErrorCount, "BlockCache reinsertion error count") \
+    M(BlockCacheReinsertionCount, "BlockCache reinsertion count") \
+    M(BlockCacheReinsertionBytes, "BlockCache reinsertion size in bytes") \
+    M(BlockCacheLookupForItemDestructorErrorCount, "BlockCache lookup for item destructor error count") \
+    M(BlockCacheRemoveAttemptionCollisions, "BlockCache remove attemption collisions") \
+    M(BlockCacheReclaimEntryHeaderChecksumErrorCount, "BlockCache reclaim entry header checksum error count") \
+    M(BlockCacheReclaimValueChecksumErrorCount, "BlockCache reclaim value checksum error count") \
+    M(BlockCacheCleanupEntryHeaderChecksumErrorCount, "BlockCache cleanup entry header checksum error count") \
+    M(BlockCacheCleanupValueChecksumErrorCount, "BlockCache cleanup value checksum error count") \
+\
+    M(NvmCacheLookupCount, "NvmCache lookup count") \
+    M(NvmCacheLookupSuccCount, "NvmCache lookup success count") \
+    M(NvmCacheInsertCount, "NvmCache insert count") \
+    M(NvmCacheInsertSuccCount, "NvmCache insert success count") \
+    M(NvmCacheRemoveCount, "NvmCache remove count") \
+    M(NvmCacheRemoveSuccCount, "NvmCache remove success count") \
+    M(NvmCacheIoErrorCount, "NvmCache io error count") \
+    M(NvmGets, "NvmCache get op count") \
+    M(NvmGetMissFast, "NvmCache fast get miss count") \
+    M(NvmGetCoalesced, "NvmCache get coalesced count") \
+    M(NvmGetMiss, "NvmCache get miss count") \
+    M(NvmGetMissDueToInflightRemove, "NvmCache get miss count due to inflight remove") \
+    M(NvmPuts, "NvmCache put op count") \
+    M(NvmPutErrors, "NvmCache put error count") \
+    M(NvmAbortedPutOnTombstone, "NvmCache abort count of puts due to tombstone") \
+    M(NvmAbortedPutOnInflightGet, "NvmCache abort count of puts due to inflight get") \
+    M(NvmDeletes, "NvmCache remove op count") \
+    M(NvmSkippedDeletes, "NvmCache skipped remove op count") \
+\
+    M(RegionManagerPhysicalWrittenCount, "RegionManager physical written byte count") \
+    M(RegionManagerReclaimRegionErrorCount, "RegionManager reclaim region error count") \
+    M(RegionManagerReclaimCount, "RegionManager reclaim count") \
+    M(RegionManagerReclaimTimeCount, "RegionManager reclaim time count") \
+    M(RegionManagerEvictionCount, "RegionManager eviction count") \
+    M(RegionManagerNumInMemBufFlushRetries, "RegionManager number of in-memory buffer flush retries") \
+    M(RegionManagerNumInMemBufFlushFailures, "RegionManager number of in-memory buffer flush failures") \
+    M(RegionManagerNumInMemBufCleanupRetries, "RegionManager number of in-memory buffer cleanup retries") \
+\
     M(TSORequest, "Number requests sent to TSO") \
     M(TSOError, "Error logged by TSO Service as a response to CNCH") \
     \

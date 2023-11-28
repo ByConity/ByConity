@@ -51,6 +51,7 @@ struct FieldDescription
     struct OriginColumn
     {
         StoragePtr storage;
+        StorageMetadataPtr metadata_snapshot;
         IAST * table_ast;
         String column;
         size_t index_of_scope;
@@ -85,6 +86,7 @@ struct FieldDescription
         DataTypePtr type_,
         QualifiedName prefix_,
         StoragePtr origin_table_,
+        StorageMetadataPtr origin_metadata_snapshot_,
         IAST * origin_table_ast_,
         String origin_column_,
         size_t index_of_origin_scope_,
@@ -92,7 +94,12 @@ struct FieldDescription
         : name(std::move(name_))
         , type(std::move(type_))
         , prefix(std::move(prefix_))
-        , origin_columns{OriginColumn{std::move(origin_table_), origin_table_ast_, std::move(origin_column_), index_of_origin_scope_}}
+        , origin_columns{OriginColumn{
+              std::move(origin_table_),
+              std::move(origin_metadata_snapshot_),
+              origin_table_ast_,
+              std::move(origin_column_),
+              index_of_origin_scope_}}
         , substituted_by_asterisk(substituted_by_asterisk_)
     {
     }
@@ -207,6 +214,7 @@ public:
     size_t getHierarchyOffset() const;
     size_t getHierarchySize() const;
     Names getOriginColumns() const;
+    NameSet getNamesSet() const;
 
 private:
     template <typename T, bool check_ambiguous>

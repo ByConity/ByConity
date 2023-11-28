@@ -23,6 +23,7 @@
 #include <Interpreters/ActionsDAG.h>
 #include <Interpreters/ArrayJoinAction.h>
 #include <Processors/QueryPipeline.h>
+#include <Protos/EnumMacros.h>
 #include <Protos/plan_node.pb.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/IQueryPlanStep.h>
@@ -37,7 +38,6 @@
 #include <Common/JSONBuilder.h>
 #include <Common/Stopwatch.h>
 #include <common/logger_useful.h>
-#include "PlanSerDerHelper.h"
 
 
 namespace DB
@@ -46,6 +46,12 @@ namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
 }
+
+ENUM_WITH_PROTO_CONVERTER(
+    QueryPlanMode, // enum name
+    Protos::QueryPlan::PlanMode, // protobuf enum message
+    (TreeLike, 1),
+    (Flatten, 2));
 
 QueryPlan::QueryPlan() = default;
 QueryPlan::~QueryPlan() = default;
@@ -329,7 +335,7 @@ QueryPipelinePtr QueryPlan::buildQueryPipeline(
     for (auto & context : interpreter_context)
         last_pipeline->addInterpreterContext(std::move(context));
 
-    LOG_DEBUG(log, "Build pipeline takes:{}", watch.elapsedMilliseconds());
+    LOG_DEBUG(log, "Build pipeline takes: {}ms", watch.elapsedMilliseconds());
     return last_pipeline;
 }
 
@@ -680,12 +686,105 @@ void QueryPlan::serialize(WriteBuffer & buffer) const
         writeBinary(false, buffer);
     }
 }
-
-// we only support optimizer mode
+// handle when plan is tree-like, i.e., plan_node + cte_info
 void QueryPlan::toProto(Protos::QueryPlan & proto) const
 {
+    if (plan_node)
+    {
+        proto.set_mode(QueryPlanModeConverter::toProto(QueryPlanMode::TreeLike));
+        toProtoTreeLike(proto);
+    }
+    else if (root)
+    {
+        proto.set_mode(QueryPlanModeConverter::toProto(QueryPlanMode::Flatten));
+        toProtoFlatten(proto);
+    }
+    else
+    {
+        throw Exception("Invalid QueryPlan", ErrorCodes::LOGICAL_ERROR);
+    }
+}
+
+void QueryPlan::fromProto(const Protos::QueryPlan & proto)
+{
+    auto mode = QueryPlanModeConverter::fromProto(proto.mode());
+    switch (mode)
+    {
+        case QueryPlanMode::TreeLike:
+            this->fromProtoTreeLike(proto);
+            break;
+        case QueryPlanMode::Flatten:
+            this->fromProtoFlatten(proto);
+            break;
+        default: {
+            throw Exception("Invalid QueryPlan Proto", ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+}
+
+// handle when plan is flatten, i.e., root + nodes + cte_nodes
+void QueryPlan::toProtoFlatten(Protos::QueryPlan & proto) const
+{
+    if (!root)
+        throw Exception("QueryPlan::toProtoFlatten() failed", ErrorCodes::LOGICAL_ERROR);
+
+    if (reset_step_id)
+    {
+        size_t id = 0;
+        for (const auto & node : nodes)
+            node.id = id++; // this is mutable field
+    }
+
+    for (const auto & node : nodes)
+    {
+        auto id = node.id;
+        auto & node_proto = (*proto.mutable_plan_nodes())[id];
+        node_proto.set_plan_id(id);
+        serializeQueryPlanStepToProto(node.step, *node_proto.mutable_step());
+        for (const auto & child : node.children)
+        {
+            node_proto.add_children(child->id);
+        }
+    }
+
+    proto.set_root_id(root->id);
+}
+
+void QueryPlan::fromProtoFlatten(const Protos::QueryPlan & proto)
+{
+    std::unordered_map<size_t, Node *> id_to_node;
+    const auto & id_to_node_proto = proto.plan_nodes();
+
+    auto context = !interpreter_context.empty() ? interpreter_context.back() : nullptr;
+
+    for (const auto & [id, node_proto] : id_to_node_proto)
+    {
+        if (node_proto.plan_id() != id)
+            throw Exception("Invalid Proto", ErrorCodes::LOGICAL_ERROR);
+        auto step = deserializeQueryPlanStepFromProto(node_proto.step(), context);
+        nodes.emplace_back(Node{step, {}, id});
+        id_to_node[id] = &nodes.back();
+    }
+
+    for (auto & node : nodes)
+    {
+        auto id = node.id;
+        for (auto child_id : id_to_node_proto.at(id).children())
+        {
+            auto * child = id_to_node[child_id];
+            node.children.emplace_back(child);
+        }
+    }
+
+    auto root_id = proto.root_id();
+    root = id_to_node[root_id];
+}
+
+// support optimizer mode
+void QueryPlan::toProtoTreeLike(Protos::QueryPlan & proto) const
+{
     if (!plan_node)
-        throw Exception("QueryPlan::toProto() only support optimizer mode", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("QueryPlan::toProtoTreeLike() failed", ErrorCodes::LOGICAL_ERROR);
 
     std::queue<PlanNodePtr> queue;
     queue.push(plan_node);
@@ -716,7 +815,7 @@ void QueryPlan::toProto(Protos::QueryPlan & proto) const
     }
 }
 
-void QueryPlan::fromProto(Protos::QueryPlan & proto)
+void QueryPlan::fromProtoTreeLike(const Protos::QueryPlan & proto)
 {
     std::unordered_map<Int64, PlanNodePtr> id_to_plan;
     ContextPtr context = interpreter_context.empty() ? nullptr : interpreter_context.back();

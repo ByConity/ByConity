@@ -79,6 +79,7 @@ struct BatchCommitRequest
     void AddPut(const SinglePutRequest & put) { puts.emplace_back(put); }
     void AddDelete(const std::string & del) { deletes.emplace_back(del); }
     void AddDelete(const std::string & delkey, const std::string & expected) { deletes.emplace_back(delkey, "", expected); }
+    void ClearDelete() { deletes.clear(); }
     void SetTimeout(uint32_t time_out) { commit_timeout_ms = time_out; }
     bool isEmpty() { return puts.empty() && deletes.empty(); }
 

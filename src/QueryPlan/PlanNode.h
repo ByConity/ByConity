@@ -96,8 +96,6 @@ public:
     PlanNodes & getChildren() { return children; }
     const PlanNodes & getChildren() const { return children; }
     void replaceChildren(const PlanNodes & children_) { replaceChildrenImpl(children_); }
-
-    void replaceChildren(PlanNodes && children_) { children = std::move(children_); }
     void setStatistics(const PlanNodeStatisticsEstimate & statistics_) { statistics = statistics_; }
     const PlanNodeStatisticsEstimate & getStatistics() const { return statistics; }
     QueryPlanStepPtr getStep() const { return getStepImpl(); }

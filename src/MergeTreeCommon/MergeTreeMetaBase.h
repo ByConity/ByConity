@@ -533,6 +533,9 @@ protected:
 
     void checkProperties(const StorageInMemoryMetadata & new_metadata, const StorageInMemoryMetadata & old_metadata, bool attach = false) const;
 
+    /// Check version column constrains when create table
+    void checkVersionColumnConstraint();
+
     void setProperties(const StorageInMemoryMetadata & new_metadata, const StorageInMemoryMetadata & old_metadata, bool attach = false);
 
     void checkPartitionKeyAndInitMinMax(const KeyDescription & new_partition_key);

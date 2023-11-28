@@ -2,7 +2,7 @@
  from(select w_warehouse_name
             ,i_item_id
             ,sum(case when (cast(d_date as date) < cast ('2000-03-11' as date))
-	                then inv_quantity_on_hand
+                 then inv_quantity_on_hand 
                       else 0 end) as inv_before
             ,sum(case when (cast(d_date as date) >= cast ('2000-03-11' as date))
                       then inv_quantity_on_hand

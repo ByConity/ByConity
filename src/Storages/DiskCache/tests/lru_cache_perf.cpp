@@ -21,7 +21,7 @@
 #include <boost/program_options.hpp>
 #include <Common/LRUCache.h>
 #include <Common/Stopwatch.h>
-#include <Storages/DiskCache/BucketLRUCache.h>
+#include <Common/BucketLRUCache.h>
 
 using namespace DB;
 

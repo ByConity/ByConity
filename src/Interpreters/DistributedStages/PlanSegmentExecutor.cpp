@@ -64,6 +64,7 @@
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
+#include "Interpreters/Context_fwd.h"
 #include "Processors/Exchange/DataTrans/Batch/Writer/DiskPartitionWriter.h"
 
 namespace ProfileEvents
@@ -364,10 +365,21 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
     }
 }
 
+static QueryPlanOptimizationSettings buildOptimizationSettingsWithCheck(ContextMutablePtr& context)
+{   
+    QueryPlanOptimizationSettings settings = QueryPlanOptimizationSettings::fromContext(context);
+    if(!settings.enable_optimizer)
+    {
+        LOG_WARNING(&Poco::Logger::get("PlanSegmentExecutor"), "enable_optimizer should be true");
+        settings.enable_optimizer = true;
+    }
+    return settings;
+}
+
 QueryPipelinePtr PlanSegmentExecutor::buildPipeline()
 {
     QueryPipelinePtr pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
-        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context));
+        buildOptimizationSettingsWithCheck(context), BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context));
     registerAllExchangeReceivers(*pipeline, context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
     return pipeline;
 }
@@ -437,7 +449,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
     }
 
     pipeline = plan_segment->getQueryPlan().buildQueryPipeline(
-        QueryPlanOptimizationSettings::fromContext(context),
+        buildOptimizationSettingsWithCheck(context),
         BuildQueryPipelineSettings::fromPlanSegment(plan_segment.get(), context)
     );
 

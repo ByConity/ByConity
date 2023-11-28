@@ -13,14 +13,15 @@
  * limitations under the License.
  */
 
-#include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
-#include <Storages/PartCacheManager.h>
-#include <Storages/VirtualColumnUtils.h>
+#include <DataTypes/DataTypeEnum.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <Common/CurrentThread.h>
 #include <Interpreters/Context.h>
 #include <Processors/Sources/SourceFromSingleChunk.h>
+#include <Storages/PartCacheManager.h>
+#include <Storages/System/StorageSystemCnchPartsInfoLocal.h>
+#include <Storages/VirtualColumnUtils.h>
+#include <Common/CurrentThread.h>
 
 namespace DB
 {
@@ -34,6 +35,13 @@ StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID
     : IStorage(table_id_)
 {
     StorageInMemoryMetadata storage_metadata;
+
+    auto ready_state = std::make_shared<DataTypeEnum8>(DataTypeEnum8::Values{
+        {"Unloaded", static_cast<Int8>(ReadyState::Unloaded)},
+        {"Loading", static_cast<Int8>(ReadyState::Loading)},
+        {"Loaded", static_cast<Int8>(ReadyState::Loaded)},
+    });
+
     storage_metadata.setColumns(ColumnsDescription({
         {"database", std::make_shared<DataTypeString>()},
         {"table", std::make_shared<DataTypeString>()},
@@ -44,6 +52,9 @@ StorageSystemCnchPartsInfoLocal::StorageSystemCnchPartsInfoLocal(const StorageID
         {"total_parts_number", std::make_shared<DataTypeInt64>()},
         {"total_parts_size", std::make_shared<DataTypeInt64>()},
         {"total_rows_count", std::make_shared<DataTypeInt64>()},
+        {"ready_state", std::move(ready_state)},
+        /// Boolean
+        {"recalculating", std::make_shared<DataTypeUInt8>()},
         {"last_update_time", std::make_shared<DataTypeUInt64>()},
         {"last_snapshot_time", std::make_shared<DataTypeUInt64>()},
     }));
@@ -177,8 +188,8 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
         {
             size_t src_index = 0;
             size_t dest_index = 0;
-            const auto & metrics_ptr = it->second->partition_info_ptr->metrics_ptr->read();
-            bool is_valid_metrics = metrics_ptr.validateMetrics();
+            const auto & metrics_data = it->second->partition_info_ptr->metrics_ptr->read();
+            bool is_valid_metrics = metrics_data.validateMetrics();
             if (columns_mask[src_index++])
                 res_columns[dest_index++]->insert(entry->database);
             if (columns_mask[src_index++])
@@ -195,21 +206,32 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
                 if (columns_mask[src_index++])
                     res_columns[dest_index++]->insert(true);
                 if (columns_mask[src_index++])
-                    res_columns[dest_index++]->insert(metrics_ptr.total_parts_number);
+                    res_columns[dest_index++]->insert(metrics_data.total_parts_number);
                 if (columns_mask[src_index++])
-                    res_columns[dest_index++]->insert(metrics_ptr.total_parts_size);
+                    res_columns[dest_index++]->insert(metrics_data.total_parts_size);
                 if (columns_mask[src_index++])
-                    res_columns[dest_index++]->insert(metrics_ptr.total_rows_count);
+                    res_columns[dest_index++]->insert(metrics_data.total_rows_count);
                 if (columns_mask[src_index++])
                 {
-                    UInt64 last_update_time = metrics_ptr.last_update_time;
+                    ReadyState state = ReadyState::Unloaded;
+                    if (entry->loading_metrics)
+                        state = ReadyState::Loading;
+                    if (entry->partition_metrics_loaded)
+                        state = ReadyState::Loaded;
+                    res_columns[dest_index++]->insert(state);
+                }
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(it->second->partition_info_ptr->metrics_ptr->isRecalculating());
+                if (columns_mask[src_index++])
+                {
+                    UInt64 last_update_time = metrics_data.last_update_time;
                     if (last_update_time == TxnTimestamp::maxTS())
                         last_update_time = current_ts;
                     res_columns[dest_index++]->insert(TxnTimestamp(last_update_time).toSecond());
                 }
                 if (columns_mask[src_index++])
                 {
-                    UInt64 last_snapshot_time = metrics_ptr.last_snapshot_time;
+                    UInt64 last_snapshot_time = metrics_data.last_snapshot_time;
                     if (last_snapshot_time == TxnTimestamp::maxTS())
                         last_snapshot_time = current_ts;
                     res_columns[dest_index++]->insert(TxnTimestamp(last_snapshot_time).toSecond());
@@ -220,6 +242,10 @@ Pipe StorageSystemCnchPartsInfoLocal::read(
                 // invalid metrics
                 if (columns_mask[src_index++])
                     res_columns[dest_index++]->insert(false);
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(0);
+                if (columns_mask[src_index++])
+                    res_columns[dest_index++]->insert(0);
                 if (columns_mask[src_index++])
                     res_columns[dest_index++]->insert(0);
                 if (columns_mask[src_index++])

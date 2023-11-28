@@ -529,7 +529,7 @@ if (USE_LDAP)
     dbms_target_include_directories (SYSTEM BEFORE PRIVATE ${OPENLDAP_INCLUDE_DIRS})
     dbms_target_link_libraries (PRIVATE ${OPENLDAP_LIBRARIES})
 endif ()
-dbms_target_include_directories (SYSTEM BEFORE PRIVATE ${SPARSEHASH_INCLUDE_DIR})
+dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${SPARSEHASH_INCLUDE_DIR})
 
 if (USE_PROTOBUF)
     target_link_libraries(clickhouse_common_io PUBLIC brpc-static ${DYNAMIC_LIB})
@@ -551,10 +551,9 @@ if (USE_HDFS)
     dbms_target_include_directories (SYSTEM BEFORE PUBLIC ${HDFS3_INCLUDE_DIR})
 endif()
 
-if (USE_AWS_S3)
-    target_link_libraries (clickhouse_common_io PUBLIC ${AWS_S3_LIBRARY})
-    target_include_directories (clickhouse_common_io SYSTEM BEFORE PUBLIC ${AWS_S3_CORE_INCLUDE_DIR})
-    target_include_directories (clickhouse_common_io SYSTEM BEFORE PUBLIC ${AWS_S3_INCLUDE_DIR})
+if (TARGET ch_contrib::aws_s3)
+    target_link_libraries (clickhouse_common_io PUBLIC ch_contrib::aws_s3)
+    message("link clickhouse_common_io ch_contrib::aws_s3")
 endif()
 
 if (USE_BROTLI)
@@ -633,7 +632,8 @@ if (ENABLE_TESTS AND USE_GTEST)
     add_executable(unit_tests_dbms ${dbms_gtest_sources})
 
     target_include_directories(unit_tests_dbms PRIVATE ${dbms_gtest_headers})
-    target_include_directories (unit_tests_dbms PRIVATE ${PARALLEL_HASHMAP_INCLUDE_DIR})
+    target_include_directories(unit_tests_dbms PRIVATE ${PARALLEL_HASHMAP_INCLUDE_DIR})
+    target_include_directories(unit_tests_dbms SYSTEM BEFORE PRIVATE ${SPARSEHASH_INCLUDE_DIR})
 
     # copy disk cache test config
     file(COPY ${ClickHouse_SOURCE_DIR}/src/Storages/DiskCache/tests/disk_cache_test_old_config.xml DESTINATION ${ClickHouse_SOURCE_DIR}/build/src)
@@ -696,6 +696,7 @@ if (ENABLE_BENCHMARK)
 
         target_compile_options(${BENCHMARK_NAME} PRIVATE "-Werror" "-Wall")
         target_include_directories(${BENCHMARK_NAME} PRIVATE ${ClickHouse_SOURCE_DIR}/src/benchmark/*.h)
+        target_include_directories(${BENCHMARK_NAME} SYSTEM BEFORE PRIVATE ${SPARSEHASH_INCLUDE_DIR})
         target_link_libraries(${BENCHMARK_NAME} PRIVATE clickhouse_benchmark_util)
         set_target_properties(${BENCHMARK_NAME} PROPERTIES
             CXX_EXTENSIONS OFF

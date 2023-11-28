@@ -47,6 +47,8 @@ public:
         explicit TableMetricsData(Protos::TableTrashItemsMetricsSnapshot & snapshot);
         TableMetricsData(const TableMetricsData & rhs);
         TableMetricsData & operator=(const TableMetricsData & rhs);
+        TableMetricsData operator+(const TableMetricsData & rhs) const;
+        TableMetricsData & operator+=(const TableMetricsData & rhs);
 
         /**
          * @brief Generate a snapshot.
@@ -158,6 +160,8 @@ public:
 
     String getTraceID() { return table_uuid + " " + partition_id; }
     void shutDown();
+    /// This is called before `shutDown` to quickly notify the recalculation task to abort itself.
+    void notifyShutDown() { shutdown = true; }
 
     ~PartitionMetrics() { shutDown(); }
 

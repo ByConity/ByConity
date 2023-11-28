@@ -48,7 +48,8 @@ std::optional<PlanNodeStatisticsPtr> CardinalityEstimator::estimate(
     std::vector<PlanNodeStatisticsPtr> children_stats,
     ContextMutablePtr context,
     bool simple_children,
-    std::vector<bool> children_are_table_scan)
+    std::vector<bool> children_are_table_scan,
+    const InclusionDependency & inclusion_dependency)
 {
     static CardinalityVisitor visitor;
     CardinalityContext cardinality_context{
@@ -56,7 +57,8 @@ std::optional<PlanNodeStatisticsPtr> CardinalityEstimator::estimate(
         .cte_info = cte_info,
         .children_stats = std::move(children_stats),
         .simple_children = simple_children,
-        .children_are_table_scan = std::move(children_are_table_scan)};
+        .children_are_table_scan = std::move(children_are_table_scan),
+        .inclusion_dependency = inclusion_dependency};
     auto stats = VisitorUtil::accept(step, visitor, cardinality_context);
     return stats ? std::make_optional(stats) : std::nullopt;
 }
@@ -161,7 +163,8 @@ PlanNodeStatisticsPtr CardinalityVisitor::visitJoinStep(const JoinStep & step, C
         step,
         *context.context,
         context.children_are_table_scan[0],
-        context.children_are_table_scan[1]);
+        context.children_are_table_scan[1],
+        context.inclusion_dependency);
     return stats;
 }
 

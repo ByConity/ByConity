@@ -62,6 +62,7 @@ void TSOImpl::setPhysicalTime(UInt64 physical_time)
 UInt64 TSOImpl::fetchAddLogical(UInt32 to_add)
 {
     UInt64 timestamp = ts.fetch_add(to_add, std::memory_order_acquire);
+
     UInt32 next_logical = ts_to_logical(timestamp) + to_add;
     checkLogicalClock(next_logical);
     return timestamp;
@@ -155,17 +156,13 @@ void TSOImpl::checkLogicalClock(UInt32 logical_value)
         ThreadFromGlobalPool([this] {
             try
             {
-                std::this_thread::sleep_for(std::chrono::milliseconds(TSO_UPDATE_INTERVAL));
-                UInt64 ts_now = ts.load(std::memory_order_acquire);
-                UInt64 machine_time_now = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
-                // Check the leader result in case the node yielded the leadership during sleeping
-                // Timestamp stored in TSO is at least 10 seconds away from machine time
-                if (isLeader() && (machine_time_now - ts_now) >= 10000)
+                if (isLeader())
                 {
-                    // Fallback to leader election if an overflow issue happens even after sleep_for(TSO_UPDATE_INTERVAL).
                     // yield leadership as updateTSO thread stopped functioning
-                    tso_server.onFollower();
-                    LOG_INFO(log, "Resign leader. TSO update timestamp thread has stopped functioning. Machine Time: {} | TSO Timestamp: {}", machine_time_now, ts_now);
+                    tso_server.leader_election->yieldLeadership();
+                    UInt64 ts_now = ts.load(std::memory_order_acquire);
+                    UInt64 machine_time_now = duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+                    LOG_INFO(log, "Resign leader due to logical clock overflow. Machine Time: {} | TSO Timestamp: {}", machine_time_now, ts_now);
                 }
                 logical_clock_checking.store(false, std::memory_order_relaxed);
             }

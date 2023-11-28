@@ -50,7 +50,7 @@ void ColumnPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
     plan.update(result);
 }
 
-void ColumnPruning::selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage, NameSet & required)
+String ColumnPruning::selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage)
 {
     /// You need to read at least one column to find the number of rows.
     /// We will find a column with minimum <compressed_size, type_size, uncompressed_size>.
@@ -85,7 +85,7 @@ void ColumnPruning::selectColumnWithMinSize(NamesAndTypesList source_columns, St
     }
 
     if (!columns.empty())
-        required.insert(std::min_element(columns.begin(), columns.end())->name);
+        return std::min_element(columns.begin(), columns.end())->name;
     else if (!source_columns.empty())
     {
         if (storage)
@@ -97,7 +97,12 @@ void ColumnPruning::selectColumnWithMinSize(NamesAndTypesList source_columns, St
             }
         }
         /// If we have no information about columns sizes, choose a column of minimum size of its data type.
-        required.insert(ExpressionActions::getSmallestColumn(source_columns));
+        return ExpressionActions::getSmallestColumn(source_columns);
+    }
+    else
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "unexpected branch of selectColumnWithMinSize");
+        __builtin_unreachable();
     }
 }
 
@@ -438,23 +443,21 @@ PlanNodePtr ColumnPruningVisitor::visitTableScanNode(TableScanNode & node, NameS
     if (step->getPushdownAggregation() || step->getPushdownProjection() || step->getPushdownFilter())
         throw Exception(ErrorCodes::LOGICAL_ERROR, "TableScan with pushdown steps can not be processed for column pruning.");
 
-    NameSet required;
-    for (const auto & item : step->getColumnAlias())
-        if (require.contains(item.second))
-            required.insert(item.second);
-
-    if (required.empty())
-    {
-        ColumnPruning::selectColumnWithMinSize(step->getOutputStream().header.getNamesAndTypesList(),
-                                               step->getStorage(), required);
-    }
-
     bool contains_all_columns = true;
     NamesWithAliases column_names;
     for (const auto & item : step->getColumnAlias())
     {
-        if (required.contains(item.second))
+        if (require.contains(item.second))
             column_names.emplace_back(item);
+        else
+            contains_all_columns = false;
+    }
+
+    Assignments inline_expressions;
+    for (const auto & ass : step->getInlineExpressions())
+    {
+        if (require.contains(ass.first))
+            inline_expressions.emplace(ass.first, ass.second);
         else
             contains_all_columns = false;
     }
@@ -462,8 +465,44 @@ PlanNodePtr ColumnPruningVisitor::visitTableScanNode(TableScanNode & node, NameS
     if (contains_all_columns)
         return node.shared_from_this();
 
+    if (column_names.empty() && inline_expressions.empty())
+    {
+        // select a minimal column from the present columns to be read
+        auto storage = step->getStorage();
+        auto metadata_snapshot = storage->getInMemoryMetadataPtr();
+        const auto & columns_desc = metadata_snapshot->getColumns();
+        auto column_to_alias = step->getColumnToAliasMap();
+        NamesAndTypesList candidate_columns;
+
+        if (!column_to_alias.empty())
+        {
+            for (const auto & pair : column_to_alias)
+                // Hack: ColumnPruning::selectColumnWithMinSize ignores subcolumn, by checking `NameAndTypePair::subcolumn_delimiter_position`.
+                // This is unexpected, so we rebuild the NameAndTypePair
+                candidate_columns.emplace_back(
+                    pair.first, columns_desc.getColumnOrSubcolumn(ColumnsDescription::AllPhysical, pair.first).type);
+        }
+        else
+        {
+            candidate_columns = columns_desc.getAllPhysical();
+        }
+
+        auto min_size_column = ColumnPruning::selectColumnWithMinSize(std::move(candidate_columns), storage);
+        column_names.emplace_back(
+            min_size_column,
+            column_to_alias.contains(min_size_column) ? column_to_alias[min_size_column]
+                                                      : context->getSymbolAllocator()->newSymbol(min_size_column));
+    }
+
     auto read_step = std::make_shared<TableScanStep>(
-        context, step->getStorageID(), std::move(column_names), step->getQueryInfo(), step->getMaxBlockSize(), step->getTableAlias(), step->getHints());
+        context,
+        step->getStorageID(),
+        column_names,
+        step->getQueryInfo(),
+        step->getMaxBlockSize(),
+        step->getTableAlias(),
+        step->getHints(),
+        inline_expressions);
     auto read_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(read_step), {}, node.getStatistics());
     return read_node;
 }
@@ -509,7 +548,7 @@ PlanNodePtr ColumnPruningVisitor::visitAggregatingNode(AggregatingNode & node, N
             new_keys.push_back(key);
         }
     }
-    
+
 
     auto agg_step = std::make_shared<AggregatingStep>(
         child->getStep()->getOutputStream(),

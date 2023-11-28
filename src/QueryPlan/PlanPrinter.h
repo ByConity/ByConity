@@ -58,9 +58,12 @@ public:
         const StepAggregatedOperatorProfiles & profiles = {},
         const QueryPlan & query_plan = {},
         bool print_profile = true);
+    static String textPipelineProfile(PlanSegmentDescriptions & segment_descs, SegmentAndWorkerToGroupedProfile & worker_grouped_profiles);
+    static String jsonPipelineProfile(PlanSegmentDescriptions & segment_descs, SegmentAndWorkerToGroupedProfile & worker_grouped_profiles);
     static void getPlanNodes(const PlanNodePtr & parent, std::unordered_map<PlanNodeId, PlanNodePtr> & id_to_node);
     static std::unordered_map<PlanNodeId, PlanNodePtr>  getPlanNodeMap(const QueryPlan & query_plan);
     static void getRemoteSegmentId(const QueryPlan::Node * node, std::unordered_map<PlanNodeId, size_t> & exchange_to_segment);
+    static String getPlanSegmentHeaderText(PlanSegmentDescriptionPtr & segment_desc);
 
     class TextPrinter;
 };
@@ -102,6 +105,7 @@ public:
     }
     static String printOutputColumns(PlanNodeBase & plan_node, const TextPrinterIntent & intent = {});
     String printLogicalPlan(PlanNodeBase & plan, const TextPrinterIntent & intent = {}, const StepAggregatedOperatorProfiles & profiles = {});
+    String printPipelineProfile(GroupedProcessorProfilePtr & input_root, const TextPrinterIntent & intent = {});
 
     static String prettyNum(size_t num);
     static String prettyBytes(size_t bytes);
@@ -112,6 +116,7 @@ public:
     static String printFilter(ConstASTPtr filter);
 private:
     String printDetail(QueryPlanStepPtr plan, const TextPrinterIntent & intent) const;
+    static String printProcessorDetail(GroupedProcessorProfilePtr profile, const TextPrinterIntent & intent);
     String printStatistics(const PlanNodeBase & plan, const TextPrinterIntent & intent = {}) const;
     static String printOperatorProfiles(PlanNodeBase & plan, const TextPrinterIntent & intent = {}, const StepAggregatedOperatorProfiles & profiles = {}) ;
 
@@ -182,7 +187,7 @@ struct PlanSegmentDescription
 
     NodeDescriptionPtr node_description;
 
-    Poco::JSON::Object::Ptr jsonPlanSegmentDescription(const StepAggregatedOperatorProfiles & profiles);
+    Poco::JSON::Object::Ptr jsonPlanSegmentDescription(const StepAggregatedOperatorProfiles & profiles, bool is_pipeline = false);
     String jsonPlanSegmentDescriptionAsString(const StepAggregatedOperatorProfiles & profiles);
     static PlanSegmentDescriptionPtr getPlanSegmentDescription(PlanSegmentPtr & segment, bool record_plan_detail = false);
 };

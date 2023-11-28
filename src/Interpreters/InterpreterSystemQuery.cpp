@@ -333,6 +333,10 @@ BlockIO InterpreterSystemQuery::execute()
             getContext()->checkAccess(AccessType::SYSTEM_DROP_UNCOMPRESSED_CACHE);
             system_context->dropUncompressedCache();
             break;
+        case Type::DROP_NVM_CACHE:
+            getContext()->checkAccess(AccessType::SYSTEM_DROP_NVM_CACHE);
+            system_context->dropNvmCache();
+            break;
         case Type::DROP_MMAP_CACHE:
             getContext()->checkAccess(AccessType::SYSTEM_DROP_MMAP_CACHE);
             system_context->dropMMappedFileCache();
@@ -1204,6 +1208,7 @@ AccessRightsElements InterpreterSystemQuery::getRequiredAccessForDDLOnCluster() 
 #if USE_EMBEDDED_COMPILER
         case Type::DROP_COMPILED_EXPRESSION_CACHE: [[fallthrough]];
 #endif
+        case Type::DROP_NVM_CACHE: [[fallthrough]];
         case Type::DROP_UNCOMPRESSED_CACHE:
         {
             required_access.emplace_back(AccessType::SYSTEM_DROP_CACHE);

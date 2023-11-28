@@ -378,10 +378,12 @@ PropertySets DeterminerVisitor::visitLimitStep(const LimitStep & step, Determine
         return visitStep(step, context);
     return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
-PropertySets DeterminerVisitor::visitLimitByStep(const LimitByStep & node, DeterminerContext & context)
+
+PropertySets DeterminerVisitor::visitLimitByStep(const LimitByStep &, DeterminerContext &)
 {
-    return visitStep(node, context);
+    return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};
 }
+
 PropertySets DeterminerVisitor::visitSortingStep(const SortingStep &, DeterminerContext &)
 {
     return {{Property{Partitioning{Partitioning::Handle::SINGLE}}}};

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <Storages/DiskCache/Buffer.h>
-#include <Storages/DiskCache/File.h>
 #include <Storages/DiskCache/Types.h>
 #include <fmt/core.h>
 #include <sys/param.h>
@@ -9,6 +8,7 @@
 #include <Poco/Logger.h>
 #include <Common/Exception.h>
 #include <common/types.h>
+#include <Common/File.h>
 
 namespace DB::ErrorCodes
 {
@@ -22,17 +22,17 @@ namespace DB::HybridCache
 class Device
 {
 public:
-    explicit Device(UInt64 size) : Device{size, 0} { }
+    explicit Device(UInt64 size_) : Device{size_, 0} { }
 
-    Device(UInt64 size, UInt32 max_write_size) : Device(size, kDefaultAlignmentSize, max_write_size) { }
+    Device(UInt64 size_, UInt32 max_write_size_) : Device(size_, kDefaultAlignmentSize, max_write_size_) { }
 
-    Device(UInt64 size, UInt32 io_align_size, UInt32 max_write_size);
+    Device(UInt64 size_, UInt32 io_align_size_, UInt32 max_write_size_);
 
     virtual ~Device() = default;
 
-    size_t getIOAlignedSize(size_t size) const { return roundup(size, io_alignment_size_); }
+    size_t getIOAlignedSize(size_t size_) const { return roundup(size_, io_alignment_size); }
 
-    Buffer makeIOBuffer(size_t size) const { return Buffer{getIOAlignedSize(size), io_alignment_size_}; }
+    Buffer makeIOBuffer(size_t size_) const { return Buffer{getIOAlignedSize(size_), io_alignment_size}; }
 
     bool write(UInt64 offset, Buffer value);
 
@@ -44,9 +44,9 @@ public:
 
     void flush() { flushImpl(); }
 
-    UInt64 getSize() const { return size_; }
+    UInt64 getSize() const { return size; }
 
-    UInt32 getIOAlignmentSize() const { return io_alignment_size_; }
+    UInt32 getIOAlignmentSize() const { return io_alignment_size; }
 
     static Poco::Logger & logger();
 
@@ -62,13 +62,13 @@ private:
 
     bool writeInternal(UInt64 offset, const UInt8 * data, size_t size);
 
-    const UInt64 size_{0};
+    const UInt64 size{0};
 
-    const UInt32 io_alignment_size_{kDefaultAlignmentSize};
+    const UInt32 io_alignment_size{kDefaultAlignmentSize};
 
     // For chunking write, split large io into smaller writes.
     // 0 meanings no write limit.
-    const UInt32 max_write_size_{0};
+    const UInt32 max_write_size{0};
 
     static constexpr UInt32 kDefaultAlignmentSize{1};
 };
@@ -76,7 +76,7 @@ private:
 std::unique_ptr<Device> createMemoryDevice(UInt64 size, UInt32 io_align_size = 1);
 
 std::unique_ptr<Device> createDirectIoFileDevice(
-    std::vector<File> f_vec,
+    std::vector<DB::File> f_vec,
     UInt64 file_size,
     UInt32 block_size,
     UInt32 stripe_size,
@@ -85,7 +85,7 @@ std::unique_ptr<Device> createDirectIoFileDevice(
     UInt32 q_depth);
 
 std::unique_ptr<Device>
-createDirectIoFileDevice(std::vector<File> f_vec, UInt64 file_size, UInt32 block_size, UInt32 stripe_size, UInt32 max_device_write_size);
+createDirectIoFileDevice(std::vector<DB::File> f_vec, UInt64 file_size, UInt32 block_size, UInt32 stripe_size, UInt32 max_device_write_size);
 
 inline Poco::Logger & Device::logger()
 {

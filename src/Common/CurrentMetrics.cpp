@@ -142,8 +142,20 @@
     M(SystemCnchPartsInfoRecalculationTasksSize, "Number of background threads in recalculate cnch_parts_info system table.") \
     M(SystemCnchTrashItemsInfoRecalculationTasksSize, "Number of background threads in recalculate cnch_trash_items_info system table.") \
     \
+    M(BigHashItemCount, "BigHash item count") \
+    M(BigHashUsedSizeBytes, "BigHash used size in bytes") \
+    \
+    M(BlockCacheUsedSizeBytes, "BlockCache used size in bytes") \
+    M(BlockCacheHoleCount, "BlockCache hole count") \
+    M(BlockCacheHoleBytesTotal, "BlockCache hole bytes total") \
+    \
+    M(RegionManagerExternalFragmentation, "RegionManager external fragmentation") \
+    M(RegionManagerNumInMemBufActive, "RegionManager number of in-memory active buffer") \
+    M(RegionManagerNumInMemBufWaitingFlush, "RegionManager number of in-memory waiting flush buffer") \
+    \
     M(IOSchUserRequests, "UserRequests in io scheduler") \
     M(IOSchRawRequests, "RawRequests in deadline scheduler") \
+    \
 
 namespace CurrentMetrics
 {

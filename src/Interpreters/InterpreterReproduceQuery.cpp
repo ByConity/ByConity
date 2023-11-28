@@ -2,6 +2,7 @@
 
 #include <Analyzers/QueryAnalyzer.h>
 #include <Columns/IColumn.h>
+#include <Common/CurrentThread.h>
 #include <Common/SettingsChanges.h>
 #include <Core/Block.h>
 #include <Core/ColumnWithTypeAndName.h>
@@ -271,7 +272,7 @@ BlockIO InterpreterReproduceQuery::reproduceExecuteImpl(PlanReproducer && reprod
             query_context->applySettingsChanges(enforced_settings);
             String query_id = query_context->getCurrentQueryId();
             query_context->setCurrentQueryId(query_id + "_sub_query_" + query.query_id);
-            ThreadStatus thread_status;
+            auto & thread_status = CurrentThread::get();
             thread_status.attachQueryContext(query_context);
 
             String res;

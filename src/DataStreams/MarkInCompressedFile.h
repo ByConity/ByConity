@@ -43,7 +43,8 @@ struct MarkInCompressedFile
 class MarksInCompressedFile : public PODArray<MarkInCompressedFile>
 {
 public:
-    MarksInCompressedFile(size_t n) : PODArray(n) {}
+    MarksInCompressedFile() : PODArray(0) {}
+    explicit MarksInCompressedFile(size_t n) : PODArray(n) {}
 
     void read(ReadBuffer & buffer, size_t from, size_t count)
     {

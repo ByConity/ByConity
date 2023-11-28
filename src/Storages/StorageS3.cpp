@@ -493,21 +493,22 @@ void StorageS3::updateClientAndAuthSettings(ContextPtr ctx, StorageS3::ClientAut
         return;
 
     Aws::Auth::AWSCredentials credentials(upd.access_key_id, upd.secret_access_key);
-    HeaderCollection headers;
+    HTTPHeaderEntries headers;
     if (upd.access_key_id.empty())
     {
         credentials = Aws::Auth::AWSCredentials(settings.access_key_id, settings.access_key_secret);
         headers = settings.headers;
     }
 
-    S3::PocoHTTPClientConfiguration client_configuration = S3::ClientFactory::instance().createClientConfiguration(
-        settings.region,
-        ctx->getRemoteHostFilter(), ctx->getGlobalContext()->getSettingsRef().s3_max_redirects,
-        ctx->getConfigRef().getUInt("s3.http_keep_alive_timeout_ms", 5000),
-        ctx->getConfigRef().getUInt("s3.http_connection_pool_size", 1024), false);
+    std::shared_ptr<Aws::Client::ClientConfiguration> client_configuration =
+        S3::ClientFactory::instance().createClientConfiguration(
+            settings.region,
+            ctx->getRemoteHostFilter(), ctx->getGlobalContext()->getSettingsRef().s3_max_redirects,
+            ctx->getConfigRef().getUInt("s3.http_keep_alive_timeout_ms", 5000),
+            ctx->getConfigRef().getUInt("s3.http_connection_pool_size", 1024), false);
 
-    client_configuration.endpointOverride = upd.uri.endpoint;
-    client_configuration.maxConnections = upd.max_connections;
+    client_configuration->endpointOverride = upd.uri.endpoint;
+    client_configuration->maxConnections = upd.max_connections;
 
     upd.client = S3::ClientFactory::instance().create(
         client_configuration,

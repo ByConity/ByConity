@@ -22,7 +22,7 @@ namespace DB
 {
 std::set<std::string> SymbolsExtractor::extract(ConstASTPtr node)
 {
-    static SymbolVisitor visitor;
+    SymbolVisitor visitor;
     SymbolVisitorContext context;
     ASTVisitorUtil::accept(node, visitor, context);
     if (!context.exclude_symbols.empty())
@@ -45,7 +45,7 @@ std::set<std::string> SymbolsExtractor::extract(PlanNodePtr & node)
 
 std::set<std::string> SymbolsExtractor::extract(std::vector<ConstASTPtr> & nodes)
 {
-    static SymbolVisitor visitor;
+    SymbolVisitor visitor;
     SymbolVisitorContext context;
     for (auto & node : nodes)
     {

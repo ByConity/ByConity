@@ -52,6 +52,8 @@ public:
 
     using Key = ConstHashAST;
     using OriKey = ConstASTPtr;
+    using MapType = std::unordered_map<Key, Value, EqAST::Hash, EqAST::Equal>;
+    using IterType = typename MapType::iterator;
 
     template <typename V>
     auto emplace(const Key & key, V && v)
@@ -128,9 +130,13 @@ public:
         return container.find(ConstHashAST::make(key));
     }
 
+    auto erase(IterType it)
+    {
+        return container.erase(it);
+    }
 
 private:
-    std::unordered_map<Key, Value, EqAST::Hash, EqAST::Equal> container;
+    MapType container;
 };
 
 class EqualityASTSet

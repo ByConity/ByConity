@@ -153,8 +153,22 @@ JoinPtr JoinStep::makeJoin(ContextPtr context, std::shared_ptr<RuntimeFilterCons
     return std::make_shared<JoinSwitcher>(table_join, r_sample_block);
 }
 
-JoinStep::JoinStep(const DataStream & left_stream_, const DataStream & right_stream_, JoinPtr join_, size_t max_block_size_, size_t max_streams_, bool keep_left_read_in_order_, bool is_ordered_, bool simple_reordered_, PlanHints hints_)
-    : join(std::move(join_)), max_block_size(max_block_size_), max_streams(max_streams_), keep_left_read_in_order(keep_left_read_in_order_), is_ordered(is_ordered_), simple_reordered(simple_reordered_)
+JoinStep::JoinStep(
+    const DataStream & left_stream_,
+    const DataStream & right_stream_,
+    JoinPtr join_,
+    size_t max_block_size_,
+    size_t max_streams_,
+    bool keep_left_read_in_order_,
+    bool is_ordered_,
+    bool simple_reordered_,
+    PlanHints hints_)
+    : join(std::move(join_))
+    , max_block_size(max_block_size_)
+    , max_streams(max_streams_)
+    , keep_left_read_in_order(keep_left_read_in_order_)
+    , is_ordered(is_ordered_)
+    , simple_reordered(simple_reordered_)
 {
     input_streams = {left_stream_, right_stream_};
     output_stream = DataStream{
@@ -315,16 +329,16 @@ void JoinStep::describePipeline(FormatSettings & settings) const
 
 void JoinStep::toProto(Protos::JoinStep & proto, bool for_hash_equals) const
 {
-    for (const auto & element : input_streams)
-        element.toProto(*proto.add_input_streams());
-    if (for_hash_equals)
+    // skip input/output streams when comparing plan
+    if (!for_hash_equals)
     {
-        // skip
-    }
-    else if (output_stream.has_value())
+        if (!output_stream.has_value() || input_streams.empty())
+            throw Exception("required to have input/output stream", ErrorCodes::PROTOBUF_BAD_CAST);
+
+        for (const auto & element : input_streams)
+            element.toProto(*proto.add_input_streams());
         output_stream->toProto(*proto.mutable_output_stream());
-    else
-        throw Exception("required to have output stream", ErrorCodes::PROTOBUF_BAD_CAST);
+    }
 
     proto.set_step_description(step_description);
     proto.set_kind(ASTTableJoin::KindConverter::toProto(kind));

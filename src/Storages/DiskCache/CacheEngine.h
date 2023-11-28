@@ -1,7 +1,7 @@
 #pragma once
 
-#include <istream>
-#include <ostream>
+#include <google/protobuf/io/zero_copy_stream.h>
+
 #include <IO/ReadBuffer.h>
 #include <IO/WriteBuffer.h>
 #include <Storages/DiskCache/Buffer.h>
@@ -38,14 +38,32 @@ public:
     virtual void reset() = 0;
 
     // serializes engine state
-    virtual void persist(std::ostream * os) = 0;
+    virtual void persist(google::protobuf::io::ZeroCopyOutputStream *) = 0;
 
     // deserialize engine state
-    virtual bool recover(std::istream * is) = 0;
+    virtual bool recover(google::protobuf::io::ZeroCopyInputStream *) = 0;
 
     virtual UInt64 getMaxItemSize() const = 0;
 
     // get key and buffer for a random sample
     virtual std::pair<Status, std::string> getRandomAlloc(Buffer & value) = 0;
+};
+
+class NoopEngine final : public CacheEngine
+{
+public:
+    ~NoopEngine() override = default;
+    UInt64 getSize() const override { return 0; }
+    Status insert(HashedKey, BufferView) override { return Status::Rejected; }
+    bool couldExist(HashedKey) override { return false; }
+    UInt64 estimateWriteSize(HashedKey, BufferView) const override { return 0; }
+    Status lookup(HashedKey, Buffer &) override { return Status::NotFound; }
+    Status remove(HashedKey) override { return Status::NotFound; }
+    void flush() override { }
+    void reset() override { }
+    void persist(google::protobuf::io::ZeroCopyOutputStream *) override { }
+    bool recover(google::protobuf::io::ZeroCopyInputStream *) override { return true; }
+    UInt64 getMaxItemSize() const override { return UINT32_MAX; }
+    std::pair<Status, std::string> getRandomAlloc(Buffer &) override { return std::make_pair(Status::NotFound, ""); }
 };
 }

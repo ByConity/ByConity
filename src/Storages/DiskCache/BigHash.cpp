@@ -1,5 +1,6 @@
 #include <Storages/DiskCache/BigHash.h>
 
+#include <atomic>
 #include <chrono>
 #include <exception>
 #include <istream>
@@ -8,24 +9,26 @@
 #include <random>
 #include <shared_mutex>
 #include <utility>
+#include <sys/param.h>
+
 #include <fmt/core.h>
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <google/protobuf/util/delimited_message_util.h>
-#include <sys/param.h>
 
 #include <IO/ReadBuffer.h>
 #include <Protos/disk_cache.pb.h>
 #include <Storages/DiskCache/Bucket.h>
 #include <Storages/DiskCache/Buffer.h>
 #include <Storages/DiskCache/HashKey.h>
-#include <Storages/DiskCache/TimeUtil.h>
 #include <Storages/DiskCache/Types.h>
+#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
 #include <Common/SharedMutex.h>
 #include <Common/thread_local_rng.h>
+#include <common/chrono_io.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 
@@ -39,9 +42,18 @@ extern const Event BigHashInsertCount;
 extern const Event BigHashSuccInsertCount;
 extern const Event BigHashRemoveCount;
 extern const Event BigHashSuccRemoveCount;
+extern const Event BigHashLookupCount;
 extern const Event BigHashSuccLookupCount;
 extern const Event BigHashIOErrorCount;
 extern const Event BigHashBFFalsePositiveCount;
+extern const Event BigHashBFProbCount;
+extern const Event BigHashBFRejectCount;
+}
+
+namespace CurrentMetrics
+{
+extern const Metric BigHashItemCount;
+extern const Metric BigHashUsedSizeBytes;
 }
 
 namespace DB::ErrorCodes
@@ -99,44 +111,44 @@ BigHash::BigHash(Config && config) : BigHash{std::move(config.validate()), Valid
 }
 
 BigHash::BigHash(Config && config, ValidConfigTag)
-    : check_expired_(std::move(config.check_expired))
-    , destructor_callback_{[callback = std::move(config.destructor_callback)](HashedKey key, BufferView value, DestructorEvent event) {
+    : check_expired(std::move(config.check_expired))
+    , destructor_callback{[callback = std::move(config.destructor_callback)](HashedKey key, BufferView value, DestructorEvent event) {
         if (callback)
             callback(key, value, event);
     }}
-    , bucket_size_(config.bucket_size)
-    , cache_base_offset_(config.cache_start_offset)
-    , num_buckets_(config.numBuckets())
-    , bloom_filters_{std::move(config.bloom_filters)}
-    , device_{*config.device}
+    , bucket_size(config.bucket_size)
+    , cache_base_offset(config.cache_start_offset)
+    , num_buckets(config.numBuckets())
+    , bloom_filters{std::move(config.bloom_filters)}
+    , device{*config.device}
 {
-    mutex_ = std::make_unique<SharedMutex[]>(kNumMutexes);
+    mutex = std::make_unique<SharedMutex[]>(kNumMutexes);
     LOG_INFO(
-        log, fmt::format("BigHash created: buckets: {}, bucket size: {}, base offset: {}", num_buckets_, bucket_size_, cache_base_offset_));
+        log, fmt::format("BigHash created: buckets: {}, bucket size: {}, base offset: {}", num_buckets, bucket_size, cache_base_offset));
     reset();
 }
 
 void BigHash::reset()
 {
     LOG_INFO(log, "Reset BigHash");
-    generation_time_ = getSteadyClock();
+    generation_time = getSteadyClock();
 
-    if (bloom_filters_)
-        bloom_filters_->reset();
+    if (bloom_filters)
+        bloom_filters->reset();
 
-    item_count_ = 0;
-    used_size_bytes_ = 0;
+    CurrentMetrics::set(CurrentMetrics::BigHashItemCount, 0);
+    CurrentMetrics::set(CurrentMetrics::BigHashUsedSizeBytes, 0);
 }
 
 UInt64 BigHash::getMaxItemSize() const
 {
     auto item_overhead = BucketStorage::slotSize(sizeof(BucketEntry));
-    return bucket_size_ - sizeof(Bucket) - item_overhead;
+    return bucket_size - sizeof(Bucket) - item_overhead;
 }
 
 std::pair<Status, std::string> BigHash::getRandomAlloc(Buffer & value)
 {
-    auto dist = std::uniform_int_distribution<UInt64>(0, num_buckets_ - 1);
+    auto dist = std::uniform_int_distribution<UInt64>(0, num_buckets - 1);
     BucketId bucket_id(dist(thread_local_rng));
 
     Bucket * bucket{nullptr};
@@ -161,54 +173,52 @@ std::pair<Status, std::string> BigHash::getRandomAlloc(Buffer & value)
     return std::make_pair(Status::Ok, key);
 }
 
-void BigHash::persist(std::ostream * os)
+void BigHash::persist(google::protobuf::io::ZeroCopyOutputStream * stream)
 {
     LOG_INFO(log, "Starting bighash persist");
     Protos::BigHashPersistentData pb;
     pb.set_format_version(kFormatVersion);
-    pb.set_generation_time(generation_time_.count());
-    pb.set_item_count(item_count_.value());
-    pb.set_bucket_size(bucket_size_);
-    pb.set_cache_base_offset(cache_base_offset_);
-    pb.set_num_buckets(num_buckets_);
-    pb.set_used_size_bytes(used_size_bytes_.value());
-    google::protobuf::util::SerializeDelimitedToOstream(pb, os);
-    auto raw_stream = google::protobuf::io::OstreamOutputStream(os);
-    google::protobuf::io::CodedOutputStream stream(&raw_stream);
+    pb.set_generation_time(generation_time.count());
+    pb.set_item_count(CurrentMetrics::values[CurrentMetrics::BigHashItemCount].load(std::memory_order_relaxed));
+    pb.set_bucket_size(bucket_size);
+    pb.set_cache_base_offset(cache_base_offset);
+    pb.set_num_buckets(num_buckets);
+    pb.set_used_size_bytes(CurrentMetrics::values[CurrentMetrics::BigHashUsedSizeBytes].load(std::memory_order_relaxed));
+    google::protobuf::io::CodedOutputStream ostream(stream);
+    google::protobuf::util::SerializeDelimitedToCodedStream(pb, &ostream);
 
-    if (bloom_filters_)
+    if (bloom_filters)
     {
-        bloom_filters_->persist(&stream);
+        bloom_filters->persist(&ostream);
         LOG_INFO(log, "Bloom filter persist done");
     }
     LOG_INFO(log, "Finished bighash persist");
 }
 
-bool BigHash::recover(std::istream * is)
+bool BigHash::recover(google::protobuf::io::ZeroCopyInputStream * stream)
 {
     LOG_INFO(log, "Starting bighash recovery");
     try
     {
         Protos::BigHashPersistentData pb;
-        google::protobuf::io::IstreamInputStream raw_stream(is);
-        google::protobuf::io::CodedInputStream stream(&raw_stream);
-        google::protobuf::util::ParseDelimitedFromCodedStream(&pb, &stream, nullptr);
+        google::protobuf::io::CodedInputStream istream(stream);
+        google::protobuf::util::ParseDelimitedFromCodedStream(&pb, &istream, nullptr);
         if (pb.format_version() != kFormatVersion)
             throwFromErrno(
                 fmt::format("Invalid format version {}, expected {}", pb.format_version(), kFormatVersion),
                 ErrorCodes::INVALID_CONFIG_PARAMETER);
 
         auto config_validate
-            = pb.bucket_size() == bucket_size_ && pb.cache_base_offset() == cache_base_offset_ && pb.num_buckets() == num_buckets_;
+            = pb.bucket_size() == bucket_size && pb.cache_base_offset() == cache_base_offset && pb.num_buckets() == num_buckets;
         if (!config_validate)
             throwFromErrno(fmt::format("Recovery config {}", pb.DebugString()), ErrorCodes::INVALID_CONFIG_PARAMETER);
 
-        generation_time_ = std::chrono::nanoseconds{pb.generation_time()};
-        item_count_ = pb.item_count();
-        used_size_bytes_ = pb.used_size_bytes();
-        if (bloom_filters_)
+        generation_time = std::chrono::nanoseconds{pb.generation_time()};
+        CurrentMetrics::set(CurrentMetrics::BigHashItemCount, pb.item_count());
+        CurrentMetrics::set(CurrentMetrics::BigHashUsedSizeBytes, pb.used_size_bytes());
+        if (bloom_filters)
         {
-            bloom_filters_->recover(&stream);
+            bloom_filters->recover(&istream);
             LOG_INFO(log, "Recovered bloom filter");
         }
     }
@@ -252,13 +262,13 @@ Status BigHash::insert(HashedKey key, BufferView value)
         auto * bucket = reinterpret_cast<Bucket *>(buffer.data());
         old_remaining_bytes = bucket->remainingBytes();
         removed = bucket->remove(key, callback);
-        std::tie(evicted, evict_expired) = bucket->insert(key, value, check_expired_, callback);
+        std::tie(evicted, evict_expired) = bucket->insert(key, value, check_expired, callback);
         new_remaining_bytes = bucket->remainingBytes();
 
-        if (bloom_filters_)
+        if (bloom_filters)
         {
             if (removed + evicted == 0)
-                bloom_filters_->set(bucket_id.toUnderType(), key.keyHash());
+                bloom_filters->set(bucket_id.toUnderType(), key.keyHash());
             else
                 bfRebuild(bucket_id, bucket);
         }
@@ -266,30 +276,28 @@ Status BigHash::insert(HashedKey key, BufferView value)
         const auto res = writeBucket(bucket_id, std::move(buffer));
         if (!res)
         {
-            if (bloom_filters_)
-                bloom_filters_->clear(bucket_id.toUnderType());
+            if (bloom_filters)
+                bloom_filters->clear(bucket_id.toUnderType());
             ProfileEvents::increment(ProfileEvents::BigHashIOErrorCount);
             return Status::DeviceError;
         }
     }
 
     for (const auto & item : removed_items)
-    {
-        destructor_callback_(makeHashKey(std::get<0>(item)), std::get<1>(item).view(), std::get<2>(item));
-    }
+        destructor_callback(makeHashKey(std::get<0>(item)), std::get<1>(item).view(), std::get<2>(item));
 
     if (old_remaining_bytes < new_remaining_bytes)
-        used_size_bytes_ = used_size_bytes_.value() - (new_remaining_bytes - old_remaining_bytes);
+        CurrentMetrics::sub(CurrentMetrics::BigHashUsedSizeBytes, new_remaining_bytes - old_remaining_bytes);
     else
-        used_size_bytes_ = used_size_bytes_.value() + (old_remaining_bytes - new_remaining_bytes);
+        CurrentMetrics::add(CurrentMetrics::BigHashUsedSizeBytes, old_remaining_bytes - new_remaining_bytes);
 
-    item_count_++;
-    item_count_ = item_count_.value() - (evicted + removed);
+    CurrentMetrics::add(CurrentMetrics::BigHashItemCount);
+    CurrentMetrics::sub(CurrentMetrics::BigHashItemCount, evicted + removed);
 
     ProfileEvents::increment(ProfileEvents::BigHashEvictionCount, evicted);
     ProfileEvents::increment(ProfileEvents::BigHashEvictionExpiredCount, evict_expired);
     ProfileEvents::increment(ProfileEvents::BigHashLogicalWrittenCount, (key.key().size + value.size()));
-    ProfileEvents::increment(ProfileEvents::BigHashPhysicalWrittenCount, bucket_size_);
+    ProfileEvents::increment(ProfileEvents::BigHashPhysicalWrittenCount, bucket_size);
     ProfileEvents::increment(ProfileEvents::BigHashSuccInsertCount);
 
     return Status::Ok;
@@ -304,17 +312,21 @@ bool BigHash::couldExist(HashedKey key)
         can_exist = !bfReject(bucket_id, key.keyHash());
     }
 
+    if (!can_exist)
+        ProfileEvents::increment(ProfileEvents::BigHashLookupCount);
+
     return can_exist;
 }
 
 UInt64 BigHash::estimateWriteSize(HashedKey, BufferView) const
 {
-    return bucket_size_;
+    return bucket_size;
 }
 
 Status BigHash::lookup(HashedKey key, Buffer & value)
 {
     const auto bucket_id = getBucketId(key);
+    ProfileEvents::increment(ProfileEvents::BigHashLookupCount);
 
     Bucket * bucket{nullptr};
     Buffer buffer;
@@ -380,27 +392,27 @@ Status BigHash::remove(HashedKey key)
         }
         new_remaining_bytes = bucket->remainingBytes();
 
-        if (bloom_filters_)
+        if (bloom_filters)
             bfRebuild(bucket_id, bucket);
 
         const auto res = writeBucket(bucket_id, std::move(buffer));
         if (!res)
         {
-            if (bloom_filters_)
-                bloom_filters_->clear(bucket_id.toUnderType());
+            if (bloom_filters)
+                bloom_filters->clear(bucket_id.toUnderType());
             ProfileEvents::increment(ProfileEvents::BigHashIOErrorCount);
             return Status::DeviceError;
         }
     }
 
     if (!value_copy.isNull())
-        destructor_callback_(key, value_copy.view(), DestructorEvent::Removed);
+        destructor_callback(key, value_copy.view(), DestructorEvent::Removed);
 
     chassert(old_remaining_bytes <= new_remaining_bytes);
-    used_size_bytes_ = used_size_bytes_.value() - (new_remaining_bytes - old_remaining_bytes);
-    item_count_--;
+    CurrentMetrics::sub(CurrentMetrics::BigHashUsedSizeBytes, new_remaining_bytes - old_remaining_bytes);
+    CurrentMetrics::sub(CurrentMetrics::BigHashItemCount);
 
-    ProfileEvents::increment(ProfileEvents::BigHashPhysicalWrittenCount, bucket_size_);
+    ProfileEvents::increment(ProfileEvents::BigHashPhysicalWrittenCount, bucket_size);
     ProfileEvents::increment(ProfileEvents::BigHashSuccRemoveCount);
 
     return Status::Ok;
@@ -408,20 +420,26 @@ Status BigHash::remove(HashedKey key)
 
 bool BigHash::bfReject(BucketId bucket_id, const UInt64 key_hash) const
 {
-    if (bloom_filters_)
-        if (!bloom_filters_->couldExist(bucket_id.toUnderType(), key_hash))
+    if (bloom_filters)
+    {
+        ProfileEvents::increment(ProfileEvents::BigHashBFProbCount);
+        if (!bloom_filters->couldExist(bucket_id.toUnderType(), key_hash))
+        {
+            ProfileEvents::increment(ProfileEvents::BigHashBFRejectCount);
             return true;
+        }
+    }
     return false;
 }
 
 void BigHash::bfRebuild(BucketId bucket_id, const Bucket * bucket)
 {
-    chassert(bloom_filters_);
-    bloom_filters_->clear(bucket_id.toUnderType());
+    chassert(bloom_filters);
+    bloom_filters->clear(bucket_id.toUnderType());
     auto iter = bucket->getFirst();
     while (!iter.done())
     {
-        bloom_filters_->set(bucket_id.toUnderType(), iter.keyHash());
+        bloom_filters->set(bucket_id.toUnderType(), iter.keyHash());
         iter = bucket->getNext(iter);
     }
 }
@@ -429,23 +447,23 @@ void BigHash::bfRebuild(BucketId bucket_id, const Bucket * bucket)
 void BigHash::flush()
 {
     LOG_INFO(log, "Flush bighash");
-    device_.flush();
+    device.flush();
 }
 
 Buffer BigHash::readBucket(BucketId bucket_id)
 {
-    auto buffer = device_.makeIOBuffer(bucket_size_);
+    auto buffer = device.makeIOBuffer(bucket_size);
     chassert(!buffer.isNull());
 
-    const bool res = device_.read(getBucketOffset(bucket_id), buffer.size(), buffer.data());
+    const bool res = device.read(getBucketOffset(bucket_id), buffer.size(), buffer.data());
     if (!res)
         return {};
 
     auto * bucket = reinterpret_cast<Bucket *>(buffer.data());
 
     const auto checksum_success = Bucket::computeChecksum(buffer.view()) == bucket->getChecksum();
-    if (!checksum_success || static_cast<UInt64>(generation_time_.count()) != bucket->generationTime())
-        Bucket::initNew(buffer.mutableView(), generation_time_.count());
+    if (!checksum_success || static_cast<UInt64>(generation_time.count()) != bucket->generationTime())
+        Bucket::initNew(buffer.mutableView(), generation_time.count());
 
     return buffer;
 }
@@ -454,6 +472,6 @@ bool BigHash::writeBucket(BucketId bucket_id, Buffer buffer)
 {
     auto * bucket = reinterpret_cast<Bucket *>(buffer.data());
     bucket->setChecksum(Bucket::computeChecksum(buffer.view()));
-    return device_.write(getBucketOffset(bucket_id), std::move(buffer));
+    return device.write(getBucketOffset(bucket_id), std::move(buffer));
 }
 }

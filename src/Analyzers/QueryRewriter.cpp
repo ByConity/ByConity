@@ -21,7 +21,6 @@
 #include <Analyzers/ImplementFunctionVisitor.h>
 #include <Analyzers/ReplaceViewWithSubqueryVisitor.h>
 #include <Analyzers/SimpleFunctionVisitor.h>
-#include <Analyzers/RewriteAliasesVisitor.h>
 #include <Interpreters/ApplyWithAliasVisitor.h>
 #include <Interpreters/ApplyWithSubqueryVisitor.h>
 #include <Interpreters/CollectJoinOnKeysVisitor.h>
@@ -179,13 +178,6 @@ namespace
     {
         ApplyWithSubqueryVisitor::visit(query);
         GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-expand-cte");
-    }
-
-    void rewriteAliases(ASTPtr & query, ContextMutablePtr context, int & graphviz_index)
-    {
-        RewriteAliasesVisitor::Data data{context};
-        RewriteAliasesVisitor(data).visit(query);
-        GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-rewrite-alias");
     }
 
     void checkAlias(ASTPtr & query)
@@ -550,7 +542,6 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
         simpleFunctions(query, context);
 
         /// Expression rewriting
-        rewriteAliases(query, context, graphviz_index);
         markTupleLiteralsAsLegacy(query, context);
         markTableIdentifiers(query);
         rewriteInTableExpression(query);

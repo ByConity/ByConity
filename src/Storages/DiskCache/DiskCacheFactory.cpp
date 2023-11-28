@@ -77,6 +77,8 @@ void DiskCacheFactory::init(Context & context)
 
     // create dafault cache for MergeTree Diskcache
     DiskCacheSettings cache_settings;
+    cache_settings.loadFromConfig(config, "MergeTree");
+    
     if (caches.find(DiskCacheType::MergeTree) == caches.end())
     {
         LOG_TRACE(

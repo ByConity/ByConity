@@ -1,7 +1,7 @@
   select  dt.d_year
- 	,item.i_brand_id brand_id
- 	,item.i_brand brand
- 	,sum(ss_ext_sales_price) ext_price
+  ,item.i_brand_id brand_id
+  ,item.i_brand brand
+  ,sum(ss_ext_sales_price) ext_price
  from date_dim dt
      ,store_sales
      ,item
@@ -11,9 +11,9 @@
     and dt.d_moy=11
     and dt.d_year=2000
  group by dt.d_year
- 	,item.i_brand
- 	,item.i_brand_id
+  ,item.i_brand
+  ,item.i_brand_id
  order by dt.d_year
- 	,ext_price desc
- 	,brand_id
+  ,ext_price desc
+  ,brand_id
 limit 100 ;

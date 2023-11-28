@@ -116,7 +116,6 @@ void executePlanSegmentInternal(PlanSegmentPtr plan_segment, ContextMutablePtr c
 void executePlanSegmentRemotely(
     const PlanSegment & plan_segment,
     ContextPtr context,
-    bool async,
     AsyncContextPtr & async_context,
     const WorkerId & worker_id = WorkerId{});
 

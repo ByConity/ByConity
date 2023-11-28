@@ -186,7 +186,7 @@ namespace ErrorCodes
     extern const int UNKNOWN_EXCEPTION;
 }
 
-void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr & ast)
+void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr & ast, bool & use_backup_vw)
 {
     const auto & backup_vw = context->getSettingsRef().backup_virtual_warehouse.value;
     if (backup_vw.empty())
@@ -211,6 +211,7 @@ void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr 
             {
                 ProfileEvents::increment(ProfileEvents::BackupVW, 1);
                 LOG_DEBUG(&Poco::Logger::get("executeQuery"), "backup round_robin choose {}", backup_vws[idx - 1]);
+                use_backup_vw = true;
                 trySetVirtualWarehouseAndWorkerGroup(backup_vws[idx - 1], context);
             }
         }
@@ -225,6 +226,7 @@ void trySetVirtualWarehouseWithBackup(ContextMutablePtr & context, const ASTPtr 
                     {
                         trySetVirtualWarehouseAndWorkerGroup(vw, context);
                         ProfileEvents::increment(ProfileEvents::BackupVW, 1);
+                        use_backup_vw = true;
                         LOG_DEBUG(&Poco::Logger::get("executeQuery"), "backup vw choose {}", vw);
                         break;
                     }
@@ -847,6 +849,18 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             }
         }
     };
+
+    auto applyCustomSetting = [](ContextMutablePtr context_ptr, const ASTPtr & current_ast) {
+        if (context_ptr->getServerType() == ServerType::cnch_server && context_ptr->getVWCustomizedSettings())
+        {
+            auto vw_name = tryGetVirtualWarehouseName(current_ast, context_ptr);
+            if (vw_name != EMPTY_VIRTUAL_WAREHOUSE_NAME)
+            {
+                context_ptr->getVWCustomizedSettings()->overwriteDefaultSettings(vw_name, context_ptr->getSettingsRef());
+            }
+        }
+    };
+
     String query_database;
     String query_table;
     BlockIO res;
@@ -878,7 +892,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
         {
             ast = input_ast;
         }
-
+        applyCustomSetting(context, ast);
         bool in_interactive_txn = isQueryInInteractiveSession(context, ast);
         if (in_interactive_txn && isDDLQuery(context, ast))
         {
@@ -979,17 +993,12 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
     auto txn = prepareCnchTransaction(context, ast);
     if (txn)
     {
-        trySetVirtualWarehouseWithBackup(context, ast);
+        bool use_backup_vw = false;
+        trySetVirtualWarehouseWithBackup(context, ast, use_backup_vw);
         if (context->getServerType() == ServerType::cnch_server)
         {
-            if (context->getVWCustomizedSettings())
-            {
-                auto vw_name = tryGetVirtualWarehouseName(ast, context);
-                if (vw_name != EMPTY_VIRTUAL_WAREHOUSE_NAME)
-                {
-                    context->getVWCustomizedSettings()->overwriteDefaultSettings(vw_name, context->getSettingsRef());
-                }
-            }
+            if (use_backup_vw)
+                applyCustomSetting(context, ast);
             context->initCnchServerResource(txn->getTransactionID());
             if (!internal && !ast->as<ASTShowProcesslistQuery>() && context->getSettingsRef().enable_query_queue)
                 tryQueueQuery(context, ast->getType());
@@ -1859,7 +1868,7 @@ void tryOutfile(BlockIO & streams, ASTPtr ast, ContextMutablePtr context)
 
         String compression_method_str;
         UInt64 compression_level = 1;
-        OutfileTarget::setOufileCompression(ast_query_with_output, compression_method_str, compression_level);
+        OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
 
         const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
         OutfileTargetPtr outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
@@ -2086,7 +2095,7 @@ void executeQuery(
                 auto out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
                 String compression_method_str;
                 UInt64 compression_level = 1;
-                OutfileTarget::setOufileCompression(ast_query_with_output, compression_method_str, compression_level);
+                OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
                 outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
                 auto out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
                 out = FormatFactory::instance().getOutputStreamParallelIfPossible(
@@ -2133,7 +2142,7 @@ void executeQuery(
                 const auto & out_path = typeid_cast<const ASTLiteral &>(*ast_query_with_output->out_file).value.safeGet<std::string>();
                 String compression_method_str;
                 UInt64 compression_level = 1;
-                OutfileTarget::setOufileCompression(ast_query_with_output, compression_method_str, compression_level);
+                OutfileTarget::setOutfileCompression(ast_query_with_output, compression_method_str, compression_level);
                 outfile_target = OutfileTarget::getOutfileTarget(out_path, format_name, compression_method_str, compression_level);
                 out_buf = outfile_target->getOutfileBuffer(context, allow_into_outfile);
             }

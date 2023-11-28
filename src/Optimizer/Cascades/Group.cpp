@@ -22,6 +22,7 @@
 #include <QueryPlan/AnyStep.h>
 #include <QueryPlan/CTERefStep.h>
 #include <Optimizer/Property/ConstantsDeriver.h>
+#include <Optimizer/DataDependency/DataDependencyDeriver.h>
 
 namespace DB
 {
@@ -92,15 +93,16 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
     if (!stats_derived)
     {
         std::vector<PlanNodeStatisticsPtr> children_stats;
+        InclusionDependency inclusion_dependency;
         std::vector<bool> is_table_scans;
         for (const auto & child : expression->getChildrenGroups())
         {
+            inclusion_dependency = inclusion_dependency | context.getMemo().getGroupById(child)->getDataDependency().value_or(DataDependency{}).getInclusionDependencyRef();
             children_stats.emplace_back(context.getMemo().getGroupById(child)->getStatistics().value_or(nullptr));
             simple_children &= context.getMemo().getGroupById(child)->isSimpleChildren();
             is_table_scans.emplace_back(context.getMemo().getGroupById(child)->isTableScan());
         }
-        statistics = CardinalityEstimator::estimate(
-            expression->getStep(), context.getCTEInfo(), std::move(children_stats), context.getContext(), simple_children, is_table_scans);
+        statistics = CardinalityEstimator::estimate(expression->getStep(), context.getCTEInfo(), children_stats, context.getContext(), simple_children, is_table_scans, inclusion_dependency);
 
         if (expression->getStep()->getType() == IQueryPlanStep::Type::TableScan)
         {
@@ -137,6 +139,15 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
             children.emplace_back(context.getMemo().getGroupById(child)->getConstants().value_or(Constants{}));
         }
         constants = ConstantsDeriver::deriveConstants(expression->getStep(), children, context.getCTEInfo(), context.getContext());
+    }
+    if (!data_dependency.has_value())
+    {
+        std::vector<DataDependency> children;
+        for (const auto & child : expression->getChildrenGroups())
+        {
+            children.emplace_back(context.getMemo().getGroupById(child)->getDataDependency().value_or(DataDependency{}));
+        }
+        data_dependency = DataDependencyDeriver::deriveDataDependency(expression->getStep(), children, context.getCTEInfo(), context.getContext());
     }
 }
 

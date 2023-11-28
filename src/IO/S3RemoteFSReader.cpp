@@ -16,10 +16,15 @@ namespace ProfileEvents {
     extern const Event S3TrivialReaderReadMicroseconds;
     extern const Event S3TrivialReaderReadBytes;
     extern const Event S3ReadAheadReaderReadCount;
-    extern const Event S3ReadAheadReaderRemoteReadCount;
-    extern const Event S3ReadAheadReaderReadMicro;
-    extern const Event S3ReadAheadReaderExpectReadBytes;
     extern const Event S3ReadAheadReaderReadBytes;
+    extern const Event S3ReadAheadReaderReadMicro;
+    extern const Event S3ReadAheadReaderIgnoreCount;
+    extern const Event S3ReadAheadReaderIgnoreBytes;
+    extern const Event S3ReadAheadReaderIgnoreMicro;
+    extern const Event S3ReadAheadReaderGetRequestCount;
+    extern const Event S3ReadAheadReaderExpectReadBytes;
+    extern const Event S3ReadAheadReaderGetRequestMicro;
+    extern const Event S3ReadAheadReaderExpandTimes;
 }
 
 namespace DB {
@@ -130,11 +135,6 @@ S3ReadAheadReader::~S3ReadAheadReader()
 
 uint64_t S3ReadAheadReader::read(char* buffer, uint64_t size)
 {
-    Stopwatch watch;
-    ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderReadCount);
-    ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderExpectReadBytes, size);
-    SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderReadMicro, watch.elapsedMicroseconds());});
-
     if (current_offset_ == reader_end_offset_)
     {
         updateBufferSize(size);
@@ -159,6 +159,7 @@ void S3ReadAheadReader::updateBufferSize(uint64_t size)
         {
             ++read_expanded_times_;
             reader_size_ = reader_size_ * read_expand_pct_ / 100;
+            ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderExpandTimes);
         }
     } else
     {
@@ -171,8 +172,10 @@ void S3ReadAheadReader::updateBufferSize(uint64_t size)
 
 bool S3ReadAheadReader::refillBuffer()
 {
-    ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderRemoteReadCount);
-
+    Stopwatch watch;
+    SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderGetRequestMicro, watch.elapsedMicroseconds());});
+    ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderGetRequestCount);
+    ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderExpectReadBytes, reader_size_);
     assert(current_offset_ == reader_end_offset_
         && "Refill buffer when cursor didn't reach end of current reader");
 
@@ -207,6 +210,8 @@ uint64_t S3ReadAheadReader::readFromBuffer(char* buffer, uint64_t size)
 {
     try
     {
+        Stopwatch watch;
+        SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderReadMicro, watch.elapsedMicroseconds());});
         Aws::IOStream& stream = read_result_->GetBody();
         stream.read(buffer, size);
         size_t last_read_count = stream.gcount();
@@ -239,6 +244,7 @@ uint64_t S3ReadAheadReader::readFromBuffer(char* buffer, uint64_t size)
         {
             reader_is_drained_ = true;
         }
+        ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderReadCount);
         ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderReadBytes, last_read_count);
         return last_read_count;
     }
@@ -261,10 +267,13 @@ uint64_t S3ReadAheadReader::seek(uint64_t offset)
         {
             size_t bytes_to_skip = offset - current_offset_;
 
+            Stopwatch watch;
+            SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderIgnoreMicro, watch.elapsedMicroseconds());});
             Aws::IOStream& stream = read_result_->GetBody();
             stream.ignore(bytes_to_skip);
             size_t last_read_count = stream.gcount();
-            ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderReadBytes, last_read_count);
+            ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderIgnoreCount);
+            ProfileEvents::increment(ProfileEvents::S3ReadAheadReaderIgnoreBytes, last_read_count);
             if (last_read_count == bytes_to_skip)
             {
                 current_offset_ = offset;

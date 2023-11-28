@@ -183,6 +183,8 @@ void StorageSystemCnchDedupWorkers::fillData(MutableColumns & res_columns, Conte
         {
             for (auto it = db.second->getTablesIterator(context); it->isValid(); it->next())
             {
+                if (!it->table())
+                    continue;
                 auto table = dynamic_cast<const StorageCloudMergeTree *>(it->table().get());
                 if (table && table->getInMemoryMetadataPtr()->hasUniqueKey())
                     tables[table->getStorageID().uuid] = it->table();

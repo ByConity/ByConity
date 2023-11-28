@@ -127,22 +127,6 @@ public:
         }
     }
 
-    // ---------------------------------- NEW API like CacheLib ----------------------------------------------
-    // using InsertCallback = std::function<void(Status status, HashedKey key)>;
-    // using LookupCallback = std::function<void(Status status, HashedKey key)>;
-    // using RemoveCallback = std::function<void(Status status, HashedKey key)>;
-
-    // virtual Status insert(HashedKey key, BufferView value) = 0;
-    // virtual Status insertAsync(HashedKey key, BufferView value, InsertCallback callback) = 0;
-    // virtual Status lookup(HashedKey key, Buffer& value) = 0;
-    // virtual Status lookupAsync(HashedKey key, LookupCallback callback) = 0;
-    // virtual Status remove(HashedKey key) = 0;
-    // virtual Status RemoveAsync(HashedKey key, RemoveCallback callback) = 0;
-    // virtual void flush() = 0;
-    // virtual void reset() = 0;
-    // virtual void persist() const = 0;
-    // virtual void recover() = 0;
-
 protected:
     VolumePtr volume;
     ThrottlerPtr disk_cache_throttler;

@@ -93,7 +93,8 @@ void PartitionMetrics::restoreFromSnapshot(const PartitionMetrics & other)
     }
 
     std::unique_lock write_lock(mutex);
-    new_store = other.new_store;
+    /// Some incremental data might be inserted before the snapshot retrieved.
+    new_store += other.new_store;
 
     recalculating = false;
 }
@@ -182,6 +183,13 @@ bool PartitionMetrics::recalculate(size_t current_time, ContextPtr context, bool
     catch (...)
     {
         DB::tryLogCurrentException(log);
+        /// Try merge `old_store` back into `new_store`.
+        if (old_store.has_value())
+        {
+            std::unique_lock write_lock(mutex);
+            new_store += old_store.value().second;
+            old_store = std::nullopt;
+        }
     }
 
     recalculating = false;
@@ -209,8 +217,8 @@ void PartitionMetrics::recalculateBottomHalf(ContextPtr context)
         {
             /// 3. Get from KV.
             LOG_TRACE(log, "{} Get from KV", getTraceID());
-            auto metrics
-                = context->getCnchCatalog()->getPartitionMetricsStoreFromMetastore(table_uuid, partition_id, old_store.value().first);
+            auto metrics = context->getCnchCatalog()->getPartitionMetricsStoreFromMetastore(
+                table_uuid, partition_id, old_store.value().first, [this]() { return shutdown.load(); });
             LOG_TRACE(log, "{} After recalculate: {}", getTraceID(), metrics.toString());
 
             /// 4. Replace the old value.
@@ -238,7 +246,9 @@ void PartitionMetrics::recalculateBottomHalf(ContextPtr context)
         }
 
         /// Try to trigger a snapshot.
-        if (auto info = read(); need_snapshot(info.last_update_time, info.last_snapshot_time, current_time, context))
+        /// Abortion may happens during recalculation, which will leave a damaged metrics.
+        /// We must test `shutdown` again to explicitly avoid this.
+        if (auto info = read(); need_snapshot(info.last_update_time, info.last_snapshot_time, current_time, context) && !shutdown)
         {
             LOG_TRACE(log, "{} recalculate {} {}, snapshot triggered at {}", getTraceID(), table_uuid, partition_id, current_time);
 
@@ -258,6 +268,13 @@ void PartitionMetrics::recalculateBottomHalf(ContextPtr context)
     catch (...)
     {
         DB::tryLogCurrentException(log);
+        /// Try merge `old_store` back into `new_store`.
+        if (old_store.has_value())
+        {
+            std::unique_lock write_lock(mutex);
+            new_store += old_store.value().second;
+            old_store = std::nullopt;
+        }
     }
     recalculating = false;
 }
@@ -327,7 +344,8 @@ void TableMetrics::restoreFromSnapshot(Protos::TableTrashItemsMetricsSnapshot & 
         return;
     }
 
-    data = TableMetricsData(snapshot);
+    /// Some incremental data might be inserted before the snapshot retrieved.
+    data += TableMetricsData(snapshot);
 
     recalculating = false;
 }
@@ -500,12 +518,13 @@ PartitionMetrics::PartitionMetricsStore PartitionMetrics::PartitionMetricsStore:
 }
 void PartitionMetrics::PartitionMetricsStore::update(const Protos::DataModelPart & part_model)
 {
+    /// We ignore rows_count for partial parts.
     auto is_partial_part = part_model.part_info().hint_mutation();
-    /// do not count partial part
-    if (is_partial_part)
-        return;
 
     auto is_deleted_part = part_model.has_deleted() && part_model.deleted();
+
+    if (is_deleted_part && is_partial_part)
+        return;
 
     /// To minimize costs, we don't calculate part visibility when updating PartitionMetrics. For those parts marked as delete,
     /// just subtract them from statistics. And the non-deleted parts added into statistics. The non-deleted parts are added into
@@ -519,7 +538,8 @@ void PartitionMetrics::PartitionMetricsStore::update(const Protos::DataModelPart
     }
     else
     {
-        total_rows_count += part_model.rows_count();
+        if (!is_partial_part)
+            total_rows_count += part_model.rows_count();
         total_parts_size += part_model.size();
         total_parts_number += 1;
         if (part_model.bucket_number() == -1)
@@ -547,6 +567,22 @@ TableMetrics::TableMetricsData & TableMetrics::TableMetricsData::operator=(const
     return *this;
 }
 PartitionMetrics::PartitionMetricsStore & PartitionMetrics::PartitionMetricsStore::operator+=(const PartitionMetricsStore & rhs)
+{
+    *this = *this + rhs;
+    return *this;
+}
+TableMetrics::TableMetricsData TableMetrics::TableMetricsData::operator+(const TableMetricsData & rhs) const
+{
+    TableMetricsData res;
+    res.total_parts_number = this->total_parts_number + rhs.total_parts_number;
+    res.total_parts_size = this->total_parts_size + rhs.total_parts_size;
+    res.total_bitmap_number = this->total_bitmap_number + rhs.total_bitmap_number;
+    res.total_bitmap_size = this->total_bitmap_size + rhs.total_bitmap_size;
+    res.last_update_time = std::max(this->last_update_time.load(), rhs.last_update_time.load());
+    res.last_snapshot_time = std::max(this->last_snapshot_time.load(), rhs.last_snapshot_time.load());
+    return res;
+}
+TableMetrics::TableMetricsData & TableMetrics::TableMetricsData::operator+=(const TableMetricsData & rhs)
 {
     *this = *this + rhs;
     return *this;

@@ -42,6 +42,7 @@
 #include <Optimizer/Utils.h>
 #include <Parsers/queryToString.h>
 #include <QueryPlan/SymbolMapper.h>
+#include <Storages/MergeTree/MergeTreeCloudData.h>
 
 namespace DB
 {
@@ -423,7 +424,7 @@ void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryI
     if (!select || !select->where() || query_info.partition_filter || !storage)
         return;
 
-    if (!dynamic_cast<MergeTreeData *>(storage.get()))
+    if (!dynamic_cast<MergeTreeCloudData *>(storage.get()))
         return;
 
     ASTs conjuncts = PredicateUtils::extractConjuncts(select->where()->clone());
@@ -454,7 +455,7 @@ void optimizePartitionPredicate(ASTPtr & query, StoragePtr storage, SelectQueryI
     }
     if (!PredicateUtils::isTruePredicate(push_filter))
     {
-        if (auto * merge_tree_data = dynamic_cast<MergeTreeData *>(storage.get()))
+        if (auto * merge_tree_data = dynamic_cast<MergeTreeCloudData *>(storage.get()))
         {
             ASTs push_predicates;
             ASTs remain_predicates;

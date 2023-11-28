@@ -279,4 +279,5 @@ private:
     /// *********** END OF BitEngine-related members *********** ///
 };
 
+using StorageCnchMergeTreePtr = std::shared_ptr<StorageCnchMergeTree>;
 }

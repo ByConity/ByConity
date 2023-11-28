@@ -395,11 +395,14 @@ BlockIO InterpreterDropQuery::executeToDatabaseImpl(const ASTDropQuery & query, 
                 /// see DatabaseMaterializeMySQL<>::getTablesIterator()
                 for (auto iterator = database->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
                 {
-                    iterator->table()->flush();
+                    if (auto table = iterator->table())
+                        table->flush();
                 }
 
                 for (auto iterator = database->getTablesIterator(getContext()); iterator->isValid(); iterator->next())
                 {
+                    if (!iterator->table())
+                        continue;
                     DatabasePtr db;
                     UUID table_to_wait = UUIDHelpers::Nil;
                     query_for_table.table = iterator->name();

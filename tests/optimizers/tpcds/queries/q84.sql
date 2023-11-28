@@ -7,7 +7,7 @@
      ,household_demographics
      ,income_band
      ,store_returns
- where ca_city	        =  'Edgewood'
+ where ca_city         =  'Edgewood'
    and c_current_addr_sk = ca_address_sk
    and ib_lower_bound   >=  38128
    and ib_upper_bound   <=  38128 + 50000

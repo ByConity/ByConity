@@ -1,0 +1,55 @@
+Projection Est. 60150 rows
+│     Expressions: nation:=n_name, o_year:=`expr#toYear(o_orderdate)`, sum_profit:=`expr#sum(amount)`
+└─ Sorting Est. 60150 rows
+   │     Order by: {n_name ASC NULLS LAST, expr#toYear(o_orderdate) DESC NULLS LAST}
+   └─ Gather Exchange Est. 60150 rows
+      └─ Sorting Est. 60150 rows
+         │     Order by: {n_name ASC NULLS LAST, expr#toYear(o_orderdate) DESC NULLS LAST}
+         └─ MergingAggregated Est. 60150 rows
+            └─ Repartition Exchange Est. 60150 rows
+               │     Partition by: {n_name, expr#toYear(o_orderdate)}
+               └─ Aggregating Est. 60150 rows
+                  │     Group by: {n_name, expr#toYear(o_orderdate)}
+                  │     Aggregates: expr#sum(amount):=AggNull(sum)(expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)))
+                  └─ Projection Est. 2131273319 rows
+                     │     Expressions: [n_name], expr#minus(multiply(l_extendedprice, minus(1, l_discount)), multiply(ps_supplycost, l_quantity)):=(l_extendedprice * (1 - l_discount)) - (ps_supplycost * l_quantity), expr#toYear(o_orderdate):=toYear(o_orderdate)
+                     └─ Inner (PARALLEL_HASH) Join Est. 2144686971 rows
+                        │     Condition: l_partkey == p_partkey, l_suppkey == ps_suppkey
+                        ├─ Repartition Exchange Est. 593104506 rows
+                        │  │     Partition by: {l_suppkey}
+                        │  └─ Inner (PARALLEL_HASH) Join Est. 593104506 rows
+                        │     │     Condition: l_orderkey == o_orderkey
+                        │     ├─ Repartition Exchange Est. 600037902 rows
+                        │     │  │     Partition by: {l_orderkey}
+                        │     │  └─ TableScan tpch100.lineitem Est. 600037902 rows
+                        │     │           Outputs: [l_orderkey, l_partkey, l_suppkey, l_quantity, l_extendedprice, l_discount]
+                        │     └─ Repartition Exchange Est. 150000000 rows
+                        │        │     Partition by: {o_orderkey}
+                        │        └─ TableScan tpch100.orders Est. 150000000 rows
+                        │                 Outputs: [o_orderkey, o_orderdate]
+                        └─ Inner Join Est. 71860874 rows
+                           │     Condition: ps_suppkey == s_suppkey
+                           ├─ Repartition Exchange Est. 71999997 rows
+                           │  │     Partition by: {ps_suppkey}
+                           │  └─ Inner (PARALLEL_HASH) Join Est. 71999997 rows
+                           │     │     Condition: ps_partkey == p_partkey
+                           │     ├─ Repartition Exchange Est. 80000000 rows
+                           │     │  │     Partition by: {ps_partkey}
+                           │     │  └─ TableScan tpch100.partsupp Est. 80000000 rows
+                           │     │           Outputs: [ps_partkey, ps_suppkey, ps_supplycost]
+                           │     └─ Repartition Exchange Est. 18000000 rows
+                           │        │     Partition by: {p_partkey}
+                           │        └─ Filter Est. 18000000 rows
+                           │           │     Condition: p_name LIKE '%green%'
+                           │           └─ TableScan tpch100.part Est. 20000000 rows
+                           │                    Where: p_name LIKE '%green%'
+                           │                    Outputs: [p_partkey, p_name]
+                           └─ Repartition Exchange Est. 1000000 rows
+                              │     Partition by: {s_suppkey}
+                              └─ Inner Join Est. 1000000 rows
+                                 │     Condition: s_nationkey == n_nationkey
+                                 ├─ TableScan tpch100.supplier Est. 1000000 rows
+                                 │        Outputs: [s_suppkey, s_nationkey]
+                                 └─ Broadcast Exchange Est. 25 rows
+                                    └─ TableScan tpch100.nation Est. 25 rows
+                                             Outputs: [n_nationkey, n_name]

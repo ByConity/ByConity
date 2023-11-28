@@ -21,6 +21,7 @@
 #include <Columns/IColumn.h>
 #include <Common/PODArray.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
+#include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Transaction/LockRequest.h>
 
 namespace DB
@@ -124,5 +125,17 @@ struct FilterInfo
 };
 
 Block filterBlock(const Block & block, const FilterInfo & filter_info);
+
+CnchDedupHelper::DedupScope
+getDedupScope(MergeTreeMetaBase & storage, IMergeTreeDataPartsVector & source_data_parts, bool force_normal_dedup = false);
+
+CnchDedupHelper::DedupScope
+getDedupScope(MergeTreeMetaBase & storage, const MutableMergeTreeDataPartsCNCHVector & preload_parts, bool force_normal_dedup = false);
+
+/// Check whether we can use bucket level dedup, according to whether all parts is the same table definition, otherwise we need to use normal lock instead of bucket lock.
+bool checkBucketParts(
+    MergeTreeMetaBase & storage,
+    const MergeTreeDataPartsCNCHVector & visible_parts,
+    const MergeTreeDataPartsCNCHVector & staged_parts);
 
 }

@@ -307,8 +307,7 @@ IMutableMergeTreeDataPartPtr MergeTreeDataMutator::mutatePartToTemporaryPart(
     auto new_part_info = source_part->info;
     new_part_info.level += 1;
     new_part_info.hint_mutation = new_part_info.mutation;
-    new_part_info.mutation = context->getTimestamp();
-    
+    new_part_info.mutation = context->getCurrentTransactionID().toUInt64();
     auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + source_part->name, space_reservation->getDisk(), 0);
     auto new_part_name = new_part_info.getPartName();
     auto new_data_part = data.createPart(

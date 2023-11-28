@@ -2,6 +2,7 @@
 
 #include <Storages/DiskCache/HashKey.h>
 #include <Storages/DiskCache/Types.h>
+#include <common/function_traits.h>
 
 namespace DB::HybridCache
 {
@@ -25,12 +26,6 @@ struct MockRemoveCB
 {
     MOCK_METHOD2(call, void(Status, HashedKey));
 };
-
-template <typename Class, typename RetType, typename... Args>
-inline std::function<RetType(Args...)> bindThis(RetType (Class::*memFn)(Args...), Class & self)
-{
-    return [memFn, p = &self](Args... args) { return (p->*memFn)(std::forward<Args>(args)...); };
-}
 
 template <typename MockCB>
 auto toCallback(MockCB & mock)

@@ -1,8 +1,8 @@
 with ss as (
  select i_item_id,sum(ss_ext_sales_price) total_sales
  from
- 	store_sales,
- 	date_dim,
+  store_sales,
+  date_dim,
          customer_address,
          item
  where i_item_id in (select
@@ -19,8 +19,8 @@ where i_color in ('slate','blanched','burnished'))
  cs as (
  select i_item_id,sum(cs_ext_sales_price) total_sales
  from
- 	catalog_sales,
- 	date_dim,
+  catalog_sales,
+  date_dim,
          customer_address,
          item
  where
@@ -38,8 +38,8 @@ where i_color in ('slate','blanched','burnished'))
  ws as (
  select i_item_id,sum(ws_ext_sales_price) total_sales
  from
- 	web_sales,
- 	date_dim,
+  web_sales,
+  date_dim,
          customer_address,
          item
  where

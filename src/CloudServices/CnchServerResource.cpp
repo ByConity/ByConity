@@ -97,7 +97,7 @@ void AssignedResource::addDataParts(const FileDataPartsCNCHVector & parts)
     }
 }
 
-void ResourceStageInfo::filter_resource(std::optional<ResourceOption> resource_option)
+void ResourceStageInfo::filterResource(std::optional<ResourceOption> resource_option)
 {
     if (resource_option)
     {
@@ -234,7 +234,7 @@ void CnchServerResource::sendResources(const ContextPtr & context, std::optional
     auto send_lock = getLockForSend("ALL_WORKER");
 
     // filter resource for stage send resource
-    resource_stage_info.filter_resource(resource_option);
+    resource_stage_info.filterResource(resource_option);
     std::unordered_map<HostWithPorts, std::vector<AssignedResource>> all_resources;
     std::vector<brpc::CallId> call_ids;
     {
