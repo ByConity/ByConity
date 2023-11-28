@@ -2242,8 +2242,19 @@ enum PreloadLevelSettings : UInt64
     M(Bool, bitengine_encode_without_lock, false, "Whether to encode bitengine without lock.", 0) \
     M(Bool, bitengine_encode_fast_mode, false, "Whether to encode bitengine in parallel but with a ZooKeeper lock. It's used for BitEngineDictionary::encodeFast.", 0) \
     M(UInt64, max_parallel_threads_for_bitengine_recode, 10, "The maximum number of threads to recode bitengine parts", 0) \
-    /** End of BitEngine related settings */
-
+    M(Bool, decode_with_merged_dict, true, "Decode column by merging all bucket dicts", 0) \
+    M(Bool, encode_with_splitted_columns, true, "Decode column by merging all bucket dicts", 0) \
+    M(Bool, enable_parallel_load_dict, true, "Read dict file in parallel", 0) \
+    M(Bool, load_dict_from_cache, true, "Read dict from cache", 0) \
+    /** End of BitEngine related settings */ \
+    \
+    /** Just for compatible, totally the same with settings above */ \
+    M(UInt64, cnch_offloading_mode, 0, "Offloading mode, 0: disable offloading, 1: offloading for simple queries, 2: offloading for queries without JOIN/IN, 3: offloading for all queries.", 0) \
+    M(UInt64, distributed_query_max_threads, 0, "The maximum number of threads to execute the plan semgent. By default, it is equals to max_threads", 0) \
+    M(Bool, enable_parallel_input_generator, false, "Whether enable generate parallel inputs", 0) \
+    M(Bool, enable_prune_source_plan_segment, true, "Whether enable prune source plan segment", 0) \
+    M(Bool, exchange_enable_metric, true, "whether enable exchange metric collection", 0) \
+    M(UInt64, exchange_local_no_repartition_extra_threads, 32, "Extra threads for pipeline which reading data from LOCAL_NO_NEED_REPARTITION exchange", 0) \
 
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

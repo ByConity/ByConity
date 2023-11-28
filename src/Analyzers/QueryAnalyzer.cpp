@@ -608,9 +608,12 @@ ScopePtr QueryAnalyzerVisitor::analyzeTable(
             add_field(column.name, column.type, false);
         }
 
-        for (const auto & column: columns_description.getSubcolumnsOfAllPhysical())
+        if (storage->supportsSubcolumns())
         {
-            add_field(column.name, column.type, false);
+            for (const auto & column : columns_description.getSubcolumnsOfAllPhysical())
+            {
+                add_field(column.name, column.type, false);
+            }
         }
 
         scope = createScope(fields);
