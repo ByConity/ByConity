@@ -29,6 +29,8 @@ namespace DB
 class HostWithPorts;
 using HostWithPortsVec = std::vector<HostWithPorts>;
 
+std::string truncateNetworkInterfaceIfHas(const std::string & s);
+
 inline const std::string & getHostIPFromEnv()
 {
     const auto get_host_ip_lambda = [] () -> std::string
@@ -57,7 +59,7 @@ inline const std::string & getHostIPFromEnv()
                 return my_ipv4;
         }
 
-        return getIPOrFQDNOrHostName();
+        return truncateNetworkInterfaceIfHas(getIPOrFQDNOrHostName());
     };
 
     static std::string host_ip = get_host_ip_lambda();
@@ -144,7 +146,7 @@ class HostWithPorts
 public:
     HostWithPorts() = default;
     HostWithPorts(const std::string & host_, uint16_t rpc_port_ = 0, uint16_t tcp_port_ = 0, uint16_t http_port_ = 0, [[maybe_unused]] uint16_t exchange_port_ = 0, [[maybe_unused]] uint16_t exchange_status_port_ = 0, std::string id_ = {})
-        : host{removeBracketsIfIpv6(host_)}, 
+        : host{removeBracketsIfIpv6(host_)},
             id{std::move(id_)},
           rpc_port{rpc_port_},
           tcp_port{tcp_port_},

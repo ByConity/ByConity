@@ -131,4 +131,55 @@ TEST(HostWithPortsUtils, HostWithPortHash)
     EXPECT_EQ(hasher(hp4), hasher(hp4));
 }
 
+TEST(HostWithPortsUtils, truncateNetworkInterfaceIfHas)
+{
+    {
+        const std::string host{"1:aaaa:1:1::1111%eno1"};
+        const std::string truncated_host = truncateNetworkInterfaceIfHas(host);
+        const std::string expected{"1:aaaa:1:1::1111"};
+        EXPECT_EQ(expected, truncated_host);
+    }
+
+    {
+        const std::string host{"1:aaaa:1:1::1111"};
+        const std::string truncated_host = truncateNetworkInterfaceIfHas(host);
+        const std::string expected{"1:aaaa:1:1::1111"};
+        EXPECT_EQ(expected, truncated_host);
+    }
+
+    {
+        const std::string host{"10.1.1.1%eno1"};
+        const std::string truncated_host = truncateNetworkInterfaceIfHas(host);
+        const std::string expected{"10.1.1.1"};
+        EXPECT_EQ(expected, truncated_host);
+    }
+
+    {
+        const std::string host{"10.1.1.1"};
+        const std::string truncated_host = truncateNetworkInterfaceIfHas(host);
+        const std::string expected{"10.1.1.1"};
+        EXPECT_EQ(expected, truncated_host);
+    }
+
+    {
+        const std::string host{"google"};
+        const std::string truncated_host = truncateNetworkInterfaceIfHas(host);
+        const std::string expected{"google"};
+        EXPECT_EQ(expected, truncated_host);
+    }
+
+    {
+        const std::string host{"www.google.com"};
+        const std::string truncated_host = truncateNetworkInterfaceIfHas(host);
+        const std::string expected{"www.google.com"};
+        EXPECT_EQ(expected, truncated_host);
+    }
+    {
+        const std::string host;
+        const std::string truncated_host = truncateNetworkInterfaceIfHas(host);
+        const std::string expected;
+        EXPECT_EQ(expected, truncated_host);
+    }
+}
+
 } // end anonymous namespace
