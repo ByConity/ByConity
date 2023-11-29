@@ -228,6 +228,17 @@ Names IDataType::getSpecialColumnFiles(const String & prefix, bool throw_excepti
         files.push_back(prefix + COMPRESSION_DATA_FILE_EXTENSION);
         files.push_back(prefix + COMPRESSION_MARKS_FILE_EXTENSION);
     }
+    if (isBitmapIndex())
+    {
+        files.push_back(prefix + BITMAP_IDX_EXTENSION);
+        files.push_back(prefix + BITMAP_IRK_EXTENSION);
+    }
+    if (isSegmentBitmapIndex())
+    {
+        files.push_back(prefix + SEGMENT_BITMAP_IDX_EXTENSION);
+        files.push_back(prefix + SEGMENT_BITMAP_TABLE_EXTENSION);
+        files.push_back(prefix + SEGMENT_BITMAP_DIRECTORY_EXTENSION);
+    }
     if (throw_exception && (lowCardinality() || isMapKVStore()))
     {
         // not support , throw exception instead.

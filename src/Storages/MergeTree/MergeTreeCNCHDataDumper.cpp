@@ -51,6 +51,7 @@ namespace ErrorCodes
     extern const int NO_FILE_IN_DATA_PART;
 }
 
+static const std::vector<String> EXTENSION_LIST_FOR_TEMP_PART{DATA_FILE_EXTENSION, MARKS_FILE_EXTENSION, BITMAP_IDX_EXTENSION, BITMAP_IRK_EXTENSION, SEGMENT_BITMAP_IDX_EXTENSION, SEGMENT_BITMAP_TABLE_EXTENSION, SEGMENT_BITMAP_DIRECTORY_EXTENSION};
 
 MergeTreeCNCHDataDumper::MergeTreeCNCHDataDumper(
     MergeTreeMetaBase & data_,
@@ -231,7 +232,7 @@ MutableMergeTreeDataPartCNCHPtr MergeTreeCNCHDataDumper::dumpTempPart(
             const auto & column_type = k_it.type;
             column_type->enumerateStreams(IDataType::getSerialization(k_it),[&](const ISerialization::SubstreamPath & substream_path, const IDataType & ) {
                 String stream_name = ISerialization::getFileNameForStream(column_name, substream_path);
-                for (const auto & extension : {".bin", ".mrk"})
+                for (const auto & extension : EXTENSION_LIST_FOR_TEMP_PART)
                 {
                     if (auto it = checksums_files.find(stream_name + extension); it != checksums_files.end() && !it->second.is_deleted)
                     {

@@ -218,6 +218,7 @@ public:
         bool need_filter = false;
 
         Block block_before_prewhere;
+        Block bitmap_block;
 
     private:
         RangesInfo started_ranges;
@@ -256,6 +257,7 @@ private:
     ReadResult startReadingChain(size_t max_rows, MarkRanges & ranges);
     Columns continueReadingChain(ReadResult & result, size_t & num_rows);
     void executePrewhereActionsAndFilterColumns(ReadResult & result);
+    void extractBitmapIndexColumns(Columns & columns, Block & bitmap_block);
 
     IMergeTreeReader * merge_tree_reader = nullptr;
     const MergeTreeIndexGranularity * index_granularity = nullptr;

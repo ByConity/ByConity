@@ -67,7 +67,11 @@ Chunk::Chunk(MutableColumns columns_, UInt64 num_rows_, ChunkInfoPtr chunk_info_
 
 Chunk Chunk::clone() const
 {
-    return Chunk(getColumns(), getNumRows(), chunk_info);
+    Chunk res(getColumns(), getNumRows(), chunk_info);
+    if (owned_side_block && owned_side_block->columns() > 0)
+    for (auto column : *owned_side_block)
+        res.addColumnToSideBlock(std::move(column));
+    return res;
 }
 
 void Chunk::setColumns(Columns columns_, UInt64 num_rows_)
@@ -220,6 +224,14 @@ const ChunkMissingValues::RowsBitMask & ChunkMissingValues::getDefaultsBitmask(s
     if (it != rows_mask_by_column_id.end())
         return it->second;
     return none;
+}
+
+void Chunk::addColumnToSideBlock(ColumnWithTypeAndName && col)
+{
+    if (!owned_side_block)
+        owned_side_block = std::make_unique<Block>();
+    if (!owned_side_block->has(col.name))
+        owned_side_block->insert(std::move(col));
 }
 
 }

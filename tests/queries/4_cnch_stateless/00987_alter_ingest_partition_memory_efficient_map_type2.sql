@@ -20,3 +20,4 @@ SELECT * FROM test.test_ingest_partition_map2_target ORDER BY id;
 SELECT 'Source data have 2 parts unsorted join to 1 target data part: END';
 DROP TABLE IF EXISTS test.test_ingest_partition_map2_target;
 DROP TABLE IF EXISTS test.test_ingest_partition_map2_source;
+

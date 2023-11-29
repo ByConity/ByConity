@@ -153,6 +153,9 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ParserKeyword s_ttl{"TTL"};
     ParserKeyword s_remove{"REMOVE"};
     ParserKeyword s_compression{"COMPRESSION"};
+    ParserKeyword s_bloom{"BLOOM"};
+    ParserKeyword s_bitmap_index{"BitmapIndex"};
+    // ParserKeyword s_segment_bitmap_index{"SegmentBitmapIndex"};
     ParserKeyword s_kv{"KV"};
     ParserKeyword s_bitengine_encode{"BitEngineEncode"};
     ParserTernaryOperatorExpression expr_parser(dt); /* decimal type can use float as default value */
@@ -248,6 +251,12 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
             inner_flags |= TYPE_COMPRESSION_FLAG;
         if (s_bitengine_encode.ignore(pos, expected))
             inner_flags |= TYPE_BITENGINE_ENCODE_FLAG;
+        if (s_bloom.ignore(pos, expected))
+            inner_flags |= TYPE_BLOOM_FLAG;
+        if (s_bitmap_index.ignore(pos, expected))
+            inner_flags |= TYPE_BITMAP_INDEX_FLAG;
+        // if (s_segment_bitmap_index.ignore(pos, expected))
+        //     inner_flags |= TYPE_SEGMENT_BITMAP_INDEX_FLAG;
 
         if (!inner_flags)
             break;

@@ -292,6 +292,7 @@ StepAndOutputOrder StepNormalizer::visitProjectionStep(const ProjectionStep & st
         assignments_reordered,
         mapped_name_to_type,
         step.isFinalProject(),
+        step.isIndexProject(),
         PlanHints{}); // hints set later
 
     Block output_order = getOutputOrder(step, *normal_projection, symbol_mapper);

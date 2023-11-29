@@ -87,5 +87,18 @@ public:
 
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
 };
+class PushIndexProjectionIntoTableScan : public Rule
+{
+public:
+    RuleType getType() const override { return RuleType::PUSH_INDEX_PROJECTION_INTO_TABLE_SCAN; }
+    String getName() const override { return "PUSH_INDEX_PROJECTION_INTO_TABLE_SCAN"; }
+    bool isEnabled(ContextPtr context) const override
+    {
+        return context->getSettingsRef().enable_push_index_projection_into_table_scan;
+    }
+    PatternPtr getPattern() const override;
+
+    TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext & context) override;
+};
 
 }

@@ -101,6 +101,8 @@ public:
     void execute(Block & block, size_t & num_rows, bool dry_run = false) const;
     /// The same, but without `num_rows`. If result block is empty, adds `_dummy` column to keep block size.
     void execute(Block & block, bool dry_run = false) const;
+    /// The same, but possible to use columns from precomputed_result
+    void execute(Block & block, Block * precomputed_result, size_t & num_rows, bool dry_run = false) const;
 
     bool hasArrayJoin() const;
 

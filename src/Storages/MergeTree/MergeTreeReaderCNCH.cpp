@@ -73,12 +73,13 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     MarkCache * mark_cache_,
     const MarkRanges & mark_ranges_,
     const MergeTreeReaderSettings & settings_,
+    MergeTreeIndexExecutor* index_executor_,
     const ValueSizeMap & avg_value_size_hints_,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
     clockid_t clock_type_)
     : IMergeTreeReader(
         data_part_, columns_, metadata_snapshot_, uncompressed_cache_,
-        mark_cache_, mark_ranges_, settings_, avg_value_size_hints_)
+        mark_cache_, mark_ranges_, settings_, avg_value_size_hints_, index_executor_)
     , segment_cache_strategy(nullptr)
     , segment_cache(nullptr)
     , log(&Poco::Logger::get("MergeTreeReaderCNCH(" + data_part_->get_name() + ")"))
@@ -101,8 +102,9 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
     size_t read_rows = 0;
     try
     {
+        size_t num_bitmap_columns = hasBitmapIndexReader() ? getBitmapOutputColumns().size() : 0;
+        checkNumberOfColumns(res_columns.size() - num_bitmap_columns);
         size_t num_columns = columns.size();
-        checkNumberOfColumns(num_columns);
 
         std::unordered_map<String, size_t> res_col_to_idx;
         auto column_it = columns.begin();
@@ -195,6 +197,31 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
         /// NOTE: positions for all streams must be kept in sync.
         /// In particular, even if for some streams there are no rows to be read,
         /// you must ensure that no seeks are skipped and at this point they all point to to_mark.
+
+        if (index_executor && index_executor->valid())
+        {
+            Columns res_bitmap_columns;
+            for (size_t i = num_columns; i < res_columns.size(); ++i)
+                res_bitmap_columns.emplace_back(std::move(res_columns[i]));
+
+            size_t bitmap_rows_read = index_executor->read(from_mark, continue_reading, max_rows_to_read, res_bitmap_columns);
+#ifndef NDEBUG
+            String output_names;
+            for (const auto & output_name: getBitmapOutputColumns())
+                output_names += " " + output_name;
+            LOG_TRACE(&Poco::Logger::get("index_executor"), "read bitmap index file:{} for part:{}", output_names, this->data_part->name);
+#endif
+            // If there is only bitmap_index columns, rows_read may be zero.
+            if (read_rows == 0)
+                read_rows = bitmap_rows_read;
+
+            if (read_rows != bitmap_rows_read)
+            {
+                throw Exception("Mismatch rows read from index_executor: " + toString(read_rows) + " : " + toString(bitmap_rows_read), ErrorCodes::LOGICAL_ERROR);
+            }
+            for (size_t i = num_columns; i < res_columns.size(); ++i)
+                res_columns[i] = std::move(res_bitmap_columns[i - num_columns]);
+        }
     }
     catch (Exception & e)
     {

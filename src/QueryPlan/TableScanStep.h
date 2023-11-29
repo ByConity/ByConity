@@ -170,10 +170,10 @@ public:
     {
         Output = 1,
         Prewhere = 2,
-        // BitmapIndex = 4,
+        BitmapIndex = 4,
 
         OutputAndPrewhere = Output | Prewhere,
-        All = Output | Prewhere /*| BitmapIndex */,
+        All = Output | Prewhere | BitmapIndex,
     };
 
     Names getRequiredColumns(GetFlags flags = All) const;

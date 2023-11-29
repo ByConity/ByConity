@@ -24,6 +24,7 @@
 #include <Core/Settings.h>
 #include <IO/ReadSettings.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include "Core/NamesAndTypes.h"
 
 namespace DB
 {
@@ -90,6 +91,30 @@ struct BitengineWriteSettings
     bool skip_bitengine_encode = false;
 
     Float64 bitengine_encode_loss_rate = 0.1;
+};
+
+struct BitmapBuildInfo
+{
+    // set to false when 
+    // 1. disenable bitmap index build in insert/merge 
+    // 2. or modify dependent columns
+    bool build_all_bitmap_index = true;
+    // set to true when executing `alter table build bitmap of partition`
+    bool only_bitmap_index = false;
+    // set to true when other columns mutated
+    bool not_build_bitmap_index = false;
+
+    // when dependent columns changed, We build indices for columns in bitmap_index_columns
+    NamesAndTypes bitmap_index_columns;
+
+    // same meaning of those of bitmap index
+    // added for the independence of segment index
+    // this ensures that a table can hold columns with both original bitmap and segment bitmap
+    bool build_all_segment_bitmap_index = true;
+    bool only_segment_bitmap_index = false;
+    bool not_build_segment_bitmap_index = false;
+
+    NamesAndTypes segment_bitmap_index_columns;
 };
 
 }

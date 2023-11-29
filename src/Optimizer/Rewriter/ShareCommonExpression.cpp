@@ -450,7 +450,7 @@ namespace
         symbol_translation = std::move(new_translation);
 
         auto new_projection_step = std::make_shared<ProjectionStep>(
-            cur_node->getCurrentDataStream(), assignments, name_to_type, projection_step.isFinalProject(), projection_step.getHints());
+            cur_node->getCurrentDataStream(), assignments, name_to_type, projection_step.isFinalProject(), projection_step.isIndexProject(), projection_step.getHints());
 
         return PlanNodeBase::createPlanNode(node.getId(), new_projection_step, PlanNodes{cur_node}, node.getStatistics());
     }

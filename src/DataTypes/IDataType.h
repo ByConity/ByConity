@@ -60,12 +60,14 @@ struct DataTypeWithConstInfo
 
 using DataTypesWithConstInfo = std::vector<DataTypeWithConstInfo>;
 
-
 #define TYPE_MAP_KV_STORE_FLAG      0x01
 #define TYPE_BITENGINE_ENCODE_FLAG  0x02
 // #define TYPE_SECURITY_FLAG          0x04  /// unused
 // #define TYPE_ENCRYPT_FLAG           0x08  /// unused
+#define TYPE_BLOOM_FLAG             0x10
 #define TYPE_COMPRESSION_FLAG       0x20
+#define TYPE_BITMAP_INDEX_FLAG          0x40
+#define TYPE_SEGMENT_BITMAP_INDEX_FLAG  0x80
 
 /** Properties of data type.
   *
@@ -302,6 +304,9 @@ public:
     virtual bool canBeInsideNullable() const { return false; }
 
     bool isCompression() const { return flags & TYPE_COMPRESSION_FLAG;}
+
+    bool isBitmapIndex() const { return flags & TYPE_BITMAP_INDEX_FLAG || flags & TYPE_BLOOM_FLAG; }
+    bool isSegmentBitmapIndex() const { return flags & TYPE_SEGMENT_BITMAP_INDEX_FLAG; }
 
     virtual bool lowCardinality() const { return false; }
 

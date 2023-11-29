@@ -29,6 +29,7 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Disks/IDisk.h>
+#include <Storages/MergeTree/ColumnBitmapIndex.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 
 
@@ -77,6 +78,17 @@ protected:
     const bool with_final_mark;
 
     MutableColumns index_columns;
+
+    // added by bitmap index
+    using ColumnBitmapIndexes = std::map<String, std::unique_ptr<ColumnBitmapIndex>>;
+    using ColumnSegmentBitmapIndexes = std::map<String, std::unique_ptr<ColumnSegmentBitmapIndex>>;
+
+    void addBitmapIndexes(const String & path, const String & name, const IDataType & type, const IndexParams & bitmap_params = IndexParams());
+    void addSegmentBitmapIndexes(const String & path, const String & name, const IDataType & type, const IndexParams & bitmap_params = IndexParams());
+
+    ColumnBitmapIndexes column_bitmap_indexes;
+    ColumnSegmentBitmapIndexes column_segment_bitmap_indexes;
+
 };
 
 }

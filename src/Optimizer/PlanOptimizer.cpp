@@ -21,6 +21,7 @@
 #include <Optimizer/Rewriter/AddBufferForDeadlockCTE.h>
 #include <Optimizer/Rewriter/AddExchange.h>
 #include <Optimizer/Rewriter/AddRuntimeFilters.h>
+#include <Optimizer/Rewriter/BitmapIndexSplitter.h>
 #include <Optimizer/Rewriter/ColumnPruning.h>
 #include <Optimizer/Rewriter/EliminateJoinByForeignKey.h>
 #include <Optimizer/Rewriter/GroupByKeysPruning.h>
@@ -67,6 +68,12 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
 
         // rules for normalize Union/Except/Intersect
         std::make_shared<IterativeRewriter>(Rules::mergeSetRules(), "MergeSetNode"),
+
+        std::make_shared<BitmapIndexSplitter>(),
+        std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+        std::make_shared<IterativeRewriter>(Rules::pushDownBitmapProjection(), "PushDownBitmapProjection"),
+        std::make_shared<ColumnPruning>(),
+        std::make_shared<IterativeRewriter>(Rules::pushIndexProjectionIntoTableScanRules(), "PushIndexProjectionIntoTableScan"),
 
         std::make_shared<ColumnPruning>(),
         std::make_shared<RemoveRedundantDistinct>(),
@@ -160,6 +167,9 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         std::make_shared<RemoveUnCorrelatedQuantifiedComparisonSubquery>(),
         std::make_shared<RemoveCorrelatedQuantifiedComparisonSubquery>(),
 
+        std::make_shared<BitmapIndexSplitter>(),
+        std::make_shared<IterativeRewriter>(Rules::inlineProjectionRules(), "InlineProjection"),
+        std::make_shared<IterativeRewriter>(Rules::pushDownBitmapProjection(), "PushDownBitMapProjection"),
         std::make_shared<ColumnPruning>(),
 
         // rules after subquery removed, DO NOT change !!!.

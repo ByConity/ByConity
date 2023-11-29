@@ -7,6 +7,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Parsers/ASTSubquery.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
 
 namespace DB
 {
@@ -200,6 +201,120 @@ void RequiredSourceColumnsMatcher::visit(const ASTArrayJoin & node, const ASTPtr
 
     for (ASTPtr * add_node : out)
         Visitor(data).visit(*add_node);
+}
+
+
+void NoBitmapIndexRequiredSourceColumnsMatcher::visit(ASTPtr & ast, Data & data)
+{
+    /// results are columns
+
+    if (auto * t = ast->as<ASTIdentifier>())
+    {
+        visit(*t, ast, data);
+        return;
+    }
+    if (auto * t = ast->as<ASTFunction>())
+    {
+        data.addColumnAliasIfAny(*ast);
+        visit(*t, ast, data);
+        return;
+    }
+
+    /// results are tables
+
+    if (auto * t = ast->as<ASTTablesInSelectQueryElement>())
+    {
+        visit(*t, ast, data);
+        return;
+    }
+
+    if (auto * t = ast->as<ASTTableExpression>())
+    {
+        visit(*t, ast, data);
+        return;
+    }
+    if (auto * t = ast->as<ASTSelectQuery>())
+    {
+        visit(*t, ast, data);
+        return;
+    }
+    if (ast->as<ASTSubquery>())
+    {
+        return;
+    }
+
+    /// other
+
+    if (auto * t = ast->as<ASTArrayJoin>())
+    {
+        data.has_array_join = true;
+        visit(*t, ast, data);
+        return;
+    }
+}
+
+bool NoBitmapIndexRequiredSourceColumnsMatcher::needChildVisit(ASTPtr & node, const ASTPtr & child)
+{
+    if (child->as<ASTSelectQuery>())
+        return false;
+
+    /// Processed. Do not need children.
+    if (node->as<ASTTableExpression>() || node->as<ASTArrayJoin>() || node->as<ASTSelectQuery>())
+        return false;
+
+    if (const auto * f = node->as<ASTFunction>())
+    {
+        /// "indexHint" is a special function for index analysis. Everything that is inside it is not calculated. @sa KeyCondition
+        /// "lambda" visit children itself.
+        if (f->name == "indexHint" || f->name == "lambda" || BitmapIndexHelper::isArraySetFunctions(f->name))
+            return false;
+    }
+
+    return true;
+}
+
+void NoBitmapIndexRequiredSourceColumnsMatcher::visit(ASTSelectQuery & select, const ASTPtr &, Data & data)
+{
+    /// special case for top-level SELECT items: they are publics
+    for (auto & node : select.select()->children)
+    {
+        if (const auto * identifier = node->as<ASTIdentifier>())
+            data.addColumnIdentifier(*identifier);
+        else
+            data.addColumnAliasIfAny(*node);
+    }
+
+    std::vector<ASTPtr *> out;
+    for (auto & node : select.children)
+    {
+        // ImplicitWhere doesn't contribute to used columns.
+        if (node != select.select())
+            out.push_back(&node);
+    }
+
+    /// revisit select_expression_list (with children) when all the aliases are set
+    out.push_back(&select.refSelect());
+
+    for (ASTPtr * add_node : out)
+        Visitor(data).visit(*add_node);
+}
+
+void NoBitmapIndexRequiredSourceColumnsMatcher::visit(const ASTFunction & node, const ASTPtr &, Data & data)
+{
+    /// Do not add formal parameters of the lambda expression
+    if (node.name == "lambda")
+    {
+        Names local_aliases;
+        for (const auto & name : RequiredSourceColumnsMatcher::extractNamesFromLambda(node))
+            if (data.private_aliases.insert(name).second)
+                local_aliases.push_back(name);
+
+        /// visit child with masked local aliases
+        Visitor(data).visit(node.arguments->children[1]);
+
+        for (const auto & name : local_aliases)
+            data.private_aliases.erase(name);
+    }
 }
 
 }

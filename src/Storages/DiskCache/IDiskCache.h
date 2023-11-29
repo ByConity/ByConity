@@ -100,6 +100,7 @@ public:
 
     using CacheSegmentsCallback = std::function<void(const String &, const int &)>;
     void cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments, CacheSegmentsCallback callback = {});
+    void cacheBitmapIndexToLocalDisk(const IDiskCacheSegmentPtr & bitmap_segment);
 
     VolumePtr getStorageVolume() const { return volume; }
     ThrottlerPtr getDiskCacheThrottler() const { return disk_cache_throttler; }

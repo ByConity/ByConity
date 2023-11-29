@@ -124,6 +124,24 @@ void ColumnDescription::writeText(WriteBuffer & buf) const
             writeString("BitEngineEncode", buf);
             flag ^= TYPE_BITENGINE_ENCODE_FLAG;
         }
+        else if (flag & TYPE_BLOOM_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("BLOOM", buf);
+            flag ^= TYPE_BLOOM_FLAG;
+        }
+        else if (flag & TYPE_BITMAP_INDEX_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("BitmapIndex", buf);
+            flag ^= TYPE_BITMAP_INDEX_FLAG;
+        }
+        else if (flag & TYPE_SEGMENT_BITMAP_INDEX_FLAG)
+        {
+            writeChar('\t', buf);
+            DB::writeText("SegmentBitmapIndex", buf);
+            flag ^= TYPE_SEGMENT_BITMAP_INDEX_FLAG;
+        }
     }
 
     if (!comment.empty())

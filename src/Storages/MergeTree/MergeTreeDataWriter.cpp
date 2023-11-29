@@ -558,6 +558,12 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
 
     const auto & index_factory = MergeTreeIndexFactory::instance();
 
+    BitmapBuildInfo bitmap_build_info;
+    if (!data.getSettings()->enable_build_ab_index)
+        bitmap_build_info.build_all_bitmap_index = false;
+    if (!data.getSettings()->enable_segment_bitmap_index)
+        bitmap_build_info.build_all_segment_bitmap_index = false;
+
     MergedBlockOutputStream out(
         new_data_part,
         metadata_snapshot,
@@ -565,7 +571,8 @@ MergeTreeMetaBase::MutableDataPartPtr MergeTreeDataWriter::writeTempPart(
         index_factory.getMany(metadata_snapshot->getSecondaryIndices()),
         compression_codec,
         /* blocks_are_granules_size(default) */false,
-        context->getSettingsRef().optimize_map_column_serialization);
+        context->getSettingsRef().optimize_map_column_serialization,
+        bitmap_build_info);
     bool sync_on_insert = data.getSettings()->fsync_after_insert;
 
     // pre-handle low-cardinality fall-back

@@ -41,6 +41,9 @@ public:
     static std::vector<RulePtr> pushTableScanEmbeddedStepRules();
     static std::vector<RulePtr> explainAnalyzeRules();
     static std::vector<RulePtr> pushApplyRules();
+    static std::vector<RulePtr> pushDownBitmapProjection();
+    static std::vector<RulePtr> pushProjectionIntoTableScanRules();
+    static std::vector<RulePtr> pushIndexProjectionIntoTableScanRules();
 };
 
 }

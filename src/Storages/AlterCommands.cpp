@@ -49,6 +49,8 @@
 #include <Parsers/queryToString.h>
 #include <Storages/AlterCommands.h>
 #include <Storages/IStorage.h>
+#include <Storages/MergeTree/Index/MergeTreeBitmapIndex.h>
+#include <Storages/MergeTree/Index/MergeTreeSegmentBitmapIndex.h>
 #include <Common/typeid_cast.h>
 #include <Common/randomSeed.h>
 
@@ -1399,6 +1401,12 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
             }
 
             const auto & column = all_columns.get(column_name);
+
+            if (column.type->isBitmapIndex() && !MergeTreeBitmapIndex::isValidBitmapIndexColumnType(column.type))
+                throw Exception("Unsupported type of bitmap index: " + column.type->getName() + ". Need: Array(String/Int/UInt/Float)", ErrorCodes::BAD_TYPE_OF_FIELD);
+
+            // if (column.type->isSegmentBitmapIndex() && !MergeTreeSegmentBitmapIndex::isValidSegmentBitmapIndexColumnType(column.type))
+            //     throw Exception("Unsupported type of segment bitmap index: " + column.type->getName() + ". Need: [Array | Nullable] String/Int/UInt/Float", ErrorCodes::BAD_TYPE_OF_FIELD);
 
             if (column.type->isMap() && command.data_type && command.data_type->isMapKVStore() != column.type->isMapKVStore())
                 throw Exception("Not support modifying map column between KV Map and Byte Map", ErrorCodes::TYPE_MISMATCH);

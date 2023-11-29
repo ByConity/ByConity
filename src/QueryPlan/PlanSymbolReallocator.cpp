@@ -51,6 +51,7 @@ public:
                 assignments,
                 step->getNameToType(),
                 step->isFinalProject(),
+                step->isIndexProject(),
                 step->getHints()),
             {child},
             symbol_mapper.map(project.getStatistics()));

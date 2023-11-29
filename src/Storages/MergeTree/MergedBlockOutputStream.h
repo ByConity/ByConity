@@ -46,7 +46,8 @@ public:
         const MergeTreeIndices & skip_indices,
         CompressionCodecPtr default_codec_,
         bool blocks_are_granules_size = false,
-        bool optimize_map_column_serialization_ = false);
+        bool optimize_map_column_serialization_ = false,
+        const BitmapBuildInfo & bitmap_build_info_ = {});
 
     Block getHeader() const override { return metadata_snapshot->getSampleBlock(); }
 

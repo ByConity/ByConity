@@ -43,7 +43,7 @@ PlanNodePtr TrivialCountVisitor::visitAggregatingNode(AggregatingNode & node, Vo
     VisitorUtil::accept(node.getChildren()[0], visitor, count_context);
 
     // There are other nodes below this node that change the number of output lines except for the FilterNode
-    if (count_context.has_other_node || !count_context.query)
+    if (count_context.has_other_node || !count_context.query || count_context.pushdowned_index_projection)
         return visitPlanNode(node, v);
 
     // check query
@@ -211,6 +211,7 @@ void CountContextVisitor::visitTableScanNode(TableScanNode & node, TrivialCountC
     context.storage = node.getStep()->getStorage();
     context.query = node.getStep()->getQueryInfo().query->clone();
     context.column_alias = node.getStep()->getColumnAlias();
+    context.pushdowned_index_projection = node.getStep()->hasInlineExpressions();
 }
 
 void CountContextVisitor::visitPlanNode(PlanNodeBase & , TrivialCountContext & context)

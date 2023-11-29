@@ -128,7 +128,8 @@ public:
         const String & marks_file_extension,
         const CompressionCodecPtr & default_codec,
         const MergeTreeWriterSettings & settings,
-        const MergeTreeIndexGranularity & index_granularity);
+        const MergeTreeIndexGranularity & index_granularity,
+        const BitmapBuildInfo & bitmap_build_info);
 
     void setWrittenOffsetColumns(WrittenOffsetColumns * written_offset_columns_)
     {
@@ -144,6 +145,11 @@ protected:
      /// Count index_granularity for block and store in `index_granularity`
     size_t computeIndexGranularity(const Block & block) const;
 
+    /// write all bitmap indices of all_columns
+    void writeBitmapIndexColumns(const Block & block);
+    /// write all segment bitmap indices of all_columns
+    void writeSegmentBitmapIndexColumns(const Block & block);
+
     /// Write primary index according to granules_to_write
     void calculateAndSerializePrimaryIndex(const Block & primary_index_block, const Granules & granules_to_write);
     /// Write skip indices according to granules_to_write. Skip indices also have their own marks
@@ -151,6 +157,10 @@ protected:
     /// require additional state: skip_indices_aggregators and skip_index_accumulated_marks
     void calculateAndSerializeSkipIndices(const Block & skip_indexes_block, const Granules & granules_to_write);
 
+    /// Finishes bitmap indices serialization: finalize all bitmap indices and compute checksums
+    void finishBitmapIndexSerialization(MergeTreeData::DataPart::Checksums & checksums);
+    /// Finishes segment bitmap indices serialization: finalize all segment bitmap indices and compute checksums
+    void finishSegmentBitmapIndexSerialization(MergeTreeData::DataPart::Checksums & checksums);
     /// Finishes primary index serialization: write final primary index row (if required) and compute checksums
     void finishPrimaryIndexSerialization(MergeTreeData::DataPart::Checksums & checksums, bool sync);
     /// Finishes skip indices serialization: write all accumulated data to disk and compute checksums
@@ -259,6 +269,8 @@ protected:
 
     const bool compute_granularity;
 
+    BitmapBuildInfo bitmap_build_info;
+
     std::vector<StreamPtr> skip_indices_streams;
     MergeTreeIndexAggregators skip_indices_aggregators;
     std::vector<size_t> skip_index_accumulated_marks;
@@ -306,6 +318,8 @@ protected:
     bool is_merge = false;
 
 private:
+    void initBitmapIndices();
+    void initSegmentBitmapIndices();
     void initSkipIndices();
     void initPrimaryIndex();
 

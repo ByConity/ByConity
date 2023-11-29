@@ -28,7 +28,7 @@
 #include <Columns/ColumnBitMap64.h>
 
 #include <AggregateFunctions/IAggregateFunction.h>
-#include <AggregateFunctions/AggregateBitMapExpressionCommon.h>
+#include <AggregateFunctions/AggregateBitmapExpressionCommon.h>
 #include <Common/typeid_cast.h>
 
 

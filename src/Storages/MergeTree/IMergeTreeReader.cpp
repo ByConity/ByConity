@@ -31,6 +31,7 @@
 #include <Storages/MergeTree/IMergeTreeReader.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Common/typeid_cast.h>
+#include <Storages/MergeTree/Index/MergeTreeBitmapIndexReader.h>
 
 
 namespace DB
@@ -54,7 +55,8 @@ IMergeTreeReader::IMergeTreeReader(
     MarkCache * mark_cache_,
     const MarkRanges & all_mark_ranges_,
     const MergeTreeReaderSettings & settings_,
-    const ValueSizeMap & avg_value_size_hints_)
+    const ValueSizeMap & avg_value_size_hints_,
+    MergeTreeIndexExecutor * index_executor_)
     : data_part(data_part_)
     , avg_value_size_hints(avg_value_size_hints_)
     , columns(columns_)
@@ -65,6 +67,7 @@ IMergeTreeReader::IMergeTreeReader(
     , storage(data_part_->storage)
     , metadata_snapshot(metadata_snapshot_)
     , all_mark_ranges(all_mark_ranges_)
+    , index_executor(index_executor_)
     , alter_conversions(storage.getAlterConversionsForPart(data_part))
 {
     if (settings.convert_nested_to_subcolumns)
@@ -106,15 +109,15 @@ static bool arrayHasNoElementsRead(const IColumn & column)
     return last_offset != 0;
 }
 
-void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows, bool check_column_size)
+void IMergeTreeReader::fillMissingColumns(Columns & res_columns, bool & should_evaluate_missing_defaults, size_t num_rows, bool /* check_column_size */)
 {
     try
     {
         size_t num_columns = columns.size();
-
-        if (check_column_size && res_columns.size() != num_columns)
+        size_t num_bitmap_columns = hasBitmapIndexReader() ? getBitmapOutputColumns().size() : 0;
+        if (res_columns.size() != num_columns + num_bitmap_columns)
             throw Exception("invalid number of columns passed to MergeTreeReader::fillMissingColumns. "
-                            "Expected " + toString(num_columns) + ", "
+                            "Expected " + toString(num_columns + num_bitmap_columns) + ", "
                             "got " + toString(res_columns.size()), ErrorCodes::LOGICAL_ERROR);
 
         /// For a missing column of a nested data structure we must create not a column of empty
@@ -195,10 +198,10 @@ void IMergeTreeReader::evaluateMissingDefaults(Block additional_columns, Columns
     try
     {
         size_t num_columns = columns.size();
-
-        if (res_columns.size() != num_columns)
+        size_t num_bitmap_columns = hasBitmapIndexReader() ? getBitmapOutputColumns().size() : 0;
+        if (res_columns.size() != num_columns + num_bitmap_columns)
             throw Exception("invalid number of columns passed to MergeTreeReader::fillMissingColumns. "
-                            "Expected " + toString(num_columns) + ", "
+                            "Expected " + toString(num_columns + num_bitmap_columns) + ", "
                             "got " + toString(res_columns.size()), ErrorCodes::LOGICAL_ERROR);
 
         /// Convert columns list to block.
@@ -273,18 +276,18 @@ NameAndTypePair IMergeTreeReader::getColumnFromPart(const NameAndTypePair & requ
     return {String{it->first}, type};
 }
 
-void IMergeTreeReader::performRequiredConversions(Columns & res_columns, bool check_column_size)
+void IMergeTreeReader::performRequiredConversions(Columns & res_columns, bool /* check_column_size */)
 {
     try
     {
         size_t num_columns = columns.size();
-
-        if (check_column_size && res_columns.size() != num_columns)
+        size_t num_bitmap_columns = hasBitmapIndexReader() ? getBitmapOutputColumns().size() : 0;
+        if (res_columns.size() != num_columns + num_bitmap_columns)
         {
             throw Exception(
                 "Invalid number of columns passed to MergeTreeReader::performRequiredConversions. "
                 "Expected "
-                    + toString(num_columns)
+                    + toString(num_columns + num_bitmap_columns)
                     + ", "
                       "got "
                     + toString(res_columns.size()),
@@ -505,6 +508,45 @@ bool IMergeTreeReader::checkBitEngineColumn(const NameAndTypePair & column) cons
 {
     return storage.isBitEngineMode() && !settings.read_source_bitmap
         && isBitmap64(column.type) && column.type->isBitEngineEncode();
+}
+
+bool IMergeTreeReader::hasBitmapIndexReader() const
+{
+    if (index_executor && index_executor->valid())
+    {
+        if (auto index_reader = index_executor->getReader(MergeTreeIndexInfo::Type::BITMAP))
+        {
+            if (auto * bitmap_reader = dynamic_cast<MergeTreeBitmapIndexReader *>(index_reader.get()); bitmap_reader && bitmap_reader->validIndexReader())
+                return true;
+        }
+    }
+    return false;
+}
+
+const NameOrderedSet & IMergeTreeReader::getBitmapOutputColumns() const
+{
+    if (index_executor)
+    {
+        if (auto index_reader = index_executor->getReader(MergeTreeIndexInfo::Type::BITMAP))
+        {
+            if (auto * bitmap_index_reader = dynamic_cast<MergeTreeBitmapIndexReader *>(index_reader.get()))
+                return bitmap_index_reader->getOutputColumnNames();
+        }
+    }
+    throw Exception("Bitmap index reader is nullptr", ErrorCodes::LOGICAL_ERROR);
+}
+
+const NamesAndTypesList & IMergeTreeReader::getBitmapColumns() const
+{
+    if (index_executor)
+    {
+        if (auto index_reader = index_executor->getReader(MergeTreeIndexInfo::Type::BITMAP))
+        {
+            if (auto * bitmap_index_reader = dynamic_cast<MergeTreeBitmapIndexReader *>(index_reader.get()))
+                return bitmap_index_reader->getOutputColumns();
+        }
+    }
+    throw Exception("Bitmap index reader is nullptr", ErrorCodes::LOGICAL_ERROR);
 }
 
 }

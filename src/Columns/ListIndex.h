@@ -22,10 +22,12 @@
 #include <Compression/CompressedWriteBuffer.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnVector.h>
+#include <Columns/ColumnBitMap64.h>
 #include <DataTypes/DataTypeArray.h>
 #include <IO/ReadBufferFromFile.h>
 #include <IO/WriteBufferFromFile.h>
 #include <IO/HashingWriteBuffer.h>
+#include <IO/LimitReadBuffer.h>
 #include <IO/WriteHelpers.h>
 #include <IO/ReadHelpers.h>
 #include <Storages/MergeTree/MergeTreeData.h>
@@ -36,19 +38,10 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Common/ThreadPool.h>
+#include <Columns/ColumnNullable.h>
 
 namespace DB
 {
-/** Macro that guarantees a Boolean value results in a 1 for true and 0 for false
- *
- * Useful shorthand to indicate a Boolean result like (a>b) results in 1 or 0 without using a
- * forbidden questionmark operator which has very bad optimization results.
- * Usually Boolean is defined as being 1 or 0 so no alteration is needed; however,
- * this macro allows clarity on code which makes this assumption and a way to add active
- * logic for processors/compilers where this is not the case.
- */
-#define BOOL_TO_BIT(exp) (exp)
-
 class BitMap : public Roaring
 {
 public:
@@ -62,13 +55,25 @@ public:
 
         istr.read(buffer.data(), size_in_bytes);
 
-        std::unique_ptr<roaring_bitmap_t>  r(roaring::api::roaring_bitmap_portable_deserialize_safe(buffer.data(), size_in_bytes));
+        roaring_bitmap_t * r = roaring::api::roaring_bitmap_portable_deserialize_safe(buffer.data(), size_in_bytes);
+
         if (!r)
         {
             throw Exception("failed alloc while roaring bitmap reading", ErrorCodes::CANNOT_ALLOCATE_MEMORY);
         }
 
-        roaring = std::move(*r);
+        loadBitmap(Roaring(r));
+    }
+
+    void loadBitmap(Roaring && r) 
+    {
+        roaring::internal::ra_clear(&roaring.high_low_container);
+
+        roaring = std::move(r.roaring);
+        bool is_ok = roaring::internal::ra_init_with_capacity(&r.roaring.high_low_container, 1);
+        if (!is_ok) {
+            throw std::runtime_error("failed memory alloc in assignment");
+        }
     }
 
     //TBD: write length or capacity
@@ -97,14 +102,15 @@ public:
 class IListIndex
 {
     size_t total_rows = 0;
-    BitMap mIndexData;
+    BitMap m_index_data;
 public:
     virtual ~IListIndex() = default;
-    virtual void addMSN(size_t msn) { mIndexData.set(msn); }
-    virtual size_t size() { return mIndexData.cardinality(); }
-    virtual const BitMap& getIndex() const {return mIndexData;}
-    virtual BitMap& getIndex() {return mIndexData;}
-    virtual void setIndex(const BitMap & bitmap) { mIndexData = bitmap; }
+    virtual void addMSN(size_t msn) { m_index_data.set(msn); }
+    virtual size_t size() { return m_index_data.cardinality(); }
+    virtual const BitMap& getIndex() const {return m_index_data;}
+    virtual BitMap& getIndex() {return m_index_data;}
+    virtual void setIndex(const BitMap & bitmap) { m_index_data = bitmap; }
+    virtual void orIndex(const BitMap & bitmap) { m_index_data |= bitmap; }
     virtual size_t getOriginalRows() const { return total_rows; }
     virtual void setOriginalRows(const size_t & rows) { total_rows = rows; }
     virtual void addRows(const size_t & rows) { total_rows += rows; }
@@ -115,8 +121,8 @@ class ListIndex : public IListIndex
 {
     VIDTYPE vid;
 public:
-    ListIndex() {}
-    ListIndex(VIDTYPE vid_) : vid(vid_) {}
+    ListIndex() = default;
+    explicit ListIndex(VIDTYPE vid_) : vid(vid_) {}
 
     VIDTYPE getVid() const {return vid;}
     void setVid(const VIDTYPE & vid_) { vid = vid_; }
@@ -156,8 +162,8 @@ private:
     bool enable_run_optimization;
 
     BitmapIndexMode bitmap_index_mode;
-    std::vector<String> adx_suffix_vec = {AB_IDX_EXTENSION, MARK_BITMAP_IDX_EXTENSION};
-    std::vector<String> ark_suffix_vec = {AB_IRK_EXTENSION, MARK_BITMAP_IRK_EXTENSION};
+    std::vector<String> adx_suffix_vec = {BITMAP_IDX_EXTENSION};
+    std::vector<String> ark_suffix_vec = {BITMAP_IRK_EXTENSION};
 
 public:
     // Initialize writers
@@ -169,26 +175,38 @@ public:
     void addToChecksums(MergeTreeData::DataPart::Checksums & checksums, const String & column_name);
 };
 
+struct FileOffsetAndSize
+{
+    off_t file_offset;
+    size_t file_size;
+};
 
 class BitmapIndexReader
 {
 private:
-    String path;
+    IMergeTreeDataPartPtr part;
     String column_name;
-    BitmapIndexMode bitmap_index_mode ;
+    [[maybe_unused]] BitmapIndexMode bitmap_index_mode;
     std::unique_ptr<CompressedReadBufferFromFile> compressed_idx;
-    ReadBufferFromFilePtr irk;
+    std::unique_ptr<ReadBufferFromFileBase> irk_buffer;
+    FileOffsetAndSize idx_pos;
+    FileOffsetAndSize irk_pos;
+    bool read_from_local_cache = false;
 
-    std::vector<String> adx_suffix_vec = {AB_IDX_EXTENSION, MARK_BITMAP_IDX_EXTENSION};
-    std::vector<String> ark_suffix_vec = {AB_IRK_EXTENSION, MARK_BITMAP_IRK_EXTENSION};
+    std::vector<String> adx_suffix_vec = {BITMAP_IDX_EXTENSION};
+    std::vector<String> ark_suffix_vec = {BITMAP_IRK_EXTENSION};
 public:
-    BitmapIndexReader(String path, String name, BitmapIndexMode bitmap_index_mode_);
+    BitmapIndexReader(const IMergeTreeDataPartPtr & part_, String name, const HDFSConnectionParams & hdfs_params_ = {});
     ~BitmapIndexReader() = default;
     // seek based on irk and read idx
-    template <typename VIDTYPE> bool deserialize(VIDTYPE vid, IListIndex& li);
-    template <typename VIDTYPE, typename Method> bool deserializeVids(Method & vids, std::vector<BitmapIndexPtr> & indexes, size_t total_vid_cnt);
+    template <typename VIDTYPE>
+    bool deserialize(VIDTYPE vid, IListIndex& li);
+    template <typename VIDTYPE>
+    bool deserializeVids(std::unordered_set<VIDTYPE> & vids, std::vector<BitmapIndexPtr> & res_indexes, BitmapIndexPtr & list_index);
+    template <typename VIDTYPE, typename Method>
+    bool deserializeVids(Method & vids, std::vector<BitmapIndexPtr> & indexes, size_t total_vid_cnt);
     void init();
-    bool valid() { return (compressed_idx && irk); }
+    bool valid() { return (compressed_idx && irk_buffer); }
 };
 
 class IBitmapColumnListIndexes
@@ -214,16 +232,16 @@ public:
 
     virtual void addToChecksums(MergeTreeData::DataPart::Checksums & checksums) = 0;
 
-    virtual const String getPath() const { return path; }
+    virtual String getPath() const { return path; }
 
     Poco::Logger * log = &Poco::Logger::get("BitmapColumnListIndexes");
 
-    virtual ~IBitmapColumnListIndexes() {}
+    virtual ~IBitmapColumnListIndexes() = default;
 };
 
 struct BitmapBuildTask
 {
-    BitmapBuildTask() {}
+    BitmapBuildTask() = default;
     size_t start_offset = 0;
 };
 
@@ -231,10 +249,10 @@ struct BitmapBuildTask
 template <typename VIDTYPE = Int32>
 struct BitmapBuildTaskHolder
 {
-    using ColumnIndexes = std::map<VIDTYPE, ListIndex<VIDTYPE>>;
+    using ColumnIndexes = std::unordered_map<VIDTYPE, ListIndex<VIDTYPE>>;
 
-    std::condition_variable cond;
-    std::mutex mtx;
+    bthread::ConditionVariable cond;
+    bthread::Mutex mtx;
     ColumnIndexes final_indexes;
 
     // global_offset is used for recording the current offset during insert blocks.
@@ -246,14 +264,14 @@ struct BitmapBuildTaskHolder
     std::vector<std::shared_ptr<BitmapBuildTask>> build_tasks;
     std::queue<std::shared_ptr<BitmapBuildTask>> free_tasks;
     size_t max_size = 0;
-    BitmapBuildTaskHolder(const size_t max_size_)
+    explicit BitmapBuildTaskHolder(const size_t max_size_)
         : max_size(max_size_)
     {
         //build_tasks = std::vector<std::shared_ptr<BuildTask>>(max_size, std::make_shared<BuildTask>());
         for (size_t i = 0; i < max_size; ++i)
             build_tasks.push_back(std::make_shared<BitmapBuildTask>());
 
-        for (auto task : build_tasks)
+        for (const auto& task : build_tasks)
         {
             free_tasks.push(task);
         }
@@ -265,7 +283,7 @@ struct BitmapBuildTaskHolder
     // consume a task from free_tasks
     std::shared_ptr<BitmapBuildTask> getTask(ColumnPtr col)
     {
-        std::unique_lock<std::mutex> lock(mtx);
+        std::unique_lock<bthread::Mutex> lock(mtx);
         cond.wait(lock, [this](){
             return !free_tasks.empty();
         });
@@ -282,7 +300,7 @@ struct BitmapBuildTaskHolder
 
     void addTask(std::shared_ptr<BitmapBuildTask> task)
     {
-        std::unique_lock<std::mutex> lock(mtx);
+        std::unique_lock<bthread::Mutex> lock(mtx);
         cond.wait(lock, [this](){
             return free_tasks.size() < max_size;
         });
@@ -293,7 +311,7 @@ struct BitmapBuildTaskHolder
 
     void commitBitmap(ColumnIndexes & column_indexes)
     {
-        std::unique_lock<std::mutex> lock(mtx);
+        std::unique_lock<bthread::Mutex> lock(mtx);
         for (auto it = column_indexes.begin(); it != column_indexes.end(); ++it)
         {
             const VIDTYPE & vid = it->first;
@@ -309,7 +327,7 @@ struct BitmapBuildTaskHolder
 template <typename VIDTYPE = Int32>
 class BitmapColumnListIndexes : public IBitmapColumnListIndexes
 {
-    using ColumnIndexes = std::map<VIDTYPE, ListIndex<VIDTYPE>>;
+    using ColumnIndexes = std::unordered_map<VIDTYPE, ListIndex<VIDTYPE>>;
 
     std::shared_ptr<BitmapBuildTaskHolder<VIDTYPE>> build_tasks_holder;
     std::unique_ptr<ThreadPool> thread_pool;
@@ -350,121 +368,218 @@ public:
 };
 
 template<typename VIDTYPE>
-void construct_column_indexes(std::map<VIDTYPE, ListIndex<VIDTYPE>> & column_indexes, size_t offset, [[maybe_unused]]const ColumnVector<VIDTYPE> * col, BitmapIndexMode bitmap_index_mode, size_t index_granularity)
+inline void add_into_bitmap_indexes(std::unordered_map<VIDTYPE, ListIndex<VIDTYPE>> & column_indexes, const VIDTYPE & vid, size_t offset, size_t i, size_t index_granularity, BitmapIndexMode bitmap_index_mode)
+{
+    auto it = column_indexes.find(vid);
+    if (it == column_indexes.end())
+        column_indexes.insert({vid, ListIndex<VIDTYPE>(vid)});
+    auto & bitmap = column_indexes[vid].getIndex();
+    if (bitmap_index_mode == BitmapIndexMode::ROW)
+        bitmap.set(offset + i);
+    else if (bitmap_index_mode == BitmapIndexMode::MARK)
+        bitmap.set((offset + i)/index_granularity);
+    else
+        throw Exception("bitmap index mode not support: ", ErrorCodes::LOGICAL_ERROR);
+}
+
+template<typename VIDTYPE>
+void construct_column_indexes(std::unordered_map<VIDTYPE, ListIndex<VIDTYPE>> & column_indexes, size_t offset, [[maybe_unused]]const ColumnNullable * col, BitmapIndexMode bitmap_index_mode, size_t index_granularity)
+{
+    size_t num_rows = col->size();
+    if constexpr (std::is_same_v<VIDTYPE, UInt8>  || std::is_same_v<VIDTYPE, UInt16> || std::is_same_v<VIDTYPE, UInt32> || std::is_same_v<VIDTYPE, UInt64>
+                  || std::is_same_v<VIDTYPE, UInt128> || std::is_same_v<VIDTYPE, Int8> || std::is_same_v<VIDTYPE, Int16> || std::is_same_v<VIDTYPE, Int32>
+                  || std::is_same_v<VIDTYPE, Int64>  || std::is_same_v<VIDTYPE, Float32> || std::is_same_v<VIDTYPE, Float64>)
+    {
+        const auto * data_numbers = static_cast<const ColumnVector<VIDTYPE> *>(&col->getNestedColumn());
+        const auto & data_col = data_numbers->getData();
+        for (size_t i = 0; i<num_rows; i++)
+        {
+            if (col->isNullAt(i))
+                continue;
+
+            const VIDTYPE & vid = data_col[i];
+            add_into_bitmap_indexes(column_indexes, vid, offset, i, index_granularity, bitmap_index_mode);
+        }
+    }
+    else if constexpr (std::is_same_v<VIDTYPE, String>)
+    {
+        const auto * data_string = static_cast<const ColumnString *>(&col->getNestedColumn());
+        if (!data_string)
+            return;
+        for (size_t i = 0; i<num_rows; i++)
+        {
+            if (col->isNullAt(i))
+                continue;
+
+            const VIDTYPE & vid = data_string->getDataAt(i).toString();
+            add_into_bitmap_indexes(column_indexes, vid, offset, i, index_granularity, bitmap_index_mode);
+        }
+    }
+}
+
+template<typename VIDTYPE>
+void construct_column_indexes(std::unordered_map<VIDTYPE, ListIndex<VIDTYPE>> & column_indexes, size_t offset, [[maybe_unused]]const ColumnVector<VIDTYPE> * col, BitmapIndexMode bitmap_index_mode, size_t index_granularity)
 {
     if constexpr (std::is_same_v<VIDTYPE, UInt8>  || std::is_same_v<VIDTYPE, UInt16> || std::is_same_v<VIDTYPE, UInt32> || std::is_same_v<VIDTYPE, UInt64>
                   || std::is_same_v<VIDTYPE, UInt128> || std::is_same_v<VIDTYPE, Int8> || std::is_same_v<VIDTYPE, Int16> || std::is_same_v<VIDTYPE, Int32>
                   || std::is_same_v<VIDTYPE, Int64>  || std::is_same_v<VIDTYPE, Float32> || std::is_same_v<VIDTYPE, Float64>)
     {
-        size_t numRows = col->size();
-        const auto & dataCol = col->getData();
-        for (size_t i = 0; i<numRows; i++)
+        size_t num_rows = col->size();
+        const auto & data_col = col->getData();
+        for (size_t i = 0; i<num_rows; i++)
         {
-            const VIDTYPE & vid = dataCol[i];
-            auto it = column_indexes.find(vid);
-            if (it == column_indexes.end())
-                column_indexes.insert({vid, ListIndex<VIDTYPE>(vid)});
-            auto & bitmap = column_indexes[vid].getIndex();
-            if (bitmap_index_mode == BitmapIndexMode::ROW)
-                bitmap.set(offset + i);
-            else if (bitmap_index_mode == BitmapIndexMode::MARK)
-                bitmap.set((offset + i)/index_granularity);
-            else
-                throw Exception("bitmap index mode not support: ", ErrorCodes::LOGICAL_ERROR);
+            const VIDTYPE & vid = data_col[i];
+            add_into_bitmap_indexes(column_indexes, vid, offset, i, index_granularity, bitmap_index_mode);
         }
     }
 }
 
 
 template<typename VIDTYPE>
-void construct_column_indexes(std::map<VIDTYPE, ListIndex<VIDTYPE>> & column_indexes, size_t offset, [[maybe_unused]]const ColumnString * col, BitmapIndexMode bitmap_index_mode, size_t index_granularity)
+void construct_column_indexes(std::unordered_map<VIDTYPE, ListIndex<VIDTYPE>> & column_indexes, size_t offset, [[maybe_unused]]const ColumnString * col, BitmapIndexMode bitmap_index_mode, size_t index_granularity)
 {
     if constexpr (std::is_same_v<VIDTYPE, String>)
     {
-        size_t numRows = col->size();
-        for (size_t i = 0; i<numRows; i++)
+        size_t num_rows = col->size();
+        for (size_t i = 0; i<num_rows; i++)
         {
             const VIDTYPE & vid = col->getDataAt(i).toString();
-            auto it = column_indexes.find(vid);
-            if (it == column_indexes.end())
-                column_indexes.insert({vid, ListIndex<VIDTYPE>(vid)});
-            auto & bitmap = column_indexes[vid].getIndex();
-            if (bitmap_index_mode == BitmapIndexMode::ROW)
-                bitmap.set(offset + i);
-            else if (bitmap_index_mode == BitmapIndexMode::MARK)
-                bitmap.set((offset + i)/index_granularity);
-            else
-                throw Exception("bitmap index mode not support: ", ErrorCodes::LOGICAL_ERROR);
+            add_into_bitmap_indexes(column_indexes, vid, offset, i, index_granularity, bitmap_index_mode);
         }
     }
 }
 
 
 template<typename VIDTYPE>
-void construct_column_indexes(std::map<VIDTYPE, ListIndex<VIDTYPE>> & column_indexes, size_t offset, const ColumnArray * col, BitmapIndexMode bitmap_index_mode, size_t index_granularity)
+void construct_column_indexes(std::unordered_map<VIDTYPE, ListIndex<VIDTYPE>> & column_indexes, size_t offset, const ColumnArray * col, BitmapIndexMode bitmap_index_mode, size_t index_granularity)
 {
-    size_t numRows = col->size();
-    const auto & inputOffset = col->getOffsets();
-    const auto & dataCol = col->getData();
+    size_t num_rows = col->size();
+    const auto & input_offset = col->getOffsets();
+    const auto & data_col = col->getData();
+
+    if (data_col.isNullable())
+    {
+        if constexpr (std::is_same<VIDTYPE, String>::value)
+        {
+            const auto * data_nullable_string = static_cast<const ColumnNullable *>(&data_col);
+            const auto * data_string = static_cast<const ColumnString *>(&data_nullable_string->getNestedColumn());
+            if (!data_string)
+                return;
+            size_t pre_pos = 0;
+            for (size_t i = 0; i<num_rows; i++)
+            {
+                size_t end_pos = input_offset[i];
+                for (size_t j = pre_pos; j < end_pos; j++)
+                {
+                    if (data_nullable_string->isNullAt(j))
+                        continue;
+
+                    const VIDTYPE & vid = data_string->getDataAt(j).toString();
+                    add_into_bitmap_indexes(column_indexes, vid, offset, i, index_granularity, bitmap_index_mode);
+                }
+
+                pre_pos = end_pos;
+            }
+        }
+        else
+        {
+            const auto * data_nullable_numbers = static_cast<const ColumnNullable *>(&data_col);
+            const auto * data_numbers = static_cast<const ColumnVector<VIDTYPE> *>(&data_nullable_numbers->getNestedColumn());
+            if (!data_numbers)
+                return;
+
+            const auto & data_col_vec = data_numbers->getData();
+            size_t pre_pos = 0;
+            for (size_t i = 0; i<num_rows; i++)
+            {
+                // [pre_pos, offsets[i])
+                size_t end_pos = input_offset[i];
+                for (size_t j = pre_pos; j < end_pos; j++)
+                {
+                    if (data_nullable_numbers->isNullAt(j))
+                        continue;
+
+                    const VIDTYPE & vid = data_col_vec[j];
+                    add_into_bitmap_indexes(column_indexes, vid, offset, i, index_granularity, bitmap_index_mode);
+                }
+
+                pre_pos = end_pos;
+            }
+        }
+        return;
+    }
 
     if constexpr (std::is_same<VIDTYPE, String>::value)
     {
-        const auto * data_string = static_cast<const ColumnString *>(&dataCol);
+        const auto * data_string = static_cast<const ColumnString *>(&data_col);
         if (!data_string)
             return;
-        size_t prePos = 0;
-        for (size_t i = 0; i<numRows; i++)
+        size_t pre_pos = 0;
+        for (size_t i = 0; i<num_rows; i++)
         {
-            size_t endPos = inputOffset[i];
-            for (size_t j = prePos; j < endPos; j++)
+            size_t end_pos = input_offset[i];
+            for (size_t j = pre_pos; j < end_pos; j++)
             {
-                const String & vid = data_string->getDataAt(j).toString();
-                auto it = column_indexes.find(vid);
-                if (it == column_indexes.end())
-                    column_indexes.insert({vid, ListIndex<String>(vid)});
-                auto & bitmap = column_indexes[vid].getIndex();
-                if (bitmap_index_mode == BitmapIndexMode::ROW)
-                    bitmap.set(offset + i);
-                else if (bitmap_index_mode == BitmapIndexMode::MARK)
-                    bitmap.set((offset + i)/index_granularity);
-                else
-                    throw Exception("bitmap index mode not support: ", ErrorCodes::LOGICAL_ERROR);
+                const VIDTYPE & vid = data_string->getDataAt(j).toString();
+                add_into_bitmap_indexes(column_indexes, vid, offset, i, index_granularity, bitmap_index_mode);
             }
 
-            prePos = endPos;
+            pre_pos = end_pos;
         }
     }
     else
     {
-        const auto * data_numbers = static_cast<const ColumnVector<VIDTYPE> *>(&dataCol);
+        const auto * data_numbers = static_cast<const ColumnVector<VIDTYPE> *>(&data_col);
         if (!data_numbers)
             return;
-        const auto & dataColVec = data_numbers->getData();
+        const auto & data_col_vec = data_numbers->getData();
         //LOG_DEBUG(&Logger::get("appendColumnData"), "use bitmap index id : "<< std::to_string(task->id));
-        size_t prePos = 0;
-        for (size_t i = 0; i<numRows; i++)
+        size_t pre_pos = 0;
+        for (size_t i = 0; i<num_rows; i++)
         {
-            // [prePos, offsets[i])
-            size_t endPos = inputOffset[i];
-            for (size_t j = prePos; j < endPos; j++)
+            // [pre_pos, offsets[i])
+            size_t end_pos = input_offset[i];
+            for (size_t j = pre_pos; j < end_pos; j++)
             {
-                const VIDTYPE & vid = dataColVec[j];
-                auto it = column_indexes.find(vid);
-                if (it == column_indexes.end())
-                    column_indexes.insert({vid, ListIndex<VIDTYPE>(vid)});
-                auto & bitmap = column_indexes[vid].getIndex();
-                if (bitmap_index_mode == BitmapIndexMode::ROW)
-                    bitmap.set(offset + i);
-                else if (bitmap_index_mode == BitmapIndexMode::MARK)
-                    bitmap.set((offset + i)/index_granularity);
-                else
-                    throw Exception("bitmap index mode not support: ", ErrorCodes::LOGICAL_ERROR);
+                const VIDTYPE & vid = data_col_vec[j];
+                add_into_bitmap_indexes(column_indexes, vid, offset, i, index_granularity, bitmap_index_mode);
             }
 
-            prePos = endPos;
+            pre_pos = end_pos;
         }
     }
 }
+
+// template<typename VIDTYPE, typename BITMAP>
+// void construct_column_indexes(std::unordered_map<VIDTYPE, ListIndex<VIDTYPE>> & column_indexes, size_t offset, [[maybe_unused]] const ColumnBitMapImpl<BITMAP> * col, BitmapIndexMode bitmap_index_mode, size_t index_granularity)
+// {
+
+//     if constexpr (std::is_same<VIDTYPE, UInt32>::value || std::is_same<VIDTYPE, Int32>::value
+//                   || std::is_same<VIDTYPE, UInt64>::value || std::is_same<VIDTYPE, Int64>::value)
+//     {
+//         size_t num_rows = col->size();
+//         for (size_t i = 0; i < num_rows; i++)
+//         {
+//             const auto & bitmap = col->getBitMapAt(i);
+//             auto it = bitmap.begin();
+//             while(it != bitmap.end())
+//             {
+//                 const VIDTYPE & vid = *it;
+//                 auto indexes_it = column_indexes.find(vid);
+//                 if (indexes_it == column_indexes.end())
+//                     column_indexes.insert({vid, ListIndex<VIDTYPE>(vid)});
+//                 auto & bitmap_index = column_indexes[vid].getIndex();
+//                 if (bitmap_index_mode == BitmapIndexMode::ROW)
+//                     bitmap_index.set(offset + i);
+//                 else if (bitmap_index_mode == BitmapIndexMode::MARK)
+//                     bitmap_index.set((offset + i)/index_granularity);
+//                 else
+//                     throw Exception("bitmap index mode not support: ", ErrorCodes::LOGICAL_ERROR);
+//                 ++it;
+//             }
+//         }
+//     }
+// }
 
 /**
  * Build Bitmap column's bitmap index based on input block, resize the bitmap in
@@ -476,12 +591,18 @@ void BitmapColumnListIndexes<VIDTYPE>::appendColumnData(ColumnPtr col, std::shar
     // read data row by row
     ColumnIndexes column_indexes;
     size_t offset = task->start_offset;
-    if (dynamic_cast<const ColumnArray *>(col.get()))
-        construct_column_indexes(column_indexes, offset, dynamic_cast<const ColumnArray *>(col.get()), bitmap_index_mode, index_granularity);
-    else if (dynamic_cast<const ColumnString *>(col.get()))
-        construct_column_indexes(column_indexes, offset, dynamic_cast<const ColumnString *>(col.get()), bitmap_index_mode, index_granularity);
-    else if (dynamic_cast<const ColumnVector<VIDTYPE> *>(col.get()))
-        construct_column_indexes(column_indexes, offset, dynamic_cast<const ColumnVector<VIDTYPE> *>(col.get()), bitmap_index_mode, index_granularity);
+    if (typeid_cast<const ColumnArray *>(col.get()))
+        construct_column_indexes(column_indexes, offset, typeid_cast<const ColumnArray *>(col.get()), bitmap_index_mode, index_granularity);
+    else if (typeid_cast<const ColumnString *>(col.get()))
+        construct_column_indexes(column_indexes, offset, typeid_cast<const ColumnString *>(col.get()), bitmap_index_mode, index_granularity);
+    else if (typeid_cast<const ColumnVector<VIDTYPE> *>(col.get()))
+        construct_column_indexes(column_indexes, offset, typeid_cast<const ColumnVector<VIDTYPE> *>(col.get()), bitmap_index_mode, index_granularity);
+    // else if (typeid_cast<const ColumnBitMap32 *>(col.get()))
+    //     construct_column_indexes(column_indexes, offset, typeid_cast<const ColumnBitMap32 *>(col.get()), bitmap_index_mode, index_granularity);
+    // else if (typeid_cast<const ColumnBitMap64 *>(col.get()))
+    //     construct_column_indexes(column_indexes, offset, typeid_cast<const ColumnBitMap64 *>(col.get()), bitmap_index_mode, index_granularity);
+    else if (typeid_cast<const ColumnNullable *>(col.get()))
+        construct_column_indexes(column_indexes, offset, typeid_cast<const ColumnNullable *>(col.get()), bitmap_index_mode, index_granularity);
     else
         throw Exception("Bitmap column " + colname + " type is wrong",  ErrorCodes::LOGICAL_ERROR);
 
@@ -554,9 +675,9 @@ void BitmapIndexWriter::serialize(IListIndex & li)
 
     if constexpr (std::is_same<VIDTYPE, String>::value)
         writeStringBinary(list_index->getVid(), *hash_irk);
-        // backward compatible
-        // Since the first version of bitmap uses Int64 as vids type when it write bitmap of int index
-        // We try to cast int to Int64 to be compatible with old data
+    // backward compatible
+    // Since the first version of bitmap uses Int64 as vids type when it write bitmap of int index
+    // We try to cast int to Int64 to be compatible with old data
     else if constexpr (std::is_same<VIDTYPE, Int32>::value)
         writePODBinary(static_cast<Int64>(list_index->getVid()), *hash_irk);
     else
@@ -576,19 +697,28 @@ void BitmapIndexWriter::serialize(IListIndex & li)
 // iteration
 template <typename VIDTYPE>
 bool BitmapIndexReader::deserialize(VIDTYPE vid, IListIndex& li)
-{
+{   
     // files are compaction of all vids in this part
     // STEP 1: locate the range belong to vid based on irk(index mark)
     [[maybe_unused]] off_t compressed_offset = 0, uncompressed_offset = 0;
-    VIDTYPE tmpVid;
+    VIDTYPE tmp_vid;
     size_t total_rows = 0;
-    bool vidFound = false;
+    bool vid_found = false;
 
-    if (!compressed_idx || !irk)
+    if (!compressed_idx || !irk_buffer)
         throw Exception("Cannot deserialize bitmap index since there is no inputstream", ErrorCodes::LOGICAL_ERROR);
 
-    compressed_idx->seek(0,0);
-    irk->seek(0, SEEK_SET);
+    if (read_from_local_cache)
+    {
+        compressed_idx->seek(0, 0);
+        irk_buffer->seek(0);
+    }
+    else
+    {
+        compressed_idx->seek(idx_pos.file_offset, 0);
+        irk_buffer->seek(irk_pos.file_offset);
+    }
+    auto irk = std::make_unique<LimitReadBuffer>(*irk_buffer, irk_pos.file_size, false);
 
     if (!irk->eof())
         readIntBinary(total_rows, *irk);
@@ -596,29 +726,29 @@ bool BitmapIndexReader::deserialize(VIDTYPE vid, IListIndex& li)
     while(!irk->eof())
     {
         if constexpr (std::is_same<VIDTYPE, String>::value)
-            readStringBinary(tmpVid, *irk);
-            // backward compatible
-            // try to read vid of type Int64 instead of template types
-            // since the old version has written vids in type `Int64`
-            // We only deal with `int` type because only `int` type was used
+            readStringBinary(tmp_vid, *irk);
+        // backward compatible
+        // try to read vid of type Int64 instead of template types
+        // since the old version has written vids in type `Int64`
+        // We only deal with `int` type because only `int` type was used
         else if constexpr (std::is_same<VIDTYPE, Int32>::value)
         {
             Int64 backward_compatible_vid;
             readPODBinary(backward_compatible_vid, *irk);
-            tmpVid = backward_compatible_vid;
+            tmp_vid = backward_compatible_vid;
         }
         else
-            readPODBinary(tmpVid, *irk);
+            readPODBinary(tmp_vid, *irk);
         readIntBinary(compressed_offset, *irk);
         readIntBinary(uncompressed_offset, *irk);
         //std::cout<<"vid: "<<vid<<" tmpVid: "<<tmpVid<<" ===>total_rows: "<<total_rows<<std::endl;
-        if (tmpVid != vid)
+        if (tmp_vid != vid)
         {
             continue;
         }
         else
         {
-            vidFound = true;
+            vid_found = true;
             // go this vid end pos
             break;
         }
@@ -626,32 +756,135 @@ bool BitmapIndexReader::deserialize(VIDTYPE vid, IListIndex& li)
 
     li.setOriginalRows(total_rows);
     // what happens if vid not found in this part
-    if (!vidFound) return false;
+    if (!vid_found) return false;
     // Range [vidoffset, offset] in idx are data for this vid, if this vid is
     // the first one, vidoffset is initialized as 0, and [0, offset] is expected
 
     // STEP 2: get bitmap based on range got in STEP 1 from idx(index data)
-    compressed_idx->seek(compressed_offset, uncompressed_offset);
+    if (read_from_local_cache)
+        compressed_idx->seek(compressed_offset, uncompressed_offset);
+    else
+        compressed_idx->seek(idx_pos.file_offset + compressed_offset, uncompressed_offset);
     // TODO: add assertion here that idx file is not corrupted
     li.getIndex().deserialize(*compressed_idx);
 
 
-    return vidFound;
+    return vid_found;
+}
+
+// Support BitmapIndexRead for unique vids
+template <typename VIDTYPE>
+bool BitmapIndexReader::deserializeVids(std::unordered_set<VIDTYPE> & vids, std::vector<BitmapIndexPtr> & res_indexes, BitmapIndexPtr & list_index)
+{
+    // files are compaction of all vids in this part
+    // STEP 1: locate the range belong to vid based on irk(index mark)
+    [[maybe_unused]] off_t compressed_offset = 0, uncompressed_offset = 0;
+    size_t total_rows = 0;
+
+    if (!compressed_idx || !irk_buffer)
+        throw Exception("Cannot deserialize bitmap index since there is no inputstream", ErrorCodes::LOGICAL_ERROR);
+
+    if (read_from_local_cache)
+    {
+        compressed_idx->seek(0, 0);
+        irk_buffer->seek(0);
+    }
+    else
+    {
+        compressed_idx->seek(idx_pos.file_offset, 0);
+        irk_buffer->seek(irk_pos.file_offset);
+    }
+    auto irk = std::make_unique<LimitReadBuffer>(*irk_buffer, irk_pos.file_size, false);
+
+    if (!irk->eof())
+    {
+        readIntBinary(total_rows, *irk);
+        list_index->setOriginalRows(total_rows);
+    }
+    else
+    {
+        list_index->setOriginalRows(total_rows);
+        return false;
+    }
+    
+    [[maybe_unused]] off_t seek_base;
+    if constexpr (std::is_same<VIDTYPE, Int32>::value)
+        seek_base = sizeof(Int64);
+    else
+        seek_base = sizeof(VIDTYPE);
+    seek_base += sizeof(compressed_offset) + sizeof(uncompressed_offset);
+
+    [[maybe_unused]] Int64 l = 0, r = (irk->available()/seek_base) - 1;
+    [[maybe_unused]] VIDTYPE tmp_vid;
+
+    // std::cout<<"threadid: " << std::this_thread::get_id() <<" fileposition: " << irk->getPositionInFile() << " available: " << irk->available() << std::endl;
+    // fflush(stdout);
+
+    size_t vids_remain = vids.size();
+
+    while(!irk->eof())
+    {
+        if constexpr (std::is_same<VIDTYPE, String>::value)
+            readStringBinary(tmp_vid, *irk);
+        // backward compatible
+        // try to read vid of type Int64 instead of template types
+        // since the old version has written vids in type `Int64`
+        // We only deal with `int` type because only `int` type was used
+        else if constexpr (std::is_same<VIDTYPE, Int32>::value)
+        {
+            Int64 backward_compatible_vid;
+            readPODBinary(backward_compatible_vid, *irk);
+            tmp_vid = backward_compatible_vid;
+        }
+        else
+            readPODBinary(tmp_vid, *irk);
+        readIntBinary(compressed_offset, *irk);
+        readIntBinary(uncompressed_offset, *irk);
+        //std::std::cout<<"threadid: " << std::this_thread::get_id() << " vid: "<<vid<<" tmpVid: "<<tmpVid<<" ===>total_rows: "<<total_rows<<std::endl;
+        
+        if (vids.find(tmp_vid) != vids.end())
+        {
+            vids_remain--;
+            BitmapIndexPtr temp_index = std::make_shared<IListIndex>();
+            if (read_from_local_cache)
+                compressed_idx->seek(compressed_offset, uncompressed_offset);
+            else
+                compressed_idx->seek(idx_pos.file_offset + compressed_offset, uncompressed_offset);
+            temp_index->getIndex().deserialize(*compressed_idx);
+            temp_index->setOriginalRows(total_rows);
+            res_indexes.emplace_back(std::move(temp_index));
+        }
+        
+        if (!vids_remain)
+            break;
+    }
+
+    // If all vids have been found, return true
+    return !vids_remain;
 }
 
 template <typename VIDTYPE, typename Method>
 bool BitmapIndexReader::deserializeVids(Method & vids, std::vector<BitmapIndexPtr> & indexes, size_t total_vid_cnt)
 {
     [[maybe_unused]] off_t compressed_offset = 0, uncompressed_offset = 0;
-    VIDTYPE tmpVid;
+    VIDTYPE tmp_vid;
     size_t total_rows = 0;
-    bool vidFound = false;
+    bool vid_found = false;
 
-    if (!compressed_idx || !irk)
+    if (!compressed_idx || !irk_buffer)
         throw Exception("Cannot deserialize bitmap index since there is no inputstream", ErrorCodes::LOGICAL_ERROR);
 
-    compressed_idx->seek(0,0);
-    irk->seek(0, SEEK_SET);
+    if (read_from_local_cache)
+    {
+        compressed_idx->seek(0, 0);
+        irk_buffer->seek(0);
+    }
+    else
+    {
+        compressed_idx->seek(idx_pos.file_offset, 0);
+        irk_buffer->seek(irk_pos.file_offset);
+    }
+    auto irk = std::make_unique<LimitReadBuffer>(*irk_buffer, irk_pos.file_size, false);
 
     if (!irk->eof())
         readIntBinary(total_rows, *irk);
@@ -661,7 +894,7 @@ bool BitmapIndexReader::deserializeVids(Method & vids, std::vector<BitmapIndexPt
     while(!irk->eof())
     {
         if constexpr (std::is_same<VIDTYPE, String>::value)
-            readStringBinary(tmpVid, *irk);
+            readStringBinary(tmp_vid, *irk);
             // backward compatible
             // try to read vid of type Int64 instead of template types
             // since the old version has written vids in type `Int64`
@@ -670,31 +903,34 @@ bool BitmapIndexReader::deserializeVids(Method & vids, std::vector<BitmapIndexPt
         {
             Int64 backward_compatible_vid;
             readPODBinary(backward_compatible_vid, *irk);
-            tmpVid = backward_compatible_vid;
+            tmp_vid = backward_compatible_vid;
         }
         else
-            readPODBinary(tmpVid, *irk);
+            readPODBinary(tmp_vid, *irk);
         readIntBinary(compressed_offset, *irk);
         readIntBinary(uncompressed_offset, *irk);
         //std::cout<<"vid: "<<vid<<" tmpVid: "<<tmpVid<<" ===>total_rows: "<<total_rows<<std::endl;
-        if (!vids.data.has(tmpVid))
+        if (!vids.data.has(tmp_vid))
         {
             continue;
         }
         else
         {
-            vidFound = true;
+            vid_found = true;
             indexes.emplace_back(std::make_shared<IListIndex>());
             auto & temp_index = indexes.back();
             temp_index->setOriginalRows(total_rows);
-            compressed_idx->seek(compressed_offset, uncompressed_offset);
+            if (read_from_local_cache)
+                compressed_idx->seek(compressed_offset, uncompressed_offset);
+            else
+                compressed_idx->seek(idx_pos.file_offset + compressed_offset, uncompressed_offset);
             temp_index->getIndex().deserialize(*compressed_idx);
 
             if (++vid_cnt == total_vid_cnt)
                 break;
         }
     }
-    return vidFound;
+    return vid_found;
 }
 
 

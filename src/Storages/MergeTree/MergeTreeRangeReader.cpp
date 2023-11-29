@@ -75,6 +75,28 @@ static void filterColumns(Columns & columns, const ColumnPtr & filter)
     filterColumns(columns, *descr.data);
 }
 
+static void filterResult(MergeTreeRangeReader::ReadResult & result, const ColumnPtr & filter)
+{
+    filterColumns(result.columns, filter);
+    auto bitmap_columns = result.bitmap_block.getColumns();
+    filterColumns(bitmap_columns, filter);
+    if (bitmap_columns.empty())
+        result.bitmap_block = result.bitmap_block.cloneEmpty();
+    else
+        result.bitmap_block.setColumns(std::move(bitmap_columns));
+}
+
+static void filterResult(MergeTreeRangeReader::ReadResult & result, const IColumn::Filter & filter)
+{
+    filterColumns(result.columns, filter);
+    auto bitmap_columns = result.bitmap_block.getColumns();
+    filterColumns(bitmap_columns, filter);
+    if (bitmap_columns.empty())
+        result.bitmap_block = result.bitmap_block.cloneEmpty();
+    else
+        result.bitmap_block.setColumns(std::move(bitmap_columns));
+}
+
 
 MergeTreeRangeReader::DelayedStream::DelayedStream(
         size_t from_mark, IMergeTreeReader * merge_tree_reader_)
@@ -360,6 +382,7 @@ void MergeTreeRangeReader::ReadResult::setFilterConstFalse()
 {
     clearFilter();
     columns.clear();
+    bitmap_block.clear();
     num_rows = 0;
 }
 
@@ -401,6 +424,9 @@ void MergeTreeRangeReader::ReadResult::optimize(bool can_read_incomplete_granule
             num_rows = total_rows_per_granule;
             setFilterConstTrue();
             shrink(columns); /// shrink acts as filtering in such case
+            auto bitmap_columns = bitmap_block.getColumns();
+            shrink(bitmap_columns);
+            bitmap_block.setColumns(std::move(bitmap_columns));
         }
         else
         {
@@ -566,6 +592,13 @@ MergeTreeRangeReader::MergeTreeRangeReader(
     for (const auto & name_and_type : merge_tree_reader->getColumns())
         sample_block.insert({name_and_type.type->createColumn(), name_and_type.type, name_and_type.name});
 
+    Block bitmap_block;
+    if (merge_tree_reader->hasBitmapIndexReader())
+    {
+        for (const auto & name_and_type : merge_tree_reader->getBitmapColumns())
+            bitmap_block.insert({name_and_type.type->createColumn(), name_and_type.type, name_and_type.name});
+    }
+
     if (prewhere_info)
     {
         if (prewhere_info->alias_actions)
@@ -577,11 +610,26 @@ MergeTreeRangeReader::MergeTreeRangeReader(
             sample_block.erase(prewhere_info->row_level_column_name);
         }
 
+        size_t rows = sample_block.rows();
         if (prewhere_info->prewhere_actions)
-            prewhere_info->prewhere_actions->execute(sample_block, true);
+            prewhere_info->prewhere_actions->execute(sample_block, &bitmap_block, rows, true);
+        if (!sample_block)
+            sample_block.insert({DataTypeUInt8().createColumnConst(rows, 0), std::make_shared<DataTypeUInt8>(), "_dummy"});
 
         if (prewhere_info->remove_prewhere_column)
-            sample_block.erase(prewhere_info->prewhere_column_name);
+        {
+            if (sample_block.has(prewhere_info->prewhere_column_name))
+                sample_block.erase(prewhere_info->prewhere_column_name);
+        }
+        else
+        {
+            if (!sample_block.has(prewhere_info->prewhere_column_name))
+            {
+                const auto & prewhere_actions = prewhere_info->prewhere_actions->getActions();
+                const auto * last_action_node = prewhere_actions[prewhere_actions.size()-1].node;
+                sample_block.insert({last_action_node->result_type->createColumn(),last_action_node->result_type, prewhere_info->prewhere_column_name});
+            }
+        }
     }
 }
 
@@ -734,6 +782,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
             merge_tree_reader->performRequiredConversions(columns);
         }
 
+        extractBitmapIndexColumns(columns, read_result.bitmap_block);
         read_result.columns.reserve(read_result.columns.size() + columns.size());
         for (auto & column : columns)
             read_result.columns.emplace_back(std::move(column));
@@ -764,6 +813,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
             total_bytes += column->byteSize();
 
         read_result.addNumBytesRead(total_bytes);
+        extractBitmapIndexColumns(read_result.columns, read_result.bitmap_block);
     }
 
     if (read_result.num_rows == 0)
@@ -775,7 +825,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
     }
     else if (!prev_reader && read_result.getFilter())
     {
-        filterColumns(read_result.columns, read_result.getFilter()->getData());
+        filterResult(read_result, read_result.getFilter()->getData());
         read_result.num_rows = read_result.countBytesInResultFilter(read_result.getFilter()->getData());
     }
 
@@ -786,7 +836,7 @@ MergeTreeRangeReader::ReadResult MergeTreeRangeReader::read(size_t max_rows, Mar
 MergeTreeRangeReader::ReadResult MergeTreeRangeReader::startReadingChain(size_t max_rows, MarkRanges & ranges)
 {
     ReadResult result;
-    result.columns.resize(merge_tree_reader->getColumns().size());
+    result.columns.resize(merge_tree_reader->numColumnsInResult());
 
     ColumnUInt8::MutablePtr delete_filter_column;
     bool delete_filter_always_true = true;
@@ -1059,7 +1109,7 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
     const auto & header = merge_tree_reader->getColumns();
     size_t num_columns = header.size();
 
-    if ((result.columns.size() != num_columns))
+    if (result.columns.size() != num_columns)
         throw Exception("Invalid number of columns passed to MergeTreeRangeReader. "
                         "Expected " + toString(num_columns) + ", "
                         "got " + toString(result.columns.size()), ErrorCodes::LOGICAL_ERROR);
@@ -1117,10 +1167,20 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
             if (columns.empty())
                 block = block.cloneEmpty();
             else
-                block.setColumns(columns);
-        }
+                block.setColumns(std::move(columns));
 
-        prewhere_info->prewhere_actions->execute(block);
+            auto bitmap_columns = result.bitmap_block.getColumns();
+            filterColumns(bitmap_columns, row_level_filter);
+            if (bitmap_columns.empty())
+                result.bitmap_block = result.bitmap_block.cloneEmpty();
+            else
+                result.bitmap_block.setColumns(std::move(bitmap_columns));
+        }
+        /// block.rows can be empty if we only select bitmap index, e.g.
+        /// SELECT arraySetCheck(vid, 1) FROM t WHERE arraySetCheck(vid, 1) OR arraySetCheck(vid, 2)arraySetCheck(vid, 1)
+        size_t num_rows = block.rows() ? block.rows() : result.bitmap_block.rows();
+        if (prewhere_info->prewhere_actions)
+            prewhere_info->prewhere_actions->execute(block, &result.bitmap_block, num_rows);
 
         prewhere_column_pos = block.getPositionByName(prewhere_info->prewhere_column_name);
 
@@ -1178,9 +1238,9 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
             const auto * result_filter = result.getFilterOriginal();
 
             if (row_level_filter)
-                filterColumns(result.columns, filter);
+                filterResult(result, filter);
             else
-                filterColumns(result.columns, result_filter->getData());
+                filterResult(result, result_filter->getData());
 
             result.need_filter = true;
 
@@ -1219,6 +1279,19 @@ void MergeTreeRangeReader::executePrewhereActionsAndFilterColumns(ReadResult & r
         result.columns[prewhere_column_pos] = castColumn(col, type);
         result.clearFilter(); // Acting as a flag to not filter in PREWHERE
     }
+}
+
+void MergeTreeRangeReader::extractBitmapIndexColumns(Columns & columns, Block & bitmap_block)
+{
+    if (!merge_tree_reader->hasBitmapIndexReader())
+        return;
+    auto num_columns = merge_tree_reader->getColumns().size();
+    const auto & name_and_types = merge_tree_reader->getBitmapColumns();
+    size_t i = 0;
+    for (auto name_and_type = name_and_types.begin(); i < name_and_types.size(); ++i, ++name_and_type)
+        bitmap_block.insert({std::move(columns[num_columns+i]), name_and_type->type, name_and_type->name});
+
+    columns.resize(num_columns);
 }
 
 }

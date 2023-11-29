@@ -70,6 +70,7 @@ IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartInMemory::getReader(
     UncompressedCache * /* uncompressed_cache */,
     MarkCache * /* mark_cache */,
     const MergeTreeReaderSettings & reader_settings,
+    MergeTreeIndexExecutor * /* index_executor */,
     const ValueSizeMap & /* avg_value_size_hints */,
     const ReadBufferFromFileBase::ProfileCallback & /* profile_callback */) const
 {
@@ -84,7 +85,8 @@ IMergeTreeDataPart::MergeTreeWriterPtr MergeTreeDataPartInMemory::getWriter(
     const std::vector<MergeTreeIndexPtr> & /* indices_to_recalc */,
     const CompressionCodecPtr & /* default_codec */,
     const MergeTreeWriterSettings & writer_settings,
-    const MergeTreeIndexGranularity & /* computed_index_granularity */) const
+    const MergeTreeIndexGranularity & /* computed_index_granularity */,
+    const BitmapBuildInfo & /* bitmap_build_info */) const
 {
     auto ptr = std::static_pointer_cast<const MergeTreeDataPartInMemory>(shared_from_this());
     return std::make_unique<MergeTreeDataPartWriterInMemory>(

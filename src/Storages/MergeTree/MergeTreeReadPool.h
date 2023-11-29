@@ -32,6 +32,14 @@
 namespace DB
 {
 
+struct PerPartParams
+{
+    NameSet column_name_set;
+    MergeTreeReadTaskColumns task_columns;
+    bool should_reorder;
+    MergeTreeBlockSizePredictorPtr size_predictor;
+};
+
 using MergeTreeReadTaskPtr = std::unique_ptr<MergeTreeReadTask>;
 
 /**   Provides read tasks for MergeTreeThreadSelectBlockInputStream`s in fine-grained batches, allowing for more
@@ -94,7 +102,7 @@ public:
         const size_t threads_, const size_t sum_marks_, const size_t min_marks_for_concurrent_read_,
         RangesInDataParts && parts_, MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter,
         const MergeTreeMetaBase & data_, const StorageMetadataPtr & metadata_snapshot_,
-        const PrewhereInfoPtr & prewhere_info_,
+        const SelectQueryInfo & query_info_,
         const bool check_columns_, const Names & column_names_,
         const BackoffSettings & backoff_settings_, size_t preferred_block_size_bytes_,
         const bool do_not_steal_tasks_ = false);
@@ -114,7 +122,7 @@ public:
 
 private:
     std::vector<size_t> fillPerPartInfo(
-        const RangesInDataParts & parts, MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter, const bool check_columns);
+        const RangesInDataParts & parts, MergeTreeMetaBase::DeleteBitmapGetter delete_bitmap_getter, const MergeTreeIndexContextPtr & index_context, const bool check_columns);
 
     void fillPerThreadInfo(
         const size_t threads, const size_t sum_marks, std::vector<size_t> per_part_sum_marks,
@@ -125,11 +133,7 @@ private:
     const Names column_names;
     bool do_not_steal_tasks;
     bool predict_block_size_bytes;
-    std::vector<NameSet> per_part_column_name_set;
-    std::vector<NamesAndTypesList> per_part_columns;
-    std::vector<NamesAndTypesList> per_part_pre_columns;
-    std::vector<char> per_part_should_reorder;
-    std::vector<MergeTreeBlockSizePredictorPtr> per_part_size_predictor;
+    std::vector<PerPartParams> per_part_params;
     PrewhereInfoPtr prewhere_info;
 
     struct Part

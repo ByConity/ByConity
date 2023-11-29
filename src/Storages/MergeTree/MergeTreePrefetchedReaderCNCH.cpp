@@ -29,6 +29,7 @@ MergeTreePrefetchedReaderCNCH::MergeTreePrefetchedReaderCNCH(
         mark_cache_,
         mark_ranges_,
         settings_,
+        /* index_executor */nullptr,
         {},
         profile_callback_,
         clock_type_,

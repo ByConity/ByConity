@@ -48,7 +48,8 @@ public:
         const String & marks_file_extension,
         const CompressionCodecPtr & default_codec,
         const MergeTreeWriterSettings & settings,
-        const MergeTreeIndexGranularity & index_granularity);
+        const MergeTreeIndexGranularity & index_granularity,
+        const BitmapBuildInfo & bitmap_build_info = {});
 
     ~MergeTreeDataPartWriterWide() override;
 

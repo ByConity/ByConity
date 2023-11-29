@@ -429,13 +429,20 @@ struct Settings;
     M(UInt64, part_moves_between_shards_delay_seconds, 30, "Time to wait before/after moving parts between shards.", 0) \
 \
     /** ByteDance settings */ \
-\
+    \
+    M(Bool, enable_build_ab_index, true, "", 0) \
+    M(Bool, enable_segment_bitmap_index, true, "", 0) \
+    M(Bool, build_bitmap_index_in_merge, true, "", 0) \
+    M(Bool, build_segment_bitmap_index_in_merge, true, "", 0) \
+    M(UInt64, bitmap_index_segment_granularity, 65536, "", 0) \
+    M(UInt64, bitmap_index_serializing_granularity, 65536, "", 0) \
+    M(UInt64, max_parallel_threads_for_bitmap, 16, "", 0) \
     M(Bool, enable_run_optimization, true, "", 0) \
     M(UInt64, delta_merge_interval, 60, "", 0) \
-    /** Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled, "", 0) */ \
-\
-    /** If true, replicated tables would prefer to merge locally rather than                                  |
-      * fetching of merged part from replica */ \
+    /** Minimal amount of bytes to enable O_DIRECT in merge (0 - disabled, "", 0) */                                 \
+    \
+    /** If true, replicated tables would prefer to merge locally rather than                                  |\
+      * fetching of merged part from replica */                                                               \
     M(Bool, prefer_merge_than_fetch, false, "", 0) \
     M(Bool, heuristic_part_source_replica_lookup, true, "", 0) \
     /** Using in ingest partition function. If true, we'll insert default when                                |\

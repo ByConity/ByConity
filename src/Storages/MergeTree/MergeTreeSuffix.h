@@ -29,11 +29,12 @@ constexpr auto COMPRESSION_COLUMN_EXTENSION = "_encoded";
 constexpr auto COMPRESSION_DATA_FILE_EXTENSION = "_encoded.bin";
 constexpr auto COMPRESSION_MARKS_FILE_EXTENSION = "_encoded.mrk";
 
-constexpr auto AB_IDX_EXTENSION = ".adx";
-constexpr auto AB_IRK_EXTENSION = ".ark";
+constexpr auto BITMAP_IDX_EXTENSION = ".adx";
+constexpr auto BITMAP_IRK_EXTENSION = ".ark";
 
-constexpr auto MARK_BITMAP_IDX_EXTENSION = ".m_adx";
-constexpr auto MARK_BITMAP_IRK_EXTENSION = ".m_ark";
+constexpr auto SEGMENT_BITMAP_IDX_EXTENSION = ".bitidx";
+constexpr auto SEGMENT_BITMAP_TABLE_EXTENSION = ".bittab";
+constexpr auto SEGMENT_BITMAP_DIRECTORY_EXTENSION = ".bitdir";
 
 constexpr auto DELETE_BITMAP_FILE_EXTENSION = ".del";
 constexpr auto DELETE_BITMAP_FILE_NAME = "delete.del";

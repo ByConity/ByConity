@@ -48,6 +48,20 @@ NameSet injectRequiredColumns(const MergeTreeMetaBase & storage,
     Names & columns, const String& default_injected_column);
 
 
+struct MergeTreeReadTaskColumns
+{
+    /// column names to read during WHERE
+    NamesAndTypesList columns;
+    /// column names to read during PREWHERE
+    NamesAndTypesList pre_columns;
+    /// bitmap columns read during WHERE
+    NameSet bitmap_index_columns;
+    /// bitmap columns read during PREWHERE
+    NameSet bitmap_index_pre_columns;
+    /// resulting block may require reordering in accordance with `ordered_names`
+    bool should_reorder;
+};
+
 /// A batch of work for MergeTreeThreadSelectBlockInputStream
 struct MergeTreeReadTask
 {
@@ -63,10 +77,8 @@ struct MergeTreeReadTask
     const Names & ordered_names;
     /// used to determine whether column should be filtered during PREWHERE or WHERE
     const NameSet & column_name_set;
-    /// column names to read during WHERE
-    NamesAndTypesList & columns;
-    /// column names to read during PREWHERE
-    NamesAndTypesList & pre_columns;
+    /// task columns
+    const MergeTreeReadTaskColumns & task_columns;
     /// should PREWHERE column be returned to requesting side?
     const bool remove_prewhere_column;
     /// resulting block may require reordering in accordance with `ordered_names`
@@ -81,21 +93,12 @@ struct MergeTreeReadTask
 
     MergeTreeReadTask(
         const MergeTreeMetaBase::DataPartPtr & data_part_, ImmutableDeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
-        const Names & ordered_names_, const NameSet & column_name_set_, NamesAndTypesList & columns_,
-        NamesAndTypesList & pre_columns_, const bool remove_prewhere_column_, const bool should_reorder_,
+        const Names & ordered_names_, const NameSet & column_name_set_,
+        const MergeTreeReadTaskColumns & task_columns_,
+        bool remove_prewhere_column_, bool should_reorder_,
         MergeTreeBlockSizePredictorPtr && size_predictor_);
 
     virtual ~MergeTreeReadTask();
-};
-
-struct MergeTreeReadTaskColumns
-{
-    /// column names to read during WHERE
-    NamesAndTypesList columns;
-    /// column names to read during PREWHERE
-    NamesAndTypesList pre_columns;
-    /// resulting block may require reordering in accordance with `ordered_names`
-    bool should_reorder;
 };
 
 MergeTreeReadTaskColumns getReadTaskColumns(
@@ -104,6 +107,7 @@ MergeTreeReadTaskColumns getReadTaskColumns(
     const MergeTreeMetaBase::DataPartPtr & data_part,
     const Names & required_columns,
     const PrewhereInfoPtr & prewhere_info,
+    const MergeTreeIndexContextPtr & index_context,
     bool check_columns);
 
 struct MergeTreeBlockSizePredictor

@@ -56,6 +56,7 @@ MergeTreeReaderWide::MergeTreeReaderWide(
     MarkCache * mark_cache_,
     MarkRanges mark_ranges_,
     MergeTreeReaderSettings settings_,
+    MergeTreeIndexExecutor * index_executor_,
     IMergeTreeDataPart::ValueSizeMap avg_value_size_hints_,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
     clockid_t clock_type_,
@@ -68,7 +69,8 @@ MergeTreeReaderWide::MergeTreeReaderWide(
         std::move(mark_cache_),
         std::move(mark_ranges_),
         std::move(settings_),
-        std::move(avg_value_size_hints_))
+        std::move(avg_value_size_hints_),
+        index_executor_)
 {
     if (!create_streams_)
     {

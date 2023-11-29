@@ -45,7 +45,7 @@ public:
         const MergeTreeMetaBase & storage_,
         const StorageMetadataPtr & metadata_snapshot_,
         const bool use_uncompressed_cache_,
-        const PrewhereInfoPtr & prewhere_info_,
+        const SelectQueryInfo & query_info_,
         ExpressionActionsSettings actions_settings,
         const MergeTreeReaderSettings & reader_settings_,
 

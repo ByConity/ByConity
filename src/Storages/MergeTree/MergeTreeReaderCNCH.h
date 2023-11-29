@@ -41,6 +41,7 @@ public:
         MarkCache * mark_cache_,
         const MarkRanges & mark_ranges_,
         const MergeTreeReaderSettings & settings_,
+        MergeTreeIndexExecutor* index_executor_,
         const ValueSizeMap & avg_value_size_hints_ = {},
         const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = {},
         clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE);

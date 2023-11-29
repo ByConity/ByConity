@@ -1,0 +1,15 @@
+1 part without index
+7
+1 part without index, 1 part with index
+14
+select arraySetCheck
+1
+2
+1
+1
+2
+1
+8
+select group by
+1	10
+2	4

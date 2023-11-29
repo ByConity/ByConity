@@ -31,6 +31,7 @@
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/ProjectionsDescription.h>
+#include <Storages/MergeTree/Index/MergeTreeIndexHelper.h>
 
 namespace DB
 {
@@ -84,6 +85,7 @@ struct PrewhereInfo
     String prewhere_column_name;
     bool remove_prewhere_column = false;
     bool need_filter = false;
+    MergeTreeIndexContextPtr index_context;
 
     PrewhereInfo() = default;
     PrewhereInfo(const PrewhereInfo &) = default;
@@ -184,6 +186,8 @@ struct SelectQueryInfo
     /// Can be modified while reading from storage
     InputOrderInfoPtr input_order_info;
 
+    MergeTreeIndexContextPtr index_context;
+
     /// Prepared sets are used for indices by storage engine.
     /// Example: x IN (1, 2, 3)
     PreparedSets sets;
@@ -200,6 +204,9 @@ struct SelectQueryInfo
 
     /// Read from local table
     bool read_local_table = true;
+
+    /// Read from index
+    bool read_bitmap_index = false;
 
     void toProto(Protos::SelectQueryInfo & proto) const;
     void fillFromProto(const Protos::SelectQueryInfo & proto);
@@ -224,5 +231,8 @@ struct SelectQueryInfo
     /// caller must hold the interpreter to prevent some resources in query_info from being released
     static std::shared_ptr<InterpreterSelectQuery> buildQueryInfoFromQuery(ContextPtr context, const StoragePtr & storage, const String & query, SelectQueryInfo & query_info);
 };
+
+const PrewhereInfoPtr & getPrewhereInfo(const SelectQueryInfo & query_info);
+MergeTreeIndexContextPtr getIndexContext(const SelectQueryInfo & query_info);
 
 }

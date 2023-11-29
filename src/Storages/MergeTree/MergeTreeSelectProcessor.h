@@ -48,7 +48,7 @@ public:
         Names required_columns_,
         MarkRanges mark_ranges,
         bool use_uncompressed_cache,
-        const PrewhereInfoPtr & prewhere_info,
+        const SelectQueryInfo & query_info_,
         ExpressionActionsSettings actions_settings,
         bool check_columns,
         const MergeTreeReaderSettings & reader_settings,

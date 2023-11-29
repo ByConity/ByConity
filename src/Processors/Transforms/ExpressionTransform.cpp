@@ -20,7 +20,7 @@ void ExpressionTransform::transform(Chunk & chunk)
     size_t num_rows = chunk.getNumRows();
     auto block = getInputPort().getHeader().cloneWithColumns(chunk.detachColumns());
 
-    expression->execute(block, num_rows);
+    expression->execute(block, chunk.getSideBlock(), num_rows);
 
     chunk.setColumns(block.getColumns(), num_rows);
 }

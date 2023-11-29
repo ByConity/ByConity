@@ -41,6 +41,8 @@ const String & getMapSeparator()
     return map_separator;
 }
 
+const String MAP_KV_RESERVED_KEYS[4] = {".keys", ".key", ".values", ".value"};
+
 void checkAndSetMapSeparator(const String & map_separator_)
 {
     const char * pos = map_separator_.data();
@@ -240,6 +242,19 @@ String getMapFileNameFromImplicitFileName(const String & implicit_file_name)
     if (extension_loc == String::npos)
         throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_FILE_NAME, "Invalid file name of implicit column: {}", implicit_file_name);
     return escapeForFileName(map_name) + implicit_file_name.substr(extension_loc, implicit_file_name.size() - extension_loc);
+}
+
+std::pair<bool, String> mayBeMapKVReservedKeys(const String & name)
+{
+    for (const auto & key : MAP_KV_RESERVED_KEYS)
+    {
+        if (name.ends_with(key))
+        {
+            // remove reserved suffix
+            return {true, name.substr(0, name.size() - key.size())};
+        }
+    }
+    return {false, ""};
 }
 
 bool isMapBaseFile(const String & file_name)

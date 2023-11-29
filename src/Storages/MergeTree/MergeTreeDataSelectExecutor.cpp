@@ -154,6 +154,9 @@ QueryPlanPtr MergeTreeDataSelectExecutor::read(
     const auto & settings = context->getSettingsRef();
     auto parts = data.getDataPartsVector();
 
+    if (settings.enable_ab_index_optimization)
+        query_info.index_context->enable_read_bitmap_index = settings.enable_ab_index_optimization;
+
     parts.erase(std::remove_if(parts.begin(), parts.end(), [](auto & part) { return part->info.isFakeDropRangePart(); }), parts.end());
 
     if (!query_info.projection)

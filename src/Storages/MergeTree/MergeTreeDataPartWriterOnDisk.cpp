@@ -20,6 +20,8 @@
  */
 
 #include <Storages/MergeTree/MergeTreeDataPartWriterOnDisk.h>
+#include <Storages/MergeTree/Index/MergeTreeBitmapIndex.h>
+#include <Storages/MergeTree/Index/MergeTreeSegmentBitmapIndex.h>
 
 #include <Columns/ColumnByteMap.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -137,7 +139,8 @@ MergeTreeDataPartWriterOnDisk::MergeTreeDataPartWriterOnDisk(
     const String & marks_file_extension_,
     const CompressionCodecPtr & default_codec_,
     const MergeTreeWriterSettings & settings_,
-    const MergeTreeIndexGranularity & index_granularity_)
+    const MergeTreeIndexGranularity & index_granularity_,
+    const BitmapBuildInfo & bitmap_build_info_)
     : IMergeTreeDataPartWriter(data_part_,
         columns_list_, metadata_snapshot_, settings_, index_granularity_)
     , skip_indices(indices_to_recalc_)
@@ -145,6 +148,7 @@ MergeTreeDataPartWriterOnDisk::MergeTreeDataPartWriterOnDisk(
     , marks_file_extension(marks_file_extension_)
     , default_codec(default_codec_)
     , compute_granularity(index_granularity.empty())
+    , bitmap_build_info(bitmap_build_info_)
 {
     if (settings.blocks_are_granules_size && !index_granularity.empty())
         throw Exception("Can't take information about index granularity from blocks, when non empty index_granularity array specified", ErrorCodes::LOGICAL_ERROR);
@@ -161,6 +165,8 @@ MergeTreeDataPartWriterOnDisk::MergeTreeDataPartWriterOnDisk(
     if (settings.rewrite_primary_key)
         initPrimaryIndex();
     initSkipIndices();
+    initBitmapIndices();
+    initSegmentBitmapIndices();
 
     optimize_map_column_serialization = settings.optimize_map_column_serialization;
 }
@@ -237,6 +243,144 @@ void MergeTreeDataPartWriterOnDisk::initSkipIndices()
                         default_codec, settings.max_compress_block_size));
         skip_indices_aggregators.push_back(index_helper->createIndexAggregator());
         skip_index_accumulated_marks.push_back(0);
+    }
+}
+
+/**
+  * Bitmap indices can be built from :
+  * 1. build in insert / merge: 
+  *   - enable build : 
+  *       build_all_bitmap_index && !only_bitmap_index: 
+  *   - not enable build (insert: enable_build_ab_index; merge: build_bitmap_index_in_merge):
+  *       (!build_all_bitmap_index) with empty bitmap_index_columns
+  * 2. alter table build bitmap of partition:
+  *   - build_all_bitmap_index && only_bitmap_index
+  * 3. other mutation: 
+  *   - not_build_bitmap_index
+  * 4. build with dependent columns changed:
+  *   - (!build_all_bitmap_index && !only_bitmap_index) with dependent columns in bitmap_index_columns
+  */
+void MergeTreeDataPartWriterOnDisk::initBitmapIndices()
+{
+    if (bitmap_build_info.not_build_bitmap_index)
+        return;
+
+    auto get_all_bitmap_columns = [&](const auto & all_columns) 
+    {
+        bitmap_build_info.bitmap_index_columns.clear();
+        for (const auto & column : all_columns)
+        {
+            if (MergeTreeBitmapIndex::isBitmapIndexColumn(column.type))
+                bitmap_build_info.bitmap_index_columns.emplace_back(column.name, column.type);
+        }
+    };
+
+    if (bitmap_build_info.build_all_bitmap_index)
+    {
+        bitmap_build_info.bitmap_index_columns.clear();
+        if (bitmap_build_info.only_bitmap_index)
+            get_all_bitmap_columns(metadata_snapshot->getColumns());
+        else
+            get_all_bitmap_columns(columns_list);
+    }
+    
+    for (const auto & it : bitmap_build_info.bitmap_index_columns)
+    {
+        if (MergeTreeBitmapIndex::isBitmapIndexColumn(it.type) && MergeTreeBitmapIndex::needBuildIndex(data_part->getFullPath(), it.name))
+        {
+            IndexParams bitmap_params(storage.getSettings()->enable_build_ab_index,
+                                      bitmap_build_info.only_bitmap_index,
+                                      storage.getSettings()->enable_run_optimization,
+                                      storage.getSettings()->max_parallel_threads_for_bitmap,
+                                      storage.getSettings()->index_granularity);
+            addBitmapIndexes(data_part->volume->getDisk()->getPath() + "/" + part_path, it.name, *it.type, bitmap_params);
+        }
+    }
+}
+
+void MergeTreeDataPartWriterOnDisk::initSegmentBitmapIndices()
+{
+    if (bitmap_build_info.not_build_segment_bitmap_index)
+        return;
+
+    auto get_all_indexed_columns = [&](const auto & all_columns) 
+    {
+        bitmap_build_info.segment_bitmap_index_columns.clear();
+        for (const auto & column : all_columns)
+        {
+            if (MergeTreeSegmentBitmapIndex::isSegmentBitmapIndexColumn(column.type))
+                bitmap_build_info.segment_bitmap_index_columns.emplace_back(column.name, column.type);
+        }
+    };
+
+    if (bitmap_build_info.build_all_segment_bitmap_index)
+    {
+        bitmap_build_info.segment_bitmap_index_columns.clear();
+        if (bitmap_build_info.only_segment_bitmap_index)
+            get_all_indexed_columns(metadata_snapshot->getColumns());
+        else
+            get_all_indexed_columns(columns_list);
+    }
+    
+    for (const auto & it : bitmap_build_info.segment_bitmap_index_columns)
+    {
+        if (MergeTreeSegmentBitmapIndex::isSegmentBitmapIndexColumn(it.type) && MergeTreeSegmentBitmapIndex::needBuildSegmentIndex(data_part->getFullPath(), it.name))
+        {
+            IndexParams bitmap_params(
+                // enable sync build, this logic is bounded with original bitmap index
+                storage.getSettings()->enable_build_ab_index,
+                bitmap_build_info.only_segment_bitmap_index,
+                storage.getSettings()->enable_run_optimization,
+                storage.getSettings()->max_parallel_threads_for_bitmap,
+                storage.getSettings()->index_granularity,
+                storage.getSettings()->bitmap_index_segment_granularity,
+                storage.getSettings()->bitmap_index_serializing_granularity
+                );
+            addSegmentBitmapIndexes(data_part->volume->getDisk()->getPath() + "/" + part_path, it.name, *it.type, bitmap_params);
+        }
+    }
+}
+
+void MergeTreeDataPartWriterOnDisk::writeBitmapIndexColumns(const Block & block)
+{
+    if (column_bitmap_indexes.empty())
+        return;
+
+    for (const auto & column : bitmap_build_info.bitmap_index_columns)
+    {
+        // Assume that if current column has a bitmap index, it won't have other index optimizations
+        String index_name = ISerialization::getFileNameForStream(column.name, {});
+        if (column_bitmap_indexes.count(index_name))
+        {
+            auto * index = column_bitmap_indexes[index_name].get();
+            if (index && index->bitmap_index)
+            {
+                index->bitmap_index->asyncAppendColumnData(block.getByName(column.name).column);
+                data_part->bitmap_index_checker->emplace(column.name, true);
+            }
+        }
+    }
+}
+
+
+void MergeTreeDataPartWriterOnDisk::writeSegmentBitmapIndexColumns(const Block & block)
+{
+    if (column_segment_bitmap_indexes.empty())
+        return;
+
+    for (const auto & column : bitmap_build_info.segment_bitmap_index_columns)
+    {
+        // Assume that if current column has a segment bitmap index, it won't have other index optimizations
+        String index_name = ISerialization::getFileNameForStream(column.name, {});
+        if (column_segment_bitmap_indexes.count(index_name))
+        {
+            auto * index = column_segment_bitmap_indexes[index_name].get();
+            if (index && index->bitmap_index)
+            {
+                index->bitmap_index->asyncAppendColumnData(block.getByName(column.name).column);
+                data_part->bitmap_index_checker->emplace(column.name, true);
+            }
+        }
     }
 }
 
@@ -371,6 +515,42 @@ void MergeTreeDataPartWriterOnDisk::finishSkipIndicesSerialization(
     skip_indices_streams.clear();
     skip_indices_aggregators.clear();
     skip_index_accumulated_marks.clear();
+}
+
+void MergeTreeDataPartWriterOnDisk::finishBitmapIndexSerialization(MergeTreeData::DataPart::Checksums & checksums)
+{
+    for (auto & column_bitmap_index : column_bitmap_indexes)
+    {
+        if (column_bitmap_index.second->only_write_bitmap_index)
+        {
+            if (column_bitmap_index.second->bitmap_index)
+            {
+                column_bitmap_index.second->bitmap_index->finalize();
+                column_bitmap_index.second->bitmap_index->addToChecksums(checksums);
+                continue;
+            }
+        }
+        column_bitmap_index.second->finalize();
+        column_bitmap_index.second->addToChecksums(checksums);
+    }
+}
+
+void MergeTreeDataPartWriterOnDisk::finishSegmentBitmapIndexSerialization(MergeTreeData::DataPart::Checksums & checksums)
+{
+    for (auto & column_segment_bitmap_index : column_segment_bitmap_indexes)
+    {
+        if (column_segment_bitmap_index.second->only_write_bitmap_index)
+        {
+            if (column_segment_bitmap_index.second->bitmap_index)
+            {
+                column_segment_bitmap_index.second->bitmap_index->finalize();
+                column_segment_bitmap_index.second->bitmap_index->addToChecksums(checksums);
+                continue;
+            }
+        }
+        column_segment_bitmap_index.second->finalize();
+        column_segment_bitmap_index.second->addToChecksums(checksums);
+    }
 }
 
 Names MergeTreeDataPartWriterOnDisk::getSkipIndicesColumns() const

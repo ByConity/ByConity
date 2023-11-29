@@ -139,10 +139,11 @@ MergeTreeDataPartWriterCompact::MergeTreeDataPartWriterCompact(
     const String & marks_file_extension_,
     const CompressionCodecPtr & default_codec_,
     const MergeTreeWriterSettings & settings_,
-    const MergeTreeIndexGranularity & index_granularity_)
+    const MergeTreeIndexGranularity & index_granularity_,
+    const BitmapBuildInfo & bitmap_build_info_)
     : MergeTreeDataPartWriterOnDisk(data_part_, columns_list_, metadata_snapshot_,
         indices_to_recalc_, marks_file_extension_,
-        default_codec_, settings_, index_granularity_)
+        default_codec_, settings_, index_granularity_, bitmap_build_info_)
 	, log(&Poco::Logger::get(storage.getLogName() + " (WriterCompact)"))
 {
     const auto & storage_columns = metadata_snapshot->getColumns();
