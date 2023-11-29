@@ -116,6 +116,7 @@ std::string truncateNetworkInterfaceIfHas(const std::string & s)
     if (pos != std::string::npos)
     {
         std::string truncated = s.substr(0, pos);
+        return truncated;
     }
     return s;
 }
