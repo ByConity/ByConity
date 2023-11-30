@@ -20,6 +20,8 @@
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchWorkerResource.h>
 #include <CloudServices/DedupWorkerStatus.h>
+#include <Common/Configurations.h>
+#include <Common/getNumberOfPhysicalCPUCores.h>
 #include <IO/ReadBufferFromString.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
@@ -46,7 +48,6 @@
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
 #include <brpc/stream.h>
-#include "Common/Configurations.h"
 
 #if USE_RDKAFKA
 #    include <Storages/Kafka/KafkaTaskCommand.h>
@@ -84,12 +85,76 @@ namespace ErrorCodes
 }
 
 CnchWorkerServiceImpl::CnchWorkerServiceImpl(ContextMutablePtr context_)
-    : WithMutableContext(context_->getGlobalContext()), log(&Poco::Logger::get("CnchWorkerService"))
+    : WithMutableContext(context_->getGlobalContext())
+    , log(&Poco::Logger::get("CnchWorkerService"))
+    , thread_pool(getNumberOfPhysicalCPUCores() * 4, getNumberOfPhysicalCPUCores() * 2, getNumberOfPhysicalCPUCores() * 8)
 {
 }
 
-CnchWorkerServiceImpl::~CnchWorkerServiceImpl() = default;
+CnchWorkerServiceImpl::~CnchWorkerServiceImpl()
+{
+    try
+    {
+        LOG_TRACE(log, "Waiting local thread pool finishing");
+        thread_pool.wait();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+    }
+}
 
+#define THREADPOOL_SCHEDULE(func) \
+    try \
+    { \
+        thread_pool.scheduleOrThrowOnError(std::move(func)); \
+    } \
+    catch (...) \
+    { \
+        tryLogCurrentException(log, __PRETTY_FUNCTION__); \
+        RPCHelpers::handleException(response->mutable_exception()); \
+        done->Run(); \
+    }
+
+#define SUBMIT_THREADPOOL(...) \
+    auto _func = [=, this] { \
+        brpc::ClosureGuard done_guard(done); \
+        try \
+        { \
+            __VA_ARGS__; \
+        } \
+        catch (...) \
+        { \
+            tryLogCurrentException(log, __PRETTY_FUNCTION__); \
+            RPCHelpers::handleException(response->mutable_exception()); \
+        } \
+    }; \
+    THREADPOOL_SCHEDULE(_func);
+
+
+void CnchWorkerServiceImpl::executeSimpleQuery(
+    google::protobuf::RpcController * ,
+    const Protos::ExecuteSimpleQueryReq * ,
+    Protos::ExecuteSimpleQueryResp * response,
+    google::protobuf::Closure * done)
+{
+    /// example
+    SUBMIT_THREADPOOL({
+        /// TODO:
+    })
+
+    /// Former impl
+    /*
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        /// TODO:
+    }
+
+    */
+
+}
 
 void CnchWorkerServiceImpl::submitManipulationTask(
     google::protobuf::RpcController * cntl,
@@ -97,10 +162,7 @@ void CnchWorkerServiceImpl::submitManipulationTask(
     Protos::SubmitManipulationTaskResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-
-    try
-    {
+    SUBMIT_THREADPOOL({
         if (request->task_id().empty())
             throw Exception(ErrorCodes::BAD_ARGUMENTS, "Require non-empty task_id");
 
@@ -183,12 +245,7 @@ void CnchWorkerServiceImpl::submitManipulationTask(
 
         /// Waiting for manipulation task to be added to the ManipulationList
         event->wait(3 * 1000);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::shutdownManipulationTasks(
@@ -197,10 +254,7 @@ void CnchWorkerServiceImpl::shutdownManipulationTasks(
     Protos::ShutdownManipulationTasksResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-
-    try
-    {
+    SUBMIT_THREADPOOL({
         auto uuid = RPCHelpers::createUUID(request->table_uuid());
         std::unordered_set<String> task_ids(request->task_ids().begin(), request->task_ids().end());
 
@@ -216,12 +270,7 @@ void CnchWorkerServiceImpl::shutdownManipulationTasks(
                 e.is_cancelled.store(true, std::memory_order_relaxed);
             }
         });
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::touchManipulationTasks(
@@ -230,10 +279,7 @@ void CnchWorkerServiceImpl::touchManipulationTasks(
     Protos::TouchManipulationTasksResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-
-    try
-    {
+    SUBMIT_THREADPOOL({
         auto uuid = RPCHelpers::createUUID(request->table_uuid());
         std::unordered_set<String> request_tasks(request->tasks_id().begin(), request->tasks_id().end());
 
@@ -256,12 +302,7 @@ void CnchWorkerServiceImpl::touchManipulationTasks(
                 response->add_tasks_id(e.task_id);
             }
         });
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::getManipulationTasksStatus(
@@ -270,10 +311,7 @@ void CnchWorkerServiceImpl::getManipulationTasksStatus(
     Protos::GetManipulationTasksStatusResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-
-    try
-    {
+    SUBMIT_THREADPOOL({
         getContext()->getManipulationList().apply([&](std::list<ManipulationListElement> & container) {
             for (auto & e : container)
             {
@@ -302,12 +340,7 @@ void CnchWorkerServiceImpl::getManipulationTasksStatus(
                 task_info->set_thread_id(e.thread_id);
             }
         });
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::sendCreateQuery(
@@ -316,9 +349,7 @@ void CnchWorkerServiceImpl::sendCreateQuery(
     Protos::SendCreateQueryResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         LOG_TRACE(log, "Receiving create queries for Session: {}", request->txn_id());
         /// set client_info.
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
@@ -338,12 +369,7 @@ void CnchWorkerServiceImpl::sendCreateQuery(
         }
 
         LOG_TRACE(log, "Successfully create {} queries for Session: {}", request->create_queries_size(), request->txn_id());
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::sendQueryDataParts(
@@ -352,9 +378,7 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
     Protos::SendDataPartsResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
         const auto & query_context = session->context;
 
@@ -398,14 +422,7 @@ void CnchWorkerServiceImpl::sendQueryDataParts(
         // std::map<String, UInt64> udf_infos;
         // for (const auto & udf_info: request->udf_infos())
         //     udf_infos.emplace(udf_info.function_name(), udf_info.version());
-
-        // UserDefinedObjectsLoader::instance().checkAndLoadUDFFromStorage(query_context, udf_infos, true);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 
@@ -415,9 +432,7 @@ void CnchWorkerServiceImpl::sendCnchFileDataParts(
     Protos::SendCnchFileDataPartsResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
         const auto & query_context = session->context;
 
@@ -431,12 +446,7 @@ void CnchWorkerServiceImpl::sendCnchFileDataParts(
         cnchfile_table.loadDataParts(data_parts);
 
         LOG_DEBUG(log, "Received and loaded {} file parts.", data_parts.size());
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::checkDataParts(
@@ -445,9 +455,7 @@ void CnchWorkerServiceImpl::checkDataParts(
     Protos::CheckDataPartsResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         /// set client_info
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
@@ -490,12 +498,7 @@ void CnchWorkerServiceImpl::checkDataParts(
 
         session->release();
         LOG_DEBUG(log, "Send check results back for {} parts.", data_parts.size());
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::preloadDataParts(
@@ -504,9 +507,7 @@ void CnchWorkerServiceImpl::preloadDataParts(
     Protos::PreloadDataPartsResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::PreloadExecTotalOps); });
 
         Stopwatch watch;
@@ -554,12 +555,7 @@ void CnchWorkerServiceImpl::preloadDataParts(
             watch.elapsedMilliseconds(),
             request->preload_level(),
             request->sync());
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::dropPartDiskCache(
@@ -568,10 +564,7 @@ void CnchWorkerServiceImpl::dropPartDiskCache(
     Protos::DropPartDiskCacheResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-
-    try
-    {
+    SUBMIT_THREADPOOL({
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         StoragePtr storage = createStorageFromQuery(request->create_table_query(), rpc_context);
         auto & cloud_merge_tree = dynamic_cast<StorageCloudMergeTree &>(*storage);
@@ -599,15 +592,9 @@ void CnchWorkerServiceImpl::dropPartDiskCache(
             }
         }
 
-
         if (pool)
             pool->wait();
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::sendOffloading(
@@ -616,17 +603,9 @@ void CnchWorkerServiceImpl::sendOffloading(
     Protos::SendOffloadingResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-
-    try
-    {
+    SUBMIT_THREADPOOL({
         /// TODO
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::sendResources(
@@ -635,9 +614,7 @@ void CnchWorkerServiceImpl::sendResources(
     Protos::SendResourcesResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         LOG_TRACE(log, "Receiving resources for Session: {}", request->txn_id());
 
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
@@ -728,12 +705,7 @@ void CnchWorkerServiceImpl::sendResources(
         }
 
         LOG_TRACE(log, "Received all resource for session: {}", request->txn_id());
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::removeWorkerResource(
@@ -742,18 +714,11 @@ void CnchWorkerServiceImpl::removeWorkerResource(
     Protos::RemoveWorkerResourceResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         auto session = getContext()->acquireNamedCnchSession(request->txn_id(), {}, true);
         /// remove resource in worker
         session->release();
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 #if defined(__clang__)
@@ -764,14 +729,6 @@ void CnchWorkerServiceImpl::removeWorkerResource(
 #    pragma GCC diagnostic ignored "-Wunused-parameter"
 #endif
 
-void CnchWorkerServiceImpl::executeSimpleQuery(
-    google::protobuf::RpcController * cntl,
-    const Protos::ExecuteSimpleQueryReq * request,
-    Protos::ExecuteSimpleQueryResp * response,
-    google::protobuf::Closure * done)
-{
-}
-
 void CnchWorkerServiceImpl::GetPreallocatedStatus(
     google::protobuf::RpcController *,
     const Protos::GetPreallocatedStatusReq * request,
@@ -779,6 +736,7 @@ void CnchWorkerServiceImpl::GetPreallocatedStatus(
     google::protobuf::Closure * done)
 {
 }
+
 void CnchWorkerServiceImpl::SetQueryIntent(
     google::protobuf::RpcController *,
     const Protos::SetQueryIntentReq * request,
@@ -786,6 +744,7 @@ void CnchWorkerServiceImpl::SetQueryIntent(
     google::protobuf::Closure * done)
 {
 }
+
 void CnchWorkerServiceImpl::SubmitSyncTask(
     google::protobuf::RpcController *,
     const Protos::SubmitSyncTaskReq * request,
@@ -793,6 +752,7 @@ void CnchWorkerServiceImpl::SubmitSyncTask(
     google::protobuf::Closure * done)
 {
 }
+
 void CnchWorkerServiceImpl::ResetQueryIntent(
     google::protobuf::RpcController *,
     const Protos::ResetQueryIntentReq * request,
@@ -800,6 +760,7 @@ void CnchWorkerServiceImpl::ResetQueryIntent(
     google::protobuf::Closure * done)
 {
 }
+
 void CnchWorkerServiceImpl::SubmitScaleTask(
     google::protobuf::RpcController *,
     const Protos::SubmitScaleTaskReq * request,
@@ -807,6 +768,7 @@ void CnchWorkerServiceImpl::SubmitScaleTask(
     google::protobuf::Closure * done)
 {
 }
+
 void CnchWorkerServiceImpl::ClearPreallocatedDataParts(
     google::protobuf::RpcController *,
     const Protos::ClearPreallocatedDataPartsReq * request,
@@ -814,15 +776,14 @@ void CnchWorkerServiceImpl::ClearPreallocatedDataParts(
     google::protobuf::Closure * done)
 {
 }
+
 void CnchWorkerServiceImpl::createDedupWorker(
     google::protobuf::RpcController * cntl,
     const Protos::CreateDedupWorkerReq * request,
     Protos::CreateDedupWorkerResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         auto storage_id = RPCHelpers::createStorageID(request->table());
         const auto & query = request->create_table_query();
         auto host_ports = RPCHelpers::createHostWithPorts(request->host_ports());
@@ -856,12 +817,7 @@ void CnchWorkerServiceImpl::createDedupWorker(
                 tryLogCurrentException(__PRETTY_FUNCTION__);
             }
         }).detach();
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 void CnchWorkerServiceImpl::dropDedupWorker(
     google::protobuf::RpcController * cntl,
@@ -869,9 +825,7 @@ void CnchWorkerServiceImpl::dropDedupWorker(
     Protos::DropDedupWorkerResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         auto storage_id = RPCHelpers::createStorageID(request->table());
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
 
@@ -889,22 +843,18 @@ void CnchWorkerServiceImpl::dropDedupWorker(
             InterpreterDropQuery(q, c).execute();
             LOG_DEBUG(log, "Dropped table: {}", storage_id.getNameForLogs());
         }).detach();
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
+
 void CnchWorkerServiceImpl::getDedupWorkerStatus(
     google::protobuf::RpcController *,
     const Protos::GetDedupWorkerStatusReq * request,
     Protos::GetDedupWorkerStatusResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
+        response->set_is_active(false);
+
         auto storage_id = RPCHelpers::createStorageID(request->table());
         auto storage = DatabaseCatalog::instance().getTable(storage_id, getContext());
 
@@ -934,13 +884,7 @@ void CnchWorkerServiceImpl::getDedupWorkerStatus(
             response->set_last_exception(status.last_exception);
             response->set_last_exception_time(status.last_exception_time);
         }
-    }
-    catch (...)
-    {
-        response->set_is_active(false);
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 #if USE_RDKAFKA
@@ -950,9 +894,7 @@ void CnchWorkerServiceImpl::submitKafkaConsumeTask(
     Protos::SubmitKafkaConsumeTaskResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         /// parse command params passed by brpc
         auto command = std::make_shared<KafkaTaskCommand>();
         command->type = static_cast<KafkaTaskCommand::Type>(request->type());
@@ -998,22 +940,16 @@ void CnchWorkerServiceImpl::submitKafkaConsumeTask(
             ///CurrentThread::attachQueryContext(*c);
             DB::executeKafkaConsumeTask(*p, c);
         }).detach();
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
+
 void CnchWorkerServiceImpl::getConsumerStatus(
     google::protobuf::RpcController * cntl,
     const Protos::GetConsumerStatusReq * request,
     Protos::GetConsumerStatusResp * response,
     google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         rpc_context->makeQueryContext();
 
@@ -1034,12 +970,7 @@ void CnchWorkerServiceImpl::getConsumerStatus(
             response->add_assignments(tpl);
         response->set_consumer_num(status.assigned_consumers);
         response->set_last_exception(status.last_exception);
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 #endif
 
@@ -1050,9 +981,7 @@ void CnchWorkerServiceImpl::submitMySQLSyncThreadTask(
     [[maybe_unused]] Protos::SubmitMySQLSyncThreadTaskResp * response,
     [[maybe_unused]] google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         if (request->database_name().empty() || request->sync_thread_key().empty())
             throw Exception("MySQLSyncThread task requires database name [" + request->database_name()
                             + "] and thread key [" + request->sync_thread_key() +"] should not be empty", ErrorCodes::BAD_ARGUMENTS);
@@ -1089,12 +1018,7 @@ void CnchWorkerServiceImpl::submitMySQLSyncThreadTask(
             // CurrentThread::attachQueryContext(*c);
             DB::executeSyncThreadTaskCommand(*p, c);
         }).detach();
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 
 void CnchWorkerServiceImpl::checkMySQLSyncThreadStatus(
@@ -1103,9 +1027,7 @@ void CnchWorkerServiceImpl::checkMySQLSyncThreadStatus(
     [[maybe_unused]] Protos::CheckMySQLSyncThreadStatusResp * response,
     [[maybe_unused]] google::protobuf::Closure * done)
 {
-    brpc::ClosureGuard done_guard(done);
-    try
-    {
+    SUBMIT_THREADPOOL({
         auto database = DatabaseCatalog::instance().getDatabase(request->database_name(), getContext());
         if (!database)
             throw Exception("Database " + request->database_name() + " doesn't exist", ErrorCodes::LOGICAL_ERROR);
@@ -1115,12 +1037,7 @@ void CnchWorkerServiceImpl::checkMySQLSyncThreadStatus(
             throw Exception("DatabaseCloudMaterializedMySQL is expected, but got " + database->getEngineName(), ErrorCodes::LOGICAL_ERROR);
 
         response->set_is_running(materialized_mysql->syncThreadIsRunning(request->sync_thread_key()));
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
+    })
 }
 #endif
 

@@ -223,6 +223,8 @@ private:
 
     // class PreloadHandler;
     // std::shared_ptr<PreloadHandler> preload_handler;
+
+    ThreadPool thread_pool;
 };
 
 REGISTER_SERVICE_IMPL(CnchWorkerServiceImpl);
