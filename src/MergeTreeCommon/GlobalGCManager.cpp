@@ -92,63 +92,105 @@ size_t amountOfWorkCanReceive(size_t max_threads, size_t deleting_table_num)
 }
 
 namespace {
-    void cleanS3Disks(const StoragePtr & storage, const MergeTreeMetaBase & mergetree_meta, const Context & context, Poco::Logger * log)
+// Helper function to calculate exponential backoff time
+int calculateBackoffTime(int attempts)
+{
+    // Example: simple exponential backoff
+    const int baseTime = 1000; // milliseconds
+    return baseTime * (1 << attempts); // Exponential increase
+}
+
+// Helper function to identify "no free thread" exception
+bool isNoFreeThreadException(const DB::Exception& e)
+{
+    const std::string errorMessage = e.what();
+    // Define the specific message or part of the message that indicates "no free thread"
+    const std::string noFreeThreadMessage = "no free thread";
+    return errorMessage.find(noFreeThreadMessage) != std::string::npos;
+}
+
+void cleanS3Disks(const StoragePtr & storage, const MergeTreeMetaBase & mergetree_meta, const Context & context, Poco::Logger * log)
+{
+    auto catalog = context.getCnchCatalog();
+    Strings partition_ids = catalog->getPartitionIDs(storage, &context);
+
+    ThreadPool clean_pool(context.getSettingsRef().s3_gc_inter_partition_parallelism);
+    for (const String & partition_id : partition_ids)
     {
-        auto catalog = context.getCnchCatalog();
-        Strings partition_ids = catalog->getPartitionIDs(storage, &context);
-
-        ThreadPool clean_pool(context.getSettingsRef().s3_gc_inter_partition_parallelism);
-        for (const String & partition_id : partition_ids)
+        bool success = false;
+        int attempts = 0;
+        const int MAX_ATTEMPTS = 10;
+        while (!success && attempts < MAX_ATTEMPTS) // Define MAX_ATTEMPTS as appropriate
         {
-            clean_pool.scheduleOrThrow([partition_id, &log, &catalog, &storage, &mergetree_meta, &context]() {
-                MultiDiskS3PartsLazyCleaner parts_cleaner(std::nullopt, context.getSettingsRef().s3_gc_intra_partition_parallelism);
+            try
+            {
+                clean_pool.scheduleOrThrow([partition_id, &log, &catalog, &storage, &mergetree_meta, &context]() {
+                    MultiDiskS3PartsLazyCleaner parts_cleaner(std::nullopt, context.getSettingsRef().s3_gc_intra_partition_parallelism);
 
-                LOG_INFO(log, fmt::format("Start GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs()));
+                    LOG_INFO(log, fmt::format("Start GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs()));
 
-                ServerDataPartsVector parts = catalog->getServerDataPartsInPartitions(storage, {partition_id}, {0}, &context);
-                for (auto & part : parts)
-                {
-                    auto cnch_part = part->toCNCHDataPart(mergetree_meta);
-
-                    auto disks = cnch_part->volume->getDisks();
-                    for (const auto & disk : disks)
+                    ServerDataPartsVector parts = catalog->getServerDataPartsInPartitions(storage, {partition_id}, {0}, &context);
+                    for (auto & part : parts)
                     {
-                        parts_cleaner.push(disk, cnch_part->getFullRelativePath());
+                        auto cnch_part = part->toCNCHDataPart(mergetree_meta);
+
+                        auto disks = cnch_part->volume->getDisks();
+                        for (const auto & disk : disks)
+                        {
+                            parts_cleaner.push(disk, cnch_part->getFullRelativePath());
+                        }
                     }
-                }
 
-                parts = catalog->listDetachedParts(mergetree_meta, AttachFilter::createPartitionFilter(partition_id));
-                for (auto & part : parts)
-                {
-                    auto cnch_part = part->toCNCHDataPart(mergetree_meta);
-
-                    auto disks = cnch_part->volume->getDisks();
-                    for (const auto & disk : disks)
+                    parts = catalog->listDetachedParts(mergetree_meta, AttachFilter::createPartitionFilter(partition_id));
+                    for (auto & part : parts)
                     {
-                        parts_cleaner.push(disk, cnch_part->getFullRelativePath());
+                        auto cnch_part = part->toCNCHDataPart(mergetree_meta);
+
+                        auto disks = cnch_part->volume->getDisks();
+                        for (const auto & disk : disks)
+                        {
+                            parts_cleaner.push(disk, cnch_part->getFullRelativePath());
+                        }
                     }
-                }
 
-                parts_cleaner.finalize();
+                    parts_cleaner.finalize();
 
-                LOG_INFO(log, fmt::format("Finish GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs()));
+                    LOG_INFO(log, fmt::format("Finish GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs()));
 
-                if (mergetree_meta.getInMemoryMetadataPtr()->hasUniqueKey())
+                    if (mergetree_meta.getInMemoryMetadataPtr()->hasUniqueKey())
+                    {
+                        auto all_detached_bitmaps
+                            = catalog->listDetachedDeleteBitmaps(mergetree_meta, AttachFilter::createPartitionFilter(partition_id));
+                        for (auto & detached_bitmap : all_detached_bitmaps)
+                            detached_bitmap->removeFile();
+                        LOG_INFO(
+                            log,
+                            "Finish GC detached delete bitmap of partition {} for table {}",
+                            partition_id,
+                            storage->getStorageID().getNameForLogs());
+                    }
+                });
+                success = true;
+            }
+            catch (const DB::Exception& e)
+            {
+                if (isNoFreeThreadException(e)) // Implement this function to identify the specific exception
                 {
-                    auto all_detached_bitmaps
-                        = catalog->listDetachedDeleteBitmaps(mergetree_meta, AttachFilter::createPartitionFilter(partition_id));
-                    for (auto & detached_bitmap : all_detached_bitmaps)
-                        detached_bitmap->removeFile();
-                    LOG_INFO(
-                        log,
-                        "Finish GC detached delete bitmap of partition {} for table {}",
-                        partition_id,
-                        storage->getStorageID().getNameForLogs());
+                    LOG_WARNING(log, "No free thread for GC partition {} for table {}, waiting for {} milliseconds",
+                        partition_id, storage->getStorageID().getNameForLogs(), calculateBackoffTime(attempts));
+                    int waitTime = calculateBackoffTime(attempts); // Implement exponential backoff time calculation
+                    std::this_thread::sleep_for(std::chrono::milliseconds(waitTime));
+                    attempts++;
                 }
-            });
+                else
+                {
+                    throw; // Rethrow if it's not the specific exception we're handling
+                }
+            }
         }
-        clean_pool.wait();
     }
+    clean_pool.wait();
+}
 
 void cleanDisks(const Disks & disks, const String & relative_path, Poco::Logger * log)
 {
