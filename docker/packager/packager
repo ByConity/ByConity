@@ -189,7 +189,7 @@ if __name__ == "__main__":
         help="ClickHouse git repository",
     )
     parser.add_argument("--output-dir", type=dir_name, required=True)
-    parser.add_argument("--build-type", choices=("debug", ""), default="")
+    parser.add_argument("--build-type", choices=("debug", "release"), default="")
     parser.add_argument(
         "--ccache_dir",
         default=os.getenv("HOME", "") + "/.ccache",
