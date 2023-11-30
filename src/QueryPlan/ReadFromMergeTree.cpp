@@ -65,6 +65,8 @@ static const char * indexTypeToString(ReadFromMergeTree::IndexType type)
             return "PrimaryKey";
         case ReadFromMergeTree::IndexType::Skip:
             return "Skip";
+        case ReadFromMergeTree::IndexType::Bitmap:
+            return "Bitmap";
     }
 
     __builtin_unreachable();
@@ -78,12 +80,6 @@ static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & con
         .checksum_on_read = context->getSettingsRef().checksum_on_read,
         .read_source_bitmap = !context->getSettingsRef().use_encoded_bitmap
     };
-}
-
-static const PrewhereInfoPtr & getPrewhereInfo(const SelectQueryInfo & query_info)
-{
-    return query_info.projection ? query_info.projection->prewhere_info
-                                 : query_info.prewhere_info;
 }
 
 static Array extractMapColumnKeys(const MergeTreeMetaBase::DataPartsVector & parts)
@@ -166,11 +162,13 @@ ReadFromMergeTree::ReadFromMergeTree(
     std::shared_ptr<PartitionIdToMaxBlock> max_block_numbers_to_read_,
     Poco::Logger * log_,
     MergeTreeDataSelectAnalysisResultPtr analyzed_result_ptr_)
-    : ISourceStep(DataStream{.header = MergeTreeBaseSelectProcessor::transformHeader(
-        metadata_snapshot_->getSampleBlockForColumns(real_column_names_, data_.getVirtuals(), data_.getStorageID()),
-        getPrewhereInfo(query_info_),
-        data_.getPartitionValueType(),
-        virt_column_names_)})
+    : ISourceStep(DataStream{
+    .header = MergeTreeBaseSelectProcessor::transformHeader(
+            metadata_snapshot_->getSampleBlockForColumns(real_column_names_, data_.getVirtuals(), data_.getStorageID()),
+            getPrewhereInfo(query_info_),
+            data_.getPartitionValueType(),
+            virt_column_names_,
+            getIndexContext(query_info_), query_info_.read_bitmap_index)})
     , reader_settings(getMergeTreeReaderSettings(context_))
     , prepared_parts(std::move(parts_))
     , delete_bitmap_getter(std::move(delete_bitmap_getter_))
@@ -236,7 +234,7 @@ Pipe ReadFromMergeTree::readFromPool(
         delete_bitmap_getter,
         data,
         metadata_snapshot,
-        prewhere_info,
+        query_info,
         true,
         required_columns,
         backoff_settings,
@@ -252,7 +250,7 @@ Pipe ReadFromMergeTree::readFromPool(
             i, pool, min_marks_for_concurrent_read, max_block_size,
             settings.preferred_block_size_bytes, settings.preferred_max_column_in_block_size_bytes,
             data, metadata_snapshot, use_uncompressed_cache,
-            prewhere_info, actions_settings, reader_settings, virt_column_names);
+            query_info, actions_settings, reader_settings, virt_column_names);
 
         if (i == 0)
         {
@@ -276,7 +274,7 @@ ProcessorPtr ReadFromMergeTree::createSource(
     return std::make_shared<TSource>(
             data, metadata_snapshot, part.data_part, std::move(delete_bitmap), max_block_size, preferred_block_size_bytes,
             preferred_max_column_in_block_size_bytes, required_columns, part.ranges, use_uncompressed_cache,
-            prewhere_info, actions_settings, true, reader_settings, virt_column_names, part.part_index_in_query);
+            query_info, actions_settings, true, reader_settings, virt_column_names, part.part_index_in_query);
 }
 
 Pipe ReadFromMergeTree::readInOrder(

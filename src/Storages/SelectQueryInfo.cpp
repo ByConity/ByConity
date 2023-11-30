@@ -68,8 +68,19 @@ std::shared_ptr<InterpreterSelectQuery> SelectQueryInfo::buildQueryInfoFromQuery
     query_info.syntax_analyzer_result = interpreter->syntax_analyzer_result;
     query_info.prewhere_info = interpreter->analysis_result.prewhere_info;
     query_info.sets = interpreter->query_analyzer->getPreparedSets();
-    // query_info.index_context = interpreter->query_analyzer->getIndexContext();
+    query_info.index_context = interpreter->query_analyzer->getIndexContext();
     return interpreter;
+}
+
+const PrewhereInfoPtr & getPrewhereInfo(const SelectQueryInfo & query_info)
+{
+    return query_info.projection ? query_info.projection->prewhere_info : query_info.prewhere_info;
+}
+
+MergeTreeIndexContextPtr getIndexContext(const SelectQueryInfo & query_info)
+{
+    /// Projection shouldn't have bitmap index
+    return query_info.projection ? nullptr : query_info.index_context;
 }
 
 }

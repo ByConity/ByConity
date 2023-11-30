@@ -26,6 +26,7 @@
 #include <Optimizer/Rule/Rewrite/PushAggThroughJoinRules.h>
 #include <Optimizer/Rule/Rewrite/PushDownApplyRules.h>
 #include <Optimizer/Rule/Rewrite/PushDownLimitRules.h>
+#include <Optimizer/Rule/Rewrite/PushProjectionRules.h>
 #include <Optimizer/Rule/Rewrite/PushIntoTableScanRules.h>
 #include <Optimizer/Rule/Rewrite/PushPartialStepThroughExchangeRules.h>
 #include <Optimizer/Rule/Rewrite/PushThroughExchangeRules.h>
@@ -147,6 +148,25 @@ std::vector<RulePtr> Rules::pushTableScanEmbeddedStepRules()
         std::make_shared<PushAggregationIntoTableScan>(),
         std::make_shared<PushProjectionIntoTableScan>(),
         std::make_shared<PushFilterIntoTableScan>()};
+}
+
+std::vector<RulePtr> Rules::pushDownBitmapProjection()
+{
+    return {
+        std::make_shared<PushProjectionThroughFilter>(),
+        std::make_shared<PushProjectionThroughProjection>(),
+        std::make_shared<InlineProjections>(true)};
+}
+
+std::vector<RulePtr> Rules::pushProjectionIntoTableScanRules()
+{
+    return {std::make_shared<PushProjectionIntoTableScan>()};
+}
+
+std::vector<RulePtr> Rules::pushIndexProjectionIntoTableScanRules()
+{
+    // enable when optimizer_index_projection_support = 1
+    return {std::make_shared<PushIndexProjectionIntoTableScan>()};
 }
 
 std::vector<RulePtr> Rules::swapAdjacentRules()

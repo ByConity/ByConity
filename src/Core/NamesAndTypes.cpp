@@ -160,6 +160,18 @@ void NamesAndTypesList::readText(ReadBuffer & buf)
             {
                 const_cast<IDataType *>(it.type.get())->setFlags(TYPE_BITENGINE_ENCODE_FLAG);
             }
+            else if (options == "BLOOM")
+            {
+                it.type->setFlags(TYPE_BLOOM_FLAG);
+            }
+            else if (options == "BitmapIndex")
+            {
+                it.type->setFlags(TYPE_BITMAP_INDEX_FLAG);
+            }
+            else if (options == "SegmentBitmapIndex")
+            {
+                it.type->setFlags(TYPE_SEGMENT_BITMAP_INDEX_FLAG);
+            }
             else
             {
                 // TBD: ignore for now, or throw exception
@@ -196,6 +208,24 @@ void NamesAndTypesList::writeText(WriteBuffer & buf) const
                 writeChar('\t', buf);
                 writeString("COMPRESSION", buf);
                 flag ^= TYPE_COMPRESSION_FLAG;
+            }
+            else if (flag & TYPE_BLOOM_FLAG)
+            {
+                writeChar('\t', buf);
+                writeString("BLOOM", buf);
+                flag ^= TYPE_BLOOM_FLAG;
+            }
+            else if (flag & TYPE_BITMAP_INDEX_FLAG)
+            {
+                writeChar('\t', buf);
+                writeString("BitmapIndex", buf);
+                flag ^= TYPE_BITMAP_INDEX_FLAG;
+            }
+            else if (flag & TYPE_SEGMENT_BITMAP_INDEX_FLAG)
+            {
+                writeChar('\t', buf);
+                writeString("SegmentBitmapIndex", buf);
+                flag ^= TYPE_SEGMENT_BITMAP_INDEX_FLAG;
             }
             else if (flag & TYPE_MAP_KV_STORE_FLAG)
             {

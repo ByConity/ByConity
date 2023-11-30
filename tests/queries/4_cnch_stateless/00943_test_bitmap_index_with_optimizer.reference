@@ -1,0 +1,12 @@
+enable_ab_index_optimization = 0;
+40
+40
+2022-01-01	60
+enable_ab_index_optimization = 1;
+40
+40
+2022-01-01	60
+enable_ab_index_optimization = 0;
+2022-01-01	120
+enable_ab_index_optimization = 1;
+2022-01-01	120

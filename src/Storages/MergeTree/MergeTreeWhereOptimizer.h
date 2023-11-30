@@ -108,6 +108,10 @@ private:
 
     UInt64 getIdentifiersColumnSize(const NameSet & identifiers) const;
 
+    bool containsArraySetCheck(const ASTPtr & condition) const;
+
+    bool isArraySetCheck(const ASTPtr & condition, bool is_not = false) const;
+
     bool hasPrimaryKeyAtoms(const ASTPtr & ast) const;
 
     bool isPrimaryKeyAtom(const ASTPtr & ast) const;
@@ -140,6 +144,7 @@ private:
     UInt64 total_size_of_queried_columns = 0;
     NameSet array_joined_names;
     const StorageMetadataPtr & metadata_snapshot;
+    bool enable_ab_index_optimization;
 };
 
 

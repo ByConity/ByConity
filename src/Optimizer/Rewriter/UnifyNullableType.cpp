@@ -66,7 +66,7 @@ PlanNodePtr UnifyNullableVisitor::visitProjectionNode(ProjectionNode & node, Voi
     }
 
     auto expression_step = std::make_shared<ProjectionStep>(
-        child->getStep()->getOutputStream(), assignments, set_nullable, step.isFinalProject());
+        child->getStep()->getOutputStream(), assignments, set_nullable, step.isFinalProject(), step.isIndexProject());
     return ProjectionNode::createPlanNode(context->nextNodeId(), std::move(expression_step), PlanNodes{child}, node.getStatistics());
 }
 

@@ -44,7 +44,7 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     Names required_columns_,
     MarkRanges mark_ranges_,
     bool use_uncompressed_cache_,
-    const PrewhereInfoPtr & prewhere_info_,
+    const SelectQueryInfo & query_info_,
     ExpressionActionsSettings actions_settings,
     bool check_columns_,
     const MergeTreeReaderSettings & reader_settings_,
@@ -54,7 +54,7 @@ MergeTreeSelectProcessor::MergeTreeSelectProcessor(
     :
     MergeTreeBaseSelectProcessor{
         metadata_snapshot_->getSampleBlockForColumns(required_columns_, storage_.getVirtuals(), storage_.getStorageID()),
-        storage_, metadata_snapshot_, prewhere_info_, std::move(actions_settings), max_block_size_rows_,
+        storage_, metadata_snapshot_, query_info_, std::move(actions_settings), max_block_size_rows_,
         preferred_block_size_bytes_, preferred_max_column_in_block_size_bytes_,
         reader_settings_, use_uncompressed_cache_, virt_column_names_},
     required_columns{std::move(required_columns_)},
@@ -93,7 +93,7 @@ try
 
     task_columns = getReadTaskColumns(
         storage, metadata_snapshot, data_part,
-        required_columns, prewhere_info, check_columns);
+        required_columns, prewhere_info, index_context, check_columns);
 
     auto size_predictor = (preferred_block_size_bytes == 0)
         ? nullptr
@@ -104,31 +104,11 @@ try
     column_name_set = NameSet{column_names.begin(), column_names.end()};
 
     task = std::make_unique<MergeTreeReadTask>(
-        data_part, delete_bitmap, all_mark_ranges, part_index_in_query, ordered_names, column_name_set, task_columns.columns,
-        task_columns.pre_columns, prewhere_info && prewhere_info->remove_prewhere_column,
-        task_columns.should_reorder, std::move(size_predictor));
+        data_part, delete_bitmap, all_mark_ranges, part_index_in_query, ordered_names, column_name_set, task_columns, 
+        prewhere_info && prewhere_info->remove_prewhere_column, task_columns.should_reorder, std::move(size_predictor));
 
     if (!reader)
-    {
-        if (use_uncompressed_cache)
-            owned_uncompressed_cache = storage.getContext()->getUncompressedCache();
-
-        owned_mark_cache = storage.getContext()->getMarkCache();
-
-        reader = data_part->getReader(task_columns.columns, metadata_snapshot, all_mark_ranges,
-            owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings);
-
-        if (prewhere_info)
-        {
-            pre_reader = data_part->getReader(
-                task_columns.pre_columns,
-                metadata_snapshot,
-                all_mark_ranges,
-                owned_uncompressed_cache.get(),
-                owned_mark_cache.get(),
-                reader_settings);
-        }
-    }
+        initializeReaders(all_mark_ranges);
 
     return true;
 }
@@ -150,6 +130,8 @@ void MergeTreeSelectProcessor::finish()
     reader.reset();
     pre_reader.reset();
     data_part.reset();
+    index_executor.reset();
+    pre_index_executor.reset();
 }
 
 

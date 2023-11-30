@@ -1221,6 +1221,12 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         merged_stream = std::make_shared<MaterializingBlockInputStream>(merged_stream);
     }
 
+    BitmapBuildInfo bitmap_build_info;
+    if (!data.getSettings()->build_bitmap_index_in_merge)
+        bitmap_build_info.build_all_bitmap_index = false;
+    if (!data.getSettings()->build_segment_bitmap_index_in_merge)
+        bitmap_build_info.build_all_segment_bitmap_index = false;
+
     const auto & index_factory = MergeTreeIndexFactory::instance();
     MergedBlockOutputStream to{
         new_data_part,
@@ -1229,7 +1235,8 @@ MergeTreeData::MutableDataPartPtr MergeTreeDataMergerMutator::mergePartsToTempor
         index_factory.getMany(metadata_snapshot->getSecondaryIndices()),
         compression_codec,
         blocks_are_granules_size,
-        context->getSettingsRef().optimize_map_column_serialization};
+        context->getSettingsRef().optimize_map_column_serialization,
+        bitmap_build_info};
 
     merged_stream->readPrefix();
     to.writePrefix();

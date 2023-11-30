@@ -240,7 +240,7 @@ PlanNodePtr PushProjectionThroughJoin::inlineProjections(PlanNodePtr parent_proj
     {
         return parent_projection;
     }
-    auto result = InlineProjections::inlineProjections(parent_projection, child, context);
+    auto result = InlineProjections::inlineProjections(parent_projection, child, context, false);
     if (result.has_value())
     {
         return inlineProjections(result.value(), context);

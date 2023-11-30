@@ -34,6 +34,11 @@ namespace
     {
         return rule_context.context->getSettingsRef().optimizer_projection_support;
     }
+
+    bool isOptimizerIndexProjectionSupportEnabled(RuleContext & rule_context)
+    {
+        return rule_context.context->getSettingsRef().optimizer_index_projection_support;
+    }
 }
 
 PatternPtr PushStorageFilter::getPattern() const
@@ -233,6 +238,89 @@ TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const C
     // coverity[var_deref_model]
     copy_table_step->formatOutputStream(rule_context.context);
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
+}
+
+PatternPtr PushIndexProjectionIntoTableScan::getPattern() const
+{
+    return Patterns::project().withSingle(
+               Patterns::tableScan().matchingStep<TableScanStep>(
+                   [](const auto & step) { return !step.getPushdownAggregation() ; })).result();
+}
+
+TransformResult PushIndexProjectionIntoTableScan::transformImpl(PlanNodePtr node, const Captures &, RuleContext & rule_context)
+{
+    if (!isOptimizerIndexProjectionSupportEnabled(rule_context))
+        return {};
+
+    auto * projection_step = dynamic_cast<ProjectionStep *>(node->getStep().get());
+
+    if (projection_step && !projection_step->isIndexProject())
+        return {};
+
+    auto copy_step = node->getChildren()[0]->getStep()->copy(rule_context.context);
+    auto * copy_table_step = dynamic_cast<TableScanStep *>(copy_step.get());
+
+    if (copy_table_step->hasInlineExpressions())
+        return {};
+
+    const auto & all_name_to_type = projection_step->getNameToType();
+
+    // split node into two projection a, b.
+    // a contains all original assignments, but convert function to identifier about `arraysetcheck`.
+    // b contains all output symbols, and `arraysetcheck` with function type.
+    // we push b into table_scan, then return a->(table_scan).
+    Assignments a_assignments;
+    NameToType a_name_to_type;
+    Assignments  b_assignments;
+    // NameToType b_name_to_type;
+    bool projection_a_no_need = true;
+    for (const auto & assignment : projection_step->getAssignments())
+    {
+        if (const auto * func = assignment.second->as<ASTFunction>())
+        {
+            if (Poco::toLower(func->name) == "arraysetcheck")
+            {
+                b_assignments.emplace_back(assignment);
+                // b_name_to_type.emplace(assignment.first, all_name_to_type.at(assignment.first));
+
+                // remaining reference arraysetchecks, but convert function to identifier(calculate only occur in function type).
+                a_assignments.emplace_back(assignment.first, std::make_shared<ASTIdentifier>(assignment.first));
+                a_name_to_type.emplace(assignment.first, all_name_to_type.at(assignment.first));
+                continue;
+            }
+            projection_a_no_need = false;
+        }
+        a_assignments.emplace_back(assignment);
+        a_name_to_type.emplace(assignment.first, all_name_to_type.at(assignment.first));
+    }
+
+    if (b_assignments.empty())
+        return {};
+
+    // prune simple expressions & map symbols
+    auto prepare_index_projection = [&](const Assignments & assignments) {
+        Assignments new_assignments;
+        auto aliases_to_columns = copy_table_step->getAliasToColumnMap();
+        SymbolMapper mapper = SymbolMapper::simpleMapper(aliases_to_columns);
+
+        for (const auto & ass : assignments)
+            if (!ass.second->as<ASTIdentifier>())
+                new_assignments.emplace_back(ass.first, mapper.map(ass.second));
+
+        return new_assignments;
+    };
+
+    if (projection_a_no_need)
+    {
+        copy_table_step->setInlineExpressions(prepare_index_projection(projection_step->getAssignments()), rule_context.context);
+        return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
+    }
+
+    copy_table_step->setInlineExpressions(prepare_index_projection(b_assignments), rule_context.context);
+
+    auto table_scan_node = PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
+    auto a_projection_step = std::make_shared<ProjectionStep>(table_scan_node->getCurrentDataStream(), a_assignments, a_name_to_type);
+    return ProjectionNode::createPlanNode(rule_context.context->nextNodeId(), std::move(a_projection_step), {table_scan_node}, node->getStatistics());
 }
 
 }

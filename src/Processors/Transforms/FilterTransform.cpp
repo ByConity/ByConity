@@ -108,7 +108,7 @@ void FilterTransform::transform(Chunk & chunk)
         Block block = getInputPort().getHeader().cloneWithColumns(columns);
         columns.clear();
 
-        expression->execute(block, num_rows_before_filtration);
+        expression->execute(block, chunk.getSideBlock(), num_rows_before_filtration);
 
         columns = block.getColumns();
     }
@@ -210,6 +210,16 @@ void FilterTransform::transform(Chunk & chunk)
             current_column = current_column->cut(0, num_filtered_rows);
         else
             current_column = current_column->filter(*filter_and_holder.data, num_filtered_rows);
+    }
+
+    if (auto * block = chunk.getSideBlock(); block != nullptr)
+    {
+        auto side_columns = block->getColumns();
+        for (auto & col : side_columns)
+        {
+            col = col->filter(*filter_and_holder.data, num_filtered_rows);
+        }
+        block->setColumns(side_columns);
     }
 
     chunk.setColumns(std::move(columns), num_filtered_rows);

@@ -37,6 +37,7 @@ public:
         Partition,
         PrimaryKey,
         Skip,
+        Bitmap,
     };
 
     /// This is a struct with information about applied indexes.

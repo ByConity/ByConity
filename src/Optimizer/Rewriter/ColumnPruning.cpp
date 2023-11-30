@@ -386,7 +386,7 @@ PlanNodePtr ColumnPruningVisitor::visitProjectionNode(ProjectionNode & node, Nam
         return child;
 
     auto expr_step = std::make_shared<ProjectionStep>(
-        child->getStep()->getOutputStream(), assignments, name_to_type, step->isFinalProject());
+        child->getStep()->getOutputStream(), assignments, name_to_type, step->isFinalProject(), step->isIndexProject());
     PlanNodes children{child};
     auto expr_node = ProjectionNode::createPlanNode(context->nextNodeId(), std::move(expr_step), children, node.getStatistics());
     return expr_node;
@@ -503,6 +503,7 @@ PlanNodePtr ColumnPruningVisitor::visitTableScanNode(TableScanNode & node, NameS
         step->getTableAlias(),
         step->getHints(),
         inline_expressions);
+
     auto read_node = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(read_step), {}, node.getStatistics());
     return read_node;
 }

@@ -54,6 +54,8 @@
 #include <Storages/MergeTree/CloudMergeTreeBlockOutputStream.h>
 #include <Storages/MergeTree/CnchAttachProcessor.h>
 #include <Storages/MergeTree/PartitionPruner.h>
+#include <Storages/MergeTree/Index/MergeTreeBitmapIndex.h>
+#include <Storages/MergeTree/Index/MergeTreeSegmentBitmapIndex.h>
 #include <Storages/MutationCommands.h>
 #include <Storages/PartitionCommands.h>
 #include <Storages/StorageMaterializedView.h>
@@ -185,6 +187,10 @@ StorageCnchMergeTree::StorageCnchMergeTree(
     /// check cluster by keys, for BitEngine, only when creating table first time
     if (isBitEngineTable() && !attach_)
         checkSchemaForBitEngineTable(context_);
+    
+    const auto & all_columns = getInMemoryMetadataPtr()->getColumns();
+    MergeTreeBitmapIndex::checkValidBitmapIndexType(all_columns);
+    MergeTreeSegmentBitmapIndex::checkSegmentBitmapStorageGranularity(all_columns, getSettings());
 
     registerBitEngineDictionaries();
 }

@@ -109,7 +109,8 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
     const String & marks_file_extension_,
     const CompressionCodecPtr & default_codec_,
     const MergeTreeWriterSettings & settings_,
-    const MergeTreeIndexGranularity & index_granularity_)
+    const MergeTreeIndexGranularity & index_granularity_,
+    const BitmapBuildInfo & bitmap_build_info_)
     : MergeTreeDataPartWriterOnDisk(
         data_part_,
         columns_list_,
@@ -118,7 +119,8 @@ MergeTreeDataPartWriterWide::MergeTreeDataPartWriterWide(
         marks_file_extension_,
         default_codec_,
         settings_,
-        index_granularity_)
+        index_granularity_,
+        bitmap_build_info_)
     , log(&Poco::Logger::get(storage.getLogName() + " (WriterWide)"))
 {
     const auto & columns = metadata_snapshot->getColumns();
@@ -215,6 +217,7 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
 
     /// Fill permuted underlying columns for unique key
     Block unique_key_block;
+    Block bitmap_index_block;
     NameSet unique_key_underlying_columns;
     String version_column_name;
     if (settings.enable_disk_based_key_index)
@@ -230,6 +233,7 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
         const ColumnWithTypeAndName & column = block.getByName(it->name);
         const bool part_of_unique_key = unique_key_underlying_columns.count(column.name) > 0;
         const bool is_extra_column = !version_column_name.empty() && (column.name == version_column_name);
+        const bool is_bitmap_index_column = column_bitmap_indexes.count(ISerialization::getFileNameForStream(column.name, {}));
 
         if (permutation)
         {
@@ -238,6 +242,8 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                 const auto & primary_column = primary_key_block.getByName(it->name);
                 if (part_of_unique_key || is_extra_column)
                     unique_key_block.insert(primary_column);
+                if (is_bitmap_index_column)
+                    bitmap_index_block.insert(primary_column);
                 writeColumn(*it, *primary_column.column, offset_columns, granules_to_write);
             }
             else if (skip_indexes_block.has(it->name))
@@ -245,6 +251,8 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                 const auto & index_column = skip_indexes_block.getByName(it->name);
                 if (part_of_unique_key || is_extra_column)
                     unique_key_block.insert(index_column);
+                if (is_bitmap_index_column)
+                    bitmap_index_block.insert(index_column);
                 writeColumn(*it, *index_column.column, offset_columns, granules_to_write);
             }
             else
@@ -253,6 +261,8 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
                 ColumnPtr permuted_column = column.column->permute(*permutation, 0);
                 if (part_of_unique_key || is_extra_column)
                     unique_key_block.insert(ColumnWithTypeAndName(permuted_column, column.type, column.name));
+                if (is_bitmap_index_column)
+                    bitmap_index_block.insert(ColumnWithTypeAndName(permuted_column, column.type, column.name));
                 writeColumn(*it, *permuted_column, offset_columns, granules_to_write);
             }
         }
@@ -260,9 +270,15 @@ void MergeTreeDataPartWriterWide::write(const Block & block, const IColumn::Perm
         {
             if (part_of_unique_key || is_extra_column)
                 unique_key_block.insert(column);
+            bitmap_index_block.insert(column);
             writeColumn(*it, *column.column, offset_columns, granules_to_write);
         }
     }
+
+    if (!bitmap_index_block && (!column_bitmap_indexes.empty() || !column_segment_bitmap_indexes.empty()))
+        bitmap_index_block = block;
+    writeBitmapIndexColumns(bitmap_index_block);
+    writeSegmentBitmapIndexColumns(bitmap_index_block);
 
     if (settings.rewrite_primary_key)
         calculateAndSerializePrimaryIndex(primary_key_block, granules_to_write);
@@ -727,6 +743,10 @@ void MergeTreeDataPartWriterWide::finish(IMergeTreeDataPart::Checksums & checksu
         finishPrimaryIndexSerialization(checksums, sync);
 
     finishSkipIndicesSerialization(checksums, sync);
+    
+    finishBitmapIndexSerialization(checksums);
+
+    finishSegmentBitmapIndexSerialization(checksums);
 
     if (settings.enable_disk_based_key_index)
     {

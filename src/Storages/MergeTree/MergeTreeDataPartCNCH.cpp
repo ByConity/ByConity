@@ -108,6 +108,7 @@ IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartCNCH::getReader(
     UncompressedCache * uncompressed_cache,
     MarkCache * mark_cache,
     const MergeTreeReaderSettings & reader_settings_,
+    MergeTreeIndexExecutor * index_executor,
     const ValueSizeMap & avg_value_size_hints,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback) const
 {
@@ -123,6 +124,7 @@ IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartCNCH::getReader(
         mark_cache,
         mark_ranges,
         new_settings,
+        index_executor,
         avg_value_size_hints,
         profile_callback);
 }
@@ -133,7 +135,8 @@ IMergeTreeDataPart::MergeTreeWriterPtr MergeTreeDataPartCNCH::getWriter(
     [[maybe_unused]] const std::vector<MergeTreeIndexPtr> & indices_to_recalc,
     [[maybe_unused]] const CompressionCodecPtr & default_codec_,
     [[maybe_unused]] const MergeTreeWriterSettings & writer_settings,
-    [[maybe_unused]] const MergeTreeIndexGranularity & computed_index_granularity) const
+    [[maybe_unused]] const MergeTreeIndexGranularity & computed_index_granularity,
+    [[maybe_unused]] const BitmapBuildInfo & bitmap_build_info) const
 {
     return {};
 }
@@ -540,6 +543,7 @@ void MergeTreeDataPartCNCH::combineWithRowExists(DeleteBitmapPtr & bitmap) const
         MergeTreeReaderSettings {
             .save_marks_in_cache = false,
         },
+        /* index_executor */ {},
         /*avg_value_size_hints*/ {},
         /*profile_callback*/ {}
     );

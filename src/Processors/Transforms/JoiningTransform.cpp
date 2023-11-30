@@ -187,7 +187,20 @@ void JoiningTransform::transform(Chunk & chunk)
         block = readExecute(chunk);
 
     auto num_rows = block.rows();
-    chunk.setColumns(block.getColumns(), num_rows);
+    Columns columns;
+    if (chunk.getSideBlock())
+        chunk.getSideBlock()->clear();
+
+    /// Block may include: (1) columns and (2) bitmap index columns, we need to split them
+    for (size_t i = 0; i < block.columns(); ++i)
+    {
+        if (outputs.front().getHeader().has(block.getByPosition(i).name))
+            columns.emplace_back(std::move(block.getByPosition(i).column));
+        else
+            chunk.addColumnToSideBlock(std::move(block.getByPosition(i)));
+    }
+
+    chunk.setColumns(std::move(columns), num_rows);
 }
 
 Block JoiningTransform::readExecute(Chunk & chunk)
@@ -199,6 +212,12 @@ Block JoiningTransform::readExecute(Chunk & chunk)
         if (chunk.hasColumns())
             res = inputs.front().getHeader().cloneWithColumns(chunk.detachColumns());
 
+        /// Sometimes, predicate is not pushdown to storage, so filtering can happens after
+        /// JOIN. In this case, we need to bring the bitmap index columns to the next step.
+        if (auto * side_block = chunk.getSideBlock())
+            for (size_t i = 0; i < side_block->columns(); ++i)
+                res.insert(side_block->getByPosition(i));
+
         if (res)
             join->joinBlock(res, not_processed);
     }
@@ -206,6 +225,10 @@ Block JoiningTransform::readExecute(Chunk & chunk)
     {
         if (chunk.hasColumns())
             res = inputs.front().getHeader().cloneWithColumns(chunk.detachColumns());
+
+        if (auto * side_block = chunk.getSideBlock())
+            for (size_t i = 0; i < side_block->columns(); ++i)
+                res.insert(side_block->getByPosition(i));
 
         not_processed.reset();
         join->joinBlock(res, not_processed);

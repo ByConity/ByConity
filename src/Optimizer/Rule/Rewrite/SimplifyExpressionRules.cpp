@@ -316,7 +316,8 @@ TransformResult SimplifyExpressionRewriteRule::transformImpl(PlanNodePtr node, c
             node->getChildren()[0]->getStep()->getOutputStream(),
             assignments,
             name_to_type,
-            project->isFinalProject()),
+            project->isFinalProject(),
+            project->isIndexProject()),
         PlanNodes{node->getChildren()[0]});
 }
 

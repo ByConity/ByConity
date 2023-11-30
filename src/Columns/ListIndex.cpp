@@ -16,8 +16,11 @@
 #include <Columns/ListIndex.h>
 
 #include <Common/StringUtils/StringUtils.h>
-//#include <roaring.c>
 #include <Compression/CompressedReadBufferFromFile.h>
+#include <Storages/DiskCache/IDiskCache.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
+#include <Storages/DiskCache/BitmapIndexDiskCacheSegment.h>
+#include <Storages/DiskCache/PartFileDiskCacheSegment.h>
 #include <Common/escapeForFileName.h>
 
 namespace DB
@@ -82,29 +85,98 @@ void BitmapIndexWriter::addToChecksums(MergeTreeData::DataPart::Checksums & chec
     checksums.files[column_name + ark_suffix].file_hash = hash_irk->getHash();
 }
 
-BitmapIndexReader::BitmapIndexReader(String path_, String name, BitmapIndexMode bitmap_index_mode_)
-    : path(path_), column_name(name), bitmap_index_mode(bitmap_index_mode_)
+BitmapIndexReader::BitmapIndexReader(const IMergeTreeDataPartPtr & part_,
+                                    String name,
+                                    [[maybe_unused]]const HDFSConnectionParams & hdfs_params_) 
+                                    : part(part_), column_name(name)
 {
-    if (!endsWith(path, "/"))
-        path.append("/");
-    column_name = escapeForFileName(name);
+    auto file_column_name = escapeForFileName(name);
+    idx_pos = FileOffsetAndSize{
+            part->getFileOffsetOrZero(file_column_name + BITMAP_IDX_EXTENSION), 
+            part->getFileSizeOrZero(file_column_name + BITMAP_IDX_EXTENSION)};
+    irk_pos = FileOffsetAndSize{
+            part->getFileOffsetOrZero(file_column_name + BITMAP_IRK_EXTENSION), 
+            part->getFileSizeOrZero(file_column_name + BITMAP_IRK_EXTENSION)};
+
     init();
+
+    // LOG_TRACE(&Logger::get("BitmapIndexReader"), "BitMapIndex reader inited for column " + column_name);
 }
 
 void BitmapIndexReader::init()
 {
-    String ark_suffix = ark_suffix_vec[bitmap_index_mode];
-    String adx_suffix = adx_suffix_vec[bitmap_index_mode];
     try
     {
-        compressed_idx = std::make_unique<CompressedReadBufferFromFile>(path + column_name + adx_suffix, 0, 0, 0, nullptr, DBMS_DEFAULT_BUFFER_SIZE);
-        irk = std::make_unique<ReadBufferFromFile>(path + column_name + ark_suffix, DBMS_DEFAULT_BUFFER_SIZE);
+         /***
+         * try to get cache first
+         */
+        if (part->enableDiskCache())
+        {
+            auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree);
+            std::shared_ptr<BitmapIndexDiskCacheSegment> bitmap_index_segment = 
+                std::make_shared<BitmapIndexDiskCacheSegment>(part, column_name, BITMAP_IDX_EXTENSION);
+
+            String bin_segment_key = BitmapIndexDiskCacheSegment::getSegmentKey(part, column_name, 0, BITMAP_IDX_EXTENSION);
+            String mrk_segment_key = BitmapIndexDiskCacheSegment::getSegmentKey(part, column_name, 0, BITMAP_IRK_EXTENSION);
+
+            auto [index_idx_disk, index_idx_path] = disk_cache->get(bin_segment_key);
+            auto [index_irk_disk, index_irk_path] = disk_cache->get(mrk_segment_key);
+
+            if (index_idx_disk && index_irk_disk && !index_idx_path.empty() && !index_irk_path.empty())
+            {
+                compressed_idx = std::make_unique<CompressedReadBufferFromFile>(
+                    index_idx_disk->readFile(index_idx_path, part->storage.getContext()->getReadSettings())
+                );
+
+                irk_buffer = std::make_unique<ReadBufferFromFile>(
+                    index_irk_disk->getPath() + index_irk_path, DBMS_DEFAULT_BUFFER_SIZE
+                );
+                
+                LOG_DEBUG(&Poco::Logger::get("BitmapIndexReader"), "Get BitMapIndex read buffers from local cache for column " + column_name);
+                read_from_local_cache = true;
+                return;
+            }
+            else
+            {
+                disk_cache->cacheBitmapIndexToLocalDisk(bitmap_index_segment);
+            }
+        }
     }
-    catch (...)
+    catch(...)
+    {
+        tryLogCurrentException(&Poco::Logger::get("BitmapIndexReader"), "Cache or Get BitMapIndex Failed");
+    }
+
+    try
+    {
+        /**
+         * if there is no binary or mark (idx / irk), the reader is invalid so that we should not init buffers.
+         */
+        if ((idx_pos.file_offset == 0 && idx_pos.file_size == 0) || (irk_pos.file_offset == 0 && irk_pos.file_size == 0))
+            return;
+
+        auto data_rel_path = fs::path(part->getFullRelativePath()) / "data";
+        auto data_disk = part->volume->getDisk();
+
+        std::unique_ptr<ReadBufferFromFileBase> raw_idx_buffer = data_disk->readFile(
+            data_rel_path, ReadSettings {
+                .enable_io_scheduler = static_cast<bool>(part->storage.getContext()->getSettingsRef().enable_io_scheduler),
+                .enable_io_pfra = static_cast<bool>(part->storage.getContext()->getSettingsRef().enable_io_pfra),
+            });
+        compressed_idx = std::make_unique<CompressedReadBufferFromFile>(
+            std::move(raw_idx_buffer), false, idx_pos.file_offset, idx_pos.file_size, true);
+        irk_buffer = data_disk->readFile(data_rel_path, ReadSettings {
+            .enable_io_scheduler = static_cast<bool>(part->storage.getContext()->getSettingsRef().enable_io_scheduler),
+            .enable_io_pfra = static_cast<bool>(part->storage.getContext()->getSettingsRef().enable_io_pfra),
+            .buffer_size = irk_pos.file_size,
+            .estimated_size = irk_pos.file_size
+        });
+    }
+    catch(...)
     {
         tryLogCurrentException(&Poco::Logger::get("BitmapIndexReader"), __PRETTY_FUNCTION__);
         compressed_idx = nullptr;
-        irk = nullptr;
+        irk_buffer = nullptr;
     }
 }
 

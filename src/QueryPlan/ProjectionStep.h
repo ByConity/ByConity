@@ -35,6 +35,7 @@ public:
         Assignments assignments_,
         NameToType name_to_type_,
         bool final_project_ = false,
+        bool index_project_ = false,
         PlanHints hints_ = {});
 
     String getName() const override { return "Projection"; }
@@ -49,14 +50,18 @@ public:
     const NameToType & getNameToType() const { return name_to_type; }
 
     bool isFinalProject() const { return final_project; }
+    bool isIndexProject() const { return index_project; }
     std::shared_ptr<IQueryPlanStep> copy(ContextPtr) const override;
     void setInputStreams(const DataStreams & input_streams_) override;
+
+    static ActionsDAGPtr createActions(const Assignments & assignments, const NamesAndTypesList & source, ContextPtr context);
 
 private:
     Assignments assignments;
     NameToType name_to_type;
     // final output step
     bool final_project;
+    bool index_project;
 };
 
 }

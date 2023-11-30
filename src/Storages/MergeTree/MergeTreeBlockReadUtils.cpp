@@ -21,6 +21,7 @@
 
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
 #include <Core/NamesAndTypes.h>
 #include <Common/checkStackSize.h>
 #include <Common/RowExistsColumnInfo.h>
@@ -158,11 +159,12 @@ NameSet injectRequiredColumns(const MergeTreeMetaBase & storage,
 
 MergeTreeReadTask::MergeTreeReadTask(
     const MergeTreeMetaBase::DataPartPtr & data_part_, ImmutableDeleteBitmapPtr delete_bitmap_, const MarkRanges & mark_ranges_, const size_t part_index_in_query_,
-    const Names & ordered_names_, const NameSet & column_name_set_, NamesAndTypesList & columns_,
-    NamesAndTypesList & pre_columns_, const bool remove_prewhere_column_, const bool should_reorder_,
+    const Names & ordered_names_, const NameSet & column_name_set_,
+    const MergeTreeReadTaskColumns & task_columns_,
+    bool remove_prewhere_column_, bool should_reorder_,
     MergeTreeBlockSizePredictorPtr && size_predictor_)
     : data_part{data_part_}, delete_bitmap{std::move(delete_bitmap_)}, mark_ranges{mark_ranges_}, part_index_in_query{part_index_in_query_},
-    ordered_names{ordered_names_}, column_name_set{column_name_set_}, columns{columns_}, pre_columns{pre_columns_},
+    ordered_names{ordered_names_}, column_name_set{column_name_set_}, task_columns{task_columns_},
     remove_prewhere_column{remove_prewhere_column_}, should_reorder{should_reorder_}, size_predictor{std::move(size_predictor_)}
 {
 }
@@ -300,6 +302,7 @@ MergeTreeReadTaskColumns getReadTaskColumns(
     const MergeTreeMetaBase::DataPartPtr & data_part,
     const Names & required_columns,
     const PrewhereInfoPtr & prewhere_info,
+    const MergeTreeIndexContextPtr & index_context,
     bool check_columns)
 {
     Names column_names = required_columns;
@@ -345,7 +348,46 @@ MergeTreeReadTaskColumns getReadTaskColumns(
         column_names = post_column_names;
     }
 
+    NameSet bitmap_column_names;
+    NameSet bitmap_pre_column_names;
+    NameSet index_name_set;
+
+    auto * bitmap_index_info = index_context ? dynamic_cast<BitmapIndexInfo *>(index_context->get(MergeTreeIndexInfo::Type::BITMAP).get()) : nullptr;
+    std::tie(index_name_set, bitmap_column_names) = bitmap_index_info ? bitmap_index_info->getIndexColumns(data_part) : std::pair<NameSet,NameSet>{};
+    if (!bitmap_column_names.empty())
+    {
+        // remove the indexed columns from prewhere_columns and tasks columns to prevent from being read.
+        std::erase_if(pre_column_names, [&index_name_set, &bitmap_index_info](auto & col) {
+            // it's index column, and not in non removable
+            return index_name_set.count(col) > 0 && bitmap_index_info->non_removable_index_columns.count(col) <= 0;
+        });
+        std::erase_if(column_names, [&index_name_set, &bitmap_index_info](auto & col) {
+            return index_name_set.count(col) > 0 && bitmap_index_info->non_removable_index_columns.count(col) <= 0;
+        });
+
+        /// Collect the bitmap index columns for prewhere, no need to check for ready because it's subset of bitmap_index_info
+        /// and should be ready at this point
+        if (prewhere_info && prewhere_info->index_context)
+        {
+            auto * prewhere_bitmap_index_info = dynamic_cast<BitmapIndexInfo *>(prewhere_info->index_context->get(MergeTreeIndexInfo::Type::BITMAP).get());
+            {
+                const auto & index_names = prewhere_bitmap_index_info->index_names;
+                for (const auto & index_name : index_names)
+                {
+                    bitmap_pre_column_names.emplace(index_name.first);
+                }
+            }
+            /// Do not read same bitmap columns in both prewhere and where
+            std::erase_if(bitmap_column_names, [&bitmap_pre_column_names](const auto & name){
+                return bitmap_pre_column_names.contains(name);
+            });
+        }
+    }
+
     MergeTreeReadTaskColumns result;
+
+    result.bitmap_index_pre_columns = std::move(bitmap_pre_column_names);
+    result.bitmap_index_columns = std::move(bitmap_column_names);
 
     if (check_columns)
     {

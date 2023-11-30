@@ -129,6 +129,10 @@ public:
     {
         return container.find(ConstHashAST::make(key));
     }
+    void clear()
+    {
+        container.clear();
+    }
 
     auto erase(IterType it)
     {

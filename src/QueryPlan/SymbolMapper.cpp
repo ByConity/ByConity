@@ -597,6 +597,7 @@ std::shared_ptr<ProjectionStep> SymbolMapper::map(const ProjectionStep & project
         map(projection.getAssignments()),
         map(projection.getNameToType()),
         projection.isFinalProject(),
+        projection.isIndexProject(),
         projection.getHints());
 }
 

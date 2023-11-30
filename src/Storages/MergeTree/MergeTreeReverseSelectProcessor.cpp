@@ -44,9 +44,9 @@ MergeTreeReverseSelectProcessor::MergeTreeReverseSelectProcessor(
     Names required_columns_,
     MarkRanges mark_ranges_,
     bool use_uncompressed_cache_,
-    const PrewhereInfoPtr & prewhere_info_,
+    const SelectQueryInfo & query_info_,
     ExpressionActionsSettings actions_settings,
-    bool check_columns,
+    bool check_columns_,
     const MergeTreeReaderSettings & reader_settings_,
     const Names & virt_column_names_,
     size_t part_index_in_query_,
@@ -54,7 +54,7 @@ MergeTreeReverseSelectProcessor::MergeTreeReverseSelectProcessor(
     :
     MergeTreeBaseSelectProcessor{
         metadata_snapshot_->getSampleBlockForColumns(required_columns_, storage_.getVirtuals(), storage_.getStorageID()),
-        storage_, metadata_snapshot_, prewhere_info_, std::move(actions_settings), max_block_size_rows_,
+        storage_, metadata_snapshot_, query_info_, std::move(actions_settings), max_block_size_rows_,
         preferred_block_size_bytes_, preferred_max_column_in_block_size_bytes_,
         reader_settings_, use_uncompressed_cache_, virt_column_names_},
     required_columns{std::move(required_columns_)},
@@ -62,7 +62,8 @@ MergeTreeReverseSelectProcessor::MergeTreeReverseSelectProcessor(
     delete_bitmap{std::move(delete_bitmap_)},
     all_mark_ranges(std::move(mark_ranges_)),
     part_index_in_query(part_index_in_query_),
-    path(data_part->getFullRelativePath())
+    path(data_part->getFullRelativePath()),
+    check_columns(check_columns_)
 {
     /// Let's estimate total number of rows for progress bar.
     for (const auto & range : all_mark_ranges)
@@ -76,27 +77,7 @@ MergeTreeReverseSelectProcessor::MergeTreeReverseSelectProcessor(
             data_part->index_granularity.getMarkStartingRow(all_mark_ranges.front().begin));
 
     addTotalRowsApprox(total_rows);
-
     ordered_names = header_without_virtual_columns.getNames();
-
-    task_columns = getReadTaskColumns(storage, metadata_snapshot, data_part, required_columns, prewhere_info, check_columns);
-
-    /// will be used to distinguish between PREWHERE and WHERE columns when applying filter
-    const auto & column_names = task_columns.columns.getNames();
-    column_name_set = NameSet{column_names.begin(), column_names.end()};
-
-    if (use_uncompressed_cache)
-        owned_uncompressed_cache = storage.getContext()->getUncompressedCache();
-
-    owned_mark_cache = storage.getContext()->getMarkCache();
-
-    reader = data_part->getReader(task_columns.columns, metadata_snapshot,
-        all_mark_ranges, owned_uncompressed_cache.get(),
-        owned_mark_cache.get(), reader_settings);
-
-    if (prewhere_info)
-        pre_reader = data_part->getReader(task_columns.pre_columns, metadata_snapshot, all_mark_ranges,
-            owned_uncompressed_cache.get(), owned_mark_cache.get(), reader_settings);
 }
 
 bool MergeTreeReverseSelectProcessor::getNewTask()
@@ -113,6 +94,12 @@ try
     if (all_mark_ranges.empty())
         return true;
 
+    task_columns = getReadTaskColumns(storage, metadata_snapshot, data_part, required_columns, prewhere_info, index_context, check_columns);
+
+    /// will be used to distinguish between PREWHERE and WHERE columns when applying filter
+    const auto & column_names = task_columns.columns.getNames();
+    column_name_set = NameSet{column_names.begin(), column_names.end()};
+
     /// Read ranges from right to left.
     MarkRanges mark_ranges_for_task = { all_mark_ranges.back() };
     all_mark_ranges.pop_back();
@@ -123,8 +110,11 @@ try
 
     task = std::make_unique<MergeTreeReadTask>(
         data_part, delete_bitmap, mark_ranges_for_task, part_index_in_query, ordered_names, column_name_set,
-        task_columns.columns, task_columns.pre_columns, prewhere_info && prewhere_info->remove_prewhere_column,
+        task_columns, prewhere_info && prewhere_info->remove_prewhere_column,
         task_columns.should_reorder, std::move(size_predictor));
+
+    if (!reader)
+        initializeReaders(mark_ranges_for_task);
 
     return true;
 }
@@ -174,6 +164,8 @@ void MergeTreeReverseSelectProcessor::finish()
     reader.reset();
     pre_reader.reset();
     data_part.reset();
+    index_executor.reset();
+    pre_index_executor.reset();
 }
 
 MergeTreeReverseSelectProcessor::~MergeTreeReverseSelectProcessor() = default;

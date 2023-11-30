@@ -29,6 +29,8 @@
 #include <Interpreters/SubqueryForSet.h>
 #include <Parsers/IAST.h>
 #include <Parsers/ASTExpressionList.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
+#include <Storages/MergeTree/Index/MergeTreeIndexHelper.h>
 
 
 namespace DB
@@ -187,6 +189,8 @@ public:
         AggregationKeysInfo aggregation_keys_info;
         bool build_expression_with_window_functions;
 
+        MergeTreeIndexContextPtr index_context;
+
         /*
          * Remember the last unique column suffix to avoid quadratic behavior
          * when we add lots of column with same prefix. One counter for all
@@ -207,7 +211,8 @@ public:
             bool only_consts_,
             bool create_source_for_in_,
             AggregationKeysInfo aggregation_keys_info_,
-            bool build_expression_with_window_functions_ = false);
+            bool build_expression_with_window_functions_ = false,
+            MergeTreeIndexContextPtr index_context_ = nullptr);
 
         /// Does result of the calculation already exists in the block.
         bool hasColumn(const String & column_name) const;
@@ -270,6 +275,7 @@ private:
     static void visit(const ASTLiteral & literal, const ASTPtr & ast, Data & data);
     static void visit(ASTExpressionList & expression_list, const ASTPtr & ast, Data & data);
 
+    static SetPtr tryMakeSet(const ASTFunction & node, Data & data, bool no_subqueries, bool create_ordered_set = false);
     static SetPtr makeSet(const ASTFunction & node, Data & data, bool no_subqueries, bool create_ordered_set = false);
     static ASTs doUntuple(const ASTFunction * function, ActionsMatcher::Data & data);
     static std::optional<NameAndTypePair> getNameAndTypeFromAST(const ASTPtr & ast, Data & data);

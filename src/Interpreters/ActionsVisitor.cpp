@@ -387,7 +387,26 @@ SetPtr makeExplicitSet(
     const auto & dag_node = actions.findInIndex(column_name);
     DataTypePtr left_arg_type = dag_node.result_type;
 
-    if (isArraySetFunctions(node->name))
+    // Special handling bitmap function case
+    if (BitmapIndexHelper::isBitmapFunctions(node->name))
+    {
+        /// TODO: support them when add BitMap32 type and support BitMapIndex for BitMap32/BitMap64
+
+        // if (const auto *const null_type_ptr = typeid_cast<const DataTypeNullable *>(left_arg_type.get()))
+        //     left_arg_type = null_type_ptr->getNestedType();        
+        // if (typeid_cast<const DataTypeBitmap32 *>(left_arg_type.get()))
+        // {
+        //     left_arg_type = std::make_shared<DataTypeUInt32>();
+        // }
+        // else if (typeid_cast<const DataTypeBitmap64 *>(left_arg_type.get()))
+        // {
+        //     left_arg_type = std::make_shared<DataTypeUInt64>();
+        // }
+        // else
+            throw Exception("Invalid argument of function bitmap related functions", ErrorCodes::LOGICAL_ERROR);
+    }
+    // Special handling arraySetCheck/arraySetGet/arraySetGetAny(array, tuple) case
+    else if (BitmapIndexHelper::isArraySetFunctions(node->name))
     {
         if (const auto *const null_type_ptr = typeid_cast<const DataTypeNullable *>(left_arg_type.get()))
             left_arg_type = null_type_ptr->getNestedType();
@@ -499,7 +518,8 @@ ActionsMatcher::Data::Data(
     bool only_consts_,
     bool create_source_for_in_,
     AggregationKeysInfo aggregation_keys_info_,
-    bool build_expression_with_window_functions_)
+    bool build_expression_with_window_functions_,
+    MergeTreeIndexContextPtr index_context_)
     : WithContext(context_)
     , set_size_limit(set_size_limit_)
     , subquery_depth(subquery_depth_)
@@ -514,6 +534,7 @@ ActionsMatcher::Data::Data(
     , actions_stack(std::move(actions_dag), context_)
     , aggregation_keys_info(aggregation_keys_info_)
     , build_expression_with_window_functions(build_expression_with_window_functions_)
+    , index_context(index_context_)
     , next_unique_suffix(actions_stack.getLastActions().getIndex().size() + 1)
 {
 }
@@ -937,7 +958,12 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
     SetPtr prepared_set;
     std::vector<SetPtr> prepared_sets_vec;
 
-    bool need_make_set_for_func = isArraySetFunctions(node.name);
+    bool has_null_argument = BitmapIndexHelper::hasNullArgument(ast);
+    if (BitmapIndexHelper::isNarrowArraySetFunctions(node.name) && has_null_argument && data.getContext()->getSettingsRef().throw_exception_when_has_null)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "ArraySetCheck/Get/GetAny do not support calculating null values in the set");
+    bool can_use_bitmap_index = (BitmapIndexHelper::isArraySetFunctions(node.name) && !has_null_argument) ? BitmapIndexHelper::checkConstArguments(ast) : false;
+    bool need_make_set_for_func = can_use_bitmap_index && (BitmapIndexHelper::isNarrowArraySetFunctions(node.name) || BitmapIndexHelper::isBitmapFunctions(node.name));
+    
     if (checkFunctionIsInOrGlobalInOperator(node))
     {
         /// Let's find the type of the first argument (then getActionsImpl will be called again and will not affect anything).
@@ -964,8 +990,12 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
             return;
         }
     }
-    else if (need_make_set_for_func)
+    else if (can_use_bitmap_index)
     {
+        auto * bitmap_index_info = data.index_context ? 
+            dynamic_cast<BitmapIndexInfo *>(data.index_context->get(MergeTreeIndexInfo::Type::BITMAP).get()) : nullptr;
+        bool should_update_bitmap_index_info = bitmap_index_info && !bitmap_index_info->index_names.count(node.getColumnName());
+        
         size_t arg_size = node.arguments->children.size();
         if (arg_size % 2 != 0)
             throw Exception("The number of arguments is wrong in arraySet function", ErrorCodes::LOGICAL_ERROR);
@@ -985,12 +1015,29 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
 
         if (make_set)
         {
+            auto col_name = node.getColumnName();
+
+            if (should_update_bitmap_index_info)
+                bitmap_index_info->return_types.emplace(col_name, BitmapIndexHelper::getBitmapIndexReturnType(node.name));
+
             for (size_t i = 0; i < arg_size; i += 2)
             {
                 ASTPtr arg_col = node.arguments->children.at(i);
+                ASTPtr arg_set = node.arguments->children.at(i + 1);
                 visit(arg_col, data);
-                SetPtr arg_prepared_set = makeSet(node, data, data.no_subqueries, true);
+                // Just try to make set for bitmap index reader, if failed, rollback to normal reader
+                SetPtr arg_prepared_set = tryMakeSet(node, data, data.no_subqueries, true);
                 prepared_sets_vec.push_back(arg_prepared_set);
+                if (arg_prepared_set && should_update_bitmap_index_info)
+                {
+                    if (auto * identifier = arg_col->as<ASTIdentifier>())
+                    {
+                        bitmap_index_info->index_names[col_name].push_back(identifier->getColumnName());
+                        bitmap_index_info->set_args[col_name].push_back(arg_prepared_set);
+                        // collect all col names
+                        bitmap_index_info->index_column_name_set.emplace(identifier->getColumnName());
+                    }
+                }
             }
         }
     }
@@ -1147,6 +1194,7 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
                 argument_types.push_back(column.type);
                 argument_names.push_back(column.name);
             }
+            // When it is narrow arrayset func, need to make set for the func
             else if (((need_make_set_for_func) && (arg % 2)) && !prepared_sets_vec.empty())
             {
                 ColumnWithTypeAndName column;
@@ -1337,6 +1385,25 @@ void ActionsMatcher::visit(const ASTLiteral & literal, const ASTPtr & /* ast */,
     column.type = type;
 
     data.addColumn(std::move(column));
+}
+
+SetPtr ActionsMatcher::tryMakeSet(const ASTFunction & node, Data & data, bool no_subqueries, bool create_ordered_set)
+{
+    SetPtr return_set = nullptr;
+    try 
+    {
+        return_set = makeSet(node, data, no_subqueries, create_ordered_set);
+    } 
+    catch (Exception & e) 
+    {
+        // if it is narrow array set Functions, we must make set and throw exception if it can't be made successfully
+        if (BitmapIndexHelper::isNarrowArraySetFunctions(node.name))
+            throw e;
+
+        LOG_DEBUG(&Poco::Logger::get("ActionsMatcher"), "Cannot make set for bitmap_index_funcs, fallback to normal reader");
+        return nullptr;
+    }
+    return return_set;
 }
 
 SetPtr ActionsMatcher::makeSet(const ASTFunction & node, Data & data, bool no_subqueries, bool create_ordered_set)

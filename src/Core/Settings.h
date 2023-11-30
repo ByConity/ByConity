@@ -892,6 +892,11 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_ab_index_optimization, true, "Optimize ab version by reading Bitmap", 0)\
     M(Bool, enable_sync_build_bitmap, false, "Build bitmap index in sync mode", 0)\
     M(Bool, enable_async_build_bitmap_in_attach, false, "Async build bitmap index in attach, it is a user config", 0)\
+    M(Bool, throw_exception_when_has_null, true, "Whether throw an exception when there has null value in arraySetCheck", 0)\
+    \
+    /**  settings about segment bitmap index */\
+    M(Bool, enable_sync_build_segment_bitmap, false, "Build  segment bitmap index in sync mode", 0)\
+    M(Bool, enable_async_build_segment_bitmap_in_attach, false, "Async build segment bitmap index in attach, it is a user config", 0)\
     \
     /** Limits during query execution are part of the settings. \
       * Used to provide a more safe execution of queries from the user interface. \
@@ -1785,6 +1790,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_topn_filtering_optimization, false, "Whether enable TopNFilterting optimization", 0) \
     M(Bool, enable_optimizer_support_window, true, "Optimizer support window", 0) \
     M(Bool, optimizer_projection_support, false, "Use projection in optimizer mode", 0) \
+    M(Bool, optimizer_index_projection_support, true, "Use indexprojection in optimizer mode", 0) \
     M(Bool, enable_setoperation_to_agg, true, "Whether enable rewrite set operation to aggregation", 0)                                            \
     M(Bool, enable_execute_uncorrelated_subquery, false, "Whether enable execute uncorrelated subquery", 0) \
     M(UInt64, execute_uncorrelated_in_subquery_size, 10000, "Size of execute uncorrelated in subquery", 0) \

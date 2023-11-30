@@ -33,6 +33,7 @@
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/SelectQueryInfo.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
 
 namespace DB
 {
@@ -63,6 +64,9 @@ using ArrayJoinActionPtr = std::shared_ptr<ArrayJoinAction>;
 class ActionsDAG;
 using ActionsDAGPtr = std::shared_ptr<ActionsDAG>;
 
+class MergeTreeIndexContext;
+using MergeTreeIndexContextPtr = std::shared_ptr<MergeTreeIndexContext>;
+
 /// Create columns in block or return false if not possible
 bool sanitizeBlock(Block & block, bool throw_if_cannot_create_column = false);
 
@@ -76,6 +80,8 @@ struct ExpressionAnalyzerData
 
     std::unique_ptr<QueryPlan> joined_plan;
 
+    /// Columns after add bitmap index result column and remove bitmap index source column
+    NamesAndTypesList columns_after_bitmap_index;
     /// Columns after ARRAY JOIN. If there is no ARRAY JOIN, it's source_columns.
     NamesAndTypesList columns_after_array_join;
     /// Columns after Columns after ARRAY JOIN and JOIN. If there is no JOIN, it's columns_after_array_join.
@@ -125,7 +131,7 @@ public:
     /// Ctor for non-select queries. Generally its usage is:
     /// auto actions = ExpressionAnalyzer(query, syntax, context).getActions();
     ExpressionAnalyzer(const ASTPtr & query_, const TreeRewriterResultPtr & syntax_analyzer_result_, ContextPtr context_)
-        : ExpressionAnalyzer(query_, syntax_analyzer_result_, context_, 0, false, {}, {})
+        : ExpressionAnalyzer(query_, syntax_analyzer_result_, context_, 0, false, {}, {}, std::make_shared<BitmapIndexInfo>())
     {
     }
 
@@ -174,6 +180,8 @@ public:
       */
     SetPtr isPlainStorageSetInSubquery(const ASTPtr & subquery_or_table_name);
 
+    MergeTreeIndexContextPtr getIndexContext() { return index_context; }
+
 protected:
     ExpressionAnalyzer(
         const ASTPtr & query_,
@@ -182,11 +190,14 @@ protected:
         size_t subquery_depth_,
         bool do_global_,
         SubqueriesForSets subqueries_for_sets_,
-        PreparedSets prepared_sets_);
+        PreparedSets prepared_sets_,
+        BitmapIndexInfoPtr bitmap_index_info_);
 
     ASTPtr query;
     const ExtractedSettings settings;
     size_t subquery_depth;
+
+    MergeTreeIndexContextPtr index_context;
 
     TreeRewriterResultPtr syntax;
 
@@ -213,6 +224,8 @@ protected:
     void getRootActionsForHaving(const ASTPtr & ast, bool no_subqueries, ActionsDAGPtr & actions, bool only_consts = false);
 
     void getRootActionsForWindowFunctions(const ASTPtr & ast, bool no_makeset_for_subqueries, ActionsDAGPtr & actions);
+
+    void analyzeBitmapIndex();
 
     /** Add aggregation keys to aggregation_keys, aggregate functions to aggregate_descriptions,
       * Create a set of columns aggregated_columns resulting after the aggregation, if any,
@@ -327,7 +340,8 @@ public:
         bool do_global_ = false,
         const SelectQueryOptions & options_ = {},
         SubqueriesForSets subqueries_for_sets_ = {},
-        PreparedSets prepared_sets_ = {})
+        PreparedSets prepared_sets_ = {},
+        BitmapIndexInfoPtr bitmap_index_info_ = std::make_shared<BitmapIndexInfo>())
         : ExpressionAnalyzer(
             query_,
             syntax_analyzer_result_,
@@ -335,7 +349,8 @@ public:
             options_.subquery_depth,
             do_global_,
             std::move(subqueries_for_sets_),
-            std::move(prepared_sets_))
+            std::move(prepared_sets_),
+            bitmap_index_info_)
         , metadata_snapshot(metadata_snapshot_)
         , required_result_columns(required_result_columns_)
         , query_options(options_)

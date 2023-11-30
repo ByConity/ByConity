@@ -443,7 +443,9 @@ public:
     bool isNegativeInfinity() const { return which == Types::NegativeInfinity; }
     bool isPositiveInfinity() const { return which == Types::PositiveInfinity; }
 
-
+    bool isArray() const { return which == Types::Array; }
+    bool isTuple() const { return which == Types::Tuple; }
+    
     template <typename T>
     NearestFieldType<std::decay_t<T>> & get();
 

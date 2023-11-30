@@ -13,6 +13,7 @@ struct TrivialCountContext
     StoragePtr storage;
     ASTPtr query;
     NamesWithAliases column_alias;
+    bool pushdowned_index_projection = false;
 };
 
 /**

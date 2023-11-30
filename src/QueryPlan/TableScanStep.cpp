@@ -16,6 +16,7 @@
 #include <Processors/MergeTreeSelectPrepareProcessor.h>
 #include <Processors/ResizeProcessor.h>
 #include <QueryPlan/TableScanStep.h>
+#include <QueryPlan/ExecutePlanElement.h>
 
 #include <Analyzers/TypeAnalyzer.h>
 #include <Formats/FormatSettings.h>
@@ -52,15 +53,17 @@
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
+#include <Storages/MergeTree/Index/TableScanExecutorWithIndex.h>
+#include <Storages/VirtualColumnUtils.h>
 #include <Storages/StorageCloudMergeTree.h>
 #include <Storages/StorageCnchMergeTree.h>
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageReplicatedMergeTree.h>
-#include <Storages/VirtualColumnUtils.h>
 #include <fmt/format.h>
 #include <Common/FieldVisitorToString.h>
 #include "Interpreters/DatabaseCatalog.h"
 #include <Common/Stopwatch.h>
+#include <Interpreters/RuntimeFilter/RuntimeFilterManager.h>
 
 namespace DB
 {
@@ -73,113 +76,6 @@ namespace ErrorCodes
 
 namespace _scan_execute_impl
 {
-    /// interfaces
-    // parts within a same group have the same columns & available projections
-    struct PartGroup
-    {
-        MergeTreeData::DataPartsVector parts;
-
-        bool hasProjection(const String & projection_name) const
-        {
-            return parts.front()->hasProjection(projection_name);
-        }
-
-        const NamesAndTypesList & getColumns() const
-        {
-            return parts.front()->getColumns();
-        }
-
-        String toString() const
-        {
-            std::stringstream ss;
-            ss << '{';
-            for (const auto & part: parts)
-                ss << part->getNameWithState() << "";
-            ss << '}';
-            return ss.str();
-        }
-
-        size_t partsNum() const
-        {
-            return parts.size();
-        }
-    };
-
-    using PartGroups = std::vector<PartGroup>;
-
-    struct ExecutePlanElement
-    {
-        PartGroup part_group;
-        MergeTreeDataSelectAnalysisResultPtr read_analysis;
-
-        // if not use projection, below members are not empty
-        MergeTreeData::DataPartsVector parts;
-
-        // if use projection, below members are not empty
-        ProjectionDescriptionRawPtr projection_desc = nullptr;
-        Names projection_required_columns;
-        QueryPlanStepPtr rewritten_projection_step;
-        QueryPlanStepPtr rewritten_filter_step;
-        ActionsDAGPtr prewhere_actions;
-
-        ExecutePlanElement(PartGroup part_group_,
-                           MergeTreeDataSelectAnalysisResultPtr read_analysis_,
-                           MergeTreeData::DataPartsVector parts_)
-            : part_group(std::move(part_group_)),
-            read_analysis(std::move(read_analysis_)),
-            parts(std::move(parts_))
-        {}
-
-        ExecutePlanElement(PartGroup part_group_,
-                           MergeTreeDataSelectAnalysisResultPtr read_analysis_,
-                           ProjectionDescriptionRawPtr projection_desc_,
-                           Names required_columns_,
-                           QueryPlanStepPtr projection_,
-                           QueryPlanStepPtr filter_,
-                           ActionsDAGPtr prewhere_actions_)
-            : part_group(std::move(part_group_)),
-            read_analysis(std::move(read_analysis_)),
-            projection_desc(projection_desc_),
-            projection_required_columns(std::move(required_columns_)),
-            rewritten_projection_step(std::move(projection_)),
-            rewritten_filter_step(std::move(filter_)),
-            prewhere_actions(std::move(prewhere_actions_))
-        {}
-
-        String toString() const;
-    };
-
-    String ExecutePlanElement::toString() const
-    {
-        std::ostringstream os;
-        if (!read_analysis->error())
-            os << "Read Marks: " << read_analysis->marks() << std::endl;
-
-        if (projection_desc)
-        {
-            os << "Used Projection: " << projection_desc->name << std::endl;
-            os << "Projection Type: " << (projection_desc->type == ProjectionDescription::Type::Aggregate ? "aggregate" : "normal" )<< std::endl;
-
-            if (rewritten_filter_step)
-            {
-                auto filter_dump = serializeAST(*(dynamic_cast<FilterStep &>(*rewritten_filter_step).getFilter()));
-                os << "Rewritten Filter: " << filter_dump << std::endl;
-            }
-
-            if (rewritten_projection_step)
-            {
-                os << "Column Mapping: " << std::endl;
-                auto assignment_dump = dynamic_cast<ProjectionStep &>(*rewritten_projection_step).getAssignments().toString();
-                os << assignment_dump;
-            }
-        }
-
-        return os.str();
-    }
-
-    class ExecutePlan: public std::vector<ExecutePlanElement>
-    {};
-
     // a struct used in projection selection with any necessary intermediate states
     struct ProjectionMatchContext;
     using ProjectionMatchContexts = std::vector<ProjectionMatchContext>;
@@ -520,7 +416,7 @@ ExecutePlan TableScanExecutor::buildExecutePlan()
         if (selected_candidate)
             execute_plan.push_back(selected_candidate->buildExecutePlanElement(std::move(part_group), select_query_info));
         else
-            execute_plan.push_back(ExecutePlanElement(std::move(part_group), std::move(normal_read_result), std::move(part_group.parts)));
+            execute_plan.push_back(ExecutePlanElement(part_group, std::move(normal_read_result), part_group.parts));
     }
 
     if (log->debug())
@@ -569,7 +465,7 @@ ExecutePlan TableScanExecutor::buildExecutePlan()
 
 bool TableScanExecutor::match(ProjectionMatchContext & candidate) const
 {
-    auto & projection_desc = candidate.projection_desc;
+    const auto & projection_desc = candidate.projection_desc;
 
     if (!has_aggregate && projection_desc.type == ProjectionDescription::Type::Aggregate)
         return false;
@@ -1123,9 +1019,11 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     stage_watch.start();
     storage = DatabaseCatalog::instance().getTable(storage_id, build_context.context);
 
-    bool use_optimizer_projection_selection =
-        build_context.context->getSettingsRef().optimizer_projection_support &&
-        dynamic_cast<MergeTreeMetaBase *>(storage.get()) && !pushdown_projection;
+    bool use_projection_index = build_context.context->getSettingsRef().optimizer_index_projection_support
+        && dynamic_cast<MergeTreeData *>(storage.get()) && build_context.context->getSettingsRef().enable_ab_index_optimization;
+
+    bool use_optimizer_projection_selection = build_context.context->getSettingsRef().optimizer_projection_support
+        && dynamic_cast<MergeTreeData *>(storage.get()) && !use_projection_index;
 
     rewriteInForBucketTable(build_context.context);
     stage_watch.start();
@@ -1182,11 +1080,54 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         query_info.prewhere_info->need_filter = true;
 
     query_info.partition_filter = partition_filter;
+
+    if (use_projection_index)
+    {
+        auto input_columns_block
+            = storage->getInMemoryMetadataPtr()->getSampleBlockForColumns(getRequiredColumns(), storage->getVirtuals(), storage_id);
+        auto input_columns = input_columns_block.getNamesAndTypesList();
+        auto required_columns_block = storage->getInMemoryMetadataPtr()->getSampleBlockForColumns(
+            getRequiredColumns(OutputAndPrewhere), storage->getVirtuals(), storage_id);
+        auto required_columns = required_columns_block.getNamesAndTypesList();
+
+        String msg;
+
+        for (const auto & ass : inline_expressions)
+        {
+            msg += fmt::format("from: {}, source: {}\n", ass.first, queryToString(*ass.second));
+        }
+
+        auto output_types = table_output_stream.getNamesToTypes();
+        for (const auto & ass : inline_expressions)
+        {
+            msg += fmt::format("name: {}, type: {}\n", ass.first, output_types.at(ass.first)->getName());
+        }
+
+        msg += fmt::format(
+            "actions: {}\n",
+            ProjectionStep::createActions(inline_expressions, input_columns, build_context.context)->dumpDAG());
+
+        // msg += fmt::format("output_columns: {}\n required_columns: {}", column_alias, required_columns.toString());
+
+        LOG_DEBUG(log, fmt::format("pushdown_index_projection: {}", msg));
+
+        MergeTreeIndexInfo::BuildIndexContext index_building_context{
+                .input_columns = input_columns,
+                .required_columns = required_columns,
+                .context = build_context.context,
+                .prepared_sets = query_info.sets,
+                .outputs = column_alias /* no meaning */};
+
+        query_info.index_context = MergeTreeIndexContext::buildFromProjection(inline_expressions, index_building_context);
+    }
+
     ExecutePlan execute_plan;
 
     stage_watch.restart();
     if (use_optimizer_projection_selection)
         execute_plan = TableScanExecutor(*this, build_context.context).buildExecutePlan();
+    else if (use_projection_index)
+        execute_plan = TableScanExecutorWithIndex(*this, build_context.context).buildExecutePlan();
     LOG_DEBUG(log, "init pipeline stage run time: projection match, {} ms", stage_watch.elapsedMillisecondsAsDouble());
 
     size_t max_streams = build_context.context->getSettingsRef().max_threads;
@@ -1247,6 +1188,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         bool use_projection = plan_element.projection_desc != nullptr;
         QueryPipelinePtr sub_pipeline;
 
+        LOG_DEBUG(log, fmt::format("plan_element: {}", plan_element.toString()));
+
         if (plan_element.read_analysis->marks() == 0)
             continue;
 
@@ -1302,13 +1245,16 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                 delete_bitmap_getter = [](const auto & part) { return part->getDeleteBitmap(); };
             }
 
+            auto query_info_for_index = query_info;
+            query_info_for_index.read_bitmap_index = plan_element.read_bitmap_index;
+
             auto read_plan = merge_tree_reader.readFromParts(
                 {},
                 delete_bitmap_getter,
                 getRequiredColumns(),
                 metadata_snapshot,
                 metadata_snapshot,
-                query_info,
+                query_info_for_index,
                 context,
                 max_block_size,
                 max_streams,
@@ -1318,6 +1264,9 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             sub_pipeline = read_plan->buildQueryPipeline(QueryPlanOptimizationSettings::fromContext(context),
                                                          BuildQueryPipelineSettings::fromContext(context));
 
+            String pipeline_name = "execute plan read";
+            if (plan_element.read_bitmap_index)
+                pipeline_name += "(with index)";
             aliasColumns(*sub_pipeline, build_context, "execute plan read");
 
             if (pushdown_filter)
@@ -1461,6 +1410,8 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 
         if (plan_element.projection_desc)
             step_desc << plan_element.part_group.partsNum() << " parts from projection `" << plan_element.projection_desc->name << "`";
+        else if (plan_element.read_bitmap_index)
+            step_desc << plan_element.part_group.partsNum() << " parts from bitmap index";
         else
             step_desc << plan_element.part_group.partsNum() << " parts from raw data";
     }
@@ -1502,7 +1453,7 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
 {
     auto storage_id = StorageID::fromProto(proto.storage_id(), context);
     NamesWithAliases column_alias;
-    for (auto & proto_element : proto.column_alias())
+    for (const auto & proto_element : proto.column_alias())
     {
         auto name = proto_element.name();
         auto alias = proto_element.alias();
@@ -1511,7 +1462,6 @@ std::shared_ptr<TableScanStep> TableScanStep::fromProto(const Protos::TableScanS
     SelectQueryInfo query_info;
     query_info.fillFromProto(proto.query_info());
     auto max_block_size = proto.max_block_size();
-
     auto inline_expressions = deserializeAssignmentsFromProto(proto.inline_expressions());
 
     std::shared_ptr<AggregatingStep> pushdown_aggregation;
@@ -1841,15 +1791,15 @@ Names TableScanStep::getRequiredColumns(GetFlags flags) const
         if (auto prewhere = getPrewhere())
             add_columns_in_expr(prewhere);
 
-    // if (flags & GetFlags::BitmapIndex)
-    // {
-    //     for (const auto & item : inline_expressions)
-    //     {
-    //         const auto * func = item.second->as<ASTFunction>();
-    //         if (func && Poco::toLower(func->name) == "arraysetcheck")
-    //             add_columns_in_expr(item.second);
-    //     }
-    // }
+    if (flags & GetFlags::BitmapIndex)
+    {
+        for (const auto & item : inline_expressions)
+        {
+            const auto * func = item.second->as<ASTFunction>();
+            if (func && Poco::toLower(func->name) == "arraysetcheck")
+                add_columns_in_expr(item.second);
+        }
+    }
 
     return {result.begin(), result.end()};
 }

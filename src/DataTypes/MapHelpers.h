@@ -90,6 +90,9 @@ String parseImplicitColumnFromImplicitFileName(const String & data_file_name, co
 // e.g. __col1__%27key%27.bin --> col.bin, __col2__%27key%27.null.bin --> col2.null.bin
 String getMapFileNameFromImplicitFileName(const String & implicit_file_name);
 
+// Check if name contains map reserved keys, and return a name without the suffix
+std::pair<bool, String> mayBeMapKVReservedKeys(const String & name);
+
 bool isMapBaseFile(const String & file_name);
 
 bool isMapImplicitKey(const String & map_col);

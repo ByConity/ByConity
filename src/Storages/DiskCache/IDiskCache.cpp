@@ -153,6 +153,24 @@ void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments,
     });
 }
 
+void IDiskCache::cacheBitmapIndexToLocalDisk(const IDiskCacheSegmentPtr & bitmap_segment)
+{
+    Stopwatch watch;
+    SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::DiskCacheScheduleCacheTaskMicroSeconds,
+            watch.elapsedMicroseconds());});
+
+    scheduleCacheTask([this, bitmap_segment] {
+        try
+        {
+            bitmap_segment->cacheToDisk(*this);
+        }
+        catch (...)
+        {
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
+    });
+}
+
 // Schedule cache task, when threadpool's current running task exceed certain ratio, start random
 // drop disk cache task
 bool IDiskCache::scheduleCacheTask(const std::function<void()> & task)

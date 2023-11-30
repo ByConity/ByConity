@@ -23,6 +23,8 @@
 
 #include <DataStreams/IBlockInputStream.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
+#include <Storages/MergeTree/Index/BitmapIndexHelper.h>
+#include <Storages/MergeTree/IMergeTreeReader.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/SelectQueryInfo.h>
 
@@ -44,7 +46,7 @@ public:
         Block header,
         const MergeTreeMetaBase & storage_,
         const StorageMetadataPtr & metadata_snapshot_,
-        const PrewhereInfoPtr & prewhere_info_,
+        const SelectQueryInfo & query_info_,
         ExpressionActionsSettings actions_settings,
         UInt64 max_block_size_rows_,
         UInt64 preferred_block_size_bytes_,
@@ -56,7 +58,8 @@ public:
     ~MergeTreeBaseSelectProcessor() override;
 
     static Block transformHeader(
-        Block block, const PrewhereInfoPtr & prewhere_info, const DataTypePtr & partition_value_type, const Names & virtual_columns);
+        Block block, const PrewhereInfoPtr & prewhere_info, const DataTypePtr & partition_value_type, const Names & virtual_columns, 
+        const MergeTreeIndexContextPtr & index_context_, bool read_bitmap_index);
 
 protected:
     Chunk generate() final;
@@ -75,6 +78,10 @@ protected:
     injectVirtualColumns(Chunk & chunk, MergeTreeReadTask * task, const DataTypePtr & partition_value_type, const Names & virtual_columns);
 
     void initializeRangeReaders(MergeTreeReadTask & task);
+    void initializeReaders(const MarkRanges & mark_ranges, const IMergeTreeReader::ValueSizeMap & avg_value_size_hints = IMergeTreeReader::ValueSizeMap{}, const ReadBufferFromFileBase::ProfileCallback & profile_callback = ReadBufferFromFileBase::ProfileCallback{});
+    void insertMarkRangesForSegmentBitmapIndexFunctions(MergeTreeIndexExecutorPtr & index_executor, const MarkRanges & mark_ranges_inc);
+
+    void prepareForBitmapIndex(NamesAndTypesList & prewhere_columns, NamesAndTypesList & task_columns);
 
 protected:
     const MergeTreeMetaBase & storage;
@@ -82,6 +89,7 @@ protected:
 
     PrewhereInfoPtr prewhere_info;
     std::unique_ptr<PrewhereExprInfo> prewhere_actions;
+    MergeTreeIndexContextPtr index_context;
 
     UInt64 max_block_size_rows;
     UInt64 preferred_block_size_bytes;
@@ -104,8 +112,13 @@ protected:
     std::shared_ptr<MarkCache> owned_mark_cache;
 
     using MergeTreeReaderPtr = std::unique_ptr<IMergeTreeReader>;
+    using MergeTreeBitMapIndexReaderPtr = std::unique_ptr<MergeTreeBitmapIndexReader>;
+
     MergeTreeReaderPtr reader;
     MergeTreeReaderPtr pre_reader;
+    MergeTreeIndexExecutorPtr index_executor;
+    MergeTreeIndexExecutorPtr pre_index_executor;
+    NameSet bitmap_index_columns_superset; 
 };
 
 }

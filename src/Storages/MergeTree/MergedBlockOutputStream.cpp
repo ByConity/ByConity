@@ -41,7 +41,8 @@ MergedBlockOutputStream::MergedBlockOutputStream(
     const MergeTreeIndices & skip_indices,
     CompressionCodecPtr default_codec_,
     bool blocks_are_granules_size,
-    bool optimize_map_column_serialization)
+    bool optimize_map_column_serialization,
+    const BitmapBuildInfo & bitmap_build_info)
     : IMergedBlockOutputStream(data_part, metadata_snapshot_)
     , columns_list(columns_list_)
     , default_codec(default_codec_)
@@ -71,7 +72,7 @@ MergedBlockOutputStream::MergedBlockOutputStream(
         writer = data_part->getWriter(new_columns_list, metadata_snapshot, skip_indices, default_codec, writer_settings);
     }
     else
-        writer = data_part->getWriter(columns_list, metadata_snapshot, skip_indices, default_codec, writer_settings);
+        writer = data_part->getWriter(columns_list, metadata_snapshot, skip_indices, default_codec, writer_settings, {}, bitmap_build_info);
 
     if (metadata_snapshot->hasUniqueKey())
     {

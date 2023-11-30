@@ -47,6 +47,7 @@
 #include <Poco/Path.h>
 #include <Common/HashTable/HashMap.h>
 #include <common/types.h>
+#include "Storages/MergeTree/Index/MergeTreeIndexHelper.h"
 #include <roaring.hh>
 #include <forward_list>
 
@@ -76,6 +77,9 @@ class IMergeTreeReader;
 class IMergeTreeDataPartWriter;
 class MarkCache;
 class UncompressedCache;
+
+struct BitmapIndexChecker;
+using BitmapIndexCheckerPtr = std::shared_ptr<BitmapIndexChecker>;
 
 /// Description of the data part.
 class IMergeTreeDataPart : public std::enable_shared_from_this<IMergeTreeDataPart>
@@ -126,13 +130,14 @@ public:
         IStorage::StorageLocation location_,
         const UUID& part_id_ = UUIDHelpers::Nil);
 
-    virtual MergeTreeReaderPtr getReader(
+        virtual MergeTreeReaderPtr getReader(
         const NamesAndTypesList & columns_,
         const StorageMetadataPtr & metadata_snapshot,
         const MarkRanges & mark_ranges,
         UncompressedCache * uncompressed_cache,
         MarkCache * mark_cache,
         const MergeTreeReaderSettings & reader_settings_,
+        MergeTreeIndexExecutor * bitmap_index_reader = nullptr,
         const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{},
         const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = ReadBufferFromFileBase::ProfileCallback{}) const = 0;
 
@@ -142,7 +147,8 @@ public:
         const std::vector<MergeTreeIndexPtr> & indices_to_recalc,
         const CompressionCodecPtr & default_codec_,
         const MergeTreeWriterSettings & writer_settings,
-        const MergeTreeIndexGranularity & computed_index_granularity = {}) const = 0;
+        const MergeTreeIndexGranularity & computed_index_granularity = {},
+        const BitmapBuildInfo & bitmap_build_info = {}) const = 0;
 
     virtual bool isStoredOnDisk() const = 0;
 
@@ -384,6 +390,8 @@ public:
 
     CompressionCodecPtr default_codec;
 
+    BitmapIndexCheckerPtr bitmap_index_checker = std::make_shared<BitmapIndexChecker>();
+
     /// load checksum on demand. return ChecksumsPtr from global cache or its own checksums_ptr;
     ChecksumsPtr getChecksums() const;
     virtual void prefetchChecksums() const { getChecksums(); }
@@ -471,6 +479,11 @@ public:
     }
 
     virtual void loadProjections(bool require_columns_checksums, bool check_consistency);
+
+    bool hasBitmapIndex(const String & column_name) const
+    {
+        return bitmap_index_checker->hasBitmapIndex(column_name);
+    }
 
     /// Return set of metadat file names without checksums. For example,
     /// columns.txt or checksums.txt itself.

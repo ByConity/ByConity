@@ -30,11 +30,13 @@ ProjectionStep::ProjectionStep(
     Assignments assignments_,
     NameToType name_to_type_,
     bool final_project_,
+    bool index_project_,
     PlanHints hints_)
     : ITransformingStep(input_stream_, {}, {}, true, hints_)
     , assignments(std::move(assignments_))
     , name_to_type(std::move(name_to_type_))
     , final_project(final_project_)
+    , index_project(index_project_)
 {
     for (const auto & item : assignments)
     {
@@ -64,6 +66,7 @@ void ProjectionStep::toProto(Protos::ProjectionStep & proto, bool) const
     serializeAssignmentsToProto(assignments, *proto.mutable_assignments());
     serializeOrderedMapToProto(name_to_type, *proto.mutable_name_to_type());
     proto.set_final_project(final_project);
+    proto.set_index_project(index_project);
 }
 
 std::shared_ptr<ProjectionStep> ProjectionStep::fromProto(const Protos::ProjectionStep & proto, ContextPtr)
@@ -72,14 +75,15 @@ std::shared_ptr<ProjectionStep> ProjectionStep::fromProto(const Protos::Projecti
     auto assignments = deserializeAssignmentsFromProto(proto.assignments());
     auto name_to_type = deserializeOrderedMapFromProto<String, DataTypePtr>(proto.name_to_type());
     auto final_project = proto.final_project();
-    auto step = std::make_shared<ProjectionStep>(base_input_stream, assignments, name_to_type, final_project);
+    auto index_project = proto.index_project();
+    auto step = std::make_shared<ProjectionStep>(base_input_stream, assignments, name_to_type, final_project, index_project);
     step->setStepDescription(step_description);
     return step;
 }
 
 std::shared_ptr<IQueryPlanStep> ProjectionStep::copy(ContextPtr) const
 {
-    return std::make_shared<ProjectionStep>(input_streams[0], assignments, name_to_type, final_project, hints);
+    return std::make_shared<ProjectionStep>(input_streams[0], assignments, name_to_type, final_project, index_project, hints);
 }
 
 ActionsDAGPtr ProjectionStep::createActions(ContextPtr context) const
@@ -94,4 +98,18 @@ ActionsDAGPtr ProjectionStep::createActions(ContextPtr context) const
     }
     return createExpressionActions(context, input_streams[0].header.getNamesAndTypesList(), output, expr_list);
 }
+
+ActionsDAGPtr ProjectionStep::createActions(const Assignments & assignments, const NamesAndTypesList & source, ContextPtr context)
+{
+    ASTPtr expr_list = std::make_shared<ASTExpressionList>();
+
+    NamesWithAliases output;
+    for (const auto & item : assignments)
+    {
+        expr_list->children.emplace_back(item.second->clone());
+        output.emplace_back(NameWithAlias{item.second->getColumnName(), item.first});
+    }
+    return createExpressionActions(context, source, output, expr_list);
+}
+
 }

@@ -24,7 +24,6 @@
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 
 #include <Common/MultiVersion.h>
-#include <Common/QueueForAsyncTask.h>
 #include <Storages/IStorage.h>
 #include <Storages/MergeTree/MergeTreeIndices.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>

@@ -62,6 +62,8 @@
 #include <Storages/MergeTree/MergeTreeSequentialSource.h>
 #include <Storages/MergeTree/MergedBlockOutputStream.h>
 #include <Storages/MergeTree/MergedColumnOnlyOutputStream.h>
+#include <Storages/MergeTree/Index/MergeTreeBitmapIndex.h>
+#include <Storages/MergeTree/Index/MergeTreeSegmentBitmapIndex.h>
 #include <Storages/MergeTree/checkDataPart.h>
 #include <Storages/MergeTree/localBackup.h>
 #include <Storages/MergeTree/ChecksumsCache.h>
@@ -247,6 +249,10 @@ MergeTreeData::MergeTreeData(
         if (!buf->eof())
             throw Exception("Bad version file: " + fullPath(version_file.second, version_file.first), ErrorCodes::CORRUPTED_DATA);
     }
+
+    const auto & all_columns = getInMemoryMetadataPtr()->getColumns();
+    MergeTreeBitmapIndex::checkValidBitmapIndexType(all_columns);
+    MergeTreeSegmentBitmapIndex::checkSegmentBitmapStorageGranularity(all_columns, getSettings());
 
     if (format_version < min_format_version)
     {

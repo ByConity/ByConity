@@ -49,7 +49,8 @@ public:
         MarkCache * mark_cache_,
         const MarkRanges & all_mark_ranges_,
         const MergeTreeReaderSettings & settings_,
-        const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{});
+        const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{},
+        MergeTreeIndexExecutor * index_executor_ = nullptr);
 
     /// Return the number of rows has been read or zero if there is no columns to read.
     /// If continue_reading is true, continue reading from last state, otherwise seek to from_mark
@@ -73,14 +74,18 @@ public:
     void performRequiredConversions(Columns & res_columns, bool check_column_size = true);
 
     const NamesAndTypesList & getColumns() const { return columns; }
-    size_t numColumnsInResult() const { return columns.size(); }
+    size_t numColumnsInResult() const { return hasBitmapIndexReader() ? columns.size() + getBitmapOutputColumns().size() : columns.size(); }
 
     size_t getFirstMarkToRead() const
     {
         return all_mark_ranges.front().begin;
     }
 
-    const NameSet & getBitmapOutputColumns();
+    bool hasBitmapIndexReader() const;
+
+    const NameOrderedSet & getBitmapOutputColumns() const;
+
+    const NamesAndTypesList & getBitmapColumns() const;
 
     MergeTreeData::DataPartPtr data_part;
 
@@ -146,6 +151,7 @@ protected:
 
     /// Mark row number
     size_t next_row_number_to_read = 0;
+    MergeTreeIndexExecutor * index_executor = nullptr;
 
 private:
     /// Alter conversions, which must be applied on fly if required

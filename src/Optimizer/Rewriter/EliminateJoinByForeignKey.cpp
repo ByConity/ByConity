@@ -875,6 +875,7 @@ PlanNodePtr EliminateJoinByFK::Eliminator::visitProjectionNode(ProjectionNode & 
             new_assignments,
             new_name_to_type,
             node.getStep()->isFinalProject(),
+            node.getStep()->isIndexProject(),
             node.getStep()->getHints());
         PlanNodes children{child};
         auto expr_node = ProjectionNode::createPlanNode(context->nextNodeId(), std::move(expr_step), children);

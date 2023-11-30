@@ -213,6 +213,7 @@ message ProjectionStep {
   map<string, DataType> name_to_type = 3;
   required bool final_project = 4;
   map<string, RuntimeFilterBuildInfos> dynamic_filters = 5;
+  required bool index_project = 6;
 }
 
 message JoinStep {
@@ -304,7 +305,6 @@ message TableScanStep {
   optional AggregatingStep pushdown_aggregation = 5;
   optional ProjectionStep pushdown_projection = 6;
   optional FilterStep pushdown_filter = 7;
-
   optional Assignments inline_expressions = 14;
 }
 

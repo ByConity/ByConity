@@ -60,6 +60,7 @@
 #include <Interpreters/RewriteCountDistinctVisitor.h>
 #include <Interpreters/InterpreterPerfectShard.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/RequiredSourceColumnsVisitor.h>
 
 #include <Processors/Pipe.h>
 #include <QueryPlan/AggregatingStep.h>
@@ -447,6 +448,16 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             view = nullptr;
         }
 
+        BitmapIndexInfoPtr inited_bitmap_index_info = std::make_shared<BitmapIndexInfo>();
+        /// TODO: for bitmap index remove where condition
+        // if (shouldRemoveBitmapIndexCondition())
+        // {
+        //     inited_bitmap_index_info = std::make_shared<BitmapIndexInfo>();
+        //     const MergeTreeData * merge_tree_data = dynamic_cast<const MergeTreeData *>(storage.get());
+        //     WhereWithBitmapIndexOptimizer where_with_bitmap_index_optimizer(inited_bitmap_index_info, *merge_tree_data, context);
+        //     where_with_bitmap_index_optimizer.optimize(query_ptr);
+        // }
+
         if (try_move_to_prewhere && storage && query.where() && !query.prewhere())
         {
             /// PREWHERE optimization: transfer some condition from WHERE to PREWHERE if enabled and viable
@@ -487,7 +498,8 @@ InterpreterSelectQuery::InterpreterSelectQuery(
             !options.only_analyze,
             options,
             std::move(subquery_for_sets),
-            std::move(prepared_sets));
+            std::move(prepared_sets),
+            inited_bitmap_index_info);
 
         if (!options.only_analyze)
         {
@@ -732,6 +744,37 @@ Block InterpreterSelectQuery::getSampleBlockImpl()
 
     analysis_result = ExpressionAnalysisResult(
         *query_analyzer, metadata_snapshot, first_stage, second_stage, options.only_analyze, filter_info, source_header);
+
+    // required columns without bitmap index
+    NoBitmapIndexRequiredSourceColumnsVisitor::Data columns_context;
+    NoBitmapIndexRequiredSourceColumnsVisitor(columns_context).visit(query_ptr);
+    auto required_in_non_bitmap_index_functions = columns_context.requiredColumns();
+    auto index_context = query_analyzer->getIndexContext();
+    if (auto * bitmap_index_info = dynamic_cast<BitmapIndexInfo *>(index_context->get(MergeTreeIndexInfo::Type::BITMAP).get()))
+    {
+        // find the intersection -- the column is index column, but used in functions other than arraySetCheck -> we still need to read it
+        for (auto it = bitmap_index_info->index_column_name_set.begin(); it != bitmap_index_info->index_column_name_set.end(); ++it)
+        {
+            if (required_in_non_bitmap_index_functions.count(*it)) {
+                bitmap_index_info->non_removable_index_columns.emplace(*it);
+            }
+        }
+    }
+
+    if (analysis_result.prewhere_info 
+        && analysis_result.prewhere_info->index_context 
+        && analysis_result.prewhere_info->index_context->has(MergeTreeIndexInfo::Type::BITMAP))
+    {
+        if (auto * bitmap_index_info = dynamic_cast<BitmapIndexInfo *>(analysis_result.prewhere_info->index_context->get(MergeTreeIndexInfo::Type::BITMAP).get()))
+        {
+            for (auto it = bitmap_index_info->index_column_name_set.begin(); it != bitmap_index_info->index_column_name_set.end(); ++it)
+            {
+                if (required_in_non_bitmap_index_functions.count(*it)) {
+                    bitmap_index_info->non_removable_index_columns.emplace(*it);
+                }
+            }
+        }
+    }
 
     if (options.to_stage == QueryProcessingStage::Enum::FetchColumns)
     {
@@ -2060,6 +2103,21 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         if (prewhere_info)
             query_info.prewhere_info = prewhere_info;
 
+        query_info.index_context = query_analyzer->getIndexContext();
+        if (!context->getSettingsRef().enable_ab_index_optimization)
+        {
+            query_info.index_context = nullptr;
+            if (query_info.prewhere_info)
+                query_info.prewhere_info->index_context = nullptr;
+        }
+        else
+        {
+            if (query_info.index_context)
+                LOG_DEBUG(log, query_info.index_context->toString());
+            if (query_info.prewhere_info && query_info.prewhere_info->index_context)
+                LOG_DEBUG(log, fmt::format("pre-index: {}", query_info.prewhere_info->index_context->toString()));
+        }
+
         /// Create optimizer with prepared actions.
         /// Maybe we will need to calc input_order_info later, e.g. while reading from StorageMerge.
         if ((analysis_result.optimize_read_in_order || analysis_result.optimize_aggregation_in_order)
@@ -2150,6 +2208,25 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
                 ? query_info.projection->desc->metadata->getSampleBlockForColumns(
                     query_info.projection->required_columns, storage->getVirtuals(), storage->getStorageID())
                 : metadata_snapshot->getSampleBlockForColumns(required_columns, storage->getVirtuals(), storage->getStorageID());
+
+            /// add bitmap index result column for null source
+            if (auto * bitmap_index_info = dynamic_cast<BitmapIndexInfo *>(query_analyzer->getIndexContext()->get(MergeTreeIndexInfo::Type::BITMAP).get()))
+            {
+                for (const auto & name : header.getNames())
+                {
+                    if (bitmap_index_info->remove_on_header_column_name_set.count(name) > 0 && bitmap_index_info->non_removable_index_columns.count(name) <= 0)
+                    {
+                        header.erase(name);
+                    }
+                }
+                for (const auto & item : bitmap_index_info->return_types)
+                {
+                    if (item.second == BitmapIndexReturnType::EXPRESSION)
+                    {
+                        header.insert({std::make_shared<DataTypeUInt8>(), item.first});
+                    }
+                }
+            }
 
             addEmptySourceToQueryPlan(query_plan, header, query_info, context);
         }

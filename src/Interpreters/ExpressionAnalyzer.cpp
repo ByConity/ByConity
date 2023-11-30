@@ -169,13 +169,18 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     size_t subquery_depth_,
     bool do_global,
     SubqueriesForSets subqueries_for_sets_,
-    PreparedSets prepared_sets_)
+    PreparedSets prepared_sets_,
+    BitmapIndexInfoPtr bitmap_index_info_)
     : WithContext(context_)
     , query(query_)
     , settings(getContext()->getSettings())
     , subquery_depth(subquery_depth_)
+    , index_context(std::make_shared<MergeTreeIndexContext>())
     , syntax(syntax_analyzer_result_)
 {
+    if (bitmap_index_info_)
+        index_context->add(bitmap_index_info_);
+
     /// Cache prepared sets because we might run analysis multiple times
     subqueries_for_sets = std::move(subqueries_for_sets_);
     prepared_sets = std::move(prepared_sets_);
@@ -183,6 +188,9 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     /// external_tables, subqueries_for_sets for global subqueries.
     /// Replaces global subqueries with the generated names of temporary tables that will be sent to remote servers.
     initGlobalSubqueriesAndExternalTables(do_global);
+
+    /// init columns_after_bitmap_index before analyzeAggregation
+    analyzeBitmapIndex();
 
     /// has_aggregation, aggregation_keys, aggregate_descriptions, aggregated_columns.
     /// This analysis should be performed after processing global subqueries, because otherwise,
@@ -211,12 +219,12 @@ void ExpressionAnalyzer::analyzeAggregation()
 
     auto * select_query = query->as<ASTSelectQuery>();
 
-    auto temp_actions = std::make_shared<ActionsDAG>(sourceColumns());
+    auto temp_actions = std::make_shared<ActionsDAG>(columns_after_bitmap_index);
 
     if (select_query)
     {
         NamesAndTypesList array_join_columns;
-        columns_after_array_join = sourceColumns();
+        columns_after_array_join = columns_after_bitmap_index;
 
         bool is_array_join_left;
         if (ASTPtr array_join_expression_list = select_query->arrayJoinExpressionList(is_array_join_left))
@@ -448,6 +456,27 @@ void ExpressionAnalyzer::analyzeAggregation()
     }
 }
 
+void ExpressionAnalyzer::analyzeBitmapIndex()
+{
+    columns_after_bitmap_index = sourceColumns();
+    auto * bitmap_index_info = dynamic_cast<BitmapIndexInfo *>(index_context->get(MergeTreeIndexInfo::Type::BITMAP).get());
+    if (!bitmap_index_info->return_types.empty())
+    {
+        for (auto & ele : bitmap_index_info->return_types)
+        {
+            if (ele.second == BitmapIndexReturnType::EXPRESSION)
+            {
+                auto type = std::make_shared<DataTypeUInt8>();
+                columns_after_bitmap_index.emplace_back(ele.first, type);
+            }
+        }
+        columns_after_bitmap_index.remove_if([&bitmap_index_info](auto & col) {
+            // it's index column, and not in non-removable
+            return bitmap_index_info->remove_on_header_column_name_set.count(col.name) > 0 && bitmap_index_info->non_removable_index_columns.count(col.name) <= 0;
+        });
+    }
+}
+
 void ExpressionAnalyzer::checkQuery()
 {
     const auto * select_query = query->as<ASTSelectQuery>();
@@ -641,7 +670,8 @@ void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_makeset_for_
         only_consts,
         !isRemoteStorage() /* create_source_for_in */,
         getAggregationKeysInfo(),
-        false /* build_expression_with_window_functions */);
+        false /* build_expression_with_window_functions */,
+        index_context);
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }
@@ -1049,7 +1079,7 @@ SelectQueryExpressionAnalyzer::appendArrayJoin(ExpressionActionsChain & chain, A
     if (!array_join_expression_list)
         return nullptr;
 
-    ExpressionActionsChain::Step & step = chain.lastStep(sourceColumns());
+    ExpressionActionsChain::Step & step = chain.lastStep(columns_after_bitmap_index);
 
     getRootActions(array_join_expression_list, only_types, step.actions());
 
@@ -1255,7 +1285,7 @@ SelectQueryExpressionAnalyzer::appendPrewhere(ExpressionActionsChain & chain, bo
     if (!chain.steps.empty())
         first_action_names = chain.steps.front()->getRequiredColumns().getNames();
 
-    auto & step = chain.lastStep(sourceColumns());
+    auto & step = chain.lastStep(columns_after_bitmap_index);
     getRootActions(select_query->prewhere(), only_types, step.actions());
     String prewhere_column_name = select_query->prewhere()->getColumnName();
     step.addRequiredOutput(prewhere_column_name);
@@ -1268,7 +1298,7 @@ SelectQueryExpressionAnalyzer::appendPrewhere(ExpressionActionsChain & chain, bo
     ActionsDAGPtr prewhere_actions;
     {
         /// Remove unused source_columns from prewhere actions.
-        auto tmp_actions_dag = std::make_shared<ActionsDAG>(sourceColumns());
+        auto tmp_actions_dag = std::make_shared<ActionsDAG>(columns_after_bitmap_index);
         getRootActions(select_query->prewhere(), only_types, tmp_actions_dag);
         /// Constants cannot be removed since they can be used in other parts of the query.
         /// And if they are not used anywhere, except PREWHERE, they will be removed on the next step.
@@ -1290,7 +1320,7 @@ SelectQueryExpressionAnalyzer::appendPrewhere(ExpressionActionsChain & chain, bo
         auto names = step.actions()->getNames();
         NameSet name_set(names.begin(), names.end());
 
-        for (const auto & column : sourceColumns())
+        for (const auto & column : columns_after_bitmap_index)
             if (required_source_columns.count(column.name) == 0)
                 name_set.erase(column.name);
 
@@ -1315,7 +1345,7 @@ SelectQueryExpressionAnalyzer::appendPrewhere(ExpressionActionsChain & chain, bo
         for (const auto & col : required_columns)
             prewhere_input_names.insert(col.name);
 
-        for (const auto & column : sourceColumns())
+        for (const auto & column : columns_after_bitmap_index)
         {
             if (prewhere_input_names.count(column.name) == 0)
             {
@@ -1704,7 +1734,7 @@ ActionsDAGPtr SelectQueryExpressionAnalyzer::appendProjectResult(ExpressionActio
 
 void ExpressionAnalyzer::appendExpression(ExpressionActionsChain & chain, const ASTPtr & expr, bool only_types)
 {
-    ExpressionActionsChain::Step & step = chain.lastStep(sourceColumns());
+    ExpressionActionsChain::Step & step = chain.lastStep(columns_after_bitmap_index);
     getRootActions(expr, only_types, step.actions());
     step.addRequiredOutput(expr->getColumnName());
 }
@@ -1748,7 +1778,7 @@ ActionsDAGPtr ExpressionAnalyzer::getActionsDAG(bool add_aliases, bool project_r
     {
         NameSet name_set(result_names.begin(), result_names.end());
         /// We will not delete the original columns.
-        for (const auto & column_name_type : sourceColumns())
+        for (const auto & column_name_type : columns_after_bitmap_index)
         {
             if (name_set.count(column_name_type.name) == 0)
             {
@@ -1815,6 +1845,16 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
     auto context = query_analyzer.getContext();
     const Settings & settings = context->getSettingsRef();
     const ConstStoragePtr & storage = query_analyzer.storage();
+    Block precomputed_header;
+    auto index_context = query_analyzer.getIndexContext();
+    if (auto * bitmap_index_info = dynamic_cast<BitmapIndexInfo *>(index_context->get(MergeTreeIndexInfo::Type::BITMAP).get()))
+    {
+        for (auto & ele : bitmap_index_info->return_types)
+        {
+            if (ele.second == BitmapIndexReturnType::EXPRESSION)
+                precomputed_header.insert({std::make_shared<DataTypeUInt8>(), ele.first});
+        }
+    }
 
     bool finalized = false;
     size_t where_step_num = 0;
@@ -1864,6 +1904,8 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
         if (auto actions = query_analyzer.appendPrewhere(chain, !first_stage, additional_required_columns_after_prewhere))
         {
             prewhere_info = std::make_shared<PrewhereInfo>(actions, query.prewhere()->getColumnName());
+            if (query_analyzer.index_context->has(MergeTreeIndexInfo::Type::BITMAP))
+                prewhere_info->index_context = query_analyzer.index_context->clone();
 
             if (allowEarlyConstantFolding(*prewhere_info->prewhere_actions, settings))
             {

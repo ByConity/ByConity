@@ -1031,6 +1031,7 @@ TEST_F(ProtobufTest, TableScanStep)
         auto max_block_size = eng() % 1000;
         std::shared_ptr<AggregatingStep> pushdown_aggregation = nullptr;
         std::shared_ptr<ProjectionStep> pushdown_projection = nullptr;
+        std::shared_ptr<ProjectionStep> pushdown_index_projection = nullptr;
         std::shared_ptr<FilterStep> pushdown_filter = nullptr;
 
         auto s = std::make_shared<TableScanStep>(
