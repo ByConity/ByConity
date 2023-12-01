@@ -106,85 +106,87 @@ namespace DB
 
 class MergeScheduler;
 
+#define LIST_OF_SIMPLE_MERGE_SELECTOR_SETTINGS(M) \
+    /** Zero means unlimited. Can be overridden by the same merge tree setting. */ \
+    M(UInt64, max_parts_to_merge_at_once, 100, "", 0) \
+    M(UInt64, min_parts_to_merge_at_once, 3, "", 0) \
+\
+    /** Zero means unlimited.*/ \
+    /** Unique table will set it to a value < 2^32 in order to prevent rowid(UInt32) overflow */ \
+    /** Too large part has no advantage since we cannot utilize parallelism. We set max_total_rows_to_merge as 2147483647.*/ \
+    M(UInt64, max_total_rows_to_merge, 0xFFFFFFFF, "", 0) \
+\
+    /** Minimum ratio of size of one part to all parts in set of parts to merge (for usual cases).*/ \
+    /** For example, if all parts have equal size, it means, that at least 'base' number of parts should be merged.*/ \
+    /** If parts has non-uniform sizes, then minimum number of parts to merge is effectively increased.*/ \
+    /** This behaviour balances merge-tree workload.*/ \
+    /** It called 'base', because merge-tree depth could be estimated as logarithm with that base.*/ \
+    /** If base is higher - then tree gets more wide and narrow, lowering write amplification.*/ \
+    /** If base is lower - then merges occurs more frequently, lowering number of parts in average.*/ \
+    /** */ \
+    /** We need some balance between write amplification and number of parts.*/ \
+    M(Float, base, 5, "", 0) \
+    /** Simple standard baseline for merge to lower the base. */ \
+    M(Float, standard_baseline, 2.0, "", 0) \
+\
+    /** Base is lowered until 1 (effectively means "merge any two parts") depending on several variables:*/ \
+    /** */ \
+    /** 1. Total number of parts in partition. If too many - then base is lowered.*/ \
+    /** It means: when too many parts - do merges more urgently.*/ \
+    /** */ \
+    /** 2. Minimum age of parts participating in merge. If higher age - then base is lowered.*/ \
+    /** It means: do less wide merges only rarely.*/ \
+    /** */ \
+    /** 3. Sum size of parts participating in merge. If higher - then more age is required to lower base. So, base is lowered slower.*/ \
+    /** It means: for small parts, it's worth to merge faster, even not so wide or balanced.*/ \
+    /** */ \
+    /** We have multivariative dependency. Let it be logarithmic of size and somewhat multi-linear by other variables,*/ \
+    /** between some boundary points, and constant outside.*/ \
+    M(UInt64, min_size_to_lower_base, 1024 * 1024, "", 0) \
+    M(UInt64, max_size_to_lower_base, 100ULL * 1024 * 1024 * 1024, "", 0) \
+\
+    M(UInt64, min_age_to_lower_base_at_min_size, 10, "", 0) \
+    M(UInt64, min_age_to_lower_base_at_max_size, 10, "", 0) \
+    M(UInt64, max_age_to_lower_base_at_min_size, 3600, "", 0) \
+    M(UInt64, max_age_to_lower_base_at_max_size, 30 * 86400, "", 0) \
+\
+    M(UInt64, min_parts_to_lower_base, 10, "", 0) \
+    M(UInt64, max_parts_to_lower_base, 50, "", 0) \
+\
+    /** Add this to size before all calculations. It means: merging even very small parts has it's fixed cost.*/ \
+    M(UInt64, size_fixed_cost_to_add, 5 * 1024 * 1024, "", 0) \
+\
+    /** Heuristic:*/ \
+    /** Make some preference for ranges, that sum_size is like (in terms of ratio) to part previous at left.*/ \
+    M(Bool, enable_heuristic_to_align_parts, true, "", 0) \
+    M(Float, heuristic_to_align_parts_min_ratio_of_sum_size_to_prev_part, 0.9, "", 0) \
+    M(Float, heuristic_to_align_parts_max_absolute_difference_in_powers_of_two, 0.5, "", 0) \
+    M(Float, heuristic_to_align_parts_max_score_adjustment, 0.75, "", 0) \
+\
+    /** Heuristic:*/ \
+    /** From right side of range, remove all parts, that size is less than specified ratio of sum_size.*/ \
+    M(Bool, enable_heuristic_to_remove_small_parts_at_right, true, "", 0) \
+    M(Float, heuristic_to_remove_small_parts_at_right_max_ratio, 0.01, "", 0) \
+\
+    /** For batch select mode.*/ \
+    /** Currently, only part-merger tool use thesis options.*/ \
+    M(Bool, enable_batch_select, false, "", 0) \
+    M(UInt64, max_rows_to_merge_at_once, 30000000, "", 0)
+
+DECLARE_SETTINGS_TRAITS(SimpleMergeSelectorSettingsTraits, LIST_OF_SIMPLE_MERGE_SELECTOR_SETTINGS)
+
+
+class SimpleMergeSelectorSettings : public BaseSettings<SimpleMergeSelectorSettingsTraits>
+{
+public:
+    void loadFromConfig(const Poco::Util::AbstractConfiguration & config);
+};
+
+
 class SimpleMergeSelector final : public IMergeSelector
 {
 public:
-    struct Settings
-    {
-        /// Zero means unlimited. Can be overridden by the same merge tree setting.
-        size_t max_parts_to_merge_at_once = 100;
-
-        /** Zero means unlimited.
-         *  Unique table will set it to a value < 2^32 in order to prevent rowid(UInt32) overflow
-         *  Too large part has no advantage since we cannot utilize parallelism. We set max_total_rows_to_merge as 2147483647.
-         */
-        size_t max_total_rows_to_merge = 0xFFFFFFFF;
-
-        /** Minimum ratio of size of one part to all parts in set of parts to merge (for usual cases).
-          * For example, if all parts have equal size, it means, that at least 'base' number of parts should be merged.
-          * If parts has non-uniform sizes, then minimum number of parts to merge is effectively increased.
-          * This behaviour balances merge-tree workload.
-          * It called 'base', because merge-tree depth could be estimated as logarithm with that base.
-          *
-          * If base is higher - then tree gets more wide and narrow, lowering write amplification.
-          * If base is lower - then merges occurs more frequently, lowering number of parts in average.
-          *
-          * We need some balance between write amplification and number of parts.
-          */
-        double base = 5;
-
-        /** Base is lowered until 1 (effectively means "merge any two parts") depending on several variables:
-          *
-          * 1. Total number of parts in partition. If too many - then base is lowered.
-          * It means: when too many parts - do merges more urgently.
-          *
-          * 2. Minimum age of parts participating in merge. If higher age - then base is lowered.
-          * It means: do less wide merges only rarely.
-          *
-          * 3. Sum size of parts participating in merge. If higher - then more age is required to lower base. So, base is lowered slower.
-          * It means: for small parts, it's worth to merge faster, even not so wide or balanced.
-          *
-          * We have multivariative dependency. Let it be logarithmic of size and somewhat multi-linear by other variables,
-          *  between some boundary points, and constant outside.
-          */
-
-        size_t min_size_to_lower_base = 1024 * 1024;
-        size_t max_size_to_lower_base = 100ULL * 1024 * 1024 * 1024;
-
-        time_t min_age_to_lower_base_at_min_size = 10;
-        time_t min_age_to_lower_base_at_max_size = 10;
-        time_t max_age_to_lower_base_at_min_size = 3600;
-        time_t max_age_to_lower_base_at_max_size = 30 * 86400;
-
-        size_t min_parts_to_lower_base = 10;
-        size_t max_parts_to_lower_base = 50;
-
-        /// Add this to size before all calculations. It means: merging even very small parts has it's fixed cost.
-        size_t size_fixed_cost_to_add = 5 * 1024 * 1024;
-
-        /** Heuristic:
-          * Make some preference for ranges, that sum_size is like (in terms of ratio) to part previous at left.
-          */
-        bool enable_heuristic_to_align_parts = true;
-        double heuristic_to_align_parts_min_ratio_of_sum_size_to_prev_part = 0.9;
-        double heuristic_to_align_parts_max_absolute_difference_in_powers_of_two = 0.5;
-        double heuristic_to_align_parts_max_score_adjustment = 0.75;
-
-        /** Heuristic:
-          * From right side of range, remove all parts, that size is less than specified ratio of sum_size.
-          */
-        bool enable_heuristic_to_remove_small_parts_at_right = true;
-        double heuristic_to_remove_small_parts_at_right_max_ratio = 0.01;
-
-        /**
-         * For batch select mode.
-         *
-         * Currently, only part-merger tool use thesis options.
-         */
-        bool enable_batch_select = false;
-        size_t min_parts_to_merge_at_once = 3;
-        size_t max_rows_to_merge_at_once = 30000000;
-    };
+    using Settings = SimpleMergeSelectorSettings;
 
     explicit SimpleMergeSelector(const Settings & settings_) : settings(settings_)
     {

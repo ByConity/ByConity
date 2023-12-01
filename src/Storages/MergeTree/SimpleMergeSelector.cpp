@@ -32,6 +32,34 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+    extern const int UNKNOWN_SETTING;
+}
+
+IMPLEMENT_SETTINGS_TRAITS(SimpleMergeSelectorSettingsTraits, LIST_OF_SIMPLE_MERGE_SELECTOR_SETTINGS)
+
+void SimpleMergeSelectorSettings::loadFromConfig(const Poco::Util::AbstractConfiguration & config)
+{
+    static std::string config_elem = "simple_merge_selector";
+    if (!config.has(config_elem))
+        return;
+
+    Poco::Util::AbstractConfiguration::Keys config_keys;
+    config.keys(config_elem, config_keys);
+
+    try
+    {
+        for (auto & key : config_keys)
+            set(key, config.getString(config_elem + "." + key));
+    }
+    catch (Exception & e)
+    {
+        if (e.code() == ErrorCodes::UNKNOWN_SETTING)
+            e.addMessage("in DanceMergeSelector config");
+        throw;
+    }
+}
 
 namespace
 {
@@ -157,7 +185,7 @@ bool allow(
 
 //    std::cerr << "combined_ratio: " << combined_ratio << "\n";
 
-    double lowered_base = interpolateLinear(settings.base, 2.0, combined_ratio);
+    double lowered_base = interpolateLinear(settings.base, settings.standard_baseline, combined_ratio);
 
 //    std::cerr << "------- lowered_base: " << lowered_base << "\n";
 

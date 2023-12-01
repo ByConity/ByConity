@@ -215,6 +215,7 @@ ServerSelectPartsDecision selectPartsToMerge(
     else
     {
         SimpleMergeSelector::Settings merge_settings;
+        merge_settings.loadFromConfig(config);
         /// Override value from table settings
         merge_settings.max_parts_to_merge_at_once = data_settings->max_parts_to_merge_at_once;
         merge_settings.max_total_rows_to_merge = data_settings->cnch_merge_max_total_rows_to_merge;
