@@ -33,7 +33,7 @@ ccache_status
 ccache --zero-stats ||:
 
 # Build everything
-cmake --debug-trycompile -DCMAKE_VERBOSE_MAKEFILE=1 -LA "-DCMAKE_BUILD_TYPE=$BUILD_TYPE" -DENABLE_CHECK_HEAVY_BUILDS=0 "${CMAKE_FLAGS[@]}" ..
+cmake --debug-trycompile -DCMAKE_VERBOSE_MAKEFILE=1 -LA "-DCMAKE_BUILD_TYPE=$BUILD_TYPE" -DENABLE_CHECK_HEAVY_BUILDS=0 -DENABLE_BREAKPAD=ON "${CMAKE_FLAGS[@]}" ..
 
 # No quotes because I want it to expand to nothing if empty.
 # shellcheck disable=SC2086 # No quotes because I want it to expand to nothing if empty.
