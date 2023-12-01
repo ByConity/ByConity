@@ -17,7 +17,7 @@ LABEL org.opencontainers.image.source="https://github.com/ByConity/ByConity"
 RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
     binutils gettext-base strace bpftrace sysstat gdb maven default-jdk ninja-build \
-    lsb-release wget curl software-properties-common gnupg ccache git vim \
+    lsb-release wget curl software-properties-common gnupg ccache git vim zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=downloader /downloads /downloads
