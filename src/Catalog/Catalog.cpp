@@ -443,8 +443,6 @@ namespace ProfileEvents
     extern const Event PutAccessEntityFailed;
     extern const Event DropAccessEntitySuccess;
     extern const Event DropAccessEntityFailed;
-    extern const Event GetByKeySuccess;
-    extern const Event GetByKeyFailed;
 }
 
 namespace DB

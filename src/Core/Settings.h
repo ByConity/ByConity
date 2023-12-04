@@ -2228,7 +2228,6 @@ enum PreloadLevelSettings : UInt64
     M(Seconds, access_entity_ttl, 60 * 60, "TTL for access entities stored in memory in seconds", 0) \
 \
     M(Bool, debug_enable_early_partition_pruning, false, "Whether we can prune parts via query filter and partition value", 0) \
-    M(Seconds, access_entity_ttl, 60 * 60, "TTL for access entities stored in memory in seconds", 0) \
     \
     M(String, s3_ak_id, "", "The access_key set by user when accessing ve s3.", 0) \
     M(String, s3_ak_secret, "", "The secret_key set by user when accessing ve s3.", 0) \

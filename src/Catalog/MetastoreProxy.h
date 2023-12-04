@@ -756,28 +756,6 @@ public:
         return escapeString(name_space) + "_" + DATA_ITEM_TRASH_PREFIX + uuid + "_";
     }
 
-    static std::string accessEntityPrefix(EntityType type, const std::string & name_space)
-    {
-        return fmt::format("{}_{}", escapeString(name_space), formatTenantEntityPrefix(getEntityMetastorePrefix(type).prefix));
-    }
-    // RBAC TODO: use special separator betweem prefix and name
-    static std::string accessEntityKey(EntityType type, const std::string & name_space, const std::string & name)
-    {
-        return fmt::format("{}{}", accessEntityPrefix(type, name_space), name);
-    }
-
-    static std::string accessEntityUUIDNameMappingPrefix(const std::string & name_space)
-    {
-        return fmt::format("{}_{}", escapeString(name_space), formatTenantEntityPrefix(ENTITY_UUID_MAPPING));
-    }
-
-    // Should not need Entity type here. No need to use prefix here. so remove accessEntityUUIDNameMappingPrefix method and just get the name
-    // change put to simple put the mapping key without type
-    static std::string accessEntityUUIDNameMappingKey(const std::string & name_space, const std::string & uuid)
-    {
-        return fmt::format("{}{}", accessEntityUUIDNameMappingPrefix(name_space), uuid);
-    }
-
     static String partitionPartsMetricsSnapshotPrefix(const String & name_space, const String & table_uuid, const String & partition_id)
     {
         return escapeString(name_space) + "_" + PARTITION_PARTS_METRICS_SNAPSHOT_PREFIX + table_uuid + "_" + partition_id;
@@ -1110,12 +1088,6 @@ public:
     IMetaStore::IteratorPtr getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit);
     IMetaStore::IteratorPtr getAllDeleteBitmaps(const String & name_space, const String & table_uuid);
 
-    // Access Entities
-    String getAccessEntity(EntityType type, const String & name_space, const String & name) const;
-    Strings getAllAccessEntities(EntityType type, const String & name_space) const;
-    String getAccessEntityNameByUUID(const String & name_space, const UUID & id) const;
-    bool dropAccessEntity(EntityType type, const String & name_space, const UUID & id, const String & name) const;
-    bool putAccessEntity(EntityType type, const String & name_space, const AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists) const;
     /**
      * @brief Get parts partition metrics snapshots in table level.
      */
