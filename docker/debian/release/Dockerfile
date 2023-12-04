@@ -1,7 +1,6 @@
 FROM byconity/debian-runner
 
 ARG APP_ROOT=/opt/byconity
-COPY build_install ${APP_ROOT}
 WORKDIR ${APP_ROOT}
 
 ENV PATH="${PATH}:${APP_ROOT}/bin" \
@@ -23,3 +22,4 @@ ENV CLASSPATH=${APP_ROOT}/lib/jar/jni-extension_1.0-SNAPSHOT-jar-with-dependenci
 RUN mkdir -p /etc/service/byconity
 COPY run /etc/service/byconity/run
 RUN chmod 755 /etc/service/byconity/run
+COPY build_install ${APP_ROOT}
