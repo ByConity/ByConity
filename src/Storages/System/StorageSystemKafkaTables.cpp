@@ -47,6 +47,7 @@ StorageSystemKafkaTables::StorageSystemKafkaTables(const StorageID & table_id_)
         { "kafka_cluster",              std::make_shared<DataTypeString>()  },
         { "topics",                     std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()) },
         { "consumer_group",             std::make_shared<DataTypeString>()  },
+        { "virtual_warehouse",          std::make_shared<DataTypeString>()  },
         { "num_consumers",              std::make_shared<DataTypeUInt32>()  },
         { "consumer_tables",            std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
         { "consumer_hosts",             std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
@@ -138,6 +139,7 @@ Pipe StorageSystemKafkaTables::read(
         res_columns[col_num++]->insert(topics);
 
         res_columns[col_num++]->insert(table_info.consumer_group);
+        res_columns[col_num++]->insert(kafka_table->getSettings().cnch_vw_write.value);
         res_columns[col_num++]->insert(consumer_infos.size());
 
         /// if the table is not consuming, such as dependencies is not ready, just print common info

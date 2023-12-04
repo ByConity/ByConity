@@ -30,6 +30,7 @@ StorageSystemCnchKafkaTables::StorageSystemCnchKafkaTables(const StorageID & tab
         { "kafka_cluster",              std::make_shared<DataTypeString>()  },
         { "topics",                     std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()) },
         { "consumer_group",             std::make_shared<DataTypeString>()  },
+        { "virtual_warehouse",          std::make_shared<DataTypeString>()  },
         { "num_consumers",              std::make_shared<DataTypeUInt32>()  },
         { "consumer_tables",            std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
         { "consumer_hosts",             std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())  },
