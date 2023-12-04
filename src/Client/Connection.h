@@ -47,6 +47,8 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/ClientInfo.h>
 
+#include <Parsers/formatTenantDatabaseName.h>
+
 #include <Compression/ICompressionCodec.h>
 
 #include <atomic>
@@ -144,7 +146,7 @@ public:
 
         if (user.empty())
             user = "default";
-
+        user = formatTenantConnectUserName(user);
         setDescription();
     }
 

@@ -80,6 +80,7 @@ bool ParserSetRoleQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     query->kind = kind;
     query->roles = std::move(roles);
     query->to_users = std::move(to_users);
+    query->rewriteNamesWithTenant(pos.getContext());
 
     return true;
 }

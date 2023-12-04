@@ -120,6 +120,18 @@ String appendTenantIdOnly(const String & name)
     return formatTenantDatabaseNameImpl(name);
 }
 
+String formatTenantDatabaseNameWithTenantId(const String & database_name, const String & tenant_id, char separator)
+{
+    if (!tenant_id.empty() && !isInternalDatabaseName(database_name) && database_name.find(tenant_id) != 0)
+    {
+        String result = tenant_id;
+        result += separator;
+        result += database_name;
+        return result;
+    }
+     return database_name;
+}
+
 //Format pattern {tenant_id}`{database_name}
 String formatTenantDefaultDatabaseName(const String & database_name)
 {
@@ -132,10 +144,34 @@ String formatTenantConnectUserName(const String & user_name)
     return formatTenantUserNameImpl(user_name, '`');
 }
 
-//Format pattern {tenant_id}_{entity prefix}
-String formatTenantEntityPrefix(const String & prefix)
+//Format pattern {tenant_id}.{entity_name}
+String formatTenantEntityName(const String & name)
 {
-    return formatTenantUserNameImpl(prefix, '.');
+    return formatTenantUserNameImpl(name, '.');
+}
+
+String formatTenantEntityNameWithTenantId(const String & name, const String & tenant_id, char separator)
+{
+    if (!tenant_id.empty() && name.find(tenant_id) != 0)
+    {
+        String result = tenant_id;
+        result += separator;
+        result += name;
+        return result;
+    }
+     return name;
+}
+
+String getOriginalEntityName(const String & tenant_entity_name)
+{
+    auto tenant_id = getTenantId();
+    if (!tenant_id.empty()) {
+        auto size = tenant_id.size();
+        if (tenant_entity_name.size() > size + 1 && tenant_entity_name[size] == '.'
+            && memcmp(tenant_id.data(),tenant_entity_name.data(), size) == 0)
+            return tenant_entity_name.substr(size + 1);
+    }
+    return tenant_entity_name;
 }
 
 // {tenant_id}.{original_database_name}

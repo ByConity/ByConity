@@ -167,6 +167,7 @@ bool ParserShowCreateAccessEntityQuery::parseImpl(Pos & pos, ASTPtr & node, Expe
     query->all = all;
     query->short_name = std::move(short_name);
     query->database_and_table_name = std::move(database_and_table_name);
+    query->rewriteNamesWithTenant(pos.getContext());
 
     return true;
 }

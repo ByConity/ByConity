@@ -32,6 +32,7 @@ namespace DB
 class ASTUserNamesWithHost;
 class ASTRolesOrUsersSet;
 class ASTSettingsProfileElements;
+class Context;
 
 /** CREATE USER [IF NOT EXISTS | OR REPLACE] name
   *     [NOT IDENTIFIED | IDENTIFIED {[WITH {no_password|plaintext_password|sha256_password|sha256_hash|double_sha1_password|double_sha1_hash}] BY {'password'|'hash'}}|{WITH ldap SERVER 'server_name'}|{WITH kerberos [REALM 'realm']}]
@@ -61,6 +62,7 @@ public:
 
     std::optional<Authentication> authentication;
     bool show_password = true; /// formatImpl() will show the password or hash.
+    bool tenant_rewritten = false;
 
     // std::optional<AllowedClientHosts> hosts;
     // std::optional<AllowedClientHosts> add_hosts;
@@ -76,6 +78,7 @@ public:
 
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const override;
+    void rewriteUserNameWithTenant(const Context *);
     // ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTCreateUserQuery>(clone()); }
 };
 }

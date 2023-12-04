@@ -312,10 +312,10 @@ public:
         google::protobuf::Closure * done) override;
 
     void notifyAccessEntityChange(
-    google::protobuf::RpcController *,
-    const Protos::notifyAccessEntityChangeReq * request,
-    Protos::notifyAccessEntityChangeResp * response,
-    google::protobuf::Closure *done) override;
+        google::protobuf::RpcController *,
+        const Protos::notifyAccessEntityChangeReq * request,
+        Protos::notifyAccessEntityChangeResp * response,
+        google::protobuf::Closure *done) override;
 
 #if USE_MYSQL
     void submitMaterializedMySQLDDLQuery(

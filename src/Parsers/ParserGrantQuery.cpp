@@ -300,6 +300,7 @@ bool ParserGrantQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     query->roles = std::move(roles);
     query->grantees = std::move(grantees);
     query->admin_option = admin_option;
+    query->rewriteNamesWithTenant(pos.getContext());
 
     return true;
 }

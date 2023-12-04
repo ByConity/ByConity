@@ -979,7 +979,7 @@ void CnchServerClient::executeOptimize(const StorageID & storage_id, const Strin
     RPCHelpers::checkResponse(response);
 }
 
-void CnchServerClient::notifyAccessEntityChange(IAccessEntity::Type type, const String & name)
+void CnchServerClient::notifyAccessEntityChange(IAccessEntity::Type type, const String & name, const UUID & uuid)
 {
     brpc::Controller cntl;
     Protos::notifyAccessEntityChangeReq request;
@@ -987,10 +987,8 @@ void CnchServerClient::notifyAccessEntityChange(IAccessEntity::Type type, const 
 
     request.set_type(toString(type));
     request.set_name(name);
+    RPCHelpers::fillUUID(uuid, *request.mutable_uuid());
     stub->notifyAccessEntityChange(&cntl, &request, &response, nullptr);
-
-    assertController(cntl);
-    RPCHelpers::checkResponse(response);
 }
 
 #if USE_MYSQL

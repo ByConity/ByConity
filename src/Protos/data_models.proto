@@ -625,14 +625,6 @@ message S3SanitizerDataModelPart
     optional UUID new_part_id = 35;
 };
 
-message DataModelAccessEntity
-{
-    required string name = 1;
-    required string create_sql = 2; // contains CREATE and GRANT queries of the entity
-    required uint64 commit_time = 3;
-    required UUID uuid = 4;
-}
-
 message MySQLBinlogModel {
   optional string binlog_file = 1;
   optional uint64 binlog_position = 2;
@@ -662,3 +654,19 @@ message TableTrashItemsMetricsSnapshot {
   required uint64 last_update_time = 5;
   required uint64 last_snapshot_time = 6;
 }
+
+message DataModelAccessEntity
+{
+    optional string name = 1;
+    optional string create_sql = 2; // contains CREATE and GRANT queries of the entity
+    optional uint64 commit_time = 3;
+    optional UUID uuid = 4;
+}
+
+message DataModelSnapshot {
+  optional string name = 1;
+  optional uint64 commit_time = 2;
+  optional uint32 ttl_in_days = 3;
+  // absent if the snapshot binds to all tables in the database
+  optional UUID table_uuid = 4;
+};

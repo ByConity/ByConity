@@ -27,6 +27,7 @@
 namespace DB
 {
 class ASTRolesOrUsersSet;
+class Context;
 
 /** SET ROLE {DEFAULT | NONE | role [,...] | ALL | ALL EXCEPT role [,...]}
   * SET DEFAULT ROLE {NONE | role [,...] | ALL | ALL EXCEPT role [,...]} TO {user|CURRENT_USER} [,...]
@@ -44,6 +45,7 @@ public:
 
     std::shared_ptr<ASTRolesOrUsersSet> roles;
     std::shared_ptr<ASTRolesOrUsersSet> to_users;
+    bool tenant_rewritten = false;
 
     String getID(char) const override;
 
@@ -51,5 +53,6 @@ public:
 
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
+    void rewriteNamesWithTenant(const Context *);
 };
 }

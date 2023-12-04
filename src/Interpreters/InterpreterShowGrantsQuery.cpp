@@ -115,6 +115,11 @@ BlockInputStreamPtr InterpreterShowGrantsQuery::executeImpl()
     WriteBufferFromOwnString grant_buf;
     for (const auto & grant_query : grant_queries)
     {
+        if (getContext()->getUserName() != "default")
+        {
+            auto to_rewrite_grant_query = grant_query->as<ASTGrantQuery &>();
+            to_rewrite_grant_query.rewriteNamesWithoutTenant(getContext().get());
+        }
         grant_buf.restart();
         formatAST(*grant_query, grant_buf, false, true);
         column->insert(grant_buf.str());
@@ -128,7 +133,6 @@ BlockInputStreamPtr InterpreterShowGrantsQuery::executeImpl()
     String prefix = "SHOW ";
     if (desc.starts_with(prefix))
         desc = desc.substr(prefix.length()); /// `desc` always starts with "SHOW ", so we can trim this prefix.
-
     return std::make_shared<OneBlockInputStream>(Block{{std::move(column), std::make_shared<DataTypeString>(), desc}});
 }
 

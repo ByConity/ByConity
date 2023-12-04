@@ -1,7 +1,9 @@
 #include <Parsers/ASTSetRoleQuery.h>
 #include <Parsers/ASTRolesOrUsersSet.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -40,5 +42,28 @@ void ASTSetRoleQuery::formatImpl(const FormatSettings & settings, FormatState &,
 
     settings.ostr << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "");
     to_users->format(settings);
+}
+
+void ASTSetRoleQuery::rewriteNamesWithTenant(const Context *)
+{
+    if (!tenant_rewritten)
+    {
+        if (roles)
+        {
+            for (auto & name : roles->names)
+                name = formatTenantEntityName(name);
+            for (auto & name : roles->except_names)
+                name = formatTenantEntityName(name);
+        }
+        if (to_users)
+        {
+            for (auto & name : to_users->names)
+                name = formatTenantEntityName(name);
+            for (auto & name : to_users->except_names)
+                name = formatTenantEntityName(name);
+        }
+
+        tenant_rewritten = true;
+    }  
 }
 }

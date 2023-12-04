@@ -2,8 +2,10 @@
 #include <Parsers/ASTUserNameWithHost.h>
 #include <Parsers/ASTRolesOrUsersSet.h>
 #include <Parsers/ASTSettingsProfileElement.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -271,4 +273,42 @@ void ASTCreateUserQuery::formatImpl(const FormatSettings & format, FormatState &
     if (grantees)
         formatGrantees(*grantees, format);
 }
+
+void ASTCreateUserQuery::rewriteUserNameWithTenant(const Context *)
+{
+    if (!tenant_rewritten)
+    {
+        if (!new_name.empty())
+            new_name = formatTenantEntityName(new_name);
+        if (!attach)
+        {
+            if (names)
+            {
+                for (auto & name : names->names)
+                    name->base_name = formatTenantEntityName(name->base_name);
+            }
+            if (default_roles)
+            {
+                for (auto & name : default_roles->names)
+                {
+                    name = formatTenantEntityName(name);
+                }
+                for (auto & name : default_roles->except_names)
+                    name = formatTenantEntityName(name);
+            }
+            if (grantees)
+            {
+                for (auto & name : grantees->names)
+                {
+                    name = formatTenantEntityName(name);
+                }
+                for (auto & name : grantees->except_names)
+                    name = formatTenantEntityName(name);
+            }
+        }
+
+        tenant_rewritten = true;
+    }  
+}
+
 }

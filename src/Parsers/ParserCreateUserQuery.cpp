@@ -430,7 +430,7 @@ bool ParserCreateUserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     auto query = std::make_shared<ASTCreateUserQuery>();
     node = query;
-
+    
     query->alter = alter;
     query->attach = attach_mode;
     query->if_exists = if_exists;
@@ -446,6 +446,8 @@ bool ParserCreateUserQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     query->default_roles = std::move(default_roles);
     query->settings = std::move(settings);
     query->grantees = std::move(grantees);
+
+    query->rewriteUserNameWithTenant(pos.getContext());
 
     return true;
 }

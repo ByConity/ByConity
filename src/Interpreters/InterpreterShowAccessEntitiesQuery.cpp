@@ -38,6 +38,7 @@ String InterpreterShowAccessEntitiesQuery::getRewrittenQuery() const
     String expr = "*";
     String filter;
     String order;
+    const auto & tenant_id = getContext()->getTenantId();
 
     switch (query.type)
     {
@@ -88,7 +89,9 @@ String InterpreterShowAccessEntitiesQuery::getRewrittenQuery() const
         case EntityType::USER:
         {
             origin = "users";
-            expr = "name";
+            expr = tenant_id.empty() ? "name" : "arrayStringConcat(arraySlice(splitByChar('.',name), 2),'.') AS name";
+            filter = tenant_id.empty() ? "" : "system.users.name LIKE '" + tenant_id + ".%'";
+            order = "name";
             break;
         }
 
@@ -107,7 +110,9 @@ String InterpreterShowAccessEntitiesQuery::getRewrittenQuery() const
             else
             {
                 origin = "roles";
-                expr = "name";
+                expr = tenant_id.empty() ? "name" : "arrayStringConcat(arraySlice(splitByChar('.',name), 2),'.') AS name";
+                filter = tenant_id.empty() ? "" : "system.roles.name LIKE '" + tenant_id + ".%'";
+                order = "name";
             }
             break;
         }

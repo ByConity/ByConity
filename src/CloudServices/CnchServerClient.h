@@ -175,6 +175,8 @@ public:
 #endif
 
     void forceRecalculateMetrics(const StorageID & storage_id);
+    
+    void notifyAccessEntityChange(IAccessEntity::Type type, const String & name, const UUID & uuid);
 private:
     std::unique_ptr<Protos::CnchServerService_Stub> stub;
 };

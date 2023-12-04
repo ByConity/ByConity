@@ -28,6 +28,7 @@
 namespace DB
 {
 class ASTRowPolicyNames;
+class Context;
 
 using Strings = std::vector<String>;
 
@@ -54,6 +55,7 @@ public:
     bool current_quota = false;
     bool current_user = false;
     bool all = false;
+    bool tenant_rewritten = false;
 
     String short_name;
     std::optional<std::pair<String, String>> database_and_table_name;
@@ -65,6 +67,7 @@ public:
     ASTPtr clone() const override;
 
     void replaceEmptyDatabase(const String & current_database);
+    void rewriteNamesWithTenant(const Context *);
 
 protected:
     String getKeyword() const;

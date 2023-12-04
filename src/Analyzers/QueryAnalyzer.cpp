@@ -59,6 +59,7 @@
 #include <Storages/StorageDistributed.h>
 #include <Storages/StorageMemory.h>
 #include "Parsers/formatAST.h"
+#include <Access/ContextAccess.h>
 
 using namespace std::string_literals;
 
@@ -82,6 +83,7 @@ namespace ErrorCodes
     extern const int EMPTY_NESTED_TABLE;
     extern const int ILLEGAL_COLUMN;
     extern const int ILLEGAL_PREWHERE;
+    extern const int ACCESS_DENIED;
 }
 
 class QueryAnalyzerVisitor : public ASTVisitor<Void, const Void>
@@ -177,10 +179,13 @@ static NameSet collectNames(ScopePtr scope);
 static String
 qualifyJoinedName(const String & name, const String & table_qualifier, const NameSet & source_names, bool check_identifier_begin_valid);
 
+static void checkAccess(AnalysisPtr analysis, ContextPtr context);
+
 AnalysisPtr QueryAnalyzer::analyze(ASTPtr & ast, ContextPtr context)
 {
     AnalysisPtr analysis_ptr = std::make_unique<Analysis>();
-    analyze(ast, nullptr, std::move(context), *analysis_ptr);
+    analyze(ast, nullptr, context, *analysis_ptr);
+    checkAccess(analysis_ptr, context);
     return analysis_ptr;
 }
 
@@ -2030,6 +2035,41 @@ qualifyJoinedName(const String & name, const String & table_qualifier, const Nam
         return table_qualifier + name;
 
     return name;
+}
+
+void checkAccess(AnalysisPtr analysis, ContextPtr context)
+{
+    // check access rights.
+    const auto & used_columns = analysis->getUsedColumns();
+    for (const auto & [table_id, columns] : used_columns)
+    {
+        Names required_names(columns.begin(), columns.end());                
+        context->checkAccess(AccessType::SELECT, table_id, required_names);
+    }
+    if (used_columns.empty())
+    {
+        const auto & used_storages = analysis->getStorages();
+        auto access = context->getAccess();
+
+        for (const auto & [_, storage_analysis] : used_storages)
+        {
+            bool is_any_column_granted = false;
+            for (const auto & column : storage_analysis.storage->getInMemoryMetadataPtr()->getColumns())
+            {
+                if (access->isGranted(AccessType::SELECT, storage_analysis.database, storage_analysis.table, column.name))
+                {
+                    is_any_column_granted = true;
+                    break;
+                }
+            }
+            if (!is_any_column_granted)
+                throw Exception(
+                    ErrorCodes::ACCESS_DENIED,
+                    "{}: Not enough privileges. To execute this query it's necessary to have grant SELECT for at least one column on {}",
+                    context->getUserName(),
+                    storage_analysis.storage->getStorageID().getFullTableName());
+        }
+    }
 }
 
 }

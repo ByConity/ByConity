@@ -124,6 +124,7 @@ bool ParserCreateRoleQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     query->names = std::move(names);
     query->new_name = std::move(new_name);
     query->settings = std::move(settings);
+    query->rewriteRoleNameWithTenant(pos.getContext());
 
     return true;
 }

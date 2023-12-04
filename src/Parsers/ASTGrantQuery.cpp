@@ -1,8 +1,10 @@
 #include <Parsers/ASTGrantQuery.h>
 #include <Parsers/ASTRolesOrUsersSet.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
-
+#include <Interpreters/Context.h>
+#include <iostream>
 
 namespace DB
 {
@@ -37,7 +39,10 @@ namespace
         else
         {
             if (!database.empty())
+            {
+                std::cout << "before --> " << database << " | "<< backQuoteIfNeed(database) << std::endl;
                 settings.ostr << backQuoteIfNeed(database) << ".";
+            }
             if (any_table)
                 settings.ostr << "*";
             else
@@ -155,6 +160,54 @@ void ASTGrantQuery::replaceCurrentUserTag(const String & current_user_name) cons
 {
     if (grantees)
         grantees->replaceCurrentUserTag(current_user_name);
+}
+
+void ASTGrantQuery::rewriteNamesWithTenant(const Context *)
+{
+    if (!tenant_rewritten)
+    {
+        if (roles && !attach_mode)
+        {
+            for (auto & name : roles->names)
+                name = formatTenantEntityName(name);
+            for (auto & name : roles->except_names)
+                name = formatTenantEntityName(name);
+        }
+        if (grantees && !attach_mode)
+        {
+            for (auto & name : grantees->names)
+                name = formatTenantEntityName(name);
+            for (auto & name : grantees->except_names)
+                name = formatTenantEntityName(name);
+        }
+
+        tenant_rewritten = true;
+    }  
+}
+
+void ASTGrantQuery::rewriteNamesWithoutTenant(const Context *)
+{
+    if (roles)
+    {
+        for (auto & name : roles->names)
+            name = getOriginalEntityName(name);
+        for (auto & name : roles->except_names)
+            name = getOriginalEntityName(name);
+    }
+    if (grantees)
+    {
+        for (auto & name : grantees->names)
+            name = getOriginalEntityName(name);
+        for (auto & name : grantees->except_names)
+            name = getOriginalEntityName(name);
+    }
+    for (auto & access_rights_element : access_rights_elements)
+    {   
+        std::cout << "before --> " << access_rights_element.database << std::endl;
+        access_rights_element.database = getOriginalDatabaseName(access_rights_element.database);
+        std::cout << "after --> " << access_rights_element.database  << "value used --> " << getOriginalDatabaseName(access_rights_element.database) << std::endl;
+    }
+
 }
 
 }

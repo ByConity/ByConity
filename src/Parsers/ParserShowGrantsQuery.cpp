@@ -33,6 +33,7 @@ bool ParserShowGrantsQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
 
     auto query = std::make_shared<ASTShowGrantsQuery>();
     query->for_roles = std::move(for_roles);
+    query->rewriteNamesWithTenant(pos.getContext());
     node = query;
 
     return true;
