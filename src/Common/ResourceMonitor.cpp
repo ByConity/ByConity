@@ -56,6 +56,34 @@ std::optional<T> getNumberFromFile(const char * filename)
     }
     return std::nullopt;
 };
+template<class T>
+std::optional<T> getNumberFromFileByName(const char * filename, std::string name)
+{
+    name += " ";
+    std::ifstream istream(filename);
+
+    if (istream) {
+        std::string line;
+        while(std::getline(istream, line))
+        {
+            if (line.find(name) != std::string::npos)
+            {
+                line = line.replace(0, name.length(), "");
+                T val;
+                try
+                {
+                    val = boost::lexical_cast<T>(line);
+                }
+                catch (...)
+                {
+                    return std::nullopt;
+                }
+                return val;
+            }
+        }
+    }
+    return std::nullopt;
+};
 bool inContainer()
 {
     const static std::string PID_ONE_CGROUP = "/proc/1/cgroup";
@@ -232,12 +260,19 @@ MemoryMonitor::~MemoryMonitor()
 std::optional<MemoryMonitor::Data> MemoryMonitor::getContainerData()
 {
     Data data{};
-    auto mem_usage_val = getNumberFromFile<UInt64>(mem_usage_fs);
+    auto mem_usage_in_bytes_val = getNumberFromFile<UInt64>(mem_usage_fs);
     auto mem_limit_val = getNumberFromFile<UInt64>(mem_limit_fs);
-    if (mem_usage_val && mem_limit_val)
+
+    std::string mem_inactive_file_name = "inactive_file";
+    auto mem_inactive_file_val = getNumberFromFileByName<UInt64>(mem_stat_fs, mem_inactive_file_name);
+
+    // referring to the memory usage method in k8s, use memory.usage_in_bytes - inactive_file.
+    auto mem_working_usage_val = *mem_usage_in_bytes_val - *mem_inactive_file_val;
+
+    if (mem_working_usage_val && mem_limit_val)
     {
         data.memory_total = *mem_limit_val;
-        data.memory_available = data.memory_total - *mem_usage_val;
+        data.memory_available = data.memory_total - mem_working_usage_val;
         data.memory_usage = 100.00 * static_cast<double>(data.memory_total - data.memory_available) / data.memory_total;
 
         memory_usage_accumulate += likely(buffer.full()) ? data.memory_usage - buffer.front() : data.memory_usage;
