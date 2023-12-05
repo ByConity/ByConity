@@ -7,6 +7,9 @@ CURDIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 set -e
 
+export NEW_USER=${NEW_USER:="user_test_02184"}
+export NEW_USER1=${NEW_USER1:="user_test_02185"}
+
 $CLICKHOUSE_CLIENT --query "DROP USER IF EXISTS user_test_02184;"
 $CLICKHOUSE_CLIENT --query "DROP USER IF EXISTS user_test_02185;"
 $CLICKHOUSE_CLIENT --query "DROP TABLE IF EXISTS t;"
