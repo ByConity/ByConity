@@ -26,6 +26,7 @@
 #include <DataTypes/DataTypeUUID.h>
 #include <Interpreters/Context.h>
 #include <Storages/System/StorageSystemCnchTables.h>
+#include <Storages/System/CollectWhereClausePredicate.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Common/Status.h>
 #include <common/logger_useful.h>
@@ -67,6 +68,7 @@ StorageSystemCnchTables::StorageSystemCnchTables(const StorageID & table_id_)
             {"cluster_key", std::make_shared<DataTypeString>()},
             {"split_number", std::make_shared<DataTypeInt64>()},
             {"with_range", std::make_shared<DataTypeUInt8>()},
+            {"engine", std::make_shared<DataTypeString>()},
         }));
     setInMemoryMetadata(storage_metadata);
 }
@@ -81,6 +83,26 @@ static std::unordered_set<String> key_columns =
     "split_number",
     "with_range"
 };
+
+static std::unordered_set<std::string> columns_require_storage =
+{
+    "dependencies_database",
+    "dependencies_table",
+    "engine"
+};
+
+std::optional<StorageID> parseStorageIDFromWhere(SelectQueryInfo & query_info)
+{
+    ASTPtr where_expression = query_info.query->as<ASTSelectQuery &>().where();
+    std::map<String,String> predicates;
+    collectWhereClausePredicate(where_expression, predicates);
+
+    std::optional<StorageID> storage_id;
+    if (predicates.count("database") && predicates.count("name"))
+        storage_id = StorageID(predicates["database"], predicates["name"]);
+
+    return storage_id;
+}
 
 Pipe StorageSystemCnchTables::read(
     const Names & column_names,
@@ -97,13 +119,14 @@ Pipe StorageSystemCnchTables::read(
         throw Exception("Table system.cnch_tables_history only support cnch_server", ErrorCodes::LOGICAL_ERROR);
 
     bool require_key_columns = false;
-    for (auto & name : column_names)
+    bool require_storage = false;
+
+    for (auto it=column_names.begin(); it!=column_names.end(); ++it)
     {
-        if (key_columns.count(name))
-        {
+        if (columns_require_storage.count(*it))
+            require_storage = true;
+        if (key_columns.count(*it))
             require_key_columns = true;
-            break;
-        }
     }
 
     NameSet names_set(column_names.begin(), column_names.end());
@@ -121,7 +144,18 @@ Pipe StorageSystemCnchTables::read(
         }
     }
 
-    Catalog::Catalog::DataModelTables table_models = cnch_catalog->getAllTables();
+    Catalog::Catalog::DataModelTables table_models;
+
+    auto required_table = parseStorageIDFromWhere(query_info);
+
+    if (required_table)
+    {        
+        auto table_id = cnch_catalog->getTableIDByName(required_table->getDatabaseName(), required_table->getTableName());
+        if (table_id)
+            table_models = cnch_catalog->getTablesByIDs(std::vector<std::shared_ptr<Protos::TableIdentifier>>{std::move(table_id)});
+    }
+    else
+        table_models = cnch_catalog->getAllTables();
 
     Block block_to_filter;
 
@@ -162,6 +196,15 @@ Pipe StorageSystemCnchTables::read(
         if (Status::isDeleted(table_model.status()))
             continue;
 
+        StoragePtr storage;
+
+        if (require_storage)
+        {
+            storage = cnch_catalog->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(table_model.uuid())), TxnTimestamp::maxTS());
+            if (!storage)
+                continue;
+        }
+
         Array dependencies_table_name_array;
         Array dependencies_database_name_array;
 
@@ -182,10 +225,9 @@ Pipe StorageSystemCnchTables::read(
         if (columns_mask[src_index] || columns_mask[src_index + 1])
         {
             std::vector<StoragePtr> dependencies = {};
-            auto storage_ptr = cnch_catalog->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(table_model.uuid())), TxnTimestamp::maxTS());
-            if (storage_ptr)
+            if (storage)
             {
-                dependencies = cnch_catalog->getAllViewsOn(*context, storage_ptr, TxnTimestamp::maxTS());
+                dependencies = cnch_catalog->getAllViewsOn(*context, storage, TxnTimestamp::maxTS());
             }
             if (!dependencies.empty())
             {
@@ -264,10 +306,8 @@ Pipe StorageSystemCnchTables::read(
                 }
             }
 
-
             if (columns_mask[src_index++])
                 ast_partition_by ? (res_columns[col_num++]->insert(queryToString(*ast_partition_by))) : (res_columns[col_num++]->insertDefault());
-
 
             if (columns_mask[src_index++])
                 ast_order_by ? (res_columns[col_num++]->insert(queryToString(*ast_order_by))) : (res_columns[col_num++]->insertDefault());
@@ -292,13 +332,21 @@ Pipe StorageSystemCnchTables::read(
             {
                 if (columns_mask[src_index++])
                     res_columns[col_num++]->insertDefault();
-
                 if (columns_mask[src_index++])
                     res_columns[col_num++]->insert(-1); // shard ratio is not available
-
                 if (columns_mask[src_index++])
                     res_columns[col_num++]->insert(0); // with range is not available
             }
+        }
+        else
+            src_index += 7;
+
+        if (columns_mask[src_index++])
+        {
+            if (storage)
+                res_columns[col_num++]->insert(storage->getName());
+            else
+                res_columns[col_num++]->insertDefault();
         }
     }
 
