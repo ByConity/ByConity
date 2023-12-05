@@ -28,7 +28,7 @@
 namespace DB
 {
 class ASTSettingsProfileElements;
-
+class Context;
 
 /** CREATE ROLE [IF NOT EXISTS | OR REPLACE] name
   *     [SETTINGS variable [= value] [MIN [=] min_value] [MAX [=] max_value] [READONLY|WRITABLE] | PROFILE 'profile_name'] [,...]
@@ -46,6 +46,7 @@ public:
     bool if_exists = false;
     bool if_not_exists = false;
     bool or_replace = false;
+    bool tenant_rewritten = false;
 
     Strings names;
     String new_name;
@@ -58,6 +59,7 @@ public:
 
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & format, FormatState &, FormatStateStacked) const override;
+    void rewriteRoleNameWithTenant(const Context *);
     // ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTCreateRoleQuery>(clone()); }
 };
 }

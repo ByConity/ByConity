@@ -40,6 +40,8 @@
 #include <WorkerTasks/ManipulationType.h>
 #include <Storages/Kafka/CnchKafkaConsumeManager.h>
 #include <Storages/PartCacheManager.h>
+#include <Access/AccessControlManager.h>
+#include <Access/KVAccessStorage.h>
 
 #if USE_MYSQL
 #include <Storages/StorageMaterializeMySQL.h>
@@ -1559,32 +1561,6 @@ void CnchServerServiceImpl::executeOptimize(
     }
 }
 
-void CnchServerServiceImpl::notifyAccessEntityChange(
-    google::protobuf::RpcController *,
-    const Protos::notifyAccessEntityChangeReq * request,
-    Protos::notifyAccessEntityChangeResp * response,
-    google::protobuf::Closure *done)
-{
-    brpc::ClosureGuard done_guard(done);
-
-    try
-    {
-        String entity_type = request->type();
-        String name = request->name();
-        for (auto type : collections::range(IAccessEntity::Type::MAX))
-        {
-            // AccessControlManager::find will find the newly update/deleted access entity and notify all subscribers
-            if (toString(type) == entity_type)
-                getContext()->getAccessControlManager().find(type, name);
-        }
-    }
-    catch (...)
-    {
-        tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        RPCHelpers::handleException(response->mutable_exception());
-    }
-}
-
 void CnchServerServiceImpl::forceRecalculateMetrics(
     google::protobuf::RpcController *,
     const Protos::ForceRecalculateMetricsReq * request,
@@ -1614,6 +1590,38 @@ void CnchServerServiceImpl::forceRecalculateMetrics(
         RPCHelpers::handleException(response->mutable_exception());
     }
 }
+
+void CnchServerServiceImpl::notifyAccessEntityChange(
+    google::protobuf::RpcController *,
+    const Protos::notifyAccessEntityChangeReq * request,
+    Protos::notifyAccessEntityChangeResp * response,
+    google::protobuf::Closure *done)
+{
+    brpc::ClosureGuard done_guard(done);
+
+    try
+    {
+        String entity_type = request->type();
+        String name = request->name();
+        UUID id = RPCHelpers::createUUID(request->uuid());
+        for (auto type : collections::range(IAccessEntity::Type::MAX))
+        {
+            // KVAccessStorage::onAccessEntityChanged will find the newly update/deleted access entity and notify all subscribers
+            if (toString(type) == entity_type)
+            {
+                if (auto kv_access_storage = std::dynamic_pointer_cast<KVAccessStorage>(getContext()->getAccessControlManager().getStorage(id)))
+                    kv_access_storage->onAccessEntityChanged(type, name);
+            }
+                
+        }
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        RPCHelpers::handleException(response->mutable_exception());
+    }
+}
+
 
 #if defined(__clang__)
     #pragma clang diagnostic pop

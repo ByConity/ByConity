@@ -1,7 +1,9 @@
 #include <Parsers/ASTShowGrantsQuery.h>
 #include <Parsers/ASTRolesOrUsersSet.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -33,5 +35,21 @@ void ASTShowGrantsQuery::formatQueryImpl(const FormatSettings & settings, Format
                       << (settings.hilite ? hilite_none : "");
         for_roles->format(settings);
     }
+}
+
+void ASTShowGrantsQuery::rewriteNamesWithTenant(const Context *)
+{
+    if (!tenant_rewritten)
+    {
+        if (for_roles)
+        {
+            for (auto & name : for_roles->names)
+                name = formatTenantEntityName(name);
+            for (auto & name : for_roles->except_names)
+                name = formatTenantEntityName(name);
+        }
+
+        tenant_rewritten = true;
+    }  
 }
 }

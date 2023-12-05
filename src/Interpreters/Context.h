@@ -738,6 +738,7 @@ public:
     void checkAccess(const AccessRightsElement & element) const;
     void checkAccess(const AccessRightsElements & elements) const;
 
+    void grantAllAccess();
     std::shared_ptr<const ContextAccess> getAccess() const;
 
     WorkerGroupStatusPtr & getWorkerGroupStatusPtr() { return worker_group_status; }

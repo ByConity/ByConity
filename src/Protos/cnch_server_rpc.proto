@@ -392,17 +392,6 @@ message ExecuteOptimizeQueryReq {
 
 message ExecuteOptimizeQueryResp { optional string exception = 1; }
 
-message notifyAccessEntityChangeReq
-{
-  required string type = 1;
-  required string name = 2;
-}
-
-message notifyAccessEntityChangeResp
-{
-  optional string exception = 1;
-}
-
 message SubmitMaterializedMySQLDDLQueryReq {
   required string database_name = 1;
   required string thread_key = 2;
@@ -434,6 +423,18 @@ message ReportSyncFailedForSyncThreadResp { optional string exception = 1; }
 message ForceRecalculateMetricsReq { required StorageID storage_id = 1; }
 
 message ForceRecalculateMetricsResp { optional string exception = 1; }
+
+message notifyAccessEntityChangeReq
+{
+  required string type = 1;
+  required string name = 2;
+  required UUID uuid = 3;
+}
+
+message notifyAccessEntityChangeResp
+{
+  optional string exception = 1;
+}
 
 service CnchServerService {
   rpc reportTaskHeartbeat(ReportTaskHeartbeatReq)
@@ -544,8 +545,6 @@ service CnchServerService {
   rpc executeOptimize(ExecuteOptimizeQueryReq)
       returns(ExecuteOptimizeQueryResp);
 
-  rpc notifyAccessEntityChange(notifyAccessEntityChangeReq) returns (notifyAccessEntityChangeResp);
-
   rpc submitPreloadTask(SubmitPreloadTaskReq) returns(SubmitPreloadTaskResp);
 
   rpc submitMaterializedMySQLDDLQuery(SubmitMaterializedMySQLDDLQueryReq)
@@ -557,4 +556,6 @@ service CnchServerService {
 
   rpc forceRecalculateMetrics(ForceRecalculateMetricsReq)
       returns(ForceRecalculateMetricsResp);
+  
+  rpc notifyAccessEntityChange(notifyAccessEntityChangeReq) returns (notifyAccessEntityChangeResp);
 };

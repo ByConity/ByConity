@@ -15,6 +15,7 @@ users:
     password: ""
     profile: default
     quota: default
+    access_management: 1
   readonly:
     networks:
       ip: ::/0

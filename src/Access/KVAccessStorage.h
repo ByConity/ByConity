@@ -27,6 +27,7 @@ public:
 
     bool isReadOnly() const { return false; }
     void stopBgJob();
+    void onAccessEntityChanged(EntityType type, const String & tenanted_name) const;
 
 private:
     std::optional<UUID> findImpl(EntityType type, const String & name) const override;
@@ -77,7 +78,7 @@ private:
     void prepareNotifications(const UUID & id, const Entry & entry, bool remove, Notifications & notifications) const;
 
     mutable std::unordered_map<UUID, Entry> entries_by_id;
-    mutable std::unordered_map<std::string_view, Entry *> entries_by_name_and_type[static_cast<size_t>(EntityType::MAX)];
+    mutable std::unordered_map<String, Entry *> entries_by_name_and_type[static_cast<size_t>(EntityType::MAX)];
     mutable std::list<OnChangedHandler> handlers_by_type[static_cast<size_t>(EntityType::MAX)];
     mutable std::mutex mutex;
     Catalog::CatalogPtr catalog;

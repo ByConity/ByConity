@@ -29,6 +29,7 @@
 namespace DB
 {
 class ASTRowPolicyNames;
+class Context;
 
 /** DROP USER [IF EXISTS] name [,...]
   * DROP ROLE [IF EXISTS] name [,...]
@@ -45,6 +46,7 @@ public:
     bool if_exists = false;
     Strings names;
     std::shared_ptr<ASTRowPolicyNames> row_policy_names;
+    bool tenant_rewritten = false;
 
     String getID(char) const override;
 
@@ -52,6 +54,7 @@ public:
 
     ASTPtr clone() const override;
     void formatImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
+    void rewriteNamesWithTenant(const Context *);
     ASTPtr getRewrittenASTWithoutOnCluster(const std::string &) const override { return removeOnCluster<ASTDropAccessEntityQuery>(clone()); }
 
     void replaceEmptyDatabase(const String & current_database) const;

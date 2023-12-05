@@ -542,7 +542,7 @@ struct ContextSharedPart
                 cache_manager.reset();
 
             access_control_manager.stopBgJobForKVStorage();
-
+            
             if (nvm_cache)
                 nvm_cache->shutDown();
 
@@ -1470,13 +1470,11 @@ void Context::setUser(const Credentials & credentials, const Poco::Net::SocketAd
     /// Find a user with such name and check the credentials.
     /// NOTE: getAccessControlManager().login and other AccessControl's functions may require some IO work,
     /// so Context::getLock() must be unlocked while we're doing this.
-
     auto new_user_id = getAccessControlManager().login(credentials, address.host());
-
-    auto lock = getLock();
     auto new_access = getAccessControlManager().getContextAccess(
         new_user_id, /* current_roles = */ {}, /* use_default_roles = */ true, settings, current_database, client_info);
 
+    auto lock = getLock();
     user_id = new_user_id;
     access = std::move(new_access);
     current_roles.clear();
@@ -1495,9 +1493,11 @@ void Context::setUser(const String & name, const String & password, const Poco::
         auto tenant_id = String(user.c_str(), pos);
         this->setSetting("tenant_id", tenant_id); /// {tenant_id}`*
         this->setTenantId(tenant_id);
-        pushTenantId(tenant_id);
-        pushed = true;
-        user = user.substr(pos + 1); ///{tenant_id}`user_name=>user_name
+        auto sub_user = user.substr(pos + 1);
+        if (sub_user != "default")
+            user[pos] = '.';            ///{tenant_id}`{user_name}=>{tenant_id}.{user_name}
+        else
+            user = std::move(sub_user); ///{tenant_id}`default=>default
     }
     setUser(BasicCredentials(user, password), address);
     if (pushed)
@@ -1639,9 +1639,19 @@ void Context::checkAccess(const AccessRightsElements & elements) const
 }
 
 
+void Context::grantAllAccess()
+{
+    auto lock = getLock();
+    access = ContextAccess::getFullAccess();    
+}
+
 std::shared_ptr<const ContextAccess> Context::getAccess() const
 {
     auto lock = getLock();
+    // If its a worker node and prefer_cnch_catalog is false, this is a query from server
+    // and access check has already been done in server. We can return full access.
+    if (getServerType() == ServerType::cnch_worker && !getSettingsRef().prefer_cnch_catalog)
+        return ContextAccess::getFullAccess();
     return access ? access : ContextAccess::getFullAccess();
 }
 

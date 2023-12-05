@@ -752,7 +752,17 @@
     M(GetTableTrashItemsMetricsDataFromMetastoreFailed, "") \
     M(GetPartsInfoMetricsSuccess, "") \
     M(GetPartsInfoMetricsFailed, "") \
-    \
+    M(PutAccessEntitySuccess, "") \
+    M(PutAccessEntityFailed, "") \
+    M(TryGetAccessEntitySuccess, "") \
+    M(TryGetAccessEntityFailed, "") \
+    M(GetAllAccessEntitySuccess, "") \
+    M(GetAllAccessEntityFailed, "") \
+    M(DropAccessEntitySuccess, "") \
+    M(DropAccessEntityFailed, "") \
+    M(TryGetAccessEntityNameSuccess, "") \
+    M(TryGetAccessEntityNameFailed, "") \
+\
     M(PartsToAttach, "") \
     M(NumOfRowsToAttach, "") \
     M(ScheduleTimeMilliseconds, "Total time spent to schedule plan segment") \
@@ -903,17 +913,6 @@
     M(TSOError, "Error logged by TSO Service as a response to CNCH") \
     \
     M(BackupVW, "Whether use backup virtual warehouse or not") \
-    \
-    M(PutAccessEntitySuccess, "") \
-    M(PutAccessEntityFailed, "") \
-    M(TryGetAccessEntitySuccess, "") \
-    M(TryGetAccessEntityFailed, "") \
-    M(GetAllAccessEntitySuccess, "") \
-    M(GetAllAccessEntityFailed, "") \
-    M(DropAccessEntitySuccess, "") \
-    M(DropAccessEntityFailed, "") \
-    M(TryGetAccessEntityNameSuccess, "") \
-    M(TryGetAccessEntityNameFailed, "") \
 
 namespace ProfileEvents
 {

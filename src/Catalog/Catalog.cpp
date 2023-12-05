@@ -5882,10 +5882,10 @@ namespace Catalog
             ProfileEvents::DropAccessEntitySuccess,
             ProfileEvents::DropAccessEntityFailed);
         if (isSuccessful)
-            notifyOtherServersOnAccessEntityChange(context, type, name, log);
+            notifyOtherServersOnAccessEntityChange(context, type, name, uuid, log);
     }
 
-    void Catalog::putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists)
+    void Catalog::putAccessEntity(EntityType type, AccessEntityModel & new_access_entity, AccessEntityModel & old_access_entity, bool replace_if_exists)
     {
         new_access_entity.set_commit_time(context.getTimestamp());
         bool isSuccessful = false;
@@ -5893,7 +5893,7 @@ namespace Catalog
             [&] {
                 isSuccessful = meta_proxy->putAccessEntity(type, name_space, new_access_entity, old_access_entity, replace_if_exists);
                 if (!isSuccessful) // RBAC TODO: remove this check once FDB batchWrite throws exception on CAS fail like ByteKV batchWrite
-                {
+                {   
                     String error_msg = replace_if_exists ? "Failed to perform operation on KV Storage" : fmt::format("Access entity with name {} already exists", new_access_entity.name());
                     throw Exception(error_msg, ErrorCodes::ACCESS_ENTITY_ALREADY_EXISTS);
                 }
@@ -5901,10 +5901,10 @@ namespace Catalog
             ProfileEvents::PutAccessEntitySuccess,
             ProfileEvents::PutAccessEntityFailed);
         if (isSuccessful)
-            notifyOtherServersOnAccessEntityChange(context, type, new_access_entity.name(), log);
+            notifyOtherServersOnAccessEntityChange(context, type, new_access_entity.name(), RPCHelpers::createUUID(new_access_entity.uuid()), log);
     }
 
-    void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & name, Poco::Logger * log)
+    void notifyOtherServersOnAccessEntityChange(const Context & context, EntityType type, const String & name, const UUID & uuid, Poco::Logger * log)
     {
         std::shared_ptr<CnchTopologyMaster> topology_master = context.getCnchTopologyMaster();
         if (!topology_master)
@@ -5942,7 +5942,7 @@ namespace Catalog
             String rpc_address = client->getRPCAddress();
             try
             {
-                client->notifyAccessEntityChange(type, name);
+                client->notifyAccessEntityChange(type, name, uuid);
             }
             catch (...)
             {
@@ -5951,7 +5951,7 @@ namespace Catalog
             }
         }
     }
-
+    
     DeleteBitmapMetaPtrVector Catalog::listDetachedDeleteBitmaps(const MergeTreeMetaBase & storage, const AttachFilter & filter)
     {
         IMetaStore::IteratorPtr iter = nullptr;

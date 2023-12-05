@@ -1091,7 +1091,6 @@ bool MetastoreProxy::writeIntent(const String & name_space, const String & inten
         {
             for (auto & [index, new_value]: resp.puts)
             {
-                std::cout << "cas failed key: " << new_value << std::endl;
                 cas_failed_list.push_back(new_value);
             }
         }
@@ -2629,6 +2628,48 @@ IMetaStore::IteratorPtr MetastoreProxy::getDetachedPartsInRange(
         include_start, include_end);
 }
 
+IMetaStore::IteratorPtr MetastoreProxy::getDetachedDeleteBitmapsInRange(
+    const String & name_space,
+    const String & tbl_uuid,
+    const String & range_start,
+    const String & range_end,
+    bool include_start,
+    bool include_end)
+{
+    String prefix = detachedDeleteBitmapKeyPrefix(name_space, tbl_uuid);
+    return metastore_ptr->getByRange(prefix + range_start, prefix + range_end, include_start, include_end);
+}
+
+IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit)
+{
+    return metastore_ptr->getByPrefix(trashItemsPrefix(name_space, table_uuid), limit);
+}
+
+IMetaStore::IteratorPtr MetastoreProxy::getAllDeleteBitmaps(const String & name_space, const String & table_uuid)
+{
+    return metastore_ptr->getByPrefix(deleteBitmapPrefix(name_space, table_uuid));
+}
+
+void MetastoreProxy::updateTableTrashItemsSnapshot(const String & name_space, const String & table_uuid, const String & snapshot)
+{
+    metastore_ptr->put(tableTrashItemsMetricsSnapshotPrefix(name_space, table_uuid), snapshot);
+}
+void MetastoreProxy::updatePartitionMetricsSnapshot(
+    const String & name_space, const String & table_uuid, const String & partition_id, const String & snapshot)
+{
+    metastore_ptr->put(partitionPartsMetricsSnapshotPrefix(name_space, table_uuid, partition_id), snapshot);
+}
+IMetaStore::IteratorPtr MetastoreProxy::getTablePartitionMetricsSnapshots(const String & name_space, const String & table_uuid)
+{
+    return metastore_ptr->getByPrefix(partitionPartsMetricsSnapshotPrefix(name_space, table_uuid, ""));
+}
+String MetastoreProxy::getTableTrashItemsSnapshot(const String & name_space, const String & table_uuid)
+{
+    String value;
+    metastore_ptr->get(tableTrashItemsMetricsSnapshotPrefix(name_space, table_uuid), value);
+    return value;
+}
+
 // Access Entities
 String MetastoreProxy::getAccessEntity(EntityType type, const String & name_space, const String & name) const
 {
@@ -2670,14 +2711,16 @@ bool MetastoreProxy::putAccessEntity(EntityType type, const String & name_space,
 {
     BatchCommitRequest batch_write;
     BatchCommitResponse resp;
+    auto is_rename = !old_access_entity.name().empty() && new_access_entity.name() != old_access_entity.name();
     auto put_access_entity_request = SinglePutRequest(accessEntityKey(type, name_space, new_access_entity.name()), new_access_entity.SerializeAsString(), !replace_if_exists);
     String uuid = UUIDHelpers::UUIDToString(RPCHelpers::createUUID(new_access_entity.uuid()));
     String serialized_old_access_entity = old_access_entity.SerializeAsString();
-    if (!serialized_old_access_entity.empty())
+    if (!serialized_old_access_entity.empty() && !is_rename)
         put_access_entity_request.expected_value = serialized_old_access_entity;
     batch_write.AddPut(put_access_entity_request);
     batch_write.AddPut(SinglePutRequest(accessEntityUUIDNameMappingKey(name_space, uuid), new_access_entity.name(), !replace_if_exists));
-
+    if (is_rename)
+        batch_write.AddDelete(accessEntityKey(type, name_space, old_access_entity.name())); // delete old one in case of rename
     try
     {
         return metastore_ptr->batchWrite(batch_write, resp);
@@ -2707,48 +2750,6 @@ bool MetastoreProxy::putAccessEntity(EntityType type, const String & name_space,
         }
         throw e;
     }
-}
-
-IMetaStore::IteratorPtr MetastoreProxy::getDetachedDeleteBitmapsInRange(
-    const String & name_space,
-    const String & tbl_uuid,
-    const String & range_start,
-    const String & range_end,
-    bool include_start,
-    bool include_end)
-{
-    String prefix = detachedDeleteBitmapKeyPrefix(name_space, tbl_uuid);
-    return metastore_ptr->getByRange(prefix + range_start, prefix + range_end, include_start, include_end);
-}
-
-IMetaStore::IteratorPtr MetastoreProxy::getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit)
-{
-    return metastore_ptr->getByPrefix(trashItemsPrefix(name_space, table_uuid), limit);
-}
-
-IMetaStore::IteratorPtr MetastoreProxy::getAllDeleteBitmaps(const String & name_space, const String & table_uuid)
-{
-    return metastore_ptr->getByPrefix(deleteBitmapPrefix(name_space, table_uuid));
-}
-
-void MetastoreProxy::updateTableTrashItemsSnapshot(const String & name_space, const String & table_uuid, const String & snapshot)
-{
-    metastore_ptr->put(tableTrashItemsMetricsSnapshotPrefix(name_space, table_uuid), snapshot);
-}
-void MetastoreProxy::updatePartitionMetricsSnapshot(
-    const String & name_space, const String & table_uuid, const String & partition_id, const String & snapshot)
-{
-    metastore_ptr->put(partitionPartsMetricsSnapshotPrefix(name_space, table_uuid, partition_id), snapshot);
-}
-IMetaStore::IteratorPtr MetastoreProxy::getTablePartitionMetricsSnapshots(const String & name_space, const String & table_uuid)
-{
-    return metastore_ptr->getByPrefix(partitionPartsMetricsSnapshotPrefix(name_space, table_uuid, ""));
-}
-String MetastoreProxy::getTableTrashItemsSnapshot(const String & name_space, const String & table_uuid)
-{
-    String value;
-    metastore_ptr->get(tableTrashItemsMetricsSnapshotPrefix(name_space, table_uuid), value);
-    return value;
 }
 
 } /// end of namespace DB::Catalog

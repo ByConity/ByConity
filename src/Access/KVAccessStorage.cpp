@@ -212,10 +212,14 @@ KVAccessStorage::KVAccessStorage(const ContextPtr & context)
     , catalog(context->getCnchCatalog())
     , ttl_ms(context->getSettingsRef().access_entity_ttl.value.totalMilliseconds())
 {
-    // init all entities from KV
+    // Init all entities from KV
     clear();
-    for (auto type : collections::range(EntityType::MAX))
-        findAllImpl(type);
+    // Preload entities only on server nodes. Worker nodes loads entities on need only basis (eg. when perfer_cnch_catalog = 1)
+    if (context->getServerType() == ServerType::cnch_server)
+    {
+        for (auto type : collections::range(EntityType::MAX))
+            findAllImpl(type);
+    }
     task = context->getSchedulePool().createTask("updateExpiredEntries", [this]() { updateExpiredEntries(); });
     if (task)
         task->activateAndSchedule();
@@ -245,19 +249,19 @@ void KVAccessStorage::updateExpiredEntries()
         if (task)
             task->scheduleAfter(ttl_ms / 2); // check half the time of ttl to reduce how long an entry stays stale
     });
-    std::vector<std::pair<EntityType, String>> expired_entries;
+    std::vector<std::pair<EntityType, Entry>> expired_entries;
     {
         std::lock_guard lock{mutex};
         for (auto & [id, entry] : entries_by_id)
         {
             if (entry.isExpired(ttl_ms))
-                expired_entries.emplace_back(entry.type, entry.name);
+                expired_entries.emplace_back(entry.type, entry);
         }
     }
 
     // for each expired entity, update to latest version. RBAC TODO: implement multiFind here
-    for (auto & [type, name] : expired_entries)
-        findImpl(type, name);
+    for (auto & [type, entry] : expired_entries)
+        onAccessEntityChanged(type, entry.name);
 }
 
 UUID KVAccessStorage::addEntry(EntityType type, const AccessEntityModel & entity_model, Notifications & notifications) const
@@ -280,15 +284,28 @@ std::optional<UUID> KVAccessStorage::findImpl(EntityType type, const String & na
 {
     Notifications notifications;
     SCOPE_EXIT({ notify(notifications); });
-    std::lock_guard lock{mutex};
     auto entity_model = catalog->tryGetAccessEntity(type, name);
+    std::lock_guard lock{mutex};
     if (entity_model)
         return addEntry(type, *entity_model, notifications);
+    return {};
+}
+
+
+
+void KVAccessStorage::onAccessEntityChanged(EntityType type, const String & name) const
+{
+    Notifications notifications;
+    SCOPE_EXIT({ notify(notifications); });
+    auto entity_model = catalog->tryGetAccessEntity(type, name);
+    std::lock_guard lock{mutex};
+    if (entity_model)
+        addEntry(type, *entity_model, notifications);
     else
     {
         auto & entries_by_name = entries_by_name_and_type[static_cast<size_t>(type)];
         auto it = entries_by_name.find(name);
-        if (it != entries_by_name.end()) // this logic is executed when receiving notifications from other servers
+        if (it != entries_by_name.end())
         {
             Entry & entry = *(it->second);
             prepareNotifications(entry.id, entry, true, notifications);
@@ -296,16 +313,16 @@ std::optional<UUID> KVAccessStorage::findImpl(EntityType type, const String & na
             entries_by_id.erase(entry.id);
         }
     }
-    return {};
 }
+
 
 
 std::vector<UUID> KVAccessStorage::findAllImpl(EntityType type) const
 {
     Notifications notifications;
     SCOPE_EXIT({ notify(notifications); });
-    std::lock_guard lock{mutex};
     auto entity_models = catalog->getAllAccessEntities(type);
+    std::lock_guard lock{mutex};
     std::vector<UUID> res;
     res.reserve(entity_models.size());
     for (const auto & entity_model : entity_models)
@@ -315,8 +332,15 @@ std::vector<UUID> KVAccessStorage::findAllImpl(EntityType type) const
 
 bool KVAccessStorage::existsImpl(const UUID & id) const
 {
-    std::lock_guard lock{mutex};
-    return entries_by_id.count(id);
+    {
+        std::lock_guard lock{mutex};
+        if (entries_by_id.count(id))
+            return true;
+    }
+    if (catalog->tryGetAccessEntityName((id)))
+        return true;
+        
+    return false;
 }
 
 
@@ -335,16 +359,17 @@ AccessEntityPtr KVAccessStorage::readImpl(const UUID & id) const
 
 String KVAccessStorage::readNameImpl(const UUID & id) const
 {
-    std::lock_guard lock{mutex};
-    auto it = entries_by_id.find(id);
-    if (it == entries_by_id.end())
     {
-        auto name = catalog->tryGetAccessEntityName(id);
-        if (!name)
-            throwNotFound(id);
-        return *name;
+        std::lock_guard lock{mutex};
+        auto it = entries_by_id.find(id);
+        if (it != entries_by_id.end())
+            return String{it->second.name};
     }
-    return String{it->second.name};
+
+    auto name = catalog->tryGetAccessEntityName(id);
+    if (!name)
+        throwNotFound(id);
+    return *name;
 }
 
 
@@ -372,16 +397,18 @@ void KVAccessStorage::insertNoLock(const UUID & id, const AccessEntityPtr & new_
     EntityType type = new_entity->getType();
 
     AccessEntityModel new_entity_model;
+    AccessEntityModel old_entity_model;
     RPCHelpers::fillUUID(id, *(new_entity_model.mutable_uuid()));
     new_entity_model.set_name(name);
     new_entity_model.set_create_sql(convertFromEntityToSql(*new_entity));
-    catalog->putAccessEntity(type, new_entity_model, /* old_entity */ {}, replace_if_exists);
+    catalog->putAccessEntity(type, new_entity_model, old_entity_model, replace_if_exists);
 
     /// Add entry.
     auto & entry = entries_by_id[id];
     entry.id = id;
     entry.type = type;
     entry.name = name;
+    entry.commit_time = new_entity_model.commit_time();
     entry.entity = new_entity;
     auto & entries_by_name = entries_by_name_and_type[static_cast<size_t>(type)];
     entries_by_name[entry.name] = &entry;

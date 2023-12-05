@@ -208,10 +208,6 @@ void TCPHandler::runImpl()
             else /// {tenant_id}`
                 default_database.clear();
         }
-        else if (!default_database.empty() && !connection_context->getTenantId().empty())
-        {
-            default_database = connection_context->getTenantId() + '.' + default_database;
-        }
         
         if ((!default_database.empty()) && (!DatabaseCatalog::instance().isDatabaseExist(default_database, connection_context)))
         {
@@ -1155,6 +1151,28 @@ void TCPHandler::receiveHello()
 
     if (user.empty())
         throw NetException("Unexpected packet from client (no user in Hello package)", ErrorCodes::UNEXPECTED_PACKET_FROM_CLIENT);
+    
+    String tenant_id_from_db;
+    String tenant_id_from_user;
+    if (auto pos = user.find('`'); pos != String::npos)
+        tenant_id_from_user = String(user.c_str(), pos);
+
+    if (!default_database.empty())
+    {
+        if (auto pos = default_database.find('`'); pos != String::npos)
+            tenant_id_from_db = String(default_database.c_str(), pos);
+    }
+
+    if (!tenant_id_from_user.empty() && tenant_id_from_db.empty())
+    {
+        default_database = formatTenantDatabaseNameWithTenantId(default_database, tenant_id_from_user, '`');
+        if (auto pos = user.find('`'); pos != String::npos) // remove tenant id for server and worker communication
+            user = user.substr(pos + 1);
+    }
+    // else if (tenant_id_from_user.empty() && !tenant_id_from_db.empty())
+    //     user = tenant_id_from_db + '`' + user;
+    else if (!tenant_id_from_user.empty() && !tenant_id_from_db.empty() && tenant_id_from_user != tenant_id_from_db)
+        throw NetException("Tenant ID of user and default database are not matching", ErrorCodes::LOGICAL_ERROR);
 
     LOG_DEBUG(
         log,
@@ -1436,10 +1454,10 @@ void TCPHandler::receiveQuery()
             "Inter-server secret support is disabled, because ClickHouse was built without SSL library", ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
     }
-    else
-    {
-        query_context->setInitialRowPolicy();
-    }
+    // else
+    // {
+    //     query_context->setInitialRowPolicy();
+    // }
 
     ///
     /// Settings
@@ -1612,10 +1630,10 @@ void TCPHandler::receiveCnchQuery()
             "Inter-server secret support is disabled, because ClickHouse was built without SSL library", ErrorCodes::SUPPORT_IS_DISABLED);
 #endif
     }
-    else
-    {
-        query_context->setInitialRowPolicy();
-    }
+    // else
+    // {
+    //     query_context->setInitialRowPolicy();
+    // }
 
     /// Settings
     auto settings_changes = passed_settings.changes();
@@ -1719,7 +1737,7 @@ void TCPHandler::receivePlanSegment()
     readVarUInt(compression, *in);
     state.compression = static_cast<Protocol::Compression>(compression);
 
-    query_context->setInitialRowPolicy();
+    // query_context->setInitialRowPolicy();
 
     ///
     /// Settings

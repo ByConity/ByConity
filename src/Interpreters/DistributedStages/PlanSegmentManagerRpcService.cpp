@@ -120,7 +120,7 @@ void PlanSegmentManagerRpcService::executeQuery(
         }
 
         /// Sets an extra row policy based on `client_info.initial_user`
-        query_context->setInitialRowPolicy();
+        // query_context->setInitialRowPolicy();
 
         /// Quietly clamp to the constraints since it's a secondary query.
         query_context->clampToSettingsConstraints(settings_changes);
@@ -130,6 +130,8 @@ void PlanSegmentManagerRpcService::executeQuery(
         /// already normalized on initiator node, or not normalized and should remain unnormalized for
         /// compatibility.
         query_context->setSetting("normalize_function_names", Field(0));
+        if (query_context->getServerType() == ServerType::cnch_worker)
+            query_context->grantAllAccess();
 
         /// Set quota
         if (!request->has_quota())

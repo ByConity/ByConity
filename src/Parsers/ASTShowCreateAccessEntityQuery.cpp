@@ -1,7 +1,9 @@
 #include <Parsers/ASTShowCreateAccessEntityQuery.h>
 #include <Parsers/ASTRowPolicyName.h>
+#include <Parsers/formatTenantDatabaseName.h>
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
@@ -83,6 +85,22 @@ void ASTShowCreateAccessEntityQuery::replaceEmptyDatabase(const String & current
         if (database.empty())
             database = current_database;
     }
+}
+
+void ASTShowCreateAccessEntityQuery::rewriteNamesWithTenant(const Context *)
+{
+    if (!tenant_rewritten)
+    {
+        for (auto & name : names)
+            name = formatTenantEntityName(name);
+        if (row_policy_names)
+        {
+            for (auto & name_parts : row_policy_names->name_parts)
+                name_parts.short_name = formatTenantEntityName(name_parts.short_name);
+        }
+
+        tenant_rewritten = true;
+    }  
 }
 
 }

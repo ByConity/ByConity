@@ -91,6 +91,7 @@ bool ParserDropAccessEntityQuery::parseImpl(Pos & pos, ASTPtr & node, Expected &
     query->cluster = std::move(cluster);
     query->names = std::move(names);
     query->row_policy_names = std::move(row_policy_names);
+    query->rewriteNamesWithTenant(pos.getContext());
 
     return true;
 }

@@ -18,9 +18,15 @@ String appendTenantIdOnly(const String & name);
 
 String formatTenantDefaultDatabaseName(const String & database_name);
 
+String formatTenantDatabaseNameWithTenantId(const String & database_name, const String & tenant_id, char separator = '.');
+
 String formatTenantConnectUserName(const String & user_name);
 
-String formatTenantEntityPrefix(const String & prefix);
+String formatTenantEntityName(const String & name);
+
+String formatTenantEntityNameWithTenantId(const String & name, const String & tenant_id, char separator = '.');
+
+String getOriginalEntityName(const String & tenant_entity_name);
 
 String getOriginalDatabaseName(const String & tenant_database_name);
 

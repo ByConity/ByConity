@@ -46,6 +46,11 @@ namespace DB::ErrorCodes
     extern const int METASTORE_ACCESS_ENTITY_NOT_IMPLEMENTED;
 }
 
+namespace DB::ErrorCodes
+{
+    extern const int METASTORE_ACCESS_ENTITY_NOT_IMPLEMENTED;
+}
+
 namespace DB::Catalog
 {
 
@@ -109,6 +114,8 @@ namespace DB::Catalog
 #define DETACHED_DELETE_BITMAP_PREFIX "DDLB_"
 #define PARTITION_PARTS_METRICS_SNAPSHOT_PREFIX "PPS_"
 #define TABLE_TRASHITEMS_METRICS_SNAPSHOT_PREFIX "TTS_"
+#define DICTIONARY_BUCKET_UPDATE_TIME_PREFIX "DBUT_"
+#define ENTITY_UUID_MAPPING "EUM_"
 
 using EntityType = IAccessEntity::Type;
 struct EntityMetastorePrefix
@@ -134,7 +141,6 @@ static EntityMetastorePrefix getEntityMetastorePrefix(EntityType type)
             throw Exception("Access Entity not implemented", ErrorCodes::METASTORE_ACCESS_ENTITY_NOT_IMPLEMENTED);
     }
 }
-
 
 static std::shared_ptr<MetastoreFDBImpl> getFDBInstance(const String & cluster_config_path)
 {
@@ -726,16 +732,10 @@ public:
         return escapeString(name_space) + '_' + DETACHED_PART_PREFIX + uuid + '_' + part_name;
     }
 
-    static String trashItemsPrefix(const String & name_space, const String & uuid)
-    {
-        return escapeString(name_space) + "_" + DATA_ITEM_TRASH_PREFIX + uuid + "_";
-    }
-
     static std::string accessEntityPrefix(EntityType type, const std::string & name_space)
     {
-        return fmt::format("{}_{}", escapeString(name_space), formatTenantEntityPrefix(getEntityMetastorePrefix(type).prefix));
+        return fmt::format("{}_{}", escapeString(name_space), getEntityMetastorePrefix(type).prefix);
     }
-    // RBAC TODO: use special separator betweem prefix and name
     static std::string accessEntityKey(EntityType type, const std::string & name_space, const std::string & name)
     {
         return fmt::format("{}{}", accessEntityPrefix(type, name_space), name);
@@ -743,14 +743,17 @@ public:
 
     static std::string accessEntityUUIDNameMappingPrefix(const std::string & name_space)
     {
-        return fmt::format("{}_{}", escapeString(name_space), formatTenantEntityPrefix(ENTITY_UUID_MAPPING));
+        return fmt::format("{}_{}", escapeString(name_space), ENTITY_UUID_MAPPING);
     }
 
-    // Should not need Entity type here. No need to use prefix here. so remove accessEntityUUIDNameMappingPrefix method and just get the name
-    // change put to simple put the mapping key without type
     static std::string accessEntityUUIDNameMappingKey(const std::string & name_space, const std::string & uuid)
     {
         return fmt::format("{}{}", accessEntityUUIDNameMappingPrefix(name_space), uuid);
+    }
+    
+    static String trashItemsPrefix(const String & name_space, const String & uuid)
+    {
+        return escapeString(name_space) + "_" + DATA_ITEM_TRASH_PREFIX + uuid + "_";
     }
 
     static String partitionPartsMetricsSnapshotPrefix(const String & name_space, const String & table_uuid, const String & partition_id)
@@ -1061,6 +1064,13 @@ public:
     IMetaStore::IteratorPtr getDetachedPartsInRange(const String& name_space,
         const String& tbl_uuid, const String& range_start, const String& range_end,
         bool include_start = true, bool include_end = false);
+    
+    // Access Entities
+    String getAccessEntity(EntityType type, const String & name_space, const String & name) const;
+    Strings getAllAccessEntities(EntityType type, const String & name_space) const;
+    String getAccessEntityNameByUUID(const String & name_space, const UUID & id) const;
+    bool dropAccessEntity(EntityType type, const String & name_space, const UUID & id, const String & name) const;
+    bool putAccessEntity(EntityType type, const String & name_space, const AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists) const;
 
     IMetaStore::IteratorPtr getDetachedDeleteBitmapsInRange(
         const String & name_space,
@@ -1078,12 +1088,6 @@ public:
     IMetaStore::IteratorPtr getItemsInTrash(const String & name_space, const String & table_uuid, const size_t & limit);
     IMetaStore::IteratorPtr getAllDeleteBitmaps(const String & name_space, const String & table_uuid);
 
-    // Access Entities
-    String getAccessEntity(EntityType type, const String & name_space, const String & name) const;
-    Strings getAllAccessEntities(EntityType type, const String & name_space) const;
-    String getAccessEntityNameByUUID(const String & name_space, const UUID & id) const;
-    bool dropAccessEntity(EntityType type, const String & name_space, const UUID & id, const String & name) const;
-    bool putAccessEntity(EntityType type, const String & name_space, const AccessEntityModel & new_access_entity, const AccessEntityModel & old_access_entity, bool replace_if_exists) const;
     /**
      * @brief Get parts partition metrics snapshots in table level.
      */

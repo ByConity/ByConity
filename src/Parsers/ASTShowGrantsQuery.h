@@ -27,6 +27,7 @@
 namespace DB
 {
 class ASTRolesOrUsersSet;
+class Context;
 
 /** SHOW GRANTS [FOR user_name]
   */
@@ -34,6 +35,7 @@ class ASTShowGrantsQuery : public ASTQueryWithOutput
 {
 public:
     std::shared_ptr<ASTRolesOrUsersSet> for_roles;
+    bool tenant_rewritten = false;
 
     String getID(char) const override;
 
@@ -41,5 +43,6 @@ public:
 
     ASTPtr clone() const override;
     void formatQueryImpl(const FormatSettings & settings, FormatState &, FormatStateStacked) const override;
+    void rewriteNamesWithTenant(const Context *);
 };
 }
