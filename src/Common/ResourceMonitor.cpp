@@ -263,11 +263,10 @@ std::optional<MemoryMonitor::Data> MemoryMonitor::getContainerData()
     auto mem_usage_in_bytes_val = getNumberFromFile<UInt64>(mem_usage_fs);
     auto mem_limit_val = getNumberFromFile<UInt64>(mem_limit_fs);
 
-    std::string mem_inactive_file_name = "inactive_file";
-    auto mem_inactive_file_val = getNumberFromFileByName<UInt64>(mem_stat_fs, mem_inactive_file_name);
+    auto mem_total_inactive_file_val = getNumberFromFileByName<UInt64>(mem_stat_fs, "total_inactive_file");
 
-    // referring to the memory usage method in k8s, use memory.usage_in_bytes - inactive_file.
-    auto mem_working_usage_val = *mem_usage_in_bytes_val - *mem_inactive_file_val;
+    // referring to the memory usage method in k8s, use memory.usage_in_bytes - total_inactive_file.
+    auto mem_working_usage_val = *mem_usage_in_bytes_val - *mem_total_inactive_file_val;
 
     if (mem_working_usage_val && mem_limit_val)
     {
