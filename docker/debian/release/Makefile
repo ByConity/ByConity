@@ -2,17 +2,20 @@ BYCONITY_SOURCE=$(realpath ../../..)
 BUILD_TYPE ?= "Release"
 CMAKE_FLAGS ?= ""
 TAG ?= "latest"
+UID := $(shell id -u)
+GID := $(shell id -g)
 
 pull:
 	docker pull byconity/debian-builder
 	docker pull byconity/debian-runner
 
 compile:
-	docker run --rm \
-	--privileged --cap-add SYS_PTRACE \
-	-v ~/.m2:/root/.m2 \
-	-v ${BYCONITY_SOURCE}:/root/ByConity \
-	-e BUILD_TYPE=${BUILD_TYPE} -e CMAKE_FLAGS=${CMAKE_FLAGS} -e VERSION_SCM=${TAG} \
+	docker run --rm --user=$(UID):$(GID) \
+	--cap-add SYS_PTRACE \
+	--mount=type=bind,source=$(HOME)/.ccache,destination=/ccache \
+	-v ~/.m2:/home/.m2 \
+	-v ${BYCONITY_SOURCE}:/home/ByConity \
+	-e BUILD_TYPE=${BUILD_TYPE} -e CMAKE_FLAGS=${CMAKE_FLAGS} -e VERSION_SCM=${TAG} -e CCACHE_DIR=/ccache \
 	-it byconity/debian-builder bash /build.sh
 
 image:
@@ -21,3 +24,5 @@ image:
 
 release:
 	docker push byconity/byconity:${TAG}
+test:
+	docker run --rm -it byconity/byconity /bin/bash

@@ -110,6 +110,7 @@ add_executable(minidump_stackwalk ${MINIDUMP_STACKWALK_SRCS})
 target_compile_definitions(minidump_stackwalk PUBLIC HAVE_CONFIG_H)
 target_include_directories(minidump_stackwalk PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${BREAKPAD_SRC_DIR})
 target_link_libraries(minidump_stackwalk disasm)
+install(TARGETS minidump_stackwalk RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 
 set(MINIDUMP_DUMP_SRCS
@@ -127,6 +128,7 @@ set(MINIDUMP_DUMP_SRCS
 add_executable(minidump_dump ${MINIDUMP_DUMP_SRCS})
 target_compile_definitions(minidump_dump PUBLIC HAVE_CONFIG_H)
 target_include_directories(minidump_dump PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${BREAKPAD_SRC_DIR})
+install(TARGETS minidump_dump RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 
 set(MINIDUMP_2_CORE_SRCS
@@ -137,6 +139,7 @@ set(MINIDUMP_2_CORE_SRCS
 add_executable(minidump-2-core ${MINIDUMP_2_CORE_SRCS})
 target_compile_definitions(minidump-2-core PUBLIC HAVE_CONFIG_H)
 target_include_directories(minidump-2-core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${BREAKPAD_SRC_DIR})
+install(TARGETS minidump-2-core RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 
 set(CORE2MD_SRCS
@@ -146,6 +149,7 @@ add_executable(core2md ${CORE2MD_SRCS})
 target_compile_definitions(core2md PUBLIC HAVE_CONFIG_H)
 target_link_libraries(core2md breakpad_client)
 target_include_directories(core2md PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})  # for config.h
+install(TARGETS core2md RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 
 
 set(DUMP_SYMS_SRCS
@@ -176,3 +180,4 @@ add_executable(dump_syms ${DUMP_SYMS_SRCS})
 target_compile_definitions(dump_syms PUBLIC HAVE_CONFIG_H)
 target_link_libraries(dump_syms ${ZLIB_LIBRARIES})
 target_include_directories(dump_syms PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${BREAKPAD_SRC_DIR} ${ZLIB_INCLUDE_DIRS})
+install(TARGETS dump_syms RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})

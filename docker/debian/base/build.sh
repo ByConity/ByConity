@@ -2,10 +2,10 @@
 set -e
 
 #ccache -s # uncomment to display CCache statistics
-cd /root/ByConity
-mkdir -p /root/ByConity/build_docker
-mkdir -p /root/ByConity/build_install
-git config --global --add safe.directory /root/ByConity
+cd /home/ByConity
+mkdir -p /home/ByConity/build_docker
+mkdir -p /home/ByConity/build_install
+git config --add safe.directory /home/ByConity
 
 git_hash=`git rev-parse HEAD`
 VERSION_DATE=`git show -s --format=%cs $git_hash`
