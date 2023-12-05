@@ -4,7 +4,6 @@
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
 #include <Interpreters/Context.h>
-#include <iostream>
 
 namespace DB
 {
@@ -40,7 +39,6 @@ namespace
         {
             if (!database.empty())
             {
-                std::cout << "before --> " << database << " | "<< backQuoteIfNeed(database) << std::endl;
                 settings.ostr << backQuoteIfNeed(database) << ".";
             }
             if (any_table)
@@ -202,10 +200,8 @@ void ASTGrantQuery::rewriteNamesWithoutTenant(const Context *)
             name = getOriginalEntityName(name);
     }
     for (auto & access_rights_element : access_rights_elements)
-    {   
-        std::cout << "before --> " << access_rights_element.database << std::endl;
+    {
         access_rights_element.database = getOriginalDatabaseName(access_rights_element.database);
-        std::cout << "after --> " << access_rights_element.database  << "value used --> " << getOriginalDatabaseName(access_rights_element.database) << std::endl;
     }
 
 }
