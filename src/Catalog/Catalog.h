@@ -20,8 +20,8 @@
 #include <Catalog/CatalogUtils.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Catalog/MetastoreProxy.h>
-#include <CloudServices/Checkpoint.h>
 #include <Core/Types.h>
+#include <Databases/Snapshot.h>
 #include <Protos/DataModelHelpers.h>
 #include <Protos/cnch_common.pb.h>
 #include <Protos/cnch_server_rpc.pb.h>
@@ -55,6 +55,17 @@ struct PrunedPartitions;
 
 namespace DB::Catalog
 {
+
+enum class VisibilityLevel
+{
+    // all items visible to xid (commit_ts <= xid && end_ts > xid)
+    Visible,
+    // all items committed before xid, including unvisible items (end_ts <= xid)
+    Committed,
+    // all items written before xid, including intermediate uncommitted items
+    All
+};
+
 class Catalog
 {
 public:
@@ -113,7 +124,10 @@ public:
 
     void removeSQLBinding(const String & uuid, const bool & is_re_expression);
 
-    ///database related interface
+    /////////////////////////////
+    /// Database related API
+    /////////////////////////////
+
     void createDatabase(const String & database, const UUID & uuid, const TxnTimestamp & txnID, const TxnTimestamp & ts,
                         const String & create_query = "", const String & engine_name = "");
 
@@ -123,14 +137,40 @@ public:
 
     void dropDatabase(const String & database, const TxnTimestamp & previous_version, const TxnTimestamp & txnID, const TxnTimestamp & ts);
 
-    void renameDatabase(const String & from_database, const String & to_database, const TxnTimestamp & txnID, const TxnTimestamp & ts);
+    void renameDatabase(const UUID & uuid, const String & from_database, const String & to_database, const TxnTimestamp & txnID, const TxnTimestamp & ts);
 
     ///currently only used for materialized mysql
     void alterDatabase(const String & alter_database, const TxnTimestamp & txnID, const TxnTimestamp & ts,
                        const String & create_query = "", const String & engine_name = "");
 
-    ///table related interface
+    /////////////////////////////
+    /// Snapshots related API
+    /////////////////////////////
+
+    /// Create snapshot in `db`, with the specified name, ts, etc.
+    /// Throws if name already exists.
+    void createSnapshot(
+        const UUID & db,
+        const String & snapshot_name,
+        const TxnTimestamp & ts,
+        int ttl_in_days,
+        UUID bind_table);
+
+    void removeSnapshot(const UUID & db, const String & snapshot_name);
+
+    /// Return snapshot if exist, nullptr otherwise.
+    SnapshotPtr tryGetSnapshot(const UUID & db, const String & snapshot_name);
+
+    /// Return all snapshots in `db`, in ascending order of snapshot time.
+    /// If `table_filter` is not null, exclude snapshot that binds to other table from the result.
+    Snapshots getAllSnapshots(const UUID & db, UUID * table_filter = nullptr);
+
+    /////////////////////////////
+    /// Table related API
+    /////////////////////////////
+
     void createTable(
+        const UUID & db_uuid,
         const StorageID & storage_id,
         const String & create_query,
         const String & virtual_warehouse,
@@ -138,7 +178,11 @@ public:
         const TxnTimestamp & ts);
 
     void dropTable(
-        const StoragePtr & storage, const TxnTimestamp & previous_version, const TxnTimestamp & txnID, const TxnTimestamp & ts);
+        const UUID & db_uuid,
+        const StoragePtr & storage,
+        const TxnTimestamp & previous_version,
+        const TxnTimestamp & txnID,
+        const TxnTimestamp & ts);
 
     void createUDF(const String & db, const String & name, const String & create_query);
 
@@ -166,6 +210,7 @@ public:
         const String & from_table,
         const String & to_database,
         const String & to_table,
+        const UUID & to_db_uuid,
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts);
 
@@ -187,23 +232,34 @@ public:
     /// return true if table is active, false otherwise
     bool getTableActiveness(const StoragePtr & storage, const TxnTimestamp & ts);
 
-    ///data parts related interface
-    ServerDataPartsVector getServerDataPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, bool for_gc = false);
+    /////////////////////////////
+    /// Data parts API
+    /////////////////////////////
 
-    ServerDataPartsVector getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context);
+    ServerDataPartsVector getServerDataPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
+
+    ServerDataPartsVector getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
+
+    ServerDataPartsVector getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility = VisibilityLevel::Visible);
     DataPartsVector getDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
     DataPartsVector getStagedDataPartsByNames(const NameSet & names, const StoragePtr & table, const TxnTimestamp & ts);
     DeleteBitmapMetaPtrVector getAllDeleteBitmaps(const MergeTreeMetaBase & storage);
 
     // return table's committed staged parts. if partitions != null, ignore staged parts not belong to `partitions`.
     DataPartsVector getStagedParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
+    ServerDataPartsVector getStagedServerDataParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions = nullptr);
 
-    /// (UNIQUE KEY) fetch all delete bitmaps <= ts in the given partitions
-    DeleteBitmapMetaPtrVector
-    getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts = 0);
-    /// (UNIQUE KEY) get bitmaps by keys
+    /////////////////////////////
+    /// Delete bitmaps API (UNIQUE KEY)
+    /////////////////////////////
+
+    /// fetch all delete bitmaps <= ts in the given partitions
+    DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts = 0);
+    DeleteBitmapMetaPtrVector getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts);
+
+    /// get bitmaps by keys
     DeleteBitmapMetaPtrVector getDeleteBitmapByKeys(const StoragePtr & storage, const NameSet & keys);
-    /// (UNIQUE KEY) remove bitmaps meta from KV, used by GC
+    /// remove bitmaps meta from KV, used by GC
     void removeDeleteBitmaps(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps);
 
     // V1 part commit API
@@ -417,22 +473,33 @@ public:
 
     /// system tables related interface
 
-    std::optional<DB::Protos::DataModelTable> getTableByID(const Protos::TableIdentifier & identifier);
-    DataModelTables getTablesByID(std::vector<std::shared_ptr<Protos::TableIdentifier>> & identifiers);
+    DataModelTables getTablesByIDs(std::vector<std::shared_ptr<Protos::TableIdentifier>> & identifiers);
 
     DataModelDBs getAllDataBases();
 
     DataModelTables getAllTables(const String & database_name = "");
 
+    DataModelUDFs getAllUDFs(const String & prefix_name, const String & function_name);
+
+    DataModelUDFs getUDFByName(const std::unordered_set<String> & function_names);
+
+    /////////////////////////////
+    /// Trash API
+    /////////////////////////////
+
     IMetaStore::IteratorPtr getTrashTableIDIterator(uint32_t iterator_internal_batch_size);
-
-    DataModelUDFs getAllUDFs(const String &database_name, const String &function_name);
-
-    DataModelUDFs getUDFByName(const std::unordered_set<String> &function_names);
 
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getTrashTableID();
 
     DataModelTables getTablesInTrash();
+
+    /// Get all versions of metadata (in commit ts order) for the given table.
+    DataModelTables getTableHistories(const String & table_uuid);
+
+    /**
+     * @return ts -> table id of trash table
+     */
+    std::map<UInt64, std::shared_ptr<Protos::TableIdentifier>> getTrashTableVersions(const String & database, const String & table);
 
     DataModelDBs getDatabaseInTrash();
 
@@ -448,8 +515,8 @@ public:
     void clearDatabaseMeta(const String & database, const UInt64 & ts);
 
     void clearTableMetaForGC(const String & database, const String & name, const UInt64 & ts);
-    void clearDataPartsMeta(const StoragePtr & table, const DataPartsVector & parts, const bool skip_part_cache = false);
-    void clearStagePartsMeta(const StoragePtr & table, const DataPartsVector & parts);
+    void clearDataPartsMeta(const StoragePtr & storage, const DataPartsVector & parts, const bool skip_part_cache = false);
+    void clearStagePartsMeta(const StoragePtr & storage, const ServerDataPartsVector & parts);
     void clearDataPartsMetaForTable(const StoragePtr & table);
     void clearDeleteBitmapsMetaForTable(const StoragePtr & table);
 
@@ -492,16 +559,6 @@ public:
     Strings getAllMutations(const StorageID & storage_id);
     std::multimap<String, String> getAllMutations();
     void fillMutationsByStorage(const StorageID & storage_id, std::map<TxnTimestamp, CnchMergeTreeMutationEntry> & out_mutations);
-
-
-    /// TODO:
-    // void addCheckpoint(const StoragePtr &, Checkpoint) { }
-    // void markCheckpoint(const StoragePtr &, Checkpoint) { }
-    // void removeCheckpoint(const StoragePtr &, Checkpoint) { }
-    Checkpoints getCheckpoints() { return {}; }
-
-    /// TODO:
-    DataPartsVector getAllDataPartsBetween(const StoragePtr &, const TxnTimestamp &, const TxnTimestamp &) { return {}; }
 
     void setTableClusterStatus(const UUID & table_uuid, const bool clustered, const UInt64 & table_definition_hash);
     void getTableClusterStatus(const UUID & table_uuid, bool & clustered);
@@ -578,7 +635,6 @@ public:
     std::vector<UInt64> getTrashDBVersions(const String & database);
     void undropDatabase(const String & database, const UInt64 & ts);
 
-    std::unordered_map<String, UInt64> getTrashTableVersions(const String & database, const String & table);
     void undropTable(const String & database, const String & table, const UInt64 & ts);
 
     /// Get the key of a insertion label with the KV namespace
@@ -712,7 +768,9 @@ private:
     StoragePtr createTableFromDataModel(const Context & session_context, const Protos::DataModelTable & data_model);
     void detachOrAttachTable(const String & db, const String & name, const TxnTimestamp & ts, bool is_detach);
     DataModelPartPtrVector getDataPartsMetaFromMetastore(
-        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts);
+        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts, bool from_trash = false);
+    DeleteBitmapMetaPtrVector getDeleteBitmapsInPartitionsImpl(
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash = false);
     void detachOrAttachDictionary(const String & db, const String & name, bool is_detach);
     void moveTableIntoTrash(
         Protos::DataModelTable & table,

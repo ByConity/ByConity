@@ -19,12 +19,11 @@
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Storages/MergeTree/DeleteBitmapMeta.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h>
 
 #include <vector>
 #include <unordered_map>
 
-namespace DB
+namespace DB::detail
 {
 
 struct TransactionRecordLite
@@ -59,8 +58,8 @@ bool isCommitted(const T & element, std::unordered_map<UInt64, TransactionRecord
 /// Convert elements in the intermediate state into the final state (set commit time for them) if the transaction has been committed
 /// and remove intermediate state elements if its corresponding transaction is running.
 /// The elements with commit time larger than ts will be ignored.
-template <typename T, typename Operation>
-void getCommitted(std::vector<T> & elements, const TxnTimestamp & ts, Catalog::Catalog * catalog)
+template <typename T, typename Operation, bool test_end_ts>
+void getImpl(std::vector<T> & elements, const TxnTimestamp & ts, Catalog::Catalog * catalog)
 {
     std::unordered_map<UInt64, TransactionRecordLite> transactions; // cache for fetched transactions
     std::set<TxnTimestamp> txn_ids;
@@ -89,15 +88,15 @@ void getCommitted(std::vector<T> & elements, const TxnTimestamp & ts, Catalog::C
         }
     }
 
-    elements.erase(
-        std::remove_if(
-            elements.begin(),
-            elements.end(),
-            [&](const T & element) {
-                return !isCommitted<T, Operation>(element, transactions)
-                    || transactions[Operation::getTxnID(element)].commit_ts > ts;
-            }),
-        elements.end());
+    std::erase_if(elements, [&](const T & element) {
+        bool is_uncommitted = !isCommitted<T, Operation>(element, transactions)
+            || transactions[Operation::getTxnID(element)].commit_ts > ts;
+        if constexpr (test_end_ts)
+            return is_uncommitted || (Operation::getEndTime(element) && Operation::getEndTime(element) <= ts);
+        else
+            return is_uncommitted;
+
+    });
 }
 
 
@@ -128,29 +127,16 @@ bool isAborted(const T & element, Catalog::Catalog * catalog, std::unordered_map
     return txn_record.status == CnchTransactionStatus::Aborted || txn_record.status == CnchTransactionStatus::Inactive;
 }
 
-struct DataPartOperation
-{
-    static UInt64 getCommitTime(const MergeTreeDataPartCNCHPtr & part)
-    {
-        return part->commit_time;
-    }
-
-    static UInt64 getTxnID(const MergeTreeDataPartCNCHPtr & part)
-    {
-        return part->info.mutation;
-    }
-
-    static void setCommitTime(const MergeTreeDataPartCNCHPtr & part, const TxnTimestamp & ts)
-    {
-        part->commit_time = ts;
-    }
-};
-
 struct ServerDataPartOperation
 {
     static UInt64 getCommitTime(const ServerDataPartPtr & server_part_ptr)
     {
         return server_part_ptr->getCommitTime();
+    }
+
+    static UInt64 getEndTime(const ServerDataPartPtr & server_part_ptr)
+    {
+        return server_part_ptr->getEndTime();
     }
 
     static UInt64 getTxnID(const ServerDataPartPtr & server_part_ptr)
@@ -171,6 +157,11 @@ struct BitmapOperation
         return bitmap->getCommitTime();
     }
 
+    static UInt64 getEndTime(const DeleteBitmapMetaPtr & bitmap)
+    {
+        return bitmap->getEndTime();
+    }
+
     static UInt64 getTxnID(const DeleteBitmapMetaPtr & bitmap)
     {
         return bitmap->getTxnId();
@@ -182,11 +173,14 @@ struct BitmapOperation
     }
 };
 
-constexpr auto getCommittedDataParts = getCommitted<MergeTreeDataPartCNCHPtr, DataPartOperation>;
-constexpr auto getCommittedServerDataParts = getCommitted<ServerDataPartPtr, ServerDataPartOperation>;
-constexpr auto isCommittedDataPart = isCommitted<MergeTreeDataPartCNCHPtr, DataPartOperation>;
-constexpr auto isAbortedDataPart = isAborted<MergeTreeDataPartCNCHPtr, DataPartOperation>;
-constexpr auto isAbortedServerDataPart = isAborted<ServerDataPartPtr, ServerDataPartOperation>;
-constexpr auto getCommittedBitmaps = getCommitted<DeleteBitmapMetaPtr, BitmapOperation>;
+} // namespace DB::detail
+
+namespace DB
+{
+constexpr auto isAbortedServerDataPart = detail::isAborted<ServerDataPartPtr, detail::ServerDataPartOperation>;
+constexpr auto getCommittedServerDataParts = detail::getImpl<ServerDataPartPtr, detail::ServerDataPartOperation, false>;
+constexpr auto getVisibleServerDataParts = detail::getImpl<ServerDataPartPtr, detail::ServerDataPartOperation, true>;
+constexpr auto getCommittedBitmaps = detail::getImpl<DeleteBitmapMetaPtr, detail::BitmapOperation, false>;
+constexpr auto getVisibleBitmaps = detail::getImpl<DeleteBitmapMetaPtr, detail::BitmapOperation, true>;
 
 }

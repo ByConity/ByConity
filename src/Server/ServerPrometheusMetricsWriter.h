@@ -324,8 +324,8 @@ namespace ProfileEvents
     extern const Event UpdateServerWorkerGroupFailed;
     extern const Event GetWorkersInWorkerGroupSuccess;
     extern const Event GetWorkersInWorkerGroupFailed;
-    extern const Event GetTableByIDSuccess;
-    extern const Event GetTableByIDFailed;
+    extern const Event GetTableHistoriesSuccess;
+    extern const Event GetTableHistoriesFailed;
     extern const Event GetTablesByIDSuccess;
     extern const Event GetTablesByIDFailed;
     extern const Event GetAllDataBasesSuccess;
@@ -854,8 +854,8 @@ private:
         ProfileEvents::UpdateServerWorkerGroupFailed,
         ProfileEvents::GetWorkersInWorkerGroupSuccess,
         ProfileEvents::GetWorkersInWorkerGroupFailed,
-        ProfileEvents::GetTableByIDSuccess,
-        ProfileEvents::GetTableByIDFailed,
+        ProfileEvents::GetTableHistoriesSuccess,
+        ProfileEvents::GetTableHistoriesFailed,
         ProfileEvents::GetTablesByIDSuccess,
         ProfileEvents::GetTablesByIDFailed,
         ProfileEvents::GetAllDataBasesSuccess,

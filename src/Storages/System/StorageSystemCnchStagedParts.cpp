@@ -55,22 +55,13 @@ NamesAndTypesList StorageSystemCnchStagedParts::getNamesAndTypes()
     };
 }
 
-ColumnsDescription StorageSystemCnchStagedParts::getColumnsAndAlias()
+NamesAndAliases StorageSystemCnchStagedParts::getNamesAndAliases()
 {
-    auto columns = ColumnsDescription(getNamesAndTypes());
-
-    auto add_alias = [&](const String & alias_name, const String & column_name) {
-        ColumnDescription column(alias_name, columns.get(column_name).type);
-        column.default_desc.kind = ColumnDefaultKind::Alias;
-        column.default_desc.expression = std::make_shared<ASTIdentifier>(column_name);
-        columns.add(column);
+    return
+    {
+        {"bytes", {std::make_shared<DataTypeUInt64>()}, "bytes_on_disk"},
+        {"rows", {std::make_shared<DataTypeUInt64>()}, "rows_count"}
     };
-
-    /// Add aliases for column names for align with table system.parts.
-    add_alias("bytes", "bytes_on_disk");
-    add_alias("rows", "rows_count");
-
-    return columns;
 }
 
 void StorageSystemCnchStagedParts::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const

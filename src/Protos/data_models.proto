@@ -23,6 +23,8 @@ message TableIdentifier {
     optional uint32 meta_version = 4;
     optional string server_vw_name = 5;
     optional bool detached = 6;
+    // needed in order to get the correct snapshots
+    optional UUID db_uuid = 7;
 }
 
 enum CnchDatabaseType { Cnch = 0; MaterializedMySQL = 1; }
@@ -35,9 +37,9 @@ message DataModelDB {
   optional uint64 status = 5;
   repeated string tables = 6;
   optional uint32 meta_version = 7;
-  optional UUID uuid = 8; // optional uuid for database.
-  optional string definition =
-      9; // create query, useful for CnchMaterializedMySQL
+  optional UUID uuid = 8;
+  // create query, useful for CnchMaterializedMySQL
+  optional string definition = 9;
   optional CnchDatabaseType type = 10;
 };
 
@@ -129,7 +131,10 @@ message DataModelPart {
   repeated uint64 index_granularities = 30;
   repeated string projections =
       31; // record names of projections managed by the current part
+  /// used by parts stored in object storage
   optional UUID part_id = 35;
+  // commit ts of the txn removing this object
+  optional uint64 end_time = 36;
 };
 
 message CnchFilePartInfo { required string name = 1; }
@@ -173,6 +178,8 @@ message DataModelDeleteBitmap {
   // present iff the value is stored in vfs
   optional uint64 file_size = 9;
   optional uint64 commit_time = 10;
+  // commit ts of the txn removing this object
+  optional uint64 end_time = 11;
 }
 
 message DataModelPartVector { repeated DataModelPart parts = 1; }

@@ -52,6 +52,7 @@ namespace ErrorCodes
     extern const int SYNTAX_ERROR;
     extern const int UNKNOWN_TABLE;
     extern const int UNKNOWN_CATALOG;
+    extern const int UNKNOWN_CNCH_SNAPSHOT;
     extern const int NOT_IMPLEMENTED;
     extern const int INCORRECT_QUERY;
     extern const int SUPPORT_IS_DISABLED;
@@ -80,6 +81,8 @@ BlockIO InterpreterDropQuery::execute()
         drop.no_delay = true;
     if (drop.table.empty() && drop.database.empty() && !drop.catalog.empty())
         return executeToCatalog(drop);
+    else if (drop.is_snapshot)
+        return executeToSnapshot(drop);
     else if (!drop.table.empty())
         return executeToTable(drop);
     else if (!drop.database.empty())
@@ -116,6 +119,31 @@ BlockIO InterpreterDropQuery::executeToCatalog(ASTDropQuery & query)
         }
     }
     ExternalCatalog::Mgr::instance().dropExternalCatalog(catalog_name);
+    return {};
+}
+
+BlockIO InterpreterDropQuery::executeToSnapshot(ASTDropQuery & query)
+{
+    auto current_context = getContext();
+    if (query.database.empty())
+        query.database = current_context->getCurrentDatabase();
+
+    /// TODO: check access
+
+    DatabasePtr database = DatabaseCatalog::instance().getDatabase(query.database, current_context);
+    if (!database->supportSnapshot())
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Database '{}' doesn't support snapshot", query.database);
+
+    /// TODO: need intent lock?
+
+    if (!database->tryGetSnapshot(query.table))
+    {
+        if (!query.if_exists)
+            throw Exception(ErrorCodes::UNKNOWN_CNCH_SNAPSHOT, "No such snapshot: {}", query.table);
+        return {};
+    }
+    /// TODO: in the future, need to check whether there're active txns using the snapshot
+    database->dropSnapshot(current_context, query.table);
     return {};
 }
 

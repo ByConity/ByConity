@@ -1099,7 +1099,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         {
             const ASTExpressionList * foreign_keys = create.columns_list->foreign_keys;
             NameSet used_fk_names;
-            
+
             for (const auto & foreign_key_child : foreign_keys->children)
             {
                 auto & foreign_key = foreign_key_child->as<ASTForeignKeyDeclaration &>();
@@ -1150,7 +1150,7 @@ BlockIO InterpreterCreateQuery::createTable(ASTCreateQuery & create)
         if (!columns.empty())
         {
             const ASTExpressionList * unique = create.columns_list->unique;
-            NameSet used_uk_names;            
+            NameSet used_uk_names;
 
             for (const auto & unique_child : unique->children)
             {
@@ -1659,11 +1659,11 @@ BlockIO InterpreterCreateQuery::execute()
 
     ASTQueryWithOutput::resetOutputASTIfExist(create);
 
-    /// CREATE|ATTACH DATABASE
     if (!create.catalog.empty() && create.database.empty() && create.table.empty())
         return createExternalCatalog(create);
     else if (!create.catalog.empty() && (!create.database.empty() || !create.table.empty()))
-        throw Exception("create database or table in externcal catalog is not supported", ErrorCodes::INCORRECT_QUERY);
+        throw Exception("create database or table in externcal catalog is not supported", ErrorCodes::INCORRECT_QUERY );
+    /// CREATE|ATTACH DATABASE
     else if (!create.database.empty() && create.table.empty())
         return createDatabase(create);
     else

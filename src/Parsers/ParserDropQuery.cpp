@@ -17,6 +17,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     ParserKeyword s_temporary("TEMPORARY");
     ParserKeyword s_table("TABLE");
     ParserKeyword s_dictionary("DICTIONARY");
+    ParserKeyword s_snapshot("SNAPSHOT");
     ParserKeyword s_view("VIEW");
     ParserKeyword s_catalog("EXTERNAL CATALOG");
     ParserKeyword s_database("DATABASE");
@@ -34,6 +35,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     bool if_exists = false;
     bool temporary = false;
     bool is_dictionary = false;
+    bool is_snapshot = false;
     bool is_view = false;
     bool no_delay = false;
     bool permanently = false;
@@ -62,11 +64,13 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
             is_view = true;
         else if (s_dictionary.ignore(pos, expected))
             is_dictionary = true;
+        else if (s_snapshot.ignore(pos, expected))
+            is_snapshot = true;
         else if (s_temporary.ignore(pos, expected))
             temporary = true;
 
         /// for TRUNCATE queries TABLE keyword is assumed as default and can be skipped
-        if (!is_view && !is_dictionary && (!s_table.ignore(pos, expected) && kind != ASTDropQuery::Kind::Truncate))
+        if (!is_view && !is_dictionary && !is_snapshot && (!s_table.ignore(pos, expected) && kind != ASTDropQuery::Kind::Truncate))
         {
             return false;
         }
@@ -87,7 +91,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     }
 
     /// common for tables / dictionaries / databases
-    if (ParserKeyword{"ON"}.ignore(pos, expected))
+    if (!is_snapshot && ParserKeyword{"ON"}.ignore(pos, expected))
     {
         if (!ASTQueryWithOnCluster::parse(pos, cluster_str, expected))
             return false;
@@ -107,6 +111,7 @@ bool parseDropQuery(IParser::Pos & pos, ASTPtr & node, Expected & expected, cons
     query->if_exists = if_exists;
     query->temporary = temporary;
     query->is_dictionary = is_dictionary;
+    query->is_snapshot = is_snapshot;
     query->is_view = is_view;
     query->no_delay = no_delay;
     query->permanently = permanently;

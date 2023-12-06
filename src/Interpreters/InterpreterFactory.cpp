@@ -81,6 +81,7 @@
 #include <Interpreters/InterpreterCreateRoleQuery.h>
 #include <Interpreters/InterpreterCreateRowPolicyQuery.h>
 #include <Interpreters/InterpreterCreateSettingsProfileQuery.h>
+#include <Interpreters/InterpreterCreateSnapshotQuery.h>
 #include <Interpreters/InterpreterCreateUserQuery.h>
 #include <Interpreters/InterpreterCreateWarehouseQuery.h>
 #include <Interpreters/InterpreterCreateWorkerGroupQuery.h>
@@ -233,6 +234,10 @@ std::unique_ptr<IInterpreter> InterpreterFactory::get(ASTPtr & query, ContextMut
     else if (query->as<ASTCreateQuery>())
     {
         return std::make_unique<InterpreterCreateQuery>(query, context);
+    }
+    else if (query->as<ASTCreateSnapshotQuery>())
+    {
+        return std::make_unique<InterpreterCreateSnapshotQuery>(query, context);
     }
     else if (query->as<ASTDropQuery>())
     {

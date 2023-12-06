@@ -39,6 +39,7 @@ class IntentLock : boost::noncopyable, WithContext
 {
 public:
     static constexpr auto TB_LOCK_PREFIX = "TB_LOCK";
+    static constexpr auto SS_LOCK_PREFIX = "SS_LOCK"; // for snapshots
     static constexpr auto DB_LOCK_PREFIX = "DB_LOCK";
 
     IntentLock(ContextPtr context_, TransactionRecord txn_record_, String lock_prefix_, Strings intent_names_ = {})

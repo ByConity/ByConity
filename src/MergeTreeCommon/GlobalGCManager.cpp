@@ -30,7 +30,9 @@ namespace DB
 
 namespace ErrorCodes
 {
+    extern const int AMBIGUOUS_TABLE_NAME;
     extern const int LOGICAL_ERROR;
+    extern const int UNKNOWN_TABLE;
 }
 
 GlobalGCManager::GlobalGCManager(
@@ -103,7 +105,7 @@ namespace {
             clean_pool.scheduleOrThrow([partition_id, &log, &catalog, &storage, &mergetree_meta, &context]() {
                 MultiDiskS3PartsLazyCleaner parts_cleaner(std::nullopt, context.getSettingsRef().s3_gc_intra_partition_parallelism);
 
-                LOG_INFO(log, fmt::format("Start GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs()));
+                LOG_DEBUG(log, "Start GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs());
 
                 ServerDataPartsVector parts = catalog->getServerDataPartsInPartitions(storage, {partition_id}, {0}, &context);
                 for (auto & part : parts)
@@ -131,7 +133,7 @@ namespace {
 
                 parts_cleaner.finalize();
 
-                LOG_INFO(log, fmt::format("Finish GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs()));
+                LOG_DEBUG(log, "Finish GC partition {} for table {}", partition_id, storage->getStorageID().getNameForLogs());
 
                 if (mergetree_meta.getInMemoryMetadataPtr()->hasUniqueKey())
                 {
@@ -139,7 +141,7 @@ namespace {
                         = catalog->listDetachedDeleteBitmaps(mergetree_meta, AttachFilter::createPartitionFilter(partition_id));
                     for (auto & detached_bitmap : all_detached_bitmaps)
                         detached_bitmap->removeFile();
-                    LOG_INFO(
+                    LOG_DEBUG(
                         log,
                         "Finish GC detached delete bitmap of partition {} for table {}",
                         partition_id,
@@ -157,12 +159,16 @@ void cleanDisks(const Disks & disks, const String & relative_path, Poco::Logger 
         if (disk->exists(relative_path))
         {
             disk->removeRecursive(relative_path);
-            LOG_TRACE(log, "Removed relative path {} of disk type {}, root path {}!",
+            LOG_DEBUG(log, "Removed relative path {} of disk type {}, root path {}",
                 relative_path, DiskType::toString(disk->getType()), disk->getPath());
         }
         else
-            LOG_WARNING(log, "Relative path {} of disk type {}, root path {} doesn't exist!",
-                relative_path, DiskType::toString(disk->getType()), disk->getPath());
+            LOG_WARNING(
+                log,
+                "Relative path {} doesn't exists, disk type is {}, root path is {}",
+                relative_path,
+                DiskType::toString(disk->getType()),
+                disk->getPath());
     }
 }
 
@@ -181,6 +187,84 @@ void dropBGStatusInCatalogForCnchKafka(UUID uuid, Catalog::Catalog * catalog)
 
 } /// end anonymous namespace
 
+std::optional<Protos::DataModelTable> getCleanableTrashTable(
+    ContextPtr context,
+    const Protos::TableIdentifier & table_id,
+    const TxnTimestamp & ts,
+    UInt64 retention_sec,
+    String * fail_reason)
+{
+    std::vector<Protos::DataModelTable> table_versions = context->getCnchCatalog()->getTableHistories(table_id.uuid());
+
+    // sequences of drop/undrop ddl leads to multiple life spans for the table
+    std::vector<std::pair<UInt64, UInt64>> lifespans; // [(beg1, end1), (beg2, end2), ..]
+    std::pair<UInt64, UInt64> curr_span = {0, 0};
+    for (const auto & table : table_versions)
+    {
+        if (Status::isDeleted(table.status()))
+        {
+            if (curr_span.second == 0)
+            {
+                curr_span.second = table.commit_time();
+                lifespans.push_back(curr_span);
+                curr_span = {0, 0};
+            }
+        }
+        else if (curr_span.first == 0)
+        {
+            curr_span.first = table.commit_time();
+        }
+    }
+
+    if (lifespans.empty() || curr_span.first != 0 || curr_span.second != 0)
+    {
+        *fail_reason = fmt::format("Can't calculate lifespans for table {}", table_id.uuid());
+        return std::nullopt;
+    }
+
+    // the above if leads to this assertion
+    assert(!table_versions.empty() && Status::isDeleted(table_versions.back().status()));
+
+    // fast path: cannot clean if table is within retention period
+    if (lifespans.back().second + TxnTimestamp::fromUnixTimestamp(retention_sec) > ts)
+    {
+        if (fail_reason)
+            *fail_reason = "Under retention period";
+        return std::nullopt;
+    }
+
+    // otherwise, can clean table iff it's not referenced by any snapshots
+
+    // fast path: no snapshots for database
+    if (!table_id.has_db_uuid())
+        return table_versions.back();
+
+    UUID table_uuid = RPCHelpers::createUUID(table_versions.back().uuid());
+    Snapshots snapshots = context->getCnchCatalog()->getAllSnapshots(RPCHelpers::createUUID(table_id.db_uuid()), &table_uuid);
+    // remove expired snapshots
+    std::erase_if(snapshots, [&](SnapshotPtr & snapshot) {
+        return snapshot->commit_time() + TxnTimestamp::fromUnixTimestamp(snapshot->ttl_in_days() * 3600 * 24) < ts;
+    });
+
+    auto * log = &Poco::Logger::get("getCleanableTrashTable");
+    for (const auto & [beg, end] : lifespans)
+    {
+        LOG_TRACE(log, "lifespan [{} - {})", beg, end);
+        for (const auto & snapshot : snapshots)
+        {
+            LOG_TRACE(log, "Test snapshot {} with ts {}", snapshot->name(), snapshot->commit_time());
+            if (snapshot->commit_time() >= beg && snapshot->commit_time() < end)
+            {
+                if (fail_reason)
+                    *fail_reason = fmt::format("Referenced by active snapshot '{}'", snapshot->name());
+                return std::nullopt;
+            }
+        }
+    }
+
+    return table_versions.back();
+}
+
 bool executeGlobalGC(const Protos::DataModelTable & table, const Context & context, Poco::Logger * log)
 {
     auto storage_id = StorageID{table.database(), table.name(), RPCHelpers::createUUID(table.uuid())};
@@ -195,6 +279,7 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
 
     try
     {
+        Stopwatch watch;
         auto catalog = context.getCnchCatalog();
 
         auto storage = catalog->tryGetTableByUUID(context, UUIDHelpers::UUIDToString(storage_id.uuid), TxnTimestamp::maxTS(), true);
@@ -267,11 +352,13 @@ bool executeGlobalGC(const Protos::DataModelTable & table, const Context & conte
         /// delete table's metadata
         LOG_DEBUG(log, "Remove table meta for table {}", storage_id.getNameForLogs());
         catalog->clearTableMetaForGC(storage_id.database_name, storage_id.table_name, table.commit_time());
+
+        LOG_INFO(log, "Successfully executed GlobalGC for {} in {} ms", storage_id.getNameForLogs(), watch.elapsedMilliseconds());
     }
     catch (...)
     {
-        LOG_ERROR(log, "Failed to remove meta data for table {}", storage_id.getNameForLogs());
         tryLogCurrentException(log);
+        LOG_ERROR(log, "Failed to execute GlobalGC for {}", storage_id.getNameForLogs());
     }
 
     return true;
@@ -431,6 +518,50 @@ bool GlobalGCManager::schedule(std::vector<Protos::DataModelTable> tables)
         return false;
     }
     return true;
+}
+
+void GlobalGCManager::systemCleanTrash(ContextPtr local_context, StorageID storage_id, Poco::Logger * log)
+{
+    const UInt64 retention_sec = local_context->getSettingsRef().cnch_data_retention_time_in_sec;
+    auto catalog = local_context->getCnchCatalog();
+    auto table_ids = catalog->getTrashTableVersions(storage_id.database_name, storage_id.table_name);
+    if (table_ids.empty())
+        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Trash table {} not found", storage_id.getNameForLogs());
+
+    std::shared_ptr<Protos::TableIdentifier> table_id;
+    if (storage_id.hasUUID())
+    {
+        for (auto & entry : table_ids)
+        {
+            if (entry.second->uuid() == UUIDHelpers::UUIDToString(storage_id.uuid))
+            {
+                table_id = entry.second;
+                break;
+            }
+        }
+        if (!table_id)
+            throw Exception(ErrorCodes::UNKNOWN_TABLE, "Trash table {} not found", storage_id.getNameForLogs());
+    }
+    else if (table_ids.size() > 1)
+    {
+        throw Exception(ErrorCodes::AMBIGUOUS_TABLE_NAME, "Found multiple trash tables, please specify UUID");
+    }
+    else
+    {
+        table_id = table_ids.begin()->second;
+    }
+
+    TxnTimestamp ts = local_context->getTimestamp();
+    String fail_reason;
+    auto table_model = GlobalGCHelpers::getCleanableTrashTable(local_context, *table_id, ts, retention_sec, &fail_reason);
+    if (table_model.has_value())
+    {
+        GlobalGCHelpers::executeGlobalGC(*table_model, *local_context, log);
+    }
+    else
+    {
+        LOG_INFO(log, "Cannot clean trash table {} because : {}", storage_id.getNameForLogs(), fail_reason);
+    }
 }
 
 bool GlobalGCManager::isShutdown() const

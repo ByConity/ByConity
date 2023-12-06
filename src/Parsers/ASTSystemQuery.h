@@ -90,6 +90,7 @@ public:
         STOP_MERGES,
         START_MERGES,
         REMOVE_MERGES,
+        GC, // gc db.table [partition partition_expr]
         STOP_GC,
         START_GC,
         FORCE_GC,
@@ -126,6 +127,7 @@ public:
         STOP_CLUSTER,
         DUMP_SERVER_STATUS,
         CLEAN_TRANSACTION,
+        CLEAN_TRASH_TABLE,
         CLEAN_FILESYSTEM_LOCK,
         JEPROF_DUMP,
         LOCK_MEMORY_LOCK,
@@ -143,6 +145,8 @@ public:
     String target_model;
     String database;
     String table;
+    // optional for clean trash table
+    UUID table_uuid = UUIDHelpers::Nil;
     String replica;
     String replica_zk_path;
     bool is_drop_whole_replica{};
@@ -164,7 +168,7 @@ public:
 
     ASTPtr target_path;
 
-    // For DEDUP
+    // For GC and DEDUP
     ASTPtr partition; // The value or ID of the partition is stored here.
 
     /// for CLEAN TRANSACTION txn_id

@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Interpreters/StorageID.h>
 #include <Parsers/ParserSystemQuery.h>
 #include <Parsers/ASTSystemQuery.h>
 #include <Parsers/CommonParsers.h>
@@ -259,6 +260,15 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
             break;
         }
 
+        case Type::GC:
+        {
+            if (!parseDatabaseAndTableName(pos, expected, res->database, res->table))
+                return false;
+            if (ParserKeyword{"PARTITION"}.ignore(pos, expected) && !parser_partition.parse(pos, res->partition, expected))
+                return false;
+            break;
+        }
+
         case Type::START_GC:
         case Type::STOP_GC:
         case Type::FORCE_GC:
@@ -366,6 +376,19 @@ bool ParserSystemQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, Expected & 
         {
             if (!parseIdentifierOrStringLiteral(pos, expected, res->string_data))
                 return false;
+            break;
+        }
+
+        case Type::CLEAN_TRASH_TABLE:
+        {
+            ASTPtr table;
+            ParserCompoundIdentifier name_p(true);
+            if (!name_p.parse(pos, table, expected))
+                return false;
+            auto table_id = table->as<ASTTableIdentifier>()->getTableId();
+            res->database = table_id.database_name;
+            res->table = table_id.table_name;
+            res->table_uuid = table_id.uuid;
             break;
         }
 

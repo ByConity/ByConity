@@ -19,6 +19,7 @@
 #include <Catalog/Catalog.h>
 #include <CloudServices/CnchPartsHelper.h>
 #include <CloudServices/CnchDataWriter.h>
+#include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/ServerPartLog.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
@@ -36,6 +37,31 @@ CnchPartGCThread::CnchPartGCThread(ContextPtr context_, const StorageID & id) : 
     data_remover->deactivate();
 }
 
+void CnchPartGCThread::executeManually(const ASTPtr & partition, ContextPtr local_context)
+{
+    auto istorage = getStorageFromCatalog();
+    auto & storage = checkAndGetCnchTable(istorage);
+    if (istorage->is_dropped)
+    {
+        LOG_DEBUG(log, "Table was dropped, do nothing...");
+        return;
+    }
+
+    Strings partitions;
+    if (partition)
+        partitions.push_back(storage.getPartitionIDFromQuery(partition, local_context));
+    else
+        partitions = catalog->getPartitionIDs(istorage, nullptr);
+
+    Stopwatch watch;
+    doPhaseOneGC(istorage, storage, partitions);
+    LOG_INFO(log, "Successfully execute phase-one GC in {} ms", watch.elapsedMilliseconds());
+
+    watch.restart();
+    auto nremoved = doPhaseTwoGC(istorage, storage);
+    LOG_INFO(log, "Successfully execute phase-two GC in {} ms, removed {} files", watch.elapsedMilliseconds(), nremoved);
+}
+
 void CnchPartGCThread::stop()
 {
     if (data_remover->taskIsActive())
@@ -45,6 +71,29 @@ void CnchPartGCThread::stop()
     }
     // stop current gc task;
     ICnchBGThread::stop();
+}
+
+void CnchPartGCThread::doPhaseOneGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const Strings & partitions)
+{
+    bool in_wakeup = inWakeup();
+    auto storage_settings = storage.getSettings();
+
+    /// Only inspect the parts small than gc_timestamp
+    TxnTimestamp gc_timestamp = calculateGCTimestamp(storage_settings->old_parts_lifetime.totalSeconds(), in_wakeup);
+    if (gc_timestamp <= last_gc_timestamp) /// Skip unnecessary gc
+    {
+        LOG_INFO(log, "Skip unnecessary GC as gc_timestamp <= last_gc_timestamp: {} vs. {}", gc_timestamp, last_gc_timestamp);
+    }
+    else
+    {
+        /// Do GC partition by partition to avoid holding too many ServerParts.
+        for (const auto & p : partitions)
+            doPhaseOnePartitionGC(istorage, storage, p, in_wakeup, gc_timestamp);
+
+        last_gc_timestamp = gc_timestamp;
+    }
+
+    clearOldInsertionLabels(istorage, storage);
 }
 
 void CnchPartGCThread::runImpl()
@@ -73,33 +122,8 @@ void CnchPartGCThread::runImpl()
 
         try
         {
-            auto catalog = getContext()->getCnchCatalog();
-            bool in_wakeup = inWakeup();
-            Strings partitions = in_wakeup ? catalog->getPartitionIDs(istorage, nullptr) : selectPartitions(istorage);
-
-            /// Only inspect the parts small than gc_timestamp
-            TxnTimestamp gc_timestamp = calculateGCTimestamp(storage_settings->old_parts_lifetime.totalSeconds(), in_wakeup);
-            if (gc_timestamp <= last_gc_timestamp) /// Skip unnecessary gc
-            {
-                LOG_INFO(log, "Skip unnecessary GC as gc_timestamp <= last_gc_timestamp: {} vs. {}", gc_timestamp, last_gc_timestamp);
-            }
-            else
-            {
-                /// Do GC partition by partition to avoid holding too many ServerParts.
-                for (const auto & p : partitions)
-                    clearOldPartsByPartition(istorage, storage, p, in_wakeup, gc_timestamp);
-
-                last_gc_timestamp = gc_timestamp;
-            }
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, __PRETTY_FUNCTION__);
-        }
-
-        try
-        {
-            clearOldInsertionLabels(istorage, storage);
+            Strings partitions = inWakeup() ? catalog->getPartitionIDs(istorage, nullptr) : selectPartitions(istorage);
+            doPhaseOneGC(istorage, storage, partitions);
         }
         catch (...)
         {
@@ -120,129 +144,6 @@ void CnchPartGCThread::runImpl()
 void CnchPartGCThread::clearData()
 {
     removeCandidatePartitions();
-}
-
-void CnchPartGCThread::clearOldPartsByPartition(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp)
-{
-    auto storage_settings = storage.getSettings();
-    auto now = time(nullptr);
-
-    Stopwatch watch;
-    auto all_parts = catalog->getServerDataPartsInPartitions(istorage, {partition_id}, gc_timestamp, nullptr, true);
-    LOG_TRACE(log, "Get parts for {} from Catalog cost {} us, size: {}", partition_id, watch.elapsedMicroseconds(), all_parts.size());
-    watch.restart();
-
-    // Get zombie parts to remove and filter out invisible intermediate parts.
-    auto intermediate_parts_to_remove = processIntermediateParts(all_parts, gc_timestamp);
-    if (!intermediate_parts_to_remove.empty())
-    {
-        LOG_TRACE(log, "Get {} staged intermediate parts to remove for {} ", intermediate_parts_to_remove.size(), partition_id);
-        pushToRemovingQueue(storage, intermediate_parts_to_remove, "Staged Intermediate Parts");
-    }
-
-    ServerDataPartsVector visible_alone_drop_ranges;
-    ServerDataPartsVector invisible_dropped_parts;
-    auto visible_parts = CnchPartsHelper::calcVisiblePartsForGC(all_parts, &visible_alone_drop_ranges, &invisible_dropped_parts);
-    LOG_TRACE(log, "Calculate visible parts for GC cost {} us, visible_parts: {}", watch.elapsedMicroseconds(), visible_parts.size());
-    watch.stop();
-
-    /// Generate DROP_RANGE for expired partitions by the TTL
-    if (!visible_parts.empty())
-        tryMarkExpiredPartitions(storage, visible_parts);
-
-    /// Clear special old parts
-    UInt64 old_parts_lifetime = in_wakeup ? 0ull : UInt64(storage_settings->old_parts_lifetime.totalSeconds());
-
-    invisible_dropped_parts.erase(
-        std::remove_if(
-            invisible_dropped_parts.begin(),
-            invisible_dropped_parts.end(),
-            [&](auto & part) { return UInt64(now) < TxnTimestamp(part->getCommitTime()).toSecond() + old_parts_lifetime; }),
-        invisible_dropped_parts.end());
-    pushToRemovingQueue(storage, invisible_dropped_parts, "invisible dropped");
-
-    visible_alone_drop_ranges.erase(
-        std::remove_if(
-            visible_alone_drop_ranges.begin(),
-            visible_alone_drop_ranges.end(),
-            [&](auto & part) { return UInt64(now) < TxnTimestamp(part->getCommitTime()).toSecond() + old_parts_lifetime; }),
-        visible_alone_drop_ranges.end());
-    pushToRemovingQueue(storage, visible_alone_drop_ranges, "visible alone drop range");
-
-    if (!visible_alone_drop_ranges.empty() || !invisible_dropped_parts.empty())
-    {
-        LOG_DEBUG(
-            log,
-            "Clear old parts with timestamp {}, {} : all_parts {}, visible_alone_drop_ranges {}, invisible_dropped_parts {}",
-            gc_timestamp,
-            LocalDateTime(gc_timestamp.toSecond()),
-            all_parts.size(),
-            visible_alone_drop_ranges.size(),
-            invisible_dropped_parts.size());
-    }
-
-
-    /// Clear special old bitmaps
-    DeleteBitmapMetaPtrVector visible_bitmaps, visible_alone_tombstone_bitmaps, unvisible_bitmaps;
-    if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
-    {
-        auto all_bitmaps = catalog->getDeleteBitmapsInPartitions(istorage, {partition_id}, gc_timestamp);
-        // TODO: filter out uncommitted bitmaps
-        CnchPartsHelper::calcVisibleDeleteBitmaps(all_bitmaps, visible_bitmaps, true, &visible_alone_tombstone_bitmaps, &unvisible_bitmaps);
-    }
-
-    removeDeleteBitmaps(storage, unvisible_bitmaps, "covered by range tombstones");
-
-    visible_alone_tombstone_bitmaps.erase(
-        std::remove_if(
-            visible_alone_tombstone_bitmaps.begin(),
-            visible_alone_tombstone_bitmaps.end(),
-            [&](auto & bitmap) { return UInt64(now)  < (bitmap->getCommitTime() >> 18) / 1000 + old_parts_lifetime; }),
-        visible_alone_tombstone_bitmaps.end()
-    );
-    removeDeleteBitmaps(storage, visible_alone_tombstone_bitmaps, "alone tombstone");
-
-    /// Clear staged parts
-    if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
-    {
-        /// staged part is tmp part which is unecessary to last for old_parts_lifetime, delete it directly
-        ServerDataPartsVector staged_parts = createServerPartsFromDataParts(
-            storage, catalog->getStagedParts(istorage, TxnTimestamp{storage.getContext()->getTimestamp()}));
-        staged_parts = CnchPartsHelper::calcVisiblePartsForGC(staged_parts, nullptr, nullptr);
-        size_t size = staged_parts.size();
-        size_t handle_size = 0;
-        for (size_t i = 0; i < size; ++i)
-        {
-            auto staged_part = staged_parts[i];
-            if (!staged_part->deleted())
-                continue;
-            /// In response to fail situation, it's necessary to handle previous stage part before handle stage part who marks delete state.
-            if (staged_part->tryGetPreviousPart())
-                pushToRemovingQueue(storage, {staged_part->tryGetPreviousPart()}, "Clear staged parts", true);
-            else
-            {
-                pushToRemovingQueue(storage, {staged_part}, "Clear staged parts", true);
-                handle_size++;
-            }
-        }
-        LOG_DEBUG(log, "All staged parts: {}, Clear staged parts {}", staged_parts.size(), handle_size);
-    }
-
-    if (!visible_parts.empty())
-    {
-        LOG_DEBUG(
-            log,
-            "Will check visible_parts {} with timestamp {}, {}",
-            visible_parts.size(),
-            gc_timestamp,
-            LocalDateTime(gc_timestamp.toSecond()));
-    }
-
-    auto checkpoints = getCheckpoints(storage, gc_timestamp);
-    for (size_t i = 1; i < checkpoints.size(); ++i)
-    {
-        collectBetweenCheckpoints(storage, visible_parts, visible_bitmaps, checkpoints[i - 1], checkpoints[i]);
-    }
 }
 
 void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, const ServerDataPartsVector & visible_parts)
@@ -290,122 +191,6 @@ void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, 
     cnch_writer.dumpAndCommitCnchParts(drop_ranges, bitmap_tombstones);
 }
 
-std::vector<TxnTimestamp> CnchPartGCThread::getCheckpoints(StorageCnchMergeTree & storage, TxnTimestamp max_timestamp)
-{
-    auto storage_settings = storage.getSettings();
-
-    auto now = time(nullptr);
-
-    std::vector<TxnTimestamp> timestamps{0};
-
-    if (storage_settings->time_travel_retention_days)
-    {
-        Checkpoints checkpoints = catalog->getCheckpoints();
-
-        for (auto & checkpoint : checkpoints)
-        {
-            TxnTimestamp ts = checkpoint.timestamp();
-            if (checkpoint.status() == Checkpoint::Normal && UInt64(now) > ts.toSecond() + checkpoint.ttl())
-                ; /// TODO:
-            /// storage.removeCheckpoint(checkpoint);
-            else
-                timestamps.push_back(ts);
-        }
-    }
-
-    timestamps.push_back(max_timestamp);
-    return timestamps;
-}
-
-void CnchPartGCThread::collectBetweenCheckpoints(
-    StorageCnchMergeTree & storage,
-    const ServerDataPartsVector & visible_parts,
-    const DeleteBitmapMetaPtrVector & visible_bitmaps,
-    TxnTimestamp begin,
-    TxnTimestamp end)
-{
-    ServerDataPartsVector stale_parts;
-    DeleteBitmapMetaPtrVector stale_bitmaps;
-
-    for (const auto & part : visible_parts)
-        collectStaleParts(part, begin, end, false, stale_parts);
-    for (const auto & bitmap : visible_bitmaps)
-        collectStaleBitmaps(bitmap, begin, end, false, stale_bitmaps);
-
-    pushToRemovingQueue(storage, stale_parts, "stale");
-    removeDeleteBitmaps(storage, stale_bitmaps, "stale between " + begin.toString() + " and " + end.toString());
-
-    std::unordered_map<String, Int32> remove_parts_num;
-
-    for (auto & part : stale_parts)
-        ++remove_parts_num[part->info().partition_id];
-
-    if (!remove_parts_num.empty())
-    {
-        std::stringstream ss;
-        for (auto & [partition_id, count]: remove_parts_num)
-            ss << "(" << partition_id << ", " << count << "), ";
-        LOG_TRACE(log, "Removed stale parts: {}", ss.str());
-    }
-}
-
-void CnchPartGCThread::collectStaleParts(
-    ServerDataPartPtr parent_part,
-    TxnTimestamp begin,
-    TxnTimestamp end,
-    bool has_visible_ancestor,
-    ServerDataPartsVector & stale_parts) const
-{
-    do
-    {
-        const auto & prev_part = parent_part->tryGetPreviousPart();
-
-        if (!prev_part)
-            break;
-
-        has_visible_ancestor = has_visible_ancestor           // inherit from parent
-            || (parent_part->getCommitTime() < end.toUInt64() // parent is visible
-                && !parent_part->isPartial());                // parent is a base one
-
-        if (has_visible_ancestor && prev_part->getCommitTime() > begin.toUInt64())
-        {
-            LOG_DEBUG(
-                log, "Will remove part {} covered by {} /partial={}", prev_part->name(), parent_part->name(), parent_part->isPartial());
-            stale_parts.push_back(prev_part);
-        }
-
-        parent_part = prev_part;
-    }
-    while (true);
-}
-
-void CnchPartGCThread::collectStaleBitmaps(
-    DeleteBitmapMetaPtr parent_bitmap,
-    TxnTimestamp begin,
-    TxnTimestamp end,
-    bool has_visible_ancestor,
-    DeleteBitmapMetaPtrVector & stale_bitmaps)
-{
-    do
-    {
-        const auto & prev_bitmap = parent_bitmap->tryGetPrevious();
-        if (!prev_bitmap || prev_bitmap->getCommitTime() <= begin.toUInt64())
-            break;
-
-        /// inherit from parent;
-        if (!has_visible_ancestor) // 1. parent is visible;                           &&  2. parent is a base bitmap
-            has_visible_ancestor = ((parent_bitmap->getCommitTime() <= end.toUInt64()) && !parent_bitmap->isPartial());
-
-        if (has_visible_ancestor)
-        {
-            LOG_DEBUG(log, "Will remove delete bitmap {} covered by {}", prev_bitmap->getNameForLogs(), parent_bitmap->getNameForLogs());
-            stale_bitmaps.push_back(prev_bitmap);
-        }
-
-        parent_bitmap = prev_bitmap;
-    } while (true);
-}
-
 TxnTimestamp CnchPartGCThread::calculateGCTimestamp(UInt64 delay_second, bool in_wakeup)
 {
     auto local_context = getContext();
@@ -433,26 +218,25 @@ Strings CnchPartGCThread::selectPartitions(const StoragePtr & storage)
         /// Partition selector would always return non-empty result (by round-robin or other strategies).
         /// In some corner case (like the table was detached before calling partition selector), we fall back to Catalog API.
         LOG_DEBUG(log, "Get all partitions from Catalog as partition selector returns empty result.");
-        return getContext()->getCnchCatalog()->getPartitionIDs(storage, nullptr);
+        return catalog->getPartitionIDs(storage, nullptr);
     }
     for (const auto & p : from_partition_selector)
         res.insert(p);
     return {res.begin(), res.end()};
 }
 
-void CnchPartGCThread::pushToRemovingQueue(
-    StorageCnchMergeTree & storage, const ServerDataPartsVector & parts, const String & part_type, bool is_staged_part)
+void CnchPartGCThread::movePartsToTrash(const StoragePtr & storage, const ServerDataPartsVector & parts, bool is_staged, String log_type, size_t pool_size, size_t batch_size)
 {
     auto local_context = getContext();
-    auto storage_settings = storage.getSettings();
 
     if (parts.empty())
         return;
 
-    LOG_DEBUG(log, "Try to remove {} {} part(s) by GCThread", parts.size(), part_type);
+    LOG_DEBUG(log, "Try to clear metadata of {} {}", parts.size(), log_type);
 
-    /// Operations on the metastore are fast, so a fixed size pool is used.
-    ThreadPool remove_pool(4);
+    /// TODO: adjust pool_size based on num_batch
+    ThreadPool remove_pool(pool_size);
+    std::atomic<size_t> num_moved = 0;
 
     auto batch_remove = [&](size_t start, size_t end)
     {
@@ -462,87 +246,75 @@ void CnchPartGCThread::pushToRemovingQueue(
 
             for (auto it = parts.begin() + start; it != parts.begin() + end; ++it)
             {
-                if (is_staged_part)
+                if (is_staged)
                     items.staged_parts.push_back(*it);
                 else
                     items.data_parts.push_back(*it);
             }
 
-            LOG_DEBUG(
-                log,
-                "Will remove {} data part(s), {} staged part(s) to trash in CnchCatalog",
-                items.data_parts.size(),
-                items.staged_parts.size());
-
-
-            catalog->moveDataItemsToTrash(storage.shared_from_this(), items);
-
-            if (auto server_part_log = local_context->getServerPartLog())
+            try
             {
-                auto now = time(nullptr);
-                std::unordered_map<String, size_t> count_by_partition{};
+                catalog->moveDataItemsToTrash(storage, items);
+                num_moved.fetch_add(is_staged ? items.staged_parts.size() : items.data_parts.size());
 
-                for (const auto & part: parts)
+                if (auto server_part_log = local_context->getServerPartLog())
                 {
-                    ServerPartLogElement elem;
-                    elem.event_type = ServerPartLogElement::REMOVE_PART;
-                    elem.event_time = now;
-                    elem.database_name = storage.getDatabaseName();
-                    elem.table_name = storage.getTableName();
-                    elem.uuid = storage.getStorageUUID();
-                    elem.part_name = part->name();
-                    elem.partition_id = part->info().partition_id;
-                    elem.is_staged_part = is_staged_part;
-                    elem.rows = part->rowsCount();
+                    auto now = time(nullptr);
+                    std::unordered_map<String, size_t> count_by_partition{};
 
-                    server_part_log->add(elem);
+                    for (const auto & part: parts)
+                    {
+                        /// TODO: add commit_time and end_time field
+                        ServerPartLogElement elem;
+                        elem.event_type = ServerPartLogElement::REMOVE_PART;
+                        elem.event_time = now;
+                        elem.database_name = storage->getDatabaseName();
+                        elem.table_name = storage->getTableName();
+                        elem.uuid = storage->getStorageUUID();
+                        elem.part_name = part->name();
+                        elem.partition_id = part->info().partition_id;
+                        elem.is_staged_part = is_staged;
+                        elem.rows = part->rowsCount();
 
-                    if (elem.rows > 0)
-                        count_by_partition[elem.partition_id] += 1;
+                        server_part_log->add(elem);
+
+                        if (elem.rows > 0)
+                            count_by_partition[elem.partition_id] += 1;
+                    }
+
+                    if (partition_selector)
+                    {
+                        for (const auto & [partition, count] : count_by_partition)
+                            partition_selector->addRemoveParts(storage->getStorageUUID(), partition, count, now);
+                    }
                 }
-
-                if (partition_selector)
-                {
-                    for (const auto & [partition, count] : count_by_partition)
-                        partition_selector->addRemoveParts(storage.getStorageUUID(), partition, count, now);
-                }
+            }
+            catch (Exception & e)
+            {
+                e.addMessage("while moving " + log_type + " to trash");
+                tryLogCurrentException(log);
             }
         });
     };
-
-    size_t batch_size = storage_settings->gc_trash_part_batch_size;
 
     for (size_t start = 0; start < parts.size(); start += batch_size)
     {
         auto end = std::min(start + batch_size, parts.size());
         batch_remove(start, end);
     }
-
-    if (storage_settings->enable_gc_evict_disk_cache)
-    {
-        try
-        {
-            ContextPtr ctx = storage.getContext();
-            storage.sendDropDiskCacheTasks(ctx, parts);
-        }
-        catch (...)
-        {
-            tryLogCurrentException(log, "Fail to drop disk cache for " + storage.getStorageID().getNameForLogs());
-        }
-    }
-
     remove_pool.wait();
+    LOG_DEBUG(log, "Successfully cleared metadata of {} {}", num_moved.load(), log_type);
 }
 
-void CnchPartGCThread::removeDeleteBitmaps(StorageCnchMergeTree & storage, const DeleteBitmapMetaPtrVector & bitmaps, const String & reason)
+void CnchPartGCThread::moveDeleteBitmapsToTrash(const StoragePtr & storage, const DeleteBitmapMetaPtrVector & bitmaps, size_t pool_size, size_t batch_size)
 {
     if (bitmaps.empty())
         return;
 
-    LOG_DEBUG(log, "Try to remove {} bitmap(s) by GCThread, reason: {}", bitmaps.size(), reason);
+    LOG_DEBUG(log, "Try to move {} delete bitmaps to trash", bitmaps.size());
 
-    ThreadPool remove_pool(storage.getSettings()->gc_remove_bitmap_thread_pool_size);
-
+    ThreadPool remove_pool(pool_size);
+    std::atomic<size_t> num_moved = 0;
     auto batch_remove = [&](size_t start, size_t end)
     {
         remove_pool.scheduleOrThrowOnError([&, start, end] {
@@ -550,32 +322,36 @@ void CnchPartGCThread::removeDeleteBitmaps(StorageCnchMergeTree & storage, const
 
             for (auto it = bitmaps.begin() + start; it != bitmaps.begin() + end; ++it)
             {
-                items.delete_bitmaps.push_back(*it);
+                const auto & bitmap = *it;
+                LOG_DEBUG(
+                    log,
+                    "Will move bitmap to trash: {} [{} - {}) {}",
+                    bitmap->getNameForLogs(),
+                    bitmap->getCommitTime(),
+                    bitmap->getEndTime(),
+                    (bitmap->isTombstone() ? "tombstone" : ""));
+                items.delete_bitmaps.push_back(bitmap);
             }
-
-            LOG_DEBUG(log, "Will remove {} delete bitmap(s), reason: {}", items.delete_bitmaps.size(), reason);
 
             try
             {
-                getContext()->getCnchCatalog()->moveDataItemsToTrash(storage.shared_from_this(), items);
+                catalog->moveDataItemsToTrash(storage, items);
+                num_moved.fetch_add(items.delete_bitmaps.size());
             }
             catch (Exception & e)
             {
-                LOG_WARNING(log, "Error occurs when remove bitmaps from catalog. Message : ", e.what());
+                LOG_WARNING(log, "Error occurs when removing stale delete bitmaps from catalog. Message : ", e.what());
             }
         });
     };
 
-    size_t batch_size = storage.getSettings()->gc_remove_bitmap_batch_size;
-    size_t s = 0;
-
-    while (s + batch_size < bitmaps.size())
+    for (size_t start = 0; start < bitmaps.size(); start += batch_size)
     {
-        batch_remove(s, s + batch_size);
-        s += batch_size;
+        auto end = std::min(start + batch_size, bitmaps.size());
+        batch_remove(start, end);
     }
-    batch_remove(s, bitmaps.size());
     remove_pool.wait();
+    LOG_DEBUG(log, "Successfully moved {} delete bitmaps to trash", num_moved.load());
 }
 
 void CnchPartGCThread::clearOldInsertionLabels(const StoragePtr &, StorageCnchMergeTree & storage)
@@ -609,9 +385,9 @@ void CnchPartGCThread::runDataRemoveTask()
         if (!istorage->is_dropped)
         {
             auto & storage = checkAndGetCnchTable(istorage);
-            auto storage_settings = storage.getSettings();
-            size_t removed_size = clearDataFileInTrash(istorage, storage);
+            size_t removed_size = doPhaseTwoGC(istorage, storage);
 
+            auto storage_settings = storage.getSettings();
             if (removed_size)
             {
                 sleep_ms = std::uniform_int_distribution<UInt64>(0, storage_settings->cleanup_delay_period_random_add * 1000)(rng);
@@ -633,94 +409,145 @@ void CnchPartGCThread::runDataRemoveTask()
     data_remover->scheduleAfter(sleep_ms);
 }
 
-size_t CnchPartGCThread::clearDataFileInTrash(const StoragePtr & istorage, StorageCnchMergeTree & storage)
+size_t CnchPartGCThread::doPhaseTwoGC(const StoragePtr & istorage, StorageCnchMergeTree & storage)
 {
-    size_t pool_size = storage.getSettings()->gc_remove_part_thread_pool_size;
+    std::vector<UInt64> snapshot_times;
+    auto db = DatabaseCatalog::instance().getDatabase(storage.getDatabaseName(), getContext());
+    if (db->supportSnapshot())
+    {
+        auto snapshots = db->getAllSnapshotsForStorage(istorage->getStorageUUID());
+        for (auto & ele : snapshots)
+            snapshot_times.push_back(ele->commit_time());
+        std::sort(snapshot_times.begin(), snapshot_times.end());
+    }
+
+    const UInt64 ttl_for_trash_items = static_cast<UInt64>(storage.getSettings()->ttl_for_trash_items.totalSeconds());
+    TxnTimestamp gc_timestamp = TxnTimestamp::fromUnixTimestamp(time(nullptr) - ttl_for_trash_items);
+
+    /// remove all ts > gc_timestamp
+    std::erase_if(snapshot_times, [&](auto ts) { return ts > gc_timestamp; });
+    snapshot_times.push_back(gc_timestamp.toUInt64());
+
+    auto can_remove = [&](UInt64 commit_ts, UInt64 end_ts) -> bool
+    {
+        /// zombie intermediate parts or items created in old version
+        if (end_ts == 0)
+            return true; /// same behavior as before
+
+        if (commit_ts > end_ts)
+        {
+            /// TODO: log warning
+            return false;
+        }
+
+        auto it = std::upper_bound(snapshot_times.begin(), snapshot_times.end(), end_ts);
+
+        /// end_ts >= gc_timestamp
+        /// keep item within fail-safe period
+        if (it == snapshot_times.end())
+            return false;
+
+        /// end_ts < snapshot_times.front()
+        /// remove item which is not visible to the earliest snapshot
+        if (it == snapshot_times.begin())
+            return true;
+
+        /// commit_ts > *(it-1) && end_ts < *(it)
+        /// item is created and then removed between consecutive snapshots
+        /// remove it because it's not visible to any snapshot
+        if (commit_ts > *std::prev(it))
+            return true;
+
+        return false;
+    };
+
+    size_t pool_size = std::max(static_cast<size_t>(storage.getSettings()->gc_remove_part_thread_pool_size), static_cast<size_t>(1));
     size_t batch_size = storage.getSettings()->gc_remove_part_batch_size;
+    auto trash_items = catalog->getDataItemsInTrash(istorage, /*limit*/ pool_size * batch_size);
 
-    Stopwatch watch;
-    const auto trash_items = catalog->getDataItemsInTrash(istorage, batch_size * pool_size);
+    Catalog::TrashItems items_to_remove;
+    for (auto & part : trash_items.data_parts)
+    {
+        if (can_remove(part->getCommitTime(), part->getEndTime()))
+        {
+            items_to_remove.data_parts.push_back(part);
+        }
+    }
+    for (auto & bitmap : trash_items.delete_bitmaps)
+    {
+        if (can_remove(bitmap->getCommitTime(), bitmap->getEndTime()))
+        {
+            items_to_remove.delete_bitmaps.push_back(bitmap);
+        }
+    }
 
-    if (trash_items.empty())
+    if (items_to_remove.empty())
         return 0;
 
+    /// remove data file and meta of items_to_remove
     ThreadPool remove_pool(pool_size);
-    std::atomic<std::size_t> total_removed_items;
+    std::atomic<size_t> ntotal = 0;
 
-    auto batch_remove = [&](size_t p_start, size_t p_end, size_t d_start, size_t d_end) {
-        remove_pool.trySchedule([&, p_start, p_end, d_start, d_end] {
-            Catalog::TrashItems trash_items_removed;
+    auto batch_remove = [&](size_t p_beg, size_t p_end, size_t d_beg, size_t d_end) {
+        /// TODO: old impl use trySchedule, what's the difference?
+        remove_pool.scheduleOrThrowOnError([&, p_beg, p_end, d_beg, d_end] {
+            Stopwatch watch;
+            Catalog::TrashItems items_removed;
 
-            /// Remove part file.
-            for (size_t i = p_start; i < p_end; i++)
+            for (size_t i = p_beg; i < p_end; ++i)
             {
-                const auto & part = trash_items.data_parts[i];
-                String name = part->name();
+                const auto & part = items_to_remove.data_parts[i];
                 try
                 {
-                    LOG_DEBUG(log, "Will remove part: {}", name);
                     auto cnch_part = part->toCNCHDataPart(storage);
+                    LOG_DEBUG(log, "Will remove part {} under path {}", part->name(), cnch_part->getFullRelativePath());
                     cnch_part->remove();
-                    trash_items_removed.data_parts.push_back(part);
+                    items_removed.data_parts.push_back(part);
                 }
                 catch (...)
                 {
-                    tryLogCurrentException(log, "Error occurs when remove part: " + name);
+                    tryLogCurrentException(log, "Error occurs while remove part " + part->name());
                 }
             }
 
-            /// Remove delete bitmap file
-            for (size_t i = d_start; i < d_end; i++)
+            for (size_t i = d_beg; i < d_end; ++i)
             {
-                const auto & bitmap = trash_items.delete_bitmaps[i];
+                const auto & bitmap = items_to_remove.delete_bitmaps[i];
                 try
                 {
-                    LOG_DEBUG(log, "Will remove delete bitmap : {}", bitmap->getNameForLogs());
+                    auto opt_path = bitmap->getFullRelativePath();
+                    LOG_DEBUG(log, "Will remove delete bitmap {} under path {}", bitmap->getNameForLogs(), opt_path.has_value() ? *opt_path : "");
                     bitmap->removeFile();
-                    trash_items_removed.delete_bitmaps.push_back(bitmap);
+                    items_removed.delete_bitmaps.push_back(bitmap);
                 }
                 catch (...)
                 {
-                    tryLogCurrentException(log, "Error occurs when remove bitmap " + bitmap->getNameForLogs());
+                    tryLogCurrentException(log, "Error occurs while remove delete bitmap " + bitmap->getNameForLogs());
                 }
             }
 
-            size_t removed_parts_number = trash_items_removed.data_parts.size();
-            size_t removed_delete_bitmap_number = trash_items_removed.delete_bitmaps.size();
+            size_t nparts = items_removed.data_parts.size();
+            size_t nbitmaps = items_removed.delete_bitmaps.size();
+            LOG_DEBUG(log, "Will remove trash records of {} parts, {} delete bitmaps", nparts, nbitmaps);
+            catalog->clearTrashItems(istorage, items_removed);
             LOG_DEBUG(
-                log, "Will remove trash items (with {} parts, {} delete bitmaps)", removed_parts_number, removed_delete_bitmap_number);
-            catalog->clearTrashItems(istorage, trash_items_removed);
-            LOG_DEBUG(
-                log,
-                "Removed {} parts, {} delete bitmaps in {} ms.",
-                removed_parts_number,
-                removed_delete_bitmap_number,
-                watch.elapsedMilliseconds());
-
-            total_removed_items += (removed_parts_number + removed_delete_bitmap_number);
+                log, "Completely removed data of {} parts and {} delete bitmaps in {} ms", nparts, nbitmaps, watch.elapsedMilliseconds());
+            ntotal += (nparts + nbitmaps);
         });
     };
 
-    size_t offset = 0;
-
-    while (offset + batch_size < trash_items.data_parts.size())
+    for (size_t i = 0; i < items_to_remove.data_parts.size(); i += batch_size)
     {
-        batch_remove(offset, offset + batch_size, 0, 0);
-        offset += batch_size;
+        size_t end = std::min(i + batch_size, items_to_remove.data_parts.size());
+        batch_remove(i, end, 0, 0);
     }
-    batch_remove(offset, trash_items.data_parts.size(), 0, 0);
-
-    offset = 0;
-    while (offset + batch_size < trash_items.delete_bitmaps.size())
+    for (size_t i = 0; i < items_to_remove.delete_bitmaps.size(); i += batch_size)
     {
-        batch_remove(0, 0, offset, offset + batch_size);
-        offset += batch_size;
+        size_t end = std::min(i + batch_size, items_to_remove.delete_bitmaps.size());
+        batch_remove(0, 0, i, end);
     }
-    batch_remove(0, 0, offset, trash_items.delete_bitmaps.size());
-
     remove_pool.wait();
-
-    return total_removed_items;
+    return ntotal;
 }
 
 ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataPartsVector & parts, TxnTimestamp gc_timestamp)
@@ -728,18 +555,15 @@ ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataParts
     ServerDataPartsVector intermediate_parts;
     std::set<TxnTimestamp> txn_ids;
     // Collect all intermediate parts and related transactions.
-    parts.erase(std::remove_if(parts.begin(), parts.end(),
-        [&](const ServerDataPartPtr & p)
+    std::erase_if(parts, [&](const ServerDataPartPtr & p) {
+        if (p->getCommitTime() == IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
         {
-            if (p->getCommitTime() == IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
-            {
-                intermediate_parts.push_back(p);
-                txn_ids.insert(p->part_model_wrapper->part_model->part_info().mutation());
-                return true;
-            }
-            return false;
+            intermediate_parts.push_back(p);
+            txn_ids.insert(p->part_model_wrapper->part_model->part_info().mutation());
+            return true;
         }
-    ), parts.end());
+        return false;
+    });
 
     // no intermediate part to process.
     if (txn_ids.empty())
@@ -786,6 +610,120 @@ ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataParts
             parts.push_back(part);
     }
     return zombie_intermediate_parts;
+}
+
+void CnchPartGCThread::doPhaseOnePartitionGC(const StoragePtr & istorage, StorageCnchMergeTree & storage, const String & partition_id, bool in_wakeup, TxnTimestamp gc_timestamp)
+{
+    auto storage_settings = storage.getSettings();
+    auto now = time(nullptr);
+
+    Stopwatch watch;
+    // for gc thread, intermediate parts are required in case that TransactionCleaner fails to clean them.
+    auto all_parts = catalog->getServerDataPartsInPartitions(istorage, {partition_id}, gc_timestamp, nullptr, Catalog::VisibilityLevel::All);
+    LOG_TRACE(log, "Get {} parts for {} from Catalog cost {} us", all_parts.size(), partition_id, watch.elapsedMicroseconds());
+    watch.restart();
+
+    // Get zombie parts to remove and filter out invisible intermediate parts.
+    auto intermediate_parts_to_remove = processIntermediateParts(all_parts, gc_timestamp);
+    if (!intermediate_parts_to_remove.empty())
+    {
+        LOG_TRACE(log, "Get {} intermediate parts to remove for {} ", intermediate_parts_to_remove.size(), partition_id);
+        movePartsToTrash(istorage, intermediate_parts_to_remove, /*is_staged*/ false, "intermediate parts",
+            storage_settings->gc_trash_part_thread_pool_size, storage_settings->gc_trash_part_batch_size);
+    }
+
+    auto visible_parts = CnchPartsHelper::calcVisibleParts(all_parts, false);
+    LOG_TRACE(log, "Calculate visible parts cost {} us, visible_parts: {}", watch.elapsedMicroseconds(), visible_parts.size());
+
+    /// Generate DROP_RANGE for expired partitions by the TTL
+    if (!visible_parts.empty())
+        tryMarkExpiredPartitions(storage, visible_parts);
+
+    /// Clear special old parts
+    UInt64 old_parts_lifetime = in_wakeup ? 0ull : static_cast<UInt64>(storage_settings->old_parts_lifetime.totalSeconds());
+
+    /// clear parts
+    {
+        watch.restart();
+        ServerDataPartsVector parts_to_gc;
+        CnchPartsHelper::calcPartsForGC(all_parts, &parts_to_gc, nullptr);
+        LOG_DEBUG(
+            log,
+            "Get {}/{} parts to gc at {}({}), took {} us",
+            parts_to_gc.size(),
+            all_parts.size(),
+            gc_timestamp,
+            LocalDateTime(gc_timestamp.toSecond()),
+            watch.elapsedMicroseconds());
+
+        std::erase_if(parts_to_gc, [&](auto & part) {
+            return !part->getEndTime() || static_cast<UInt64>(now) < TxnTimestamp(part->getEndTime()).toSecond() + old_parts_lifetime;
+        });
+
+        if (storage_settings->enable_gc_evict_disk_cache)
+        {
+            try
+            {
+                storage.sendDropDiskCacheTasks(getContext(), parts_to_gc);
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, "Fail to drop disk cache for " + storage.getStorageID().getNameForLogs());
+            }
+        }
+
+        movePartsToTrash(istorage, parts_to_gc, /*is_staged*/ false, "parts",
+            storage_settings->gc_trash_part_thread_pool_size, storage_settings->gc_trash_part_batch_size);
+    }
+
+    /// clear delete bitmaps
+    if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
+    {
+        watch.restart();
+        /// TODO: handle zombie intermediate bitmaps
+        DeleteBitmapMetaPtrVector all_bitmaps = catalog->getDeleteBitmapsInPartitions(istorage, {partition_id}, gc_timestamp);
+        DeleteBitmapMetaPtrVector bitmaps_to_gc;
+        CnchPartsHelper::calcBitmapsForGC(all_bitmaps, &bitmaps_to_gc, nullptr);
+        LOG_DEBUG(
+            log,
+            "Get {}/{} bitmaps to gc at {}({}), took {} us",
+            bitmaps_to_gc.size(),
+            all_bitmaps.size(),
+            gc_timestamp,
+            LocalDateTime(gc_timestamp.toSecond()),
+            watch.elapsedMicroseconds());
+
+        std::erase_if(bitmaps_to_gc, [&](auto & bitmap) {
+            return !bitmap->getEndTime() || static_cast<UInt64>(now) < TxnTimestamp(bitmap->getEndTime()).toSecond() + old_parts_lifetime;
+        });
+        moveDeleteBitmapsToTrash(istorage, bitmaps_to_gc, storage_settings->gc_remove_bitmap_thread_pool_size, storage_settings->gc_remove_bitmap_batch_size);
+    }
+
+    /// clear staged parts
+    if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
+    {
+        watch.restart();
+        NameSet partition_filter { partition_id };
+        /// not using gc_timestamp here because
+        /// staged part is tmp part which is unecessary to last for old_parts_lifetime, delete it directly
+        TxnTimestamp ts = storage.getContext()->getTimestamp();
+        ServerDataPartsVector all_staged_parts = catalog->getStagedServerDataParts(istorage, ts, &partition_filter);
+        ServerDataPartsVector staged_parts_to_gc;
+        CnchPartsHelper::calcPartsForGC(all_staged_parts, &staged_parts_to_gc, nullptr);
+        LOG_DEBUG(
+            log,
+            "Get {}/{} staged parts to gc at {}({}), took {} us",
+            staged_parts_to_gc.size(),
+            all_staged_parts.size(),
+            ts,
+            LocalDateTime(ts.toSecond()),
+            watch.elapsedMicroseconds());
+
+        /// due to its temporary nature, staged parts don't actually have a trash,
+        /// `Catalog::moveDataItemsToTrash` will removes its metadata directly.
+        movePartsToTrash(istorage, staged_parts_to_gc, /*is_staged*/ true, "staged parts",
+            storage_settings->gc_trash_part_thread_pool_size, storage_settings->gc_trash_part_batch_size);
+    }
 }
 
 }

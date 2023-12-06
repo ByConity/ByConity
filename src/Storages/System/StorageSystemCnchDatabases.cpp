@@ -15,11 +15,12 @@
 
 #include <Catalog/Catalog.h>
 #include <DataTypes/DataTypeDateTime.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
-#include <DataTypes/DataTypeNullable.h>
 #include <Interpreters/Context.h>
 #include <Storages/System/StorageSystemCnchDatabases.h>
+#include <Transaction/TxnTimestamp.h>
 #include <Common/Status.h>
 
 namespace DB
@@ -38,7 +39,7 @@ NamesAndTypesList StorageSystemCnchDatabases::getNamesAndTypes()
 
 void StorageSystemCnchDatabases::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & ) const
 {
-    Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
+    auto cnch_catalog = context->tryGetCnchCatalog();
 
     if (context->getServerType() == ServerType::cnch_server && cnch_catalog)
     {
@@ -58,8 +59,7 @@ void StorageSystemCnchDatabases::fillData(MutableColumns & res_columns, ContextP
                     res_columns[col_num++]->insertDefault();
                 res_columns[col_num++]->insert(res[i].txnid());
                 res_columns[col_num++]->insert(res[i].previous_version());
-                auto commit_time = (res[i].commit_time() >> 18) ; // first 48 bits represent times
-                res_columns[col_num++]->insert(commit_time/1000) ;// convert to seconds
+                res_columns[col_num++]->insert(TxnTimestamp(res[i].commit_time()).toSecond());
             }
         }
     }

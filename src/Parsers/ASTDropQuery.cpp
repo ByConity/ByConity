@@ -53,6 +53,8 @@ void ASTDropQuery::formatQueryImpl(const FormatSettings & settings, FormatState 
         settings.ostr << "EXTERNAL CATALOG ";
     else if (is_dictionary)
         settings.ostr << "DICTIONARY ";
+    else if (is_snapshot)
+        settings.ostr << "SNAPSHOT ";
     else if (is_view)
         settings.ostr << "VIEW ";
     else

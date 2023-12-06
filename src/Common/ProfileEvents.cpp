@@ -404,6 +404,14 @@
     M(RenameDatabaseFailed, "") \
     M(AlterDatabaseSuccess, "") \
     M(AlterDatabaseFailed, "") \
+    M(CreateSnapshotSuccess, "") \
+    M(CreateSnapshotFailed, "") \
+    M(RemoveSnapshotSuccess, "") \
+    M(RemoveSnapshotFailed, "") \
+    M(TryGetSnapshotSuccess, "") \
+    M(TryGetSnapshotFailed, "") \
+    M(GetAllSnapshotsSuccess, "") \
+    M(GetAllSnapshotsFailed, "") \
     M(CreateTableSuccess, "") \
     M(CreateTableFailed, "") \
     M(DropTableSuccess, "") \
@@ -578,8 +586,8 @@
     M(UpdateServerWorkerGroupFailed, "") \
     M(GetWorkersInWorkerGroupSuccess, "") \
     M(GetWorkersInWorkerGroupFailed, "") \
-    M(GetTableByIDSuccess, "") \
-    M(GetTableByIDFailed, "") \
+    M(GetTableHistoriesSuccess, "") \
+    M(GetTableHistoriesFailed, "") \
     M(GetTablesByIDSuccess, "") \
     M(GetTablesByIDFailed, "") \
     M(GetAllDataBasesSuccess, "") \

@@ -579,6 +579,17 @@ public:
     using IParserDialectBase::IParserDialectBase;
 };
 
+/// Parses queries like:
+/// CREATE SNAPSHOT [IF NOT EXISTS] [db.]name [TO [db.]table] TTL n DAYS;
+class ParserCreateSnapshotQuery : public IParserDialectBase
+{
+protected:
+    const char * getName() const override { return "CREATE SNAPSHOT query"; }
+    bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+
+public:
+    using IParserDialectBase::IParserDialectBase;
+};
 
 /** Query like this:
   * CREATE|ATTACH TABLE [IF NOT EXISTS] [db.]name

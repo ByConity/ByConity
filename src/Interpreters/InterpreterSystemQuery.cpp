@@ -33,7 +33,9 @@
 #include <MergeTreeCommon/CnchServerTopology.h>
 #include <MergeTreeCommon/CnchServerManager.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <MergeTreeCommon/GlobalGCManager.h>
 #include <CloudServices/CnchBGThreadCommon.h>
+#include <CloudServices/CnchPartGCThread.h>
 #include <CloudServices/CnchServerClientPool.h>
 #include <DaemonManager/DaemonManagerClient.h>
 #include <Interpreters/Context.h>
@@ -501,6 +503,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::STOP_CLUSTER:
             executeBGTaskInCnchServer(system_context, query.type);
             break;
+        case Type::GC:
+            executeGc(query);
+            break;
         case Type::DEDUP:
             executeDedup(query);
             break;
@@ -515,6 +520,9 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             break;
         case Type::CLEAN_TRANSACTION:
             cleanTransaction(query.txn_id);
+            break;
+        case Type::CLEAN_TRASH_TABLE:
+            executeCleanTrashTable(query);
             break;
         case Type::CLEAN_FILESYSTEM_LOCK:
             cleanFilesystemLock();
@@ -1114,6 +1122,27 @@ void InterpreterSystemQuery::executeMetastoreCmd(ASTSystemQuery & query) const
         default:
             throw Exception("Unknown metastore operation.", ErrorCodes::LOGICAL_ERROR);
     }
+}
+
+void InterpreterSystemQuery::executeCleanTrashTable(const ASTSystemQuery & query)
+{
+    auto local_context = getContext();
+    // note: don't use table_id because it's not from trash
+    StorageID id(query.database, query.table, query.table_uuid);
+    if (id.database_name.empty())
+        id.database_name = local_context->getCurrentDatabase();
+    GlobalGCManager::systemCleanTrash(local_context, id, log);
+}
+
+void InterpreterSystemQuery::executeGc(const ASTSystemQuery & query)
+{
+    auto local_context = getContext();
+    if (auto server_type = local_context->getServerType(); server_type != ServerType::cnch_server)
+        throw Exception("SYSTEM GC is only available on CNCH server", ErrorCodes::NOT_IMPLEMENTED);
+
+    auto storage = DatabaseCatalog::instance().getTable(table_id, local_context);
+    CnchPartGCThread gc_thread(local_context, storage->getStorageID());
+    gc_thread.executeManually(query.partition, local_context);
 }
 
 void InterpreterSystemQuery::executeDedup(const ASTSystemQuery & query)

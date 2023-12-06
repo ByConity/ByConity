@@ -35,6 +35,7 @@
 #include <WorkerTasks/ManipulationTaskParams.h>
 #include <WorkerTasks/ManipulationType.h>
 
+#include <common/sleep.h>
 #include <chrono>
 
 namespace ProfileEvents
@@ -976,7 +977,7 @@ String CnchMergeMutateThread::triggerPartMerge(
         LOG_DEBUG(log, "triggerPartMerge(): size of visible_parts <= 1");
         return {};
     }
-    
+
     /// Step 3: get mutation list
     std::map<TxnTimestamp, CnchMergeTreeMutationEntry> mutation_entries;
     std::vector<std::pair<TxnTimestamp, bool>> mutation_timestamps;
@@ -1056,17 +1057,38 @@ void CnchMergeMutateThread::waitTasksFinish(const std::vector<String> & task_ids
         {
             auto escaped_time = watch.elapsedMilliseconds();
             if (escaped_time >= timeout_ms)
-                throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout when wait MergeMutateTask `{}` finished", task_id);
+                throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout waiting for task `{}` to finish", task_id);
 
-            currently_synchronous_tasks_cv.wait_for(
+            bool done = currently_synchronous_tasks_cv.wait_for(
                 lock,
                 std::chrono::milliseconds(timeout_ms - escaped_time),
                 [&]() { return !shutdown_called && !currently_synchronous_tasks.count(task_id); });
+            if (!done)
+                throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout waiting for task `{}` to finish", task_id);
         }
     }
 
     if (shutdown_called)
         throw Exception(ErrorCodes::ABORTED, "Tasks maybe canceled due to server shutdown");
+}
+
+void CnchMergeMutateThread::waitMutationFinish(UInt64 mutation_commit_time, UInt64 timeout_ms)
+{
+    Stopwatch watch;
+    while (true)
+    {
+        std::map<TxnTimestamp, CnchMergeTreeMutationEntry> current_mutations_by_version;
+        catalog->fillMutationsByStorage(storage_id, current_mutations_by_version);
+        if (!current_mutations_by_version.count(mutation_commit_time))
+            break;
+
+        if (shutdown_called)
+            throw Exception(ErrorCodes::ABORTED, "Cancel waiting because thread {} is shutting done", log->name());
+        if (timeout_ms && watch.elapsedMilliseconds() >= timeout_ms)
+            throw Exception(ErrorCodes::TIMEOUT_EXCEEDED, "Timeout waiting for mutation {} to finish", mutation_commit_time);
+        scheduled_task->schedule();
+        sleepForMilliseconds(500);
+    }
 }
 
 void CnchMergeMutateThread::tryRemoveTask(const String & task_id)
@@ -1418,9 +1440,7 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
                 if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
                 {
                     NameSet partitions{partition_id};
-                    auto staged_parts = createServerPartsFromDataParts(
-                        storage,
-                        catalog->getStagedParts(istorage, timestamp, &partitions));
+                    auto staged_parts = catalog->getStagedServerDataParts(istorage, timestamp, &partitions);
                     visible_staged_parts = CnchPartsHelper::calcVisibleParts(staged_parts, false);
                 }
 
@@ -1462,9 +1482,7 @@ bool CnchMergeMutateThread::tryMutateParts(StoragePtr & istorage, StorageCnchMer
             ServerDataPartsVector current_visible_staged_parts;
             if (storage.getInMemoryMetadataPtr()->hasUniqueKey())
             {
-                auto staged_parts = createServerPartsFromDataParts(
-                    storage,
-                    catalog->getStagedParts(istorage, timestamp));
+                auto staged_parts = catalog->getStagedServerDataParts(istorage, timestamp);
                 current_visible_staged_parts = CnchPartsHelper::calcVisibleParts(staged_parts, false);
             }
 
@@ -1563,6 +1581,7 @@ void CnchMergeMutateThread::removeMutationEntryFromKV(const CnchMergeTreeMutatio
     /// We can only allow the mutation to be deleted after T4 to ensure part_1 can be modified.
     /// At T3, the MinActiveTimestamp should be T1, T1 < T2, so, the Mutation should not allow to remove.
     /// At T4, the MinActiveTimestamp should be greater than T2, so, the Mutation could be remove.
+    /// TODO: should be acquired before get parts
     auto min_active_ts = calculateMinActiveTimestamp();
     if (min_active_ts <= commit_time)
     {

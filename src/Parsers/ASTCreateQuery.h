@@ -91,6 +91,19 @@ public:
     }
 };
 
+class ASTCreateSnapshotQuery : public ASTQueryWithTableAndOutput
+{
+public:
+    bool if_not_exists = false;
+    StorageID to_table_id = StorageID::createEmpty();
+    Int32 ttl_in_days = 0;
+
+    String getID(char delim) const override { return String("CreateSnapshotQuery") + delim + database + delim + table; }
+
+    ASTPtr clone() const override;
+
+    void formatQueryImpl(const FormatSettings & settings, FormatState & state, FormatStateStacked frame) const override;
+};
 
 /// CREATE TABLE or ATTACH TABLE query
 class ASTCreateQuery : public ASTQueryWithTableAndOutput, public ASTQueryWithOnCluster

@@ -28,6 +28,8 @@ public:
                                   std::unique_ptr<MaterializeMySQLSettings> settings_, const String & create_sql_);
     ~DatabaseCnchMaterializedMySQL() override = default;
 
+    bool supportSnapshot() const override { return false; }
+
     bool shouldSyncTable(const String & table_name) const;
     /// Check whether to skip ddl command based on setting skip_ddl_patterns. Maintaining the DDL skip in the manager(server side) makes it easier to obtain relevant filtering logs.
     bool shouldSkipDDLCmd(const String & query) const;

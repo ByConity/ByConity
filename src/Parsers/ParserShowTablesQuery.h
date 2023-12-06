@@ -28,7 +28,7 @@ namespace DB
 {
 
 /** Query like this:
-  * SHOW TABLES [FROM db] [[NOT] [I]LIKE 'str'] [LIMIT expr]
+  * SHOW TABLES|DICTIONARIES|SNAPSHOTS [FROM db] [[NOT] [I]LIKE 'str'] [LIMIT expr]
   * or
   * SHOW DATABASES.
   */

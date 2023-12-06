@@ -46,10 +46,8 @@ public:
     /// Useful if we already have a DDL lock
     bool no_ddl_lock{false};
 
-    /// We dropping dictionary, so print correct word
     bool is_dictionary{false};
-
-    /// Same as above
+    bool is_snapshot{false};
     bool is_view{false};
 
     bool no_delay{false};

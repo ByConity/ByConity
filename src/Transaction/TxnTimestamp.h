@@ -55,6 +55,8 @@ public:
     static TxnTimestamp maxTS() { return TxnTimestamp(UINT64_MAX); }
     static TxnTimestamp fallbackTS() { return TxnTimestamp(UINT64_MAX - 1); }
 
+    static TxnTimestamp fromUnixTimestamp(UInt64 unix_timestamp) { return TxnTimestamp((unix_timestamp * 1000) << 18); }
+
     std::string toString() const;
 
 private:

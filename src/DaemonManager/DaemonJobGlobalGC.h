@@ -29,14 +29,18 @@ namespace DB::DaemonManager
 class DaemonJobGlobalGC : public DaemonJob
 {
 public:
-    DaemonJobGlobalGC(ContextMutablePtr global_context_)
-        : DaemonJob{std::move(global_context_), CnchBGThreadType::GlobalGC}
-    {}
+    explicit DaemonJobGlobalGC(ContextMutablePtr global_context_);
+
 protected:
     bool executeImpl() override;
 private:
+    void cleanSnapshotsIfNeeded(TxnTimestamp ts);
+
+    std::shared_ptr<Catalog::Catalog> catalog;
+
     Catalog::IMetaStore::IteratorPtr trash_table_it;
     std::vector<DB::Protos::DataModelTable> tables_need_gc;
+    Stopwatch snapshot_clean_watch;
 };
 
 namespace GlobalGCHelpers

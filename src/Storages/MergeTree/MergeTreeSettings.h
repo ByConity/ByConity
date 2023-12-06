@@ -169,7 +169,8 @@ struct Settings;
       0) \
     M(UInt64, gc_remove_bitmap_batch_size, 1000, "Submit a batch of bitmaps to a background thread", 0) \
     M(UInt64, gc_remove_bitmap_thread_pool_size, 16, "Turn up the thread pool size to speed up GC processing of bitmaps", 0) \
-\
+    M(Seconds, ttl_for_trash_items, 30 * 60, "How many additional seconds to wait before actual data removal", 0) \
+    \
     /** Inserts settings. */ \
     M(UInt64, \
       parts_to_delay_insert, \
@@ -475,8 +476,7 @@ struct Settings;
     M(String, cnch_vw_write, "vw_write", "", 0) \
     M(String, cnch_vw_task, "vw_task", "", 0) \
     M(String, cnch_server_vw, DEFAULT_SERVER_VW_NAME, "", 0) \
-\
-    M(UInt64, time_travel_retention_days, 0, "", 0) \
+    \
     M(UInt64, insertion_label_ttl, 8400 * 2, "", 0) \
 \
     M(Bool, cnch_merge_enable_batch_select, false, "", 0) \
@@ -537,8 +537,9 @@ struct Settings;
     M(UInt64, cnch_gc_round_robin_partitions_interval, 600, "", 0) \
     M(UInt64, cnch_gc_round_robin_partitions_number, 10, "", 0) \
     M(UInt64, cnch_meta_rpc_timeout_ms, 8000, "", 0) \
-    M(UInt64, gc_remove_part_thread_pool_size, 2, "Turn up the thread pool size to speed up GC processing of parts", 0) \
     M(UInt64, gc_trash_part_batch_size, 5000, "Batch size to remove stale parts to trash in background tasks", 0) \
+    M(UInt64, gc_trash_part_thread_pool_size, 4, "Turn up the thread pool size to speed up trashing of parts", 0) \
+    M(UInt64, gc_remove_part_thread_pool_size, 2, "Turn up the thread pool size to speed up trash cleaning of parts", 0) \
     M(UInt64, gc_remove_part_batch_size, 200, "Batch size to remove trash parts from storage in background tasks", 0) \
 \
     /** uuid of CnchMergeTree, as we won't use uuid in CloudMergeTree */ \

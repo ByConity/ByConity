@@ -432,14 +432,14 @@ ServerDataPartsVector createServerPartsFromDataParts(const MergeTreeMetaBase & s
 }
 
 IMergeTreeDataPartsVector createPartVectorFromServerParts(
-    const MergeTreeMetaBase & storage, const ServerDataPartsVector & parts, const std::optional<std::string> & relative_path)
+    const MergeTreeMetaBase & storage, const ServerDataPartsVector & parts)
 {
     IMergeTreeDataPartsVector res;
     res.reserve(parts.size());
     for (const auto & part : parts)
     {
         /// already deal with prev_part in ServerDataPart::toCNCHDataPart.
-        res.push_back(part->toCNCHDataPart(storage, relative_path));
+        res.push_back(part->toCNCHDataPart(storage, std::nullopt));
     }
     return res;
 }

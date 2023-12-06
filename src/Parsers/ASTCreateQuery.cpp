@@ -258,6 +258,31 @@ void ASTColumns::formatImpl(const FormatSettings & s, FormatState & state, Forma
     }
 }
 
+ASTPtr ASTCreateSnapshotQuery::clone() const
+{
+    auto res = std::make_shared<ASTCreateSnapshotQuery>(*this);
+    cloneOutputOptions(*res);
+    return res;
+}
+
+void ASTCreateSnapshotQuery::formatQueryImpl(const FormatSettings & settings, FormatState & /*state*/, FormatStateStacked /*frame*/) const
+{
+    settings.ostr << (settings.hilite ? hilite_keyword : "") << "CREATE SNAPSHOT " << (if_not_exists ? "IF NOT EXISTS " : "")
+                  << (settings.hilite ? hilite_none : "");
+
+    settings.ostr << (!database.empty() ? backQuoteIfNeed(database) + "." : "") << backQuoteIfNeed(table);
+    if (uuid != UUIDHelpers::Nil)
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " UUID " << (settings.hilite ? hilite_none : "")
+                      << quoteString(toString(uuid));
+
+    if (to_table_id)
+        settings.ostr << (settings.hilite ? hilite_keyword : "") << " TO " << (settings.hilite ? hilite_none : "")
+                      << (!to_table_id.database_name.empty() ? backQuoteIfNeed(to_table_id.database_name) + "." : "")
+                      << backQuoteIfNeed(to_table_id.table_name);
+
+    settings.ostr << (settings.hilite ? hilite_keyword : "") << " TTL " << (settings.hilite ? hilite_none : "") << ttl_in_days
+                  << (settings.hilite ? hilite_keyword : "") << " DAYS " << (settings.hilite ? hilite_none : "");
+}
 
 ASTPtr ASTCreateQuery::clone() const
 {

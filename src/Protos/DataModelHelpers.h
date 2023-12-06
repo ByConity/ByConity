@@ -265,8 +265,7 @@ ServerDataPartsVector createServerPartsFromDataParts(const MergeTreeMetaBase & s
 
 IMergeTreeDataPartsVector createPartVectorFromServerParts(
     const MergeTreeMetaBase & storage,
-    const ServerDataPartsVector & parts,
-    const std::optional<std::string> & relative_path = std::nullopt);
+    const ServerDataPartsVector & parts);
 
 size_t fillCnchFilePartsModel(const FileDataPartsCNCHVector & parts, pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model);
 FileDataPartsCNCHVector createCnchFileDataParts(const ContextPtr & context, const pb::RepeatedPtrField<Protos::CnchFilePartModel> & parts_model);

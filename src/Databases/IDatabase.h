@@ -21,12 +21,13 @@
 
 #pragma once
 
-#include <common/types.h>
+#include <Core/UUID.h>
+#include <Databases/Snapshot.h>
+#include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST_fwd.h>
 #include <Storages/IStorage_fwd.h>
-#include <Interpreters/Context_fwd.h>
 #include <Common/Exception.h>
-#include <Core/UUID.h>
+#include <common/types.h>
 
 #include <ctime>
 #include <functional>
@@ -316,9 +317,41 @@ public:
             getEngineName());
     }
 
+    virtual bool supportSnapshot() const { return false; }
+
+    virtual void dropSnapshot(ContextPtr /*local_context*/, const String & /*snapshot_name*/)
+    {
+        assertSupportSnapshot();
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{}: DROP SNAPSHOT is not supported");
+    }
+
+    virtual SnapshotPtr tryGetSnapshot(const String & /*snapshot_name*/) const
+    {
+        assertSupportSnapshot();
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{}: GET SNAPSHOT is not supported");
+    }
+
+    virtual Snapshots getAllSnapshots() const
+    {
+        assertSupportSnapshot();
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{}: SHOW SNAPSHOTS is not supported");
+    }
+
+    virtual Snapshots getAllSnapshotsForStorage(UUID /*storage_uuid*/) const
+    {
+        assertSupportSnapshot();
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "{}: SHOW SNAPSHOTS is not supported");
+    }
+
     virtual ~IDatabase() = default;
 
 protected:
+    void assertSupportSnapshot() const
+    {
+        if (!supportSnapshot())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Database engine {} doesn't support snapshots", getEngineName());
+    }
+
     virtual ASTPtr getCreateTableQueryImpl(const String & /*name*/, ContextPtr /*context*/, bool throw_on_error) const
     {
         if (throw_on_error)

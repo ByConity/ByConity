@@ -1,0 +1,33 @@
+drop table
+test_global_gc1
+clean trash
+test_global_gc1
+undrop table
+0	A
+1	A
+2	A
+create snapshots and drop tables
+test_global_gc1
+test_global_gc2
+clean trash
+test_global_gc1
+test_global_gc2
+drop db snapshot
+test_global_gc1
+drop table snapshot
+create and drop
+create snapshot
+create and drop again
+test_global_gc1
+test_global_gc1
+undrop second table
+0	AA
+1	AA
+2	AA
+clean first table
+second table not affected
+0	AA
+1	AA
+2	AA
+drop snapshot
+drop and clean second table

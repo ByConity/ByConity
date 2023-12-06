@@ -180,6 +180,7 @@ public:
     void triggerPartMutate(StoragePtr storage);
 
     void waitTasksFinish(const std::vector<String> & task_ids, UInt64 timeout_ms);
+    void waitMutationFinish(UInt64 mutation_commit_time, UInt64 timeout_ms);
     MergeTreeMutationStatusVector getAllMutationStatuses();
     ClusterTaskProgress getReclusteringTaskProgress();
 

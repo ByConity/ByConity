@@ -1,3 +1,4 @@
+set mutations_sync = 1;
 DROP TABLE IF EXISTS t_alter_d;
 DROP TABLE IF EXISTS t_alter_ids;
 
@@ -15,7 +16,6 @@ INSERT INTO t_alter_d select 1, number from numbers(5, 10);
 ALTER TABLE t_alter_d DELETE WHERE m in t_alter_ids;
 
 -- MergeMutateThread will wait ~3 seconds before scheduling.
-SELECT sleepEachRow(3) FROM numbers(40) FORMAT Null;
 SELECT count() FROM t_alter_d;
 
 SELECT '----- DELETE IN PARTITION WHERE -----';
@@ -25,21 +25,18 @@ INSERT INTO t_alter_d select 2, number from numbers(6, 10);
 -- t_alter_d|2: 10,11,12,13,14,15
 ALTER TABLE t_alter_d DELETE IN PARTITION '2' WHERE m in t_alter_ids;
 
-SELECT sleepEachRow(3) FROM numbers(10) FORMAT Null;
 SELECT count() FROM t_alter_d;
 
 SELECT '----- DELETE NOTHING -----';
 -- t_alter_d|1: 10,11,12,13,14; 2: 10,11,12,13,14,15
 ALTER TABLE t_alter_d DELETE WHERE m < 10;
 
-SELECT sleepEachRow(3) FROM numbers(10) FORMAT Null;
 SELECT count() FROM t_alter_d;
 
 SELECT '----- DELETE ALL -----';
 -- t_alter_d: EMPTY
 ALTER TABLE t_alter_d DELETE WHERE 1 = 1;
 
-SELECT sleepEachRow(3) FROM numbers(10) FORMAT Null;
 SELECT count() FROM t_alter_d;
 
 SELECT '----- INSERT AFTER DELETE -----';
@@ -52,7 +49,6 @@ ALTER TABLE t_alter_d DELETE WHERE k = 1 and m <= 5;
 -- t_alter_d|1: 2
 INSERT INTO t_alter_d VALUES (1,2);
 
-SELECT sleepEachRow(3) FROM numbers(10) FORMAT Null;
 SELECT m FROM t_alter_d WHERE k = 1 ORDER BY m;
 
 DROP TABLE t_alter_d;

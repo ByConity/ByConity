@@ -38,6 +38,8 @@ private:
     BlockIO executeToTable(ASTDropQuery & query);
     BlockIO executeToTableImpl(ASTDropQuery & query, DatabasePtr & db, UUID & uuid_to_wait);
 
+    BlockIO executeToSnapshot(ASTDropQuery & query);
+
     BlockIO executeToCatalog(ASTDropQuery & query);
 
     static void waitForTableToBeActuallyDroppedOrDetached(const ASTDropQuery & query, const DatabasePtr & db, const UUID & uuid_to_wait);
