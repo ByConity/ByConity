@@ -218,7 +218,12 @@ std::optional<Protos::DataModelTable> getCleanableTrashTable(
 
     if (lifespans.empty() || curr_span.first != 0 || curr_span.second != 0)
     {
-        *fail_reason = fmt::format("Can't calculate lifespans for table {}", table_id.uuid());
+        if (fail_reason)
+            *fail_reason = fmt::format(
+                "Can't calculate lifespans for table {}, got {} versions and {} spans",
+                table_id.uuid(),
+                table_versions.size(),
+                lifespans.size());
         return std::nullopt;
     }
 
