@@ -1,6 +1,7 @@
 #pragma once
-#include <Catalog/Catalog.h>
+#include <Catalog/DataModelPartWrapper_fwd.h>
 #include <Core/Types.h>
+#include <Interpreters/Context_fwd.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Storages/IStorage.h>
 #include <Storages/TableMetaEntry.h>
@@ -54,10 +55,18 @@ public:
     void shutDown();
 
     /**
-     * @brief Trigger a recalculation of both CNCH parts and trash items
-     * metrics.
+     * @brief Trigger a  recalculation of both CNCH parts and trash items
+     * metrics. When using this function, special attention needs to be
+     * paid to whether the caller can accept long waits.
+     * If `timeout` is set, be careful about potential task starvation.
+     *
+     * @param table_meta_ptr Represent the table we need to do the recalculation.
+     * @param current_time A (current) timestamp that marks the bound.
+     * @param force Whether to force the actual recalculation.
+     * @param schedule_timeout Will wait forever with `std::nullopt`. Abort immediately by default.
      */
-    void recalculateOrSnapshotPartitionsMetrics(TableMetaEntryPtr & table_meta_ptr, size_t current_time, bool force = false);
+    void recalculateOrSnapshotPartitionsMetrics(
+        TableMetaEntryPtr & table_meta_ptr, size_t current_time, bool force = false, std::optional<size_t> schedule_timeout = 0);
 
 private:
     // Used to correct the metrics periodically.
@@ -67,7 +76,10 @@ private:
 
     // Schedule a recalculation task.
     // This thread pool used to be called `PartCacheManagerThreadPool` so reused its setting.
-    ThreadPool table_partition_thread_pool{getContext()->getSettingsRef().part_cache_manager_thread_pool_size};
+    ThreadPool table_partition_thread_pool{
+        getContext()->getSettingsRef().part_cache_manager_thread_pool_size,
+        getContext()->getSettingsRef().part_cache_manager_thread_pool_size,
+        100 * getContext()->getSettingsRef().part_cache_manager_thread_pool_size};
     ThreadPool & getTablePartitionThreadPool() { return table_partition_thread_pool; }
 
     Poco::Logger * log;
