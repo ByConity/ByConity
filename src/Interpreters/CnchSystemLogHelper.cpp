@@ -191,6 +191,9 @@ bool createCnchTable(
     query_context->makeSessionContext();
     query_context->makeQueryContext();
 
+    auto db = global_context->getCnchCatalog()->getDatabase(database, query_context);
+    UUID db_uuid = db ? db->getUUID() : UUIDHelpers::Nil;
+
     auto & create = create_query_ast->as<ASTCreateQuery &>();
     create.uuid = UUIDHelpers::generateV4();
     String create_table_sql = queryToString(create);
@@ -198,7 +201,7 @@ bool createCnchTable(
     auto & txn_coordinator = global_context->getCnchTransactionCoordinator();
     TransactionCnchPtr txn = txn_coordinator.createTransaction(CreateTransactionOption().setContext(query_context));
 
-    CreateActionParams params = {{database, table, create.uuid}, create_table_sql};
+    CreateActionParams params = CreateTableParams{db_uuid, StorageID(database, table, create.uuid), create_table_sql, /*attach*/ false};
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
 

@@ -181,7 +181,7 @@ Pipe StorageSystemCnchTablesHistory::read(
     for (size_t i=0; i<filtered_index_column->size(); i++)
         requested_table_id.push_back(trashed_tables_id[(*filtered_index_column)[i].get<UInt64>()]);
 
-    auto tables = cnch_catalog->getTablesByID(requested_table_id);
+    auto tables = cnch_catalog->getTablesByIDs(requested_table_id);
 
     BlockInputStreamPtr input = std::make_shared<CnchTablesHistoryInputStream>(std::move(columns_mask),
         std::move(res_block), max_block_size, tables);

@@ -54,7 +54,10 @@ std::shared_ptr<ResourceSelectCase::QueryType> ResourceSelectCase::translateQuer
 
 ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * ast)
 {
-    if (ast->as<ASTCreateQuery>() || ast->as<ASTDropQuery>() || ast->as<ASTRenameQuery>()
+    if (ast->as<ASTCreateQuery>()
+        || ast->as<ASTCreateSnapshotQuery>()
+        || ast->as<ASTDropQuery>()
+        || ast->as<ASTRenameQuery>()
         // || ast->as<ASTCreateMaskingPolicyQuery>()
     )
         return ResourceSelectCase::QueryType::DDL;
@@ -65,7 +68,9 @@ ResourceSelectCase::QueryType ResourceSelectCase::getQueryType(const DB::IAST * 
     else if (ast->as<ASTInsertQuery>() || ast->as<ASTDeleteQuery>() || ast->as<ASTUpdateQuery>())
         return ResourceSelectCase::QueryType::DATA;
 
-    else if (const auto * ast_system = ast->as<ASTSystemQuery>(); ast_system && ast_system->type == ASTSystemQuery::Type::DEDUP)
+    else if (const auto * ast_system = ast->as<ASTSystemQuery>(); ast_system
+        && ast_system->type == ASTSystemQuery::Type::DEDUP
+    )
         return ResourceSelectCase::QueryType::DATA;
 
     else if (const auto * alter_selects = ast->as<ASTAlterQuery>())

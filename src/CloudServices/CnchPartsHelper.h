@@ -25,6 +25,63 @@ namespace DB
 class Context;
 }
 
+namespace DB
+{
+/// used in unit tests
+struct MinimumDataPart
+{
+    /////////////////////////////
+    /// Factory methods
+    /////////////////////////////
+
+    static std::shared_ptr<MinimumDataPart> create(String name, UInt64 commit_time, bool is_deleted = false)
+    {
+        auto res = std::make_shared<MinimumDataPart>();
+        res->info = MergeTreePartInfo::fromPartName(name, MERGE_TREE_CHCH_DATA_STORAGTE_VERSION);
+        res->commit_time = commit_time;
+        res->is_deleted = is_deleted;
+        return res;
+    }
+
+    static std::shared_ptr<MinimumDataPart> createDropRange(String partition_id, Int64 max_block, Int64 xid, UInt64 commit_time)
+    {
+        auto res = std::make_shared<MinimumDataPart>();
+        res->info = MergeTreePartInfo(partition_id, 0, max_block, MergeTreePartInfo::MAX_LEVEL, xid);
+        res->commit_time = commit_time;
+        res->is_deleted = true;
+        return res;
+    }
+
+    /////////////////////////////
+    /// Helper functions
+    /////////////////////////////
+
+    bool containsExactly(const MinimumDataPart & rhs) const
+    {
+        return info.partition_id == rhs.info.partition_id && info.min_block == rhs.info.min_block && info.max_block == rhs.info.max_block
+            && (info.level > rhs.info.level || commit_time > rhs.commit_time);
+    }
+
+    // for working with PartComparator
+    const MergeTreePartInfo & get_info() const { return info; }
+    UInt64 get_commit_time() const { return commit_time; }
+
+    /////////////////////////////
+    /// Fields
+    /////////////////////////////
+
+    MergeTreePartInfo info;
+    UInt64 commit_time = 0;
+    UInt64 end_time = 0;
+    std::shared_ptr<MinimumDataPart> prev;
+    bool is_deleted = false;
+};
+
+using MinimumDataPartPtr = std::shared_ptr<MinimumDataPart>;
+using MinimumDataParts = std::vector<MinimumDataPartPtr>;
+
+}
+
 namespace DB::CnchPartsHelper
 {
 
@@ -55,11 +112,22 @@ MergeTreeDataPartsVector calcVisibleParts(MergeTreeDataPartsVector & all_parts, 
 ServerDataPartsVector calcVisibleParts(ServerDataPartsVector & all_parts, bool flatten, LoggingOption logging = DisableLogging, bool move_source_parts = false);
 MergeTreeDataPartsCNCHVector calcVisibleParts(MergeTreeDataPartsCNCHVector & all_parts, bool flatten, LoggingOption logging = DisableLogging);
 
-ServerDataPartsVector calcVisiblePartsForGC(
-    ServerDataPartsVector & all_parts,
-    ServerDataPartsVector * visible_alone_drop_ranges,
-    ServerDataPartsVector * invisible_dropped_parts,
-    LoggingOption logging = DisableLogging);
+/**
+ * Compute end time for committed parts.
+ * @param all_parts input, should be flatterned, all part should have been committed (w/ commit time)
+ * @param out_parts_to_gc if not null, all parts with end time set will be added to it
+ * @param out_visible_parts if not null, all visible parts (latest version for mvcc parts) will be added to it
+ */
+void calcPartsForGC(ServerDataPartsVector & all_parts, ServerDataPartsVector * out_parts_to_gc, ServerDataPartsVector * out_visible_parts);
+
+/// for tests only
+void calcMinimumPartsForGC(MinimumDataParts & all_parts, MinimumDataParts * out_parts_to_gc, MinimumDataParts * out_visible_parts);
+
+/// similar to calcPartsForGC, but for delete bitmaps
+void calcBitmapsForGC(
+    DeleteBitmapMetaPtrVector & all_bitmaps,
+    DeleteBitmapMetaPtrVector * out_bitmaps_to_gc,
+    DeleteBitmapMetaPtrVector * out_visible_bitmaps);
 
 void calcVisibleDeleteBitmaps(
     DeleteBitmapMetaPtrVector & all_bitmaps,

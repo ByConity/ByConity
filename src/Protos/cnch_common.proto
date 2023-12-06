@@ -15,18 +15,6 @@ message StorageID
   optional string server_vw_name = 4;
 }
 
-message Checkpoint {
-  required uint64 timestamp = 1;
-  required uint32 ttl = 2;
-  // required uint32 status = 3;
-  enum Status {
-    Normal = 0;
-    Prepared = 1;
-    Removing = 2;
-  };
-  required Status status = 3[default = Normal];
-}
-
 message HostWithPorts
 {
   required string hostname = 1;
@@ -126,11 +114,11 @@ message LeaderLease {
 
   //Leader should refresh "last_refresh_time" in every "refresh_interval_ms".
   required uint64 refresh_interval_ms = 3;
-  
-  //If any follower found "last_refresh_time" was not changed in "expired_interval_ms", 
+
+  //If any follower found "last_refresh_time" was not changed in "expired_interval_ms",
   //then it can safely try to elect.
   required uint64 expired_interval_ms = 4;
-  
+
   enum Status {
     //Clients can safely connect to these status leader if the status is Ready.
     Ready = 0;

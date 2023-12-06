@@ -108,8 +108,11 @@ public:
 
     time_t getTTLForPartition(const MergeTreePartition & partition) const;
 
+    /**
+     * @param snapshot_ts If not zero, specify the snapshot to use
+     */
     ServerDataPartsVector
-    selectPartsToRead(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info) const;
+    selectPartsToRead(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info, UInt64 snapshot_ts = 0) const;
 
     /// Return all base parts and delete bitmap metas in the given partitions.
     /// If `partitions` is empty, return meta for all partitions.
@@ -120,12 +123,16 @@ public:
     MergeTreeDataPartsCNCHVector
     getStagedParts(const TxnTimestamp & ts, const NameSet * partitions = nullptr, bool skip_delete_bitmap = false);
 
-    /// Pre-condition: "parts" should have been sorted in part info order
-    void getDeleteBitmapMetaForParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time, bool force_found = true);
+    /**
+     * @param parts input parts, must be sorted in PartComparator order
+     * @param snapshot_ts If not zero, specify the snapshot to use
+     */
+    void getDeleteBitmapMetaForServerParts(const ServerDataPartsVector & parts, ContextPtr local_context, UInt64 snapshot_ts = 0) const;
+    /// TODO: unify into one methods
+    void getDeleteBitmapMetaForCnchParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time, bool force_found = true);
+    void getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, ContextPtr context, TxnTimestamp start_time, bool force_found = true);
     /// For staged parts, delete bitmap represents delete_flag info which is optional, it's valid if it doesn't have delete_bitmap metadata.
     void getDeleteBitmapMetaForStagedParts(const MergeTreeDataPartsCNCHVector & parts, ContextPtr context, TxnTimestamp start_time);
-    void getDeleteBitmapMetaForParts(const ServerDataPartsVector & parts, ContextPtr context, TxnTimestamp start_time) const;
-    void getDeleteBitmapMetaForParts(IMergeTreeDataPartsVector & parts, ContextPtr context, TxnTimestamp start_time, bool force_found = true);
 
     /// Used by the "SYSTEM DEDUP" command to repair unique table by removing duplicate keys in visible parts.
     void executeDedupForRepair(const ASTPtr & partition, ContextPtr context);
@@ -136,13 +143,7 @@ public:
     // Allocate parts to workers before we want to do some calculation on the parts, support non-select query.
     void allocateParts(ContextPtr local_context, ServerDataPartsVector & parts);
 
-    UInt64 getTimeTravelRetention();
-
-    void addCheckpoint(const Protos::Checkpoint & checkpoint);
-    void removeCheckpoint(const Protos::Checkpoint & checkpoint);
-
     ColumnSizeByName getColumnSizes() const override { return {}; }
-
 
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr local_context) const override;
     void alter(const AlterCommands & commands, ContextPtr local_context, TableLockHolder & table_lock_holder) override;
@@ -202,6 +203,8 @@ public:
 
     PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const ;
 
+    // get all Visible Parts
+    ServerDataPartsVector getAllParts(ContextPtr local_context) const;
 protected:
     StorageCnchMergeTree(
         const StorageID & table_id_,
@@ -220,11 +223,11 @@ private:
 
     CheckResults checkDataCommon(const ASTPtr & query, ContextPtr local_context, ServerDataPartsVector & parts) const;
 
-    // get all Visible Parts
-    ServerDataPartsVector getAllParts(ContextPtr local_context) const;
-
+    /**
+     * @param snapshot_ts If not zero, specify the snapshot to use
+     */
     ServerDataPartsVector
-    getAllPartsInPartitions(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info) const;
+    getAllPartsInPartitions(const Names & column_names_to_return, ContextPtr local_context, const SelectQueryInfo & query_info, UInt64 snapshot_ts = 0) const;
 
     Strings selectPartitionsByPredicate(
         const SelectQueryInfo & query_info,
@@ -268,7 +271,7 @@ private:
 
 
     /// *********** START OF BitEngine-related members *********** ///
-    
+
     /// check whether bitengine table and dictionary table has same CLUSTER BY clause
     /// only CnChMergeTree use it when creating table, CloudMergeTree doesn't need it because it's more difficult
     /// to get underlying dict table.

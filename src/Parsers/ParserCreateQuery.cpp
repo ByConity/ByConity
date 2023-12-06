@@ -20,8 +20,9 @@
  */
 
 #include <memory>
-#include <IO/ReadHelpers.h>
-#include <Parsers/ASTConstraintDeclaration.h>
+#include <Common/typeid_cast.h>
+#include <Parsers/IAST.h>
+#include <Parsers/IAST_fwd.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTExpressionList.h>
 #include <Parsers/ASTForeignKeyDeclaration.h>
@@ -29,8 +30,6 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTIndexDeclaration.h>
 #include <Parsers/ASTProjectionDeclaration.h>
-#include <Parsers/ASTExpressionList.h>
-#include <Parsers/ASTCreateQuery.h>
 #include <Parsers/ASTSetQuery.h>
 #include <Parsers/ASTUniqueNotEnforcedDeclaration.h>
 #include <Parsers/CommonParsers.h>
@@ -38,8 +37,6 @@
 #include <Parsers/ASTTableOverrides.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Parsers/ExpressionListParsers.h>
-#include <Parsers/IAST.h>
-#include <Parsers/IAST_fwd.h>
 #include <Parsers/ParserCreateQuery.h>
 #include <Parsers/ParserSelectWithUnionQuery.h>
 #include <Parsers/ParserSetQuery.h>
@@ -51,7 +48,6 @@
 #include <Parsers/ParserProjectionSelectQuery.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Poco/Logger.h>
-#include <Common/typeid_cast.h>
 
 
 namespace DB
@@ -1263,7 +1259,7 @@ bool ParserCreateCatalogQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & ex
     ASTPtr properties;
     bool if_not_exists = false;
 
-    if (!s_create.ignore(pos, expected))
+    if(!s_create.ignore(pos,expected))
     {
         return false;
     }
@@ -1543,6 +1539,59 @@ bool ParserCreateDictionaryQuery::parseImpl(IParser::Pos & pos, ASTPtr & node, E
     return true;
 }
 
+bool ParserCreateSnapshotQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
+{
+    if (!ParserKeyword{"CREATE SNAPSHOT"}.ignore(pos, expected))
+        return false;
+
+    bool if_not_exists = false;
+    ASTPtr table;
+    ASTPtr to_table;
+    ASTPtr ttl_ast;
+    Int64 ttl_in_days;
+
+    if (ParserKeyword{"IF NOT EXISTS"}.ignore(pos, expected))
+        if_not_exists = true;
+
+    ParserCompoundIdentifier name_p(true);
+    if (!name_p.parse(pos, table, expected))
+        return false;
+
+    if (ParserKeyword{"TO"}.ignore(pos, expected))
+    {
+        if (!name_p.parse(pos, to_table, expected))
+            return false;
+    }
+
+    if (!ParserKeyword{"TTL"}.ignore(pos, expected))
+        return false;
+
+    if (!ParserUnsignedInteger{}.parse(pos, ttl_ast, expected))
+        return false;
+
+    ttl_in_days = ttl_ast->as<ASTLiteral &>().value.get<Int64>();
+    if (ttl_in_days <= 0 || ttl_in_days > 365)
+    {
+        expected.add(pos, "ttl must be greater than 0 and smaller than 365");
+        return false;
+    }
+
+    if (!ParserKeyword{"DAYS"}.ignore(pos, expected))
+        return false;
+
+    auto res = std::make_shared<ASTCreateSnapshotQuery>();
+    res->if_not_exists = if_not_exists;
+    auto table_id = table->as<ASTTableIdentifier>()->getTableId();
+    res->database = table_id.database_name;
+    res->table = table_id.table_name;
+    res->uuid = table_id.uuid;
+    if (to_table)
+        res->to_table_id = to_table->as<ASTTableIdentifier>()->getTableId();
+    res->ttl_in_days = static_cast<Int32>(ttl_in_days);
+
+    node = std::move(res);
+    return true;
+}
 
 bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
@@ -1552,9 +1601,15 @@ bool ParserCreateQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserCreateDictionaryQuery dictionary_p(dt);
     ParserCreateLiveViewQuery live_view_p(dt);
     ParserCreateCatalogQuery catalog_p(dt);
+    ParserCreateSnapshotQuery snapshot_p(dt);
 
-    return table_p.parse(pos, node, expected) || database_p.parse(pos, node, expected) || view_p.parse(pos, node, expected)
-        || dictionary_p.parse(pos, node, expected) || live_view_p.parse(pos, node, expected) || catalog_p.parse(pos, node, expected);
+    return table_p.parse(pos, node, expected)
+        || database_p.parse(pos, node, expected)
+        || view_p.parse(pos, node, expected)
+        || dictionary_p.parse(pos, node, expected)
+        || live_view_p.parse(pos, node, expected)
+        || catalog_p.parse(pos, node, expected)
+        || snapshot_p.parse(pos, node, expected);
 }
 
 }

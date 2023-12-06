@@ -19,39 +19,29 @@
 #include <Parsers/ASTRenameQuery.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Transaction/Actions/IAction.h>
+#include <variant>
 
 namespace DB
 {
 
-struct RenameActionParams
+struct RenameDatabaseParams
 {
-    struct RenameTableParams
-    {
-        String from_database;
-        String from_table;
-        UUID from_table_uuid;
-        String to_database;
-        String to_table;
-    };
-
-    struct RenameDBParams
-    {
-        String from_database;
-        String to_database;
-        std::vector<UUID> uuids;
-    };
-
-    enum class Type
-    {
-        RENAME_DB,
-        RENAME_TABLE
-    };
-
-    RenameTableParams table_params{};
-    RenameDBParams db_params{};
-    Type type {Type::RENAME_TABLE};
+    UUID uuid = UUIDHelpers::Nil;
+    String old_name;
+    String new_name;
 };
 
+struct RenameTableParams
+{
+    String from_database;
+    StoragePtr from_storage;
+    String to_database;
+    String to_table;
+    // needed to update db_uuid in TableIdentifier
+    UUID to_database_uuid = UUIDHelpers::Nil;
+};
+
+using RenameActionParams = std::variant<RenameDatabaseParams, RenameTableParams>;
 
 class DDLRenameAction : public IAction
 {
@@ -65,16 +55,7 @@ public:
     void executeV1(TxnTimestamp commit_time) override;
 
 private:
-    /// void updateTsCache(const UUID & uuid, const TxnTimestamp & commit_time) override;
-
-    void renameTablePrefix(TxnTimestamp commit_time);
-    void renameTableSuffix(TxnTimestamp commit_time);
-
-private:
     RenameActionParams params;
-
-    bool is_cnch_merge_tree{false};
-    // bool is_cnch_kafka{false};
 };
 
 using DDLRenameActionPtr = std::shared_ptr<DDLRenameAction>;

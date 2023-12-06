@@ -62,8 +62,8 @@ public:
 class ServerDataPart : public std::enable_shared_from_this<ServerDataPart>, public DataPartInterface
 {
 public:
-    ServerDataPart(const DataModelPartWrapperPtr & part_model_wrapper_) : part_model_wrapper(part_model_wrapper_) {}
-    ServerDataPart(DataModelPartWrapperPtr && part_model_wrapper_) : part_model_wrapper(part_model_wrapper_) {}
+    explicit ServerDataPart(const DataModelPartWrapperPtr & part_model_wrapper_) : part_model_wrapper(part_model_wrapper_) { }
+    explicit ServerDataPart(DataModelPartWrapperPtr && part_model_wrapper_) : part_model_wrapper(part_model_wrapper_) { }
 
     virtual bool isServerDataPart() const override { return true; }
 
@@ -77,6 +77,8 @@ public:
     void setCommitTime(const UInt64 & new_commit_time) const;
     UInt64 getColumnsCommitTime() const;
     UInt64 getMutationCommitTime() const;
+    UInt64 getEndTime() const;
+    void setEndTime(UInt64 end_time) const;
 
     bool containsExactly(const ServerDataPart & other) const;
 

@@ -2036,6 +2036,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, cnch_atomic_attach_part_preemtive_lock_acquire, false, "Whether to acquire lock preemptively during atomic attach part", 0) \
     M(Bool, allow_full_scan_txn_records, false, "Whether to allow full scan of all transaction records on catalog", 0) \
     \
+    /* Snapshot */ \
+    M(String, use_snapshot, "", "If not empty, specify the name of the snapshot to use for query", 0) \
+    M(Seconds, snapshot_clean_interval, 300, "How often to remove ttl expired snapshots", 0) \
     /* Outfile related Settings */ \
     M(Bool, outfile_in_server_with_tcp, false, "Out file in sever with tcp and return client empty block", 0) \
     M(UInt64, outfile_buffer_size_in_mb, 1, "Out file buffer size in 'OUT FILE'", 0) \

@@ -30,7 +30,7 @@ namespace DB
 {
 
 
-/** Query SHOW TABLES or SHOW DATABASES or SHOW CLUSTERS
+/** Query SHOW TABLES or SHOW DATABASES or SHOW CLUSTERS or SHOW SNAPSHOTS
   */
 class ASTShowTablesQuery : public ASTQueryWithOutput
 {
@@ -40,6 +40,7 @@ public:
     bool clusters{false};
     bool cluster{false};
     bool dictionaries{false};
+    bool snapshots{false};
     bool m_settings{false};
     bool changed{false};
     bool temporary{false};

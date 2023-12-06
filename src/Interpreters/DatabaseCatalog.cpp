@@ -1153,7 +1153,7 @@ getDatabaseFromCnchOrHiveCatalog(const String & database_name, ContextPtr contex
     //get database from cnch catalog
     if (!catalog_name.has_value() || getOriginalDatabaseName(catalog_name.value()) == "cnch")
     {
-        auto catalog = context->tryGetCnchCatalog();
+        auto catalog = context->getCnchCatalog();
         return catalog->getDatabase(appendTenantIdOnly(db_name.value()), context, timestamp);
     }
     else

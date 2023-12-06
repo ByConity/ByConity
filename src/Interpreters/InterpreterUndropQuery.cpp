@@ -54,27 +54,24 @@ BlockIO InterpreterUndropQuery::execute()
         auto trash_table_versions = getContext()->getCnchCatalog()->getTrashTableVersions(database, table);
         UInt64 version_to_restore {0};
 
-        if (trash_table_versions.size() == 0)
+        if (trash_table_versions.empty())
             throw Exception("No available table to restore.", ErrorCodes::UNKNOWN_TABLE);
         else
         {
             if (undrop_query.uuid == UUIDHelpers::Nil)
             {
                 // if uuid is not specified, undrop the latest version the table.
-                for (auto it = trash_table_versions.begin(); it != trash_table_versions.end(); it++)
-                {
-                    version_to_restore = version_to_restore >= it->second ? version_to_restore : it->second;
-                }
+                version_to_restore = trash_table_versions.rbegin()->first;
             }
             else
             {
                 // undrop the trashed table with specified uuid.
                 String undrop_uuid = toString(undrop_query.uuid);
-                for (auto it = trash_table_versions.begin(); it != trash_table_versions.end(); it++)
+                for (const auto & entry : trash_table_versions)
                 {
-                    if (it->first == undrop_uuid)
+                    if (entry.second->uuid() == undrop_uuid)
                     {
-                        version_to_restore = it->second;
+                        version_to_restore = entry.first;
                         break;
                     }
                 }

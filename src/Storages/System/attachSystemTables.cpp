@@ -118,6 +118,7 @@
 #include <Storages/System/StorageSystemCnchDedupWorkers.h>
 #include <Storages/System/StorageSystemCnchDictionaries.h>
 #include <Storages/System/StorageSystemCnchManipulations.h>
+#include <Storages/System/StorageSystemCnchSnapshots.h>
 #include <Storages/System/StorageSystemCnchTransactions.h>
 #include <Storages/System/StorageSystemGlobalGCManager.h>
 #include <Storages/System/StorageSystemCnchParts.h>
@@ -259,12 +260,13 @@ void attachSystemTablesServer(IDatabase & system_database, bool has_zookeeper)
     attach<StorageSystemCnchTableInfo>(system_database, "cnch_table_info");
     attach<StorageSystemCnchTablesHistory>(system_database, "cnch_tables_history");
     attach<StorageSystemCnchDatabases>(system_database, "cnch_databases");
+    attach<StorageSystemCnchDatabasesHistory>(system_database, "cnch_databases_history");
     attach<StorageSystemCnchColumns>(system_database, "cnch_columns");
     attach<StorageSystemCnchDictionaries>(system_database, "cnch_dictionaries");
-    attach<StorageSystemCnchDatabasesHistory>(system_database, "cnch_databases_history");
     attach<StorageSystemCnchTables>(system_database, "cnch_tables");
     attach<StorageSystemCnchViewTables>(system_database, "cnch_view_tables");
     attach<StorageSystemCnchManipulations>(system_database, "cnch_manipulations");
+    attach<StorageSystemCnchSnapshots>(system_database, "cnch_snapshots");
     attach<StorageSystemDMBGJobs>(system_database, "dm_bg_jobs");
     attach<StorageSystemPersistentBGJobStatus>(system_database, "persistent_bg_job_status");
     attach<StorageSystemGlobalGCManager>(system_database, "global_gc_manager");

@@ -106,6 +106,14 @@ namespace ProfileEvents
     extern const Event RenameDatabaseFailed;
     extern const Event AlterDatabaseSuccess;
     extern const Event AlterDatabaseFailed;
+    extern const Event CreateSnapshotSuccess;
+    extern const Event CreateSnapshotFailed;
+    extern const Event RemoveSnapshotSuccess;
+    extern const Event RemoveSnapshotFailed;
+    extern const Event TryGetSnapshotSuccess;
+    extern const Event TryGetSnapshotFailed;
+    extern const Event GetAllSnapshotsSuccess;
+    extern const Event GetAllSnapshotsFailed;
     extern const Event CreateTableSuccess;
     extern const Event CreateTableFailed;
     extern const Event DropTableSuccess;
@@ -274,8 +282,8 @@ namespace ProfileEvents
     extern const Event UpdateServerWorkerGroupFailed;
     extern const Event GetWorkersInWorkerGroupSuccess;
     extern const Event GetWorkersInWorkerGroupFailed;
-    extern const Event GetTableByIDSuccess;
-    extern const Event GetTableByIDFailed;
+    extern const Event GetTableHistoriesSuccess;
+    extern const Event GetTableHistoriesFailed;
     extern const Event GetTablesByIDSuccess;
     extern const Event GetTablesByIDFailed;
     extern const Event GetAllDataBasesSuccess;
@@ -520,21 +528,22 @@ namespace Catalog
     {
         runWithMetricSupport(
             [&] {
+                if (uuid == UUIDHelpers::Nil)
+                {
+                    throw Exception("Missing uuid for createDatabase", ErrorCodes::LOGICAL_ERROR);
+                }
                 if (tryGetDatabaseFromMetastore(database, ts.toUInt64()))
                 {
                     throw Exception("Database already exits.", ErrorCodes::DATABASE_ALREADY_EXISTS);
                 }
-                else
                 {
                     DB::Protos::DataModelDB db_data;
-
                     db_data.set_name(database);
                     db_data.set_previous_version(0);
                     db_data.set_txnid(txnID.toUInt64());
                     db_data.set_commit_time(ts.toUInt64());
                     db_data.set_status(0);
-                    if (uuid != UUIDHelpers::Nil)
-                        RPCHelpers::fillUUID(uuid, *(db_data.mutable_uuid()));
+                    RPCHelpers::fillUUID(uuid, *(db_data.mutable_uuid()));
                     if (engine_name == "CnchMaterializedMySQL")
                     {
                         if (create_query.empty())
@@ -651,7 +660,7 @@ namespace Catalog
     }
 
     void Catalog::renameDatabase(
-        const String & from_database, const String & to_database, [[maybe_unused]] const TxnTimestamp & txnID, const TxnTimestamp & ts)
+        const UUID & uuid, const String & from_database, const String & to_database, const TxnTimestamp & txnID, const TxnTimestamp & ts)
     {
         runWithMetricSupport(
             [&] {
@@ -666,12 +675,14 @@ namespace Catalog
                     auto table_id_ptrs = meta_proxy->getAllTablesId(name_space, from_database);
                     for (auto & table_id_ptr : table_id_ptrs)
                     {
-                        auto table = tryGetTableFromMetastore(table_id_ptr->uuid(), UINT64_MAX);
+                        String table_uuid = table_id_ptr->uuid();
+                        auto table = tryGetTableFromMetastore(table_uuid, UINT64_MAX);
                         if (!table)
-                            throw Exception(
-                                "Cannot get metadata of table " + table_id_ptr->database() + "." + table_id_ptr->name()
-                                    + " by UUID : " + table_id_ptr->uuid(),
-                                ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
+                            throw Exception(ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR,
+                                "Cannot get metadata of table {}.{} by UUID {}",
+                                table_id_ptr->database(),
+                                table_id_ptr->name(),
+                                table_uuid);
 
                         if (table->commit_time() >= ts.toUInt64())
                             throw Exception("Cannot rename table with an earlier timestamp", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
@@ -679,7 +690,7 @@ namespace Catalog
                         replace_definition(*table, to_database, table_id_ptr->name());
                         table->set_txnid(txnID.toUInt64());
                         table->set_commit_time(ts.toUInt64());
-                        meta_proxy->renameTable(name_space, *table, from_database, table_id_ptr->name(), table_id_ptr->uuid(), batch_writes);
+                        meta_proxy->prepareRenameTable(name_space, table_uuid, from_database, table_id_ptr->name(), uuid, *table, batch_writes);
 
                         if (auto cache_manager = context.getPartCacheManager(); cache_manager)
                             cache_manager->removeStorageCache(from_database, table->name());
@@ -745,7 +756,84 @@ namespace Catalog
             ProfileEvents::AlterDatabaseFailed);
     }
 
+    void Catalog::createSnapshot(
+        const UUID & db,
+        const String & snapshot_name,
+        const TxnTimestamp & ts,
+        int ttl_in_days,
+        UUID bind_table)
+    {
+        runWithMetricSupport(
+            [&] {
+                if (db == UUIDHelpers::Nil)
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "invalid UUID for DB");
+                Protos::DataModelSnapshot model;
+                model.set_name(snapshot_name);
+                model.set_commit_time(ts.toUInt64());
+                model.set_ttl_in_days(ttl_in_days);
+                if (bind_table != UUIDHelpers::Nil)
+                    RPCHelpers::fillUUID(bind_table, *model.mutable_table_uuid());
+
+                String db_uuid_str = UUIDHelpers::UUIDToString(db);
+                meta_proxy->createSnapshot(name_space, db_uuid_str, model);
+                LOG_INFO(log, "Created snapshot {} in DB {} at {}", snapshot_name, db_uuid_str, ts.toString());
+            },
+            ProfileEvents::CreateSnapshotSuccess,
+            ProfileEvents::CreateSnapshotFailed);
+    }
+
+    void Catalog::removeSnapshot(const UUID & db, const String & snapshot_name)
+    {
+        runWithMetricSupport(
+            [&] {
+                if (db == UUIDHelpers::Nil)
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "invalid UUID for DB");
+                auto db_uuid_str = UUIDHelpers::UUIDToString(db);
+                meta_proxy->removeSnapshot(name_space, db_uuid_str, snapshot_name);
+                LOG_INFO(log, "Removed snapshot {} from DB {}", snapshot_name, db_uuid_str);
+            },
+            ProfileEvents::RemoveSnapshotSuccess,
+            ProfileEvents::RemoveSnapshotFailed);
+    }
+
+    /// Return snapshot if exist, nullptr otherwise.
+    SnapshotPtr Catalog::tryGetSnapshot(const UUID & db, const String & snapshot_name)
+    {
+        SnapshotPtr res;
+        runWithMetricSupport(
+            [&] {
+                if (db == UUIDHelpers::Nil)
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "invalid UUID for DB");
+                res = meta_proxy->tryGetSnapshot(name_space, UUIDHelpers::UUIDToString(db), snapshot_name);
+            },
+            ProfileEvents::TryGetSnapshotSuccess,
+            ProfileEvents::TryGetSnapshotFailed);
+        return res;
+    }
+
+    Snapshots Catalog::getAllSnapshots(const UUID & db, UUID * table_filter)
+    {
+        Snapshots res;
+        runWithMetricSupport(
+            [&] {
+                if (db == UUIDHelpers::Nil)
+                    throw Exception(ErrorCodes::LOGICAL_ERROR, "invalid UUID for DB");
+
+                res = meta_proxy->getAllSnapshots(name_space, UUIDHelpers::UUIDToString(db));
+                if (table_filter)
+                {
+                    std::erase_if(res, [&](SnapshotPtr & item) {
+                        return item->has_table_uuid() && RPCHelpers::createUUID(item->table_uuid()) != *table_filter;
+                    });
+                }
+            },
+            ProfileEvents::GetAllSnapshotsSuccess,
+            ProfileEvents::GetAllSnapshotsFailed);
+        return res;
+    }
+
     void Catalog::createTable(
+        const UUID & db_uuid,
         const StorageID & storage_id,
         const String & create_query,
         const String & virtual_warehouse,
@@ -757,7 +845,6 @@ namespace Catalog
                 String uuid_str = UUIDHelpers::UUIDToString(storage_id.uuid);
                 LOG_INFO(log, "start createTable namespace {} table_name {}, uuid {}", name_space, storage_id.getFullTableName(), uuid_str);
                 Protos::DataModelTable tb_data;
-
                 tb_data.set_database(storage_id.getDatabaseName());
                 tb_data.set_name(storage_id.getTableName());
                 tb_data.set_definition(create_query);
@@ -779,7 +866,7 @@ namespace Catalog
                 ///FIXME: if masking policy is ready.
                 // Strings masking_policy_names = getMaskingPolicyNames(ast);
                 Strings masking_policy_names = {};
-                meta_proxy->createTable(name_space, tb_data, dependencies, masking_policy_names);
+                meta_proxy->createTable(name_space, db_uuid, tb_data, dependencies, masking_policy_names);
                 meta_proxy->setTableClusterStatus(name_space, uuid_str, true, createTableFromDataModel(context, tb_data)->getTableHashForClusterBy());
 
                 LOG_INFO(log, "finish createTable namespace {} table_name {}, uuid {}", name_space, storage_id.getFullTableName(), uuid_str);
@@ -812,8 +899,9 @@ namespace Catalog
     }
 
     void Catalog::dropTable(
+        const UUID & db_uuid,
         const StoragePtr & storage,
-        [[maybe_unused]] const TxnTimestamp & previous_version,
+        const TxnTimestamp & /*previous_version*/,
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts)
     {
@@ -836,6 +924,8 @@ namespace Catalog
                     identifier.set_database(db);
                     identifier.set_name(name);
                     identifier.set_uuid(table_uuid);
+                    if (db_uuid != UUIDHelpers::Nil)
+                        RPCHelpers::fillUUID(db_uuid, *identifier.mutable_db_uuid());
 
                     checkCanbeDropped(identifier, false);
                     moveTableIntoTrash(*table, identifier, txnID, ts, batch_writes);
@@ -1022,6 +1112,7 @@ namespace Catalog
         const String & from_table,
         const String & to_database,
         const String & to_table,
+        const UUID & to_db_uuid,
         const TxnTimestamp & txnID,
         const TxnTimestamp & ts)
     {
@@ -1043,7 +1134,7 @@ namespace Catalog
                     replace_definition(*table, to_database, to_table);
                     table->set_txnid(txnID.toUInt64());
                     table->set_commit_time(ts.toUInt64());
-                    meta_proxy->renameTable(name_space, *table, from_database, from_table, table_uuid, batch_writes);
+                    meta_proxy->prepareRenameTable(name_space, table_uuid, from_database, from_table, to_db_uuid, *table, batch_writes);
                     BatchCommitResponse resp;
                     meta_proxy->batchWrite(batch_writes, resp);
 
@@ -1308,7 +1399,17 @@ namespace Catalog
 
     DataPartsVector Catalog::getStagedParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
     {
-        DataPartsVector res;
+        auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
+        if (!storage)
+            throw Exception("Table is not a merge tree", ErrorCodes::BAD_ARGUMENTS);
+
+        auto staged_server_parts = getStagedServerDataParts(table, ts, partitions);
+        return CnchPartsHelper::toMergeTreeDataPartsCNCHVector(createPartVectorFromServerParts(*storage, staged_server_parts));
+    }
+
+    ServerDataPartsVector Catalog::getStagedServerDataParts(const StoragePtr & table, const TxnTimestamp & ts, const NameSet * partitions)
+    {
+        ServerDataPartsVector res;
         runWithMetricSupport(
             [&] {
                 auto * storage = dynamic_cast<MergeTreeMetaBase *>(table.get());
@@ -1316,27 +1417,27 @@ namespace Catalog
                     throw Exception("Table is not a merge tree", ErrorCodes::BAD_ARGUMENTS);
                 String table_uuid = UUIDHelpers::UUIDToString(table->getStorageUUID());
 
-                IMetaStore::IteratorPtr mIt;
+                IMetaStore::IteratorPtr m_it;
                 bool need_partitions_check = false;
                 if (partitions && partitions->size() == 1)
                 {
-                    mIt = meta_proxy->getStagedPartsInPartition(name_space, table_uuid, *(partitions->begin()));
+                    m_it = meta_proxy->getStagedPartsInPartition(name_space, table_uuid, *(partitions->begin()));
                 }
                 else
                 {
                     /// TODO: find out more efficient way to scan staged parts only in the requested partitions.
                     /// currently seems not a bottleneck because the total number of staged parts won't be very large
-                    mIt = meta_proxy->getStagedParts(name_space, table_uuid);
+                    m_it = meta_proxy->getStagedParts(name_space, table_uuid);
                     need_partitions_check = (partitions != nullptr);
                 }
 
                 DataModelPartPtrVector models;
-                while (mIt->next())
+                while (m_it->next())
                 {
                     /// if ts is set, exclude model whose txn id > ts
                     if (ts.toUInt64())
                     {
-                        const auto & key = mIt->key();
+                        const auto & key = m_it->key();
                         auto pos = key.find_last_of('_');
                         if (pos != String::npos)
                         {
@@ -1347,7 +1448,7 @@ namespace Catalog
                     }
 
                     DataModelPartPtr model = std::make_shared<Protos::DataModelPart>();
-                    model->ParseFromString(mIt->value());
+                    model->ParseFromString(m_it->value());
                     /// exclude model whose commit ts > ts
                     if (ts.toUInt64() && model->has_commit_time() && model->commit_time() > ts.toUInt64())
                         continue;
@@ -1360,13 +1461,13 @@ namespace Catalog
                 res.reserve(models.size());
                 for (auto & model : models)
                 {
-                    res.push_back(createPartFromModel(*storage, *model));
+                    auto part_model_wrapper = createPartWrapperFromModel(*storage, *model);
+                    res.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
                 }
 
-                /// remove uncommitted parts
                 if (ts)
                 {
-                    getCommittedDataParts(res, ts, this);
+                    getVisibleServerDataParts(res, ts, this);
                 }
             },
             ProfileEvents::GetStagedPartsSuccess,
@@ -1375,7 +1476,7 @@ namespace Catalog
     }
 
     DB::ServerDataPartsVector Catalog::getServerDataPartsInPartitions(
-        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, bool for_gc)
+        const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility)
     {
         ServerDataPartsVector res;
         String source;
@@ -1384,9 +1485,9 @@ namespace Catalog
                 Stopwatch watch;
                 auto fall_back = [&]() {
                     ServerDataPartsVector tmp_res;
-                    auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
+                    const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
                     Strings all_partitions = getPartitionIDsFromMetastore(storage);
-                    auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts);
+                    auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts, /*from_trash=*/ false);
                     for (auto & part_model_ptr : parts_model)
                     {
                         auto part_model_wrapper = createPartWrapperFromModel(merge_tree_storage, *part_model_ptr);
@@ -1430,7 +1531,7 @@ namespace Catalog
                             partitions,
                             [&](const Strings & required_partitions, const Strings & full_partitions) {
                                 miss_cache = true;
-                                return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0});
+                                return getDataPartsMetaFromMetastore(storage, required_partitions, full_partitions, TxnTimestamp{0}, /*from_trash=*/ false);
                             },
                             ts.toUInt64(),
                             host_port.topology_version);
@@ -1453,8 +1554,7 @@ namespace Catalog
                     }
                 }
 
-                // for gc thread, intermediate parts are required in case that TransactionCleaner fails to clean them.
-                if (!for_gc && ts)
+                if (ts && visibility != VisibilityLevel::All)
                 {
                     LOG_TRACE(
                         log,
@@ -1463,7 +1563,10 @@ namespace Catalog
                         ,res.size()
                         ,ts.toString());
 
-                    getCommittedServerDataParts(res, ts, this);
+                    if (visibility == VisibilityLevel::Visible)
+                        getVisibleServerDataParts(res, ts, this);
+                    else
+                        getCommittedServerDataParts(res, ts, this);
 
                     LOG_TRACE(
                         log,
@@ -1490,16 +1593,51 @@ namespace Catalog
         return res;
     }
 
-    ServerDataPartsVector Catalog::getAllServerDataParts(const ConstStoragePtr & table, const TxnTimestamp & ts, const Context * session_context)
+    ServerDataPartsVector Catalog::getTrashedPartsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
     {
         ServerDataPartsVector res;
         runWithMetricSupport(
             [&] {
-                if (!dynamic_cast<const MergeTreeMetaBase *>(table.get()))
+                const auto * merge_tree = dynamic_cast<const MergeTreeMetaBase *>(storage.get());
+                if (!merge_tree)
+                    return;
+
+                Stopwatch watch;
+                Strings all_partitions = getPartitionIDsFromMetastore(storage);
+                auto parts_model = getDataPartsMetaFromMetastore(storage, partitions, all_partitions, ts, /*from_trash=*/ true);
+                for (auto & part_model_ptr : parts_model)
+                {
+                    auto part_model_wrapper = createPartWrapperFromModel(*merge_tree, *part_model_ptr);
+                    res.push_back(std::make_shared<ServerDataPart>(std::move(part_model_wrapper)));
+                }
+
+                size_t size_before = res.size();
+                getVisibleServerDataParts(res, ts, this);
+                LOG_DEBUG(
+                    log,
+                    "Get {}/{} visible parts in trash for table {} in {} ms, ts={}",
+                    res.size(),
+                    size_before,
+                    storage->getStorageID().getNameForLogs(),
+                    watch.elapsedMilliseconds(),
+                    ts.toString());
+            },
+            ProfileEvents::GetServerDataPartsInPartitionsSuccess,
+            ProfileEvents::GetServerDataPartsInPartitionsFailed);
+
+        return res;
+    }
+
+    ServerDataPartsVector Catalog::getAllServerDataParts(const ConstStoragePtr & storage, const TxnTimestamp & ts, const Context * session_context, VisibilityLevel visibility)
+    {
+        ServerDataPartsVector res;
+        runWithMetricSupport(
+            [&] {
+                if (!dynamic_cast<const MergeTreeMetaBase *>(storage.get()))
                 {
                     return;
                 }
-                res = getServerDataPartsInPartitions(table, getPartitionIDs(table, session_context), ts, session_context);
+                res = getServerDataPartsInPartitions(storage, getPartitionIDs(storage, session_context), ts, session_context, visibility);
             },
             ProfileEvents::GetAllServerDataPartsSuccess,
             ProfileEvents::GetAllServerDataPartsFailed);
@@ -3480,8 +3618,8 @@ namespace Catalog
                         db_map.emplace(db_data.name(), db_data);
                 }
 
-                for (auto m_it = db_map.begin(); m_it != db_map.end(); m_it++)
-                    res.push_back(m_it->second);
+                for (auto & entry : db_map)
+                    res.push_back(entry.second);
             },
             ProfileEvents::GetAllDataBasesSuccess,
             ProfileEvents::GetAllDataBasesFailed);
@@ -3596,7 +3734,7 @@ namespace Catalog
         runWithMetricSupport(
             [&] {
                 auto identifiers = meta_proxy->getTrashTableID(name_space);
-                res = getTablesByID(identifiers);
+                res = getTablesByIDs(identifiers);
             },
             ProfileEvents::GetTablesInTrashSuccess,
             ProfileEvents::GetTablesInTrashFailed);
@@ -3727,11 +3865,47 @@ namespace Catalog
             ProfileEvents::ClearDataPartsMetaFailed);
     }
 
-    void Catalog::clearStagePartsMeta(const StoragePtr & storage, const DataPartsVector & parts)
+    void Catalog::clearStagePartsMeta(const StoragePtr & storage, const ServerDataPartsVector & parts)
     {
+        if (parts.empty())
+            return;
         runWithMetricSupport(
             [&] {
-                clearParts(storage, CommitItems{{}, {}, parts});
+                LOG_INFO(
+                    log,
+                    "Start clear metadata of {} staged parts of table {}",
+                    parts.size(),
+                    storage->getStorageID().getNameForLogs());
+
+                String table_uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+                String key_prefix = MetastoreProxy::stagedDataPartPrefix(name_space, table_uuid);
+
+                for (size_t beg = 0; beg < parts.size(); beg += max_drop_size_one_batch)
+                {
+                    size_t end = std::min(beg + max_drop_size_one_batch, parts.size());
+
+                    Strings drop_keys;
+                    for (auto it = parts.begin() + beg; it != parts.begin() + end; ++it)
+                    {
+                        const auto & part = *it;
+                        drop_keys.emplace_back(key_prefix + part->name());
+                        LOG_DEBUG(
+                            log,
+                            "Will clear staged part meta of table {} : {} [{} - {}) {}",
+                            table_uuid,
+                            part->name(),
+                            part->getCommitTime(),
+                            part->getEndTime(),
+                            (part->deleted() ? "tombstone" : ""));
+                    }
+                    meta_proxy->multiDrop(drop_keys);
+                }
+
+                LOG_INFO(
+                    log,
+                    "Finish clear metadata of {} staged parts of table {}",
+                    parts.size(),
+                    storage->getStorageID().getNameForLogs());
             },
             ProfileEvents::ClearStagePartsMetaSuccess,
             ProfileEvents::ClearStagePartsMetaFailed);
@@ -3795,6 +3969,7 @@ namespace Catalog
                 model_ptr->ParseFromString(it->value());
                 res.delete_bitmaps.push_back(std::make_shared<DeleteBitmapMeta>(merge_tree_storage, model_ptr));
             }
+            // not handling staged parts because we never move them to trash
         }
 
         return res;
@@ -3805,9 +3980,9 @@ namespace Catalog
         if (items.empty())
             return;
 
-        LOG_DEBUG(
+        LOG_INFO(
             log,
-            "Start drop metadata of {} parts, {} delete bitmaps, {} staged parts of table {}",
+            "Start clear metadata of {} parts, {} delete bitmaps, {} staged parts of table {}",
             items.data_parts.size(),
             items.delete_bitmaps.size(),
             items.staged_parts.size(),
@@ -3839,10 +4014,11 @@ namespace Catalog
                 parts_index++;
                 LOG_DEBUG(
                     log,
-                    "Will move part of table {} to trash: {} {} {}",
+                    "Will move part of table {} to trash: {} [{} - {}) {}",
                     table_uuid,
                     part->name(),
                     part->getCommitTime(),
+                    part->getEndTime(),
                     (part->deleted() ? "tombstone" : ""));
             }
             else if (delete_bitmaps_index < items.delete_bitmaps.size())
@@ -3856,10 +4032,11 @@ namespace Catalog
                 delete_bitmaps_index++;
                 LOG_DEBUG(
                     log,
-                    "Will move delete bitmap of table {} to trash: {} {} {}",
+                    "Will move delete bitmap of table {} to trash: {} [{} - {}) {}",
                     table_uuid,
                     bitmap->getNameForLogs(),
                     bitmap->getCommitTime(),
+                    bitmap->getEndTime(),
                     (bitmap->isTombstone() ? "tombstone" : ""));
             }
             else if (staged_parts_index < items.staged_parts.size())
@@ -3872,10 +4049,11 @@ namespace Catalog
                 staged_parts_index++;
                 LOG_DEBUG(
                     log,
-                    "Will remove staged part metadata of table {}: {} {} {}",
+                    "Will remove staged part metadata of table {}: {} [{} - {}) {}",
                     table_uuid,
                     part->name(),
                     part->getCommitTime(),
+                    part->getEndTime(),
                     (part->deleted() ? "tombstone" : ""));
             }
             else
@@ -3906,7 +4084,7 @@ namespace Catalog
         if (need_invalid_cache)
             context.getPartCacheManager()->invalidPartCache(table->getStorageUUID(), items.data_parts);
 
-        LOG_DEBUG(
+        LOG_INFO(
             log,
             "Finish clear metadata of {} parts, {} delete bitmaps, {} staged parts of table {}",
             items.data_parts.size(),
@@ -4437,9 +4615,9 @@ namespace Catalog
             ProfileEvents::UndropDatabaseFailed);
     }
 
-    std::unordered_map<String, UInt64> Catalog::getTrashTableVersions(const String & database, const String & table)
+    std::map<UInt64, std::shared_ptr<Protos::TableIdentifier>> Catalog::getTrashTableVersions(const String & database, const String & table)
     {
-        std::unordered_map<String, UInt64> res;
+        std::map<UInt64, std::shared_ptr<Protos::TableIdentifier>> res;
         runWithMetricSupport(
             [&] { res = meta_proxy->getTrashTableVersions(name_space, database, table); },
             ProfileEvents::GetTrashTableVersionsSuccess,
@@ -4466,8 +4644,6 @@ namespace Catalog
 
     std::shared_ptr<Protos::DataModelDB> Catalog::tryGetDatabaseFromMetastore(const String & database, const UInt64 & ts)
     {
-        std::shared_ptr<DB::Protos::DataModelDB> res;
-
         Strings databases_meta;
         meta_proxy->getDatabase(name_space, database, databases_meta);
 
@@ -4475,16 +4651,16 @@ namespace Catalog
 
         for (auto & meta : databases_meta)
         {
-            std::shared_ptr<DB::Protos::DataModelDB> model(new DB::Protos::DataModelDB);
+            auto model = std::make_shared<DB::Protos::DataModelDB>();
             model->ParseFromString(meta);
             if (model->commit_time() < ts)
                 db_versions.emplace(model->commit_time(), model);
         }
 
         if (!db_versions.empty() && !Status::isDeleted(db_versions.begin()->second->status()))
-            res = db_versions.begin()->second;
+            return db_versions.begin()->second;
 
-        return res;
+        return {};
     }
 
     std::shared_ptr<Protos::DataModelTable> Catalog::tryGetTableFromMetastore(const String & table_uuid, const UInt64 & ts, bool with_prev_versions, bool with_deleted)
@@ -4817,28 +4993,33 @@ namespace Catalog
     }
 
     DataModelPartPtrVector Catalog::getDataPartsMetaFromMetastore(
-        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts)
+        const ConstStoragePtr & storage, const Strings & required_partitions, const Strings & full_partitions, const TxnTimestamp & ts, bool from_trash)
     {
-        auto createDataModelPartPtr = [&](const String & meta) {
+        auto create_func = [&](const String & meta) {
             Protos::DataModelPart part_model;
             part_model.ParseFromString(meta);
             std::shared_ptr<Protos::DataModelPart> res_ptr;
             if (ts.toUInt64() && part_model.has_commit_time() && TxnTimestamp{part_model.commit_time()} > ts)
                 return res_ptr;
             // compatible with old parts from alpha, old part doesn't have commit time field, the mutation is its commit time
-            else if (ts.toUInt64() && !part_model.has_commit_time() && UInt64(part_model.part_info().mutation()) > ts)
+            else if (ts.toUInt64() && !part_model.has_commit_time() && static_cast<UInt64>(part_model.part_info().mutation()) > ts)
                 return res_ptr;
             return createPtrFromModel(std::move(part_model));
         };
 
         UInt32 time_out_ms = 1000 * (context.getSettingsRef().cnch_fetch_parts_timeout.totalSeconds());
 
+        String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+        String meta_prefix = from_trash
+            ? MetastoreProxy::trashItemsPrefix(name_space, uuid) + PART_STORE_PREFIX
+            : MetastoreProxy::dataPartPrefix(name_space, uuid);
+
         return getDataModelsByPartitions<DataModelPartPtr>(
             storage,
-            MetastoreProxy::dataPartPrefix(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid)),
+            meta_prefix,
             required_partitions,
             full_partitions,
-            createDataModelPartPtr,
+            create_func,
             ts,
             time_out_ms);
     }
@@ -4876,36 +5057,48 @@ namespace Catalog
         return res;
     }
 
+    DeleteBitmapMetaPtrVector Catalog::getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    {
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ false);
+    }
+
+    DeleteBitmapMetaPtrVector Catalog::getTrashedDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    {
+        return getDeleteBitmapsInPartitionsImpl(storage, partitions, ts, /*from_trash*/ true);
+    }
+
     DeleteBitmapMetaPtrVector
-    Catalog::getDeleteBitmapsInPartitions(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts)
+    Catalog::getDeleteBitmapsInPartitionsImpl(const ConstStoragePtr & storage, const Strings & partitions, const TxnTimestamp & ts, bool from_trash)
     {
         DeleteBitmapMetaPtrVector res;
         runWithMetricSupport(
             [&] {
                 const auto & merge_tree_storage = dynamic_cast<const MergeTreeMetaBase &>(*storage);
 
-                auto createDeleteBitmapMetaPtr = [&](const String & meta) {
+                auto create_func = [&](const String & meta) -> DeleteBitmapMetaPtr {
                     DataModelDeleteBitmapPtr model_ptr = std::make_shared<Protos::DataModelDeleteBitmap>();
                     model_ptr->ParseFromString(meta);
-                    std::shared_ptr<DeleteBitmapMeta> res_ptr;
                     if (ts.toUInt64() && model_ptr->has_commit_time() && TxnTimestamp{model_ptr->commit_time()} > ts)
-                    {
-                        return res_ptr;
-                    }
+                        return nullptr;
                     return std::make_shared<DeleteBitmapMeta>(merge_tree_storage, model_ptr);
                 };
 
                 Strings all_partitions = getPartitionIDsFromMetastore(storage);
+                String uuid = UUIDHelpers::UUIDToString(storage->getStorageUUID());
+                String meta_prefix = from_trash
+                    ? MetastoreProxy::trashItemsPrefix(name_space, uuid) + DELETE_BITMAP_PREFIX
+                    : MetastoreProxy::deleteBitmapPrefix(name_space, uuid);
+
                 res = getDataModelsByPartitions<DeleteBitmapMetaPtr>(
                     storage,
-                    MetastoreProxy::deleteBitmapPrefix(name_space, UUIDHelpers::UUIDToString(storage->getStorageID().uuid)),
+                    meta_prefix,
                     partitions,
                     all_partitions,
-                    createDeleteBitmapMetaPtr,
+                    create_func,
                     ts);
 
-                // NOTE: the below logic does is to filter out uncommitted bitmaps at this moment.
-                getCommittedBitmaps(res, ts, this);
+                /// filter out invisible bitmaps (uncommitted or invisible to current txn)
+                getVisibleBitmaps(res, ts, this);
             },
             ProfileEvents::GetDeleteBitmapsInPartitionsSuccess,
             ProfileEvents::GetDeleteBitmapsInPartitionsFailed);
@@ -4976,32 +5169,26 @@ namespace Catalog
             ProfileEvents::ClearKafkaTransactionsForTableFailed);
     }
 
-    std::optional<DB::Protos::DataModelTable> Catalog::getTableByID(const Protos::TableIdentifier & identifier)
+    Catalog::DataModelTables Catalog::getTableHistories(const String & table_uuid)
     {
-        std::optional<DB::Protos::DataModelTable> res;
+        DataModelTables res;
         runWithMetricSupport(
             [&] {
-                const String & database_name = identifier.database();
-                const String & table_name = identifier.name();
-                const String & uuid = identifier.uuid();
-
                 Strings tables_meta;
-                meta_proxy->getTableByUUID(name_space, uuid, tables_meta);
-
-                if (!tables_meta.empty())
+                meta_proxy->getTableByUUID(name_space, table_uuid, tables_meta);
+                for (const auto & meta : tables_meta)
                 {
-                    DB::Protos::DataModelTable table_data;
-                    table_data.ParseFromString(tables_meta.back());
-                    replace_definition(table_data, database_name, table_name);
-                    res = std::make_optional<DB::Protos::DataModelTable>(std::move(table_data));
+                    DB::Protos::DataModelTable model;
+                    model.ParseFromString(meta);
+                    res.push_back(model);
                 }
             },
-            ProfileEvents::GetTableByIDSuccess,
-            ProfileEvents::GetTableByIDFailed);
+            ProfileEvents::GetTableHistoriesSuccess,
+            ProfileEvents::GetTableHistoriesFailed);
         return res;
     }
 
-    Catalog::DataModelTables Catalog::getTablesByID(std::vector<std::shared_ptr<Protos::TableIdentifier>> & identifiers)
+    Catalog::DataModelTables Catalog::getTablesByIDs(std::vector<std::shared_ptr<Protos::TableIdentifier>> & identifiers)
     {
         DataModelTables res;
         runWithMetricSupport(

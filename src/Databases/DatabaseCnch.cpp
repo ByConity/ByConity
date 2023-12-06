@@ -211,13 +211,19 @@ void DatabaseCnch::createTable(ContextPtr local_context, const String & table_na
     checkCreateIsAllowedInCnch(query);
 
     bool attach = query->as<ASTCreateQuery&>().attach;
+    String statement = getObjectDefinitionFromCreateQueryForCnch(query);
 
     /// Cnch table should not throw exceptions during creating StoragePtr. Otherwise, it will cause problems when
     /// atempting to drop the table later.
     /// Cnch Hive table catch exception during table creation and throws exception in startup()
     table->startup();
 
-    CreateActionParams params = {table->getStorageID(), getObjectDefinitionFromCreateQueryForCnch(query), attach, table->isDictionary()};
+    CreateActionParams params;
+    if (table->isDictionary())
+        params = CreateDictionaryParams{table->getStorageID(), statement, attach};
+    else
+        params = CreateTableParams{getUUID(), table->getStorageID(), statement, attach};
+
     auto create_table = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_table));
     txn->commitV1();
@@ -234,27 +240,25 @@ void DatabaseCnch::dropTable(ContextPtr local_context, const String & table_name
     LOG_DEBUG(log, "Drop table {} in query {}, no delay {}", table_name, local_context->getCurrentQueryId(), no_delay);
 
     auto txn = local_context->getCurrentTransaction();
-
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
-    StoragePtr storage = local_context->getCnchCatalog()->tryGetTable(*local_context, getDatabaseName(), table_name, TxnTimestamp::maxTS());
+    DropActionParams params;
     bool is_dictionary = false;
-    TxnTimestamp previous_version = 0;
-    if (!storage)
+    StoragePtr storage = local_context->getCnchCatalog()->tryGetTable(*local_context, getDatabaseName(), table_name, TxnTimestamp::maxTS());
+    if (storage)
     {
-        if (!local_context->getCnchCatalog()->isDictionaryExists(getDatabaseName(), table_name))
-            throw Exception("Can't get storage for table " + table_name, ErrorCodes::SYSTEM_ERROR);
-        else
-            is_dictionary = true;
+        params = DropTableParams{storage, storage->commit_time, /*is_detach*/ false, getUUID()};
+    }
+    else if (local_context->getCnchCatalog()->isDictionaryExists(getDatabaseName(), table_name))
+    {
+        is_dictionary = true;
+        params = DropDictionaryParams{getDatabaseName(), table_name, /*is_detach*/ false};
     }
     else
-    {
-        previous_version = storage->commit_time;
-    }
+        throw Exception("Can't get storage for table " + table_name, ErrorCodes::SYSTEM_ERROR);
 
-    DropActionParams params{getDatabaseName(), table_name, previous_version, ASTDropQuery::Kind::Drop, is_dictionary};
-    auto drop_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{std::move(storage)});
+    auto drop_action = txn->createAction<DDLDropAction>(std::move(params));
     txn->appendAction(std::move(drop_action));
     txn->commitV1();
     if (is_dictionary)
@@ -291,7 +295,7 @@ void DatabaseCnch::drop(ContextPtr local_context)
     for (const auto & lock : locks)
         lock->lock();
 
-    DropActionParams params{getDatabaseName(), "", commit_time, ASTDropQuery::Kind::Drop};
+    DropActionParams params = DropDatabaseParams{getDatabaseName(), commit_time};
     auto drop_action = txn->createAction<DDLDropAction>(std::move(params));
     txn->appendAction(std::move(drop_action));
     txn->commitV1();
@@ -304,22 +308,23 @@ void DatabaseCnch::detachTablePermanently(ContextPtr local_context, const String
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
-    StoragePtr storage = local_context->getCnchCatalog()->tryGetTable(*local_context, getDatabaseName(), table_name, TxnTimestamp::maxTS());
+    /// detach table action
+    DropActionParams params;
     bool is_dictionary = false;
-    TxnTimestamp previous_version = 0;
-    if (!storage)
+    StoragePtr storage = local_context->getCnchCatalog()->tryGetTable(*local_context, getDatabaseName(), table_name, TxnTimestamp::maxTS());
+    if (storage)
     {
-        if (!local_context->getCnchCatalog()->isDictionaryExists(getDatabaseName(), table_name))
-            throw Exception("Can't get storage for table " + table_name, ErrorCodes::SYSTEM_ERROR);
-        else
-            is_dictionary = true;
+        params = DropTableParams{storage, storage->commit_time, /*is_detach*/ true, getUUID()};
+    }
+    else if (local_context->getCnchCatalog()->isDictionaryExists(getDatabaseName(), table_name))
+    {
+        is_dictionary = true;
+        params = DropDictionaryParams{getDatabaseName(), table_name, /*is_detach*/ true};
     }
     else
-        previous_version = storage->commit_time;
+        throw Exception("Can't get storage for table " + table_name, ErrorCodes::SYSTEM_ERROR);
 
-    /// detach table action
-    DropActionParams params{getDatabaseName(), table_name, previous_version, ASTDropQuery::Kind::Detach, is_dictionary};
-    auto detach_action = txn->createAction<DDLDropAction>(std::move(params), std::vector{storage});
+    auto detach_action = txn->createAction<DDLDropAction>(std::move(params));
     txn->appendAction(std::move(detach_action));
     txn->commitV1();
 
@@ -497,8 +502,7 @@ void DatabaseCnch::createEntryInCnchCatalog(ContextPtr local_context) const
     if (!txn)
         throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
 
-    CreateActionParams params = {{getDatabaseName(), "fake", getUUID()}, ""};
-    params.is_database = true;
+    CreateActionParams params = CreateDatabaseParams{getDatabaseName(), getUUID(), /*statement*/ "", getEngineName()};
     auto create_db = txn->createAction<DDLCreateAction>(std::move(params));
     txn->appendAction(std::move(create_db));
     txn->commitV1();
@@ -519,9 +523,7 @@ StoragePtr DatabaseCnch::tryGetTableImpl(const String & name, ContextPtr local_c
 void DatabaseCnch::renameDatabase(ContextPtr local_context, const String & new_name)
 {
     auto txn = local_context->getCurrentTransaction();
-    RenameActionParams params;
-    params.db_params = RenameActionParams::RenameDBParams{database_name, new_name, {}};
-    params.type = RenameActionParams::Type::RENAME_DB;
+    RenameActionParams params = RenameDatabaseParams{getUUID(), database_name, new_name};
     auto rename = txn->createAction<DDLRenameAction>(std::move(params));
     txn->appendAction(std::move(rename));
     txn->commitV1();
@@ -535,16 +537,19 @@ void DatabaseCnch::renameTable(
     bool /*exchange*/,
     bool /*dictionary*/)
 {
-    auto txn = local_context->getCurrentTransaction();
+    if (to_database.getEngineName() != getEngineName())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Can only rename to database with {} engine, but got {}", getEngineName(), to_database.getEngineName());
     if (to_database.isTableExist(to_table_name, local_context))
-        throw Exception(
-            "Table " + to_database.getDatabaseName() + "." + to_table_name + " already exists.", ErrorCodes::TABLE_ALREADY_EXISTS);
+        throw Exception(ErrorCodes::TABLE_ALREADY_EXISTS, "Table {}.{} already exists", to_database.getDatabaseName(), to_table_name);
+
     StoragePtr from_table = tryGetTableImpl(table_name, local_context);
     if (!from_table)
-        throw Exception("Table " + database_name + "." + table_name + " doesn't exist.", ErrorCodes::UNKNOWN_TABLE);
-    std::vector<IntentLockPtr> locks;
+        throw Exception(ErrorCodes::UNKNOWN_TABLE, "Table {}.{} doesn't exist", database_name, table_name);
 
-    if (std::make_pair(database_name, table_name) < std::make_pair(to_database.getDatabaseName(), to_table_name))
+    std::vector<IntentLockPtr> locks;
+    auto txn = local_context->getCurrentTransaction();
+    if (std::make_pair(database_name, table_name)
+        < std::make_pair(to_database.getDatabaseName(), to_table_name))
     {
         locks.push_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database_name, from_table->getStorageID().table_name));
         locks.push_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, to_database.getDatabaseName(), to_table_name));
@@ -554,12 +559,9 @@ void DatabaseCnch::renameTable(
         locks.push_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, to_database.getDatabaseName(), to_table_name));
         locks.push_back(txn->createIntentLock(IntentLock::TB_LOCK_PREFIX, database_name, from_table->getStorageID().table_name));
     }
-
     std::lock(*locks[0], *locks[1]);
 
-    RenameActionParams params;
-    params.table_params = RenameActionParams::RenameTableParams{
-        database_name, table_name, from_table->getStorageUUID(), to_database.getDatabaseName(), to_table_name};
+    RenameActionParams params = RenameTableParams{database_name, from_table, to_database.getDatabaseName(), to_table_name, to_database.getUUID()};
     auto rename_table = txn->createAction<DDLRenameAction>(std::move(params));
     txn->appendAction(std::move(rename_table));
     /// Commit in InterpreterRenameQuery because we can rename multiple tables in a same transaction
@@ -568,4 +570,38 @@ void DatabaseCnch::renameTable(
         cache.erase(table_name);
 }
 
+void DatabaseCnch::dropSnapshot(ContextPtr local_context, const String & snapshot_name)
+{
+    assertSupportSnapshot();
+    auto txn = local_context->getCurrentTransaction();
+    if (!txn)
+        throw Exception("Cnch transaction is not initialized", ErrorCodes::CNCH_TRANSACTION_NOT_INITIALIZED);
+
+    LOG_DEBUG(log, "Dropping snapshot {} in query {}", snapshot_name, local_context->getCurrentQueryId());
+
+    DropActionParams params = DropSnapshotParams{snapshot_name, db_uuid};
+    auto action = txn->createAction<DDLDropAction>(std::move(params));
+    txn->appendAction(std::move(action));
+    txn->commitV1();
+}
+
+SnapshotPtr DatabaseCnch::tryGetSnapshot(const String & snapshot_name) const
+{
+    assertSupportSnapshot();
+    return getContext()->getCnchCatalog()->tryGetSnapshot(db_uuid, snapshot_name);
+}
+
+Snapshots DatabaseCnch::getAllSnapshots() const
+{
+    assertSupportSnapshot();
+    return getContext()->getCnchCatalog()->getAllSnapshots(db_uuid);
+}
+
+Snapshots DatabaseCnch::getAllSnapshotsForStorage(UUID storage_uuid) const
+{
+    if (storage_uuid == UUIDHelpers::Nil)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "storage uuid can't be empty");
+    assertSupportSnapshot();
+    return getContext()->getCnchCatalog()->getAllSnapshots(db_uuid, &storage_uuid);
+}
 }

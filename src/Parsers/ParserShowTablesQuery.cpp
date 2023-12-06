@@ -44,6 +44,7 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
     ParserKeyword s_temporary("TEMPORARY");
     ParserKeyword s_external_catalog("EXTERNAL CATALOGS");
     ParserKeyword s_tables("TABLES");
+    ParserKeyword s_snapshots("SNAPSHOTS");
     ParserKeyword s_databases("DATABASES");
     ParserKeyword s_history("HISTORY");
     ParserKeyword s_clusters("CLUSTERS");
@@ -94,15 +95,15 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
                 return false;
         }
         tryRewriteHiveCatalogName(database, pos.getContext());
-    }
-    else if (s_databases.ignore(pos, expected)) // show databases
+
+    } else if (s_databases.ignore(pos, expected)) // show databases
     {
         query->databases = true;
 
         if (s_history.ignore(pos, expected))
             query->history = true;
 
-        if (s_from.ignore(pos, expected))
+        if (s_from.ignore(pos,expected))
         {
             query->external = true;
             if (!name_p.parse(pos, catalog, expected))
@@ -142,6 +143,8 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             if (!exp_elem.parse(pos, query->limit_length, expected))
                 return false;
         }
+
+
     }
     else if (s_clusters.ignore(pos, expected)) // show clusters
     {
@@ -199,18 +202,17 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
         else
             return false;
     }
-    else // show tables
+    else // show tables or dictionaries or snapshots
     {
         if (s_temporary.ignore(pos))
             query->temporary = true;
 
-        if (!s_tables.ignore(pos, expected))
-        {
-            if (s_dictionaries.ignore(pos, expected))
-                query->dictionaries = true;
-            else
-                return false;
-        }
+        if (s_dictionaries.ignore(pos, expected))
+            query->dictionaries = true;
+        else if (s_snapshots.ignore(pos, expected))
+            query->snapshots = true;
+        else if (!s_tables.ignore(pos, expected))
+            return false;
 
         if (s_history.ignore(pos, expected))
             query->history = true;
@@ -220,7 +222,7 @@ bool ParserShowTablesQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expec
             // parse [catalog.]db
             if (!name_p.parse(pos, database, expected))
             {
-                return false;
+                  return false;
             }
             if (s_dot.ignore(pos, expected))
             {

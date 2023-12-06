@@ -168,6 +168,11 @@ String InterpreterShowTablesQuery::getRewrittenQueryImpl()
 
     if (query.dictionaries)
         rewritten_query << "dictionaries ";
+    else if (query.snapshots)
+    {
+        rewritten_query.restart();
+        rewritten_query << "SELECT name, table_uuid, creation_time, ttl_in_days FROM system.cnch_snapshots ";
+    }
     else
     {
         if (query.history)

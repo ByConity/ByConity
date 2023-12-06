@@ -1353,8 +1353,9 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                             part_info_model->set_mutation(part_info.mutation);
                             part_info_model->set_hint_mutation(part_info.hint_mutation);
 
-                            // Discard part's commit time
+                            // Discard part's commit time & end time
                             part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
+                            part_model.clear_end_time();
                             parts_with_history.first[offset] = part;
                             parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_name);
                             if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash || is_user_defined_cluster_by_expression)
@@ -1419,8 +1420,9 @@ CnchAttachProcessor::PartsWithHistory  CnchAttachProcessor::prepareParts(
                     part_info_model->set_mutation(part_info.mutation);
                     part_info_model->set_hint_mutation(part_info.hint_mutation);
 
-                    // Discard part's commit time
+                    // Discard part's commit time & end time
                     part_model.set_commit_time(IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME);
+                    part_model.clear_end_time();
                     parts_with_history.first[offset] = part;
                     parts_with_history.second[offset] = createPartFromModel(target_tbl, part_model, part_info.getPartNameWithHintMutation());
                     if (!query_ctx->getSettingsRef().allow_attach_parts_with_different_table_definition_hash || is_user_defined_cluster_by_expression)

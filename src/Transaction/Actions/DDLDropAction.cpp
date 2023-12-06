@@ -13,75 +13,50 @@
  * limitations under the License.
  */
 
-#include "DDLDropAction.h"
-
 #include <Catalog/Catalog.h>
-// #include <Interpreters/CnchSystemLog.h>
-#include <Parsers/ASTDropQuery.h>
-// #include <Storages/Kafka/StorageCnchKafka.h>
-#include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
-#include <Storages/StorageCnchMergeTree.h>
-// #include <DaemonManager/DaemonManagerClient.h>
-#include <CloudServices/CnchServerClient.h>
-#include <Transaction/TransactionCoordinatorRcCnch.h>
-#include <Common/ErrorCodes.h>
+#include <Transaction/Actions/DDLDropAction.h>
 
 namespace DB
 {
 
 namespace ErrorCodes
 {
-    extern const ErrorCode SYNTAX_ERROR;
+    extern const int LOGICAL_ERROR;
 }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wshadow"
 void DDLDropAction::executeV1(TxnTimestamp commit_time)
 {
-    Catalog::CatalogPtr cnch_catalog = global_context.getCnchCatalog();
+    Catalog::CatalogPtr catalog = global_context.getCnchCatalog();
 
-    if (!params.database.empty() && params.table.empty())
+    if (auto * p = std::get_if<DropDatabaseParams>(&params))
     {
-        // drop database
-        if (params.kind == ASTDropQuery::Kind::Drop)
-        {
-            // for (auto & table : tables)
-            //    updateTsCache(table->getStorageUUID(), commit_time);
-            cnch_catalog->dropDatabase(params.database, params.prev_version, txn_id, commit_time); /*mark database deleted, we just remove database now.*/
-        }
-        else if (params.kind == ASTDropQuery::Kind::Truncate)
-        {
-            throw Exception("Unable to truncate database.", ErrorCodes::SYNTAX_ERROR);
-        }
+        catalog->dropDatabase(p->name, p->prev_version, txn_id, commit_time);
     }
-    else if (!params.database.empty() && !params.table.empty())
+    else if (auto * p = std::get_if<DropSnapshotParams>(&params))
     {
-        if (tables.size()==1 && tables[0])
-        {
-            auto table = tables[0];
-
-            // drop table
-            if (params.kind == ASTDropQuery::Kind::Drop)
-            {
-                // updateTsCache(table->getStorageUUID(), commit_time);
-                cnch_catalog->dropTable(table, params.prev_version, txn_id, commit_time);
-            }
-            else if (params.kind == ASTDropQuery::Kind::Detach)
-            {
-                // updateTsCache(table->getStorageUUID(), commit_time);
-                cnch_catalog->detachTable(params.database, params.table, commit_time);
-            }
-            else if (params.kind == ASTDropQuery::Kind::Truncate)
-            {
-                throw Exception("Logical error: shouldn't be here", ErrorCodes::LOGICAL_ERROR);
-            }
-        }
-        else if (params.is_dictionary)
-        {
-            if (params.kind == ASTDropQuery::Kind::Drop)
-                cnch_catalog->dropDictionary(params.database, params.table);
-            else if (params.kind == ASTDropQuery::Kind::Detach)
-                cnch_catalog->detachDictionary(params.database, params.table);
-        }
+        catalog->removeSnapshot(p->db_uuid, p->name);
+    }
+    else if (auto * p = std::get_if<DropDictionaryParams>(&params))
+    {
+        if (p->is_detach)
+            catalog->detachDictionary(p->database, p->name);
+        else
+            catalog->dropDictionary(p->database, p->name);
+    }
+    else if (auto * p = std::get_if<DropTableParams>(&params))
+    {
+        if (p->is_detach)
+            catalog->detachTable(p->storage->getDatabaseName(), p->storage->getTableName(), commit_time);
+        else
+            catalog->dropTable(p->db_uuid, p->storage, p->prev_version, txn_id, commit_time);
+    }
+    else
+    {
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown drop action with index {}", params.index());
     }
 }
+#pragma clang diagnostic pop
 
 }

@@ -15,8 +15,9 @@
 
 #pragma once
 
-#include <memory>
 #include <assert.h>
+#include <memory>
+#include <optional>
 #include <Protos/data_models.pb.h>
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreePartInfo.h>
@@ -125,10 +126,17 @@ public:
             model->set_commit_time(commit_time);
     }
 
+    /**
+     * @return If it's stored on remote storage, return the relative path to the file. nullopt otherwise (inline).
+     */
+    std::optional<String> getFullRelativePath() const;
+
     void removeFile();
 
     /// PartitionID_MinBlock_MaxBlock
     String getBlockName() const;
+
+    const String & getPartitionID() const { return model->partition_id(); }
 
     bool sameBlock(const DeleteBitmapMeta & rhs) const
     {
@@ -173,6 +181,9 @@ public:
     UInt64 getCommitTime() const { return model->commit_time(); }
 
     UInt64 getTxnId() const { return model->txn_id(); }
+
+    UInt64 getEndTime() const;
+    DeleteBitmapMeta & setEndTime(UInt64 end_time);
 
     String getNameForLogs() const;
 

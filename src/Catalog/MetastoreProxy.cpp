@@ -121,12 +121,15 @@ IMetaStore::IteratorPtr MetastoreProxy::getAllExternalCatalogMeta(const String &
 
 void MetastoreProxy::addDatabase(const String & name_space, const Protos::DataModelDB & db_model)
 {
+    UUID uuid = RPCHelpers::createUUID(db_model.uuid());
+    if (uuid == UUIDHelpers::Nil)
+        throw Exception("missing UUID for addDatabase", ErrorCodes::LOGICAL_ERROR);
+
     String db_meta;
     db_model.SerializeToString(&db_meta);
 
     BatchCommitRequest batch_write;
-    if (db_model.has_uuid())
-        batch_write.AddPut(SinglePutRequest(dbUUIDUniqueKey(name_space, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(db_model.uuid()))), "", true));
+    batch_write.AddPut(SinglePutRequest(dbUUIDUniqueKey(name_space, UUIDHelpers::UUIDToString(uuid)), "", true));
     batch_write.AddPut(SinglePutRequest(dbKey(name_space, db_model.name(), db_model.commit_time()), db_meta));
 
     BatchCommitResponse resp;
@@ -212,6 +215,45 @@ void MetastoreProxy::dropDatabase(const String & name_space, const Protos::DataM
     metastore_ptr->batchWrite(batch_write, resp);
 }
 
+void MetastoreProxy::createSnapshot(const String & name_space, const String & db_uuid, const Protos::DataModelSnapshot & snapshot)
+{
+    auto key = snapshotKey(name_space, db_uuid, snapshot.name());
+    metastore_ptr->put(key, snapshot.SerializeAsString(), /*if_not_exists*/true);
+}
+
+void MetastoreProxy::removeSnapshot(const String & name_space, const String & db_uuid, const String & name)
+{
+    metastore_ptr->drop(snapshotKey(name_space, db_uuid, name));
+}
+
+std::shared_ptr<Protos::DataModelSnapshot>
+MetastoreProxy::tryGetSnapshot(const String & name_space, const String & db_uuid, const String & name)
+{
+    auto key = snapshotKey(name_space, db_uuid, name);
+    String value;
+    metastore_ptr->get(key, value);
+    if (value.empty())
+        return {};
+
+    auto res = std::make_shared<Protos::DataModelSnapshot>();
+    res->ParseFromString(value);
+    return res;
+}
+
+std::vector<std::shared_ptr<Protos::DataModelSnapshot>>
+MetastoreProxy::getAllSnapshots(const String & name_space, const String & db_uuid)
+{
+    std::vector<std::shared_ptr<Protos::DataModelSnapshot>> res;
+    auto it = metastore_ptr->getByPrefix(snapshotPrefix(name_space, db_uuid));
+    while (it->next())
+    {
+        auto item = std::make_shared<Protos::DataModelSnapshot>();
+        item->ParseFromString(it->value());
+        res.push_back(std::move(item));
+    }
+    return res;
+}
+
 String MetastoreProxy::getTableUUID(const String & name_space, const String & database, const String & name)
 {
     String identifier_meta;
@@ -263,7 +305,7 @@ String MetastoreProxy::getTrashTableUUID(const String & name_space, const String
     return identifier.uuid();
 }
 
-void MetastoreProxy::createTable(const String & name_space, const DB::Protos::DataModelTable & table_data, const Strings & dependencies, const Strings & masking_policy_mapping)
+void MetastoreProxy::createTable(const String & name_space, const UUID & db_uuid, const DB::Protos::DataModelTable & table_data, const Strings & dependencies, const Strings & masking_policy_mapping)
 {
     const String & database = table_data.database();
     const String & name = table_data.name();
@@ -282,13 +324,16 @@ void MetastoreProxy::createTable(const String & name_space, const DB::Protos::Da
     for (const String & mask : masking_policy_mapping)
         batch_write.AddPut(SinglePutRequest(maskingPolicyTableMappingKey(name_space, mask, uuid), uuid));
 
-    /// add `table name` ->`uuid` mapping
+    /// add name to identifier mapping
     Protos::TableIdentifier identifier;
     identifier.set_database(database);
     identifier.set_name(name);
     identifier.set_uuid(uuid);
     if (table_data.has_server_vw_name())
         identifier.set_server_vw_name(table_data.server_vw_name());
+    if (db_uuid != UUIDHelpers::Nil)
+        RPCHelpers::fillUUID(db_uuid, *identifier.mutable_db_uuid());
+
     batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, database, name), identifier.SerializeAsString(), true));
     batch_write.AddPut(SinglePutRequest(tableUUIDUniqueKey(name_space, uuid), "", true));
 
@@ -488,18 +533,18 @@ std::vector<std::shared_ptr<Protos::TableIdentifier>> MetastoreProxy::getTablesF
     return res;
 }
 
-std::unordered_map<String, UInt64> MetastoreProxy::getTrashTableVersions(const String & name_space, const String & database, const String & table)
+std::map<UInt64, std::shared_ptr<Protos::TableIdentifier>> MetastoreProxy::getTrashTableVersions(const String & name_space, const String & database, const String & table)
 {
-    std::unordered_map<String, UInt64> res;
+    std::map<UInt64, std::shared_ptr<Protos::TableIdentifier>> res;
     auto it = metastore_ptr->getByPrefix(tableTrashPrefix(name_space) + escapeString(database) + "_" + escapeString(table));
     while(it->next())
     {
         const auto & key = it->key();
         auto pos = key.find_last_of('_');
         UInt64 drop_ts = std::stoull(key.substr(pos + 1, String::npos), nullptr);
-        Protos::TableIdentifier data_model;
-        data_model.ParseFromString(it->value());
-        res.emplace(data_model.uuid(), drop_ts);
+        auto table_id = std::make_shared<Protos::TableIdentifier>();
+        table_id->ParseFromString(it->value());
+        res.emplace(drop_ts, table_id);
     }
     return res;
 }
@@ -631,25 +676,28 @@ IMetaStore::IteratorPtr MetastoreProxy::getMaskingPolicyAppliedTables(const Stri
     return metastore_ptr->getByPrefix(maskingPolicyTableMappingPrefix(name_space, masking_policy_name));
 }
 
-void MetastoreProxy::renameTable(const String & name_space,
-                                 Protos::DataModelTable & table,
-                                 const String & old_db_name,
-                                 const String & old_table_name,
-                                 const String & uuid,
+void MetastoreProxy::prepareRenameTable(const String & name_space,
+                                 const String & table_uuid,
+                                 const String & from_db,
+                                 const String & from_table,
+                                 const UUID & to_db_uuid,
+                                 Protos::DataModelTable & to_table,
                                  BatchCommitRequest & batch_write)
 {
     /// update `table`->`uuid` mapping.
-    batch_write.AddDelete(tableUUIDMappingKey(name_space, old_db_name, old_table_name));
+    batch_write.AddDelete(tableUUIDMappingKey(name_space, from_db, from_table));
     Protos::TableIdentifier identifier;
-    identifier.set_database(table.database());
-    identifier.set_name(table.name());
-    identifier.set_uuid(uuid);
-    batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, table.database(), table.name()), identifier.SerializeAsString(), true));
+    identifier.set_database(to_table.database());
+    identifier.set_name(to_table.name());
+    identifier.set_uuid(table_uuid);
+    if (to_db_uuid != UUIDHelpers::Nil)
+        RPCHelpers::fillUUID(to_db_uuid, *identifier.mutable_db_uuid());
+    batch_write.AddPut(SinglePutRequest(tableUUIDMappingKey(name_space, to_table.database(), to_table.name()), identifier.SerializeAsString(), true));
 
     String meta_data;
-    table.SerializeToString(&meta_data);
+    to_table.SerializeToString(&meta_data);
     /// add new table meta data with new name
-    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, uuid, table.commit_time()), meta_data, true));
+    batch_write.AddPut(SinglePutRequest(tableStoreKey(name_space, table_uuid, to_table.commit_time()), meta_data, true));
 }
 
 bool MetastoreProxy::alterTable(const String & name_space, const Protos::DataModelTable & table, const Strings & masks_to_remove, const Strings & masks_to_add)

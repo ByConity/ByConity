@@ -193,6 +193,17 @@ DeleteBitmapMeta::~DeleteBitmapMeta()
     }
 }
 
+UInt64 DeleteBitmapMeta::getEndTime() const
+{
+    return model->has_end_time() ? model->end_time() : 0;
+}
+
+DeleteBitmapMeta & DeleteBitmapMeta::setEndTime(UInt64 end_time)
+{
+    model->set_end_time(end_time);
+    return *this;
+}
+
 String DeleteBitmapMeta::getNameForLogs() const
 {
     return dataModelName(*model);
@@ -213,12 +224,22 @@ String DeleteBitmapMeta::deleteBitmapFileRelativePath(const Protos::DataModelDel
     return ss.str();
 }
 
-void DeleteBitmapMeta::removeFile()
+std::optional<String> DeleteBitmapMeta::getFullRelativePath() const
 {
     if (model->has_file_size())
     {
-        DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
         String rel_file_path = fs::path(storage.getRelativeDataPath(IStorage::StorageLocation::MAIN)) / deleteBitmapFileRelativePath(*model);
+        return rel_file_path;
+    }
+    return std::nullopt;
+}
+
+void DeleteBitmapMeta::removeFile()
+{
+    if (auto path = getFullRelativePath(); path.has_value())
+    {
+        String rel_file_path = path.value();
+        DiskPtr disk = storage.getStoragePolicy(IStorage::StorageLocation::MAIN)->getAnyDisk();
         if (likely(disk->exists(rel_file_path)))
         {
             disk->removeFile(rel_file_path);

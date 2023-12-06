@@ -15,22 +15,46 @@
 
 #pragma once
 
+#include <variant>
 #include <Core/UUID.h>
+#include <Interpreters/StorageID.h>
 #include <Parsers/ASTCreateQuery.h>
 #include <Transaction/Actions/IAction.h>
-#include <Interpreters/StorageID.h>
 
 namespace DB
 {
-struct CreateActionParams
+struct CreateDatabaseParams
+{
+    String name;
+    UUID uuid;
+    String statement; // used by CnchMaterializedMySQL
+    String engine_name;
+};
+
+struct CreateSnapshotParams
+{
+    UUID db_uuid;
+    String name;
+    int ttl_in_days;
+    UUID bind_table;
+};
+
+struct CreateDictionaryParams
 {
     StorageID storage_id;
     String statement;
     bool attach = false;
-    bool is_dictionary = false;
-    bool is_database = false;
-    String engine_name = "";
 };
+
+struct CreateTableParams
+{
+    UUID db_uuid = UUIDHelpers::Nil;
+    StorageID storage_id;
+    String statement;
+    bool attach = false;
+};
+
+using CreateActionParams = std::variant<CreateDatabaseParams, CreateSnapshotParams, CreateDictionaryParams, CreateTableParams>;
 
 class DDLCreateAction : public IAction
 {

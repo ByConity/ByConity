@@ -207,20 +207,20 @@ bool StorageCloudMergeTree::checkStagedParts()
     auto cnch_table = catalog->tryGetTableByUUID(*getContext(), UUIDHelpers::UUIDToString(getStorageUUID()), ts);
 
     /// get all the partitions of committed staged parts
-    auto staged_parts = catalog->getStagedParts(cnch_table, ts);
+    auto staged_parts = catalog->getStagedServerDataParts(cnch_table, ts);
     staged_parts = CnchPartsHelper::calcVisibleParts(staged_parts, /*collect_on_chain*/ false);
     size_t num_to_publish = 0;
     for (auto & part : staged_parts)
     {
-        if (TxnTimestamp(ts).toMillisecond() - part->commit_time.toMillisecond()
+        if (TxnTimestamp(ts).toMillisecond() - TxnTimestamp(part->getCommitTime()).toMillisecond()
             > getSettings()->staged_part_lifetime_threshold_ms_to_block_kafka_consume)
         {
             num_to_publish++;
             LOG_DEBUG(
                 log,
                 "The part: {}, commit time: {} ms, current time: {} ms, staged_part_lifetime_threshold_ms_to_block_kafka_consume: {} ms.",
-                part->name,
-                part->commit_time.toMillisecond(),
+                part->name(),
+                TxnTimestamp(part->getCommitTime()).toMillisecond(),
                 TxnTimestamp(ts).toMillisecond(),
                 getSettings()->staged_part_lifetime_threshold_ms_to_block_kafka_consume);
         }

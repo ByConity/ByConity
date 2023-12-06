@@ -59,6 +59,7 @@ namespace DB::Catalog
 #define DB_UUID_UNIQUE_PREFIX "DU_"
 #define DELETE_BITMAP_PREFIX "DLB_"
 #define TABLE_STORE_PREFIX "TB_"
+#define SNAPSHOT_STORE_PREFIX "SNST_"
 #define MASKING_POLICY_PREFIX "MP_"
 #define MASKING_POLICY_TABLE_MAPPING "MPT_"
 #define TABLE_UUID_MAPPING "TM_"
@@ -234,7 +235,15 @@ public:
         return allDbPrefix(name_space) + escapeString(db) + '_' + toString(ts);
     }
 
+    static std::string snapshotPrefix(const std::string & name_space, const std::string & db_uuid)
+    {
+        return escapeString(name_space) + "_" + SNAPSHOT_STORE_PREFIX + db_uuid + "_";
+    }
 
+    static std::string snapshotKey(const std::string & name_space, const std::string & db_uuid, const std::string & name)
+    {
+        return snapshotPrefix(name_space, db_uuid) + escapeString(name);
+    }
 
     static std::string deleteBitmapPrefix(const std::string & name_space, const std::string & uuid)
     {
@@ -821,6 +830,12 @@ public:
     std::vector<Protos::DataModelDB> getTrashDBs(const String & name_space);
     std::vector<UInt64> getTrashDBVersions(const String & name_space, const String & database);
 
+    void createSnapshot(const String & name_space, const String & db_uuid, const Protos::DataModelSnapshot & snapshot);
+    void removeSnapshot(const String & name_space, const String & db_uuid, const String & name);
+    /// return snapshot from KV, nullptr if not found.
+    std::shared_ptr<Protos::DataModelSnapshot> tryGetSnapshot(const String & name_space, const String & db_uuid, const String & name);
+    std::vector<std::shared_ptr<Protos::DataModelSnapshot>> getAllSnapshots(const String & name_space, const String & db_uuid);
+
     String getMaskingPolicy(const String & name_space, const String & masking_policy_name) const;
     Strings getMaskingPolicies(const String & name_space, const Strings & masking_policy_names) const;
     Strings getAllMaskingPolicy(const String & name_space) const;
@@ -831,14 +846,14 @@ public:
     String getTableUUID(const String & name_space, const String & database, const String & name);
     std::shared_ptr<Protos::TableIdentifier> getTableID(const String & name_space, const String & database, const String & name);
     String getTrashTableUUID(const String & name_space, const String & database, const String & name, const UInt64 & ts);
-    void createTable(const String & name_space, const DB::Protos::DataModelTable & table_data, const Strings & dependencies, const Strings & masking_policy_mapping);
+    void createTable(const String & name_space, const UUID & db_uuid, const DB::Protos::DataModelTable & table_data, const Strings & dependencies, const Strings & masking_policy_mapping);
     void createUDF(const String & name_space, const DB::Protos::DataModelUDF & udf_data);
     void dropUDF(const String & name_space, const String &db_name, const String &function_name);
     void updateTable(const String & name_space, const String & table_uuid, const String & table_info_new, const UInt64 & ts);
     void updateTableWithID(const String & name_space, const Protos::TableIdentifier & table_id, const DB::Protos::DataModelTable & table_data);
     void getTableByUUID(const String & name_space, const String & table_uuid, Strings & tables_info);
     void clearTableMeta(const String & name_space, const String & database, const String & table, const String & uuid, const Strings & dependencies, const UInt64 & ts = 0);
-    void renameTable(const String & name_space, Protos::DataModelTable & table, const String & old_db_name, const String & old_table_name, const String & uuid, BatchCommitRequest & batch_write);
+    static void prepareRenameTable(const String & name_space, const String & table_uuid, const String & from_db, const String & from_table, const UUID & to_db_uuid, Protos::DataModelTable & to_table, BatchCommitRequest & batch_write);
     bool alterTable(const String & name_space, const Protos::DataModelTable & table, const Strings & masks_to_remove, const Strings & masks_to_add);
     Strings getAllTablesInDB(const String & name_space, const String & database);
     IMetaStore::IteratorPtr getAllTablesMeta(const String & name_space);
@@ -850,7 +865,7 @@ public:
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getTrashTableID(const String & name_space);
     std::shared_ptr<Protos::TableIdentifier> getTrashTableID(const String & name_space, const String & database, const String & table, const UInt64 & ts);
     std::vector<std::shared_ptr<Protos::TableIdentifier>> getTablesFromTrash(const String & name_space, const String & database);
-    std::unordered_map<String, UInt64> getTrashTableVersions(const String & name_space, const String & database, const String & table);
+    std::map<UInt64, std::shared_ptr<Protos::TableIdentifier>> getTrashTableVersions(const String & name_space, const String & database, const String & table);
 
     void createDictionary(const String & name_space, const String & db, const String & name, const String & dic_meta);
     void getDictionary(const String & name_space, const String & db, const String & name, String & dic_meta);

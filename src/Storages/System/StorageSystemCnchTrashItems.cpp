@@ -21,6 +21,8 @@ NamesAndTypesList StorageSystemCnchTrashItems::getNamesAndTypes()
         {"name", std::make_shared<DataTypeString>()},
         {"bytes_on_disk", std::make_shared<DataTypeUInt64>()},
         {"commit_time", std::make_shared<DataTypeDateTime>()},
+        {"commit_ts", std::make_shared<DataTypeUInt64>()},
+        {"end_ts", std::make_shared<DataTypeUInt64>()},
     };
 }
 
@@ -71,7 +73,9 @@ void StorageSystemCnchTrashItems::fillData(MutableColumns & res_columns, Context
             res_columns[col_num++]->insert("PART");
             res_columns[col_num++]->insert(part->name());
             res_columns[col_num++]->insert(part->size());
+            res_columns[col_num++]->insert(TxnTimestamp(part->getCommitTime()).toSecond());
             res_columns[col_num++]->insert(part->getCommitTime());
+            res_columns[col_num++]->insert(part->getEndTime());
         }
         else if (delete_bitmap)
         {
@@ -80,7 +84,9 @@ void StorageSystemCnchTrashItems::fillData(MutableColumns & res_columns, Context
             res_columns[col_num++]->insert("DELETE_BITMAP");
             res_columns[col_num++]->insert(delete_bitmap->getNameForLogs());
             res_columns[col_num++]->insert(model->file_size());
+            res_columns[col_num++]->insert(TxnTimestamp(delete_bitmap->getCommitTime()).toSecond());
             res_columns[col_num++]->insert(delete_bitmap->getCommitTime());
+            res_columns[col_num++]->insert(delete_bitmap->getEndTime());
         }
     };
 

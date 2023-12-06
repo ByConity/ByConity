@@ -46,6 +46,7 @@ public:
     void stop() override final;
     CnchBGThreadType getType() const { return type; }
     Poco::Logger * getLog() { return log; }
+
 protected:
     void execute() override final;
     virtual bool executeImpl() = 0;

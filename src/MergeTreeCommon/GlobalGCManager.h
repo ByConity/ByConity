@@ -17,7 +17,9 @@
 #include <mutex>
 #include <Common/ThreadPool.h>
 #include <Core/UUID.h>
+#include <Interpreters/StorageID.h>
 #include <Protos/data_models.pb.h>
+#include <Transaction/TxnTimestamp.h>
 
 namespace DB
 {
@@ -27,6 +29,17 @@ namespace GlobalGCHelpers
 constexpr size_t DEFAULT_THREADPOOL_MAX_SIZE = 3;
 constexpr size_t DEFAULT_THREADPOOL_MAX_FREE_THREAD = 1;
 constexpr size_t DEFAULT_THREADPOOL_MAX_QUEUE_SIZE = 60;
+
+/**
+ * @return if the table can be cleaned, returns the latest version of metadata.
+ *         otherwise returns nullopt and set `fail_reason` if it's not nullptr.
+ */
+std::optional<Protos::DataModelTable> getCleanableTrashTable(
+    ContextPtr context,
+    const Protos::TableIdentifier & table_id,
+    const TxnTimestamp & ts,
+    UInt64 retention_sec,
+    String * fail_reason = nullptr);
 
 using GlobalGCExecuter = std::function<bool(const Protos::DataModelTable & table, const Context & context, Poco::Logger * log)>;
 bool executeGlobalGC(const Protos::DataModelTable & table, const Context & context, Poco::Logger * log);
@@ -76,6 +89,9 @@ public:
     size_t getMaxThreads() const { return max_threads; }
     std::set<UUID> getDeletingUUIDs() const;
     bool isShutdown() const;
+
+    static void systemCleanTrash(ContextPtr local_context, StorageID storage_id, Poco::Logger * log);
+
 private:
     bool scheduleImpl(std::vector<Protos::DataModelTable> && tables);
     void removeDeletingUUID(UUID uuid);

@@ -13,16 +13,16 @@
  * limitations under the License.
  */
 
-#include <CloudServices/CnchPartsHelper.h>
+#include <functional>
+#include <sstream>
 #include <Catalog/CatalogUtils.h>
 #include <Catalog/DataModelPartWrapper.h>
-#include <Common/ThreadPool.h>
-#include <Common/Stopwatch.h>
+#include <CloudServices/CnchPartsHelper.h>
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
-
-#include <sstream>
-#include <functional>
+#include <Common/Stopwatch.h>
+#include <Common/ThreadPool.h>
+#include <common/defines.h>
 
 namespace DB::CnchPartsHelper
 {
@@ -35,7 +35,7 @@ IMergeTreeDataPartsVector toIMergeTreeDataPartsVector(const MergeTreeDataPartsCN
 {
     IMergeTreeDataPartsVector res;
     res.reserve(vec.size());
-    for (auto & p : vec)
+    for (const auto & p : vec)
         res.push_back(p);
     return res;
 }
@@ -44,10 +44,231 @@ MergeTreeDataPartsCNCHVector toMergeTreeDataPartsCNCHVector(const IMergeTreeData
 {
     MergeTreeDataPartsCNCHVector res;
     res.reserve(vec.size());
-    for (auto & p : vec)
+    for (const auto & p : vec)
         res.push_back(dynamic_pointer_cast<const MergeTreeDataPartCNCH>(p));
     return res;
 }
+
+namespace
+{
+    struct ServerDataPartOperation
+    {
+        static Int64 getMinBlockNumber(const ServerDataPartPtr & part) { return part->get_info().min_block; }
+
+        static Int64 getMaxBlockNumber(const ServerDataPartPtr & part) { return part->get_info().max_block; }
+
+        static UInt64 getCommitTime(const ServerDataPartPtr & part) { return part->get_commit_time(); }
+
+        static UInt64 getEndTime(const ServerDataPartPtr & part) { return part->getEndTime(); }
+
+        static void setEndTime(const ServerDataPartPtr & part, UInt64 end_time)
+        {
+            if (!end_time)
+                return;
+            /// TODO: need change to support multiple base parts in MVCC chain
+            for (auto curr = part; curr; curr = curr->tryGetPreviousPart())
+                curr->setEndTime(end_time);
+        }
+
+        /// note that range tombstone is also a tombstone
+        static bool isTombstone(const ServerDataPartPtr & part) { return part->get_deleted(); }
+
+        static bool isRangeTombstone(const ServerDataPartPtr & part) { return part->get_info().level == MergeTreePartInfo::MAX_LEVEL; }
+
+        static bool isSamePartition(const ServerDataPartPtr & lhs, const ServerDataPartPtr & rhs)
+        {
+            return lhs->get_info().partition_id == rhs->get_info().partition_id;
+        }
+
+        /// returns whether `lhs` is previous version of `rhs`.
+        static bool isPreviousOf(const ServerDataPartPtr & lhs, const ServerDataPartPtr & rhs) { return rhs->containsExactly(*lhs); }
+
+        static void setPrevious(const ServerDataPartPtr & lhs, const ServerDataPartPtr & rhs) { lhs->setPreviousPart(rhs); }
+
+        static const ServerDataPartPtr & tryGetPrevious(const ServerDataPartPtr & part) { return part->tryGetPreviousPart(); }
+    };
+
+    struct MinimumDataPartOperation
+    {
+        static Int64 getMinBlockNumber(const MinimumDataPartPtr & part) { return part->info.min_block; }
+
+        static Int64 getMaxBlockNumber(const MinimumDataPartPtr & part) { return part->info.max_block; }
+
+        static UInt64 getCommitTime(const MinimumDataPartPtr & part) { return part->commit_time; }
+
+        static UInt64 getEndTime(const MinimumDataPartPtr & part) { return part->end_time; }
+
+        static void setEndTime(const MinimumDataPartPtr & part, UInt64 end_time)
+        {
+            if (!end_time)
+                return;
+            /// TODO: need change to support multiple base parts in MVCC chain
+            for (auto curr = part; curr; curr = curr->prev)
+                curr->end_time = end_time;
+        }
+
+        /// note that range tombstone is also a tombstone
+        static bool isTombstone(const MinimumDataPartPtr & part) { return part->is_deleted; }
+
+        static bool isRangeTombstone(const MinimumDataPartPtr & part) { return part->info.level == MergeTreePartInfo::MAX_LEVEL; }
+
+        static bool isSamePartition(const MinimumDataPartPtr & lhs, const MinimumDataPartPtr & rhs)
+        {
+            return lhs->info.partition_id == rhs->info.partition_id;
+        }
+
+        /// returns whether `lhs` is previous version of `rhs`.
+        static bool isPreviousOf(const MinimumDataPartPtr & lhs, const MinimumDataPartPtr & rhs) { return rhs->containsExactly(*lhs); }
+
+        static void setPrevious(const MinimumDataPartPtr & lhs, const MinimumDataPartPtr & rhs) { lhs->prev = rhs; }
+
+        static const MinimumDataPartPtr & tryGetPrevious(const MinimumDataPartPtr & part) { return part->prev; }
+    };
+
+    struct DeleteBitmapOperation
+    {
+        static Int64 getMinBlockNumber(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getModel()->part_min_block(); }
+
+        static Int64 getMaxBlockNumber(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getModel()->part_max_block(); }
+
+        static UInt64 getCommitTime(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getCommitTime(); }
+
+        static UInt64 getEndTime(const DeleteBitmapMetaPtr & bitmap) { return bitmap->getEndTime(); }
+
+        static void setEndTime(const DeleteBitmapMetaPtr & bitmap, UInt64 end_time)
+        {
+            for (auto it = bitmap; it; it = it->tryGetPrevious())
+            {
+                if (end_time)
+                    it->setEndTime(end_time);
+                if (!it->isPartial())
+                    end_time = it->getCommitTime();
+            }
+        }
+
+        static bool isTombstone(const DeleteBitmapMetaPtr & bitmap) { return bitmap->isTombstone(); }
+
+        static bool isRangeTombstone(const DeleteBitmapMetaPtr & bitmap) { return bitmap->isRangeTombstone(); }
+
+        static bool isSamePartition(const DeleteBitmapMetaPtr & lhs, const DeleteBitmapMetaPtr & rhs)
+        {
+            return lhs->getPartitionID() == rhs->getPartitionID();
+        }
+
+        /// returns whether `lhs` is previous version of `rhs`.
+        static bool isPreviousOf(const DeleteBitmapMetaPtr & lhs, const DeleteBitmapMetaPtr & rhs)
+        {
+            return lhs->sameBlock(*rhs) && lhs->getCommitTime() < rhs->getCommitTime();
+        }
+
+        static void setPrevious(const DeleteBitmapMetaPtr & lhs, const DeleteBitmapMetaPtr & rhs) { lhs->setPrevious(rhs); }
+
+        static const DeleteBitmapMetaPtr & tryGetPrevious(const DeleteBitmapMetaPtr & bitmap) { return bitmap->tryGetPrevious(); }
+    };
+
+    template <class Vec, typename Operation, typename Comparator>
+    void calcForGCImpl(Vec & all_items, Vec * out_to_gc, Vec * out_visible_items)
+    {
+        chassert(out_to_gc || out_visible_items);
+
+        if (all_items.empty())
+            return;
+
+        if (all_items.size() == 1)
+        {
+            if (out_to_gc && Operation::getEndTime(all_items.front()))
+                out_to_gc->push_back(all_items.front());
+            if (out_visible_items)
+                out_visible_items->push_back(all_items.front());
+            return;
+        }
+
+        std::sort(all_items.begin(), all_items.end(), Comparator{});
+
+        auto prev_it = all_items.begin();
+        auto curr_it = std::next(prev_it);
+        auto end = all_items.end();
+
+        auto range_tombstone_beg_it = end;
+        auto range_tombstone_end_it = end;
+
+        while (prev_it != end)
+        {
+            bool reach_partition_end = false;
+            auto & prev = *prev_it;
+
+            chassert(Operation::getCommitTime(prev));
+
+            if (curr_it != end && Operation::isPreviousOf(prev, (*curr_it)))
+            {
+                Operation::setPrevious((*curr_it), prev);
+            }
+            /// last part OR latest version of mvcc parts
+            else
+            {
+                UInt64 end_ts = 0;
+                if (curr_it == end || !Operation::isSamePartition(prev, *curr_it))
+                    reach_partition_end = true;
+
+                /// drop range part
+                if (Operation::isRangeTombstone(prev))
+                {
+                    if (range_tombstone_beg_it == end)
+                        range_tombstone_beg_it = prev_it;
+                    range_tombstone_end_it = std::next(prev_it);
+                    /// curr_part is also a DROP RANGE mark in the same partition, must be the bigger one
+                    if (!reach_partition_end && Operation::isRangeTombstone(*curr_it))
+                        end_ts = Operation::getCommitTime(*curr_it);
+                }
+                /// drop part
+                else if (Operation::isTombstone(prev))
+                {
+                    /// for trash cleaner, it's ok to remove tombstone before its predecessor
+                    /// because we use both commit ts and end ts to determine visibility
+                    end_ts = Operation::getCommitTime(prev);
+                }
+                /// normal part
+                else
+                {
+                    /// skip range tombstones that won't cover further item
+                    while (range_tombstone_beg_it != range_tombstone_end_it
+                           && Operation::getMinBlockNumber(prev) > Operation::getMaxBlockNumber(*range_tombstone_beg_it))
+                    {
+                        range_tombstone_beg_it++;
+                    }
+                    /// find the first covering range tombstone for prev
+                    for (auto it = range_tombstone_beg_it; it != range_tombstone_end_it; ++it)
+                    {
+                        if (Operation::getMaxBlockNumber(prev) <= Operation::getMaxBlockNumber(*it))
+                        {
+                            end_ts = Operation::getCommitTime(*it);
+                            break;
+                        }
+                    }
+                }
+
+                Operation::setEndTime(prev, end_ts);
+                if (out_to_gc)
+                {
+                    for (auto item = prev; item; item = Operation::tryGetPrevious(item))
+                    {
+                        if (Operation::getEndTime(item))
+                            out_to_gc->push_back(item);
+                    }
+                }
+                if (out_visible_items)
+                    out_visible_items->push_back(prev);
+            }
+
+            prev_it = curr_it;
+            if (curr_it != end)
+                ++curr_it;
+            if (reach_partition_end)
+                range_tombstone_beg_it = range_tombstone_end_it = end;
+        }
+    }
+
+} /// anonymouse namespace
 
 namespace
 {
@@ -308,19 +529,23 @@ MergeTreeDataPartsCNCHVector calcVisibleParts(MergeTreeDataPartsCNCHVector & all
     return calcVisiblePartsImpl<MergeTreeDataPartsCNCHVector>(all_parts, flatten, /* skip_drop_ranges */ true, nullptr, nullptr, logging);
 }
 
-ServerDataPartsVector calcVisiblePartsForGC(
-    ServerDataPartsVector & all_parts,
-    ServerDataPartsVector * visible_alone_drop_ranges,
-    ServerDataPartsVector * invisible_dropped_parts,
-    LoggingOption logging)
+void calcPartsForGC(ServerDataPartsVector & all_parts, ServerDataPartsVector * out_parts_to_gc, ServerDataPartsVector * out_visible_parts)
 {
-    return calcVisiblePartsImpl(
-        all_parts,
-        /* flatten */ false,
-        /* skip_drop_ranges */ false,
-        visible_alone_drop_ranges,
-        invisible_dropped_parts,
-        logging);
+    return calcForGCImpl<ServerDataPartsVector, ServerDataPartOperation, PartComparator<ServerDataPartPtr>>(
+        all_parts, out_parts_to_gc, out_visible_parts);
+}
+
+void calcMinimumPartsForGC(MinimumDataParts & all_parts, MinimumDataParts * out_parts_to_gc, MinimumDataParts * out_visible_parts)
+{
+    return calcForGCImpl<MinimumDataParts, MinimumDataPartOperation, PartComparator<MinimumDataPartPtr>>(
+        all_parts, out_parts_to_gc, out_visible_parts);
+}
+
+void calcBitmapsForGC(
+    DeleteBitmapMetaPtrVector & all_bitmaps, DeleteBitmapMetaPtrVector * out_bitmaps_to_gc, DeleteBitmapMetaPtrVector * out_visible_bitmaps)
+{
+    return calcForGCImpl<DeleteBitmapMetaPtrVector, DeleteBitmapOperation, LessDeleteBitmapMeta>(
+        all_bitmaps, out_bitmaps_to_gc, out_visible_bitmaps);
 }
 
 /// Input

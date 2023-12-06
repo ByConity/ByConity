@@ -48,8 +48,6 @@ namespace ErrorCodes
    It doesn't make sense to detach / attach a database when metadata is stored in a centralized
    kv storage.
  */
-
-
 class DatabaseCnch : public IDatabase, protected WithContext
 {
 public:
@@ -87,6 +85,12 @@ public:
     bool empty() const override;
     void shutdown() override {}
     void createEntryInCnchCatalog(ContextPtr local_context) const;
+
+    bool supportSnapshot() const override { return db_uuid != UUIDHelpers::Nil; }
+    void dropSnapshot(ContextPtr local_context, const String & snapshot_name) override;
+    SnapshotPtr tryGetSnapshot(const String & snapshot_name) const override;
+    Snapshots getAllSnapshots() const override;
+    Snapshots getAllSnapshotsForStorage(UUID storage_uuid) const override;
 
     TxnTimestamp commit_time;
 protected:

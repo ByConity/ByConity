@@ -51,6 +51,16 @@ UInt64 ServerDataPart::getMutationCommitTime() const
     return part_model().has_mutation_commit_time() ? part_model().mutation_commit_time() : 0;
 }
 
+UInt64 ServerDataPart::getEndTime() const
+{
+    return part_model_wrapper->part_model->has_end_time() ? part_model_wrapper->part_model->end_time() : 0;
+}
+
+void ServerDataPart::setEndTime(UInt64 end_time) const
+{
+    const_cast<ServerDataPart *>(this)->part_model_wrapper->part_model->set_end_time(end_time);
+}
+
 bool ServerDataPart::containsExactly(const ServerDataPart & other) const
 {
     const auto & this_info = *part_model_wrapper->info;

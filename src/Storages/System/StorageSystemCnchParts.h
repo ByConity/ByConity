@@ -41,11 +41,21 @@ public:
 
     static NamesAndAliases getNamesAndAliases();
 
+    /**
+    *     ----------------------------------------------------------------------------------------------------------------
+    *     part_type     | visible | outdated |        description
+    *     ----------------------------------------------------------------------------------------------------------------
+    *     VisiblePart   |   1     |   0      | With data, latest version in MVCC chain, visible to query/merges
+    *     InvisiblePart |   0     |   0/1    | Previou versions of VisiblePart
+    *     Tombstone     |   0     |   0/1    | Without data, mark-delete other parts (deleted() == true)
+    *     DroppedPart   |   0     |   1      | Parts covered by tombstone
+    *     -----------------------------------------------------------------------------------------------------------------
+    */
     enum PartType
     {
         VisiblePart = 1,
         InvisiblePart = 2,
-        DropRange = 3,
+        Tombstone = 3,
         DroppedPart = 4,
     };
 

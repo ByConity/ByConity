@@ -33,7 +33,7 @@ public:
 
     static NamesAndTypesList getNamesAndTypes();
 
-    ColumnsDescription getColumnsAndAlias();
+    static NamesAndAliases getNamesAndAliases();
 
 protected:
     const FormatSettings format_settings;

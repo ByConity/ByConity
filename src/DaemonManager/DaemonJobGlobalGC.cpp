@@ -13,17 +13,18 @@
  * limitations under the License.
  */
 
-#include <netdb.h>
-#include <DaemonManager/DaemonJobGlobalGC.h>
-#include <DaemonManager/DaemonHelper.h>
-#include <DaemonManager/DaemonFactory.h>
-#include <DaemonManager/DMDefines.h>
-#include <Core/UUID.h>
-#include <MergeTreeCommon/GlobalGCManager.h>
-#include <MergeTreeCommon/CnchTopologyMaster.h>
-#include <CloudServices/CnchServerClientPool.h>
 #include <CloudServices/CnchServerClient.h>
+#include <CloudServices/CnchServerClientPool.h>
+#include <Core/UUID.h>
+#include <DaemonManager/DMDefines.h>
+#include <DaemonManager/DaemonFactory.h>
+#include <DaemonManager/DaemonHelper.h>
+#include <DaemonManager/DaemonJobGlobalGC.h>
+#include <Interpreters/Context.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <MergeTreeCommon/GlobalGCManager.h>
 #include <iterator>
+#include <netdb.h>
 
 namespace DB::DaemonManager
 {
@@ -236,28 +237,84 @@ bool tryNext(Catalog::IMetaStore::IteratorPtr & trash_table_it)
 }
 }
 
+DaemonJobGlobalGC::DaemonJobGlobalGC(ContextMutablePtr global_context_)
+    : DaemonJob{std::move(global_context_), CnchBGThreadType::GlobalGC}
+    , catalog(getContext()->getCnchCatalog())
+{}
+
+void DaemonJobGlobalGC::cleanSnapshotsIfNeeded(TxnTimestamp ts)
+{
+    auto context = getContext();
+    if (snapshot_clean_watch.elapsedSeconds() < context->getSettingsRef().snapshot_clean_interval.totalSeconds())
+        return;
+    snapshot_clean_watch.restart();
+
+    try
+    {
+        Stopwatch watch;
+        size_t num_removed = 0;
+        LOG_DEBUG(log, "Start to clear ttl expired snapshots at {}", ts.toSecond());
+        Catalog::Catalog::DataModelDBs all_db_models = catalog->getAllDataBases();
+        for (const auto & db_model : all_db_models)
+        {
+            UUID db_uuid = db_model.has_uuid() ? RPCHelpers::createUUID(db_model.uuid()) : UUIDHelpers::Nil;
+            if (db_uuid == UUIDHelpers::Nil)
+                continue;
+            auto snapshots = catalog->getAllSnapshots(db_uuid);
+            for (const auto & snapshot : snapshots)
+            {
+                UInt64 commit_timestamp = TxnTimestamp(snapshot->commit_time()).toSecond();
+                if (commit_timestamp + (snapshot->ttl_in_days() * 3600 * 24) < ts.toSecond())
+                {
+                    try
+                    {
+                        catalog->removeSnapshot(db_uuid, snapshot->name());
+                        num_removed++;
+                        LOG_INFO(
+                            log,
+                            "Removed ttl expired snapshot {} from {} ({})",
+                            toString(*snapshot),
+                            db_model.name(),
+                            UUIDHelpers::UUIDToString(db_uuid));
+                    }
+                    catch (...)
+                    {
+                        tryLogCurrentException(log, fmt::format("Failed to remove snapshot {}.{}", db_model.name(), snapshot->name()));
+                    }
+                }
+            }
+        }
+        LOG_DEBUG(log, "Total removed {} snapshots from {} databases, took {} ms", num_removed, all_db_models.size(), watch.elapsedMilliseconds());
+        snapshot_clean_watch.restart();
+    }
+    catch (...)
+    {
+        tryLogCurrentException(log, "Failed to clean ttl expired snapshots");
+    }
+}
+
 bool DaemonJobGlobalGC::executeImpl()
 {
-    Context & context = *getContext();
-    static const UInt64 retention_time_ms = context.getSettings().cnch_data_retention_time_in_sec * 1000;
-    /// to make sure current_time_ms always bigger than tso timestamp
-    constexpr unsigned int wall_clock_complement_value_in_sec = 60;
-    UInt64 current_time_ms = (std::time(nullptr) + wall_clock_complement_value_in_sec) * 1000;
-    UInt64 current_ts = context.tryGetTimestamp();
-    if (current_ts == TxnTimestamp::maxTS())
-        LOG_INFO(log, "TSO isn't available, use wall clock instead, wall clock ms: {}", current_time_ms);
-    else
-        current_time_ms = (current_ts >> 18);
+    auto context = getContext();
+    TxnTimestamp ts = context->tryGetTimestamp();
+    if (ts == TxnTimestamp::maxTS())
+    {
+        ts = TxnTimestamp::fromUnixTimestamp(std::time(nullptr));
+        LOG_INFO(log, "TSO isn't available, use wall clock timestamp {} instead", ts.toSecond());
+    }
 
-    std::shared_ptr<Catalog::Catalog> catalog = context.getCnchCatalog();
-    std::shared_ptr<CnchTopologyMaster> topology_master = context.getCnchTopologyMaster();
+    cleanSnapshotsIfNeeded(ts);
+
+    const UInt64 retention_sec = context->getSettingsRef().cnch_data_retention_time_in_sec.value;
+
+    std::shared_ptr<CnchTopologyMaster> topology_master = context->getCnchTopologyMaster();
     if (!topology_master)
     {
         LOG_ERROR(log, "Failed to get topology master, skip iteration");
         return false;
     }
 
-    const std::vector<CnchServerClientPtr> clients = getServerClients(context, *topology_master, log);
+    const std::vector<CnchServerClientPtr> clients = getServerClients(*context, *topology_master, log);
     std::vector<std::pair<String, long>> num_of_table_can_send = getNumOfTablesCanSend(clients, log);
     if (num_of_table_can_send.empty())
     {
@@ -320,24 +377,22 @@ bool DaemonJobGlobalGC::executeImpl()
         }
 
         Protos::TableIdentifier table_id{};
-
         table_id.ParseFromString(trash_table_it->value());
-        LOG_TRACE(log, "Trash table: database {} , name {} , uuid {}", table_id.database(), table_id.name(), table_id.uuid());
+        LOG_TRACE(
+            log,
+            "Found trash table, db={}(uuid={}), name={}(uuid={})",
+            table_id.database(),
+            table_id.has_db_uuid() ? UUIDHelpers::UUIDToString(RPCHelpers::createUUID(table_id.db_uuid())) : "",
+            table_id.name(),
+            table_id.uuid());
+
         if (deleting_uuids_from_servers.find(table_id.uuid()) != deleting_uuids_from_servers.end())
             continue;
-        std::optional<DB::Protos::DataModelTable> table_model = catalog->getTableByID(table_id);
-        if (!table_model.has_value())
-        {
-            LOG_ERROR(log, "Trash table id doesn't have a corresponding table datamodel");
-        }
-        else
-        {
-            DB::Protos::DataModelTable table = table_model.value();
 
-            if ((table.commit_time()>>18) + retention_time_ms > current_time_ms)
-                continue;
-
-            this->tables_need_gc.push_back(table);
+        std::optional<DB::Protos::DataModelTable> table_model = DB::GlobalGCHelpers::getCleanableTrashTable(context, table_id, ts, retention_sec);
+        if (table_model.has_value())
+        {
+            this->tables_need_gc.push_back(*table_model);
         }
     }
 
@@ -354,15 +409,16 @@ bool DaemonJobGlobalGC::executeImpl()
     }
 
     /// Clean database
-    auto db_models = context.getCnchCatalog()->getDatabaseInTrash();
+    auto db_models = catalog->getDatabaseInTrash();
 
-    for (auto db: db_models)
+    for (const auto & db : db_models)
     {
-        if ((db.commit_time()>>18) + retention_time_ms > current_time_ms)
-            continue;
-        // remove meta from catalog
-        LOG_INFO(log, "Remove db meta for db {}", db.name());
-        catalog->clearDatabaseMeta(db.name(), db.commit_time());
+        if (TxnTimestamp(db.commit_time()).toSecond() < (ts.toSecond() - retention_sec))
+        {
+            // remove meta from catalog
+            LOG_INFO(log, "Remove db meta for db {}", db.name());
+            catalog->clearDatabaseMeta(db.name(), db.commit_time());
+        }
     }
 
     LOG_INFO(log, "Finish executeImpl in global GC");

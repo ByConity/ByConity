@@ -124,6 +124,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "START MERGES";
         case Type::REMOVE_MERGES:
             return "REMOVE MERGES";
+        case Type::GC:
+            return "GC";
         case Type::START_GC:
             return "START GC";
         case Type::STOP_GC:
@@ -196,6 +198,8 @@ const char * ASTSystemQuery::typeToString(Type type)
             return "DUMP SERVER STATUS";
         case Type::CLEAN_TRANSACTION:
             return "CLEAN TRANSACTION";
+        case Type::CLEAN_TRASH_TABLE:
+            return "CLEAN TRASH TABLE";
         case Type::CLEAN_FILESYSTEM_LOCK:
             return "CLEAN FILESYSTEM LOCK";
         case Type::JEPROF_DUMP:
@@ -282,10 +286,22 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     if (!cluster.empty())
         formatOnCluster(settings);
 
-    if (type == Type::STOP_MERGES || type == Type::START_MERGES || type == Type::STOP_TTL_MERGES || type == Type::START_TTL_MERGES
-        || type == Type::STOP_MOVES || type == Type::START_MOVES || type == Type::STOP_FETCHES || type == Type::START_FETCHES
-        || type == Type::STOP_REPLICATED_SENDS || type == Type::START_REPLICATED_SENDS || type == Type::STOP_REPLICATION_QUEUES
-        || type == Type::START_REPLICATION_QUEUES || type == Type::STOP_DISTRIBUTED_SENDS || type == Type::START_DISTRIBUTED_SENDS
+    if (   type == Type::STOP_MERGES
+        || type == Type::START_MERGES
+        || type == Type::STOP_GC
+        || type == Type::START_GC
+        || type == Type::STOP_TTL_MERGES
+        || type == Type::START_TTL_MERGES
+        || type == Type::STOP_MOVES
+        || type == Type::START_MOVES
+        || type == Type::STOP_FETCHES
+        || type == Type::START_FETCHES
+        || type == Type::STOP_REPLICATED_SENDS
+        || type == Type::START_REPLICATED_SENDS
+        || type == Type::STOP_REPLICATION_QUEUES
+        || type == Type::START_REPLICATION_QUEUES
+        || type == Type::STOP_DISTRIBUTED_SENDS
+        || type == Type::START_DISTRIBUTED_SENDS
         || type == Type::DROP_CHECKSUMS_CACHE)
     {
         if (!table.empty())
@@ -331,6 +347,15 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
         if (meta_ops.operation > MetastoreOperation::STOP_AUTO_SYNC)
             print_database_table();
     }
+    else if (type == Type::GC)
+    {
+        print_database_table();
+        if (partition)
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " PARTITION " << (settings.hilite ? hilite_none : "");
+            partition->formatImpl(settings, state, frame);
+        }
+    }
     else if (type == Type::DEDUP)
     {
         print_database_table();
@@ -344,6 +369,13 @@ void ASTSystemQuery::formatImpl(const FormatSettings & settings, FormatState & s
     else if (type == Type::CLEAN_TRANSACTION)
     {
         settings.ostr << " " << txn_id;
+    }
+    else if (type == Type::CLEAN_TRASH_TABLE)
+    {
+        print_database_table();
+        if (table_uuid != UUIDHelpers::Nil)
+            settings.ostr << (settings.hilite ? hilite_keyword : "") << " UUID " << (settings.hilite ? hilite_none : "")
+                          << quoteString(toString(table_uuid));
     }
     else if(type == Type::START_MATERIALIZEDMYSQL || type == Type::STOP_MATERIALIZEDMYSQL)
     {
