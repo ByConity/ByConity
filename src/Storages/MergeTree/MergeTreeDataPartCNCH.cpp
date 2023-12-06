@@ -1103,7 +1103,7 @@ void MergeTreeDataPartCNCH::removeImpl(bool keep_shared_data) const
             return;
         }
         /// Recursive directory removal does many excessive "stat" syscalls under the hood.
-        LOG_ERROR(
+        LOG_INFO(
             storage.log,
             "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}",
             fullPath(disk, path_on_disk),
@@ -1124,7 +1124,7 @@ void MergeTreeDataPartCNCH::projectionRemove(const String & parent_to, bool) con
     catch (...)
     {
         /// Recursive directory removal does many excessive "stat" syscalls under the hood.
-        LOG_ERROR(
+        LOG_INFO(
             storage.log,
             "Cannot quickly remove directory {} by removing files; fallback to recursive removal. Reason: {}",
             fullPath(disk, projection_path_on_disk),
