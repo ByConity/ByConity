@@ -15,6 +15,7 @@
 
 #include <Storages/PartCacheManager.h>
 
+#include <chrono>
 #include <iterator>
 #include <Catalog/Catalog.h>
 #include <Catalog/CatalogFactory.h>
@@ -45,8 +46,13 @@ namespace ErrorCodes
     extern const int UNKNOWN_TABLE;
 }
 
-PartCacheManager::PartCacheManager(ContextMutablePtr context_)
-    : WithMutableContext(context_), table_partition_metrics(context_)
+/// Mock function for `getTimestamp`/`tryGetTimestamp`.
+constexpr auto dummy_get_timestamp = []() -> UInt64 {
+    return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+};
+
+PartCacheManager::PartCacheManager(ContextMutablePtr context_, bool dummy_mode)
+    : WithMutableContext(context_), dummy_mode(dummy_mode), table_partition_metrics(context_)
 {
     part_cache_ptr = std::make_shared<CnchDataPartCache>(getContext()->getConfigRef().getUInt("size_of_cached_parts", 100000));
     storageCachePtr = std::make_shared<CnchStorageCache>(getContext()->getConfigRef().getUInt("cnch_max_cached_storage", 10000));
@@ -84,7 +90,7 @@ PartCacheManager::PartCacheManager(ContextMutablePtr context_)
         }
         this->trashed_active_tables_cleaner->scheduleAfter(5 * 60 * 1000);
     });
-    if (getContext()->getServerType() == ServerType::cnch_server)
+    if (getContext()->getServerType() == ServerType::cnch_server && !dummy_mode)
     {
         meta_lock_cleaner->activateAndSchedule();
         active_table_loader->activateAndSchedule();
@@ -129,6 +135,7 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
 
     auto load_table_partitions = [&](TableMetaEntryPtr & meta_ptr) -> bool
     {
+        bool meta_loaded = false;
         auto table_lock = meta_ptr->writeLock();
         /// If other thread finished load, just return
         if (meta_ptr->cache_status == CacheStatus::LOADED)
@@ -140,15 +147,20 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
         try
         {
             meta_ptr->cache_status = CacheStatus::LOADING;
-            getContext()->getCnchCatalog()->getPartitionsFromMetastore(*cnch_table, meta_ptr->partitions);
-            getContext()->getCnchCatalog()->getTableClusterStatus(storage.getStorageUUID(), meta_ptr->is_clustered);
-            getContext()->getCnchCatalog()->getTablePreallocateVW(storage.getStorageUUID(), meta_ptr->preallocate_vw);
+            // No need to load from catalog in dummy mode.
+            if (likely(!dummy_mode))
+            {
+                getContext()->getCnchCatalog()->getPartitionsFromMetastore(*cnch_table, meta_ptr->partitions);
+                getContext()->getCnchCatalog()->getTableClusterStatus(storage.getStorageUUID(), meta_ptr->is_clustered);
+                getContext()->getCnchCatalog()->getTablePreallocateVW(storage.getStorageUUID(), meta_ptr->preallocate_vw);
+                meta_loaded = true;
+            }
             meta_ptr->table_definition_hash = storage.getTableHashForClusterBy();
             /// Needs make sure no other thread force reload
             UInt32 loading = CacheStatus::LOADING;
             meta_ptr->cache_status.compare_exchange_strong(loading, CacheStatus::LOADED);
             meta_ptr->cache_version.set(topology_version);
-            return true;
+            return meta_loaded;
         }
         catch (...)
         {
@@ -334,7 +346,15 @@ UInt64 PartCacheManager::getTableLastUpdateTime(const UUID & uuid)
         }
         if (last_update_time == 0)
         {
-            UInt64 ts = getContext()->tryGetTimestamp();
+            UInt64 ts ={};
+            if (unlikely(dummy_mode))
+            {
+                ts = dummy_get_timestamp();
+            }
+            else
+            {
+                ts = getContext()->tryGetTimestamp();
+            }
             auto lock = table_entry->writeLock();
             if (table_entry->last_update_time == 0)
             {
@@ -632,7 +652,15 @@ void PartCacheManager::insertDataPartsIntoCache(
             partitionid_to_parts[partition_id] = DataModelPartWrapperVector{part_wrapper_ptr};
     }
 
-    UInt64 ts = getContext()->tryGetTimestamp();
+    UInt64 ts{};
+    if (unlikely(dummy_mode))
+    {
+        ts = dummy_get_timestamp();
+    }
+    else
+    {
+        ts = getContext()->tryGetTimestamp();
+    }
     auto update_metrics = [&](const std::shared_ptr<Protos::DataModelPart> & model, std::shared_ptr<PartitionMetrics> metrics_ptr) {
         meta_ptr->metrics_last_update_time = ts;
         metrics_ptr->update(*model);
@@ -784,7 +812,7 @@ DB::ServerDataPartsVector PartCacheManager::getOrSetServerDataPartsInPartitions(
         return res;
 
     /// On cnch worker, we disable part cache to avoid cache synchronization with server.
-    if (getContext()->getServerType() != ServerType::cnch_server)
+    if (getContext()->getServerType() != ServerType::cnch_server && !dummy_mode)
     {
         DataModelPartPtrVector fetched = load_func(partitions,  meta_ptr->getPartitionIDs());
         for (auto & part_model_ptr : fetched)
@@ -1345,10 +1373,12 @@ void PartCacheManager::reset()
     part_cache_ptr->reset();
     storageCachePtr->reset();
     /// reload active tables when topology change.
-    active_table_loader->schedule();
+    if (!dummy_mode)
+        active_table_loader->schedule();
 }
 
-void PartCacheManager::cleanTrashedActiveTables() {
+size_t PartCacheManager::cleanTrashedActiveTables() {
+    size_t count = 0;
     while (true)
     {
         TableMetaEntryPtr cur;
@@ -1356,7 +1386,7 @@ void PartCacheManager::cleanTrashedActiveTables() {
             std::unique_lock<std::mutex> lock(trashed_active_tables_mutex);
             if (trashed_active_tables.size() == 0)
             {
-                return;
+                return count;
             }
             cur = trashed_active_tables.front();
             trashed_active_tables.pop_front();
@@ -1364,6 +1394,7 @@ void PartCacheManager::cleanTrashedActiveTables() {
 
         /// The `TableMetaEntryPtr` will be released at the end
         /// of the scope without holding the lock.
+        count++;
     }
 }
 

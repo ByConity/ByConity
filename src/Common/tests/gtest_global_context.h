@@ -21,9 +21,55 @@
 
 #pragma once
 
-#include <Interpreters/Context.h>
+#include <filesystem>
 #include <Databases/DatabaseMemory.h>
+#include <Interpreters/Context.h>
+#include <Poco/SAX/InputSource.h>
+#include <Poco/Util/XMLConfiguration.h>
 #include <Common/time.h>
+
+// May update the config if need.
+static std::string default_config = R"#(<?xml version="1.0"?>
+<yandex>
+    <storage_configuration>
+    <disks>
+        <local_disk>
+            <path>/tmp/.test</path>
+        </local_disk>
+        <hdfs_disk>
+            <path>/hdfs_path/</path>
+            <type>hdfs</type>
+        </hdfs_disk>
+    </disks>
+    <policies>
+        <default>
+            <volumes>
+                <local>
+                    <default>local_disk</default>
+                    <disk>local_disk</disk>
+                </local>
+                <hdfs>
+                    <default>hdfs_disk</default>
+                    <disk>hdfs_disk</disk>
+                </hdfs>
+            </volumes>
+        </default>
+        <cnch_default_hdfs>
+            <volumes>
+                <local>
+                    <default>local_disk</default>
+                    <disk>local_disk</disk>
+                </local>
+                <hdfs>
+                    <default>hdfs_disk</default>
+                    <disk>hdfs_disk</disk>
+                </hdfs>
+            </volumes>
+        </cnch_default_hdfs>
+    </policies>
+    </storage_configuration>
+    <hdfs_addr>hdfs://test</hdfs_addr>
+</yandex>)#";
 
 struct ContextHolder
 {
@@ -37,8 +83,32 @@ struct ContextHolder
         context->makeGlobalContext();
         context->setPath("./");
 
+        // Load default config.
+        std::stringstream ss(default_config);
+        Poco::XML::InputSource input_source{ss};
+        auto * config = new Poco::Util::XMLConfiguration{&input_source};
+        context->setConfig(config);
+
+        DB::HDFSConnectionParams hdfs_params = DB::HDFSConnectionParams::parseHdfsFromConfig(context->getConfigRef());
+        context->setHdfsConnectionParams(hdfs_params);
+
+        // Register path.
+        std::string path = "gtest_tmp/";
+        context->setPath(path);
+        {
+            std::filesystem::create_directories(std::filesystem::path(path) / "disks/");
+        }
+
         DB::DatabasePtr database = std::make_shared<DB::DatabaseMemory>("test_database", context);
         DB::DatabaseCatalog::instance().attachDatabase("test_database", database);
+    }
+
+    void resetStoragePolicy() const {
+        std::stringstream ss(default_config);
+        Poco::XML::InputSource input_source{ss};
+        auto * config = new Poco::Util::XMLConfiguration{&input_source};
+        context->setConfig(config);
+        context->updateStorageConfiguration(*config);
     }
 
     ContextHolder(ContextHolder &&) = default;

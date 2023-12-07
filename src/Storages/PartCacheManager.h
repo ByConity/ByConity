@@ -47,8 +47,10 @@ public:
     using DataPartPtr = std::shared_ptr<const MergeTreeDataPartCNCH>;
     using DataPartsVector = std::vector<DataPartPtr>;
 
-    explicit PartCacheManager(ContextMutablePtr context_);
+    explicit PartCacheManager(ContextMutablePtr context_, bool dummy_mode = false);
     ~PartCacheManager();
+
+    TableMetaEntryPtr getTableMeta(const UUID & uuid);
 
     void mayUpdateTableMeta(const IStorage & storage, const PairInt64 & topology_version);
 
@@ -157,9 +159,10 @@ public:
     void shutDown();
 
     std::unordered_map<UUID, TableMetaEntryPtr> getTablesSnapshot();
-    friend class CnchTablePartitionMetricsHelper;
 
+    size_t cleanTrashedActiveTables();
 private:
+    bool dummy_mode;
     mutable std::mutex cache_mutex;
     CnchDataPartCachePtr part_cache_ptr;
     std::unordered_map<UUID, TableMetaEntryPtr> active_tables;
@@ -183,11 +186,9 @@ private:
     BackgroundSchedulePool::TaskHolder trashed_active_tables_cleaner;
 
     CnchTablePartitionMetricsHelper table_partition_metrics;
-    void cleanTrashedActiveTables();
     void cleanMetaLock();
     // load tables belongs to current server according to the topology. The task is performed asynchronously.
     void loadActiveTables();
-    TableMetaEntryPtr getTableMeta(const UUID & uuid);
 
     // we supply two implementation for getting parts. Normally, we just use getPartsInternal. If the table parts number is huge we can
     // fetch parts sequentially for each partition by using getPartsByPartition.

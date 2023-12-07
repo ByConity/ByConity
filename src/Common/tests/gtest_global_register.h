@@ -26,6 +26,7 @@
 #include <Functions/registerFunctions.h>
 #include <Storages/registerStorages.h>
 #include <QueryPlan/Hints/registerHints.h>
+#include <Disks/registerDisks.h>
 
 inline void tryRegisterFunctions()
 {
@@ -50,4 +51,9 @@ inline void tryRegisterAggregateFunctions()
 inline void tryRegisterHints()
 {
     static struct Register { Register() { DB::registerHints(); } } registered;
+}
+
+inline void tryRegisterDisks()
+{
+    static struct Register { Register() { DB::registerDisks(); } } registered;
 }
