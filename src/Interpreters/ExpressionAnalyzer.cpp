@@ -2019,6 +2019,40 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
             const auto * select_query = query_analyzer.getSelectQuery();
             if (select_query->orderBy())
             {
+                // Set up a HashSet of dependent column names for matching sub expr of order key to their dependencies.
+                // If there exists AggregateStep, all potential missing dependencies needed to be appended are included in
+                // aggregated columns; Otherwise, all potential dependencies needed to be appended are included in source columns.
+                std::unordered_set<DB::String> dep_columns;
+                if (query_analyzer.hasAggregation())
+                {
+                    for (const auto & agg_col : query_analyzer.aggregated_columns)
+                        dep_columns.emplace(agg_col.name);
+                }
+                else
+                {
+                    for (const auto & src_col : query_analyzer.sourceColumns())
+                        dep_columns.emplace(src_col.name);
+                }
+
+                // Extract all leaf expr which refers to dependent columns from given orderBy key, and append
+                // them into required_columns collection
+                std::unordered_set<DB::String> required_columns;
+
+                std::function<void(ASTPtr)> extract_dependent_from_order_key = [&](ASTPtr order_key)
+                {
+                    if (order_key->children.empty())
+                    {
+                        const auto & col = order_key->getColumnName();
+                        if (dep_columns.find(col) != dep_columns.end())
+                            required_columns.emplace(col);
+                    }
+                    else
+                    {
+                        for (const auto & ch : order_key->children)
+                            extract_dependent_from_order_key(ch);
+                    }
+                };
+
                 for (auto & child : select_query->orderBy()->children)
                 {
                     auto * ast = child->as<ASTOrderByElement>();
@@ -2026,9 +2060,13 @@ ExpressionAnalysisResult::ExpressionAnalysisResult(
                     if (auto * function = order_expression->as<ASTFunction>();
                         function && (function->is_window_function || function->compute_after_window_functions))
                         continue;
-                    const String & column_name = order_expression->getColumnName();
-                    chain.getLastStep().addRequiredOutput(column_name);
+                    // Collect all dependent columns referred by `order_expression`
+                    extract_dependent_from_order_key(order_expression);
                 }
+                // Instead of adding all window irrelevant orderBy columns as required outputs, only adds used source
+                // columns in case of `Unknown column` exception might occur during subsequent `finalize_chain`
+                for (const auto & req_col : required_columns)
+                    chain.getLastStep().addRequiredOutput(req_col);
             }
 
             before_window = chain.getLastActions();
