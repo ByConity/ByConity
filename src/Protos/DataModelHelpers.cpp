@@ -358,7 +358,7 @@ std::shared_ptr<MergeTreePartition> createPartitionFromMetaModel(const MergeTree
     return partition_ptr;
 }
 
-std::shared_ptr<MergeTreePartition> createParitionFromMetaString(const MergeTreeMetaBase & storage, const String & parition_minmax_info)
+std::shared_ptr<MergeTreePartition> createPartitionFromMetaString(const MergeTreeMetaBase & storage, const String & parition_minmax_info)
 {
     std::shared_ptr<MergeTreePartition> partition_ptr = std::make_shared<MergeTreePartition>();
     ReadBufferFromString partition_minmax_buf(parition_minmax_info);

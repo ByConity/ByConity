@@ -241,7 +241,7 @@ inline DataModelPartPtr createPtrFromModel(Protos::DataModelPart part_model)
 
 std::shared_ptr<MergeTreePartition> createPartitionFromMetaModel(const MergeTreeMetaBase & storage, const Protos::PartitionMeta & meta);
 
-std::shared_ptr<MergeTreePartition> createParitionFromMetaString(const MergeTreeMetaBase & storage, const String & parition_minmax_info);
+std::shared_ptr<MergeTreePartition> createPartitionFromMetaString(const MergeTreeMetaBase & storage, const String & parition_minmax_info);
 
 inline DeleteBitmapMetaPtr createFromModel(const MergeTreeMetaBase & storage, const Protos::DataModelDeleteBitmap & model)
 {

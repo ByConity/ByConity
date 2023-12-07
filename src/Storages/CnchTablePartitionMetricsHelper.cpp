@@ -195,7 +195,7 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(boo
 
     for (auto & [table_uuid, meta_ptr] : tables_snapshot)
     {
-        LOG_TRACE(log, "recalculateOrSnapshotParitionsMetrics {}, force: {}", UUIDHelpers::UUIDToString(table_uuid), force);
+        LOG_TRACE(log, "recalculateOrSnapshotPartitionsMetrics {}, force: {}", UUIDHelpers::UUIDToString(table_uuid), force);
 
         /// To avoid starvation of tasks, we need to wait indefinitely.
         recalculateOrSnapshotPartitionsMetrics(meta_ptr, current_time, force, std::nullopt);
@@ -266,7 +266,7 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(
         if (partition == nullptr)
             continue;
 
-        LOG_TRACE(log, "recalculateOrSnapshotParitionsMetrics {} {}", table_meta_ptr->table, partition->partition_id);
+        LOG_TRACE(log, "recalculateOrSnapshotPartitionsMetrics {} {}", table_meta_ptr->table, partition->partition_id);
         if (partition->metrics_ptr == nullptr)
             continue;
 
