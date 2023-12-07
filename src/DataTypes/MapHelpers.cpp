@@ -224,15 +224,10 @@ String parseMapNameFromImplicitKVName(const String & implicit_col)
         throw Exception(ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME, "Invalid implciti kv name {} when parsing map name", implicit_col);
 }
 
-String parseImplicitColumnFromImplicitFileName(const String & data_file_name, const String & map_col)
+String parseImplicitColumnFromImplicitFileName(const String & implicit_file_name, const String & map_col)
 {
-    if (!startsWith(data_file_name, String("__") + escapeForFileName(map_col) + "__"))
-        throw Exception("Implicit file name " + data_file_name + " doesn't belong to map column " + map_col, ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME);
-    auto extension_loc = data_file_name.find('.'); /// only extension contain dot, other dots in column name are escaped.
-    if (extension_loc == String::npos)
-        throw Exception("Invalid file name of implicit column: " + data_file_name, ErrorCodes::INVALID_IMPLICIT_COLUMN_NAME);
-    size_t extension_size = data_file_name.size() - extension_loc;
-    return unescapeForFileName(data_file_name.substr(0, data_file_name.size() - extension_size));
+    String key_name = parseKeyNameFromImplicitFileName(implicit_file_name, map_col);
+    return getImplicitColNameForMapKey(map_col, key_name);
 }
 
 String getMapFileNameFromImplicitFileName(const String & implicit_file_name)

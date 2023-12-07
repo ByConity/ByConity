@@ -83,7 +83,9 @@ String parseKeyNameFromImplicitColName(const String & implicit_col, const String
 // e.g. col.value --> col
 String parseMapNameFromImplicitKVName(const String & implicit_col);
 
-String parseImplicitColumnFromImplicitFileName(const String & data_file_name, const String & map_col);
+// Get map implicit column name from implicit file name
+// e.g __col__%27key%27.bin -> __col__'key'
+String parseImplicitColumnFromImplicitFileName(const String & implicit_file_name, const String & map_col);
 
 // Input parameter 'implicit_file_name' is from checksum, which has escaped by method escapeForFileName. For detail, please refer to ISerialization::getFileNameForStream.
 // In compact map version, all implicit columns are stored in the same file with different offsets, this method is extract the target file name which consist of map column name and extension.

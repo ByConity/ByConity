@@ -606,7 +606,7 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::getChecksums() const
     }
 
     const_cast<IMergeTreeDataPart *>(this)->setChecksumsPtrIfNeed(res);
-    
+
     return res;
 }
 
@@ -1452,7 +1452,7 @@ void IMergeTreeDataPart::removeImpl(bool keep_shared_data) const
     try
     {
         checksums = getChecksums();
-        
+
         /// load checksums for projections parts before removing parent part.
         for (const auto & [ _, projection_part] : projection_parts)
             projection_part->getChecksums();
@@ -1959,9 +1959,14 @@ ColumnSize IMergeTreeDataPart::getColumnSize(const String & column_name, const I
 
 void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) const
 {
+    for (const auto & [column_name, size] : columns_sizes)
+        /// it is ok to maintain byte map columns in column_to_size with 0 size
+        column_to_size[column_name] = size.data_compressed;
+
     auto checksums = getChecksums();
     auto & files = checksums->files;
 
+    /// implicit columns of bytemap may not in columns_sizes if enable enable_calculate_columns_size_without_map, need to get from checksums files
     for (const NameAndTypePair & name_type : storage.getInMemoryMetadataPtr()->getColumns().getAllPhysical())
     {
         if (name_type.type->isMap() && !name_type.type->isMapKVStore())
@@ -1973,16 +1978,6 @@ void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) co
                 if (endsWith(filename, DATA_FILE_EXTENSION))
                     column_to_size[parseImplicitColumnFromImplicitFileName(filename, name_type.name)] += curr->second.file_size;
             }
-        }
-        else
-        {
-            auto serialization = getSerializationForColumn(name_type);
-            serialization->enumerateStreams(
-                [&](const ISerialization::SubstreamPath & substream_path) {
-                    auto bin_checksum = files.find(ISerialization::getFileNameForStream(name_type.name, substream_path) + DATA_FILE_EXTENSION);
-                    if (bin_checksum != files.end())
-                        column_to_size[name_type.name] += bin_checksum->second.file_size;
-            });
         }
     }
 }
