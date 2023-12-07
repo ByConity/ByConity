@@ -3,7 +3,7 @@ FROM byconity/debian-runner
 ARG APP_ROOT=/opt/byconity
 WORKDIR ${APP_ROOT}
 
-ENV PATH="${PATH}:${APP_ROOT}/bin" \
+ENV PATH="${PATH}:${APP_ROOT}/bin:${APP_ROOT}/usr/breakpad/bin" \
     LD_LIBRARY_PATH="${APP_ROOT}/lib:${LD_LIBRARY_PATH}" \
     APP_ROOT="${APP_ROOT}"
 

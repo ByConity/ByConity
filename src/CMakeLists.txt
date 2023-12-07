@@ -637,8 +637,8 @@ if (ENABLE_TESTS AND USE_GTEST)
     target_include_directories(unit_tests_dbms SYSTEM BEFORE PRIVATE ${SPARSEHASH_INCLUDE_DIR})
 
     # copy disk cache test config
-    file(COPY ${ClickHouse_SOURCE_DIR}/src/Storages/DiskCache/tests/disk_cache_test_old_config.xml DESTINATION ${ClickHouse_SOURCE_DIR}/build/src)
-    file(COPY ${ClickHouse_SOURCE_DIR}/src/Storages/DiskCache/tests/disk_cache_test_new_config.xml DESTINATION ${ClickHouse_SOURCE_DIR}/build/src)
+    file(COPY ${ClickHouse_SOURCE_DIR}/src/Storages/DiskCache/tests/disk_cache_test_old_config.xml DESTINATION ${CMAKE_BINARY_DIR}/src)
+    file(COPY ${ClickHouse_SOURCE_DIR}/src/Storages/DiskCache/tests/disk_cache_test_new_config.xml DESTINATION ${CMAKE_BINARY_DIR}/src)
 
     # gtest framework has substandard code
     target_compile_options(unit_tests_dbms PRIVATE
