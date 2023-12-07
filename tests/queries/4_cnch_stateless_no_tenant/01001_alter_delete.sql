@@ -1,4 +1,3 @@
-set mutations_sync = 1;
 DROP TABLE IF EXISTS t_alter_d;
 DROP TABLE IF EXISTS t_alter_ids;
 
