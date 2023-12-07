@@ -1,3 +1,4 @@
+#include <Catalog/Catalog.h>
 #include <Storages/CnchTablePartitionMetricsHelper.h>
 #include <Storages/PartCacheManager.h>
 #include <Common/CurrentMetrics.h>
@@ -15,7 +16,7 @@ namespace DB
 CnchTablePartitionMetricsHelper::CnchTablePartitionMetricsHelper(ContextPtr context_)
     : WithContext(context_), log(&Poco::Logger::get("CnchTablePartitionMetricsHelper"))
 {
-    metrics_updater = getContext()->getSchedulePool().createTask("PartMetricsUpdater", [this]() {
+    metrics_updater = getContext()->getMetricsRecalculationSchedulePool().createTask("PartMetricsUpdater", [this]() {
         try
         {
             LOG_TRACE(log, "Recalculation scheduled.");
@@ -28,7 +29,7 @@ CnchTablePartitionMetricsHelper::CnchTablePartitionMetricsHelper(ContextPtr cont
         /// Schedule every 30 mins, maybe could be configurable later.
         this->metrics_updater->scheduleAfter(30 * 60 * 1000);
     });
-    metrics_initializer = getContext()->getSchedulePool().createTask("PartMetricsInitializer", [this]() {
+    metrics_initializer = getContext()->getMetricsRecalculationSchedulePool().createTask("PartMetricsInitializer", [this]() {
         try
         {
             initTablePartitionsMetrics();
@@ -167,8 +168,7 @@ void CnchTablePartitionMetricsHelper::initTablePartitionsMetrics()
             continue;
         UUID uuid = table_snapshot.first;
         TableMetaEntryPtr meta_ptr = table_snapshot.second;
-        getTablePartitionThreadPool().scheduleOrThrowOnError(
-            [this, uuid, meta_ptr]() { initializeMetricsFromMetastore(uuid, meta_ptr); });
+        initializeMetricsFromMetastore(uuid, meta_ptr);
     }
 }
 
@@ -195,15 +195,16 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(boo
 
     for (auto & [table_uuid, meta_ptr] : tables_snapshot)
     {
-        LOG_TRACE(log, "recalculateOrSnapshotParitionsMetrics {}, force: {}", UUIDHelpers::UUIDToString(table_uuid), force);
+        LOG_TRACE(log, "recalculateOrSnapshotPartitionsMetrics {}, force: {}", UUIDHelpers::UUIDToString(table_uuid), force);
 
-        recalculateOrSnapshotPartitionsMetrics(meta_ptr, current_time, force);
+        /// To avoid starvation of tasks, we need to wait indefinitely.
+        recalculateOrSnapshotPartitionsMetrics(meta_ptr, current_time, force, std::nullopt);
     }
 }
 
 
 void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(
-    TableMetaEntryPtr & table_meta_ptr, size_t current_time, bool force)
+    TableMetaEntryPtr & table_meta_ptr, size_t current_time, bool force, std::optional<size_t> schedule_timeout)
 {
     if (table_meta_ptr == nullptr)
     {
@@ -265,12 +266,11 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(
         if (partition == nullptr)
             continue;
 
-        LOG_TRACE(log, "recalculateOrSnapshotParitionsMetrics {} {}", table_meta_ptr->table, partition->partition_id);
+        LOG_TRACE(log, "recalculateOrSnapshotPartitionsMetrics {} {}", table_meta_ptr->table, partition->partition_id);
         if (partition->metrics_ptr == nullptr)
             continue;
 
-
-        getTablePartitionThreadPool().scheduleOrThrowOnError([this, partition, current_time, table_meta_ptr, force]() {
+        auto task = [this, partition, current_time, table_meta_ptr, force]() {
             CurrentMetrics::Increment metric_increment(CurrentMetrics::SystemCnchPartsInfoRecalculationTasksSize);
             /// After actually recalculated, update `metrics_last_update_time`.
             if (partition->metrics_ptr->recalculate(current_time, getContext(), force))
@@ -278,14 +278,32 @@ void CnchTablePartitionMetricsHelper::recalculateOrSnapshotPartitionsMetrics(
                 auto lock = table_meta_ptr->writeLock();
                 table_meta_ptr->metrics_last_update_time = current_time;
             }
-        });
+        };
+
+        if (schedule_timeout)
+        {
+            getTablePartitionThreadPool().scheduleOrThrow(task, 0, *schedule_timeout);
+        }
+        else
+        {
+            getTablePartitionThreadPool().scheduleOrThrowOnError(task);
+        }
     }
 
     /// Schedule a table level trash items recalculation.
-    getTablePartitionThreadPool().scheduleOrThrowOnError([this, table_meta_ptr, current_time]() {
+    auto task = [this, table_meta_ptr, current_time]() {
         CurrentMetrics::Increment metric_increment{CurrentMetrics::SystemCnchTrashItemsInfoRecalculationTasksSize};
         table_meta_ptr->trash_item_metrics->recalculate(current_time, getContext());
-    });
+    };
+
+    if (schedule_timeout)
+    {
+        getTablePartitionThreadPool().scheduleOrThrow(task, 0, *schedule_timeout);
+    }
+    else
+    {
+        getTablePartitionThreadPool().scheduleOrThrowOnError(task);
+    }
 }
 
 void CnchTablePartitionMetricsHelper::initializeMetricsFromMetastore(const UUID uuid, const TableMetaEntryPtr & table_meta)

@@ -624,7 +624,7 @@ void PartCacheManager::insertDataPartsIntoCache(
         auto part_wrapper_ptr = createPartWrapperFromModel(storage, part_model);
         const auto & partition_id = part_wrapper_ptr->info->partition_id;
         if (!partitionid_to_partition.contains(partition_id))
-            partitionid_to_partition[partition_id] = createParitionFromMetaString(storage, part_model.partition_minmax());
+            partitionid_to_partition[partition_id] = createPartitionFromMetaString(storage, part_model.partition_minmax());
         auto it = partitionid_to_parts.find(partition_id);
         if (it != partitionid_to_parts.end())
             it->second.emplace_back(part_wrapper_ptr);
