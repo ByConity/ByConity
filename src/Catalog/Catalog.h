@@ -473,7 +473,8 @@ public:
 
     /// system tables related interface
 
-    DataModelTables getTablesByIDs(std::vector<std::shared_ptr<Protos::TableIdentifier>> & identifiers);
+    std::optional<DB::Protos::DataModelTable> getTableByID(const Protos::TableIdentifier & identifier);
+    DataModelTables getTablesByIDs(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & identifiers);
 
     DataModelDBs getAllDataBases();
 

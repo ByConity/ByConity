@@ -1100,6 +1100,14 @@ void fixKafkaActiveStatuses(DaemonJobServerBGThread * daemon_job)
 
         try
         {
+            /// make shortcut to avoid Hive/S3 Storage ctor
+            auto ast = getASTCreateQueryFromString(data_model.definition(), daemon_job->getContext());
+            if (ast->storage &&
+                ast->storage->engine &&
+                (!isCnchMergeTreeOrKafka(ast->storage->engine->name))
+            )
+                continue;
+
             StoragePtr storage = Catalog::CatalogFactory::getTableByDefinition(
                         daemon_job->getContext(),
                         data_model.database(),

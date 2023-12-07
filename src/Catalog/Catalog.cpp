@@ -5188,7 +5188,7 @@ namespace Catalog
         return res;
     }
 
-    Catalog::DataModelTables Catalog::getTablesByIDs(std::vector<std::shared_ptr<Protos::TableIdentifier>> & identifiers)
+    Catalog::DataModelTables Catalog::getTablesByIDs(const std::vector<std::shared_ptr<Protos::TableIdentifier>> & identifiers)
     {
         DataModelTables res;
         runWithMetricSupport(
@@ -6080,7 +6080,7 @@ namespace Catalog
             [&] {
                 isSuccessful = meta_proxy->putAccessEntity(type, name_space, new_access_entity, old_access_entity, replace_if_exists);
                 if (!isSuccessful) // RBAC TODO: remove this check once FDB batchWrite throws exception on CAS fail like ByteKV batchWrite
-                {   
+                {
                     String error_msg = replace_if_exists ? "Failed to perform operation on KV Storage" : fmt::format("Access entity with name {} already exists", new_access_entity.name());
                     throw Exception(error_msg, ErrorCodes::ACCESS_ENTITY_ALREADY_EXISTS);
                 }
@@ -6138,7 +6138,7 @@ namespace Catalog
             }
         }
     }
-    
+
     DeleteBitmapMetaPtrVector Catalog::listDetachedDeleteBitmaps(const MergeTreeMetaBase & storage, const AttachFilter & filter)
     {
         IMetaStore::IteratorPtr iter = nullptr;
