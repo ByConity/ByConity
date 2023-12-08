@@ -164,6 +164,27 @@ ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION '2023-06-26';  -- 
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION ID '20230626'; -- { serverError 344 }
 ALTER TABLE u10117_uniquekey_test_bucket2 RECLUSTER PARTITION WHERE id > 0;  -- { serverError 344 }
 
+ALTER TABLE u10117_uniquekey_test_bucket MODIFY SETTING partition_level_unique_keys = 1;
+ALTER TABLE u10117_uniquekey_test_bucket MODIFY SETTING partition_level_unique_keys = 0; -- { serverError 344 }
+
 DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;
 DROP TABLE IF EXISTS u10117_uniquekey_test_bucket2;
 DROP TABLE IF EXISTS u10117_uniquekey_test_normal;
+
+SELECT '';
+select 'test bucket level unique key';
+CREATE TABLE u10117_uniquekey_test_bucket (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY s INTO 2 BUCKETS ORDER BY s SETTINGS partition_level_unique_keys = 0;
+CREATE TABLE u10117_uniquekey_test_bucket2 (d Date, id Int32, s String) ENGINE = CnchMergeTree() PARTITION BY d UNIQUE KEY id CLUSTER BY s INTO 2 BUCKETS ORDER BY s SETTINGS partition_level_unique_keys = 1;
+
+ALTER TABLE u10117_uniquekey_test_bucket MODIFY SETTING enable_bucket_level_unique_keys = 1;
+ALTER TABLE u10117_uniquekey_test_bucket2 MODIFY SETTING enable_bucket_level_unique_keys = 1;
+SELECT 'insert some values and query';
+INSERT INTO u10117_uniquekey_test_bucket VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a');
+INSERT INTO u10117_uniquekey_test_bucket2 VALUES ('2023-06-26', 1, '1a'), ('2023-06-26', 2, '2a'), ('2023-06-26', 3, '3a'), ('2023-06-26', 1, '1b'), ('2023-06-26', 1, '1a'), ('2023-06-27', 1, '1c'), ('2023-06-27', 3, '3b');
+SELECT * FROM u10117_uniquekey_test_bucket ORDER BY s, d;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket' and active;
+SELECT * FROM u10117_uniquekey_test_bucket2 ORDER BY s, d;
+SELECT partition, bucket_number, table_definition_hash FROM system.cnch_parts where database = currentDatabase() and table = 'u10117_uniquekey_test_bucket2' and active;
+
+DROP TABLE IF EXISTS u10117_uniquekey_test_bucket;
+DROP TABLE IF EXISTS u10117_uniquekey_test_bucket2;

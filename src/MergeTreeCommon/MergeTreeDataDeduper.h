@@ -73,6 +73,8 @@ public:
             , new_parts(new_parts_)
         {
         }
+
+        String getDedupLevelInfo() const;
     };
     using DedupTasks = std::vector<DedupTask>;
 
@@ -90,7 +92,8 @@ private:
     DedupTasks convertIntoSubDedupTasks(
         const IMergeTreeDataPartsVector & all_visible_parts,
         const IMergeTreeDataPartsVector & all_staged_parts,
-        const IMergeTreeDataPartsVector & all_uncommitted_parts);
+        const IMergeTreeDataPartsVector & all_uncommitted_parts,
+        const bool & bucket_level_dedup);
 
     const MergeTreeMetaBase & data;
     ContextPtr context;

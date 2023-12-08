@@ -470,6 +470,13 @@ namespace
 
 } /// namespace
 
+String MergeTreeDataDeduper::DedupTask::getDedupLevelInfo() const
+{
+    WriteBufferFromOwnString os;
+    os << (partition_id.empty() ? "table" : "partition " + partition_id) << (bucket_valid ? ("(bucket " + toString(bucket_number) + ")") : "");
+    return os.str();
+}
+
 LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
     TxnTimestamp txn_id,
     const IMergeTreeDataPartsVector & all_visible_parts,
@@ -541,9 +548,9 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
         return num_bitmaps;
     };
 
-    auto log_dedup_detail = [&](const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts) {
+    auto log_dedup_detail = [&](const DedupTask & task, const IMergeTreeDataPartsVector & visible_parts, const IMergeTreeDataPartsVector & new_parts) {
         WriteBufferFromOwnString msg;
-        msg << "Start to dedup in txn_id: " << txn_id.toUInt64() << ", visible_parts: [";
+        msg << "Start to dedup in txn_id: " << txn_id.toUInt64() << ", dedup level info: " << task.getDedupLevelInfo() << ",, visible_parts: [";
         for (size_t i = 0; i < visible_parts.size(); ++i)
         {
             if (i > 0)
@@ -562,27 +569,30 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
     };
 
     Stopwatch watch;
-    DedupTasks dedup_tasks = convertIntoSubDedupTasks(all_visible_parts, all_staged_parts, all_uncommitted_parts);
+    bool bucket_level_dedup = data.getSettings()->enable_bucket_level_unique_keys;
+    DedupTasks dedup_tasks = convertIntoSubDedupTasks(all_visible_parts, all_staged_parts, all_uncommitted_parts, bucket_level_dedup);
 
     size_t dedup_pool_size = std::min(static_cast<size_t>(data.getSettings()->unique_table_dedup_threads), dedup_tasks.size());
     ThreadPool dedup_pool(dedup_pool_size);
     std::mutex mutex;
     for (size_t i = 0; i < dedup_tasks.size(); ++i)
     {
+        if (bucket_level_dedup && !dedup_tasks[i].bucket_valid)
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Enable bucket level unique keys, but dedup task is bucket invalid, it's a bug!");
+
         dedup_pool.scheduleOrThrowOnError([&, i]() {
             Stopwatch sub_task_watch;
             auto & visible_parts = dedup_tasks[i].visible_parts;
             auto & new_parts = dedup_tasks[i].new_parts;
-            log_dedup_detail(visible_parts, new_parts);
+            log_dedup_detail(dedup_tasks[i], visible_parts, new_parts);
             DeleteBitmapVector bitmaps = dedupImpl(visible_parts, new_parts);
 
             std::lock_guard lock(mutex);
             size_t num_bitmaps_to_dump = prepare_bitmaps_to_dump(visible_parts, new_parts, bitmaps);
             LOG_DEBUG(
                 log,
-                "Dedup {}{} in {} ms, visible parts={}, new parts={}, result bitmaps={}",
-                dedup_tasks[i].partition_id.empty() ? "table" : "partition " + dedup_tasks[i].partition_id,
-                dedup_tasks[i].bucket_valid ? ("(bucket " + toString(dedup_tasks[i].bucket_number) + ")") : "",
+                "Dedup {} in {} ms, visible parts={}, new parts={}, result bitmaps={}",
+                dedup_tasks[i].getDedupLevelInfo(),
                 sub_task_watch.elapsedMilliseconds(),
                 visible_parts.size(),
                 new_parts.size(),
@@ -607,16 +617,17 @@ LocalDeleteBitmaps MergeTreeDataDeduper::dedupParts(
 MergeTreeDataDeduper::DedupTasks MergeTreeDataDeduper::convertIntoSubDedupTasks(
     const IMergeTreeDataPartsVector & all_visible_parts,
     const IMergeTreeDataPartsVector & all_staged_parts,
-    const IMergeTreeDataPartsVector & all_uncommitted_parts)
+    const IMergeTreeDataPartsVector & all_uncommitted_parts,
+    const bool & bucket_level_dedup)
 {
     /// Mark whether we can split dedup tasks into bucket granule.
-    bool table_level_valid_bucket = data.getInMemoryMetadataPtr()->checkIfClusterByKeySameWithUniqueKey();
+    bool table_level_valid_bucket = bucket_level_dedup ? true : data.getInMemoryMetadataPtr()->checkIfClusterByKeySameWithUniqueKey();
     auto table_definition_hash = data.getTableHashForClusterBy();
     auto settings = data.getSettings();
     /// Check whether all parts has same table_definition_hash.
     /// Otherwise, we can not split dedup task to bucket granule.
-    auto checkBucketTable = [&settings, &table_definition_hash](const IMergeTreeDataPartsVector & all_parts, bool & valid_bucket) {
-        if (!valid_bucket || settings->enable_bucket_level_unique_keys)
+    auto checkBucketTable = [&bucket_level_dedup, &table_definition_hash](const IMergeTreeDataPartsVector & all_parts, bool & valid_bucket) {
+        if (!valid_bucket || bucket_level_dedup)
             return;
         auto it = std::find_if(all_parts.begin(), all_parts.end(), [&](const auto & part) {
             return part->bucket_number == -1 || part->table_definition_hash != table_definition_hash;
