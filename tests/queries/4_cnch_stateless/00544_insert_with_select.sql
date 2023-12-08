@@ -13,7 +13,7 @@ SELECT * FROM test;
 CREATE TABLE source( `d` Date, `i` Int32) ENGINE = CnchMergeTree PARTITION BY d ORDER BY i;
 INSERT INTO source values ('2020-01-01', 1);
 CREATE TABLE target( `d` Date, `i` Int32) ENGINE = CnchMergeTree PARTITION BY d ORDER BY i;
-INSERT INTO target SELECT * FROM source SETTINGS virtual_warehouse='vw_default', virtual_warehouse_write='vw_default';
+INSERT INTO target SELECT * FROM source SETTINGS virtual_warehouse='vw_default';
 SELECt * from target;
 
 DROP TABLE source;

@@ -39,6 +39,7 @@ void ThreadStatus::applyQuerySettings()
     const Settings & settings = query_context_ptr->getSettingsRef();
 
     query_id = query_context_ptr->getCurrentQueryId();
+    xid = query_context_ptr->tryGetCurrentTransactionID();
     initQueryProfiler();
 
     untracked_memory_limit = settings.max_untracked_memory;
@@ -372,6 +373,7 @@ void ThreadStatus::detachQuery(bool exit_if_already_detached, bool thread_exits)
     memory_tracker.setParent(thread_group->memory_tracker.getParent());
 
     query_id.clear();
+    xid = 0;
     query_context.reset();
     thread_trace_context.trace_id = 0;
     thread_trace_context.span_id = 0;

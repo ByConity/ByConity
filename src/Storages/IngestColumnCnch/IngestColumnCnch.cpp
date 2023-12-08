@@ -65,15 +65,6 @@ String createCloudMergeTreeCreateQuery(
         table_name, nullptr, false, std::nullopt, Strings{}, database_name);
 }
 
-WorkerGroupHandle getWorkerGroup(const StorageCnchMergeTree & cnch_table, ContextPtr context)
-{
-    String vw_name = cnch_table.getSettings()->cnch_vw_write;
-    auto vw_handle = context->getVirtualWarehousePool().get(vw_name);
-    auto value = context->getSettingsRef().vw_schedule_algo.value;
-    auto algo = ResourceManagement::toVWScheduleAlgo(&value[0]);
-    return vw_handle->pickWorkerGroup(algo);
-}
-
 String reconstructAlterQuery(
     const StorageID & target_storage_id,
     const StorageID & source_storage_id,
@@ -143,7 +134,7 @@ BlockInputStreamPtr forwardIngestPartitionToWorker(
 
     const String query_for_send_to_worker = reconstructAlterQuery(target_table.getStorageID(), source_table.getStorageID(), command, task_id);
     LOG_TRACE(log, "reconstruct query to send to worker {}", query_for_send_to_worker);
-    WorkerGroupHandle worker_group = getWorkerGroup(target_table, context);
+    WorkerGroupHandle worker_group = context->getCurrentWorkerGroup();
     auto num_of_workers = worker_group->getShardsInfo().size();
     if (!num_of_workers)
         throw Exception("No heathy worker available", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);

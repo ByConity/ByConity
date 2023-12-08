@@ -94,6 +94,7 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     const String & date_column_name,
     const MergingParams & merging_params_,
     std::unique_ptr<MergeTreeSettings> storage_settings_,
+    const String & logger_name_,
     bool require_part_metadata_,
     bool attach_,
     BrokenPartCallback broken_part_callback_)
@@ -103,7 +104,7 @@ MergeTreeMetaBase::MergeTreeMetaBase(
     , merging_params(merging_params_)
     , require_part_metadata(require_part_metadata_)
     , broken_part_callback(broken_part_callback_)
-    , log_name(table_id_.getNameForLogs())
+    , log_name(logger_name_)
     , log(&Poco::Logger::get(log_name))
     , storage_settings(std::move(storage_settings_))
     , pinned_part_uuids(std::make_shared<PinnedPartUUIDs>())

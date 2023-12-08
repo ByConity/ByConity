@@ -164,6 +164,7 @@ MergeTreeData::MergeTreeData(
         date_column_name,
         merging_params_,
         std::move(storage_settings_),
+        table_id_.getNameForLogs(),
         require_part_metadata_,
         attach,
         std::move(broken_part_callback_))

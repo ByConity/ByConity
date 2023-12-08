@@ -80,6 +80,14 @@ public:
         return current_thread->getQueryId();
     }
 
+    /// Returns a non-zero value if the thread is bound to a transaction
+    static UInt64 getTransactionId()
+    {
+        if (unlikely(!current_thread))
+            return 0;
+        return current_thread->getTransactionId();
+    }
+
     /// Non-master threads call this method in destructor automatically
     static void detachQuery();
     static void detachQueryIfNotDetached();

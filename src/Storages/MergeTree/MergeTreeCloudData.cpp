@@ -57,6 +57,9 @@ MergeTreeCloudData::MergeTreeCloudData(
         date_column_name_,
         merging_params_,
         std::move(settings_),
+        /// notice: cardinality of cloud merge tree table name is very high (including xids)
+        /// so if it's used in logger name, can lead to memleak
+        UUIDHelpers::UUIDToString(table_id_.uuid) + " (CloudMergeTree)",
         false, /// require_part_metadata
         false  /// attach
     )

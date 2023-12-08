@@ -21,6 +21,7 @@
 #include <Interpreters/VirtualWarehousePool.h>
 #include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Optimizer/QueryUseOptimizerChecker.h>
+#include <Parsers/ASTAlterQuery.h>
 #include <Parsers/ASTDeleteQuery.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
@@ -63,7 +64,7 @@ static bool trySetVirtualWarehouseFromTable(
     if (!storage)
         return false;
 
-    if (auto *cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
+    if (auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(storage.get()))
     {
         String vw_name = vw_type == VirtualWarehouseType::Write ? cnch_table->getSettings()->cnch_vw_write
                                                                 : cnch_table->getSettings()->cnch_vw_default;
@@ -153,6 +154,14 @@ static bool trySetVirtualWarehouseFromAST(const ASTPtr & ast, ContextMutablePtr 
                 && trySetVirtualWarehouseFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Read))
                 return true;
             if (trySetVirtualWarehouseFromTable(table_id.database_name, table_id.table_name, context, VirtualWarehouseType::Write))
+                return true;
+        }
+        else if (auto * alter = ast->as<ASTAlterQuery>())   /// e.g., ingest partition
+        {
+            if (alter->table.empty()) // alter database
+                return false;
+            auto database = alter->database.empty() ? context->getCurrentDatabase() : alter->database;
+            if (trySetVirtualWarehouseFromTable(database, alter->table, context, VirtualWarehouseType::Write))
                 return true;
         }
         else if (auto * table_expr = ast->as<ASTTableExpression>())
