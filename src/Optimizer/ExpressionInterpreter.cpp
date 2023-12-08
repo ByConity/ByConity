@@ -490,18 +490,7 @@ InterpretIMResult ExpressionInterpreter::visit(const ConstASTPtr & node) const
     if (const auto * ast_func = node->as<ASTFunction>())
     {
         const auto & func_name = ast_func->name;
-        const static NameSet functions_not_evaluate{
-            "arraySetCheck",
-            "arraySetGet",
-            "arraySetGetAny",
-
-                InternalFunctionRuntimeFilter::name,
-
-            "str_to_map",
-            "getMapKeys",
-        };
-
-        if (functions_not_evaluate.count(func_name))
+        if (func_name == InternalFunctionRuntimeFilter::name)
             return originalNode(node);
         if (isInFunction(func_name))
             return visitInFunction(*ast_func, node);
