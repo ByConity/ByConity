@@ -928,7 +928,7 @@ std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocal
             }
         }
 
-        auto worker_client = worker_group->getWorkerClients().at(index);
+        auto worker_client = worker_group->getWorkerClient(index, /*skip_busy_worker*/false).second;
         worker_clients_for_send.emplace_back(worker_client);
     }
 

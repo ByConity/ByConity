@@ -100,8 +100,6 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(
         info.per_replica_pools = {std::move(pool)};
 
         shards_info.emplace_back(std::move(info));
-
-        worker_clients.emplace_back(current_context->getCnchWorkerClientPools().getWorker(host));
     }
 
     /// if not jump consistent hash, build ring
@@ -126,15 +124,12 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from,
     if (!current_context)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Context expired!");
 
-    // TODO(zuochuang.zema) MERGE worker client pool
     for (size_t index : indices)
     {
         hosts.emplace_back(from.getHostWithPortsVec().at(index));
         shards_info.emplace_back(from.getShardsInfo().at(index));
-        worker_clients.emplace_back(current_context->getCnchWorkerClientPools().getWorker(hosts.back()));
     }
 
-    // TODO(zuochuang.zema) MERGE hash
     if (current_context->getPartAllocationAlgo() != Context::PartAllocator::JUMP_CONSISTENT_HASH)
     {
         ring = buildRing(this->shards_info, current_context);
@@ -191,40 +186,56 @@ CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClient(bool skip_busy_worker
 
 std::pair<UInt64, CnchWorkerClientPtr> WorkerGroupHandleImpl::getWorkerClient(UInt64 sequence, bool skip_busy_worker) const
 {
-    if (worker_clients.empty())
+    if (hosts.empty())
         throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
-    if (worker_clients.size() == 1)
-        return {0, worker_clients[0]};
-    
 
-    auto start_index = sequence % worker_clients.size();
+    auto size = hosts.size();
+    if (size == 1)
+        return {0, doGetWorkerClient(hosts[0])};
+
+    auto start_index = sequence % size;
     if (!skip_busy_worker)
-        return {start_index, worker_clients[start_index]};
+        return {start_index, doGetWorkerClient(hosts[start_index])};
     
     auto ratio = getContext()->getRootConfig().vw_ratio_of_busy_worker.value;
     auto busy_worker_indexes = getBusyWorkerIndexes(ratio, getMetrics());
-    for (size_t i = 0; i < worker_clients.size(); ++i)
+    for (size_t i = 0; i < size; ++i)
     {
-        start_index %= worker_clients.size();
+        start_index %= size;
         if (busy_worker_indexes.contains(start_index))
         {
             start_index++;
             continue;
         }
-        return {start_index, worker_clients[start_index]};
+        return {start_index, doGetWorkerClient(hosts[start_index])};
     }
-    start_index %= worker_clients.size();
-    return {start_index, worker_clients[start_index]};
+    start_index %= size;
+    return {start_index, doGetWorkerClient(hosts[start_index])};
 }
 
 CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClient(const HostWithPorts & host_ports) const
 {
-    if (auto index = indexOf(host_ports))
+    if (indexOf(host_ports).has_value())
     {
-        return worker_clients.at(index.value());
+        return doGetWorkerClient(host_ports);
     }
 
     throw Exception("Can't get WorkerClient for host_ports: " + host_ports.toDebugString(), ErrorCodes::NO_SUCH_SERVICE);
+}
+
+std::vector<CnchWorkerClientPtr> WorkerGroupHandleImpl::getWorkerClients() const
+{
+    std::vector<CnchWorkerClientPtr> res;
+    res.reserve(hosts.size());
+    for (const auto & host : hosts)
+        res.emplace_back(doGetWorkerClient(host));
+    return res;
+}
+
+CnchWorkerClientPtr WorkerGroupHandleImpl::doGetWorkerClient(const HostWithPorts & host_ports) const
+{
+    /// Get a cached client, or create a new one when cache miss or client is unhealthy.
+    return getContext()->getCnchWorkerClientPools().getWorker(host_ports);
 }
 
 bool WorkerGroupHandleImpl::isSame(const WorkerGroupData & data) const

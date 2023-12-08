@@ -379,7 +379,7 @@ void CnchServerResource::allocateResource(
             {
                 // NOTE: server_parts maybe moved due to splitCnchParts and cannot be used again
                 std::tie(bucket_parts, leftover_server_parts) = splitCnchParts(context, *storage, server_parts);
-                if (bucket_parts.size() > 0 && leftover_server_parts.size() > 0)
+                if (!bucket_parts.empty() && !leftover_server_parts.empty())
                 {
                     LOG_TRACE(
                         log,
