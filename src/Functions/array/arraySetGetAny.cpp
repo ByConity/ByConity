@@ -67,6 +67,11 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    bool isSuitableForConstantFolding() const override
+    {
+        return false;
+    }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         const DataTypeArray * array_type = checkAndGetDataType<DataTypeArray>(arguments[0].get());
@@ -190,7 +195,7 @@ public:
             size_t rsize = array.size();
             const auto & offsets = array.getOffsets();
             size_t pre_offset = 0, cur_offset = 0;
-            
+
             Arena arena(0);
             for (size_t i = 0; i<rsize; ++i)
             {

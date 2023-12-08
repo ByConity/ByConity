@@ -39,6 +39,7 @@
 #include <QueryPlan/Void.h>
 #include <DataTypes/DataTypeMap.h>
 #include <Interpreters/join_common.h>
+#include <Functions/InternalFunctionRuntimeFilter.h>
 
 #include <Poco/String.h>
 
@@ -309,6 +310,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
     ColumnsWithTypeAndName processed_arguments(arguments.size());
     DataTypes arguments_types(arguments.size());
     std::vector<size_t> lambda_arg_index;
+    bool all_const = true;
 
     for (size_t i = 0; i < arguments.size(); ++i)
     {
@@ -332,6 +334,8 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
 
             arguments_types[i] = processed_arguments[i].type;
         }
+        if (!processed_arguments[i].column)
+            all_const = false;
     }
 
     if (!lambda_arg_index.empty())
@@ -374,6 +378,21 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
     auto function_base = overload_resolver->build(processed_arguments);
     auto column_name = getFunctionColumnName(function->name, processed_arguments);
 
+    ColumnPtr res_col;
+    auto function_ret_type = function_base->getResultType();
+    if (options.evaluate_constant_expression && function_base->isSuitableForConstantFolding()
+        && !functionIsDictGet(function->name) // 01852_dictionary_found_rate_long
+        && !functionIsInOrGlobalInOperator(function->name))
+    {
+        if (all_const)
+            res_col = function_base->execute(processed_arguments, function_ret_type, 1, false);
+        else
+            res_col = function_base->getConstantResultForNonConstArguments(processed_arguments, function_ret_type);
+
+        if (res_col && isColumnConst(*res_col) && res_col->empty())
+            res_col = res_col->cloneResized(1);
+    }
+
     // post analysis for sub column optimization
     String func_name_lowercase = Poco::toLower(function->name);
 
@@ -408,10 +427,18 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
                     return type->isMap() && !type->isMapKVStore();
                 }))
             {
+                String map_column_name;
                 if (auto * key_lit = function->arguments->children[1]->as<ASTLiteral>())
+                    map_column_name = key_lit->getColumnName();
+                else if (processed_arguments.size() > 1 && processed_arguments[1].column)
                 {
-                    auto key_name = key_lit->getColumnName();
-                    auto column_id = SubColumnID::mapElement(key_name);
+                    auto argument_value = std::make_shared<ASTLiteral>((*processed_arguments[1].column)[0]);
+                    map_column_name = argument_value->getColumnName();
+                }
+
+                if (!map_column_name.empty())
+                {
+                    auto column_id = SubColumnID::mapElement(map_column_name);
                     register_subcolumn(function, *column_reference, column_id);
                 }
             }
@@ -425,7 +452,6 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
             if (check_subcolumn(resolved_field, [](const auto & origin_col) -> bool {
                     if (!origin_col.storage->supportsMapImplicitColumn())
                         return false;
-
                     DataTypePtr type = origin_col.metadata_snapshot->columns.getPhysical(origin_col.column).type;
                     return type->isMap() && type->isMapKVStore();
                 }))
@@ -454,14 +480,13 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         }
     }
 
-    if (!function_base->isDeterministicInScopeOfQuery() || !function_base->isDeterministicInScopeOfQuery()
-        || !function_base->isSuitableForConstantFolding())
+    if (!function_base->isDeterministicInScopeOfQuery() || !function_base->isDeterministicInScopeOfQuery())
     {
         analysis.addNonDeterministicFunctions(*function);
         context->setFunctionDeterministic(function->name, false);
     }
 
-    return {nullptr, function_base->getResultType(), column_name};
+    return {res_col, function_ret_type, column_name};
 }
 
 ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeAggregateFunction(ASTFunctionPtr & function)

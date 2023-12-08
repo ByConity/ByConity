@@ -42,8 +42,6 @@ FROM (
     FROM numbers(3)
 );
 
-SET enable_optimizer=0;
-
 SELECT '1 group, multiple matches, String and FixedString';
 SELECT extractGroups('hello world', '(\\w+) (\\w+)');
 SELECT extractGroups('hello world', CAST('(\\w+) (\\w+)' as FixedString(11)));

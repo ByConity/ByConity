@@ -1,0 +1,19 @@
+1
+['hello','world']
+1	{'r0_viking_recall_local_life_gmv_cnt':1}
+Projection Est. ? rows
+│     Expressions: [a, map1]
+└─ Gather Exchange Est. ? rows
+   └─ Filter Est. ? rows
+      │     Condition: length(extractGroups(\'hello world\', cast(\'(\\\\w+) (\\\\w+)\', \'FixedString(11)\'))) = 2
+      └─ TableScan default.constant_folding Est. ? rows
+               Where: length(extractGroups(\'hello world\', cast(\'(\\\\w+) (\\\\w+)\', \'FixedString(11)\'))) = 2
+               Outputs: [a, map1]
+Projection Est. 1 rows, cost 1.480000e-01
+│     Expressions: extractGroups(\'hello world\', CAST(\'(\\\\w+) (\\\\w+)\', \'FixedString(11)\')):=extractGroups(\'hello world\', cast(\'(\\\\w+) (\\\\w+)\', \'FixedString(11)\'))
+└─ Values Est. 1 rows, cost 7.400000e-02
+Projection Est. ? rows
+│     Expressions: mapElement(map1, concatWithSeparator(\'_\', \'r0\', \'viking_recall_local_life_gmv\', \'cnt\')):=`__map1__\'r0_viking_recall_local_life_gmv_cnt\'`
+└─ Gather Exchange Est. ? rows
+   └─ TableScan default.constant_folding Est. ? rows
+            Outputs: [__map1__\'r0_viking_recall_local_life_gmv_cnt\']

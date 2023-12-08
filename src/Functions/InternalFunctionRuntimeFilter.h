@@ -36,6 +36,11 @@ public:
 
     String getName() const override { return name; }
 
+    bool isSuitableForConstantFolding() const override
+    {
+        return false;
+    }
+
     ColumnPtr executeImpl(
         const ColumnsWithTypeAndName & /*arguments*/, const DataTypePtr & /*result_type*/, size_t /*input_rows_count*/) const override
     {
