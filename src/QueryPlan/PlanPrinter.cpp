@@ -663,8 +663,8 @@ String PlanPrinter::TextPrinter::printQError(const PlanNodeBase & plan, const St
             else
             {
                 double max_rows = static_cast<double>(max_input_rows);
-                out << "Filtered: " << std::fixed << std::setprecision(1)
-                    << (max_rows - static_cast<double>(profile->output_rows)) * static_cast<double>(100) / max_rows << "%";
+                double filtered = max_rows > 0 ? (((max_rows - static_cast<double>(profile->output_rows)) * static_cast<double>(100) / max_rows)) : 0.0;
+                out << "Filtered: " << std::fixed << std::setprecision(1) << filtered << "%";
             }
 
         }
@@ -675,8 +675,8 @@ String PlanPrinter::TextPrinter::printQError(const PlanNodeBase & plan, const St
             else
             {
                 auto child_input_rows = static_cast<double>(profiles.at(plan.getChildren()[0]->getId())->output_rows);
-                out << "Filtered: " << std::fixed << std::setprecision(1)
-                    << (child_input_rows - static_cast<double>(profile->output_rows)) * static_cast<double>(100) / child_input_rows << "%";
+                double filtered = child_input_rows > 0 ? ((child_input_rows - static_cast<double>(profile->output_rows)) * static_cast<double>(100) / child_input_rows) : 0.0;
+                out << "Filtered: " << std::fixed << std::setprecision(1) << filtered << "%";
             }
         }
         else
@@ -684,7 +684,7 @@ String PlanPrinter::TextPrinter::printQError(const PlanNodeBase & plan, const St
             out << "Filtered: 0.0%";
         }
 
-        if (stats && profile->output_rows != 0)
+        if (stats && stats.value()->getRowCount() != 0 && profile->output_rows != 0)
         {
             if (profile->output_rows > stats.value()->getRowCount())
                 out << ", QError: " << std::fixed << std::setprecision(1) << static_cast<double>(profile->output_rows) / static_cast<double>(stats.value()->getRowCount());
@@ -1378,7 +1378,7 @@ Poco::JSON::Object::Ptr NodeDescription::jsonNodeDescription(const StepAggregate
             if (max_input_rows != 0)
             {
                 double max_rows = static_cast<double>(max_input_rows);
-                filtered = (max_rows - static_cast<double>(profile_detail->output_rows)) * static_cast<double>(100) / max_rows;
+                filtered = max_rows > 0 ? ((max_rows - static_cast<double>(profile_detail->output_rows)) * static_cast<double>(100) / max_rows) : 0;
             }
         }
         else if (children.size() == 1)
@@ -1386,7 +1386,7 @@ Poco::JSON::Object::Ptr NodeDescription::jsonNodeDescription(const StepAggregate
             if (node_profiles.contains(children[0]->node_id))
             {
                 auto child_input_rows = static_cast<double>(node_profiles.at(children[0]->node_id)->output_rows);
-                filtered = (child_input_rows - static_cast<double>(profile_detail->output_rows)) * static_cast<double>(100) / child_input_rows;
+                filtered = child_input_rows > 0 ? ((child_input_rows - static_cast<double>(profile_detail->output_rows)) * static_cast<double>(100) / child_input_rows) : 0;
             }
         }
         profiles->set("FilteredRate", filtered);
