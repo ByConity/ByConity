@@ -214,6 +214,7 @@ extern const Metric BackgroundUniqueTableSchedulePoolTask;
 extern const Metric BackgroundMemoryTableSchedulePoolTask;
 extern const Metric BackgroundCNCHTopologySchedulePoolTask;
 extern const Metric BackgroundPartsMetricsSchedulePoolTask;
+extern const Metric BackgroundGCSchedulePoolTask;
 }
 
 namespace DB
@@ -233,6 +234,7 @@ namespace SchedulePool
         MemoryTable,
         CNCHTopology,
         PartsMetrics,
+        GC,
         Size
     };
 }
@@ -2770,6 +2772,15 @@ BackgroundSchedulePool & Context::getMetricsRecalculationSchedulePool() const
             CurrentMetrics::BackgroundPartsMetricsSchedulePoolTask,
             "PtMetricsPol");
     return *shared->extra_schedule_pools[SchedulePool::PartsMetrics];
+}
+
+BackgroundSchedulePool & Context::getGCSchedulePool() const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[SchedulePool::GC])
+        shared->extra_schedule_pools[SchedulePool::GC].emplace(
+            settings.background_gc_thread_pool_size, CurrentMetrics::BackgroundGCSchedulePoolTask, "GCPol");
+    return *shared->extra_schedule_pools[SchedulePool::GC];
 }
 
 ThrottlerPtr Context::getDiskCacheThrottler() const
