@@ -169,6 +169,7 @@ StorageCnchMergeTree::StorageCnchMergeTree(
         date_column_name_,
         merging_params_,
         std::move(settings_),
+        table_id_.getNameForLogs() + " (CnchMergeTree)",
         false,
         attach_,
         [](const String &) {})

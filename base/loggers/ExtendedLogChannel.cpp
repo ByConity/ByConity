@@ -30,6 +30,7 @@ ExtendedLogMessage ExtendedLogMessage::getFrom(const Poco::Message & base)
         auto query_id_ref = CurrentThread::getQueryId();
         if (query_id_ref.size)
             msg_ext.query_id.assign(query_id_ref.data, query_id_ref.size);
+        msg_ext.xid = CurrentThread::getTransactionId();
     }
 
     msg_ext.thread_id = getThreadId();

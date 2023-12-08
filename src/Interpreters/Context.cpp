@@ -135,6 +135,7 @@
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Config/VWCustomizedSettings.h>
 #include <Common/Configurations.h>
+#include <Common/CurrentThread.h>
 #include <Common/DNSResolver.h>
 #include <Common/FieldVisitorToString.h>
 #include <Common/Macros.h>
@@ -5143,11 +5144,19 @@ TransactionCoordinatorRcCnch & Context::getCnchTransactionCoordinator() const
 
 void Context::setCurrentTransaction(TransactionCnchPtr txn, bool finish_txn)
 {
+    TransactionCnchPtr prev_txn;
+    {
+        auto lock = getLock();
+        prev_txn = current_cnch_txn;
+    }
+
+    if (prev_txn && finish_txn && getServerType() == ServerType::cnch_server)
+        getCnchTransactionCoordinator().finishTransaction(prev_txn);
+
+    if (current_thread && txn)
+        CurrentThread::get().setTransactionId(txn->getTransactionID());
+
     auto lock = getLock();
-
-    if (current_cnch_txn && finish_txn && getServerType() == ServerType::cnch_server)
-        getCnchTransactionCoordinator().finishTransaction(current_cnch_txn);
-
     current_cnch_txn = std::move(txn);
 }
 
@@ -5179,6 +5188,11 @@ TransactionCnchPtr Context::getCurrentTransaction() const
     auto lock = getLock();
 
     return current_cnch_txn;
+}
+
+TxnTimestamp Context::tryGetCurrentTransactionID() const
+{
+    return current_cnch_txn ? current_cnch_txn->getTransactionID() : TxnTimestamp{};
 }
 
 TxnTimestamp Context::getCurrentTransactionID() const

@@ -54,6 +54,17 @@ void OwnPatternFormatter::formatExtended(const DB::ExtendedLogMessage & msg_ext,
         writeCString(resetColor(), wb);
     writeCString("} ", wb);
 
+    if (msg_ext.xid)
+    {
+        writeCString("(", wb);
+        if (color)
+            writeString(setColor(intHash64(msg_ext.xid)), wb);
+        DB::writeIntText(msg_ext.xid, wb);
+        if (color)
+            writeCString(resetColor(), wb);
+        writeCString(") ", wb);
+    }
+
     writeCString("<", wb);
     int priority = static_cast<int>(msg.getPriority());
     if (color)

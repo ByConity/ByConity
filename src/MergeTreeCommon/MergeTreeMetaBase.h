@@ -154,6 +154,7 @@ public:
         const String & date_column_name,
         const MergingParams & merging_params_,
         std::unique_ptr<MergeTreeSettings> storage_settings_,
+        const String & logger_name_,
         bool require_part_metadata_,
         bool attach_,
         BrokenPartCallback broken_part_callback_ = [](const String &) {});

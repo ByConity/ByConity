@@ -591,7 +591,7 @@ private:
     bool read_from_client_finished = false;
 
     bool is_explain_query = false;
-    
+
     Context();
     Context(const Context &);
     Context & operator=(const Context &);
@@ -1497,6 +1497,8 @@ public:
     TransactionCnchPtr
     setTemporaryTransaction(const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0, bool with_check = true);
     TransactionCnchPtr getCurrentTransaction() const;
+    /// @return current transaction id or 0 if no txn
+    TxnTimestamp tryGetCurrentTransactionID() const;
     TxnTimestamp getCurrentTransactionID() const;
     TxnTimestamp getCurrentCnchStartTime() const;
 

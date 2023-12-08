@@ -27,6 +27,7 @@ public:
 
     uint64_t thread_id = 0;
     std::string query_id;
+    uint64_t xid = 0;
 };
 
 

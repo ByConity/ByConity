@@ -150,6 +150,7 @@ protected:
     ContextWeakPtr query_context;
 
     String query_id;
+    UInt64 xid = 0;
 
     /// A logs queue used by TCPHandler to pass logs to a client
     InternalTextLogsQueueWeakPtr logs_queue_ptr;
@@ -204,6 +205,16 @@ public:
         return query_id;
     }
 
+    UInt64 getTransactionId() const
+    {
+        return xid;
+    }
+
+    void setTransactionId(UInt64 xid_)
+    {
+        xid = xid_;
+    }
+
     String getTenantId() const
     {
         String result;
@@ -212,12 +223,12 @@ public:
         return result;
     }
 
-    void pushTenantId(const String& new_tenant_id) 
+    void pushTenantId(const String& new_tenant_id)
     {
         tenant_ids.push(new_tenant_id);
     }
 
-    void popTenantId() 
+    void popTenantId()
     {
         if (!tenant_ids.empty())
             tenant_ids.pop();
