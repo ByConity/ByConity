@@ -17,6 +17,7 @@
 
 #include <DataTypes/IDataType.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <DataTypes/MapHelpers.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Common/StringUtils/StringUtils.h>
 
@@ -104,7 +105,7 @@ template <class V>
 std::pair<typename std::map<String, V>::const_iterator, typename std::map<String, V>::const_iterator>
 getMapColumnRangeFromOrderedFiles(const String & map_column, const std::map<String, V> & m)
 {
-    String map_prefix = "__" + map_column + "__";
+    String map_prefix = getMapKeyPrefix(map_column);
     auto beg = m.lower_bound(map_prefix);
     map_prefix.back() += 1; /// The modified prefix must greater than all implicit column files in map
     auto end = m.upper_bound(map_prefix);
