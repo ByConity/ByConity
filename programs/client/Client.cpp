@@ -1997,6 +1997,7 @@ private:
     {
         block_out_stream.reset();
         logs_out_stream.reset();
+        outfile_target.reset();
 
         if (pager_cmd)
         {
@@ -2004,13 +2005,7 @@ private:
             pager_cmd->wait();
         }
         pager_cmd = nullptr;
-
-        if (outfile_target)
-        {
-            outfile_target->flushFile();
-            outfile_target.reset();
-        }
-
+        
         if (out_logs_buf)
         {
             out_logs_buf->next();
@@ -2433,8 +2428,14 @@ private:
     {
         progress_indication.clearProgressOutput();
 
-        if (block_out_stream)
+        if (block_out_stream) {
             block_out_stream->writeSuffix();
+
+            if (outfile_target)
+            {
+                outfile_target->flushFile();
+            }
+        }
 
         if (logs_out_stream)
             logs_out_stream->writeSuffix();
