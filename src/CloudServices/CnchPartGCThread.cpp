@@ -32,7 +32,7 @@ namespace DB
 CnchPartGCThread::CnchPartGCThread(ContextPtr context_, const StorageID & id) : ICnchBGThread(context_, CnchBGThreadType::PartGC, id)
 {
     partition_selector = getContext()->getBGPartitionSelector();
-    data_remover = getContext()->getMergeSelectSchedulePool().createTask(log->name() + "(remover)", [this] { runDataRemoveTask(); });
+    data_remover = getContext()->getGCSchedulePool().createTask(log->name() + "(remover)", [this] { runDataRemoveTask(); });
     data_remover->deactivate();
 }
 

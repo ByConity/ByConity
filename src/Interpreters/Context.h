@@ -1155,6 +1155,7 @@ public:
     BackgroundSchedulePool & getMemoryTableSchedulePool() const;
     BackgroundSchedulePool & getTopologySchedulePool() const;
     BackgroundSchedulePool & getMetricsRecalculationSchedulePool() const;
+    BackgroundSchedulePool & getGCSchedulePool() const;
 
     ThrottlerPtr getDiskCacheThrottler() const;
 
