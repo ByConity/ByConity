@@ -20,6 +20,8 @@ public:
 
     bool nextImpl() override;
 
+    size_t readBig(char * to, size_t n) override;
+
 protected:
     std::unique_ptr<SeekableReadBuffer> impl;
 };

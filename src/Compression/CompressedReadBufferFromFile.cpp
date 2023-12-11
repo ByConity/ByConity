@@ -186,4 +186,9 @@ size_t CompressedReadBufferFromFile::readBig(char * to, size_t n)
     return bytes_read;
 }
 
+std::pair<size_t, size_t> CompressedReadBufferFromFile::position() const
+{
+    return {file_in.getPosition() - size_compressed, size_compressed == 0 ? 0 : offset()};
+}
+
 }

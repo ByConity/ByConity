@@ -21,6 +21,7 @@
 
 #include <Storages/MergeTree/MergeTreeReadPool.h>
 #include <Storages/MergeTree/MergeTreeBaseSelectProcessor.h>
+#include <Storages/MergeTree/FilterWithRowUtils.h>
 #include <Common/formatReadable.h>
 #include <common/range.h>
 
@@ -257,7 +258,7 @@ std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(
         const auto & required_column_names = task_columns.columns.getNames();
         params.column_name_set = NameSet{required_column_names.begin(), required_column_names.end()};
         params.should_reorder = task_columns.should_reorder;
-        parts_with_idx.push_back({ part.data_part, part.part_index_in_query, delete_bitmap_getter(part.data_part) });
+        parts_with_idx.push_back({ part.data_part, part.part_index_in_query, combineFilterBitmap(part, delete_bitmap_getter)});
 
         if (predict_block_size_bytes)
             params.size_predictor = std::make_unique<MergeTreeBlockSizePredictor>(

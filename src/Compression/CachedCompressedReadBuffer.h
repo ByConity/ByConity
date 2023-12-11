@@ -84,17 +84,18 @@ public:
         clock_type = clock_type_;
     }
 
-    String getPath() const
-    {
-        return path;
-    }
+    String getPath() const { return path; }
 
-    size_t getSizeCompressed() const { return owned_cell->compressed_size; }
+    size_t getSizeCompressed() const { return owned_cell == nullptr ? 0 : owned_cell->compressed_size; }
 
-    size_t compressedOffset() const
-    {
-        return file_pos;
-    }
+    size_t compressedOffset() const { return file_pos; }
+
+    /// Return compressed offset and uncompressed offset of current read buffer
+    std::pair<size_t, size_t> position() const;
+
+    /// Return uncompressed size of current compress block, return 0 if there isn't any
+    /// yet
+    size_t currentBlockUncompressedSize() const { return owned_cell == nullptr ? 0 : working_buffer.size(); }
 };
 
 }

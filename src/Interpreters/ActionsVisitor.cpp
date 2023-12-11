@@ -1050,6 +1050,12 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
         return;
     }
 
+    if (node.name == "textSearch")
+    {
+        data.addFunction(FunctionFactory::instance().get("textSearch", data.getContext()), {}, column_name);
+        return;
+    }
+
     // Now we need to correctly process window functions and any expression which depend on them.
     if (node.is_window_function)
     {

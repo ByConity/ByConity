@@ -137,7 +137,6 @@ try
         {
             current_row += data_part->index_granularity.getMarkRows(current_mark);
             current_mark++;
-            continue_reading = false;
         }
         if (current_mark >= marks_count)
         {
@@ -154,8 +153,9 @@ try
 
         const auto & sample = reader->getColumns();
         Columns columns(sample.size());
-        size_t rows_read = reader->readRows(current_mark, continue_reading, rows_to_read, columns);
-        continue_reading = true;
+        size_t rows_read = reader->readRows(current_mark,
+            current_row - data_part->index_granularity.getMarkStartingRow(current_mark),
+            rows_to_read, columns);
 
         if (rows_read)
         {

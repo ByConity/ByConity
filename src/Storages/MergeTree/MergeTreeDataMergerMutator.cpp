@@ -61,6 +61,8 @@
 #include <Parsers/queryToString.h>
 #include <Columns/ColumnByteMap.h>
 #include <Common/FieldVisitorToString.h>
+#include "Storages/MergeTree/MergeTreeSuffix.h"
+#include <Storages/MergeTree/GinIndexDataPartHelper.h>
 
 #include <cmath>
 #include <ctime>
@@ -2127,6 +2129,16 @@ NameToNameVector MergeTreeDataMergerMutator::collectFilesForRenames(
             {
                 rename_vector.emplace_back(INDEX_FILE_PREFIX + command.column_name + ".idx", "");
                 rename_vector.emplace_back(INDEX_FILE_PREFIX + command.column_name + mrk_extension, "");
+                
+                // For GIN index
+                if (source_checksums->has(INDEX_FILE_PREFIX + command.column_name + GIN_SEGMENT_ID_FILE_EXTENSION))
+                {
+                    rename_vector.emplace_back(INDEX_FILE_PREFIX + command.column_name + GIN_SEGMENT_ID_FILE_EXTENSION, "");
+                    rename_vector.emplace_back(INDEX_FILE_PREFIX + command.column_name + GIN_SEGMENT_METADATA_FILE_EXTENSION, "");
+                    rename_vector.emplace_back(INDEX_FILE_PREFIX + command.column_name + GIN_DICTIONARY_FILE_EXTENSION, "");
+                    rename_vector.emplace_back(INDEX_FILE_PREFIX + command.column_name + GIN_POSTINGS_FILE_EXTENSION, "");
+                }
+
             }
         }
         else if (command.type == MutationCommand::Type::DROP_PROJECTION)

@@ -85,3 +85,8 @@ if (ENABLE_FUZZING)
     add_executable(YAML_fuzzer YAML_fuzzer.cpp ${SRCS})
     target_link_libraries(YAML_fuzzer PRIVATE clickhouse_parsers ${LIB_FUZZING_ENGINE})
 endif ()
+
+if (USE_CPP_JIEBA)
+    add_executable(chinese_tokenizer ChineseTokenizer.cpp)
+    target_link_libraries(chinese_tokenizer ${CPP_JIEBA_LIBRARY})
+endif()

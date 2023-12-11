@@ -93,6 +93,10 @@ void MergeTreeDataPartChecksums::checkEqual(const MergeTreeDataPartChecksums & r
     {
         const String & name = it.first;
 
+        /// Exclude files written by inverted index from check. No correct checksums are available for them currently.
+        if (name.ends_with(".gin_dict") || name.ends_with(".gin_post") || name.ends_with(".gin_seg") || name.ends_with(".gin_sid"))
+            continue;
+
         auto jt = rhs.files.find(name);
         if (jt == rhs.files.end())
             throw Exception("No file " + name + " in data part", ErrorCodes::NO_FILE_IN_DATA_PART);
@@ -111,6 +115,10 @@ bool MergeTreeDataPartChecksums::isEqual(const MergeTreeDataPartChecksums & rhs,
 
 void MergeTreeDataPartChecksums::checkSizes(const DiskPtr & disk, const String & path) const
 {
+    /// Skip inverted index files, these have a default MergeTreeDataPartChecksum with file_size == 0
+    if (path.ends_with(".gin_dict") || path.ends_with(".gin_post") || path.ends_with(".gin_seg") || path.ends_with(".gin_sid"))
+        return;
+
     for (const auto & it : files)
     {
         const String & name = it.first;

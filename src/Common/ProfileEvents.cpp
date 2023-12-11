@@ -921,6 +921,15 @@
     M(TSOError, "Error logged by TSO Service as a response to CNCH") \
     \
     M(BackupVW, "Whether use backup virtual warehouse or not") \
+    M(GetByKeySuccess, "") \
+    M(GetByKeyFailed, "") \
+\
+    M(SkipRowsTimeMicro, "Time used in skip unnecessary rows") \
+    M(ReadRowsTimeMicro, "Time used in read necessary rows") \
+    M(GinIndexCacheHit, "Cache hit of gin index") \
+    M(GinIndexCacheMiss, "Cache miss of gin index") \
+    M(PostingReadBytes, "Readed postings list size in bytes") \
+
 
 namespace ProfileEvents
 {

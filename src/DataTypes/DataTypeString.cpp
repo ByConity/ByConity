@@ -32,7 +32,9 @@
 #include <Formats/FormatSettings.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeCustom.h>
 #include <DataTypes/Serializations/SerializationString.h>
+#include <DataTypes/Serializations/SerializationBigString.h>
 
 #include <Parsers/IAST.h>
 #include <Parsers/ASTLiteral.h>
@@ -97,6 +99,13 @@ static DataTypePtr create(const ASTPtr & arguments)
 void registerDataTypeString(DataTypeFactory & factory)
 {
     factory.registerDataType("String", create);
+
+    factory.registerSimpleDataTypeCustom("BigString", []() {
+        return std::make_pair(DataTypeFactory::instance().get("String"),
+            std::make_unique<DataTypeCustomDesc>(
+                std::make_unique<DataTypeCustomFixedName>("BigString"),
+                std::make_unique<SerializationBigString>()));
+    });
 
     /// These synonims are added for compatibility.
 

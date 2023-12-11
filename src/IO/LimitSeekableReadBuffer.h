@@ -21,6 +21,10 @@ public:
 
     virtual off_t seek(off_t offset, int whence) override;
 
+    size_t readBigAt(char* to, size_t n, size_t read_offset, const std::function<bool(size_t m)>& progress_callback) override;
+
+    bool supportsReadAt() override { return in_.supportsReadAt(); }
+
 private:
     virtual bool nextImpl() override;
 

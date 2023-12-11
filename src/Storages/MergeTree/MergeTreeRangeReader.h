@@ -66,7 +66,8 @@ public:
         MergeTreeRangeReader * prev_reader_,
         const PrewhereExprInfo * prewhere_info_,
         ImmutableDeleteBitmapPtr delete_bitmap_,
-        bool last_reader_in_chain_);
+        bool last_reader_in_chain_,
+        size_t filtered_ratio_to_use_skip_read_);
 
     MergeTreeRangeReader() = default;
 
@@ -107,7 +108,6 @@ public:
         /// Actual reader of data from disk
         IMergeTreeReader * merge_tree_reader = nullptr;
         const MergeTreeIndexGranularity * index_granularity = nullptr;
-        bool continue_reading = false;
         bool is_finished = true;
 
         /// Current position from the begging of file in rows
@@ -255,7 +255,7 @@ public:
 private:
 
     ReadResult startReadingChain(size_t max_rows, MarkRanges & ranges);
-    Columns continueReadingChain(ReadResult & result, size_t & num_rows);
+    Columns continueReadingChain(ReadResult & result, size_t & num_rows, bool filter_when_read);
     void executePrewhereActionsAndFilterColumns(ReadResult & result);
     void extractBitmapIndexColumns(Columns & columns, Block & bitmap_block);
 
@@ -271,6 +271,8 @@ private:
 
     bool last_reader_in_chain = false;
     bool is_initialized = false;
+
+    size_t filtered_ratio_to_use_skip_read = 0;
 };
 
 }

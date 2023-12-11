@@ -58,6 +58,10 @@ public:
 
     virtual off_t seek(off_t off, int whence) override;
 
+    virtual bool supportsReadAt() override { return true; }
+
+    virtual size_t readBigAt(char * to, size_t n, size_t range_begin, const std::function<bool(size_t)> & progress_callback) override;
+
 private:
     ThrottlerPtr throttler_;
 

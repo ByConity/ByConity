@@ -56,7 +56,8 @@ struct Settings;
       "be compressed even if the current granule is not finished. If this setting is not set, the corresponding global setting is used.", \
       0) \
     M(UInt64, index_granularity, 8192, "How many rows correspond to one primary key value.", 0) \
-\
+    M(UInt64, max_digestion_size_per_segment, 256 * 1024 * 1024, "Max number of bytes to digest per segment to build GIN index.", 0) \
+    \
     /** Data storing format settings. */ \
     /* For backward compatibility, do not use compact part */ \
     M(UInt64, \

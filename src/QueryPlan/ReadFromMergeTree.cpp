@@ -34,6 +34,7 @@
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/RewriteDistributedQueryVisitor.h>
 #include <Optimizer/PredicateUtils.h>
+#include <Storages/MergeTree/FilterWithRowUtils.h>
 
 namespace ProfileEvents
 {
@@ -270,9 +271,8 @@ ProcessorPtr ReadFromMergeTree::createSource(
     const Names & required_columns,
     bool use_uncompressed_cache)
 {
-    auto delete_bitmap = delete_bitmap_getter(part.data_part);
     return std::make_shared<TSource>(
-            data, metadata_snapshot, part.data_part, std::move(delete_bitmap), max_block_size, preferred_block_size_bytes,
+            data, metadata_snapshot, part.data_part, std::move(combineFilterBitmap(part, delete_bitmap_getter)), max_block_size, preferred_block_size_bytes,
             preferred_max_column_in_block_size_bytes, required_columns, part.ranges, use_uncompressed_cache,
             query_info, actions_settings, true, reader_settings, virt_column_names, part.part_index_in_query);
 }

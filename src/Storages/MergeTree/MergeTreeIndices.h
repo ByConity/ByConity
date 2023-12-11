@@ -11,6 +11,7 @@
 #include <Storages/MergeTree/MarkRange.h>
 #include <Interpreters/ExpressionActions.h>
 #include <DataTypes/DataTypeLowCardinality.h>
+#include <Storages/MergeTree/GinIndexStore.h>
 
 constexpr auto INDEX_FILE_PREFIX = "skp_idx_";
 
@@ -66,7 +67,7 @@ using MergeTreeIndexConditionPtr = std::shared_ptr<IMergeTreeIndexCondition>;
 
 struct IMergeTreeIndex
 {
-    IMergeTreeIndex(const IndexDescription & index_)
+    explicit IMergeTreeIndex(const IndexDescription & index_)
         : index(index_)
     {
     }
@@ -82,6 +83,11 @@ struct IMergeTreeIndex
     virtual MergeTreeIndexGranulePtr createIndexGranule() const = 0;
 
     virtual MergeTreeIndexAggregatorPtr createIndexAggregator() const = 0;
+
+    virtual MergeTreeIndexAggregatorPtr createIndexAggregatorForPart([[maybe_unused]] const GinIndexStorePtr & store) const
+    {
+        return createIndexAggregator();
+    }
 
     virtual MergeTreeIndexConditionPtr createIndexCondition(
             const SelectQueryInfo & query_info, ContextPtr context) const = 0;
@@ -134,5 +140,8 @@ void bloomFilterIndexValidator(const IndexDescription & index, bool attach);
 
 MergeTreeIndexPtr bloomFilterIndexCreatorNew(const IndexDescription & index);
 void bloomFilterIndexValidatorNew(const IndexDescription & index, bool attach);
+
+MergeTreeIndexPtr ginIndexCreator(const IndexDescription & index);
+void ginIndexValidator(const IndexDescription & index, bool attach);
 
 }

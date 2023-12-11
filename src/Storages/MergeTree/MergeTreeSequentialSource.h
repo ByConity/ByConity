@@ -80,7 +80,6 @@ private:
 
     /// Columns we have to read (each Block from read will contain them)
     Names columns_to_read;
-    bool continue_reading = false;
 
     /// Should read using direct IO
     bool read_with_direct_io;

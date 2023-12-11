@@ -82,17 +82,18 @@ public:
         file_in.setProfileCallback(profile_callback_, clock_type_);
     }
 
-    String getPath() const
-    {
-        return file_in.getFileName();
-    }
+    String getPath() const { return file_in.getFileName(); }
 
     size_t getSizeCompressed() const { return size_compressed; }
 
-    size_t compressedOffset() const
-    {
-        return file_in.getPosition();
-    }
+    size_t compressedOffset() const { return file_in.getPosition(); }
+
+    /// Return compressed offset and uncompressed offset of current read buffer
+    std::pair<size_t, size_t> position() const;
+
+    /// Return uncompressed size of current compress block, return 0 if there isn't any
+    /// yet
+    size_t currentBlockUncompressedSize() const { return size_compressed == 0 ? 0 : working_buffer.size(); }
 };
 
 }

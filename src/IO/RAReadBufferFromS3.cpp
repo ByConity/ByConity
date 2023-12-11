@@ -105,4 +105,11 @@ off_t RAReadBufferFromS3::seek(off_t off, int whence)
     }
 }
 
+size_t RAReadBufferFromS3::readBigAt(char * to, size_t n, size_t range_begin, const std::function<bool(size_t)> &)
+{
+    S3TrivialReader raw_reader(reader_.client(), reader_.bucket(), reader_.key());
+    raw_reader.seek(range_begin);
+    return raw_reader.read(to, n);
+}
+
 }

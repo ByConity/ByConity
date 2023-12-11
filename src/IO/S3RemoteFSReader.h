@@ -33,6 +33,7 @@ public:
 
     virtual const String& bucket() const = 0;
     virtual const String& key() const = 0;
+    virtual std::shared_ptr<Aws::S3::S3Client> client() const = 0;
     virtual Poco::Logger * logger() const = 0;
 };
 
@@ -50,6 +51,7 @@ public:
 
     virtual const String& bucket() const override { return bucket_; }
     virtual const String& key() const override { return key_; }
+    virtual std::shared_ptr<Aws::S3::S3Client> client() const override { return client_; }
     virtual Poco::Logger * logger() const override { return nullptr; }
 
 private:
@@ -80,6 +82,7 @@ public:
 
     virtual const String& bucket() const override { return bucket_; }
     virtual const String& key() const override { return key_; }
+    virtual std::shared_ptr<Aws::S3::S3Client> client() const override { return client_; }
     virtual Poco::Logger * logger() const override { return logger_; }
 
 private:

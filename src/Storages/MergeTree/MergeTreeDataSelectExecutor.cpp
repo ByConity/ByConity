@@ -21,8 +21,11 @@
 
 #include <boost/rational.hpp>   /// For calculations related to sampling coefficients.
 #include <common/scope_guard_safe.h>
+#include "Storages/MergeTree/FilterWithRowUtils.h"
+#include <memory>
 #include <optional>
 #include <unordered_set>
+#include <utility>
 
 #include <Storages/MergeTree/MergeTreeDataSelectExecutor.h>
 #include <Storages/MergeTree/MergeTreeReadPool.h>
@@ -30,6 +33,10 @@
 #include <Storages/MergeTree/MergeTreeIndexReader.h>
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
+#include <Storages/MergeTree/GinIndexDataPartHelper.h>
+#include <Storages/MergeTree/GinIndexStore.h>
+#include <Storages/MergeTree/MergeTreeIndexInverted.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/ReadInOrderOptimizer.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -61,6 +68,7 @@
 #include <Processors/Transforms/AggregatingTransform.h>
 #include <Storages/MergeTree/StorageFromMergeTreeDataPart.h>
 #include <IO/WriteBufferFromOStream.h>
+#include <roaring.hh>
 
 namespace ProfileEvents
 {
@@ -956,8 +964,12 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                 ranges.ranges = std::move(sampled_ranges);
             }
 
+            MutableFilterBitmapPtr filter_bitmap = std::make_shared<roaring::Roaring>();
+
             for (auto & index_and_condition : useful_indices)
             {
+                roaring::Roaring tmp_filter_bitmap;
+
                 if (ranges.ranges.empty())
                     break;
 
@@ -974,7 +986,11 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
                     reader_settings,
                     total_granules,
                     granules_dropped,
-                    log_);
+                    tmp_filter_bitmap,
+                    log_
+                );
+                
+                (*filter_bitmap) |= tmp_filter_bitmap;
 
                 index_and_condition.total_granules.fetch_add(total_granules, std::memory_order_relaxed);
                 index_and_condition.granules_dropped.fetch_add(granules_dropped, std::memory_order_relaxed);
@@ -998,6 +1014,9 @@ RangesInDataParts MergeTreeDataSelectExecutor::filterPartsByPrimaryKeyAndSkipInd
 
                 parts_with_ranges[part_index] = std::move(ranges);
             }
+
+            parts_with_ranges[part_index].filter_bitmap = std::move(filter_bitmap);
+
         };
 
         size_t num_threads = std::min(size_t(num_streams), parts.size());
@@ -1683,6 +1702,7 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     const MergeTreeReaderSettings & reader_settings,
     size_t & total_granules,
     size_t & granules_dropped,
+    roaring::Roaring & filter_bitmap,
     Poco::Logger * log)
 {
     const auto & settings = context->getSettingsRef();
@@ -1717,6 +1737,26 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
     /// this variable is stored to avoid reading the same granule twice.
     MergeTreeIndexGranulePtr granule = nullptr;
     size_t last_index_mark = 0;
+
+    PostingsCacheForStore cache_in_store;
+
+    if (dynamic_cast<const MergeTreeIndexInverted *>(&*index_helper) != nullptr)
+    {
+        std::unique_ptr<IGinDataPartHelper> gin_part_helper = nullptr;
+        if (part->getType() == IMergeTreeDataPart::Type::CNCH)
+        {
+            gin_part_helper = std::make_unique<GinDataCNCHPartHelper>(part,
+                DiskCacheFactory::instance().get(DiskCacheType::MergeTree));
+        }
+        else
+        {
+            gin_part_helper = std::make_unique<GinDataLocalPartHelper>(*part);
+        }
+        cache_in_store.store = GinIndexStoreFactory::instance().get(index_helper->getFileName(), std::move(gin_part_helper));
+    }
+
+    const auto * gin_filter_condition = dynamic_cast<const MergeTreeConditionInverted *>(&*condition);
+
     for (const auto & range : ranges)
     {
         MarkRange index_range(
@@ -1737,7 +1777,21 @@ MarkRanges MergeTreeDataSelectExecutor::filterMarksUsingIndex(
                     std::max(range.begin, index_mark * index_granularity),
                     std::min(range.end, (index_mark + 1) * index_granularity));
 
-            if (!condition->mayBeTrueOnGranule(granule))
+            bool maybe_true = false;
+
+            if (!gin_filter_condition)
+            {
+                maybe_true = condition->mayBeTrueOnGranule(granule);
+            }
+            else
+            {
+                roaring::Roaring filter_result;
+                maybe_true
+                    = cache_in_store.store ? gin_filter_condition->mayBeTrueOnGranuleInPart(granule, cache_in_store, filter_result) : true;
+                filter_bitmap |= filter_result;
+            }
+
+            if (!maybe_true)
             {
                 ++granules_dropped;
                 continue;

@@ -40,7 +40,6 @@ MergeTreeFillDeleteWithDefaultValueSource::MergeTreeFillDeleteWithDefaultValueSo
     , data_part(std::move(data_part_))
     , delete_bitmap(std::move(delete_bitmap_))
     , columns_to_read(std::move(columns_to_read_))
-    , continue_reading(false)
     , mark_cache(storage.getContext()->getMarkCache())
 {
     {
@@ -93,7 +92,6 @@ try
         {
             current_row += rows_to_read;
             current_mark++;
-            continue_reading = false;
 
             for (auto & col : header)
                 res_columns.push_back(col.type->createColumnConstWithDefaultValue(rows_to_read)->convertToFullColumnIfConst());
@@ -103,8 +101,9 @@ try
 
             const auto & sample = reader->getColumns();
             Columns columns(sample.size());
-            size_t rows_read = reader->readRows(current_mark, continue_reading, rows_to_read, columns);
-            continue_reading = true;
+            size_t rows_read = reader->readRows(current_mark,
+                current_row - data_part->index_granularity.getMarkStartingRow(current_mark),
+                rows_to_read, columns);
 
             if (rows_read != rows_to_read)
                 throw Exception(ErrorCodes::LOGICAL_ERROR, "Expect {} rows read from mark {} in part {}, got {}",

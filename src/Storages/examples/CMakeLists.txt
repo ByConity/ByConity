@@ -31,3 +31,5 @@ if (ENABLE_FUZZING)
     target_link_libraries (columns_description_fuzzer PRIVATE dbms ${LIB_FUZZING_ENGINE})
 endif ()
 
+add_executable (inverted_index_meta_checker inverted_index_meta_checker.cpp)
+target_link_libraries (inverted_index_meta_checker PRIVATE dbms)

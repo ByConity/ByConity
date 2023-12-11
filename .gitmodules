@@ -294,3 +294,9 @@
 [submodule "contrib/arrow-nanoarrow"]
 	path = contrib/arrow-nanoarrow
 	url = https://github.com/apache/arrow-nanoarrow.git
+[submodule "contrib/cppjieba"]
+	path = contrib/cppjieba
+	url = https://github.com/ByConity/cppjieba.git
+[submodule "contrib/TSQuery"]
+	path = contrib/TSQuery
+	url = https://github.com/ByConity/TSQuery.git

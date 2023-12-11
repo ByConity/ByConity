@@ -270,6 +270,10 @@ IMergeTreeDataPart::Checksums checkDataPart(
     for (auto it = disk->iterateDirectory(path); it->isValid(); it->next())
     {
         const String & file_name = it->name();
+
+        if (file_name.ends_with(".gin_dict") || file_name.ends_with(".gin_post") || file_name.ends_with(".gin_seg") || file_name.ends_with(".gin_sid"))
+            continue;
+
         auto checksum_it = checksums_data.files.find(file_name);
 
         /// Skip files that we already calculated. Also skip metadata files that are not checksummed.

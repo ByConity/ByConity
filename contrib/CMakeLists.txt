@@ -409,3 +409,11 @@ unset (BUILD_SHARED_LIBS)
 add_subdirectory(msgpack-c)
 set(BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS_BEFORE_MSGPACK})
 unset(BUILD_SHARED_LIBS_BEFORE_MSGPACK)
+
+if (USE_CPP_JIEBA)
+    add_subdirectory(cppjieba-cmake)
+endif()
+
+if (USE_TSQUERY)
+    add_subdirectory(TSQuery-cmake)
+endif()

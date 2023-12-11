@@ -1187,7 +1187,12 @@ inline void readBinary(std::pair<String, String> & x, ReadBuffer & buf)
     readBinary(x.first, buf);
     readBinary(x.second, buf);
 }
-
+template <typename T>
+inline void readBinary(std::pair<T, T> & x, ReadBuffer & buf)
+{
+    readBinary(x.first, buf);
+    readBinary(x.second, buf);
+}
 
 template <typename T>
 inline std::enable_if_t<is_arithmetic_v<T> && (sizeof(T) <= 8), void>

@@ -52,6 +52,11 @@ off_t LimitSeekableReadBuffer::seek(off_t offset, int whence)
     }
 }
 
+size_t LimitSeekableReadBuffer::readBigAt(char* to, size_t n, size_t read_offset, const std::function<bool(size_t m)>& progress_callback)
+{
+    return in_.readBigAt(to, n, read_offset, progress_callback);
+}
+
 void LimitSeekableReadBuffer::adoptInputBuffer(size_t offset)
 {
     UInt64 under_buf_end = in_.getPosition() + (in_.buffer().end() - in_.position());

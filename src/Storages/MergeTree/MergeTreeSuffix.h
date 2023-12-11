@@ -50,6 +50,13 @@ constexpr auto BITENGINE_COLUMN_EXTENSION = "_encoded_bitmap";
 constexpr auto BITENGINE_DATA_FILE_EXTENSION = "_encoded_bitmap.bin";
 constexpr auto BITENGINE_DATA_MARKS_EXTENSION = "_encoded_bitmap.mrk";
 
+constexpr auto COMPRESSED_DATA_INDEX_EXTENSION = ".compress_idx";
+
+constexpr auto GIN_SEGMENT_ID_FILE_EXTENSION = ".gin_sid";
+constexpr auto GIN_SEGMENT_METADATA_FILE_EXTENSION = ".gin_seg";
+constexpr auto GIN_DICTIONARY_FILE_EXTENSION = ".gin_dict";
+constexpr auto GIN_POSTINGS_FILE_EXTENSION = ".gin_post";
+
 bool isEngineReservedWord(const String & column);
 
 /// Type `ONLY_SOURCE` is used in encoding and select, it's **DEFAULT** type

@@ -71,7 +71,12 @@ public:
     off_t size();//todo(jiashuo): replace by base class fileSize()
 
     void setProgressCallback(ContextPtr context);
+
+    size_t readBig(char * to, size_t n) override;
+
 private:
+    size_t readInto(char * to, size_t n);
+
     /// Assuming file descriptor supports 'select', check that we have data to read or wait until timeout.
     bool poll(size_t timeout_microseconds);
 };
