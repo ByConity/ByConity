@@ -1591,6 +1591,15 @@ BlockIO InterpreterCreateQuery::fillTableIfNeeded(const ASTCreateQuery & create)
             auto insert_context = Context::createCopy(getContext()->getSessionContext());
             insert_context->makeQueryContext();
             insert_context->setSettings(getContext()->getSettingsRef());
+
+            // TODO @wangtao.2077: review this when internal queries are fully supported by optimizer
+            if (insert_context->getSettingsRef().enable_optimizer && insert_context->getSettingsRef().enable_optimizer_for_create_select)
+            {
+                insert_context->setCurrentQueryId("");
+                CurrentThread::attachQueryContext(insert_context);
+                return executeQuery(insert->formatForErrorMessage(), insert_context, /*internal=*/false);
+            }
+
             return executeQuery(insert->formatForErrorMessage(), insert_context, /*internal=*/true);
         }
     }
