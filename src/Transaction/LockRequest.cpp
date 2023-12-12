@@ -89,7 +89,7 @@ void LockRequest::unlock()
     }
     else
     {
-        throw Exception("Invalid unlock operator " + toString(to_underlying(status)), ErrorCodes::LOGICAL_ERROR);
+        // nothing to do
     }
 }
 
