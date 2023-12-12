@@ -92,6 +92,12 @@ MergeTreeBaseSelectProcessor::MergeTreeBaseSelectProcessor(
         prewhere_actions->prewhere_column_name = prewhere_info->prewhere_column_name;
         prewhere_actions->remove_prewhere_column = prewhere_info->remove_prewhere_column;
         prewhere_actions->need_filter = prewhere_info->need_filter;
+
+        LOG_TRACE(
+            &Poco::Logger::get("MergeTreeBaseSelectProcessor"),
+            "Prewhere column = {}, actions = {} ",
+            prewhere_info->prewhere_column_name,
+            prewhere_info->prewhere_actions->dumpDAG());
     }
     if (index_context)
     {

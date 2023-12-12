@@ -932,7 +932,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
             auto mutable_context = Context::createCopy(context);
             ASTPtr copy_select = query_info.query->clone();
             auto & copy_select_query = copy_select->as<ASTSelectQuery &>();
-            std::vector<String> setting_names{"enable_partition_filter_push_down"};
+            std::vector<String> setting_names{"enable_partition_filter_push_down", "optimize_move_to_prewhere"};
             for (auto & setting_name : setting_names)
             {
                 SettingChange setting;
