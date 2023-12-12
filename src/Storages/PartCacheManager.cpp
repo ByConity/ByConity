@@ -223,8 +223,6 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
                     LOG_DEBUG(&Poco::Logger::get("PartCacheManager::MetaEntry"), "Invalid part cache because of cache version mismatch for table {}.{}", meta_ptr->database, meta_ptr->table);
                 }
             }
-            // update table_definition_hash for active tables
-            it->second->table_definition_hash = storage.getTableHashForClusterBy();
         }
     }
 
