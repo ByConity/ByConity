@@ -2249,6 +2249,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, encode_with_splitted_columns, true, "Decode column by merging all bucket dicts", 0) \
     M(Bool, enable_parallel_load_dict, true, "Read dict file in parallel", 0) \
     M(Bool, load_dict_from_cache, true, "Read dict from cache", 0) \
+    M(Bool, throw_exception_if_bucket_unmatched, false, "Whether to throw exception if bucket is unmatched when send bitengine resource", 0) \
     /** End of BitEngine related settings */ \
     \
     /** Just for compatible, totally the same with settings above */ \
