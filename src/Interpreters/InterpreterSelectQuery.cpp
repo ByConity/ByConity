@@ -696,14 +696,21 @@ void InterpreterSelectQuery::buildQueryPlan(QueryPlan & query_plan)
 
 BlockIO InterpreterSelectQuery::execute()
 {
+    return execute(false);
+}
+
+BlockIO InterpreterSelectQuery::execute(bool dry_run)
+{
     BlockIO res;
     QueryPlan query_plan;
 
     buildQueryPlan(query_plan);
 
-    res.pipeline = std::move(*query_plan.buildQueryPipeline(
-        QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
-
+    if (!dry_run)
+    {
+        res.pipeline = std::move(*query_plan.buildQueryPipeline(
+            QueryPlanOptimizationSettings::fromContext(context), BuildQueryPipelineSettings::fromContext(context)));
+    }
     res.pipeline.addUsedStorageIDs(getUsedStorageIDs());
     return res;
 }
