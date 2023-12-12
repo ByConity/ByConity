@@ -1154,11 +1154,11 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                         tryLogWarningCurrentException(
                                &Poco::Logger::get("executeQuery"), "Query failed in optimizer enabled, try to fallback to simple query.");
                         turnOffOptimizer(context, ast);
-                        auto retry_interpreter = InterpreterFactory::get(ast, context, stage);
-                        res = retry_interpreter->execute();
 
                         if (auto session_resource = context->tryGetCnchServerResource())
                             session_resource->cleanResource();
+                        auto retry_interpreter = InterpreterFactory::get(ast, context, stage);
+                        res = retry_interpreter->execute();
 
                         fallback_reason = getCurrentExceptionMessage(true);
                     }
