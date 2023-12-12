@@ -60,6 +60,7 @@ private:
         UInt64 creation_time;
         mutable AccessEntityPtr entity; /// is guaranteed to be loaded by findImpl
         mutable std::list<OnChangedHandler> handlers_by_id;
+        AccessEntityModel entity_model;
 
         Entry()
         {

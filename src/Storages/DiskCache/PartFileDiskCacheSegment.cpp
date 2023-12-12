@@ -33,6 +33,7 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     const IMergeTreeDataPartPtr & data_part_,
     const FileOffsetAndSize & mrk_file_pos_,
     size_t marks_count_,
+    MarkCache * mark_cache_,
     const String & stream_name_,
     const String & extension_,
     const FileOffsetAndSize & stream_file_pos_,
@@ -42,6 +43,7 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     , storage(data_part_->storage.shared_from_this()) /// Need to extend the lifetime of storage because disk cache can run async
     , mrk_file_pos(mrk_file_pos_)
     , marks_count(marks_count_)
+    , mark_cache(mark_cache_)
     , read_settings(data_part_->storage.getContext()->getReadSettings())
     , stream_name(stream_name_)
     , extension(extension_)
@@ -49,12 +51,12 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     , preload_level(preload_level_)
     , marks_loader(
           data_part->volume->getDisk(),
-          nullptr,
+          mark_cache,
           data_part->getFullRelativePath() + "data",
           stream_name,
           marks_count,
           data_part->index_granularity_info,
-          false,
+          /*save_marks_in_cache*/ true,
           mrk_file_pos.file_offset,
           mrk_file_pos.file_size,
           read_settings)
@@ -135,7 +137,7 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_e
             data_file->seek(stream_file_pos.file_offset + cache_data_left_offset);
             LimitReadBuffer segment_value(*data_file, cache_data_bytes, false);
             disk_cache.getDataCache()->set(getSegmentName(), segment_value, cache_data_bytes);
-            LOG_TRACE(disk_cache.getLogger(), "cached data file: {}, preload_level: {}", getSegmentName(), preload_level);
+            LOG_DEBUG(disk_cache.getLogger(), "cached data file: {}, preload_level: {}", getSegmentName(), preload_level);
         }
 
         /// cache mark segment
@@ -145,9 +147,9 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_e
             LimitReadBuffer marks_value(*data_file, mrk_file_pos.file_size, false);
             String marks_key = getMarkName();
             disk_cache.getMetaCache()->set(marks_key, marks_value, mrk_file_pos.file_size);
-            LOG_TRACE(disk_cache.getLogger(), "cached mark file: {}, preload_level: {}", marks_key, preload_level);
+            LOG_DEBUG(disk_cache.getLogger(), "cached mark file: {}, preload_level: {}", marks_key, preload_level);
         }
-        
+
     }
     catch (const Exception & e)
     {

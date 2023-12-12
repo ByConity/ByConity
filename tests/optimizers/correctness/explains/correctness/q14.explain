@@ -94,3 +94,97 @@ Projection Est. ? rows
                   └─ TableScan correctness.web Est. ? rows
                            Where: 22. = price
                            Outputs: price_1:=price
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: a:=a_10, a_1:=`expr#count()_1`
+   └─ Left Join Est. ? rows
+      │     Condition: a_10 == expr#count()_1
+      ├─ Inner Join Est. ? rows
+      │  │     Condition: a_11 == a_10
+      │  ├─ Repartition Exchange Est. ? rows
+      │  │  │     Partition by: {a_11}
+      │  │  └─ TableScan correctness.q6_t2 Est. ? rows
+      │  │           Outputs: a_11:=a
+      │  └─ Repartition Exchange Est. ? rows
+      │     │     Partition by: {a_10}
+      │     └─ TableScan correctness.q6_t1 Est. ? rows
+      │              Outputs: a_10:=a
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {expr#count()_1}
+         └─ Aggregating Est. ? rows
+            │     Group by: {a_12}
+            │     Aggregates: expr#count()_1:=AggNull(count)()
+            └─ Inner Join Est. ? rows
+               │     Condition: a_12 == a_13
+               ├─ Repartition Exchange Est. ? rows
+               │  │     Partition by: {a_12}
+               │  └─ TableScan correctness.q6_t3 Est. ? rows
+               │           Outputs: a_12:=a
+               └─ Repartition Exchange Est. ? rows
+                  │     Partition by: {a_13}
+                  └─ TableScan correctness.q6_t4 Est. ? rows
+                           Outputs: a_13:=a
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: a:=a_14, a_1:=`expr#count()_2`
+   └─ Right Join Est. ? rows
+      │     Condition: expr#count()_2 == a_14
+      ├─ Repartition Exchange Est. ? rows
+      │  │     Partition by: {expr#count()_2}
+      │  └─ MergingAggregated Est. ? rows
+      │     └─ Gather Exchange Est. ? rows
+      │        └─ Aggregating Est. ? rows
+      │           │     Group by: {}
+      │           │     Aggregates: expr#count()_2:=AggNull(count)()
+      │           └─ Inner Join Est. ? rows
+      │              │     Condition: a_16 == a_17
+      │              ├─ Repartition Exchange Est. ? rows
+      │              │  │     Partition by: {a_16}
+      │              │  └─ TableScan correctness.q6_t3 Est. ? rows
+      │              │           Outputs: a_16:=a
+      │              └─ Repartition Exchange Est. ? rows
+      │                 │     Partition by: {a_17}
+      │                 └─ TableScan correctness.q6_t4 Est. ? rows
+      │                          Outputs: a_17:=a
+      └─ Inner Join Est. ? rows
+         │     Condition: a_14 == a_15
+         ├─ Repartition Exchange Est. ? rows
+         │  │     Partition by: {a_14}
+         │  └─ TableScan correctness.q6_t1 Est. ? rows
+         │           Outputs: a_14:=a
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {a_15}
+            └─ TableScan correctness.q6_t2 Est. ? rows
+                     Outputs: a_15:=a
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: a:=a_18, a_1:=`expr#count()_3`
+   └─ Left Join Est. ? rows
+      │     Condition: expr#count()_3 == a_18
+      ├─ Repartition Exchange Est. ? rows
+      │  │     Partition by: {expr#count()_3}
+      │  └─ MergingAggregated Est. ? rows
+      │     └─ Gather Exchange Est. ? rows
+      │        └─ Aggregating Est. ? rows
+      │           │     Group by: {}
+      │           │     Aggregates: expr#count()_3:=AggNull(count)()
+      │           └─ Inner Join Est. ? rows
+      │              │     Condition: a_20 == a_21
+      │              ├─ Repartition Exchange Est. ? rows
+      │              │  │     Partition by: {a_20}
+      │              │  └─ TableScan correctness.q6_t3 Est. ? rows
+      │              │           Outputs: a_20:=a
+      │              └─ Repartition Exchange Est. ? rows
+      │                 │     Partition by: {a_21}
+      │                 └─ TableScan correctness.q6_t4 Est. ? rows
+      │                          Outputs: a_21:=a
+      └─ Inner Join Est. ? rows
+         │     Condition: a_18 == a_19
+         ├─ Repartition Exchange Est. ? rows
+         │  │     Partition by: {a_18}
+         │  └─ TableScan correctness.q6_t1 Est. ? rows
+         │           Outputs: a_18:=a
+         └─ Repartition Exchange Est. ? rows
+            │     Partition by: {a_19}
+            └─ TableScan correctness.q6_t2 Est. ? rows
+                     Outputs: a_19:=a

@@ -133,7 +133,6 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
         current_segment_idx(0), current_compressed_offset(std::nullopt),
         logger(&Poco::Logger::get("MergedReadBufferWithSegmentCache"))
 {
-    seekToStart();
 }
 
 size_t MergedReadBufferWithSegmentCache::readBig(char *to, size_t n)

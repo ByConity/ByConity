@@ -138,6 +138,9 @@ namespace fs = std::filesystem;
 InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
     : WithMutableContext(context_), query_ptr(query_ptr_)
 {
+    /// if the settting is enabled and query are from user
+    if (context_->getSettingsRef().enable_cnch_engine_conversion && context_->getInitialQueryId().size())
+        query_ptr = convertMergeTreeToCnchEngine(std::move(query_ptr));
 }
 
 static void createPlainConfigFromSettings(const ASTSetQuery & settings, ExternalCatalog::PlainConfigs & conf)
@@ -1757,6 +1760,28 @@ size_t InterpreterCreateQuery::processIgnoreBitEngineEncode(ColumnsDescription &
     }
 
     return changed_column_cnt;
+}
+
+ASTPtr convertMergeTreeToCnchEngine(ASTPtr query_ptr)
+{
+    auto & create = query_ptr->as<ASTCreateQuery &>();
+    if (create.attach)
+        return query_ptr;
+    ASTStorage * storage = create.storage;
+    if (!storage)
+        return query_ptr;
+    ASTFunction * engine = storage->engine;
+    if (!engine)
+        return query_ptr;
+    const String & engine_name = engine->name;
+    bool found_cnch = (engine_name.find("Cnch") != std::string::npos);
+    bool found_merge_tree = (engine_name.find("MergeTree") != std::string::npos);
+    if (found_cnch || (!found_merge_tree))
+        return query_ptr;
+
+    String new_engine_name = "Cnch" + engine_name;
+    engine->name = new_engine_name;
+    return query_ptr;
 }
 
 }

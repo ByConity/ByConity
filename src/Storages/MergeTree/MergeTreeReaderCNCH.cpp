@@ -350,6 +350,7 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
                     source_data_part,
                     PartFileDiskCacheSegment::FileOffsetAndSize{mark_file_offset, mark_file_size},
                     source_data_part->getMarksCount(),
+                    mark_cache,
                     stream_name,
                     DATA_FILE_EXTENSION,
                     PartFileDiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size}));

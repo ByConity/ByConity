@@ -321,7 +321,8 @@
     \
     M(DiskCacheGetMicroSeconds, "Total time for disk cache get operation") \
     M(DiskCacheAcquireStatsLock, "Total time for acquire table stats lock") \
-    M(DiskCacheScheduleCacheTaskMicroSeconds, "Total time for schedule disk cache task") \
+    M(DiskCacheScheduleCacheTaskMicroseconds, "Total time for schedule disk cache task") \
+    M(DiskCacheTaskDropCount, "Total drop count for schedule disk cache task") \
     M(DiskCacheUpdateStatsMicroSeconds, "Total time for update disk cache statistics") \
     M(DiskCacheGetMetaMicroSeconds, "Total time for disk cache get operations") \
     M(DiskCacheGetTotalOps, "Total count of disk cache get operations") \
@@ -352,8 +353,16 @@
     M(CnchDumpParts, "") \
     M(CnchDumpPartsElapsedMilliseconds, "") \
     M(CnchDumpPartsBytes, "") \
-    \
-    M(CnchPartAllocationSplits, "Number of times part allocation has been split between using bucket number and hashing due to partially clustered bucket table") \
+\
+    M(CnchLoadMarksRequests, "") \
+    M(CnchLoadMarksBytes, "") \
+    M(CnchLoadMarksMicroseconds, "") \
+    M(CnchLoadMarksFromDiskCacheRequests, "") \
+    M(CnchLoadMarksFromDiskCacheBytes, "") \
+    M(CnchLoadMarksFromDiskCacheMicroseconds, "") \
+\
+    M(CnchPartAllocationSplits, \
+      "Number of times part allocation has been split between using bucket number and hashing due to partially clustered bucket table") \
     M(CnchSendResourceRpcCallElapsedMilliseconds, "Total RPC time for send resource to all workers, exclude RPC wait time") \
     M(CnchSendResourceElapsedMilliseconds, "Total time for send resource to all workers") \
     \

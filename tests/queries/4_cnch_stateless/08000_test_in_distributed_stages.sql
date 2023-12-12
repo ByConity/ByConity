@@ -4,7 +4,6 @@ create table test.test_in_local (p_date Date, id Int32, event String) engine = C
 
 set enable_distributed_stages = 1;
 set exchange_enable_force_remote_mode = 1;
-set send_plan_segment_by_brpc = 1;
 
 insert into test.test_in_local select '2022-01-01', number, 'a' from numbers(3);
 

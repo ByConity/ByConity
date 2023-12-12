@@ -783,7 +783,7 @@ struct BitMapExpressionWithDateMultiAnalyzer
             return;
         }
 
-        std::map<UInt32, std::vector<roaring::Roaring*>> roaring_map;
+        std::map<UInt32, std::vector<roaring::Roaring *>> roaring_map;
         for (const auto & key: key_set)
         {
             auto it = bitmap_map.find(key);

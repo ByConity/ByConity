@@ -6,7 +6,6 @@ create table test.test_union as test.test_union_local engine = Distributed(test_
 
 set enable_distributed_stages = 1;
 --set exchange_enable_force_remote_mode = 1;
-set send_plan_segment_by_brpc = 1;
 
 select id from test.test_union limit 10;
 select id from test.test_union order by id limit 10;

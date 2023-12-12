@@ -21,6 +21,7 @@
 #include <Parsers/parseQuery.h>
 #include <Parsers/ParserQuery.h>
 #include <Parsers/ASTCreateQuery.h>
+#include <common/logger_useful.h>
 #include <Common/Status.h>
 #include "Core/UUID.h"
 #include <Interpreters/Context.h>
@@ -113,10 +114,19 @@ ASTPtr CatalogFactory::getCreateDictionaryByDataModel(const DB::Protos::DataMode
     const char *begin = create_query.data();
     const char *end = begin + create_query.size();
     ParserQuery parser(end);
-    ASTPtr ast = parseQuery(parser, begin, end, "", 0, 0);
-    ASTCreateQuery *create_ast = ast->as<ASTCreateQuery>();
-    if (!create_ast)
-        throw Exception("Wrong dictionary definition.", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
+    ASTPtr ast;
+    try
+    {
+        ast = parseQuery(parser, begin, end, "", 0, 0);
+        ASTCreateQuery *create_ast = ast->as<ASTCreateQuery>();
+        if (!create_ast)
+            throw Exception("Wrong dictionary definition.", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
+    }
+    catch (Exception &)
+    {
+        LOG_WARNING(&Poco::Logger::get("CatalogFactory"), "Dictionary create query parse failed: query {}", create_query);
+        throw;
+    }
 
     return ast;
 }

@@ -232,10 +232,29 @@ bool ParserDictionary::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
                 for (auto &kv : ele->children)
                 {
                     auto kv_pair = kv->as<ASTPair>();
-                    if (kv_pair->first == "db")
+                    if (kv_pair->first == "user")
                     {
-                        auto & value = kv_pair->second->as<ASTLiteral>()->value;
-                        value = formatTenantDefaultDatabaseName(value.get<String>());
+                        String user_name;
+                        auto user = kv_pair->second->as<ASTLiteral>();
+                        auto user_identifier = kv_pair->second->as<ASTIdentifier>();
+                        if (!user)
+                        {
+                            if (user_identifier)
+                                user_name = user_identifier->name();
+                        }
+                        else
+                            user_name = user->value.get<String>();
+
+                        if (!user && !user_identifier)
+                        {
+                            throw Exception("Invalid user field!", static_cast<int>(kv_pair->second->getType()));
+                        }
+
+                        user_name = formatTenantConnectUserName(user_name);
+                        if (user)
+                            user->value = user_name;
+                        else if (user_identifier)
+                            user_identifier->setShortName(user_name);
                     }
                 }
             }

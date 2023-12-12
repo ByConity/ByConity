@@ -177,6 +177,8 @@ bool MetastoreByteKVImpl::batchWrite(const BatchCommitRequest & req, BatchCommit
     std::vector<Slice> expected_values;
     expected_values.reserve(req.puts.size());
 
+    wb_req.write_timeout_ms = req.commit_timeout_ms;
+
     for (auto & single_put : req.puts)
     {
         bytekv::sdk::PutRequest put_req;

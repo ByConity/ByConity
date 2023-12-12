@@ -1070,7 +1070,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     if (query_info.partition_filter)
         partition_filter = query_info.partition_filter->clone();
     auto interpreter = std::make_shared<InterpreterSelectQuery>(query_info.query, build_context.context, options);
-    interpreter->execute();
+    interpreter->execute(true);
     query_info = interpreter->getQueryInfo();
     query_info = fillQueryInfo(build_context.context);
     LOG_DEBUG(log, "init pipeline stage run time: make up query info, {} ms", stage_watch.elapsedMillisecondsAsDouble());

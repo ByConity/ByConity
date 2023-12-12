@@ -24,35 +24,36 @@ void ImplementJoinOrderHints::rewrite(QueryPlan & plan, ContextMutablePtr contex
 
 PlanNodePtr JoinOrderHintsVisitor::visitJoinNode(JoinNode & node, Void & v)
 {
+    auto join_ptr = visitPlanNode(node, v);
     if (node.getStep()->isOrdered())
-        return node.shared_from_this();
+        return join_ptr;
 
-    auto join_ptr = node.shared_from_this();
-    auto hints_list = join_ptr->getStep()->getHints();
-
-    PlanHintPtr order_hint;
-    for (auto & hint : hints_list)
+    auto hint_list = join_ptr->getStep()->getHints();
+    for (auto & hint : hint_list)
     {
         if (hint->getType() == HintCategory::JOIN_ORDER)
         {
-            order_hint = hint;
-            break;
+            if (auto leading_hint = std::dynamic_pointer_cast<Leading>(hint))
+                return getLeadingJoinOrder(join_ptr, leading_hint);
+            else if (auto swap_hint = std::dynamic_pointer_cast<SwapJoinOrder>(hint))
+                return swapJoinOrder(join_ptr, swap_hint);
         }
     }
-    auto leading_hint = std::dynamic_pointer_cast<Leading>(order_hint);
-    if (!leading_hint)
-        return visitPlanNode(node, v);
+    return join_ptr;
+}
 
+PlanNodePtr JoinOrderHintsVisitor::getLeadingJoinOrder(PlanNodePtr join_ptr, LeadingPtr & leading_hint)
+{
     JoinGraph join_graph = JoinGraph::build(join_ptr, context, true, true, true);
     if (join_graph.size() < 2)
         return join_ptr;
 
-    auto join_order = getJoinOrder(join_graph, leading_hint);
+    auto join_order = buildLeadingJoinOrder(join_graph, leading_hint);
 
     if (join_order)
     {
         std::vector<String> output_symbols;
-        for (auto & column : node.getStep()->getOutputStream().header)
+        for (const auto & column : join_ptr->getStep()->getOutputStream().header)
         {
             output_symbols.emplace_back(column.name);
         }
@@ -61,30 +62,87 @@ PlanNodePtr JoinOrderHintsVisitor::visitJoinNode(JoinNode & node, Void & v)
 
         LOG_WARNING(&Poco::Logger::get("ImplementJoinOrderHints"), "Leading {} is implemented.", leading_hint->getJoinOrderString());
     }
-
     return join_ptr;
 }
 
-PlanNodePtr JoinOrderHintsVisitor::getJoinOrder(JoinGraph & graph, LeadingPtr & leading)
+PlanNodePtr JoinOrderHintsVisitor::swapJoinOrder(PlanNodePtr node, SwapOrderPtr & swap_hint)
+{
+    auto * join_node = dynamic_cast<JoinNode *>(node.get());
+    auto & step = join_node->getStep();
+    if (!step->supportSwap() || step->isOrdered())
+        return node;
+
+    auto table_list = swap_hint->getOptions();
+    Strings left_table_list;
+    Strings right_table_list;
+    TableNamesVisitor visitor;
+    VisitorUtil::accept(join_node->getChildren()[0], visitor, left_table_list);
+    VisitorUtil::accept(join_node->getChildren()[1], visitor, right_table_list);
+    if (table_list.size() != 2 ||
+        std::find(left_table_list.begin(), left_table_list.end(), table_list[0]) == left_table_list.end() ||
+        std::find(right_table_list.begin(), right_table_list.end(), table_list[1]) == right_table_list.end())
+        return node;
+
+    if (step->getKind() == ASTTableJoin::Kind::Left ||
+        step->getKind() == ASTTableJoin::Kind::Right ||
+        step->getKind() == ASTTableJoin::Kind::Full ||
+        step->getKind() == ASTTableJoin::Kind::Inner)
+    {
+        ASTTableJoin::Kind kind = step->getKind();
+        if (step->getKind() == ASTTableJoin::Kind::Left)
+            kind = ASTTableJoin::Kind::Right;
+        else if (step->getKind() == ASTTableJoin::Kind::Right)
+            kind = ASTTableJoin::Kind::Left;
+        
+        DataStreams streams = {step->getInputStreams()[1], step->getInputStreams()[0]};
+        auto join_step = std::make_shared<JoinStep>(
+            streams,
+            step->getOutputStream(),
+            kind,
+            step->getStrictness(),
+            step->getMaxStreams(),
+            step->getKeepLeftReadInOrder(),
+            step->getRightKeys(),
+            step->getLeftKeys(),
+            step->getFilter(),
+            step->isHasUsing(),
+            step->getRequireRightKeys(),
+            step->getAsofInequality(),
+            step->getDistributionType(),
+            step->getJoinAlgorithm(),
+            step->isMagic(),
+            true,
+            step->isSimpleReordered(),
+            step->getRuntimeFilterBuilders(),
+            step->getHints());
+        PlanNodePtr new_join_node = std::make_shared<JoinNode>(
+            context->nextNodeId(), std::move(join_step), PlanNodes{join_node->getChildren()[1], join_node->getChildren()[0]});
+        LOG_WARNING(&Poco::Logger::get("ImplementJoinOrderHints"), "swap_join_order{} is implemented.", swap_hint->getJoinOrderString());
+        return new_join_node;
+    }
+    return node;
+}
+
+PlanNodePtr JoinOrderHintsVisitor::buildLeadingJoinOrder(JoinGraph & graph, LeadingPtr & leading)
 {
     Leading_RPN_List leading_table_id_list = buildLeadingList(graph, leading);
     if (leading_table_id_list.empty())
         return {};
 
     std::unordered_map<PlanNodeId, PlanNodePtr> id_to_node;
-    for (auto & node : graph.getNodes())
+    for (const auto & node : graph.getNodes())
     {
         id_to_node[node->getId()] = node;
     }
 
     std::unordered_map<PlanNodeId, std::unordered_set<PlanNodeId>> id_to_source_tables;
-    for (auto & node : graph.getNodes())
+    for (const auto & node : graph.getNodes())
     {
         id_to_source_tables[node->getId()].insert(node->getId());
     }
 
     std::unordered_map<PlanNodeId, PlanNodePtr> id_to_join_node;
-    for (auto & node : graph.getNodes())
+    for (const auto & node : graph.getNodes())
     {
         id_to_join_node[node->getId()] = node;
     }
@@ -179,7 +237,7 @@ PlanNodePtr JoinOrderHintsVisitor::getJoinOrder(JoinGraph & graph, LeadingPtr & 
 Leading_RPN_List JoinOrderHintsVisitor::buildLeadingList(JoinGraph & graph, LeadingPtr & leading)
 {
     Leading_RPN_List leading_table_id_list;
-    for (auto name : leading->getRPNList())
+    for (const auto & name : leading->getRPNList())
     {
         if (name == ",")
         {
@@ -188,7 +246,7 @@ Leading_RPN_List JoinOrderHintsVisitor::buildLeadingList(JoinGraph & graph, Lead
         }
 
         bool is_vaild_hint = false;
-        for (auto & node : graph.getNodes())
+        for (const auto & node : graph.getNodes())
         {
             TableNameVisitor name_visitor;
             String table_name;
@@ -204,7 +262,7 @@ Leading_RPN_List JoinOrderHintsVisitor::buildLeadingList(JoinGraph & graph, Lead
             return {};
     }
 
-    for (auto & node : graph.getNodes())
+    for (const auto & node : graph.getNodes())
     {
         bool is_contain = false;
         for (auto node_id : leading_table_id_list)
@@ -231,17 +289,12 @@ void TableNameVisitor::visitTableScanNode(TableScanNode & node, String & table_n
     else
         table_name = node.getStep()->getTable();
 }
-void TableNameVisitor::visitProjectionNode(ProjectionNode & node, String & table_name)
+
+void TableNameVisitor::visitPlanNode(PlanNodeBase & node, String & table_name)
 {
+    if (node.getChildren().size() > 1)
+        return;
     VisitorUtil::accept(node.getChildren()[0], *this, table_name);
-}
-void TableNameVisitor::visitFilterNode(FilterNode & node, String & table_name)
-{
-    VisitorUtil::accept(node.getChildren()[0], *this, table_name);
-}
-void TableNameVisitor::visitPlanNode(PlanNodeBase &, String &)
-{
-    return ;
 }
 
 }

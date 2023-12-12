@@ -158,35 +158,11 @@ MergeTreeReadTaskPtr MergeTreeReadPool::getTask(const size_t min_marks_to_read, 
 
     auto curr_task_size_predictor = !per_part_params[part_idx].size_predictor ? nullptr
         : std::make_unique<MergeTreeBlockSizePredictor>(*per_part_params[part_idx].size_predictor); /// make a copy
-    
+
     return std::make_unique<MergeTreeReadTask>(
         part.data_part, part.delete_bitmap, ranges_to_get_from_part, part.part_index_in_query, ordered_names,
-        per_part_params[part_idx].column_name_set, per_part_params[part_idx].task_columns, 
+        per_part_params[part_idx].column_name_set, per_part_params[part_idx].task_columns,
         prewhere_info && prewhere_info->remove_prewhere_column, per_part_params[part_idx].should_reorder, std::move(curr_task_size_predictor));
-}
-
-MarkRanges MergeTreeReadPool::getRestMarks(const IMergeTreeDataPart & part, const MarkRange & from) const
-{
-    MarkRanges all_part_ranges;
-
-    /// Inefficient in presence of large number of data parts.
-    for (const auto & part_ranges : parts_ranges)
-    {
-        if (part_ranges.data_part.get() == &part)
-        {
-            all_part_ranges = part_ranges.ranges;
-            break;
-        }
-    }
-    if (all_part_ranges.empty())
-        throw Exception("Trying to read marks range [" + std::to_string(from.begin) + ", " + std::to_string(from.end) + "] from part '"
-            + part.getFullPath() + "' which has no ranges in this query", ErrorCodes::LOGICAL_ERROR);
-
-    auto begin = std::lower_bound(all_part_ranges.begin(), all_part_ranges.end(), from, [] (const auto & f, const auto & s) { return f.begin < s.begin; });
-    if (begin == all_part_ranges.end())
-        begin = std::prev(all_part_ranges.end());
-    begin->begin = from.begin;
-    return MarkRanges(begin, all_part_ranges.end());
 }
 
 Block MergeTreeReadPool::getHeader() const
@@ -251,7 +227,7 @@ std::vector<size_t> MergeTreeReadPool::fillPerPartInfo(
 
         per_part_sum_marks.push_back(sum_marks);
 
-        auto task_columns = 
+        auto task_columns =
             getReadTaskColumns(data, metadata_snapshot, part.data_part, column_names, prewhere_info, index_context, check_columns);
 
         PerPartParams params;

@@ -1374,7 +1374,11 @@ IMetaStore::IteratorPtr MetastoreProxy::getPartitionList(const String & name_spa
 
 void MetastoreProxy::updateTopologyMeta(const String & name_space, const String & topology)
 {
-    metastore_ptr->put(escapeString(name_space) + "_" + SERVERS_TOPOLOGY_KEY, topology);
+    BatchCommitRequest batch_write(false);
+    batch_write.SetTimeout(3000);
+    batch_write.AddPut(SinglePutRequest(escapeString(name_space) + "_" + SERVERS_TOPOLOGY_KEY, topology));
+    BatchCommitResponse resp;
+    metastore_ptr->batchWrite(batch_write, resp);
 }
 
 String MetastoreProxy::getTopologyMeta(const String & name_space)

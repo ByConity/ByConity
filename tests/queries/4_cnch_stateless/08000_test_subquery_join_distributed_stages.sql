@@ -3,7 +3,6 @@ drop table if exists test.test_subquery_join_local;
 create table test.test_subquery_join_local (p_date Date, id Int32, event String) engine = CnchMergeTree partition by p_date order by id;
 
 set enable_distributed_stages = 1;
-set send_plan_segment_by_brpc = 1;
 
 select id from test.test_subquery_join_local limit 10;
 select id from test.test_subquery_join_local order by id limit 10;

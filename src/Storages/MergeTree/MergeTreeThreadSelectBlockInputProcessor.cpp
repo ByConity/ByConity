@@ -89,17 +89,15 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
 
     if (!reader)
     {
-        auto rest_mark_ranges = pool->getRestMarks(*task->data_part, task->mark_ranges[0]);
-        initializeReaders(rest_mark_ranges, IMergeTreeReader::ValueSizeMap{}, profile_callback);
+        initializeReaders(task->mark_ranges, IMergeTreeReader::ValueSizeMap{}, profile_callback);
     }
     else
     {
         /// in other case we can reuse readers, anyway they will be "seeked" to required mark
         if (part_name != last_readed_part_name)
         {
-            auto rest_mark_ranges = pool->getRestMarks(*task->data_part, task->mark_ranges[0]);
             auto avg_size_hint = reader->getAvgValueSizeHints();
-            initializeReaders(rest_mark_ranges, avg_size_hint, profile_callback);
+            initializeReaders(task->mark_ranges, avg_size_hint, profile_callback);
         }
     }
 

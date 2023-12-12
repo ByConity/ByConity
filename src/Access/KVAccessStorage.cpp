@@ -273,6 +273,7 @@ UUID KVAccessStorage::addEntry(EntityType type, const AccessEntityModel & entity
     entry.id = uuid;
     entry.commit_time = entity_model.commit_time();
     entry.entity = convertFromSqlToEntity(entity_model.create_sql());
+    entry.entity_model = entity_model;
     auto & entries_by_name = entries_by_name_and_type[static_cast<size_t>(type)];
     entries_by_name[entry.name] = &entry;
     prepareNotifications(uuid, entry, false, notifications);
@@ -410,6 +411,7 @@ void KVAccessStorage::insertNoLock(const UUID & id, const AccessEntityPtr & new_
     entry.name = name;
     entry.commit_time = new_entity_model.commit_time();
     entry.entity = new_entity;
+    entry.entity_model = new_entity_model;
     auto & entries_by_name = entries_by_name_and_type[static_cast<size_t>(type)];
     entries_by_name[entry.name] = &entry;
     prepareNotifications(id, entry, false, notifications);
@@ -487,19 +489,14 @@ void KVAccessStorage::updateNoLock(const UUID & id, const UpdateFunc & update_fu
     }
 
     // write to KV
-    AccessEntityModel old_entity_model;
-    RPCHelpers::fillUUID(id, *(old_entity_model.mutable_uuid()));
-    old_entity_model.set_name(old_name);
-    old_entity_model.set_commit_time(entry.commit_time);
-    old_entity_model.set_create_sql(convertFromEntityToSql(*old_entity));
-
     AccessEntityModel new_entity_model;
     RPCHelpers::fillUUID(id, *(new_entity_model.mutable_uuid()));
     new_entity_model.set_name(new_name);
     new_entity_model.set_create_sql(convertFromEntityToSql(*new_entity));
 
-    catalog->putAccessEntity(type, new_entity_model, old_entity_model);
+    catalog->putAccessEntity(type, new_entity_model, entry.entity_model);
     entry.entity = new_entity;
+    entry.entity_model = new_entity_model;
 
     // if renamed, change entry in memory
     if (name_changed)

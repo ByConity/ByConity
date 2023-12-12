@@ -12,7 +12,7 @@ namespace ErrorCodes
 
 void DAGGraph::joinAsyncRpcPerStage()
 {
-    if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_at_last || query_context->getSettingsRef().send_plan_segment_by_brpc)
+    if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_at_last)
         return;
     if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_per_stage)
         joinAsyncRpcWithThrow();
@@ -30,8 +30,6 @@ void DAGGraph::joinAsyncRpcWithThrow()
 
 void DAGGraph::joinAsyncRpcAtLast()
 {
-    if (query_context->getSettingsRef().send_plan_segment_by_brpc)
-        return;
     if (query_context->getSettingsRef().send_plan_segment_by_brpc_join_at_last)
         joinAsyncRpcWithThrow();
 }

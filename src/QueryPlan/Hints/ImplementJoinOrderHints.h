@@ -5,6 +5,7 @@
 #include <Optimizer/Rewriter/Rewriter.h>
 #include <Parsers/ASTVisitor.h>
 #include <QueryPlan/Hints/Leading.h>
+#include <QueryPlan/Hints/SwapJoinOrder.h>
 #include <QueryPlan/PlanVisitor.h>
 #include <QueryPlan/SimplePlanRewriter.h>
 
@@ -12,6 +13,7 @@
 
 namespace DB
 {
+using SwapOrderPtr = std::shared_ptr<SwapJoinOrder>;
 using LeadingPtr = std::shared_ptr<Leading>;
 using Leading_RPN_List = std::vector<DB::Int64>;
 
@@ -31,10 +33,12 @@ public:
     explicit JoinOrderHintsVisitor(ContextMutablePtr context_, CTEInfo & cte_info_) : SimplePlanRewriter(context_, cte_info_) { }
     PlanNodePtr visitJoinNode(JoinNode &, Void &) override;
 
-    Leading_RPN_List buildLeadingList(JoinGraph & graph, LeadingPtr & leading);
-
 private:
-    PlanNodePtr getJoinOrder(JoinGraph & graph, LeadingPtr & leading_hint);
+    PlanNodePtr getLeadingJoinOrder(PlanNodePtr join_ptr, LeadingPtr & leading_hint);
+    PlanNodePtr buildLeadingJoinOrder(JoinGraph & graph, LeadingPtr & leading_hint);
+    static Leading_RPN_List buildLeadingList(JoinGraph & graph, LeadingPtr & leading);
+
+    PlanNodePtr swapJoinOrder(PlanNodePtr node, SwapOrderPtr & swap_hint);
 };
 
 //get the table name list of a node
@@ -42,8 +46,6 @@ class TableNameVisitor : public PlanNodeVisitor<void, String>
 {
 private:
     void visitTableScanNode(TableScanNode & node, String & table_name) override;
-    void visitProjectionNode(ProjectionNode & node, String & table_name) override;
-    void visitFilterNode(FilterNode & node, String & table_name) override;
     void visitPlanNode(PlanNodeBase & node, String & table_name) override;
 };
 
