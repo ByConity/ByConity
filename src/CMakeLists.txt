@@ -605,6 +605,15 @@ if (USE_LIBPQXX)
     dbms_target_include_directories(SYSTEM BEFORE PUBLIC ${LIBPQXX_INCLUDE_DIR})
 endif()
 
+if(USE_CPP_JIEBA)
+    dbms_target_link_libraries(PUBLIC ${CPP_JIEBA_LIBRARY})
+endif()
+
+if (USE_TSQUERY)
+    dbms_target_link_libraries(PUBLIC ${TSQUERY_LIBRARY})
+endif()
+
+
 target_link_libraries(clickhouse_aggregate_functions PRIVATE datasketches_lib)
 dbms_target_link_libraries(PUBLIC datasketches_lib)
 

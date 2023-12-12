@@ -21,11 +21,18 @@
 
 #include <Storages/MergeTree/MergeTreeReaderInMemory.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
+#include <Common/ProfileEventsTimer.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/MapHelpers.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnByteMap.h>
+
+namespace ProfileEvents
+{
+    extern const Event SkipRowsTimeMicro;
+    extern const Event ReadRowsTimeMicro;
+}
 
 namespace DB
 {
@@ -76,7 +83,52 @@ static ColumnPtr getColumnFromBlock(const Block & block, const NameAndTypePair &
     return column;
 }
 
-size_t MergeTreeReaderInMemory::readRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read, Columns & res_columns)
+size_t MergeTreeReaderInMemory::readRows(size_t from_mark, size_t from_row,
+    size_t max_rows_to_read, Columns& res_columns)
+{
+    size_t from_mark_start_row = data_part->index_granularity.getMarkStartingRow(
+        from_mark);
+    size_t starting_row = from_mark_start_row + from_row;
+
+    size_t rows_to_skip = from_row;
+    bool adjacent_reading = next_row_number_to_read >= from_mark_start_row
+        && starting_row >= next_row_number_to_read;
+    if (adjacent_reading)
+    {
+        rows_to_skip = starting_row - next_row_number_to_read;
+    }
+
+    size_t skipped_rows = 0;
+    if (rows_to_skip > 0)
+    {
+        ProfileEventsTimer timer(ProfileEvents::SkipRowsTimeMicro);
+
+        Columns tmp_columns(columns.size(), nullptr);
+        auto column_iter = columns.begin();
+        for (size_t i = 0; i < columns.size(); ++i)
+        {
+            const auto& [name, type] = getColumnFromPart(*column_iter);
+            tmp_columns[i] = type->createColumn();
+        }
+
+        skipped_rows = resumableReadRows(from_mark, adjacent_reading, rows_to_skip, tmp_columns);
+    }
+
+    next_row_number_to_read += skipped_rows;
+
+    size_t read_rows = 0;
+    if (skipped_rows >= rows_to_skip)
+    {
+        ProfileEventsTimer timer(ProfileEvents::ReadRowsTimeMicro);
+
+        adjacent_reading = rows_to_skip > 0 || starting_row == next_row_number_to_read;
+
+        read_rows = resumableReadRows(from_mark, adjacent_reading, max_rows_to_read, res_columns);
+    }
+    return read_rows;
+}
+
+size_t MergeTreeReaderInMemory::resumableReadRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read, Columns & res_columns)
 {
     if (!continue_reading)
     {

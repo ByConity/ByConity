@@ -35,7 +35,6 @@
 #include <IO/Operators.h>
 #include <Interpreters/Context.h>
 
-
 #if defined(__clang__) && __clang_major__ >= 13
 #pragma clang diagnostic ignored "-Wreserved-identifier"
 #endif
@@ -75,60 +74,15 @@ std::string ReadBufferFromFileDescriptor::getFileName() const
 
 bool ReadBufferFromFileDescriptor::nextImpl()
 {
-    size_t bytes_read = 0;
-    while (!bytes_read)
-    {
-        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorRead);
-
-        Stopwatch watch(profile_callback ? clock_type : CLOCK_MONOTONIC);
-
-        ssize_t res = 0;
-        {
-            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
-            res = ::read(fd, internal_buffer.begin(), internal_buffer.size());
-        }
-        if (!res)
-            break;
-
-        if (-1 == res && errno != EINTR)
-        {
-            ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadFailed);
-            throwFromErrnoWithPath("Cannot read from file " + getFileName(), getFileName(),
-                                   ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
-        }
-
-        if (res > 0)
-            bytes_read += res;
-
-        /// It reports real time spent including the time spent while thread was preempted doing nothing.
-        /// And it is Ok for the purpose of this watch (it is used to lower the number of threads to read from tables).
-        /// Sometimes it is better to use taskstats::blkio_delay_total, but it is quite expensive to get it
-        /// (TaskStatsInfoGetter has about 500K RPS).
-        watch.stop();
-        ProfileEvents::increment(ProfileEvents::DiskReadElapsedMicroseconds, watch.elapsedMicroseconds());
-
-        if (profile_callback)
-        {
-            ProfileInfo info;
-            info.bytes_requested = internal_buffer.size();
-            info.bytes_read = res;
-            info.nanoseconds = watch.elapsed();
-            profile_callback(info);
-        }
-    }
-
-    file_offset_of_buffer_end += bytes_read;
+    size_t bytes_read = readInto(internal_buffer.begin(), internal_buffer.size());
 
     if (bytes_read)
     {
-        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadBytes, bytes_read);
         working_buffer = internal_buffer;
         working_buffer.resize(bytes_read);
+        return true;
     }
-    else
-        return false;
-
-    return true;
+    return false;
 }
 
 
@@ -238,6 +192,95 @@ void ReadBufferFromFileDescriptor::setProgressCallback(ContextPtr context)
     {
         file_progress_callback(FileProgress(progress.bytes_read, 0));
     });
+}
+
+size_t ReadBufferFromFileDescriptor::readBig(char * to, size_t n)
+{
+    /// Read from current working buffer if possible
+    size_t read_bytes = 0;
+    if (size_t remain = available(); remain > 0)
+    {
+        read_bytes = std::min(n, remain);
+
+        memcpy(to, pos, read_bytes);
+        pos += read_bytes;
+
+        if (read_bytes >= n)
+        {
+            bytes += read_bytes;
+            return n;
+        }
+    }
+
+    /// Already drain current working buffer
+    resetWorkingBuffer();
+
+    while (read_bytes < n)
+    {
+        size_t readed = readInto(to + read_bytes, n - read_bytes);
+        if (readed == 0)
+        {
+            break;
+        }
+
+        read_bytes += readed;
+    }
+    bytes += read_bytes;
+    return read_bytes;
+}
+
+size_t ReadBufferFromFileDescriptor::readInto(char * to, size_t n)
+{
+    size_t bytes_read = 0;
+    while (!bytes_read)
+    {
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorRead);
+
+        Stopwatch watch(profile_callback ? clock_type : CLOCK_MONOTONIC);
+
+        ssize_t res = 0;
+        {
+            CurrentMetrics::Increment metric_increment{CurrentMetrics::Read};
+
+            res = ::read(fd, to, n);
+        }
+        if (!res)
+            break;
+
+        if (-1 == res && errno != EINTR)
+        {
+            ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadFailed);
+            throwFromErrnoWithPath("Cannot read from file " + getFileName(), getFileName(),
+                                   ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);
+        }
+
+        if (res > 0)
+            bytes_read += res;
+
+        /// It reports real time spent including the time spent while thread was preempted doing nothing.
+        /// And it is Ok for the purpose of this watch (it is used to lower the number of threads to read from tables).
+        /// Sometimes it is better to use taskstats::blkio_delay_total, but it is quite expensive to get it
+        /// (TaskStatsInfoGetter has about 500K RPS).
+        watch.stop();
+        ProfileEvents::increment(ProfileEvents::DiskReadElapsedMicroseconds, watch.elapsedMicroseconds());
+
+        if (profile_callback)
+        {
+            ProfileInfo info;
+            info.bytes_requested = n;
+            info.bytes_read = res;
+            info.nanoseconds = watch.elapsed();
+            profile_callback(info);
+        }
+    }
+
+    file_offset_of_buffer_end += bytes_read;
+
+    if (bytes_read)
+    {
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadBytes, bytes_read);
+    }
+    return bytes_read;
 }
 
 }

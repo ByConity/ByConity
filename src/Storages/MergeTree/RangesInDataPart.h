@@ -3,16 +3,15 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MarkRange.h>
 
-
 namespace DB
 {
-
 
 struct RangesInDataPart
 {
     MergeTreeData::DataPartPtr data_part;
     size_t part_index_in_query;
     MarkRanges ranges;
+    std::shared_ptr<roaring::Roaring> filter_bitmap;
 
     RangesInDataPart() = default;
 

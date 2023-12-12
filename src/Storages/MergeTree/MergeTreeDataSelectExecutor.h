@@ -111,6 +111,7 @@ private:
         const MergeTreeReaderSettings & reader_settings,
         size_t & total_granules,
         size_t & granules_dropped,
+        roaring::Roaring & filter_bitmap,
         Poco::Logger * log);
 
     struct PartFilterCounters

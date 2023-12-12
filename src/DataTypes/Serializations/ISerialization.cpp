@@ -66,6 +66,10 @@ String ISerialization::Substream::toString() const
             return "MapValueElements";
         case MapSizes:
             return "MapSizes";
+        case StringElements:
+            return "StringElements";
+        case StringOffsets:
+            return "StringOffsets";
     }
 
     __builtin_unreachable();
@@ -132,6 +136,18 @@ void ISerialization::deserializeBinaryBulkWithMultipleStreams(
     }
 }
 
+size_t ISerialization::skipBinaryBulkWithMultipleStreams(
+    const NameAndTypePair & name_and_type,
+    size_t limit,
+    DeserializeBinaryBulkSettings & settings,
+    DeserializeBinaryBulkStatePtr & state,
+    SubstreamsCache * cache) const
+{
+    ColumnPtr tmp_column = name_and_type.type->createColumn();
+    deserializeBinaryBulkWithMultipleStreams(tmp_column, limit, settings, state, cache);
+    return tmp_column->size();
+}
+
 static String getNameForSubstreamPath(
     String stream_name,
     const ISerialization::SubstreamPath & path,
@@ -176,6 +192,10 @@ static String getNameForSubstreamPath(
         }
         else if (elem.type == Substream::MapSizes)
             stream_name += ".size" + toString(array_level);
+        else if (elem.type == Substream::StringElements)
+            stream_name += ".str_elements";
+        else if (elem.type == Substream::StringOffsets)
+            stream_name += ".str_offsets";
     }
 
     return stream_name;

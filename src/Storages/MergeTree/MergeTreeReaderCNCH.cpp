@@ -38,6 +38,7 @@
 #include <bits/types/clockid_t.h>
 #include <Poco/Logger.h>
 #include <Common/escapeForFileName.h>
+#include <Common/ProfileEventsTimer.h>
 #include <Common/typeid_cast.h>
 
 namespace ProfileEvents
@@ -50,6 +51,8 @@ namespace ProfileEvents
     extern const Event CnchAddStreamsParallelElapsedMilliseconds;
     extern const Event CnchAddStreamsSequentialTasks;
     extern const Event CnchAddStreamsSequentialElapsedMilliseconds;
+    extern const Event SkipRowsTimeMicro;
+    extern const Event ReadRowsTimeMicro;
 }
 
 namespace DB
@@ -94,12 +97,9 @@ MergeTreeReaderCNCH::MergeTreeReaderCNCH(
     initializeStreams(profile_callback_, clock_type_);
 }
 
-size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read, Columns & res_columns)
+size_t MergeTreeReaderCNCH::readRows(size_t from_mark, size_t from_row,
+    size_t max_rows_to_read, Columns& res_columns)
 {
-    if (!continue_reading)
-        next_row_number_to_read = data_part->index_granularity.getMarkStartingRow(from_mark);
-
-    size_t read_rows = 0;
     try
     {
         size_t num_bitmap_columns = hasBitmapIndexReader() ? getBitmapOutputColumns().size() : 0;
@@ -118,110 +118,34 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
         if (!dup_implicit_keys.empty())
             sort_columns.sort([](const auto & lhs, const auto & rhs) { return (!lhs.type->isMap()) && rhs.type->isMap(); });
 
-        /// Pointers to offset columns that are common to the nested data structure columns.
-        /// If append is true, then the value will be equal to nullptr and will be used only to
-        /// check that the offsets column has been already read.
-        OffsetColumns offset_columns;
-        std::unordered_map<String, ISerialization::SubstreamsCache> caches;
+        size_t from_mark_start_row = data_part->index_granularity.getMarkStartingRow(
+            from_mark);
+        size_t starting_row = from_mark_start_row + from_row;
+        size_t init_row_number = next_row_number_to_read;
+        bool adjacent_reading = next_row_number_to_read >= from_mark_start_row
+            && starting_row >= next_row_number_to_read;
+        size_t rows_to_skip = adjacent_reading ? starting_row - next_row_number_to_read
+            : from_row;
 
-        int row_number_column_pos = -1;
-        auto name_and_type = sort_columns.begin();
-        for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
+        if (!adjacent_reading)
         {
-            auto column_from_part = getColumnFromPart(*name_and_type);
-            const auto & [name, type] = column_from_part;
-            size_t pos = res_col_to_idx[name];
-
-            /// The column is already present in the block so we will append the values to the end.
-            bool append = res_columns[pos] != nullptr;
-            if (!append)
-                res_columns[pos] = type->createColumn();
-
-            /// row number column will be populated at last after `read_rows` is set
-            if (name == "_part_row_number")
-            {
-                row_number_column_pos = pos;
-                continue;
-            }
-
-            auto & column = res_columns[pos];
-            try
-            {
-                size_t column_size_before_reading = column->size();
-                auto & cache = caches[column_from_part.getNameInStorage()];
-                if (type->isMap() && !type->isMapKVStore())
-                    readMapDataNotKV(
-                        column_from_part, column, from_mark, continue_reading, max_rows_to_read, caches, res_col_to_idx, res_columns);
-                else
-                    readData(column_from_part, column, from_mark, continue_reading, max_rows_to_read, cache);
-
-                /// For elements of Nested, column_size_before_reading may be greater than column size
-                ///  if offsets are not empty and were already read, but elements are empty.
-                if (!column->empty())
-                    read_rows = std::max(read_rows, column->size() - column_size_before_reading);
-            }
-            catch (Exception & e)
-            {
-                /// Better diagnostics.
-                e.addMessage("(while reading column " + name + ")");
-                throw;
-            }
-
-            if (column->empty())
-                res_columns[pos] = nullptr;
+            next_row_number_to_read = from_mark_start_row;
         }
 
-        /// Populate _part_row_number column if requested
-        if (row_number_column_pos >= 0)
-        {
-            /// update `read_rows` if no physical columns are read (only _part_row_number is requested)
-            if (columns.size() == 1)
-            {
-                read_rows = std::min(max_rows_to_read, data_part->rows_count - next_row_number_to_read);
-            }
+        size_t skipped_rows = skipUnnecessaryRows(sort_columns, num_columns, from_mark,
+            adjacent_reading, rows_to_skip);
+        next_row_number_to_read += skipped_rows;
 
-            if (read_rows)
-            {
-                auto mutable_column = res_columns[row_number_column_pos]->assumeMutable();
-                ColumnUInt64 & column = assert_cast<ColumnUInt64 &>(*mutable_column);
-                for (size_t i = 0, row_number = next_row_number_to_read; i < read_rows; ++i)
-                    column.insertValue(row_number++);
-                res_columns[row_number_column_pos] = std::move(mutable_column);
-            }
-            else
-            {
-                res_columns[row_number_column_pos] = nullptr;
-            }
+        size_t readed_rows = 0;
+        if (skipped_rows >= rows_to_skip)
+        {
+            adjacent_reading = rows_to_skip > 0 || init_row_number == starting_row;
+            readed_rows = readNecessaryRows(sort_columns, num_columns, from_mark,
+                adjacent_reading, max_rows_to_read, res_col_to_idx, res_columns);
+            next_row_number_to_read += readed_rows;
         }
 
-        /// NOTE: positions for all streams must be kept in sync.
-        /// In particular, even if for some streams there are no rows to be read,
-        /// you must ensure that no seeks are skipped and at this point they all point to to_mark.
-
-        if (index_executor && index_executor->valid())
-        {
-            Columns res_bitmap_columns;
-            for (size_t i = num_columns; i < res_columns.size(); ++i)
-                res_bitmap_columns.emplace_back(std::move(res_columns[i]));
-
-            size_t bitmap_rows_read = index_executor->read(from_mark, continue_reading, max_rows_to_read, res_bitmap_columns);
-#ifndef NDEBUG
-            String output_names;
-            for (const auto & output_name: getBitmapOutputColumns())
-                output_names += " " + output_name;
-            LOG_TRACE(&Poco::Logger::get("index_executor"), "read bitmap index file:{} for part:{}", output_names, this->data_part->name);
-#endif
-            // If there is only bitmap_index columns, rows_read may be zero.
-            if (read_rows == 0)
-                read_rows = bitmap_rows_read;
-
-            if (read_rows != bitmap_rows_read)
-            {
-                throw Exception("Mismatch rows read from index_executor: " + toString(read_rows) + " : " + toString(bitmap_rows_read), ErrorCodes::LOGICAL_ERROR);
-            }
-            for (size_t i = num_columns; i < res_columns.size(); ++i)
-                res_columns[i] = std::move(res_bitmap_columns[i - num_columns]);
-        }
+        return readed_rows;
     }
     catch (Exception & e)
     {
@@ -240,9 +164,6 @@ size_t MergeTreeReaderCNCH::readRows(size_t from_mark, bool continue_reading, si
 
         throw;
     }
-
-    next_row_number_to_read += read_rows;
-    return read_rows;
 }
 
 void MergeTreeReaderCNCH::initializeStreams(const ReadBufferFromFileBase::ProfileCallback& profile_callback, clockid_t clock_type)
@@ -477,6 +398,177 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
     auto serialization = data_part->getSerializationForColumn(name_and_type);
     serialization->enumerateStreams(callback);
     serializations.emplace(name_and_type.name, std::move(serialization));
+}
+
+size_t MergeTreeReaderCNCH::skipUnnecessaryRows(const NamesAndTypesList& sort_columns, size_t num_columns,
+    size_t from_mark, bool continue_reading, size_t rows_to_skip)
+{
+    if (rows_to_skip <= 0)
+    {
+        return 0;
+    }
+
+    ProfileEventsTimer timer(ProfileEvents::SkipRowsTimeMicro);
+
+    std::unordered_map<String, ISerialization::SubstreamsCache> caches;
+    size_t skipped_rows = 0;
+    auto name_and_type = sort_columns.begin();
+    for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
+    {
+        auto column_from_part = getColumnFromPart(*name_and_type);
+        const auto& [name, type] = column_from_part;
+
+        if (name == "_part_row_number")
+        {
+            skipped_rows = std::max(skipped_rows, std::min(rows_to_skip, data_part->rows_count - next_row_number_to_read));
+            continue;
+        }
+
+        try
+        {
+            auto& cache = caches[column_from_part.getNameInStorage()];
+            if (type->isMap() && !type->isMapKVStore())
+                skipped_rows = std::max(skipped_rows,
+                    skipMapDataNotKV(column_from_part, from_mark, continue_reading,
+                        rows_to_skip, caches));
+            else
+                skipped_rows = std::max(skipped_rows,
+                    skipData(column_from_part, from_mark, continue_reading, rows_to_skip,
+                        cache));
+        }
+        catch (Exception & e)
+        {
+            /// Better diagnostics.
+            e.addMessage("(while reading column " + name + ")");
+            throw;
+        }
+    }
+
+    if (index_executor && index_executor->valid())
+    {
+        Columns tmp_bitmap_columns(getBitmapOutputColumns().size(), nullptr);
+        readIndexColumns(from_mark, continue_reading, rows_to_skip, tmp_bitmap_columns);
+    }
+
+    return skipped_rows;
+}
+
+size_t MergeTreeReaderCNCH::readNecessaryRows(const NamesAndTypesList& sort_columns,
+    size_t num_columns, size_t from_mark, bool continue_reading, size_t rows_to_read,
+    std::unordered_map<String, size_t>& res_col_to_idx, Columns& res_columns)
+{
+    ProfileEventsTimer timer(ProfileEvents::ReadRowsTimeMicro);
+
+    std::unordered_map<String, ISerialization::SubstreamsCache> caches;
+
+    size_t readed_rows = 0;
+    int row_number_column_pos = -1;
+    auto name_and_type = sort_columns.begin();
+    for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
+    {
+        auto column_from_part = getColumnFromPart(*name_and_type);
+        const auto& [name, type] = column_from_part;
+        size_t pos = res_col_to_idx[name];
+
+        if (res_columns[pos] == nullptr)
+            res_columns[pos] = type->createColumn();
+
+        /// row number column will be populated at last after `read_rows` is set
+        if (name == "_part_row_number")
+        {
+            row_number_column_pos = pos;
+            continue;
+        }
+
+        auto& column = res_columns[pos];
+        try
+        {
+            size_t column_size_before_reading = column->size();
+            auto & cache = caches[column_from_part.getNameInStorage()];
+            if (type->isMap() && !type->isMapKVStore())
+                readMapDataNotKV(column_from_part, column, from_mark, continue_reading,
+                    rows_to_read, caches, res_col_to_idx, res_columns);
+            else
+                readData(column_from_part, column, from_mark, continue_reading,
+                    rows_to_read, cache);
+
+            /// For elements of Nested, column_size_before_reading may be greater than column size
+            ///  if offsets are not empty and were already read, but elements are empty.
+            if (!column->empty())
+                readed_rows = std::max(readed_rows, column->size() - column_size_before_reading);
+        }
+        catch (Exception & e)
+        {
+            /// Better diagnostics.
+            e.addMessage("(while reading column " + name + ")");
+            throw;
+        }
+
+        if (column->empty())
+            res_columns[pos] = nullptr;
+    }
+
+    /// Populate _part_row_number column if requested
+    if (row_number_column_pos >= 0)
+    {
+        /// update `read_rows` if no physical columns are read (only _part_row_number is requested)
+        if (columns.size() == 1)
+        {
+            readed_rows = std::min(rows_to_read, data_part->rows_count - next_row_number_to_read);
+        }
+
+        if (readed_rows)
+        {
+            auto mutable_column = res_columns[row_number_column_pos]->assumeMutable();
+            ColumnUInt64 & column = assert_cast<ColumnUInt64 &>(*mutable_column);
+            for (size_t i = 0, row_number = next_row_number_to_read; i < readed_rows; ++i)
+                column.insertValue(row_number++);
+            res_columns[row_number_column_pos] = std::move(mutable_column);
+        }
+        else
+        {
+            res_columns[row_number_column_pos] = nullptr;
+        }
+    }
+
+    if (index_executor && index_executor->valid())
+    {
+        Columns res_bitmap_columns;
+        for (size_t i = num_columns; i < res_columns.size(); ++i)
+            res_bitmap_columns.emplace_back(std::move(res_columns[i]));
+
+        size_t bitmap_rows_read = readIndexColumns(from_mark, continue_reading,
+            rows_to_read, res_bitmap_columns);
+
+        // If there is only bitmap_index columns, rows_read may be zero.
+        if (readed_rows == 0)
+            readed_rows = bitmap_rows_read;
+
+        if (readed_rows != bitmap_rows_read)
+        {
+            throw Exception("Mismatch rows read from index_executor: " + toString(readed_rows) + " : " + toString(bitmap_rows_read), ErrorCodes::LOGICAL_ERROR);
+        }
+        for (size_t i = num_columns; i < res_columns.size(); ++i)
+            res_columns[i] = std::move(res_bitmap_columns[i - num_columns]);
+    }
+
+    return readed_rows;
+}
+
+size_t MergeTreeReaderCNCH::readIndexColumns(size_t from_mark, bool continue_reading,
+    size_t max_rows, Columns& res_bitmap_columns)
+{
+    size_t bitmap_rows_read = index_executor->read(from_mark, continue_reading,
+            max_rows, res_bitmap_columns);
+
+#ifdef NDEBUG
+        String output_names;
+        for (const auto & output_name: getBitmapOutputColumns())
+            output_names += " " + output_name;
+        LOG_TRACE(&Poco::Logger::get("index_executor"), "read bitmap index file:{} for part:{}", output_names, this->data_part->name);
+#endif
+
+    return bitmap_rows_read;
 }
 
 }

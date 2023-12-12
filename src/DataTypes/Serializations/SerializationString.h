@@ -35,6 +35,10 @@ private:
     static constexpr char enc_pad = 0x00;
 
 public:
+    size_t skipBinaryBulkWithMultipleStreams(const NameAndTypePair & name_and_type,
+        size_t limit, DeserializeBinaryBulkSettings & settings, DeserializeBinaryBulkStatePtr & state,
+        SubstreamsCache * cache) const override;
+
     void serializeBinary(const Field & field, WriteBuffer & ostr) const override;
     void deserializeBinary(Field & field, ReadBuffer & istr) const override;
     void serializeBinary(const IColumn & column, size_t row_num, WriteBuffer & ostr) const override;

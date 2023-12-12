@@ -46,6 +46,8 @@ class Field;
 struct FormatSettings;
 struct NameAndTypePair;
 
+class CompressedDataIndex;
+
 class ISerialization
 {
 public:
@@ -96,6 +98,9 @@ public:
             MapKeyElements,
             MapValueElements,
             MapSizes,
+
+            StringElements,
+            StringOffsets,
         };
         Type type;
 
@@ -127,6 +132,7 @@ public:
 
     using OutputStreamGetter = std::function<WriteBuffer*(const SubstreamPath &)>;
     using InputStreamGetter = std::function<ReadBuffer*(const SubstreamPath &)>;
+    using CompressedIndexGetter = std::function<std::unique_ptr<CompressedDataIndex>(const SubstreamPath &)>;
 
     struct SerializeBinaryBulkState
     {
@@ -155,6 +161,9 @@ public:
     struct DeserializeBinaryBulkSettings
     {
         InputStreamGetter getter;
+        /// Some serialization method may need benefit from compressed index file
+        /// it will utilize compressed data index to accelerate skip and seek
+        CompressedIndexGetter compressed_idx_getter;
         SubstreamPath path;
 
         /// True if continue reading from previous positions in file. False if made fseek to the start of new granule.
@@ -199,6 +208,16 @@ public:
     /// Read no more than limit values and append them into column.
     virtual void deserializeBinaryBulkWithMultipleStreams(
         ColumnPtr & column,
+        size_t limit,
+        DeserializeBinaryBulkSettings & settings,
+        DeserializeBinaryBulkStatePtr & state,
+        SubstreamsCache * cache) const;
+
+    /// Returns skipped rows, it will add result to substream cache to avoid
+    /// deserialize same column multiple times, for serialization which support
+    /// skip, it will put a mocked column const into substream cache
+    virtual size_t skipBinaryBulkWithMultipleStreams(
+        const NameAndTypePair & name_and_type,
         size_t limit,
         DeserializeBinaryBulkSettings & settings,
         DeserializeBinaryBulkStatePtr & state,

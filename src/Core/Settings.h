@@ -2060,6 +2060,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
     \
     M(Bool, force_manipulate_materialized_mysql_table, false, "For tables of materialized mysql engine, force to manipulate it.", 0) \
+    /** for inverted index*/ \
+    M(UInt64, skip_inverted_index_term_size, 512, "If term size bigger than size, do not filter with inverted index", 0) \
 
 // End of COMMON_SETTINGS
 // Please add settings related to formats into the FORMAT_FACTORY_SETTINGS below.
@@ -2259,6 +2261,8 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_prune_source_plan_segment, true, "Whether enable prune source plan segment", 0) \
     M(Bool, exchange_enable_metric, true, "whether enable exchange metric collection", 0) \
     M(UInt64, exchange_local_no_repartition_extra_threads, 32, "Extra threads for pipeline which reading data from LOCAL_NO_NEED_REPARTITION exchange", 0) \
+    M(UInt64, filtered_ratio_to_use_skip_read, 0, "Ratio of origin rows to filtered rows when using skip reading, 0 means disable", 0) \
+
 
 // End of FORMAT_FACTORY_SETTINGS
 // Please add settings non-related to formats into the COMMON_SETTINGS above.

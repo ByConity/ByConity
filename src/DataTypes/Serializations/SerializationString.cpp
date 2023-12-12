@@ -21,6 +21,7 @@
 
 #include <DataTypes/Serializations/SerializationString.h>
 
+#include <Core/NamesAndTypes.h>
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnConst.h>
 
@@ -43,6 +44,39 @@
 
 namespace DB
 {
+
+size_t SerializationString::skipBinaryBulkWithMultipleStreams(const NameAndTypePair &,
+    size_t limit, DeserializeBinaryBulkSettings & settings, DeserializeBinaryBulkStatePtr &,
+    SubstreamsCache * cache) const
+{
+    auto cached_column = getFromSubstreamsCache(cache, settings.path);
+    if (cached_column)
+    {
+        return cached_column->size();
+    }
+    else if (ReadBuffer * stream = settings.getter(settings.path))
+    {
+        size_t count = 0;
+        UInt64 str_size = 0;
+        for (; count < limit; ++count)
+        {
+            if (stream->eof())
+            {
+                break;
+            }
+
+            readVarUInt(str_size, *stream);
+            stream->ignore(str_size);
+        }
+
+        MutableColumnPtr base_col = ColumnString::create();
+        base_col->insert(Field(""));
+        addToSubstreamsCache(cache, settings.path, ColumnConst::create(std::move(base_col), count));
+
+        return count;
+    }
+    return 0;
+}
 
 void SerializationString::serializeBinary(const Field & field, WriteBuffer & ostr) const
 {
@@ -227,7 +261,6 @@ void SerializationString::deserializeBinaryBulk(IColumn & column, ReadBuffer & i
     else
         deserializeBinarySSE2<1>(data, offsets, istr, limit);
 }
-
 
 void SerializationString::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings &) const
 {

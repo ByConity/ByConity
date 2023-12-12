@@ -145,4 +145,10 @@ void CachedCompressedReadBuffer::seek(size_t offset_in_compressed_file, size_t o
     }
 }
 
+std::pair<size_t, size_t> CachedCompressedReadBuffer::position() const
+{
+    return {file_pos - (owned_cell == nullptr ? 0 : owned_cell->compressed_size),
+        owned_cell == nullptr ? 0 : offset()};
+}
+
 }

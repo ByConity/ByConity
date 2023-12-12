@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <unordered_map>
 #include <Core/NamesAndTypes.h>
 #include <Storages/DiskCache/IDiskCache.h>
 #include <Storages/DiskCache/IDiskCacheStrategy.h>
@@ -48,8 +49,8 @@ public:
 
     /// Return the number of rows has been read or zero if there is no columns to read.
     /// If continue_reading is true, continue reading from last state, otherwise seek to from_mark
-    size_t readRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read,
-        Columns & res_columns) override;
+    size_t readRows(size_t from_mark, size_t from_row, size_t max_rows_to_read,
+        Columns& res_columns) override;
 
     bool canReadIncompleteGranules() const override { return true; }
 
@@ -64,11 +65,18 @@ private:
         const ReadBufferFromFileBase::ProfileCallback& profile_callback,
         clockid_t clock_type, FileStreamBuilders* stream_builders);
     void executeFileStreamBuilders(FileStreamBuilders& stream_builders);
-
     void addStreamsIfNoBurden(const NameAndTypePair& name_and_type,
         const std::function<String(const String&, const ISerialization::SubstreamPath&)>& file_name_getter,
         const ReadBufferFromFileBase::ProfileCallback& profile_callback,
         clockid_t clock_type, FileStreamBuilders* stream_builders);
+
+    size_t skipUnnecessaryRows(const NamesAndTypesList& sort_columns, size_t num_columns,
+        size_t from_mark, bool continue_reading, size_t rows_to_skip);
+    size_t readNecessaryRows(const NamesAndTypesList& sort_columns, size_t num_columns,
+        size_t from_mark, bool continue_reading, size_t rows_to_read,
+        std::unordered_map<String, size_t>& res_col_to_idx, Columns& res_columns);
+    size_t readIndexColumns(size_t from_mark, bool continue_reading, size_t max_rows,
+        Columns& res_bitmap_columns);
 
     IDiskCacheStrategyPtr segment_cache_strategy;
     IDiskCachePtr segment_cache;

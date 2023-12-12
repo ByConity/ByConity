@@ -129,6 +129,7 @@
 #include <common/phdr_cache.h>
 #include <common/scope_guard.h>
 #include <Parsers/formatTenantDatabaseName.h>
+#include <Common/ChineseTokenExtractor.h>
 
 #include <CloudServices/CnchServerClientPool.h>
 
@@ -934,6 +935,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (config().has("pipeline_log_path"))
         global_context->setPipelineLogPath(config().getString("pipeline_log_path", "/tmp/"));
+
+    if (config().has(CHINESE_TOKENIZER_CONFIG_PREFIX))
+    {
+        ChineseTokenizerFactory::registeChineseTokneizer(config());
+    }
 
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,

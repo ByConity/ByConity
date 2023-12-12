@@ -6,6 +6,7 @@ image:
 	test -f fdbcli || curl -L -o fdbcli https://github.com/apple/foundationdb/releases/download/7.1.0/fdbcli.x86_64
 	test -f fdbserver || curl -L -o fdbserver https://github.com/apple/foundationdb/releases/download/7.1.0/fdbserver.x86_64
 	test -f hadoop-3.3.4.tar.gz || curl -L -o hadoop-3.3.4.tar.gz https://downloads.apache.org/hadoop/common/hadoop-3.3.4/hadoop-3.3.4.tar.gz
+	test -f docker-compose || curl -L -o docker-compose "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-Linux-x86_64"
 	docker build --network=host -t byconity/byconity-ci .
 
 image_push:

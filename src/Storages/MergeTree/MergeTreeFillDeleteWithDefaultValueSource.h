@@ -54,8 +54,6 @@ private:
 
     /// Columns we have to read (each Block from read will contain them)
     Names columns_to_read;
-    /// whether the next read continues from last reading position and avoids seek
-    bool continue_reading;
 
     Poco::Logger * log = &Poco::Logger::get("MergeTreeFillDeleteWithDefaultValueSource");
 

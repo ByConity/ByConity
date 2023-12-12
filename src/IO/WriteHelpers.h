@@ -956,6 +956,12 @@ inline void writeBinary(const std::pair<String, String> & x, WriteBuffer & buf)
     writeBinary(x.first, buf);
     writeBinary(x.second, buf);
 }
+template <typename T>
+inline void writeBinary(const std::pair<T, T> & x, WriteBuffer & buf)
+{
+    writeBinary(x.first, buf);
+    writeBinary(x.second, buf);
+}
 
 /// Methods for outputting the value in text form for a tab-separated format.
 template <typename T>

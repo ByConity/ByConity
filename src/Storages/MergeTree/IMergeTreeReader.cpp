@@ -22,9 +22,10 @@
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/MapHelpers.h>
-#include "common/logger_useful.h"
+#include <common/logger_useful.h>
 #include <Common/escapeForFileName.h>
 #include <Compression/CachedCompressedReadBuffer.h>
+#include <Compression/CompressedDataIndex.h>
 #include <Columns/ColumnArray.h>
 #include <Columns/ColumnByteMap.h>
 #include <Interpreters/inplaceBlockConversions.h>
@@ -46,6 +47,54 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+static ReadBuffer* getStream(bool stream_for_prefix, const ISerialization::SubstreamPath& substream_path,
+    MergeTreeReaderWide::FileStreams& streams, const NameAndTypePair& name_and_type,
+    size_t from_mark, bool continue_reading, ISerialization::SubstreamsCache& cache)
+{
+    /// If substream have already been read.
+    if (cache.count(ISerialization::getSubcolumnNameForStream(substream_path)))
+        return nullptr;
+
+    String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
+
+    auto it = streams.find(stream_name);
+    if (it == streams.end())
+        return nullptr;
+
+    IMergeTreeReaderStream & stream = *it->second;
+
+    if (stream_for_prefix)
+    {
+        stream.seekToStart();
+    }
+    else if (!continue_reading)
+    {
+        stream.seekToMark(from_mark);
+    }
+
+    return stream.data_buffer;
+}
+
+static std::unique_ptr<CompressedDataIndex> getCompressedIndex(
+    const MergeTreeDataPartPtr& data_part, const NameAndTypePair& name_and_type,
+    const ISerialization::SubstreamPath& substream_path)
+{
+    String stream_name = ISerialization::getFileNameForStream(name_and_type,
+        substream_path);
+
+    String stream_index_file = stream_name + DATA_FILE_EXTENSION
+        + COMPRESSED_DATA_INDEX_EXTENSION;
+
+    if (!data_part->getChecksums()->files.count(stream_index_file))
+    {
+        return nullptr;
+    }
+
+    DiskPtr disk = data_part->volume->getDisk();
+    String rel_path = data_part->getFullRelativePath() + stream_index_file;
+
+    return CompressedDataIndex::openForRead(disk->readFile(rel_path).get());
+}
 
 IMergeTreeReader::IMergeTreeReader(
     const MergeTreeData::DataPartPtr & data_part_,
@@ -238,42 +287,18 @@ void IMergeTreeReader::evaluateMissingDefaults(Block additional_columns, Columns
     }
 }
 
-NameAndTypePair IMergeTreeReader::getColumnFromPart(const NameAndTypePair & required_column) const
+
+NameAndTypePair IMergeTreeReader::getColumnFromPart(const NameAndTypePair & required_column)
 {
-    auto name_in_storage = required_column.getNameInStorage();
-
-    decltype(columns_from_part.begin()) it;
-    if (alter_conversions.isColumnRenamed(name_in_storage))
+    if (auto iter = columns_type_cache.find(required_column.name);
+        iter != columns_type_cache.end())
     {
-        String old_name = alter_conversions.getColumnOldName(name_in_storage);
-        it = columns_from_part.find(old_name);
-    }
-    else
-    {
-        it = columns_from_part.find(name_in_storage);
+        return iter->second;
     }
 
-    if (it == columns_from_part.end())
-        return required_column;
-
-    const auto & type = *it->second;
-    if (required_column.isSubcolumn())
-    {
-        auto subcolumn_name = required_column.getSubcolumnName();
-        auto subcolumn_type = type->tryGetSubcolumnType(subcolumn_name);
-
-        if (!subcolumn_type)
-            return required_column;
-
-        return {String{it->first}, subcolumn_name, type, subcolumn_type};
-    }
-
-    if (checkBitEngineColumn({String{it->first}, *it->second}))
-    {
-        return {String{it->first}.append(BITENGINE_COLUMN_EXTENSION), type};
-    }
-
-    return {String{it->first}, type};
+    NameAndTypePair type = columnTypeFromPart(required_column);
+    columns_type_cache[required_column.name] = type;
+    return type;
 }
 
 void IMergeTreeReader::performRequiredConversions(Columns & res_columns, bool /* check_column_size */)
@@ -398,7 +423,6 @@ void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, 
     auto serialization = data_part->getSerializationForColumn(name_and_type);
     serialization->enumerateStreams(callback);
     serializations.emplace(name_and_type.name, std::move(serialization));
-
 }
 
 void IMergeTreeReader::readMapDataNotKV(
@@ -448,60 +472,110 @@ void IMergeTreeReader::readMapDataNotKV(
         ->fillByExpandedColumns(type_map, impl_key_values, std::min(max_rows_to_read, data_part->rows_count - next_row_number_to_read));
 }
 
+size_t IMergeTreeReader::skipMapDataNotKV(const NameAndTypePair& name_and_type,
+    size_t from_mark, bool continue_reading, size_t max_rows_to_skip,
+    std::unordered_map<String, ISerialization::SubstreamsCache>& caches)
+{
+    const auto & [name, type] = name_and_type;
+
+    // collect all the substreams based on map column's name and its keys substream.
+    // and somehow construct runtime two implicit columns(key&value) representation.
+    auto keys_iter = map_column_keys.equal_range(name);
+    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*type);
+    DataTypePtr impl_value_type = type_map.getValueTypeForImplicitColumn();
+
+    String impl_key_name;
+    for (auto kit = keys_iter.first; kit != keys_iter.second; ++kit)
+    {
+        impl_key_name = getImplicitColNameForMapKey(name, kit->second);
+        NameAndTypePair implicit_key_name_and_type{impl_key_name, impl_value_type};
+        auto cache = caches[implicit_key_name_and_type.getNameInStorage()];
+
+        if (dup_implicit_keys.count(impl_key_name) != 0)
+        {
+            continue;
+        }
+
+        skipData(implicit_key_name_and_type, from_mark, continue_reading,
+            max_rows_to_skip, cache);
+    }
+
+    return std::min(max_rows_to_skip, data_part->rows_count - next_row_number_to_read);
+}
+
 void IMergeTreeReader::readData(
     const NameAndTypePair & name_and_type, ColumnPtr & column,
     size_t from_mark, bool continue_reading, size_t max_rows_to_read,
     ISerialization::SubstreamsCache & cache)
 {
-    auto get_stream_getter = [&](bool stream_for_prefix) -> ISerialization::InputStreamGetter
-    {
-        return [&, stream_for_prefix](const ISerialization::SubstreamPath & substream_path) -> ReadBuffer * //-V1047
-        {
-            /// If substream have already been read.
-            if (cache.count(ISerialization::getSubcolumnNameForStream(substream_path)))
-                return nullptr;
-
-            String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
-
-            auto it = streams.find(stream_name);
-            if (it == streams.end())
-                return nullptr;
-
-            IMergeTreeReaderStream & stream = *it->second;
-
-            if (stream_for_prefix)
-            {
-                stream.seekToStart();
-                continue_reading = false;
-            }
-            else if (!continue_reading)
-            {
-                stream.seekToMark(from_mark);
-            }
-
-            return stream.data_buffer;
-        };
-    };
-
     double & avg_value_size_hint = avg_value_size_hints[name_and_type.name];
     ISerialization::DeserializeBinaryBulkSettings deserialize_settings;
     deserialize_settings.avg_value_size_hint = avg_value_size_hint;
+    deserialize_settings.compressed_idx_getter = [&](const ISerialization::SubstreamPath& substream_path) -> std::unique_ptr<CompressedDataIndex>
+    {
+        return getCompressedIndex(data_part, name_and_type, substream_path);
+    };
+
+    const auto & name = name_and_type.name;
+    auto serialization = serializations[name];
+
+    if (deserialize_binary_bulk_state_map.count(name) == 0)
+    {
+        deserialize_settings.getter = [&](const ISerialization::SubstreamPath& substream_path)
+        {
+            return getStream(true, substream_path, streams, name_and_type, from_mark,
+                continue_reading, cache);
+        };
+        serialization->deserializeBinaryBulkStatePrefix(deserialize_settings, deserialize_binary_bulk_state_map[name]);
+    }
+
+    deserialize_settings.getter = [&](const ISerialization::SubstreamPath& substream_path)
+    {
+        return getStream(false, substream_path, streams, name_and_type, from_mark,
+            continue_reading, cache);
+    };
+    deserialize_settings.continuous_reading = continue_reading;
+    auto & deserialize_state = deserialize_binary_bulk_state_map[name];
+
+    serialization->deserializeBinaryBulkWithMultipleStreams(column, max_rows_to_read, deserialize_settings, deserialize_state, &cache);
+    IDataType::updateAvgValueSizeHint(*column, avg_value_size_hint);
+}
+
+size_t IMergeTreeReader::skipData(const NameAndTypePair & name_and_type,
+    size_t from_mark, bool continue_reading, size_t max_rows_to_skip,
+    ISerialization::SubstreamsCache & cache)
+{
+    double & avg_value_size_hint = avg_value_size_hints[name_and_type.name];
+    ISerialization::DeserializeBinaryBulkSettings deserialize_settings;
+    deserialize_settings.avg_value_size_hint = avg_value_size_hint;
+    deserialize_settings.compressed_idx_getter = [&](const ISerialization::SubstreamPath& substream_path) -> std::unique_ptr<CompressedDataIndex>
+    {
+        return getCompressedIndex(data_part, name_and_type, substream_path);
+    };
 
     const auto & name = name_and_type.name;
     auto serialization = serializations[name];
 
     if (!deserialize_binary_bulk_state_map.contains(name))
     {
-        deserialize_settings.getter = get_stream_getter(true);
+        deserialize_settings.getter = [&](const ISerialization::SubstreamPath& substream_path)
+        {
+            return getStream(true, substream_path, streams, name_and_type, from_mark,
+                continue_reading, cache);
+        };
         serialization->deserializeBinaryBulkStatePrefix(deserialize_settings, deserialize_binary_bulk_state_map[name]);
     }
 
-    deserialize_settings.getter = get_stream_getter(false);
+    deserialize_settings.getter = [&](const ISerialization::SubstreamPath& substream_path)
+    {
+        return getStream(false, substream_path, streams, name_and_type, from_mark,
+            continue_reading, cache);
+    };
     deserialize_settings.continuous_reading = continue_reading;
     auto & deserialize_state = deserialize_binary_bulk_state_map[name];
 
-    serialization->deserializeBinaryBulkWithMultipleStreams(column, max_rows_to_read, deserialize_settings, deserialize_state, &cache);
-    IDataType::updateAvgValueSizeHint(*column, avg_value_size_hint);
+    return serialization->skipBinaryBulkWithMultipleStreams(name_and_type,
+        max_rows_to_skip, deserialize_settings, deserialize_state, &cache);
 }
 
 bool IMergeTreeReader::checkBitEngineColumn(const NameAndTypePair & column) const
@@ -547,6 +621,44 @@ const NamesAndTypesList & IMergeTreeReader::getBitmapColumns() const
         }
     }
     throw Exception("Bitmap index reader is nullptr", ErrorCodes::LOGICAL_ERROR);
+}
+
+NameAndTypePair IMergeTreeReader::columnTypeFromPart(const NameAndTypePair & required_column)
+{
+    auto name_in_storage = required_column.getNameInStorage();
+
+    decltype(columns_from_part.begin()) it;
+    if (alter_conversions.isColumnRenamed(name_in_storage))
+    {
+        String old_name = alter_conversions.getColumnOldName(name_in_storage);
+        it = columns_from_part.find(old_name);
+    }
+    else
+    {
+        it = columns_from_part.find(name_in_storage);
+    }
+
+    if (it == columns_from_part.end())
+        return required_column;
+
+    const auto & type = *it->second;
+    if (required_column.isSubcolumn())
+    {
+        auto subcolumn_name = required_column.getSubcolumnName();
+        auto subcolumn_type = type->tryGetSubcolumnType(subcolumn_name);
+
+        if (!subcolumn_type)
+            return required_column;
+
+        return {String{it->first}, subcolumn_name, type, subcolumn_type};
+    }
+
+    if (checkBitEngineColumn({String{it->first}, *it->second}))
+    {
+        return {String{it->first}.append(BITENGINE_COLUMN_EXTENSION), type};
+    }
+
+    return {String{it->first}, type};
 }
 
 }

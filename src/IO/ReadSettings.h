@@ -42,6 +42,8 @@ struct ReadSettings
 
     bool parquet_parallel_read = false;
     size_t parquet_decode_threads = 48;
+
+    size_t filtered_ratio_to_use_skip_read = 0;
 };
 
 }

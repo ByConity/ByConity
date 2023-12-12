@@ -22,11 +22,18 @@
 #include <Storages/MergeTree/MergeTreeReaderCompact.h>
 #include <Storages/MergeTree/MergeTreeDataPartCompact.h>
 #include <Columns/ColumnByteMap.h>
+#include <Common/ProfileEventsTimer.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/MapHelpers.h>
 #include <DataTypes/NestedUtils.h>
+
+namespace ProfileEvents
+{
+    extern const Event SkipRowsTimeMicro;
+    extern const Event ReadRowsTimeMicro;
+}
 
 namespace DB
 {
@@ -256,7 +263,35 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
     }
 }
 
-size_t MergeTreeReaderCompact::readRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read, Columns & res_columns)
+size_t MergeTreeReaderCompact::readRows(size_t from_mark, size_t from_row,
+    size_t max_rows_to_read, Columns& res_columns)
+{
+    size_t from_mark_start_row = data_part->index_granularity.getMarkStartingRow(
+        from_mark);
+    size_t starting_row = from_mark_start_row + from_row;
+
+    size_t rows_to_skip = from_row;
+    bool adjacent_reading = next_row_number_to_read >= from_mark_start_row
+        && starting_row >= next_row_number_to_read;
+    if (adjacent_reading)
+    {
+        rows_to_skip = starting_row - next_row_number_to_read;
+    }
+
+    if (rows_to_skip > 0)
+    {
+        throw Exception("MergeTreeReaderCompact::readRows is invoked with incomplete granule",
+            ErrorCodes::LOGICAL_ERROR);
+    }
+
+    ProfileEventsTimer timer(ProfileEvents::ReadRowsTimeMicro);
+
+    adjacent_reading = rows_to_skip > 0 || starting_row == next_row_number_to_read;
+
+    return resumableReadRows(from_mark, adjacent_reading, max_rows_to_read, res_columns);
+}
+
+size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read, Columns & res_columns)
 {
     if (continue_reading)
         from_mark = next_mark;

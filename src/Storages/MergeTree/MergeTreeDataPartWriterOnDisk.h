@@ -30,6 +30,7 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <Storages/MergeTree/IMergeTreeDataPart.h>
 #include <Disks/IDisk.h>
+#include <Storages/MergeTree/GinIndexStore.h>
 
 
 namespace DB
@@ -88,7 +89,8 @@ public:
             const std::string & marks_file_extension_,
             const CompressionCodecPtr & compression_codec_,
             size_t max_compress_block_size_,
-            bool is_compact_map = false);
+            bool is_compact_map = false,
+            bool write_compressed_index = false);
 
         String escaped_column_name;
         std::string data_file_extension;
@@ -103,6 +105,10 @@ public:
         /// marks -> marks_file
         std::unique_ptr<WriteBufferFromFileBase> marks_file;
         HashingWriteBuffer marks;
+
+        std::unique_ptr<WriteBufferFromFileBase> compressed_idx_file;
+        std::unique_ptr<HashingWriteBuffer> compressed_idx_hash;
+        std::unique_ptr<CompressedDataIndex> compressed_idx;
 
         /// file offset, it's used to distinguish different implicit columns because all implicit column data store in the same file.
         off_t data_file_offset;
@@ -316,6 +322,8 @@ protected:
     /// 2. write row store for unique table
     /// In other cases, this parameter can not reflect the correct merge status.
     bool is_merge = false;
+
+    GinIndexStoreFactory::GinIndexStores gin_index_stores;
 
 private:
     void initBitmapIndices();

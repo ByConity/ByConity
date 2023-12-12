@@ -29,7 +29,7 @@
 #include <IO/BufferWithOwnMemory.h>
 #include <Compression/ICompressionCodec.h>
 #include <Compression/CompressionFactory.h>
-
+#include <Compression/CompressedDataIndex.h>
 
 namespace DB
 {
@@ -41,6 +41,8 @@ private:
     CompressionCodecPtr codec;
 
     PODArray<char> compressed_buffer;
+
+    CompressedDataIndex* stats;
 
     void nextImpl() override;
 
@@ -74,6 +76,8 @@ public:
 
     //@ByteMap
     virtual void deepCopyTo(/*CompressedWriteBuffer*/BufferBase& target) const override;
+
+    void setStatisticsCollector(CompressedDataIndex* stats_);
 };
 
 }

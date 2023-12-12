@@ -402,17 +402,17 @@ struct BitMapExpressionAnalyzer
             return;
         }
 
-        std::map<UInt32, std::vector<Roaring*>> roaring_map;
+        std::map<UInt32, std::vector<roaring::Roaring*>> roaring_map;
         for (const auto & key: key_set)
         {
             auto it = bitmap_map.find(key);
             if (it == bitmap_map.end())
                 continue;
-            std::map<UInt32, Roaring> & inner_roaring = const_cast<std::map<UInt32, Roaring> &>(it->second.getRoarings());
+            std::map<UInt32, roaring::Roaring> & inner_roaring = const_cast<std::map<UInt32, roaring::Roaring> &>(it->second.getRoarings());
             for (auto jt = inner_roaring.begin(); jt != inner_roaring.end(); ++jt)
             {
                 if (roaring_map.find(jt->first) == roaring_map.end())
-                    roaring_map.emplace(jt->first, std::vector<Roaring *>());
+                    roaring_map.emplace(jt->first, std::vector<roaring::Roaring *>());
                 roaring_map[jt->first].emplace_back(&jt->second);
             }
         }
@@ -421,8 +421,8 @@ struct BitMapExpressionAnalyzer
 
         for (auto it = roaring_map.begin(); it != roaring_map.end(); ++it)
         {
-            Roaring result = Roaring::fastunion(it->second.size(), static_cast<roaring::Roaring **>(&(*(it->second.begin()))));
-            const_cast<std::map<UInt32, Roaring> &>(res_roaring.getRoarings()).emplace(it->first, std::move(result));
+            roaring::Roaring result = roaring::Roaring::fastunion(it->second.size(), static_cast<roaring::Roaring **>(&(*(it->second.begin()))));
+            const_cast<std::map<UInt32, roaring::Roaring> &>(res_roaring.getRoarings()).emplace(it->first, std::move(result));
         }
 
         bitmap_map[final_key] = std::move(res_roaring);
@@ -773,17 +773,17 @@ struct BitMapExpressionMultiAnalyzer
             return;
         }
 
-        std::map<UInt32, std::vector<Roaring*>> roaring_map;
+        std::map<UInt32, std::vector<roaring::Roaring*>> roaring_map;
         for (const auto & key: key_set)
         {
             auto it = bitmap_map.find(key);
             if (it == bitmap_map.end())
                 continue;
-            std::map<UInt32, Roaring> & inner_roaring = const_cast<std::map<UInt32, Roaring> &>(it->second.getRoarings());
+            std::map<UInt32, roaring::Roaring> & inner_roaring = const_cast<std::map<UInt32, roaring::Roaring> &>(it->second.getRoarings());
             for (auto jt = inner_roaring.begin(); jt != inner_roaring.end(); ++jt)
             {
                 if (roaring_map.find(jt->first) == roaring_map.end())
-                    roaring_map.emplace(jt->first, std::vector<Roaring *>());
+                    roaring_map.emplace(jt->first, std::vector<roaring::Roaring *>());
                 roaring_map[jt->first].emplace_back(&jt->second);
             }
         }
@@ -792,8 +792,8 @@ struct BitMapExpressionMultiAnalyzer
 
         for (auto it = roaring_map.begin(); it != roaring_map.end(); ++it)
         {
-            Roaring result = Roaring::fastunion(it->second.size(), static_cast<roaring::Roaring **>(&(*(it->second.begin()))));
-            const_cast<std::map<UInt32, Roaring> &>(res_roaring.getRoarings()).emplace(it->first, std::move(result));
+            roaring::Roaring result = roaring::Roaring::fastunion(it->second.size(), static_cast<roaring::Roaring **>(&(*(it->second.begin()))));
+            const_cast<std::map<UInt32, roaring::Roaring> &>(res_roaring.getRoarings()).emplace(it->first, std::move(result));
         }
 
         bitmap_map[final_keys[index]] = std::move(res_roaring);

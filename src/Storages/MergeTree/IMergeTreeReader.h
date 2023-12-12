@@ -21,6 +21,7 @@
 
 #pragma once
 
+#include <limits>
 #include <Core/NamesAndTypes.h>
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
 #include <Storages/MergeTree/MergeTreeBlockReadUtils.h>
@@ -54,7 +55,7 @@ public:
 
     /// Return the number of rows has been read or zero if there is no columns to read.
     /// If continue_reading is true, continue reading from last state, otherwise seek to from_mark
-    virtual size_t readRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read, Columns & res_columns) = 0;
+    virtual size_t readRows(size_t from_mark, size_t from_row, size_t max_rows_to_read, Columns & res_columns) = 0;
 
     virtual bool canReadIncompleteGranules() const = 0;
 
@@ -89,9 +90,12 @@ public:
 
     MergeTreeData::DataPartPtr data_part;
 
+    using FileStreams = std::map<std::string, std::unique_ptr<IMergeTreeReaderStream>>;
+    using Serializations = std::map<std::string, SerializationPtr>;
+
 protected:
     /// Returns actual column type in part, which can differ from table metadata.
-    NameAndTypePair getColumnFromPart(const NameAndTypePair & required_column) const;
+    NameAndTypePair getColumnFromPart(const NameAndTypePair & required_column);
 
     void checkNumberOfColumns(size_t num_columns_to_read) const;
 
@@ -110,10 +114,19 @@ protected:
         std::unordered_map<String, ISerialization::SubstreamsCache> & caches,
         std::unordered_map<String, size_t> & res_col_to_idx, Columns & res_columns);
 
+    size_t skipMapDataNotKV(
+        const NameAndTypePair & name_and_type, size_t from_mark,
+        bool continue_reading, size_t max_rows_to_skip,
+        std::unordered_map<String, ISerialization::SubstreamsCache> & caches);
+
     void readData(
         const NameAndTypePair & name_and_type, ColumnPtr & column,
         size_t from_mark, bool continue_reading, size_t max_rows_to_read,
         ISerialization::SubstreamsCache & cache);
+
+    size_t skipData(
+        const NameAndTypePair & name_and_type, size_t from_mark, bool continue_reading,
+        size_t max_rows_to_skip, ISerialization::SubstreamsCache & cache);
 
     /// avg_value_size_hints are used to reduce the number of reallocations when creating columns of variable size.
     ValueSizeMap avg_value_size_hints;
@@ -141,24 +154,27 @@ protected:
     using ColumnPosition = std::optional<size_t>;
     virtual ColumnPosition findColumnForOffsets(const String & column_name) const;
 
-    using FileStreams = std::map<std::string, std::unique_ptr<IMergeTreeReaderStream>>;
-    using Serializations = std::map<std::string, SerializationPtr>;
-
     FileStreams streams;
     Serializations serializations;
 
     friend class MergeTreeRangeReader::DelayedStream;
 
-    /// Mark row number
-    size_t next_row_number_to_read = 0;
     MergeTreeIndexExecutor * index_executor = nullptr;
 
+    /// Row number, update on seek or read, set to size_t max to force a seek
+    /// when reader start reading
+    size_t next_row_number_to_read = std::numeric_limits<size_t>::max();
+
 private:
+    NameAndTypePair columnTypeFromPart(const NameAndTypePair & required_column);
+
     /// Alter conversions, which must be applied on fly if required
     MergeTreeMetaBase::AlterConversions alter_conversions;
 
     /// Actual data type of columns in part
     google::dense_hash_map<StringRef, const DataTypePtr *, StringRefHash> columns_from_part;
+
+    std::unordered_map<String, NameAndTypePair> columns_type_cache;
 };
 
 }

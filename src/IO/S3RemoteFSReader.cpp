@@ -9,7 +9,6 @@
 #include <common/scope_guard_safe.h>
 #include <common/sleep.h>
 #include <Poco/Logger.h>
-#include "Common/ProfileEvents.h"
 
 namespace ProfileEvents {
     extern const Event S3TrivialReaderReadCount;

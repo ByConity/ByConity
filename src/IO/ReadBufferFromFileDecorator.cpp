@@ -48,4 +48,12 @@ bool ReadBufferFromFileDecorator::nextImpl()
     return result;
 }
 
+size_t ReadBufferFromFileDecorator::readBig(char * to, size_t n)
+{
+    swap(*impl);
+    size_t read_bytes = impl->readBig(to, n);
+    swap(*impl);
+    return read_bytes;
+}
+
 }

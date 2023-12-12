@@ -46,6 +46,8 @@ void CompressedWriteBuffer::nextImpl()
     if (!offset())
         return;
 
+    size_t init_compressed_offset = out.count();
+
     size_t decompressed_size = offset();
     UInt32 compressed_reserve_size = codec->getCompressedReserveSize(decompressed_size);
     compressed_buffer.resize(compressed_reserve_size);
@@ -58,6 +60,11 @@ void CompressedWriteBuffer::nextImpl()
     CityHash_v1_0_2::uint128 checksum = CityHash_v1_0_2::CityHash128(compressed_buffer.data(), compressed_size);
     out.write(reinterpret_cast<const char *>(&checksum), CHECKSUM_SIZE);
     out.write(compressed_buffer.data(), compressed_size);
+
+    if (stats != nullptr)
+    {
+        stats->append(init_compressed_offset, decompressed_size);
+    }
 }
 
 
@@ -66,6 +73,7 @@ CompressedWriteBuffer::CompressedWriteBuffer(
     CompressionCodecPtr codec_,
     size_t buf_size)
     : BufferWithOwnMemory<WriteBuffer>(buf_size), out(out_), codec(std::move(codec_))
+    , stats(nullptr)
 {
 }
 
@@ -87,6 +95,11 @@ void CompressedWriteBuffer::deepCopyTo(/*CompressedWriteBuffer*/BufferBase& targ
 
     //Copy compressed_buffer
     explicitTarget.compressed_buffer.assign(compressed_buffer.begin(), compressed_buffer.end());
+}
+
+void CompressedWriteBuffer::setStatisticsCollector(CompressedDataIndex* stats_)
+{
+    stats = stats_;
 }
 
 }
