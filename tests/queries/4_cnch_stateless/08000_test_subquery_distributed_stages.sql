@@ -4,7 +4,6 @@ create table test.test_subquery_local (p_date Date, id Int32, event String) engi
 
 set enable_distributed_stages = 1;
 set exchange_enable_force_remote_mode = 1;
-set send_plan_segment_by_brpc = 1;
 
 select id from test.test_subquery_local limit 10;
 select id from test.test_subquery_local order by id limit 10;

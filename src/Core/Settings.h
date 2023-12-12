@@ -1674,7 +1674,6 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_distributed_stages, false, "Enable complex query mode to split plan to distributed stages", 0)\
     M(Bool, fallback_to_simple_query, false, "Enable fallback if there is any syntax error", 0)\
     M(Bool, debug_plan_generation, false, "Enable complex query mode to split plan to distributed stages", 0)\
-    M(Bool, send_plan_segment_by_brpc, false, "Whether to send plan segment by BRPC", 0)\
     M(Bool, send_plan_segment_by_brpc_join_per_stage, false, "Whether to send plan segment by BRPC and join async rpc request per stage", 0)\
     M(Bool, send_plan_segment_by_brpc_join_at_last, true, "Whether to send plan segment by BRPC and join async rpc request at last", 0)\
     \
