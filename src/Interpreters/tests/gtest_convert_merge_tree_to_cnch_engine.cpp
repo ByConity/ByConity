@@ -63,6 +63,15 @@ TEST(convertMergeTreeToCnchEngineTest, normal_test)
         EXPECT_EQ(getEngineName(new_create_ast), "");
         EXPECT_EQ(new_create_query, create_query);
     }
+
+    {
+        const String create_query = "ATTACH TABLE test_view_00740";
+        ASTPtr create_ast = parseQuery(create_parser, create_query, 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+        ASTPtr new_create_ast = convertMergeTreeToCnchEngine(create_ast);
+        const String new_create_query = queryToString(new_create_ast);
+        EXPECT_EQ(getEngineName(new_create_ast), "");
+        EXPECT_EQ(new_create_query, create_query);
+    }
 }
 
 }

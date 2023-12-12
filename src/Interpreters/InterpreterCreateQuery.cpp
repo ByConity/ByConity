@@ -138,7 +138,8 @@ namespace fs = std::filesystem;
 InterpreterCreateQuery::InterpreterCreateQuery(const ASTPtr & query_ptr_, ContextMutablePtr context_)
     : WithMutableContext(context_), query_ptr(query_ptr_)
 {
-    if (context_->getSettingsRef().enable_cnch_engine_conversion)
+    /// if the settting is enabled and query are from user
+    if (context_->getSettingsRef().enable_cnch_engine_conversion && context_->getInitialQueryId().size())
         query_ptr = convertMergeTreeToCnchEngine(std::move(query_ptr));
 }
 
@@ -1764,6 +1765,8 @@ size_t InterpreterCreateQuery::processIgnoreBitEngineEncode(ColumnsDescription &
 ASTPtr convertMergeTreeToCnchEngine(ASTPtr query_ptr)
 {
     auto & create = query_ptr->as<ASTCreateQuery &>();
+    if (create.attach)
+        return query_ptr;
     ASTStorage * storage = create.storage;
     if (!storage)
         return query_ptr;
