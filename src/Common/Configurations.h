@@ -101,7 +101,9 @@ struct TracerConfiguration final : public TracerConfigurationData
 
 #define BSP_CONFIG_FIELDS_LISTS(M) \
     M(String, storage_policy, "", "default", ConfigFlag::Default, "storage policy for bsp mode disk exchange data") \
-    M(String, volume, "", "local", ConfigFlag::Default, "volume to store bsp mode disk exchange data")
+    M(String, volume, "", "local", ConfigFlag::Default, "volume to store bsp mode disk exchange data") \
+    M(UInt64, gc_interval_seconds, "", 1800, ConfigFlag::Default, "by default, garbage collection for bsp directory is done every 1800 seconds") \
+    M(UInt64, file_expire_seconds, "", 172800, ConfigFlag::Default, "by default, bsp mode disk exchange data expire after two days")
 
 DECLARE_CONFIG_DATA(BSPConfigurationData, BSP_CONFIG_FIELDS_LISTS)
 
@@ -194,7 +196,7 @@ struct RootConfiguration final : public RootConfigurationData
     QMConfiguration queue_manager;
     ASConfiguration adaptive_scheduler;
     TSOConfiguration tso_service;
-    BSPConfiguration batch_synchronous_parallel;
+    BSPConfiguration bulk_synchronous_parallel;
 
 
     RootConfiguration()
@@ -205,7 +207,7 @@ struct RootConfiguration final : public RootConfigurationData
         sub_configs.push_back(&queue_manager);
         sub_configs.push_back(&adaptive_scheduler);
         sub_configs.push_back(&tso_service);
-        sub_configs.push_back(&batch_synchronous_parallel);
+        sub_configs.push_back(&bulk_synchronous_parallel);
     }
 
     void loadFromPocoConfigImpl(const PocoAbstractConfig & config, const String & current_prefix) override;

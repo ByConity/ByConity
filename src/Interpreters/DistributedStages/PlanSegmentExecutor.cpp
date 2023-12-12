@@ -51,10 +51,11 @@
 #include <Processors/Transforms/BufferedCopyTransform.h>
 #include <Processors/Transforms/CopyTransform.h>
 #include <Protos/plan_segment_manager.pb.h>
+#include <Protos/registry.pb.h>
 #include <QueryPlan/BuildQueryPipelineSettings.h>
 #include <QueryPlan/GraphvizPrinter.h>
-#include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+#include <QueryPlan/PlanPrinter.h>
 #include <QueryPlan/QueryPlan.h>
 #include <fmt/core.h>
 #include <Common/Brpc/BrpcChannelPoolOptions.h>
@@ -397,7 +398,10 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
 
     /// need to create directory in bsp_mode before submitting write task
     if (settings.bsp_mode)
-        disk_exchange_mgr->createWriteTaskDirectory(current_tx_id);
+    {
+        auto coordinator_address = extractExchangeStatusHostPort(plan_segment->getCoordinatorAddress());
+        disk_exchange_mgr->createWriteTaskDirectory(current_tx_id, plan_segment->getQueryId(), coordinator_address);
+    }
 
     for (const auto &cur_plan_segment_output : plan_segment_outputs)
     {
@@ -431,8 +435,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
             BroadcastSenderPtr sender;
             if (settings.bsp_mode)
             {
-                auto buf = disk_exchange_mgr->createFileBufferForWrite(data_key);
-                auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, data_key, std::move(buf));
+                auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, data_key);
                 disk_exchange_mgr->submitWriteTask(writer, thread_group);
                 sender = writer;
             }

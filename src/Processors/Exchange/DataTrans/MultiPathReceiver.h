@@ -1,6 +1,8 @@
 #pragma once
 
+#include <Core/Types.h>
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
+#include <Processors/Exchange/DataTrans/Brpc/AsyncRegisterResult.h>
 #include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <Processors/Exchange/DataTrans/IBroadcastReceiver.h>
 #include <Processors/Exchange/DataTrans/MultiPathBoundedQueue.h>
@@ -8,7 +10,6 @@
 #include <bthread/mutex.h>
 #include <butil/iobuf.h>
 #include <Poco/Logger.h>
-#include <Core/Types.h>
 
 #include <atomic>
 #include <memory>

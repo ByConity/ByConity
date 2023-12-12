@@ -39,8 +39,8 @@ class BroadcastSenderProxyRegistry final : private boost::noncopyable
 public:
     static BroadcastSenderProxyRegistry & instance()
     {
-        static BroadcastSenderProxyRegistry instance;
-        return instance;
+        static BroadcastSenderProxyRegistry * instance = new BroadcastSenderProxyRegistry;
+        return *instance;
     }
 
     BroadcastSenderProxyPtr getOrCreate(ExchangeDataKeyPtr data_key);

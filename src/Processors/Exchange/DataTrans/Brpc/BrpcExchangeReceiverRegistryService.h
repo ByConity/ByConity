@@ -72,6 +72,12 @@ public:
         ::DB::Protos::CleanupExchangeDataResponse * response,
         ::google::protobuf::Closure * done) override;
 
+    void sendExchangeDataHeartbeat(
+        ::google::protobuf::RpcController * controller,
+        const ::DB::Protos::ExchangeDataHeartbeatRequest * request,
+        ::DB::Protos::ExchangeDataHeartbeatResponse * response,
+        ::google::protobuf::Closure * done) override;
+
     void setContext(ContextMutablePtr context_)
     {
         context = context_;

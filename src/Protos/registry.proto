@@ -58,9 +58,29 @@ message CleanupExchangeDataResponse {
   optional string message = 1;
 }
 
+message AliveQueryInfo {
+  optional uint64 query_unique_id = 1;
+  optional string query_id = 2;
+  optional string coordinator_address = 3;
+};
+
+message QueryExchangeDataHeartbeatInfo {
+  optional uint64 query_unique_id = 1;
+  optional string query_id = 2;
+};
+
+message ExchangeDataHeartbeatRequest {
+  repeated QueryExchangeDataHeartbeatInfo infos = 1;
+}
+
+message ExchangeDataHeartbeatResponse {
+  repeated QueryExchangeDataHeartbeatInfo not_alive_queries = 1;
+}
+
 service RegistryService {
   rpc registry(RegistryRequest) returns (RegistryResponse);
   rpc registerBRPCSenderFromDisk(RegistryDiskSenderRequest) returns (RegistryResponse);
   rpc cancelExchangeDataReader(CancelExchangeDataReaderRequest) returns (CancelExchangeDataReaderResponse);
   rpc cleanupExchangeData(CleanupExchangeDataRequest) returns (CleanupExchangeDataResponse);
+  rpc sendExchangeDataHeartbeat(ExchangeDataHeartbeatRequest) returns (ExchangeDataHeartbeatResponse);
 };

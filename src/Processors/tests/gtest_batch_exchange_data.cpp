@@ -1,12 +1,17 @@
+#include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <memory>
+#include <string>
 #include <thread>
+#include <variant>
 #include <Core/BackgroundSchedulePool.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/ExchangeDataTracker.h>
 #include <Parsers/IParser.h>
+#include <Processors/Chunk.h>
 #include <Processors/Exchange/BroadcastExchangeSink.h>
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Processors/Exchange/DataTrans/Batch/Writer/DiskPartitionWriter.h>
@@ -36,9 +41,12 @@ static Block getHeader(size_t column_num)
 
 void write(ContextMutablePtr & context, Block header, DiskExchangeDataManagerPtr mgr, ExchangeDataKeyPtr key)
 {
-    mgr->createWriteTaskDirectory(key->query_unique_id);
-    auto buf = mgr->createFileBufferForWrite(key);
-    DiskPartitionWriterPtr writer = std::make_shared<DiskPartitionWriter>(context, mgr, header, std::move(key), std::move(buf));
+    /// For now, in unit test, server and worker is sharing the same brpc, but its okay,
+    /// since in this test server only uses ExchangeDataTracker, and worker uses only DiskExchangeManager
+    context->getExchangeDataTracker()->registerExchange(std::to_string(key->query_unique_id), key->exchange_id, 0);
+    mgr->createWriteTaskDirectory(
+        key->query_unique_id, std::to_string(key->query_unique_id), fmt::format("127.0.0.1:{}", brpc_server_port));
+    DiskPartitionWriterPtr writer = std::make_shared<DiskPartitionWriter>(context, mgr, header, std::move(key));
     auto origin_chunk = createUInt8Chunk(10, 1, 7);
     BroadcastStatus status = writer->sendImpl(std::move(origin_chunk));
     ASSERT_TRUE(status.code == BroadcastStatusCode::RUNNING);
@@ -53,10 +61,10 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataWriteAndRead)
     auto header = getHeader(1);
 
     // write to disk
-    auto key = std::make_shared<ExchangeDataKey>(query_unique_id, exchange_id, parallel_idx);
+    auto key = std::make_shared<ExchangeDataKey>(query_unique_id_1, exchange_id, parallel_idx);
     write(context, header, manager, key);
 
-    auto name = BrpcRemoteBroadcastReceiver::generateName(exchange_id, write_segment_id, read_segment_id, parallel_idx, host);
+    auto name = BrpcRemoteBroadcastReceiver::generateName(exchange_id, write_segment_id, read_segment_id, parallel_idx, rpc_host);
     auto queue = std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size);
     auto receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
         key, rpc_host, context, header, true, name, std::move(queue), BrpcExchangeReceiverRegistryService::DISK_READER);
@@ -67,6 +75,7 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataWriteAndRead)
     ASSERT_EQ(ret_chunk.getNumRows(), 10);
     auto col = ret_chunk.getColumns().at(0);
     ASSERT_EQ(col->getUInt(1), 7);
+    manager->cleanup(key->query_unique_id);
 }
 
 Processors createMockExecutor(const ExchangeDataKeyPtr & key, Block header, uint64_t interval_ms, size_t rows)
@@ -89,7 +98,7 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
     auto manager = context->getDiskExchangeDataManager();
     auto header = getHeader(1);
 
-    auto key = std::make_shared<ExchangeDataKey>(query_unique_id, exchange_id, parallel_idx);
+    auto key = std::make_shared<ExchangeDataKey>(query_unique_id_2, exchange_id, parallel_idx);
     write(context, header, manager, key);
 
     manager->submitReadTask(query_id, key, createMockExecutor(key, header, interval_ms, rows));
@@ -99,7 +108,7 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
         ;
 
     // register senders
-    auto name = BrpcRemoteBroadcastReceiver::generateName(exchange_id, write_segment_id, read_segment_id, parallel_idx, host);
+    auto name = BrpcRemoteBroadcastReceiver::generateName(exchange_id, write_segment_id, read_segment_id, parallel_idx, rpc_host);
     auto queue = std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size);
     auto receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
         key, rpc_host, context, header, true, name, queue, BrpcExchangeReceiverRegistryService::BRPC);
@@ -110,6 +119,7 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCancel)
     ASSERT_TRUE(std::holds_alternative<BroadcastStatus>(packet));
     auto status = std::get<BroadcastStatus>(packet);
     ASSERT_TRUE(status.code == BroadcastStatusCode::SEND_CANCELLED);
+    manager->cleanup(key->query_unique_id);
 }
 
 TEST_F(ExchangeRemoteTest, DiskExchangeDataCleanup)
@@ -117,10 +127,59 @@ TEST_F(ExchangeRemoteTest, DiskExchangeDataCleanup)
     auto context = getContext().context;
     auto header = getHeader(1);
 
-    auto key = std::make_shared<ExchangeDataKey>(query_unique_id, exchange_id, parallel_idx);
+    auto key = std::make_shared<ExchangeDataKey>(query_unique_id_3, exchange_id, parallel_idx);
     write(context, header, manager, key);
 
     manager->cleanup(key->query_unique_id);
     auto file_name = manager->getFileName(*key);
     ASSERT_TRUE(!disk->exists(file_name));
+}
+
+TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByHeartBeat)
+{
+    auto context = getContext().context;
+    auto header = getHeader(1);
+    /// test unregister
+    auto test_query_unique_id = 1000;
+    auto key = std::make_shared<ExchangeDataKey>(test_query_unique_id, exchange_id, parallel_idx);
+    write(context, header, manager, key);
+    context->getExchangeDataTracker()->unregisterExchanges(std::to_string(test_query_unique_id));
+    /// test invalid file name
+    disk->createDirectories("bsp/v-1.0.0/invalid");
+    disk->createFile(fs::path("bsp/v-1.0.0/invalid") / "tmp_file");
+    disk->createFile("bsp/v-1.0.0/invalid-file");
+
+    std::mutex mu;
+    std::condition_variable cv;
+    for (size_t i = 0; i < 100; i++)
+    {
+        std::unique_lock<std::mutex> lock(mu);
+        cv.wait_for(lock, std::chrono::milliseconds((10)), [&]() {
+            return !disk->exists("bsp/v-1.0.0/1000") && !disk->exists("bsp/v-1.0.0/invalid") && !disk->exists("bsp/v-1.0.0/invalid-file");
+        });
+    }
+
+    ASSERT_TRUE(!disk->exists("bsp/v-1.0.0/1000"));
+    ASSERT_TRUE(!disk->exists("bsp/v-1.0.0/invalid"));
+    ASSERT_TRUE(!disk->exists("bsp/v-1.0.0/invalid-file"));
+}
+
+TEST_F(ExchangeRemoteTest, DiskExchangeGarbageCollectionByExpire)
+{
+    auto context = getContext().context;
+    auto header = getHeader(1);
+    auto key = std::make_shared<ExchangeDataKey>(query_unique_id_4, exchange_id, parallel_idx);
+    write(context, header, manager, key);
+
+    manager->setFileExpireSeconds(0);
+
+    std::mutex mu;
+    std::condition_variable cv;
+    for (size_t i = 0; i < 100; i++)
+    {
+        std::unique_lock<std::mutex> lock(mu);
+        cv.wait_for(
+            lock, std::chrono::milliseconds((10)), [&]() { return !disk->exists(fmt::format("bsp/v-1.0.0/{}", query_unique_id_4)); });
+    }
+    ASSERT_TRUE(!disk->exists(fmt::format("bsp/v-1.0.0/{}", query_unique_id_4)));
 }

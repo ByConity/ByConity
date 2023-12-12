@@ -1,24 +1,40 @@
 #pragma once
 
+#include <Disks/DiskLocal.h>
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
+#include <ServiceDiscovery/IServiceDiscovery.h>
 #include <brpc/server.h>
 #include <gtest/gtest.h>
 #include <Poco/Util/MapConfiguration.h>
 #include <Common/Brpc/BrpcApplication.h>
 #include <Common/tests/gtest_global_context.h>
 #include <Common/tests/gtest_utils.h>
-#include "Disks/DiskLocal.h"
 
+
+const int brpc_server_port = 8001;
+
+struct MockServiceDiscoveryClient : public DB::IServiceDiscovery
+{
+    DB::HostWithPortsVec lookup(const String & psm_name, DB::ComponentType type, const String & vw_name = "") override;
+    std::string getName() const override
+    {
+        return "MockServiceDiscoveryClient";
+    }
+    DB::ServiceDiscoveryMode getType() const override
+    {
+        return DB::ServiceDiscoveryMode::LOCAL;
+    }
+};
 
 class ExchangeRemoteTest : public ::testing::Test
 {
 protected:
-    static brpc::Server server;
-    static DB::BrpcExchangeReceiverRegistryService service_impl;
+    static brpc::Server * server;
+    static DB::BrpcExchangeReceiverRegistryService * service_impl;
     static void startBrpcServer()
     {
-        if (server.AddService(&service_impl, brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
+        if (server->AddService(service_impl, brpc::SERVER_DOESNT_OWN_SERVICE) != 0)
         {
             LOG(ERROR) << "Fail to add service";
             return;
@@ -28,7 +44,7 @@ protected:
         // Start the server.
         brpc::ServerOptions options;
         options.idle_timeout_sec = -1;
-        if (server.Start(8001, &options) != 0)
+        if (server->Start(brpc_server_port, &options) != 0)
         {
             LOG(ERROR) << "Fail to start Server";
             return;
@@ -44,37 +60,56 @@ protected:
         startBrpcServer();
 
         auto context = getContext().context;
-        DB::DiskExchangeDataManagerOptions options{.path = "bsp/v.1.0.0", .storage_policy = "default", .volume = "tmp/bsp"};
+        Coordination::SettingsChanges config_settings;
+        config_settings.emplace_back("exchange_timeout_ms", 20000);
+        context->applySettingsChanges(config_settings);
+        /// gc_interval_seconds is set to zero for testing
         DB::ContextWeakMutablePtr context_weak = std::weak_ptr<DB::Context>(context);
         fs::create_directories("tmp/bsp/");
         auto disk = std::make_shared<DB::DiskLocal>("bsp", "tmp/bsp/", 0);
+        DB::DiskExchangeDataManagerOptions options{
+            .path = "bsp/v-1.0.0",
+            .storage_policy = "default",
+            .volume = "tmp/bsp",
+            .gc_interval_seconds = 0,
+            .file_expire_seconds = 10000,
+            .start_gc_random_wait_seconds = 0};
+        if (disk->exists(options.path))
+            disk->removeRecursive(options.path);
         disk->createDirectories(options.path);
-        context->setMockDiskExchangeDataManager(std::make_shared<DB::DiskExchangeDataManager>(context_weak, std::move(disk), options));
-        ExchangeRemoteTest::service_impl.setContext(context);
+        auto mock_sd_client = std::make_shared<MockServiceDiscoveryClient>();
+        std::shared_ptr<DB::IServiceDiscovery> sd_client = mock_sd_client;
+        context->setMockDiskExchangeDataManager(
+            std::make_shared<DB::DiskExchangeDataManager>(context_weak, std::move(disk), options, sd_client, ""));
+        context->setMockExchangeDataTracker(std::make_shared<DB::ExchangeStatusTracker>(context_weak));
+        ExchangeRemoteTest::service_impl->setContext(context);
         setQueryDuration();
     }
 
     static void TearDownTestCase()
     {
-        server.Stop(1000);
+        getContext().context->getDiskExchangeDataManager()->shutdown();
+        server->Stop(1000);
     }
 
     void SetUp() override
     {
         auto context = getContext().context;
+        DB::ContextWeakMutablePtr context_weak = std::weak_ptr<DB::Context>(context);
         manager = context->getDiskExchangeDataManager();
+        manager->setFileExpireSeconds(10000);
         disk = manager->getDisk();
-        disk->removeRecursive("bsp/v.1.0.0");
-        disk->createDirectories("bsp/v.1.0.0");
     }
 
-    uint64_t query_unique_id = 111;
+    uint64_t query_unique_id_1 = 111;
+    uint64_t query_unique_id_2 = 222;
+    uint64_t query_unique_id_3 = 333;
+    uint64_t query_unique_id_4 = 444;
     String query_id = "query_id";
     uint64_t interval_ms = 10000;
     size_t rows = 7;
     UInt64 exchange_id = 1;
     UInt64 parallel_idx = 0;
-    const String host = "localhost:6666";
     const String rpc_host = "127.0.0.1:8001";
     size_t write_segment_id = 0;
     size_t read_segment_id = 1;

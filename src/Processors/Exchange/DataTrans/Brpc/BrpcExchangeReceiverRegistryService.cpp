@@ -231,4 +231,36 @@ void BrpcExchangeReceiverRegistryService::cleanupExchangeData(
         cntl->SetFailed(error_msg);
     }
 }
+
+void BrpcExchangeReceiverRegistryService::sendExchangeDataHeartbeat(
+    ::google::protobuf::RpcController * controller,
+    const ::DB::Protos::ExchangeDataHeartbeatRequest * request,
+    ::DB::Protos::ExchangeDataHeartbeatResponse * response,
+    ::google::protobuf::Closure * done)
+{
+    brpc::ClosureGuard done_guard(done);
+    brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
+    try
+    {
+        auto exchange_data_tracker = context->getExchangeDataTracker();
+        for (const auto & info : request->infos())
+        {
+            if (!exchange_data_tracker->checkQueryAlive(info.query_id()))
+            {
+                auto * query_info_resp = response->add_not_alive_queries();
+                query_info_resp->set_query_id(info.query_id());
+                query_info_resp->set_query_unique_id(info.query_unique_id());
+            }
+        }
+    }
+    catch (...)
+    {
+        std::stringstream ss;
+        for (const auto & info : request->infos())
+            ss << "query_unique_id:" << info.query_unique_id() << " query_id:" << info.query_id() << std::endl;
+        auto error_msg = fmt::format("sendExchangeFileHeartbeat exchange data failed for queries:{}", ss.str());
+        tryLogCurrentException(log, error_msg);
+        cntl->SetFailed(error_msg);
+    }
+}
 }
