@@ -66,6 +66,11 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    bool isSuitableForConstantFolding() const override
+    {
+        return false;
+    }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
         const DataTypeArray * array_type = checkAndGetDataType<DataTypeArray>(arguments[0].get());
@@ -171,7 +176,7 @@ public:
             else if (to_type.isUInt64())
                 return setGetNumberImpl<Nullable, Method, UInt64>(method, array, result);
         }
-        
+
         throw Exception("Not implement type " + data_type.getName() + " for function " + getName(), ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
@@ -191,7 +196,7 @@ public:
             const auto & offsets = array.getOffsets();
             auto & res_offsets = result.getOffsets();
             size_t pre_offset = 0, cur_offset = 0;
-            
+
             Arena arena(0);
             for (size_t i = 0; i<rsize; ++i)
             {

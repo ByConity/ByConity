@@ -56,6 +56,7 @@ struct ExprAnalyzerOptions
     bool expand_untuple = true;
     bool expand_asterisk = true;
     bool record_used_object = true; // whether record used_columns, used_functions
+    bool evaluate_constant_expression = true;
 
     // constructor
     ExprAnalyzerOptions(String statement_name_ = ""): statement_name(std::move(statement_name_)) // NOLINT(google-explicit-constructor)
@@ -101,6 +102,12 @@ struct ExprAnalyzerOptions
     ExprAnalyzerOptions & recordUsedObject(bool arg)
     {
         record_used_object = arg;
+        return *this;
+    }
+
+    ExprAnalyzerOptions & evaluateConstantExpression(bool arg)
+    {
+        evaluate_constant_expression = arg;
         return *this;
     }
 };

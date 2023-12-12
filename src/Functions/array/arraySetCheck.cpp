@@ -66,6 +66,11 @@ public:
 
     bool useDefaultImplementationForConstants() const override { return true; }
 
+    bool isSuitableForConstantFolding() const override
+    {
+        return false;
+    }
+
     DataTypePtr getReturnTypeImpl(const DataTypes & ) const override
     {
         return std::make_shared<DataTypeNumber<UInt8>>();

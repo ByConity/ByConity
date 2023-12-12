@@ -365,6 +365,8 @@ public:
     /// TODO : add Function Convert Nullable(String) column to String column
     bool useDefaultImplementationForNulls() const override { return false; }
 
+    bool isSuitableForConstantFolding() const override { return false; }
+
     DataTypePtr getReturnTypeImpl(const ColumnsWithTypeAndName & arguments) const override
     {
         if (arguments.size() != 3)
