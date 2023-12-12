@@ -76,6 +76,7 @@ class MemoryMonitor
     static constexpr auto filename = "/proc/meminfo";
     static constexpr auto mem_usage_fs = "/sys/fs/cgroup/memory/memory.usage_in_bytes";
     static constexpr auto mem_limit_fs = "/sys/fs/cgroup/memory/memory.limit_in_bytes";
+    static constexpr auto mem_stat_fs = "/sys/fs/cgroup/memory/memory.stat";
 
 public:
     struct Data
