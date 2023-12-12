@@ -5394,10 +5394,11 @@ PlanCacheManager* Context::getPlanCacheManager()
 
 UInt32 Context::getQueryMaxExecutionTime() const
 {
+    // max is 4294967295/1000/60=71582 min
     if (getSettingsRef().max_execution_time.totalSeconds() != 0)
-        return getSettingsRef().max_execution_time.totalSeconds() * 1000;
+        return std::min(getSettingsRef().max_execution_time.totalSeconds() * UInt64(1000), UInt64(UINT32_MAX));
     else if (getSettingsRef().exchange_timeout_ms != 0)
-        return getSettingsRef().exchange_timeout_ms;
+        return std::min(UInt64(getSettingsRef().exchange_timeout_ms), UInt64(UINT32_MAX));
     else
         return 100 * 60 * 1000; // default as 100min
 }

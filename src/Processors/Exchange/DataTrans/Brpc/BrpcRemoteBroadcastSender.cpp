@@ -244,8 +244,8 @@ BroadcastStatus BrpcRemoteBroadcastSender::sendIOBuffer(const butil::IOBuf & io_
     }
     if (!success)
     {
-        const auto msg = "Write stream-" + std::to_string(stream_id) + " timeout, with data_key-" + data_key.toString()
-            + ", size:" + std::to_string(io_buffer.size());
+        const auto msg = fmt::format("Write stream-{} timeout, with data_key-{}, size:{}, retry_count:{}, query_expiration_ms_ts:{}, maximum:{}", 
+            stream_id, data_key, io_buffer.size(), retry_count, query_expiration_ms_ts, context->getQueryMaxExecutionTime() / 1000);
         LOG_ERROR(log, msg);
         auto current_status = BroadcastStatus(BroadcastStatusCode::SEND_TIMEOUT, true, msg);
         int actual_status_code = BroadcastStatusCode::RUNNING;
