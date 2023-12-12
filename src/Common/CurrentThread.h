@@ -105,6 +105,8 @@ public:
 private:
     static void defaultThreadDeleter();
 
+    friend class InterpreterCreateQuery;
+
     /// Sets query_context for current thread group
     /// Can by used only through QueryScope
     static void attachQueryContext(ContextPtr query_context);

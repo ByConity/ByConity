@@ -232,7 +232,7 @@ bool areTypesEqual(const DataTypePtr & lhs, const DataTypePtr & rhs)
     return lhs_name == rhs_name;
 }
 
-ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count)
+ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count, const ColumnPtr & src_map_ptr)
 {
     ColumnPtr result_null_map_column;
 
@@ -284,8 +284,24 @@ ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnsWithTypeAndName & a
         }
     }
 
-    if (!result_null_map_column)
+    if (!result_null_map_column && !src_map_ptr)
         return makeNullable(src);
+    else if (!result_null_map_column && src_map_ptr)
+        return ColumnNullable::create(src_not_nullable->convertToFullColumnIfConst(), src_map_ptr);
+
+    // Merge result nullmap with input nullmap if any
+    if (src_map_ptr)
+    {
+        MutableColumnPtr mutable_result_null_map_column = IColumn::mutate(std::move(result_null_map_column));
+
+        NullMap & result_null_map = assert_cast<ColumnUInt8 &>(*mutable_result_null_map_column).getData();
+        const NullMap & src_null_map = assert_cast<const ColumnUInt8 &>(*src_map_ptr).getData();
+
+        for (size_t i = 0, size = result_null_map.size(); i < size; ++i)
+            result_null_map[i] |= src_null_map[i];
+
+        result_null_map_column = std::move(mutable_result_null_map_column);
+    }
 
     return ColumnNullable::create(src_not_nullable->convertToFullColumnIfConst(), result_null_map_column);
 }

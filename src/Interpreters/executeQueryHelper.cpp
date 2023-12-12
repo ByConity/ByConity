@@ -4,6 +4,7 @@
 #include <Interpreters/DatabaseAndTableWithAlias.h>
 #include <Interpreters/DatabaseCatalog.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
+#include <Interpreters/InterpreterSelectQueryUseOptimizer.h>
 #include <Interpreters/SelectQueryOptions.h>
 #include <Interpreters/executeQueryHelper.h>
 #include <MergeTreeCommon/CnchTopologyMaster.h>
@@ -22,6 +23,7 @@
 #include <common/logger_useful.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/RemoteBlockInputStream.h>
+#include <Optimizer/QueryUseOptimizerChecker.h>
 
 namespace DB
 {
@@ -109,7 +111,13 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     LOG_DEBUG(&Poco::Logger::get("executeQuery"), "Sending query as ordinary query");
     Block header;
     if (ast->as<ASTSelectWithUnionQuery>())
-        header = InterpreterSelectWithUnionQuery(ast, context, SelectQueryOptions(QueryProcessingStage::Complete).analyze()).getSampleBlock();
+    {
+        if (settings.enable_optimizer &&  QueryUseOptimizerChecker::check(ast, context))
+            header = InterpreterSelectQueryUseOptimizer(ast, context, SelectQueryOptions(QueryProcessingStage::Complete).analyze()).getSampleBlock();
+        else
+            header = InterpreterSelectWithUnionQuery(ast, context, SelectQueryOptions(QueryProcessingStage::Complete).analyze()).getSampleBlock();
+    }
+
     Pipes remote_pipes;
     auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(*res.remote_execution_conn, query, header, context);
     remote_query_executor->setPoolMode(PoolMode::GET_ONE);

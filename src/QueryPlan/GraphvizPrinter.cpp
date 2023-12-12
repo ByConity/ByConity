@@ -2545,12 +2545,9 @@ void GraphvizPrinter::printAST(const ASTPtr & astPtr, ContextMutablePtr & contex
         out << graphviz;
         out.close();
 
-        // QueryStatus * process_list_elem = context->getProcessListElement();
-        // if (process_list_elem)
-        //     process_list_elem->addGraphviz(visitor, graphviz);
-
         QueryStatus * process_list_elem = context->getProcessListElement();
-        process_list_elem->addGraphviz(visitor, graphviz);
+        if (process_list_elem)
+            process_list_elem->addGraphviz(visitor, graphviz);
     }
 }
 
@@ -2570,11 +2567,9 @@ void GraphvizPrinter::printLogicalPlan(PlanNodeBase & root, ContextMutablePtr & 
         out << graphviz;
         out.close();
 
-        // QueryStatus * process_list_elem = context->getProcessListElement();
-        // if (process_list_elem)
-        //     process_list_elem->addGraphviz(name, graphviz);
         QueryStatus * process_list_elem = context->getProcessListElement();
-        process_list_elem->addGraphviz(name, graphviz);
+        if (process_list_elem)
+            process_list_elem->addGraphviz(name, graphviz);
     }
 }
 
@@ -2595,7 +2590,8 @@ void GraphvizPrinter::printLogicalPlan(
         out.close();
 
         QueryStatus * process_list_elem = context->getProcessListElement();
-        process_list_elem->addGraphviz(name, graphviz);
+        if (process_list_elem)
+            process_list_elem->addGraphviz(name, graphviz);
     }
 }
 
@@ -2617,11 +2613,9 @@ void GraphvizPrinter::printPipeline(
 
             std::stringstream name;
             name << PIPELINE_PATH << "-grouped_" << segment_id << "_" << host;
-            // QueryStatus * process_list_elem = context->getProcessListElement();
-            // if (process_list_elem)
-            //     process_list_elem->addGraphviz(name.str(), graphviz);
             QueryStatus * process_list_elem = context->getProcessListElement();
-            process_list_elem->addGraphviz(name.str(), graphviz);
+            if (process_list_elem)
+                process_list_elem->addGraphviz(name.str(), graphviz);
         }
         {
             auto const graphviz = printPipeline(processors, graph);
@@ -2635,7 +2629,8 @@ void GraphvizPrinter::printPipeline(
             std::stringstream name;
             name << PIPELINE_PATH << "_" << segment_id << "_" << host;
             QueryStatus * process_list_elem = context->getProcessListElement();
-            process_list_elem->addGraphviz(name.str(), graphviz);
+            if (process_list_elem)
+                process_list_elem->addGraphviz(name.str(), graphviz);
         }
     }
 }
@@ -2934,7 +2929,8 @@ void GraphvizPrinter::printMemo(const Memo & memo, GroupId root_id, const Contex
         out.close();
 
         QueryStatus * process_list_elem = context->getProcessListElement();
-        process_list_elem->addGraphviz(name, graphviz);
+        if (process_list_elem)
+            process_list_elem->addGraphviz(name, graphviz);
     }
 }
 
@@ -2955,7 +2951,8 @@ void GraphvizPrinter::printPlanSegment(const PlanSegmentTreePtr & segment, const
         out.close();
 
         QueryStatus * process_list_elem = context->getProcessListElement();
-        process_list_elem->addGraphviz("4000-PlanSegment", graphviz);
+        if (process_list_elem)
+            process_list_elem->addGraphviz("4000-PlanSegment", graphviz);
     }
 }
 

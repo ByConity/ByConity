@@ -236,33 +236,77 @@ inline constexpr const auto & undec(const T & x)
         return x;
 }
 
-// TODO: verify performance impact for the nullable fix from community
 template <typename A, typename B, typename Op, typename OpResultType = typename Op::ResultType>
 struct BinaryOperation
 {
     using ResultType = OpResultType;
     static const constexpr bool allow_fixed_string = false;
 
-    template <OpCase op_case>
-    static void NO_INLINE process(const A * __restrict a, const B * __restrict b, ResultType * __restrict c, size_t size, const NullMap * right_nullmap = nullptr)
+    static bool inline handleZeroDivision(const B * __restrict b, int index, ResultType * __restrict c, UInt8 * res_nullmap)
     {
+        // Set res_nullmap to true and res_col to default value
+        if (undec(b[index]) == 0)
+        {
+            res_nullmap[index] = true;
+            c[index] = ResultType();
+            return true;
+        }
+        return false;
+    }
+
+    template <OpCase op_case>
+    static void NO_INLINE process(const A * __restrict a, const B * __restrict b, ResultType * __restrict c, size_t size, const NullMap * right_nullmap = nullptr, UInt8 * res_nullmap = nullptr)
+    {
+
         if constexpr (op_case == OpCase::RightConstant)
         {
             if (right_nullmap && (*right_nullmap)[0])
                 return;
 
+            // Handle division by zero
+            // 1/0 -> null
+            if (res_nullmap && undec(b[0]) == 0)
+            {
+                res_nullmap[0] = true;
+                return;
+            }
+
             for (size_t i = 0; i < size; ++i)
                 c[i] = Op::template apply<ResultType>(a[i], *b);
         }
         else
-        {
-            if (right_nullmap)
+        {   
+            // Mixing nulls and zeros
+            // 1/null -> null, 1/0 -> null
+            if (right_nullmap && res_nullmap)
             {
                 for (size_t i = 0; i < size; ++i)
+                {
+                    if ((*right_nullmap)[i])
+                        c[i] = ResultType();
+                    else if (!handleZeroDivision(b, i, c, res_nullmap))
+                       apply<op_case>(a, b, c, i);
+                }
+            }
+            // Only handle nulls
+            else if (right_nullmap && !res_nullmap)
+            {
+                for (size_t i = 0; i < size; ++i)
+                {
                     if ((*right_nullmap)[i])
                         c[i] = ResultType();
                     else
                         apply<op_case>(a, b, c, i);
+                }
+            }
+            // Only handle zeros
+            else if (!right_nullmap && res_nullmap)
+            {
+                for (size_t i = 0; i < size; ++i)
+                {
+                    if (!handleZeroDivision(b, i, c, res_nullmap))
+                        apply<op_case>(a, b, c, i);
+                }
             }
             else
                 for (size_t i = 0; i < size; ++i)
@@ -380,7 +424,7 @@ private:
 public:
     template <OpCase op_case, bool is_decimal_a, bool is_decimal_b, class A, class B>
     static void NO_INLINE process(const A & a, const B & b, ResultContainerType & c,
-        NativeResultType scale_a, NativeResultType scale_b, const NullMap * right_nullmap = nullptr)
+        NativeResultType scale_a, NativeResultType scale_b, const NullMap * right_nullmap = nullptr, UInt8 * res_nullmap = nullptr)
     {
         if constexpr (op_case == OpCase::LeftConstant) static_assert(!IsDecimalNumber<A>);
         if constexpr (op_case == OpCase::RightConstant) static_assert(!IsDecimalNumber<B>);
@@ -437,7 +481,7 @@ public:
         }
         else if constexpr (is_division && is_decimal_b)
         {
-            processWithRightNullmapImpl<op_case>(a, b, c, size, right_nullmap, [&scale_a](const auto & left, const auto & right)
+            processWithRightNullmapImpl<op_case>(a, b, c, size, right_nullmap, res_nullmap, [&scale_a](const auto & left, const auto & right)
             {
                 return applyScaled<true>(left, right, scale_a);
             });
@@ -445,7 +489,7 @@ public:
         }
 
         processWithRightNullmapImpl<op_case>(
-            a, b, c, size, right_nullmap,
+            a, b, c, size, right_nullmap, res_nullmap,
             [](const auto & left, const auto & right)
             {
                 return apply(
@@ -473,9 +517,43 @@ public:
 
 private:
     template <OpCase op_case, typename ApplyFunc>
-    static inline void processWithRightNullmapImpl(const auto & a, const auto & b, ResultContainerType & c, size_t size, const NullMap * right_nullmap, ApplyFunc apply_func)
+    static inline void processWithRightNullmapImpl(const auto & a, const auto & b, ResultContainerType & c, size_t size, const NullMap * right_nullmap, UInt8 * res_nullmap, ApplyFunc apply_func)
     {
-        if (right_nullmap)
+        // Mixing nulls and zeros
+        if (right_nullmap && res_nullmap)
+        {
+            if constexpr (op_case == OpCase::RightConstant)
+            {
+                if ((*right_nullmap)[0])
+                    return;
+
+                if (undec(b) == 0)
+                {
+                    res_nullmap[0] = true;
+                    return;
+                }
+
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = apply_func(undec(a[i]), undec(b));
+            }
+            else
+            {
+                for (size_t i = 0; i < size; ++i)
+                {
+                    if ((*right_nullmap)[i])
+                        c[i] = ResultType();
+                    else if (undec(b[i]) == 0)
+                    {
+                        res_nullmap[i] = true;
+                        c[i] = ResultType();
+                    }
+                    else
+                        c[i] = apply_func(unwrap<op_case, OpCase::LeftConstant>(a, i), undec(b[i]));
+                }
+            }
+        }
+        // Only handle nulls
+        else if (right_nullmap)
         {
             if constexpr (op_case == OpCase::RightConstant)
             {
@@ -491,6 +569,34 @@ private:
                 {
                     if ((*right_nullmap)[i])
                         c[i] = ResultType();
+                    else
+                        c[i] = apply_func(unwrap<op_case, OpCase::LeftConstant>(a, i), undec(b[i]));
+                }
+            }
+        }
+        // Only handle zeros
+        else if (res_nullmap)
+        {
+            if constexpr (op_case == OpCase::RightConstant)
+            {
+                if (undec(b) == 0)
+                {
+                    res_nullmap[0] = true;
+                    return;
+                }
+
+                for (size_t i = 0; i < size; ++i)
+                    c[i] = apply_func(undec(a[i]), undec(b));
+            }
+            else
+            {
+                for (size_t i = 0; i < size; ++i)
+                {   
+                    if (undec(b[i]) == 0)
+                    {
+                        res_nullmap[i] = true;
+                        c[i] = ResultType();
+                    }
                     else
                         c[i] = apply_func(unwrap<op_case, OpCase::LeftConstant>(a, i), undec(b[i]));
                 }
@@ -617,6 +723,7 @@ class FunctionBinaryArithmetic : public IFunction
     bool check_decimal_overflow = true;
     bool allow_decimal_promote_storage = false;
     bool use_extended_scale_for_decimal_division = false;
+    bool handle_division_by_zero;
 
     template <typename F>
     static bool castType(const IDataType * type, F && f)
@@ -957,12 +1064,12 @@ class FunctionBinaryArithmetic : public IFunction
 
     template <OpCase op_case, bool left_decimal, bool right_decimal, typename OpImpl, typename OpImplCheck,
               typename L, typename R, typename VR, typename SA, typename SB>
-    void helperInvokeEither(const L& left, const R& right, VR& vec_res, SA scale_a, SB scale_b, const NullMap * right_nullmap) const
+    void helperInvokeEither(const L& left, const R& right, VR& vec_res, SA scale_a, SB scale_b, const NullMap * right_nullmap, UInt8 * res_nullmap) const
     {
         if (check_decimal_overflow)
-            OpImplCheck::template process<op_case, left_decimal, right_decimal>(left, right, vec_res, scale_a, scale_b, right_nullmap);
+            OpImplCheck::template process<op_case, left_decimal, right_decimal>(left, right, vec_res, scale_a, scale_b, right_nullmap, res_nullmap);
         else
-            OpImpl::template process<op_case, left_decimal, right_decimal>(left, right, vec_res, scale_a, scale_b, right_nullmap);
+            OpImpl::template process<op_case, left_decimal, right_decimal>(left, right, vec_res, scale_a, scale_b, right_nullmap, res_nullmap);
     }
 
     template <bool allow_decimal_promote_storage, class LeftDataType, class RightDataType, class ResultDataType,
@@ -971,7 +1078,7 @@ class FunctionBinaryArithmetic : public IFunction
         const L & left, const R & right,
         const ColumnConst * const col_left_const, const ColumnConst * const col_right_const,
         const CL * const col_left, const CR * const col_right,
-        size_t col_left_size, const NullMap * right_nullmap) const
+        size_t col_left_size, const NullMap * right_nullmap, UInt8 * res_nullmap) const
     {
         using T0 = typename LeftDataType::FieldType;
         using T1 = typename RightDataType::FieldType;
@@ -1033,9 +1140,14 @@ class FunctionBinaryArithmetic : public IFunction
 
             ResultType res = {};
             if (!right_nullmap || !(*right_nullmap)[0])
-                res = check_decimal_overflow
+            {
+                if (res_nullmap && undec(const_b) == 0)
+                    res_nullmap[0] = true;
+                else
+                    res = check_decimal_overflow
                     ? OpImplCheck::template process<left_is_decimal, right_is_decimal>(const_a, const_b, scale_a, scale_b)
                     : OpImpl::template process<left_is_decimal, right_is_decimal>(const_a, const_b, scale_a, scale_b);
+            }
 
             return ResultDataType(type.getPrecision(), type.getScale())
                 .createColumnConst(col_left_const->size(), toField(res, type.getScale()));
@@ -1049,21 +1161,21 @@ class FunctionBinaryArithmetic : public IFunction
         if (col_left && col_right)
         {
             helperInvokeEither<OpCase::Vector, left_is_decimal, right_is_decimal, OpImpl, OpImplCheck>(
-                col_left->getData(), col_right->getData(), vec_res, scale_a, scale_b, right_nullmap);
+                col_left->getData(), col_right->getData(), vec_res, scale_a, scale_b, right_nullmap, res_nullmap);
         }
         else if (col_left_const && col_right)
         {
             const NativeResultType const_a = helperGetOrConvert<T0, ResultDataType>(col_left_const, left);
 
             helperInvokeEither<OpCase::LeftConstant, left_is_decimal, right_is_decimal, OpImpl, OpImplCheck>(
-                const_a, col_right->getData(), vec_res, scale_a, scale_b, right_nullmap);
+                const_a, col_right->getData(), vec_res, scale_a, scale_b, right_nullmap, res_nullmap);
         }
         else if (col_left && col_right_const)
         {
             const NativeResultType const_b = helperGetOrConvert<T1, ResultDataType>(col_right_const, right);
 
             helperInvokeEither<OpCase::RightConstant, left_is_decimal, right_is_decimal, OpImpl, OpImplCheck>(
-                col_left->getData(), const_b, vec_res, scale_a, scale_b, right_nullmap);
+                col_left->getData(), const_b, vec_res, scale_a, scale_b, right_nullmap, res_nullmap);
         }
         else
             return nullptr;
@@ -1079,7 +1191,9 @@ public:
     :   context(context_),
         check_decimal_overflow(decimalCheckArithmeticOverflow(context)),
         allow_decimal_promote_storage(decimalArithmeticPromoteStorage(context)),
-        use_extended_scale_for_decimal_division(decimalDivisionUseExtendedScale(context))
+        use_extended_scale_for_decimal_division(decimalDivisionUseExtendedScale(context)),
+        handle_division_by_zero(context->getSettingsRef().handle_division_by_zero
+            && (IsOperation<Op>::div_int || IsOperation<Op>::modulo || IsOperation<Op>::div_floating))
     {}
 
     String getName() const override { return name; }
@@ -1091,16 +1205,16 @@ public:
         /// We shouldn't use default implementation for nulls for the case when operation is divide,
         /// intDiv or modulo and denominator is Nullable(Something), because it may cause division
         /// by zero error (when value is Null we store default value 0 in nested column).
-        return !division_by_nullable;
+        return !division_by_nullable && !handle_division_by_zero;
     }
 
     DataTypePtr getReturnTypeImpl(const DataTypes & arguments) const override
     {
-        return getReturnTypeImplStatic(arguments, context);
+        return getReturnTypeImplStatic(arguments, context, handle_division_by_zero);
     }
 
     template <bool allow_decimal_promote_storage>
-    static DataTypePtr getReturnTypeImplStaticTemplate(const DataTypes & arguments, ContextPtr context)
+    static DataTypePtr getReturnTypeImplStaticTemplate(const DataTypes & arguments, ContextPtr context, bool use_null_division_by_zero)
     {
         /// Special case when multiply aggregate function state
         if (isAggregateMultiply(arguments[0], arguments[1]))
@@ -1197,6 +1311,10 @@ public:
                     }
                     else
                         type_res = std::make_shared<ResultDataType>();
+
+                    if (use_null_division_by_zero && type_res->canBeInsideNullable())
+                        type_res = makeNullable(type_res);
+
                     return true;
                 }
             }
@@ -1213,12 +1331,12 @@ public:
             ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
     }
 
-    static DataTypePtr getReturnTypeImplStatic(const DataTypes & arguments, ContextPtr context)
+    static DataTypePtr getReturnTypeImplStatic(const DataTypes & arguments, ContextPtr context, bool use_null_division_by_zero)
     {
         if (decimalArithmeticPromoteStorage(context))
-            return getReturnTypeImplStaticTemplate<true>(arguments, context);
+            return getReturnTypeImplStaticTemplate<true>(arguments, context, use_null_division_by_zero);
         else
-            return getReturnTypeImplStaticTemplate<false>(arguments, context);
+            return getReturnTypeImplStaticTemplate<false>(arguments, context, use_null_division_by_zero);
     }
 
     ColumnPtr executeFixedString(const ColumnsWithTypeAndName & arguments) const
@@ -1307,7 +1425,7 @@ public:
     }
 
     template <bool allow_decimal_promote_storage, typename A, typename B>
-    ColumnPtr executeNumeric(const ColumnsWithTypeAndName & arguments, const A & left, const B & right, const NullMap * right_nullmap) const
+    ColumnPtr executeNumeric(const ColumnsWithTypeAndName & arguments, const A & left, const B & right, const NullMap * right_nullmap, UInt8 * res_nullmap) const
     {
         using LeftDataType = std::decay_t<decltype(left)>;
         using RightDataType = std::decay_t<decltype(right)>;
@@ -1361,7 +1479,8 @@ public:
                     col_left_const, col_right_const,
                     col_left, col_right,
                     col_left_size,
-                    right_nullmap);
+                    right_nullmap,
+                    res_nullmap);
             }
             else // can't avoid else and another indentation level, otherwise the compiler would try to instantiate
                  // ColVecResult for Decimals which would lead to a compile error.
@@ -1371,6 +1490,12 @@ public:
                 /// non-vector result
                 if (col_left_const && col_right_const)
                 {
+                    if (res_nullmap && col_right_const->template getValue<T1>() == 0)
+                    {
+                        res_nullmap[0] = true;
+                        return ResultDataType().createColumnConst(col_left_const->size(), toField(ResultType()));
+                    }
+
                     const auto res = right_nullmap && (*right_nullmap)[0]
                         ? ResultType()
                         : OpImpl::process(col_left_const->template getValue<T0>(), col_right_const->template getValue<T1>());
@@ -1390,7 +1515,8 @@ public:
                         col_right->getData().data(),
                         vec_res.data(),
                         vec_res.size(),
-                        right_nullmap);
+                        right_nullmap,
+                        res_nullmap);
                 }
                 else if (col_left_const && col_right)
                 {
@@ -1401,7 +1527,8 @@ public:
                         col_right->getData().data(),
                         vec_res.data(),
                         vec_res.size(),
-                        right_nullmap);
+                        right_nullmap,
+                        res_nullmap);
                 }
                 else if (col_left && col_right_const)
                 {
@@ -1412,7 +1539,8 @@ public:
                         &value,
                         vec_res.data(),
                         vec_res.size(),
-                        right_nullmap);
+                        right_nullmap,
+                        res_nullmap);
                 }
                 else
                     return nullptr;
@@ -1453,10 +1581,32 @@ public:
         return executeImpl2(arguments, result_type, input_rows_count);
     }
 
-    ColumnPtr executeImpl2(const ColumnsWithTypeAndName & arguments, const DataTypePtr & result_type, size_t input_rows_count, const NullMap * right_nullmap = nullptr) const
+    ColumnPtr executeImpl2(
+        const ColumnsWithTypeAndName & arguments,
+        const DataTypePtr & result_type,
+        size_t input_rows_count,
+        const NullMap * right_nullmap = nullptr,
+        UInt8 * res_nullmap = nullptr) const
     {
         const auto & left_argument = arguments[0];
         const auto & right_argument = arguments[1];
+
+        /// Handling division by zero by pass a res null map recursively
+        if (handle_division_by_zero && !res_nullmap)
+        {
+            // An empty null map for the result
+            auto null_map_column_ptr = ColumnUInt8::create(input_rows_count, false);
+            auto * nullmap = null_map_column_ptr->getData().data();
+
+            bool is_const = checkColumnConst<ColumnNullable>(right_argument.column.get());
+            const ColumnNullable * nullable_column = is_const ? checkAndGetColumnConstData<ColumnNullable>(right_argument.column.get())
+                                                              : checkAndGetColumn<ColumnNullable>(*right_argument.column);
+
+            // Process right null map at the same time, in case nulls and zeros are both there
+            const NullMap * arg_nullmap = nullable_column ? &nullable_column->getNullMapData() : nullptr;
+            auto res = executeImpl2(createBlockWithNestedColumns(arguments), removeNullable(result_type), input_rows_count, arg_nullmap, nullmap);
+            return wrapInNullable(res, arguments, result_type, input_rows_count, null_map_column_ptr->getPtr()); 
+        }
 
         /// Process special case when operation is divide, intDiv or modulo and denominator
         /// is Nullable(Something) to prevent division by zero error.
@@ -1493,9 +1643,9 @@ public:
             else
             {
                 if (allow_decimal_promote_storage)
-                    res = executeNumeric<true>(arguments, left, right, right_nullmap);
+                    res = executeNumeric<true>(arguments, left, right, right_nullmap, res_nullmap);
                 else
-                    res = executeNumeric<false>(arguments, left, right, right_nullmap);
+                    res = executeNumeric<false>(arguments, left, right, right_nullmap, res_nullmap);
                 return res != nullptr;
             }
         });
@@ -1765,7 +1915,12 @@ public:
         return std::make_unique<BinaryArithmeticOverloadResolver>(context);
     }
 
-    explicit BinaryArithmeticOverloadResolver(ContextPtr context_) : context(context_) {}
+    explicit BinaryArithmeticOverloadResolver(ContextPtr context_)
+        : context(context_)
+        , handle_division_by_zero(context->getSettingsRef().handle_division_by_zero
+            && (IsOperation<Op>::div_int || IsOperation<Op>::modulo || IsOperation<Op>::div_floating))
+    {
+    }
 
     String getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 2; }
@@ -1810,10 +1965,11 @@ public:
             throw Exception(
                 "Number of arguments for function " + getName() + " doesn't match: passed " + toString(arguments.size()) + ", should be 2",
                 ErrorCodes::NUMBER_OF_ARGUMENTS_DOESNT_MATCH);
-        return FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments>::getReturnTypeImplStatic(arguments, context);
+        return FunctionBinaryArithmetic<Op, Name, valid_on_default_arguments, valid_on_float_arguments>::getReturnTypeImplStatic(arguments, context, handle_division_by_zero);
     }
 
 private:
     ContextPtr context;
+    bool handle_division_by_zero;
 };
 }

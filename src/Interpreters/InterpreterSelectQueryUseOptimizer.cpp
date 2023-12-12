@@ -52,6 +52,17 @@ namespace ErrorCodes
 extern const int TOO_MANY_PLAN_SEGMENTS;
 }
 
+Block InterpreterSelectQueryUseOptimizer::getSampleBlock()
+{
+    if (!block)
+    {
+        auto query_plan = buildQueryPlan();
+        block = query_plan->getPlanNodeRoot()->getCurrentDataStream().header;
+    }
+
+    return block;
+}
+
 QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
 {
     // When interpret sub query, reuse context info, e.g. PlanNodeIdAllocator, SymbolAllocator.
@@ -113,6 +124,8 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
         }
     }
 
+    if (query_plan->getPlanNodeRoot())
+        block = query_plan->getPlanNodeRoot()->getCurrentDataStream().header;
     LOG_DEBUG(log, "join order {}", JoinOrderUtils::getJoinOrder(*query_plan));
     return query_plan;
 }

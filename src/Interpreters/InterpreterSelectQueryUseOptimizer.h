@@ -65,6 +65,8 @@ public:
 
     static void fillContextQueryAccessInfo(ContextPtr context, AnalysisPtr & analysis);
 
+    Block getSampleBlock();
+
 private:
     ASTPtr query_ptr;
     PlanNodePtr sub_plan_ptr;
@@ -75,6 +77,8 @@ private:
     bool interpret_sub_query;
 
     std::shared_ptr<std::vector<String>> segment_profiles;
+
+    Block block;
 };
 
 /**
