@@ -58,7 +58,7 @@ struct AggregateFunctionBitMapLogicalData
         readVarUInt(bytes_size, buf);
         PODArray<char> buffer(bytes_size);
         buf.readStrict(buffer.data(), bytes_size);
-        bitmap = std::move(BitMap64::readSafe(buffer.data(), bytes_size));
+        bitmap = BitMap64::readSafe(buffer.data(), bytes_size);
         readVarUInt(has_value, buf);
     }
 };
