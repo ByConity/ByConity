@@ -122,6 +122,7 @@ void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server
     auto remote_query_executor = std::make_shared<RemoteQueryExecutor>(*res.remote_execution_conn, query, header, context);
     remote_query_executor->setPoolMode(PoolMode::GET_ONE);
     remote_query_executor->setServerForwarding(true);
+    remote_query_executor->setQueryId(query_client_info.initial_query_id);
     remote_pipes.emplace_back(createRemoteSourcePipe(remote_query_executor, true, false, false, true));
     remote_pipes.back().addInterpreterContext(context);
 
