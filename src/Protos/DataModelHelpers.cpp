@@ -227,7 +227,7 @@ MutableMergeTreeDataPartCNCHPtr createPartFromModel(
     return part;
 }
 
-void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time)
+void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time, UInt64 txn_id)
 {
     /// fill part info
     Protos::DataModelPartInfo * model_info = part_model.mutable_part_info();
@@ -245,7 +245,13 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     const auto cnch_part = std::dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part.shared_from_this());
     if (cnch_part)
         part_model.set_marks_count(cnch_part->getMarksCount());
-    part_model.set_txnid(part.info.mutation);
+    
+    /// Normally, the DataModelPart::txnID and DataModelPart::part_info::mutation are always the same.
+    /// But in some special cases(like ATTACH PARTITION, see CnchAttachProcessor::prepareParts),
+    /// the DataModelPart::txnID not equal to DataModelPart::part_info::mutation.
+    /// To handle this case, we need to set txnID and part_info::mutation separately.
+    /// And when getting txnID, use DataModelPart::txnID by default, and use mutation as fallback, see ServerDataPart::txnID() .
+    part_model.set_txnid(txn_id ? txn_id : part.info.mutation);
     part_model.set_bucket_number(part.bucket_number);
     part_model.set_table_definition_hash(part.table_definition_hash);
     part_model.set_commit_time(part.commit_time.toUInt64());

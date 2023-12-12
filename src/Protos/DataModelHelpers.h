@@ -62,16 +62,17 @@ inline std::vector<T> createPartVectorFromModels(
     return res;
 }
 
-void fillPartModel(
-    const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time = false);
+void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Protos::DataModelPart & part_model, bool ignore_column_commit_time = false, UInt64 txn_id = 0);
 
 void fillPartInfoModel(const IMergeTreeDataPart & part, Protos::DataModelPartInfo & part_info_model);
 
 template <class T>
-inline void
-fillPartsModel(const IStorage & storage, const std::vector<T> & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model)
+inline void fillPartsModel(const IStorage & storage, const std::vector<T> & parts, pb::RepeatedPtrField<Protos::DataModelPart> & parts_model, UInt64 txn_id = 0)
 {
-    std::for_each(parts.begin(), parts.end(), [&](const T & part) { fillPartModel(storage, *part, *parts_model.Add()); });
+    std::for_each(parts.begin(), parts.end(), [&](const T & part)
+    {
+        fillPartModel(storage, *part, *parts_model.Add(), false, txn_id);
+    });
 }
 
 template <class T>

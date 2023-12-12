@@ -148,6 +148,11 @@ const String & ServerDataPart::name() const { return part_model_wrapper->name; }
 const MergeTreePartition & ServerDataPart::partition() const { return part_model_wrapper->partition; }
 const std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> & ServerDataPart::minmax_idx() const { return part_model_wrapper->minmax_idx; }
 
+UInt64 ServerDataPart::txnID() const
+{
+    return part_model_wrapper->txnID();
+}
+
 MutableMergeTreeDataPartCNCHPtr ServerDataPart::toCNCHDataPart(
     const MergeTreeMetaBase & storage,
     /*const std::unordered_map<UInt32, String> & id_full_paths,*/

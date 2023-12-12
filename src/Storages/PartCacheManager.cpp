@@ -792,8 +792,7 @@ void PartCacheManager::loadActiveTables()
 inline static bool isVisible(const DB::DataModelPartWrapperPtr & part_wrapper_ptr, const UInt64 & ts)
 {
     return ts == 0
-        || (UInt64(part_wrapper_ptr->part_model->part_info().mutation()) <= ts
-            && part_wrapper_ptr->part_model->commit_time() <= ts);
+        || (part_wrapper_ptr->txnID() <= ts && part_wrapper_ptr->part_model->commit_time() <= ts);
 }
 
 DB::ServerDataPartsVector PartCacheManager::getOrSetServerDataPartsInPartitions(

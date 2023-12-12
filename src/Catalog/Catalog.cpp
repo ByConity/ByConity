@@ -1846,7 +1846,7 @@ namespace Catalog
 
                 /// add data parts
                 Protos::DataModelPartVector commit_parts;
-                fillPartsModel(*storage, parts, *commit_parts.mutable_parts());
+                fillPartsModel(*storage, parts, *commit_parts.mutable_parts(), txnID.toUInt64());
 
                 finishCommitInternal(
                     storage,
@@ -2718,7 +2718,7 @@ namespace Catalog
             ProfileEvents::ClearIntentsFailed);
     }
 
-    /// write part into bytekv, replace commitParts
+    /// write part into kvstore, replace commitParts
     void Catalog::writeParts(
         const StoragePtr & table,
         const TxnTimestamp & txnID,
@@ -2781,7 +2781,7 @@ namespace Catalog
                                                         && !table->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
                 if (table->isBucketTable() && !skip_table_definition_hash_check)
                 {
-                    for (auto & part : commit_data.data_parts)
+                    for (const auto & part : commit_data.data_parts)
                     {
                         if (!part->deleted && (part->bucket_number < 0 || table->getTableHashForClusterBy() != part->table_definition_hash))
                             throw Exception(
@@ -2798,7 +2798,7 @@ namespace Catalog
                     && skip_table_definition_hash_check
                     && isTableClustered(table->getStorageUUID()))
                 {
-                    for (auto & part : commit_data.data_parts)
+                    for (const auto & part : commit_data.data_parts)
                     {
                         if (!part->deleted && (table->getTableHashForClusterBy() != part->table_definition_hash))
                         {
@@ -2809,7 +2809,7 @@ namespace Catalog
                 }
 
                 Protos::DataModelPartVector part_models;
-                fillPartsModel(*table, commit_data.data_parts, *part_models.mutable_parts());
+                fillPartsModel(*table, commit_data.data_parts, *part_models.mutable_parts(), txnID.toUInt64());
 
                 Protos::DataModelPartVector staged_part_models;
                 fillPartsModel(*table, commit_data.staged_parts, *staged_part_models.mutable_parts());
@@ -2891,13 +2891,13 @@ namespace Catalog
                 }
 
                 // set part commit time
-                for (auto & part : commit_data.data_parts)
+                for (const auto & part : commit_data.data_parts)
                     part->commit_time = ts;
 
-                for (auto & bitmap : commit_data.delete_bitmaps)
+                for (const auto & bitmap : commit_data.delete_bitmaps)
                     bitmap->updateCommitTime(ts);
 
-                for (auto & part : commit_data.staged_parts)
+                for (const auto & part : commit_data.staged_parts)
                     part->commit_time = ts;
 
                 // the same logic as write parts, just re-write data parts and update part cache.
@@ -2940,9 +2940,9 @@ namespace Catalog
                     staged_parts_to_remove,
                     expected_staged_parts);
 
-                if (parts_to_remove.size() == 0 && bitmaps_to_remove.size() == 0 && staged_parts_to_remove.size() == 0)
+                if (parts_to_remove.empty() && bitmaps_to_remove.empty() && staged_parts_to_remove.empty())
                 {
-                    fillPartsModel(*table, commit_data.data_parts, *part_models.mutable_parts());
+                    fillPartsModel(*table, commit_data.data_parts, *part_models.mutable_parts(), txn_id);
                     fillPartsModel(*table, commit_data.staged_parts, *staged_part_models.mutable_parts());
 
                     finishCommitInBatch(
@@ -2982,7 +2982,7 @@ namespace Catalog
                             "The part size or bitmap size want to insert does not match with the actual existed size in catalog.",
                             ErrorCodes::LOGICAL_ERROR);
 
-                    fillPartsModel(*table, parts_to_write, *part_models.mutable_parts());
+                    fillPartsModel(*table, parts_to_write, *part_models.mutable_parts(), txn_id);
                     fillPartsModel(*table, staged_parts_to_write, *staged_part_models.mutable_parts());
 
                     finishCommitInBatch(
