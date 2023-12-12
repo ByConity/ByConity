@@ -200,7 +200,14 @@ Pipe StorageSystemCnchTables::read(
 
         if (require_storage)
         {
-            storage = cnch_catalog->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(table_model.uuid())), TxnTimestamp::maxTS());
+            try
+            {
+                storage = cnch_catalog->tryGetTableByUUID(*context, UUIDHelpers::UUIDToString(RPCHelpers::createUUID(table_model.uuid())), TxnTimestamp::maxTS());
+            }
+            catch (...)
+            {
+                tryLogCurrentException(&Poco::Logger::get("StorageSystemCnchTables"));
+            }
             if (!storage)
                 continue;
         }

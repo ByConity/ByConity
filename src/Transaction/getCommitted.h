@@ -141,7 +141,7 @@ struct ServerDataPartOperation
 
     static UInt64 getTxnID(const ServerDataPartPtr & server_part_ptr)
     {
-        return server_part_ptr->part_model_wrapper->part_model->part_info().mutation();
+        return server_part_ptr->txnID();
     }
 
     static void setCommitTime(const ServerDataPartPtr & server_part_ptr, const TxnTimestamp & ts)

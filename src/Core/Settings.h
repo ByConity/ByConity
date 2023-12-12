@@ -938,8 +938,12 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, max_bytes_to_read_local, 0, "Limit max reading bytes for each local shard.", 0) \
     M(OverflowMode, read_overflow_mode_local, OverflowMode::THROW, "What to do when the limit is exceeded.", 0) \
     \
-    /** Just for compatible, totally the same with settings above */ \
+    /** Just for compatible, maybe removed or implemented later */ \
     M(Bool, allow_experimental_multiple_joins_emulation, true, "Emulate multiple joins using subselects", 0) \
+    M(Bool, allow_experimental_data_skipping_indices, true, "Emulate data skipping indices", 0) \
+    M(Bool, enable_predicate_pushdown, false, "Where to push down predicate", 0) \
+    M(Bool, dict_table_full_mode, false, "If encode / decode table is not bucket table, try to dispatch dict to all workers, if false, throw exception instead", 0) \
+    M(UInt64, pathgraph_threshold_y, 0, "maximum point number in each level", 0) \
     \
     M(UInt64, max_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a query segment can consume.", 0) \
     M(UInt64, max_distributed_query_cpu_seconds, 0, "Limit the maximum amount of CPU resources such a distribute query can consume.", 0) \

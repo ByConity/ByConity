@@ -223,8 +223,6 @@ void PartCacheManager::mayUpdateTableMeta(const IStorage & storage, const PairIn
                     LOG_DEBUG(&Poco::Logger::get("PartCacheManager::MetaEntry"), "Invalid part cache because of cache version mismatch for table {}.{}", meta_ptr->database, meta_ptr->table);
                 }
             }
-            // update table_definition_hash for active tables
-            it->second->table_definition_hash = storage.getTableHashForClusterBy();
         }
     }
 
@@ -792,8 +790,7 @@ void PartCacheManager::loadActiveTables()
 inline static bool isVisible(const DB::DataModelPartWrapperPtr & part_wrapper_ptr, const UInt64 & ts)
 {
     return ts == 0
-        || (UInt64(part_wrapper_ptr->part_model->part_info().mutation()) <= ts
-            && part_wrapper_ptr->part_model->commit_time() <= ts);
+        || (part_wrapper_ptr->txnID() <= ts && part_wrapper_ptr->part_model->commit_time() <= ts);
 }
 
 DB::ServerDataPartsVector PartCacheManager::getOrSetServerDataPartsInPartitions(

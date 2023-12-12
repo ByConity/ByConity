@@ -45,6 +45,14 @@ public:
     std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> minmax_idx;
 
     std::shared_ptr<MergeTreePartInfo> info;
+
+    /// Get the txn id of the part.
+    /// For a normal insertion, the DataModelPart::txnID and DataModelPart::part_info::mutation are always the same.
+    /// But in some special cases(like ATTACH PARTITION, see CnchAttachProcessor::prepareParts),
+    /// the DataModelPart::txnID not equal to DataModelPart::part_info::mutation.
+    /// To handle this case, we need to set txnID and part_info::mutation separately, see DataModelHelpers::fillPartsModel.
+    /// And when getting txnID, use DataModelPart::txnID by default, and use mutation as fallback.
+    inline UInt64 txnID() const { return part_model->txnid() ? part_model->txnid() : part_model->part_info().mutation(); }
 };
 
 class DataPartInterface
@@ -95,6 +103,7 @@ public:
     bool deleted() const;
     const Protos::DataModelPart & part_model() const;
     const std::shared_ptr<IMergeTreeDataPart::MinMaxIndex> & minmax_idx() const;
+    UInt64 txnID() const;
 
     const MergeTreePartInfo & info() const;
     const String & name() const;

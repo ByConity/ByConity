@@ -559,7 +559,7 @@ ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataParts
         if (p->getCommitTime() == IMergeTreeDataPart::NOT_INITIALIZED_COMMIT_TIME)
         {
             intermediate_parts.push_back(p);
-            txn_ids.insert(p->part_model_wrapper->part_model->part_info().mutation());
+            txn_ids.insert(p->txnID());
             return true;
         }
         return false;
@@ -599,7 +599,7 @@ ServerDataPartsVector CnchPartGCThread::processIntermediateParts(ServerDataParts
     ServerDataPartsVector zombie_intermediate_parts;
     for (const auto & part : intermediate_parts)
     {
-        auto txn_id = part->part_model_wrapper->part_model->part_info().mutation();
+        auto txn_id = part->txnID();
         // skip those invisible intermediate parts (not zombie).
         if (!transactions.contains(txn_id))
             continue;

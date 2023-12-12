@@ -42,7 +42,6 @@ struct SingleRequest
         : key(key_)
     {
     }
-
     SingleRequest(const std::string & key_, const std::string & value_, bool if_not_exists_ = false)
         : key(key_), value(value_), if_not_exists(if_not_exists_)
     {
@@ -56,6 +55,11 @@ struct SingleRequest
     SingleRequest(const std::string & key_, const std::string & value_, uint64_t ttl_) : key(key_), value(value_), ttl(ttl_)
     {
     }
+
+    bool isEmpty() { return key.empty();}
+
+    uint32_t size() const {return (expected_value ? expected_value->size() : 0) + key.size() + value.size(); }
+
     std::string key;
     std::string value;
     bool if_not_exists = false;
@@ -76,18 +80,38 @@ struct BatchCommitRequest
         : with_cas(with_cas_), allow_cas_fail(allow_cas_fail_)
     {
     }
-    void AddPut(const SinglePutRequest & put) { puts.emplace_back(put); }
-    void AddDelete(const std::string & del) { deletes.emplace_back(del); }
-    void AddDelete(const std::string & delkey, const std::string & expected) { deletes.emplace_back(delkey, "", expected); }
-    void ClearDelete() { deletes.clear(); }
+
+    void AddPut(const SinglePutRequest & put)
+    {
+        puts.emplace_back(put);
+        request_size_in_bytes += put.size();
+    }
+    void AddDelete(const SingleDeleteRequest & del)
+    {
+        deletes.emplace_back(del);
+        request_size_in_bytes += del.size();
+    }
+    void AddDelete(const std::string & del)
+    {
+        deletes.emplace_back(del);
+        request_size_in_bytes += del.size();
+    }
+    void AddDelete(const std::string & delkey, const std::string & expected)
+    {
+        deletes.emplace_back(delkey, "", expected);
+        request_size_in_bytes += delkey.size() + expected.size();
+    }
     void SetTimeout(uint32_t time_out) { commit_timeout_ms = time_out; }
     bool isEmpty() { return puts.empty() && deletes.empty(); }
+
+    uint32_t size() const { return request_size_in_bytes; }
 
     std::vector<SinglePutRequest> puts;
     std::vector<SingleDeleteRequest> deletes;
     bool with_cas = true;
     bool allow_cas_fail = true;
     uint32_t commit_timeout_ms = 0;
+    uint32_t request_size_in_bytes = 0;
 };
 
 /// Response for batch commit request.It contains the conflict info for both put requests and delete requests.

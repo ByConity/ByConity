@@ -270,7 +270,21 @@ bool ColumnGathererStream::preCheckFullLowCardinalitySources()
     for (size_t i = 0; i < sources.size(); ++i)
     {
         Source & source = sources[i];
-        fetchNewBlock(source, i);
+
+        try
+        {
+            source.block = children[i]->read();
+            /// Here allow empty stream
+            if (!source.block.rows())
+                continue;
+            source.update(column_name);
+        }
+        catch (Exception & e)
+        {
+            e.addMessage("Cannot fetch required block. Stream " + children[i]->getName() + ", part " + toString(i));
+            throw;
+        }
+
         auto const *low_src = typeid_cast<const ColumnLowCardinality *>(source.column);
         if (low_src->isFullState())
         {

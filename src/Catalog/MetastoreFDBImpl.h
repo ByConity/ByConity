@@ -32,6 +32,10 @@ namespace Catalog
 
 class MetastoreFDBImpl : public IMetaStore
 {
+// Limitations of FDB (in bytes)
+#define MAX_FDB_KV_SIZE 10000
+#define MAX_FDB_TRANSACTION_SIZE 10000000
+
 public:
     struct FDBIterator: public IMetaStore::Iterator
     {
@@ -93,6 +97,10 @@ public:
     void close() override {}
 
     static void check_fdb_op(const fdb_error_t & error_t);
+
+    // leave some margin
+    uint32_t getMaxBatchSize() final { return MAX_FDB_TRANSACTION_SIZE - 1000; }
+
 private:
     /// convert metastore specific error code to Clickhouse error code for processing convenience in upper layer.
     static int toCommonErrorCode(const fdb_error_t & error_t);

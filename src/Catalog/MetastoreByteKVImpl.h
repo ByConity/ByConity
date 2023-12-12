@@ -38,6 +38,9 @@ using namespace bytekv::sdk;
 
 class MetastoreByteKVImpl : public IMetaStore
 {
+// Limitations of bytekv (in bytes)
+#define MAX_BYTEKV_KV_SIZE 1000000
+#define MAX_BYTEKV_BATCH_SIZE 10000000
 
 public:
     using ExpectedCodes = std::initializer_list<Errorcode>;
@@ -111,6 +114,9 @@ public:
     void close() override {}
 
     static void assertStatus(const OperationType & op, const Errorcode & code, const ExpectedCodes & expected);
+
+    // leave some margin
+    uint32_t getMaxBatchSize() final { return MAX_BYTEKV_BATCH_SIZE - 1000; }
 
 public:
     std::shared_ptr<ByteKVClient> client;

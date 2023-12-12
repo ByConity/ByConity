@@ -648,6 +648,7 @@ namespace Catalog
                     }
 
                     BatchCommitResponse resp;
+                    ///TODO: resolve risk of exceeding max batch size;
                     meta_proxy->batchWrite(batch_writes, resp);
                 }
                 else
@@ -706,6 +707,7 @@ namespace Catalog
                     batch_writes.AddPut(SinglePutRequest(MetastoreProxy::dbKey(name_space, to_database, ts.toUInt64()), database->SerializeAsString()));
 
                     BatchCommitResponse resp;
+                    ///TODO: resolve risk of exceeding max batch size;
                     meta_proxy->batchWrite(batch_writes, resp);
                 }
                 else
@@ -1844,7 +1846,7 @@ namespace Catalog
 
                 /// add data parts
                 Protos::DataModelPartVector commit_parts;
-                fillPartsModel(*storage, parts, *commit_parts.mutable_parts());
+                fillPartsModel(*storage, parts, *commit_parts.mutable_parts(), txnID.toUInt64());
 
                 finishCommitInternal(
                     storage,
@@ -2716,7 +2718,7 @@ namespace Catalog
             ProfileEvents::ClearIntentsFailed);
     }
 
-    /// write part into bytekv, replace commitParts
+    /// write part into kvstore, replace commitParts
     void Catalog::writeParts(
         const StoragePtr & table,
         const TxnTimestamp & txnID,
@@ -2779,7 +2781,7 @@ namespace Catalog
                                                         && !table->getInMemoryMetadataPtr()->getIsUserDefinedExpressionFromClusterByKey();
                 if (table->isBucketTable() && !skip_table_definition_hash_check)
                 {
-                    for (auto & part : commit_data.data_parts)
+                    for (const auto & part : commit_data.data_parts)
                     {
                         if (!part->deleted && (part->bucket_number < 0 || table->getTableHashForClusterBy() != part->table_definition_hash))
                             throw Exception(
@@ -2796,7 +2798,7 @@ namespace Catalog
                     && skip_table_definition_hash_check
                     && isTableClustered(table->getStorageUUID()))
                 {
-                    for (auto & part : commit_data.data_parts)
+                    for (const auto & part : commit_data.data_parts)
                     {
                         if (!part->deleted && (table->getTableHashForClusterBy() != part->table_definition_hash))
                         {
@@ -2807,7 +2809,7 @@ namespace Catalog
                 }
 
                 Protos::DataModelPartVector part_models;
-                fillPartsModel(*table, commit_data.data_parts, *part_models.mutable_parts());
+                fillPartsModel(*table, commit_data.data_parts, *part_models.mutable_parts(), txnID.toUInt64());
 
                 Protos::DataModelPartVector staged_part_models;
                 fillPartsModel(*table, commit_data.staged_parts, *staged_part_models.mutable_parts());
@@ -2889,13 +2891,13 @@ namespace Catalog
                 }
 
                 // set part commit time
-                for (auto & part : commit_data.data_parts)
+                for (const auto & part : commit_data.data_parts)
                     part->commit_time = ts;
 
-                for (auto & bitmap : commit_data.delete_bitmaps)
+                for (const auto & bitmap : commit_data.delete_bitmaps)
                     bitmap->updateCommitTime(ts);
 
-                for (auto & part : commit_data.staged_parts)
+                for (const auto & part : commit_data.staged_parts)
                     part->commit_time = ts;
 
                 // the same logic as write parts, just re-write data parts and update part cache.
@@ -2938,9 +2940,9 @@ namespace Catalog
                     staged_parts_to_remove,
                     expected_staged_parts);
 
-                if (parts_to_remove.size() == 0 && bitmaps_to_remove.size() == 0 && staged_parts_to_remove.size() == 0)
+                if (parts_to_remove.empty() && bitmaps_to_remove.empty() && staged_parts_to_remove.empty())
                 {
-                    fillPartsModel(*table, commit_data.data_parts, *part_models.mutable_parts());
+                    fillPartsModel(*table, commit_data.data_parts, *part_models.mutable_parts(), txn_id);
                     fillPartsModel(*table, commit_data.staged_parts, *staged_part_models.mutable_parts());
 
                     finishCommitInBatch(
@@ -2980,7 +2982,7 @@ namespace Catalog
                             "The part size or bitmap size want to insert does not match with the actual existed size in catalog.",
                             ErrorCodes::LOGICAL_ERROR);
 
-                    fillPartsModel(*table, parts_to_write, *part_models.mutable_parts());
+                    fillPartsModel(*table, parts_to_write, *part_models.mutable_parts(), txn_id);
                     fillPartsModel(*table, staged_parts_to_write, *staged_part_models.mutable_parts());
 
                     finishCommitInBatch(
@@ -3995,91 +3997,56 @@ namespace Catalog
 
         bool need_invalid_cache = context.getPartCacheManager() && !skip_part_cache;
 
-        size_t batch_size = 2000;
-        size_t parts_index{0}, delete_bitmaps_index{0}, staged_parts_index{0};
-        size_t drop_items_count = 0;
+        BatchCommitRequest batch_writes(false);
 
-        BatchCommitRequest batch_writes;
-
-        while (true)
+        for (const auto & part : items.data_parts)
         {
-            if (parts_index < items.data_parts.size())
-            {
-                // Drop part metadata and add new one in trash;
-                const auto & part = items.data_parts[parts_index];
-                batch_writes.AddDelete(part_meta_prefix + part->info().getPartName());
-                batch_writes.AddPut(
-                    {MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, part->name()),
-                     part->part_model_wrapper->part_model->SerializeAsString()});
-                parts_index++;
-                LOG_DEBUG(
-                    log,
-                    "Will move part of table {} to trash: {} [{} - {}) {}",
-                    table_uuid,
-                    part->name(),
-                    part->getCommitTime(),
-                    part->getEndTime(),
-                    (part->deleted() ? "tombstone" : ""));
-            }
-            else if (delete_bitmaps_index < items.delete_bitmaps.size())
-            {
-                // Drop delete bitmap metadata and add new one in trash;
-                const auto & bitmap = items.delete_bitmaps[delete_bitmaps_index];
-                const auto & model = *(bitmap->getModel());
-                batch_writes.AddDelete(MetastoreProxy::deleteBitmapKey(name_space, table_uuid, model));
-                batch_writes.AddPut(
-                    SinglePutRequest(MetastoreProxy::deleteBitmapKeyInTrash(name_space, table_uuid, model), model.SerializeAsString()));
-                delete_bitmaps_index++;
-                LOG_DEBUG(
-                    log,
-                    "Will move delete bitmap of table {} to trash: {} [{} - {}) {}",
-                    table_uuid,
-                    bitmap->getNameForLogs(),
-                    bitmap->getCommitTime(),
-                    bitmap->getEndTime(),
-                    (bitmap->isTombstone() ? "tombstone" : ""));
-            }
-            else if (staged_parts_index < items.staged_parts.size())
-            {
-                // Drop staged part metadata instead of moving to trash because:
-                // after staged part is published, it no longer own the underlying data file,
-                // therfore garbage collection of staged parts only needs metadata cleaning.
-                const auto & part = items.staged_parts[staged_parts_index];
-                batch_writes.AddDelete(staged_part_meta_prefix + part->info().getPartName());
-                staged_parts_index++;
-                LOG_DEBUG(
-                    log,
-                    "Will remove staged part metadata of table {}: {} [{} - {}) {}",
-                    table_uuid,
-                    part->name(),
-                    part->getCommitTime(),
-                    part->getEndTime(),
-                    (part->deleted() ? "tombstone" : ""));
-            }
-            else
-                // Stop loop if no more drop item.
-                break;
-
-            drop_items_count++;
-
-            if (drop_items_count >= batch_size)
-            {
-                /// Commit the current batch.
-                BatchCommitResponse resp;
-                meta_proxy->batchWrite(batch_writes, resp);
-
-                /// Reset BatchCommitRequest.
-                batch_writes = {};
-                drop_items_count = 0;
-            }
+            batch_writes.AddDelete(part_meta_prefix + part->info().getPartName());
+            batch_writes.AddPut(
+                {MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, part->name()),
+                part->part_model_wrapper->part_model->SerializeAsString()});
+            LOG_DEBUG(
+                log,
+                "Will move part of table {} to trash: {} [{} - {}) {}",
+                table_uuid,
+                part->name(),
+                part->getCommitTime(),
+                part->getEndTime(),
+                (part->deleted() ? "tombstone" : ""));
         }
 
-        if (drop_items_count)
+        for (const auto & bitmap : items.delete_bitmaps)
         {
-            /// Commit the current batch.
-            BatchCommitResponse resp;
-            meta_proxy->batchWrite(batch_writes, resp);
+            const auto & model = *(bitmap->getModel());
+            batch_writes.AddDelete(MetastoreProxy::deleteBitmapKey(name_space, table_uuid, model));
+            batch_writes.AddPut({MetastoreProxy::deleteBitmapKeyInTrash(name_space, table_uuid, model), model.SerializeAsString()});
+            LOG_DEBUG(
+                log,
+                "Will move delete bitmap of table {} to trash: {} [{} - {}) {}",
+                table_uuid,
+                bitmap->getNameForLogs(),
+                bitmap->getCommitTime(),
+                bitmap->getEndTime(),
+                (bitmap->isTombstone() ? "tombstone" : ""));
         }
+
+        for (const auto & part : items.staged_parts)
+        {
+            // Drop staged part metadata instead of moving to trash because:
+            // after staged part is published, it no longer own the underlying data file,
+            // therfore garbage collection of staged parts only needs metadata cleaning.
+            batch_writes.AddDelete(staged_part_meta_prefix + part->info().getPartName());
+            LOG_DEBUG(
+                log,
+                "Will remove staged part metadata of table {}: {} [{} - {}) {}",
+                table_uuid,
+                part->name(),
+                part->getCommitTime(),
+                part->getEndTime(),
+                (part->deleted() ? "tombstone" : ""));
+        }
+
+        meta_proxy->getMetastore()->adaptiveBatchWrite(batch_writes);
 
         if (need_invalid_cache)
             context.getPartCacheManager()->invalidPartCache(table->getStorageUUID(), items.data_parts);
