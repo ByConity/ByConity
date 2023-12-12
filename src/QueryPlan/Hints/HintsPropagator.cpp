@@ -113,12 +113,13 @@ void HintsVisitor::visitTableScanNode(TableScanNode & node, HintsVisitorContext 
 
 void HintsVisitor::visitPlanNode(PlanNodeBase & node, HintsVisitorContext & hints_context)
 {
-    hints_context.name_list.clear();
     for (const auto & item : node.getChildren())
     {
-        VisitorUtil::accept(*item, *this, hints_context);
         hints_context.name_list.clear();
+        VisitorUtil::accept(*item, *this, hints_context);
     }
+    if (node.getChildren().size() > 1)
+        hints_context.name_list.clear();
 }
 
 void HintsVisitor::visitCTERefNode(CTERefNode & node, HintsVisitorContext &)

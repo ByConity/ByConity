@@ -9,6 +9,7 @@ void registerHintBroadcastJoin(PlanHintFactory & factory);
 void registerHintRepartitionJoin(PlanHintFactory & factory);
 void registerHintUseGraceHash(PlanHintFactory & factory);
 void registerHintLeading(PlanHintFactory & factory);
+void registerHintSwapJoinOrder(PlanHintFactory & factory);
 
 void registerHints()
 {
@@ -18,7 +19,7 @@ void registerHints()
     registerHintLeading(factory);
     registerHintRepartitionJoin(factory);
     registerHintUseGraceHash(factory);
-
+    registerHintSwapJoinOrder(factory);
 }
 
 }
