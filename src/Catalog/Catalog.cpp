@@ -648,6 +648,7 @@ namespace Catalog
                     }
 
                     BatchCommitResponse resp;
+                    ///TODO: resolve risk of exceeding max batch size;
                     meta_proxy->batchWrite(batch_writes, resp);
                 }
                 else
@@ -706,6 +707,7 @@ namespace Catalog
                     batch_writes.AddPut(SinglePutRequest(MetastoreProxy::dbKey(name_space, to_database, ts.toUInt64()), database->SerializeAsString()));
 
                     BatchCommitResponse resp;
+                    ///TODO: resolve risk of exceeding max batch size;
                     meta_proxy->batchWrite(batch_writes, resp);
                 }
                 else
@@ -3995,91 +3997,56 @@ namespace Catalog
 
         bool need_invalid_cache = context.getPartCacheManager() && !skip_part_cache;
 
-        size_t batch_size = 2000;
-        size_t parts_index{0}, delete_bitmaps_index{0}, staged_parts_index{0};
-        size_t drop_items_count = 0;
+        BatchCommitRequest batch_writes(false);
 
-        BatchCommitRequest batch_writes;
-
-        while (true)
+        for (const auto & part : items.data_parts)
         {
-            if (parts_index < items.data_parts.size())
-            {
-                // Drop part metadata and add new one in trash;
-                const auto & part = items.data_parts[parts_index];
-                batch_writes.AddDelete(part_meta_prefix + part->info().getPartName());
-                batch_writes.AddPut(
-                    {MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, part->name()),
-                     part->part_model_wrapper->part_model->SerializeAsString()});
-                parts_index++;
-                LOG_DEBUG(
-                    log,
-                    "Will move part of table {} to trash: {} [{} - {}) {}",
-                    table_uuid,
-                    part->name(),
-                    part->getCommitTime(),
-                    part->getEndTime(),
-                    (part->deleted() ? "tombstone" : ""));
-            }
-            else if (delete_bitmaps_index < items.delete_bitmaps.size())
-            {
-                // Drop delete bitmap metadata and add new one in trash;
-                const auto & bitmap = items.delete_bitmaps[delete_bitmaps_index];
-                const auto & model = *(bitmap->getModel());
-                batch_writes.AddDelete(MetastoreProxy::deleteBitmapKey(name_space, table_uuid, model));
-                batch_writes.AddPut(
-                    SinglePutRequest(MetastoreProxy::deleteBitmapKeyInTrash(name_space, table_uuid, model), model.SerializeAsString()));
-                delete_bitmaps_index++;
-                LOG_DEBUG(
-                    log,
-                    "Will move delete bitmap of table {} to trash: {} [{} - {}) {}",
-                    table_uuid,
-                    bitmap->getNameForLogs(),
-                    bitmap->getCommitTime(),
-                    bitmap->getEndTime(),
-                    (bitmap->isTombstone() ? "tombstone" : ""));
-            }
-            else if (staged_parts_index < items.staged_parts.size())
-            {
-                // Drop staged part metadata instead of moving to trash because:
-                // after staged part is published, it no longer own the underlying data file,
-                // therfore garbage collection of staged parts only needs metadata cleaning.
-                const auto & part = items.staged_parts[staged_parts_index];
-                batch_writes.AddDelete(staged_part_meta_prefix + part->info().getPartName());
-                staged_parts_index++;
-                LOG_DEBUG(
-                    log,
-                    "Will remove staged part metadata of table {}: {} [{} - {}) {}",
-                    table_uuid,
-                    part->name(),
-                    part->getCommitTime(),
-                    part->getEndTime(),
-                    (part->deleted() ? "tombstone" : ""));
-            }
-            else
-                // Stop loop if no more drop item.
-                break;
-
-            drop_items_count++;
-
-            if (drop_items_count >= batch_size)
-            {
-                /// Commit the current batch.
-                BatchCommitResponse resp;
-                meta_proxy->batchWrite(batch_writes, resp);
-
-                /// Reset BatchCommitRequest.
-                batch_writes = {};
-                drop_items_count = 0;
-            }
+            batch_writes.AddDelete(part_meta_prefix + part->info().getPartName());
+            batch_writes.AddPut(
+                {MetastoreProxy::dataPartKeyInTrash(name_space, table_uuid, part->name()),
+                part->part_model_wrapper->part_model->SerializeAsString()});
+            LOG_DEBUG(
+                log,
+                "Will move part of table {} to trash: {} [{} - {}) {}",
+                table_uuid,
+                part->name(),
+                part->getCommitTime(),
+                part->getEndTime(),
+                (part->deleted() ? "tombstone" : ""));
         }
 
-        if (drop_items_count)
+        for (const auto & bitmap : items.delete_bitmaps)
         {
-            /// Commit the current batch.
-            BatchCommitResponse resp;
-            meta_proxy->batchWrite(batch_writes, resp);
+            const auto & model = *(bitmap->getModel());
+            batch_writes.AddDelete(MetastoreProxy::deleteBitmapKey(name_space, table_uuid, model));
+            batch_writes.AddPut({MetastoreProxy::deleteBitmapKeyInTrash(name_space, table_uuid, model), model.SerializeAsString()});
+            LOG_DEBUG(
+                log,
+                "Will move delete bitmap of table {} to trash: {} [{} - {}) {}",
+                table_uuid,
+                bitmap->getNameForLogs(),
+                bitmap->getCommitTime(),
+                bitmap->getEndTime(),
+                (bitmap->isTombstone() ? "tombstone" : ""));
         }
+
+        for (const auto & part : items.staged_parts)
+        {
+            // Drop staged part metadata instead of moving to trash because:
+            // after staged part is published, it no longer own the underlying data file,
+            // therfore garbage collection of staged parts only needs metadata cleaning.
+            batch_writes.AddDelete(staged_part_meta_prefix + part->info().getPartName());
+            LOG_DEBUG(
+                log,
+                "Will remove staged part metadata of table {}: {} [{} - {}) {}",
+                table_uuid,
+                part->name(),
+                part->getCommitTime(),
+                part->getEndTime(),
+                (part->deleted() ? "tombstone" : ""));
+        }
+
+        meta_proxy->getMetastore()->adaptiveBatchWrite(batch_writes);
 
         if (need_invalid_cache)
             context.getPartCacheManager()->invalidPartCache(table->getStorageUUID(), items.data_parts);

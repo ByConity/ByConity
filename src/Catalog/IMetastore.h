@@ -66,9 +66,14 @@ public:
     virtual std::vector<std::pair<String, UInt64>> multiGet(const std::vector<String> & keys) = 0;
 
     /***
-     * Commit record in batch. For both write and delete.
+     * Commit records in batch within one transaction. For both write and delete.
      */
     virtual bool batchWrite(const BatchCommitRequest & req, BatchCommitResponse & response) = 0;
+
+    /***
+     * Write records in batch. May split into multiple transactions.
+    */
+    virtual void adaptiveBatchWrite(const BatchCommitRequest & req);
 
     /***
      * Delete a specific record from metastore;
@@ -106,6 +111,11 @@ public:
      * Close metastore;
      */
     virtual void close() = 0;
+
+    /***
+     * get limitations of the kv store
+    */
+    virtual uint32_t getMaxBatchSize() = 0;
 };
 
 }
