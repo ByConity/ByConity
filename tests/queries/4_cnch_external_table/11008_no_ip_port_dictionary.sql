@@ -34,6 +34,9 @@ INSERT INTO test_rd01238.table_for_no_ip_port_dict VALUES (3000, 100, -100, 'key
 SELECT sleepEachRow(3) FROM numbers(5) FORMAT Null;
 SELECT dictGetString('test_rd01238.dict_flat_no_ip_port', 'c', toUInt64(3000));
 
+CREATE DICTIONARY test_rd01238.dict_flat_no_ip_port1(id UInt64, a UInt64 DEFAULT 0, b Int32 DEFAULT -1, c String DEFAULT 'none') PRIMARY KEY id SOURCE(CLICKHOUSE(USER default TABLE 'table_for_no_ip_port_dict' PASSWORD '' DB 'test_rd01238')) LIFETIME(MIN 3 MAX 3) LAYOUT(FLAT());
+
+DROP DICTIONARY IF EXISTS test_rd01238.dict_flat_no_ip_port1;
 DROP DICTIONARY IF EXISTS test_rd01238.dict_flat_no_ip_port;
 DROP TABLE IF EXISTS test_rd01238.interger_col;
 DROP TABLE IF EXISTS test_rd01238.table_for_no_ip_port_dict;
