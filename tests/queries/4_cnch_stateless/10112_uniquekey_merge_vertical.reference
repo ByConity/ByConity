@@ -16,3 +16,11 @@
 6	106	3	a	1
 7	107	3	b	1
 #parts:	1
+
+test empty part with LC type
+-- before merge --
+0	100	1	a	1
+#parts:	3
+-- after merge --
+0	100	1	a	1
+#parts:	1
