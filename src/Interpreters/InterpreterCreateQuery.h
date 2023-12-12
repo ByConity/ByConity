@@ -129,4 +129,6 @@ private:
     mutable String as_database_saved;
     mutable String as_table_saved;
 };
+
+ASTPtr convertMergeTreeToCnchEngine(ASTPtr query_ptr);
 }
