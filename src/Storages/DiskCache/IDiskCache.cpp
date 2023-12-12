@@ -24,7 +24,8 @@
 
 namespace ProfileEvents
 {
-extern const Event DiskCacheScheduleCacheTaskMicroSeconds;
+extern const Event DiskCacheScheduleCacheTaskMicroseconds;
+extern const Event DiskCacheTaskDropCount;
 }
 
 
@@ -124,10 +125,10 @@ void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments,
         return;
 
     Stopwatch watch;
-    SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::DiskCacheScheduleCacheTaskMicroSeconds, watch.elapsedMicroseconds()); });
+    SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::DiskCacheScheduleCacheTaskMicroseconds, watch.elapsedMicroseconds()); });
 
     // Notes: split to more tasks?
-    scheduleCacheTask([this, segments = std::move(hit_segments), cb = callback] {
+    bool success = scheduleCacheTask([this, segments = std::move(hit_segments), cb = callback] {
         String last_exception{};
         for (const auto & hit_segment : segments)
         {
@@ -151,15 +152,17 @@ void IDiskCache::cacheSegmentsToLocalDisk(IDiskCacheSegmentsVector hit_segments,
         if (cb)
             cb(last_exception, segments.size());
     });
+
+    if (!success)
+        ProfileEvents::increment(ProfileEvents::DiskCacheTaskDropCount);
 }
 
 void IDiskCache::cacheBitmapIndexToLocalDisk(const IDiskCacheSegmentPtr & bitmap_segment)
 {
     Stopwatch watch;
-    SCOPE_EXIT({ProfileEvents::increment(ProfileEvents::DiskCacheScheduleCacheTaskMicroSeconds,
-            watch.elapsedMicroseconds());});
+    SCOPE_EXIT({ ProfileEvents::increment(ProfileEvents::DiskCacheScheduleCacheTaskMicroseconds, watch.elapsedMicroseconds()); });
 
-    scheduleCacheTask([this, bitmap_segment] {
+    bool success = scheduleCacheTask([this, bitmap_segment] {
         try
         {
             bitmap_segment->cacheToDisk(*this);
@@ -169,6 +172,8 @@ void IDiskCache::cacheBitmapIndexToLocalDisk(const IDiskCacheSegmentPtr & bitmap
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
         }
     });
+    if (!success)
+        ProfileEvents::increment(ProfileEvents::DiskCacheTaskDropCount);
 }
 
 // Schedule cache task, when threadpool's current running task exceed certain ratio, start random

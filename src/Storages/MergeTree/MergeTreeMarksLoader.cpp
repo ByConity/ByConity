@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <Common/ProfileEvents.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <IO/ReadBufferFromFile.h>
@@ -27,6 +28,16 @@
 #include <Storages/DiskCache/IDiskCache.h>
 
 #include <utility>
+
+namespace ProfileEvents
+{
+    extern const Event CnchLoadMarksRequests;
+    extern const Event CnchLoadMarksBytes;
+    extern const Event CnchLoadMarksMicroseconds;
+    extern const Event CnchLoadMarksFromDiskCacheRequests;
+    extern const Event CnchLoadMarksFromDiskCacheBytes;
+    extern const Event CnchLoadMarksFromDiskCacheMicroseconds;
+}
 
 namespace DB
 {
@@ -83,8 +94,30 @@ const MarkInCompressedFile & MergeTreeMarksLoader::getMark(size_t row_index, siz
 
 MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
 {
+    enum class MetricType
+    {
+        Counts,
+        Bytes,
+        Microseconds,
+    };
+
+    const ProfileEvents::Event events_map[][3] = {
+        {ProfileEvents::CnchLoadMarksRequests, ProfileEvents::CnchLoadMarksBytes, ProfileEvents::CnchLoadMarksMicroseconds},
+        {ProfileEvents::CnchLoadMarksFromDiskCacheRequests, ProfileEvents::CnchLoadMarksFromDiskCacheBytes, ProfileEvents::CnchLoadMarksFromDiskCacheMicroseconds}
+    };
+
+    bool from_disk_cache = false;
+
+    auto select_metric = [&](MetricType type)
+    {
+        return events_map[from_disk_cache][static_cast<int>(type)];
+    };
+
     /// Memory for marks must not be accounted as memory usage for query, because they are stored in shared cache.
     MemoryTracker::BlockerInThread temporarily_disable_memory_tracker;
+
+    Stopwatch watch;
+    SCOPE_EXIT({ ProfileEvents::increment(select_metric(MetricType::Microseconds), watch.elapsedMicroseconds()); });
 
     size_t mark_size = index_granularity_info.getMarkSizeInBytes(columns_in_mark);
     size_t expected_file_size = mark_size * marks_count;
@@ -108,6 +141,7 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                     auto [local_cache_disk, local_cache_path] = disk_cache->get(mrk_seg_key);
                     if (local_cache_disk && local_cache_disk->exists(local_cache_path))
                     {
+                        from_disk_cache = true;
                         LOG_TRACE(&Poco::Logger::get(__func__), "load from local disk {}, mrk_path {}", local_cache_disk->getPath(), local_cache_path);
                         size_t cached_mark_file_size = local_cache_disk->getFileSize(local_cache_path);
                         if (expected_file_size != cached_mark_file_size)
@@ -173,6 +207,9 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                 mrk_path, marks_count, mark_file_size, i, buffer->count());
     }
     res->protect();
+
+    ProfileEvents::increment(select_metric(MetricType::Counts));
+    ProfileEvents::increment(select_metric(MetricType::Bytes), mark_file_size);
     return res;
 }
 

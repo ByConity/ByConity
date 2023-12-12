@@ -45,6 +45,7 @@ public:
         const IMergeTreeDataPartPtr & data_part_,
         const FileOffsetAndSize & mrk_file_pos,
         size_t marks_count_,
+        MarkCache * mark_cache_,
         const String & stream_name_,
         const String & extension_,
         const FileOffsetAndSize & stream_file_pos,
@@ -63,6 +64,7 @@ private:
     ConstStoragePtr storage;
     FileOffsetAndSize mrk_file_pos;
     size_t marks_count;
+    MarkCache * mark_cache;
 
     ReadSettings read_settings;
 

@@ -1190,6 +1190,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
     MarkRanges all_mark_ranges{MarkRange(0, getMarksCount())};
     IDiskCacheSegmentsVector segments;
 
+    MarkCachePtr mark_cache_holder = storage.getContext()->getMarkCache();
     auto add_segments = [&, this, strategy = cache_strategy](
                             const NameAndTypePair & real_column,
                             const std::function<String(const String &, const ISerialization::SubstreamPath &)> & file_name_getter) {
@@ -1213,6 +1214,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
                 source_data_part,
                 PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(mark_file_name), getFileSizeOrZero(mark_file_name)},
                 getMarksCount(),
+                mark_cache_holder.get(),
                 stream_name,
                 DATA_FILE_EXTENSION,
                 PartFileDiskCacheSegment::FileOffsetAndSize{getFileOffsetOrZero(data_file_name), getFileSizeOrZero(data_file_name)},
