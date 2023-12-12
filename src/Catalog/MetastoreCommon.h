@@ -102,7 +102,7 @@ struct BatchCommitRequest
         request_size_in_bytes += delkey.size() + expected.size();
     }
     void SetTimeout(uint32_t time_out) { commit_timeout_ms = time_out; }
-    bool isEmpty() { return puts.empty() && deletes.empty(); }
+    bool isEmpty() const { return puts.empty() && deletes.empty(); }
 
     uint32_t size() const { return request_size_in_bytes; }
 
@@ -120,6 +120,7 @@ struct BatchCommitResponse
 {
     std::unordered_map<int, std::string> puts;
     std::unordered_map<int, std::string> deletes;
+    void reset() { puts.clear(); deletes.clear(); }
 };
 
 }
