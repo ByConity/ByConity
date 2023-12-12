@@ -25,27 +25,51 @@ struct ModuloByConstantImpl
     : BinaryOperation<A, B, ModuloImpl<A, B>>
 {
     using Op = ModuloImpl<A, B>;
+    using BaseType = BinaryOperation<A, B, ModuloImpl<A, B>>;
     using ResultType = typename Op::ResultType;
     static const constexpr bool allow_fixed_string = false;
 
     template <OpCase op_case>
-    static void NO_INLINE process(const A * __restrict a, const B * __restrict b, ResultType * __restrict c, size_t size, const NullMap * right_nullmap)
+    static void NO_INLINE process(const A * __restrict a, const B * __restrict b, ResultType * __restrict c, size_t size, const NullMap * right_nullmap, UInt8 * res_nullmap)
     {
         if constexpr (op_case == OpCase::RightConstant)
         {
             if (right_nullmap && (*right_nullmap)[0])
                 return;
+            if (res_nullmap && undec(*b) == 0)
+                return;
+
             vectorConstant(a, *b, c, size);
         }
         else
         {
-            if (right_nullmap)
+            if (right_nullmap && res_nullmap)
             {
                 for (size_t i = 0; i < size; ++i)
+                {
+                    if ((*right_nullmap)[i])
+                        c[i] = ResultType();
+                    else if (!BaseType::handleZeroDivision(b, i, c, res_nullmap))
+                       apply<op_case>(a, b, c, i);
+                }
+            }
+            else if (right_nullmap && !res_nullmap)
+            {
+                for (size_t i = 0; i < size; ++i)
+                {
                     if ((*right_nullmap)[i])
                         c[i] = ResultType();
                     else
                         apply<op_case>(a, b, c, i);
+                }
+            }
+            else if (!right_nullmap && res_nullmap)
+            {
+                for (size_t i = 0; i < size; ++i)
+                {
+                    if (!BaseType::handleZeroDivision(b, i, c, res_nullmap))
+                        apply<op_case>(a, b, c, i);
+                }
             }
             else
                 for (size_t i = 0; i < size; ++i)

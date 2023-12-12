@@ -213,7 +213,7 @@ bool areTypesEqual(const DataTypePtr & lhs, const DataTypePtr & rhs);
 /** Return ColumnNullable of src, with null map as OR-ed null maps of args columns.
   * Or ColumnConst(ColumnNullable) if the result is always NULL or if the result is constant and always not NULL.
   */
-ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count);
+ColumnPtr wrapInNullable(const ColumnPtr & src, const ColumnsWithTypeAndName & args, const DataTypePtr & result_type, size_t input_rows_count, const ColumnPtr & src_map_ptr = nullptr);
 
 /**  Get an array of column pointers and nullmap pointers for each argument column.
   *  For nullable columns: column pointer -> nested column pointer, nullmap pointer -> its nullmap data pointer
