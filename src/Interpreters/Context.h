@@ -36,7 +36,7 @@
 #include <Interpreters/DistributedStages/ExchangeDataTracker.h>
 #include <Interpreters/DistributedStages/PlanSegmentProcessList.h>
 #include <Parsers/IAST_fwd.h>
-#include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
+#include <Processors/Exchange/DataTrans/DataTrans_fwd.h>
 #include <QueryPlan/PlanNodeIdAllocator.h>
 #include <QueryPlan/SymbolAllocator.h>
 #include <Storages/IStorage_fwd.h>
@@ -1041,7 +1041,9 @@ public:
     SegmentSchedulerPtr getSegmentScheduler();
     SegmentSchedulerPtr getSegmentScheduler() const;
 
+    void setMockExchangeDataTracker(ExchangeStatusTrackerPtr exchange_data_tracker);
     ExchangeStatusTrackerPtr getExchangeDataTracker() const;
+    void initDiskExchangeDataManager() const;
     DiskExchangeDataManagerPtr getDiskExchangeDataManager() const;
     void setMockDiskExchangeDataManager(DiskExchangeDataManagerPtr disk_exchange_data_manager);
 
@@ -1156,6 +1158,9 @@ public:
     BackgroundSchedulePool & getTopologySchedulePool() const;
     BackgroundSchedulePool & getMetricsRecalculationSchedulePool() const;
     BackgroundSchedulePool & getGCSchedulePool() const;
+    /// no more get pool method, use getExtraSchedulePool
+    BackgroundSchedulePool & getExtraSchedulePool(
+        SchedulePool::Type pool_type, SettingFieldUInt64 pool_size, CurrentMetrics::Metric metric, const char * name) const;
 
     ThrottlerPtr getDiskCacheThrottler() const;
 

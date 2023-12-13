@@ -1822,6 +1822,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             throw Exception("Failed to start rpc server in all listen_hosts.", ErrorCodes::BRPC_EXCEPTION);
         }
 
+        if (global_context->getServerType() == ServerType::cnch_worker)
+            global_context->initDiskExchangeDataManager();
 
         LOG_INFO(log, "Ready for connections.");
 

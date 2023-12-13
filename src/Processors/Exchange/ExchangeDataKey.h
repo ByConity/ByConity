@@ -17,8 +17,8 @@
 
 #include <string>
 #include <fmt/core.h>
-#include <common/types.h>
 #include <fmt/format.h>
+#include <common/types.h>
 
 namespace DB
 {

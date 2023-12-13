@@ -2050,9 +2050,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, count_distinct_optimization, false, "Rewrite count distinct to subquery of group by", 0) \
     M(UInt64, max_download_thread, 48, "threads for reading parquet in parallel",0) \
     M(Bool,   parquet_parallel_read, false, "whether to read parquet in parallel",0) \
-    /*start of batch synchronous parallel section*/ \
+    /*start of bulk synchronous parallel section*/ \
     M(Bool, bsp_mode, false, "if enabled, query will execute in bsp mode", 0) \
-    /*end of batch synchronous parallel section*/ \
+    /*end of bulk synchronous parallel section*/ \
     M(Bool, enable_io_scheduler, false, "Enable io scheduler", 0) \
     M(Bool, enable_io_pfra, false, "Enable prefetch and read ahead for remote read", 0) \
     \

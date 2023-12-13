@@ -8,6 +8,26 @@
 namespace DB
 {
 
+namespace SchedulePool
+{
+    enum Type
+    {
+        Consume,
+        Restart,
+        HaLog,
+        Mutation,
+        Local,
+        MergeSelect,
+        UniqueTable,
+        MemoryTable,
+        CNCHTopology,
+        PartsMetrics,
+        GC,
+        BspGC,
+        Size
+    };
+}
+
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;

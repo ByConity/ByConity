@@ -3,6 +3,7 @@
 #include <Interpreters/DistributedStages/executePlanSegment.h>
 #include <Interpreters/Scheduler.h>
 #include <Interpreters/sendPlanSegment.h>
+#include "common/types.h"
 #include <Common/Stopwatch.h>
 
 namespace DB
@@ -280,7 +281,26 @@ void BSPScheduler::onQueryFinished()
     UInt64 query_unique_id = query_context->getCurrentTransactionID().toUInt64();
     for (const auto & address : dag_graph_ptr->plan_send_addresses)
     {
-        cleanupExchangeDataForQuery(address, query_unique_id);
+        try
+        {
+            cleanupExchangeDataForQuery(address, query_unique_id);
+            LOG_TRACE(
+                log,
+                "cleanup exchange data successfully query_id:{} query_unique_id:{} address:{}",
+                query_id,
+                query_unique_id,
+                address.toString());
+        }
+        catch (...)
+        {
+            tryLogCurrentException(
+                log,
+                fmt::format(
+                    "cleanup exchange data failed for query_id:{} query_unique_id:{} address:{}",
+                    query_id,
+                    query_unique_id,
+                    address.toString()));
+        }
     }
 }
 }

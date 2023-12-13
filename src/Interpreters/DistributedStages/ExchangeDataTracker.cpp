@@ -43,7 +43,7 @@ void ExchangeStatusTracker::registerExchange(const String & query_id, UInt64 exc
 {
     LOG_TRACE(log, "register exchange for query:{} exchange_id:{} parallel_size:{}", query_id, exchange_id, parallel_size);
     std::lock_guard<std::mutex> g(exchange_status_mutex);
-    query_to_exchanges[query_id].insert(exchange_id);
+    query_exchange_ids[query_id].insert(exchange_id);
     const ExchangeKey ex_key({query_id, exchange_id});
     ExchangeStatuses ex_statuses = ExchangeStatuses{parallel_size};
     exchange_statuses.insert({std::move(ex_key), std::move(ex_statuses)});
@@ -90,11 +90,18 @@ void ExchangeStatusTracker::unregisterExchange(const String & query_id, UInt64 e
 void ExchangeStatusTracker::unregisterExchanges(const String & query_id)
 {
     std::lock_guard<std::mutex> g(exchange_status_mutex);
-    for (const auto & s_id : query_to_exchanges[query_id])
+    for (const auto & s_id : query_exchange_ids[query_id])
     {
         unregisterExchange(query_id, s_id);
     }
-    query_to_exchanges.erase(query_id);
+    query_exchange_ids.erase(query_id);
+}
+
+bool ExchangeStatusTracker::checkQueryAlive(const String & query_id)
+{
+    std::lock_guard<std::mutex> g(exchange_status_mutex);
+    auto iter = query_exchange_ids.find(query_id);
+    return iter != query_exchange_ids.end();
 }
 
 std::vector<AddressInfo>

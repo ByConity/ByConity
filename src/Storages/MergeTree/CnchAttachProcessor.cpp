@@ -1647,6 +1647,10 @@ void CnchAttachProcessor::commitPartsFromS3(const PartsWithHistory & parts_with_
             }
         }
     }
+    else
+    {
+        prepared_parts = std::move(parts_with_history.second);
+    }
 
     // Commit transaction
     injectFailure(AttachFailurePoint::BEFORE_COMMIT_FAIL);

@@ -106,7 +106,10 @@
 #include <ServiceDiscovery/ServiceDiscoveryFactory.h>
 #include <QueryPlan/PlanCache.h>
 #include <Storages/CompressionCodecSelector.h>
+#include <Storages/DiskCache/AbstractCache.h>
 #include <Storages/DiskCache/KeyIndexFileCache.h>
+#include <Storages/DiskCache/NvmCacheConfig.h>
+#include <Storages/DiskCache/Types.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/HDFS/HDFSFileSystem.h>
 #include <Storages/IStorage.h>
@@ -152,11 +155,9 @@
 #include <Common/setThreadName.h>
 #include <Common/thread_local_rng.h>
 #include <common/logger_useful.h>
+#include "Core/SettingsFields.h"
 #include "Disks/DiskType.h"
 #include "Server/AsyncQueryManager.h"
-#include <Storages/DiskCache/AbstractCache.h>
-#include <Storages/DiskCache/NvmCacheConfig.h>
-#include <Storages/DiskCache/Types.h>
 
 #include <Storages/IndexFile/FilterPolicy.h>
 #include <Storages/IndexFile/IndexFileWriter.h>
@@ -179,6 +180,7 @@
 
 #include <IO/VETosCommon.h>
 
+#include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Statistics/AutoStatisticsManager.h>
 #include <fmt/core.h>
 
@@ -220,25 +222,6 @@ extern const Metric BackgroundGCSchedulePoolTask;
 
 namespace DB
 {
-
-namespace SchedulePool
-{
-    enum Type
-    {
-        Consume,
-        Restart,
-        HaLog,
-        Mutation,
-        Local,
-        MergeSelect,
-        UniqueTable,
-        MemoryTable,
-        CNCHTopology,
-        PartsMetrics,
-        GC,
-        Size
-    };
-}
 
 namespace ErrorCodes
 {
@@ -513,6 +496,9 @@ struct ContextSharedPart
         if (cnch_system_logs)
             cnch_system_logs->shutdown();
 
+        if (disk_exchange_data_manager)
+            disk_exchange_data_manager->shutdown();
+
         DatabaseCatalog::shutdown();
 
         /// reset scheduled task before schedule pool shutdown
@@ -545,7 +531,7 @@ struct ContextSharedPart
                 cache_manager.reset();
 
             access_control_manager.stopBgJobForKVStorage();
-            
+
             if (nvm_cache)
                 nvm_cache->shutDown();
 
@@ -839,6 +825,12 @@ SegmentSchedulerPtr Context::getSegmentScheduler() const
     return shared->segment_scheduler;
 }
 
+void Context::setMockExchangeDataTracker(ExchangeStatusTrackerPtr exchange_data_tracker)
+{
+    auto lock = getLock();
+    shared->exchange_data_tracker = exchange_data_tracker;
+}
+
 ExchangeStatusTrackerPtr Context::getExchangeDataTracker() const
 {
     auto lock = getLock();
@@ -856,13 +848,23 @@ ExchangeStatusTrackerPtr Context::getExchangeDataTracker() const
     return shared->exchange_data_tracker;
 }
 
+void Context::initDiskExchangeDataManager() const
+{
+    getDiskExchangeDataManager();
+}
+
 DiskExchangeDataManagerPtr Context::getDiskExchangeDataManager() const
 {
     auto lock = getLock();
     if (!shared->disk_exchange_data_manager)
     {
-        const auto & bsp_conf = getRootConfig().batch_synchronous_parallel;
-        DiskExchangeDataManagerOptions options{.path = "bsp/v-1.0.0", .storage_policy = bsp_conf.storage_policy, .volume = bsp_conf.volume};
+        const auto & bsp_conf = getRootConfig().bulk_synchronous_parallel;
+        DiskExchangeDataManagerOptions options{
+            .path = "bsp/v-1.0.0",
+            .storage_policy = bsp_conf.storage_policy,
+            .volume = bsp_conf.volume,
+            .gc_interval_seconds = bsp_conf.gc_interval_seconds,
+            .file_expire_seconds = bsp_conf.file_expire_seconds};
         shared->disk_exchange_data_manager
             = DiskExchangeDataManager::createDiskExchangeDataManager(global_context, getGlobalContext(), options);
     }
@@ -1646,7 +1648,7 @@ void Context::checkAccess(const AccessRightsElements & elements) const
 void Context::grantAllAccess()
 {
     auto lock = getLock();
-    access = ContextAccess::getFullAccess();    
+    access = ContextAccess::getFullAccess();
 }
 
 std::shared_ptr<const ContextAccess> Context::getAccess() const
@@ -2783,6 +2785,15 @@ BackgroundSchedulePool & Context::getGCSchedulePool() const
         shared->extra_schedule_pools[SchedulePool::GC].emplace(
             settings.background_gc_thread_pool_size, CurrentMetrics::BackgroundGCSchedulePoolTask, "GCPol");
     return *shared->extra_schedule_pools[SchedulePool::GC];
+}
+
+BackgroundSchedulePool & Context::getExtraSchedulePool(
+    SchedulePool::Type pool_type, SettingFieldUInt64 pool_size, CurrentMetrics::Metric metric, const char * name) const
+{
+    auto lock = getLock();
+    if (!shared->extra_schedule_pools[pool_type])
+        shared->extra_schedule_pools[pool_type].emplace(pool_size, metric, name);
+    return *shared->extra_schedule_pools[pool_type];
 }
 
 ThrottlerPtr Context::getDiskCacheThrottler() const
@@ -5394,10 +5405,11 @@ PlanCacheManager* Context::getPlanCacheManager()
 
 UInt32 Context::getQueryMaxExecutionTime() const
 {
+    // max is 4294967295/1000/60=71582 min
     if (getSettingsRef().max_execution_time.totalSeconds() != 0)
-        return getSettingsRef().max_execution_time.totalSeconds() * 1000;
+        return std::min(getSettingsRef().max_execution_time.totalSeconds() * UInt64(1000), UInt64(UINT32_MAX));
     else if (getSettingsRef().exchange_timeout_ms != 0)
-        return getSettingsRef().exchange_timeout_ms;
+        return std::min(UInt64(getSettingsRef().exchange_timeout_ms), UInt64(UINT32_MAX));
     else
         return 100 * 60 * 1000; // default as 100min
 }

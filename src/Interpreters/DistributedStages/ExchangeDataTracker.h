@@ -117,6 +117,10 @@ public:
     void registerExchangeStatus(const String & query_id, UInt64 exchange_id, UInt64 parallel_index, const ExchangeStatus & exchange_status);
     // Unregister exchagnes for specified query.
     void unregisterExchanges(const String & query_id);
+    /// check if query is still alive, used by worker GC
+    /// NOTE! it might happen that when server restarts, a new query with the same query_id is created
+    /// So far, this is okay for our usage case in GC, because this new query will eventually finish, and all files in worker will be removed.
+    bool checkQueryAlive(const String & query_id);
     // Get the most locality-friendly addresses for specified partition range.
     std::vector<AddressInfo> getExchangeDataAddrs(PlanSegment * plan_segment, UInt64 start_parallel_index, UInt64 end_parallel_index);
 
@@ -128,8 +132,8 @@ private:
     // Protect concurrent access to `exchange_statuses` and `query_to_exchanges`.
     std::mutex exchange_status_mutex;
     std::unordered_map<const ExchangeKey, ExchangeStatuses, ExchangeKey::Hash> exchange_statuses;
-    // Store all exchange ids for query, used to delete exchagne statuses for a query.
-    std::unordered_map<String, std::unordered_set<UInt64>> query_to_exchanges;
+    // Store all exchange ids for query, used to delete exchange statuses for a query.
+    std::unordered_map<String, std::unordered_set<UInt64>> query_exchange_ids;
     Poco::Logger * log = &Poco::Logger::get("ExchangeStatusTracker");
 };
 
