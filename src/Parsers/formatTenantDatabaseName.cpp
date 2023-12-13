@@ -150,16 +150,18 @@ String formatTenantEntityName(const String & name)
     return formatTenantUserNameImpl(name, '.');
 }
 
-String formatTenantEntityNameWithTenantId(const String & name, const String & tenant_id, char separator)
+bool isTenantMatchedEntityName(const String & tenant_entity_name)
 {
-    if (!tenant_id.empty() && name.find(tenant_id) != 0)
+    auto tenant_id = getTenantId();
+    if (!tenant_id.empty())
     {
-        String result = tenant_id;
-        result += separator;
-        result += name;
-        return result;
+        auto size = tenant_id.size();
+        if (tenant_entity_name.size() > size + 1 && tenant_entity_name[size] == '.'
+            && memcmp(tenant_id.data(),tenant_entity_name.data(), size) == 0)
+            return true;
+        return false;
     }
-     return name;
+    return true;
 }
 
 String getOriginalEntityName(const String & tenant_entity_name)
