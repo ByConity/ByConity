@@ -73,6 +73,17 @@ struct SortCursorImpl
         reset(columns, {}, perm);
     }
 
+    SortCursorImpl(
+        const Block & header,
+        const Columns & columns,
+        const SortDescription & desc_,
+        size_t order_ = 0,
+        IColumn::Permutation * perm = nullptr)
+        : desc(desc_), sort_columns_size(desc.size()), order(order_), need_collation(desc.size())
+    {
+        reset(columns, header, perm);
+    }
+
     bool empty() const { return rows == 0; }
 
     /// Set the cursor to the beginning of the new block.
@@ -121,9 +132,14 @@ struct SortCursorImpl
 
     bool isFirst() const { return pos == 0; }
     bool isLast() const { return pos + 1 >= rows; }
+    bool isLast(size_t size) const { return pos + size >= rows; }
     bool isValid() const { return pos < rows; }
+    
     void next() { ++pos; }
+    void next(size_t size) { pos += size; }
 
+    size_t getSize() const { return rows; }
+    size_t rowsLeft() const { return rows - pos; }
 /// Prevent using pos instead of getRow()
 private:
     size_t pos = 0;

@@ -520,4 +520,26 @@ String TableJoin::renamedRightColumnName(const String & name) const
     return name;
 }
 
+bool TableJoin::oneDisjunct() const
+{
+    //return clauses.size() == 1;
+    return true;
+}
+
+std::unordered_map<String, String> TableJoin::leftToRightKeyRemap() const
+{
+    std::unordered_map<String, String> left_to_right_key_remap;
+    if (hasUsing())
+    {
+        const auto & required_right_keys = requiredRightKeys();
+        forAllKeys(clauses, [&](const auto & left_key_name, const auto & right_key_name)
+        {
+            if (!required_right_keys.contains(right_key_name))
+                left_to_right_key_remap[left_key_name] = right_key_name;
+            return true;
+        });
+    }
+    return left_to_right_key_remap;
+}
+
 }

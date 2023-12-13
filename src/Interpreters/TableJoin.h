@@ -181,6 +181,11 @@ public:
         return dictionary_reader || join_algorithm == JoinAlgorithm::HASH || join_algorithm == JoinAlgorithm::PARALLEL_HASH;
     }
 
+    bool forceFullSortingMergeJoin() const 
+    {
+        return !isSpecialStorage() && join_algorithm.isSet(JoinAlgorithm::FULL_SORTING_MERGE); 
+    }
+
     bool forceNullableRight() const { return join_use_nulls && isLeftOrFull(table_join.kind); }
     bool forceNullableLeft() const { return join_use_nulls && isRightOrFull(table_join.kind); }
     size_t defaultMaxBytes() const { return default_max_bytes; }
@@ -254,7 +259,7 @@ public:
     bool isSpecialStorage() const {return !!joined_storage; }
     // The communary introduced support for "The 'OR' operator in 'ON' section for join",
     // but in our scenario, there only one disjunct at a time yet
-    bool oneDisjunct() const { return true; }
+    bool oneDisjunct() const;
 
     /// Split key and other columns by keys name list
     void splitAdditionalColumns(const Block & sample_block, Block & block_keys, Block & block_others) const;
@@ -269,6 +274,8 @@ public:
     size_t getInBuildThreshold() const { return runtime_filter_in_build_threshold;}
 
     void setRuntimeFilterConsumer(std::shared_ptr<RuntimeFilterConsumer> && filterConsumer) { runtimeFilterConsumer = std::move(filterConsumer); }
+
+    std::unordered_map<String, String> TableJoin::leftToRightKeyRemap() const;
 };
 
 }
