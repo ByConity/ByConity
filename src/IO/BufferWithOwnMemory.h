@@ -23,6 +23,7 @@
 
 #include <boost/noncopyable.hpp>
 
+#include <common/arithmeticOverflow.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Allocator.h>
 
@@ -42,6 +43,10 @@ namespace ProfileEvents
 namespace DB
 {
 
+namespace ErrorCodes
+{
+    extern const int ARGUMENT_OUT_OF_BOUND;
+}
 
 /** Replacement for std::vector<char> to use in buffers.
   * Differs in that is doesn't do unneeded memset. (And also tries to do as little as possible.)
@@ -50,8 +55,7 @@ namespace DB
 template <typename Allocator = Allocator<false>>
 struct Memory : boost::noncopyable, Allocator
 {
-    /// Padding is needed to allow usage of 'memcpySmallAllowReadWriteOverflow15' function with this buffer.
-    static constexpr size_t pad_right = 15;
+    static constexpr size_t pad_right = PADDING_FOR_SIMD - 1;
 
     size_t m_capacity = 0;  /// With padding.
     size_t m_size = 0;
@@ -63,7 +67,7 @@ struct Memory : boost::noncopyable, Allocator
     /// If alignment != 0, then allocate memory aligned to specified value.
     explicit Memory(size_t size_, size_t alignment_ = 0) : m_capacity(size_), m_size(m_capacity), alignment(alignment_)
     {
-        alloc();
+        alloc(size_);
     }
 
     ~Memory()
@@ -99,24 +103,23 @@ struct Memory : boost::noncopyable, Allocator
 
     void resize(size_t new_size)
     {
-        if (0 == m_capacity)
+        if (!m_data)
         {
-            m_size = new_size;
-            m_capacity = new_size;
-            alloc();
+            alloc(new_size);
+            return;
         }
-        else if (new_size <= m_capacity - pad_right)
+
+        if (new_size <= m_capacity - pad_right)
         {
             m_size = new_size;
             return;
         }
-        else
-        {
-            size_t new_capacity = align(new_size + pad_right, alignment);
-            m_data = static_cast<char *>(Allocator::realloc(m_data, m_capacity, new_capacity, alignment));
-            m_capacity = new_capacity;
-            m_size = m_capacity - pad_right;
-        }
+
+        size_t new_capacity = withPadding(new_size);
+
+        m_data = static_cast<char *>(Allocator::realloc(m_data, m_capacity, new_capacity, alignment));
+        m_capacity = new_capacity;
+        m_size = new_size;
     }
 
     void swap(Memory& rhs)
@@ -128,31 +131,32 @@ struct Memory : boost::noncopyable, Allocator
     }
 
 private:
-    static size_t align(const size_t value, const size_t alignment)
+    static size_t withPadding(size_t value)
     {
-        if (!alignment)
-            return value;
+        size_t res = 0;
 
-        return (value + alignment - 1) / alignment * alignment;
+        if (common::addOverflow(value, pad_right, res))
+            throw Exception(ErrorCodes::ARGUMENT_OUT_OF_BOUND, "value is too big to apply padding");
+
+        return res;
     }
 
-    void alloc()
+    void alloc(size_t new_size)
     {
-        if (!m_capacity)
+        if (!new_size)
         {
             m_data = nullptr;
             return;
         }
 
-        size_t padded_capacity = m_capacity + pad_right;
+        size_t new_capacity = withPadding(new_size);
 
         ProfileEvents::increment(ProfileEvents::IOBufferAllocs);
-        ProfileEvents::increment(ProfileEvents::IOBufferAllocBytes, padded_capacity);
+        ProfileEvents::increment(ProfileEvents::IOBufferAllocBytes, new_capacity);
 
-        size_t new_capacity = align(padded_capacity, alignment);
         m_data = static_cast<char *>(Allocator::alloc(new_capacity, alignment));
         m_capacity = new_capacity;
-        m_size = m_capacity - pad_right;
+        m_size = new_size;
     }
 
     void dealloc()
@@ -186,10 +190,10 @@ public:
     virtual void deepCopyTo(BufferBase& target) const override
     {
         Base::deepCopyTo(target);
-        BufferWithOwnMemory<Base>& explicitTarget = dynamic_cast<BufferWithOwnMemory<Base>& >(target);
+        BufferWithOwnMemory<Base>& explicit_target = dynamic_cast<BufferWithOwnMemory<Base>& >(target);
         // copy memory
-        explicitTarget.memory.resize(memory.size());
-        std::memcpy(explicitTarget.memory.m_data, memory.m_data, memory.size());
+        explicit_target.memory.resize(memory.size());
+        std::memcpy(explicit_target.memory.m_data, memory.m_data, memory.size());
     }
 
     void freeResource() override

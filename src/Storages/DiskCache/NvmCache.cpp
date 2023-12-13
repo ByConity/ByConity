@@ -16,6 +16,7 @@
 #include <Storages/DiskCache/RecordIO.h>
 #include <Storages/DiskCache/Types.h>
 #include <Storages/MarkCache.h>
+#include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Common/ProfileEvents.h>
@@ -57,7 +58,7 @@ using PutToken = NvmCache::PutToken;
 
 
 template <typename T>
-Handle NvmCache::find(HashedKey key, DecodeCallback cb, HybridCache::EngineTag tag)
+Handle NvmCache::find(HashedKey key, DecodeCallback cb, EngineTag tag)
 {
     if (!isEnabled())
         return {};
@@ -108,10 +109,11 @@ Handle NvmCache::find(HashedKey key, DecodeCallback cb, HybridCache::EngineTag t
     return hdl;
 }
 
-template Handle NvmCache::find<UncompressedCacheCell>(HashedKey key, DecodeCallback cb, HybridCache::EngineTag);
-template Handle NvmCache::find<MarksInCompressedFile>(HashedKey key, DecodeCallback cb, HybridCache::EngineTag);
+template Handle NvmCache::find<UncompressedCacheCell>(HashedKey key, DecodeCallback cb, EngineTag);
+template Handle NvmCache::find<MarksInCompressedFile>(HashedKey key, DecodeCallback cb, EngineTag);
+template Handle NvmCache::find<MergeTreeDataPartChecksums>(HashedKey key, DecodeCallback cb, EngineTag);
 
-void NvmCache::put(HashedKey key, std::shared_ptr<void> item, PutToken token, EncodeCallback cb, HybridCache::EngineTag tag)
+void NvmCache::put(HashedKey key, std::shared_ptr<void> item, PutToken token, EncodeCallback cb, EngineTag tag)
 {
     if (!isEnabled())
         return;

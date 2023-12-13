@@ -7,7 +7,10 @@ namespace DB::HybridCache
 enum class EngineTag : UInt32
 {
     MarkCache = 0,
-    UncompressedCache = 1,
+    UncompressedCache,
+    ChecksumCache,
+    // keep count at last
+    COUNT,
 };
 
 enum class Status

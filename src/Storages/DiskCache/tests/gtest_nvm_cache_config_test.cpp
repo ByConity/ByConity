@@ -89,6 +89,20 @@ TEST(NvmCacheConfigTest, EnginesSetup)
 
         cfg.blockCache().setSize(20 * 1024 * 1024);
         EnginesConfig pair1;
+        pair1.blockCache().setRegionSize(0);
+        pair1.bigHash().setSizePctAndMaxItemSize(0, 640);
+        cfg.addEnginePair(std::move(pair1));
+
+        cfg.setEnginesSelector([](HybridCache::EngineTag tag) { return static_cast<size_t>(tag) % 2; });
+
+        EXPECT_NE(nullptr, createNvmCache(cfg, {}, {}, true, false));
+    }
+
+    {
+        NvmCacheConfig cfg = getNvmTestConfig("/tmp");
+
+        cfg.blockCache().setSize(20 * 1024 * 1024);
+        EnginesConfig pair1;
         pair1.blockCache().setRegionSize(4 * 1024 * 1024);
         pair1.bigHash().setSizePctAndMaxItemSize(5, 640);
         cfg.addEnginePair(std::move(pair1));
@@ -133,7 +147,7 @@ TEST(NvmCacheConfigTest, EnginesSetup)
         EnginesConfig pair1;
         pair1.blockCache().setRegionSize(4 * 1024 * 1024);
         pair1.bigHash().setSizePctAndMaxItemSize(5, 640);
-        pair1.blockCache().setSize(20 * 1024 * 1024);
+        pair1.blockCache().setSize(200 * 1024 * 1024);
         cfg.addEnginePair(std::move(pair1));
         cfg.setEnginesSelector([](HybridCache::EngineTag tag) { return static_cast<size_t>(tag) % 2; });
 

@@ -19,6 +19,7 @@
 #include <Common/Exception.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -231,9 +232,6 @@ namespace
     // |--- Metadata ---|--- BC-0 ---|--- BC-1 ---|...|--- BH-1 ---|--- BH-0 ---|
     void setupProtos(const NvmCacheConfig & config, const Device & device, Proto & proto, bool item_destructor_enabled)
     {
-        if (config.enginesConfigs()[config.enginesConfigs().size() - 1].blockCache().getSize() != 0)
-            throw Exception(ErrorCodes::BAD_ARGUMENTS, "last pair of engines must have its block cache use up all the space left");
-
         auto get_default_metadata_size = [](size_t size, size_t alignment) {
             chassert(isPowerOf2(alignment));
             auto mask = ~(alignment - 1);
@@ -274,13 +272,11 @@ namespace
                     big_hash_end_offset,
                     block_cache_start_offset,
                     *engine_pair_proto);
-                block_cache_size = block_cache_size == 0 ? big_hash_start_offset - block_cache_start_offset : block_cache_size;
                 LOG_INFO(&Poco::Logger::get("NvmCacheConfig"), "block cache size: {}", block_cache_size);
             }
             else
             {
                 big_hash_start_offset = big_hash_end_offset;
-                block_cache_size = block_cache_size == 0 ? big_hash_start_offset - block_cache_start_offset : block_cache_size;
                 LOG_INFO(&Poco::Logger::get("NvmCacheConfig"), "-- no bighash. block cache size: {}", block_cache_size);
             }
 
@@ -392,7 +388,7 @@ void NvmCacheConfig::loadFromConfig(const std::string & config_elem, const Poco:
     req_ordering_shards = conf.getUInt64(config_elem + ".req_ordering_shards", 20);
     max_concurrent_inserts = conf.getUInt(config_elem + ".max_concurrent_inserts", 1'000'000);
     max_parcel_memory_mb = conf.getUInt64(config_elem + ".max_parcel_memory_mb", 256);
-    UInt32 engines_size = conf.getUInt(config_elem + ".engines_size", 1);
+    UInt32 engines_size = static_cast<UInt32>(EngineTag::COUNT);
     engines_configs.resize(engines_size);
     for (unsigned int i = 0; i < engines_size; ++i)
         engines_configs[i].loadFromConfig(fmt::format("{}.engines{}", config_elem, i), conf);
