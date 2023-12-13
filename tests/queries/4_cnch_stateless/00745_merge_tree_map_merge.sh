@@ -54,11 +54,11 @@ ${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge2 VALUE
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge3 VALUES (4, {});"
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge4 VALUES (4, {});"
 
-${CLICKHOUSE_CLIENT} --query "OPTIMIZE TABLE test.00745_merge_tree_map_merge1;"
-${CLICKHOUSE_CLIENT} --query "OPTIMIZE TABLE test.00745_merge_tree_map_merge2;"
-${CLICKHOUSE_CLIENT} --query "OPTIMIZE TABLE test.00745_merge_tree_map_merge3;"
-${CLICKHOUSE_CLIENT} --query "OPTIMIZE TABLE test.00745_merge_tree_map_merge4;"
-sleep 60
+${CLICKHOUSE_CLIENT} --query "OPTIMIZE TABLE test.00745_merge_tree_map_merge1 settings mutations_sync = 1;"
+${CLICKHOUSE_CLIENT} --query "OPTIMIZE TABLE test.00745_merge_tree_map_merge2 settings mutations_sync = 1;"
+${CLICKHOUSE_CLIENT} --query "OPTIMIZE TABLE test.00745_merge_tree_map_merge3 settings mutations_sync = 1;"
+${CLICKHOUSE_CLIENT} --query "OPTIMIZE TABLE test.00745_merge_tree_map_merge4 settings mutations_sync = 1;"
+sleep 80
 
 ${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = '${TENANT_DB_PREFIX}test' AND table = '00745_merge_tree_map_merge1' AND active;"
 ${CLICKHOUSE_CLIENT} --query "SELECT count(1) FROM system.cnch_parts WHERE database = '${TENANT_DB_PREFIX}test' AND table = '00745_merge_tree_map_merge2' AND active;"
