@@ -205,7 +205,9 @@ Contains information about all the Kafka tables in the cluster
 │ kafka_cluster       │ String        │
 │ topics              │ Array(String) │
 │ consumer_group      │ String        │
-│ virtual_warehouse   │ String        │
+│ vw_write            │ String        │
+│ max_block_size      │ UInt64        │
+│ max_poll_interval_ms│ UInt64        │
 │ num_consumers       │ UInt32        │
 │ consumer_tables     │ Array(String) │
 │ consumer_hosts      │ Array(String) │
