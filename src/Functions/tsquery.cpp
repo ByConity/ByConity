@@ -1,3 +1,8 @@
+
+#include <Common/config.h>
+
+#if USE_TSQUERY
+
 #include <algorithm>
 #include <cstddef>
 #include <memory>
@@ -132,3 +137,5 @@ REGISTER_FUNCTION(TSQuery)
 
 
 }
+
+#endif

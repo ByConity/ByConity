@@ -1,3 +1,6 @@
+#include <Common/config.h>
+#if USE_TSQUERY
+
 #include <cstddef>
 #include <memory>
 #include <utility>
@@ -177,3 +180,5 @@ TextSearchQueryExpressionPtr TextSearchQuery::toTextSearchQueryExpression(
 }
 
 }
+
+#endif
