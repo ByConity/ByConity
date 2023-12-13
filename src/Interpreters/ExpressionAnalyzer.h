@@ -380,7 +380,7 @@ public:
     const AggregateDescriptions & aggregates() const { return aggregate_descriptions; }
 
     const std::vector<const ASTFunction *> & aggregateAsts() const { return ExpressionAnalyzer::aggregates(); }
-    
+
     const PreparedSets & getPreparedSets() const { return prepared_sets; }
     std::unique_ptr<QueryPlan> getJoinedPlan();
 

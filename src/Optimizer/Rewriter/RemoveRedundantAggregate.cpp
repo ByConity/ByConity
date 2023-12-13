@@ -5,7 +5,6 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
-#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {
@@ -299,7 +298,7 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitJoinNode(JoinNode & node, Remo
 
 PlanNodePtr RemoveRedundantAggregateVisitor::visitTableScanNode(TableScanNode & node, RemoveRedundantAggregateContext & ctx)
 {
-    const auto * step = dynamic_cast<const TableScanStep *>(node.getStep().get());
+    auto step = node.getStep();
     String database = step->getDatabase();
     auto storage = step->getStorage();
 

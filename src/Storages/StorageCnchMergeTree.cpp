@@ -353,7 +353,7 @@ PrepareContextResult StorageCnchMergeTree::prepareReadContext(
     }
 
     String local_table_name = getCloudTableName(local_context);
-    auto bucket_numbers = getRequiredBucketNumbers(query_info, local_context);
+    auto bucket_numbers = getRequiredBucketNumbers(query_info.query->as<ASTSelectQuery>()->getWhere(), local_context);
     collectResource(local_context, parts, local_table_name, bucket_numbers);
 
     return {std::move(local_table_name), std::move(parts), {}, {}};
@@ -2682,10 +2682,9 @@ Block StorageCnchMergeTree::getBlockWithVirtualPartitionColumns(
     return block;
 }
 
-std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr local_context) const
+std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(ASTPtr where_expression, ContextPtr local_context) const
 {
     std::set<Int64> bucket_numbers;
-    ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->getWhere();
     const Settings & settings = local_context->getSettingsRef();
     auto metadata_snapshot = getInMemoryMetadataPtr();
     // if number of bucket columns of this table > 1, skip optimisation
@@ -3128,4 +3127,20 @@ void StorageCnchMergeTree::checkUnderlyingDictionaryTable(const BitEngineHelper:
         throw Exception("Value column type should be UInt64", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
+StorageID StorageCnchMergeTree::prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context)
+{
+    auto prepare_result = prepareReadContext(output_columns, getInMemoryMetadataPtr(), query_info, local_context);
+
+    StorageID storage_id = getStorageID();
+    storage_id.table_name = prepare_result.local_table_name;
+    return storage_id;
+}
+
+StorageID StorageCnchMergeTree::prepareTableWrite(ContextPtr local_context)
+{
+    auto prepare_result = prepareLocalTableForWrite(nullptr, local_context, false, false);
+    StorageID storage_id = getStorageID();
+    storage_id.table_name = prepare_result.first;
+    return storage_id;
+}
 } // end namespace DB

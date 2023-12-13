@@ -61,7 +61,7 @@ void AddRuntimeFilters::rewrite(QueryPlan & plan, ContextMutablePtr context) con
 
 PlanNodePtr AddRuntimeFilters::AddRuntimeFilterRewriter::visitJoinNode(JoinNode & node, Void & c)
 {
-    const auto & join = dynamic_cast<const JoinStep &>(*node.getStep());
+    auto & join = *node.getStep();
 
     // todo left anti
     if (join.getKind() != ASTTableJoin::Kind::Inner && join.getKind() != ASTTableJoin::Kind::Right
@@ -168,7 +168,7 @@ AddRuntimeFilters::RuntimeFilterInfoExtractor::visitPlanNode(PlanNodeBase & node
 RuntimeFilterWithScanRows
 AddRuntimeFilters::RuntimeFilterInfoExtractor::visitExchangeNode(ExchangeNode & node, std::unordered_set<RuntimeFilterId> & no_exchange)
 {
-    const auto * exchange_step = dynamic_cast<const ExchangeStep *>(node.getStep().get());
+    auto exchange_step = node.getStep();
     if (exchange_step->getExchangeMode() == ExchangeMode::LOCAL_MAY_NEED_REPARTITION
         || exchange_step->getExchangeMode() == ExchangeMode::LOCAL_NO_NEED_REPARTITION)
         return VisitorUtil::accept(node.getChildren()[0], *this, no_exchange);
@@ -184,7 +184,7 @@ AddRuntimeFilters::RuntimeFilterInfoExtractor::visitProjectionNode(ProjectionNod
 {
     auto result = VisitorUtil::accept(node.getChildren()[0], *this, no_exchange);
 
-    const auto * project_step = dynamic_cast<const ProjectionStep *>(node.getStep().get());
+    auto project_step = node.getStep();
     std::unordered_map<std::string, RuntimeFilterId> children_runtime_filters;
     for (const auto & assignment : project_step->getAssignments())
     {
@@ -200,7 +200,7 @@ AddRuntimeFilters::RuntimeFilterInfoExtractor::visitProjectionNode(ProjectionNod
 RuntimeFilterWithScanRows
 AddRuntimeFilters::RuntimeFilterInfoExtractor::visitJoinNode(JoinNode & node, std::unordered_set<RuntimeFilterId> & no_exchange)
 {
-    const auto * join_step = dynamic_cast<const JoinStep *>(node.getStep().get());
+    auto join_step = node.getStep();
 
     std::unordered_set<RuntimeFilterId> left_runtime_filter_without_exchange{no_exchange.begin(), no_exchange.end()};
     for (const auto & runtime_filter : join_step->getRuntimeFilterBuilders())
@@ -295,7 +295,7 @@ AddRuntimeFilters::RuntimeFilterInfoExtractor::visitTableScanNode(TableScanNode 
 RuntimeFilterWithScanRows
 AddRuntimeFilters::RuntimeFilterInfoExtractor::visitCTERefNode(CTERefNode & node, std::unordered_set<RuntimeFilterId> & no_exchange)
 {
-    const auto * cte = dynamic_cast<const CTERefStep *>(node.getStep().get());
+    auto cte = node.getStep();
     return cte_helper.accept(cte->getId(), *this, no_exchange);
 }
 
@@ -304,7 +304,7 @@ AddRuntimeFilters::RuntimeFilterInfoExtractor::visitFilterNode(FilterNode & node
 {
     auto result = VisitorUtil::accept(node.getChildren()[0], *this, no_exchange);
 
-    const auto * filter_step = dynamic_cast<const FilterStep *>(node.getStep().get());
+    auto filter_step = node.getStep();
     auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter_step->getFilter());
     auto predicates = std::move(filters.second);
     for (auto & runtime_filter : filters.first)
@@ -368,7 +368,7 @@ PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterProbRewriter::visitFilte
     auto child = VisitorUtil::accept(*node.getChildren()[0], *this, allowed_runtime_filters);
 
     auto child_stats = CardinalityEstimator::estimate(*node.getChildren()[0], cte_helper.getCTEInfo(), context);
-    const auto * filter_step = dynamic_cast<const FilterStep *>(node.getStep().get());
+    auto filter_step = node.getStep();
 
     if (!child_stats || child_stats.value()->getRowCount() < context->getSettingsRef().runtime_filter_min_filter_rows)
     {
@@ -433,7 +433,7 @@ PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterProbRewriter::visitFilte
 PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterProbRewriter::visitJoinNode(
     JoinNode & plan, std::unordered_set<RuntimeFilterId> & allowed_runtime_filters)
 {
-    const auto * join_step = dynamic_cast<const JoinStep *>(plan.getStep().get());
+    const auto & join_step = plan.getStep();
 
     auto right = VisitorUtil::accept(plan.getChildren()[1], *this, allowed_runtime_filters);
 
@@ -474,7 +474,7 @@ PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterProbRewriter::visitJoinN
 PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterProbRewriter::visitCTERefNode(
     CTERefNode & node, std::unordered_set<RuntimeFilterId> & allowed_runtime_filters)
 {
-    const auto * cte = dynamic_cast<const CTERefStep *>(node.getStep().get());
+    auto cte = node.getStep();
     cte_helper.accept(cte->getId(), *this, allowed_runtime_filters);
     return node.shared_from_this();
 }
@@ -514,7 +514,7 @@ PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterBuildRewriter::visitPlan
 
 PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterBuildRewriter::visitJoinNode(JoinNode & node, Void & c)
 {
-    const auto * join_step = dynamic_cast<const JoinStep *>(node.getStep().get());
+    auto join_step = node.getStep();
 
     std::unordered_map<String, RuntimeFilterBuildInfos> runtime_filter_builders;
     for (const auto & runtime_filter : join_step->getRuntimeFilterBuilders())
@@ -560,7 +560,7 @@ PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterBuildRewriter::visitJoin
 
 PlanNodePtr AddRuntimeFilters::RemoveUnusedRuntimeFilterBuildRewriter::visitCTERefNode(CTERefNode & node, Void & c)
 {
-    const auto * cte = dynamic_cast<const CTERefStep *>(node.getStep().get());
+    auto cte = node.getStep();
     cte_helper.acceptAndUpdate(cte->getId(), *this, c);
     return node.shared_from_this();
 }
@@ -593,7 +593,7 @@ PlanNodePtr AddRuntimeFilters::AddExchange::visitFilterNode(FilterNode & node, b
         return result;
 
     /// enforce local exchange
-    const auto * filter_step = dynamic_cast<const FilterStep *>(node.getStep().get());
+    auto filter_step = node.getStep();
     auto filters = RuntimeFilterUtils::extractRuntimeFilters(filter_step->getFilter());
     if (filters.first.empty())
         return result;

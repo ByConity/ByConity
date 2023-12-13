@@ -63,8 +63,7 @@ public:
         const Names & column_names,
         const StorageMetadataPtr & metadata_snapshot,
         SelectQueryInfo & query_info,
-        ContextPtr query_context,
-        unsigned /*num_streams*/);
+        ContextPtr query_context);
 
     virtual BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr query_context) override;
 
@@ -84,6 +83,11 @@ public:
 
     QueryProcessingStage::Enum
     getQueryProcessingStage(ContextPtr query_context, QueryProcessingStage::Enum stage, const StorageMetadataPtr & storage_metadata, SelectQueryInfo & query_info) const override;
+
+    bool supportsOptimizer() const override { return true; }
+    bool supportsDistributedRead() const override { return true; }
+    StorageID prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context) override;
+
 private:
     Strings getPrunedFiles(const ContextPtr & query_context, const ASTPtr & query);
 

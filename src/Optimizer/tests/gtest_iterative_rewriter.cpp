@@ -41,11 +41,11 @@ struct MergeRule : public Rule
     PatternPtr getPattern() const override { return filter().withSingle(filter().capturedAs(subNodeCap)).result(); }
     TransformResult transformImpl(PlanNodePtr node, const Captures & captures, RuleContext &) override
     {
-        auto subNode = captures.at<PlanNodePtr>(subNodeCap);
+        auto sub_node = captures.at<PlanNodePtr>(subNodeCap);
         int i = dynamic_cast<const MockedStepForRewriterTest *>(node->getStep().get())->i;
-        if (i == dynamic_cast<const MockedStepForRewriterTest *>(subNode->getStep().get())->i)
+        if (i == dynamic_cast<const MockedStepForRewriterTest *>(sub_node->getStep().get())->i)
         {
-            return {createRewriteTestNode(i * 2, subNode->getChildren())};
+            return {createRewriteTestNode(i * 2, sub_node->getChildren())};
         }
         else
             return {};

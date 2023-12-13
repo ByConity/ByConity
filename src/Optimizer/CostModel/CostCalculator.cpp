@@ -264,7 +264,7 @@ CostWithCTEReferenceCounts PlanCostVisitor::visitPlanNode(PlanNodeBase & node, P
 
 CostWithCTEReferenceCounts PlanCostVisitor::visitCTERefNode(CTERefNode & node, PlanCostMap & plan_cost_map)
 {
-    const auto * cte_step = dynamic_cast<const CTERefStep *>(node.getStep().get());
+    auto cte_step = node.getStep();
     auto res = visitPlanNode(node, plan_cost_map);
     res.cte_reference_counts[cte_step->getId()] += 1;
     return res;

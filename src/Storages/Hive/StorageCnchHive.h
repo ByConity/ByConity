@@ -80,7 +80,11 @@ public:
     void checkAlterIsPossible(const AlterCommands & commands, ContextPtr context) const override;
     void alter(const AlterCommands & params, ContextPtr local_context, TableLockHolder &) override;
 
-    std::pair<UInt64, ApacheHive::TableStatsResult> getTableStats(const Strings & col_names, ContextPtr local_context);
+
+    bool supportsOptimizer() const override { return true; }
+    bool supportsDistributedRead() const override { return true; }
+    StorageID prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context) override;
+    std::optional<TableStatistics> getTableStats(const Strings & columns, ContextPtr local_context) override;
 
 protected:
     void collectResource(ContextPtr local_context, PrepareContextResult & result);

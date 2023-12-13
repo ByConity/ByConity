@@ -198,7 +198,7 @@ JoinGraph JoinGraphVisitor::visitProjectionNode(ProjectionNode & node, NameSet &
 {
     if (ignore_filter_and_projection)
     {
-        const auto * step = dynamic_cast<const ProjectionStep *>(node.getStep().get());
+        auto step = node.getStep();
         bool contains_required_columns = false;
         for (const auto & assigment : step->getAssignments())
         {

@@ -712,8 +712,7 @@ PlanNodePtr PredicateVisitor::visitExchangeNode(ExchangeNode & node, PredicateCo
 
 PlanNodePtr PredicateVisitor::visitWindowNode(WindowNode & node, PredicateContext & predicate_context)
 {
-    auto & step_ptr = node.getStep();
-    const auto * step = dynamic_cast<const WindowStep *>(step_ptr.get());
+    auto step = node.getStep();
 
     const WindowDescription & window_desc = step->getWindow();
     SortDescription scheme = window_desc.partition_by;
@@ -763,8 +762,7 @@ PlanNodePtr PredicateVisitor::visitWindowNode(WindowNode & node, PredicateContex
 
 PlanNodePtr PredicateVisitor::visitMarkDistinctNode(MarkDistinctNode & node, PredicateContext & predicate_context)
 {
-    auto & step_ptr = node.getStep();
-    auto & step = dynamic_cast<MarkDistinctStep &>(*step_ptr);
+    const auto & step = *node.getStep();
 
     const Strings & distinct_symbols = step.getDistinctSymbols();
 
@@ -871,12 +869,12 @@ PlanNodePtr PredicateVisitor::visitAssignUniqueIdNode(AssignUniqueIdNode & node,
 
 PlanNodePtr PredicateVisitor::visitCTERefNode(CTERefNode & node, PredicateContext & predicate_context)
 {
-    auto * cte_step = dynamic_cast<CTERefStep *>(node.getStep().get());
+    auto & cte_step = node.getStep();
     if (!cte_step->hasFilter() && !PredicateUtils::isTruePredicate(predicate_context.predicate))
         cte_step->setFilter(true);
 
     auto & cte_refs = cte_predicates[cte_step->getId()];
-    cte_refs.emplace_back(std::make_pair(cte_step, predicate_context.predicate));
+    cte_refs.emplace_back(std::make_pair(cte_step.get(), predicate_context.predicate));
     // only push filter through cte when filters exist above all cte, and only push filter in the first time.
     if (cte_refs.size() == cte_reference_counts.at(cte_step->getId()))
     {
