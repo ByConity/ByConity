@@ -479,7 +479,8 @@ struct Settings;
     /** Obsolete settings. Kept for backward compatibility only, or will add usage later */ \
     M(UInt64, min_relative_delay_to_yield_leadership, 120, "Obsolete setting, does nothing.", 0) \
     M(UInt64, check_delay_period, 60, "Obsolete setting, does nothing.", 0) \
-    M(Bool, allow_floating_point_partition_key, false, "Allow floating point as partition key", 0) \
+    /** community behavior, but cnch 1.4 do not check this in mergetree. 2.0 disable this check to compatible with 1.4*/ \
+    M(Bool, allow_floating_point_partition_key, true, "Allow floating point as partition key", 0) \
     M(Bool, cnch_enable_memory_buffer, false, "", 0) \
     M(Bool, cnch_merge_only_realtime_partition, false, "", 0) \
     M(Bool, \
