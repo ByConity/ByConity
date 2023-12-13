@@ -1157,7 +1157,6 @@ public:
     BackgroundSchedulePool & getMemoryTableSchedulePool() const;
     BackgroundSchedulePool & getTopologySchedulePool() const;
     BackgroundSchedulePool & getMetricsRecalculationSchedulePool() const;
-    BackgroundSchedulePool & getGCSchedulePool() const;
     /// no more get pool method, use getExtraSchedulePool
     BackgroundSchedulePool & getExtraSchedulePool(
         SchedulePool::Type pool_type, SettingFieldUInt64 pool_size, CurrentMetrics::Metric metric, const char * name) const;

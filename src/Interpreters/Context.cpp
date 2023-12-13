@@ -2755,7 +2755,7 @@ BackgroundSchedulePool & Context::getMemoryTableSchedulePool() const
     auto lock = getLock();
     if (!shared->extra_schedule_pools[SchedulePool::MemoryTable])
         shared->extra_schedule_pools[SchedulePool::MemoryTable].emplace(
-            settings.background_memory_table_schedule_pool_size, CurrentMetrics::BackgroundMemoryTableSchedulePoolTask, "BgMemTblPol");
+            settings.background_memory_table_schedule_pool_size, CurrentMetrics::BackgroundMemoryTableSchedulePoolTask, "BgMemTblPool");
     return *shared->extra_schedule_pools[SchedulePool::MemoryTable];
 }
 
@@ -2764,7 +2764,7 @@ BackgroundSchedulePool & Context::getTopologySchedulePool() const
     auto lock = getLock();
     if (!shared->extra_schedule_pools[SchedulePool::CNCHTopology])
         shared->extra_schedule_pools[SchedulePool::CNCHTopology].emplace(
-            settings.background_topology_thread_pool_size, CurrentMetrics::BackgroundCNCHTopologySchedulePoolTask, "CNCHTopoPol");
+            settings.background_topology_thread_pool_size, CurrentMetrics::BackgroundCNCHTopologySchedulePoolTask, "CNCHTopoPool");
     return *shared->extra_schedule_pools[SchedulePool::CNCHTopology];
 }
 
@@ -2775,17 +2775,8 @@ BackgroundSchedulePool & Context::getMetricsRecalculationSchedulePool() const
         shared->extra_schedule_pools[SchedulePool::PartsMetrics].emplace(
             settings.background_metrics_recalculation_schedule_pool_size,
             CurrentMetrics::BackgroundPartsMetricsSchedulePoolTask,
-            "PtMetricsPol");
+            "PtMetricsPool");
     return *shared->extra_schedule_pools[SchedulePool::PartsMetrics];
-}
-
-BackgroundSchedulePool & Context::getGCSchedulePool() const
-{
-    auto lock = getLock();
-    if (!shared->extra_schedule_pools[SchedulePool::GC])
-        shared->extra_schedule_pools[SchedulePool::GC].emplace(
-            settings.background_gc_thread_pool_size, CurrentMetrics::BackgroundGCSchedulePoolTask, "GCPol");
-    return *shared->extra_schedule_pools[SchedulePool::GC];
 }
 
 BackgroundSchedulePool & Context::getExtraSchedulePool(
