@@ -181,7 +181,12 @@ ServerDataPartsVector CnchServerClient::fetchDataParts(const String & remote_hos
     return createServerPartsFromModels(storage, response.parts());
 }
 
-PrunedPartitions CnchServerClient::fetchPartitions(const String & remote_host, const ConstStoragePtr & table, const SelectQueryInfo & query_info, const Names & column_names)
+PrunedPartitions CnchServerClient::fetchPartitions(
+    const String & remote_host,
+    const ConstStoragePtr & table,
+    const SelectQueryInfo & query_info,
+    const Names & column_names,
+    const TxnTimestamp & txn_id)
 {
     brpc::Controller cntl;
     if (const auto * storage = dynamic_cast<const MergeTreeMetaBase *>(table.get()))
@@ -201,6 +206,8 @@ PrunedPartitions CnchServerClient::fetchPartitions(const String & remote_host, c
 
     for (const auto & name : column_names)
         request.add_column_name_filter(name);
+
+    request.set_txnid(txn_id.toUInt64());
 
     stub->fetchPartitions(&cntl, &request, & response, nullptr);
 

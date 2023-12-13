@@ -71,7 +71,12 @@ public:
 
     ServerDataPartsVector fetchDataParts(const String & remote_host, const ConstStoragePtr & table, const Strings & partition_list, const TxnTimestamp & ts);
 
-    PrunedPartitions fetchPartitions(const String & remote_host, const ConstStoragePtr & table, const SelectQueryInfo & query_info, const Names & column_names);
+    PrunedPartitions fetchPartitions(
+        const String & remote_host,
+        const ConstStoragePtr & table,
+        const SelectQueryInfo & query_info,
+        const Names & column_names,
+        const TxnTimestamp & txn_id);
 
     void redirectCommitParts(
         const StoragePtr & table,

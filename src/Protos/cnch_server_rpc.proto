@@ -164,6 +164,7 @@ message FetchPartitionsReq {
   required string table = 3;
   optional string predicate = 4;
   repeated string column_name_filter = 5;
+  optional uint64 txnid = 6;
 }
 
 message FetchPartitionsResp {
