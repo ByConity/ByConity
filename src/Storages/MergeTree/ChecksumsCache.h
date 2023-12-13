@@ -17,6 +17,9 @@
 
 #include <Common/BucketLRUCache.h>
 #include <Common/ShardCache.h>
+#include <Storages/DiskCache/NvmCache.h>
+#include <Storages/DiskCache/Buffer.h>
+#include <Storages/DiskCache/HashKey.h>
 #include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Common/ProfileEvents.h>
@@ -86,8 +89,6 @@ struct ChecksumsCacheSettings
 class ChecksumsCache
 {
 public:
-
-public:
     explicit ChecksumsCache(const ChecksumsCacheSettings & settings)
     : cache_shard_num(settings.cache_shard_num),
       table_to_parts_cache(new std::unordered_map<String, std::set<ChecksumsName>>[settings.cache_shard_num]), 
@@ -126,24 +127,31 @@ public:
         std::shared_ptr<ChecksumsCacheItem> cache_result = shard.get(key);
         if (!cache_result || cache_result->first != ChecksumsCacheState::Cached)
         {
+            if (nvm_cache && nvm_cache->isEnabled())
+            {
+                auto handle = nvm_cache->find<MergeTreeDataPartChecksums>(HybridCache::makeHashKey(key.c_str()), [&key, &shard, &name, &flag, this](std::shared_ptr<void> ptr, HybridCache::Buffer buffer)
+                {
+                    auto checksums = std::static_pointer_cast<MergeTreeDataPartChecksums>(ptr);
+                    auto read_buffer = buffer.asReadBuffer();
+                    checksums->deserialize(read_buffer);
+                    if (internalInsert(shard, key, name, checksums))
+                        flag = true;
+
+                }, HybridCache::EngineTag::ChecksumCache);
+                if (auto ptr = handle.get())
+                {
+                    auto mapped = std::static_pointer_cast<MergeTreeDataPartChecksums>(ptr);
+                    if (!mapped->empty())
+                        return std::make_pair(mapped, flag);
+                }
+            }
+
             ProfileEvents::increment(ProfileEvents::ChecksumsCacheMisses);
 
             result = load();
-            
-            bool inserted = shard.emplace(key, std::make_shared<ChecksumsCacheItem>(std::make_pair(ChecksumsCacheState::Caching, nullptr)));
-            if (inserted)
-            {
-                {
-                    size_t first_level_bucket = std::hash<String>()(name) % cache_shard_num;
-                    std::unique_lock<std::mutex> guard(table_to_parts_cache_locks[first_level_bucket]);
-                    table_to_parts_cache[first_level_bucket][name].insert(key);
-                    LOG_DEBUG(&Poco::Logger::get("checksumsCache"), "checksums insert table {} part {} bucket {}", name, key, first_level_bucket);
-                }
 
-                shard.update(key, std::make_shared<ChecksumsCacheItem>(std::make_pair(ChecksumsCacheState::Cached, result)));
-
+            if(internalInsert(shard, key, name, result))
                 flag = true;
-            }
         }
         else
         {
@@ -199,7 +207,27 @@ public:
         }
     }
 
+    void setNvmCache(std::shared_ptr<NvmCache> nvm_cache_) { nvm_cache = nvm_cache_; }
+
 private:
+    using ChecksumsCacheBucket = BucketLRUCache<ChecksumsName, ChecksumsCacheItem, std::hash<ChecksumsName>, ChecksumsWeightFunction>;
+
+    bool internalInsert(ChecksumsCacheBucket & shard, const ChecksumsName& key, const String & name, std::shared_ptr<MergeTreeDataPartChecksums> result)
+    {
+        bool inserted = shard.emplace(key, std::make_shared<ChecksumsCacheItem>(std::make_pair(ChecksumsCacheState::Caching, nullptr)));
+        if (inserted)
+        {
+            {
+                size_t first_level_bucket = std::hash<String>()(name) % cache_shard_num;
+                std::unique_lock<std::mutex> guard(table_to_parts_cache_locks[first_level_bucket]);
+                table_to_parts_cache[first_level_bucket][name].insert(key);
+                LOG_DEBUG(&Poco::Logger::get("checksumsCache"), "checksums insert table {} part {} bucket {}", name, key, first_level_bucket);
+            }
+            shard.update(key, std::make_shared<ChecksumsCacheItem>(std::make_pair(ChecksumsCacheState::Cached, result)));
+        }
+        return inserted;
+    }
+
     std::pair<bool, std::shared_ptr<ChecksumsCacheItem>> onEvictChecksums(
             [[maybe_unused]]const ChecksumsName& key, const std::shared_ptr<ChecksumsCacheItem>& item, size_t)
     {
@@ -237,15 +265,35 @@ private:
             auto& shard = parts_to_checksums_cache.shard(key);
             shard.erase(key);
         }
+
+        if (nvm_cache && nvm_cache->isEnabled())
+        {
+            for (const auto & pair : removed_elements)
+            {
+                auto hash_key = HybridCache::makeHashKey(pair.first.c_str());
+                auto token = nvm_cache->createPutToken(hash_key.key());
+
+                auto & checksums = pair.second->second;
+                std::shared_ptr<Memory<>> mem = std::make_shared<Memory<>>(DBMS_DEFAULT_BUFFER_SIZE);
+                BufferWithOutsideMemory<WriteBuffer> write_buffer(*mem);
+                checksums->serialize(write_buffer);
+
+                nvm_cache->put(hash_key, std::move(mem), std::move(token), [](void * obj) {
+                    auto * ptr = reinterpret_cast<Memory<> *>(obj);
+                    return HybridCache::BufferView{ptr->size(), reinterpret_cast<UInt8 *>(ptr->data())};
+                }, HybridCache::EngineTag::ChecksumCache); 
+            }
+        }
     }
 
-private:
     size_t cache_shard_num;
     std::unique_ptr<std::unordered_map<String, std::set<ChecksumsName>>[]> table_to_parts_cache;
     std::unique_ptr<std::mutex[]> table_to_parts_cache_locks;
 
     ShardCache<ChecksumsName, std::hash<ChecksumsName>, 
         BucketLRUCache<ChecksumsName, ChecksumsCacheItem, std::hash<ChecksumsName>, ChecksumsWeightFunction>> parts_to_checksums_cache;
+
+    std::shared_ptr<NvmCache> nvm_cache{};
 };
 
 using ChecksumsCachePtr = std::shared_ptr<ChecksumsCache>;

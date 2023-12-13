@@ -81,8 +81,6 @@ protected:
     void initializeReaders(const MarkRanges & mark_ranges, const IMergeTreeReader::ValueSizeMap & avg_value_size_hints = IMergeTreeReader::ValueSizeMap{}, const ReadBufferFromFileBase::ProfileCallback & profile_callback = ReadBufferFromFileBase::ProfileCallback{});
     void insertMarkRangesForSegmentBitmapIndexFunctions(MergeTreeIndexExecutorPtr & index_executor, const MarkRanges & mark_ranges_inc);
 
-    void prepareForBitmapIndex(NamesAndTypesList & prewhere_columns, NamesAndTypesList & task_columns);
-
 protected:
     const MergeTreeMetaBase & storage;
     StorageMetadataPtr metadata_snapshot;

@@ -5,6 +5,8 @@
 #include <memory>
 
 #include <IO/BufferWithOwnMemory.h>
+#include <IO/ReadBuffer.h>
+#include <IO/WriteBuffer.h>
 #include <Common/BitHelpers.h>
 #include <Common/Exception.h>
 #include <common/StringRef.h>
@@ -117,6 +119,10 @@ public:
     // Return a mutable view
     MutableBufferView mutableView() { return MutableBufferView{data_size, data()}; }
 
+    WriteBuffer asWriteBuffer() { return WriteBuffer(reinterpret_cast<char *>(data()), data_size); }
+
+    ReadBuffer asReadBuffer() { return ReadBuffer(reinterpret_cast<char *>(data()), data_size, 0); }
+
     // Return true if data is nullptr
     bool isNull() const { return memory.data() == nullptr; }
 
@@ -172,7 +178,7 @@ public:
         memory.freeResource();
     }
 
-    Memory<>& getMemory() { return memory; }
+    Memory<> & getMemory() { return memory; }
 
 private:
     Buffer copyInternal(Buffer buf) const

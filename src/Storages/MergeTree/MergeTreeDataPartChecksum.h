@@ -38,7 +38,7 @@ namespace DB
 using StorageType = DiskType::Type;
 
 /// Checksum of one file.
-struct MergeTreeDataPartChecksum
+struct PACKED_LINLINE MergeTreeDataPartChecksum
 {
     using uint128 = CityHash_v1_0_2::uint128;
 
@@ -46,19 +46,23 @@ struct MergeTreeDataPartChecksum
     UInt64 file_size {};
     uint128 file_hash {};
 
-    bool is_compressed = false;
-    /// MOCK for MergeTreeCNCHDataDumper
-    bool is_deleted = false;
     Int64 mutation = 0;
 
     UInt64 uncompressed_size {};
     uint128 uncompressed_hash {};
 
-    MergeTreeDataPartChecksum() {}
+    bool is_compressed = false;
+    /// MOCK for MergeTreeCNCHDataDumper
+    bool is_deleted = false;
+
+    UInt16 padding1 {};
+    UInt32 padding2 {};
+
+    MergeTreeDataPartChecksum() = default;
     MergeTreeDataPartChecksum(UInt64 file_size_, uint128 file_hash_) : file_size(file_size_), file_hash(file_hash_) {}
     MergeTreeDataPartChecksum(UInt64 file_size_, uint128 file_hash_, UInt64 uncompressed_size_, uint128 uncompressed_hash_)
-        : file_size(file_size_), file_hash(file_hash_), is_compressed(true),
-        uncompressed_size(uncompressed_size_), uncompressed_hash(uncompressed_hash_) {}
+        : file_size(file_size_), file_hash(file_hash_),
+        uncompressed_size(uncompressed_size_), uncompressed_hash(uncompressed_hash_), is_compressed(true) {}
 
     void checkEqual(const MergeTreeDataPartChecksum & rhs, bool have_uncompressed, const String & name) const;
     void checkSize(const DiskPtr & disk, const String & path) const;
@@ -119,6 +123,10 @@ struct MergeTreeDataPartChecksums
     bool readV7(ReadBuffer & in);
 
     void write(WriteBuffer & to) const;
+
+    void serialize(WriteBuffer & to) const;
+
+    bool deserialize(ReadBuffer & in);
 
     /// Checksum from the set of checksums of .bin files (for deduplication).
     void computeTotalChecksumDataOnly(SipHash & hash) const;

@@ -255,8 +255,6 @@ BENCHMARK_DEFINE_F(BigHashBenchmark, SimpleInsert)(benchmark::State & state)
 // NOLINTNEXTLINE
 BENCHMARK_DEFINE_F(DiskCacheLRUBenchmark, SimpleInsert)(benchmark::State & state)
 {
-    auto volume = newDiskVolume();
-
     DB::DiskCacheSettings settings;
 
     HybridCache::WorkerPool pool(BenchmarkConfig::num_threads, {});
@@ -266,6 +264,7 @@ BENCHMARK_DEFINE_F(DiskCacheLRUBenchmark, SimpleInsert)(benchmark::State & state
     {
         fs::remove_all("./tmp/");
         fs::create_directories("./tmp/");
+        auto volume = newDiskVolume();
         IDiskCache::init(*getContext().context);
 
         DiskCacheLRU * cache = new DiskCacheLRU(

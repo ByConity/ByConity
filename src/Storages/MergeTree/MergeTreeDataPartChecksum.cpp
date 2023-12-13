@@ -435,6 +435,40 @@ void MergeTreeDataPartChecksums::write(WriteBuffer & to) const
     }
 }
 
+void MergeTreeDataPartChecksums::serialize(WriteBuffer & to) const
+{
+    writeVarUInt(files.size(), to);
+
+    for (const auto & file : files)
+    {
+        const String & name = file.first;
+        const Checksum & sum = file.second;
+
+        writeBinary(name, to);
+        writePODBinary(sum, to);
+    }
+}
+
+bool MergeTreeDataPartChecksums::deserialize(ReadBuffer & in)
+{
+    size_t count;
+
+    readVarUInt(count, in);
+
+    for (size_t i = 0; i < count; ++i)
+    {
+        String name;
+        Checksum sum;
+
+        readBinary(name, in);
+        readPODBinary(sum, in);
+
+        files.emplace(std::move(name), sum);
+    }
+
+    return true;
+}
+
 void MergeTreeDataPartChecksums::addFile(const String & file_name, UInt64 file_size, MergeTreeDataPartChecksum::uint128 file_hash)
 {
     files[file_name] = Checksum(file_size, file_hash);

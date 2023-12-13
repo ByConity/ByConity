@@ -1,7 +1,9 @@
+#include <fmt/core.h>
 #include <gtest/gtest.h>
 
-#include <Storages/DiskCache/Buffer.h>
 #include <DataStreams/MarkInCompressedFile.h>
+#include <Storages/DiskCache/Buffer.h>
+#include <Storages/MergeTree/MergeTreeDataPartChecksum.h>
 
 namespace DB::HybridCache
 {
@@ -131,7 +133,7 @@ TEST(Buffer, MarksInCompressedFile)
     auto view = HybridCache::BufferView{marks.size() * sizeof(MarkInCompressedFile), reinterpret_cast<const UInt8 *>(marks.raw_data())};
 
     HybridCache::Buffer buffer(view);
-    auto * mark0= reinterpret_cast<MarkInCompressedFile *>(buffer.data());
+    auto * mark0 = reinterpret_cast<MarkInCompressedFile *>(buffer.data());
     ASSERT_EQ(1, mark0->offset_in_compressed_file);
     ASSERT_EQ(2, mark0->offset_in_decompressed_block);
 
@@ -143,5 +145,22 @@ TEST(Buffer, MarksInCompressedFile)
     ASSERT_EQ(2, marks2[0].offset_in_decompressed_block);
     ASSERT_EQ(3, marks2[1].offset_in_compressed_file);
     ASSERT_EQ(4, marks2[1].offset_in_decompressed_block);
+}
+
+TEST(Buffer, MergeTreeDataPartChecksum)
+{
+    MergeTreeDataPartChecksums checksums;
+    for (int i = 0; i < 10; i++)
+        checksums.addFile(fmt::format("test{}", i), 100, {100, 100});
+
+    Buffer buffer(4096);
+    auto write_buffer = buffer.asWriteBuffer();
+    checksums.serialize(write_buffer);
+    
+    MergeTreeDataPartChecksums checksums2;
+    auto read_buffer = buffer.asReadBuffer();
+    checksums2.deserialize(read_buffer);
+
+    ASSERT_EQ(checksums.getTotalChecksumUInt128(), checksums2.getTotalChecksumUInt128());
 }
 }
