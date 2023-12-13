@@ -42,7 +42,7 @@ public:
     Range visitLimitNode(LimitNode & node, Void & context) override
     {
         auto source_range = VisitorUtil::accept(node.getChildren()[0], *this, context);
-        const auto * step = dynamic_cast<const LimitStep *>(node.getStep().get());
+        auto step = node.getStep();
         return applyLimit(applyOffset(source_range, step->getOffset()), step->getLimit());
     }
 
@@ -75,13 +75,13 @@ public:
 
     Range visitValuesNode(ValuesNode & node, Void &) override
     {
-        const auto * step = dynamic_cast<const ValuesStep *>(node.getStep().get());
+        auto step = node.getStep();
         return Range{step->getRows(), step->getRows()};
     }
 
     Range visitAggregatingNode(AggregatingNode & node, Void & context) override
     {
-        const auto * step = dynamic_cast<const AggregatingStep *>(node.getStep().get());
+        auto step = node.getStep();
         if (step->getKeys().empty())
             return Range{1, 1};
 
@@ -95,7 +95,7 @@ public:
     Range visitDistinctNode(DistinctNode & node, Void & context) override
     {
         auto source_range = VisitorUtil::accept(node.getChildren()[0], *this, context);
-        auto step = dynamic_cast<const DistinctStep *>(node.getStep().get());
+        auto step = node.getStep();
         auto limit_hint = step->getLimitHint();
         if (limit_hint != 0)
             return Range{std::min(static_cast<size_t>(1), source_range.lowerBound), std::min(limit_hint, source_range.upperBound)};

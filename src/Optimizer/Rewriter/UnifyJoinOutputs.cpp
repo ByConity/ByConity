@@ -42,7 +42,7 @@ std::unordered_map<PlanNodeId, UnionFind<String>> UnifyJoinOutputs::UnionFindExt
 
 Void UnifyJoinOutputs::UnionFindExtractor::visitJoinNode(JoinNode & node, std::unordered_map<PlanNodeId, UnionFind<String>> & union_find_map)
 {
-    auto step = dynamic_cast<const JoinStep *>(node.getStep().get());
+    auto step = node.getStep();
     if (!step->supportReorder(true))
         return visitPlanNode(node, union_find_map);
 
@@ -59,7 +59,7 @@ Void UnifyJoinOutputs::UnionFindExtractor::visitJoinNode(JoinNode & node, std::u
 
 Void UnifyJoinOutputs::UnionFindExtractor::visitCTERefNode(CTERefNode & node, std::unordered_map<PlanNodeId, UnionFind<String>> & context)
 {
-    const auto * step = dynamic_cast<const CTERefStep *>(node.getStep().get());
+    auto step = node.getStep();
     cte_helper.accept(step->getId(), *this, context);
     return Void{};
 }
@@ -86,7 +86,7 @@ PlanNodePtr UnifyJoinOutputs::Rewriter::visitPlanNode(PlanNodeBase & node, std::
 
 PlanNodePtr UnifyJoinOutputs::Rewriter::visitJoinNode(JoinNode & node, std::set<String> & require)
 {
-    auto step = dynamic_cast<const JoinStep *>(node.getStep().get());
+    auto step = node.getStep();
     if (!step->supportReorder(true))
         return visitPlanNode(node, require);
 
@@ -175,7 +175,7 @@ PlanNodePtr UnifyJoinOutputs::Rewriter::visitJoinNode(JoinNode & node, std::set<
 
 PlanNodePtr UnifyJoinOutputs::Rewriter::visitCTERefNode(CTERefNode & node, std::set<String> & require)
 {
-    auto step = dynamic_cast<const CTERefStep *>(node.getStep().get());
+    auto step = node.getStep();
     std::set<String> mapped;
     for (auto & item : require)
         if (step->getOutputColumns().contains(item))

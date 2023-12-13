@@ -743,4 +743,144 @@ bool merge_column_stats(
     return false;
 }
 
+static ColumnStatistics parse(const ApacheHive::LongColumnStatsData & stats)
+{
+    return ColumnStatistics{
+        .ndv = static_cast<UInt64>(stats.numDVs),
+        .min = static_cast<double>(stats.lowValue),
+        .max = static_cast<double>(stats.highValue),
+        .null_counts = static_cast<UInt64>(stats.numNulls),
+    };
+}
+
+static ColumnStatistics parse(const ApacheHive::DoubleColumnStatsData & stats)
+{
+    return ColumnStatistics{
+        .ndv = static_cast<UInt64>(stats.numDVs),
+        .min = static_cast<double>(stats.lowValue),
+        .max = static_cast<double>(stats.highValue),
+        .null_counts = static_cast<UInt64>(stats.numNulls),
+        .avg_len = 0,
+        .max_len = 0,
+    };
+}
+
+static ColumnStatistics parse(const ApacheHive::DateColumnStatsData & stats)
+{
+    return ColumnStatistics{
+        .ndv = static_cast<UInt64>(stats.numDVs),
+        .min = static_cast<double>(stats.lowValue.daysSinceEpoch),
+        .max = static_cast<double>(stats.highValue.daysSinceEpoch),
+        .null_counts = static_cast<UInt64>(stats.numNulls),
+    };
+}
+
+static ColumnStatistics parse(const ApacheHive::StringColumnStatsData & stats)
+{
+    return ColumnStatistics{
+        .ndv = static_cast<UInt64>(stats.numDVs),
+        .min = static_cast<double>(0),
+        .max = static_cast<double>(std::numeric_limits<UInt64>::max()),
+        .null_counts = static_cast<UInt64>(stats.numNulls),
+        .avg_len = stats.avgColLen,
+        .max_len = static_cast<UInt64>(stats.maxColLen)
+    };
+}
+
+static double decimalToDouble(const ApacheHive::Decimal & decimal)
+{
+    if (decimal.unscaled.empty())
+        return 0;
+
+    bool is_first = true;
+    double value = 0;
+    for (auto byte : decimal.unscaled)
+    {
+        if (is_first)
+        {
+            value = static_cast<Int8>(byte);
+            is_first = false;
+            continue;
+        }
+        value = value * 256 + static_cast<UInt8>(byte);
+    }
+    value *= std::pow(10, -decimal.scale);
+    return value;
+}
+
+static ColumnStatistics parse(const ApacheHive::DecimalColumnStatsData & stats)
+{
+    return ColumnStatistics{
+        .ndv = static_cast<UInt64>(stats.numDVs),
+        .min = decimalToDouble(stats.lowValue),
+        .max = decimalToDouble(stats.highValue),
+        .null_counts = static_cast<UInt64>(stats.numNulls),
+        .avg_len = 0,
+        .max_len = 0,
+    };
+}
+
+static ColumnStatistics parse(const ApacheHive::BooleanColumnStatsData & stats)
+{
+    UInt64 ndv = 0;
+    double min = 0;
+    double max = 0;
+    if (stats.numFalses > 0)
+    {
+        min = 0;
+        if (stats.numTrues > 0)
+        {
+            ndv = 2;
+            max = 1;
+        }
+        else
+        {
+            ndv = 1;
+            max = 0;
+        }
+    }
+    else if (stats.numTrues > 0)
+    {
+        ndv = 1;
+        min = max = 1;
+    }
+    else
+    {
+        ndv = 0;
+        min = max = std::numeric_limits<double>::quiet_NaN();
+    }
+
+    return ColumnStatistics{
+        .ndv = ndv,
+        .min = min,
+        .max = max,
+        .null_counts = static_cast<UInt64>(stats.numNulls),
+        .avg_len = 0,
+        .max_len = 0,
+    };
+}
+
+TableStatistics convertHiveStats(const std::pair<int64_t, ApacheHive::TableStatsResult> & hive_stats)
+{
+    std::unordered_map<String, ColumnStatistics> column_statistics;
+    for (const auto & col_obj : hive_stats.second.tableStats)
+    {
+        if (col_obj.statsData.__isset.booleanStats)
+            column_statistics[col_obj.colName] = parse(col_obj.statsData.booleanStats);
+        else if (col_obj.statsData.__isset.longStats)
+            column_statistics[col_obj.colName] = parse(col_obj.statsData.longStats);
+        else if (col_obj.statsData.__isset.doubleStats)
+            column_statistics[col_obj.colName] = parse(col_obj.statsData.doubleStats);
+        else if (col_obj.statsData.__isset.stringStats)
+            column_statistics[col_obj.colName] = parse(col_obj.statsData.stringStats);
+        else if (col_obj.statsData.__isset.decimalStats)
+            column_statistics[col_obj.colName] = parse(col_obj.statsData.decimalStats);
+        else if (col_obj.statsData.__isset.dateStats)
+            column_statistics[col_obj.colName] = parse(col_obj.statsData.dateStats);
+        // else if (col_obj.statsData.__isset.binaryStats)
+        //    todo
+    }
+    return TableStatistics{static_cast<UInt64>(hive_stats.first), column_statistics};
+}
+
 }

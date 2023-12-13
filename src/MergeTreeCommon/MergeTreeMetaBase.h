@@ -15,19 +15,20 @@
 
 #pragma once
 
+#include <Disks/StoragePolicy.h>
 #include <Interpreters/Context.h>
-#include <Storages/IStorage.h>
-#include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
-#include <Storages/extractKeyExpressionList.h>
-#include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
-#include <Storages/MergeTree/PinnedPartUUIDs.h>
-#include <Storages/MergeTree/MergeTreeMeta.h>
-#include <Storages/BitEngine/BitEngineHelper.h>
+#include <MergeTreeCommon/CnchStorageCommon.h>
 #include <MergeTreeCommon/IMergeTreePartMeta.h>
 #include <Processors/Merges/Algorithms/Graphite.h>
-#include <Common/SimpleIncrement.h>
+#include <Storages/BitEngine/BitEngineHelper.h>
+#include <Storages/IStorage.h>
+#include <Storages/MergeTree/CnchMergeTreeMutationEntry.h>
+#include <Storages/MergeTree/MergeTreeDataFormatVersion.h>
+#include <Storages/MergeTree/MergeTreeMeta.h>
+#include <Storages/MergeTree/PinnedPartUUIDs.h>
+#include <Storages/extractKeyExpressionList.h>
 #include <Transaction/TxnTimestamp.h>
-#include <Disks/StoragePolicy.h>
+#include <Common/SimpleIncrement.h>
 
 namespace DB
 {
@@ -392,6 +393,8 @@ public:
     void addMutationEntry(const CnchMergeTreeMutationEntry & entry);
     void removeMutationEntry(TxnTimestamp create_time);
     Strings getPlainMutationEntries();
+
+    virtual bool supportsOptimizer() const override { return true; }
 
     /// *********** START OF BitEngine-related members *********** ///
     // BitEngine mode means the storage can work for BitEngine encode/decode

@@ -59,37 +59,36 @@ DataDependencyDeriver::deriveStorageDataDependency(const StoragePtr & storage, C
     FunctionalDependencies functional_dependencies;
     InclusionDependency inclusion_dependency;
 
-    if (dynamic_cast<const MergeTreeMetaBase *>(storage.get()) || dynamic_cast<const StorageMemory *>(storage.get()))
+    // fill functioonal_dependencies
+    std::vector<Names> unique_columns = storage->getInMemoryMetadataPtr()->getUniqueNotEnforced().getUniqueNames();
+    Names all_columns = storage->getInMemoryMetadataPtr()->getColumns().getAll().getNames();
+
+    for (const auto & unique_names : unique_columns)
     {
-        // fill functioonal_dependencies
-        std::vector<Names> unique_columns = storage->getInMemoryMetadataPtr()->getUniqueNotEnforced().getUniqueNames();
-        Names all_columns = storage->getInMemoryMetadataPtr()->getColumns().getAll().getNames();
-
-        for (const auto & unique_names : unique_columns)
+        for (const auto & dependent_column : all_columns)
         {
-            for (const auto & dependent_column : all_columns)
-            {
-                std::unordered_set us(unique_names.begin(), unique_names.end());
-                if (!us.contains(dependent_column))
-                    functional_dependencies.update(FunctionalDependency{us, {dependent_column}});
-            }
+            std::unordered_set us(unique_names.begin(), unique_names.end());
+            if (!us.contains(dependent_column))
+                functional_dependencies.update(FunctionalDependency{us, {dependent_column}});
         }
+    }
 
-        // fill inclusion_dependency using pk
-        for (const auto & unique_names : unique_columns)
+    // fill inclusion_dependency using pk
+    for (const auto & unique_names : unique_columns)
+    {
+        if (unique_names.size() == 1)
         {
-            if (unique_names.size() == 1)
-            {
-                inclusion_dependency.emplace(unique_names[0], std::pair<bool, String>{false, storage->getStorageID().getTableName() + '.' + unique_names[0]});
-            }
+            inclusion_dependency.emplace(
+                unique_names[0], std::pair<bool, String>{false, storage->getStorageID().getTableName() + '.' + unique_names[0]});
         }
+    }
 
-        // fill inclusion_dependency using fk
-        auto fk_tuples = storage->getInMemoryMetadataPtr()->getForeignKeys().getForeignKeysTuple();
-        for (const auto & fk_tuple : fk_tuples)
-        {
-            inclusion_dependency.emplace(fk_tuple.fk_column_name, std::pair<bool, String>{true, fk_tuple.ref_table_name + '.' + fk_tuple.ref_column_name});
-        }
+    // fill inclusion_dependency using fk
+    auto fk_tuples = storage->getInMemoryMetadataPtr()->getForeignKeys().getForeignKeysTuple();
+    for (const auto & fk_tuple : fk_tuples)
+    {
+        inclusion_dependency.emplace(
+            fk_tuple.fk_column_name, std::pair<bool, String>{true, fk_tuple.ref_table_name + '.' + fk_tuple.ref_column_name});
     }
 
     return DataDependency{functional_dependencies, inclusion_dependency};

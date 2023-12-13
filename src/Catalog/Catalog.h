@@ -51,6 +51,8 @@ namespace DB
 {
 class AttachFilter;
 struct PrunedPartitions;
+using DataModelPartPtr = std::shared_ptr<Protos::DataModelPart>;
+using DataModelPartPtrVector = std::vector<DataModelPartPtr>;
 }
 
 namespace DB::Catalog

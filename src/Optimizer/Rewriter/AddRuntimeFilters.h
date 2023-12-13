@@ -100,9 +100,9 @@ public:
 
 protected:
     PlanNodePtr visitPlanNode(PlanNodeBase & plan, std::unordered_set<RuntimeFilterId> & allowed_runtime_filters) override;
-    PlanNodePtr visitFilterNode(FilterNode & node, std::unordered_set<RuntimeFilterId> & context) override;
-    PlanNodePtr visitJoinNode(JoinNode & node, std::unordered_set<RuntimeFilterId> & context) override;
-    PlanNodePtr visitCTERefNode(CTERefNode & node, std::unordered_set<RuntimeFilterId> & context) override;
+    PlanNodePtr visitFilterNode(FilterNode & node, std::unordered_set<RuntimeFilterId> & allowed_runtime_filters) override;
+    PlanNodePtr visitJoinNode(JoinNode & node, std::unordered_set<RuntimeFilterId> & allowed_runtime_filters) override;
+    PlanNodePtr visitCTERefNode(CTERefNode & node, std::unordered_set<RuntimeFilterId> & allowed_runtime_filters) override;
 
 private:
     ContextMutablePtr context;

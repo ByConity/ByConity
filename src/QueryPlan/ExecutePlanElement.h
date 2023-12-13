@@ -1,4 +1,5 @@
 #pragma once
+#include <memory>
 #include <QueryPlan/IQueryPlanStep.h>
 #include <Processors/Transforms/ExpressionTransform.h>
 #include <Storages/IStorage_fwd.h>
@@ -63,8 +64,8 @@ struct ExecutePlanElement
     // if use projection, below members are not empty
     ProjectionDescriptionRawPtr projection_desc = nullptr;
     Names projection_required_columns;
-    QueryPlanStepPtr rewritten_projection_step;
-    QueryPlanStepPtr rewritten_filter_step;
+    std::shared_ptr<ProjectionStep> rewritten_projection_step;
+    std::shared_ptr<FilterStep> rewritten_filter_step;
     ActionsDAGPtr prewhere_actions;
     ActionsDAGPtr projection_index_actions;
     bool read_bitmap_index = false;
@@ -81,8 +82,8 @@ struct ExecutePlanElement
                         MergeTreeDataSelectAnalysisResultPtr read_analysis_,
                         ProjectionDescriptionRawPtr projection_desc_,
                         Names required_columns_,
-                        QueryPlanStepPtr projection_,
-                        QueryPlanStepPtr filter_,
+                        std::shared_ptr<ProjectionStep> projection_,
+                        std::shared_ptr<FilterStep> filter_,
                         ActionsDAGPtr prewhere_actions_)
         : part_group(std::move(part_group_)),
         read_analysis(std::move(read_analysis_)),
@@ -106,14 +107,14 @@ struct ExecutePlanElement
 
             if (rewritten_filter_step)
             {
-                auto filter_dump = serializeAST(*(dynamic_cast<FilterStep &>(*rewritten_filter_step).getFilter()));
+                auto filter_dump = serializeAST(*rewritten_filter_step->getFilter());
                 os << "Rewritten Filter: " << filter_dump << std::endl;
             }
 
             if (rewritten_projection_step)
             {
                 os << "Column Mapping: " << std::endl;
-                auto assignment_dump = dynamic_cast<ProjectionStep &>(*rewritten_projection_step).getAssignments().toString();
+                auto assignment_dump = rewritten_projection_step->getAssignments().toString();
                 os << assignment_dump;
             }
         }

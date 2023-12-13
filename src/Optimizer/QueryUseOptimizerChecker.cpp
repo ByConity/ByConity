@@ -21,17 +21,11 @@
 #include <Interpreters/SelectQueryOptions.h>
 #include <Interpreters/getTableExpressions.h>
 #include <Interpreters/misc.h>
-#include <MergeTreeCommon/MergeTreeMetaBase.h>
 #include <Parsers/ASTExplainQuery.h>
 #include <Parsers/ASTSelectIntersectExceptQuery.h>
 #include <Parsers/ASTWithElement.h>
-#include <Storages/StorageDistributed.h>
 #include <Storages/StorageView.h>
 #include <common/logger_useful.h>
-#include <Storages/Hive/StorageCnchHive.h>
-#include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageMaterializedView.h>
-#include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Interpreters/executeQuery.h>
 //#include <Common/TestLog.h>
 
@@ -103,9 +97,7 @@ static bool checkDatabaseAndTable(String database_name, String table_name, Conte
         return ASTVisitorUtil::accept(subquery, checker, check_context);
     }
 
-    return dynamic_cast<const MergeTreeMetaBase *>(storage_table.get()) || dynamic_cast<const StorageCnchHive *>(storage_table.get())
-        || dynamic_cast<const StorageMaterializedView *>(storage_table.get())
-        || dynamic_cast<const IStorageCnchFile *>(storage_table.get());
+    return storage_table->supportsOptimizer();
 }
 
 bool QueryUseOptimizerChecker::check(ASTPtr node, ContextMutablePtr context, bool throw_exception)

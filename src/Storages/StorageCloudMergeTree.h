@@ -90,9 +90,9 @@ public:
 
     Pipe ingestPartition(const StorageMetadataPtr &, const PartitionCommand & command, ContextPtr local_context);
 
-    std::set<Int64> getRequiredBucketNumbers() const { return required_bucket_numbers; }
+    std::set<Int64> getRequiredBucketNumbers(ASTPtr /*where*/, ContextPtr /*context*/) const override { return required_bucket_numbers; }
     void setRequiredBucketNumbers(std::set<Int64> & required_bucket_numbers_) { required_bucket_numbers = required_bucket_numbers_; }
-    ASTs convertBucketNumbersToAstLiterals(const ASTPtr where_expression, ContextPtr context) const;
+    ASTs convertBucketNumbersToAstLiterals(ASTPtr where_expression, ContextPtr context) const override;
 
     /// check whether staged parts are too old.
     bool checkStagedParts();

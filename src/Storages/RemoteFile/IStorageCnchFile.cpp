@@ -133,7 +133,7 @@ void IStorageCnchFile::read(
 {
     tryUpdateFSClient(query_context);
     
-    auto prepare_result = prepareReadContext(column_names, metadata_snapshot, query_info, query_context, num_streams);
+    auto prepare_result = prepareReadContext(column_names, metadata_snapshot, query_info, query_context);
 
     /// If no parts to read from - execute locally, must make sure that all stages are executed
     /// because CnchMergeTree is a high order storage
@@ -192,8 +192,7 @@ PrepareContextResult IStorageCnchFile::prepareReadContext(
     const Names & column_names,
     const StorageMetadataPtr & metadata_snapshot,
     SelectQueryInfo & query_info,
-    ContextPtr query_context,
-    unsigned /*num_streams*/)
+    ContextPtr query_context)
 {
     auto txn = query_context->getCurrentTransaction();
     if (query_context->getServerType() == ServerType::cnch_server && txn && txn->isReadOnly())
@@ -435,4 +434,12 @@ QueryProcessingStage::Enum IStorageCnchFile::getQueryProcessingStage(
     }
 }
 
+StorageID IStorageCnchFile::prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context)
+{
+    auto prepare_result = prepareReadContext(output_columns, getInMemoryMetadataPtr(), query_info, local_context);
+
+    StorageID storage_id = getStorageID();
+    storage_id.table_name = prepare_result.local_table_name;
+    return storage_id;
+}
 }
