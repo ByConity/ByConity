@@ -112,6 +112,9 @@ MergeTreeSequentialSource::MergeTreeSequentialSource(
 
     if (future_files)
     {
+        /// need convert xx.xx to a subcolumn of nested column xx, this setting will be set at data_part->getReader()
+        reader_settings.convert_nested_to_subcolumns = true;
+
         reader = std::make_unique<MergeTreePrefetchedReaderCNCH>(
             data_part, columns_for_reader, metadata_snapshot, nullptr,
             MarkRanges{MarkRange(0, data_part->getMarksCount())}, reader_settings,

@@ -7,7 +7,12 @@
 #include <Storages/MergeTree/KeyCondition.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeIndices.h>
+
+#include <Common/config.h>
+#if USE_TSQUERY
 #include "Common/TextSreachQuery.h"
+#endif 
+
 #include <Common/ChineseTokenExtractor.h>
 #include <roaring.hh>
 #include <common/types.h>
@@ -115,8 +120,10 @@ private:
             /// Constants
             ALWAYS_FALSE,
             ALWAYS_TRUE,
+            #if USE_TSQUERY
             // FOR TEXT SEARCH
             FUNCTION_TEXT_SEARCH,
+            #endif
         };
 
         RPNElement( /// NOLINT
@@ -136,10 +143,12 @@ private:
 
         /// For FUNCTION_IN, FUNCTION_NOT_IN and FUNCTION_MULTI_SEARCH
         std::vector<GinFilters> set_gin_filters;
-
-        // FOr FUNCTION_TEXT_SEARCH
+        
+        #if USE_TSQUERY
+        // For FUNCTION_TEXT_SEARCH
         std::unique_ptr<TextSearchQueryExpression> text_search_filter; 
-
+        #endif 
+        
         /// For FUNCTION_IN and FUNCTION_NOT_IN
         std::vector<size_t> set_key_position;
     };

@@ -1,5 +1,9 @@
 #pragma once
 
+#include <Common/config.h>
+
+#if USE_TSQUERY
+
 #include <memory>
 #include <Interpreters/GinFilter.h>
 #include <TSQuery/TSQueryExpression.h>
@@ -62,3 +66,5 @@ private:
 
 
 }
+
+#endif

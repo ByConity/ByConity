@@ -39,6 +39,7 @@
 #include <Processors/Exchange/DataTrans/RpcChannelPool.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <Processors/Exchange/ExchangeOptions.h>
+#include <Processors/Exchange/ExchangeUtils.h>
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/IProcessor.h>
 #include <Processors/Pipe.h>
@@ -558,9 +559,7 @@ Processors DiskExchangeDataManager::createProcessors(BroadcastSenderProxyPtr sen
     auto buf = disk->readFile(file_name);
     auto source = std::make_shared<DiskExchangeDataSource>(header, std::move(buf));
     String name = BroadcastExchangeSink::generateName(key->exchange_id);
-    ExchangeOptions exchange_options{
-        .exchange_timeout_ts = query_context->getQueryExpirationTimeStamp(),
-        .force_use_buffer = query_context->getSettingsRef().exchange_force_use_buffer};
+    ExchangeOptions exchange_options = ExchangeUtils::getExchangeOptions(query_context);
     auto sink = std::make_shared<BroadcastExchangeSink>(
         std::move(header), std::vector<BroadcastSenderPtr>{std::move(sender)}, exchange_options, std::move(name));
     connect(source->getOutputs().front(), sink->getInputs().front());

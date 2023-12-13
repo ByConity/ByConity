@@ -43,7 +43,8 @@ MergeTreePrefetchedReaderCNCH::MergeTreePrefetchedReaderCNCH(
 
     try
     {
-        for (const NameAndTypePair& column : columns_)
+        /// need to use columns from IMergeTreeReader to read converted subcolumns of nested columns
+        for (const NameAndTypePair& column : columns)
             addStreams(column, profile_callback_, clock_type_,
                 &mocked_index_granularity_info);
     }

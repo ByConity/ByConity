@@ -24,9 +24,9 @@ String formatTenantConnectUserName(const String & user_name);
 
 String formatTenantEntityName(const String & name);
 
-String formatTenantEntityNameWithTenantId(const String & name, const String & tenant_id, char separator = '.');
-
 String getOriginalEntityName(const String & tenant_entity_name);
+
+bool isTenantMatchedEntityName(const String & tenant_entity_name);
 
 String getOriginalDatabaseName(const String & tenant_database_name);
 

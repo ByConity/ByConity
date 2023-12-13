@@ -1,4 +1,4 @@
-option(ENABLE_TSQUERY "Enable TSQUERY" ON)
+option(ENABLE_TSQUERY "Enable TSQUERY" OFF)
 
 if (ENABLE_TSQUERY)
     set (USE_TSQUERY 1)
@@ -7,6 +7,10 @@ if (ENABLE_TSQUERY)
     set (TSQUERY_LIBRARY tsquery)
 
     message(STATUS "Using TSQuery = ${USE_TSQUERY} : ${TSQEURY_INCLUDE_DIR} ${TSQUERY_LIBRARY}")
+else()
+    set (USE_TSQUERY 0)
+    message(STATUS "Using TSQuery = ${USE_TSQUERY} : ${TSQEURY_INCLUDE_DIR} ${TSQUERY_LIBRARY}")
 endif()
+
 
 

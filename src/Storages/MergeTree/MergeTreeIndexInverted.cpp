@@ -19,7 +19,12 @@
 #include <Storages/MergeTree/RPNBuilder.h>
 #include <Interpreters/ITokenExtractor.h>
 #include "common/logger_useful.h"
+#include <Common/config.h>
+
+#if USE_TSQUERY
 #include <Common/TextSreachQuery.h>
+#endif 
+
 #include <Common/ChineseTokenExtractor.h>
 #include <common/types.h>
 #include <Core/Types.h>
@@ -54,7 +59,7 @@ bool MergeTreeConditionInverted::createFunctionEqualsCondition(
     
     return true;
 }
-
+#if USE_TSQUERY
 bool MergeTreeConditionInverted::createFunctionTextSearchCondition(
     RPNElement & out, const Field & const_value, const GinFilterParameters & params, TokenExtractorPtr token_extractor, ChineseTokenExtractorPtr nlp_extractor)
 {
@@ -69,7 +74,7 @@ bool MergeTreeConditionInverted::createFunctionTextSearchCondition(
 
     return true;
 }
-
+#endif
 
 MergeTreeIndexGranuleInverted::MergeTreeIndexGranuleInverted(
     const String & index_name_, size_t columns_number, const GinFilterParameters & params_)
@@ -256,7 +261,10 @@ bool MergeTreeConditionInverted::alwaysUnknownOrTrue() const
             element.function == RPNElement::FUNCTION_EQUALS || element.function == RPNElement::FUNCTION_NOT_EQUALS
             || element.function == RPNElement::FUNCTION_IN || element.function == RPNElement::FUNCTION_NOT_IN
             || element.function == RPNElement::FUNCTION_MULTI_SEARCH || element.function == RPNElement::ALWAYS_FALSE
-            || element.function == RPNElement::FUNCTION_TEXT_SEARCH )
+            #if USE_TSQUERY
+            || element.function == RPNElement::FUNCTION_TEXT_SEARCH 
+            #endif
+        )
         {
             rpn_stack.push_back(false);
         }
@@ -381,6 +389,7 @@ bool MergeTreeConditionInverted::mayBeTrueOnGranuleInPart(
         {
             rpn_stack.emplace_back(true, false);
         }
+        #if USE_TSQUERY
         else if (element.function == RPNElement::FUNCTION_TEXT_SEARCH)
         {
             rpn_stack.emplace_back(
@@ -391,6 +400,7 @@ bool MergeTreeConditionInverted::mayBeTrueOnGranuleInPart(
                     filter_bitmap),
                     true);
         }
+        #endif
         else
             throw Exception("Unexpected function type in GinFilterCondition::RPNElement", ErrorCodes::LOGICAL_ERROR);
     }
@@ -441,13 +451,15 @@ bool MergeTreeConditionInverted::atomFromAST(const ASTPtr & node, Block & block_
         }
         else
             return false;
-
+        
+        #if USE_TSQUERY
         /// For textSearch 
         if (func_name == "textSearch")
         {
             out.key_column = key_column_num;
             return createFunctionTextSearchCondition(out, const_value, params, token_extractor, nlp_extractor);
         }
+        #endif
 
         if (const_type && const_type->getTypeId() != TypeIndex::String && const_type->getTypeId() != TypeIndex::FixedString
             && const_type->getTypeId() != TypeIndex::Array)

@@ -1,6 +1,7 @@
 #include <Interpreters/InterpreterShowAccessQuery.h>
 
 #include <Parsers/formatAST.h>
+#include <Parsers/ASTGrantQuery.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterShowCreateAccessEntityQuery.h>
 #include <Interpreters/InterpreterShowGrantsQuery.h>
@@ -37,6 +38,11 @@ BlockInputStreamPtr InterpreterShowAccessQuery::executeImpl() const
     WriteBufferFromOwnString buf;
     for (const auto & query : queries)
     {
+        if (getContext()->getUserName() != "default")
+        {
+            if (auto * to_rewrite_grant_query = query->as<ASTGrantQuery>())
+                to_rewrite_grant_query->rewriteNamesWithoutTenant(getContext().get());
+        }
         buf.restart();
         formatAST(*query, buf, false, true);
         column->insert(buf.str());
@@ -58,7 +64,8 @@ std::vector<AccessEntityPtr> InterpreterShowAccessQuery::getEntities() const
         auto ids = access_control.findAll(type);
         for (const auto & id : ids)
         {
-            if (auto entity = access_control.tryRead(id))
+            auto entity = access_control.tryRead(id);
+            if (entity && isTenantMatchedEntityName(entity->getName()))
                 entities.push_back(entity);
         }
     }

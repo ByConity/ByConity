@@ -376,6 +376,8 @@ bool HTTPHandler::authenticateUser(
             context->setTenantId(tenant_id_from_user);
             if (user.substr(pos + 1) == "default")
                 user = user.substr(pos + 1);
+            else
+                user[pos] = '.';
         }
 
         basic_credentials->setUserName(user); // add tenant_id to user here

@@ -117,7 +117,7 @@ BlockInputStreamPtr InterpreterShowGrantsQuery::executeImpl()
     {
         if (getContext()->getUserName() != "default")
         {
-            auto to_rewrite_grant_query = grant_query->as<ASTGrantQuery &>();
+            auto& to_rewrite_grant_query = grant_query->as<ASTGrantQuery &>();
             to_rewrite_grant_query.rewriteNamesWithoutTenant(getContext().get());
         }
         grant_buf.restart();
@@ -147,7 +147,7 @@ std::vector<AccessEntityPtr> InterpreterShowGrantsQuery::getEntities() const
     for (const auto & id : ids)
     {
         auto entity = access_control.tryRead(id);
-        if (entity)
+        if (entity && isTenantMatchedEntityName(entity->getName()))
             entities.push_back(entity);
     }
 

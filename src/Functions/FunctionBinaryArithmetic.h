@@ -479,13 +479,24 @@ public:
             }
 
         }
-        else if constexpr (is_division && is_decimal_b)
+        else if constexpr (is_division)
         {
-            processWithRightNullmapImpl<op_case>(a, b, c, size, right_nullmap, res_nullmap, [&scale_a](const auto & left, const auto & right)
+            if (scale_a != 1)
             {
-                return applyScaled<true>(left, right, scale_a);
-            });
-            return;
+                processWithRightNullmapImpl<op_case>(
+                    a, b, c, size, right_nullmap, res_nullmap, [&scale_a](const auto & left, const auto & right) {
+                        return applyScaled<true>(left, right, scale_a);
+                    });
+                return;
+            }
+            else if (scale_b != 1)
+            {
+                processWithRightNullmapImpl<op_case>(
+                    a, b, c, size, right_nullmap, res_nullmap, [&scale_b](const auto & left, const auto & right) {
+                        return applyScaled<false>(left, right, scale_b);
+                    });
+                return;
+            }
         }
 
         processWithRightNullmapImpl<op_case>(
