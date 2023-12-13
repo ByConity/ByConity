@@ -90,10 +90,6 @@ size_t MergeTreeBitmapIndexBoolReader::read(size_t from_mark, bool continue_read
     }
 
     rows_start = prev_rows_start;
-    
-    LOG_DEBUG(&Poco::Logger::get("MergeTreeBitMapIndexBoolReader"), fmt::format("IndexExecutor read from {} mark, max_rows_to_read {}, result_rows {}",
-                from_mark, max_rows_to_read, prev_res_num));
-
     return prev_res_num;
 }
 

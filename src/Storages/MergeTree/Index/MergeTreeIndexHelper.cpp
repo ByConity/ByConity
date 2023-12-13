@@ -313,7 +313,7 @@ size_t MergeTreeIndexExecutor::read(size_t from_mark, bool continue_reading, siz
         if (it->second && it->second->validIndexReader())
         {
             result_rows = it->second->read(from_mark, continue_reading, max_rows_to_read, res);
-            LOG_DEBUG(&Poco::Logger::get("MergeTreeIndexExecutor"), fmt::format("IndexExecutor ({}) read from {} mark, max_rows_to_read {}, result_rows {}", 
+            LOG_TRACE(&Poco::Logger::get("MergeTreeIndexExecutor"), fmt::format("IndexExecutor ({}) read from {} mark, max_rows_to_read {}, result_rows {}",
                 IndexTypeToString(it->first), from_mark, max_rows_to_read, result_rows));
         }
     }

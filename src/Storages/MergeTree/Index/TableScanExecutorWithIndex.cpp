@@ -80,11 +80,9 @@ ExecutePlan TableScanExecutorWithIndex::buildExecutePlan()
         // NOTE: It is not clear if we need it. E.g. projections do not support skip index for now.
         if (!normal_read_result->error())
             min_sum_marks = normal_read_result->marks() + 1;
-        
+
         bool has_bitmap_index = part_group.hasBitmapIndx();
-        auto projection_index_actions = index_context->getProjectionActions(has_bitmap_index);
         auto plan_element = ExecutePlanElement(part_group, std::move(normal_read_result), part_group.parts);
-        plan_element.projection_index_actions = projection_index_actions;
         plan_element.read_bitmap_index = has_bitmap_index;
         execute_plan.push_back(plan_element);
     }
