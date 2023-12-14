@@ -51,6 +51,9 @@ struct BlockIO
     std::shared_ptr<ProcessListEntry> process_list_entry;
     std::shared_ptr<PlanSegmentProcessListEntry> plan_segment_process_entry;
 
+    /// NOTE: make sure it's destructed after streams and pipeline.
+    ConnectionPtr remote_execution_conn;
+
     BlockOutputStreamPtr out;
     BlockInputStreamPtr in;
 
@@ -62,8 +65,6 @@ struct BlockIO
 
     /// When it is true, don't bother sending any non-empty blocks to the out stream
     bool null_format = false;
-
-    ConnectionPtr remote_execution_conn;
 
     Stopwatch watch;
 
