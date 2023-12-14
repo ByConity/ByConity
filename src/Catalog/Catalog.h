@@ -208,6 +208,7 @@ public:
 
 
     void renameTable(
+        const Settings & query_settings,
         const String & from_database,
         const String & from_table,
         const String & to_database,

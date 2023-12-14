@@ -56,6 +56,7 @@ public:
 
 private:
     RenameActionParams params;
+    Settings query_settings;
 };
 
 using DDLRenameActionPtr = std::shared_ptr<DDLRenameAction>;

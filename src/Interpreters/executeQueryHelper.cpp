@@ -61,6 +61,16 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
         else
             return {};
     }
+    else if (const auto * rename = ast->as<ASTRenameQuery>())
+    {
+        if (!rename->database)
+        {
+            database = rename->elements.at(0).from.database;
+            table = rename->elements.at(0).from.table;
+        }
+        else
+            return {};
+    }
     else
         return {};
 
