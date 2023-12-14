@@ -119,7 +119,6 @@ public:
     static FDBClientPtr Instance(const std::string & cluster_file);
     ~FDBClient();
     fdb_error_t CreateTransaction(FDBTransactionPtr tr);
-    fdb_error_t Get(const std::string & key, GetResponse & res);
     fdb_error_t Get(FDBTransactionPtr tr, const std::string & key, GetResponse & res);
     fdb_error_t Put(FDBTransactionPtr tr, const PutRequest & put);
     std::shared_ptr<Iterator> Scan(FDBTransactionPtr tr, const ScanRequest & scan_req);

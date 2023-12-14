@@ -54,8 +54,10 @@ public:
 
     void get(String & value) override
     {
+        FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
+        assertStatus(OperationType::GET, fdb_client->CreateTransaction(tr));
         FDB::GetResponse res;
-        assertStatus(OperationType::GET, fdb_client->Get(key_name, res));
+        assertStatus(OperationType::GET, fdb_client->Get(tr, key_name, res));
         value = res.value;
     }
 
