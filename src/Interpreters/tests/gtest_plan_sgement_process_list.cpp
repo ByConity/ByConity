@@ -21,6 +21,7 @@
 #include <Columns/IColumn.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <QueryPlan/ReadNothingStep.h>
+#include <Common/Stopwatch.h>
 #include <gtest/gtest.h>
 #include <Poco/ConsoleChannel.h>
 #include <common/scope_guard.h>

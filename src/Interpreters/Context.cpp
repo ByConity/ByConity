@@ -2405,13 +2405,13 @@ bool Context::isExplainQuery() const
     return is_explain_query;
 }
 
-void Context::setProcessListElement(ProcessList::Element * elem)
+void Context::setProcessListElement(QueryStatus * elem)
 {
     /// Set to a session or query. In the session, only one query is processed at a time. Therefore, the lock is not needed.
     process_list_elem = elem;
 }
 
-ProcessList::Element * Context::getProcessListElement() const
+QueryStatus * Context::getProcessListElement() const
 {
     return process_list_elem;
 }

@@ -583,7 +583,7 @@ if (USE_MSGPACK)
 endif()
 
 target_link_libraries (clickhouse_common_io PUBLIC ${FAST_FLOAT_LIBRARY})
-target_include_directories (clickhouse_common_io SYSTEM BEFORE PUBLIC ${FAST_FLOAT_INCLUDE_DIR})
+target_include_directories (clickhouse_common_io SYSTEM BEFORE PUBLIC ${FAST_FLOAT_INCLUDE_DIR} ${PARALLEL_HASHMAP_INCLUDE_DIR})
 
 if (USE_ORC)
     dbms_target_link_libraries(PUBLIC ${ORC_LIBRARIES})
