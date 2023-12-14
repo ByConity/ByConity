@@ -31,6 +31,7 @@
 #include <brpc/channel.h>
 #include <brpc/controller.h>
 #include <common/logger_useful.h>
+#include <Storages/MergeTree/MarkRange.h>
 namespace DB
 {
 CnchWorkerClient::CnchWorkerClient(String host_port_)
@@ -343,6 +344,7 @@ brpc::CallId CnchWorkerClient::sendResources(
 
         if (!resource.server_parts.empty())
         {
+            // todo(jiashuo): bitmap need handler?
             fillBasePartAndDeleteBitmapModels(
                 *resource.storage,
                 resource.server_parts,

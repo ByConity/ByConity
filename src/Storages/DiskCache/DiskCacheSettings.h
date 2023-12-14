@@ -58,6 +58,14 @@ struct DiskCacheSettings
     UInt64 meta_cache_size_ratio{0};
     UInt64 meta_cache_nums_ratio{50};
 
+    // config for cache stealing
+    UInt64 stealing_max_request_rate{0};
+    UInt64 stealing_connection_timeout_ms{10000};
+    UInt64 stealing_read_timeout_ms{20000};
+    UInt64 stealing_max_retry_times{3};
+    UInt64 stealing_retry_sleep_ms{100};
+    UInt64 stealing_max_queue_count{10000};
+
     std::string toString() const;
 };
 

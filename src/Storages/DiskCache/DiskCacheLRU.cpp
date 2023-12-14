@@ -22,6 +22,7 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include "Common/Exception.h"
 #include "Common/hex.h"
 #include "common/logger_useful.h"
 #include <Common/Throttler.h>
@@ -218,7 +219,6 @@ void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_
     }
 
     ProfileEvents::increment(ProfileEvents::DiskCacheSetTotalOps);
-
     auto key = hash(seg_name);
     auto& shard = containers.shard(key);
     // Insert cache meta first, if there is a entry already there, skip this insert
@@ -249,11 +249,11 @@ void DiskCacheLRU::set(const String& seg_name, ReadBuffer& value, size_t weight_
             DiskCacheMeta::State::Cached, reserved_space->getDisk(), weight
         ));
     }
-    catch(...)
+    catch(const Exception & e)
     {
         String local_disk_path = reserved_space == nullptr ? "" : reserved_space->getDisk()->getPath();
         tryLogCurrentException(log, fmt::format("Failed to key {} "
-            "to local, disk path: {}, weight: {}", seg_name, local_disk_path, weight_hint));
+            "to local, disk path: {}, weight: {}, fail: {}", seg_name, local_disk_path, weight_hint, e.message()));
         shard.erase(key);
     }
 }

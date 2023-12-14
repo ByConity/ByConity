@@ -125,6 +125,16 @@ public:
 
     void setVirtualPartSize(const UInt64 & virtual_part_size) const;
     UInt64 getVirtualPartSize() const;
+
+    void setHostPort(const String & disk_cache_host_port_, const String & assign_compute_host_port_) const
+    {
+        disk_cache_host_port = disk_cache_host_port_;
+        assign_compute_host_port = assign_compute_host_port_;
+    }
+
+    mutable String disk_cache_host_port;
+    mutable String assign_compute_host_port;
+
 private:
     mutable std::optional<UInt64> commit_time;
     mutable ServerDataPartPtr prev_part;

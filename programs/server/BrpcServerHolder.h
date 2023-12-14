@@ -4,6 +4,8 @@
 #include <CloudServices/CnchWorkerServiceImpl.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/DistributedStages/PlanSegmentManagerRpcService.h>
+#include <Storages/DistributedDataService.h>
+#include <Storages/RemoteDiskCacheService.h>
 #include <Interpreters/RuntimeFilter/RuntimeFilterService.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcExchangeReceiverRegistryService.h>
 #include <brpc/server.h>
@@ -35,6 +37,12 @@
         SERVER_REGISTER_SERVICE(PlanSegmentManagerRpcService); \
     }
 
+#define REGISTER_REMOTE_DISKCACHE_SERVICES(host_port) \
+{ \
+    LOG_DEBUG(&Poco::Logger::get("BrpcServerHolder"), "Start register RemoteDiskCacheService: {}", host_port); \
+    SERVER_REGISTER_SERVICE(RemoteDiskCacheService); \
+}
+
 namespace DB
 {
 
@@ -57,6 +65,7 @@ public:
         else if (global_context->getServerType() == ServerType::cnch_worker)
         {
             REGISTER_WORKER_SERVICES()
+            REGISTER_REMOTE_DISKCACHE_SERVICES(host_port)
         }
 
         if (global_context->getComplexQueryActive())

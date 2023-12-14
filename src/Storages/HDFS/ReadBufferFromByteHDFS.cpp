@@ -29,6 +29,8 @@
 namespace ProfileEvents
 {
     extern const int HdfsFileOpen;
+    extern const int HdfsFileOpenMs;
+    extern const int ReadBufferFromHdfsRead;
     extern const int HDFSReadElapsedMilliseconds;
     extern const int ReadBufferFromHdfsReadBytes;
     extern const int HDFSSeek;
@@ -136,12 +138,14 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
             fs = createHDFSFS(builder.get());
         });
 
+        Stopwatch watch;
         doWithRetry([this] {
             ProfileEvents::increment(ProfileEvents::HdfsFileOpen);
             fin = hdfsOpenFile(fs.get(), hdfs_file_path.c_str(), O_RDONLY, 0, 0, 0, ReadBufferFromHdfsCallBack);
             if (!fin)
                 throw Exception(ErrorCodes::CANNOT_OPEN_FILE, "Fail to open hdfs file {}. Error: {}", hdfs_file_path, std::string(hdfsGetLastError()));
         });
+        ProfileEvents::increment(ProfileEvents::HdfsFileOpenMs, watch.elapsedMilliseconds());
     }
 
     ~ReadBufferFromHDFSImpl()
@@ -178,6 +182,7 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
 
         file_offset += total_bytes_read;
 
+        ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsRead, 1);
         ProfileEvents::increment(ProfileEvents::ReadBufferFromHdfsReadBytes, total_bytes_read);
         ProfileEvents::increment(ProfileEvents::HDFSReadElapsedMilliseconds, watch.elapsedMilliseconds());
         return total_bytes_read;

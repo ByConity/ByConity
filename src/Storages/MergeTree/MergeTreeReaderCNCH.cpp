@@ -37,9 +37,11 @@
 #include <Storages/MergeTree/MergeTreeReaderStreamWithSegmentCache.h>
 #include <bits/types/clockid_t.h>
 #include <Poco/Logger.h>
+#include "common/logger_useful.h"
 #include <Common/escapeForFileName.h>
 #include <Common/ProfileEventsTimer.h>
 #include <Common/typeid_cast.h>
+#include "Storages/MergeTree/IMergeTreeDataPart.h"
 
 namespace ProfileEvents
 {
@@ -357,6 +359,10 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
             segment_cache->cacheSegmentsToLocalDisk(segments);
         }
 
+        PartHostInfo part_host{
+            .disk_cache_host_port = source_data_part->disk_cache_host_port,
+            .assign_compute_host_port = source_data_part->assign_compute_host_port};
+
         std::function<MergeTreeReaderStreamUniquePtr()> stream_builder = [=, this]() {
             return std::make_unique<MergeTreeReaderStreamWithSegmentCache>(
                 source_data_part->storage.getStorageID(),
@@ -364,14 +370,22 @@ void MergeTreeReaderCNCH::addStreamsIfNoBurden(
                 stream_name,
                 source_data_part->volume->getDisk(),
                 source_data_part->getMarksCount(),
-                data_path, data_file_offset, data_file_size,
-                mark_path, mark_file_offset, mark_file_size,
-                all_mark_ranges, settings, mark_cache, uncompressed_cache,
+                data_path,
+                data_file_offset,
+                data_file_size,
+                mark_path,
+                mark_file_offset,
+                mark_file_size,
+                all_mark_ranges,
+                settings,
+                mark_cache,
+                uncompressed_cache,
                 segment_cache.get(),
                 segment_cache_strategy == nullptr ? 1 : segment_cache_strategy->getSegmentSize(),
+                part_host,
                 &(source_data_part->index_granularity_info),
-                profile_callback, clock_type
-            );
+                profile_callback,
+                clock_type);
             // TODO: here we can use the pointer to source_data_part's index_granularity_info, because *source_data_part will not be destoryed
         };
 

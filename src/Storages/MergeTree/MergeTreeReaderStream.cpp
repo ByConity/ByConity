@@ -49,7 +49,7 @@ MergeTreeReaderStream::MergeTreeReaderStream(
         read_settings(settings_.read_settings), data_file_offset(bin_file_.offset),
         marks_loader(mrk_file_.disk, mark_cache_, mrk_file_.rel_path, stream_name_,
             marks_count_, *index_granularity_info_, settings_.save_marks_in_cache, mrk_file_.offset,
-            mrk_file_.size, settings_.read_settings)
+            mrk_file_.size, settings_)
 {
     /// Compute the size of the buffer.
     size_t max_mark_range_bytes = 0;

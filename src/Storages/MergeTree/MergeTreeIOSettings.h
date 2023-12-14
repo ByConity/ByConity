@@ -24,7 +24,9 @@
 #include <Core/Settings.h>
 #include <IO/ReadSettings.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include "common/types.h"
 #include "Core/NamesAndTypes.h"
+
 
 namespace DB
 {
@@ -46,6 +48,20 @@ struct MergeTreeReaderSettings
 
     /// whether read the original bitmap columns in BitEngine mode
     bool read_source_bitmap = true;
+
+    void setDiskCacheSteaing(UInt64 stealing_disk_cache)
+    {
+        if (stealing_disk_cache == 0)
+            remote_disk_cache_stealing = StealingCacheMode::DISABLE;
+        else if (stealing_disk_cache == 1)
+            remote_disk_cache_stealing = StealingCacheMode::READ_ONLY;
+        else if (stealing_disk_cache == 2)
+            remote_disk_cache_stealing = StealingCacheMode::WRITE_ONLY;
+        else if (stealing_disk_cache == 3)
+            remote_disk_cache_stealing = StealingCacheMode::READ_WRITE;
+    }
+
+    StealingCacheMode remote_disk_cache_stealing = StealingCacheMode::DISABLE;
 };
 
 struct MergeTreeWriterSettings

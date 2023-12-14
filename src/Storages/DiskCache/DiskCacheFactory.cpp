@@ -33,7 +33,7 @@ void DiskCacheFactory::init(Context & context)
         throw Exception("Can't repeat register DiskCache!", DB::ErrorCodes::LOGICAL_ERROR);
     const auto & config = context.getConfigRef();
 
-    // TODO: volume
+    // TODO(jiashuo): suppport multi volume
     VolumePtr disk_cache_volume = context.getStoragePolicy("default")->getVolume(0);
     auto throttler = context.getDiskCacheThrottler();
 

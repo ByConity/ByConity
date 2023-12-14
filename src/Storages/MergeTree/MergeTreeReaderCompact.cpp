@@ -64,7 +64,7 @@ MergeTreeReaderCompact::CompactDataReader::CompactDataReader(
         settings.save_marks_in_cache,
         data_part->getFileOffsetOrZero(data_part->index_granularity_info.getMarksFilePath(MergeTreeDataPartCompact::DATA_FILE_NAME)),
         data_part->getFileSizeOrZero(data_part->index_granularity_info.getMarksFilePath(MergeTreeDataPartCompact::DATA_FILE_NAME)),
-        settings.read_settings,
+        settings,
         std::dynamic_pointer_cast<const MergeTreeDataPartCompact>(data_part)->getColumnsWithoutByteMapColSize())
 {
     // Do not use max_read_buffer_size, but try to lower buffer size with maximal size of granule to avoid reading much data.

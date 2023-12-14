@@ -40,6 +40,12 @@ void DiskCacheSettings::loadFromConfig(const Poco::Util::AbstractConfiguration &
     previous_disk_cache_dir = config.getString(config_prefix + ".previous_disk_cache_dir", (disk_cache_name == "simple" || disk_cache_name == "MergeTree" ? "disk_cache,disk_cache_v1,mergetree_disk_cache" : ""));
     meta_cache_size_ratio = config.getUInt(config_prefix + ".meta_cache_size_ratio", 0);
     meta_cache_nums_ratio = config.getUInt(config_prefix + ".meta_cache_nums_ratio", 50);
+    stealing_max_request_rate = config.getUInt(config_prefix + ".stealing_max_request_rate", 0);
+    stealing_connection_timeout_ms = config.getUInt(config_prefix + ".stealing_connection_timeout_ms", 5000);
+    stealing_read_timeout_ms = config.getUInt(config_prefix + ".stealing_read_timeout_ms", 10000);
+    stealing_max_retry_times = config.getUInt(config_prefix + ".stealing_max_retry_times", 3);
+    stealing_retry_sleep_ms = config.getUInt(config_prefix + ".stealing_retry_sleep_ms", 100);
+    stealing_max_queue_count = config.getUInt(config_prefix + ".stealing_max_queue_count", 10000);
 }
 
 std::string DiskCacheSettings::toString() const

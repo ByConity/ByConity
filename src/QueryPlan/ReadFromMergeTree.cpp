@@ -30,6 +30,7 @@
 #include <common/logger_useful.h>
 #include <Common/JSONBuilder.h>
 #include <Common/escapeForFileName.h>
+#include "Storages/MergeTree/MergeTreeIOSettings.h"
 #include <Parsers/queryToString.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Interpreters/RewriteDistributedQueryVisitor.h>
@@ -73,14 +74,17 @@ static const char * indexTypeToString(ReadFromMergeTree::IndexType type)
     __builtin_unreachable();
 }
 
-static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & context)
+static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & context, const MergeTreeMetaBase & data)
 {
-    return {
+    MergeTreeReaderSettings settings{
         .read_settings = context->getReadSettings(),
         .save_marks_in_cache = true,
         .checksum_on_read = context->getSettingsRef().checksum_on_read,
-        .read_source_bitmap = !context->getSettingsRef().use_encoded_bitmap
+        .read_source_bitmap = !context->getSettingsRef().use_encoded_bitmap,
     };
+    
+    settings.setDiskCacheSteaing(data.getSettings()->disk_cache_stealing_mode);
+    return settings;
 }
 
 static Array extractMapColumnKeys(const MergeTreeMetaBase::DataPartsVector & parts)
@@ -170,7 +174,8 @@ ReadFromMergeTree::ReadFromMergeTree(
             data_.getPartitionValueType(),
             virt_column_names_,
             getIndexContext(query_info_), query_info_.read_bitmap_index)})
-    , reader_settings(getMergeTreeReaderSettings(context_))
+    , reader_settings(getMergeTreeReaderSettings(context_, data_))
+
     , prepared_parts(std::move(parts_))
     , delete_bitmap_getter(std::move(delete_bitmap_getter_))
     , real_column_names(std::move(real_column_names_))
@@ -1015,7 +1020,7 @@ MergeTreeDataSelectAnalysisResultPtr ReadFromMergeTree::selectRangesToRead(
         if (result.sampling.read_nothing)
             return std::make_shared<MergeTreeDataSelectAnalysisResult>(MergeTreeDataSelectAnalysisResult{.result = std::move(result)});
 
-        auto reader_settings = getMergeTreeReaderSettings(context);
+        auto reader_settings = getMergeTreeReaderSettings(context, data);
 
         for (const auto & part : parts)
             total_marks_pk += part->index_granularity.getMarksCountWithoutFinal();

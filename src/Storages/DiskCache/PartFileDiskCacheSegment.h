@@ -24,6 +24,7 @@
 #include <Storages/MergeTree/IMergeTreeDataPart_fwd.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
 #include <Storages/IStorage_fwd.h>
+#include "Storages/MergeTree/MergeTreeSettings.h"
 #include "Storages/MergeTree/MergeTreeSuffix.h"
 
 namespace DB
@@ -66,7 +67,7 @@ private:
     size_t marks_count;
     MarkCache * mark_cache;
 
-    ReadSettings read_settings;
+    MergeTreeReaderSettings merge_tree_reader_settings;
 
     String stream_name;
     String extension;

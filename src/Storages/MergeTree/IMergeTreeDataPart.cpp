@@ -41,6 +41,7 @@
 #include <Common/FieldVisitorsAccurateComparison.h>
 #include <common/JSON.h>
 #include <common/logger_useful.h>
+#include "Core/SettingsEnums.h"
 #include <Storages/KeyDescription.h>
 #include <Compression/getCompressionCodecForFile.h>
 #include <Parsers/queryToString.h>
@@ -1733,7 +1734,7 @@ bool IMergeTreeDataPart::enableDiskCache() const
         return storage.getSettings()->enable_local_disk_cache;
     else if (disk_cache_mode == DiskCacheMode::SKIP_DISK_CACHE)
         return false;
-    else if (disk_cache_mode == DiskCacheMode::USE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+    else if (disk_cache_mode == DiskCacheMode::USE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE)
         return true;
     else
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown disk cache mode");

@@ -22,6 +22,8 @@
 #include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <brpc/controller.h>
+#include "Common/ProfileEvents.h"
+#include "common/logger_useful.h"
 #include <common/logger_useful.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>

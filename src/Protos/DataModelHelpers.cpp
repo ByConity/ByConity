@@ -29,11 +29,13 @@
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Transaction/TxnTimestamp.h>
+#include "common/logger_useful.h"
 #include <Common/Exception.h>
 #include <common/JSON.h>
 #include <Disks/HDFS/DiskByteHDFS.h>
 #include <Storages/HDFS/HDFSCommon.h>
 #include <Storages/RemoteFile/CnchFileCommon.h>
+#include <Poco/Logger.h>
 
 namespace DB
 {
@@ -181,6 +183,7 @@ createPartFromModelCommon(const MergeTreeMetaBase & storage, const Protos::DataM
 
     std::unordered_set<std::string> projection_parts_names(part_model.projections().begin(), part_model.projections().end());
     part->setProjectionPartsNames(projection_parts_names);
+    part->setHostPort(part_model.disk_cache_host_port(), part_model.assign_compute_host_port());
 
     return part;
 }
@@ -245,7 +248,7 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     const auto cnch_part = std::dynamic_pointer_cast<const MergeTreeDataPartCNCH>(part.shared_from_this());
     if (cnch_part)
         part_model.set_marks_count(cnch_part->getMarksCount());
-    
+
     /// Normally, the DataModelPart::txnID and DataModelPart::part_info::mutation are always the same.
     /// But in some special cases(like ATTACH PARTITION, see CnchAttachProcessor::prepareParts),
     /// the DataModelPart::txnID not equal to DataModelPart::part_info::mutation.
@@ -321,6 +324,16 @@ void fillPartModel(const IStorage & storage, const IMergeTreeDataPart & part, Pr
     // For part in hdfs, it's id will be filled with 0
     RPCHelpers::fillUUID(part.getUUID(), *(part_model.mutable_part_id()));
 
+    if (!part.disk_cache_host_port.empty())
+    {
+        part_model.set_disk_cache_host_port(part.disk_cache_host_port);
+    }
+
+    if (!part.assign_compute_host_port.empty())
+    {
+        part_model.set_assign_compute_host_port(part.assign_compute_host_port);
+    }
+
     for (const auto & projection : part.getProjectionPartsNames())
         part_model.add_projections(projection);
 
@@ -353,6 +366,8 @@ void fillPartsModelForSend(
             part_model.set_columns(storage.getPartColumns(part_model.columns_commit_time())->toString());
             sent_columns_commit_time.insert(part_model.columns_commit_time());
         }
+        part_model.set_disk_cache_host_port(part->disk_cache_host_port);
+        part_model.set_assign_compute_host_port(part->assign_compute_host_port);
     }
 }
 

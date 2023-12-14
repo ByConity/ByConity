@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <ctime>
 #include <memory>
 #include <Compression/CachedCompressedReadBuffer.h>
@@ -24,9 +25,11 @@
 #include <Storages/DiskCache/IDiskCache.h>
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
+#include <IO/ReadBufferFromRpcStreamFile.h>
 
 namespace DB
 {
+
 
 class MergedReadBufferWithSegmentCache: public ReadBuffer
 {
@@ -34,7 +37,7 @@ public:
     MergedReadBufferWithSegmentCache(const StorageID& storage_id_,
         const String& part_name_, const String& stream_name_, const DiskPtr& source_disk_,
         const String& source_file_path_, size_t source_data_offset_,
-        size_t source_data_size_, size_t cache_segment_size_,
+        size_t source_data_size_, size_t cache_segment_size_, const PartHostInfo & part_host_,
         IDiskCache* segment_cache_, const MergeTreeReaderSettings& settings_,
         size_t total_segment_count_, MergeTreeMarksLoader& marks_loader_,
         UncompressedCache* uncompressed_cache_ = nullptr,
@@ -76,6 +79,8 @@ private:
 
     void seekToPosition(size_t segment_idx, const MarkInCompressedFile& mark_pos);
     bool seekToMarkInSegmentCache(size_t segment_idx, const MarkInCompressedFile& mark_pos);
+    bool seekToMarkInRemoteSegmentCache(size_t segment_idx, const MarkInCompressedFile& mark_pos, const String & segment_key);
+    void initCacheBufferIfNeeded(const DiskPtr & disk, const String & path, std::unique_ptr<ReadBufferFromRpcStreamFile> remote_cache = nullptr);
     void initSourceBufferIfNeeded();
 
     inline size_t toSourceDataOffset(size_t logical_offset) const;
@@ -112,6 +117,8 @@ private:
     std::optional<size_t> current_compressed_offset;
     DualCompressedReadBuffer cache_buffer;
     DualCompressedReadBuffer source_buffer;
+
+    PartHostInfo part_host;
 
     Poco::Logger* logger;
 };

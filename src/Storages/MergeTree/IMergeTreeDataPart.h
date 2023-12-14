@@ -78,8 +78,15 @@ class IMergeTreeDataPartWriter;
 class MarkCache;
 class UncompressedCache;
 
+struct PartHostInfo
+{
+    String disk_cache_host_port;
+    String assign_compute_host_port;
+};
+
 struct BitmapIndexChecker;
 using BitmapIndexCheckerPtr = std::shared_ptr<BitmapIndexChecker>;
+
 
 /// Description of the data part.
 class IMergeTreeDataPart : public std::enable_shared_from_this<IMergeTreeDataPart>
@@ -601,6 +608,15 @@ public:
 
     DiskCacheMode disk_cache_mode {DiskCacheMode::AUTO};
     bool enableDiskCache() const;
+
+    void setHostPort(const String & disk_cache_host_port_, const String & assign_compute_host_port_) const
+    {
+        disk_cache_host_port = disk_cache_host_port_;
+        assign_compute_host_port = assign_compute_host_port_;
+    }
+
+    mutable String disk_cache_host_port;
+    mutable String assign_compute_host_port;
 
 protected:
     friend class MergeTreeMetaBase;

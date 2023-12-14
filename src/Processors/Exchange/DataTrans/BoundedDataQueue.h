@@ -19,6 +19,9 @@
 #include <type_traits>
 #include <bthread/condition_variable.h>
 #include <bthread/mutex.h>
+#include <fmt/core.h>
+#include <Poco/Logger.h>
+#include "common/logger_useful.h"
 #include <Common/CurrentMetrics.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
@@ -41,6 +44,7 @@ private:
         std::unique_lock<bthread::Mutex> lock(mutex);
         while (queue.size() >= capacity && !is_closed)
         {
+            LOG_TRACE(&Poco::Logger::get("BoundedDataQueue"), fmt::format("Queue is full and waiting, current size: {}, max size: {}", queue.size(), capacity));
             full_cv.wait(lock);
         }
         if (is_closed)

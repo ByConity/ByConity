@@ -309,6 +309,7 @@
     M(WriteBufferFromHdfsWrite, "")\
     M(WriteBufferFromHdfsWriteFailed, "")\
     M(HdfsFileOpen, "")\
+    M(HdfsFileOpenMs, "")\
     M(ReadBufferFromHdfsRead, "")\
     M(ReadBufferFromHdfsReadFailed, "")\
     M(ReadBufferFromHdfsReadBytes, "")\
@@ -365,6 +366,7 @@
       "Number of times part allocation has been split between using bucket number and hashing due to partially clustered bucket table") \
     M(CnchSendResourceRpcCallElapsedMilliseconds, "Total RPC time for send resource to all workers, exclude RPC wait time") \
     M(CnchSendResourceElapsedMilliseconds, "Total time for send resource to all workers") \
+    M(CnchDiskCacheNodeUnLocalityParts, "Total count of un-locality disk cache part") \
     \
     M(IntentLockElapsedMilliseconds, "Total time spent to acquire intent locks") \
     M(IntentLockWriteIntentElapsedMilliseconds, "Total time spent to write intents") \
@@ -815,6 +817,14 @@
     M(ReadBufferFromS3ReadMicro, "The time spent ReadBufferFromS3 read from s3 stream") \
     M(S3StreamInitMicroseconds, "Time spent initializing connection to S3.") \
     M(ReadBufferFromS3SeekTimes, "The seek times of read buffer from s3.") \
+    \
+    M(ReadBufferFromRpcStreamFileRead, "remote rpc file data read count") \
+    M(ReadBufferFromRpcStreamFileReadFailed, "remote rpc file data read failed count") \
+    M(ReadBufferFromRpcStreamFileReadMs, "remote rpc file data read ms") \
+    M(ReadBufferFromRpcStreamFileReadBytes, "remote rpc file data read bytes") \
+    M(ReadBufferFromRpcStreamFileConnect, "remote rpc file data connect count") \
+    M(ReadBufferFromRpcStreamFileConnectFailed, "remote rpc file data connect failed count") \
+    M(ReadBufferFromRpcStreamFileConnectMs, "remote rpc file data connect ms") \
     \
     M(IOSchedulerOpenFileMicro, "Time used in open file when using io scheduler") \
     M(IOSchedulerScheduleMicro, "Time used in schedule io request") \

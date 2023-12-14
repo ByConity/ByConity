@@ -5277,6 +5277,8 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
                 return PartAllocator::RING_CONSISTENT_HASH;
             case 2:
                 return PartAllocator::STRICT_RING_CONSISTENT_HASH;
+            case 3: 
+                return PartAllocator::SIMPLE_HASH;
             default:
                 return PartAllocator::JUMP_CONSISTENT_HASH;
         }
@@ -5291,6 +5293,8 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
             return PartAllocator::RING_CONSISTENT_HASH;
         case 2:
             return PartAllocator::STRICT_RING_CONSISTENT_HASH;
+        case 3: 
+            return PartAllocator::SIMPLE_HASH;
         default:
             return PartAllocator::JUMP_CONSISTENT_HASH;
     }

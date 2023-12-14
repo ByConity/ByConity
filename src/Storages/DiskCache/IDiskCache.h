@@ -128,6 +128,8 @@ public:
         }
     }
 
+    DiskCacheSettings getSettings() const { return settings;} 
+
 protected:
     VolumePtr volume;
     ThrottlerPtr disk_cache_throttler;

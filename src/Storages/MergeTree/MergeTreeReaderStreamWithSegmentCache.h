@@ -43,7 +43,7 @@ public:
         const String& mark_path_, off_t mark_offset_, size_t mark_size_,
         const MarkRanges& all_mark_ranges_, const MergeTreeReaderSettings& settings_,
         MarkCache* mark_cache_, UncompressedCache* uncompressed_cache_,
-        IDiskCache* segment_cache_, size_t cache_segment_size_,
+        IDiskCache* segment_cache_, size_t cache_segment_size_, const PartHostInfo & part_host_, 
         const MergeTreeIndexGranularityInfo* index_granularity_info_,
         const ReadBufferFromFileBase::ProfileCallback& profile_callback_,
         clockid_t clock_type_);

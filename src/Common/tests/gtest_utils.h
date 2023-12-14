@@ -15,10 +15,15 @@
 
 #pragma once
 
+#include <Poco/AutoPtr.h>
+#include <Poco/ConsoleChannel.h>
+#include <Poco/Logger.h>
+#include <Common/Exception.h>
+
 namespace UnitTest
 {
 
-extern void initLogger();
+extern void initLogger(const String & level = "trace");
 
 }
 

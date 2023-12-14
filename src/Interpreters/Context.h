@@ -1534,7 +1534,9 @@ public:
         JUMP_CONSISTENT_HASH = 0,
         RING_CONSISTENT_HASH = 1,
         STRICT_RING_CONSISTENT_HASH = 2,
+        SIMPLE_HASH = 3,//Note: Now just used for test disk cache stealing so not used for online
     };
+
     PartAllocator getPartAllocationAlgo() const;
 
     String getDefaultCnchPolicyName() const;
