@@ -421,6 +421,10 @@ target_include_directories(clickhouse_common_io SYSTEM PUBLIC ${UDNS_INCLUDE_DIR
 
 # dbms_target_link_libraries(PUBLIC ch_contrib::abseil_swiss_tables)
 
+# Make dbms depend on roaring instead of clickhouse_common_io so that roaring itself can depend on clickhouse_common_io
+# That way we we can redirect malloc/free functions avoiding circular dependencies
+dbms_target_link_libraries(PUBLIC roaring)
+
 if (USE_RDKAFKA)
     dbms_target_link_libraries(PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY} )
     dbms_target_include_directories(SYSTEM BEFORE PRIVATE  ${RAPIDJSON_INCLUDE_DIR})

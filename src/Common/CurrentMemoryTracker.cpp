@@ -54,6 +54,12 @@ namespace
     }
 }
 
+void check()
+{
+    if (auto * memory_tracker = getMemoryTracker())
+        memory_tracker->allocImpl(0, true);
+}
+
 void alloc(Int64 size)
 {
     bool throw_if_memory_exceeded = true;
