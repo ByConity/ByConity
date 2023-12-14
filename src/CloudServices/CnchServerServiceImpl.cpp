@@ -1150,7 +1150,7 @@ void CnchServerServiceImpl::redirectAttachDetachedS3Parts(
             {
                 auto target_server = global_context->getCnchTopologyMaster()->
                         getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
-                if (target_server.empty() || isLocalServer(target_server.getRPCAddress(), std::to_string(global_context->getRPCPort())))
+                if (target_server.empty() || !isLocalServer(target_server.getRPCAddress(), std::to_string(global_context->getRPCPort())))
                     throw Exception("Redirect detach/attach parts failed because choose wrong host server.", ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
             };
 
@@ -1232,7 +1232,7 @@ void CnchServerServiceImpl::redirectDetachAttachedS3Parts(
             {
                 auto target_server = global_context->getCnchTopologyMaster()->
                         getTargetServer(UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), true);
-                if (target_server.empty() || isLocalServer(target_server.getRPCAddress(), std::to_string(global_context->getRPCPort())))
+                if (target_server.empty() || !isLocalServer(target_server.getRPCAddress(), std::to_string(global_context->getRPCPort())))
                     throw Exception("Redirect detach/attach parts failed because choose wrong host server.", ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
             };
 
