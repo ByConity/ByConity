@@ -139,6 +139,14 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
         current_segment_idx(0), current_compressed_offset(std::nullopt), part_host(part_host_),
         logger(&Poco::Logger::get("MergedReadBufferWithSegmentCache"))
 {
+    initialize();
+}
+
+void MergedReadBufferWithSegmentCache::initialize() {
+    if (seekToMarkInSegmentCache(0, {0, 0}))
+        return;
+    // No segment cache, trying to use source reader
+    initSourceBufferIfNeeded();
 }
 
 size_t MergedReadBufferWithSegmentCache::readBig(char *to, size_t n)
@@ -238,6 +246,32 @@ bool MergedReadBufferWithSegmentCache::nextImpl()
     }
 
     return !encounter_eof;
+}
+
+void MergedReadBufferWithSegmentCache::setReadUntilPosition(size_t position)
+{
+    read_until_position = position;
+    // Only set when active buffer is source_buffer
+    if (source_buffer.initialized())
+        source_buffer.activeBuffer().setReadUntilPosition(source_data_offset + position);
+}
+
+void MergedReadBufferWithSegmentCache::setReadUntilEnd()
+{
+    read_until_position = source_data_size;
+    if (source_buffer.initialized())
+        source_buffer.activeBuffer().setReadUntilPosition(source_data_offset + source_data_size);
+}
+
+
+ReadBuffer& MergedReadBufferWithSegmentCache::activeBuffer() {
+    return cache_buffer.initialized() ? cache_buffer.activeBuffer() : source_buffer.activeBuffer();
+}
+
+void MergedReadBufferWithSegmentCache::prefetch(Priority priority)
+{
+    if (cache_buffer.initialized() || source_buffer.initialized())
+        activeBuffer().prefetch(priority);
 }
 
 void MergedReadBufferWithSegmentCache::seekToStart()
@@ -463,6 +497,12 @@ void MergedReadBufferWithSegmentCache::initSourceBufferIfNeeded()
     {
         source_buffer.disableChecksumming();
     }
+
+    // When source buffer is not initialized, setting read_until_position may be failed.
+    // Therefore, we record and set it to source buffer after initializing.
+    if (read_until_position)
+        setReadUntilPosition(read_until_position);
+
 }
 
 size_t MergedReadBufferWithSegmentCache::toSourceDataOffset(size_t logical_offset) const

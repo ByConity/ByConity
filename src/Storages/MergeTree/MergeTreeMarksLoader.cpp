@@ -226,6 +226,8 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
             auto buf = disk->readFile(mrk_path, load_mark_read_settings);
             if (buf->seek(mark_file_offset) != mark_file_offset)
                 throw Exception("Cannot seek to mark file  " + mrk_path + " for stream " + stream_name, ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
+            // prefetch mark file
+            buf->setReadUntilPosition(mark_file_offset + mark_file_size);
             return buf;
         }();
 

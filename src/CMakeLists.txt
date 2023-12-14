@@ -111,6 +111,7 @@ add_headers_and_sources(dbms ResourceGroup)
 add_headers_and_sources(dbms ResourceManagement)
 add_headers_and_sources(dbms TSO)
 
+add_headers_and_sources(dbms Disks/IO)
 if(USE_RDKAFKA)
     add_headers_and_sources(dbms Storages/Kafka)
 endif()

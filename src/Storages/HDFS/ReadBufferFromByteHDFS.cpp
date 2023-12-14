@@ -124,11 +124,14 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
 
     bool pread {false};
     size_t file_offset = 0;
+    size_t read_until_position = 0;
 
     ReadBufferFromHDFSImpl(
-        const String & hdfs_file_path_, bool pread_, const HDFSConnectionParams & hdfs_params_)
+        const String & hdfs_file_path_, bool pread_, const HDFSConnectionParams & hdfs_params_,
+        size_t read_until_position_)
         : hdfs_params(hdfs_params_)
         , pread(pread_)
+        , read_until_position(read_until_position_)
     {
         Poco::URI uri(hdfs_file_path_);
         hdfs_file_path = uri.getPath();
@@ -156,6 +159,18 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
 
     size_t readImpl(char * to, size_t bytes)
     {
+        size_t num_bytes_to_read = bytes;
+        if (read_until_position)
+        {
+            if (read_until_position == file_offset)
+                return 0;
+
+            if (read_until_position < file_offset)
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Attempt to read beyond right offset ({} > {})", file_offset, read_until_position - 1);
+
+            num_bytes_to_read = std::min(bytes, read_until_position - file_offset);
+        }
+
         Stopwatch watch;
         size_t total_bytes_read = 0;
         do
@@ -163,9 +178,9 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
             int bytes_read = 0;
 
             if (pread)
-                bytes_read = hdfsPRead(fs.get(), fin, to + total_bytes_read, bytes - total_bytes_read);
+                bytes_read = hdfsPRead(fs.get(), fin, to + total_bytes_read, num_bytes_to_read - total_bytes_read);
             else
-                bytes_read = hdfsRead(fs.get(), fin, to + total_bytes_read, bytes - total_bytes_read);
+                bytes_read = hdfsRead(fs.get(), fin, to + total_bytes_read, num_bytes_to_read - total_bytes_read);
 
             if (bytes_read < 0)
             {
@@ -178,7 +193,7 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
             if (bytes_read == 0)
                 break;
             total_bytes_read += bytes_read;
-        } while (total_bytes_read < bytes);
+        } while (total_bytes_read < num_bytes_to_read);
 
         file_offset += total_bytes_read;
 
@@ -213,6 +228,18 @@ struct ReadBufferFromByteHDFS::ReadBufferFromHDFSImpl
             throw Exception(ErrorCodes::UNKNOWN_FILE_SIZE, "Cannot find out file size for: {}", hdfs_file_path);
         return file_info->mSize;
     }
+
+    void setReadUntilPosition(size_t position)
+    {
+        if (position != static_cast<size_t>(read_until_position))
+            read_until_position = position;
+    }
+
+    void setReadUntilEnd()
+    {
+        if (read_until_position)
+            read_until_position = 0;
+    }
 };
 
 ReadBufferFromByteHDFS::ReadBufferFromByteHDFS(
@@ -222,14 +249,53 @@ ReadBufferFromByteHDFS::ReadBufferFromByteHDFS(
     size_t buf_size_,
     char * existing_memory_,
     size_t alignment_,
-    ThrottlerPtr total_network_throttler_)
-    : ReadBufferFromFileBase(buf_size_, existing_memory_, alignment_)
-    , impl(std::make_unique<ReadBufferFromHDFSImpl>(hdfs_file_path_, pread_, hdfs_params_))
+    ThrottlerPtr total_network_throttler_,
+    bool use_external_buffer_,
+    off_t read_until_position_)
+    : ReadBufferFromFileBase(use_external_buffer_ ? 0 : buf_size_, existing_memory_, alignment_)
+    , impl(std::make_unique<ReadBufferFromHDFSImpl>(hdfs_file_path_, pread_, hdfs_params_, read_until_position_))
     , total_network_throttler(total_network_throttler_)
 {
 }
 
 ReadBufferFromByteHDFS::~ReadBufferFromByteHDFS() = default;
+
+IAsynchronousReader::Result ReadBufferFromByteHDFS::readInto(char * data, size_t size, size_t read_offset, size_t ignore_bytes)
+{
+    /**
+     * Set `data` to current working and internal buffers.
+     * Internal buffer with size `size`. Working buffer with size 0.
+     */
+    set(data, size);
+
+    bool result = false;
+
+    seek(read_offset, SEEK_SET);
+    /**
+     * Lazy seek is performed here.
+     * In asynchronous buffer when seeking to offset in range [pos, pos + min_bytes_for_seek]
+     * we save how many bytes need to be ignored (new_offset - position() bytes).
+     */
+    if (ignore_bytes)
+    {
+        ignore(ignore_bytes);
+        result = hasPendingData();
+        ignore_bytes = 0;
+    }
+
+    if (!result)
+        result = next();
+
+    /// Required for non-async reads.
+    if (result)
+    {
+        assert(available());
+        // nextimpl_working_buffer_offset = offset;
+        return { working_buffer.size(), BufferBase::offset(), nullptr };
+    }
+
+    return {0, 0, nullptr};
+}
 
 bool ReadBufferFromByteHDFS::nextImpl()
 {
@@ -249,7 +315,6 @@ bool ReadBufferFromByteHDFS::nextImpl()
 
 off_t ReadBufferFromByteHDFS::seek(off_t offset_, int whence_)
 {
-
     if (whence_ == SEEK_CUR)
         offset_ = getPosition() + offset_;
     else if (whence_ != SEEK_SET)
@@ -294,6 +359,19 @@ String ReadBufferFromByteHDFS::getFileName() const
     return impl->hdfs_file_path;
 }
 
+void ReadBufferFromByteHDFS::setReadUntilPosition(size_t position)
+{
+    impl->setReadUntilPosition(position);
+}
+
+void ReadBufferFromByteHDFS::setReadUntilEnd()
+{
+    impl->setReadUntilEnd();
+}
+
+size_t ReadBufferFromByteHDFS::getFileOffsetOfBufferEnd() const {
+    return impl->file_offset;
+}
 
 size_t ReadBufferFromByteHDFS::readBigAt(char * to, size_t n, size_t range_begin, const std::function<bool(size_t)> & progress_callback)
 {
@@ -301,7 +379,7 @@ size_t ReadBufferFromByteHDFS::readBigAt(char * to, size_t n, size_t range_begin
         return 0;
 
     /// make a impl copy
-    auto hdfs_impl = std::make_shared<ReadBufferFromHDFSImpl>(impl->hdfs_file_path, /*pread*/ true, impl->hdfs_params);
+    auto hdfs_impl = std::make_shared<ReadBufferFromHDFSImpl>(impl->hdfs_file_path, /*pread*/ true, impl->hdfs_params, 0);
     hdfs_impl->seek(range_begin);
     size_t bytes_read = hdfs_impl->readImpl(to, n);
     if (bytes_read && progress_callback)

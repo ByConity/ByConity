@@ -46,8 +46,9 @@ private:
     std::unique_ptr<ReadBufferFromFileBase> file_in;
 
     const std::string path;
-    //size_t file_pos;
-    off_t file_pos;
+
+    /// Current position in file_in
+    size_t file_pos;
     /// It represents the end of file in local storage. but in remote storage(e.g. hdfs),
     /// We merge some small file to a big data file, so it represents the end pos of small file in one big data file.
     const off_t limit_offset_in_file;
@@ -60,11 +61,17 @@ private:
     UncompressedCache::MappedPtr owned_cell;
 
     void initInput();
+
     bool nextImpl() override;
+
+    void prefetch(Priority priority) override;
 
     /// Passed into file_in.
     ReadBufferFromFileBase::ProfileCallback profile_callback;
     clockid_t clock_type {};
+
+    /// Check comment in CompressedReadBuffer
+    /* size_t nextimpl_working_buffer_offset; */
 
 public:
     CachedCompressedReadBuffer(
@@ -76,6 +83,8 @@ public:
         size_t file_size_ = 0,
         bool is_limit_ = false);
 
+    /// Seek is lazy. It doesn't move the position anywhere, just remember them and perform actual
+    /// seek inside nextImpl.
     void seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block);
 
     void setProfileCallback(const ReadBufferFromFileBase::ProfileCallback & profile_callback_, clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE)
@@ -84,7 +93,22 @@ public:
         clock_type = clock_type_;
     }
 
-    String getPath() const { return path; }
+    void setReadUntilPosition(size_t position) override
+    {
+        if (file_in)
+            file_in->setReadUntilPosition(position);
+    }
+
+    void setReadUntilEnd() override
+    {
+        if (file_in)
+            file_in->setReadUntilEnd();
+    }
+
+    String getPath() const
+    {
+        return path;
+    }
 
     size_t getSizeCompressed() const { return owned_cell == nullptr ? 0 : owned_cell->compressed_size; }
 

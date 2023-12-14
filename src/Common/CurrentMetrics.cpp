@@ -100,6 +100,7 @@
     M(OpenFileForRead, "Number of files open for reading") \
     M(OpenFileForWrite, "Number of files open for writing") \
     M(Read, "Number of read (read, pread, io_getevents, etc.) syscalls in fly") \
+    M(RemoteRead, "Number of read with remote reader in fly") \
     M(Write, "Number of write (write, pwrite, io_getevents, etc.) syscalls in fly") \
     M(NetworkReceive, \
       "Number of threads receiving data from network. Only ClickHouse-related network interaction is included, not by 3rd party " \
@@ -147,6 +148,8 @@
     M(GlobalThreadActive, "Number of threads in global thread pool running a task.") \
     M(LocalThread, "Number of threads in local thread pools. The threads in local thread pools are taken from the global thread pool.") \
     M(LocalThreadActive, "Number of threads in local thread pools running a task.") \
+    M(ThreadPoolRemoteFSReaderThreads, "Number of threads in the thread pool for remote_filesystem_read_method=threadpool.") \
+    M(ThreadPoolRemoteFSReaderThreadsActive, "Number of threads in the thread pool for remote_filesystem_read_method=threadpool running a task.") \
     M(DistributedFilesToInsert, \
       "Number of pending files to process for asynchronous insertion into Distributed tables. Number of files for every shard is summed.") \
     M(BrokenDistributedFilesToInsert, \
@@ -165,7 +168,8 @@
     M(PartsInMemory, "In-memory parts.") \
     M(PartsCNCH, "CNCH parts.") \
     M(MMappedFiles, "Total number of mmapped files.") \
-    M(MMappedFileBytes, "Sum size of mmapped file regions.") \
+    M(MMappedFileBytes, "Sum size of mmapped file regions.")     \
+    M(AsynchronousReadWait, "Number of threads waiting for asynchronous read.") \
     M(MemoryTrackingForExchange, "Total amount of memory (bytes) allocated for complex query exchange") \
     M(ParquetDecoderThreads, "Number of threads in the ParquetBlockInputFormat thread pool.") \
     M(ParquetDecoderThreadsActive, "Number of threads in the ParquetBlockInputFormat thread pool running a task.") \

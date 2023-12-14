@@ -49,13 +49,18 @@ void CachedCompressedReadBuffer::initInput()
     }
 }
 
+void CachedCompressedReadBuffer::prefetch(Priority priority)
+{
+    initInput();
+    file_in->prefetch(priority);
+}
 
 bool CachedCompressedReadBuffer::nextImpl()
 {
 
     /// It represents the end of file when the position exceeds the limit in hdfs shared storage or handling implicit column data in compact impl.
     /// TODO: handle hdfs case
-    if (/*(storage_type == StorageType::Hdfs || */is_limit /*)*/ && file_pos >= limit_offset_in_file)
+    if (/*(storage_type == StorageType::Hdfs || */is_limit /*)*/ && file_pos >= static_cast<size_t>(limit_offset_in_file))
         return false;
 
     /// Let's check for the presence of a decompressed block in the cache, grab the ownership of this block, if it exists.
@@ -91,6 +96,12 @@ bool CachedCompressedReadBuffer::nextImpl()
 
     working_buffer = Buffer(reinterpret_cast<char *>(owned_cell->data.data()), reinterpret_cast<char *>(owned_cell->data.data()) + owned_cell->data.size() - owned_cell->additional_bytes);
 
+    /// nextimpl_working_buffer_offset is set in the seek function (lazy seek). So we have to
+    /// check that we are not seeking beyond working buffer.
+    if (nextimpl_working_buffer_offset > working_buffer.size())
+        throw Exception(ErrorCodes::SEEK_POSITION_OUT_OF_BOUND, "Seek position is beyond the decompressed block (pos: "
+        "{}, block size: {})", nextimpl_working_buffer_offset, toString(working_buffer.size()));
+
     file_pos += owned_cell->compressed_size;
 
     return true;
@@ -117,31 +128,31 @@ CachedCompressedReadBuffer::CachedCompressedReadBuffer(
 
 void CachedCompressedReadBuffer::seek(size_t offset_in_compressed_file, size_t offset_in_decompressed_block)
 {
+    /// Nothing to do if we already at required position
+    if (!owned_cell && file_pos == offset_in_compressed_file
+        && ((!buffer().empty() && offset() == offset_in_decompressed_block) ||
+            nextimpl_working_buffer_offset == offset_in_decompressed_block))
+        return;
+
     if (owned_cell &&
         offset_in_compressed_file == file_pos - owned_cell->compressed_size &&
         offset_in_decompressed_block <= working_buffer.size())
     {
-        bytes += offset();
         pos = working_buffer.begin() + offset_in_decompressed_block;
-        bytes -= offset();
     }
     else
     {
+        /// Remember position in compressed file (will be moved in nextImpl)
         file_pos = offset_in_compressed_file;
-
+        /// We will discard our working_buffer, but have to account rest bytes
         bytes += offset();
-
+        /// No data, everything discarded
         resetWorkingBuffer();
+        owned_cell.reset();
 
-        nextImpl();
-
-        if (offset_in_decompressed_block > working_buffer.size())
-            throw Exception("Seek position is beyond the decompressed block"
-                " (pos: " + toString(offset_in_decompressed_block) + ", block size: " + toString(working_buffer.size()) + ")",
-                ErrorCodes::SEEK_POSITION_OUT_OF_BOUND);
-
-        pos = working_buffer.begin() + offset_in_decompressed_block;
-        bytes -= offset();
+        /// Remember required offset in decompressed block which will be set in
+        /// the next ReadBuffer::next() call
+        nextimpl_working_buffer_offset = offset_in_decompressed_block;
     }
 }
 

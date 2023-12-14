@@ -30,6 +30,7 @@
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <fmt/core.h>
 #include <Common/Exception.h>
+#include <Storages/MergeTree/IMergeTreeReaderStream.h>
 
 namespace DB
 {
@@ -43,18 +44,26 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
     IDiskCache* segment_cache_, size_t cache_segment_size_, const PartHostInfo & part_host_,
     const MergeTreeIndexGranularityInfo* index_granularity_info_,
     const ReadBufferFromFileBase::ProfileCallback& profile_callback_,
-    clockid_t clock_type_):
-        marks_loader(disk_, mark_cache_, mark_path_,
+    clockid_t clock_type_, bool is_low_cardinality_dictionary_):
+        IMergeTreeReaderStream(disk_, mark_cache_, mark_path_,
             stream_name_, marks_count_, *index_granularity_info_,
             settings_.save_marks_in_cache, mark_offset_, mark_size_,
-            settings_, 1, segment_cache_ ? segment_cache_->getMetaCache().get() : nullptr, part_host_, storage_id_.uuid,
-            part_name_)
+            settings_, data_size_, is_low_cardinality_dictionary_, part_host_,
+            1, segment_cache_ ? segment_cache_->getMetaCache().get() : nullptr, storage_id_.uuid, part_name_)
 {
     size_t max_mark_range_bytes = 0;
     size_t sum_mark_range_bytes = 0;
 
-    markRangeStatistics(all_mark_ranges_, marks_loader, data_size_,
-        &max_mark_range_bytes, &sum_mark_range_bytes);
+    for (const auto & mark_range : all_mark_ranges_)
+    {
+        size_t left_mark = mark_range.begin;
+        size_t right_mark = mark_range.end;
+        size_t left_offset = left_mark < marks_count ? marks_loader.getMark(left_mark).offset_in_compressed_file : 0;
+        auto mark_range_bytes = getRightOffset(right_mark) - left_offset;
+
+        max_mark_range_bytes = std::max(max_mark_range_bytes, mark_range_bytes);
+        sum_mark_range_bytes += mark_range_bytes;
+    }
 
     if (max_mark_range_bytes == 0)
         max_mark_range_bytes = settings_.read_settings.buffer_size;
@@ -86,49 +95,4 @@ void MergeTreeReaderStreamWithSegmentCache::seekToMark(size_t mark)
 {
     read_buffer_holder->seekToMark(mark);
 }
-
-void MergeTreeReaderStreamWithSegmentCache::markRangeStatistics(const MarkRanges& all_mark_ranges,
-    MergeTreeMarksLoader& marks_loader, size_t file_size, size_t* max_mark_range_bytes,
-    size_t* sum_mark_range_bytes)
-{
-    size_t marks_count = marks_loader.marksCount();
-    for (const auto & mark_range : all_mark_ranges)
-    {
-        size_t left_mark = mark_range.begin;
-        size_t right_mark = mark_range.end;
-
-        /// NOTE: if we are reading the whole file, then right_mark == marks_count
-        /// and we will use max_read_buffer_size for buffer size, thus avoiding the need to load marks.
-
-        /// If the end of range is inside the block, we will need to read it too.
-        if (right_mark < marks_count && marks_loader.getMark(right_mark).offset_in_decompressed_block > 0)
-        {
-            auto indices = collections::range(right_mark, marks_count);
-            auto it = std::upper_bound(indices.begin(), indices.end(), right_mark, [&marks_loader](size_t i, size_t j)
-            {
-                return marks_loader.getMark(i).offset_in_compressed_file < marks_loader.getMark(j).offset_in_compressed_file;
-            });
-
-            right_mark = (it == indices.end() ? marks_count : *it);
-        }
-
-        size_t mark_range_bytes;
-
-        /// If there are no marks after the end of range, just use file size
-        if (right_mark >= marks_count
-            || (right_mark + 1 == marks_count
-                && marks_loader.getMark(right_mark).offset_in_compressed_file == marks_loader.getMark(mark_range.end).offset_in_compressed_file))
-        {
-            mark_range_bytes = file_size - (left_mark < marks_count ? marks_loader.getMark(left_mark).offset_in_compressed_file : 0);
-        }
-        else
-        {
-            mark_range_bytes = marks_loader.getMark(right_mark).offset_in_compressed_file - marks_loader.getMark(left_mark).offset_in_compressed_file;
-        }
-
-        *max_mark_range_bytes = std::max(*max_mark_range_bytes, mark_range_bytes);
-        *sum_mark_range_bytes += mark_range_bytes;
-    }
-}
-
 }

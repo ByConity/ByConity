@@ -69,6 +69,7 @@ public:
         const BitmapBuildInfo & bitmap_build_info) const override;
 
     bool isStoredOnDisk() const override { return false; }
+    bool isStoredOnRemoteDisk() const override { return false; }
     bool hasColumnFiles(const NameAndTypePair & column) const override { return !!getColumnPosition(column.name); }
     String getFileNameForColumn(const NameAndTypePair & /* column */) const override { return ""; }
     void renameTo(const String & new_relative_path, bool remove_new_dir_if_exists) const override;

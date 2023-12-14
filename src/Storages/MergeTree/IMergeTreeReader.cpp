@@ -47,34 +47,6 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
-static ReadBuffer* getStream(bool stream_for_prefix, const ISerialization::SubstreamPath& substream_path,
-    MergeTreeReaderWide::FileStreams& streams, const NameAndTypePair& name_and_type,
-    size_t from_mark, bool continue_reading, ISerialization::SubstreamsCache& cache)
-{
-    /// If substream have already been read.
-    if (cache.count(ISerialization::getSubcolumnNameForStream(substream_path)))
-        return nullptr;
-
-    String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
-
-    auto it = streams.find(stream_name);
-    if (it == streams.end())
-        return nullptr;
-
-    IMergeTreeReaderStream & stream = *it->second;
-
-    if (stream_for_prefix)
-    {
-        stream.seekToStart();
-    }
-    else if (!continue_reading)
-    {
-        stream.seekToMark(from_mark);
-    }
-
-    return stream.data_buffer;
-}
-
 static std::unique_ptr<CompressedDataIndex> getCompressedIndex(
     const MergeTreeDataPartPtr& data_part, const NameAndTypePair& name_and_type,
     const ISerialization::SubstreamPath& substream_path)
@@ -371,6 +343,12 @@ void IMergeTreeReader::checkNumberOfColumns(size_t num_columns_to_read) const
                         "got " + toString(num_columns_to_read), ErrorCodes::LOGICAL_ERROR);
 }
 
+bool IMergeTreeReader::isLowCardinalityDictionary(const ISerialization::SubstreamPath & substream_path)
+{
+    // TODO: Check it's right or not in CNCH
+    return substream_path.size() > 1 && substream_path[substream_path.size() - 2].type == ISerialization::Substream::Type::DictionaryKeys;
+}
+
 void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, const String & col_name,
 	const ReadBufferFromFileBase::ProfileCallback & profile_callback, clockid_t clock_type)
 {
@@ -392,6 +370,7 @@ void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, 
         if (!data_file_exists)
             return;
 
+        bool is_lc_dict = isLowCardinalityDictionary(substream_path);
         streams.emplace(
             implicit_stream_name,
             std::make_unique<MergeTreeReaderStream>(
@@ -415,7 +394,8 @@ void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, 
                 uncompressed_cache,
                 &data_part->index_granularity_info,
                 profile_callback,
-                clock_type
+                clock_type,
+                is_lc_dict
             )
         );
     };
@@ -425,10 +405,156 @@ void IMergeTreeReader::addByteMapStreams(const NameAndTypePair & name_and_type, 
     serializations.emplace(name_and_type.name, std::move(serialization));
 }
 
+static ReadBuffer * getStream(
+    bool seek_to_start,
+    const ISerialization::SubstreamPath & substream_path,
+    IMergeTreeReader::FileStreams & streams,
+    const NameAndTypePair & name_and_type,
+    size_t from_mark, bool seek_to_mark,
+    size_t current_task_last_mark,
+    ISerialization::SubstreamsCache & cache)
+{
+    /// If substream have already been read.
+    if (cache.contains(ISerialization::getSubcolumnNameForStream(substream_path)))
+        return nullptr;
+
+    String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
+
+    auto it = streams.find(stream_name);
+    if (it == streams.end())
+        return nullptr;
+
+    IMergeTreeReaderStream & stream = *it->second;
+    // Adjust right mark MUST be executed before seek(), otherwise seek position may over until_postion
+    stream.adjustRightMark(current_task_last_mark);
+
+    if (seek_to_start)
+        stream.seekToStart();
+    else if (seek_to_mark)
+        stream.seekToMark(from_mark);
+
+    return stream.getDataBuffer();
+}
+
+void IMergeTreeReader::deserializePrefix(
+    const SerializationPtr & serialization,
+    const NameAndTypePair & name_and_type,
+    size_t current_task_last_mark,
+    ISerialization::SubstreamsCache & cache)
+{
+    const auto & name = name_and_type.name;
+    if (!deserialize_binary_bulk_state_map.contains(name))
+    {
+        ISerialization::DeserializeBinaryBulkSettings deserialize_settings;
+        deserialize_settings.getter = [&](const ISerialization::SubstreamPath & substream_path)
+        {
+            return getStream(/* seek_to_start = */true, substream_path, streams, name_and_type, 0, /* seek_to_mark = */false, current_task_last_mark, cache);
+        };
+        serialization->deserializeBinaryBulkStatePrefix(deserialize_settings, deserialize_binary_bulk_state_map[name]);
+    }
+}
+
+
+void IMergeTreeReader::prefetchForAllColumns(
+    Priority priority, NamesAndTypesList & prefetch_columns, size_t from_mark, size_t current_task_last_mark, bool continue_reading)
+{
+    bool do_prefetch = data_part->isStoredOnRemoteDisk()
+        ? settings.read_settings.remote_fs_prefetch
+        : settings.read_settings.local_fs_prefetch;
+
+    if (!do_prefetch)
+        return;
+
+    /// Request reading of data in advance,
+    /// so if reading can be asynchronous, it will also be performed in parallel for all columns.
+    auto name_and_type = prefetch_columns.begin();
+    for (size_t pos = 0; pos < prefetch_columns.size(); ++pos, ++name_and_type)
+    {
+        auto column_from_part = getColumnFromPart(*name_and_type);
+        const auto & [name, type] = column_from_part;
+
+        if (name == "_part_row_number")
+            continue;
+        try
+        {
+            auto & cache = caches[column_from_part.getNameInStorage()];
+            if (type->isMap() && !type->isMapKVStore())
+                prefetchForMapColumn(priority, column_from_part, from_mark, continue_reading, current_task_last_mark);
+            else
+                prefetchForColumn(
+                    priority, column_from_part, serializations[name], from_mark, continue_reading,
+                    current_task_last_mark, cache);
+        }
+        catch (Exception & e)
+        {
+            /// Better diagnostics.
+            e.addMessage("(while reading column " + name + ")");
+            throw;
+        }
+    }
+}
+
+void IMergeTreeReader::prefetchForMapColumn(
+    Priority priority,
+    const NameAndTypePair & name_and_type,
+    size_t from_mark,
+    bool continue_reading,
+    size_t current_task_last_mark)
+{
+    const auto & [name, type] = name_and_type;
+    // collect all the substreams based on map column's name and its keys substream.
+    // and somehow construct runtime two implicit columns(key&value) representation.
+    auto keys_iter = map_column_keys.equal_range(name);
+    const DataTypeByteMap & type_map = typeid_cast<const DataTypeByteMap &>(*type);
+    DataTypePtr impl_value_type = type_map.getValueTypeForImplicitColumn();
+
+    for (auto kit = keys_iter.first; kit != keys_iter.second; ++kit)
+    {
+        String impl_key_name = getImplicitColNameForMapKey(name, kit->second);
+        NameAndTypePair implicit_key_name_and_type{impl_key_name, impl_value_type};
+        auto cache = caches[implicit_key_name_and_type.getNameInStorage()];
+
+        // If MAP implicit column and MAP column co-exist in columns, implicit column should
+        // only read only once.
+        if (dup_implicit_keys.count(impl_key_name) != 0)
+            continue;
+
+        const SerializationPtr & serialization = serializations[impl_key_name];
+        prefetchForColumn(priority, implicit_key_name_and_type, serialization, from_mark,
+            continue_reading, current_task_last_mark, cache);
+    }
+}
+
+void IMergeTreeReader::prefetchForColumn(
+    Priority priority,
+    const NameAndTypePair & name_and_type,
+    const SerializationPtr & serialization,
+    size_t from_mark,
+    bool continue_reading,
+    size_t current_task_last_mark,
+    ISerialization::SubstreamsCache & cache)
+{
+    deserializePrefix(serialization, name_and_type, current_task_last_mark, cache);
+
+    serialization->enumerateStreams([&](const ISerialization::SubstreamPath & substream_path)
+    {
+        String stream_name = ISerialization::getFileNameForStream(name_and_type, substream_path);
+
+        if (!prefetched_streams.contains(stream_name))
+        {
+            bool seek_to_mark = !continue_reading;
+            if (ReadBuffer * buf = getStream(false, substream_path, streams, name_and_type, from_mark, seek_to_mark, current_task_last_mark, cache))
+            {
+                buf->prefetch(priority);
+                prefetched_streams.insert(stream_name);
+            }
+        }
+    });
+}
+
 void IMergeTreeReader::readMapDataNotKV(
     const NameAndTypePair & name_and_type, ColumnPtr & column,
-    size_t from_mark, bool continue_reading, size_t max_rows_to_read,
-    std::unordered_map<String, ISerialization::SubstreamsCache> & caches,
+    size_t from_mark, bool continue_reading, size_t current_task_last_mark, size_t max_rows_to_read,
     std::unordered_map<String, size_t> & res_col_to_idx, Columns & res_columns)
 {
     size_t column_size_before_reading = column->size();
@@ -461,9 +587,10 @@ void IMergeTreeReader::readMapDataNotKV(
 
 
         impl_key_col_holder.push_back(impl_value_type->createColumn());
-        auto & implValueColumn = impl_key_col_holder.back();
-        readData(implicit_key_name_and_type, implValueColumn, from_mark, continue_reading, max_rows_to_read, cache);
-        impl_key_values[kit->second] = {0, &(*implValueColumn)};
+        auto & impl_value_column = impl_key_col_holder.back();
+        readData(implicit_key_name_and_type, impl_value_column, from_mark, continue_reading,
+            current_task_last_mark, max_rows_to_read, cache);
+        impl_key_values[kit->second] = {0, &(*impl_value_column)};
     }
 
     // after reading all implicit values columns based files(built by keys), it's time to
@@ -473,8 +600,8 @@ void IMergeTreeReader::readMapDataNotKV(
 }
 
 size_t IMergeTreeReader::skipMapDataNotKV(const NameAndTypePair& name_and_type,
-    size_t from_mark, bool continue_reading, size_t max_rows_to_skip,
-    std::unordered_map<String, ISerialization::SubstreamsCache>& caches)
+    size_t from_mark, bool continue_reading, size_t current_task_last_mark,
+    size_t max_rows_to_skip)
 {
     const auto & [name, type] = name_and_type;
 
@@ -497,7 +624,7 @@ size_t IMergeTreeReader::skipMapDataNotKV(const NameAndTypePair& name_and_type,
         }
 
         skipData(implicit_key_name_and_type, from_mark, continue_reading,
-            max_rows_to_skip, cache);
+            current_task_last_mark, max_rows_to_skip, cache);
     }
 
     return std::min(max_rows_to_skip, data_part->rows_count - next_row_number_to_read);
@@ -505,8 +632,8 @@ size_t IMergeTreeReader::skipMapDataNotKV(const NameAndTypePair& name_and_type,
 
 void IMergeTreeReader::readData(
     const NameAndTypePair & name_and_type, ColumnPtr & column,
-    size_t from_mark, bool continue_reading, size_t max_rows_to_read,
-    ISerialization::SubstreamsCache & cache)
+    size_t from_mark, bool continue_reading, size_t current_task_last_mark,
+    size_t max_rows_to_read, ISerialization::SubstreamsCache & cache)
 {
     double & avg_value_size_hint = avg_value_size_hints[name_and_type.name];
     ISerialization::DeserializeBinaryBulkSettings deserialize_settings;
@@ -517,22 +644,15 @@ void IMergeTreeReader::readData(
     };
 
     const auto & name = name_and_type.name;
-    auto serialization = serializations[name];
-
-    if (deserialize_binary_bulk_state_map.count(name) == 0)
-    {
-        deserialize_settings.getter = [&](const ISerialization::SubstreamPath& substream_path)
-        {
-            return getStream(true, substream_path, streams, name_and_type, from_mark,
-                continue_reading, cache);
-        };
-        serialization->deserializeBinaryBulkStatePrefix(deserialize_settings, deserialize_binary_bulk_state_map[name]);
-    }
+    const SerializationPtr & serialization = serializations[name];
+    deserializePrefix(serialization, name_and_type, current_task_last_mark, cache);
 
     deserialize_settings.getter = [&](const ISerialization::SubstreamPath& substream_path)
     {
+        bool seek_to_mark = !continue_reading;
+
         return getStream(false, substream_path, streams, name_and_type, from_mark,
-            continue_reading, cache);
+            seek_to_mark, current_task_last_mark, cache);
     };
     deserialize_settings.continuous_reading = continue_reading;
     auto & deserialize_state = deserialize_binary_bulk_state_map[name];
@@ -542,8 +662,8 @@ void IMergeTreeReader::readData(
 }
 
 size_t IMergeTreeReader::skipData(const NameAndTypePair & name_and_type,
-    size_t from_mark, bool continue_reading, size_t max_rows_to_skip,
-    ISerialization::SubstreamsCache & cache)
+    size_t from_mark, bool continue_reading, size_t current_task_last_mark,
+    size_t max_rows_to_skip, ISerialization::SubstreamsCache & cache)
 {
     double & avg_value_size_hint = avg_value_size_hints[name_and_type.name];
     ISerialization::DeserializeBinaryBulkSettings deserialize_settings;
@@ -554,22 +674,15 @@ size_t IMergeTreeReader::skipData(const NameAndTypePair & name_and_type,
     };
 
     const auto & name = name_and_type.name;
-    auto serialization = serializations[name];
-
-    if (!deserialize_binary_bulk_state_map.contains(name))
-    {
-        deserialize_settings.getter = [&](const ISerialization::SubstreamPath& substream_path)
-        {
-            return getStream(true, substream_path, streams, name_and_type, from_mark,
-                continue_reading, cache);
-        };
-        serialization->deserializeBinaryBulkStatePrefix(deserialize_settings, deserialize_binary_bulk_state_map[name]);
-    }
+    const SerializationPtr & serialization = serializations[name];
+    deserializePrefix(serialization, name_and_type, current_task_last_mark, cache);
 
     deserialize_settings.getter = [&](const ISerialization::SubstreamPath& substream_path)
     {
+        bool seek_to_mark = !continue_reading;
+
         return getStream(false, substream_path, streams, name_and_type, from_mark,
-            continue_reading, cache);
+            seek_to_mark, current_task_last_mark, cache);
     };
     deserialize_settings.continuous_reading = continue_reading;
     auto & deserialize_state = deserialize_binary_bulk_state_map[name];

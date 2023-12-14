@@ -24,6 +24,11 @@
 #include <Storages/MergeTree/MergeTreeThreadSelectBlockInputProcessor.h>
 #include <Interpreters/Context.h>
 
+namespace ProfileEvents
+{
+    extern const Event ReusedDataPartReaders;
+};
+
 namespace DB
 {
 
@@ -91,15 +96,14 @@ bool MergeTreeThreadSelectBlockInputProcessor::getNewTask()
     {
         initializeReaders(task->mark_ranges, IMergeTreeReader::ValueSizeMap{}, profile_callback);
     }
-    else
+    else if (part_name != last_readed_part_name)
     {
-        /// in other case we can reuse readers, anyway they will be "seeked" to required mark
-        if (part_name != last_readed_part_name)
-        {
-            auto avg_size_hint = reader->getAvgValueSizeHints();
-            initializeReaders(task->mark_ranges, avg_size_hint, profile_callback);
-        }
+        auto avg_size_hint = reader->getAvgValueSizeHints();
+        initializeReaders(task->mark_ranges, avg_size_hint, profile_callback);
     }
+    /// in other case we can reuse readers, anyway they will be "seeked" to required mark
+    else
+        ProfileEvents::increment(ProfileEvents::ReusedDataPartReaders);
 
     last_readed_part_name = part_name;
 

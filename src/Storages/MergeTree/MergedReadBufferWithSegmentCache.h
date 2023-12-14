@@ -47,8 +47,13 @@ public:
     virtual size_t readBig(char* to, size_t n) override;
     virtual bool nextImpl() override;
 
+    void prefetch(Priority priority) override;
+
     void seekToStart();
     void seekToMark(size_t mark);
+
+    void setReadUntilPosition(size_t position) override;
+    void setReadUntilEnd() override;
 
 private:
     class DualCompressedReadBuffer
@@ -79,12 +84,15 @@ private:
 
     void seekToPosition(size_t segment_idx, const MarkInCompressedFile& mark_pos);
     bool seekToMarkInSegmentCache(size_t segment_idx, const MarkInCompressedFile& mark_pos);
+    void initialize();
     bool seekToMarkInRemoteSegmentCache(size_t segment_idx, const MarkInCompressedFile& mark_pos, const String & segment_key);
     void initCacheBufferIfNeeded(const DiskPtr & disk, const String & path, std::unique_ptr<ReadBufferFromRpcStreamFile> remote_cache = nullptr);
     void initSourceBufferIfNeeded();
 
     inline size_t toSourceDataOffset(size_t logical_offset) const;
     inline size_t fromSourceDataOffset(size_t physical_offset) const;
+
+    ReadBuffer& activeBuffer();
 
     // Reader stream info
     StorageID storage_id;
@@ -121,6 +129,8 @@ private:
     PartHostInfo part_host;
 
     Poco::Logger* logger;
+
+    off_t read_until_position = 0;
 };
 
 }

@@ -18,6 +18,7 @@
 #include <Disks/DiskFactory.h>
 #include <Disks/DiskType.h>
 #include <Disks/HDFS/DiskByteHDFS.h>
+#include <Disks/IO/AsynchronousBoundedReadBuffer.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/Context_fwd.h>
 #include <IO/Scheduler/IOScheduler.h>
@@ -203,9 +204,24 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteHDFS::readFile(const String & pa
                 IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(file_path),
                 settings.buffer_size, nullptr, 0, settings.throttler);
         }
-    } else {
-        return std::make_unique<ReadBufferFromByteHDFS>(file_path, hdfs_params,
-            settings.byte_hdfs_pread, settings.buffer_size);
+    }
+    else
+    {
+        if (settings.remote_fs_prefetch)
+        {
+            auto impl = std::make_unique<ReadBufferFromByteHDFS>(file_path, hdfs_params,
+                settings.byte_hdfs_pread, settings.remote_fs_buffer_size, nullptr, 0, nullptr,
+                /* use_external_buffer */true);
+
+            auto global_context = Context::getGlobalContextInstance();
+            auto reader = global_context->getThreadPoolReader();
+            return std::make_unique<AsynchronousBoundedReadBuffer>(std::move(impl), *reader, settings);
+        }
+        else
+        {
+            return std::make_unique<ReadBufferFromByteHDFS>(file_path, hdfs_params,
+                settings.byte_hdfs_pread, settings.remote_fs_buffer_size);
+        }
     }
 }
 

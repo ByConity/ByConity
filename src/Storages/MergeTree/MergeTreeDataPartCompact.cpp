@@ -300,6 +300,11 @@ void MergeTreeDataPartCompact::checkConsistency(bool require_part_metadata) cons
     }
 }
 
+bool MergeTreeDataPartCompact::isStoredOnRemoteDisk() const
+{
+    return storage.isRemote();
+}
+
 MergeTreeDataPartCompact::~MergeTreeDataPartCompact()
 {
     removeIfNeeded();

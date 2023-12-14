@@ -106,7 +106,7 @@ public:
     BlockIO execute() override;
 
     BlockIO execute(bool dry_run);
-    
+
     /// Builds QueryPlan for current query.
     virtual void buildQueryPlan(QueryPlan & query_plan) override;
 

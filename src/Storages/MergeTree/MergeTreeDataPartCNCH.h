@@ -71,6 +71,8 @@ public:
 
     bool isStoredOnDisk() const override { return true; }
 
+    bool isStoredOnRemoteDisk() const override { return true; }
+
     bool supportsVerticalMerge() const override { return true; }
 
     String getFileNameForColumn(const NameAndTypePair & column) const override;

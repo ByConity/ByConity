@@ -304,6 +304,9 @@ class VETosConnectionParams;
 class NvmCache;
 using NvmCachePtr = std::shared_ptr<NvmCache>;
 
+class IAsynchronousReader;
+using AsynchronousReaderPtr = std::shared_ptr<IAsynchronousReader>;
+
 enum class ServerType
 {
     standalone,
@@ -519,6 +522,8 @@ private:
 
     /// A flag, used to distinguish between user query and internal query to a database engine (MaterializePostgreSQL).
     bool is_internal_query = false;
+
+    inline static ContextPtr global_context_instance;
 
     CnchWorkerResourcePtr worker_resource;
     CnchServerResourcePtr server_resource;
@@ -977,6 +982,9 @@ public:
     bool hasSessionContext() const { return !session_context.expired(); }
 
     ContextMutablePtr getGlobalContext() const;
+
+    static ContextPtr getGlobalContextInstance() { return global_context_instance; }
+
     bool hasGlobalContext() const { return !global_context.expired(); }
     bool isGlobalContext() const
     {
@@ -1566,6 +1574,8 @@ public:
     UInt32 getQueryMaxExecutionTime() const;
     timespec getQueryExpirationTimeStamp() const { return query_expiration_timestamp; }
     void setQueryExpirationTimeStamp();
+
+    AsynchronousReaderPtr getThreadPoolReader() const;
 
 private:
     String tenant_id;

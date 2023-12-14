@@ -58,6 +58,8 @@ public:
      */
     virtual off_t getPosition() = 0;
 
+    virtual size_t getFileOffsetOfBufferEnd() const { throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Method getFileOffsetOfBufferEnd() not implemented"); }
+
     /// Returns true if seek() actually works, false if seek() will always throw (or make subsequent
     /// nextImpl() calls throw).
     ///

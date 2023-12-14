@@ -128,7 +128,8 @@ MergeTreeReaderWide::MergeTreeReaderWide(
             }
         }
 
-        if (!dup_implicit_keys.empty()) names = columns.getNames();
+        if (!dup_implicit_keys.empty())
+            names = columns.getNames();
     }
     catch (...)
     {
@@ -137,7 +138,7 @@ MergeTreeReaderWide::MergeTreeReaderWide(
     }
 }
 
-size_t MergeTreeReaderWide::readRows(size_t from_mark, size_t from_row,
+size_t MergeTreeReaderWide::readRows(size_t from_mark, size_t current_task_last_mark, size_t from_row,
     size_t max_rows_to_read, Columns& res_columns)
 {
     try
@@ -153,7 +154,7 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, size_t from_row,
             res_col_to_idx[name] = i;
         }
 
-        auto sort_columns = columns;
+        sort_columns = columns;
         if (!dup_implicit_keys.empty())
             sort_columns.sort([](const auto & lhs, const auto & rhs) { return (!lhs.type->isMap()) && rhs.type->isMap(); });
 
@@ -171,20 +172,20 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, size_t from_row,
             next_row_number_to_read = from_mark_start_row;
         }
 
-        size_t skipped_rows = skipUnnecessaryRows(sort_columns, num_columns,
-            from_mark, adjacent_reading, rows_to_skip);
+        size_t skipped_rows = skipUnnecessaryRows(num_columns, from_mark, adjacent_reading,
+            current_task_last_mark, rows_to_skip);
         next_row_number_to_read += skipped_rows;
 
-        size_t readed_rows = 0;
+        size_t read_rows = 0;
         if (skipped_rows >= rows_to_skip)
         {
             adjacent_reading = rows_to_skip > 0 || init_row_number == starting_row;
-            readed_rows = readNecessaryRows(sort_columns, num_columns, from_mark,
-                adjacent_reading, max_rows_to_read, res_col_to_idx, res_columns);
-            next_row_number_to_read += readed_rows;
+            read_rows = readNecessaryRows(num_columns, from_mark, adjacent_reading,
+                current_task_last_mark, max_rows_to_read, res_col_to_idx, res_columns);
+            next_row_number_to_read += read_rows;
         }
 
-        return readed_rows;
+        return read_rows;
     }
     catch (Exception & e)
     {
@@ -205,17 +206,13 @@ size_t MergeTreeReaderWide::readRows(size_t from_mark, size_t from_row,
     }
 }
 
-size_t MergeTreeReaderWide::skipUnnecessaryRows(const NamesAndTypesList& sort_columns,
-    size_t num_columns, size_t from_mark, bool continue_reading, size_t rows_to_skip)
+size_t MergeTreeReaderWide::skipUnnecessaryRows(size_t num_columns, size_t from_mark, bool continue_reading,
+    size_t current_task_last_mark, size_t rows_to_skip)
 {
     if (rows_to_skip <= 0)
-    {
         return 0;
-    }
 
     ProfileEventsTimer timer(ProfileEvents::SkipRowsTimeMicro);
-
-    std::unordered_map<String, ISerialization::SubstreamsCache> caches;
 
     size_t skipped_rows = 0;
     auto name_and_type = sort_columns.begin();
@@ -236,11 +233,11 @@ size_t MergeTreeReaderWide::skipUnnecessaryRows(const NamesAndTypesList& sort_co
             if (type->isMap() && !type->isMapKVStore())
                 skipped_rows = std::max(skipped_rows,
                     skipMapDataNotKV(column_from_part, from_mark, continue_reading,
-                        rows_to_skip, caches));
+                        current_task_last_mark, rows_to_skip));
             else
                 skipped_rows = std::max(skipped_rows,
                     skipData(column_from_part, from_mark, continue_reading,
-                        rows_to_skip, cache));
+                        current_task_last_mark, rows_to_skip, cache));
         }
         catch (Exception& e)
         {
@@ -249,24 +246,21 @@ size_t MergeTreeReaderWide::skipUnnecessaryRows(const NamesAndTypesList& sort_co
             throw;
         }
     }
+    caches.clear();
 
     return skipped_rows;
 }
 
-size_t MergeTreeReaderWide::readNecessaryRows(const NamesAndTypesList& sort_columns,
-    size_t num_columns, size_t from_mark, bool continue_reading, size_t rows_to_read,
+size_t MergeTreeReaderWide::readNecessaryRows(size_t num_columns, size_t from_mark, bool continue_reading,
+    size_t current_task_last_mark, size_t rows_to_read,
     std::unordered_map<String, size_t>& res_col_to_idx, Columns& res_columns)
 {
     if (rows_to_read <= 0)
-    {
         return 0;
-    }
 
     ProfileEventsTimer timer(ProfileEvents::ReadRowsTimeMicro);
 
-    std::unordered_map<String, ISerialization::SubstreamsCache> caches;
-
-    size_t readed_rows = 0;
+    size_t read_rows = 0;
     int row_number_column_pos = -1;
     auto name_and_type = sort_columns.begin();
     for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
@@ -292,15 +286,15 @@ size_t MergeTreeReaderWide::readNecessaryRows(const NamesAndTypesList& sort_colu
             auto& cache = caches[column_from_part.getNameInStorage()];
             if (type->isMap() && !type->isMapKVStore())
                 readMapDataNotKV(column_from_part, column, from_mark, continue_reading,
-                    rows_to_read, caches, res_col_to_idx, res_columns);
+                    current_task_last_mark, rows_to_read, res_col_to_idx, res_columns);
             else
                 readData(column_from_part, column, from_mark, continue_reading,
-                    rows_to_read, cache);
+                   current_task_last_mark, rows_to_read, cache);
 
             /// For elements of Nested, column_size_before_reading may be greater than column size
             ///  if offsets are not empty and were already read, but elements are empty.
             if (!column->empty())
-                readed_rows = std::max(readed_rows, column->size() - column_size_before_reading);
+                read_rows = std::max(read_rows, column->size() - column_size_before_reading);
         }
         catch (Exception& e)
         {
@@ -312,6 +306,7 @@ size_t MergeTreeReaderWide::readNecessaryRows(const NamesAndTypesList& sort_colu
         if (column->empty())
             res_columns[pos] = nullptr;
     }
+    caches.clear();
 
     /// Populate _part_row_number column if requested
     if (row_number_column_pos >= 0)
@@ -319,14 +314,14 @@ size_t MergeTreeReaderWide::readNecessaryRows(const NamesAndTypesList& sort_colu
         /// update `read_rows` if no physical columns are read (only _part_row_number is requested)
         if (columns.size() == 1)
         {
-            readed_rows = std::min(rows_to_read, data_part->rows_count - next_row_number_to_read);
+            read_rows = std::min(rows_to_read, data_part->rows_count - next_row_number_to_read);
         }
 
-        if (readed_rows)
+        if (read_rows)
         {
             auto mutable_column = res_columns[row_number_column_pos]->assumeMutable();
             ColumnUInt64 & column = assert_cast<ColumnUInt64 &>(*mutable_column);
-            for (size_t i = 0, row_number = next_row_number_to_read; i < readed_rows; ++i)
+            for (size_t i = 0, row_number = next_row_number_to_read; i < read_rows; ++i)
                 column.insertValue(row_number++);
             res_columns[row_number_column_pos] = std::move(mutable_column);
         }
@@ -336,7 +331,7 @@ size_t MergeTreeReaderWide::readNecessaryRows(const NamesAndTypesList& sort_colu
         }
     }
 
-    return readed_rows;
+    return read_rows;
 }
 
 void MergeTreeReaderWide::addStreams(const NameAndTypePair & name_and_type,
@@ -356,6 +351,7 @@ void MergeTreeReaderWide::addStreams(const NameAndTypePair & name_and_type,
         if (!data_file_exists)
             return;
 
+        bool is_lc_dict = isLowCardinalityDictionary(substream_path);
         streams.emplace(
             stream_name,
             std::make_unique<MergeTreeReaderStream>(
@@ -379,7 +375,8 @@ void MergeTreeReaderWide::addStreams(const NameAndTypePair & name_and_type,
                 uncompressed_cache,
                 &data_part->index_granularity_info,
                 profile_callback,
-                clock_type
+                clock_type,
+                is_lc_dict
             )
         );
     };

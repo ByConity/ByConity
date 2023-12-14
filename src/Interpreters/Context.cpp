@@ -183,6 +183,7 @@
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Statistics/AutoStatisticsManager.h>
 #include <fmt/core.h>
+#include <Disks/IO/ThreadPoolRemoteFSReader.h>
 
 namespace fs = std::filesystem;
 
@@ -348,6 +349,8 @@ struct ContextSharedPart
     mutable std::optional<BackgroundSchedulePool> schedule_pool;    /// A thread pool that can run different jobs in background (used in replicated tables)
     mutable std::optional<BackgroundSchedulePool> distributed_schedule_pool; /// A thread pool that can run different jobs in background (used for distributed sends)
     mutable std::optional<BackgroundSchedulePool> message_broker_schedule_pool; /// A thread pool that can run different jobs in background (used for message brokers, like RabbitMQ and Kafka)
+
+    mutable AsynchronousReaderPtr asynchronous_remote_fs_reader;
 
     mutable ThrottlerPtr disk_cache_throttler;
 
@@ -631,6 +634,8 @@ ContextMutablePtr Context::createGlobal(ContextSharedPart * shared)
 
 void Context::initGlobal()
 {
+    assert(!global_context_instance);
+    global_context_instance = shared_from_this();
     DatabaseCatalog::init(shared_from_this());
 }
 
@@ -746,6 +751,8 @@ InterserverIOHandler & Context::getInterserverIOHandler()
 ReadSettings Context::getReadSettings() const
 {
     ReadSettings res;
+    res.remote_fs_prefetch = settings.remote_filesystem_read_prefetch;
+    res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.enable_io_scheduler = settings.enable_io_scheduler;
     res.enable_io_pfra = settings.enable_io_pfra || settings.s3_use_read_ahead;
     res.buffer_size = settings.max_read_buffer_size;
@@ -5277,7 +5284,7 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
                 return PartAllocator::RING_CONSISTENT_HASH;
             case 2:
                 return PartAllocator::STRICT_RING_CONSISTENT_HASH;
-            case 3: 
+            case 3:
                 return PartAllocator::SIMPLE_HASH;
             default:
                 return PartAllocator::JUMP_CONSISTENT_HASH;
@@ -5293,7 +5300,7 @@ Context::PartAllocator Context::getPartAllocationAlgo() const
             return PartAllocator::RING_CONSISTENT_HASH;
         case 2:
             return PartAllocator::STRICT_RING_CONSISTENT_HASH;
-        case 3: 
+        case 3:
             return PartAllocator::SIMPLE_HASH;
         default:
             return PartAllocator::JUMP_CONSISTENT_HASH;
@@ -5422,4 +5429,16 @@ void Context::setQueryExpirationTimeStamp()
     query_expiration_timestamp = {.tv_sec = time_t(query_expiration_ms / 1000), .tv_nsec = long((query_expiration_ms % 1000) * 1000000)};
 }
 
+AsynchronousReaderPtr Context::getThreadPoolReader() const
+{
+    auto lock = getLock();
+
+    const Poco::Util::AbstractConfiguration & config = getConfigRef();
+    auto pool_size = config.getUInt(".threadpool_remote_fs_reader_pool_size", 250);
+    auto queue_size = config.getUInt(".threadpool_remote_fs_reader_queue_size", 1000000);
+    if (!shared->asynchronous_remote_fs_reader)
+        shared->asynchronous_remote_fs_reader = std::make_shared<ThreadPoolRemoteFSReader>(pool_size, queue_size);
+
+    return shared->asynchronous_remote_fs_reader;
+}
 }

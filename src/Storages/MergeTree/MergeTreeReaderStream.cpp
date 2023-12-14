@@ -21,6 +21,7 @@
 
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
 #include <Compression/CachedCompressedReadBuffer.h>
+#include <Storages/MergeTree/IMergeTreeReaderStream.h>
 
 #include <utility>
 
@@ -43,13 +44,13 @@ MergeTreeReaderStream::MergeTreeReaderStream(
     MarkCache * mark_cache_, UncompressedCache * uncompressed_cache_,
     const MergeTreeIndexGranularityInfo * index_granularity_info_,
     const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
-    clockid_t clock_type_):
-        data_disk(bin_file_.disk), data_rel_path(bin_file_.rel_path),
-        stream_name(stream_name_), marks_count(marks_count_),
-        read_settings(settings_.read_settings), data_file_offset(bin_file_.offset),
-        marks_loader(mrk_file_.disk, mark_cache_, mrk_file_.rel_path, stream_name_,
+    clockid_t clock_type_, bool is_low_cardinality_dictionary_):
+        IMergeTreeReaderStream(mrk_file_.disk, mark_cache_, mrk_file_.rel_path, stream_name_,
             marks_count_, *index_granularity_info_, settings_.save_marks_in_cache, mrk_file_.offset,
-            mrk_file_.size, settings_)
+            mrk_file_.size, settings_, bin_file_.size, is_low_cardinality_dictionary_),
+        data_disk(bin_file_.disk), data_rel_path(bin_file_.rel_path),
+        stream_name(stream_name_),
+        read_settings(settings_.read_settings), data_file_offset(bin_file_.offset)
 {
     /// Compute the size of the buffer.
     size_t max_mark_range_bytes = 0;
@@ -59,35 +60,8 @@ MergeTreeReaderStream::MergeTreeReaderStream(
     {
         size_t left_mark = mark_range.begin;
         size_t right_mark = mark_range.end;
-
-        /// NOTE: if we are reading the whole file, then right_mark == marks_count
-        /// and we will use max_read_buffer_size for buffer size, thus avoiding the need to load marks.
-
-        /// If the end of range is inside the block, we will need to read it too.
-        if (right_mark < marks_count && marks_loader.getMark(right_mark).offset_in_decompressed_block > 0)
-        {
-            auto indices = collections::range(right_mark, marks_count);
-            auto it = std::upper_bound(indices.begin(), indices.end(), right_mark, [this](size_t i, size_t j)
-            {
-                return marks_loader.getMark(i).offset_in_compressed_file < marks_loader.getMark(j).offset_in_compressed_file;
-            });
-
-            right_mark = (it == indices.end() ? marks_count : *it);
-        }
-
-        size_t mark_range_bytes;
-
-        /// If there are no marks after the end of range, just use file size
-        if (right_mark >= marks_count
-            || (right_mark + 1 == marks_count
-                && marks_loader.getMark(right_mark).offset_in_compressed_file == marks_loader.getMark(mark_range.end).offset_in_compressed_file))
-        {
-            mark_range_bytes = bin_file_.size - (left_mark < marks_count ? marks_loader.getMark(left_mark).offset_in_compressed_file : 0);
-        }
-        else
-        {
-            mark_range_bytes = marks_loader.getMark(right_mark).offset_in_compressed_file - marks_loader.getMark(left_mark).offset_in_compressed_file;
-        }
+        size_t left_offset = left_mark < marks_count ? marks_loader.getMark(left_mark).offset_in_compressed_file : 0;
+        auto mark_range_bytes = getRightOffset(right_mark) - left_offset;
 
         max_mark_range_bytes = std::max(max_mark_range_bytes, mark_range_bytes);
         sum_mark_range_bytes += mark_range_bytes;
@@ -145,7 +119,6 @@ MergeTreeReaderStream::MergeTreeReaderStream(
         data_buffer = non_cached_buffer.get();
     }
 }
-
 
 void MergeTreeReaderStream::seekToMark(size_t index)
 {

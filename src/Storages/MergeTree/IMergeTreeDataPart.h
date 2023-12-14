@@ -137,7 +137,7 @@ public:
         IStorage::StorageLocation location_,
         const UUID& part_id_ = UUIDHelpers::Nil);
 
-        virtual MergeTreeReaderPtr getReader(
+    virtual MergeTreeReaderPtr getReader(
         const NamesAndTypesList & columns_,
         const StorageMetadataPtr & metadata_snapshot,
         const MarkRanges & mark_ranges,
@@ -158,6 +158,8 @@ public:
         const BitmapBuildInfo & bitmap_build_info = {}) const = 0;
 
     virtual bool isStoredOnDisk() const = 0;
+
+    virtual bool isStoredOnRemoteDisk() const = 0;
 
     virtual bool supportsVerticalMerge() const { return false; }
 

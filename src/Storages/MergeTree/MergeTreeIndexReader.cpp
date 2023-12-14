@@ -68,7 +68,8 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 nullptr,
                 &part_->index_granularity_info,
                 ReadBufferFromFileBase::ProfileCallback{},
-                CLOCK_MONOTONIC_COARSE
+                CLOCK_MONOTONIC_COARSE,
+                false
             );
             break;
         }
@@ -139,7 +140,9 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 part_host,
                 &(source_data_part->index_granularity_info),
                 ReadBufferFromFileBase::ProfileCallback{},
-                CLOCK_MONOTONIC_COARSE);
+                CLOCK_MONOTONIC_COARSE,
+                false
+            );
             break;
         }
         default:

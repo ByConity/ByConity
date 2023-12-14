@@ -263,7 +263,7 @@ MergeTreeReaderCompact::MergeTreeReaderCompact(
     }
 }
 
-size_t MergeTreeReaderCompact::readRows(size_t from_mark, size_t from_row,
+size_t MergeTreeReaderCompact::readRows(size_t from_mark, size_t current_task_last_mark, size_t from_row,
     size_t max_rows_to_read, Columns& res_columns)
 {
     size_t from_mark_start_row = data_part->index_granularity.getMarkStartingRow(
@@ -288,10 +288,11 @@ size_t MergeTreeReaderCompact::readRows(size_t from_mark, size_t from_row,
 
     adjacent_reading = rows_to_skip > 0 || starting_row == next_row_number_to_read;
 
-    return resumableReadRows(from_mark, adjacent_reading, max_rows_to_read, res_columns);
+    return resumableReadRows(from_mark, adjacent_reading, current_task_last_mark, max_rows_to_read, res_columns);
 }
 
-size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read, Columns & res_columns)
+size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue_reading, size_t current_task_last_mark,
+    size_t max_rows_to_read, Columns & res_columns)
 {
     if (continue_reading)
         from_mark = next_mark;
@@ -318,7 +319,7 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
         }
     }
 
-    auto sort_columns = columns;
+    sort_columns = columns;
     if (!dup_implicit_keys.empty())
         sort_columns.sort([](const auto & lhs, const auto & rhs) { return (!lhs.type->isMap()) && rhs.type->isMap(); });
 
@@ -326,7 +327,6 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
     {
         size_t rows_to_read = data_part->index_granularity.getMarkRows(from_mark);
 
-        std::unordered_map<String, ISerialization::SubstreamsCache> caches;
         int row_number_column_pos = -1;
         auto name_and_type = sort_columns.begin();
         for (size_t i = 0; i < num_columns; ++i, ++name_and_type)
@@ -355,9 +355,9 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
 
                 if (type->isMap() && !type->isMapKVStore())
                     readMapDataNotKV(
-                        column_from_part, column, from_mark, continue_reading, rows_to_read, caches, res_col_to_idx, res_columns);
+                        column_from_part, column, from_mark, continue_reading, current_task_last_mark, rows_to_read, res_col_to_idx, res_columns);
                 else if (isMapImplicitKeyNotKV(name))
-                    readData(column_from_part, column, from_mark, continue_reading, rows_to_read, cache);
+                    readData(column_from_part, column, from_mark, continue_reading, current_task_last_mark, rows_to_read, cache);
                 else
                 {
                     if (!data_reader)
@@ -422,6 +422,8 @@ size_t MergeTreeReaderCompact::resumableReadRows(size_t from_mark, bool continue
                 throw;
             }
         }
+
+        caches.clear();
 
         /// Populate _part_row_number column if requested
         if (row_number_column_pos >= 0)
