@@ -486,6 +486,7 @@ ColumnWithTypeAndName ExprAnalyzerVisitor::analyzeOrdinaryFunction(ASTFunctionPt
         context->setFunctionDeterministic(function->name, false);
     }
 
+    analysis.addUsedFunctionArgument(function->name, processed_arguments);
     return {res_col, function_ret_type, column_name};
 }
 

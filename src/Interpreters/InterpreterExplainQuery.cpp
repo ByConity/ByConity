@@ -855,11 +855,32 @@ BlockInputStreamPtr InterpreterExplainQuery::explainMetaData(const ASTPtr & ast)
     }
     insert_offset_data.push_back(insert_offest_size);
 
+    auto func_column = ColumnString::create();
+    auto args_column = ColumnArray::create(ColumnString::create());
+    auto func_args_offset_column = ColumnVector<UInt64>::create();
+
+    auto function_arguments = analysis->function_arguments;
+    size_t func_args_offest_size = 0;
+    if (!function_arguments.empty())
+    {
+        for (const auto & func_args : function_arguments)
+        {
+            Array arg_array;
+            func_args_offest_size++;
+            func_column->insert(func_args.first);
+            for (const auto & arg : func_args.second)
+                arg_array.push_back(arg);
+            args_column->insert(arg_array);
+        }
+    }
+    func_args_offset_column->insert(func_args_offest_size);
+
     column_tables->insert(tables_array);
     column_databases->insert(databases_array);
     column_functions->insert(functions_array);
     auto col_arr_arr = ColumnArray::create(std::move(column_columns_list), std::move(column_lists_off));
     ColumnPtr settings_column = ColumnMap::create(std::move(key_column), std::move(value_column), std::move(settings_offset_column));
+    ColumnPtr func_args_column = ColumnMap::create(std::move(func_column), std::move(args_column), std::move(func_args_offset_column));
     auto insert_info_arr = ColumnArray::create(std::move(insert_list), std::move(insert_offset));
 
     Block block;
@@ -870,14 +891,9 @@ BlockInputStreamPtr InterpreterExplainQuery::explainMetaData(const ASTPtr & ast)
          std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())),
          "columns_lists"});
     block.insert({std::move(column_functions), std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()), "used_function_names"});
-    block.insert(
-        {std::move(settings_column),
-         std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()),
-         "settings"});
-    block.insert(
-        {std::move(insert_info_arr),
-         std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())),
-         "insert_info"});
+    block.insert({std::move(settings_column), std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()), "settings"});
+    block.insert({std::move(insert_info_arr), std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())), "insert_info"});
+    block.insert({std::move(func_args_column), std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())), "fucntion_const_arguments"});
 
     return std::make_shared<OneBlockInputStream>(block);
 }

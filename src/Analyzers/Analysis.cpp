@@ -417,4 +417,13 @@ ArrayJoinAnalysis & Analysis::getArrayJoinAnalysis(ASTSelectQuery & select_query
     return array_join_analysis[&select_query];
 }
 
+void Analysis::addUsedFunctionArgument(const String & func_name, ColumnsWithTypeAndName & processed_arguments)
+{
+    if (func_name == "getSetting" && !processed_arguments.empty())
+    {
+        auto & arg = processed_arguments[0];
+        if (arg.column && !arg.column->empty())
+        function_arguments[func_name].emplace_back((*arg.column)[0].toString());
+    }
+}
 }

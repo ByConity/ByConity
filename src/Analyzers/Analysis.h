@@ -452,6 +452,9 @@ struct Analysis
     {
         return used_functions;
     }
+
+    std::unordered_map<String, std::vector<String>> function_arguments;
+    void addUsedFunctionArgument(const String & func_name, ColumnsWithTypeAndName & processed_arguments);
 };
 
 }
