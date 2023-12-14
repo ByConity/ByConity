@@ -12,6 +12,8 @@ ENGINE = CnchMergeTree
 PARTITION BY name
 ORDER BY name;
 
+SYSTEM START MERGES pi;
+
 insert into pi values ('a', 'a', 1);
 insert into pi values ('a', 'a', 2);
 
@@ -95,6 +97,8 @@ CREATE TABLE pi
 ENGINE = CnchMergeTree
 PARTITION BY name
 ORDER BY name;
+
+SYSTEM START MERGES pi;
 
 insert into pi values ('a', 'a', 1);
 
