@@ -17,6 +17,7 @@
 #include <QueryPlan/SymbolMapper.h>
 #include <Optimizer/Utils.h>
 #include <common/logger_useful.h>
+#include <Parsers/ASTIdentifier.h>
 
 #include <algorithm>
 #include <string>

@@ -11,9 +11,9 @@ Projection Est. ? rows
                │     Expressions: [click, event_date, uid], expr#toHour(toDateTime(server_time, \'Europe/Moscow\')):=toHour(toDateTime(server_time, \'Europe/Moscow\'))
                └─ TableScan test_40037.base40037 Est. ? rows
                         Outputs: [server_time, event_date, uid, click]
-Projection Est. ? rows
-│     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
-└─ Gather Exchange Est. ? rows
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {expr#uid, expr#event_date, expr#server_time_hour}
@@ -60,9 +60,9 @@ Projection Est. ? rows
                   └─ TableScan test_40037.base40037 Est. ? rows
                            Where: (event_date >= cast(19358, \'Date\')) AND (event_date <= cast(19367, \'Date\'))
                            Outputs: [server_time, event_date, uid, click]
-Projection Est. ? rows
-│     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
-└─ Gather Exchange Est. ? rows
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {expr#uid, expr#event_date, expr#server_time_hour}

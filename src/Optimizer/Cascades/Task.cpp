@@ -572,7 +572,7 @@ void OptimizeInput::execute()
                 context->setCostUpperBound(cur_total_cost);
             }
             auto cur_group = context->getMemo().getGroupById(group_expr->getGroupId());
-            if (!context->getOptimizerContext().getContext()->getSettingsRef().enable_cbo)
+            if (!context->getOptimizerContext().isEnableCbo())
                 cur_total_cost = 0;
 
             actual = actual.normalize(*equivalences);

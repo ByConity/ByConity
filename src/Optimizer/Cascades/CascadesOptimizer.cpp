@@ -43,7 +43,7 @@ void CascadesOptimizer::rewrite(QueryPlan & plan, ContextMutablePtr context) con
 {
     int id = context->getRuleId();
     CascadesContext cascades_context{
-        context, plan.getCTEInfo(), WorkerSizeFinder::find(plan, *context), PlanPattern::maxJoinSize(plan, context)};
+        context, plan.getCTEInfo(), WorkerSizeFinder::find(plan, *context), PlanPattern::maxJoinSize(plan, context), enable_cbo};
 
     auto start = std::chrono::high_resolution_clock::now();
     auto root = cascades_context.initMemo(plan.getPlanNode());
@@ -203,38 +203,43 @@ GroupExprPtr CascadesContext::makeGroupExpression(const PlanNodePtr & node, Rule
     return std::make_shared<GroupExpression>(node->getStep(), std::move(child_groups), produce_rule);
 }
 
-CascadesContext::CascadesContext(ContextMutablePtr context_, CTEInfo & cte_info_, size_t worker_size_, size_t max_join_size_)
+CascadesContext::CascadesContext(
+    ContextMutablePtr context_, CTEInfo & cte_info_, size_t worker_size_, size_t max_join_size_, bool enable_cbo_)
     : context(context_)
     , cte_info(cte_info_)
     , worker_size(worker_size_)
     , support_filter(context->getSettingsRef().enable_join_graph_support_filter)
     , task_execution_timeout(context->getSettingsRef().cascades_optimizer_timeout)
+    , enable_cbo(enable_cbo_ && context->getSettingsRef().enable_cbo)
     , log(&Poco::Logger::get("CascadesOptimizer"))
 {
     LOG_DEBUG(log, "max join size: {}", max_join_size_);
-    implementation_rules.emplace_back(std::make_shared<SetJoinDistribution>());
 
-    transformation_rules.emplace_back(std::make_shared<JoinEnumOnGraph>(support_filter));
-    transformation_rules.emplace_back(std::make_shared<InnerJoinCommutation>());
 
-    // left join inner join reorder q78, 80
-    transformation_rules.emplace_back(std::make_shared<PullLeftJoinThroughInnerJoin>());
-    transformation_rules.emplace_back(std::make_shared<PullLeftJoinProjectionThroughInnerJoin>());
-    transformation_rules.emplace_back(std::make_shared<PullLeftJoinFilterThroughInnerJoin>());
+    if (enable_cbo)
+    {
+        implementation_rules.emplace_back(std::make_shared<SetJoinDistribution>());
+        transformation_rules.emplace_back(std::make_shared<JoinEnumOnGraph>(support_filter));
+        transformation_rules.emplace_back(std::make_shared<InnerJoinCommutation>());
 
-    transformation_rules.emplace_back(std::make_shared<LeftJoinToRightJoin>());
-    transformation_rules.emplace_back(std::make_shared<MagicSetForAggregation>());
-    transformation_rules.emplace_back(std::make_shared<MagicSetForProjectionAggregation>());
-    transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughProject>());
-    transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughJoin>());
-    transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughFilter>());
-    transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughAggregating>());
+        // left join inner join reorder q78, 80
+        transformation_rules.emplace_back(std::make_shared<PullLeftJoinThroughInnerJoin>());
+        transformation_rules.emplace_back(std::make_shared<PullLeftJoinProjectionThroughInnerJoin>());
+        transformation_rules.emplace_back(std::make_shared<PullLeftJoinFilterThroughInnerJoin>());
 
-    transformation_rules.emplace_back(std::make_shared<InlineCTE>());
-    transformation_rules.emplace_back(std::make_shared<InlineCTEWithFilter>());
+        transformation_rules.emplace_back(std::make_shared<LeftJoinToRightJoin>());
+        transformation_rules.emplace_back(std::make_shared<MagicSetForAggregation>());
+        transformation_rules.emplace_back(std::make_shared<MagicSetForProjectionAggregation>());
+        transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughProject>());
+        transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughJoin>());
+        transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughFilter>());
+        transformation_rules.emplace_back(std::make_shared<MagicSetPushThroughAggregating>());
 
-    // transformation_rules.emplace_back(std::make_shared<PushAggThroughInnerJoin>());
+        transformation_rules.emplace_back(std::make_shared<InlineCTE>());
+        transformation_rules.emplace_back(std::make_shared<InlineCTEWithFilter>());
 
+        // transformation_rules.emplace_back(std::make_shared<PushAggThroughInnerJoin>());
+    }
     enable_pruning = cte_info.empty() && context->getSettingsRef().enable_cascades_pruning;
 }
 

@@ -1,6 +1,6 @@
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: [item_code]
+Projection Est. ? rows
+│     Expressions: [item_code]
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: item_code == item_code_1
       ├─ Repartition Exchange Est. ? rows

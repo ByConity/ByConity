@@ -32,9 +32,9 @@ CTEDef [0]
    └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 2 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from (select t1.x as x from c1 t1 join c2 t2 on t1.x = t2.x) j1 join c1 t3 on j1.x = t3.x;
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: x:=`expr#rand(1)_1`
+Projection Est. ? rows
+│     Expressions: x:=`expr#rand(1)_1`
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: expr#rand(1)_1 == expr#rand(1)_2
       ├─ Repartition Exchange Est. ? rows
@@ -57,9 +57,9 @@ CTEDef [0]
    └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 3 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from (select t1.x as x from c1 t1 join c2 t2 on t1.x = t2.x) j1 join c2 t3 on j1.x = t3.x;
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: x:=`expr#rand(1)_1`
+Projection Est. ? rows
+│     Expressions: x:=`expr#rand(1)_1`
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: expr#rand(1)_1 == expr#rand(2)_2
       ├─ Repartition Exchange Est. ? rows
@@ -84,9 +84,9 @@ CTEDef [0]
    └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 3 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from c1 t1 join (select t2.x as x from c1 t2 join c2 t3 on t2.x = t3.x) j1 on t1.x = j1.x;
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: j1.x:=`expr#rand(1)_2`
+Projection Est. ? rows
+│     Expressions: j1.x:=`expr#rand(1)_2`
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: expr#rand(1)_1 == expr#rand(1)_2
       ├─ Repartition Exchange Est. 1 rows
@@ -111,9 +111,9 @@ CTEDef [0]
    └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 3 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from c2 t1 join (select t2.x as x from c1 t2 join c2 t3 on t2.x = t3.x) j1 on t1.x = j1.x;
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: j1.x:=`expr#rand(1)_1`
+Projection Est. ? rows
+│     Expressions: j1.x:=`expr#rand(1)_1`
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: expr#rand(2)_1 == expr#rand(1)_1
       ├─ Repartition Exchange Est. 1 rows
@@ -190,9 +190,9 @@ CTEDef [0]
    └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 4 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x) select j1.x from (select t1.x as x from c1 t1 join c2 t2 on t1.x = t2.x) j1 join (select t3.x as x from c2 t3 join c1 t4 on t3.x = t4.x) j2 on j1.x = j2.x;
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: x:=`expr#rand(1)_1`
+Projection Est. ? rows
+│     Expressions: x:=`expr#rand(1)_1`
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: expr#rand(1)_1 == expr#rand(1)_2
       ├─ Repartition Exchange Est. ? rows
@@ -251,9 +251,9 @@ CTEDef [0]
    └─ Values Est. 1 rows
 note: CTE(Common Table Expression) is applied for 4 times.
 explain with c1 as (select rand(1) x), c2 as (select rand(2) x), c3 as (select rand(3) x) select j1.x from (select t1.x from c1 t1 join c2 t2 on t1.x = t2.x) j1 join (select t3.x from c2 t3 join c3 t4 on t3.x = t4.x) j2 on j1.x = j2.x;
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: x:=`expr#rand(1)_1`
+Projection Est. ? rows
+│     Expressions: x:=`expr#rand(1)_1`
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: expr#rand(1)_1 == expr#rand(2)_2
       ├─ Repartition Exchange Est. ? rows

@@ -108,7 +108,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         std::make_shared<IterativeRewriter>(Rules::pushDownTopNFilteringRules(), "pushDownTopNFiltering"),
 
         // add exchange
-        std::make_shared<AddExchange>(),
+        std::make_shared<CascadesOptimizer>(false),
 
         std::make_shared<IterativeRewriter>(Rules::pushPartialStepRules(), "PushPartialStep"),
         std::make_shared<RemoveRedundantDistinct>(),

@@ -1,7 +1,7 @@
 1	1
-Projection Est. ? rows
-│     Expressions: app_id:=`expr#app_id`, event_date:=`expr#event_date`, event_name:=`expr#event_name`, max_duration:=`expr#maxMerge(max_duration)`, sum_cost:=`expr#sumMerge(sum_cost)`
-└─ Gather Exchange Est. ? rows
+Gather Exchange Est. ? rows
+└─ Projection Est. ? rows
+   │     Expressions: app_id:=`expr#app_id`, event_date:=`expr#event_date`, event_name:=`expr#event_name`, max_duration:=`expr#maxMerge(max_duration)`, sum_cost:=`expr#sumMerge(sum_cost)`
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {expr#event_date, expr#event_name, expr#app_id}

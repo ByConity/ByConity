@@ -25,7 +25,6 @@
 
 namespace DB
 {
-
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
@@ -232,16 +231,19 @@ PlanNodePtr Winner::buildPlanNode(CascadesContext & context, PlanNodes & childre
     }
     auto stats = context.getMemo().getGroupById(group_expr->getGroupId())->getStatistics();
     auto plan_node = PlanNodeBase::createPlanNode(context.getContext()->nextNodeId(), group_expr->getStep(), children);
-    plan_node->setStatistics(stats);
+    if (stats)
+        plan_node->setStatistics(stats);
     if (remote_exchange)
     {
         plan_node = PlanNodeBase::createPlanNode(context.getContext()->nextNodeId(), remote_exchange->getStep(), {plan_node});
-        plan_node->setStatistics(stats);
+        if (stats)
+            plan_node->setStatistics(stats);
     }
     if (local_exchange)
     {
         plan_node = PlanNodeBase::createPlanNode(context.getContext()->nextNodeId(), local_exchange->getStep(), {plan_node});
-        plan_node->setStatistics(stats);
+        if (stats)
+            plan_node->setStatistics(stats);
     }
 
     return plan_node;

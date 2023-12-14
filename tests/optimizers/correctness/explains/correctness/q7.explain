@@ -1,6 +1,6 @@
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: [a, a_1, a_2, b, c, d]
+Projection Est. ? rows
+│     Expressions: [a, a_1, a_2, b, c, d]
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: a == a_2
       ├─ Repartition Exchange Est. ? rows

@@ -2,7 +2,7 @@ Projection Est. 10 rows
 │     Expressions: [a, a_1, a_2, b, c, d]
 └─ Limit Est. 10 rows
    │     Limit: 10
-   └─ Gather Exchange Est. ? rows
+   └─ Gather Exchange Est. 10 rows
       └─ Limit Est. 10 rows
          │     Limit: 10
          └─ Left Join Est. ? rows

@@ -90,7 +90,7 @@ void Group::addExpression(const GroupExprPtr & expression, CascadesContext & con
         max_table_scan_rows = std::max(max_table_scan_rows, children_table_scan_rows);
     }
 
-    if (!stats_derived)
+    if (!stats_derived && context.isEnableCbo())
     {
         std::vector<PlanNodeStatisticsPtr> children_stats;
         InclusionDependency inclusion_dependency;

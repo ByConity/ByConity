@@ -40,18 +40,21 @@ using OptContextPtr = std::shared_ptr<OptimizationContext>;
 class CascadesOptimizer : public Rewriter
 {
 public:
+    explicit CascadesOptimizer(bool enable_cbo_ = true): enable_cbo(enable_cbo_) {}
+
     String name() const override { return "CascadesOptimizer"; }
     static WinnerPtr optimize(GroupId root, CascadesContext & context, const Property & required_prop);
     static PlanNodePtr buildPlanNode(GroupId root, CascadesContext & context, const Property & required_prop);
 private:
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_cascades_optimizer;}
+    bool enable_cbo;
 };
 
 class CascadesContext
 {
 public:
-    explicit CascadesContext(ContextMutablePtr context_, CTEInfo & cte_info, size_t worker_size_, size_t max_join_size_);
+    explicit CascadesContext(ContextMutablePtr context_, CTEInfo & cte_info, size_t worker_size_, size_t max_join_size_, bool enable_cbo_);
 
     GroupExprPtr initMemo(const PlanNodePtr & plan_node);
 
@@ -100,6 +103,7 @@ public:
 
     void setEnableWhatIfMode(bool enable_what_if_mode_) { enable_what_if_mode = enable_what_if_mode_; }
     bool isEnableWhatIfMode() const { return enable_what_if_mode;}
+    bool isEnableCbo() const { return enable_cbo; }
 
 private:
     ContextMutablePtr context;
@@ -114,6 +118,7 @@ private:
     UInt64 task_execution_timeout;
     bool enable_pruning;
     bool enable_what_if_mode = false;
+    bool enable_cbo;
     Poco::Logger * log;
 };
 
