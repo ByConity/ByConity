@@ -389,10 +389,12 @@ bool DaemonJobGlobalGC::executeImpl()
         if (deleting_uuids_from_servers.find(table_id.uuid()) != deleting_uuids_from_servers.end())
             continue;
 
-        std::optional<DB::Protos::DataModelTable> table_model = DB::GlobalGCHelpers::getCleanableTrashTable(context, table_id, ts, retention_sec);
-        if (table_model.has_value())
-        {
+        String fail_reason;
+        auto table_model = DB::GlobalGCHelpers::getCleanableTrashTable(context, table_id, ts, retention_sec, &fail_reason);
+        if (table_model.has_value()) {
             this->tables_need_gc.push_back(*table_model);
+        } else {
+            LOG_INFO(log, "Cannot clean trash table {} because : {}", table_id.name(), fail_reason);
         }
     }
 
