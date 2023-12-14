@@ -73,8 +73,10 @@ std::pair<bool, String> MetastoreFDBImpl::putCAS(const String & key, const Strin
 
 uint64_t MetastoreFDBImpl::get(const String & key, String & value)
 {
+    FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
+    check_fdb_op(fdb_client->CreateTransaction(tr));
     FDB::GetResponse res;
-    check_fdb_op(fdb_client->Get(key, res));
+    check_fdb_op(fdb_client->Get(tr, key, res));
     if (res.is_present)
     {
         value = res.value;

@@ -497,45 +497,6 @@ bool Iterator::Next(fdb_error_t & code)
     }
 }
 
-fdb_error_t FDBClient::Get(const std::string & key, GetResponse & res)
-{
-    const uint8_t* p_key = reinterpret_cast<const uint8_t*>(key.c_str());
-    unsigned int retry = 3;
-    FDBFuturePtr f_read;
-    fdb_error_t err_code = 0;
-    while (retry)
-    {
-        FDB::FDBTransactionPtr tr = std::make_shared<FDB::FDBTransactionRAII>();
-        Catalog::MetastoreFDBImpl::check_fdb_op(CreateTransaction(tr));
-        f_read = std::make_shared<FDBFutureRAII>(fdb_transaction_get(tr->transaction, p_key, key.size(), 1));
-        RETURN_ON_ERROR(fdb_future_block_until_ready(f_read->future));
-        err_code = fdb_future_get_error(f_read->future);
-        if (err_code == 0)
-            break;
-        else if (err_code == FDBError::FDB_transaction_too_old ||
-                err_code == FDBError::FDB_transaction_timed_out)
-        {
-            LOG_DEBUG(&Poco::Logger::get("FDBClient::Get"), "create new transaction to retry because get fdb error {}", fdb_get_error(err_code));
-            tr = std::make_shared<FDB::FDBTransactionRAII>();
-            Catalog::MetastoreFDBImpl::check_fdb_op(CreateTransaction(tr));
-            --retry;
-        }
-    }
-    RETURN_ON_ERROR(err_code);
-
-    fdb_bool_t present;
-    uint8_t const *outValue;
-    int outValueLength;
-    RETURN_ON_ERROR(fdb_future_get_value(f_read->future, &present, &outValue, &outValueLength));
-    if (present)
-    {
-        res.is_present = true;
-        res.value = std::string(outValue, outValue+outValueLength);
-    }
-    return 0;
-}
-
-
 std::string Iterator::Key()
 {
     return std::string(reinterpret_cast<const char *>(batch_kvs[batch_read_index-1].key), batch_kvs[batch_read_index-1].key_length);
