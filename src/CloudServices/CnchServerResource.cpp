@@ -54,6 +54,8 @@ AssignedResource::AssignedResource(AssignedResource && resource)
     worker_table_name = resource.worker_table_name;
     create_table_query = resource.create_table_query;
     sent_create_query = resource.sent_create_query;
+    bucket_numbers = resource.bucket_numbers;
+    replicated = resource.replicated;
 
     server_parts = std::move(resource.server_parts);
     hive_parts = std::move(resource.hive_parts);
