@@ -33,7 +33,7 @@ CREATE TABLE test.00745_merge_tree_map_merge2 (
 ) ENGINE = CnchMergeTree ORDER BY n;
 EOF
 
-${CLICKHOUSE_CLIENT} --query "CREATE TABLE test.00745_merge_tree_map_merge3 (n UInt8, string_map Map(String, String)) ENGINE = CnchMergeTree ORDER BY tuple();"
+${CLICKHOUSE_CLIENT} --query "CREATE TABLE test.00745_merge_tree_map_merge3 (n UInt8, \`m[a]\` Map(String, String), \`m{a}\` Map(String, String)) ENGINE = CnchMergeTree ORDER BY tuple();"
 ${CLICKHOUSE_CLIENT} --query "CREATE TABLE test.00745_merge_tree_map_merge4 (n UInt8, empty_map Map(String, String)) ENGINE = CnchMergeTree ORDER BY tuple();"
 
 ${CLICKHOUSE_CLIENT} --query "SYSTEM START MERGES test.00745_merge_tree_map_merge1;"
@@ -45,13 +45,13 @@ for i in {0..3}
 do
     ${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge1 VALUES ($i, {'key$i': 'v1'}, {'key$i': ['v1']},  {$i: 1}, {$i: [1]}, {'key$i': 0.1}, {'key$i': [0.1]});"
     ${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge2 VALUES ($i, {'key$i': 'v1'}, {'key$i': ['v1']},  {$i: 1}, {$i: [1]}, {'key$i': 0.1}, {'key$i': [0.1]});"
-    ${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge3 VALUES ($i, {'key1': 'v1'});"
+    ${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge3 VALUES ($i, {'key1[1]': 'v1[1]'}, {'key1{1}': 'v1{1}'});"
     ${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge4 VALUES ($i, {});"
 done
 
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge1 VALUES (4, {}, {}, {}, {}, {}, {});"
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge2 VALUES (4, {}, {}, {}, {}, {}, {});"
-${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge3 VALUES (4, {});"
+${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge3 VALUES (4, {}, {});"
 ${CLICKHOUSE_CLIENT} --query "INSERT INTO test.00745_merge_tree_map_merge4 VALUES (4, {});"
 
 ${CLICKHOUSE_CLIENT} --query "OPTIMIZE TABLE test.00745_merge_tree_map_merge1 settings mutations_sync = 1;"
