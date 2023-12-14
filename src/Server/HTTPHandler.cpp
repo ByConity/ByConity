@@ -748,7 +748,13 @@ void HTTPHandler::processQuery(
             settings_changes.push_back({"tenant_id", String(default_database.c_str(), pos)});
             connection_context->setTenantId(String(default_database.c_str(), pos));
             if (pos + 1 != default_database.size())  ///multi-tenant default database storage pattern: {tenant_id}.{default_database}
-                default_database[pos] = '.';
+            {
+                auto sub_str = default_database.substr(pos + 1);
+                if (sub_str == "default" || sub_str == "system")
+                    default_database = std::move(sub_str);
+                else
+                    default_database[pos] = '.';
+            }
             else                                     /// {tenant_id}`
                 default_database.clear();
         }
