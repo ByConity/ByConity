@@ -394,7 +394,7 @@ bool DaemonJobGlobalGC::executeImpl()
         if (table_model.has_value()) {
             this->tables_need_gc.push_back(*table_model);
         } else {
-            LOG_INFO(log, "Cannot clean trash table {} because : {}", table_id.getNameForLogs(), fail_reason);
+            LOG_INFO(log, "Cannot clean trash table {} because : {}", table_id.name(), fail_reason);
         }
     }
 
