@@ -305,7 +305,7 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(UInt64, background_topology_thread_pool_size, 4, "Number of threads performing topology related background tasks.", 0) \
     M(UInt64, background_metrics_recalculation_schedule_pool_size, 16, "Number of threads performing metrics recalculation related background tasks.", 0) \
-    M(UInt64, background_gc_thread_pool_size, 16, "Number of threads performing data removing related background tasks.", 0) \
+    M(UInt64, background_gc_schedule_pool_size, 16, "Number of threads performing data removing related background tasks.", 0) \
     M(UInt64, local_disk_cache_thread_pool_size, 16, "Number of threads perforrming background tasks from cache segments from cloud storage to local disk. Only has meaning at server startup.", 0) \
     M(UInt64, local_disk_cache_evict_thread_pool_size, 16, "Number of threads perforrming asynchronous remove disk cache file.", 0) \
     M(UInt64, \

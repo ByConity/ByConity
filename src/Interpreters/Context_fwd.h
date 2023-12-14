@@ -22,8 +22,8 @@ namespace SchedulePool
         MemoryTable,
         CNCHTopology,
         PartsMetrics,
-        GC,
         BspGC,
+        GC,
         Size
     };
 }

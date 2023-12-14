@@ -602,7 +602,9 @@ void CnchServerServiceImpl::fetchPartitions(
             SelectQueryInfo query_info;
             auto interpreter = SelectQueryInfo::buildQueryInfoFromQuery(gc, storage, request->predicate(), query_info);
 
-            auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(gc, storage, query_info, column_names);
+            auto session_context = Context::createCopy(gc);
+            session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
+            auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names);
 
             response->set_total_size(required_partitions.total_partition_number);
             auto & mutable_partitions = *response->mutable_partitions();

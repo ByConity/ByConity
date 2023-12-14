@@ -50,7 +50,6 @@
     M(BackgroundDistributedSchedulePoolTask, \
       "Number of active tasks in BackgroundDistributedSchedulePool. This pool is used for distributed sends that is done in background.") \
     M(BackgroundMessageBrokerSchedulePoolTask, "Number of active tasks in BackgroundProcessingPool for message streaming") \
-    M(BackgroundGCSchedulePoolTask, "Number of active tasks in BackgroundGCSchedulePool. This pool is used for data removing related background threads.") \
     M(BackgroundConsumeSchedulePoolTask, \
       "Number of active tasks in BackgroundSchedulePool. This pool is used for periodic ReplicatedMergeTree tasks, like cleaning old " \
       "data parts, altering data parts, replica re-initialization, etc.") \
@@ -78,6 +77,7 @@
       "Number of active tasks in BackgroundSchedulePool. This pool is used for topology related background threads.") \
     M(BackgroundPartsMetricsSchedulePoolTask, \
       "Number of active tasks in BackgroundSchedulePool. This pool is used for parts metrics related background threads.") \
+    M(BackgroundGCSchedulePoolTask, "Number of active tasks in BackgroundGCSchedulePool. This pool is used for data removing related background threads.") \
     M(BackgroundQueueManagerSchedulePoolTask, \
       "Number of active tasks in BackgroundSchedulePool. This pool is used for queue manager threads.") \
     M(BackgroundBspGCSchedulePoolTask, "Number of active tasks in BspGCSchedulePool. This pool is used for bsp gc task.") \

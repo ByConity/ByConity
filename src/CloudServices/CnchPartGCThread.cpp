@@ -27,13 +27,24 @@
 #include <WorkerTasks/ManipulationType.h>
 #include <Poco/Exception.h>
 
+namespace CurrentMetrics
+{
+extern const Metric BackgroundGCSchedulePoolTask;
+}
+
 namespace DB
 {
 
 CnchPartGCThread::CnchPartGCThread(ContextPtr context_, const StorageID & id) : ICnchBGThread(context_, CnchBGThreadType::PartGC, id)
 {
     partition_selector = getContext()->getBGPartitionSelector();
-    data_remover = getContext()->getGCSchedulePool().createTask(log->name() + "(remover)", [this] { runDataRemoveTask(); });
+    data_remover = getContext()
+                       ->getExtraSchedulePool(
+                           SchedulePool::GC,
+                           getContext()->getSettingsRef().background_gc_schedule_pool_size,
+                           CurrentMetrics::BackgroundGCSchedulePoolTask,
+                           "GCPool")
+                       .createTask(log->name() + "(remover)", [this] { runDataRemoveTask(); });
     data_remover->deactivate();
 }
 
