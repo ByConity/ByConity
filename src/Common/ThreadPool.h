@@ -57,7 +57,7 @@ public:
     using Job = std::function<void()>;
 
     /// Maximum number of threads is based on the number of physical cores.
-    ThreadPoolImpl(DB::CpuSetPtr cpu_set_ = nullptr);
+    explicit ThreadPoolImpl(DB::CpuSetPtr cpu_set_ = nullptr);
 
     /// Size is constant. Up to num_threads are created on demand and then run until shutdown.
     explicit ThreadPoolImpl(size_t max_threads_, DB::CpuSetPtr cpu_set_ = nullptr);
@@ -187,14 +187,13 @@ public:
 class ThreadFromGlobalPool
 {
 public:
-    ThreadFromGlobalPool() {}
+    ThreadFromGlobalPool() = default;
 
     template <typename Function, typename... Args>
     explicit ThreadFromGlobalPool(Function && func, Args &&... args)
         : state(std::make_shared<Poco::Event>()),
         tid(std::make_shared<size_t>(0)),
-        cv(std::make_shared<std::condition_variable>()),
-        mutex()
+        cv(std::make_shared<std::condition_variable>())
     {
         /// NOTE: If this will throw an exception, the destructor won't be called.
         getThreadPool().scheduleOrThrow([

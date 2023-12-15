@@ -101,6 +101,7 @@ void MergeTreePrefetchedReaderCNCH::addStreams(const NameAndTypePair& name_and_t
 
         auto [bin_disk, bin_path, bin_offset] = future_files->getFutureSegmentAndPrefetch(stream_bin)->get();
         auto [mrk_disk, mrk_path, mrk_offset] = future_files->getFutureSegmentAndPrefetch(stream_mrk)->get();
+        bool is_lc_dict = isLowCardinalityDictionary(substream_path);
         streams.emplace(stream_name,
             std::make_unique<MergeTreeReaderStream>(
                 IMergeTreeReaderStream::StreamFileMeta {
@@ -123,7 +124,8 @@ void MergeTreePrefetchedReaderCNCH::addStreams(const NameAndTypePair& name_and_t
                 uncompressed_cache,
                 mocked_index_granularity_info,
                 profile_callback,
-                clock_type
+                clock_type,
+                is_lc_dict
             )
         );
     };

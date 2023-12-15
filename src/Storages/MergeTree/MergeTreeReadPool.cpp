@@ -30,6 +30,7 @@ namespace ProfileEvents
 {
     extern const Event SlowRead;
     extern const Event ReadBackoff;
+    extern const Event TaskStealCount;
 }
 
 namespace ErrorCodes
@@ -103,6 +104,7 @@ MergeTreeReadTaskPtr MergeTreeReadPool::getTask(const size_t min_marks_to_read, 
                 it = remaining_thread_tasks.begin();
             thread_idx = *it;
         }
+        ProfileEvents::increment(ProfileEvents::TaskStealCount);
     }
     auto & thread_tasks = threads_tasks[thread_idx];
 
@@ -112,13 +114,26 @@ MergeTreeReadTaskPtr MergeTreeReadPool::getTask(const size_t min_marks_to_read, 
     auto & part = parts_with_idx[part_idx];
     auto & marks_in_part = thread_tasks.sum_marks_in_parts.back();
 
-    /// Get whole part to read if it is small enough.
-    auto need_marks = std::min(marks_in_part, min_marks_to_read);
+    auto need_marks = min_marks_to_read;
 
-    /// Do not leave too little rows in part for next time.
-    if (marks_in_part > need_marks &&
-        marks_in_part - need_marks < min_marks_to_read)
-        need_marks = marks_in_part;
+    // If there are remaining tasks can be stolen, read the whole part
+    // For remote storage like S3, we can send less net request if task is bigger
+    if (thread_tasks.parts_and_ranges.size() > 1) {
+        need_marks = marks_in_part; 
+    } else {
+        // If only last part is left, get whole part to read if it is small enough.
+        if (marks_in_part <= min_marks_to_read)
+            need_marks = marks_in_part;
+        // Else, we read certain proportion of part, left a proportion to steal
+        // TODO: set this proportion as configurable
+        else
+            need_marks = marks_in_part * 2 / 3;
+
+        // Do not leave too little rows in part for next time.
+        if (marks_in_part > need_marks &&
+            marks_in_part - need_marks < min_marks_to_read)
+            need_marks = marks_in_part;
+    }
 
     MarkRanges ranges_to_get_from_part;
 

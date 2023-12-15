@@ -13,14 +13,20 @@
  * limitations under the License.
  */
 
+#include <cstddef>
 #include <memory>
 #include <optional>
+#include <math.h>
 #include <IO/createReadBufferFromFileBase.h>
 #include <Storages/DiskCache/PartFileDiskCacheSegment.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
 #include <Storages/MergeTree/MergedReadBufferWithSegmentCache.h>
 #include "Compression/CachedCompressedReadBuffer.h"
 #include "Compression/CompressedReadBufferFromFile.h"
+#include "Core/SettingsEnums.h"
+#include "Core/Types.h"
+#include "Storages/MergeTree/IMergeTreeDataPart.h"
+#include <Storages/DistributedDataClient.h>
 
 namespace ProfileEvents
 {
@@ -117,7 +123,7 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
     const StorageID& storage_id_, const String& part_name_, const String& stream_name_,
     const DiskPtr& source_disk_, const String& source_file_path_,
     size_t source_data_offset_, size_t source_data_size_, size_t cache_segment_size_,
-    IDiskCache* segment_cache_, const MergeTreeReaderSettings& settings_,
+    const PartHostInfo & part_host_, IDiskCache* segment_cache_, const MergeTreeReaderSettings& settings_,
     size_t total_segment_count_, MergeTreeMarksLoader& marks_loader_,
     UncompressedCache* uncompressed_cache_,
     const ReadBufferFromFileBase::ProfileCallback& profile_callback_,
@@ -130,9 +136,17 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
         settings(settings_), uncompressed_cache(uncompressed_cache_),
         profile_callback(profile_callback_), clock_type(clock_type_),
         total_segment_count(total_segment_count_), marks_loader(marks_loader_),
-        current_segment_idx(0), current_compressed_offset(std::nullopt),
+        current_segment_idx(0), current_compressed_offset(std::nullopt), part_host(part_host_),
         logger(&Poco::Logger::get("MergedReadBufferWithSegmentCache"))
 {
+    initialize();
+}
+
+void MergedReadBufferWithSegmentCache::initialize() {
+    if (seekToMarkInSegmentCache(0, {0, 0}))
+        return;
+    // No segment cache, trying to use source reader
+    initSourceBufferIfNeeded();
 }
 
 size_t MergedReadBufferWithSegmentCache::readBig(char *to, size_t n)
@@ -234,6 +248,32 @@ bool MergedReadBufferWithSegmentCache::nextImpl()
     return !encounter_eof;
 }
 
+void MergedReadBufferWithSegmentCache::setReadUntilPosition(size_t position)
+{
+    read_until_position = position;
+    // Only set when active buffer is source_buffer
+    if (source_buffer.initialized())
+        source_buffer.activeBuffer().setReadUntilPosition(source_data_offset + position);
+}
+
+void MergedReadBufferWithSegmentCache::setReadUntilEnd()
+{
+    read_until_position = source_data_size;
+    if (source_buffer.initialized())
+        source_buffer.activeBuffer().setReadUntilPosition(source_data_offset + source_data_size);
+}
+
+
+ReadBuffer& MergedReadBufferWithSegmentCache::activeBuffer() {
+    return cache_buffer.initialized() ? cache_buffer.activeBuffer() : source_buffer.activeBuffer();
+}
+
+void MergedReadBufferWithSegmentCache::prefetch(Priority priority)
+{
+    if (cache_buffer.initialized() || source_buffer.initialized())
+        activeBuffer().prefetch(priority);
+}
+
 void MergedReadBufferWithSegmentCache::seekToStart()
 {
     seekToPosition(0, {0, 0});
@@ -285,60 +325,31 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
 
     String segment_key = PartFileDiskCacheSegment::getSegmentKey(storage_id, part_name,
         stream_name, segment_idx, DATA_FILE_EXTENSION);
+
+    // force test steal disk cache feature via DiskCacheMode::FORCE_STEAL_DISK_CACHE mode
+    if (settings.read_settings.disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE)
+        return seekToMarkInRemoteSegmentCache(segment_idx, mark_pos, segment_key);
+
     std::pair<DiskPtr, String> cache_entry = segment_cache->get(segment_key);
+    LOG_TRACE(&Poco::Logger::get(__func__), "Current node host vs disk cache host: {} vs {}", getHostFromHostPort(part_host.assign_compute_host_port), getHostFromHostPort(part_host.disk_cache_host_port));
     if (cache_entry.first == nullptr)
     {
+        if ((settings.remote_disk_cache_stealing == StealingCacheMode::READ_WRITE
+             || settings.remote_disk_cache_stealing == StealingCacheMode::READ_ONLY)
+            && !part_host.disk_cache_host_port.empty() && getHostFromHostPort(part_host.assign_compute_host_port) != getHostFromHostPort(part_host.disk_cache_host_port))
+            return seekToMarkInRemoteSegmentCache(segment_idx, mark_pos, segment_key);
         return false;
     }
 
     DiskPtr& cache_disk = cache_entry.first;
     const String& cache_path = cache_entry.second;
-
     try
     {
         size_t segment_start_compressed_offset =
             marks_loader.getMark(segment_idx * cache_segment_size).offset_in_compressed_file;
 
         LOG_TRACE(logger, fmt::format("Seek to diskcache {} (current buffer at {}), segment {}, offset {}:{}", cache_path, cache_buffer.initialized() ? cache_buffer.path() : "Uninitialized", segment_idx, mark_pos.offset_in_compressed_file, mark_pos.offset_in_decompressed_block));
-        // There isn't any segment reading right now, or it's not the segment we
-        // are looking for, initialize one
-        if (!cache_buffer.initialized() || cache_buffer.path() != fullPath(cache_disk, cache_path))
-        {
-            cache_buffer.reset();
-
-            // Init cache buffer
-            if (uncompressed_cache)
-            {
-                auto cached_compressed_buffer = std::make_unique<CachedCompressedReadBuffer>(
-                    fullPath(cache_disk, cache_path),
-                    [this, cache_disk, cache_path]() {
-                        return cache_disk->readFile(cache_path, settings.read_settings);
-                    },
-                    uncompressed_cache
-                );
-
-                cache_buffer.initialize(std::move(cached_compressed_buffer), nullptr);
-            }
-            else
-            {
-                auto non_cached_compressed_buffer = std::make_unique<CompressedReadBufferFromFile>(
-                    cache_disk->readFile(cache_path, settings.read_settings)
-                );
-
-                cache_buffer.initialize(nullptr, std::move(non_cached_compressed_buffer));
-            }
-
-            if (profile_callback)
-            {
-                cache_buffer.setProfileCallback(profile_callback, clock_type);
-            }
-
-            if (!settings.checksum_on_read)
-            {
-                cache_buffer.disableChecksumming();
-            }
-        }
-
+        initCacheBufferIfNeeded(cache_disk, cache_path);
         cache_buffer.seek(mark_pos.offset_in_compressed_file - segment_start_compressed_offset,
             mark_pos.offset_in_decompressed_block);
         current_segment_idx = segment_idx;
@@ -351,6 +362,101 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
     }
 
     return true;
+}
+
+bool MergedReadBufferWithSegmentCache::seekToMarkInRemoteSegmentCache(size_t segment_idx,
+    const MarkInCompressedFile& mark_pos, const String & segment_key)
+{
+    if (!segment_cache)
+        return false;
+
+    DistributedDataClientOption option{
+        .max_request_rate = segment_cache->getSettings().stealing_max_request_rate,
+        .connection_timeout_ms = segment_cache->getSettings().stealing_connection_timeout_ms,
+        .read_timeout_ms = segment_cache->getSettings().stealing_read_timeout_ms,
+        .max_retry_times = segment_cache->getSettings().stealing_max_retry_times,
+        .retry_sleep_ms = segment_cache->getSettings().stealing_retry_sleep_ms,
+        .max_queue_count = segment_cache->getSettings().stealing_max_queue_count,
+    };
+    auto remote_data_client = std::make_shared<DistributedDataClient>(part_host.disk_cache_host_port, segment_key, option);
+    auto remote_cache_file = std::make_unique<ReadBufferFromRpcStreamFile>(remote_data_client, settings.read_settings.buffer_size);
+    if (remote_cache_file->getFileName().empty())
+        return false;
+    try
+    {
+        size_t segment_start_compressed_offset = marks_loader.getMark(segment_idx * cache_segment_size).offset_in_compressed_file;
+
+        LOG_TRACE(
+            logger,
+            fmt::format(
+                "Seek to remote diskcache {}:{} (current buffer at {}), segment {}, offset {}:{}",
+                part_host.disk_cache_host_port,
+                remote_cache_file->getFileName(),
+                cache_buffer.initialized() ? cache_buffer.path() : "Uninitialized",
+                segment_idx,
+                mark_pos.offset_in_compressed_file,
+                mark_pos.offset_in_decompressed_block));
+        initCacheBufferIfNeeded(nullptr, "", std::move(remote_cache_file));
+        cache_buffer.seek(mark_pos.offset_in_compressed_file - segment_start_compressed_offset, mark_pos.offset_in_decompressed_block);
+        current_segment_idx = segment_idx;
+    }
+    catch (...)
+    {
+        tryLogCurrentException("MergedReadBufferWithSegmentCache");
+        cache_buffer.reset();
+        return false;
+    }
+    return true;
+}
+
+void MergedReadBufferWithSegmentCache::initCacheBufferIfNeeded(
+    const DiskPtr & cache_disk, const String & cache_path, std::unique_ptr<ReadBufferFromRpcStreamFile> remote_cache)
+{
+    // There isn't any segment reading right now, or it's not the segment we
+    // are looking for, initialize one
+    if (!cache_buffer.initialized() || (cache_disk && cache_buffer.path() != fullPath(cache_disk, cache_path)))
+    {
+        cache_buffer.reset();
+
+        // Init cache buffer
+        if (uncompressed_cache && cache_disk)
+        {
+            auto cached_compressed_buffer = std::make_unique<CachedCompressedReadBuffer>(
+                fullPath(cache_disk, cache_path),
+                [this, cache_disk, cache_path]() { return cache_disk->readFile(cache_path, settings.read_settings); },
+                uncompressed_cache);
+
+            cache_buffer.initialize(std::move(cached_compressed_buffer), nullptr);
+        }
+        else
+        {
+            if (cache_disk)
+            {
+                auto non_cached_compressed_buffer
+                    = std::make_unique<CompressedReadBufferFromFile>(cache_disk->readFile(cache_path, settings.read_settings));
+                cache_buffer.initialize(nullptr, std::move(non_cached_compressed_buffer));
+            }
+            else if (remote_cache)
+            {
+                auto non_cached_compressed_buffer = std::make_unique<CompressedReadBufferFromFile>(std::move(remote_cache));
+                cache_buffer.initialize(nullptr, std::move(non_cached_compressed_buffer));
+            }
+            else
+            {
+                throw;
+            }
+        }
+
+        if (profile_callback)
+        {
+            cache_buffer.setProfileCallback(profile_callback, clock_type);
+        }
+
+        if (!settings.checksum_on_read)
+        {
+            cache_buffer.disableChecksumming();
+        }
+    }
 }
 
 void MergedReadBufferWithSegmentCache::initSourceBufferIfNeeded()
@@ -391,6 +497,12 @@ void MergedReadBufferWithSegmentCache::initSourceBufferIfNeeded()
     {
         source_buffer.disableChecksumming();
     }
+
+    // When source buffer is not initialized, setting read_until_position may be failed.
+    // Therefore, we record and set it to source buffer after initializing.
+    if (read_until_position)
+        setReadUntilPosition(read_until_position);
+
 }
 
 size_t MergedReadBufferWithSegmentCache::toSourceDataOffset(size_t logical_offset) const

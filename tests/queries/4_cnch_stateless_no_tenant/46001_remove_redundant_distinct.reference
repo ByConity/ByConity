@@ -32,9 +32,9 @@ Projection Est. ? rows
             └─ TableScan test_distinct.unique_3 Est. ? rows
                      Outputs: [id3]
 ---------test inner join1
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: [id]
+Projection Est. ? rows
+│     Expressions: [id]
+└─ Gather Exchange Est. ? rows
    └─ Aggregating Est. ? rows
       │     Group by: {id}
       └─ Inner Join Est. ? rows
@@ -48,9 +48,9 @@ Gather Exchange Est. ? rows
             └─ TableScan test_distinct.unique_2 Est. ? rows
                      Outputs: id_1:=id
 ---------test inner join2
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: [id]
+Projection Est. ? rows
+│     Expressions: [id]
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: id == id3
       ├─ Repartition Exchange Est. ? rows
@@ -62,9 +62,9 @@ Gather Exchange Est. ? rows
          └─ TableScan test_distinct.unique_3 Est. ? rows
                   Outputs: [id3]
 ---------test inner join3
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: [id]
+Projection Est. ? rows
+│     Expressions: [id]
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: id == id_1, m1 == id2
       ├─ Repartition Exchange Est. ? rows
@@ -76,9 +76,9 @@ Gather Exchange Est. ? rows
          └─ TableScan test_distinct.unique_2 Est. ? rows
                   Outputs: [id2], id_1:=id
 ---------test left join
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: [id]
+Projection Est. ? rows
+│     Expressions: [id]
+└─ Gather Exchange Est. ? rows
    └─ Left Join Est. ? rows
       │     Condition: id == id3
       ├─ Repartition Exchange Est. ? rows
@@ -90,9 +90,9 @@ Gather Exchange Est. ? rows
          └─ TableScan test_distinct.unique_3 Est. ? rows
                   Outputs: [id3]
 ---------test right join
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: [id3]
+Projection Est. ? rows
+│     Expressions: [id3]
+└─ Gather Exchange Est. ? rows
    └─ Right Join Est. ? rows
       │     Condition: id == id3
       ├─ Repartition Exchange Est. ? rows
@@ -104,9 +104,9 @@ Gather Exchange Est. ? rows
          └─ TableScan test_distinct.unique_3 Est. ? rows
                   Outputs: [id3]
 ---------test full join
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: [id]
+Projection Est. ? rows
+│     Expressions: [id]
+└─ Gather Exchange Est. ? rows
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {id}
@@ -123,9 +123,9 @@ Gather Exchange Est. ? rows
                   └─ TableScan test_distinct.unique_3 Est. ? rows
                            Outputs: [id3]
 ---------test cte
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: plus(id3, 10):=`expr#plus(id3, 10)`
+Projection Est. ? rows
+│     Expressions: plus(id3, 10):=`expr#plus(id3, 10)`
+└─ Gather Exchange Est. ? rows
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {expr#plus(id3, 10)}
@@ -161,9 +161,9 @@ CTEDef [0]
             Outputs: [id]
 note: CTE(Common Table Expression) is applied for 2 times.
 ---------test cte2
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: id:=id_3
+Projection Est. ? rows
+│     Expressions: id:=id_3
+└─ Gather Exchange Est. ? rows
    └─ Union Est. ? rows
       │     OutputToInputs: id_3 = [id_1,id_2]
       ├─ TableScan test_distinct.unique_1 Est. ? rows

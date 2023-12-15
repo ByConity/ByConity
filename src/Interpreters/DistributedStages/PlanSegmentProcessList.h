@@ -24,6 +24,7 @@
 #include <bthread/mutex.h>
 #include <Poco/Logger.h>
 #include <common/types.h>
+#include <parallel_hashmap/phmap.h>
 
 #include <memory>
 #include <unordered_map>
@@ -35,30 +36,59 @@ class ProcessListEntry;
 class QueryStatus;
 
 /// Group contains running queries created from one distributed query.
-struct PlanSegmentGroup
+class PlanSegmentGroup
 {
+public:
+    using Element = std::shared_ptr<ProcessListEntry>;
+    using Container = std::unordered_map<size_t, Element>;
+
+    PlanSegmentGroup(String coordinator_address_, Decimal64 initial_query_start_time_ms_)
+        : coordinator_address(std::move(coordinator_address_)), initial_query_start_time_ms(initial_query_start_time_ms_) {}
+
+    bool empty()
+    {
+        std::unique_lock lock(mutex);
+        return segment_queries.empty();
+    }
+
+    bool emplace(size_t segment_id, Element&& element)
+    {
+        std::unique_lock lock(mutex);
+        const auto ret = segment_queries.insert_or_assign(segment_id, std::move(element));
+        return ret.second;
+    }
+
+    void erase(size_t segment_id)
+    {
+        std::unique_lock lock(mutex);
+        segment_queries.erase(segment_id);
+    }
+
+    bool tryCancel();
+
+    mutable bthread::Mutex mutex;
     String coordinator_address;
-    Decimal64 initial_query_start_time_ms;
-    using SegmentIdToElement = std::unordered_map<size_t, std::shared_ptr<ProcessListEntry>>;
-    SegmentIdToElement segment_queries;
+    Decimal64 initial_query_start_time_ms{0};
+    Container segment_queries;
 };
 
 class PlanSegmentProcessList;
 class PlanSegmentProcessListEntry
 {
 private:
+    using Element = std::shared_ptr<QueryStatus>;
     PlanSegmentProcessList & parent;
-    QueryStatus * status;
+    Element status;
     String initial_query_id;
     size_t segment_id;
     AddressInfo coordinator_address;
     AddressInfo current_address;
 
 public:
-    PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, QueryStatus * status_, String initial_query_id_, size_t segment_id_);
+    PlanSegmentProcessListEntry(PlanSegmentProcessList & parent_, Element status_, String initial_query_id_, size_t segment_id_);
     ~PlanSegmentProcessListEntry();
-    QueryStatus * operator->() { return status; }
-    const QueryStatus * operator->() const { return status; }
+    Element operator->() { return status; }
+    const Element operator->() const { return status; }
     QueryStatus & get() { return *status; }
     const QueryStatus & get() const { return *status; }
     void setCoordinatorAddress(const AddressInfo & coordinator_address_) {coordinator_address = coordinator_address_;}
@@ -73,9 +103,9 @@ class PlanSegmentProcessList
 {
 public:
     /// distributed query_id -> GroupIdToElement(s). There can be multiple queries with the same query_id as long as all queries except one are cancelled.
-    using InitialQueryToSegmentGroup = std::unordered_map<String, PlanSegmentGroup>;
-
     using EntryPtr = std::shared_ptr<PlanSegmentProcessListEntry>;
+
+    using Element = std::shared_ptr<PlanSegmentGroup>;
 
     friend class PlanSegmentProcessListEntry;
 
@@ -83,8 +113,21 @@ public:
 
     CancellationCode tryCancelPlanSegmentGroup(const String & initial_query_id, String coordinator_address = "");
 
+    bool remove(std::string initial_query_id, size_t segment_id);
+
 private:
-    std::unordered_map<String, PlanSegmentGroup> initail_query_to_groups;
+    bool tryEraseGroup();
+    bool shouldEraseGroup();
+    mutable bthread::Mutex group_to_erase_mutex;
+    std::set<String> group_to_erase;
+    size_t group_to_erase_threshold{64};
+
+    using Container = phmap::parallel_flat_hash_map<std::string, Element,
+            phmap::priv::hash_default_hash<std::string>,
+            phmap::priv::hash_default_eq<std::string>,
+            std::allocator<std::pair<std::string, Element>>,
+            4, bthread::Mutex>;
+    Container initail_query_to_groups;
     mutable bthread::Mutex mutex;
     mutable bthread::ConditionVariable remove_group;
     Poco::Logger * logger = &Poco::Logger::get("PlanSegmentProcessList");

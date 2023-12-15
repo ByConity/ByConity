@@ -16,11 +16,11 @@ String formatTenantDatabaseName(const String & database_name);
 // no catalog information will be attached.
 String appendTenantIdOnly(const String & name);
 
-String formatTenantDefaultDatabaseName(const String & database_name);
+String formatTenantConnectDefaultDatabaseName(const String & database_name);
 
 String formatTenantDatabaseNameWithTenantId(const String & database_name, const String & tenant_id, char separator = '.');
 
-String formatTenantConnectUserName(const String & user_name);
+String formatTenantConnectUserName(const String & user_name, bool is_force = false);
 
 String formatTenantEntityName(const String & name);
 

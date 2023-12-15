@@ -31,7 +31,6 @@
 #include <Storages/MergeTree/MergeTreeIOSettings.h>
 #include <Storages/MergeTree/MergeTreeMarksLoader.h>
 #include <IO/ReadSettings.h>
-#include <Storages/MergeTree/IMergeTreeReaderStream.h>
 
 
 namespace DB
@@ -51,7 +50,8 @@ public:
         MarkCache * mark_cache_, UncompressedCache * uncompressed_cache_,
         const MergeTreeIndexGranularityInfo * index_granularity_info_,
         const ReadBufferFromFileBase::ProfileCallback & profile_callback_,
-        clockid_t clock_type_);
+        clockid_t clock_type_,
+        bool is_low_cardinality_dictionary_);
 
     virtual void seekToStart() override;
     virtual void seekToMark(size_t index) override;
@@ -61,15 +61,11 @@ private:
     std::string data_rel_path;
     std::string stream_name;
 
-    size_t marks_count;
-
     ReadSettings read_settings;
 
     off_t data_file_offset;
 
     std::unique_ptr<CachedCompressedReadBuffer> cached_buffer;
     std::unique_ptr<CompressedReadBufferFromFile> non_cached_buffer;
-
-    MergeTreeMarksLoader marks_loader;
 };
 }

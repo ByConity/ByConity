@@ -17,6 +17,7 @@ PROTOBUF_GENERATE_CPP(dbms_proto_srcs dbms_proto_headers
     enum.proto
     auto_statistics.proto
     disk_cache.proto
+    distributed_file.proto
     )
 
 

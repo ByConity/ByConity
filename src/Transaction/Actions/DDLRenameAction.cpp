@@ -43,7 +43,7 @@ void DDLRenameAction::executeV1(TxnTimestamp commit_time)
         if (!dynamic_cast<const StorageCnchMergeTree *>(p->from_storage.get()))
             throw Exception("Only CnchMergeTree are supported to rename now", ErrorCodes::LOGICAL_ERROR);
 
-        catalog->renameTable(p->from_database, p->from_storage->getTableName(), p->to_database, p->to_table, p->to_database_uuid, txn_id, commit_time);
+        catalog->renameTable(getContext()->getSettingsRef(), p->from_database, p->from_storage->getTableName(), p->to_database, p->to_table, p->to_database_uuid, txn_id, commit_time);
 
         // check after rename
         auto new_storage = catalog->tryGetTable(*local_context, p->to_database, p->to_table, commit_time);

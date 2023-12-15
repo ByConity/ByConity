@@ -357,4 +357,9 @@ void MergeTreeDataPartWide::calculateEachColumnSizes(ColumnSizeByName & each_col
     }
 }
 
+bool MergeTreeDataPartWide::isStoredOnRemoteDisk() const
+{
+    return storage.isRemote();
+}
+
 }

@@ -146,6 +146,8 @@ public:
 
         if (user.empty())
             user = "default";
+
+        default_database = formatTenantConnectDefaultDatabaseName(default_database_);
         user = formatTenantConnectUserName(user);
         setDescription();
     }

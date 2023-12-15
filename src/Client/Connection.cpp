@@ -275,7 +275,7 @@ void Connection::receiveHello()
 
 void Connection::setDefaultDatabase(const String & database)
 {
-    default_database = database;
+    default_database = formatTenantConnectDefaultDatabaseName(database);
 }
 
 const String & Connection::getDefaultDatabase() const

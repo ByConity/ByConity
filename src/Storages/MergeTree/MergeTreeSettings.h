@@ -37,6 +37,13 @@ namespace DB
 class ASTStorage;
 struct Settings;
 
+enum StealingCacheMode : UInt64
+{
+  DISABLE = 0,
+  READ_ONLY = 1,
+  WRITE_ONLY = 2,
+  READ_WRITE = 3
+};
 
 /** These settings represent fine tunes for internal details of MergeTree storages
   * and should not be changed by the user without a reason.
@@ -471,6 +478,7 @@ struct Settings;
     M(Bool, enable_parts_sync_preload, 0, "Enable sync preload parts", 0) \
     M(Bool, enable_gc_evict_disk_cache, false, "Enable gc evict disk cache", 0)      \
     M(MaxThreads, cnch_parallel_preloading, 0, "Max threads when worker preload parts", 0) \
+    M(UInt64, disk_cache_stealing_mode, 0, "Read/write remote vw local disk cache if cur local disk cache empty, 0: close; 1: read 2: write 3: read&write", 0) \
     \
     /* Renamed settings - cannot be ignored */\
     M(Bool, enable_nullable_sorting_key, false, "Alias of `allow_nullable_key`", 0) \

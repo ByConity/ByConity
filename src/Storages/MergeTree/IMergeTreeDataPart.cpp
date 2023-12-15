@@ -41,9 +41,11 @@
 #include <Common/FieldVisitorsAccurateComparison.h>
 #include <common/JSON.h>
 #include <common/logger_useful.h>
+#include "Core/SettingsEnums.h"
 #include <Storages/KeyDescription.h>
 #include <Compression/getCompressionCodecForFile.h>
 #include <Parsers/queryToString.h>
+#include <DataTypes/Serializations/ISerialization.h>
 #include <DataTypes/NestedUtils.h>
 #include <DataTypes/DataTypeByteMap.h>
 #include <DataTypes/MapHelpers.h>
@@ -1733,7 +1735,7 @@ bool IMergeTreeDataPart::enableDiskCache() const
         return storage.getSettings()->enable_local_disk_cache;
     else if (disk_cache_mode == DiskCacheMode::SKIP_DISK_CACHE)
         return false;
-    else if (disk_cache_mode == DiskCacheMode::USE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+    else if (disk_cache_mode == DiskCacheMode::USE_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE || disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE)
         return true;
     else
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown disk cache mode");
@@ -1959,25 +1961,34 @@ ColumnSize IMergeTreeDataPart::getColumnSize(const String & column_name, const I
 
 void IMergeTreeDataPart::accumulateColumnSizes(ColumnToSize & column_to_size) const
 {
-    for (const auto & [column_name, size] : columns_sizes)
-        /// it is ok to maintain byte map columns in column_to_size with 0 size
-        column_to_size[column_name] = size.data_compressed;
-
     auto checksums = getChecksums();
     auto & files = checksums->files;
 
-    /// implicit columns of bytemap may not in columns_sizes if enable enable_calculate_columns_size_without_map, need to get from checksums files
     for (const NameAndTypePair & name_type : storage.getInMemoryMetadataPtr()->getColumns().getAllPhysical())
     {
         if (name_type.type->isMap() && !name_type.type->isMapKVStore())
         {
-            auto [curr, end] = getMapColumnRangeFromOrderedFiles(name_type.name, files);
+            /// need escape map column name first to match filenames in checksums
+            auto [curr, end] = getMapColumnRangeFromOrderedFiles(escapeForFileName(name_type.name), files);
             for (; curr != end; ++curr)
             {
                 auto & filename = curr->first;
                 if (endsWith(filename, DATA_FILE_EXTENSION))
                     column_to_size[parseImplicitColumnFromImplicitFileName(filename, name_type.name)] += curr->second.file_size;
             }
+        }
+        else
+        {
+            ISerialization::SubstreamPath path;
+
+            auto serialization = getSerializationForColumn(name_type);
+            serialization->enumerateStreams(
+                [&](const ISerialization::SubstreamPath & substream_path) {
+                    auto bin_checksum = files.find(ISerialization::getFileNameForStream(name_type.name, substream_path) + DATA_FILE_EXTENSION);
+                    if (bin_checksum != files.end())
+                        column_to_size[name_type.name] += bin_checksum->second.file_size;
+                },
+                path);
         }
     }
 }

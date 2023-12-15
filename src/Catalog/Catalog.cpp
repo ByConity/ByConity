@@ -1110,6 +1110,7 @@ namespace Catalog
     }
 
     void Catalog::renameTable(
+        const Settings & query_settings,
         const String & from_database,
         const String & from_table,
         const String & to_database,
@@ -1120,39 +1121,51 @@ namespace Catalog
     {
         runWithMetricSupport(
             [&] {
-                String table_uuid = meta_proxy->getTableUUID(name_space, from_database, from_table);
+                auto table_id = meta_proxy->getTableID(name_space, from_database, from_table);
 
-                if (table_uuid.empty())
+                if (!table_id)
                     throw Exception("Table not found.", ErrorCodes::UNKNOWN_TABLE);
 
+                String table_uuid = table_id->uuid();
                 /// get latest version of the table
                 auto table = tryGetTableFromMetastore(table_uuid, UINT64_MAX);
-                if (table)
-                {
-                    if (table->commit_time() >= ts.toUInt64())
-                        throw Exception("Cannot rename table with an earlier timestamp", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
 
-                    BatchCommitRequest batch_writes;
-                    replace_definition(*table, to_database, to_table);
-                    table->set_txnid(txnID.toUInt64());
-                    table->set_commit_time(ts.toUInt64());
-                    meta_proxy->prepareRenameTable(name_space, table_uuid, from_database, from_table, to_db_uuid, *table, batch_writes);
-                    BatchCommitResponse resp;
-                    meta_proxy->batchWrite(batch_writes, resp);
-
-                    /// update table name in table meta entry so that we can get table part metrics correctly.
-                    if (auto cache_manager = context.getPartCacheManager(); cache_manager)
-                    {
-                        cache_manager->removeStorageCache(from_database, from_table);
-                        cache_manager->updateTableNameInMetaEntry(table_uuid, to_database, to_table);
-                    }
-                }
-                else
-                {
+                if (!table)
                     throw Exception(
                         "Cannot get metadata of table " + from_database + "." + from_table + " by UUID : " + table_uuid,
                         ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
+                
+                if (table->commit_time() >= ts.toUInt64())
+                    throw Exception("Cannot rename table with an earlier timestamp", ErrorCodes::CATALOG_SERVICE_INTERNAL_ERROR);
+
+                HostWithPorts host_port;
+                bool is_local_server = false;
+                if (!query_settings.force_execute_alter)
+                {
+                    host_port = context.getCnchTopologyMaster()
+                                        ->getTargetServer(table_uuid, table_id->has_server_vw_name() ? table_id->server_vw_name() : DEFAULT_SERVER_VW_NAME, false);
+                    is_local_server = isLocalServer(host_port.getRPCAddress(), std::to_string(context.getRPCPort()));
+                    if (!is_local_server)
+                        throw Exception(
+                            "Cannot rename table because of choosing wrong server according to current topology, targert server: " + host_port.toDebugString(),
+                            ErrorCodes::CNCH_TOPOLOGY_NOT_MATCH_ERROR);
                 }
+
+                BatchCommitRequest batch_writes;
+                replace_definition(*table, to_database, to_table);
+                table->set_txnid(txnID.toUInt64());
+                table->set_commit_time(ts.toUInt64());
+                meta_proxy->prepareRenameTable(name_space, table_uuid, from_database, from_table, to_db_uuid, *table, batch_writes);
+                BatchCommitResponse resp;
+                meta_proxy->batchWrite(batch_writes, resp);
+
+                /// update table name in table meta entry so that we can get table part metrics correctly.
+                if (auto cache_manager = context.getPartCacheManager(); cache_manager && is_local_server)
+                {
+                    cache_manager->insertStorageCache(StorageID{from_database, from_table, UUIDHelpers::toUUID(table_uuid)}, nullptr, ts, host_port.topology_version);
+                    cache_manager->updateTableNameInMetaEntry(table_uuid, to_database, to_table);
+                }
+
             },
             ProfileEvents::RenameTableSuccess,
             ProfileEvents::RenameTableFailed);

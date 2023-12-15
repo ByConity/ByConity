@@ -22,10 +22,14 @@
 
 namespace DB
 {
+
 class MMappedFileCache;
 
 struct ReadSettings
 {
+    bool remote_fs_prefetch = true;
+    bool local_fs_prefetch = false;
+
     bool enable_io_scheduler = false;
     bool enable_io_pfra = false;
     size_t buffer_size = DBMS_DEFAULT_BUFFER_SIZE;
@@ -37,7 +41,8 @@ struct ReadSettings
     size_t filesystem_cache_max_download_size = (128UL * 1024 * 1024 * 1024);
     bool skip_download_if_exceeds_query_cache = true;
     ThrottlerPtr throttler = nullptr;
-    size_t remote_read_min_bytes_for_seek = DBMS_DEFAULT_BUFFER_SIZE;
+    size_t remote_fs_buffer_size = DBMS_DEFAULT_BUFFER_SIZE;
+    size_t remote_read_min_bytes_for_seek = 3 * DBMS_DEFAULT_BUFFER_SIZE;
     DiskCacheMode disk_cache_mode {DiskCacheMode::AUTO};
 
     bool parquet_parallel_read = false;

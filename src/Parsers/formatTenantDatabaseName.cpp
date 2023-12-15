@@ -34,7 +34,7 @@ static bool enable_tenant_systemdb = true;
 
 void setEnableTenantSystemDB(bool v)
 {
-    enable_tenant_systemdb = v; 
+    enable_tenant_systemdb = v;
 }
 
 String getCurrentCatalog()
@@ -65,7 +65,7 @@ static bool isInternalDatabaseName(const String & database_name)
     if(!enable_tenant_systemdb)
     {
         if (DatabaseCatalog::SYSTEM_DATABASE == database_name)
-            return true; 
+            return true;
     }
     return false;
 }
@@ -74,7 +74,7 @@ static bool isInternalDatabaseName(const String & database_name)
 static String formatTenantDatabaseNameImpl(const String & database_name, char separator = '.')
 {
     auto tenant_id = getTenantId();
-    if (!tenant_id.empty() && !isInternalDatabaseName(database_name) && 
+    if (!tenant_id.empty() && !isInternalDatabaseName(database_name) &&
         (database_name.find(tenant_id) != 0 || database_name.size() == tenant_id.size() || database_name[tenant_id.size()] != separator))
     {
         String result = tenant_id;
@@ -89,7 +89,7 @@ static String formatTenantDatabaseNameImpl(const String & database_name, char se
 static String formatTenantUserNameImpl(const String & user_name, char separator = '`')
 {
     auto tenant_id = getTenantId();
-    if (!tenant_id.empty() && 
+    if (!tenant_id.empty() &&
         (user_name.find(tenant_id) != 0 || user_name.size() == tenant_id.size() || user_name[tenant_id.size()] != separator))
     {
         String result = tenant_id;
@@ -133,15 +133,59 @@ String formatTenantDatabaseNameWithTenantId(const String & database_name, const 
 }
 
 //Format pattern {tenant_id}`{database_name}
-String formatTenantDefaultDatabaseName(const String & database_name)
+String formatTenantConnectDefaultDatabaseName(const String & database_name)
 {
-    return formatTenantDatabaseNameImpl(database_name, '`');
+     auto tenant_id = getTenantId();
+    if (!tenant_id.empty())
+    {
+        auto pos = database_name.find(tenant_id);
+        if (pos != 0 || database_name.size() == tenant_id.size() ||
+            (database_name[tenant_id.size()] != '`' && database_name[tenant_id.size()] != '.'))
+        {
+            String result = tenant_id;
+            result += '`';
+            result += database_name;
+            return result;
+        }
+        else if (pos == 0 && database_name.size() > tenant_id.size() && database_name[tenant_id.size()] == '.')
+        {
+            String result = database_name;
+            result[tenant_id.size()] = '`';
+            return result;
+        }
+
+    }
+    return database_name;
 }
 
 //Format pattern {tenant_id}`{user_name}
-String formatTenantConnectUserName(const String & user_name)
+String formatTenantConnectUserName(const String & user_name, bool is_force)
 {
-    return formatTenantUserNameImpl(user_name, '`');
+    auto tenant_id = getTenantId();
+    if (!tenant_id.empty())
+    {
+        auto pos = user_name.find(tenant_id);
+        if (is_force)
+        {
+            if (pos != 0 || user_name.size() == tenant_id.size() ||
+                (user_name[tenant_id.size()] != '`' && user_name[tenant_id.size()] != '.'))
+            {
+                if (!is_force)
+                    return user_name;
+                String result = tenant_id;
+                result += '`';
+                result += user_name;
+                return result;
+            }
+        }
+        else if (pos == 0 && user_name.size() > tenant_id.size() && user_name[tenant_id.size()] == '.')
+        {
+            String result = user_name;
+            result[tenant_id.size()] = '`';
+            return result;
+        }
+    }
+    return user_name;
 }
 
 //Format pattern {tenant_id}.{entity_name}
@@ -209,7 +253,7 @@ String formatCatalogDatabaseName(const String & database_name, const String cata
 {
     if (isInternalDatabaseName(database_name) && database_name != "default")
         return database_name;
-    
+
     // the hive also has "default" database;
     if (database_name == "default" && catalogIsCnch(catalog_name))
         return database_name;

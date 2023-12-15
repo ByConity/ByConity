@@ -197,7 +197,22 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     ASTPtr codec_expression;
     ASTPtr ttl_expression;
 
-    if (!s_default.checkWithoutMoving(pos, expected)
+    auto null_check_without_moving = [&]() -> bool
+    {
+        if (!allow_null_modifiers)
+            return false;
+
+        if (s_null.checkWithoutMoving(pos, expected))
+            return true;
+
+        Pos before_null = pos;
+        bool res = s_not.check(pos, expected) && s_null.checkWithoutMoving(pos, expected);
+        pos = before_null;
+        return res;
+    };
+
+    if (!null_check_without_moving() 
+        && !s_default.checkWithoutMoving(pos, expected)
         && !s_materialized.checkWithoutMoving(pos, expected)
         && !s_alias.checkWithoutMoving(pos, expected)
         && (require_type
@@ -206,6 +221,18 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     {
         if (!type_parser.parse(pos, type, expected))
             return false;
+    }
+
+    if (allow_null_modifiers)
+    {
+        if (s_not.check(pos, expected))
+        {
+            if (!s_null.check(pos, expected))
+                return false;
+            null_modifier.emplace(false);
+        }
+        else if (s_null.check(pos, expected))
+            null_modifier.emplace(true);
     }
 
     Pos pos_before_specifier = pos;
@@ -221,7 +248,7 @@ bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, E
     if (require_type && !type && !default_expression)
         return false; /// reject column name without type
 
-    if (type && allow_null_modifiers)
+    if ((type || default_expression) && allow_null_modifiers && !null_modifier.has_value())
     {
         if (s_not.ignore(pos, expected))
         {

@@ -94,11 +94,11 @@ TEST_F(MaterializedViewRewriteAdditionalTest, testAggDistinctInMvGrouping)
 {
   String mv = "select avgState(deptno), empid from emps group by empid";
   String query = "select avg(deptno), max(empid) from emps group by empid";
-  sql(mv, query)
+    sql(mv, query)
       .checkingThatResultContains(
-          "Projection\n"
-          "│     Expressions: avg(deptno):=`expr#avgMerge(avgState(deptno))`, max(empid):=`expr#max(empid)_1`\n"
-          "└─ Gather Exchange\n"
+          "Gather Exchange\n"
+          "└─ Projection\n"
+          "   │     Expressions: avg(deptno):=`expr#avgMerge(avgState(deptno))`, max(empid):=`expr#max(empid)_1`\n"
           "   └─ MergingAggregated\n"
           "      └─ Repartition Exchange\n"
           "         │     Partition by: {expr#empid}\n"

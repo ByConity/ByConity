@@ -55,7 +55,7 @@ public:
 
     /// Return the number of rows has been read or zero if there is no columns to read.
     /// If continue_reading is true, continue reading from last state, otherwise seek to from_mark
-    virtual size_t readRows(size_t from_mark, size_t from_row, size_t max_rows_to_read, Columns & res_columns) = 0;
+    virtual size_t readRows(size_t from_mark, size_t current_task_last_mark, size_t from_row, size_t max_rows_to_read, Columns & res_columns) = 0;
 
     virtual bool canReadIncompleteGranules() const = 0;
 
@@ -92,8 +92,26 @@ public:
 
     using FileStreams = std::map<std::string, std::unique_ptr<IMergeTreeReaderStream>>;
     using Serializations = std::map<std::string, SerializationPtr>;
-
 protected:
+    void prefetchForAllColumns(Priority priority, NamesAndTypesList & prefetch_columns, size_t from_mark, size_t current_task_last_mark, bool continue_reading);
+
+    void prefetchForMapColumn(
+        Priority priority,
+        const NameAndTypePair & name_and_type,
+        size_t from_mark,
+        bool continue_reading,
+        size_t current_task_last_mark);
+    /// Make next readData more simple by calling 'prefetch' of all related ReadBuffers (column streams).
+    void prefetchForColumn(
+        Priority priority,
+        const NameAndTypePair & name_and_type,
+        const SerializationPtr & serialization,
+        size_t from_mark,
+        bool continue_reading,
+        size_t current_task_last_mark,
+        ISerialization::SubstreamsCache & cache);
+
+    bool isLowCardinalityDictionary(const ISerialization::SubstreamPath & substream_path);
     /// Returns actual column type in part, which can differ from table metadata.
     NameAndTypePair getColumnFromPart(const NameAndTypePair & required_column);
 
@@ -110,23 +128,27 @@ protected:
 
     void readMapDataNotKV(
         const NameAndTypePair & name_and_type, ColumnPtr & column,
-        size_t from_mark, bool continue_reading, size_t max_rows_to_read,
-        std::unordered_map<String, ISerialization::SubstreamsCache> & caches,
+        size_t from_mark, bool continue_reading, size_t current_task_last_mark, size_t max_rows_to_read,
         std::unordered_map<String, size_t> & res_col_to_idx, Columns & res_columns);
 
     size_t skipMapDataNotKV(
         const NameAndTypePair & name_and_type, size_t from_mark,
-        bool continue_reading, size_t max_rows_to_skip,
-        std::unordered_map<String, ISerialization::SubstreamsCache> & caches);
+        bool continue_reading, size_t current_task_last_mark, size_t max_rows_to_skip);
 
     void readData(
         const NameAndTypePair & name_and_type, ColumnPtr & column,
-        size_t from_mark, bool continue_reading, size_t max_rows_to_read,
-        ISerialization::SubstreamsCache & cache);
+        size_t from_mark, bool continue_reading, size_t current_task_last_mark,
+        size_t max_rows_to_read, ISerialization::SubstreamsCache & cache);
 
     size_t skipData(
         const NameAndTypePair & name_and_type, size_t from_mark, bool continue_reading,
-        size_t max_rows_to_skip, ISerialization::SubstreamsCache & cache);
+        size_t current_task_last_mark, size_t max_rows_to_skip, ISerialization::SubstreamsCache & cache);
+    
+    void deserializePrefix(
+        const SerializationPtr & serialization,
+        const NameAndTypePair & name_and_type,
+        size_t current_task_last_mark,
+        ISerialization::SubstreamsCache & cache);
 
     /// avg_value_size_hints are used to reduce the number of reallocations when creating columns of variable size.
     ValueSizeMap avg_value_size_hints;
@@ -135,6 +157,8 @@ protected:
 
     /// Columns that are read.
     NamesAndTypesList columns;
+    // Columns after sort
+    NamesAndTypesList sort_columns;
     NamesAndTypesList part_columns;
 
     /// Map ColumnMap to its keys sub columns
@@ -161,6 +185,8 @@ protected:
 
     MergeTreeIndexExecutor * index_executor = nullptr;
 
+    std::unordered_map<String, ISerialization::SubstreamsCache> caches;
+    std::unordered_set<std::string> prefetched_streams;
     /// Row number, update on seek or read, set to size_t max to force a seek
     /// when reader start reading
     size_t next_row_number_to_read = std::numeric_limits<size_t>::max();

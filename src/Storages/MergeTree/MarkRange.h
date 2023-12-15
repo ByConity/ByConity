@@ -21,5 +21,7 @@ struct MarkRange
 
 using MarkRanges = std::deque<MarkRange>;
 
-
+/** Get max range.end from ranges.
+ */
+size_t getLastMark(const MarkRanges & ranges);
 }

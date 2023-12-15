@@ -76,6 +76,7 @@ struct AssignedResource
     String worker_table_name;
     String create_table_query;
     bool sent_create_query{false};
+    bool replicated{false};
 
     /// parts info
     ServerDataPartsVector server_parts;

@@ -19,9 +19,19 @@
 #include <Catalog/Catalog.h>
 #include <Catalog/DataModelPartWrapper.h>
 #include <Storages/Hive/HiveFile/IHiveFile.h>
+#include "Common/HostWithPorts.h"
+#include "common/types.h"
 #include <common/logger_useful.h>
+#include "Catalog/DataModelPartWrapper_fwd.h"
+#include "Interpreters/Context.h"
 
 #include <sstream>
+#include <unordered_map>
+
+namespace ProfileEvents
+{
+    extern const Event CnchDiskCacheNodeUnLocalityParts;
+}
 
 namespace DB
 {
@@ -65,7 +75,7 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
     {
         case Context::PartAllocator::JUMP_CONSISTENT_HASH:
         {
-            auto ret = assignCnchPartsWithJump(worker_group->getWorkerIDVec(), parts);
+            auto ret = assignCnchPartsWithJump(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
             reportStats(ret, "Jump Consistent Hash", worker_group->getWorkerIDVec().size());
             return ret;
         }
@@ -74,9 +84,9 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
             if (!worker_group->hasRing())
             {
                 LOG_WARNING(&Poco::Logger::get("Consistent Hash"), "Attempt to use ring-base consistent hash, but ring is empty; fall back to jump");
-                return assignCnchPartsWithJump(worker_group->getWorkerIDVec(), parts);
+                return assignCnchPartsWithJump(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
             }
-            auto ret = assignCnchPartsWithRingAndBalance(worker_group->getRing(), parts);
+            auto ret = assignCnchPartsWithRingAndBalance(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts);
             reportStats(ret, "Bounded-load Consistent Hash", worker_group->getRing().size());
             return ret;
         }
@@ -85,36 +95,73 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchParts(const WorkerGrou
             if (!worker_group->hasRing())
             {
                 LOG_WARNING(&Poco::Logger::get("Strict Consistent Hash"), "Attempt to use ring-base consistent hash, but ring is empty; fall back to jump");
-                return assignCnchPartsWithJump(worker_group->getWorkerIDVec(), parts);
+                return assignCnchPartsWithJump(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
             }
-            auto ret = assignCnchPartsWithStrictBoundedHash(worker_group->getRing(), parts, true);
+            auto ret = assignCnchPartsWithStrictBoundedHash(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), worker_group->getRing(), parts, true);
             reportStats(ret, "Strict Consistent Hash", worker_group->getRing().size());
+            return ret;
+        }
+        case Context::PartAllocator::SIMPLE_HASH: //Note: Now just used for test disk cache stealing so not used for online
+        {
+            auto ret = assignCnchPartsWithSimpleHash(worker_group->getWorkerIDVec(), worker_group->getIdHostPortsMap(), parts);
+            reportStats(ret, "Simple Hash", worker_group->getWorkerIDVec().size());
             return ret;
         }
     }
 }
 
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithJump(WorkerList workers, const DataPartsCnchVector & parts)
+std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithSimpleHash(WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const DataPartsCnchVector & parts)
 {
     std::unordered_map<String, DataPartsCnchVector> ret;
     /// we don't know the order of workers returned from consul so sort then explicitly now
-    sort(workers.begin(), workers.end());
-    auto num_workers = workers.size();
+    sort(worker_ids.begin(), worker_ids.end());
+    auto num_workers = worker_ids.size();
+
+    for (size_t i = 0; i < parts.size(); ++i)
+    {
+        /// use crc64 as original implementation, may change to other hash later
+        auto part_name = parts[i]->get_info().getBasicPartName();
+        auto hash_val = fio_crc64(reinterpret_cast<const unsigned char *>(part_name.c_str()), part_name.length());
+        auto index_consistent = JumpConsistentHash(hash_val, num_workers);
+
+        auto index_simple = (index_consistent + 1) % num_workers;
+        ret[worker_ids[index_simple]].emplace_back(parts[i]);
+
+        auto disk_cache_host_port = worker_hosts.at(worker_ids[index_consistent]).getRPCAddress();
+        auto assign_compute_host_port = worker_hosts.at(worker_ids[index_simple]).getRPCAddress();
+        parts[i]->setHostPort(disk_cache_host_port, assign_compute_host_port);
+        if (parts[i]->assign_compute_host_port != parts[i]->disk_cache_host_port)
+                ProfileEvents::increment(ProfileEvents::CnchDiskCacheNodeUnLocalityParts, 1);
+    }
+    return ret;
+}
+
+template <typename DataPartsCnchVector>
+std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithJump(WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const DataPartsCnchVector & parts)
+{
+    std::unordered_map<String, DataPartsCnchVector> ret;
+    /// we don't know the order of workers returned from consul so sort then explicitly now
+    sort(worker_ids.begin(), worker_ids.end());
+    auto num_workers = worker_ids.size();
+
     for (const auto & part : parts)
     {
         /// use crc64 as original implementation, may change to other hash later
         auto part_name = part->get_info().getBasicPartName();
         auto hash_val = fio_crc64(reinterpret_cast<const unsigned char *>(part_name.c_str()), part_name.length());
         auto index = JumpConsistentHash(hash_val, num_workers);
-        ret[workers[index]].emplace_back(part);
+
+        auto host_port = worker_hosts.at(worker_ids[index]).getRPCAddress();
+        part->setHostPort(host_port, host_port);
+        ret[worker_ids[index]].emplace_back(part);
     }
     return ret;
 }
 
 /// 2 round apporach
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalance(const ConsistentHashRing & ring, const DataPartsCnchVector & parts)
+std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalance(WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const ConsistentHashRing & ring, const DataPartsCnchVector & parts)
 {
     LOG_INFO(&Poco::Logger::get("Consistent Hash"), "Start to allocate part with bounded ring based hash policy.");
     std::unordered_map<String, DataPartsCnchVector> ret;
@@ -124,10 +171,28 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalanc
     std::unordered_map<String, UInt64> stats;
 
     // first round, try respect original hash mapping as much as possible
+    sort(worker_ids.begin(), worker_ids.end());
+    auto num_workers = worker_ids.size();
+
+    auto disk_cache_worker_index = 0;
+    String disk_cache_host_port = "";
     for (auto & part : parts)
     {
-        if (auto hostname = ring.tryFind(part->get_info().getBasicPartName(), cap_limit, stats); !hostname.empty())
-            ret[hostname].emplace_back(part);
+        auto part_name = part->get_info().getBasicPartName();
+        auto hash_val = fio_crc64(reinterpret_cast<const unsigned char *>(part_name.c_str()), part_name.length());
+        disk_cache_worker_index = JumpConsistentHash(hash_val, num_workers);
+        disk_cache_host_port = worker_hosts.at(worker_ids[disk_cache_worker_index]).getRPCAddress();
+
+        if (auto host_id = ring.tryFind(part->get_info().getBasicPartName(), cap_limit, stats); !host_id.empty())
+        {
+            ret[host_id].emplace_back(part);
+
+            auto assign_compute_host_port = worker_hosts.at(host_id).getRPCAddress();
+            part->setHostPort(disk_cache_host_port, assign_compute_host_port);
+            if (part->assign_compute_host_port != part->disk_cache_host_port)
+                ProfileEvents::increment(ProfileEvents::CnchDiskCacheNodeUnLocalityParts, 1);
+        }
+
         else
             exceed_parts.emplace_back(part);
     }
@@ -135,8 +200,13 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalanc
     // second round to assign the overloaded parts, reuse the one round apporach `findAndRebalance`.
     for (auto & part: exceed_parts)
     {
-        auto hostname = ring.findAndRebalance(part->get_info().getBasicPartName(), cap_limit, stats);
-        ret[hostname].emplace_back(part);
+        auto host_id = ring.findAndRebalance(part->get_info().getBasicPartName(), cap_limit, stats);
+        ret[host_id].emplace_back(part);
+
+        auto assign_compute_host_port = worker_hosts.at(host_id).getRPCAddress();
+        part->setHostPort(disk_cache_host_port, assign_compute_host_port);
+        if (part->assign_compute_host_port != part->disk_cache_host_port)
+                ProfileEvents::increment(ProfileEvents::CnchDiskCacheNodeUnLocalityParts, 1);
     }
 
 
@@ -147,19 +217,33 @@ std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithRingAndBalanc
 
 // 1 round approach
 template <typename DataPartsCnchVector>
-std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrictBoundedHash(const ConsistentHashRing & ring, const DataPartsCnchVector & parts, bool strict)
+std::unordered_map<String, DataPartsCnchVector> assignCnchPartsWithStrictBoundedHash(WorkerList worker_ids, const std::unordered_map<String, HostWithPorts> & worker_hosts, const ConsistentHashRing & ring, const DataPartsCnchVector & parts, bool strict)
 {
     LOG_INFO(&Poco::Logger::get("Strict Bounded Consistent Hash"), "Start to allocate part with bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
     std::unordered_map<String, DataPartsCnchVector> ret;
     size_t cap_limit = 0;
     std::unordered_map<String, UInt64> stats;
 
+    sort(worker_ids.begin(), worker_ids.end());
+    auto num_workers = worker_ids.size();
+
     for (size_t i = 0; i < parts.size(); ++i)
     {
         auto & part = parts[i];
+
+        auto part_name = part->get_info().getBasicPartName();
+        auto hash_val = fio_crc64(reinterpret_cast<const unsigned char *>(part_name.c_str()), part_name.length());
+        auto index = JumpConsistentHash(hash_val, num_workers);
+
         cap_limit = ring.getCapLimit(i + 1, strict);
-        auto hostname = ring.findAndRebalance(part->get_info().getBasicPartName(), cap_limit, stats);
-        ret[hostname].emplace_back(part);
+        auto host_id = ring.findAndRebalance(part->get_info().getBasicPartName(), cap_limit, stats);
+        ret[host_id].emplace_back(part);
+
+        auto disk_cache_host_port = worker_hosts.at(worker_ids[index]).getRPCAddress();
+        auto assign_compute_host_port = worker_hosts.at(host_id).getRPCAddress();
+        part->setHostPort(disk_cache_host_port, assign_compute_host_port);
+        if (part->assign_compute_host_port != part->disk_cache_host_port)
+                ProfileEvents::increment(ProfileEvents::CnchDiskCacheNodeUnLocalityParts, 1);
     }
 
     LOG_INFO(&Poco::Logger::get("Strict Bounded Consistent Hash"), "Finish allocate part with strict bounded ring based hash policy under strict mode " + std::to_string(strict) + ".");
@@ -206,8 +290,8 @@ splitCnchParts(const ContextPtr & context, const IStorage & storage, const Serve
     std::pair<ServerDataPartsVector, ServerDataPartsVector> res;
     auto & bucket_parts = res.first;
     auto & leftover_parts = res.second;
-    
-    std::for_each(parts.begin(), parts.end(), [&](auto part) 
+
+    std::for_each(parts.begin(), parts.end(), [&](auto part)
     {
         bool is_clustered = part->part_model().table_definition_hash() == storage.getTableHashForClusterBy() && part->part_model().bucket_number() != -1;
         if (is_clustered)

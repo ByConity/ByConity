@@ -101,7 +101,7 @@ try
 
             const auto & sample = reader->getColumns();
             Columns columns(sample.size());
-            size_t rows_read = reader->readRows(current_mark,
+            size_t rows_read = reader->readRows(current_mark, data_part->getMarksCount(),
                 current_row - data_part->index_granularity.getMarkStartingRow(current_mark),
                 rows_to_read, columns);
 

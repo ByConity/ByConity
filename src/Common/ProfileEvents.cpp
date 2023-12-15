@@ -164,10 +164,14 @@
     \
     M(SlowRead, "Number of reads from a file that were slow. This indicate system overload. Thresholds are controlled by read_backoff_* settings.") \
     M(ReadBackoff, "Number of times the number of query processing threads was lowered due to slow reads.") \
+    M(TaskStealCount, "Number of task stolen from another thread.") \
     \
-    M(ReplicaYieldLeadership, "Number of times Replicated table was yielded its leadership due to large replication lag relative to other replicas.") \
-    M(ReplicaPartialShutdown, "How many times Replicated table has to deinitialize its state due to session expiration in ZooKeeper. The state is reinitialized every time when ZooKeeper is available again.") \
-    \
+    M(ReplicaYieldLeadership, \
+      "Number of times Replicated table was yielded its leadership due to large replication lag relative to other replicas.") \
+    M(ReplicaPartialShutdown, \
+      "How many times Replicated table has to deinitialize its state due to session expiration in ZooKeeper. The state is reinitialized " \
+      "every time when ZooKeeper is available again.") \
+\
     M(SelectedParts, "Number of data parts selected to read from a MergeTree table.") \
     M(SelectedRanges, "Number of (non-adjacent) ranges in all data parts selected to read from a MergeTree table.") \
     M(SelectedMarks, "Number of marks (index granules) selected to read from a MergeTree table.") \
@@ -276,8 +280,14 @@
     \
     M(CreatedHTTPConnections, "Total amount of created HTTP connections (closed or opened).") \
     \
-    M(CannotWriteToWriteBufferDiscard, "Number of stack traces dropped by query profiler or signal handler because pipe is full or cannot write to pipe.") \
-    M(QueryProfilerSignalOverruns, "Number of times we drop processing of a signal due to overrun plus the number of signals that OS has not delivered due to overrun.") \
+    M(ThreadPoolReaderTaskMicroseconds, "Time spent getting the data in asynchronous reading") \
+    M(ThreadPoolReaderReadBytes, "Bytes read from a thread pool task in asynchronous reading") \
+    M(ThreadPoolReaderSubmit, "Bytes read from a thread pool task in asynchronous reading") \
+    \
+    M(CannotWriteToWriteBufferDiscard, \
+      "Number of stack traces dropped by query profiler or signal handler because pipe is full or cannot write to pipe.") \
+    M(QueryProfilerSignalOverruns, \
+      "Number of times we drop processing of a signal due to overrun plus the number of signals that OS has not delivered due to overrun.") \
     \
     M(CreatedLogEntryForMerge, "Successfully created log entry to merge parts in ReplicatedMergeTree.") \
     M(NotCreatedLogEntryForMerge, "Log entry to merge parts in ReplicatedMergeTree is not created due to concurrent log update by another replica.") \
@@ -298,6 +308,24 @@
     M(S3WriteRequestsRedirects, "Number of redirects in POST, DELETE, PUT and PATCH requests to S3 storage.") \
     M(QueryMemoryLimitExceeded, "Number of times when memory limit exceeded for query.") \
     M(MarkBitmapIndexReadMicroseconds, "Total time spent in reading mark bitmap index.") \
+    M(RemoteFSReadMicroseconds, "Time of reading from remote filesystem.") \
+    M(RemoteFSReadBytes, "Read bytes from remote filesystem.") \
+    \
+    M(RemoteFSSeeks, "Total number of seeks for async buffer") \
+    M(RemoteFSPrefetchRequests, "Number of prefetches made with asynchronous reading from remote filesystem") \
+    M(RemoteFSCancelledPrefetches, "Number of cancelled prefecthes (because of seek)") \
+    M(RemoteFSUnusedPrefetches, "Number of prefetches pending at buffer destruction") \
+    M(RemoteFSPrefetchedReads, "Number of reads from prefecthed buffer") \
+    M(RemoteFSPrefetchedBytes, "Number of bytes from prefecthed buffer") \
+    M(RemoteFSUnprefetchedReads, "Number of reads from unprefetched buffer") \
+    M(RemoteFSUnprefetchedBytes, "Number of bytes from unprefetched buffer") \
+    M(RemoteFSLazySeeks, "Number of lazy seeks") \
+    M(RemoteFSSeeksWithReset, "Number of seeks which lead to a new connection") \
+    M(RemoteFSSeeksOverUntilPosition, "Number of seeks which is greater than read_until_position") \
+    M(RemoteFSBuffers, "Number of buffers created for asynchronous reading from remote filesystem") \
+    M(RemoteFSAsynchronousReadWaitMicroseconds, "Time spent in waiting for asynchronous remote reads.") \
+    M(RemoteFSSynchronousReadWaitMicroseconds, "Time spent in waiting for synchronous remote reads.") \
+    M(ReusedDataPartReaders, "Number of reused data part reader.") \
     \
     M(SDRequest, "Number requests sent to SD") \
     M(SDRequestFailed, "Number requests sent to SD that failed") \
@@ -309,6 +337,7 @@
     M(WriteBufferFromHdfsWrite, "")\
     M(WriteBufferFromHdfsWriteFailed, "")\
     M(HdfsFileOpen, "")\
+    M(HdfsFileOpenMs, "")\
     M(ReadBufferFromHdfsRead, "")\
     M(ReadBufferFromHdfsReadFailed, "")\
     M(ReadBufferFromHdfsReadBytes, "")\
@@ -365,6 +394,7 @@
       "Number of times part allocation has been split between using bucket number and hashing due to partially clustered bucket table") \
     M(CnchSendResourceRpcCallElapsedMilliseconds, "Total RPC time for send resource to all workers, exclude RPC wait time") \
     M(CnchSendResourceElapsedMilliseconds, "Total time for send resource to all workers") \
+    M(CnchDiskCacheNodeUnLocalityParts, "Total count of un-locality disk cache part") \
     \
     M(IntentLockElapsedMilliseconds, "Total time spent to acquire intent locks") \
     M(IntentLockWriteIntentElapsedMilliseconds, "Total time spent to write intents") \
@@ -812,9 +842,17 @@
     M(ReadBufferFromS3ReadCount, "The count of ReadBufferFromS3 read from s3 stream") \
     M(ReadBufferFromS3FailedCount, "ReadBuffer from s3 failed count") \
     M(ReadBufferFromS3ReadBytes, "Bytes size ReadBufferFromS3 read from s3 stream") \
-    M(ReadBufferFromS3ReadMicro, "The time spent ReadBufferFromS3 read from s3 stream") \
-    M(S3StreamInitMicroseconds, "Time spent initializing connection to S3.") \
-    M(ReadBufferFromS3SeekTimes, "The seek times of read buffer from s3.") \
+    M(ReadBufferFromS3ReadMicroseconds, "The time spent ReadBufferFromS3 read from s3 stream") \
+    M(ReadBufferFromS3StreamInitMicroseconds, "Time spent initializing connection to S3.") \
+    M(ReadBufferFromS3Seeks, "The seek count of read buffer from s3.") \
+    \
+    M(ReadBufferFromRpcStreamFileRead, "remote rpc file data read count") \
+    M(ReadBufferFromRpcStreamFileReadFailed, "remote rpc file data read failed count") \
+    M(ReadBufferFromRpcStreamFileReadMs, "remote rpc file data read ms") \
+    M(ReadBufferFromRpcStreamFileReadBytes, "remote rpc file data read bytes") \
+    M(ReadBufferFromRpcStreamFileConnect, "remote rpc file data connect count") \
+    M(ReadBufferFromRpcStreamFileConnectFailed, "remote rpc file data connect failed count") \
+    M(ReadBufferFromRpcStreamFileConnectMs, "remote rpc file data connect ms") \
     \
     M(IOSchedulerOpenFileMicro, "Time used in open file when using io scheduler") \
     M(IOSchedulerScheduleMicro, "Time used in schedule io request") \

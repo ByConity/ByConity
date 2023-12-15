@@ -79,9 +79,9 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateProject)
     sql("select deptno, count(*) as c, empid + 2, sum(empid) as s "
             "from emps group by empid, deptno",
         "select count(*) + 1 as c, deptno from emps group by deptno")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: c:=`expr#sum(c)` + 1, deptno:=`expr#deptno`\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: c:=`expr#sum(c)` + 1, deptno:=`expr#deptno`\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#deptno}\n"
@@ -105,9 +105,9 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
 {
     sql("select empid, deptno from emps group by empid, deptno",
         "select deptno from emps group by deptno")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: deptno:=`expr#deptno`\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: deptno:=`expr#deptno`\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#deptno}\n"
@@ -132,9 +132,9 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
     sql("select empid, deptno\n"
             "from emps where deptno = 10 group by empid, deptno",
         "select deptno from emps where deptno = 10 group by deptno")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: deptno:=`expr#deptno`\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: deptno:=`expr#deptno`\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#deptno}\n"
@@ -160,9 +160,9 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationNoAggrega
     sql("select empid, deptno\n"
         "from emps where deptno > 5 group by empid, deptno",
         "select deptno from emps where deptno > 10 group by deptno")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: deptno:=`expr#deptno`\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: deptno:=`expr#deptno`\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#deptno}\n"
@@ -207,9 +207,9 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
     sql("select empid, deptno, count(*) as c, sum(empid) as s\n"
             "from emps group by empid, deptno",
         "select deptno from emps group by deptno")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: deptno:=`expr#deptno`\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: deptno:=`expr#deptno`\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#deptno}\n"
@@ -228,9 +228,9 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
             "from emps group by empid, deptno",
         "select deptno, count(*) as c, sum(empid) as s\n"
             "from emps group by deptno")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: c:=`expr#sum(c)`, deptno:=`expr#deptno`, s:=`expr#sum(s)`\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: c:=`expr#sum(c)`, deptno:=`expr#deptno`, s:=`expr#sum(s)`\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#deptno}\n"
@@ -250,9 +250,9 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
         "from emps group by empid, deptno",
         "select deptno, empid, sum(empid) as s, count(*) as c\n"
         "from emps group by empid, deptno")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: c:=`expr#sum(c)`, deptno:=`expr#deptno`, empid:=`expr#empid`, s:=`expr#sum(s)`\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: c:=`expr#sum(c)`, deptno:=`expr#deptno`, empid:=`expr#empid`, s:=`expr#sum(s)`\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#deptno, expr#empid}\n"
@@ -272,9 +272,9 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
         "from emps where deptno >= 10 group by empid, deptno",
         "select deptno, sum(empid) as s\n"
         "from emps where deptno > 10 group by deptno")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: deptno:=`expr#deptno`, s:=`expr#sum(s)`\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: deptno:=`expr#deptno`, s:=`expr#sum(s)`\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#deptno}\n"
@@ -297,24 +297,22 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
         "from emps where deptno >= 10 group by empid, deptno",
         "select deptno, sum(empid) + 1 as s\n"
         "from emps where deptno > 10 group by deptno")
-        .checkingThatResultContains(
-
-            "Projection\n"
-            "│     Expressions: deptno:=`expr#deptno`, s:=`expr#sum(s)` + 1\n"
-            "└─ Gather Exchange\n"
-            "   └─ MergingAggregated\n"
-            "      └─ Repartition Exchange\n"
-            "         │     Partition by: {expr#deptno}\n"
-            "         └─ Aggregating\n"
-            "            │     Group by: {expr#deptno}\n"
-            "            │     Aggregates: expr#sum(s):=AggNull(sum)(expr#s)\n"
-            "            └─ Projection\n"
-            "               │     Expressions: expr#deptno:=deptno, expr#s:=s\n"
-            "               └─ Filter\n"
-            "                  │     Condition: deptno > 10\n"
-            "                  └─ TableScan test_mview.MV0_MV_DATA\n"
-            "                           Where: deptno > 10\n"
-            "                           Outputs: [s, deptno]")
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: deptno:=`expr#deptno`, s:=`expr#sum(s)` + 1\n"
+                                    "   └─ MergingAggregated\n"
+                                    "      └─ Repartition Exchange\n"
+                                    "         │     Partition by: {expr#deptno}\n"
+                                    "         └─ Aggregating\n"
+                                    "            │     Group by: {expr#deptno}\n"
+                                    "            │     Aggregates: expr#sum(s):=AggNull(sum)(expr#s)\n"
+                                    "            └─ Projection\n"
+                                    "               │     Expressions: expr#deptno:=deptno, expr#s:=s\n"
+                                    "               └─ Filter\n"
+                                    "                  │     Condition: deptno > 10\n"
+                                    "                  └─ TableScan test_mview.MV0_MV_DATA\n"
+                                    "                           Where: deptno > 10\n"
+                                    "                           Outputs: [s, deptno]")
         .ok();
 }
 
@@ -333,9 +331,9 @@ TEST_F(MaterializedViewRewriteComplexTest, testAggregateMaterializationAggregate
         "from emps where deptno >= 10 group by empid, deptno",
         "select deptno + 1, sum(empid) + 1 as s\n"
         "from emps where deptno > 10 group by deptno")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: plus(deptno, 1):=`expr#deptno` + 1, s:=`expr#sum(s)` + 1\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: plus(deptno, 1):=`expr#deptno` + 1, s:=`expr#sum(s)` + 1\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#deptno}\n"
@@ -1281,9 +1279,9 @@ TEST_F(MaterializedViewRewriteComplexTest, testQueryProjectWithBetween)
         "select s.time_id between 1 and 3"
             " from foodmart.sales_fact_1997 as s"
             " where s.store_id = 1")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3)):=(time_id >= 1) AND (time_id <= 3)\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: and(greaterOrEquals(s.time_id, 1), lessOrEquals(s.time_id, 3)):=(time_id >= 1) AND (time_id <= 3)\n"
                                     "   └─ TableScan test_mview.MV0_MV_DATA\n"
                                     "            Outputs: [time_id]")
         .ok();

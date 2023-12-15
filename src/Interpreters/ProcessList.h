@@ -37,6 +37,7 @@
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/Throttler.h>
+#include <parallel_hashmap/phmap.h>
 
 #include <list>
 #include <map>
@@ -347,10 +348,14 @@ struct ProcessListForUserInfo
 struct ProcessListForUser
 {
     ProcessListForUser();
+    using Element = std::shared_ptr<QueryStatus>;
+    using Container = phmap::flat_hash_map<std::string, Element,
+        phmap::priv::hash_default_hash<std::string>,
+        phmap::priv::hash_default_eq<std::string>,
+        std::allocator<std::pair<std::string, Element>>>;
 
     /// query_id -> ProcessListElement(s). There can be multiple queries with the same query_id as long as all queries except one are cancelled.
-    using QueryToElement = std::unordered_map<String, QueryStatus *>;
-    QueryToElement queries;
+    Container queries;
 
     ProfileEvents::Counters user_performance_counters{VariableContext::User, &ProfileEvents::global_counters};
     /// Limit and counter for memory of all simultaneously running queries of single user.
@@ -381,19 +386,24 @@ class ProcessList;
 class ProcessListEntry
 {
 private:
-    using Container = std::list<QueryStatus>;
-
     ProcessList & parent;
-    Container::iterator it;
+    std::shared_ptr<QueryStatus> it;
+
+protected:
+    friend class PlanSegmentProcessList;
+    std::shared_ptr<QueryStatus> getPtr() { return it; }
 
 public:
-    ProcessListEntry(ProcessList & parent_, Container::iterator it_)
+    ProcessListEntry(ProcessList & parent_, QueryStatus * it_)
+        : parent(parent_), it(it_) {}
+
+    ProcessListEntry(ProcessList & parent_, std::shared_ptr<QueryStatus> it_)
         : parent(parent_), it(it_) {}
 
     ~ProcessListEntry();
 
-    QueryStatus * operator->() { return &*it; }
-    const QueryStatus * operator->() const { return &*it; }
+    std::shared_ptr<QueryStatus> operator->() { return it; }
+    std::shared_ptr<const QueryStatus> operator->() const { return it; }
 
     QueryStatus & get() { return *it; }
     const QueryStatus & get() const { return *it; }
@@ -403,11 +413,17 @@ public:
 class ProcessList
 {
 public:
-    using Element = QueryStatus;
+    using Element = std::shared_ptr<QueryStatus>;
+    using UserToQueriesElement = std::shared_ptr<ProcessListForUser>;
     using Entry = ProcessListEntry;
 
+    using Container = phmap::parallel_flat_hash_map<std::string, Element,
+        phmap::priv::hash_default_hash<std::string>,
+        phmap::priv::hash_default_eq<std::string>,
+        std::allocator<std::pair<std::string, Element>>,
+        4, bthread::Mutex>;
+
     /// list, for iterators not to invalidate. NOTE: could replace with cyclic buffer, but not worth.
-    using Container = std::list<Element>;
     using Info = std::vector<QueryStatusInfo>;
     using UserInfo = std::unordered_map<String, ProcessListForUserInfo>;
 
@@ -440,7 +456,7 @@ protected:
     ThrottlerPtr hdfs_download_network_throttler;
 
     /// Call under lock. Finds process with specified current_user and current_query_id.
-    QueryStatus * tryGetProcessListElement(const String & current_query_id, const String & current_user);
+    std::shared_ptr<QueryStatus> tryGetProcessListElement(const String & current_query_id, const String & current_user);
 
 public:
     using EntryPtr = std::shared_ptr<ProcessListEntry>;
@@ -465,6 +481,7 @@ public:
     {
         std::lock_guard lock(mutex);
         max_size = max_size_;
+        processes.reserve(max_size * 2);
     }
 
     /// Try call cancel() for input and output streams of query with specified id and user

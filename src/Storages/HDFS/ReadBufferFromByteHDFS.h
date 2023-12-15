@@ -38,12 +38,18 @@ public:
         size_t buf_size = DBMS_DEFAULT_BUFFER_SIZE,
         char * existing_memory = nullptr,
         size_t alignment = 0,
-        ThrottlerPtr total_network_throttler = nullptr);
+        ThrottlerPtr total_network_throttler = nullptr,
+        bool use_external_buffer_ = false,
+        off_t read_until_position_ = 0);
 
     ~ReadBufferFromByteHDFS() override;
 
     bool nextImpl() override;
     off_t seek(off_t offset_, int whence) override;
+
+    size_t getFileOffsetOfBufferEnd() const override;
+
+    IAsynchronousReader::Result readInto(char * data, size_t size, size_t offset, size_t ignore) override;
 
     off_t getPosition() override;
     size_t getFileSize() override;
@@ -52,6 +58,8 @@ public:
     bool supportsReadAt() override { return true; }
     size_t readBigAt(char * to, size_t n, size_t range_begin, const std::function<bool(size_t)> & progress_callback) override;
 
+    void setReadUntilPosition(size_t position) override;
+    void setReadUntilEnd() override;
 private:
     std::unique_ptr<ReadBufferFromHDFSImpl> impl;
     ThrottlerPtr total_network_throttler;

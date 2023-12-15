@@ -32,7 +32,10 @@ void CnchStorageCache::insert(const StorageID & storage_id, const UInt64 ts, con
     if (inner_container)
         inner_container->insert(storage_id.database_name, full_name);
     if (storage_id.hasUUID())
+    {
+        uuid_to_table_names.left.erase(storage_id.uuid);
         uuid_to_table_names.insert({storage_id.uuid, full_name});
+    }
 }
 
 StoragePtr CnchStorageCache::getImpl(const TableName & table_name)

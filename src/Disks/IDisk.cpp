@@ -82,5 +82,4 @@ SyncGuardPtr IDisk::getDirectorySyncGuard(const String & /* path */) const
 {
     return nullptr;
 }
-
 }

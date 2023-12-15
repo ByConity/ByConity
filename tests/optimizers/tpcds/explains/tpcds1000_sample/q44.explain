@@ -5,7 +5,7 @@ Projection Est. 100 rows
    └─ Sorting Est. 100 rows
       │     Order by: {expr#rank() OVER (ORDER BY rank_col ASC) ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. ? rows
+      └─ Gather Exchange Est. 100 rows
          └─ Sorting Est. 100 rows
             │     Order by: {expr#rank() OVER (ORDER BY rank_col ASC) ASC NULLS LAST}
             │     Limit: 100

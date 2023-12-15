@@ -7,6 +7,7 @@
 #if USE_AWS_S3
 
 #    include <memory>
+#    include <IO/ReadBufferFromIStream.h>
 #    include <IO/HTTPCommon.h>
 #    include <IO/ReadBuffer.h>
 #    include <aws/s3/model/GetObjectResult.h>
@@ -32,7 +33,7 @@ private:
     UInt64 max_single_read_retries;
     off_t offset = 0;
     std::optional<Aws::S3::Model::GetObjectResult> read_result;
-    std::unique_ptr<ReadBuffer> impl;
+    std::unique_ptr<ReadBufferFromIStream> impl;
 
     Poco::Logger * log = &Poco::Logger::get("ReadBufferFromS3");
 
@@ -43,7 +44,9 @@ public:
         const String & key_,
         const ReadSettings & read_settings,
         UInt64 max_single_read_retries_ = 3,
-        bool restricted_seek_ = true);
+        bool restricted_seek_ = true,
+        bool use_external_buffer_ = false,
+        off_t read_until_position = 0);
 
     ~ReadBufferFromS3() override;
 
@@ -52,21 +55,38 @@ public:
     off_t seek(off_t off, int whence) override;
     off_t getPosition() override;
 
+    size_t getFileOffsetOfBufferEnd() const override { return offset; }
+
+    IAsynchronousReader::Result readInto(char * data, size_t size, size_t offset, size_t ignore) override;
+
     std::string getFileName() const override { return bucket + "/" + key; }
     size_t getFileSize() override;
 
     bool supportsReadAt() override { return true; }
     size_t readBigAt(char * to, size_t n, size_t range_begin, const std::function<bool(size_t)> & progress_callback) override;
 
-private:
-    std::unique_ptr<ReadBuffer> initialize();
+    void setReadUntilPosition(size_t position) override;
+    void setReadUntilEnd() override;
 
-    Aws::S3::Model::GetObjectResult sendRequest(size_t range_begin, std::optional<size_t> range_end_incl) const;
+private:
+    std::unique_ptr<ReadBufferFromIStream> initialize();
+
+    Aws::S3::Model::GetObjectResult sendRequest(size_t range_begin, std::optional<size_t> range_end_not_incl);
+
+    bool readAllRangeSuccessfully() const;
+
+    void tryIgnoreRemainingData();
 
     ReadSettings read_settings;
     std::optional<size_t> file_size;
+
     bool restricted_seek;
     bool read_all_range_successfully = false;
+
+    bool use_external_buffer;
+    off_t read_until_position = 0;
+    // the end offset of current s3 response stream
+    std::optional<size_t> stream_end_offset;
 };
 
 }

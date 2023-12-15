@@ -31,6 +31,7 @@
 #include <Storages/MergeTree/MarkRange.h>
 #include <Storages/UUIDAndPartName.h>
 #include <Storages/UniqueKeyIndexCache.h>
+#include <Common/Priority.h>
 #include <common/logger_useful.h>
 #include <Common/Exception.h>
 #include <Common/RowExistsColumnInfo.h>
@@ -61,6 +62,7 @@ static LimitReadBuffer readPartFile(ReadBufferFromFileBase & in, off_t file_offs
         throw Exception(ErrorCodes::NO_FILE_IN_DATA_PART, "The size of file is zero");
 
     in.seek(file_offset);
+    in.setReadUntilPosition(file_offset + file_size);
     return LimitReadBuffer(in, file_size, false);
 }
 
@@ -550,7 +552,7 @@ void MergeTreeDataPartCNCH::combineWithRowExists(DeleteBitmapPtr & bitmap) const
 
     size_t deleted_count = 0;
     Columns columns(1);
-    auto read_rows = reader->readRows(0, false, rows_count, columns);
+    auto read_rows = reader->readRows(0, getMarksCount(), false, rows_count, columns);
     if (read_rows != rows_count)
     {
         throw Exception(

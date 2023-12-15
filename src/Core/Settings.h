@@ -243,66 +243,20 @@ enum PreloadLevelSettings : UInt64
     M(Bool, extremes, false, "Calculate minimums and maximums of the result columns. They can be output in JSON-formats.", IMPORTANT) \
     M(Bool, use_uncompressed_cache, false, "Whether to use the cache of uncompressed blocks.", 0) \
     M(Bool, replace_running_query, false, "Whether the running request should be canceled with the same id as the new one.", 0) \
-    M(UInt64, \
-      background_buffer_flush_schedule_pool_size, \
-      16, \
-      "Number of threads performing background flush for tables with Buffer engine. Only has meaning at server startup.", \
-      0) \
-    M(UInt64, \
-      background_pool_size, \
-      16, \
-      "Number of threads performing background work for tables (for example, merging in merge tree). Only has meaning at server startup.", \
-      0) \
-    M(UInt64, \
-      unique_table_background_pool_size, \
-      16, \
-      "Number of threads performing background work for tables (for example, merging in merge tree). Only has meaning at server startup.", \
-      0) \
-    M(UInt64, \
-      background_move_pool_size, \
-      8, \
-      "Number of threads performing background moves for tables. Only has meaning at server startup.", \
-      0) \
-    M(UInt64, \
-      background_fetches_pool_size, \
-      8, \
-      "Number of threads performing background fetches for replicated tables. Only has meaning at server startup.", \
-      0) \
-    M(UInt64, \
-      background_schedule_pool_size, \
-      128, \
-      "Number of threads performing background tasks for replicated tables, dns cache updates. Only has meaning at server startup.", \
-      0) \
-    M(UInt64, \
-      background_message_broker_schedule_pool_size, \
-      16, \
-      "Number of threads performing background tasks for message streaming. Only has meaning at server startup.", \
-      0) \
-    M(UInt64, \
-      background_distributed_schedule_pool_size, \
-      16, \
-      "Number of threads performing background tasks for distributed sends. Only has meaning at server startup.", \
-      0) \
-    M(UInt64, \
-      background_local_schedule_pool_size, \
-      16, \
-      "Number of threads performing background no-network operation tasks for replicated tables. Only has meaning at server startup.", \
-      0) \
-    M(UInt64, \
-      background_consume_schedule_pool_size, \
-      16, \
-      "Number of threads performing background tasks for kafka tables. Only has meaning at server startup.", \
-      0) \
-    M(UInt64, \
-      background_unique_table_schedule_pool_size, \
-      16, \
-      "Number of threads performing background tasks for unique tables. Only has meaning at server startup.", \
-      0) \
-    M(UInt64, \
-      background_memory_table_schedule_pool_size, \
-      24, \
-      "Number of threads performing background tasks for memory table. Only has meaning at server startup.", \
-      0) \
+    M(UInt64, background_buffer_flush_schedule_pool_size, 16, "Number of threads performing background flush for tables with Buffer engine. Only has meaning at server startup.", 0) \
+    M(UInt64, background_pool_size, 16, "Number of threads performing background work for tables (for example, merging in merge tree). Only has meaning at server startup.", 0) \
+    M(UInt64, distributed_data_service_pool_size, 16, "Number of threads response distributed file data.", 0) \
+    M(UInt64, distributed_data_service_max_retry_count, 3, "Number of threads response distributed file data.", 0) \
+    M(UInt64, unique_table_background_pool_size, 16, "Number of threads performing background work for tables (for example, merging in merge tree). Only has meaning at server startup.", 0) \
+    M(UInt64, background_move_pool_size, 8, "Number of threads performing background moves for tables. Only has meaning at server startup.", 0) \
+    M(UInt64, background_fetches_pool_size, 8, "Number of threads performing background fetches for replicated tables. Only has meaning at server startup.", 0) \
+    M(UInt64, background_schedule_pool_size, 128, "Number of threads performing background tasks for replicated tables, dns cache updates. Only has meaning at server startup.", 0) \
+    M(UInt64, background_message_broker_schedule_pool_size, 16, "Number of threads performing background tasks for message streaming. Only has meaning at server startup.", 0) \
+    M(UInt64, background_distributed_schedule_pool_size, 16, "Number of threads performing background tasks for distributed sends. Only has meaning at server startup.", 0) \
+    M(UInt64, background_local_schedule_pool_size, 16, "Number of threads performing background no-network operation tasks for replicated tables. Only has meaning at server startup.", 0) \
+    M(UInt64, background_consume_schedule_pool_size, 16, "Number of threads performing background tasks for kafka tables. Only has meaning at server startup.", 0) \
+    M(UInt64, background_unique_table_schedule_pool_size, 16, "Number of threads performing background tasks for unique tables. Only has meaning at server startup.", 0) \
+    M(UInt64, background_memory_table_schedule_pool_size, 24, "Number of threads performing background tasks for memory table. Only has meaning at server startup.", 0) \
     M(UInt64, background_topology_thread_pool_size, 4, "Number of threads performing topology related background tasks.", 0) \
     M(UInt64, background_metrics_recalculation_schedule_pool_size, 16, "Number of threads performing metrics recalculation related background tasks.", 0) \
     M(UInt64, background_gc_schedule_pool_size, 16, "Number of threads performing data removing related background tasks.", 0) \
@@ -503,17 +457,11 @@ enum PreloadLevelSettings : UInt64
       "The minimum chunk size in bytes, which each thread will parse in parallel.", \
       0) \
     M(Bool, output_format_parallel_formatting, true, "Enable parallel formatting for some data formats.", 0) \
-\
-    M(UInt64, \
-      merge_tree_min_rows_for_concurrent_read, \
-      (20 * 8192), \
-      "If at least as many lines are read from one file, the reading can be parallelized.", \
-      0) \
-    M(UInt64, \
-      merge_tree_min_bytes_for_concurrent_read, \
-      (24 * 10 * 1024 * 1024), \
-      "If at least as many bytes are read from one file, the reading can be parallelized.", \
-      0) \
+    \
+    M(Bool, local_filesystem_read_prefetch, false, "Should use prefetching when reading data from local filesystem.", 0) \
+    M(Bool, remote_filesystem_read_prefetch, true, "Should use prefetching when reading data from remote filesystem.", 0) \
+    M(UInt64, merge_tree_min_rows_for_concurrent_read, (20 * 8192), "If at least as many lines are read from one file, the reading can be parallelized.", 0) \
+    M(UInt64, merge_tree_min_bytes_for_concurrent_read, (24 * 10 * 1024 * 1024), "If at least as many bytes are read from one file, the reading can be parallelized.", 0) \
     M(UInt64, merge_tree_min_rows_for_seek, 0, "You can skip reading more than that number of rows at the price of one seek per file.", 0) \
     M(UInt64, \
       merge_tree_min_bytes_for_seek, \

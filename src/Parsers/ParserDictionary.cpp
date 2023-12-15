@@ -250,7 +250,7 @@ bool ParserDictionary::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
                             throw Exception("Invalid user field!", static_cast<int>(kv_pair->second->getType()));
                         }
 
-                        user_name = formatTenantConnectUserName(user_name);
+                        user_name = formatTenantConnectUserName(user_name, true);
                         if (user)
                             user->value = user_name;
                         else if (user_identifier)

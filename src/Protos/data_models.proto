@@ -135,6 +135,10 @@ message DataModelPart {
   optional UUID part_id = 35;
   // commit ts of the txn removing this object
   optional uint64 end_time = 36;
+  
+  // remote disk cache config
+  optional string disk_cache_host_port = 37;
+  optional string assign_compute_host_port = 38;
 };
 
 message CnchFilePartInfo { required string name = 1; }

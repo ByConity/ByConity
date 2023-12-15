@@ -19,6 +19,7 @@
 #include <Common/filesystemHelpers.h>
 #include <Common/quoteString.h>
 #include <Common/formatReadable.h>
+#include <Disks/IO/AsynchronousBoundedReadBuffer.h>
 #include <IO/Scheduler/IOScheduler.h>
 #include <IO/S3Common.h>
 #include <IO/S3RemoteFSReader.h>
@@ -28,6 +29,7 @@
 #include <Disks/DiskFactory.h>
 #include <IO/RAReadBufferFromS3.h>
 #include <IO/WriteBufferFromByteS3.h>
+#include <Interpreters/Context.h>
 
 namespace DB
 {
@@ -202,11 +204,20 @@ std::unique_ptr<ReadBufferFromFileBase> DiskByteS3::readFile(const String & path
                 IO::Scheduler::IOSchedulerSet::instance().schedulerForPath(object_key),
                 settings.buffer_size, nullptr, 0, settings.throttler);
         }
-    } else {
-        if (settings.enable_io_pfra) {
-            return std::make_unique<RAReadBufferFromS3>(s3_util.getClient(),
-                s3_util.getBucket(), object_key, 3, settings.buffer_size);
-        } else {
+    }
+    else
+    {
+        if (settings.remote_fs_prefetch)
+        {
+            auto impl = std::make_unique<ReadBufferFromS3>(s3_util.getClient(),
+                s3_util.getBucket(), object_key, settings, 3, false, /* use_external_buffer */true);
+
+            auto global_context = Context::getGlobalContextInstance();
+            auto reader = global_context->getThreadPoolReader();
+            return std::make_unique<AsynchronousBoundedReadBuffer>(std::move(impl), *reader, settings);
+        }
+        else
+        {
             return std::make_unique<ReadBufferFromS3>(s3_util.getClient(),
                 s3_util.getBucket(), object_key, settings, 3, false);
         }

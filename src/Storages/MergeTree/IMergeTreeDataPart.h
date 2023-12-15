@@ -78,8 +78,15 @@ class IMergeTreeDataPartWriter;
 class MarkCache;
 class UncompressedCache;
 
+struct PartHostInfo
+{
+    String disk_cache_host_port;
+    String assign_compute_host_port;
+};
+
 struct BitmapIndexChecker;
 using BitmapIndexCheckerPtr = std::shared_ptr<BitmapIndexChecker>;
+
 
 /// Description of the data part.
 class IMergeTreeDataPart : public std::enable_shared_from_this<IMergeTreeDataPart>
@@ -130,7 +137,7 @@ public:
         IStorage::StorageLocation location_,
         const UUID& part_id_ = UUIDHelpers::Nil);
 
-        virtual MergeTreeReaderPtr getReader(
+    virtual MergeTreeReaderPtr getReader(
         const NamesAndTypesList & columns_,
         const StorageMetadataPtr & metadata_snapshot,
         const MarkRanges & mark_ranges,
@@ -151,6 +158,8 @@ public:
         const BitmapBuildInfo & bitmap_build_info = {}) const = 0;
 
     virtual bool isStoredOnDisk() const = 0;
+
+    virtual bool isStoredOnRemoteDisk() const = 0;
 
     virtual bool supportsVerticalMerge() const { return false; }
 
@@ -601,6 +610,15 @@ public:
 
     DiskCacheMode disk_cache_mode {DiskCacheMode::AUTO};
     bool enableDiskCache() const;
+
+    void setHostPort(const String & disk_cache_host_port_, const String & assign_compute_host_port_) const
+    {
+        disk_cache_host_port = disk_cache_host_port_;
+        assign_compute_host_port = assign_compute_host_port_;
+    }
+
+    mutable String disk_cache_host_port;
+    mutable String assign_compute_host_port;
 
 protected:
     friend class MergeTreeMetaBase;

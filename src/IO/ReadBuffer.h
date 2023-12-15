@@ -26,8 +26,10 @@
 #include <algorithm>
 #include <memory>
 
+#include <Common/Priority.h>
 #include <Common/Exception.h>
 #include <IO/BufferBase.h>
+#include <IO/AsynchronousReader.h>
 
 
 namespace DB
@@ -37,6 +39,7 @@ namespace ErrorCodes
 {
     extern const int ATTEMPT_TO_READ_AFTER_EOF;
     extern const int CANNOT_READ_ALL_DATA;
+    extern const int NOT_IMPLEMENTED;
 }
 
 /** A simple abstract class for buffered data reading (char sequences) from somewhere.
@@ -68,7 +71,7 @@ public:
     // accidental copying.
     ReadBuffer(const ReadBuffer &) = delete;
 
-    // FIXME: behavior differs greately from `BufferBase::set()` and it's very confusing.
+    // FIXME: behavior differs greatly from `BufferBase::set()` and it's very confusing.
     void set(Position ptr, size_t size) { BufferBase::set(ptr, size, 0); working_buffer.resize(0); }
 
     /** read next data and fill a buffer with it; set position to the beginning;
@@ -220,8 +223,10 @@ public:
 
     /** Do something to allow faster subsequent call to 'nextImpl' if possible.
       * It's used for asynchronous readers with double-buffering.
+      * `priority` is the `ThreadPool` priority, with which the prefetch task will be scheduled.
+      * Lower value means higher priority.
       */
-    virtual void prefetch() {}
+    virtual void prefetch(Priority) {}
 
 
       /**
@@ -245,6 +250,14 @@ public:
     virtual void setReadUntilPosition(size_t /* position */) {}
 
     virtual void setReadUntilEnd() {}
+
+    /// Read at most `size` bytes into data at specified offset `offset`. First ignore `ignore` bytes if `ignore` > 0.
+    /// Notice: this function only need to be implemented in synchronous read buffers to be wrapped in asynchronous read.
+    /// Such as ReadBufferFromRemoteFSGather and AsynchronousReadIndirectBufferFromRemoteFS.
+    virtual IAsynchronousReader::Result readInto(char * /*data*/, size_t /*size*/, size_t /*offset*/, size_t /*ignore*/)
+    {
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "readInto not implemented");
+    }
 protected:
     /// The number of bytes to ignore from the initial position of `working_buffer`
     /// buffer. Apparently this is an additional out-parameter for nextImpl(),

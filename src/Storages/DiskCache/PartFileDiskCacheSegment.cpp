@@ -14,6 +14,7 @@
  */
 
 #include "PartFileDiskCacheSegment.h"
+#include <vector>
 
 #include <IO/LimitReadBuffer.h>
 #include <Storages/DiskCache/IDiskCache.h>
@@ -22,11 +23,30 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeReaderStream.h>
 #include <Storages/MergeTree/MergeTreeSuffix.h>
+#include <sys/types.h>
 #include "Common/Exception.h"
+#include "common/types.h"
 #include "Core/Settings.h"
+#include "Core/SettingsEnums.h"
+#include "Storages/DistributedDataClient.h"
+#include "Storages/MergeTree/MergeTreeSettings.h"
 
 namespace DB
 {
+
+static MergeTreeReaderSettings getMergeTreeReaderSettings(const ContextPtr & context, const MergeTreeMetaBase & data)
+{
+    MergeTreeReaderSettings settings{
+        .read_settings = context->getReadSettings(),
+        .save_marks_in_cache = true,
+        .checksum_on_read = context->getSettingsRef().checksum_on_read,
+        .read_source_bitmap = !context->getSettingsRef().use_encoded_bitmap,
+    };
+    
+    settings.setDiskCacheSteaing(data.getSettings()->disk_cache_stealing_mode);
+    return settings;
+}
+
 PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     UInt32 segment_number_,
     UInt32 segment_size_,
@@ -44,7 +64,7 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
     , mrk_file_pos(mrk_file_pos_)
     , marks_count(marks_count_)
     , mark_cache(mark_cache_)
-    , read_settings(data_part_->storage.getContext()->getReadSettings())
+    , merge_tree_reader_settings(getMergeTreeReaderSettings(data_part_->storage.getContext(), data_part_->storage))
     , stream_name(stream_name_)
     , extension(extension_)
     , stream_file_pos(stream_file_pos_)
@@ -59,7 +79,7 @@ PartFileDiskCacheSegment::PartFileDiskCacheSegment(
           /*save_marks_in_cache*/ true,
           mrk_file_pos.file_offset,
           mrk_file_pos.file_size,
-          read_settings)
+          merge_tree_reader_settings)
 {
 }
 
@@ -109,7 +129,7 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_e
             String data_path = data_part->getFullRelativePath() + "data";
             auto disk = data_part->volume->getDisk();
             auto source_buffer = std::make_unique<CompressedReadBufferFromFile>(
-                disk->readFile(data_path, read_settings), stream_file_pos.file_offset,
+                disk->readFile(data_path, merge_tree_reader_settings.read_settings), stream_file_pos.file_offset,
                 stream_file_pos.file_size, true);
 
             source_buffer->seek(stream_file_pos.file_offset + marks_loader.getMark(right_mark).offset_in_compressed_file, 0);
@@ -129,27 +149,62 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_e
 
         String data_path = data_part->getFullRelativePath() + "data";
         auto disk = data_part->volume->getDisk();
-        auto data_file = disk->readFile(data_path, read_settings);
+        auto data_file = disk->readFile(data_path, merge_tree_reader_settings.read_settings);
 
         /// cache data segment
-        if (!preload_level || (preload_level & PreloadLevelSettings::DataPreload) == PreloadLevelSettings::DataPreload)
+        if (data_part->disk_cache_mode
+            != DiskCacheMode::
+                FORCE_STEAL_DISK_CACHE) // FORCE_STEAL_DISK_CACHE is used for testing, which only allow remote cache request so will skip local cache write
         {
-            data_file->seek(stream_file_pos.file_offset + cache_data_left_offset);
-            LimitReadBuffer segment_value(*data_file, cache_data_bytes, false);
-            disk_cache.getDataCache()->set(getSegmentName(), segment_value, cache_data_bytes);
-            LOG_DEBUG(disk_cache.getLogger(), "cached data file: {}, preload_level: {}", getSegmentName(), preload_level);
+            if (!preload_level || (preload_level & PreloadLevelSettings::DataPreload) == PreloadLevelSettings::DataPreload)
+            {
+                data_file->seek(stream_file_pos.file_offset + cache_data_left_offset);
+                LimitReadBuffer segment_value(*data_file, cache_data_bytes, false);
+                disk_cache.getDataCache()->set(getSegmentName(), segment_value, cache_data_bytes);
+                LOG_TRACE(disk_cache.getLogger(), "Cached data file: {}, preload_level: {}", getSegmentName(), preload_level);
+            }
+
+            /// cache mark segment
+            if (!preload_level || (preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
+            {
+                data_file->seek(mrk_file_pos.file_offset);
+                LimitReadBuffer marks_value(*data_file, mrk_file_pos.file_size, false);
+                String marks_key = getMarkName();
+                disk_cache.getMetaCache()->set(marks_key, marks_value, mrk_file_pos.file_size);
+                LOG_TRACE(disk_cache.getLogger(), "Cached mark file: {}, preload_level: {}", marks_key, preload_level);
+            }
+
         }
 
-        /// cache mark segment
-        if (!preload_level || (preload_level & PreloadLevelSettings::MetaPreload) == PreloadLevelSettings::MetaPreload)
+        // cache into remote node
+        if (data_part->disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE
+            || ((merge_tree_reader_settings.remote_disk_cache_stealing == StealingCacheMode::READ_WRITE
+                 || merge_tree_reader_settings.remote_disk_cache_stealing == StealingCacheMode::WRITE_ONLY)
+                && !data_part->disk_cache_host_port.empty()
+                && getHostFromHostPort(data_part->assign_compute_host_port) != getHostFromHostPort(data_part->disk_cache_host_port)))
         {
-            data_file->seek(mrk_file_pos.file_offset);
-            LimitReadBuffer marks_value(*data_file, mrk_file_pos.file_size, false);
-            String marks_key = getMarkName();
-            disk_cache.getMetaCache()->set(marks_key, marks_value, mrk_file_pos.file_size);
-            LOG_DEBUG(disk_cache.getLogger(), "cached mark file: {}, preload_level: {}", marks_key, preload_level);
-        }
+            std::vector<WriteFile> files{
+                {getMarkName(), data_path, static_cast<UInt64>(mrk_file_pos.file_offset), mrk_file_pos.file_size},
+                {getSegmentName(), data_path, static_cast<UInt64>(stream_file_pos.file_offset + cache_data_left_offset), cache_data_bytes}};
 
+            DistributedDataClientOption option{
+                .max_request_rate = disk_cache.getSettings().stealing_max_request_rate,
+                .connection_timeout_ms = disk_cache.getSettings().stealing_connection_timeout_ms,
+                .read_timeout_ms = disk_cache.getSettings().stealing_read_timeout_ms,
+                .max_retry_times = disk_cache.getSettings().stealing_max_retry_times,
+                .retry_sleep_ms = disk_cache.getSettings().stealing_retry_sleep_ms,
+                .max_queue_count = disk_cache.getSettings().stealing_max_queue_count,
+            };
+            auto remote_data_client = std::make_shared<DistributedDataClient>(data_part->disk_cache_host_port, "", option);
+            remote_data_client->write(disk->getName(), files);
+            LOG_TRACE(
+                disk_cache.getLogger(),
+                "Submit remote({}) cache file, mark_key: {}, data_key: {}, preload_level: {}",
+                data_part->disk_cache_host_port,
+                getMarkName(),
+                getSegmentName(),
+                preload_level);
+        }
     }
     catch (const Exception & e)
     {

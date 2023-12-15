@@ -19,6 +19,7 @@
  * All Bytedance's Modifications are Copyright (2023) Bytedance Ltd. and/or its affiliates.
  */
 
+#include <cstddef>
 #include <Storages/MergeTree/MergeTreeReaderInMemory.h>
 #include <Storages/MergeTree/MergeTreeDataPartInMemory.h>
 #include <Common/ProfileEventsTimer.h>
@@ -83,7 +84,7 @@ static ColumnPtr getColumnFromBlock(const Block & block, const NameAndTypePair &
     return column;
 }
 
-size_t MergeTreeReaderInMemory::readRows(size_t from_mark, size_t from_row,
+size_t MergeTreeReaderInMemory::readRows(size_t from_mark, size_t current_task_last_mark, size_t from_row,
     size_t max_rows_to_read, Columns& res_columns)
 {
     size_t from_mark_start_row = data_part->index_granularity.getMarkStartingRow(
@@ -111,7 +112,8 @@ size_t MergeTreeReaderInMemory::readRows(size_t from_mark, size_t from_row,
             tmp_columns[i] = type->createColumn();
         }
 
-        skipped_rows = resumableReadRows(from_mark, adjacent_reading, rows_to_skip, tmp_columns);
+        skipped_rows = resumableReadRows(from_mark, adjacent_reading, current_task_last_mark,
+            rows_to_skip, tmp_columns);
     }
 
     next_row_number_to_read += skipped_rows;
@@ -123,12 +125,14 @@ size_t MergeTreeReaderInMemory::readRows(size_t from_mark, size_t from_row,
 
         adjacent_reading = rows_to_skip > 0 || starting_row == next_row_number_to_read;
 
-        read_rows = resumableReadRows(from_mark, adjacent_reading, max_rows_to_read, res_columns);
+        read_rows = resumableReadRows(from_mark, adjacent_reading, current_task_last_mark,
+            max_rows_to_read, res_columns);
     }
     return read_rows;
 }
 
-size_t MergeTreeReaderInMemory::resumableReadRows(size_t from_mark, bool continue_reading, size_t max_rows_to_read, Columns & res_columns)
+size_t MergeTreeReaderInMemory::resumableReadRows(size_t from_mark, bool continue_reading,
+    size_t /**current_task_last_mark**/, size_t max_rows_to_read, Columns & res_columns)
 {
     if (!continue_reading)
     {

@@ -2,9 +2,9 @@
 2	1	CHILD ONE
 3	2	CHILD TWO
 4	2	CHILD TWO
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: [id]
+Projection Est. ? rows
+│     Expressions: [id]
+└─ Gather Exchange Est. ? rows
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {id}

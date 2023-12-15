@@ -13,14 +13,19 @@
  * limitations under the License.
  */
 
+#include <cstddef>
 #include <Interpreters/WorkerGroupHandle.h>
 
 #include <ResourceManagement/CommonData.h>
+#include "Common/Exception.h"
+#include "Common/HostWithPorts.h"
+#include "common/getFQDNOrHostName.h"
 #include <Common/Configurations.h>
 #include <Common/parseAddress.h>
 #include <Interpreters/Context.h>
 #include <IO/ConnectionTimeouts.h>
 #include <CloudServices/CnchWorkerClientPools.h>
+#include <fmt/core.h>
 #include <common/logger_useful.h>
 
 namespace DB
@@ -195,12 +200,12 @@ std::pair<UInt64, CnchWorkerClientPtr> WorkerGroupHandleImpl::getWorkerClient(UI
         throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
     if (worker_clients.size() == 1)
         return {0, worker_clients[0]};
-    
+
 
     auto start_index = sequence % worker_clients.size();
     if (!skip_busy_worker)
         return {start_index, worker_clients[start_index]};
-    
+
     auto ratio = getContext()->getRootConfig().vw_ratio_of_busy_worker.value;
     auto busy_worker_indexes = getBusyWorkerIndexes(ratio, getMetrics());
     for (size_t i = 0; i < worker_clients.size(); ++i)
@@ -284,6 +289,28 @@ std::vector<std::pair<String, UInt16>> WorkerGroupHandleImpl::getReadWorkers() c
         res.emplace_back(conn->getHost(), conn->getPort());
     }
     return res;
+}
+
+HostWithPorts WorkerGroupHandleImpl::randomWorker() const
+{
+    if (hosts.empty())
+        throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
+    if (hosts.size() == 1)
+        return hosts[0];
+
+    std::uniform_int_distribution dist;
+    auto index = dist(thread_local_rng) % hosts.size();
+    return hosts[index];
+}
+
+std::unordered_map<String, HostWithPorts> WorkerGroupHandleImpl::getIdHostPortsMap() const
+{
+    std::unordered_map<String, HostWithPorts> id_hosts;
+    for (const auto & host : hosts)
+    {
+        id_hosts.emplace(host.id, host);
+    }
+    return id_hosts;
 }
 
 }

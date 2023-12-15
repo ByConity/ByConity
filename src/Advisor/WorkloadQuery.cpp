@@ -117,7 +117,8 @@ WorkloadQueryPtr WorkloadQuery::build(const std::string & query, const ContextPt
         context,
         cascades_plan->getCTEInfo(),
         WorkerSizeFinder::find(*cascades_plan, *context),
-        PlanPattern::maxJoinSize(*cascades_plan, context));
+        PlanPattern::maxJoinSize(*cascades_plan, context),
+        true);
     cascades_context->setEnableWhatIfMode(true);
     auto root_group = cascades_context->initMemo(cascades_plan->getPlanNode());
 

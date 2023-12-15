@@ -138,9 +138,9 @@ TEST_F(MaterializedViewRewriteTest, testFilterQueryOnProjectView5)
 {
     sql("select deptno - 10 as x, empid + 1 as ee, name from emps",
         "select name, empid + 1 as e from emps where deptno - 10 = 2")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: [name], e:=ee\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: [name], e:=ee\n"
                                     "   └─ Filter\n"
                                     "      │     Condition: x = 2\n"
                                     "      └─ TableScan test_mview.MV0_MV_DATA\n"
@@ -558,9 +558,9 @@ TEST_F(MaterializedViewRewriteTest, testAggregateRollUp1)
     sql("select empid, deptno, count(*) as c, sum(empid) as s\n"
             "from emps group by empid, deptno",
         "select count(*) + 1 as c, deptno from emps group by deptno")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: c:=`expr#sum(c)` + 1, deptno:=`expr#deptno`\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: c:=`expr#sum(c)` + 1, deptno:=`expr#deptno`\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#deptno}\n"
@@ -686,9 +686,9 @@ TEST_F(MaterializedViewRewriteTest, testAggregateOnProject5)
     sql("select empid, deptno, name, count(*) from emps\n"
             "group by empid, deptno, name",
         "select name, empid, count(*) from emps group by name, empid")
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: count():=`expr#sum(count())`, empid:=`expr#empid`, name:=`expr#name`\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: count():=`expr#sum(count())`, empid:=`expr#empid`, name:=`expr#name`\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#empid, expr#name}\n"
@@ -965,9 +965,9 @@ TEST_F(MaterializedViewRewriteTest, testSingleMaterializationMultiUsage)
     String m = "select * from emps where empid < 500";
     sql(m, q)
         .checkingThatResultContains(
-            "Gather Exchange\n"
-            "└─ Projection\n"
-            "   │     Expressions: [commission, commission_1, deptno, deptno_1, empid, name, name_1, salary, salary_1]\n"
+            "Projection\n"
+            "│     Expressions: [commission, commission_1, deptno, deptno_1, empid, name, name_1, salary, salary_1]\n"
+            "└─ Gather Exchange\n"
             "   └─ Inner Join\n"
             "      │     Condition: empid == empid_1\n"
             "      ├─ Repartition Exchange\n"
@@ -1978,9 +1978,9 @@ TEST_F(MaterializedViewRewriteTest, testRexPredicate)
                    "where deptno > 100\n"
                    "group by name";
     sql(mv, query)
-        .checkingThatResultContains("Projection\n"
-                                    "│     Expressions: name:=`expr#name`\n"
-                                    "└─ Gather Exchange\n"
+        .checkingThatResultContains("Gather Exchange\n"
+                                    "└─ Projection\n"
+                                    "   │     Expressions: name:=`expr#name`\n"
                                     "   └─ MergingAggregated\n"
                                     "      └─ Repartition Exchange\n"
                                     "         │     Partition by: {expr#name}\n"

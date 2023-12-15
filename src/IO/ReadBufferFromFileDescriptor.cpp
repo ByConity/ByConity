@@ -74,7 +74,7 @@ std::string ReadBufferFromFileDescriptor::getFileName() const
 
 bool ReadBufferFromFileDescriptor::nextImpl()
 {
-    size_t bytes_read = readInto(internal_buffer.begin(), internal_buffer.size());
+    size_t bytes_read = readImpl(internal_buffer.begin(), internal_buffer.size());
 
     if (bytes_read)
     {
@@ -217,7 +217,7 @@ size_t ReadBufferFromFileDescriptor::readBig(char * to, size_t n)
 
     while (read_bytes < n)
     {
-        size_t readed = readInto(to + read_bytes, n - read_bytes);
+        size_t readed = readImpl(to + read_bytes, n - read_bytes);
         if (readed == 0)
         {
             break;
@@ -229,7 +229,7 @@ size_t ReadBufferFromFileDescriptor::readBig(char * to, size_t n)
     return read_bytes;
 }
 
-size_t ReadBufferFromFileDescriptor::readInto(char * to, size_t n)
+size_t ReadBufferFromFileDescriptor::readImpl(char * to, size_t n)
 {
     size_t bytes_read = 0;
     while (!bytes_read)

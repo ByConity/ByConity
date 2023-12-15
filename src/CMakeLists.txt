@@ -111,6 +111,7 @@ add_headers_and_sources(dbms ResourceGroup)
 add_headers_and_sources(dbms ResourceManagement)
 add_headers_and_sources(dbms TSO)
 
+add_headers_and_sources(dbms Disks/IO)
 if(USE_RDKAFKA)
     add_headers_and_sources(dbms Storages/Kafka)
 endif()
@@ -421,6 +422,10 @@ target_include_directories(clickhouse_common_io SYSTEM PUBLIC ${UDNS_INCLUDE_DIR
 
 # dbms_target_link_libraries(PUBLIC ch_contrib::abseil_swiss_tables)
 
+# Make dbms depend on roaring instead of clickhouse_common_io so that roaring itself can depend on clickhouse_common_io
+# That way we we can redirect malloc/free functions avoiding circular dependencies
+dbms_target_link_libraries(PUBLIC roaring)
+
 if (USE_RDKAFKA)
     dbms_target_link_libraries(PRIVATE ${CPPKAFKA_LIBRARY} ${RDKAFKA_LIBRARY} )
     dbms_target_include_directories(SYSTEM BEFORE PRIVATE  ${RAPIDJSON_INCLUDE_DIR})
@@ -583,7 +588,7 @@ if (USE_MSGPACK)
 endif()
 
 target_link_libraries (clickhouse_common_io PUBLIC ${FAST_FLOAT_LIBRARY})
-target_include_directories (clickhouse_common_io SYSTEM BEFORE PUBLIC ${FAST_FLOAT_INCLUDE_DIR})
+target_include_directories (clickhouse_common_io SYSTEM BEFORE PUBLIC ${FAST_FLOAT_INCLUDE_DIR} ${PARALLEL_HASHMAP_INCLUDE_DIR})
 
 if (USE_ORC)
     dbms_target_link_libraries(PUBLIC ${ORC_LIBRARIES})
@@ -646,8 +651,11 @@ if (ENABLE_TESTS AND USE_GTEST)
     target_include_directories(unit_tests_dbms SYSTEM BEFORE PRIVATE ${SPARSEHASH_INCLUDE_DIR})
 
     # copy disk cache test config
-    file(COPY ${ClickHouse_SOURCE_DIR}/src/Storages/DiskCache/tests/disk_cache_test_old_config.xml DESTINATION ${CMAKE_BINARY_DIR}/src)
-    file(COPY ${ClickHouse_SOURCE_DIR}/src/Storages/DiskCache/tests/disk_cache_test_new_config.xml DESTINATION ${CMAKE_BINARY_DIR}/src)
+    file(COPY ${ClickHouse_SOURCE_DIR}/src/Storages/DiskCache/tests/disk_cache_test_old_config.xml DESTINATION /tmp)
+    file(COPY ${ClickHouse_SOURCE_DIR}/src/Storages/DiskCache/tests/disk_cache_test_new_config.xml DESTINATION /tmp)
+
+    # copy rpc stream test file
+    file(COPY ${ClickHouse_SOURCE_DIR}/src/Storages/tests/distributed_file.txt DESTINATION /tmp)
 
     # gtest framework has substandard code
     target_compile_options(unit_tests_dbms PRIVATE

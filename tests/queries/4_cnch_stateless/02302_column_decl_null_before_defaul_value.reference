@@ -1,0 +1,30 @@
+create table, column +type +NULL
+id	Nullable(Int32)						
+pid	Int32						
+create table, column +type +NOT NULL
+id	Int32						
+pid	Int32						
+create table, column +type +NULL +DEFAULT
+id	Nullable(Int32)		DEFAULT	1			
+pid	Int32						
+create table, column +type +NOT NULL +DEFAULT
+id	Int32		DEFAULT	1			
+pid	Int32						
+create table, column +type +DEFAULT +NULL
+id	Nullable(Int32)		DEFAULT	1			
+pid	Int32						
+create table, column +type +DEFAULT +NOT NULL
+id	Int32		DEFAULT	1			
+pid	Int32						
+create table, column -type +NULL +DEFAULT
+id	Nullable(UInt8)		DEFAULT	1			
+pid	Int32						
+create table, column -type +NOT NULL +DEFAULT
+id	UInt8		DEFAULT	1			
+pid	Int32						
+create table, column -type +DEFAULT +NULL
+id	Nullable(UInt8)		DEFAULT	1			
+pid	Int32						
+create table, column -type +DEFAULT +NOT NULL
+id	UInt8		DEFAULT	1			
+pid	Int32						

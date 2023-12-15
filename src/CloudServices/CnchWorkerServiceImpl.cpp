@@ -48,6 +48,8 @@
 #include <brpc/closure_guard.h>
 #include <brpc/controller.h>
 #include <brpc/stream.h>
+#include "Common/Configurations.h"
+#include "Common/Exception.h"
 
 #if USE_RDKAFKA
 #    include <Storages/Kafka/KafkaTaskCommand.h>

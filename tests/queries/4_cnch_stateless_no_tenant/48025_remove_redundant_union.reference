@@ -1,6 +1,6 @@
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: mmm:=`__uykyub__\'mmm\'_2`
+Projection Est. ? rows
+│     Expressions: mmm:=`__uykyub__\'mmm\'_2`
+└─ Gather Exchange Est. ? rows
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
          │     Partition by: {__uykyub__\'mmm\'_2}

@@ -22,13 +22,14 @@
 #include <Catalog/DataModelPartWrapper_fwd.h>
 #include <CloudServices/RpcClientBase.h>
 #include <Interpreters/Context_fwd.h>
-#include <Storages/DataPart_fwd.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/Kafka/KafkaTaskCommand.h>
 #include <Transaction/TxnTimestamp.h>
 #include <brpc/controller.h>
 #include <Common/Exception.h>
 #include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
+#include "Storages/MergeTree/MergeTreeDataPartCNCH_fwd.h"
+#include <Storages/DataPart_fwd.h>
 
 #include <unordered_set>
 
@@ -49,6 +50,7 @@ namespace IngestColumnCnch
 }
 
 class MergeTreeMetaBase;
+struct MarkRange;
 struct StorageID;
 struct ManipulationInfo;
 struct ManipulationTaskParams;
@@ -96,14 +98,14 @@ public:
         UInt64 parts_preload_level,
         UInt64 submit_ts);
 
-    brpc::CallId dropPartDiskCache(
-        const ContextPtr & context,
-        const TxnTimestamp & txn_id,
-        const IStorage & storage,
-        const String & create_local_table_query,
-        const ServerDataPartsVector & parts,
-        bool sync,
-        bool drop_vw_disk_cache);
+        brpc::CallId dropPartDiskCache(
+            const ContextPtr & context,
+            const TxnTimestamp & txn_id,
+            const IStorage & storage,
+            const String & create_local_table_query,
+            const ServerDataPartsVector & parts,
+            bool sync,
+            bool drop_vw_disk_cache);
 
     brpc::CallId sendOffloadingInfo(
         const ContextPtr & context,

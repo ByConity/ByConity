@@ -1,11 +1,11 @@
-Projection Est. 100 rows, cost 9.720000e+00
+Projection Est. 100 rows, cost 2.572000e+01
 │     Expressions: channel:=`expr#\'store\'_1`, i_category:=i_category_3, nn:=ss_store_sk_1, sales_cnt:=`expr#count()`
-└─ Limit Est. 100 rows, cost 2.320000e+00
+└─ Limit Est. 100 rows, cost 1.832000e+01
    │     Limit: 100
-   └─ Sorting Est. 100 rows, cost 2.320000e+00
+   └─ Sorting Est. 100 rows, cost 1.832000e+01
       │     Order by: {expr#\'store\'_1 ASC NULLS LAST, ss_store_sk_1 ASC NULLS LAST, i_category_3 ASC NULLS LAST}
       │     Limit: 100
-      └─ Gather Exchange Est. ? rows, cost 2.320000e+00
+      └─ Gather Exchange Est. 100 rows, cost 1.832000e+01
          └─ Sorting Est. 100 rows, cost 2.160000e+00
             │     Order by: {expr#\'store\'_1 ASC NULLS LAST, ss_store_sk_1 ASC NULLS LAST, i_category_3 ASC NULLS LAST}
             │     Limit: 100

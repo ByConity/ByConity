@@ -68,7 +68,8 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                 nullptr,
                 &part_->index_granularity_info,
                 ReadBufferFromFileBase::ProfileCallback{},
-                CLOCK_MONOTONIC_COARSE
+                CLOCK_MONOTONIC_COARSE,
+                false
             );
             break;
         }
@@ -113,23 +114,34 @@ MergeTreeIndexReader::MergeTreeIndexReader(
                         PartFileDiskCacheSegment::FileOffsetAndSize{data_file_offset, data_file_size}));
                 segment_cache->cacheSegmentsToLocalDisk(segments);
             }
+
+            PartHostInfo part_host{
+            .disk_cache_host_port = source_data_part->disk_cache_host_port,
+            .assign_compute_host_port = source_data_part->assign_compute_host_port};
+
             stream = std::make_unique<MergeTreeReaderStreamWithSegmentCache>(
                 source_data_part->storage.getStorageID(),
                 source_data_part->name,
                 index_name,
                 source_data_part->volume->getDisk(),
                 marks_count_,
-                data_path, data_file_offset, data_file_size,
-                mark_path, mark_file_offset, mark_file_size,
+                data_path,
+                data_file_offset,
+                data_file_size,
+                mark_path,
+                mark_file_offset,
+                mark_file_size,
                 all_mark_ranges_,
                 settings,
                 mark_cache,
                 nullptr, /*uncompressed_cache*/
                 segment_cache.get(),
                 segment_cache_strategy ? segment_cache_strategy->getSegmentSize() : 1,
+                part_host,
                 &(source_data_part->index_granularity_info),
                 ReadBufferFromFileBase::ProfileCallback{},
-                CLOCK_MONOTONIC_COARSE
+                CLOCK_MONOTONIC_COARSE,
+                false
             );
             break;
         }

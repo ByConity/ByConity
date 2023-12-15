@@ -29,14 +29,14 @@ Projection Est. ? rows
                      Outputs: [price]
 1
 OK: fk left outer join pk
-Projection Est. 10 rows, cost 9.000000e-01
+Projection Est. 10 rows, cost 2.500000e+00
 │     Expressions: [price]
-└─ Limit Est. 10 rows, cost 1.600000e-01
+└─ Limit Est. 10 rows, cost 1.760000e+00
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 1.600000e-01
+   └─ Sorting Est. 10 rows, cost 1.760000e+00
       │     Order by: {price ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. ? rows, cost 1.600000e-01
+      └─ Gather Exchange Est. 10 rows, cost 1.760000e+00
          └─ Sorting Est. 10 rows, cost 0.000000e+00
             │     Order by: {price ASC NULLS LAST}
             │     Limit: 10
@@ -46,14 +46,14 @@ Projection Est. 10 rows, cost 9.000000e-01
 2000.3
 3003.5
 OK: pk right outer join fk
-Projection Est. 10 rows, cost 9.000000e-01
+Projection Est. 10 rows, cost 2.500000e+00
 │     Expressions: [price]
-└─ Limit Est. 10 rows, cost 1.600000e-01
+└─ Limit Est. 10 rows, cost 1.760000e+00
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 1.600000e-01
+   └─ Sorting Est. 10 rows, cost 1.760000e+00
       │     Order by: {price ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. ? rows, cost 1.600000e-01
+      └─ Gather Exchange Est. 10 rows, cost 1.760000e+00
          └─ Sorting Est. 10 rows, cost 0.000000e+00
             │     Order by: {price ASC NULLS LAST}
             │     Limit: 10
@@ -63,14 +63,14 @@ Projection Est. 10 rows, cost 9.000000e-01
 2000.3
 3003.5
 not OK: fk right outer join pk
-Projection Est. 10 rows, cost 1.540000e+00
+Projection Est. 10 rows, cost 3.140000e+00
 │     Expressions: [price]
-└─ Limit Est. 10 rows, cost 8.000000e-01
+└─ Limit Est. 10 rows, cost 2.400000e+00
    │     Limit: 10
-   └─ Sorting Est. 10 rows, cost 8.000000e-01
+   └─ Sorting Est. 10 rows, cost 2.400000e+00
       │     Order by: {price ASC NULLS LAST}
       │     Limit: 10
-      └─ Gather Exchange Est. ? rows, cost 8.000000e-01
+      └─ Gather Exchange Est. 10 rows, cost 2.400000e+00
          └─ Sorting Est. 10 rows, cost 6.400000e-01
             │     Order by: {price ASC NULLS LAST}
             │     Limit: 10
@@ -90,16 +90,16 @@ Projection Est. 10 rows, cost 1.540000e+00
 2000.3
 \N
 OK: fk semi join pk
-Projection Est. 10 rows, cost 1.640000e+00
+Projection Est. 10 rows, cost 3.240000e+00
 │     Expressions: [price]
-└─ Limit Est. 10 rows, cost 9.000000e-01
+└─ Limit Est. 10 rows, cost 2.500000e+00
    │     Limit: 10
-   └─ Projection Est. 10 rows, cost 9.000000e-01
+   └─ Projection Est. 10 rows, cost 2.500000e+00
       │     Expressions: [price]
-      └─ Sorting Est. 10 rows, cost 1.600000e-01
+      └─ Sorting Est. 10 rows, cost 1.760000e+00
          │     Order by: {price ASC NULLS LAST}
          │     Limit: 10
-         └─ Gather Exchange Est. ? rows, cost 1.600000e-01
+         └─ Gather Exchange Est. 10 rows, cost 1.760000e+00
             └─ Sorting Est. 10 rows, cost 0.000000e+00
                │     Order by: {price ASC NULLS LAST}
                │     Limit: 10
@@ -183,9 +183,9 @@ Projection Est. ? rows
                   └─ TableScan test.web Est. ? rows
                            Outputs: [price], ws_item_sk_1:=ws_item_sk, sk_1:=sk
 not OK: unique self join with select *
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: [c_customer_id, item, sk], b.c_customer_id:=c_customer_id_1, b.item:=item_1, b.sk:=sk_1
+Projection Est. ? rows
+│     Expressions: [c_customer_id, item, sk], b.c_customer_id:=c_customer_id_1, b.item:=item_1, b.sk:=sk_1
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: sk == sk_1
       ├─ Repartition Exchange Est. ? rows
@@ -197,9 +197,9 @@ Gather Exchange Est. ? rows
          └─ TableScan test.cust Est. ? rows
                   Outputs: sk_1:=sk, c_customer_id_1:=c_customer_id, item_1:=item
 OK: with top union
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: customer_id:=c_customer_id_4, sale_type:=`expr#\'s\'_1`
+Projection Est. ? rows
+│     Expressions: customer_id:=c_customer_id_4, sale_type:=`expr#\'s\'_1`
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: expr#cast(sk_1, \'Nullable(Int64)\')_2 == sk_6
       ├─ Union Est. ? rows
@@ -254,9 +254,9 @@ Gather Exchange Est. ? rows
                      Outputs: sk_6:=sk, c_customer_id_4:=c_customer_id
 5
 not OK: with top union, but pk of one child lost
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: customer_id:=c_customer_id_3, sale_type:=`expr#\'s\'_1`
+Projection Est. ? rows
+│     Expressions: customer_id:=c_customer_id_3, sale_type:=`expr#\'s\'_1`
+└─ Gather Exchange Est. ? rows
    └─ Union Est. ? rows
       │     OutputToInputs: expr#\'s\'_1 = [expr#\'s\',expr#\'c\',expr#\'w\'], c_customer_id_3 = [c_customer_id,c_customer_id_1,c_customer_id_2]
       ├─ Projection Est. ? rows

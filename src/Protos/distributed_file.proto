@@ -1,0 +1,42 @@
+syntax = "proto2";
+package DB.Protos;
+
+option cc_generic_services = true;
+
+message ConnectRequest
+{
+    required string key = 1;
+};
+
+message ConnectResponse
+{
+    required string file_full_path = 1;
+    required int64 file_size = 2;
+    optional int32 code = 3;
+    optional string message = 4;
+};
+
+message FileInfo
+{
+    required string key = 1;
+    required string path = 2;
+    required int32 offset = 3;
+    required int32 length = 4;
+}
+
+message writeFileRquest
+{
+    required string disk_name = 1;
+    repeated FileInfo files = 2;
+}
+
+message writeFileResponse
+{
+    optional int32 code = 1;
+    optional string message = 2;
+}
+
+service FileStreamService {
+    rpc acceptConnection(ConnectRequest) returns (ConnectResponse);
+    rpc writeRemoteFile(writeFileRquest) returns (writeFileResponse);
+}

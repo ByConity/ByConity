@@ -1,13 +1,13 @@
-TableFinish Est. 1 rows, cost 5.540000e-01
-└─ Gather Exchange Est. 1 rows, cost 5.540000e-01
-   └─ TableWrite Est. 1 rows, cost 2.340000e-01
+TableFinish Est. 1 rows, cost 7.140000e-01
+└─ Gather Exchange Est. 1 rows, cost 7.140000e-01
+   └─ TableWrite Est. 1 rows, cost 3.940000e-01
       │     Insert test.profile_map_tags_test_348590820934
-      └─ Local Exchange Est. 1 rows, cost 2.340000e-01
-         └─ Projection Est. 1 rows, cost 2.340000e-01
+      └─ Local Exchange Est. 1 rows, cost 3.940000e-01
+         └─ Projection Est. 1 rows, cost 3.940000e-01
             │     Expressions: [base_id], double_map:=map(\'1427\', CAST(`expr#max(tenant_dau_au_rate)`, \'Float64\')), id_type:=2296, p_date:=\'2023-04-26\'
-            └─ Limit Est. 1 rows, cost 1.600000e-01
+            └─ Limit Est. 1 rows, cost 3.200000e-01
                │     Limit: 1
-               └─ Gather Exchange Est. ? rows, cost 1.600000e-01
+               └─ Gather Exchange Est. 1 rows, cost 3.200000e-01
                   └─ Limit Est. 1 rows, cost 0.000000e+00
                      │     Limit: 1
                      └─ Inner Join Est. ? rows, cost 0.000000e+00

@@ -22,6 +22,8 @@
 #include <Interpreters/WorkerStatusManager.h>
 #include <MergeTreeCommon/assignCnchParts.h>
 #include <brpc/controller.h>
+#include "Common/ProfileEvents.h"
+#include "common/logger_useful.h"
 #include <common/logger_useful.h>
 #include <Common/CurrentThread.h>
 #include <Common/Exception.h>
@@ -52,6 +54,8 @@ AssignedResource::AssignedResource(AssignedResource && resource)
     worker_table_name = resource.worker_table_name;
     create_table_query = resource.create_table_query;
     sent_create_query = resource.sent_create_query;
+    bucket_numbers = resource.bucket_numbers;
+    replicated = resource.replicated;
 
     server_parts = std::move(resource.server_parts);
     hive_parts = std::move(resource.hive_parts);

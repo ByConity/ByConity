@@ -15,11 +15,13 @@
 
 #pragma once
 
+#include <unordered_map>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/Context_fwd.h>
 #include <Parsers/IAST_fwd.h>
 #include <ResourceManagement/WorkerGroupType.h>
 #include <ResourceManagement/VWScheduleAlgo.h>
+#include "Common/HostWithPorts.h"
 #include <Common/ConsistentHashUtils/ConsistentHashRing.h>
 
 #include <ResourceManagement/CommonData.h>
@@ -127,9 +129,12 @@ public:
     Strings getWorkerTCPAddresses(const Settings & settings) const;
     Strings getWorkerIDVec() const;
     std::vector<std::pair<String, UInt16>> getReadWorkers() const;
+    HostWithPorts randomWorker() const;
 
     bool hasRing() const { return ring != nullptr; }
     const DB::ConsistentHashRing & getRing() const { return *ring; }
+
+    std::unordered_map<String, HostWithPorts> getIdHostPortsMap() const;
 
 private:
     /// Note: updating mutable fields (like `metrics`) should be guarded with lock.

@@ -4,9 +4,9 @@ t3	1	3
 t4	1	4
 
 --- original catalog ---
-Gather Exchange Est. 24 rows, cost 4.174600e+01
-└─ Projection Est. 24 rows, cost 3.774600e+01
-   │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+Projection Est. 24 rows, cost 4.174600e+01
+│     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+└─ Gather Exchange Est. 24 rows, cost 3.997000e+01
    └─ Inner Join Est. 24 rows, cost 3.597000e+01
       │     Condition: 
       ├─ Inner Join Est. 6 rows, cost 1.479000e+01
@@ -34,9 +34,9 @@ t4.*		4
 t4.x	UInt32	4	0	1	4	4	1
 
 --- original cache ---
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+Projection Est. ? rows
+│     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: 
       ├─ Inner Join Est. ? rows
@@ -56,9 +56,9 @@ Gather Exchange Est. ? rows
                   Outputs: x_3:=x
 
 --- original normal ---
-Gather Exchange Est. 24 rows, cost 4.174600e+01
-└─ Projection Est. 24 rows, cost 3.774600e+01
-   │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+Projection Est. 24 rows, cost 4.174600e+01
+│     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+└─ Gather Exchange Est. 24 rows, cost 3.997000e+01
    └─ Inner Join Est. 24 rows, cost 3.597000e+01
       │     Condition: 
       ├─ Inner Join Est. 6 rows, cost 1.479000e+01
@@ -86,9 +86,9 @@ t4.*		4
 t4.x	UInt32	4	0	1	4	4	1
 
 --- original cache ---
-Gather Exchange Est. 24 rows, cost 4.174600e+01
-└─ Projection Est. 24 rows, cost 3.774600e+01
-   │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+Projection Est. 24 rows, cost 4.174600e+01
+│     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+└─ Gather Exchange Est. 24 rows, cost 3.997000e+01
    └─ Inner Join Est. 24 rows, cost 3.597000e+01
       │     Condition: 
       ├─ Inner Join Est. 6 rows, cost 1.479000e+01
@@ -118,9 +118,9 @@ t4.x	UInt32	4	0	1	4	4	1
 --- manipulating ---
 
 --- cache ---
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+Projection Est. ? rows
+│     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: 
       ├─ Inner Join Est. ? rows
@@ -142,9 +142,9 @@ t4.*		4
 t4.x	UInt32	4	0	1	4	4	1
 
 --- catalog ---
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+Projection Est. ? rows
+│     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: 
       ├─ Inner Join Est. ? rows
@@ -168,9 +168,9 @@ t4.*		4
 t4.x	UInt32	4	0	1	4	4	1
 
 --- normal ---
-Gather Exchange Est. ? rows
-└─ Projection Est. ? rows
-   │     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+Projection Est. ? rows
+│     Expressions: t1.x:=x, t2.x:=x_1, t3.x:=x_2, t4.x:=x_3
+└─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: 
       ├─ Inner Join Est. ? rows

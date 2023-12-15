@@ -43,3 +43,9 @@ explain metadata select b from metadata3;
 explain metadata select c from metadata3;
 
 DROP TABLE IF EXISTS metadata3;
+
+
+set enable_optimizer=1;
+set enable_optimizer_fallback=0;
+
+explain metadata select getSetting('enable_optimizer'), getSetting('enable_optimizer_fallback');
