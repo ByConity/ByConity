@@ -31,11 +31,9 @@ static InputPorts createPorts(const Blocks & blocks)
 IMergingTransformBase::IMergingTransformBase(
     const Blocks & input_headers,
     const Block & output_header,
-    bool have_all_inputs_,
-    UInt64 limit_hint_)
+    bool have_all_inputs_)
     : IProcessor(createPorts(input_headers), {output_header})
     , have_all_inputs(have_all_inputs_)
-    , limit_hint(limit_hint_)
 {
 }
 
@@ -187,7 +185,7 @@ IProcessor::Status IMergingTransformBase::prepare()
         {
             state.no_data = true;
         }
-        
+
         state.need_data = false;
     }
 

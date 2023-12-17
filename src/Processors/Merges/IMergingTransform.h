@@ -98,10 +98,9 @@ public:
         const Blocks & input_headers,
         const Block & output_header,
         bool have_all_inputs_,
-        UInt64 limit_hint_,
         bool empty_chunk_on_finish_,
         Args && ... args)
-        : IMergingTransformBase(input_headers, output_header, have_all_inputs_, limit_hint_)
+        : IMergingTransformBase(input_headers, output_header, have_all_inputs_)
         , empty_chunk_on_finish(empty_chunk_on_finish_)
         , algorithm(std::forward<Args>(args) ...)
     {
