@@ -154,6 +154,8 @@ inline constexpr bool isLeft(ASTTableJoin::Kind kind)         { return kind == A
 inline constexpr bool isRight(ASTTableJoin::Kind kind)        { return kind == ASTTableJoin::Kind::Right; }
 inline constexpr bool isInner(ASTTableJoin::Kind kind)        { return kind == ASTTableJoin::Kind::Inner; }
 inline constexpr bool isFull(ASTTableJoin::Kind kind)         { return kind == ASTTableJoin::Kind::Full; }
+inline constexpr bool isCross(ASTTableJoin::Kind kind)         { return kind == ASTTableJoin::Kind::Cross; }
+inline constexpr bool isComma(ASTTableJoin::Kind kind)         { return kind == ASTTableJoin::Kind::Comma; }
 inline constexpr bool isCrossOrComma(ASTTableJoin::Kind kind) { return kind == ASTTableJoin::Kind::Comma || kind == ASTTableJoin::Kind::Cross; }
 inline constexpr bool isRightOrFull(ASTTableJoin::Kind kind)  { return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full; }
 inline constexpr bool isLeftOrFull(ASTTableJoin::Kind kind)   { return kind == ASTTableJoin::Kind::Left  || kind == ASTTableJoin::Kind::Full; }
