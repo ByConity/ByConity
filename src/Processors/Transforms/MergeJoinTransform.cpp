@@ -31,6 +31,8 @@ namespace ErrorCodes
     extern const int LOGICAL_ERROR;
 }
 
+using JoinKind = ASTTableJoin::Kind;
+
 namespace
 {
 
@@ -280,21 +282,21 @@ MergeJoinAlgorithm::MergeJoinAlgorithm(
         throw Exception(ErrorCodes::LOGICAL_ERROR, "MergeJoinAlgorithm requires exactly two inputs");
 
     auto strictness = table_join->getTableJoin().strictness();
-    if (strictness != JoinStrictness::Any && strictness != JoinStrictness::All)
+    if (strictness != ASTTableJoin::Strictness::Any && strictness != ASTTableJoin::Strictness::All)
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MergeJoinAlgorithm is not implemented for strictness {}", strictness);
 
     auto kind = table_join->getTableJoin().kind();
     if (!isInner(kind) && !isLeft(kind) && !isRight(kind) && !isFull(kind))
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MergeJoinAlgorithm is not implemented for kind {}", kind);
 
-    const auto & join_on = table_join->getTableJoin().getOnlyClause();
+    const auto & join_on = table_join->getTableJoin()();
 
-    if (join_on.on_filter_condition_left || join_on.on_filter_condition_right)
-        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MergeJoinAlgorithm does not support ON filter conditions");
+    //if (join_on.on_filter_condition_left || join_on.on_filter_condition_right)
+    //    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MergeJoinAlgorithm does not support ON filter conditions");
 
     cursors = {
-        createCursor(input_headers[0], join_on.key_names_left),
-        createCursor(input_headers[1], join_on.key_names_right)
+        createCursor(input_headers[0], join_on.keyNamesLeft()),
+        createCursor(input_headers[1], join_on.keyNamesRight())
     };
 
     for (const auto & [left_key, right_key] : table_join->getTableJoin().leftToRightKeyRemap())
@@ -303,16 +305,6 @@ MergeJoinAlgorithm::MergeJoinAlgorithm(
         size_t right_idx = input_headers[1].getPositionByName(right_key);
         left_to_right_key_remap[left_idx] = right_idx;
     }
-}
-
-void MergeJoinAlgorithm::logElapsed(double seconds)
-{
-    LOG_TRACE(log,
-        "Finished pocessing in {} seconds"
-        ", left: {} blocks, {} rows; right: {} blocks, {} rows"
-        ", max blocks loaded to memory: {}",
-        seconds, stat.num_blocks[0], stat.num_rows[0], stat.num_blocks[1], stat.num_rows[1],
-        stat.max_blocks_loaded);
 }
 
 static void prepareChunk(Chunk & chunk)
@@ -335,6 +327,9 @@ void MergeJoinAlgorithm::initialize(Inputs inputs)
 
     for (size_t i = 0; i < inputs.size(); ++i)
     {
+        assert(inputs[i].chunk.getNumColumns() == cursors[i]->sampleBlock().columns());
+        prepareChunk(inputs[i].chunk);
+        copyColumnsResized(inputs[i].chunk.getColumns(), 0, 0, sample_chunks.emplace_back());
         consume(inputs[i], i);
     }
 }
@@ -457,9 +452,8 @@ std::optional<MergeJoinAlgorithm::Status> MergeJoinAlgorithm::handleAllJoinState
 
     if (all_join_state)
     {
-        assert(cursors.size() == 2);
         /// Accumulate blocks with same key in all_join_state
-        for (size_t i = 0; i < 2; ++i)
+        for (size_t i = 0; i < cursors.size(); ++i)
         {
             if (cursors[i]->cursor.isValid() && all_join_state->keys[i].equals(cursors[i]->cursor))
             {
@@ -484,7 +478,7 @@ std::optional<MergeJoinAlgorithm::Status> MergeJoinAlgorithm::handleAllJoinState
         MutableColumns result_cols;
         for (size_t i = 0; i < 2; ++i)
         {
-            for (const auto & col : cursors[i]->sampleColumns())
+            for (const auto & col : sample_chunks[i]->getColumns())
                 result_cols.push_back(col->cloneEmpty());
         }
 
@@ -758,8 +752,8 @@ Chunk MergeJoinAlgorithm::createBlockWithDefaults(size_t source_num, size_t star
 {
     ColumnRawPtrs cols;
     {
-        const auto & columns_left = source_num == 0 ? cursors[0]->getCurrent().getColumns() : cursors[0]->sampleColumns();
-        const auto & columns_right = source_num == 1 ? cursors[1]->getCurrent().getColumns() : cursors[1]->sampleColumns();
+        const auto & columns_left = source_num == 0 ? cursors[0]->getCurrent().getColumns() : sample_chunks[0]->getColumns();
+        const auto & columns_right = source_num == 1 ? cursors[1]->getCurrent().getColumns() : sample_chunks[1]->getColumns();
 
         for (size_t i = 0; i < columns_left.size(); ++i)
         {
@@ -857,8 +851,6 @@ MergeJoinTransform::MergeJoinTransform(
         input_headers,
         output_header,
         /* have_all_inputs_= */ true,
-        limit_hint_,
-        /* always_read_till_end_= */ false,
         /* empty_chunk_on_finish_= */ true,
         table_join, input_headers, max_block_size)
     , log(&Poco::Logger::get("MergeJoinTransform"))
@@ -868,7 +860,7 @@ MergeJoinTransform::MergeJoinTransform(
 
 void MergeJoinTransform::onFinish()
 {
-    algorithm.logElapsed(total_stopwatch.elapsedSeconds());
+    algorithm.logElapsed(total_stopwatch.elapsedSeconds(), true);
 }
 
 }
