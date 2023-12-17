@@ -289,7 +289,7 @@ MergeJoinAlgorithm::MergeJoinAlgorithm(
     if (!isInner(kind) && !isLeft(kind) && !isRight(kind) && !isFull(kind))
         throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MergeJoinAlgorithm is not implemented for kind {}", kind);
 
-    const auto & join_on = table_join->getTableJoin()();
+    const auto & join_on = table_join->getTableJoin();
 
     //if (join_on.on_filter_condition_left || join_on.on_filter_condition_right)
     //    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MergeJoinAlgorithm does not support ON filter conditions");
@@ -478,7 +478,7 @@ std::optional<MergeJoinAlgorithm::Status> MergeJoinAlgorithm::handleAllJoinState
         MutableColumns result_cols;
         for (size_t i = 0; i < 2; ++i)
         {
-            for (const auto & col : sample_chunks[i]->getColumns())
+            for (const auto & col : sample_chunks[i].getColumns())
                 result_cols.push_back(col->cloneEmpty());
         }
 
@@ -752,8 +752,8 @@ Chunk MergeJoinAlgorithm::createBlockWithDefaults(size_t source_num, size_t star
 {
     ColumnRawPtrs cols;
     {
-        const auto & columns_left = source_num == 0 ? cursors[0]->getCurrent().getColumns() : sample_chunks[0]->getColumns();
-        const auto & columns_right = source_num == 1 ? cursors[1]->getCurrent().getColumns() : sample_chunks[1]->getColumns();
+        const auto & columns_left = source_num == 0 ? cursors[0]->getCurrent().getColumns() : sample_chunks[0].getColumns();
+        const auto & columns_right = source_num == 1 ? cursors[1]->getCurrent().getColumns() : sample_chunks[1].getColumns();
 
         for (size_t i = 0; i < columns_left.size(); ++i)
         {
@@ -832,10 +832,10 @@ IMergingAlgorithm::Status MergeJoinAlgorithm::merge()
 
     auto strictness = table_join->getTableJoin().strictness();
 
-    if (strictness == JoinStrictness::Any)
+    if (strictness == ASTTableJoin::Strictness::Any)
         return anyJoin(kind);
 
-    if (strictness == JoinStrictness::All)
+    if (strictness == ASTTableJoin::Strictness::All)
         return allJoin(kind);
 
     throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Unsupported strictness '{}'", strictness);
