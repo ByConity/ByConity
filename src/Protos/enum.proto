@@ -63,6 +63,7 @@ message JoinAlgorithm {
     NESTED_LOOP_JOIN = 4;
     PARALLEL_HASH = 5;
     GRACE_HASH = 6;
+    FULL_SORTING_MERGE = 7;
   }
 }
 
