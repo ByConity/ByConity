@@ -183,7 +183,7 @@ public:
 
     bool forceFullSortingMergeJoin() const 
     {
-        return !isSpecialStorage() && join_algorithm.isSet(JoinAlgorithm::FULL_SORTING_MERGE); 
+        return !isSpecialStorage() && join_algorithm == JoinAlgorithm::FULL_SORTING_MERGE; 
     }
 
     bool forceNullableRight() const { return join_use_nulls && isLeftOrFull(table_join.kind); }
@@ -275,7 +275,7 @@ public:
 
     void setRuntimeFilterConsumer(std::shared_ptr<RuntimeFilterConsumer> && filterConsumer) { runtimeFilterConsumer = std::move(filterConsumer); }
 
-    std::unordered_map<String, String> TableJoin::leftToRightKeyRemap() const;
+    std::unordered_map<String, String> leftToRightKeyRemap() const;
 };
 
 }
