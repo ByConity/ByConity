@@ -6,10 +6,10 @@
 #include <type_traits>
 #include <vector>
 
-#include <base/defines.h>
-#include <base/types.h>
+#include <common/defines.h>
+#include <common/types.h>
 
-#include <Common/logger_useful.h>
+#include <common/logger_useful.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/IColumn.h>
@@ -20,6 +20,7 @@
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Processors/Transforms/MergeJoinTransform.h>
 
+#include <DataStreams/materializeBlock.h>
 
 namespace DB
 {
