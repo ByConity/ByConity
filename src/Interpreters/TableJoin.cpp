@@ -531,13 +531,15 @@ std::unordered_map<String, String> TableJoin::leftToRightKeyRemap() const
     std::unordered_map<String, String> left_to_right_key_remap;
     if (hasUsing())
     {
+        assert(key_names_left.size() == key_names_right.size())
+        size_t sz = key_names_left.size(); 
         const auto & required_right_keys = requiredRightKeys();
-        forAllKeys(clauses, [&](const auto & left_key_name, const auto & right_key_name)
+
+        for(int i = 0; i < sz; i++)
         {
-            if (!required_right_keys.contains(right_key_name))
-                left_to_right_key_remap[left_key_name] = right_key_name;
-            return true;
-        });
+            if (!required_right_keys.contains(key_names_right[i]))
+                left_to_right_key_remap[key_names_left[i]] = key_names_right[i];
+        }
     }
     return left_to_right_key_remap;
 }
