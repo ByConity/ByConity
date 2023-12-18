@@ -99,17 +99,18 @@ const std::pair<DB::LogsLevel, Poco::Message::Priority> & convertLogLevel(Aws::U
 class AWSLogger final : public Aws::Utils::Logging::LogSystemInterface
 {
 public:
-    AWSLogger()
+    AWSLogger(Aws::Utils::Logging::LogLevel log_level)
     {
         for (auto [tag, name] : S3_LOGGER_TAG_NAMES)
             tag_loggers[tag] = &Poco::Logger::get(name);
 
         default_logger = tag_loggers[S3_LOGGER_TAG_NAMES[0][0]];
+        log_level_ = log_level;
     }
 
     ~AWSLogger() final = default;
 
-    Aws::Utils::Logging::LogLevel GetLogLevel() const final { return Aws::Utils::Logging::LogLevel::Trace; }
+    Aws::Utils::Logging::LogLevel GetLogLevel() const final { return log_level_; }
 
     void Log(Aws::Utils::Logging::LogLevel log_level, const char * tag, const char * format_str, ...) final // NOLINT
     {
@@ -139,6 +140,7 @@ public:
 private:
     Poco::Logger * default_logger;
     std::unordered_map<String, Poco::Logger *> tag_loggers;
+    Aws::Utils::Logging::LogLevel log_level_;
 };
 
 class AWSEC2MetadataClient : public Aws::Internal::AWSHttpResourceClient
@@ -569,7 +571,8 @@ namespace S3
             return clientBootstrap;
         };
         Aws::InitAPI(aws_options);
-        Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<Auth::AWSLogger>());
+        Aws::Utils::Logging::InitializeAWSLogging(std::make_shared<Auth::AWSLogger>(
+            aws_options.loggingOptions.logLevel));
         if (aws_options_config.use_crt_http_client) {
             Aws::Http::SetHttpClientFactory(std::make_shared<CustomCRTHttpClientFactory>());
         } else {
