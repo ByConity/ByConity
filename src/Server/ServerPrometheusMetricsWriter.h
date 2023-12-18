@@ -95,9 +95,9 @@ namespace ProfileEvents
     // extern const Event CnchReadDataDeserialMicroSeconds;
     // extern const Event CnchReadDataDeserialCpuMicroSeconds;
     extern const Event DiskCacheAcquireStatsLock;
-    extern const Event DiskCacheScheduleCacheTaskMicroSeconds;
+    extern const Event DiskCacheScheduleCacheTaskMicroseconds;
     extern const Event DiskCacheUpdateStatsMicroSeconds;
-    // extern const Event DiskCacheTaskDropCount;
+    extern const Event DiskCacheTaskDropCount;
     // extern const Event PreloadSubmitTotalOps;
     // extern const Event PreloadSendTotalOps;
     // extern const Event PreloadExecTotalOps;
@@ -539,51 +539,6 @@ namespace ProfileEvents
     // extern const Event ReadBufferFromS3ReadBytes;
     // extern const Event ReadBufferFromS3ReadMicroseconds;
     // extern const Event S3ReadAheadReaderRead;
-    extern const Event QueryMemoryLimitExceeded;
-    extern const Event InsertQuery;
-    extern const Event Merge;
-    extern const Event SelectedRows;
-    extern const Event SelectedParts;
-    extern const Event SelectedRanges;
-    extern const Event SelectedMarks;
-    extern const Event SelectedBytes;
-    extern const Event SelectQuery;
-    extern const Event FailedSelectQuery;
-    extern const Event FailedInsertQuery;
-    extern const Event QueryTimeMicroseconds;
-    extern const Event SelectQueryTimeMicroseconds;
-    extern const Event InsertQueryTimeMicroseconds;
-    extern const Event RejectedInserts;
-    extern const Event DelayedInserts;
-    extern const Event DelayedInsertsMilliseconds;
-    extern const Event SlowRead;
-    extern const Event ReadBackoff;
-    extern const Event MergeTreeDataWriterRows;
-    extern const Event MergeTreeDataWriterUncompressedBytes;
-    extern const Event MergeTreeDataWriterCompressedBytes
-    extern const Event MergeTreeDataWriterBlocks;
-    extern const Event MergeTreeDataWriterBlocksAlreadySorted;
-    extern const Event DNSError;
-    extern const Event CatalogTime;
-    extern const Event PrunePartsTime;
-    extern const Event TotalPartitions;
-    extern const Event PrunedPartitions;
-    extern const Event MergesTimeMilliseconds;
-    extern const Event DiskCacheDeviceBytesRead;
-    extern const Event DiskCacheDeviceBytesWritten;
-    extern const Event DiskCacheDeviceWriteIOLatency;
-    extern const Event DiskCacheDeviceReadIOLatency;
-    extern const Event DiskCacheDeviceWriteIOErrors;
-    extern const Event DiskCacheDeviceReadIOErrors;
-    extern const Event CnchSendResourceRpcCallElapsedMilliseconds;
-    extern const Event CnchSendResourceElapsedMilliseconds;
-    extern const Event TsCacheCheckElapsedMilliseconds;
-    extern const Event TsCacheUpdateElapsedMilliseconds;
-    extern const Event CnchReadDataMicroSeconds;
-    extern const Event PartsToAttach;
-    extern const Event ConnectionPoolIsFullMicroseconds;
-    extern const Event HeavyLoadWorkerSize;
-    extern const Event AllWorkerSize;
 }
 
 namespace CurrentMetrics
@@ -608,38 +563,6 @@ namespace CurrentMetrics
     extern const Metric DiskCacheRoughSingleStatsBucketSize;
     // extern const Metric DiskCacheTasks;
     // extern const Metric DiskCacheTaskQueue;
-    extern const Metric PartsOutdated;
-    extern const Metric GlobalThread;
-    extern const Metric GlobalThreadActive;
-    extern const Metric LocalThread;
-    extern const Metric LocalThreadActive;
-    extern const Metric Revision;
-    extern const Metric VersionInteger;
-    extern const Metric Consumer;
-    extern const Metric Deduper;
-    extern const Metric UniqueTableBackgroundPoolTask;
-    extern const Metric PartsTemporary;
-    extern const Metric PartsDeleting;
-    extern const Metric PartsDeleteOnDestroy;
-    extern const Metric PartsCommitted;
-    extern const Metric PartsWide;
-    extern const Metric PartsCompact;
-    extern const Metric PartsInMemory;
-    extern const Metric PartsCNCH;
-    extern const Metric PartsPreCommitted;
-    extern const Metric MemoryTracking;
-    extern const Metric MemoryTrackingForMerges;
-    extern const Metric MemoryTrackingForConsuming;
-    extern const Metric BackgroundPoolTask;
-    extern const Metric BackgroundCNCHTopologySchedulePoolTask;
-    extern const Metric BackgroundFetchesPoolTask;
-    extern const Metric BackgroundMovePoolTask;
-    extern const Metric BackgroundSchedulePoolTask;
-    extern const Metric PartMutation;
-    extern const Metric BackgroundMessageBrokerSchedulePoolTask;
-    extern const Metric UniqueTableBackgroundPoolTask;
-    extern const Metric BackgroundBufferFlushSchedulePoolTask;
-    extern const Metric DiskSpaceReservedForMerge;
 }
 
 namespace HistogramMetrics
@@ -1180,9 +1103,9 @@ private:
         // ProfileEvents::CnchReadDataDeserialMicroSeconds,
         // ProfileEvents::CnchReadDataDeserialCpuMicroSeconds,
         ProfileEvents::DiskCacheAcquireStatsLock,
-        ProfileEvents::DiskCacheScheduleCacheTaskMicroSeconds,
+        ProfileEvents::DiskCacheScheduleCacheTaskMicroseconds,
         ProfileEvents::DiskCacheUpdateStatsMicroSeconds,
-        // ProfileEvents::DiskCacheTaskDropCount,
+        ProfileEvents::DiskCacheTaskDropCount,
         // ProfileEvents::PreloadSubmitTotalOps,
         // ProfileEvents::PreloadSendTotalOps,
         // ProfileEvents::PreloadExecTotalOps,
@@ -1240,51 +1163,6 @@ private:
         // ProfileEvents::ReadBufferFromS3ReadBytes,
         // ProfileEvents::ReadBufferFromS3ReadMicroseconds,
         // ProfileEvents::S3ReadAheadReaderRead,
-        ProfileEvents::QueryMemoryLimitExceeded;
-        ProfileEvents::InsertQuery;
-        ProfileEvents::Merge;
-        ProfileEvents::SelectedRows;
-        ProfileEvents::SelectedParts;
-        ProfileEvents::SelectedRanges;
-        ProfileEvents::SelectedMarks;
-        ProfileEvents::SelectedBytes;
-        ProfileEvents::SelectQuery;
-        ProfileEvents::FailedSelectQuery;
-        ProfileEvents::FailedInsertQuery;
-        ProfileEvents::QueryTimeMicroseconds;
-        ProfileEvents::SelectQueryTimeMicroseconds;
-        ProfileEvents::InsertQueryTimeMicroseconds;
-        ProfileEvents::RejectedInserts;
-        ProfileEvents::DelayedInserts;
-        ProfileEvents::DelayedInsertsMilliseconds;
-        ProfileEvents::SlowRead;
-        ProfileEvents::ReadBackoff;
-        ProfileEvents::MergeTreeDataWriterRows;
-        ProfileEvents::MergeTreeDataWriterUncompressedBytes;
-        ProfileEvents::MergeTreeDataWriterCompressedBytes
-        ProfileEvents::MergeTreeDataWriterBlocks;
-        ProfileEvents::MergeTreeDataWriterBlocksAlreadySorted;
-        ProfileEvents::DNSError;
-        ProfileEvents::CatalogTime;
-        ProfileEvents::PrunePartsTime;
-        ProfileEvents::TotalPartitions;
-        ProfileEvents::PrunedPartitions;
-        ProfileEvents::MergesTimeMilliseconds;
-        ProfileEvents::DiskCacheDeviceBytesRead;
-        ProfileEvents::DiskCacheDeviceBytesWritten;
-        ProfileEvents::DiskCacheDeviceWriteIOLatency;
-        ProfileEvents::DiskCacheDeviceReadIOLatency;
-        ProfileEvents::DiskCacheDeviceWriteIOErrors;
-        ProfileEvents::DiskCacheDeviceReadIOErrors;
-        ProfileEvents::CnchSendResourceRpcCallElapsedMilliseconds;
-        ProfileEvents::CnchSendResourceElapsedMilliseconds;
-        ProfileEvents::TsCacheCheckElapsedMilliseconds;
-        ProfileEvents::TsCacheUpdateElapsedMilliseconds;
-        ProfileEvents::CnchReadDataMicroSeconds;
-        ProfileEvents::PartsToAttach;
-        ProfileEvents::ConnectionPoolIsFullMicroseconds;
-        ProfileEvents::HeavyLoadWorkerSize;
-        ProfileEvents::AllWorkerSize;
     };
     const std::vector<CurrentMetrics::Metric> current_metrics_list =
     {
@@ -1307,38 +1185,6 @@ private:
         CurrentMetrics::DiskCacheRoughSingleStatsBucketSize,
         // CurrentMetrics::DiskCacheTasks,
         // CurrentMetrics::DiskCacheTaskQueue,
-        CurrentMetrics::PartsOutdated,
-        CurrentMetrics::GlobalThread;
-        CurrentMetrics::GlobalThreadActive;
-        CurrentMetrics::LocalThread;
-        CurrentMetrics::LocalThreadActive;
-        CurrentMetrics::Revision;
-        CurrentMetrics::VersionInteger;
-        CurrentMetrics::Consumer;
-        CurrentMetrics::Deduper;
-        CurrentMetrics::UniqueTableBackgroundPoolTask;
-        CurrentMetrics::PartsTemporary;
-        CurrentMetrics::PartsDeleting;
-        CurrentMetrics::PartsDeleteOnDestroy;
-        CurrentMetrics::PartsCommitted;
-        CurrentMetrics::PartsWide;
-        CurrentMetrics::PartsCompact;
-        CurrentMetrics::PartsInMemory;
-        CurrentMetrics::PartsCNCH;
-        CurrentMetrics::PartsPreCommitted;
-        CurrentMetrics::MemoryTracking;
-        CurrentMetrics::MemoryTrackingForMerges;
-        CurrentMetrics::MemoryTrackingForConsuming;
-        CurrentMetrics::BackgroundPoolTask;
-        CurrentMetrics::BackgroundCNCHTopologySchedulePoolTask;
-        CurrentMetrics::BackgroundFetchesPoolTask;
-        CurrentMetrics::BackgroundMovePoolTask;
-        CurrentMetrics::BackgroundSchedulePoolTask;
-        CurrentMetrics::PartMutation;
-        CurrentMetrics::BackgroundMessageBrokerSchedulePoolTask;
-        CurrentMetrics::UniqueTableBackgroundPoolTask;
-        CurrentMetrics::BackgroundBufferFlushSchedulePoolTask;
-        CurrentMetrics::DiskSpaceReservedForMerge;
     };
     const std::vector<String> async_metrics_list =
     {
@@ -1347,13 +1193,7 @@ private:
         "UncompressedCacheBytes",
         "UncompressedCacheCells",
         "CompiledExpressionCacheCount",
-        "MaxPartCountForPartition",
-        "NumberOfDatabases",
-        "NumberOfTables",
-        "TotalBytesOfMergeTreeTables",
-        "TotalRowsOfMergeTreeTables",
-        "TotalPartsOfMergeTreeTables",
-        "Uptime"
+        "MaxPartCountForPartition"
     };
     const std::vector<HistogramMetrics::Metric> histogram_metrics_list =
     {
