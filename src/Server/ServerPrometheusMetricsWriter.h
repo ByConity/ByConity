@@ -1261,7 +1261,7 @@ private:
         ProfileEvents::ReadBackoff,
         ProfileEvents::MergeTreeDataWriterRows,
         ProfileEvents::MergeTreeDataWriterUncompressedBytes,
-        ProfileEvents::MergeTreeDataWriterCompressedBytes
+        ProfileEvents::MergeTreeDataWriterCompressedBytes,
         ProfileEvents::MergeTreeDataWriterBlocks,
         ProfileEvents::MergeTreeDataWriterBlocksAlreadySorted,
         ProfileEvents::DNSError,
