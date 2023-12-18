@@ -1,6 +1,7 @@
 #include <memory>
 #include <hive_metastore_types.h>
 #include <IO/S3Common.h>
+#include <IO/S3/Credentials.h>
 #include <IO/S3/CustomCRTHttpClient.h>
 #include <Storages/Hive/Metastore/GlueMetastore.h>
 #include <Storages/Hive/Metastore/MetastoreConvertUtils.h>
@@ -267,7 +268,7 @@ GlueMetastoreClientPtr GlueMetastoreClientFactory::getOrCreate(const ExternalCat
 
 
     Aws::Auth::AWSCredentials aws_credential(glue_ak, glue_sk);
-    DB::S3::Auth::S3CredentialsProviderChain credential_chain(conf, aws_credential, use_instance_profile, false);
+    DB::S3::S3CredentialsProviderChain credential_chain(conf, aws_credential, DB::S3::CredentialsConfiguration{use_instance_profile, false});
     auto glue_credential = credential_chain.GetAWSCredentials();
 
     GlueClientAuxParams params{.catalog_id = catalog_id};

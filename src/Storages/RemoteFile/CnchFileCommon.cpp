@@ -52,8 +52,11 @@ void StorageS3Configuration::updateS3Client(const ContextPtr & ctx, const CnchFi
         credentials.GetAWSSecretKey(),
         auth_settings.server_side_encryption_customer_key_base64,
         std::move(headers),
-        auth_settings.use_environment_credentials.value_or(ctx->getConfigRef().getBool("s3.use_environment_credentials", false)),
-        auth_settings.use_insecure_imds_request.value_or(ctx->getConfigRef().getBool("s3.use_insecure_imds_request", false)));
+        S3::CredentialsConfiguration
+        {
+            auth_settings.use_environment_credentials.value_or(ctx->getConfigRef().getBool("s3.use_environment_credentials", false)),
+            auth_settings.use_insecure_imds_request.value_or(ctx->getConfigRef().getBool("s3.use_insecure_imds_request", false))
+        });
 
     LOG_DEBUG(
         &Poco::Logger::get("StorageS3Configuration"),
