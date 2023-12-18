@@ -267,8 +267,9 @@ namespace S3
         }
 
         Aws::Auth::AWSCredentials credentials(access_key_id, secret_access_key, session_token);
-        auto credentials_provider = std::make_shared<Auth::S3CredentialsProviderChain>(
-            client_configuration, std::move(credentials), credential_config);
+        auto credentials_provider = std::make_shared<S3CredentialsProviderChain>(
+            client_configuration, std::move(credentials),
+            credential_config);
 
         return std::make_shared<Aws::S3::S3Client>(
             credentials_provider,
