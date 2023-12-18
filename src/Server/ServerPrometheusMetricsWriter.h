@@ -560,7 +560,7 @@ namespace ProfileEvents
     extern const Event ReadBackoff;
     extern const Event MergeTreeDataWriterRows;
     extern const Event MergeTreeDataWriterUncompressedBytes;
-    extern const Event MergeTreeDataWriterCompressedBytes
+    extern const Event MergeTreeDataWriterCompressedBytes;
     extern const Event MergeTreeDataWriterBlocks;
     extern const Event MergeTreeDataWriterBlocksAlreadySorted;
     extern const Event DNSError;
