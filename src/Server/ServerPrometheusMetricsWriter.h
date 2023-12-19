@@ -97,7 +97,7 @@ namespace ProfileEvents
     extern const Event DiskCacheAcquireStatsLock;
     extern const Event DiskCacheScheduleCacheTaskMicroseconds;
     extern const Event DiskCacheUpdateStatsMicroSeconds;
-    // extern const Event DiskCacheTaskDropCount;
+    extern const Event DiskCacheTaskDropCount;
     // extern const Event PreloadSubmitTotalOps;
     // extern const Event PreloadSendTotalOps;
     // extern const Event PreloadExecTotalOps;
@@ -1182,7 +1182,7 @@ private:
         ProfileEvents::DiskCacheAcquireStatsLock,
         ProfileEvents::DiskCacheScheduleCacheTaskMicroseconds,
         ProfileEvents::DiskCacheUpdateStatsMicroSeconds,
-        // ProfileEvents::DiskCacheTaskDropCount,
+        ProfileEvents::DiskCacheTaskDropCount,
         // ProfileEvents::PreloadSubmitTotalOps,
         // ProfileEvents::PreloadSendTotalOps,
         // ProfileEvents::PreloadExecTotalOps,
