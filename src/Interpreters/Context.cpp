@@ -1893,6 +1893,17 @@ Settings Context::getSettings() const
 void Context::setSettings(const Settings & settings_)
 {
     auto lock = getLock();
+    if (isGlobalContext())
+    {
+        try
+        {
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Global context settings changed");
+        }
+        catch (Exception & e)
+        {
+            LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), getExceptionMessage(e, true));
+        }
+    }
     auto old_readonly = settings.readonly;
     auto old_allow_ddl = settings.allow_ddl;
     auto old_allow_introspection_functions = settings.allow_introspection_functions;
@@ -1908,6 +1919,17 @@ void Context::setSettings(const Settings & settings_)
 void Context::setSetting(const StringRef & name, const String & value)
 {
     auto lock = getLock();
+    if (isGlobalContext())
+    {
+        try
+        {
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Global context settings changed name: {}, value: {}", name, value);
+        }
+        catch (Exception & e)
+        {
+            LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), getExceptionMessage(e, true));
+        }
+    }
     if (name == "profile")
     {
         setProfile(value);
@@ -1923,6 +1945,18 @@ void Context::setSetting(const StringRef & name, const String & value)
 void Context::setSetting(const StringRef & name, const Field & value)
 {
     auto lock = getLock();
+    if (isGlobalContext())
+    {
+        try
+        {
+            throw Exception(ErrorCodes::INVALID_SETTING_VALUE, "Global context settings changed name: {}, value: {}", name, value.toString());
+        }
+        catch (Exception & e)
+        {
+            LOG_DEBUG(&Poco::Logger::get(__PRETTY_FUNCTION__), getExceptionMessage(e, true));
+        }
+    }
+
     if (name == "profile")
     {
         setProfile(value.safeGet<String>());

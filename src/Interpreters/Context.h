@@ -1006,7 +1006,6 @@ public:
     }
 
     const Settings & getSettingsRef() const { return settings; }
-    Settings & getSettingsRef() { return settings; }
 
     VWCustomizedSettingsPtr getVWCustomizedSettings() const;
     void setVWCustomizedSettings(VWCustomizedSettingsPtr vw_customized_settings_ptr_);

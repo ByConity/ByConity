@@ -122,7 +122,7 @@ BlockIO InterpreterExplainQuery::execute()
         getContext()->setProcessorProfileElementConsumer(consumer);
         getContext()->setIsExplainQuery(true);
         // Explain in bsp mode makes no sense.
-        getContext()->getSettingsRef().bsp_mode = false;
+        getContext()->setSetting("bsp_mode", false);
         try
         {
             res = explainAnalyze();
