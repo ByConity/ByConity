@@ -127,6 +127,7 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
     size_t total_segment_count_, MergeTreeMarksLoader& marks_loader_,
     UncompressedCache* uncompressed_cache_,
     const ReadBufferFromFileBase::ProfileCallback& profile_callback_,
+    const ProgressCallback & internal_progress_cb_,
     clockid_t clock_type_):
         ReadBuffer(nullptr, 0),
         storage_id(storage_id_), part_name(part_name_), stream_name(stream_name_),
@@ -134,7 +135,8 @@ MergedReadBufferWithSegmentCache::MergedReadBufferWithSegmentCache(
         source_data_offset(source_data_offset_), source_data_size(source_data_size_),
         cache_segment_size(cache_segment_size_), segment_cache(segment_cache_),
         settings(settings_), uncompressed_cache(uncompressed_cache_),
-        profile_callback(profile_callback_), clock_type(clock_type_),
+        profile_callback(profile_callback_), internal_progress_callback(internal_progress_cb_),
+        clock_type(clock_type_),
         total_segment_count(total_segment_count_), marks_loader(marks_loader_),
         current_segment_idx(0), current_compressed_offset(std::nullopt), part_host(part_host_),
         logger(&Poco::Logger::get("MergedReadBufferWithSegmentCache"))
@@ -175,6 +177,8 @@ bool MergedReadBufferWithSegmentCache::nextImpl()
 
             ProfileEvents::increment(ProfileEvents::CnchReadSizeFromDiskCache,
                 buf_size);
+            if (internal_progress_callback)
+                internal_progress_callback({0, 0, 0, 0, buf_size});
 
             return true;
         }
@@ -228,6 +232,8 @@ bool MergedReadBufferWithSegmentCache::nextImpl()
                 ProfileEvents::CnchReadSizeFromDiskCache
                 : ProfileEvents::CnchReadSizeFromRemote,
             buf_size);
+            if (cache_buffer.initialized() && internal_progress_callback)
+                internal_progress_callback({0, 0, 0, 0, buf_size});
 
         if (segment_cache != nullptr && !cache_buffer.initialized())
         {

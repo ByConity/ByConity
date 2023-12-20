@@ -112,7 +112,8 @@ IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartCNCH::getReader(
     const MergeTreeReaderSettings & reader_settings_,
     MergeTreeIndexExecutor * index_executor,
     const ValueSizeMap & avg_value_size_hints,
-    const ReadBufferFromFileBase::ProfileCallback & profile_callback) const
+    const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+    const ProgressCallback & internal_progress_cb) const
 {
     auto new_settings = reader_settings_;
     new_settings.convert_nested_to_subcolumns = true;
@@ -128,7 +129,8 @@ IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartCNCH::getReader(
         new_settings,
         index_executor,
         avg_value_size_hints,
-        profile_callback);
+        profile_callback,
+        internal_progress_cb);
 }
 
 IMergeTreeDataPart::MergeTreeWriterPtr MergeTreeDataPartCNCH::getWriter(
@@ -547,7 +549,8 @@ void MergeTreeDataPartCNCH::combineWithRowExists(DeleteBitmapPtr & bitmap) const
         },
         /* index_executor */ {},
         /*avg_value_size_hints*/ {},
-        /*profile_callback*/ {}
+        /*profile_callback*/ {},
+        /*internal_progress_callback*/ {}
     );
 
     size_t deleted_count = 0;

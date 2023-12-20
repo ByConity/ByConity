@@ -34,12 +34,14 @@ void ProgressValues::read(ReadBuffer & in, UInt64 server_revision)
     size_t new_read_rows = 0;
     size_t new_read_bytes = 0;
     size_t new_total_rows_to_read = 0;
+    size_t new_disk_cache_read_bytes = 0;
     size_t new_written_rows = 0;
     size_t new_written_bytes = 0;
 
     readVarUInt(new_read_rows, in);
     readVarUInt(new_read_bytes, in);
     readVarUInt(new_total_rows_to_read, in);
+    readVarUInt(new_disk_cache_read_bytes, in);
     if (server_revision >= DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO)
     {
         readVarUInt(new_written_rows, in);
@@ -49,6 +51,7 @@ void ProgressValues::read(ReadBuffer & in, UInt64 server_revision)
     this->read_rows = new_read_rows;
     this->read_bytes = new_read_bytes;
     this->total_rows_to_read = new_total_rows_to_read;
+    this->disk_cache_read_bytes = new_disk_cache_read_bytes;
     this->written_rows = new_written_rows;
     this->written_bytes = new_written_bytes;
 }
@@ -59,6 +62,7 @@ void ProgressValues::write(WriteBuffer & out, UInt64 client_revision) const
     writeVarUInt(this->read_rows, out);
     writeVarUInt(this->read_bytes, out);
     writeVarUInt(this->total_rows_to_read, out);
+    writeVarUInt(this->disk_cache_read_bytes, out);
     if (client_revision >= DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO)
     {
         writeVarUInt(this->written_rows, out);
@@ -81,6 +85,8 @@ void ProgressValues::writeJSON(WriteBuffer & out) const
     writeText(this->written_bytes, out);
     writeCString("\",\"total_rows_to_read\":\"", out);
     writeText(this->total_rows_to_read, out);
+    writeCString("\",\"disk_cache_read_bytes\":\"", out);
+    writeText(this->disk_cache_read_bytes, out);
     writeCString("\"}", out);
 }
 
@@ -92,6 +98,8 @@ bool Progress::incrementPiecewiseAtomically(const Progress & rhs)
 
     total_rows_to_read += rhs.total_rows_to_read;
     total_raw_bytes_to_read += rhs.total_raw_bytes_to_read;
+
+    disk_cache_read_bytes += rhs.disk_cache_read_bytes;
 
     written_rows += rhs.written_rows;
     written_bytes += rhs.written_bytes;
@@ -110,6 +118,8 @@ void Progress::reset()
     total_rows_to_read = 0;
     total_raw_bytes_to_read = 0;
 
+    disk_cache_read_bytes = 0;
+
     written_rows = 0;
     written_bytes = 0;
 
@@ -126,6 +136,8 @@ ProgressValues Progress::getValues() const
 
     res.total_rows_to_read = total_rows_to_read.load(std::memory_order_relaxed);
     res.total_raw_bytes_to_read = total_raw_bytes_to_read.load(std::memory_order_relaxed);
+
+    res.disk_cache_read_bytes = disk_cache_read_bytes.load(std::memory_order_relaxed);
 
     res.written_rows = written_rows.load(std::memory_order_relaxed);
     res.written_bytes = written_bytes.load(std::memory_order_relaxed);
@@ -144,6 +156,8 @@ ProgressValues Progress::fetchAndResetPiecewiseAtomically()
     res.total_rows_to_read = total_rows_to_read.fetch_and(0);
     res.total_raw_bytes_to_read = total_raw_bytes_to_read.fetch_and(0);
 
+    res.disk_cache_read_bytes = disk_cache_read_bytes.fetch_and(0);
+
     res.written_rows = written_rows.fetch_and(0);
     res.written_bytes = written_bytes.fetch_and(0);
 
@@ -158,6 +172,8 @@ Progress & Progress::operator=(Progress && other)
 
     total_rows_to_read = other.total_rows_to_read.load(std::memory_order_relaxed);
     total_raw_bytes_to_read = other.total_raw_bytes_to_read.load(std::memory_order_relaxed);
+
+    disk_cache_read_bytes = other.disk_cache_read_bytes.load(std::memory_order_relaxed);
 
     written_rows = other.written_rows.load(std::memory_order_relaxed);
     written_bytes = other.written_bytes.load(std::memory_order_relaxed);
@@ -175,6 +191,7 @@ void Progress::read(ReadBuffer & in, UInt64 server_revision)
     read_rows.store(values.read_rows, std::memory_order_relaxed);
     read_bytes.store(values.read_bytes, std::memory_order_relaxed);
     total_rows_to_read.store(values.total_rows_to_read, std::memory_order_relaxed);
+    disk_cache_read_bytes.store(values.disk_cache_read_bytes, std::memory_order_relaxed);
     written_rows.store(values.written_rows, std::memory_order_relaxed);
     written_bytes.store(values.written_bytes, std::memory_order_relaxed);
 }

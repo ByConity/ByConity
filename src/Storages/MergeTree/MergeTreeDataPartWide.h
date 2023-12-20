@@ -62,7 +62,8 @@ public:
         const MergeTreeReaderSettings & reader_settings_,
         MergeTreeIndexExecutor * index_executor,
         const ValueSizeMap & avg_value_size_hints,
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback) const override;
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+        [[maybe_unused]] const ProgressCallback & internal_progress_cb) const override;
 
     MergeTreeWriterPtr getWriter(
         const NamesAndTypesList & columns_list,
