@@ -41,7 +41,6 @@ void ProgressValues::read(ReadBuffer & in, UInt64 server_revision)
     readVarUInt(new_read_rows, in);
     readVarUInt(new_read_bytes, in);
     readVarUInt(new_total_rows_to_read, in);
-    readVarUInt(new_disk_cache_read_bytes, in);
     if (server_revision >= DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO)
     {
         readVarUInt(new_written_rows, in);
@@ -62,7 +61,6 @@ void ProgressValues::write(WriteBuffer & out, UInt64 client_revision) const
     writeVarUInt(this->read_rows, out);
     writeVarUInt(this->read_bytes, out);
     writeVarUInt(this->total_rows_to_read, out);
-    writeVarUInt(this->disk_cache_read_bytes, out);
     if (client_revision >= DBMS_MIN_REVISION_WITH_CLIENT_WRITE_INFO)
     {
         writeVarUInt(this->written_rows, out);
@@ -85,8 +83,6 @@ void ProgressValues::writeJSON(WriteBuffer & out) const
     writeText(this->written_bytes, out);
     writeCString("\",\"total_rows_to_read\":\"", out);
     writeText(this->total_rows_to_read, out);
-    writeCString("\",\"disk_cache_read_bytes\":\"", out);
-    writeText(this->disk_cache_read_bytes, out);
     writeCString("\"}", out);
 }
 
