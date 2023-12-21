@@ -113,7 +113,7 @@ void show_stat(DB::HiveMetastoreClientPtr & client, const std::string & hive_db_
     {
         column_names.emplace_back(c.name);
     }
-    auto stats = client->getTableStats(hive_db_name, hive_table_name, column_names, true);
+    auto stats = client->getTableStats(hive_db_name, hive_table_name, column_names);
     std::cout << stats.row_count << std::endl;
     for (const auto & obj : stats.table_stats.tableStats)
     {

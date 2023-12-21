@@ -131,7 +131,7 @@ std::vector<RulePtr> Rules::pushDownLimitRules()
 std::vector<RulePtr> Rules::distinctToAggregateRules()
 {
     return {
-        std::make_shared<DistinctToAggregate>(),
+        // std::make_shared<DistinctToAggregate>(),
         std::make_shared<SingleDistinctAggregationToGroupBy>(),
         std::make_shared<MultipleDistinctAggregationToMarkDistinct>()};
 }

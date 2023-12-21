@@ -280,7 +280,7 @@ std::optional<size_t> WorkerSizeFinder::visitTableScanNode(TableScanNode & node,
 
 std::optional<size_t> WorkerSizeFinder::visitCTERefNode(CTERefNode & node, Void & context)
 {
-    auto step = node.getStep();
+    const auto * step = dynamic_cast<const CTERefStep *>(node.getStep().get());
     return VisitorUtil::accept(cte_info.getCTEDef(step->getId()), *this, context);
 }
 }

@@ -15,6 +15,7 @@
 
 #include <Optimizer/Rewriter/ColumnPruning.h>
 
+#include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <DataTypes/DataTypeAggregateFunction.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/join_common.h>
@@ -42,7 +43,8 @@ namespace DB
 {
 void ColumnPruning::rewrite(QueryPlan & plan, ContextMutablePtr context) const
 {
-    ColumnPruningVisitor visitor{context, plan.getCTEInfo(), plan.getPlanNode()};
+    ColumnPruningVisitor visitor{
+        context, plan.getCTEInfo(), plan.getPlanNode(), distinct_to_aggregate && context->getSettingsRef().enable_distinct_to_aggregate};
     NameSet require;
     for (const auto & item : plan.getPlanNode()->getStep()->getOutputStream().header)
         require.insert(item.name);
@@ -740,6 +742,18 @@ PlanNodePtr ColumnPruningVisitor::visitDistinctNode(DistinctNode & node, NameSet
     NameSet child_require = require;
     const auto & columns = step->getColumns();
     child_require.insert(columns.begin(), columns.end());
+
+    // If there are non-distinct columns in the require, DistinctStep cannot be converted to group by.
+    NameSet distinct_requrie_set;
+    for (auto & name_type : step->getOutputStream().getNamesToTypes())
+    {
+        if (child_require.contains(name_type.first))
+            distinct_requrie_set.emplace(name_type.first);
+    }
+    bool can_convert_group_by = true;
+    if (distinct_requrie_set.size() > columns.size())
+        can_convert_group_by = false;
+
     auto child = VisitorUtil::accept(node.getChildren()[0], *this, child_require);
 
     auto distinct_step = std::make_shared<DistinctStep>(
@@ -747,6 +761,10 @@ PlanNodePtr ColumnPruningVisitor::visitDistinctNode(DistinctNode & node, NameSet
 
     PlanNodes children{child};
     auto distinct_node = DistinctNode::createPlanNode(context->nextNodeId(), std::move(distinct_step), children, node.getStatistics());
+
+    if (can_convert_group_by && distinct_to_aggregate)
+        return convertDistinctToGroupBy(distinct_node, context);
+
     return distinct_node;
 }
 
@@ -948,7 +966,8 @@ PlanNodePtr ColumnPruningVisitor::visitExplainAnalyzeNode(ExplainAnalyzeNode & n
 
 PlanNodePtr ColumnPruningVisitor::visitTopNFilteringNode(TopNFilteringNode & node, NameSet & require)
 {
-    auto step = node.getStep();
+    auto & step_ptr = node.getStep();
+    auto step = dynamic_cast<const TopNFilteringStep *>(step_ptr.get());
     for (const auto & item : step->getSortDescription())
     {
         require.insert(item.column_name);
@@ -973,7 +992,7 @@ PlanNodePtr ColumnPruningVisitor::visitFillingNode(FillingNode & node, NameSet &
 
 PlanNodePtr ColumnPruningVisitor::visitTableWriteNode(TableWriteNode & node, NameSet &)
 {
-    auto table_write = node.getStep();
+    auto table_write = dynamic_cast<const TableWriteStep *>(node.getStep().get());
     NameSet require;
     for (const auto & item : table_write->getInputStreams()[0].header)
         require.insert(item.name);
@@ -1050,4 +1069,58 @@ PlanNodePtr ColumnPruningVisitor::visitMergingAggregatedNode(MergingAggregatedNo
         = MergingAggregatedNode::createPlanNode(context->nextNodeId(), std::move(rewritten_merge_step), children, node.getStatistics());
     return rewritten_merge_node;
 }
+
+PlanNodePtr ColumnPruningVisitor::convertDistinctToGroupBy(PlanNodePtr node, ContextMutablePtr context)
+{
+    auto * distinct_node = dynamic_cast<DistinctNode *>(node.get());
+    if (!distinct_node)
+        return node;
+
+    const auto & step = *distinct_node->getStep();
+
+    if (step.getLimitHint() == 0)
+    {
+        NameSet name_set{step.getColumns().begin(), step.getColumns().end()};
+        NamesAndTypes arbitrary_names;
+
+        // check decimal type, which is not support for group by columns
+        // bool has_decimal_type = false;
+        // for (const auto & column : node->getStep()->getOutputStream().header)
+        // {
+        //     TypeIndex index = column.type->getTypeId();
+        //     if (index == TypeIndex::Decimal32 || index == TypeIndex::Decimal64 || index == TypeIndex::Decimal128)
+        //     {
+        //         has_decimal_type = true;
+        //         break;
+        //     }
+        //     if (!name_set.contains(column.name))
+        //         arbitrary_names.emplace_back(column.name, column.type);
+        // }
+        // if (has_decimal_type)
+        // {
+        //     return {};
+        // }
+
+        AggregateDescriptions descriptions;
+        for (auto & name_and_type : arbitrary_names)
+        {
+            // for rare case, distinct columns don't contain all columns outputs.
+            AggregateDescription aggregate_desc;
+            aggregate_desc.column_name = name_and_type.name;
+            aggregate_desc.argument_names = {name_and_type.name};
+            AggregateFunctionProperties properties;
+            Array parameters;
+            aggregate_desc.function = AggregateFunctionFactory::instance().get("any", {name_and_type.type}, parameters, properties);
+            descriptions.emplace_back(aggregate_desc);
+        }
+        auto group_agg_step = std::make_shared<AggregatingStep>(
+            node->getStep()->getOutputStream(), step.getColumns(), NameSet{}, descriptions, GroupingSetsParamsList{}, true);
+        auto group_agg_node
+            = PlanNodeBase::createPlanNode(context->nextNodeId(), std::move(group_agg_step), node->getChildren());
+        return group_agg_node;
+    }
+
+    return node;
+}
+
 }

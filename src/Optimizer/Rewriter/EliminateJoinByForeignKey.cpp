@@ -1,33 +1,34 @@
 #include <algorithm>
 #include <memory>
 #include <unordered_map>
-#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Optimizer/DataDependency/ForeignKeysTuple.h>
+#include <Optimizer/Rewriter/EliminateJoinByForeignKey.h>
+#include <Optimizer/Utils.h>
+#include <QueryPlan/PlanNode.h>
+#include <Storages/StorageDistributed.h>
+#include <common/logger_useful.h>
+#include "QueryPlan/AggregatingStep.h"
+#include "Storages/StorageCnchMergeTree.h"
+#include <Optimizer/PredicateConst.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <Core/NamesAndTypes.h>
-#include <DataTypes/getLeastSupertype.h>
-#include <Functions/FunctionFactory.h>
-#include <Interpreters/join_common.h>
 #include <Optimizer/DataDependency/DependencyUtils.h>
-#include <Optimizer/DataDependency/ForeignKeysTuple.h>
-#include <Optimizer/PredicateConst.h>
-#include <Optimizer/Rewriter/EliminateJoinByForeignKey.h>
-#include <Optimizer/SymbolsExtractor.h>
-#include <Optimizer/Utils.h>
-#include <Optimizer/makeCastFunction.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
-#include <QueryPlan/AggregatingStep.h>
 #include <QueryPlan/CTEInfo.h>
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/IQueryPlanStep.h>
-#include <QueryPlan/PlanNode.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/TableScanStep.h>
-#include <Storages/StorageDistributed.h>
+#include <Functions/FunctionFactory.h>
+#include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Optimizer/SymbolsExtractor.h>
+#include <Interpreters/join_common.h>
+#include <DataTypes/getLeastSupertype.h>
+#include <Optimizer/makeCastFunction.h>
 #include <Storages/StorageMemory.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -47,8 +48,11 @@ void EliminateJoinByFK::rewrite(QueryPlan & plan, ContextMutablePtr context) con
         if (metadatas.contains(table_name))
             continue;
         auto storage = static_cast<TableScanNode &>(*table_ptr).getStep()->getStorage();
-        auto distributed_meta = storage->getInMemoryMetadataPtr();
-        metadatas.emplace(table_name, distributed_meta);
+        if (dynamic_cast<const StorageCnchMergeTree *>(storage.get()) || dynamic_cast<const StorageMemory *>(storage.get()))
+        {
+            auto distributed_meta = storage->getInMemoryMetadataPtr();
+            metadatas.emplace(table_name, distributed_meta);
+        }
     }
 
     for (const auto & [cur_tbl_name, metadata] : metadatas)
@@ -485,13 +489,16 @@ FPKeysAndOrdinaryKeys EliminateJoinByFK::Rewriter::visitTableScanNode(TableScanN
     ForeignKeyOrPrimaryKeys fp_keys;
     OrdinaryKeys ordinary_keys;
     auto storage = node.getStep()->getStorage();
-    auto table_columns = info.table_columns.find(storage->getStorageID().getTableName());
-    if (table_columns != info.table_columns.end())
-        fp_keys = table_columns->second;
+    if (dynamic_cast<const MergeTreeMetaBase *>(storage.get()) || dynamic_cast<const StorageMemory *>(storage.get()))
+    {
+        auto table_columns = info.table_columns.find(storage->getStorageID().getTableName());
+        if (table_columns != info.table_columns.end())
+            fp_keys = table_columns->second;
 
-    auto table_ordinary_columns = info.table_ordinary_columns.find(storage->getStorageID().getTableName());
-    if (table_ordinary_columns != info.table_ordinary_columns.end())
-        ordinary_keys = table_ordinary_columns->second;
+        auto table_ordinary_columns = info.table_ordinary_columns.find(storage->getStorageID().getTableName());
+        if (table_ordinary_columns != info.table_ordinary_columns.end())
+            ordinary_keys = table_ordinary_columns->second;
+    }
     NameToNameMap translation;
     for (const auto & item : node.getStep()->getColumnAlias())
         translation.emplace(item.first, item.second);

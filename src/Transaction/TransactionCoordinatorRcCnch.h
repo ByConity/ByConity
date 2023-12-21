@@ -16,23 +16,21 @@
 #pragma once
 
 #include <optional>
-#include <Interpreters/Context_fwd.h>
-#include <Transaction/CnchExplicitTransaction.h>
-#include <Transaction/CnchProxyTransaction.h>
-#include <Transaction/CnchServerTransaction.h>
-#include <Transaction/ICnchTransaction.h>
 #include <Transaction/IntentLock.h>
 #include <Transaction/TimestampCacheManager.h>
+#include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCleaner.h>
 #include <Transaction/TransactionCommon.h>
 #include <Transaction/TxnTimestamp.h>
+#include <Transaction/CnchProxyTransaction.h>
+#include <Transaction/CnchServerTransaction.h>
+#include <Transaction/CnchExplicitTransaction.h>
 #include <Common/HostWithPorts.h>
+#include "Interpreters/Context_fwd.h"
 
 namespace DB
 {
 class Context;
-class CnchProxyTransaction;
-using ProxyTransactionPtr = std::shared_ptr<CnchProxyTransaction>;
 
 
 struct CreateTransactionOption

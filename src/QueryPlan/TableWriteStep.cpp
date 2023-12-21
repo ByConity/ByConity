@@ -1,4 +1,3 @@
-#include <memory>
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataStreams/CheckConstraintsBlockOutputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
@@ -10,9 +9,9 @@
 #include <Processors/Transforms/TableWriteTransform.h>
 #include <QueryPlan/ITransformingStep.h>
 #include <QueryPlan/TableWriteStep.h>
+#include <Storages/StorageCnchMergeTree.h>
 #include <Transaction/CnchWorkerTransaction.h>
 #include <Common/RpcClientPool.h>
-#include <MergeTreeCommon/CnchTopologyMaster.h>
 
 namespace DB
 {
@@ -182,11 +181,15 @@ std::shared_ptr<TableWriteStep> TableWriteStep::fromProto(const Protos::TableWri
 
 void TableWriteStep::allocate(const ContextPtr & context)
 {
-    auto storage_id = target->getStorage()->prepareTableWrite(context);
-    if (auto * input_target = dynamic_cast<InsertTarget *>(target.get()))
-        target = std::make_shared<InsertTarget>(input_target->getStorage(), storage_id, input_target->getColumns());
-    else
-        throw Exception("unknown TableWrite::Target", ErrorCodes::LOGICAL_ERROR);
+    if (auto * cnch = dynamic_cast<StorageCnchMergeTree *>(target->getStorage().get()))
+    {
+        auto local_table = cnch->prepareLocalTableForWrite(nullptr, context, false, false);
+
+        if (auto input_target = dynamic_cast<InsertTarget *>(target.get()))
+        {
+            input_target->setTable(local_table.first);
+        }
+    }
 }
 
 void TableWriteStep::Target::toProto(Protos::TableWriteStep::Target & proto) const
@@ -194,7 +197,7 @@ void TableWriteStep::Target::toProto(Protos::TableWriteStep::Target & proto) con
     switch (getTargetType())
     {
         case TargetType::INSERT: {
-            const auto *ptr = dynamic_cast<const TableWriteStep::InsertTarget *>(this);
+            auto ptr = dynamic_cast<const TableWriteStep::InsertTarget *>(this);
             ptr->toProtoImpl(*proto.mutable_insert_target());
             return;
         }
@@ -213,6 +216,11 @@ TableWriteStep::TargetPtr TableWriteStep::Target::fromProto(const Protos::TableW
         default:
             throw Exception(fmt::format("unknown TableWrite::Target {}", static_cast<int>(proto.target_case())), ErrorCodes::LOGICAL_ERROR);
     }
+}
+
+void TableWriteStep::InsertTarget::setTable(const String & table_)
+{
+    storage_id.table_name = table_;
 }
 
 void TableWriteStep::InsertTarget::toProtoImpl(Protos::TableWriteStep::InsertTarget & proto) const

@@ -30,6 +30,7 @@
 #include <QueryPlan/FilterStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
+#include <Storages/StorageDistributed.h>
 #include <Poco/StringTokenizer.h>
 
 namespace DB
@@ -77,13 +78,6 @@ Property PropertyDeriver::deriveProperty(QueryPlanStepPtr step, PropertySet & in
     return result;
 }
 
-static String getClusterByHint(const StoragePtr & storage) 
-{
-    if (auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(storage.get()))
-        return merge_tree->getSettings()->cluster_by_hint.toString();
-    return "";
-}
-
 Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, ContextMutablePtr & context)
 {
     if (storage->getDatabaseName() == "system")
@@ -98,29 +92,31 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, Cont
         sorting.emplace_back(SortColumn(col, SortOrder::ASC_NULLS_FIRST));
     }
 
-    auto metadata = storage->getInMemoryMetadataPtr();
-    Names cluster_by;
-    UInt64 buckets = 0;
-    if (auto cluster_by_hint = getClusterByHint(storage); !cluster_by_hint.empty())
+    if (auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(storage.get()))
     {
-        Poco::StringTokenizer tokenizer(cluster_by_hint, ",", 0x11);
-        for (const auto & cluster_by_column : tokenizer)
-            cluster_by.push_back(cluster_by_column);
-        buckets = 0;
-    }
-    else if (storage->isBucketTable())
-    {
-        bool clustered;
-        context->getCnchCatalog()->getTableClusterStatus(storage->getStorageUUID(), clustered);
-        if (clustered)
+        auto metadata = merge_tree->getInMemoryMetadataPtr();
+        Names clusterBy;
+        UInt64 buckets = 0;
+        if (auto cluster_by_hint = merge_tree->getSettings()->cluster_by_hint.toString(); !cluster_by_hint.empty())
         {
-            cluster_by = metadata->cluster_by_key.column_names;
-            buckets = metadata->getBucketNumberFromClusterByKey();
+            Poco::StringTokenizer tokenizer(cluster_by_hint, ",", 0x11);
+            for (const auto & cluster_by_column : tokenizer)
+                clusterBy.push_back(cluster_by_column);
+            buckets = 0;
         }
-    }
+        else if (storage->isBucketTable())
+        {
+            bool clustered;
+            context->getCnchCatalog()->getTableClusterStatus(merge_tree->getStorageUUID(), clustered);
+            if (clustered)
+            {
+                clusterBy = metadata->cluster_by_key.column_names;
+                buckets = metadata->getBucketNumberFromClusterByKey();
+            }
+        }
 
-    if (!cluster_by.empty())
-    {
+        if (!clusterBy.empty())
+        {
 #if 0
                 NameToNameMap translation;
                 auto id_to_table = merge_tree->parseUnderlyingDictionaryTables(merge_tree->settings.underlying_dictionary_tables);
@@ -130,10 +126,11 @@ Property PropertyDeriver::deriveStorageProperty(const StoragePtr & storage, Cont
                     sec_cols.emplace_back(item.first);
                 }
 #endif
-        return Property{
-            Partitioning{Partitioning::Handle::BUCKET_TABLE, cluster_by, true, buckets, true, Partitioning::Component::ANY},
-            Partitioning{},
-            sorting};
+            return Property{
+                Partitioning{Partitioning::Handle::BUCKET_TABLE, clusterBy, true, buckets, true, Partitioning::Component::ANY},
+                Partitioning{},
+                sorting};
+        }
     }
 
     return Property{Partitioning(Partitioning::Handle::UNKNOWN), Partitioning(Partitioning::Handle::UNKNOWN), sorting};

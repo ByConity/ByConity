@@ -27,6 +27,7 @@
 #include <Optimizer/SymbolsExtractor.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
+#include <Storages/StorageDistributed.h>
 #include <boost/math/special_functions/math_fwd.hpp>
 #include <common/logger_useful.h>
 

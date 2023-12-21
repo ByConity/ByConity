@@ -274,7 +274,7 @@ const String& StorageCloudMergeTree::getRelativeDataPath(StorageLocation locatio
         relative_auxility_storage_path;
 }
 
-ASTs StorageCloudMergeTree::convertBucketNumbersToAstLiterals(ASTPtr where_expression, ContextPtr local_context) const
+ASTs StorageCloudMergeTree::convertBucketNumbersToAstLiterals(const ASTPtr where_expression, ContextPtr local_context) const
 {
     ASTs result;
     ASTPtr where_expression_copy = where_expression->clone();
