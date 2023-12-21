@@ -7,6 +7,7 @@
 #include <QueryPlan/Void.h>
 #include <AggregateFunctions/AggregateFunctionCount.h>
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
+#include <Storages/StorageDistributed.h>
 #include <Parsers/IAST_fwd.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Optimizer/PredicateUtils.h>
@@ -30,7 +31,7 @@ void OptimizeTrivialCount::rewrite(QueryPlan & plan, ContextMutablePtr context) 
 PlanNodePtr TrivialCountVisitor::visitAggregatingNode(AggregatingNode & node, Void & v)
 {
     //check function, there is only one aggregation function in the AggregatingNode, and the size of output header columns is 1;
-    const auto & agg_step = *node.getStep();
+    const auto & agg_step = dynamic_cast<const AggregatingStep &>(*node.getStep().get());
     if (agg_step.getParams().aggregates.size() != 1 ||
             !typeid_cast<const AggregateFunctionCount *>(agg_step.getParams().aggregates[0].function.get()) ||
             agg_step.getOutputStream().header.columns() != 1)

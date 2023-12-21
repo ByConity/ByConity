@@ -948,7 +948,8 @@ PlanNodePtr ColumnPruningVisitor::visitExplainAnalyzeNode(ExplainAnalyzeNode & n
 
 PlanNodePtr ColumnPruningVisitor::visitTopNFilteringNode(TopNFilteringNode & node, NameSet & require)
 {
-    auto step = node.getStep();
+    auto & step_ptr = node.getStep();
+    auto step = dynamic_cast<const TopNFilteringStep *>(step_ptr.get());
     for (const auto & item : step->getSortDescription())
     {
         require.insert(item.column_name);
@@ -973,7 +974,7 @@ PlanNodePtr ColumnPruningVisitor::visitFillingNode(FillingNode & node, NameSet &
 
 PlanNodePtr ColumnPruningVisitor::visitTableWriteNode(TableWriteNode & node, NameSet &)
 {
-    auto table_write = node.getStep();
+    auto table_write = dynamic_cast<const TableWriteStep *>(node.getStep().get());
     NameSet require;
     for (const auto & item : table_write->getInputStreams()[0].header)
         require.insert(item.name);

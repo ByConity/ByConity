@@ -87,11 +87,6 @@ public:
 
     std::pair<String, const Cluster::ShardInfo *> prepareLocalTableForWrite(ASTInsertQuery * insert_query, ContextPtr local_context, bool enable_staging_area, bool send_query);
 
-    bool supportsOptimizer() const override { return true; }
-    bool supportsDistributedRead() const override { return true; }
-    StorageID prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context) override;
-    StorageID prepareTableWrite(ContextPtr local_context) override;
-
     BlockOutputStreamPtr write(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context) override;
 
     BlockInputStreamPtr writeInWorker(const ASTPtr & query, const StorageMetadataPtr & metadata_snapshot, ContextPtr local_context);
@@ -209,7 +204,7 @@ public:
     PrunedPartitions getPrunedPartitions(const SelectQueryInfo & query_info, const Names & column_names_to_return, ContextPtr local_context) const ;
 
     /// parse bucket number set from where clause, only works for single-key cluster by
-    virtual std::set<Int64> getRequiredBucketNumbers(ASTPtr where_expression, ContextPtr context) const override;
+    std::set<Int64> getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr context) const;
 
     // get all Visible Parts
     ServerDataPartsVector getAllParts(ContextPtr local_context) const;

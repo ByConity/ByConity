@@ -136,7 +136,7 @@ GlueMetastoreClient::getPartitionsByFilter(const String & db_name, const String 
 }
 
 // TODO(renming):: Merge all partitions.
-std::optional<TableStatistics> GlueMetastoreClient::getTableStats(
+HiveTableStats GlueMetastoreClient::getTableStats(
     [[maybe_unused]] const String & db_name,
     [[maybe_unused]] const String & table_name,
     [[maybe_unused]] const Strings & col_names,
@@ -161,11 +161,11 @@ std::optional<TableStatistics> GlueMetastoreClient::getTableStats(
             {
                 hive_stat.tableStats.emplace_back(MetastoreConvertUtils::convertTableStatistics(stat));
             }
-            return MetastoreConvertUtils::convertHiveStats({std::stol(table->parameters.at("numRows")), hive_stat});
+            return {std::stol(table->parameters.at("numRows")), hive_stat};
         }
         else
         {
-            return MetastoreConvertUtils::convertHiveStats({0, {}});
+            return {0, {}};
         }
     }
 
@@ -187,9 +187,9 @@ std::optional<TableStatistics> GlueMetastoreClient::getTableStats(
 
     auto partition_stats = getPartitionStats(db_name, table_name, col_names, partition_keys, partition_values);
 
-    auto stats = MetastoreConvertUtils::merge_partition_stats(*table, partitions, partition_stats);
+    auto [row_count, table_stats] = MetastoreConvertUtils::merge_partition_stats(*table, partitions, partition_stats);
 
-    return MetastoreConvertUtils::convertHiveStats(stats);
+    return {row_count, std::move(table_stats)};
 }
 
 // TODO(renming):: parallelize it

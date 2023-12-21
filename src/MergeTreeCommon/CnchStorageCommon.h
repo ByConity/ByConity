@@ -15,17 +15,15 @@
 
 #pragma once
 
-#include <DataStreams/NullBlockOutputStream.h>
-#include <DataStreams/copyData.h>
-#include <Interpreters/ProcessList.h>
 #include <Interpreters/WorkerGroupHandle.h>
-#include <MergeTreeCommon/CnchTopologyMaster.h>
-#include <Storages/BitEngine/BitEngineHelper.h>
-#include <Storages/DataPart_fwd.h>
-#include <Storages/Hive/HiveFile/IHiveFile_fwd.h>
 #include <Transaction/Actions/DDLAlterAction.h>
 #include <Transaction/ICnchTransaction.h>
 #include <Transaction/TransactionCoordinatorRcCnch.h>
+#include <DataStreams/NullBlockOutputStream.h>
+#include <DataStreams/copyData.h>
+#include <MergeTreeCommon/CnchTopologyMaster.h>
+#include <Interpreters/ProcessList.h>
+#include "Storages/Hive/HiveFile/IHiveFile_fwd.h"
 
 namespace DB
 {
