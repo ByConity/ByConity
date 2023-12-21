@@ -4,9 +4,9 @@ Gather Exchange Est. ? rows
    │     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
-         │     Partition by: {expr#uid, expr#event_date, expr#server_time_hour}
+         │     Partition by: {expr#event_date, expr#uid, expr#server_time_hour}
          └─ Aggregating Est. ? rows
-            │     Group by: {expr#uid, expr#event_date, expr#server_time_hour}
+            │     Group by: {expr#event_date, expr#uid, expr#server_time_hour}
             │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
             └─ Projection Est. ? rows
                │     Expressions: expr#event_date:=event_date, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
@@ -22,9 +22,9 @@ Gather Exchange Est. ? rows
    │     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
-         │     Partition by: {expr#uid, expr#event_date, expr#server_time_hour}
+         │     Partition by: {expr#event_date, expr#uid, expr#server_time_hour}
          └─ Aggregating Est. ? rows
-            │     Group by: {expr#uid, expr#event_date, expr#server_time_hour}
+            │     Group by: {expr#event_date, expr#uid, expr#server_time_hour}
             │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
             └─ Projection Est. ? rows
                │     Expressions: expr#event_date:=event_date, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
@@ -71,9 +71,9 @@ Gather Exchange Est. ? rows
    │     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
-         │     Partition by: {expr#uid, expr#event_date, expr#server_time_hour}
+         │     Partition by: {expr#event_date, expr#uid, expr#server_time_hour}
          └─ Aggregating Est. ? rows
-            │     Group by: {expr#uid, expr#event_date, expr#server_time_hour}
+            │     Group by: {expr#event_date, expr#uid, expr#server_time_hour}
             │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
             └─ Projection Est. ? rows
                │     Expressions: expr#event_date:=event_date, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
@@ -89,9 +89,9 @@ Gather Exchange Est. ? rows
    │     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
-         │     Partition by: {expr#uid, expr#event_date, expr#server_time_hour}
+         │     Partition by: {expr#event_date, expr#uid, expr#server_time_hour}
          └─ Aggregating Est. ? rows
-            │     Group by: {expr#uid, expr#event_date, expr#server_time_hour}
+            │     Group by: {expr#event_date, expr#uid, expr#server_time_hour}
             │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
             └─ Projection Est. ? rows
                │     Expressions: expr#event_date:=event_date, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
@@ -107,9 +107,9 @@ Gather Exchange Est. ? rows
    │     Expressions: event_date:=`expr#event_date`, server_time_hour:=`expr#server_time_hour`, sum_click:=`expr#sumMerge(sum_click)`, uid:=`expr#uid`
    └─ MergingAggregated Est. ? rows
       └─ Repartition Exchange Est. ? rows
-         │     Partition by: {expr#uid, expr#event_date, expr#server_time_hour}
+         │     Partition by: {expr#event_date, expr#uid, expr#server_time_hour}
          └─ Aggregating Est. ? rows
-            │     Group by: {expr#uid, expr#event_date, expr#server_time_hour}
+            │     Group by: {expr#event_date, expr#uid, expr#server_time_hour}
             │     Aggregates: expr#sumMerge(sum_click):=AggNull(sumMerge)(expr#sum_click)
             └─ Projection Est. ? rows
                │     Expressions: expr#event_date:=event_date, expr#server_time_hour:=server_time_hour, expr#sum_click:=sum_click, expr#uid:=uid
