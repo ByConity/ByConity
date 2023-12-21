@@ -91,7 +91,7 @@ std::string_view ExtractMapColumn::apply(std::string_view src)
                 break;
             }
         }
-        if (!success)
+        if (success)
             break;
         ++column_end;
     }
