@@ -2362,6 +2362,16 @@ ProgressCallback Context::getProgressCallback() const
     return progress_callback;
 }
 
+void Context::setInternalProgressCallback(ProgressCallback callback)
+{
+    internal_progress_callback = callback;
+}
+
+ProgressCallback Context::getInternalProgressCallback() const
+{
+    return internal_progress_callback;
+}
+
 void Context::setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list_entry_)
 {
     process_list_entry = process_list_entry_;

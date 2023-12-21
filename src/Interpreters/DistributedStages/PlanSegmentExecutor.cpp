@@ -229,6 +229,7 @@ void PlanSegmentExecutor::collectSegmentQueryRuntimeMetric(const QueryStatus * q
 
     query_log_element->read_bytes = query_status_info.read_bytes;
     query_log_element->read_rows = query_status_info.read_rows;
+    query_log_element->disk_cache_read_bytes = query_status_info.disk_cache_read_bytes;
     query_log_element->written_bytes = query_status_info.written_bytes;
     query_log_element->written_rows = query_status_info.written_bytes;
     query_log_element->memory_usage = query_status_info.peak_memory_usage > 0 ? query_status_info.peak_memory_usage : 0;
@@ -293,7 +294,12 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
 
     QueryStatus * query_status = &process_plan_segment_entry->get();
     context->setProcessListElement(query_status);
+    context->setInternalProgressCallback([query_status_ptr = context->getProcessListElement()](const Progress & value) {
+        if (query_status_ptr)
+            query_status_ptr->updateProgressIn(value);
+    });
     pipeline->setProcessListElement(query_status);
+    pipeline->setInternalProgressCallback(context->getInternalProgressCallback());
 
     auto pipeline_executor = pipeline->execute();
 
