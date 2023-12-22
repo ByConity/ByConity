@@ -56,7 +56,7 @@ public:
     estimate(PlanNodeStatisticsPtr & child_stats, const FilterStep & step, ContextMutablePtr & context, bool is_on_base_table = true);
 
     static double estimateFilterSelectivity(
-        PlanNodeStatisticsPtr & child_stats, ConstASTPtr & predicate, const NamesAndTypes & column_types, ContextMutablePtr & context);
+        PlanNodeStatisticsPtr & child_stats, const ConstASTPtr & predicate, const NamesAndTypes & column_types, ContextMutablePtr & context);
 
 private:
     /**
@@ -65,10 +65,10 @@ private:
      * If it's a compound condition, it is decomposed into multiple single conditions linked with
      * AND, OR, NOT.
      */
-    static FilterEstimateResult estimateFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
-    static FilterEstimateResult estimateAndFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
-    static FilterEstimateResult estimateOrFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
-    static FilterEstimateResult estimateNotFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
+    static FilterEstimateResult estimateFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
+    static FilterEstimateResult estimateAndFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
+    static FilterEstimateResult estimateOrFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
+    static FilterEstimateResult estimateNotFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
 
     /**
      * Combine symbol statistics.
@@ -91,20 +91,20 @@ private:
      * Currently we only support binary predicates where one side is a column,
      * and the other is a literal.
      */
-    static FilterEstimateResult estimateSingleFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
+    static FilterEstimateResult estimateSingleFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
     static FilterEstimateResult
-    estimateEqualityFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
+    estimateEqualityFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
     static FilterEstimateResult
-    estimateNotEqualityFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
-    static FilterEstimateResult estimateRangeFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
-    static FilterEstimateResult estimateInFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
-    static FilterEstimateResult estimateNotInFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
-    static FilterEstimateResult estimateNullFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
+    estimateNotEqualityFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
+    static FilterEstimateResult estimateRangeFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
+    static FilterEstimateResult estimateInFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
+    static FilterEstimateResult estimateNotInFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
+    static FilterEstimateResult estimateNullFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
     static FilterEstimateResult
-    estimateNotNullFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
-    static FilterEstimateResult estimateLikeFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
+    estimateNotNullFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
+    static FilterEstimateResult estimateLikeFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
     static FilterEstimateResult
-    estimateNotLikeFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context);
+    estimateNotLikeFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context);
 };
 
 }
