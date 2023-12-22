@@ -656,10 +656,17 @@ void StorageMaterializedView::refresh(const ASTPtr & partition,  ContextMutableP
         refreshImpl(partition, local_context);
 }
 
-bool StorageMaterializedView::checkPartitionExpr(ASTPtr partition_expr, ContextMutablePtr local_context)
+bool StorageMaterializedView::checkPartitionExpr(StoragePtr target_table, ASTPtr partition_expr, ContextMutablePtr local_context)
 {
-    auto * cnch_target_table = dynamic_cast<StorageCnchMergeTree*>(getTargetTable().get());
-    const auto partition_key = MergeTreePartition::adjustPartitionKey(cnch_target_table->getInMemoryMetadataPtr(), local_context);
+    auto * cnch_target_table = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
+    if (!cnch_target_table)
+        return false;
+
+    StorageMetadataPtr meta_ptr = cnch_target_table->getInMemoryMetadataPtr();
+    if (!meta_ptr.get())
+        return false;
+
+    const auto partition_key = MergeTreePartition::adjustPartitionKey(meta_ptr, local_context);
 
     IdentifierNameSet id_set;
     partition_expr->collectIdentifierNames(id_set);
@@ -685,7 +692,8 @@ bool StorageMaterializedView::checkPartitionExpr(ASTPtr partition_expr, ContextM
 //  refresh mv where toDate(ts) > '2023-10-01' and toDate(ts) < '2024-10-01'
 void StorageMaterializedView::refreshWhere(ASTPtr partition_expr, ContextMutablePtr local_context, bool /*async*/)
 {
-    auto * cnch_target_table = dynamic_cast<StorageCnchMergeTree*>(getTargetTable().get());
+    auto target_table = getTargetTable();
+    auto * cnch_target_table = dynamic_cast<StorageCnchMergeTree*>(target_table.get());
     if (!cnch_target_table)
         throw Exception("Materialized view target table is not CnchMergeTree", ErrorCodes::LOGICAL_ERROR);
     
@@ -700,7 +708,7 @@ void StorageMaterializedView::refreshWhere(ASTPtr partition_expr, ContextMutable
         throw Exception("Materialized view select table is not CnchMergeTree", ErrorCodes::LOGICAL_ERROR);
 
     LOG_DEBUG(&Poco::Logger::get("refreshWhere"), "partition_expr: {}", serializeAST(*partition_expr));
-    if (!checkPartitionExpr(partition_expr, local_context))
+    if (!checkPartitionExpr(target_table, partition_expr, local_context))
         throw Exception("Refresh Materialized view without partition key", ErrorCodes::LOGICAL_ERROR);
 
     auto select_query = std::make_shared<ASTSelectQuery>();

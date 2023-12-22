@@ -126,7 +126,7 @@ public:
     void refreshWhere(ASTPtr partition_expr, ContextMutablePtr local_context, bool async);
 
 private:
-    bool checkPartitionExpr(ASTPtr partition_expr, ContextMutablePtr local_context);
+    bool checkPartitionExpr(StoragePtr target_table, ASTPtr partition_expr, ContextMutablePtr local_context);
     void refreshImpl(const ASTPtr & partition, ContextPtr local_context);
     void refreshCnchImpl(const ASTPtr & partition, ContextMutablePtr local_context);
 
@@ -134,6 +134,7 @@ private:
     StorageID target_table_id = StorageID::createEmpty();
     bool has_inner_table = false;
     void checkStatementCanBeForwarded() const;
+
 
 protected:
     StorageMaterializedView(
