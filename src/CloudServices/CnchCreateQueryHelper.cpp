@@ -15,6 +15,7 @@
 
 #include <CloudServices/CnchCreateQueryHelper.h>
 
+#include <Interpreters/ApplyWithSubqueryVisitor.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Parsers/ASTCreateQuery.h>
@@ -38,6 +39,10 @@ std::shared_ptr<ASTCreateQuery> getASTCreateQueryFromString(const String & query
     auto create_ast = std::dynamic_pointer_cast<ASTCreateQuery>(parseQuery(parser_create, query, settings.max_query_size, settings.max_parser_depth));
     create_ast->attach = true;
     create_ast->create = false;
+
+    if (create_ast->select && create_ast->isView())
+        ApplyWithSubqueryVisitor().visit(*create_ast->select);
+
     return create_ast;
 }
 

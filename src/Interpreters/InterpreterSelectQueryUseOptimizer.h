@@ -67,6 +67,8 @@ public:
 
     Block getSampleBlock();
 
+    static void setUnsupportedSettings(ContextMutablePtr & context);
+
 private:
     ASTPtr query_ptr;
     PlanNodePtr sub_plan_ptr;

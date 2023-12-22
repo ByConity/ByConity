@@ -92,7 +92,10 @@ void MultiPathReceiver::registerToSendersAsync(UInt32 timeout_ms)
             auto * receiver_ptr = receiver.get();
             auto * brpc_receiver = dynamic_cast<BrpcRemoteBroadcastReceiver *>(receiver_ptr);
             if (brpc_receiver)
+            {
                 async_results.emplace_back(brpc_receiver->registerToSendersAsync(timeout_ms));
+                LOG_TRACE(logger, "{} register to remote sender async", brpc_receiver->getName());
+            }
         }
         LOG_DEBUG(logger, "{} register to remote sender async", name);
     }

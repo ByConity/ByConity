@@ -303,6 +303,13 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     sendRegisterRPC(stub, cntl, res.request.get(), res.response.get(), brpc::DoNothing());
     if (enable_receiver_metrics)
         receiver_metrics.register_time_ms << s.elapsedMilliseconds();
+    LOG_TRACE(
+        log,
+        "name:{} addr:{} registerToSendersAsync costs {} ms, send rpc costs {} us",
+        name,
+        registry_address,
+        s.elapsedMilliseconds(),
+        cntl.latency_us());
     return res;
 }
 
@@ -323,7 +330,7 @@ void BrpcRemoteBroadcastReceiver::sendRegisterRPC(
         auto settings = context->getSettingsRef().dumpToMap();
         disk_request.mutable_settings()->insert(settings.begin(), settings.end());
         disk_request.set_initial_query_start_time(context->getClientInfo().initial_query_start_time_microseconds.value);
-        stub.registerBRPCSenderFromDisk(&cntl, &disk_request, response, nullptr);
+        stub.registerBRPCSenderFromDisk(&cntl, &disk_request, response, done);
     }
     else
         throw Exception(fmt::format("unrecognized mode ", mode), ErrorCodes::LOGICAL_ERROR);
