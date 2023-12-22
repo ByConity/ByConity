@@ -27,7 +27,7 @@ show bindings;
 -- test drop session sql binding use uuid
 create session binding select * from test.bindings using select b+1 from test.bindings order by a;
 show bindings;
-drop session binding uuid 'c33c6081-cbcd-a444-580b-186393bd058e';
+drop session binding uuid 'c76faa6e-0418-100d-dcb7-845ac8e3daca';
 show bindings;
 
 -- test session regular expression binding
