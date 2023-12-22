@@ -1,6 +1,7 @@
 #include "Storages/RemoteFile/CnchFileCommon.h"
 
 #include <Interpreters/Context.h>
+#include "IO/S3Common.h"
 
 namespace DB
 {

@@ -241,7 +241,6 @@ namespace S3
         CredentialsConfiguration credential_config,
         const String & session_token)
     {
-
         if (!server_side_encryption_customer_key_base64.empty())
         {
             /// See S3Client::GeneratePresignedUrlWithSSEC().
