@@ -134,6 +134,7 @@ std::pair<PlanSegmentTreePtr, std::set<StorageID>> InterpreterSelectQueryUseOpti
 {
     Stopwatch stage_watch, total_watch;
     total_watch.start();
+    setUnsupportedSettings(context);
     QueryPlanPtr query_plan = buildQueryPlan();
 
     query_plan->setResetStepId(false);
@@ -474,6 +475,17 @@ void InterpreterSelectQueryUseOptimizer::fillContextQueryAccessInfo(ContextPtr c
                 required_columns);
         }
     }
+}
+
+void InterpreterSelectQueryUseOptimizer::setUnsupportedSettings(ContextMutablePtr & context)
+{
+    if (!context->getSettingsRef().enable_optimizer)
+        return;
+
+    SettingsChanges setting_changes;
+    setting_changes.emplace_back("distributed_aggregation_memory_efficient", false);
+
+    context->applySettingsChanges(setting_changes);
 }
 
 QueryPlan PlanNodeToNodeVisitor::convert(QueryPlan & query_plan)
