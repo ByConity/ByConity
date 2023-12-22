@@ -184,9 +184,20 @@ public:
     String getName() const {return name;}
     StringPairs getKvOptions() const {return kv_options;}
     Strings getOptions() const {return options;}
+    void serialize(WriteBuffer & buf) const;
+    static SqlHint deserialize(ReadBuffer & buf);
 };
 
-using SqlHints = std::vector<SqlHint>;
+class SqlHints : public std::vector<SqlHint>
+{
+public:
+    using std::vector<SqlHint>::vector;
+
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
+};
+
+// using SqlHints = std::vector<SqlHint>;
 
 /** Element of the syntax tree (hereinafter - directed acyclic graph with elements of semantics)
   */

@@ -2,6 +2,7 @@
 #include <string>
 #include <Storages/DistributedDataClient.h>
 #include <Storages/DistributedDataService.h>
+#include <Storages/tests/xml_config.h>
 #include <gtest/gtest.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
@@ -63,7 +64,7 @@ TEST_F(DistributedFileTest, base)
     try
     {
         sleep(3);
-        auto client = std::make_shared<DistributedDataClient>("127.0.0.1:22345", "/tmp/distributed_file.txt");
+        auto client = std::make_shared<DistributedDataClient>("127.0.0.1:22345", TEST_DISTRIBUTED_FILE_TXT);
         client->createReadStream();
 
         String data;

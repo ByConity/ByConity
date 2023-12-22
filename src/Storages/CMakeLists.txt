@@ -1,6 +1,7 @@
 add_subdirectory(MergeTree)
 add_subdirectory(System)
 add_subdirectory(Hive)
+add_subdirectory(tests)
 
 if(ENABLE_EXAMPLES)
     add_subdirectory(examples)

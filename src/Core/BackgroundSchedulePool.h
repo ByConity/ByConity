@@ -184,8 +184,6 @@ public:
     BackgroundSchedulePoolTaskHolder & operator=(const BackgroundSchedulePoolTaskHolder & other) noexcept = delete;
     BackgroundSchedulePoolTaskHolder & operator=(BackgroundSchedulePoolTaskHolder && other) noexcept = default;
 
-    BackgroundSchedulePoolTaskInfoPtr hasTask() { return task_info; }
-
     ~BackgroundSchedulePoolTaskHolder()
     {
         if (task_info)

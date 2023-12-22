@@ -52,7 +52,8 @@ BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
     MultiPathQueuePtr queue_,
     BrpcExchangeReceiverRegistryService::RegisterMode mode_,
     std::shared_ptr<QueryExchangeLog> query_exchange_log_)
-    : name(name_)
+    : IBroadcastReceiver(context_->getSettingsRef().log_query_exchange)
+    , name(name_)
     , trans_key(std::move(trans_key_))
     , registry_address(std::move(registry_address_))
     , context(std::move(context_))
@@ -265,6 +266,14 @@ String BrpcRemoteBroadcastReceiver::getName() const
     return name + ":" + trans_key->toString();
 }
 
+static void OnRegisterDone(Protos::RegistryResponse * /*response*/, brpc::Controller * cntl, std::function<void(void)> func)
+{
+    if (!cntl->Failed())
+    {
+        func();
+    }
+}
+
 AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 timeout_ms)
 {
     Stopwatch s;
@@ -300,13 +309,16 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     res.request->set_exchange_id(exchange_key->exchange_id);
     res.request->set_parallel_id(exchange_key->parallel_index);
     res.request->set_wait_timeout_ms(timeout_ms);
-    sendRegisterRPC(stub, cntl, res.request.get(), res.response.get(), brpc::DoNothing());
-    if (enable_receiver_metrics)
-        receiver_metrics.register_time_ms << s.elapsedMilliseconds();
+    std::function<void(void)> func = [&, s_cp = s]() {
+        if (enable_receiver_metrics)
+            receiver_metrics.register_time_ms << s_cp.elapsedMilliseconds();
+    };
+    sendRegisterRPC(
+        stub, cntl, res.request.get(), res.response.get(), brpc::NewCallback(OnRegisterDone, res.response.get(), res.cntl.get(), func));
     LOG_TRACE(
         log,
         "name:{} addr:{} registerToSendersAsync costs {} ms, send rpc costs {} us",
-        name,
+        getName(),
         registry_address,
         s.elapsedMilliseconds(),
         cntl.latency_us());

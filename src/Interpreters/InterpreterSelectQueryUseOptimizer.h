@@ -62,7 +62,6 @@ public:
         elem.query_kind = "Select";
         elem.segment_profiles = segment_profiles;
     }
-
     static void fillContextQueryAccessInfo(ContextPtr context, AnalysisPtr & analysis);
 
     Block getSampleBlock();
