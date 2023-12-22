@@ -56,6 +56,12 @@ NamesAndTypesList QueryExchangeLogElement::getNamesAndTypes()
         {"recv_bytes", std::make_shared<DataTypeUInt64>()},
         {"dser_time_ms", std::make_shared<DataTypeInt64>()},
 
+        {"disk_partition_writer_create_file_ms", std::make_shared<DataTypeUInt64>()},
+        {"disk_partition_writer_pop_ms", std::make_shared<DataTypeUInt64>()},
+        {"disk_partition_writer_write_ms", std::make_shared<DataTypeUInt64>()},
+        {"disk_partition_writer_write_num", std::make_shared<DataTypeUInt64>()},
+        {"disk_partition_writer_commit_ms", std::make_shared<DataTypeUInt64>()},
+
 #ifdef USE_COMMUNITY_MAP
         {"ProfileEvents", std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeUInt64>())},
 #else
@@ -102,6 +108,12 @@ void QueryExchangeLogElement::appendToBlock(MutableColumns & columns) const
     columns[i++]->insert(register_time_ms);
     columns[i++]->insert(recv_bytes);
     columns[i++]->insert(dser_time_ms);
+
+    columns[i++]->insert(disk_partition_writer_create_file_ms);
+    columns[i++]->insert(disk_partition_writer_pop_ms);
+    columns[i++]->insert(disk_partition_writer_write_ms);
+    columns[i++]->insert(disk_partition_writer_write_num);
+    columns[i++]->insert(disk_partition_writer_commit_ms);
 
 
     if (profile_counters)

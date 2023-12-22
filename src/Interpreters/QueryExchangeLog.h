@@ -48,6 +48,12 @@ struct QueryExchangeLogElement
     UInt64 send_retry{};
     UInt64 send_retry_ms{};
     UInt64 overcrowded_retry{};
+    // disk partition writer metric
+    UInt64 disk_partition_writer_create_file_ms{};
+    UInt64 disk_partition_writer_pop_ms{};
+    UInt64 disk_partition_writer_write_ms{};
+    UInt64 disk_partition_writer_write_num{};
+    UInt64 disk_partition_writer_commit_ms{};
 
     // recv metric
     UInt64 recv_time_ms{};
