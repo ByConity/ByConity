@@ -1,7 +1,9 @@
 #include <memory>
 #include <fcntl.h>
+#include <IO/ReadBufferFromRpcStreamFile.h>
 #include <Storages/DistributedDataClient.h>
 #include <Storages/DistributedDataService.h>
+#include <Storages/tests/xml_config.h>
 #include <gtest/gtest.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
@@ -14,7 +16,6 @@
 #include <Common/PODArray.h>
 #include <Common/tests/gtest_utils.h>
 #include "Core/Defines.h"
-#include <IO/ReadBufferFromRpcStreamFile.h>
 
 using namespace DB;
 
@@ -64,7 +65,7 @@ TEST_F(ReadBufferFromRpcStreamFileTest, base)
     try
     {
         sleep(3);
-        auto client = std::make_shared<DistributedDataClient>("127.0.0.1:12347", "/tmp/distributed_file.txt");
+        auto client = std::make_shared<DistributedDataClient>("127.0.0.1:12347", TEST_DISTRIBUTED_FILE_TXT);
         auto stream_file = std::make_shared<ReadBufferFromRpcStreamFile>(client, DBMS_DEFAULT_BUFFER_SIZE);
 
         PODArray<char> buffer;

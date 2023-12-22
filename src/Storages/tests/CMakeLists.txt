@@ -1,0 +1,1 @@
+configure_file(xml_config.h.in xml_config.h)
