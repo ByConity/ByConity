@@ -153,10 +153,7 @@ void CnchServerServiceImpl::commitParts(
                     tpl,
                     binlog);
 
-                TxnTimestamp commit_time
-                    = cnch_writer.commitPreparedCnchParts(DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts)});
-
-                rsp->set_commit_timestamp(commit_time);
+                cnch_writer.commitPreparedCnchParts(DumpedData{std::move(parts), std::move(delete_bitmaps), std::move(staged_parts)});
             }
             catch (...)
             {

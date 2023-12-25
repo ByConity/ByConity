@@ -324,8 +324,6 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
 
     TxnTimestamp txn_id = context->getCurrentTransactionID();
 
-    TxnTimestamp commit_time;
-
     try
     {
         // Check if current transaction can directly be executed on current server
@@ -334,7 +332,7 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
             if (settings.debug_cnch_force_commit_parts_rpc)
             {
                 auto server_client = context->getCnchServerClient("0.0.0.0", context->getRPCPort());
-                commit_time = server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl, binlog);
+                server_client->commitParts(txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, false, consumer_group, tpl, binlog);
             }
             else
             {
@@ -360,34 +358,20 @@ void CnchDataWriter::commitDumpedParts(const DumpedData & dumped_data)
                 throw Exception("Server with transaction " + txn_id.toString() + " is unknown", ErrorCodes::LOGICAL_ERROR);
             }
 
-            commit_time = server_client->precommitParts(
+            server_client->precommitParts(
                 context, txn_id, type, storage, dumped_parts, delete_bitmaps, dumped_staged_parts, task_id, is_server, consumer_group, tpl, binlog);
         }
     }
     catch (const Exception & e)
     {
-        /// TODO: Update committing of parts to follow 2-phase transaction flow
-        /// Current implementation results in garbage parts on HDFS if commitParts RPC times out
-        /// and committing of parts to Catalog is unsuccessful on server side
-        if (e.code() == ErrorCodes::BRPC_TIMEOUT && (type == ManipulationType::Merge))
-            LOG_WARNING(storage.getLogger(), "Commit merged task '" + task_id + "' to server timeout");
-        else
-            throw;
-    }
-
-    if (type == ManipulationType::Merge)
-    {
-        for (const auto & part : dumped_parts)
-        {
-            MergeMutateAction::updatePartData(part, commit_time);
-            part->relative_path = part->info.getPartNameWithHintMutation();
-        }
+        tryLogCurrentException(storage.getLogger(), __PRETTY_FUNCTION__);
+        throw e;
     }
 
     if (auto part_log = context->getPartLog(storage.getDatabaseName()))
     {
         // for (auto & dumped_part : dumped_parts)
-        // part_log->add(PartLog::createElement(PartLogElement::COMMIT_PART, dumped_part, watch.elapsed()));
+            // part_log->add(PartLog::createElement(PartLogElement::COMMIT_PART, dumped_part, watch.elapsed()));
     }
 
     LOG_DEBUG(
@@ -499,7 +483,7 @@ void CnchDataWriter::finalize()
     handler.throwIfException();
 }
 
-TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, const std::unique_ptr<S3AttachPartsInfo> & s3_parts_info)
+void CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_data, const std::unique_ptr<S3AttachPartsInfo> & s3_parts_info)
 {
     Stopwatch watch;
     namespace AutoStats = Statistics::AutoStats;
@@ -508,11 +492,9 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
     if (context->getServerType() != ServerType::cnch_server)
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Must be called in Server mode: {}", context->getServerType());
 
-    const auto & txn_coordinator = context->getCnchTransactionCoordinator();
     auto * log = storage.getLogger();
     auto txn = context->getCurrentTransaction();
     auto txn_id = txn->getTransactionID();
-    TxnTimestamp commit_time;
     /// set main table uuid in server side
     txn->setMainTableUUID(storage.getStorageUUID());
 
@@ -592,8 +574,8 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             for (const auto & bitmap : dumped_data.bitmaps)
                 action->as<DropRangeAction &>().appendDeleteBitmap(bitmap);
 
-            txn->appendAction(std::move(action));
-            commit_time = txn_coordinator.commitV2(txn);
+            txn->appendAction(action);
+            action->executeV2();
 
             LOG_TRACE(
                 log,
@@ -620,12 +602,12 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
                         action->as<MergeMutateAction &>().appendPart(part);
 
                     action->as<MergeMutateAction &>().setDeleteBitmaps(dumped_data.bitmaps);
-                    txn->appendAction(std::move(action));
-                    commit_time = txn_coordinator.commitV2(txn);
+                    txn->appendAction(action);
+                    action->executeV2();
 
                     LOG_TRACE(
                         log,
-                        "Committed {} parts in transaction {}, elapsed {} ms",
+                        "Write {} parts in transaction {}, elapsed {} ms",
                         dumped_data.parts.size(),
                         txn_id.toUInt64(),
                         watch.elapsedMilliseconds());
@@ -637,7 +619,7 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
             if (s3_parts_info == nullptr || s3_parts_info->former_parts.empty())
             {
                 LOG_INFO(storage.getLogger(), "Nothing to commit, skip");
-                return commit_time;
+                return;
             }
 
             auto action = txn->createAction<S3AttachMetaAction>(storage_ptr, *s3_parts_info);
@@ -656,8 +638,6 @@ TxnTimestamp CnchDataWriter::commitPreparedCnchParts(const DumpedData & dumped_d
     {
         server_txn->incrementModifiedCount(modified_counter);
     }
-
-    return commit_time;
 }
 
 void CnchDataWriter::publishStagedParts(const MergeTreeDataPartsCNCHVector & staged_parts, const LocalDeleteBitmaps & bitmaps_to_dump)

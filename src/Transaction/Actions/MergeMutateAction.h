@@ -57,6 +57,7 @@ private:
     std::vector<String> added_parts;
 
     DeleteBitmapMetaPtrVector delete_bitmaps;
+    bool executed{false};
 };
 
 }
