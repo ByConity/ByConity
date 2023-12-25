@@ -121,8 +121,6 @@ BlockIO InterpreterExplainQuery::execute()
         ProfileLogHub<ProcessorProfileLogElement>::getInstance().initLogChannel(getContext()->getCurrentQueryId(), consumer);
         getContext()->setProcessorProfileElementConsumer(consumer);
         getContext()->setIsExplainQuery(true);
-        // Explain in bsp mode makes no sense.
-        getContext()->getSettingsRef().bsp_mode = false;
         try
         {
             res = explainAnalyze();
@@ -136,6 +134,8 @@ BlockIO InterpreterExplainQuery::execute()
 
         return res;
     }
+    // Explain in bsp mode makes no sense.
+    getContext()->getSettingsRef().bsp_mode = false;
 
     res.in = executeImpl();
     return res;
