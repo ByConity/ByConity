@@ -241,7 +241,6 @@ namespace S3
         CredentialsConfiguration credential_config,
         const String & session_token)
     {
-
         if (!server_side_encryption_customer_key_base64.empty())
         {
             /// See S3Client::GeneratePresignedUrlWithSSEC().
@@ -490,7 +489,7 @@ namespace S3
         credential_config = S3::CredentialsConfiguration{
             cfg.getBool(cfg_prefix + ".use_environment_credentials", cfg.getBool("s3.use_environment_credentials", true)),
             cfg.getBool(cfg_prefix + ".use_insecure_imds_request", cfg.getBool("s3.use_insecure_imds_request", false)),
-            cfg.getUInt64(cfg_prefix + ".expiration_window_seconds", cfg.getUInt64("s3.expiration_window_seconds", 120)),
+            cfg.getUInt64(cfg_prefix + ".expiration_window_seconds", cfg.getUInt64("s3.expiration_window_seconds", S3::DEFAULT_EXPIRATION_WINDOW_SECONDS)),
             cfg.getBool(cfg_prefix + ".no_sign_request", cfg.getBool("s3.no_sign_request", false))
         };
 
@@ -866,7 +865,7 @@ namespace S3
                 std::stringstream ss;
                 for (size_t i = 0; i < errs.size(); i++)
                 {
-                    auto & err = errs[i];
+                    const auto & err = errs[i];
                     ss << "{" << err.GetKey() << ": " << err.GetMessage() << "}";
                 }
                 return ss.str();
@@ -1068,6 +1067,14 @@ namespace S3
         if (config.has(config_elem + ".use_insecure_imds_request"))
             use_insecure_imds_request = config.getBool(config_elem + ".use_insecure_imds_request");
 
+        std::optional<uint64_t> expiration_window_seconds;
+        if (config.has(config_elem + ".expiration_window_seconds"))
+            expiration_window_seconds = config.getUInt64(config_elem + ".expiration_window_seconds");
+
+        std::optional<bool> no_sign_request;
+        if (config.has(config_elem + ".no_sign_request"))
+            no_sign_request = config.getBool(config_elem + ".no_sign_request");
+
         HTTPHeaderEntries headers;
         Poco::Util::AbstractConfiguration::Keys subconfig_keys;
         config.keys(config_elem, subconfig_keys);
@@ -1090,7 +1097,9 @@ namespace S3
                 std::move(server_side_encryption_customer_key_base64),
                 std::move(headers),
                 use_environment_credentials,
-                use_insecure_imds_request
+                use_insecure_imds_request,
+                expiration_window_seconds,
+                no_sign_request
             };
     }
 

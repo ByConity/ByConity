@@ -1,0 +1,17 @@
+Projection Est. 1001 rows, cost 8.374394e+03
+│     Expressions: [A, B, C]
+└─ Gather Exchange Est. 1001 rows, cost 8.300320e+03
+   └─ Filter Est. 1001 rows, cost 8.140000e+03
+      │     Condition: (C = \'x\') AND (B = 0)
+      └─ TableScan test.mydata Est. 10000 rows, cost 7.400000e+03
+               Where: (C = \'x\') AND (B = 0)
+               Outputs: [A, B, C]
+Projection Est. 1001 rows, cost 8.374394e+03
+│     Expressions: [A, B, C]
+└─ Gather Exchange Est. 1001 rows, cost 8.300320e+03
+   └─ Filter Est. 1001 rows, cost 8.140000e+03
+      │     Condition: (C = \'x\') AND (B = 0)
+      └─ TableScan test.mydata Est. 10000 rows, cost 7.400000e+03
+               Where: (C = \'x\') AND (B = 0)
+               Prewhere: C = \'x\'
+               Outputs: [A, B, C]

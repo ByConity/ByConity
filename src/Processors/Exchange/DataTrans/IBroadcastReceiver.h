@@ -30,6 +30,12 @@ using RecvDataPacket = std::variant<Chunk, BroadcastStatus>;
 class IBroadcastReceiver
 {
 public:
+    IBroadcastReceiver() : enable_receiver_metrics(false)
+    {
+    }
+    explicit IBroadcastReceiver(bool enable_receiver_metrics_) : enable_receiver_metrics(enable_receiver_metrics_)
+    {
+    }
     struct ReceiverMetrics
     {
         bvar::Adder<size_t> recv_time_ms;

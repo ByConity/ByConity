@@ -433,7 +433,7 @@ void CnchServerClient::redirectDetachAttachedS3Parts(
     RPCHelpers::checkResponse(response);
 }
 
-TxnTimestamp CnchServerClient::commitParts(
+void CnchServerClient::commitParts(
     const TxnTimestamp & txn_id,
     ManipulationType type,
     MergeTreeMetaBase & storage,
@@ -528,11 +528,11 @@ TxnTimestamp CnchServerClient::commitParts(
     stub->commitParts(&cntl, &request, &response, nullptr);
     assertController(cntl);
     RPCHelpers::checkResponse(response);
-
-    return response.commit_timestamp();
 }
 
-TxnTimestamp CnchServerClient::precommitParts(
+/* This method commits from worker side, it split the commit parts in multiple batches to avoid rpc timeout for too many parts.
+   Note, it only applys to ManipulationType which supports 2pc, now we already separate txn commit from part commit */
+void CnchServerClient::precommitParts(
     ContextPtr context,
     const TxnTimestamp & txn_id,
     ManipulationType type,
@@ -546,13 +546,6 @@ TxnTimestamp CnchServerClient::precommitParts(
     const cppkafka::TopicPartitionList & tpl,
     const MySQLBinLogInfo & binlog)
 {
-    // TODO: this method only apply to ManipulationType which supports 2pc
-    if (type != ManipulationType::Insert)
-    {
-        // fallback to 1pc
-        return commitParts(txn_id, type, storage, parts, delete_bitmaps, staged_parts, task_id, from_server, consumer_group, tpl);
-    }
-
     const UInt64 batch_size = context->getSettingsRef().catalog_max_commit_size;
 
     // Precommit parts in batches {batch_begin, batch_end}
@@ -596,9 +589,6 @@ TxnTimestamp CnchServerClient::precommitParts(
             tpl,
             binlog);
     }
-
-    // no commit_time for precommit
-    return {};
 }
 
 google::protobuf::RepeatedPtrField<DB::Protos::DataModelTableInfo>

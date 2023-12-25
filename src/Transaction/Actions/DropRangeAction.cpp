@@ -59,6 +59,11 @@ void DropRangeAction::executeV1(TxnTimestamp commit_time)
 
 void DropRangeAction::executeV2()
 {
+    if (executed)
+        return;
+
+    executed = true;
+    
     auto * cnch_table = dynamic_cast<StorageCnchMergeTree *>(table.get());
     if (!cnch_table)
         throw Exception("Expected StorageCnchMergeTree, but got: " + table->getName(), ErrorCodes::LOGICAL_ERROR);

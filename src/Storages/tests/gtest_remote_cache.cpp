@@ -5,11 +5,13 @@
 #include <unistd.h>
 #include <Disks/registerDisks.h>
 #include <IO/LimitReadBuffer.h>
+#include <Storages/DiskCache/DiskCacheFactory.h>
 #include <Storages/DiskCache/DiskCacheLRU.h>
 #include <Storages/DiskCache/PartFileDiskCacheSegment.h>
 #include <Storages/DistributedDataClient.h>
 #include <Storages/DistributedDataService.h>
 #include <Storages/RemoteDiskCacheService.h>
+#include <Storages/tests/xml_config.h>
 #include <gtest/gtest.h>
 #include <Poco/AutoPtr.h>
 #include <Poco/ConsoleChannel.h>
@@ -26,7 +28,6 @@
 #include "IO/ReadBufferFromFile.h"
 #include "IO/ReadBufferFromFileBase.h"
 #include "Storages/MergeTree/MergeTreeSuffix.h"
-#include <Storages/DiskCache/DiskCacheFactory.h>
 
 using namespace DB;
 
@@ -52,11 +53,11 @@ public:
             fs::create_directory("/tmp/.test/disk_cache/");
             fs::create_directory("/tmp/.test/disk_cache_v1/");
             if (!fs::exists("/tmp/.test/distributed_file.txt"))
-                fs::copy_file("/tmp/distributed_file.txt", "/tmp/.test/distributed_file.txt");
+                fs::copy_file(TEST_DISTRIBUTED_FILE_TXT, "/tmp/.test/distributed_file.txt");
             if (!fs::exists("./gtest_tmp/distributed_file.txt"))
-                fs::copy_file("/tmp/distributed_file.txt", "./gtest_tmp/distributed_file.txt");
+                fs::copy_file(TEST_DISTRIBUTED_FILE_TXT, "./gtest_tmp/distributed_file.txt");
             ctx = getContext().context;
-            Poco::AutoPtr<Poco::Util::XMLConfiguration> config = new Poco::Util::XMLConfiguration("/tmp/disk_cache_test_new_config.xml");
+            Poco::AutoPtr<Poco::Util::XMLConfiguration> config = new Poco::Util::XMLConfiguration(TEST_DISK_CACHE_NEW_CONFIG_XML);
             ctx->setConfig(config);
 
             try
@@ -113,7 +114,7 @@ TEST_F(RemoteCacheTest, read)
         sleep(5);
         auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getDataCache();
 
-        std::shared_ptr<ReadBufferFromFileBase> file = std::make_shared<ReadBufferFromFile>("/tmp/distributed_file.txt");
+        std::shared_ptr<ReadBufferFromFileBase> file = std::make_shared<ReadBufferFromFile>(TEST_DISTRIBUTED_FILE_TXT);
         file->seek(0);
         LimitReadBuffer segment_value(*file, 26, false);
         auto key = PartFileDiskCacheSegment::getSegmentKey({"test", "test"}, "distributed_file", "", 0, DATA_FILE_EXTENSION);

@@ -25,10 +25,10 @@
 #include <Compression/CompressionFactory.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <Interpreters/QueryExchangeLog.h>
-#include <Processors/Exchange/DataTrans/DataTransException.h>
-#include <Processors/Exchange/DataTrans/NativeChunkOutputStream.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastSender.h>
 #include <Processors/Exchange/DataTrans/Brpc/WriteBufferFromBrpcBuf.h>
+#include <Processors/Exchange/DataTrans/DataTransException.h>
+#include <Processors/Exchange/DataTrans/NativeChunkOutputStream.h>
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <brpc/protocol.h>
 #include <brpc/stream.h>
@@ -38,6 +38,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/time.h>
 #include <common/logger_useful.h>
+#include "Processors/Exchange/DataTrans/IBroadcastSender.h"
 
 namespace DB
 {
@@ -57,7 +58,7 @@ namespace ErrorCodes
  */
 BrpcRemoteBroadcastSender::BrpcRemoteBroadcastSender(
     ExchangeDataKeyPtr trans_key_, brpc::StreamId stream_id, ContextPtr context_, Block header_)
-    : context(std::move(context_)), header(std::move(header_))
+    : IBroadcastSender(context_->getSettingsRef().log_query_exchange), context(std::move(context_)), header(std::move(header_))
 {
     trans_keys.emplace_back(std::move(trans_key_));
     sender_stream_ids.push_back(stream_id);
@@ -88,6 +89,7 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
             element.send_rows = sender_metrics.send_rows.get_value();
             element.send_bytes = sender_metrics.send_bytes.get_value();
             element.send_uncompressed_bytes = sender_metrics.send_uncompressed_bytes.get_value();
+            element.num_send_times = sender_metrics.num_send_times.get_value();
             element.ser_time_ms = sender_metrics.ser_time_ms.get_value();
             element.send_retry = sender_metrics.send_retry.get_value();
             element.send_retry_ms = sender_metrics.send_retry_ms.get_value();

@@ -24,6 +24,9 @@
 #include <QueryPlan/LimitStep.h>
 #include <QueryPlan/SymbolMapper.h>
 #include <QueryPlan/TableScanStep.h>
+#include "Parsers/ASTSelectQuery.h"
+#include <Optimizer/CardinalityEstimate/FilterEstimator.h>
+#include <Optimizer/CardinalityEstimate/TableScanEstimator.h>
 
 namespace DB
 {
@@ -60,9 +63,19 @@ TransformResult PushStorageFilter::transformImpl(PlanNodePtr node, const Capture
     const auto * filter_step = dynamic_cast<const FilterStep *>(node->getStep().get());
     auto copy_table_step = table_scan->getStep()->copy(rule_context.context);
 
+    // try get statistics of base table
+    PlanNodeStatisticsPtr stat;
+    if (rule_context.context->getSettingsRef().enable_active_prewhere)
+    {
+        if (table_scan->getStatistics().has_value())
+            stat = table_scan->getStatistics().value();
+        else
+            stat = TableScanEstimator::estimate(rule_context.context, static_cast<const TableScanStep &>(*table_scan->getStep()));
+    }
+
     // TODO: check repeat calls by checking query_info has been set
     auto remaining_filter
-        = pushStorageFilter(dynamic_cast<TableScanStep &>(*copy_table_step), filter_step->getFilter()->clone(), rule_context.context);
+        = pushStorageFilter(dynamic_cast<TableScanStep &>(*copy_table_step), filter_step->getFilter()->clone(), stat, rule_context.context);
     table_scan->setStep(copy_table_step);
 
     if (PredicateUtils::isTruePredicate(remaining_filter))
@@ -77,7 +90,7 @@ TransformResult PushStorageFilter::transformImpl(PlanNodePtr node, const Capture
         rule_context.context->nextNodeId(), std::move(new_filter_step), PlanNodes{table_scan}, node->getStatistics());
 }
 
-ASTPtr PushStorageFilter::pushStorageFilter(TableScanStep & table_step, ASTPtr query_filter, ContextPtr context)
+ASTPtr PushStorageFilter::pushStorageFilter(TableScanStep & table_step, ASTPtr query_filter, PlanNodeStatisticsPtr storage_statistics, ContextMutablePtr context)
 {
     std::unordered_map<String, String> column_to_alias;
     for (const auto & item : table_step.getColumnAlias())
@@ -117,7 +130,7 @@ ASTPtr PushStorageFilter::pushStorageFilter(TableScanStep & table_step, ASTPtr q
     if (!PredicateUtils::isTruePredicate(push_filter))
     {
         auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(table_step.getStorage().get());
-        push_filter = pushFilterIntoStorage(push_filter, merge_tree, table_step.getQueryInfo(), context);
+        push_filter = pushFilterIntoStorage(push_filter, merge_tree, table_step.getQueryInfo(), storage_statistics, table_step.getOutputStream().getNamesAndTypes(), context);
     }
 
     // construnct the remaing filter
@@ -237,6 +250,8 @@ TransformResult PushFilterIntoTableScan::transformImpl(PlanNodePtr node, const C
 
     // coverity[var_deref_model]
     copy_table_step->formatOutputStream(rule_context.context);
+
+
     return PlanNodeBase::createPlanNode(rule_context.context->nextNodeId(), std::move(copy_step), {}, node->getStatistics());
 }
 

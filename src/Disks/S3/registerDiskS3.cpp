@@ -172,7 +172,7 @@ getClient(const Poco::Util::AbstractConfiguration & config, const String & confi
         {
             config.getBool(config_prefix + ".use_environment_credentials", config.getBool("s3.use_environment_credentials", true)),
             config.getBool(config_prefix + ".use_insecure_imds_request", config.getBool("s3.use_insecure_imds_request", false)),
-            config.getUInt64(config_prefix + ".expiration_window_seconds", config.getUInt64("s3.expiration_window_seconds", 120)),
+            config.getUInt64(config_prefix + ".expiration_window_seconds", config.getUInt64("s3.expiration_window_seconds", S3::DEFAULT_EXPIRATION_WINDOW_SECONDS)),
             config.getBool(config_prefix + ".no_sign_request", config.getBool("s3.no_sign_request", false))
         });
 }
