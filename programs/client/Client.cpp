@@ -2451,6 +2451,17 @@ private:
 
     static void showClientVersion()
     {
+        std::cout << R"(
+            ______       _       _   _                      
+            | ___ \     | |     | | | |                     
+            | |_/ /_   _| |_ ___| |_| | ___  _   _ ___  ___ 
+            | ___ \ | | | __/ _ \  _  |/ _ \| | | / __|/ _ \
+            | |_/ / |_| | ||  __/ | | | (_) | |_| \__ \  __/
+            \____/ \__, |\__\___\_| |_/\___/ \__,_|___/\___|
+                    __/ |                                   
+                    |___/                                                                                                                                                                                                                                        
+            )" << std::endl;
+
         std::cout << DBMS_NAME << " client version " << VERSION_STRING << VERSION_OFFICIAL << "." << std::endl;
     }
 
