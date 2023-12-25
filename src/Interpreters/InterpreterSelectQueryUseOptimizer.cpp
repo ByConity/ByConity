@@ -56,14 +56,14 @@ Block InterpreterSelectQueryUseOptimizer::getSampleBlock()
 {
     if (!block)
     {
-        auto query_plan = buildQueryPlan();
+        auto query_plan = buildQueryPlan(true);
         block = query_plan->getPlanNodeRoot()->getCurrentDataStream().header;
     }
 
     return block;
 }
 
-QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
+QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan(bool skip_optimize)
 {
     // When interpret sub query, reuse context info, e.g. PlanNodeIdAllocator, SymbolAllocator.
     if (interpret_sub_query)
@@ -112,10 +112,13 @@ QueryPlanPtr InterpreterSelectQueryUseOptimizer::buildQueryPlan()
             context->logOptimizerProfile(
                 log, "Optimizer stage run time: ", "Planning", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
 
-            stage_watch.restart();
-            PlanOptimizer::optimize(*query_plan, context);
-            context->logOptimizerProfile(
-                log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            if (!skip_optimize)
+            {
+                stage_watch.restart();
+                context->logOptimizerProfile(
+                    log, "Optimizer stage run time: ", "Optimizer", std::to_string(stage_watch.elapsedMillisecondsAsDouble()) + "ms");
+            }
+
             if (enable_plan_cache && query_hash && query_plan)
             {
                if (PlanCacheManager::addPlanToCache(query_hash, query_plan, analysis, context))
