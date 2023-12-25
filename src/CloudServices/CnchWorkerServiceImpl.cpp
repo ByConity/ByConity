@@ -906,15 +906,15 @@ void CnchWorkerServiceImpl::submitKafkaConsumeTask(
         command->task_id = request->task_id();
         command->rpc_port = static_cast<UInt16>(request->rpc_port());
 
+        command->cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
+        if (command->cnch_storage_id.empty())
+            throw Exception("cnch_storage_id is required while starting consumer", ErrorCodes::BAD_ARGUMENTS);
+
         command->local_database_name = request->database();
         command->local_table_name = request->table();
 
         if (command->type == KafkaTaskCommand::START_CONSUME)
         {
-            command->cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
-            if (command->cnch_storage_id.empty())
-                throw Exception("cnch_storage_id is required while starting consumer", ErrorCodes::BAD_ARGUMENTS);
-
             command->assigned_consumer = request->assigned_consumer();
 
             if (request->create_table_command_size() < 2)
