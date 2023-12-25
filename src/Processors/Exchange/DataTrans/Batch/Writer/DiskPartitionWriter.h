@@ -71,6 +71,7 @@ private:
     bthread::ConditionVariable done_cv;
     bool done = false;
     bool low_cardinality_allow_in_native_format;
+    bool enable_disk_writer_metrics;
 };
 
 using DiskPartitionWriterPtr = std::shared_ptr<DiskPartitionWriter>;
