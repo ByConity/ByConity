@@ -18,6 +18,7 @@
 #include <CloudServices/CnchDataWriter.h>
 #include <Interpreters/Context.h>
 #include <Storages/StorageCloudMergeTree.h>
+#include <Transaction/ICnchTransaction.h>
 #include <WorkerTasks/MergeTreeDataMutator.h>
 
 namespace DB
@@ -49,6 +50,7 @@ void CloudMergeTreeMutateTask::executeImpl()
 
     CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Mutate, params.task_id);
     auto res = cnch_writer.dumpAndCommitCnchParts(data_parts);
+    getContext()->getCurrentTransaction()->commitV2();
     cnch_writer.preload(res.parts);
 }
 

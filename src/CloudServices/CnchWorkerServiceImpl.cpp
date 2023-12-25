@@ -172,7 +172,8 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         rpc_context->setCurrentQueryId(request->task_id());
         rpc_context->getClientInfo().rpc_port = request->rpc_port();
-        rpc_context->setCurrentTransaction(std::make_shared<CnchWorkerTransaction>(rpc_context, txn_id));
+        auto server_client = rpc_context->getCnchServerClient(rpc_context->getClientInfo().current_address.host().toString(), request->rpc_port());
+        rpc_context->setCurrentTransaction(std::make_shared<CnchWorkerTransaction>(rpc_context, txn_id, server_client));
 
         const auto & settings = getContext()->getSettingsRef();
         UInt64 max_running_task = settings.max_threads * getContext()->getRootConfig().max_ratio_of_cnch_tasks_to_threads;

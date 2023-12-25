@@ -19,6 +19,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/MergeTree/MergeTreeDataPartCNCH.h>
 #include <Storages/StorageCloudMergeTree.h>
+#include <Transaction/Actions/MergeMutateAction.h>
+#include <Transaction/ICnchTransaction.h>
 #include <WorkerTasks/MergeTreeDataMerger.h>
 
 namespace DB
@@ -97,6 +99,12 @@ void CloudMergeTreeMergeTask::executeImpl()
 
     CnchDataWriter cnch_writer(storage, getContext(), ManipulationType::Merge, params.task_id);
     DumpedData data = cnch_writer.dumpAndCommitCnchParts(temp_parts);
+    auto commit_time = getContext()->getCurrentTransaction()->commitV2();
+    for (const auto & part : data.parts)
+    {
+        MergeMutateAction::updatePartData(part, commit_time);
+        part->relative_path = part->info.getPartNameWithHintMutation();
+    }
     cnch_writer.preload(data.parts);
 }
 

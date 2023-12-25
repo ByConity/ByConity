@@ -150,9 +150,6 @@ ManipulationTaskRecord::~ManipulationTaskRecord()
             parent.currently_synchronous_tasks.erase(task_id);
             parent.currently_synchronous_tasks_cv.notify_all();
         }
-
-        if (transaction)
-            parent.getContext()->getCnchTransactionCoordinator().finishTransaction(transaction);
     }
     catch (...)
     {

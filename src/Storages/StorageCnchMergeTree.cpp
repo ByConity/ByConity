@@ -2513,7 +2513,7 @@ void StorageCnchMergeTree::dropPartsImpl(
         }
     }
 
-    MutableDataPartsVector drop_ranges;
+    MutableDataPartsVector drop_parts;
 
     if (svr_parts_to_drop.size() == 1)
     {
@@ -2525,14 +2525,7 @@ void StorageCnchMergeTree::dropPartsImpl(
         auto disk = getStoragePolicy(IStorage::StorageLocation::AUXILITY)->getAnyDisk();
         auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_part_info.getPartName(), disk);
         String drop_part_name = drop_part_info.getPartName();
-        auto drop_part = createPart(
-            drop_part_name,
-            MergeTreeDataPartType::WIDE,
-            drop_part_info,
-            single_disk_volume,
-            drop_part_name,
-            nullptr,
-            StorageLocation::AUXILITY);
+        auto drop_part = createPart(drop_part_name, MergeTreeDataPartType::WIDE, drop_part_info, single_disk_volume, drop_part_name, nullptr, StorageLocation::AUXILITY);
         drop_part->partition.assign(part->partition());
         drop_part->deleted = true;
         /// Get parts chain and update `coverd_xxx` fields for metrics.
@@ -2551,18 +2544,19 @@ void StorageCnchMergeTree::dropPartsImpl(
             drop_part->secondary_txn_id = txn->getTransactionID();
         }
 
-        drop_ranges.emplace_back(std::move(drop_part));
+        drop_parts.emplace_back(std::move(drop_part));
     }
     else
     {
         // drop_range parts should belong to the primary transaction
-        drop_ranges = createDropRangesFromParts(local_context, svr_parts_to_drop, txn);
+        drop_parts = createDropRangesFromParts(local_context, svr_parts_to_drop, txn);
     }
 
-    auto bitmap_tombstones = createDeleteBitmapTombstones(drop_ranges, txn->getPrimaryTransactionID());
+    auto bitmap_tombstones = createDeleteBitmapTombstones(drop_parts, txn->getPrimaryTransactionID());
 
     CnchDataWriter cnch_writer(*this, local_context, ManipulationType::Drop);
-    cnch_writer.dumpAndCommitCnchParts(drop_ranges, bitmap_tombstones);
+    cnch_writer.dumpAndCommitCnchParts(drop_parts, bitmap_tombstones);
+    txn->commitV2();
 }
 
 StorageCnchMergeTree::MutableDataPartsVector StorageCnchMergeTree::createDropRangesFromParts(

@@ -119,7 +119,7 @@ public:
         const std::vector<std::pair<String, String>> & detached_bitmap_metas,
         const DB::Protos::DetachAttachType & type);
 
-    TxnTimestamp commitParts(
+    void commitParts(
         const TxnTimestamp & txn_id,
         ManipulationType type,
         MergeTreeMetaBase & storage,
@@ -132,7 +132,7 @@ public:
         const cppkafka::TopicPartitionList & tpl = {},
         const MySQLBinLogInfo & binlog = {});
 
-    TxnTimestamp precommitParts(
+    void precommitParts(
         ContextPtr context,
         const TxnTimestamp & txn_id,
         ManipulationType type,

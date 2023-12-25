@@ -69,7 +69,7 @@ public:
     void finalize();
 
     // server side only
-    TxnTimestamp commitPreparedCnchParts(const DumpedData & data, const std::unique_ptr<S3AttachPartsInfo>& s3_parts_info = nullptr);
+    void commitPreparedCnchParts(const DumpedData & data, const std::unique_ptr<S3AttachPartsInfo>& s3_parts_info = nullptr);
 
 
     /// Convert staged parts to visible parts along with the given delete bitmaps.
