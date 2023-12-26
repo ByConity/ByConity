@@ -1020,10 +1020,10 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     storage = DatabaseCatalog::instance().getTable(storage_id, build_context.context);
 
     bool use_projection_index = build_context.context->getSettingsRef().optimizer_index_projection_support
-        && dynamic_cast<MergeTreeData *>(storage.get()) && build_context.context->getSettingsRef().enable_ab_index_optimization;
+        && dynamic_cast<MergeTreeMetaBase *>(storage.get()) && build_context.context->getSettingsRef().enable_ab_index_optimization;
 
     bool use_optimizer_projection_selection = build_context.context->getSettingsRef().optimizer_projection_support
-        && dynamic_cast<MergeTreeData *>(storage.get()) && !use_projection_index;
+        && dynamic_cast<MergeTreeMetaBase *>(storage.get()) && !use_projection_index;
 
     rewriteInForBucketTable(build_context.context);
     stage_watch.start();
@@ -1083,10 +1083,11 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 
     if (use_projection_index)
     {
+        auto metadata_snapshot = storage->getInMemoryMetadataPtr();
         auto input_columns_block
-            = storage->getInMemoryMetadataPtr()->getSampleBlockForColumns(getRequiredColumns(), storage->getVirtuals(), storage_id);
+            = metadata_snapshot->getSampleBlockForColumns(getRequiredColumns(), storage->getVirtuals(), storage_id);
         auto input_columns = input_columns_block.getNamesAndTypesList();
-        auto required_columns_block = storage->getInMemoryMetadataPtr()->getSampleBlockForColumns(
+        auto required_columns_block = metadata_snapshot->getSampleBlockForColumns(
             getRequiredColumns(OutputAndPrewhere), storage->getVirtuals(), storage_id);
         auto required_columns = required_columns_block.getNamesAndTypesList();
 
@@ -1118,7 +1119,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                 .prepared_sets = query_info.sets,
                 .outputs = column_alias /* no meaning */};
 
-        query_info.index_context = MergeTreeIndexContext::buildFromProjection(inline_expressions, index_building_context);
+        query_info.index_context = MergeTreeIndexContext::buildFromProjection(inline_expressions, index_building_context, metadata_snapshot);
     }
 
     ExecutePlan execute_plan;

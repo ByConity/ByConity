@@ -519,7 +519,8 @@ ActionsMatcher::Data::Data(
     bool create_source_for_in_,
     AggregationKeysInfo aggregation_keys_info_,
     bool build_expression_with_window_functions_,
-    MergeTreeIndexContextPtr index_context_)
+    MergeTreeIndexContextPtr index_context_,
+    StorageMetadataPtr metadata_snapshot_)
     : WithContext(context_)
     , set_size_limit(set_size_limit_)
     , subquery_depth(subquery_depth_)
@@ -535,6 +536,7 @@ ActionsMatcher::Data::Data(
     , aggregation_keys_info(aggregation_keys_info_)
     , build_expression_with_window_functions(build_expression_with_window_functions_)
     , index_context(index_context_)
+    , metadata_snapshot(metadata_snapshot_)
     , next_unique_suffix(actions_stack.getLastActions().getIndex().size() + 1)
 {
 }
@@ -1015,8 +1017,25 @@ void ActionsMatcher::visit(const ASTFunction & node, const ASTPtr & ast, Data & 
 
         if (make_set)
         {
-            auto col_name = node.getColumnName();
+            // check if current column type really has bitmap index
+            for (size_t i = 0; i < arg_size; i += 2)
+            {
+                ASTPtr arg_col = node.arguments->children.at(i);
+                if (auto * identifier = arg_col->as<ASTIdentifier>())
+                {
+                    const auto & index_column_name = identifier->getColumnName();
+                    if (data.metadata_snapshot && data.metadata_snapshot->getColumns().has(index_column_name))
+                    {
+                        if (!data.metadata_snapshot->getColumns().get(index_column_name).type->isBitmapIndex())
+                        {
+                            should_update_bitmap_index_info = false;
+                            break;
+                        }
+                    }
+                }
+            }
 
+            auto col_name = node.getColumnName();
             if (should_update_bitmap_index_info)
                 bitmap_index_info->return_types.emplace(col_name, BitmapIndexHelper::getBitmapIndexReturnType(node.name));
 

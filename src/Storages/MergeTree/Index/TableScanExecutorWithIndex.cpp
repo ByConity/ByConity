@@ -18,7 +18,7 @@ TableScanExecutorWithIndex::TableScanExecutorWithIndex(TableScanStep & step, Con
 , log(&Poco::Logger::get("TableScanExecutorWithIndex"))
 {
     input_stream = step.getOutputStream();
-    query_required_columns = step.getColumnNames();
+    query_required_columns = step.getRequiredColumns();
 
     const auto & settings = context->getSettingsRef();
     if (settings.select_sequential_consistency)
@@ -40,6 +40,10 @@ TableScanExecutorWithIndex::TableScanExecutorWithIndex(TableScanStep & step, Con
 
 ExecutePlan TableScanExecutorWithIndex::buildExecutePlan()
 {
+    // Do not build execute plan when there isn't bitmap index
+    if (columns_with_index.empty())
+        return {};
+
     PartGroups part_groups;
     {
         auto parts = merge_tree_data.getDataPartsVector();
