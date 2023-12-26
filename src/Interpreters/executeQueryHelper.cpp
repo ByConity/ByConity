@@ -80,14 +80,18 @@ HostWithPorts getTargetServer(ContextPtr context, ASTPtr & ast)
     if (database == "system" || is_alter_database)
         return {};
 
-    auto storage = DatabaseCatalog::instance().tryGetTable(StorageID(database, table), context);
-    if (!storage)
+    DatabaseAndTable db_and_tb = DatabaseCatalog::instance().tryGetDatabaseAndTable(StorageID(database, table), context);
+    DatabasePtr db_ptr = std::move(db_and_tb.first);
+    StoragePtr storage_ptr = std::move(db_and_tb.second);
+    if (!db_ptr || !storage_ptr)
+        return {};
+    if (db_ptr->getEngineName() != "Cnch")
         return {};
 
     auto topology_master = context->getCnchTopologyMaster();
 
     return topology_master->getTargetServer(
-        UUIDHelpers::UUIDToString(storage->getStorageUUID()), storage->getServerVwName(), context->getTimestamp(), true);
+        UUIDHelpers::UUIDToString(storage_ptr->getStorageUUID()), storage_ptr->getServerVwName(), context->getTimestamp(), true);
 }
 
 void executeQueryByProxy(ContextMutablePtr context, const HostWithPorts & server, const ASTPtr & ast, BlockIO & res, bool in_interactive_txn, const String & query)

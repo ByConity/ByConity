@@ -106,6 +106,7 @@ public:
     void preload(UInt64 preload_level, ThreadPool & pool, UInt64 submit_ts) const;
     void dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache = false) const;
 
+    void setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr) override {columns_ptr = new_columns_ptr;}
 private:
     /// See #getDeleteBitmap
     const ImmutableDeleteBitmapPtr & getCombinedDeleteBitmapForUniqueTable(bool allow_null = false) const;

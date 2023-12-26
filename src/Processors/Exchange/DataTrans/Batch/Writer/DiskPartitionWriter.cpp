@@ -30,7 +30,7 @@ namespace ErrorCodes
 }
 
 DiskPartitionWriter::DiskPartitionWriter(ContextPtr context_, DiskExchangeDataManagerPtr mgr_, Block header_, ExchangeDataKeyPtr key_)
-    : IBroadcastSender(context_->getSettingsRef().log_query_exchange)
+    : IBroadcastSender(true)
     , context(std::move(context_))
     , mgr(std::move(mgr_))
     , disk(mgr->getDisk())
@@ -40,6 +40,7 @@ DiskPartitionWriter::DiskPartitionWriter(ContextPtr context_, DiskExchangeDataMa
     , data_queue(std::make_shared<BoundedDataQueue<Chunk>>(context->getSettingsRef().exchange_remote_receiver_queue_size))
     , timeout(context->getSettingsRef().exchange_timeout_ms)
     , low_cardinality_allow_in_native_format(context->getSettings().low_cardinality_allow_in_native_format)
+    , enable_disk_writer_metrics(context->getSettingsRef().log_query_exchange)
 {
     LOG_TRACE(log, "constructed for key:{}", *key);
 }
@@ -49,7 +50,7 @@ DiskPartitionWriter::~DiskPartitionWriter()
     try
     {
         auto query_exchange_log = context->getQueryExchangeLog();
-        if (enable_sender_metrics && query_exchange_log)
+        if (enable_disk_writer_metrics && query_exchange_log)
         {
             QueryExchangeLogElement element;
             element.initial_query_id = context->getInitialQueryId();
@@ -114,12 +115,12 @@ BroadcastStatus DiskPartitionWriter::finish(BroadcastStatusCode status_code, Str
         if (data_queue->closed())
             throw Exception(fmt::format("data queue closed for key:{}", *key), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
         chassert(buf); /// buf must be created at this point
-        if (enable_sender_metrics)
+        if (enable_disk_writer_metrics)
             s.start();
         buf->sync();
         /// commit file by renaming
         disk->replaceFile(mgr->getTemporaryFileName(*key), mgr->getFileName(*key));
-        if (enable_sender_metrics)
+        if (enable_disk_writer_metrics)
             writer_metrics.commit_ms << s.elapsedMilliseconds();
         LOG_TRACE(log, "finished for key:{}", *key);
     }
@@ -129,31 +130,31 @@ BroadcastStatus DiskPartitionWriter::finish(BroadcastStatusCode status_code, Str
 void DiskPartitionWriter::runWriteTask()
 {
     Stopwatch s;
-    if (enable_sender_metrics)
+    if (enable_disk_writer_metrics)
         s.start();
     buf = mgr->createFileBufferForWrite(key);
     auto stream
         = std::make_unique<NativeChunkOutputStream>(*buf, DBMS_TCP_PROTOCOL_VERSION, header, !low_cardinality_allow_in_native_format);
-    if (enable_sender_metrics)
+    if (enable_disk_writer_metrics)
         writer_metrics.create_file_ms << s.elapsedMilliseconds();
 
     /// only breaks when
     /// 1. data_queue is closed.
     /// 2. finish is called, so no more data will be pushed to queue, and data_queue is empty.
-    if (enable_sender_metrics)
+    if (enable_disk_writer_metrics)
         s.restart();
     while (!data_queue->closed() && !(finished.load(std::memory_order_acquire) && data_queue->empty()))
     {
         Chunk chunk;
         if (data_queue->tryPop(chunk, WRITE_TASK_INTERACTIVE_INTERVAL))
         {
-            if (enable_sender_metrics)
+            if (enable_disk_writer_metrics)
             {
                 writer_metrics.pop_ms << s.elapsedMilliseconds();
                 s.restart();
             }
             stream->write(std::move(chunk));
-            if (enable_sender_metrics)
+            if (enable_disk_writer_metrics)
             {
                 writer_metrics.write_ms << s.elapsedMilliseconds();
                 writer_metrics.write_num << 1;
@@ -161,7 +162,7 @@ void DiskPartitionWriter::runWriteTask()
             }
         }
         /// pop failed, save pop time if needed
-        else if (enable_sender_metrics)
+        else if (enable_disk_writer_metrics)
         {
             writer_metrics.pop_ms << s.elapsedMilliseconds();
             s.restart();
