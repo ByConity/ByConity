@@ -170,12 +170,14 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     bool do_global,
     SubqueriesForSets subqueries_for_sets_,
     PreparedSets prepared_sets_,
-    BitmapIndexInfoPtr bitmap_index_info_)
+    BitmapIndexInfoPtr bitmap_index_info_,
+    const StorageMetadataPtr & metadata_snapshot_)
     : WithContext(context_)
     , query(query_)
     , settings(getContext()->getSettings())
     , subquery_depth(subquery_depth_)
     , index_context(std::make_shared<MergeTreeIndexContext>())
+    , metadata_snapshot(metadata_snapshot_)
     , syntax(syntax_analyzer_result_)
 {
     if (bitmap_index_info_)
@@ -671,7 +673,8 @@ void ExpressionAnalyzer::getRootActions(const ASTPtr & ast, bool no_makeset_for_
         !isRemoteStorage() /* create_source_for_in */,
         getAggregationKeysInfo(),
         false /* build_expression_with_window_functions */,
-        index_context);
+        index_context,
+        metadata_snapshot);
     ActionsVisitor(visitor_data, log.stream()).visit(ast);
     actions = visitor_data.getActions();
 }
