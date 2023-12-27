@@ -490,6 +490,10 @@ enum StealingCacheMode : UInt64
     /** community behavior, but cnch 1.4 do not check this in mergetree. 2.0 disable this check to compatible with 1.4*/ \
     M(Bool, allow_floating_point_partition_key, true, "Allow floating point as partition key", 0) \
     M(Bool, cnch_enable_memory_buffer, false, "", 0) \
+    M(UInt64, cnch_memory_buffer_size, 1, "", 0) \
+    M(UInt64, max_bytes_to_write_wal, 1024 * 1024 * 45, "", 0) \
+    M(UInt64, max_rows_memory_buffer_to_flush, 655360, "", 0) \
+    M(UInt64, max_bytes_memory_buffer_to_flush, 1024 * 1024 * 512, "", 0) \
     M(Bool, cnch_merge_only_realtime_partition, false, "", 0) \
     M(Bool, \
       cnch_merge_select_nonadjacent_parts, \
