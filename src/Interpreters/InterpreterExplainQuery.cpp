@@ -135,7 +135,7 @@ BlockIO InterpreterExplainQuery::execute()
         return res;
     }
     // Explain in bsp mode makes no sense.
-    getContext()->getSettingsRef().bsp_mode = false;
+    getContext()->setSetting("bsp_mode", false);
 
     res.in = executeImpl();
     return res;
