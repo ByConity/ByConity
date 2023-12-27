@@ -23,6 +23,12 @@ public:
         const Block & output_header,
         bool have_all_inputs_);
 
+    IMergingTransformBase(
+        const Blocks & input_headers,
+        const Block & output_header,
+        bool have_all_inputs_,
+        UInt64 limit_hint_);
+
     OutputPort & getOutputPort() { return outputs.front(); }
 
     /// Methods to add additional input port. It is possible to do only before the first call of `prepare`.
@@ -150,10 +156,10 @@ public:
     }
 
 protected:
-    Algorithm algorithm;
-
     /// Call `consume` with empty chunk when there is no more data.
     bool empty_chunk_on_finish = false;
+    
+    Algorithm algorithm;
 
     /// Profile info.
     Stopwatch total_stopwatch {CLOCK_MONOTONIC_COARSE};
