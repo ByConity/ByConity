@@ -670,7 +670,7 @@ std::shared_ptr<CTERefStep> SymbolMapper::map(const CTERefStep & cte_ref)
 
 std::shared_ptr<ExplainAnalyzeStep> SymbolMapper::map(const ExplainAnalyzeStep & step)
 {
-    return std::make_shared<ExplainAnalyzeStep>(map(step.getInputStreams()[0]), step.getKind(), step.getContext(), step.getQueryPlan());
+    return std::make_shared<ExplainAnalyzeStep>(map(step.getInputStreams()[0]), step.getKind(), step.getContext(), step.getQueryPlan(), step.getSetting());
 }
 
 std::shared_ptr<TableWriteStep> SymbolMapper::map(const TableWriteStep & step)

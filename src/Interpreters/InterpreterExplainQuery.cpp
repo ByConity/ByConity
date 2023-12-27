@@ -736,7 +736,7 @@ void InterpreterExplainQuery::explainPlanWithOptimizer(
         buffer << json_msg;
     }
     else
-        buffer << PlanPrinter::textLogicalPlan(plan, contextptr, settings.stats, true, costs);
+        buffer << PlanPrinter::textLogicalPlan(plan, contextptr, settings.stats, settings.verbose, costs);
 }
 
 void InterpreterExplainQuery::explainDistributedWithOptimizer(
@@ -761,7 +761,7 @@ void InterpreterExplainQuery::explainDistributedWithOptimizer(
     if (settings.json)
         buffer << PlanPrinter::jsonDistributedPlan(plan_segment_descriptions, {});
     else
-        buffer << PlanPrinter::textDistributedPlan(plan_segment_descriptions, settings.stats, true, costs, {}, plan);
+        buffer << PlanPrinter::textDistributedPlan(plan_segment_descriptions, settings.stats, settings.verbose, costs, {}, plan);
 }
 
 BlockInputStreamPtr InterpreterExplainQuery::explainMetaData(const ASTPtr & ast)
@@ -893,7 +893,7 @@ BlockInputStreamPtr InterpreterExplainQuery::explainMetaData(const ASTPtr & ast)
     block.insert({std::move(column_functions), std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>()), "used_function_names"});
     block.insert({std::move(settings_column), std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeString>()), "settings"});
     block.insert({std::move(insert_info_arr), std::make_shared<DataTypeArray>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())), "insert_info"});
-    block.insert({std::move(func_args_column), std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())), "fucntion_const_arguments"});
+    block.insert({std::move(func_args_column), std::make_shared<DataTypeMap>(std::make_shared<DataTypeString>(), std::make_shared<DataTypeArray>(std::make_shared<DataTypeString>())), "function_const_arguments"});
 
     return std::make_shared<OneBlockInputStream>(block);
 }

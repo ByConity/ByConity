@@ -23,6 +23,7 @@ struct QueryPlanSettings
     bool stats = true;
     bool profile = true;
     bool pb_json = false;
+    bool verbose = true;
     bool add_whitespace = true; // used to pretty print json
     bool aggregate_profiles = true; 
 
@@ -40,6 +41,7 @@ struct QueryPlanSettings
         {"profile", profile},
         {"add_whitespace", add_whitespace},
         {"aggregate_profiles", aggregate_profiles},
+        {"verbose", verbose},
     };
 };
 
