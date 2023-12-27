@@ -217,8 +217,8 @@ void CnchWorkerServiceImpl::submitManipulationTask(
             }
 
             rpc_context->initCnchServerResource(txn_id);
-            rpc_context->getSettingsRef().prefer_localhost_replica = false;
-            rpc_context->getSettingsRef().prefer_cnch_catalog = true;
+            rpc_context->setSetting("prefer_localhost_replica", false);
+            rpc_context->setSetting("prefer_cnch_catalog", true);
             trySetVirtualWarehouseAndWorkerGroup(data->getSettings()->cnch_vw_default.value, rpc_context);
         }
 

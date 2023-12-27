@@ -856,7 +856,7 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
             auto vw_name = tryGetVirtualWarehouseName(current_ast, context_ptr);
             if (vw_name != EMPTY_VIRTUAL_WAREHOUSE_NAME)
             {
-                context_ptr->getVWCustomizedSettings()->overwriteDefaultSettings(vw_name, context_ptr->getSettingsRef());
+                context_ptr->getVWCustomizedSettings()->overwriteDefaultSettings(vw_name, context_ptr);
             }
         }
     };

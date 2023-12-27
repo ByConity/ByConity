@@ -191,8 +191,8 @@ INSTANTIATE_TEST_SUITE_P(TestExpressionInterpreter,
                                  // lambda expression
                                  {"arrayMap(x -> (x + 2), [1, 2, 3])", "arrayMap(x -> (x + 2), [1, 2, 3])"},
                                  {"arrayMap(x -> (x + 2), unbound_int8_array)", "arrayMap(x -> (x + 2), unbound_int8_array)"},
-                                 {"arrayMap(x -> (x + 2), arrayConcat([1, 2], [3, 4]))", "arrayMap(x -> (x + 2), [1, 2, 3, 4])"},
-                                 {"length(arrayMap(x -> (x + 2), arrayConcat([1, 2], [3, 4]))) + (1 + 2)", "length(arrayMap(x -> (x + 2), [1, 2, 3, 4])) + cast(3, 'UInt16')"},
+                                 {"arrayMap(x -> (x + 2), arrayConcat([1, 2], [3, 4]))", "arrayMap(x -> (x + 2), arrayConcat([1, 2], [3, 4]))"},
+                                 {"length(arrayMap(x -> (x + 2), arrayConcat([1, 2], [3, 4]))) + (1 + 2)", "length(arrayMap(x -> (x + 2), arrayConcat([1, 2], [3, 4]))) + cast(3, 'UInt16')"},
 
                                  /* functions not evaluate */
                                  {"arrayJoin([1, 2, 3])", "arrayJoin([1, 2, 3])"},

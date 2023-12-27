@@ -1,0 +1,19 @@
+Projection Est. ? rows
+│     Expressions: [c1]
+└─ Gather Exchange Est. ? rows
+   └─ Left Semi Join Est. ? rows
+      │     Condition: c1 == c1_2
+      ├─ Repartition Exchange Est. ? rows
+      │  │     Partition by: {c1}
+      │  └─ Left Semi Join Est. ? rows
+      │     │     Condition: c1 == c1_1
+      │     ├─ TableScan test_optimizer_in_table.test_all Est. 1 rows
+      │     │        Outputs: [c1]
+      │     └─ Broadcast Exchange Est. 1 rows
+      │        └─ TableScan test_optimizer_in_table.test_all Est. 1 rows
+      │                 Outputs: c1_1:=c1
+      └─ Repartition Exchange Est. 1 rows
+         │     Partition by: {c1_2}
+         └─ TableScan test_optimizer_in_table.test_all Est. 1 rows
+                  Outputs: c1_2:=c1
+0

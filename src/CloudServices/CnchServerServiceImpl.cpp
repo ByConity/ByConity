@@ -597,9 +597,9 @@ void CnchServerServiceImpl::fetchPartitions(
             for (const auto & name : request->column_name_filter())
                 column_names.push_back(name);
             SelectQueryInfo query_info;
-            auto interpreter = SelectQueryInfo::buildQueryInfoFromQuery(gc, storage, request->predicate(), query_info);
-
             auto session_context = Context::createCopy(gc);
+            auto interpreter = SelectQueryInfo::buildQueryInfoFromQuery(session_context, storage, request->predicate(), query_info);
+
             session_context->setTemporaryTransaction(TxnTimestamp(request->has_txnid() ? request->txnid() : session_context->getTimestamp()), 0, false);
             auto required_partitions = gc->getCnchCatalog()->getPartitionsByPredicate(session_context, storage, query_info, column_names);
 
@@ -1611,7 +1611,7 @@ void CnchServerServiceImpl::notifyAccessEntityChange(
                 if (auto kv_access_storage = std::dynamic_pointer_cast<KVAccessStorage>(getContext()->getAccessControlManager().getStorage(id)))
                     kv_access_storage->onAccessEntityChanged(type, name);
             }
-                
+
         }
     }
     catch (...)

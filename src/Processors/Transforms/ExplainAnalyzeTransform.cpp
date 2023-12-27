@@ -83,9 +83,9 @@ void ExplainAnalyzeTransform::transform(Chunk & chunk)
         else
         {
             if (kind == ASTExplainQuery::ExplainKind::LogicalAnalyze)
-                explain = PlanPrinter::textLogicalPlan(*query_plan_ptr, context, settings.stats, true, costs, step_agg_operator_profiles, settings.profile);
+                explain = PlanPrinter::textLogicalPlan(*query_plan_ptr, context, settings.stats, settings.verbose, costs, step_agg_operator_profiles, settings.profile);
             else if (kind == ASTExplainQuery::ExplainKind::DistributedAnalyze && !segment_descriptions.empty())
-                explain = PlanPrinter::textDistributedPlan(segment_descriptions, settings.stats, true, costs, step_agg_operator_profiles, *query_plan_ptr, settings.profile);
+                explain = PlanPrinter::textDistributedPlan(segment_descriptions, settings.stats, settings.verbose, costs, step_agg_operator_profiles, *query_plan_ptr, settings.profile);
         }
         GraphvizPrinter::printLogicalPlan(*query_plan_ptr, context, "5999_explain_analyze", step_agg_operator_profiles);
     }
