@@ -16,7 +16,6 @@
 #include <Analyzers/QueryRewriter.h>
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
-#include <Analyzers/CheckAliasVisitor.h>
 #include <Analyzers/ExecutePrewhereSubqueryVisitor.h>
 #include <Analyzers/ImplementFunctionVisitor.h>
 #include <Analyzers/ReplaceViewWithSubqueryVisitor.h>
@@ -178,11 +177,6 @@ namespace
     {
         ApplyWithSubqueryVisitor::visit(query);
         GraphvizPrinter::printAST(query, context, std::to_string(graphviz_index++) + "-AST-expand-cte");
-    }
-
-    void checkAlias(ASTPtr & query)
-    {
-        CheckAliasVisitor().visit(query);
     }
 
     void simpleFunctions(ASTPtr & query, ContextMutablePtr context)
@@ -538,7 +532,6 @@ ASTPtr QueryRewriter::rewrite(ASTPtr query, ContextMutablePtr context, bool enab
         expandCte(query, context, graphviz_index);
         expandView(query, context, graphviz_index);
         normalizeUnion(query, context); // queries in union may not be normalized, hence normalize them here
-        checkAlias(query);
         simpleFunctions(query, context);
 
         /// Expression rewriting
