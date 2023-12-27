@@ -305,12 +305,15 @@ bool QueryUseOptimizerVisitor::visitASTFunction(ASTPtr & node, QueryUseOptimizer
     {
         if (auto * identifier = fun.arguments->getChildren()[1]->as<ASTIdentifier>())
         {
-            ASTTableExpression table_expression;
-            table_expression.database_and_table_name = std::make_shared<ASTTableIdentifier>(identifier->name());
-            if (!checkDatabaseAndTable(table_expression, context.context, context.ctes))
+            if (auto table = identifier->createTable())
             {
-                reason = "unsupported storage";
-                return false;
+                ASTTableExpression table_expression;
+                table_expression.database_and_table_name = table;
+                if (!checkDatabaseAndTable(table_expression, context.context, context.ctes))
+                {
+                    reason = "unsupported storage";
+                    return false;
+                }
             }
         }
     }
