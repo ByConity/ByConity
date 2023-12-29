@@ -122,7 +122,8 @@ public:
     /// So far, this is okay for our usage case in GC, because this new query will eventually finish, and all files in worker will be removed.
     bool checkQueryAlive(const String & query_id);
     // Get the most locality-friendly addresses for specified partition range.
-    std::vector<AddressInfo> getExchangeDataAddrs(PlanSegment * plan_segment, UInt64 start_parallel_index, UInt64 end_parallel_index);
+    std::vector<AddressInfo>
+    getExchangeDataAddrs(PlanSegment * plan_segment, UInt64 start_parallel_index, UInt64 end_parallel_index, size_t node_num);
 
 private:
     ExchangeStatuses & getExchangeStatusesRef(const String & query_id, UInt64 exchange_id);

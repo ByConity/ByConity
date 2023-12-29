@@ -336,13 +336,13 @@ void PlanSegmentExecutor::doExecute(ThreadGroupStatusPtr thread_group)
             {
                 const auto & key = sender_proxy->getDataKey();
                 sender_metrics.bytes_sent[key->exchange_id].emplace_back(
-                    key->parallel_index, sender_proxy->getSenderMetrics().send_uncompressed_bytes.get_value());
+                    key->partition_id, sender_proxy->getSenderMetrics().send_uncompressed_bytes.get_value());
             }
             else if (const auto writer = dynamic_pointer_cast<DiskPartitionWriter>(sender))
             {
                 const auto & key = writer->getKey();
                 sender_metrics.bytes_sent[key->exchange_id].emplace_back(
-                    key->parallel_index, writer->getSenderMetrics().send_uncompressed_bytes.get_value());
+                    key->partition_id, writer->getSenderMetrics().send_uncompressed_bytes.get_value());
             }
         }
     }
@@ -441,6 +441,7 @@ void PlanSegmentExecutor::buildPipeline(QueryPipelinePtr & pipeline, BroadcastSe
             BroadcastSenderPtr sender;
             if (settings.bsp_mode)
             {
+                data_key->parallel_index = plan_segment->getParallelIndex();
                 auto writer = std::make_shared<DiskPartitionWriter>(context, disk_exchange_mgr, header, data_key);
                 disk_exchange_mgr->submitWriteTask(writer, thread_group);
                 sender = writer;

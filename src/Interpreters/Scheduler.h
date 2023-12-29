@@ -1,11 +1,14 @@
 #pragma once
 
+#include <condition_variable>
 #include <memory>
 #include <optional>
 #include <set>
+#include <unordered_map>
 #include <time.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/DAGGraph.h>
+#include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/NodeSelector.h>
 #include <Parsers/queryToString.h>
@@ -107,6 +110,12 @@ protected:
     Poco::Logger * log;
     bool time_to_handle_finish_task = false;
 
+    std::mutex nodes_alloc_mutex;
+    std::condition_variable nodes_alloc_cv;
+    bool has_available_worker = true;
+    std::unordered_map<size_t, std::unordered_set<AddressInfo, AddressInfo::Hash>> busy_nodes;
+    std::unordered_map<size_t, std::unordered_map<UInt64, AddressInfo>> segment_parallel_nodes;
+
     String error_msg;
     bool stopped = false;
 
@@ -158,5 +167,11 @@ public:
     }
     void onSegmentFinished(const size_t & segment_id, bool is_succeed, bool is_canceled) override;
     void onQueryFinished() override;
+
+    void updateSegmentStatusCounter(const size_t & segment_id, const UInt64 & parallel_index);
+
+private:
+    std::mutex segment_status_counter_mutex;
+    std::unordered_map<size_t, std::unordered_set<UInt64>> segment_status_counter;
 };
 }

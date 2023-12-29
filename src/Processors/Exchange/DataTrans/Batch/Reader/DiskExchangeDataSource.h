@@ -14,14 +14,12 @@ namespace DB
 class DiskExchangeDataSource : public ISource
 {
 public:
-    DiskExchangeDataSource(Block header, std::unique_ptr<ReadBufferFromFileBase> buf_) : ISource(std::move(header)), buf(std::move(buf_))
+    DiskExchangeDataSource(Block header, std::vector<std::unique_ptr<ReadBufferFromFileBase>> bufs_)
+        : ISource(std::move(header)), bufs(std::move(bufs_))
     {
-        stream = std::make_unique<NativeChunkInputStream>(*buf, getOutputs().front().getHeader());
-    }
-    String getFileName() const
-    {
-        chassert(buf);
-        return buf->getFileName();
+        chassert(!bufs.empty());
+        stream = std::make_unique<NativeChunkInputStream>(*bufs[idx], getOutputs().front().getHeader());
+        LOG_DEBUG(&Poco::Logger::get("DiskExchangeDataSource"), "Start to read file {}", bufs[idx]->getFileName());
     }
     Chunk generate() override;
     String getName() const override
@@ -30,7 +28,10 @@ public:
     }
 
 private:
-    std::unique_ptr<ReadBufferFromFileBase> buf;
+    Chunk readNextFile();
+
+    std::vector<std::unique_ptr<ReadBufferFromFileBase>> bufs;
+    size_t idx = 0;
     NativeChunkInputStreamHolder stream;
 };
 }

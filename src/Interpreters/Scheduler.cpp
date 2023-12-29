@@ -1,3 +1,7 @@
+#include <chrono>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <CloudServices/CnchServerResource.h>
 #include <Interpreters/DistributedStages/PlanSegment.h>
 #include <Interpreters/DistributedStages/executePlanSegment.h>
@@ -5,12 +9,14 @@
 #include <Interpreters/sendPlanSegment.h>
 #include "common/types.h"
 #include <Common/Stopwatch.h>
+#include <Common/time.h>
 
 namespace DB
 {
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int WAIT_FOR_RESOURCE_TIMEOUT;
 }
 
 bool IScheduler::addBatchTask(BatchTaskPtr batch_task)
@@ -45,40 +51,84 @@ TaskResult IScheduler::scheduleTask(const SegmentTask & task, PlanSegment * plan
         if (auto iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
             iter != selector_info.source_addresses.end())
         {
-            plan_segment_input->insertSourceAddress(iter->second.addresses);
+            plan_segment_input->insertSourceAddresses(iter->second.addresses, query_context->getSettingsRef().bsp_mode);
         }
     }
 
-    size_t address_idx = 0;
-    for (auto & worker_node : selector_info.worker_nodes)
+    std::unordered_set<size_t> idx_to_schedule;
+    for (size_t i = 0; i < selector_info.worker_nodes.size(); i++)
+        idx_to_schedule.insert(i);
+    while (!idx_to_schedule.empty())
     {
-        for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
+        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+        if (!has_available_worker
+            && !nodes_alloc_cv.wait_until(
+                lk, timespec_to_timepoint(query_context->getQueryExpirationTimeStamp()), [this]() { return has_available_worker; }))
+            throw Exception("Wait for available workers timedout", ErrorCodes::WAIT_FOR_RESOURCE_TIMEOUT);
+        for (auto idx_iter = idx_to_schedule.begin(); idx_iter != idx_to_schedule.end();)
         {
-            auto iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
-            if (iter != selector_info.source_addresses.end() && iter->second.parallel_index)
+            const auto & idx = *idx_iter;
+            auto & worker_node = selector_info.worker_nodes[idx];
+            const auto & iter = busy_nodes.find(task.task_id);
+            // If the target node is busy, skip it.
+            if (iter != busy_nodes.end() && iter->second.contains(worker_node.address))
             {
-                plan_segment_input->setParallelIndex(*iter->second.parallel_index);
+                idx_iter++;
+                continue;
+            }
+            for (auto & plan_segment_input : plan_segment_ptr->getPlanSegmentInputs())
+            {
+                auto source_iter = selector_info.source_addresses.find(plan_segment_input->getPlanSegmentId());
+                if (source_iter != selector_info.source_addresses.end() && source_iter->second.parallel_index)
+                {
+                    plan_segment_input->setParallelIndex(*source_iter->second.parallel_index);
+                }
+                else
+                    plan_segment_input->setParallelIndex(selector_info.indexes[idx]);
+            }
+            plan_segment_ptr->setParallelIndex(idx);
+            if (worker_node.type == NodeType::Local)
+            {
+                sendPlanSegmentToLocal(plan_segment_ptr, query_context, dag_graph_ptr);
             }
             else
-                plan_segment_input->setParallelIndex(selector_info.indexes[address_idx]);
+            {
+                const auto worker_group = query_context->tryGetCurrentWorkerGroup();
+                sendPlanSegmentToRemote(
+                    worker_node.address,
+                    query_context,
+                    plan_segment_ptr,
+                    dag_graph_ptr,
+                    worker_group ? WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker_node.id)
+                                 : WorkerId{});
+            }
+            if (iter != busy_nodes.end())
+            {
+                iter->second.insert(worker_node.address);
+            }
+            else
+            {
+                std::unordered_set<AddressInfo, AddressInfo::Hash> nodes{worker_node.address};
+                busy_nodes.emplace(task.task_id, std::move(nodes));
+            }
+            const auto & parallel_nodes_iter = segment_parallel_nodes.find(task.task_id);
+            if (parallel_nodes_iter != segment_parallel_nodes.end())
+            {
+                parallel_nodes_iter->second.insert({idx, worker_node.address});
+            }
+            else
+            {
+                std::unordered_map<UInt64, AddressInfo> info{std::make_pair(idx, worker_node.address)};
+                segment_parallel_nodes.emplace(task.task_id, std::move(info));
+            }
+
+            idx_iter = idx_to_schedule.erase(idx_iter);
         }
-        plan_segment_ptr->setParallelIndex(address_idx);
-        if (worker_node.type == NodeType::Local)
-        {
-            sendPlanSegmentToLocal(plan_segment_ptr, query_context, dag_graph_ptr);
-        }
-        else
-        {
-            const auto worker_group = query_context->tryGetCurrentWorkerGroup();
-            sendPlanSegmentToRemote(
-                worker_node.address,
-                query_context,
-                plan_segment_ptr,
-                dag_graph_ptr,
-                worker_group ? WorkerStatusManager::getWorkerId(worker_group->getVWName(), worker_group->getID(), worker_node.id)
-                             : WorkerId{});
-        }
-        address_idx++;
+        has_available_worker = false;
+    }
+    {
+        std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+        has_available_worker = true;
     }
     dag_graph_ptr->joinAsyncRpcPerStage();
     res.status = TaskStatus::Success;
@@ -110,13 +160,13 @@ void IScheduler::schedule()
             {
                 throw Exception("Logical error: segment " + std::to_string(task.task_id) + " not found", ErrorCodes::LOGICAL_ERROR);
             }
-            auto plan_segment_ptr = iter->second;
             LOG_DEBUG(log, "Schedule segment {}", task.task_id);
             if (task.task_id == 0)
             {
                 prepareFinalTask();
                 break;
             }
+            auto plan_segment_ptr = iter->second;
             auto local_address = getLocalAddress(query_context);
             plan_segment_ptr->setCoordinatorAddress(local_address);
             scheduleTask(task, plan_segment_ptr);
@@ -221,7 +271,7 @@ void IScheduler::prepareFinalTask()
                 "Logical error: address of segment " + std::to_string(plan_segment_input->getPlanSegmentId()) + " not found",
                 ErrorCodes::LOGICAL_ERROR);
         if (plan_segment_input->getSourceAddresses().empty())
-            plan_segment_input->insertSourceAddress(address_it->second);
+            plan_segment_input->insertSourceAddresses(address_it->second, query_context->getSettingsRef().bsp_mode);
     }
     dag_graph_ptr->plan_segment_status_ptr->is_final_stage_start = true;
 }
@@ -302,5 +352,27 @@ void BSPScheduler::onQueryFinished()
                     address.toString()));
         }
     }
+}
+
+void BSPScheduler::updateSegmentStatusCounter(const size_t & segment_id, const UInt64 & parallel_index)
+{
+    std::unique_lock<std::mutex> lock(segment_status_counter_mutex);
+    auto segment_status_counter_iterator = segment_status_counter.find(segment_id);
+    if (segment_status_counter_iterator == segment_status_counter.end())
+    {
+        segment_status_counter[segment_id] = {};
+    }
+    segment_status_counter[segment_id].insert(parallel_index);
+
+    if (segment_status_counter[segment_id].size() == dag_graph_ptr->segment_paralle_size_map[segment_id])
+    {
+        onSegmentFinished(segment_id, /*is_succeed=*/true, /*is_canceled=*/true);
+    }
+
+    std::unique_lock<std::mutex> lk(nodes_alloc_mutex);
+    const auto & addr = segment_parallel_nodes[segment_id][parallel_index];
+    busy_nodes[segment_id].erase(addr);
+    has_available_worker = true;
+    nodes_alloc_cv.notify_all();
 }
 }

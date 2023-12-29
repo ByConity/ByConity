@@ -81,7 +81,7 @@ BrpcRemoteBroadcastSender::~BrpcRemoteBroadcastSender()
             const auto & key = trans_keys.front();
             element.initial_query_id = context->getInitialQueryId();
             element.exchange_id = std::to_string(key->exchange_id);
-            element.partition_id = std::to_string(key->parallel_index);
+            element.partition_id = std::to_string(key->partition_id);
             element.event_time =
                 std::chrono::duration_cast<std::chrono::seconds>(
                     std::chrono::system_clock::now().time_since_epoch()).count();
