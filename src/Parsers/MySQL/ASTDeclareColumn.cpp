@@ -100,7 +100,7 @@ bool ParserDeclareColumn::parseImpl(Pos & pos, ASTPtr & node, Expected & expecte
     if (!p_identifier.parse(pos, column_name, expected))
         return false;
 
-    if (!ParserDataType().parse(pos, column_data_type, expected))
+    if (!ParserDataType(ParserSettings::CLICKHOUSE).parse(pos, column_data_type, expected))
         return false;
 
     parseColumnDeclareOptions(pos, column_options, expected);

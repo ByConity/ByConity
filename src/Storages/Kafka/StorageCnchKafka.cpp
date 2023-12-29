@@ -179,7 +179,7 @@ void StorageCnchKafka::alter(const AlterCommands & commands, ContextPtr local_co
         ASTPtr ast = parseQuery(parser, create_table_query, local_context->getSettingsRef().max_query_size
             , local_context->getSettingsRef().max_parser_depth);
 
-        applyMetadataChangesToCreateQuery(ast, new_metadata);
+        applyMetadataChangesToCreateQuery(ast, new_metadata, ParserSettings::CLICKHOUSE);
         alter_act.setNewSchema(queryToString(ast));
         txn->appendAction(std::move(action));
     }

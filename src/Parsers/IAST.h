@@ -65,6 +65,7 @@ class ReadBuffer;
     M(ASTConstraintDeclaration) \
     M(ASTForeignKeyDeclaration) \
     M(ASTUniqueNotEnforcedDeclaration) \
+    M(ASTDataType) \
     M(ASTStorage) \
     M(ASTColumns) \
     M(ASTCreateQuery) \
@@ -375,6 +376,7 @@ public:
         bool always_quote_identifiers = false;
         bool without_alias = false;
         IdentifierQuotingStyle identifier_quoting_style = IdentifierQuotingStyle::Backticks;
+        DialectType dialect_type = DialectType::CLICKHOUSE;
 
         // Newline or whitespace.
         char nl_or_ws;

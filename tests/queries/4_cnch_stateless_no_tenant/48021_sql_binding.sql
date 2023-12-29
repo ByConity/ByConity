@@ -26,8 +26,10 @@ show bindings;
 
 -- test drop session sql binding use uuid
 create session binding select * from test.bindings using select b+1 from test.bindings order by a;
-show bindings;
-drop session binding uuid 'c76faa6e-0418-100d-dcb7-845ac8e3daca';
+show bindings; 
+
+-- re-generate uuid if AST serialization has been changed
+drop session binding uuid '32b6b495-200b-1786-3558-aea29e03e240';
 show bindings;
 
 -- test session regular expression binding

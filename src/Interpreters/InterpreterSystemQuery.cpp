@@ -876,7 +876,7 @@ StoragePtr InterpreterSystemQuery::tryRestartReplica(const StorageID & replica, 
     auto & create = create_ast->as<ASTCreateQuery &>();
     create.attach = true;
 
-    auto columns = InterpreterCreateQuery::getColumnsDescription(*create.columns_list->columns, system_context, true);
+    auto columns = InterpreterCreateQuery::getColumnsDescription(*create.columns_list->columns, system_context, true, true);
     auto constraints = InterpreterCreateQuery::getConstraintsDescription(create.columns_list->constraints);
     auto foreign_keys = InterpreterCreateQuery::getForeignKeysDescription(create.columns_list->foreign_keys);
     auto unique = InterpreterCreateQuery::getUniqueNotEnforcedDescription(create.columns_list->unique);

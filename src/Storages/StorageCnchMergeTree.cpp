@@ -2227,7 +2227,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
             local_context->getSettingsRef().max_query_size,
             local_context->getSettingsRef().max_parser_depth);
 
-        applyMetadataChangesToCreateQuery(ast, new_metadata);
+        applyMetadataChangesToCreateQuery(ast, new_metadata, ParserSettings::valueOf(local_context->getSettingsRef()));
         alter_act.setNewSchema(queryToString(ast));
 
         LOG_DEBUG(log, "new schema for alter query: {}", alter_act.getNewSchema());

@@ -567,14 +567,16 @@ void SystemLog<LogElement>::prepareTable()
 
     table = DatabaseCatalog::instance().tryGetTable(table_id, getContext());
 
+    auto query_context = Context::createCopy(context);
+    auto dialect_type = ParserSettings::valueOf(query_context->getSettingsRef().dialect_type);
+
     if (table)
     {
         auto metadata_columns = table->getInMemoryMetadataPtr()->getColumns();
-        auto old_query = InterpreterCreateQuery::formatColumns(metadata_columns);
+        auto old_query = InterpreterCreateQuery::formatColumns(metadata_columns, dialect_type);
 
         auto ordinary_columns = LogElement::getNamesAndTypes();
         auto alias_columns = LogElement::getNamesAndAliases();
-        auto query_context = Context::createCopy(context);
         auto current_query = InterpreterCreateQuery::formatColumns(
             ordinary_columns, alias_columns, ParserSettings::valueOf(query_context->getSettingsRef()));
 
@@ -622,7 +624,6 @@ void SystemLog<LogElement>::prepareTable()
     {
         /// Create the table.
         LOG_DEBUG(log, "Creating new table {} for {}", description, LogElement::name());
-        auto query_context = Context::createCopy(context);
         auto create = getCreateTableQuery(ParserSettings::valueOf(query_context->getSettingsRef()));
 
         query_context->makeQueryContext();
@@ -840,7 +841,8 @@ void CnchSystemLog<LogElement>::prepareTable()
     else
     {
         auto metadata_columns = cnch_storage->getInMemoryMetadataPtr()->getColumns();
-        auto old_query = InterpreterCreateQuery::formatColumns(metadata_columns);
+        auto dialect_type = ParserSettings::valueOf(getContext()->getSettingsRef());
+        auto old_query = InterpreterCreateQuery::formatColumns(metadata_columns, dialect_type);
 
         auto ordinary_columns = LogElement::getNamesAndTypes();
         auto alias_columns = LogElement::getNamesAndAliases();
