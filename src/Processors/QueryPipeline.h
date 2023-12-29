@@ -53,6 +53,11 @@ struct ExpressionActionsSettings;
 class IJoin;
 using JoinPtr = std::shared_ptr<IJoin>;
 
+class TableJoin;
+
+class QueryPipeline;
+using QueryPipelinePtr = std::unique_ptr<QueryPipeline>;
+
 using RuntimeFilterId = UInt32;
 
 class QueryPipeline
@@ -126,9 +131,9 @@ public:
 
     /// Join two pipelines together using JoinPtr.
     /// If collector is used, it will collect only newly-added processors, but not processors from pipelines.
-    static std::unique_ptr<QueryPipeline> joinPipelines(
-        std::unique_ptr<QueryPipeline> left,
-        std::unique_ptr<QueryPipeline> right,
+    static QueryPipelinePtr joinPipelinesRightLeft(
+        QueryPipelinePtr left,
+        QueryPipelinePtr right,
         JoinPtr join,
         size_t max_block_size,
         size_t max_streams,
@@ -136,6 +141,21 @@ public:
         bool join_parallel_left_right,
         Processors * collected_processors = nullptr,
         bool need_build_runtime_filter = false);
+
+    /// Join two independent pipelines, processing them simultaneously.
+    static QueryPipelinePtr joinPipelinesYShaped(
+        QueryPipelinePtr left,
+        QueryPipelinePtr right,
+        JoinPtr table_join,
+        const Block & out_header,
+        size_t max_block_size,
+        Processors * collected_processors = nullptr);
+
+    static QueryPipelinePtr mergePipelines(
+        QueryPipelinePtr left,
+        QueryPipelinePtr right,
+        ProcessorPtr transform,
+        Processors * collected_processors);
 
     /// Add other pipeline and execute it before current one.
     /// Pipeline must have empty header, it should not generate any chunk.

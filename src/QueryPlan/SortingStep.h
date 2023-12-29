@@ -25,7 +25,40 @@ namespace DB
 class SortingStep : public ITransformingStep
 {
 public:
-    explicit SortingStep(const DataStream & input_stream, SortDescription description_, UInt64 limit_, bool partial_, SortDescription prefix_description_ = {});
+    enum class Type
+    {
+        Full,
+        FinishSorting,
+        MergingSorted,
+    };
+
+    struct Settings
+    {
+        size_t max_block_size;
+        SizeLimits size_limits;
+        size_t max_bytes_before_remerge = 0;
+        double remerge_lowered_memory_bytes_ratio = 0;
+        size_t max_bytes_before_external_sort = 0;
+        TemporaryDataOnDiskScopePtr tmp_data = nullptr;
+        size_t min_free_disk_space = 0;
+
+        explicit Settings(const Context & context);
+        explicit Settings(size_t max_block_size_);
+    };
+
+    explicit SortingStep(
+        const DataStream & input_stream_, 
+        SortDescription description_, 
+        UInt64 limit_, 
+        bool partial_, 
+        SortDescription prefix_description_ = {});
+
+    /// Full Sorting
+    explicit SortingStep(
+        const DataStream & input_stream_,
+        SortDescription description_,
+        UInt64 limit_,
+        const Settings & settings_);
 
     String getName() const override { return "Sorting"; }
 
@@ -54,6 +87,8 @@ private:
     UInt64 limit;
     bool partial;
     SortDescription prefix_description;
+
+    Settings sort_settings;
 };
 
 }

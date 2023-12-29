@@ -221,7 +221,7 @@ public:
     void addJoinedColumnsAndCorrectTypes(ColumnsWithTypeAndName & columns, bool correct_nullability = true) const;
 
     /// Calculates common supertypes for corresponding join key columns.
-    bool inferJoinKeyCommonType(const NamesAndTypesList & left, const NamesAndTypesList & right);
+    bool inferJoinKeyCommonType(const NamesAndTypesList & left, const NamesAndTypesList & right, bool strict);
 
     /// Calculate converting actions, rename key columns in required
     /// For `USING` join we will convert key columns inplace and affect into types in the result table

@@ -88,6 +88,7 @@
 #include <QueryPlan/ReadNothingStep.h>
 #include <QueryPlan/RollupStep.h>
 #include <QueryPlan/SettingQuotaAndLimitsStep.h>
+#include <QueryPlan/SortingStep.h>
 #include <QueryPlan/TotalsHavingStep.h>
 #include <QueryPlan/WindowStep.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
@@ -105,6 +106,7 @@
 #include <memory>
 #include <Columns/Collator.h>
 #include <Core/Field.h>
+#include <Core/Joins.h>
 #include <Functions/IFunction.h>
 #include <Common/FieldVisitorToString.h>
 #include <Common/FieldVisitorsAccurateComparison.h>
@@ -1308,6 +1310,31 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
                     if (!joined_plan)
                         throw Exception(ErrorCodes::LOGICAL_ERROR, "There is no joined plan for query");
 
+                    auto add_sorting = [this] (QueryPlan & plan, const Names & key_names, JoinTableSide join_pos)
+                    {
+                        SortDescription order_descr;
+                        order_descr.reserve(key_names.size());
+                        for (const auto & key_name : key_names)
+                            order_descr.emplace_back(key_name);
+
+                        SortingStep::Settings sort_settings(*context);
+
+                        auto sorting_step = std::make_unique<SortingStep>(
+                            plan.getCurrentDataStream(),
+                            std::move(order_descr),
+                            settings.max_block_size,
+                            0 /* LIMIT */,
+                            sort_settings);
+                        sorting_step->setStepDescription("Sort {} before JOIN", join_pos);
+                        plan.addStep(std::move(sorting_step));
+                    };
+
+                    if (expressions.join->pipelineType() == JoinPipelineType::YShaped)
+                    {
+                        add_sorting(query_plan, expressions.join->getTableJoin().keyNamesLeft(), JoinTableSide::Left);
+                        add_sorting(*joined_plan, expressions.join->getTableJoin().keyNamesRight(), JoinTableSide::Right);
+                    }
+
                     QueryPlanStepPtr join_step = std::make_unique<JoinStep>(
                         query_plan.getCurrentDataStream(),
                         joined_plan->getCurrentDataStream(),
@@ -1316,7 +1343,7 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
                         max_streams,
                         analysis_result.optimize_read_in_order);
 
-                    join_step->setStepDescription("JOIN");
+                    join_step->setStepDescription(fmt::format("JOIN {}", expressions.join->pipelineType()));
                     std::vector<QueryPlanPtr> plans;
                     plans.emplace_back(std::make_unique<QueryPlan>(std::move(query_plan)));
                     plans.emplace_back(std::move(joined_plan));
@@ -2057,6 +2084,7 @@ void InterpreterSelectQuery::executeFetchColumns(QueryProcessingStage::Enum proc
         && !query.orderBy()
         && !query.limitBy()
         && query.limitLength()
+        && !query.join()
         && !query_analyzer->hasAggregation()
         && !query_analyzer->hasWindow()
         && limit_length <= std::numeric_limits<UInt64>::max() - limit_offset
