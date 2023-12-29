@@ -21,8 +21,8 @@
 
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataStreams/materializeBlock.h>
-
 #include <DataTypes/DataTypeAggregateFunction.h>
+#include <DataStreams/SizeLimits.h>
 
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
@@ -52,6 +52,7 @@
 #include <Interpreters/getTableExpressions.h>
 #include <Interpreters/JoinToSubqueryTransformVisitor.h>
 #include <Interpreters/CrossToInnerJoinVisitor.h>
+#include <Interpreters/IJoin.h>
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/JoinedTables.h>
 #include <Interpreters/OpenTelemetrySpanLog.h>
@@ -90,6 +91,7 @@
 #include <QueryPlan/TotalsHavingStep.h>
 #include <QueryPlan/WindowStep.h>
 #include <QueryPlan/Optimizations/QueryPlanOptimizationSettings.h>
+
 #include <Processors/Sources/NullSource.h>
 #include <Processors/Sources/SourceFromInputStream.h>
 #include <Processors/Transforms/AggregatingTransform.h>

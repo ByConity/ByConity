@@ -4,7 +4,7 @@
 #include <Interpreters/TableJoin.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeLowCardinality.h>
-#include <Common/logger_useful.h>
+#include <common/logger_useful.h>
 #include <Poco/Logger.h>
 
 namespace DB
@@ -28,8 +28,13 @@ public:
         LOG_TRACE(&Poco::Logger::get("FullSortingMergeJoin"), "Will use full sorting merge join");
     }
 
-    std::string getName() const override { return "FullSortingMergeJoin"; }
+    JoinType getType() const override { return JoinType::FULL_SORTING_MERGE; }
+
+    //std::string getName() const override { return "FullSortingMergeJoin"; }
+
     const TableJoin & getTableJoin() const override { return *table_join; }
+
+    TableJoin & getTableJoin() override { return *table_join; }
 
     bool addBlockToJoin(const Block & /* block */, bool /* check_limits */) override
     {
