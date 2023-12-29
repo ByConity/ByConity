@@ -507,16 +507,34 @@ void DiskExchangeDataManager::finishSenders(const ReadTaskPtr & task, BroadcastS
 
 String DiskExchangeDataManager::getTemporaryFileName(const ExchangeDataKey & key) const
 {
-    auto file_path = path / std::to_string(key.query_unique_id);
-    file_path = file_path / fmt::format("exchange_{}_{}.data.tmp", key.exchange_id, key.parallel_index);
-    return file_path;
+    return getFileName(key).append(".tmp");
 }
 
 String DiskExchangeDataManager::getFileName(const ExchangeDataKey & key) const
 {
     auto file_path = path / std::to_string(key.query_unique_id);
-    file_path = file_path / fmt::format("exchange_{}_{}.data", key.exchange_id, key.parallel_index);
+    file_path = file_path / fmt::format("exchange_{}_{}_{}.data", key.exchange_id, key.partition_id, key.parallel_index);
     return file_path;
+}
+
+std::vector<std::unique_ptr<ReadBufferFromFileBase>> DiskExchangeDataManager::filterFileBuffers(const ExchangeDataKey & key) const
+{
+    std::vector<String> file_names;
+    auto file_path = path / std::to_string(key.query_unique_id);
+    disk->listFiles(file_path, file_names);
+    std::vector<String> filtered_files;
+    String prefix = fmt::format("exchange_{}_{}_", key.exchange_id, key.partition_id);
+    String suffix = ".data";
+    std::copy_if(file_names.begin(), file_names.end(), std::back_inserter(filtered_files), [&prefix, &suffix](String s) {
+        return s.starts_with(prefix) && s.ends_with(suffix);
+    });
+    std::vector<std::unique_ptr<ReadBufferFromFileBase>> ret;
+    for (const auto & file : filtered_files)
+    {
+        auto abs_file_path = file_path / file;
+        ret.push_back(disk->readFile(abs_file_path));
+    }
+    return ret;
 }
 
 std::unique_ptr<WriteBufferFromFileBase> DiskExchangeDataManager::createFileBufferForWrite(const ExchangeDataKeyPtr & key)
@@ -555,9 +573,7 @@ void DiskExchangeDataManager::createWriteTaskDirectory(UInt64 query_unique_id, c
 Processors DiskExchangeDataManager::createProcessors(BroadcastSenderProxyPtr sender, Block header, ContextPtr query_context) const
 {
     auto key = sender->getDataKey();
-    auto file_name = getFileName(*key);
-    auto buf = disk->readFile(file_name);
-    auto source = std::make_shared<DiskExchangeDataSource>(header, std::move(buf));
+    auto source = std::make_shared<DiskExchangeDataSource>(header, filterFileBuffers(*key));
     String name = BroadcastExchangeSink::generateName(key->exchange_id);
     ExchangeOptions exchange_options = ExchangeUtils::getExchangeOptions(query_context);
     auto sink = std::make_shared<BroadcastExchangeSink>(

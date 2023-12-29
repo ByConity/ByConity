@@ -227,16 +227,6 @@ void PlanSegmentManagerRpcService::sendPlanSegmentStatus(
         if (status.is_succeed)
             scheduler->updateReceivedSegmentStatusCounter(request->query_id(), request->segment_id(), request->parallel_index());
 
-
-        if (scheduler->explainQueryHasReceivedAllSegmentStatus(request->query_id()))
-        {
-            ProfileLogHub<ProcessorProfileLogElement>::getInstance().stopConsume(status.query_id);
-            LOG_DEBUG(log, "Query:{} have received all segment status.", status.query_id);
-        }
-
-        if (scheduler->bspQueryReceivedAllStatusOfSegment(request->query_id(), request->segment_id()))
-            scheduler->onSegmentFinished(status);
-
         if (!status.is_canceled && status.code == 0)
         {
             try

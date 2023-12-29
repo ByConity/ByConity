@@ -109,6 +109,7 @@ private:
     using ReadTaskPtr = std::shared_ptr<ReadTask>;
     /// finish senders of a specific task, so that downstream wont wait until timeout
     static void finishSenders(const ReadTaskPtr & task, BroadcastStatusCode code, String message);
+    std::vector<std::unique_ptr<ReadBufferFromFileBase>> filterFileBuffers(const ExchangeDataKey & key) const;
 
     Poco::Logger * logger;
     bthread::Mutex mutex;

@@ -161,8 +161,8 @@ NodeSelectorResult LocalityNodeSelector::select(PlanSegment * plan_segment_ptr, 
         return result;
     }
     auto local_address = getLocalAddress(query_context);
-    for (const AddressInfo & addr :
-         query_context->getExchangeDataTracker()->getExchangeDataAddrs(plan_segment_ptr, 0, plan_segment_ptr->getParallelSize()))
+    for (const AddressInfo & addr : query_context->getExchangeDataTracker()->getExchangeDataAddrs(
+             plan_segment_ptr, 0, plan_segment_ptr->getParallelSize(), cluster_nodes.rank_worker_ids.size()))
     {
         if (addr == local_address)
             return result;
