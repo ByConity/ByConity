@@ -129,8 +129,7 @@ ASTPtr PushStorageFilter::pushStorageFilter(TableScanStep & table_step, ASTPtr q
     // push filter into storage
     if (!PredicateUtils::isTruePredicate(push_filter))
     {
-        auto * merge_tree = dynamic_cast<MergeTreeMetaBase *>(table_step.getStorage().get());
-        push_filter = pushFilterIntoStorage(push_filter, merge_tree, table_step.getQueryInfo(), storage_statistics, table_step.getOutputStream().getNamesAndTypes(), context);
+        push_filter = pushFilterIntoStorage(push_filter, table_step.getStorage(), table_step.getQueryInfo(), storage_statistics, table_step.getOutputStream().getNamesAndTypes(), context);
     }
 
     // construnct the remaing filter

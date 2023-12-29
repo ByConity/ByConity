@@ -25,24 +25,25 @@
 #include <Core/QueryProcessingStage.h>
 #include <DataStreams/IBlockStream_fwd.h>
 #include <Databases/IDatabase.h>
+#include <Disks/IDisk.h>
 #include <Interpreters/CancellationCode.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/StorageID.h>
 #include <Processors/QueryPipeline.h>
+#include <ResourceManagement/CommonData.h>
 #include <Storages/CheckResults.h>
 #include <Storages/ColumnDependency.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/SelectQueryDescription.h>
 #include <Storages/StorageInMemoryMetadata.h>
 #include <Storages/TableLockHolder.h>
-#include <Disks/IDisk.h>
+#include <Storages/TableStatistics.h>
+#include <Transaction/TxnTimestamp.h>
 #include <Common/ActionLock.h>
 #include <Common/Exception.h>
+#include <Common/HostWithPorts.h>
 #include <Common/RWLock.h>
 #include <Common/TypePromotion.h>
-#include <Common/HostWithPorts.h>
-#include "ResourceManagement/CommonData.h"
-#include <Transaction/TxnTimestamp.h>
 
 #include <optional>
 #include <shared_mutex>
@@ -246,6 +247,25 @@ public:
     virtual bool supportsLightweightDelete() const { return false; }
 
     virtual std::optional<String> getVirtualWarehouseName(VirtualWarehouseType /*vw_type*/) const { return {}; }
+
+    /// Whether storage is supported by optimier
+    virtual bool supportsOptimizer() const { return false; }
+
+    /// Get table stats for estimates, used in optimizer
+    virtual std::optional<TableStatistics> getTableStats(const Strings & /*columns*/, ContextPtr /*local_context*/) { return {}; }
+
+    /// Determine plan segment dispatch, used in optimizer
+    virtual bool supportsDistributedRead() const { return false; }
+
+    /// Prepare storeage read in plan segment and return allocated table storage id, used in optimizer
+    /// if nothing to do, return origin storage id.
+    virtual StorageID prepareTableRead(const Names & /*columns*/, SelectQueryInfo & /*query_info*/, ContextPtr /*context*/)
+    {
+        return getStorageID();
+    }
+
+    /// Prepare storeage write in plan segment and return allocated table storage id, used in optimizer
+    virtual StorageID prepareTableWrite(ContextPtr /*context*/) { return getStorageID(); }
 
 protected:
     /// Returns whether the column is virtual - by default all columns are real.

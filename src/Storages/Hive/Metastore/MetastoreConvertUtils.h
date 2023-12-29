@@ -10,6 +10,7 @@
 #include <aws/core/utils/DateTime.h>
 #include <aws/glue/model/Table.h>
 #include "IMetaClient.h"
+#include "Storages/TableStatistics.h"
 namespace DB::MetastoreConvertUtils
 {
     ApacheHive::Table convertTable(const Aws::Glue::Model::Table & glue_table);
@@ -37,6 +38,8 @@ namespace DB::MetastoreConvertUtils
         const ApacheHive::Table & table,
         const std::vector<ApacheHive::Partition> & partitions,
         const ApacheHive::PartitionsStatsResult & partition_stats);
+
+    TableStatistics convertHiveStats(const std::pair<int64_t, ApacheHive::TableStatsResult> & hive_stats);
 
     struct PartitionStatsWithRowNumber
     {

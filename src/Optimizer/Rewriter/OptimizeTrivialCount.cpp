@@ -7,7 +7,6 @@
 #include <QueryPlan/Void.h>
 #include <AggregateFunctions/AggregateFunctionCount.h>
 #include <Interpreters/RequiredSourceColumnsVisitor.h>
-#include <Storages/StorageDistributed.h>
 #include <Parsers/IAST_fwd.h>
 #include <Interpreters/InterpreterSelectQuery.h>
 #include <Optimizer/PredicateUtils.h>

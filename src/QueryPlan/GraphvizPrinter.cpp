@@ -48,7 +48,6 @@
 #include <QueryPlan/SortingStep.h>
 #include <QueryPlan/UnionStep.h>
 #include <QueryPlan/WindowStep.h>
-#include <Storages/StorageDistributed.h>
 #include <boost/algorithm/string/replace.hpp>
 #include <fmt/format.h>
 #include <Common/HashTable/Hash.h>

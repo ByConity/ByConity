@@ -2735,7 +2735,7 @@ Block StorageCnchMergeTree::getBlockWithVirtualPartitionColumns(
 std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr local_context) const
 {
     std::set<Int64> bucket_numbers;
-    ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->getWhere();
+ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->getWhere();
     const Settings & settings = local_context->getSettingsRef();
     auto metadata_snapshot = getInMemoryMetadataPtr();
     // if number of bucket columns of this table > 1, skip optimisation
@@ -3176,6 +3176,24 @@ void StorageCnchMergeTree::checkUnderlyingDictionaryTable(const BitEngineHelper:
 
     if (!WhichDataType(value_column.type).isUInt64())
         throw Exception("Value column type should be UInt64", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
+}
+
+
+StorageID StorageCnchMergeTree::prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context)
+{
+    auto prepare_result = prepareReadContext(output_columns, getInMemoryMetadataPtr(), query_info, local_context);
+
+    StorageID storage_id = getStorageID();
+    storage_id.table_name = prepare_result.local_table_name;
+    return storage_id;
+}
+
+StorageID StorageCnchMergeTree::prepareTableWrite(ContextPtr local_context)
+{
+    auto prepare_result = prepareLocalTableForWrite(nullptr, local_context, false, false);
+    StorageID storage_id = getStorageID();
+    storage_id.table_name = prepare_result.first;
+    return storage_id;
 }
 
 } // end namespace DB

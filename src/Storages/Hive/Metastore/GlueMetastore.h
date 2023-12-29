@@ -32,8 +32,8 @@ public:
     std::vector<ApacheHive::Partition>
     getPartitionsByFilter(const String & db_name, const String & table_name, const String & filter) override;
 
-    HiveTableStats getTableStats(
-        const String & db_name, const String & table_name, const Strings & col_names, const bool merge_all_partition) override;
+    std::optional<TableStatistics> getTableStats(
+        const String & db_name, const String & table_name, const Strings & col_names, bool merge_all_partition) override;
 
     ApacheHive::PartitionsStatsResult getPartitionStats(
         const String & db_name,

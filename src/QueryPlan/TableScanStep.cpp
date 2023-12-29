@@ -49,15 +49,12 @@
 #include <QueryPlan/PlanSerDerHelper.h>
 #include <QueryPlan/QueryPlan.h>
 #include <QueryPlan/planning_common.h>
-#include <Storages/Hive/StorageCnchHive.h>
 #include <Storages/IStorage_fwd.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
 #include <Storages/RemoteFile/IStorageCnchFile.h>
 #include <Storages/MergeTree/Index/TableScanExecutorWithIndex.h>
 #include <Storages/VirtualColumnUtils.h>
 #include <Storages/StorageCloudMergeTree.h>
-#include <Storages/StorageCnchMergeTree.h>
-#include <Storages/StorageDistributed.h>
 #include <Storages/StorageReplicatedMergeTree.h>
 #include <fmt/format.h>
 #include <Common/FieldVisitorToString.h>
@@ -99,9 +96,9 @@ namespace _scan_execute_impl
         MergeTreeDataSelectAnalysisResultPtr read_analysis;
 
         ProjectionMatchContext(const ProjectionDescription & projection_desc_,
-                               const PartGroup & part_group,
-                               StoragePtr storage,
-                               const NamesAndTypesList & table_columns);
+            const PartGroup & part_group,
+            const IStorage * storage,
+            const NamesAndTypesList & table_columns);
 
         ExecutePlanElement buildExecutePlanElement(PartGroup part_group, const SelectQueryInfo & query_info) const;
 
@@ -115,7 +112,7 @@ namespace _scan_execute_impl
     ProjectionMatchContext::ProjectionMatchContext(
         const ProjectionDescription & projection_desc_,
         const PartGroup & part_group,
-        StoragePtr storage,
+        const IStorage * storage,
         const NamesAndTypesList & table_columns)
         : projection_desc(projection_desc_)
     {
@@ -128,15 +125,15 @@ namespace _scan_execute_impl
         for (size_t i = 0; i < projection_desc.column_names.size(); ++i)
         {
             column_translation.addStorageTranslation(
-                projection_desc.column_asts[i], projection_desc.column_names[i], storage.get(), NODE_ID_TABLE_SCAN);
+                projection_desc.column_asts[i], projection_desc.column_names[i], storage, NODE_ID_TABLE_SCAN);
             column_types.emplace(projection_desc.column_names[i], projection_desc.data_types[i]);
         }
     }
 
     ExecutePlanElement ProjectionMatchContext::buildExecutePlanElement(PartGroup part_group, const SelectQueryInfo & query_info) const
     {
-        QueryPlanStepPtr rewritten_filter_step = nullptr;
-        QueryPlanStepPtr rewritten_projection_step = nullptr;
+        std::shared_ptr<FilterStep> rewritten_filter_step = nullptr;
+        std::shared_ptr<ProjectionStep> rewritten_projection_step = nullptr;
         auto require_columns = requiredColumns();
 
         NamesAndTypes names_and_types;
@@ -187,7 +184,7 @@ namespace _scan_execute_impl
         std::set<std::string_view> columns;
         std::set<std::string_view> projections;
 
-        PartSchemaKey(MergeTreeData::DataPartPtr part);
+        explicit PartSchemaKey(MergeTreeData::DataPartPtr part);
 
         bool operator==(const PartSchemaKey & other) const
         {
@@ -232,7 +229,7 @@ using namespace _scan_execute_impl;
 class TableScanExecutor
 {
 public:
-    TableScanExecutor(TableScanStep & step, ContextPtr context_);
+    TableScanExecutor(TableScanStep & step, const MergeTreeMetaBase & storage_, ContextPtr context_);
     ExecutePlan buildExecutePlan();
 
 private:
@@ -251,9 +248,8 @@ private:
 
     bool match_projection = false;
 
-    StoragePtr storage;
+    const MergeTreeMetaBase & storage;
     StorageMetadataPtr storage_metadata;
-    const MergeTreeMetaBase & merge_tree_data;
     MergeTreeDataSelectExecutor merge_tree_reader;
     const SelectQueryInfo & select_query_info;
     ContextPtr context;
@@ -270,11 +266,10 @@ private:
     std::shared_ptr<PartitionIdToMaxBlock> max_added_blocks;
 };
 
-TableScanExecutor::TableScanExecutor(TableScanStep & step, ContextPtr context_)
-    : storage(step.getStorage())
-    , storage_metadata(storage->getInMemoryMetadataPtr())
-    , merge_tree_data(dynamic_cast<const MergeTreeMetaBase &>(*storage))
-    , merge_tree_reader(merge_tree_data)
+TableScanExecutor::TableScanExecutor(TableScanStep & step, const MergeTreeMetaBase & storage_, ContextPtr context_)
+    : storage(storage_)
+    , storage_metadata(storage.getInMemoryMetadataPtr())
+    , merge_tree_reader(storage)
     , select_query_info(step.getQueryInfo())
     , context(std::move(context_))
     , log(&Poco::Logger::get("TableScanExecutor"))
@@ -342,7 +337,7 @@ TableScanExecutor::TableScanExecutor(TableScanStep & step, ContextPtr context_)
     const auto & settings = context->getSettingsRef();
     if (settings.select_sequential_consistency)
     {
-        if (const StorageReplicatedMergeTree * replicated = dynamic_cast<const StorageReplicatedMergeTree *>(storage.get()))
+        if (auto replicated = dynamic_pointer_cast<const StorageReplicatedMergeTree>(storage.shared_from_this()))
             max_added_blocks = std::make_shared<PartitionIdToMaxBlock>(replicated->getMaxAddedBlocks());
     }
 
@@ -356,7 +351,7 @@ ExecutePlan TableScanExecutor::buildExecutePlan()
 
     PartGroups part_groups;
     {
-        auto parts = merge_tree_data.getDataPartsVector();
+        auto parts = storage.getDataPartsVector();
         parts.erase(std::remove_if(parts.begin(), parts.end(), [](auto & part) { return part->info.isFakeDropRangePart(); }), parts.end());
 
         LOG_DEBUG(log, "Num of parts before part pruning: {}", std::to_string(parts.size()));
@@ -387,7 +382,7 @@ ExecutePlan TableScanExecutor::buildExecutePlan()
         for (const auto & projection_desc: storage_metadata->projections)
             if (part_group.hasProjection(projection_desc.name))
             {
-                projection_candidates.emplace_back(projection_desc, part_group, storage, table_columns);
+                projection_candidates.emplace_back(projection_desc, part_group, &storage, table_columns);
                 if (!match(projection_candidates.back()))
                     projection_candidates.pop_back();
             }
@@ -560,13 +555,13 @@ bool TableScanExecutor::match(ProjectionMatchContext & candidate) const
 MergeTreeDataSelectAnalysisResultPtr TableScanExecutor::estimateReadMarks(const PartGroup & part_group) const
 {
     return merge_tree_reader.estimateNumMarksToRead(part_group.parts,
-                                                    query_required_columns,
-                                                    storage_metadata,
-                                                    storage_metadata,
-                                                    select_query_info,
-                                                    context,
-                                                    context->getSettingsRef().max_threads,
-                                                    max_added_blocks);
+        query_required_columns,
+        storage_metadata,
+        storage_metadata,
+        select_query_info,
+        context,
+        context->getSettingsRef().max_threads,
+        max_added_blocks);
 }
 
 void TableScanExecutor::estimateReadMarksForProjection(const PartGroup & part_group, ProjectionMatchContext & candidate) const
@@ -583,13 +578,13 @@ void TableScanExecutor::estimateReadMarksForProjection(const PartGroup & part_gr
     }
 
     candidate.read_analysis = merge_tree_reader.estimateNumMarksToRead(projection_parts,
-                                                                       candidate.requiredColumns(),
-                                                                       storage_metadata,
-                                                                       candidate.projection_desc.metadata,
-                                                                       select_query_info,
-                                                                       context,
-                                                                       context->getSettingsRef().max_threads,
-                                                                       max_added_blocks);
+        candidate.requiredColumns(),
+        storage_metadata,
+        candidate.projection_desc.metadata,
+        select_query_info,
+        context,
+        context->getSettingsRef().max_threads,
+        max_added_blocks);
 
 }
 
@@ -598,7 +593,7 @@ void TableScanExecutor::prunePartsByIndex(MergeTreeData::DataPartsVector & parts
     if (parts.empty())
         return;
 
-    auto part_values = MergeTreeDataSelectExecutor::filterPartsByVirtualColumns(merge_tree_data, parts, select_query_info, context);
+    auto part_values = MergeTreeDataSelectExecutor::filterPartsByVirtualColumns(storage, parts, select_query_info, context);
 
     if (part_values && part_values->empty())
     {
@@ -646,7 +641,7 @@ void TableScanExecutor::prunePartsByIndex(MergeTreeData::DataPartsVector & parts
         interpreter->execute();
         LOG_TRACE(&Poco::Logger::get("TableScanExecutor::prunePartsByIndex"), "Construct partition filter query {}", queryToString(copy_select));
         MergeTreeDataSelectExecutor::filterPartsByPartition(
-            parts, part_values, storage_metadata, merge_tree_data, interpreter->getQueryInfo(), context, max_added_blocks.get(), log, result.index_stats);
+            parts, part_values, storage_metadata, storage, interpreter->getQueryInfo(), context, max_added_blocks.get(), log, result.index_stats);
     }
     else
     {
@@ -654,7 +649,7 @@ void TableScanExecutor::prunePartsByIndex(MergeTreeData::DataPartsVector & parts
             parts,
             part_values,
             storage_metadata,
-            merge_tree_data,
+            storage,
             select_query_info,
             context,
             max_added_blocks.get(),
@@ -891,17 +886,21 @@ ASTs cloneChildrenReplacement(ASTs ast_children_replacement)
 
 void TableScanStep::rewriteInForBucketTable(ContextPtr context) const
 {
+    // todo: remove dynamic cast
     const auto * cloud_merge_tree = dynamic_cast<StorageCloudMergeTree *>(storage.get());
     if (!cloud_merge_tree)
         return;
 
-    auto metadata_snapshot = cloud_merge_tree->getInMemoryMetadataPtr();
-    const bool isBucketTableAndNeedOptimise = context->getSettingsRef().optimize_skip_unused_shards && cloud_merge_tree->isBucketTable()
-        && metadata_snapshot->getColumnsForClusterByKey().size() == 1 && !cloud_merge_tree->getRequiredBucketNumbers().empty();
-    if (!isBucketTableAndNeedOptimise)
+    if (!storage->isBucketTable() || !context->getSettingsRef().optimize_skip_unused_shards)
         return;
 
-    auto query = query_info.query->as<ASTSelectQuery>();
+    auto metadata_snapshot = cloud_merge_tree->getInMemoryMetadataPtr();
+    const bool need_optimise
+        = metadata_snapshot->getColumnsForClusterByKey().size() == 1 && !cloud_merge_tree->getRequiredBucketNumbers().empty();
+    if (!need_optimise)
+        return;
+
+    auto * query = query_info.query->as<ASTSelectQuery>();
 
     // NOTE: Have try-catch for every rewrite_in in order to find the WHERE clause that caused the error
     RewriteInQueryVisitor::Data data;
@@ -1019,11 +1018,14 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
     stage_watch.start();
     storage = DatabaseCatalog::instance().getTable(storage_id, build_context.context);
 
-    bool use_projection_index = build_context.context->getSettingsRef().optimizer_index_projection_support
-        && dynamic_cast<MergeTreeMetaBase *>(storage.get()) && build_context.context->getSettingsRef().enable_ab_index_optimization;
+    auto * merge_tree_storage = dynamic_cast<MergeTreeMetaBase *>(storage.get());
+    bool is_merge_tree = merge_tree_storage != nullptr;
 
-    bool use_optimizer_projection_selection = build_context.context->getSettingsRef().optimizer_projection_support
-        && dynamic_cast<MergeTreeMetaBase *>(storage.get()) && !use_projection_index;
+    bool use_projection_index = build_context.context->getSettingsRef().optimizer_index_projection_support && is_merge_tree
+        && build_context.context->getSettingsRef().enable_ab_index_optimization;
+
+    bool use_optimizer_projection_selection
+        = build_context.context->getSettingsRef().optimizer_projection_support && is_merge_tree && !use_projection_index;
 
     rewriteInForBucketTable(build_context.context);
     stage_watch.start();
@@ -1091,26 +1093,28 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             getRequiredColumns(OutputAndPrewhere), storage->getVirtuals(), storage_id);
         auto required_columns = required_columns_block.getNamesAndTypesList();
 
-        String msg;
-
-        for (const auto & ass : inline_expressions)
+        if (log->debug())
         {
-            msg += fmt::format("from: {}, source: {}\n", ass.first, queryToString(*ass.second));
+            String msg;
+
+            for (const auto & ass : inline_expressions)
+            {
+                msg += fmt::format("from: {}, source: {}\n", ass.first, queryToString(*ass.second));
+            }
+
+            auto output_types = table_output_stream.getNamesToTypes();
+            for (const auto & ass : inline_expressions)
+            {
+                msg += fmt::format("name: {}, type: {}\n", ass.first, output_types.at(ass.first)->getName());
+            }
+
+            msg += fmt::format(
+                "actions: {}\n", ProjectionStep::createActions(inline_expressions, input_columns, build_context.context)->dumpDAG());
+
+            // msg += fmt::format("output_columns: {}\n required_columns: {}", column_alias, required_columns.toString());
+
+            LOG_DEBUG(log, fmt::format("pushdown_index_projection: {}", msg));
         }
-
-        auto output_types = table_output_stream.getNamesToTypes();
-        for (const auto & ass : inline_expressions)
-        {
-            msg += fmt::format("name: {}, type: {}\n", ass.first, output_types.at(ass.first)->getName());
-        }
-
-        msg += fmt::format(
-            "actions: {}\n",
-            ProjectionStep::createActions(inline_expressions, input_columns, build_context.context)->dumpDAG());
-
-        // msg += fmt::format("output_columns: {}\n required_columns: {}", column_alias, required_columns.toString());
-
-        LOG_DEBUG(log, fmt::format("pushdown_index_projection: {}", msg));
 
         MergeTreeIndexInfo::BuildIndexContext index_building_context{
                 .input_columns = input_columns,
@@ -1126,7 +1130,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
 
     stage_watch.restart();
     if (use_optimizer_projection_selection)
-        execute_plan = TableScanExecutor(*this, build_context.context).buildExecutePlan();
+        execute_plan = TableScanExecutor(*this, *merge_tree_storage, build_context.context).buildExecutePlan();
     else if (use_projection_index)
         execute_plan = TableScanExecutorWithIndex(*this, build_context.context).buildExecutePlan();
     LOG_DEBUG(log, "init pipeline stage run time: projection match, {} ms", stage_watch.elapsedMillisecondsAsDouble());
@@ -1174,13 +1178,14 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
         return;
     }
 
-    auto & merge_tree_data = dynamic_cast<MergeTreeMetaBase &>(*storage);
-    MergeTreeDataSelectExecutor merge_tree_reader{merge_tree_data};
+    MergeTreeDataSelectExecutor merge_tree_reader{*merge_tree_storage};
     auto metadata_snapshot = storage->getInMemoryMetadataPtr();
     auto context = build_context.context;
     Pipes pipes;
-    std::vector<size_t> plan_element_ids; // num of pipes may be smaller than num of plan elements since MergeTreeDataSelectExecutor
-                                          // can infer an empty result for a part group. hence we record a mapping of pipe->plan element
+    
+    // num of pipes may be smaller than num of plan elements since MergeTreeDataSelectExecutor
+    // can infer an empty result for a part group. hence we record a mapping of pipe->plan element
+    std::vector<size_t> plan_element_ids;
     size_t total_output_ports = 0;
 
     for (size_t plan_element_id = 0; plan_element_id < execute_plan.size(); ++plan_element_id)
@@ -1220,10 +1225,10 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
                                                          BuildQueryPipelineSettings::fromContext(context));
 
             if (plan_element.rewritten_filter_step)
-                dynamic_cast<FilterStep &>(*plan_element.rewritten_filter_step).transformPipeline(*sub_pipeline, build_context);
+                plan_element.rewritten_filter_step->transformPipeline(*sub_pipeline, build_context);
 
             if (plan_element.rewritten_projection_step)
-                dynamic_cast<ProjectionStep &>(*plan_element.rewritten_projection_step).transformPipeline(*sub_pipeline, build_context);
+                plan_element.rewritten_projection_step->transformPipeline(*sub_pipeline, build_context);
         }
         else
         {
@@ -1232,7 +1237,7 @@ void TableScanStep::initializePipeline(QueryPipeline & pipeline, const BuildQuer
             {
                 /// get a consistent snapshot of delete bitmaps for query,
                 /// otherwise concurrent upserts that modify part's delete bitmap will cause incorrect query result
-                auto delete_bitmap_snapshot = merge_tree_data.getLatestDeleteSnapshot(plan_element.parts);
+                auto delete_bitmap_snapshot = merge_tree_storage->getLatestDeleteSnapshot(plan_element.parts);
                 /// move delete_bitmap_snapshot into the closure because delete_bitmap_getter will be used after this function returns
                 delete_bitmap_getter = [snapshot = std::move(delete_bitmap_snapshot)](const auto & part) -> ImmutableDeleteBitmapPtr
                 {
@@ -1542,41 +1547,9 @@ void TableScanStep::allocate(ContextPtr context)
     }
 
     original_table = storage_id.table_name;
-    auto * cnch_merge_tree = dynamic_cast<StorageCnchMergeTree *>(storage.get());
-    auto * cnch_hive = dynamic_cast<StorageCnchHive *>(storage.get());
-    auto * cnch_file = dynamic_cast<IStorageCnchFile *>(storage.get());
+    storage_id = storage->prepareTableRead(getRequiredColumns(), query_info, context);
 
-    if (!cnch_merge_tree && !cnch_hive && !cnch_file)
-        return;
-
-    if (cnch_merge_tree)
-    {
-        storage_id.database_name = cnch_merge_tree->getDatabaseName();
-        auto prepare_res
-            = cnch_merge_tree->prepareReadContext(getRequiredColumns(), cnch_merge_tree->getInMemoryMetadataPtr(), query_info, context);
-        storage_id.table_name = prepare_res.local_table_name;
-        storage_id.uuid = cnch_merge_tree->getStorageUUID();
-    }
-    else if (cnch_hive)
-    {
-        size_t max_streams = context->getSettingsRef().max_threads;
-        if (max_block_size < context->getSettingsRef().max_block_size)
-            max_streams = 1; // single block single stream.
-
-        if (max_streams > 1 && !storage->isRemote())
-            max_streams *= context->getSettingsRef().max_streams_to_max_threads_ratio;
-
-        storage_id.database_name = cnch_hive->getDatabaseName();
-        auto prepare_res = cnch_hive->prepareReadContext(column_names, cnch_hive->getInMemoryMetadataPtr(),query_info, context, max_streams);
-        storage_id.table_name = prepare_res.local_table_name;
-        storage_id.uuid = cnch_hive->getStorageUUID();
-    }
-    else if (cnch_file)
-    {
-        storage_id.database_name = cnch_file->getDatabaseName();
-        auto prepare_res = cnch_file->prepareReadContext(column_names, cnch_file->getInMemoryMetadataPtr(), query_info, context, context->getSettingsRef().max_threads);
-        storage_id.table_name = prepare_res.local_table_name;
-    }
+    // update query info
     if (query_info.query)
     {
         query_info = fillQueryInfo(context);

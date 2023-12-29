@@ -21,7 +21,6 @@
 #include <Statistics/CacheManager.h>
 #include <Statistics/CachedStatsProxy.h>
 #include <Statistics/CollectStep.h>
-#include <Statistics/HiveConverter.h>
 #include <Statistics/SimplifyHistogram.h>
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsNdvBucketsImpl.h>
