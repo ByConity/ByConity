@@ -53,6 +53,7 @@
 #include <Interpreters/TableJoin.h>
 #include <Interpreters/evaluateConstantExpression.h>
 #include <Interpreters/replaceForPositionalArguments.h>
+#include <Interpreters/FullSortingMergeJoin.h>
 
 #include <QueryPlan/ExpressionStep.h>
 

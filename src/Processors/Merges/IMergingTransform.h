@@ -78,6 +78,7 @@ private:
     std::vector<InputState> input_states;
     std::atomic<bool> have_all_inputs;
     bool is_initialized = false;
+    UInt64 limit_hint = 0;
 
     IProcessor::Status prepareInitializeInputs();
 };
@@ -104,9 +105,10 @@ public:
         const Blocks & input_headers,
         const Block & output_header,
         bool have_all_inputs_,
+        UInt64 limit_hint_,
         bool empty_chunk_on_finish_,
         Args && ... args)
-        : IMergingTransformBase(input_headers, output_header, have_all_inputs_)
+        : IMergingTransformBase(input_headers, output_header, have_all_inputs_, limit_hint_)
         , empty_chunk_on_finish(empty_chunk_on_finish_)
         , algorithm(std::forward<Args>(args) ...)
     {
@@ -158,7 +160,7 @@ public:
 protected:
     /// Call `consume` with empty chunk when there is no more data.
     bool empty_chunk_on_finish = false;
-    
+
     Algorithm algorithm;
 
     /// Profile info.
