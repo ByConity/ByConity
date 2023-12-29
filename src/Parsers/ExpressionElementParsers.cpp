@@ -1081,7 +1081,7 @@ bool ParserCastOperator::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
 
     ASTPtr type_ast;
     if (ParserToken(TokenType::DoubleColon).ignore(pos, expected)
-        && ParserDataType().parse(pos, type_ast, expected))
+        && ParserDataType(dt).parse(pos, type_ast, expected))
     {
         String s;
         size_t data_size = data_end - data_begin;
@@ -1114,7 +1114,7 @@ bool ParserCastAsExpression::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
         && ParserToken(TokenType::OpeningRoundBracket).ignore(pos, expected)
         && ParserExpression(dt).parse(pos, expr_node, expected)
         && ParserKeyword("AS").ignore(pos, expected)
-        && ParserDataType().parse(pos, type_node, expected)
+        && ParserDataType(dt).parse(pos, type_node, expected)
         && ParserToken(TokenType::ClosingRoundBracket).ignore(pos, expected))
     {
         node = createFunctionCast(expr_node, type_node);
@@ -2424,7 +2424,7 @@ bool ParserSubstitution::parseImpl(Pos & pos, ASTPtr & node, Expected & expected
     ++pos;
 
     auto old_pos = pos;
-    ParserDataType type_parser;
+    ParserDataType type_parser(dt);
     if (!type_parser.ignore(pos, expected))
     {
         expected.add(pos, "substitution type");

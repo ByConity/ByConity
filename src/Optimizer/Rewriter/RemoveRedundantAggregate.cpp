@@ -5,7 +5,6 @@
 #include <QueryPlan/JoinStep.h>
 #include <QueryPlan/ProjectionStep.h>
 #include <QueryPlan/UnionStep.h>
-#include <Storages/StorageCnchMergeTree.h>
 
 namespace DB
 {

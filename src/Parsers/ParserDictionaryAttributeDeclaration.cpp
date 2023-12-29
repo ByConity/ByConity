@@ -31,7 +31,7 @@ namespace DB
 bool ParserDictionaryAttributeDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     ParserIdentifier name_parser;
-    ParserDataType type_parser;
+    ParserDataType type_parser(dt);
     ParserKeyword s_default{"DEFAULT"};
     ParserKeyword s_expression{"EXPRESSION"};
     ParserKeyword s_hierarchical{"HIERARCHICAL"};

@@ -211,7 +211,7 @@ CloudTableBuilder::CloudTableBuilder() : create_query(std::make_shared<ASTCreate
 
 CloudTableBuilder & CloudTableBuilder::setMetadata(const StorageMetadataPtr & metadata)
 {
-    ASTPtr new_columns = InterpreterCreateQuery::formatColumns(metadata->getColumns());
+    ASTPtr new_columns = InterpreterCreateQuery::formatColumns(metadata->getColumns(), ParserSettings::CLICKHOUSE);
     create_query->set(create_query->columns_list, std::make_shared<ASTColumns>());
     create_query->set(create_query->columns_list->columns, new_columns);
     create_query->set(create_query->storage, std::make_shared<ASTStorage>());

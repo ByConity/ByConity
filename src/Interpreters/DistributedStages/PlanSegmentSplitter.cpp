@@ -445,9 +445,7 @@ std::optional<Partitioning::Handle> SourceNodeFinder::visitTableScanNode(QueryPl
 {
     auto * source_step = dynamic_cast<TableScanStep *>(node->step.get());
     // check is bucket table instead of cnch table?
-    if (dynamic_pointer_cast<StorageCnchMergeTree>(source_step->getStorage())
-        || dynamic_pointer_cast<StorageCnchHive>(source_step->getStorage())
-        || dynamic_pointer_cast<IStorageCnchFile>(source_step->getStorage()))
+    if (source_step->getStorage()->supportsDistributedRead())
         return Partitioning::Handle::FIXED_HASH;
 
     // hack for unittest

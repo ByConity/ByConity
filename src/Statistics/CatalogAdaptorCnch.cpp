@@ -19,16 +19,16 @@
 #include <Interpreters/StorageID.h>
 #include <Statistics/CacheManager.h>
 #include <Statistics/CatalogAdaptor.h>
-#include <Statistics/HiveConverter.h>
 #include <Statistics/StatisticsCollectorObjects.h>
 #include <Statistics/SubqueryHelper.h>
 #include <Statistics/TypeUtils.h>
 #include <Storages/Hive/StorageCnchHive.h>
 #include <boost/algorithm/string.hpp>
 #include <hive_metastore_types.h>
-#include <Statistics/HiveConverter.h>
 #include <Statistics/StatsUdiCounter.h>
 #include <boost/regex.hpp>
+#include "common/types.h"
+#include "Storages/TableStatistics.h"
 
 namespace DB::Statistics
 {
@@ -58,11 +58,13 @@ public:
     bool isTableAutoUpdated(const StatsTableIdentifier & table) override;
     ColumnDescVector getCollectableColumns(const StatsTableIdentifier & identifier) override;
     const Settings & getSettingsRef() override { return context->getSettingsRef(); }
+    static StatsData convertTableStats(const TableStatistics & table_stats);
 
     CatalogAdaptorCnch(ContextPtr context_, Catalog::CatalogPtr catalog_) : context(context_), catalog(catalog_) { }
     UInt64 fetchAddUdiCount(const StatsTableIdentifier & table, UInt64 count) override;
     void removeUdiCount(const StatsTableIdentifier & table) override;
     ~CatalogAdaptorCnch() override = default;
+
 
 private:
     ContextPtr context;
@@ -129,7 +131,7 @@ StatsCollection CatalogAdaptorCnch::readSingleStats(const StatsTableIdentifier &
     else
     {
         // column_stats
-        auto column_name = column_name_opt.value();
+        const auto & column_name = column_name_opt.value();
         auto tags = catalog->getAvailableColumnStatisticsTags(uuid_str, column_name);
         if (!tags.empty())
         {
@@ -143,29 +145,16 @@ StatsCollection CatalogAdaptorCnch::readSingleStats(const StatsTableIdentifier &
 StatsData CatalogAdaptorCnch::readStatsData(const StatsTableIdentifier & table)
 {
     auto storage = getStorageByTableId(table);
+
     auto columns_desc = this->getCollectableColumns(table);
+    std::vector<String> cols_name;
+    for (auto desc : columns_desc)
+        cols_name.emplace_back(desc.name);
     StatsData result;
 
-    if (storage->getName() == "CnchHive")
-    {
-        auto hive_storage = std::dynamic_pointer_cast<StorageCnchHive>(storage);
-        std::vector<String> cols_name;
-        NameToType name_to_type;
-        for (auto desc : columns_desc)
-        {
-            cols_name.emplace_back(desc.name);
-            name_to_type[desc.name] = desc.type;
-        }
-
-        auto [row_count, hive_stats] = hive_storage->getTableStats(cols_name, context);
-        auto [table_stats, column_stats] = StatisticsImpl::convertHiveToStats(row_count, name_to_type, hive_stats);
-        result.table_stats = table_stats.writeToCollection();
-        for (auto & [k, v] : column_stats)
-        {
-            result.column_stats[k] = v.writeToCollection();
-        }
-        return result;
-    }
+    auto table_stats = storage->getTableStats(cols_name, context);
+    if (table_stats)
+        return convertTableStats(*table_stats);
 
     auto uuid_str = UUIDHelpers::UUIDToString(table.getUUID());
 
@@ -402,6 +391,34 @@ void CatalogAdaptorCnch::invalidateClusterStatsCache(const StatsTableIdentifier 
 void CatalogAdaptorCnch::invalidateServerStatsCache(const StatsTableIdentifier & table)
 {
     Statistics::CacheManager::invalidate(context, table);
+}
+
+StatsData CatalogAdaptorCnch::convertTableStats(const TableStatistics & table_statistics)
+{
+    using namespace StatisticsImpl;
+
+    StatsData result;
+
+    auto table_basic = std::make_shared<StatsTableBasic>();
+    table_basic->setRowCount(table_statistics.row_count);
+    TableStats table_stats{.basic = table_basic};
+    result.table_stats = table_stats.writeToCollection();
+
+    for (const auto & column : table_statistics.column_statistics)
+    {
+        const auto & stats = column.second;
+
+        auto column_basic = std::make_shared<StatsColumnBasic>();
+        column_basic->mutableProto().set_min_as_double(stats.min);
+        column_basic->mutableProto().set_max_as_double(stats.max);
+        UInt64 ndv_exlude_null = stats.ndv - (stats.null_counts ? 1 : 0);
+        column_basic->mutableProto().set_ndv_value(ndv_exlude_null);
+        column_basic->mutableProto().set_nonnull_count(table_statistics.row_count - stats.null_counts);
+
+        ColumnStats column_stats{.basic = std::move(column_basic)};
+        result.column_stats[column.first] = column_stats.writeToCollection();
+    }
+    return result;
 }
 
 CatalogAdaptorPtr createCatalogAdaptorCnch(ContextPtr context)

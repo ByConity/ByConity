@@ -113,7 +113,7 @@ bool HiveMetastoreClient::isTableExist(const String & db_name, const String & ta
 }
 
 
-HiveTableStats HiveMetastoreClient::getTableStats(
+std::optional<TableStatistics> HiveMetastoreClient::getTableStats(
     const String & db_name_may_with_tenant_id, const String & table_name, const Strings & col_names, const bool merge_all_partition )
 {
     auto db_name = getOriginalDatabaseName(db_name_may_with_tenant_id);
@@ -128,11 +128,11 @@ HiveTableStats HiveMetastoreClient::getTableStats(
         tryCallHiveClient([&](auto & client) { client->get_table_statistics_req(result, req); });
         if (table->parameters.contains("numRows"))
         {
-            return {.row_count = std::stol(table->parameters.at("numRows")), .table_stats = result};
+            return MetastoreConvertUtils::convertHiveStats({std::stol(table->parameters.at("numRows")), result});
         }
         else
         {
-            return {0, {}};
+            return MetastoreConvertUtils::convertHiveStats({0, {}});
         }
     }
 
@@ -154,9 +154,9 @@ HiveTableStats HiveMetastoreClient::getTableStats(
 
     auto partition_stats = getPartitionStats(db_name, table_name, col_names, partition_keys, partition_values);
 
-    auto [row_count, table_stats] = MetastoreConvertUtils::merge_partition_stats(*table, partitions, partition_stats);
+    auto stats = MetastoreConvertUtils::merge_partition_stats(*table, partitions, partition_stats);
 
-    return {row_count, std::move(table_stats)};
+    return MetastoreConvertUtils::convertHiveStats(stats);
 }
 
 

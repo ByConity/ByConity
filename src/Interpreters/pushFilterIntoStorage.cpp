@@ -11,12 +11,13 @@
 namespace DB
 {
 
-ASTPtr pushFilterIntoStorage(ASTPtr query_filter, const MergeTreeMetaBase * merge_tree_data, SelectQueryInfo & query_info, PlanNodeStatisticsPtr storage_statistics, const NamesAndTypes & names_and_types, ContextMutablePtr context)
+ASTPtr pushFilterIntoStorage(ASTPtr query_filter, StoragePtr storage, SelectQueryInfo & query_info, PlanNodeStatisticsPtr storage_statistics, const NamesAndTypes & names_and_types, ContextMutablePtr context)
 {
     ASTs conjuncts = PredicateUtils::extractConjuncts(query_filter);
     const auto & settings = context->getSettingsRef();
 
     /// Set partition_filter
+    auto * merge_tree_data = dynamic_cast<MergeTreeMetaBase *>(storage.get());
     if (merge_tree_data && settings.enable_partition_filter_push_down)
     {
         ASTs push_predicates;

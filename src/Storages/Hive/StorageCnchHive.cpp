@@ -377,17 +377,16 @@ void StorageCnchHive::alter(const AlterCommands & params, ContextPtr local_conte
     setInMemoryMetadata(new_metadata);
 }
 
-std::pair<UInt64, ApacheHive::TableStatsResult> StorageCnchHive::getTableStats(const Strings & col_names, ContextPtr local_context)
+std::optional<TableStatistics> StorageCnchHive::getTableStats(const Strings & columns, ContextPtr local_context)
 {
     bool merge_partition_stats = local_context->getSettingsRef().merge_partition_stats;
 
-    auto stats = hive_client->getTableStats(hive_db_name, hive_table_name, col_names, merge_partition_stats);
-    if (stats.row_count == 0)
-    {
-        return {0, {}};
-    }
-    LOG_TRACE(log, " row_count {}, stats {}", stats.row_count, apache::thrift::to_string(stats.table_stats));
-    return {stats.row_count, stats.table_stats};
+    auto stats =  hive_client->getTableStats(hive_db_name, hive_table_name, columns, merge_partition_stats);
+    if (stats)
+        LOG_TRACE(log, "row_count {}", stats->row_count);
+    else
+        LOG_TRACE(log, "no stats");
+    return stats;
 }
 
 std::shared_ptr<IDirectoryLister> StorageCnchHive::getDirectoryLister()
@@ -410,6 +409,20 @@ std::shared_ptr<IDirectoryLister> StorageCnchHive::getDirectoryLister()
         throw Exception(ErrorCodes::UNKNOWN_FORMAT, "Unknown hive format {}", input_format);
 }
 
+StorageID StorageCnchHive::prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context)
+{
+    size_t max_streams = local_context->getSettingsRef().max_threads;
+    // if (max_block_size < local_context->getSettingsRef().max_block_size)
+    //     max_streams = 1; // single block single stream.
+    // if (max_streams > 1 && !isRemote())
+    //     max_streams *= local_context->getSettingsRef().max_streams_to_max_threads_ratio;
+
+    auto prepare_result = prepareReadContext(output_columns, getInMemoryMetadataPtr(), query_info, local_context, max_streams);
+
+    StorageID storage_id = getStorageID();
+    storage_id.table_name = prepare_result.local_table_name;
+    return storage_id;
+}
 
 void registerStorageCnchHive(StorageFactory & factory)
 {
@@ -469,5 +482,4 @@ void registerStorageCnchHive(StorageFactory & factory)
         features);
 }
 }
-
 #endif

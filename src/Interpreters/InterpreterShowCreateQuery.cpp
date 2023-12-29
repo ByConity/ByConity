@@ -144,7 +144,7 @@ BlockInputStreamPtr InterpreterShowCreateQuery::executeImpl()
     }
 
     WriteBufferFromOwnString buf;
-    formatAST(*create_query, buf, false, false);
+    formatAST(*create_query, buf, false, false, false, getContext()->getSettingsRef().dialect_type);
     String res = buf.str();
 
     MutableColumnPtr column = ColumnString::create();

@@ -73,6 +73,7 @@ std::pair<String, StoragePtr> createTableFromAST(
 {
     ast_create_query.attach = true;
     ast_create_query.database = database_name;
+    const bool system_query = database_name == "system";
 
     if (ast_create_query.select && ast_create_query.isView())
         ApplyWithSubqueryVisitor().visit(*ast_create_query.select);
@@ -83,7 +84,7 @@ std::pair<String, StoragePtr> createTableFromAST(
         auto table_function = factory.get(ast_create_query.as_table_function, context);
         ColumnsDescription columns;
         if (ast_create_query.columns_list && ast_create_query.columns_list->columns)
-            columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, true);
+            columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, true, system_query);
         StoragePtr storage = table_function->execute(ast_create_query.as_table_function, context, ast_create_query.table, std::move(columns));
         storage->renameInMemory(ast_create_query);
         return {ast_create_query.table, storage};
@@ -111,7 +112,7 @@ std::pair<String, StoragePtr> createTableFromAST(
         }
         else
         {
-            columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, true);
+            columns = InterpreterCreateQuery::getColumnsDescription(*ast_create_query.columns_list->columns, context, true, system_query);
             constraints = InterpreterCreateQuery::getConstraintsDescription(ast_create_query.columns_list->constraints);
             foreign_keys = InterpreterCreateQuery::getForeignKeysDescription(ast_create_query.columns_list->foreign_keys);
             unique = InterpreterCreateQuery::getUniqueNotEnforcedDescription(ast_create_query.columns_list->unique);
@@ -178,7 +179,9 @@ String getObjectDefinitionFromCreateQuery(const ASTPtr & query, std::optional<bo
     return statement_buf.str();
 }
 
-void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemoryMetadata & metadata)
+void applyMetadataChangesToCreateQuery(const ASTPtr & query,
+                                       const StorageInMemoryMetadata & metadata,
+                                       const ParserSettingsImpl & dialect_type)
 {
     auto & ast_create_query = query->as<ASTCreateQuery &>();
 
@@ -188,7 +191,7 @@ void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemo
                                                      " and doesn't have structure in metadata", backQuote(ast_create_query.table));
 
     assert(has_structure);
-    ASTPtr new_columns = InterpreterCreateQuery::formatColumns(metadata.columns);
+    ASTPtr new_columns = InterpreterCreateQuery::formatColumns(metadata.columns, dialect_type);
     ASTPtr new_indices = InterpreterCreateQuery::formatIndices(metadata.secondary_indices);
     ASTPtr new_constraints = InterpreterCreateQuery::formatConstraints(metadata.constraints);
     ASTPtr new_foreign_keys = InterpreterCreateQuery::formatForeignKeys(metadata.foreign_keys);
@@ -543,7 +546,7 @@ void DatabaseOnDisk::renameTable(
 
 
 /// It returns create table statement (even if table is detached)
-ASTPtr DatabaseOnDisk::getCreateTableQueryImpl(const String & table_name, ContextPtr, bool throw_on_error) const
+ASTPtr DatabaseOnDisk::getCreateTableQueryImpl(const String & table_name, ContextPtr caller_context, bool throw_on_error) const
 {
     ASTPtr ast;
     StoragePtr storage = tryGetTable(table_name, getContext());
@@ -554,7 +557,7 @@ ASTPtr DatabaseOnDisk::getCreateTableQueryImpl(const String & table_name, Contex
     auto table_metadata_path = getObjectMetadataPath(table_name);
     try
     {
-        ast = getCreateQueryFromMetadata(table_metadata_path, throw_on_error);
+        ast = getCreateQueryFromMetadata(table_metadata_path, throw_on_error, caller_context);
     }
     catch (const Exception & e)
     {
@@ -758,9 +761,13 @@ ASTPtr DatabaseOnDisk::parseQueryFromMetadata(
     return ast;
 }
 
-ASTPtr DatabaseOnDisk::getCreateQueryFromMetadata(const String & database_metadata_path, bool throw_on_error) const
+ASTPtr DatabaseOnDisk::getCreateQueryFromMetadata(const String & database_metadata_path,
+                                                  bool throw_on_error,
+                                                  const ContextPtr & caller_context) const
 {
-    ASTPtr ast = parseQueryFromMetadata(log, getContext(), database_metadata_path, throw_on_error);
+    ASTPtr ast = parseQueryFromMetadata(log,
+                                        caller_context ? caller_context : getContext(),
+                                        database_metadata_path, throw_on_error);
 
     if (ast)
     {

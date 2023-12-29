@@ -32,10 +32,14 @@
 #include <Interpreters/InterpreterDescribeQuery.h>
 #include <Interpreters/IdentifierSemantic.h>
 #include <Access/AccessFlags.h>
+#include <Parsers/ASTDataType.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <Parsers/TablePropertiesQueriesASTs.h>
+#include <Parsers/formatAST.h>
+#include <Parsers/parseQuery.h>
+#include <Parsers/ParserDataType.h>
 
 
 namespace DB
@@ -49,7 +53,7 @@ BlockIO InterpreterDescribeQuery::execute()
 }
 
 
-Block InterpreterDescribeQuery::getSampleBlock()
+Block InterpreterDescribeQuery::getSampleBlock(ContextPtr context_)
 {
     Block block;
 
@@ -61,6 +65,12 @@ Block InterpreterDescribeQuery::getSampleBlock()
 
     col.name = "type";
     block.insert(col);
+
+    if (context_->getSettingsRef().dialect_type == DialectType::ANSI)
+    {
+        col.name = "nullable";
+        block.insert(col);
+    }
 
     col.name = "flags";
     block.insert(col);
@@ -111,16 +121,50 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
         columns = metadata_snapshot->getColumns();
     }
 
-    Block sample_block = getSampleBlock();
+    Block sample_block = getSampleBlock(getContext());
     MutableColumns res_columns = sample_block.cloneEmptyColumns();
+
+    auto dialect_type = getContext()->getSettingsRef().dialect_type;
 
     for (const auto & column : columns)
     {
         size_t i = 0;
         res_columns[i++]->insert(column.name);
-        res_columns[i++]->insert(column.type->getName());
-        res_columns[i++]->insert(String(column.type->isMapKVStore() ? "K" : ""));
 
+        /// Under ANSI mode, data type will be parsed by ANSI type parser, which converts Nullable to
+        /// null modifiers. And the nullability of root type will be demonstrated in the separate
+        /// field: `nullable`. For instance, the type field Nullable(Array(Array(Nullable(Array(String)))))
+        /// will be divided into two fields under ANSI mode:
+        ///     type: Array(Array(Array(String NOT NULL) NULL) NOT NULL
+        ///     nullable: true
+        if (dialect_type == DialectType::ANSI)
+        {
+            ParserDataType type_parser(ParserSettings::ANSI);
+            String type_name = column.type->getName();
+            const char * type_name_pos = type_name.data();
+            const char * type_name_end = type_name_pos + type_name.size();
+            auto type_ast = parseQuery(type_parser,
+                                       type_name_pos, type_name_end, "data type", 0,
+                                       DBMS_DEFAULT_MAX_PARSER_DEPTH);
+
+            bool nullable;
+            if (const auto * t_ast = type_ast->as<ASTDataType>())
+            {
+                nullable = t_ast->getNullable();
+                type_ast = t_ast->getNestedType();
+            }
+            else
+                nullable = false;
+
+            WriteBufferFromOwnString buf;
+            formatAST(*type_ast, buf, false, true, false, dialect_type);
+            res_columns[i++]->insert(buf.str());
+            res_columns[i++]->insert(nullable ? "true" : "false");
+        }
+        else
+            res_columns[i++]->insert(column.type->getName());
+
+        res_columns[i++]->insert(String(column.type->isMapKVStore() ? "K" : ""));
 
         if (column.default_desc.expression)
         {
