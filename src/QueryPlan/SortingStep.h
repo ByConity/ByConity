@@ -25,13 +25,6 @@ namespace DB
 class SortingStep : public ITransformingStep
 {
 public:
-    enum class Type
-    {
-        Full,
-        FinishSorting,
-        MergingSorted,
-    };
-
     struct Settings
     {
         size_t max_block_size;
