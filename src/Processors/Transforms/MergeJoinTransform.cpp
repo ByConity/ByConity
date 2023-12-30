@@ -76,12 +76,12 @@ int nullableCompareAt(const IColumn & left_column, const IColumn & right_column,
 
         if (left_nullable && right_nullable)
         {
-            int res = left_column->compareAt(lhs_pos, rhs_pos, right_column, null_direction_hint);
+            int res = left_column.compareAt(lhs_pos, rhs_pos, right_column, null_direction_hint);
             if (res)
                 return res;
 
             /// NULL != NULL case
-            if (left_column->isNullAt(lhs_pos))
+            if (left_column.isNullAt(lhs_pos))
                 return null_direction_hint;
 
             return 0;
@@ -92,7 +92,7 @@ int nullableCompareAt(const IColumn & left_column, const IColumn & right_column,
     {
         if (const auto * left_nullable = checkAndGetColumn<ColumnNullable>(left_column))
         {
-            if (left_column->isNullAt(lhs_pos))
+            if (left_column.isNullAt(lhs_pos))
                 return null_direction_hint;
             return left_nullable->getNestedColumn().compareAt(lhs_pos, rhs_pos, right_column, null_direction_hint);
         }
@@ -102,7 +102,7 @@ int nullableCompareAt(const IColumn & left_column, const IColumn & right_column,
     {
         if (const auto * right_nullable = checkAndGetColumn<ColumnNullable>(right_column))
         {
-            if (left_column->isNullAt(rhs_pos))
+            if (left_column.isNullAt(rhs_pos))
                 return -null_direction_hint;
             return left_column.compareAt(lhs_pos, rhs_pos, right_nullable->getNestedColumn(), null_direction_hint);
         }
