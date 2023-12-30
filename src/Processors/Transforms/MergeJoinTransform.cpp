@@ -76,12 +76,12 @@ int nullableCompareAt(const IColumn & left_column, const IColumn & right_column,
 
         if (left_nullable && right_nullable)
         {
-            int res = left_nullable->compareAt(lhs_pos, rhs_pos, right_column, null_direction_hint);
+            int res = left_column->compareAt(lhs_pos, rhs_pos, right_column, null_direction_hint);
             if (res)
                 return res;
 
             /// NULL != NULL case
-            if (left_nullable->isNullAt(lhs_pos))
+            if (left_column->isNullAt(lhs_pos))
                 return null_direction_hint;
 
             return 0;
@@ -92,7 +92,7 @@ int nullableCompareAt(const IColumn & left_column, const IColumn & right_column,
     {
         if (const auto * left_nullable = checkAndGetColumn<ColumnNullable>(left_column))
         {
-            if (left_nullable->isNullAt(lhs_pos))
+            if (left_column->isNullAt(lhs_pos))
                 return null_direction_hint;
             return left_nullable->getNestedColumn().compareAt(lhs_pos, rhs_pos, right_column, null_direction_hint);
         }
@@ -102,7 +102,7 @@ int nullableCompareAt(const IColumn & left_column, const IColumn & right_column,
     {
         if (const auto * right_nullable = checkAndGetColumn<ColumnNullable>(right_column))
         {
-            if (right_nullable->isNullAt(rhs_pos))
+            if (left_column->isNullAt(rhs_pos))
                 return -null_direction_hint;
             return left_column.compareAt(lhs_pos, rhs_pos, right_nullable->getNestedColumn(), null_direction_hint);
         }
@@ -314,11 +314,8 @@ MergeJoinAlgorithm::MergeJoinAlgorithm(
 
     //if (join_on.on_filter_condition_left || join_on.on_filter_condition_right)
     //    throw Exception(ErrorCodes::NOT_IMPLEMENTED, "MergeJoinAlgorithm does not support ON filter conditions");
-
-    cursors = {
-        createCursor(input_headers[0], join_on.keyNamesLeft()),
-        createCursor(input_headers[1], join_on.keyNamesRight())
-    };
+    cursors.push_back(createCursor(input_headers[0], join_on.keyNamesLeft()));
+    cursors.push_back(createCursor(input_headers[1], join_on.keyNamesRight()));
 
     for (const auto & [left_key, right_key] : table_join->getTableJoin().leftToRightKeyRemap())
     {
