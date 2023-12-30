@@ -1322,10 +1322,9 @@ void InterpreterSelectQuery::executeImpl(QueryPlan & query_plan, const BlockInpu
                         auto sorting_step = std::make_unique<SortingStep>(
                             plan.getCurrentDataStream(),
                             std::move(order_descr),
-                            settings.max_block_size,
                             0 /* LIMIT */,
                             sort_settings);
-                        sorting_step->setStepDescription("Sort {} before JOIN", join_pos);
+                        sorting_step->setStepDescription(fmt::format("Sort {} before JOIN", join_pos));
                         plan.addStep(std::move(sorting_step));
                     };
 
