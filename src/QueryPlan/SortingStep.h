@@ -37,6 +37,7 @@ public:
 
         explicit Settings(const Context & context);
         explicit Settings(size_t max_block_size_);
+        explicit Settings(){};
     };
 
     explicit SortingStep(
