@@ -267,7 +267,7 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
         }
         else
         {
-            pipeline = QueryPipeline::joinPipelines(
+            pipeline = QueryPipeline::joinPipelinesRightLeft(
                 std::move(pipelines[0]),
                 std::move(pipelines[1]),
                 join,
