@@ -450,7 +450,7 @@ bool TableJoin::inferJoinKeyCommonType(const NamesAndTypesList & left, const Nam
         const auto & ltype = ltypeItem->second;
         const auto & rtype = rtypeItem->second;
 
-        bool type_equals = strict ? (*ltype)->equals(*rtype) : JoinCommon::typesEqualUpToNullability(ltype, rtype);
+        bool type_equals = strict ? (*ltype).equals(*rtype) : JoinCommon::typesEqualUpToNullability(ltype, rtype);
         
         if(type_equals)
             return true;
