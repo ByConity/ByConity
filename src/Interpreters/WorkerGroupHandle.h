@@ -106,7 +106,6 @@ public:
     std::vector<CnchWorkerClientPtr> getWorkerClients() const;
     const ShardsInfo & getShardsInfo() const { return shards_info; }
 
-    CnchWorkerClientPtr getWorkerClientByHash(const String & key) const;
     CnchWorkerClientPtr getWorkerClient(bool skip_busy_worker = true) const;
     std::pair<UInt64, CnchWorkerClientPtr> getWorkerClient(UInt64 sequence, bool skip_busy_worker = true) const;
     CnchWorkerClientPtr getWorkerClient(const HostWithPorts & host_ports) const;

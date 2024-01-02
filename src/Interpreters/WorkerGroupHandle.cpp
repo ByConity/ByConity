@@ -141,14 +141,6 @@ WorkerGroupHandleImpl::WorkerGroupHandleImpl(const WorkerGroupHandleImpl & from,
     }
 }
 
-CnchWorkerClientPtr WorkerGroupHandleImpl::getWorkerClientByHash(const String & key) const
-{
-    if (worker_clients.empty())
-        throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
-    UInt64 index = std::hash<String>{}(key) % worker_clients.size();
-    return worker_clients[index];
-}
-
 static std::unordered_set<UInt64> getBusyWorkerIndexes(double ratio, const WorkerGroupMetrics & metrics)
 {
     if (metrics.worker_metrics_vec.empty())
