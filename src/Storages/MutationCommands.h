@@ -117,6 +117,7 @@ public:
         for (const auto & command : *this)
         {
             if (command.type != MutationCommand::DELETE &&
+                command.type != MutationCommand::UPDATE &&
                 command.type != MutationCommand::FAST_DELETE &&
                 command.type != MutationCommand::EMPTY &&
                 /* command.type != MutationCommand::BUILD_BITMAP && */

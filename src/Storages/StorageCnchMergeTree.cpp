@@ -3069,6 +3069,7 @@ void StorageCnchMergeTree::checkMutationIsPossible(const MutationCommands & comm
         MutationCommand::MATERIALIZE_INDEX,
         MutationCommand::DELETE,
         MutationCommand::FAST_DELETE,
+        MutationCommand::UPDATE,
     };
 
     bool contains_delete = false;
