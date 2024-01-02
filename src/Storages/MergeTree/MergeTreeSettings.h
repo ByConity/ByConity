@@ -100,7 +100,9 @@ enum StealingCacheMode : UInt64
     M(UInt64, number_of_free_entries_in_pool_to_lower_max_size_of_merge, 8, "When there is less than specified number of free entries in pool (or replicated queue), start to lower maximum size of merge to process (or to put in queue). This is to allow small merges to process - not filling the pool with long running merges.", 0) \
     M(UInt64, number_of_free_entries_in_pool_to_execute_mutation, 10, "When there is less than specified number of free entries in pool, do not execute part mutations. This is to leave free threads for regular merges and avoid \"Too many parts\"", 0) \
     M(UInt64, max_number_of_merges_with_ttl_in_pool, 2, "When there is more than specified number of merges with TTL entries in pool, do not assign new merge with TTL. This is to leave free threads for regular merges and avoid \"Too many parts\"", 0) \
-    M(Seconds, old_parts_lifetime, 30 * 60, "How many seconds to keep obsolete parts.", 0) \
+    /** We implement 2-phase part GC. `old_parts_lifetime` is the ttl for part meta in phase-1, and `ttl_for_trash_items` is the ttl for part file in phase-2. For old_parts_lifetime, a small value can speedup query by scanning less parts, and a bigger value means a safer strategy to recover data. */ \
+    M(Seconds, old_parts_lifetime, 30 * 60, "How many seconds to keep obsolete parts before marking them as trash keys.", 0) \
+    M(Seconds, ttl_for_trash_items, 3 * 3600, "How many additional seconds to wait before actual data removal for trash keys", 0) \
     M(Seconds, temporary_directories_lifetime, 86400, "How many seconds to keep tmp_-directories. You should not lower this value because merges and mutations may not be able to work with low value of this setting.", 0) \
     M(Seconds, lock_acquire_timeout_for_background_operations, DBMS_DEFAULT_LOCK_ACQUIRE_TIMEOUT_SEC, "For background operations like merges, mutations etc. How many seconds before failing to acquire table locks.", 0) \
     M(UInt64, min_rows_to_fsync_after_merge, 0, "Minimal number of rows to do fsync for part after merge (0 - disabled)", 0) \
@@ -131,7 +133,6 @@ enum StealingCacheMode : UInt64
       0) \
     M(UInt64, gc_remove_bitmap_batch_size, 1000, "Submit a batch of bitmaps to a background thread", 0) \
     M(UInt64, gc_remove_bitmap_thread_pool_size, 16, "Turn up the thread pool size to speed up GC processing of bitmaps", 0) \
-    M(Seconds, ttl_for_trash_items, 30 * 60, "How many additional seconds to wait before actual data removal", 0) \
     \
     /** Inserts settings. */ \
     M(UInt64, \

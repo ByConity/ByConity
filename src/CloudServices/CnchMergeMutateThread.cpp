@@ -879,9 +879,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
     */
 
     /// get specific version storage
-    /// TODO: FIXME @yuanquan
-    /// auto istorage = catalog->getTableByUUID(*local_context, toString(storage_id.uuid), future_task.calcColumnsCommitTime());
-    auto istorage = catalog->getTableByUUID(*local_context, toString(storage_id.uuid), TxnTimestamp::maxTS());
+    auto istorage = catalog->getTableByUUID(*local_context, toString(storage_id.uuid), future_task.calcColumnsCommitTime());
     auto & cnch_table = checkAndGetCnchTable(istorage);
 
     /// fill task parameters
