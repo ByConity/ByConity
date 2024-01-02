@@ -41,3 +41,15 @@ ALTER TABLE t_rename_with_concurrent_merge RENAME COLUMN s to s1;
 SELECT sleepEachRow(3) FROM numbers(5) FORMAT Null;
 
 SELECT count(*) FROM t_rename_with_concurrent_merge WHERE s1 = '';
+
+-- test for bitmap index
+SELECT 'TEST RENAME COLUMN WITH BITMAP INDEX';
+DROP TABLE IF EXISTS t_alter_rename_column_with_bitmap_index;
+CREATE TABLE t_alter_rename_column_with_bitmap_index(k Int32, m Int32, array_bitmap_int32 Array(Int32) BitMapIndex) ENGINE = CnchMergeTree ORDER BY k;
+
+INSERT INTO t_alter_rename_column_with_bitmap_index VALUES (1, 1, [1]);
+ALTER TABLE t_alter_rename_column_with_bitmap_index RENAME COLUMN array_bitmap_int32 to s1; -- { serverError 36 }
+ALTER TABLE t_alter_rename_column_with_bitmap_index RENAME COLUMN m to s1;
+SELECT count() FROM t_alter_rename_column_with_bitmap_index where s1 = 1;
+
+DROP TABLE IF EXISTS t_alter_rename_column_with_bitmap_index;
