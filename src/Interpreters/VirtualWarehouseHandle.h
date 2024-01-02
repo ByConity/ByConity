@@ -118,14 +118,14 @@ public:
 
     bool addWorkerGroup(const WorkerGroupHandle & worker_group);
 
-    CnchWorkerClientPtr getWorker();
-    CnchWorkerClientPtr getWorkerByHash(const String & key);
-    std::vector<CnchWorkerClientPtr> getAllWorkers();
     /// Caller should already know the worker group id when picking a single worker.
     /// So VW handle just forward the request to the target WG handle, or forward to a random WG if it's not specified.
     CnchWorkerClientPtr pickWorker(const String & worker_group_id, bool skip_busy_worker = true);
 
     std::pair<UInt64, CnchWorkerClientPtr> pickWorker(const String & worker_group_id, UInt64 sequence, bool skip_busy_worker = true);
+    CnchWorkerClientPtr getWorker();
+    CnchWorkerClientPtr getWorkerByHash(const String & key);
+    std::vector<CnchWorkerClientPtr> getAllWorkers();
 
 private:
     bool addWorkerGroupImpl(const WorkerGroupHandle & worker_group, const std::lock_guard<std::mutex> & lock);

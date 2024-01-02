@@ -1498,6 +1498,10 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
                 throw Exception{"Cannot rename and modify the same column " + backQuote(column_name) + " in a single ALTER query",
                                 ErrorCodes::NOT_IMPLEMENTED};
 
+            const auto & column = all_columns.get(command.column_name);
+            if (column.type->isBitmapIndex())
+                throw Exception{"Cannot rename column with bitmap index, please drop the index first", ErrorCodes::BAD_ARGUMENTS};
+
             String from_nested_table_name = Nested::extractTableName(command.column_name);
             String to_nested_table_name = Nested::extractTableName(command.rename_to);
             bool from_nested = from_nested_table_name != command.column_name;
