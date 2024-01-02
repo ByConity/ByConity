@@ -470,7 +470,7 @@ enum StealingCacheMode : UInt64
     \
     /* Metastore settings */\
     M(Bool, enable_metastore, false, "Use KV metastore to manage data parts.", 0) \
-    M(Bool, enable_persistent_checksum, true, "Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
+    M(Bool, enable_persistent_checksum, true, "[Deprecated] Persist checksums of part in memory. If set to false, checksums will be managed by a global cache to save memory.", 0) \
     \
     M(Bool, enable_local_disk_cache, true, "Enable local disk cache", 0) \
     /*keep enable_preload_parts for compitable*/ \
