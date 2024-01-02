@@ -36,6 +36,7 @@ set enable_optimizer=1;
 set enable_eliminate_join_by_fk=1;
 set enable_eliminate_complicated_pk_fk_join=1;
 set join_use_nulls=1;
+set enum_replicate_no_stats=0;
 
 select 'real pk?';
 SELECT count()
