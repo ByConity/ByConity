@@ -80,9 +80,9 @@ Strings ListKeysWithRegexpMatching(
             const String & key = object.GetKey();
             if (re2::RE2::FullMatch(key, *matcher) && key.back() != '/')
                 keys.emplace_back(key);
-            request.SetContinuationToken(outcome.GetResult().GetNextContinuationToken());
-            is_finished = !outcome.GetResult().GetIsTruncated();
         }
+        request.SetContinuationToken(outcome.GetResult().GetNextContinuationToken());
+        is_finished = !outcome.GetResult().GetIsTruncated();
     }
 
     LOG_TRACE(
