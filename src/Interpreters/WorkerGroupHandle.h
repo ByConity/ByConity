@@ -129,7 +129,6 @@ public:
     Strings getWorkerTCPAddresses(const Settings & settings) const;
     Strings getWorkerIDVec() const;
     std::vector<std::pair<String, UInt16>> getReadWorkers() const;
-    HostWithPorts randomWorker() const;
 
     bool hasRing() const { return ring != nullptr; }
     const DB::ConsistentHashRing & getRing() const { return *ring; }

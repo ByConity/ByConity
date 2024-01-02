@@ -67,6 +67,18 @@ VirtualWarehouseHandleImpl::Container VirtualWarehouseHandleImpl::getAll(UpdateM
     return worker_groups;
 }
 
+WorkerGroupHandle VirtualWarehouseHandleImpl::getWorkerGroup(const String & worker_group_id, UpdateMode update_mode)
+{
+    tryUpdateWorkerGroups(update_mode);
+
+    std::lock_guard lock(state_mutex);
+
+    auto it = worker_groups.find(worker_group_id);
+    if (it == worker_groups.end())
+        throw Exception("There is no worker group with id " + worker_group_id + " in VW " + name, ErrorCodes::LOGICAL_ERROR);
+    return it->second;
+}
+
 void VirtualWarehouseHandleImpl::updateWorkerStatusFromRM(const std::vector<WorkerGroupData>& groups_data)
 {
     auto worker_status_manager = getContext()->getWorkerStatusManager();
@@ -117,7 +129,7 @@ void VirtualWarehouseHandleImpl::tryUpdateWorkerGroups(UpdateMode update_mode)
 
     UInt64 current_ns = clock_gettime_ns(CLOCK_MONOTONIC_COARSE);
     UInt64 the_last_update_time_ns = last_update_time_ns.load();
-    
+
     if (current_ns >= the_last_update_time_ns + force_update_interval_ns)
     {
         LOG_TRACE(log, "The worker_groups is not updated for {} ms. Will use ForceUpdate mode.", force_update_interval_ns / 1000000);
@@ -141,7 +153,7 @@ void VirtualWarehouseHandleImpl::tryUpdateWorkerGroups(UpdateMode update_mode)
 
     if (!success || worker_groups.empty())
         LOG_WARNING(log, "Failed to update worker groups for VW:{}", name);
-    
+
     last_update_time_ns.store(current_ns);
 }
 
@@ -365,18 +377,6 @@ WorkerGroupHandle VirtualWarehouseHandleImpl::pickLocally([[maybe_unused]] const
 //     return selectGroup(algo, available_groups);
 }
 
-CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorkerByHash(const String & key)
-{
-    tryUpdateWorkerGroups(TryUpdate);
-
-    /// TODO: Should we expand the worker list first?
-    UInt64 val = std::hash<String>{}(key);
-    std::lock_guard lock(state_mutex);
-    auto wg_index = val % worker_groups.size();
-    auto & group = std::next(worker_groups.begin(), wg_index)->second;
-    return group->getWorkerClientByHash(key);
-}
-
 /// Get a worker from the VW using a random strategy.
 CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorker()
 {
@@ -384,9 +384,20 @@ CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorker()
     return wg_handle->getWorkerClient();
 }
 
-std::vector<CnchWorkerClientPtr> VirtualWarehouseHandleImpl::getAllWorkers()
+CnchWorkerClientPtr VirtualWarehouseHandleImpl::getWorkerByHash(const String & key)
 {
     tryUpdateWorkerGroups(TryUpdate);
+    /// TODO: Should we expand the worker list first?
+    UInt64 val = std::hash<String>{}(key);
+    std::lock_guard lock(state_mutex);
+    auto wg_index = val % worker_groups.size();
+    auto & group = std::next(worker_groups.begin(), wg_index)->second;
+    return group->getWorkerClient(val, false).second;
+}
+
+std::vector<CnchWorkerClientPtr> VirtualWarehouseHandleImpl::getAllWorkers()
+{
+    tryUpdateWorkerGroups(UpdateMode::TryUpdate);
 
     std::vector<CnchWorkerClientPtr> res;
     std::lock_guard lock(state_mutex);

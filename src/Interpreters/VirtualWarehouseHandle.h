@@ -126,6 +126,9 @@ public:
     CnchWorkerClientPtr pickWorker(const String & worker_group_id, bool skip_busy_worker = true);
 
     std::pair<UInt64, CnchWorkerClientPtr> pickWorker(const String & worker_group_id, UInt64 sequence, bool skip_busy_worker = true);
+    CnchWorkerClientPtr getWorker();
+    CnchWorkerClientPtr getWorkerByHash(const String & key);
+    std::vector<CnchWorkerClientPtr> getAllWorkers();
 
 private:
     bool addWorkerGroupImpl(const WorkerGroupHandle & worker_group, const std::lock_guard<std::mutex> & lock);

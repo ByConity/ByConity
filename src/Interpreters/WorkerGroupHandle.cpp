@@ -291,18 +291,6 @@ std::vector<std::pair<String, UInt16>> WorkerGroupHandleImpl::getReadWorkers() c
     return res;
 }
 
-HostWithPorts WorkerGroupHandleImpl::randomWorker() const
-{
-    if (hosts.empty())
-        throw Exception("No available worker for " + id, ErrorCodes::RESOURCE_MANAGER_NO_AVAILABLE_WORKER);
-    if (hosts.size() == 1)
-        return hosts[0];
-
-    std::uniform_int_distribution dist;
-    auto index = dist(thread_local_rng) % hosts.size();
-    return hosts[index];
-}
-
 std::unordered_map<String, HostWithPorts> WorkerGroupHandleImpl::getIdHostPortsMap() const
 {
     std::unordered_map<String, HostWithPorts> id_hosts;
