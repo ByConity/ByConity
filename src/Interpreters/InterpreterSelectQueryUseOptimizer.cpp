@@ -56,7 +56,7 @@ Block InterpreterSelectQueryUseOptimizer::getSampleBlock()
 {
     if (!block)
     {
-        auto query_plan = buildQueryPlan(true);
+        auto query_plan = buildQueryPlan();
     }
 
     return block;
