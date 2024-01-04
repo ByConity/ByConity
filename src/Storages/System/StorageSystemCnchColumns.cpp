@@ -24,6 +24,7 @@
 #include <Parsers/queryToString.h>
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Poco/Logger.h>
+#include <Storages/System/CollectWhereClausePredicate.h>
 
 namespace DB
 {
@@ -49,7 +50,75 @@ NamesAndTypesList StorageSystemCnchColumns::getNamesAndTypes()
         {"compression_codec", std::make_shared<DataTypeString>()}};
 }
 
-void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo &) const
+static std::optional<std::vector<std::map<String, String>>> parsePredicatesFromWhere(const SelectQueryInfo & query_info, const ContextPtr & context)
+{
+    ASTPtr where_expression = query_info.query->as<const ASTSelectQuery &>().where();
+    std::vector<std::map<String,Field>> predicates;
+    predicates = collectWhereORClausePredicate(where_expression, context);
+
+    std::optional<std::vector<std::map<String, String>>> res;
+    std::vector<std::map<String, String>> tmp_res;
+    for (auto & item: predicates)
+    {
+        std::map<String, String> tmp_map;
+        if (item.count("database") && item["database"].getType() == Field::Types::String)
+        {
+            tmp_map["database"] = item["database"].get<String>();
+        }
+        
+        if (item.count("table") && item["table"].getType() == Field::Types::String)
+        {
+            tmp_map["table"] = item["table"].get<String>();
+        }
+
+        if (!tmp_map.empty())
+            tmp_res.push_back(tmp_map);
+    }
+
+    if (!tmp_res.empty())
+        res = tmp_res;
+
+    return res;
+}
+
+static bool getDBTablesFromPredicates(const std::optional<std::vector<std::map<String, String>>> & predicates, 
+        std::vector<std::pair<String, String>> & db_table_pairs)
+{
+    if (!predicates)
+        return false;
+    
+    std::vector<std::pair<String, String>> tmp_result;
+    for (const auto & item : predicates.value())
+    {
+        if (!item.count("database") || !item.count("table"))
+            return false;
+        
+        tmp_result.push_back(std::make_pair(item.at("database"), item.at("table")));
+    }
+    db_table_pairs = tmp_result;
+
+    return true;
+}
+
+static bool matchAnyPredicate(const std::optional<std::vector<std::map<String, String>>> & predicates, 
+        const Protos::DataModelTable & table_model)
+{
+    if (!predicates)
+        return true;
+
+    for (const auto & item : predicates.value())
+    {
+        if ((!item.count("database") || (item.at("database") == table_model.database()))
+             && (!item.count("table") ||(item.at("table") == table_model.name())))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr context, const SelectQueryInfo & query_info) const
 {
     Catalog::CatalogPtr cnch_catalog = context->getCnchCatalog();
 
@@ -57,21 +126,35 @@ void StorageSystemCnchColumns::fillData(MutableColumns & res_columns, ContextPtr
     {
         Stopwatch stop_watch;
         stop_watch.start();
-        Catalog::Catalog::DataModelTables res = cnch_catalog->getAllTables();
+
+        Catalog::Catalog::DataModelTables table_models;
+
+        std::vector<std::pair<String, String>> db_table_pairs;
+        auto predicates = parsePredicatesFromWhere(query_info, context);
+        bool get_db_tables_ok = getDBTablesFromPredicates(predicates, db_table_pairs);
+        if (get_db_tables_ok)
+        {        
+            auto table_ids = cnch_catalog->getTableIDsByNames(db_table_pairs);
+            if (table_ids)
+                table_models = cnch_catalog->getTablesByIDs(*table_ids);
+        }
+        else
+            table_models = cnch_catalog->getAllTables();
+
         UInt64 time_pass_ms = stop_watch.elapsedMilliseconds();
         if (time_pass_ms > 2000)
             LOG_INFO(&Poco::Logger::get("StorageSystemCnchColumns"),
                 "cnch_catalog->getAllTables() took {} ms", time_pass_ms);
 
         ContextMutablePtr mutable_context = Context::createCopy(context);
-        for (size_t i = 0, size = res.size(); i != size; ++i)
+        for (size_t i = 0, size = table_models.size(); i != size; ++i)
         {
-            if (!Status::isDeleted(res[i].status()))
+            if (!Status::isDeleted(table_models[i].status()) && matchAnyPredicate(predicates, table_models[i]))
             {
-                String db = res[i].database();
-                String table_name = res[i].name();
-                auto table_uuid = RPCHelpers::createUUID(res[i].uuid());
-                String create_query = res[i].definition();
+                String db = table_models[i].database();
+                String table_name = table_models[i].name();
+                auto table_uuid = RPCHelpers::createUUID(table_models[i].uuid());
+                String create_query = table_models[i].definition();
 
                 ColumnsDescription columns;
                 Names cols_required_for_partition_key;

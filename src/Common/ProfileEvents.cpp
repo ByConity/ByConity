@@ -649,6 +649,8 @@
     M(GetAllTablesIDFailed, "") \
     M(GetTableIDByNameSuccess, "") \
     M(GetTableIDByNameFailed, "") \
+    M(GetTableIDsByNamesSuccess, "") \
+    M(GetTableIDsByNamesFailed, "") \
     M(GetAllWorkerGroupsSuccess, "") \
     M(GetAllWorkerGroupsFailed, "") \
     M(GetAllDictionariesSuccess, "") \
