@@ -40,6 +40,10 @@ TableScanExecutorWithIndex::TableScanExecutorWithIndex(TableScanStep & step, Con
 
 ExecutePlan TableScanExecutorWithIndex::buildExecutePlan()
 {
+    // Do not build execute plan when there isn't bitmap index
+    if (columns_with_index.empty())
+        return {};
+
     PartGroups part_groups;
     {
         auto parts = merge_tree_data.getDataPartsVector();

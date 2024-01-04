@@ -208,7 +208,8 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
         reader_settings,
         index_executor.get(),
         avg_value_size_hints,
-        profile_callback);
+        profile_callback,
+        internal_progress_callback);
 
     if (prewhere_info)
     {
@@ -246,7 +247,8 @@ void MergeTreeBaseSelectProcessor::initializeReaders(
             reader_settings,
             pre_index_executor.get(),
             avg_value_size_hints,
-            profile_callback);
+            profile_callback,
+            internal_progress_callback);
     }
 }
 

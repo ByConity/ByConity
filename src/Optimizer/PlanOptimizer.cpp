@@ -95,6 +95,7 @@ const Rewriters & PlanOptimizer::getSimpleRewriters()
         // push down limit and aggregate
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
+        std::make_shared<ColumnPruning>(true),
 
         std::make_shared<ImplementJoinOrderHints>(),
 
@@ -210,6 +211,7 @@ const Rewriters & PlanOptimizer::getFullRewriters()
         // push down limit & aggregate
         std::make_shared<IterativeRewriter>(Rules::pushDownLimitRules(), "PushDownLimit"),
         std::make_shared<IterativeRewriter>(Rules::distinctToAggregateRules(), "DistinctToAggregate"),
+        std::make_shared<ColumnPruning>(true),
         std::make_shared<IterativeRewriter>(Rules::pushAggRules(), "PushAggregateThroughJoin"),
 
         std::make_shared<ImplementJoinOrderHints>(),

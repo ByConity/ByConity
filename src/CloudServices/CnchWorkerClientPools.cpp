@@ -56,62 +56,6 @@ void CnchWorkerClientPools::removeVirtualWarehouse(const String & name)
     /// Won't remove from default pools
 }
 
-CnchWorkerClientPoolPtr CnchWorkerClientPools::getPool(const String & name)
-{
-    std::lock_guard lock(pools_mutex);
-
-    if (!pools.count(name))
-        addVirtualWarehouseImpl(name, default_psm, {}, lock);
-
-    if (auto iter = pools.find(name); iter != pools.end())
-        return iter->second;
-    throw Exception(ErrorCodes::LOGICAL_ERROR, "No availiable virtual warehouse: ", name);
-}
-
-
-CnchWorkerClientPoolPtr CnchWorkerClientPools::getPool(VirtualWarehouseType vw_type)
-{
-    std::lock_guard lock(pools_mutex);
-    auto & pool = default_pools[size_t(vw_type)];
-    if (!pool)
-        throw Exception(ErrorCodes::LOGICAL_ERROR, "No default pool for vw_type {} ", ResourceManagement::toString(vw_type));
-    return pool;
-}
-
-CnchWorkerClientPoolPtr CnchWorkerClientPools::getPool(const Strings & names, VirtualWarehouseTypes vw_types)
-{
-    auto log = &Poco::Logger::get("CnchWorkerClientPools");
-
-    std::lock_guard lock(pools_mutex);
-    for (auto & name : names)
-    {
-        if (!pools.count(name))
-            addVirtualWarehouseImpl(name, default_psm, {}, lock);
-
-        auto iter = pools.find(name);
-        if (iter == pools.end())
-            continue;
-        auto & pool = iter->second;
-
-        if (pool->empty())
-            LOG_DEBUG(log, "Worker pool {} is empty, just skip it", name);
-        else
-            return pool;
-    }
-    for (auto vw_type : vw_types)
-    {
-        auto & pool = default_pools[size_t(vw_type)];
-        if (!pool)
-            continue;
-
-        if (pool->empty())
-            LOG_DEBUG(log, "Default worker pool for {} is empty, just skip it", ResourceManagement::toString(vw_type));
-        else
-            return pool;
-    }
-    throw Exception(ErrorCodes::LOGICAL_ERROR, "No available virtual warehouse");
-}
-
 /// XXX: temporary solution.
 CnchWorkerClientPtr CnchWorkerClientPools::getWorker(const HostWithPorts & host_ports)
 {

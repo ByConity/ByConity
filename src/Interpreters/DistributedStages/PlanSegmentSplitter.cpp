@@ -399,6 +399,9 @@ std::pair<String, size_t> PlanSegmentVisitor::findClusterAndParallelSize(QueryPl
                         ret = max_parallel_size;
                     if (plan_segment_context.health_parallel && *plan_segment_context.health_parallel < ret)
                         ret = *plan_segment_context.health_parallel;
+                    // In bsp mode, we ignore the number of health node.
+                    if (plan_segment_context.context->getSettingsRef().bsp_mode && max_parallel_size > ret)
+                        ret = max_parallel_size;
                     return {plan_segment_context.cluster_name, ret};
                 }
             }

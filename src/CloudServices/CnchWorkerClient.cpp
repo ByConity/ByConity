@@ -492,6 +492,7 @@ void CnchWorkerClient::submitKafkaConsumeTask(const KafkaTaskCommand & command)
     request.set_type(command.type);
     request.set_task_id(command.task_id);
     request.set_rpc_port(command.rpc_port);
+    RPCHelpers::fillStorageID(command.cnch_storage_id, *request.mutable_cnch_storage_id());
     request.set_database(command.local_database_name);
     request.set_table(command.local_table_name);
     request.set_assigned_consumer(command.assigned_consumer);
@@ -505,10 +506,6 @@ void CnchWorkerClient::submitKafkaConsumeTask(const KafkaTaskCommand & command)
         cur_tpl->set_topic(toString(tpl.get_topic()));
         cur_tpl->set_partition(tpl.get_partition());
         cur_tpl->set_offset(tpl.get_offset());
-    }
-    if (command.type == KafkaTaskCommand::START_CONSUME)
-    {
-        RPCHelpers::fillStorageID(command.cnch_storage_id, *request.mutable_cnch_storage_id());
     }
 
     stub->submitKafkaConsumeTask(&cntl, &request, &response, nullptr);

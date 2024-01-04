@@ -39,6 +39,8 @@ struct QueryLogElement
     UInt64 read_rows{};
     UInt64 read_bytes{};
 
+    UInt64 disk_cache_read_bytes{};
+
     /// The data written to DB
     UInt64 written_rows{};
     UInt64 written_bytes{};

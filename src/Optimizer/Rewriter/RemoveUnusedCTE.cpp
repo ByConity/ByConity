@@ -47,7 +47,7 @@ public:
 
     PlanNodePtr visitCTERefNode(CTERefNode & node, Void & c) override
     {
-        auto with_step = node.getStep();
+        const auto * with_step = dynamic_cast<const CTERefStep *>(node.getStep().get());
         if (common_table_expression_ref_counts[with_step->getId()] >= 2 || context->getSettingsRef().cte_mode == CTEMode::ENFORCED)
         {
             cte_helper.acceptAndUpdate(with_step->getId(), *this, c);

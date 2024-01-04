@@ -15,6 +15,7 @@
 #include <aws/s3/model/HeadObjectResult.h>
 #include <aws/s3/model/GetObjectResult.h>
 #include <IO/S3/PocoHTTPClient.h>
+#include <IO/S3/Credentials.h>
 #include <IO/BufferBase.h>
 #include <Poco/URI.h>
 #include <Common/HTTPHeaderEntries.h>
@@ -73,8 +74,8 @@ public:
         const String & secret_access_key,
         const String & server_side_encryption_customer_key_base64,
         HTTPHeaderEntries headers,
-        bool use_environment_credentials,
-        bool use_insecure_imds_request);
+        CredentialsConfiguration credential_config,
+        const String & session_token = {});
 
     std::shared_ptr<Aws::Client::ClientConfiguration> createCRTHttpClientConfiguration();
 
@@ -143,9 +144,9 @@ public:
         size_t http_connection_pool_size_ = 1024, size_t slow_read_ms_ = 100):
             max_redirects(max_redirects_), connect_timeout_ms(connect_timeout_ms_),
             request_timeout_ms(request_timeout_ms_), max_connections(max_connections_),
-            endpoint(endpoint_), region(region_), bucket(bucket_), ak_id(ak_id_),
-            ak_secret(ak_secret_), root_prefix(root_prefix_),
-            session_token(session_token_), is_virtual_hosted_style(is_virtual_hosted_style_),
+            endpoint(endpoint_), region(region_), bucket(bucket_), root_prefix(root_prefix_),
+            ak_id(ak_id_), ak_secret(ak_secret_), session_token(session_token_),
+            is_virtual_hosted_style(is_virtual_hosted_style_),
             http_keep_alive_timeout_ms(http_keep_alive_timeout_ms_),
             http_connection_pool_size(http_connection_pool_size_), slow_read_ms(slow_read_ms_) {}
 
@@ -159,13 +160,17 @@ public:
     int connect_timeout_ms;
     int request_timeout_ms;
     int max_connections;
+
     String endpoint;
     String region;
     String bucket;
+    String root_prefix;
+
     String ak_id;
     String ak_secret;
-    String root_prefix;
     String session_token;
+    CredentialsConfiguration credential_config;
+
     bool is_virtual_hosted_style;
     uint32_t http_keep_alive_timeout_ms;
     size_t http_connection_pool_size;
@@ -275,6 +280,8 @@ struct AuthSettings
 
     std::optional<bool> use_environment_credentials;
     std::optional<bool> use_insecure_imds_request;
+    std::optional<uint64_t> expiration_window_seconds;
+    std::optional<bool> no_sign_request;
 
     bool operator==(const AuthSettings & other) const
     {
@@ -286,19 +293,6 @@ struct AuthSettings
 
     void updateFrom(const AuthSettings & from);
 };
-
-namespace Auth
-{
-    class S3CredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
-    {
-    public:
-        explicit S3CredentialsProviderChain(
-            std::shared_ptr<Aws::Client::ClientConfiguration> configuration,
-            const Aws::Auth::AWSCredentials & credentials,
-            bool use_environment_credentials,
-            bool use_insecure_imds_request);
-    };
-}
 
 /// return whether the exception worth retry or not
 bool processReadException(Exception & e, Poco::Logger * log, const String & bucket, const String & key, size_t read_offset, size_t attempt);

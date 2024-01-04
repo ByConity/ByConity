@@ -19,11 +19,20 @@ public:
 
     TableWriteStep(const DataStream & input_stream_, TargetPtr target_);
 
-    String getName() const override { return "TableWrite"; }
+    String getName() const override
+    {
+        return "TableWrite";
+    }
 
-    Type getType() const override { return Type::TableWrite; }
+    Type getType() const override
+    {
+        return Type::TableWrite;
+    }
 
-    const TargetPtr & getTarget() const { return target; }
+    const TargetPtr & getTarget() const
+    {
+        return target;
+    }
 
     void setInputStreams(const DataStreams & input_streams_) override;
 
@@ -73,10 +82,20 @@ public:
 
     TargetType getTargetType() const override { return TargetType::INSERT; }
     String toString() const override;
-    StoragePtr getStorage() const override { return storage; }
+    StoragePtr getStorage() const override
+    {
+        return storage;
+    }
     NameToNameMap getTableColumnToInputColumnMap(const Names & input_columns) const override;
-    const NamesAndTypes & getColumns() const { return columns; }
-    StorageID getStorageID() const { return storage_id; }
+    const NamesAndTypes & getColumns() const
+    {
+        return columns;
+    }
+    void setTable(const String & table_);
+    StorageID getStorageID() const
+    {
+        return storage_id;
+    }
 
     void toProtoImpl(Protos::TableWriteStep::InsertTarget & proto) const;
     static std::shared_ptr<InsertTarget> createFromProtoImpl(const Protos::TableWriteStep::InsertTarget & proto, ContextPtr context);

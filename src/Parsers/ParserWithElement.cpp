@@ -48,7 +48,7 @@ bool ParserWithElement::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
         node = with_element;
         return true;
     }
-    else if (dt.parse_with_alias)
+    else
     {
         pos = old_pos;
         ParserExpressionWithOptionalAlias s_expr(false, dt, false);

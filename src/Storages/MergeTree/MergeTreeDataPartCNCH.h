@@ -52,7 +52,8 @@ public:
         const MergeTreeReaderSettings & reader_settings_,
         MergeTreeIndexExecutor * index_executor,
         const ValueSizeMap & avg_value_size_hints,
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback) const override;
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback,
+        const ProgressCallback & internal_progress_cb) const override;
 
     MergeTreeWriterPtr getWriter(
         const NamesAndTypesList & columns_list,
@@ -105,6 +106,7 @@ public:
     void preload(UInt64 preload_level, ThreadPool & pool, UInt64 submit_ts) const;
     void dropDiskCache(ThreadPool & pool, bool drop_vw_disk_cache = false) const;
 
+    void setColumnsPtr(const NamesAndTypesListPtr & new_columns_ptr) override {columns_ptr = new_columns_ptr;}
 private:
     /// See #getDeleteBitmap
     const ImmutableDeleteBitmapPtr & getCombinedDeleteBitmapForUniqueTable(bool allow_null = false) const;

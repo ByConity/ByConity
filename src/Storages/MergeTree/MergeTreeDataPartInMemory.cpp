@@ -72,7 +72,8 @@ IMergeTreeDataPart::MergeTreeReaderPtr MergeTreeDataPartInMemory::getReader(
     const MergeTreeReaderSettings & reader_settings,
     MergeTreeIndexExecutor * /* index_executor */,
     const ValueSizeMap & /* avg_value_size_hints */,
-    const ReadBufferFromFileBase::ProfileCallback & /* profile_callback */) const
+    const ReadBufferFromFileBase::ProfileCallback & /* profile_callback */,
+    [[maybe_unused]] const ProgressCallback & /* internal_progress_cb */) const
 {
     auto ptr = std::static_pointer_cast<const MergeTreeDataPartInMemory>(shared_from_this());
     return std::make_unique<MergeTreeReaderInMemory>(

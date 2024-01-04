@@ -18,7 +18,8 @@ public:
         size_t marks_count_,
         const MarkRanges & all_mark_ranges_,
         MergeTreeReaderSettings settings,
-        MarkCache * mark_cache);
+        MarkCache * mark_cache,
+        const ProgressCallback & internal_progress_cb_ = {});
 
     void seek(size_t mark);
 

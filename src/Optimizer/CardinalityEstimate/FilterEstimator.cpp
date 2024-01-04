@@ -109,7 +109,7 @@ std::optional<Field> castStringType(SymbolStatistics & symbol_statistics, Field 
 }
 
 double FilterEstimator::estimateFilterSelectivity(
-    PlanNodeStatisticsPtr & child_stats, ConstASTPtr & predicate, const NamesAndTypes & column_types, ContextMutablePtr & context)
+    PlanNodeStatisticsPtr & child_stats, const ConstASTPtr & predicate, const NamesAndTypes & column_types, ContextMutablePtr & context)
 {
     NameToType name_to_type;
     for (const auto & item : column_types)
@@ -131,7 +131,7 @@ ConstASTPtr tryGetIdentifier(ConstASTPtr node)
     return node;
 }
 
-FilterEstimateResult FilterEstimator::estimateFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context)
+FilterEstimateResult FilterEstimator::estimateFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context)
 {
     if (predicate->as<ASTLiteral>())
     {
@@ -170,7 +170,7 @@ FilterEstimateResult FilterEstimator::estimateFilter(PlanNodeStatistics & stats,
 }
 
 FilterEstimateResult
-FilterEstimator::estimateAndFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context)
+FilterEstimator::estimateAndFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context)
 {
     std::vector<ConstASTPtr> conjuncts = PredicateUtils::extractConjuncts(predicate);
 
@@ -206,7 +206,7 @@ FilterEstimator::estimateAndFilter(PlanNodeStatistics & stats, ConstASTPtr & pre
 }
 
 FilterEstimateResult
-FilterEstimator::estimateOrFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context)
+FilterEstimator::estimateOrFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context)
 {
     std::vector<ConstASTPtr> disjuncts = PredicateUtils::extractDisjuncts(predicate);
     FilterEstimateResults results;
@@ -257,7 +257,7 @@ FilterEstimator::estimateOrFilter(PlanNodeStatistics & stats, ConstASTPtr & pred
 }
 
 FilterEstimateResult
-FilterEstimator::estimateNotFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context)
+FilterEstimator::estimateNotFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context)
 {
     auto function = predicate->as<const ASTFunction &>();
     ConstASTPtr sub = function.arguments->getChildren()[0];
@@ -299,7 +299,7 @@ std::unordered_map<String, std::vector<SymbolStatisticsPtr>> FilterEstimator::co
 }
 
 FilterEstimateResult
-FilterEstimator::estimateSingleFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context)
+FilterEstimator::estimateSingleFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context)
 {
     const auto & function = predicate->as<const ASTFunction &>();
     if (function.name == "equals")
@@ -360,7 +360,7 @@ FilterEstimator::estimateSingleFilter(PlanNodeStatistics & stats, ConstASTPtr & 
 }
 
 FilterEstimateResult
-FilterEstimator::estimateEqualityFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context)
+FilterEstimator::estimateEqualityFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context)
 {
     const auto & function = predicate->as<const ASTFunction &>();
 
@@ -433,7 +433,7 @@ FilterEstimator::estimateEqualityFilter(PlanNodeStatistics & stats, ConstASTPtr 
 }
 
 FilterEstimateResult
-FilterEstimator::estimateNotEqualityFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context)
+FilterEstimator::estimateNotEqualityFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context)
 {
     const auto & function = predicate->as<ASTFunction &>();
 
@@ -502,7 +502,7 @@ FilterEstimator::estimateNotEqualityFilter(PlanNodeStatistics & stats, ConstASTP
 }
 
 FilterEstimateResult
-FilterEstimator::estimateRangeFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context)
+FilterEstimator::estimateRangeFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context)
 {
     const auto & function = predicate->as<ASTFunction &>();
 
@@ -580,7 +580,7 @@ FilterEstimator::estimateRangeFilter(PlanNodeStatistics & stats, ConstASTPtr & p
 }
 
 FilterEstimateResult
-FilterEstimator::estimateInFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context)
+FilterEstimator::estimateInFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context)
 {
     const auto & function = predicate->as<ASTFunction &>();
     bool match = function.arguments->getChildren()[0]->as<ASTIdentifier>() && function.arguments->getChildren()[1]->as<ASTFunction>();
@@ -673,7 +673,7 @@ FilterEstimator::estimateInFilter(PlanNodeStatistics & stats, ConstASTPtr & pred
 }
 
 FilterEstimateResult
-FilterEstimator::estimateNotInFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext & context)
+FilterEstimator::estimateNotInFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext & context)
 {
     const auto & function = predicate->as<ASTFunction &>();
     bool match = function.arguments->getChildren()[0]->as<ASTIdentifier>() && function.arguments->getChildren()[1]->as<ASTFunction>();
@@ -767,7 +767,7 @@ FilterEstimator::estimateNotInFilter(PlanNodeStatistics & stats, ConstASTPtr & p
     return {1.0, {}};
 }
 
-FilterEstimateResult FilterEstimator::estimateNullFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext &)
+FilterEstimateResult FilterEstimator::estimateNullFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext &)
 {
     const auto & function = predicate->as<ASTFunction &>();
     ConstASTPtr left = tryGetIdentifier(function.arguments->getChildren()[0]);
@@ -802,7 +802,7 @@ FilterEstimateResult FilterEstimator::estimateNullFilter(PlanNodeStatistics & st
     return {selectivity, std::move(symbol_stats)};
 }
 
-FilterEstimateResult FilterEstimator::estimateNotNullFilter(PlanNodeStatistics & stats, ConstASTPtr & predicate, FilterEstimatorContext &)
+FilterEstimateResult FilterEstimator::estimateNotNullFilter(PlanNodeStatistics & stats, const ConstASTPtr & predicate, FilterEstimatorContext &)
 {
     const auto & function = predicate->as<ASTFunction &>();
 
@@ -836,13 +836,13 @@ FilterEstimateResult FilterEstimator::estimateNotNullFilter(PlanNodeStatistics &
 }
 
 // TODO support dynamic sample for complex predicate @gouguiling
-FilterEstimateResult FilterEstimator::estimateLikeFilter(PlanNodeStatistics &, ConstASTPtr &, FilterEstimatorContext &)
+FilterEstimateResult FilterEstimator::estimateLikeFilter(PlanNodeStatistics &, const ConstASTPtr &, FilterEstimatorContext &)
 {
     return {DEFAULT_SELECTIVITY, {}};
 }
 
 // TODO support dynamic sample for complex predicate @gouguiling
-FilterEstimateResult FilterEstimator::estimateNotLikeFilter(PlanNodeStatistics &, ConstASTPtr &, FilterEstimatorContext &)
+FilterEstimateResult FilterEstimator::estimateNotLikeFilter(PlanNodeStatistics &, const ConstASTPtr &, FilterEstimatorContext &)
 {
     return {DEFAULT_SELECTIVITY, {}};
 }

@@ -25,11 +25,12 @@
 namespace DB
 {
 
-void formatAST(const IAST & ast, WriteBuffer & buf, bool hilite, bool one_line, bool always_quote_identifiers)
+void formatAST(const IAST & ast, WriteBuffer & buf, bool hilite, bool one_line, bool always_quote_identifiers, DialectType dialect)
 {
     IAST::FormatSettings settings(buf, one_line);
     settings.hilite = hilite;
     settings.always_quote_identifiers = always_quote_identifiers;
+    settings.dialect_type = dialect;
 
     ast.format(settings);
 }

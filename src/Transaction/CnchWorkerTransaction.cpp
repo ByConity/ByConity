@@ -65,6 +65,17 @@ CnchWorkerTransaction::CnchWorkerTransaction(const ContextPtr & context_, const 
     setTransactionRecord(std::move(record));
 }
 
+CnchWorkerTransaction::CnchWorkerTransaction(const ContextPtr & context_, const TxnTimestamp & txn_id, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id)
+    : ICnchTransaction(context_), server_client(std::move(client))
+{
+    checkServerClient();
+    String initiator = txnInitiatorToString(CnchTransactionInitiator::Server);
+    TransactionRecord record;
+    record.setID(txn_id).setPrimaryID(primary_txn_id).setInitiator(initiator).setStatus(CnchTransactionStatus::Running).setType(CnchTransactionType::Implicit);
+    setTransactionRecord(std::move(record));
+    is_initiator = true;
+}
+
 CnchWorkerTransaction::CnchWorkerTransaction(const ContextPtr & context_, StorageID kafka_table_id_)
     : ICnchTransaction(context_), kafka_table_id(std::move(kafka_table_id_)) {}
 

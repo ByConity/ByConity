@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -21,6 +22,7 @@
 #include <Optimizer/Dump/DDLDumper.h>
 #include <Optimizer/Dump/StatsLoader.h>
 #include <Parsers/ASTStatsQuery.h>
+#include <Statistics/CachedStatsProxy.h>
 #include <Statistics/FormattedOutput.h>
 #include <Statistics/StatisticsCollector.h>
 #include <Statistics/StatsColumnBasic.h>
@@ -30,9 +32,19 @@
 #include <boost/algorithm/string/predicate.hpp>
 #include <Poco/Timestamp.h>
 #include <Storages/StorageMaterializedView.h>
+#include "Core/Block.h"
+#include "Core/Types.h"
+#include "Core/UUID.h"
+#include "Statistics/AutoStatisticsHelper.h"
 
 namespace DB
 {
+
+namespace Statistics
+{
+    std::shared_ptr<StatsTableBasic> getTableStatistics(ContextPtr context, const StatsTableIdentifier & table);
+}
+
 namespace ErrorCodes
 {
     extern const int NOT_IMPLEMENTED;
@@ -182,6 +194,7 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
     auto catalog = createCatalogAdaptor(context);
     auto logger = &Poco::Logger::get("load stats");
 
+    auto load_ts = AutoStats::convertToDateTime64(AutoStats::nowTimePoint());
     for (auto & table_pb : db_stats.tables())
     {
         auto table_name = table_pb.table_name();
@@ -206,6 +219,7 @@ void readDbStats(ContextPtr context, const String & original_db_name, const Stri
             }
             StatisticsCollector::TableStats table_stats;
             table_stats.readFromCollection(collection);
+            table_stats.basic->setTimestamp(load_ts);
             collector.setTableStats(std::move(table_stats));
         }
 
@@ -276,7 +290,7 @@ static std::vector<StatsTableIdentifier> getTables(ContextPtr context, const AST
     return tables;
 }
 
-BlockIO InterpreterShowStatsQuery::executeTable()
+BlockIO InterpreterShowStatsQuery::executeAll()
 {
     auto query = query_ptr->as<const ASTShowStatsQuery>();
     // Block sample_block = getSampleBlock();
@@ -509,6 +523,36 @@ void InterpreterShowStatsQuery::executeSpecial()
     }
 }
 
+
+BlockIO InterpreterShowStatsQuery::executeTable()
+{
+    auto query = query_ptr->as<const ASTShowStatsQuery>();
+    auto context = getContext();
+    auto catalog = Statistics::createCatalogAdaptor(context);
+    auto tables = getTables(context, query);
+    std::vector<FormattedOutputData> result;
+    for (auto & table : tables)
+    {
+        FormattedOutputData data;
+        auto obj = getTableStatistics(context, table);
+        auto storage = catalog->getStorageByTableId(table);
+        data.append("database", table.getDatabaseName());
+        data.append("table", table.getTableName());
+        data.append("engine", storage->getName());
+        data.append("unique_key", UUIDHelpers::UUIDToString(table.getUniqueKey()));
+        data.append("row_count", obj ? std::to_string(obj->getRowCount()) : "");
+        data.append("timestamp", obj ? AutoStats::serializeToText(obj->getTimestamp()) : "");
+        result.emplace_back(std::move(data));
+    }
+
+    auto block = outputFormattedBlock(result, {"database", "table", "engine", "unique_key", "row_count", "timestamp"});
+    BlocksList list = {std::move(block)};
+    BlockIO res;
+    // res.in = std::make_shared<Block>(sample_block.cloneWithColumns(std::move(res_columns)));
+    res.in = std::make_shared<BlocksListBlockInputStream>(std::move(list));
+    return res;
+}
+
 BlockIO InterpreterShowStatsQuery::execute()
 {
     auto query = query_ptr->as<const ASTShowStatsQuery>();
@@ -539,11 +583,17 @@ BlockIO InterpreterShowStatsQuery::execute()
         // throw Exception("unimplemented", ErrorCodes::LOGICAL_ERROR);
         return executeColumn();
     }
-    else
+    else if (query->kind == StatsQueryKind::ALL_STATS)
     {
         catalog->checkHealth(/*is_write=*/false);
+        return executeAll();
+    }
+    else if (query->kind == StatsQueryKind::TABLE_STATS)
+    {
+        catalog->checkHealth(false);
         return executeTable();
     }
+    return {};
 }
 
 }

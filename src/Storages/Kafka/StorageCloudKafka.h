@@ -87,6 +87,7 @@ private:
     HostWithPorts server_client_address;
 
     Poco::Logger * log;
+    mutable std::mutex last_exception_mutex;
     String last_exception;
     UInt64 rdkafka_exception_times{0};
 

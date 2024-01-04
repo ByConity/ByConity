@@ -33,7 +33,7 @@ void registerAggregateFunctionsAny(AggregateFunctionFactory & factory)
     factory.registerFunction("any", { createAggregateFunctionAny, properties });
     factory.registerFunction("anyLast", { createAggregateFunctionAnyLast, properties });
     factory.registerFunction("anyHeavy", { createAggregateFunctionAnyHeavy, properties });
-
+    factory.registerAlias("any_value", "any", AggregateFunctionFactory::CaseInsensitive);
     // Synonyms for use as window functions.
     factory.registerFunction("first_value",
         { createAggregateFunctionAny, properties },

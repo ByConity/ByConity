@@ -47,7 +47,7 @@ struct RootCauseErrorReceivedEvent
 {
 };
 
-static const Int16 AMBIGUOS_ERROR_MAX_NUM = 20;
+static const Int16 AMBIGUOS_ERROR_MAX_NUM = 10;
 
 // Define mpp query coordinator FSM structure
 class CoordinatorStateMachineDef : public boost::msm::front::state_machine_def<CoordinatorStateMachineDef>
@@ -288,9 +288,10 @@ void MPPQueryCoordinator::updateSegmentInstanceStatus(RuntimeSegmentsStatus stat
     if (query_status.success)
         return;
 
-    if (isAmbiguosError(status.code) && query_status.additional_errors.size() < AMBIGUOS_ERROR_MAX_NUM)
+    if (isAmbiguosError(status.code))
     {
-        query_status.additional_errors.emplace_back(std::move(query_error));
+        if (query_status.additional_errors.size() < AMBIGUOS_ERROR_MAX_NUM)
+            query_status.additional_errors.emplace_back(std::move(query_error));
         return;
     }
 

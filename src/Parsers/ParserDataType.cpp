@@ -21,6 +21,7 @@
 
 #include <Parsers/ParserDataType.h>
 
+#include <Parsers/ASTDataType.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/CommonParsers.h>
@@ -40,22 +41,22 @@ namespace
 /// - Enum element in form of 'a' = 1;
 /// - literal;
 /// - another data type (or identifier)
-class ParserDataTypeArgument : public IParserBase
+class ParserDataTypeArgument : public IParserDialectBase
 {
 private:
     const char * getName() const override { return "data type argument"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override
     {
-        ParserNestedTable nested_parser;
-        ParserDataType data_type_parser;
+        ParserNestedTable nested_parser(dt);
+        ParserDataType data_type_parser(dt, false);
         // Note: community of ClickHouse use ParserAllCollectionsOfLiterals
         // but we don't have it yet, so just handle single, Array and Tuple
-        ParserLiteral literal_parser(ParserSettings::CLICKHOUSE);
-        ParserArrayOfLiterals array_literal_parser(ParserSettings::CLICKHOUSE);
-        ParserTupleOfLiterals tuple_literal_parser(ParserSettings::CLICKHOUSE);
+        ParserLiteral literal_parser(dt);
+        ParserArrayOfLiterals array_literal_parser(dt);
+        ParserTupleOfLiterals tuple_literal_parser(dt);
 
         const char * operators[] = {"=", "equals", nullptr};
-        ParserLeftAssociativeBinaryOperatorList enum_parser(operators, std::make_unique<ParserLiteral>(ParserSettings::CLICKHOUSE));
+        ParserLeftAssociativeBinaryOperatorList enum_parser(operators, std::make_unique<ParserLiteral>(dt));
 
         if (pos->type == TokenType::BareWord && std::string_view(pos->begin, pos->size()) == "Nested")
             return nested_parser.parse(pos, node, expected);
@@ -66,13 +67,16 @@ private:
             || tuple_literal_parser.parse(pos, node, expected)
             || data_type_parser.parse(pos, node, expected);
     }
+
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 }
 
 bool ParserDataType::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    ParserNestedTable nested;
+    ParserNestedTable nested(dt);
     if (nested.parse(pos, node, expected))
         return true;
 
@@ -85,6 +89,30 @@ bool ParserDataType::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     tryGetIdentifierNameInto(identifier, type_name);
 
     String type_name_upper = Poco::toUpper(type_name);
+
+    /// ParserNestedTable will parse the pattern `[type name] [(NOT) NULL]` as `[name] [type]`, in case that
+    /// we need to detect this kind of wrong patterns and reject them.
+    if (type_name_upper == "NULL" || type_name_upper == "NOT")
+        return false;
+
+    /// Handle Nullable recursively, which is able to fold multiple Nullables in a row:
+    ///      Nullable(Nullable(Nullable(A))) => Nullable(A)
+    if (type_name_upper == "NULLABLE")
+    {
+        if (!ParserToken(TokenType::OpeningRoundBracket).ignore(pos, expected))
+            return false;
+
+        ParserDataType parser(dt, false /* is_root_type */, true /* parent_nullable */);
+        ASTPtr function_node;
+        parser.parse(pos, function_node, expected);
+
+        if (!ParserToken(TokenType::ClosingRoundBracket).ignore(pos, expected))
+            return false;
+
+        node = function_node;
+        return true;
+    }
+
     String type_name_suffix;
 
     /// Special cases for compatibility with SQL standard. We can parse several words as type name
@@ -128,34 +156,59 @@ bool ParserDataType::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
     if (!type_name_suffix.empty())
         type_name = type_name_upper + " " + type_name_suffix;
-
     auto function_node = std::make_shared<ASTFunction>();
     function_node->name = type_name;
     function_node->no_empty_args = true;
 
-    if (pos->type != TokenType::OpeningRoundBracket)
-    {
-        node = function_node;
-        return true;
-    }
-    ++pos;
-
-    /// Parse optional parameters
-    ParserList args_parser(std::make_unique<ParserDataTypeArgument>(), std::make_unique<ParserToken>(TokenType::Comma));
     ASTPtr expr_list_args;
+    if (ParserToken(TokenType::OpeningRoundBracket).ignore(pos))
+    {
+        /// Parse optional parameters
+        ParserList args_parser(std::make_unique<ParserDataTypeArgument>(dt), std::make_unique<ParserToken>(TokenType::Comma));
 
-    if (!args_parser.parse(pos, expr_list_args, expected))
-        return false;
-    if (pos->type != TokenType::ClosingRoundBracket)
-        return false;
-    ++pos;
+        if (!args_parser.parse(pos, expr_list_args, expected))
+            return false;
+    }
 
-    function_node->arguments = expr_list_args;
-    function_node->children.push_back(function_node->arguments);
+    if (expr_list_args)
+    {
+        if (!ParserToken(TokenType::ClosingRoundBracket).ignore(pos))
+            return false;
+        function_node->arguments = expr_list_args;
+        function_node->children.push_back(function_node->arguments);
+    }
 
-    node = function_node;
+    std::optional<bool> null_modifier;
+    if (!is_root_type)
+    {
+        /// check if parent type is Nullable
+        if (parent_nullable)
+        {
+            /// Null modifier should not exist when parent type is Nullable
+            if (ParserKeyword("NOT").ignore(pos) || ParserKeyword("NULL").ignore(pos))
+                return false;
+            null_modifier.emplace(true);
+        }
+        /// parse null modifiers for nested types
+        else
+        {
+            bool negate_modifier = ParserKeyword("NOT").ignore(pos, expected);
+            if (ParserKeyword("NULL").ignore(pos, expected))
+                null_modifier.emplace(!negate_modifier);
+            else if (negate_modifier)
+                return false;
+            /// Add a default null modifier for levels don't have one
+            else if (dt.explicit_null_modifiers)
+                null_modifier.emplace(false);
+        }
+    }
+
+    if (null_modifier)
+        node = std::make_shared<ASTDataType>(function_node, null_modifier.value());
+    else
+        node = function_node;
+
     return true;
 }
 
 }
-

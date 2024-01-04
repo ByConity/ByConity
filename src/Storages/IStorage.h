@@ -240,11 +240,7 @@ public:
     void setCreateTableSql(String sql) { create_table_sql = std::move(sql); }
     String getCreateTableSql() const { return create_table_sql; }
 
-    /// Bucket table
     virtual bool isBucketTable() const {return false;}
-    virtual ASTs convertBucketNumbersToAstLiterals(ASTPtr /*where*/, ContextPtr /*context*/) const { return {}; }
-    virtual std::set<Int64> getRequiredBucketNumbers(ASTPtr /*where*/, ContextPtr /*context*/) const { return {}; }
-
     virtual UInt64 getTableHashForClusterBy() const {return 0;}
 
     /// Return true if storage can execute lightweight delete.

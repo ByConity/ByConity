@@ -162,7 +162,7 @@ StoragePtr PartToolkitBase::getTable()
         if (create.storage->engine != nullptr && create.storage->engine->name != "CloudMergeTree")
             throw Exception("Only support CloudMergeTree in Part Tool.", ErrorCodes::INCORRECT_QUERY);
 
-        ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(*create.columns_list->columns, getContext(), create.attach);
+        ColumnsDescription columns = InterpreterCreateQuery::getColumnsDescription(*create.columns_list->columns, getContext(), create.attach, create.database == "system");
         ConstraintsDescription constraints = InterpreterCreateQuery::getConstraintsDescription(create.columns_list->constraints);
         ForeignKeysDescription foreign_keys = InterpreterCreateQuery::getForeignKeysDescription(create.columns_list->foreign_keys);
         UniqueNotEnforcedDescription unique = InterpreterCreateQuery::getUniqueNotEnforcedDescription(create.columns_list->unique);

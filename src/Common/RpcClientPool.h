@@ -78,7 +78,8 @@ public:
         std::unique_lock lock(state_mutex);
         if (auto iter = clients_map.find(host_ports); iter != clients_map.end())
         {
-            return iter->second;
+            if (iter->second->ok())
+                return iter->second;
         }
 
         return clients_map.try_emplace(host_ports, creator(host_ports)).first->second;

@@ -25,7 +25,7 @@ public:
         vw_config_keys.clear();
     }
 
-    void overwriteDefaultSettings(const String & vw_name, Settings & default_settings);
+    void overwriteDefaultSettings(const String & vw_name, ContextMutablePtr context);
     void loadCustomizedSettings();
 
     String toString();

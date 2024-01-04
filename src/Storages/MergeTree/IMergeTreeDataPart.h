@@ -146,7 +146,8 @@ public:
         const MergeTreeReaderSettings & reader_settings_,
         MergeTreeIndexExecutor * bitmap_index_reader = nullptr,
         const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{},
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = ReadBufferFromFileBase::ProfileCallback{}) const = 0;
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = ReadBufferFromFileBase::ProfileCallback{},
+        const ProgressCallback & internal_progress_cb = {}) const = 0;
 
     virtual MergeTreeWriterPtr getWriter(
         const NamesAndTypesList & columns_list,

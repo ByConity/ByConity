@@ -24,19 +24,22 @@ namespace DB
 class ColumnPruning : public Rewriter
 {
 public:
+    explicit ColumnPruning(bool distinct_to_aggregate_ = false) 
+        : distinct_to_aggregate(distinct_to_aggregate_) { }
     String name() const override { return "ColumnPruning"; }
     static String selectColumnWithMinSize(NamesAndTypesList source_columns, StoragePtr storage);
 
 private:
     bool isEnabled(ContextMutablePtr context) const override { return context->getSettingsRef().enable_column_pruning; }
     void rewrite(QueryPlan & plan, ContextMutablePtr context) const override;
+    bool distinct_to_aggregate;
 };
 
 class ColumnPruningVisitor : public PlanNodeVisitor<PlanNodePtr, NameSet>
 {
 public:
-    explicit ColumnPruningVisitor(ContextMutablePtr context_, CTEInfo & cte_info_, PlanNodePtr & root)
-        : context(std::move(context_)), post_order_cte_helper(cte_info_, root)
+    explicit ColumnPruningVisitor(ContextMutablePtr context_, CTEInfo & cte_info_, PlanNodePtr & root, bool distinct_to_aggregate_)
+        : context(std::move(context_)), post_order_cte_helper(cte_info_, root), distinct_to_aggregate(distinct_to_aggregate_)
     {
     }
 
@@ -51,9 +54,12 @@ private:
     template <bool require_all>
     PlanNodePtr visitDefault(PlanNodeBase & node, NameSet & require);
 
+    static PlanNodePtr convertDistinctToGroupBy(PlanNodePtr node, ContextMutablePtr context);
+
     ContextMutablePtr context;
     CTEPostorderVisitHelper post_order_cte_helper;
     std::unordered_map<CTEId, NameSet> cte_require_columns{};
+    bool distinct_to_aggregate;
 };
 
 }

@@ -51,6 +51,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int BAD_ARGUMENTS;
+    extern const int BRPC_TIMEOUT;
     extern const int CNCH_KAFKA_TASK_NEED_STOP;
     extern const int RDKAFKA_EXCEPTION;
 }
@@ -249,7 +250,7 @@ cppkafka::Configuration StorageCloudKafka::createConsumerConfiguration()
                 if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
                     cloud_kafka_log->add(kafka_error_log);
 
-                std::lock_guard lock(table_status_mutex);
+                std::lock_guard lock(last_exception_mutex);
                 last_exception = kafka_error_log.last_exception;
             }
             catch (...)
@@ -407,7 +408,7 @@ void StorageCloudKafka::streamThread()
             if (auto cloud_kafka_log = getContext()->getCloudKafkaLog())
                 cloud_kafka_log->add(kafka_error_log);
 
-            std::lock_guard lock(table_status_mutex);
+            std::lock_guard lock(last_exception_mutex);
             last_exception = kafka_error_log.last_exception;
         }
     };
@@ -645,7 +646,29 @@ void StorageCloudKafka::streamCopyData(IBlockInputStream &from, IBlockOutputStre
     kafka_commit_log.bytes = commit_bytes;
     Stopwatch watch;
 
-    to.writeSuffix();
+    /// The API `commitTransaction` may get timeout error, while it actually commit successfully;
+    /// if so, we should restart consumer task to check the latest transaction status
+    /// and get the last committed offsets to avoid duplicate consumption
+    try
+    {
+        to.writeSuffix();
+    }
+    catch (const Exception & e)
+    {
+        LOG_ERROR(log, "Failed to commit kafka txn: {}", current_txn->getTransactionID());
+        if (e.code() == ErrorCodes::BRPC_TIMEOUT)
+        {
+            throw Exception("Restart consumer task as commit transaction timedout, due to: " + getCurrentExceptionMessage(false),
+                    ErrorCodes::CNCH_KAFKA_TASK_NEED_STOP);
+        }
+
+        throw;
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, "Failed to commit kafka txn: {}, we will just retry to consume again", current_txn->getTransactionID());
+        throw;
+    }
 
     kafka_commit_log.duration_ms = watch.elapsedMilliseconds();
     if (auto kafka_log = getContext()->getKafkaLog())
@@ -778,7 +801,10 @@ void StorageCloudKafka::getConsumersStatus(CnchConsumerStatus &status) const
     }
     else
     {
-        status.last_exception = last_exception;
+        {
+            std::lock_guard lock_exception(last_exception_mutex);
+            status.last_exception = last_exception;
+        }
 
         std::ostringstream oss;
         for (const auto &tpl : consumer_context.assignment)
@@ -955,6 +981,46 @@ void executeKafkaConsumeTask(const KafkaTaskCommand & command, ContextMutablePtr
     catch (...)
     {
         tryLogCurrentException(__func__, "Failed to execute Kafka consume task");
+
+        /// 1. Record the error log in system.kafka_log to help debug
+        try
+        {
+            if (auto kafka_log = context->getGlobalContext()->getKafkaLog())
+            {
+                KafkaLogElement elem;
+                elem.event_type = KafkaLogElement::EXCEPTION;
+                elem.event_time = time(nullptr);
+                elem.cnch_database = command.cnch_storage_id.getDatabaseName();
+                elem.cnch_table = command.cnch_storage_id.getTableName();
+                elem.database = command.local_database_name;
+                elem.table = command.local_table_name;
+                elem.consumer = "KafkaConsumerTaskExecutor";
+
+                elem.has_error = true;
+                elem.last_exception = getCurrentExceptionMessage(false);
+                kafka_log->add(elem);
+                if (auto cloud_kafka_log = context->getGlobalContext()->getCloudKafkaLog())
+                    cloud_kafka_log->add(elem);
+            }
+        }
+        catch (...)
+        {
+            tryLogCurrentException( __func__, "Failed to record error log for consumer task. Ignore it now");
+        }
+
+        /// 2. Try to drop created local tables which can help trigger re-scheduling of ConsumeManager faster
+        if (command.type == KafkaTaskCommand::Type::START_CONSUME)
+        {
+            LOG_INFO(&Poco::Logger::get("KafkaConsumerTaskExecutor"), "Failed to execute START_CONSUME task, try to drop local tables");
+            try
+            {
+                dropConsumerTables(context, command.local_database_name, command.local_table_name);
+            }
+            catch (...)
+            {
+                tryLogCurrentException( __func__, "Failed to clear unused local tables for consumer task. Ignore it now");
+            }
+        }
     }
 }
 

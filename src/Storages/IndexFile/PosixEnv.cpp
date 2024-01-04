@@ -244,7 +244,7 @@ namespace
             return s;
         }
 
-        virtual Status Sync() override
+        virtual Status Sync(bool need_fsync) override
         {
             // Ensure new files referred to by the manifest are in the filesystem.
             Status s = SyncDirIfManifest();
@@ -256,7 +256,7 @@ namespace
 #if defined(OS_LINUX)
             if (s.ok())
             {
-                if (fdatasync(fd_) != 0)
+                if (need_fsync && fdatasync(fd_) != 0)
                 {
                     s = PosixError(filename_, errno);
                 }

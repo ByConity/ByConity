@@ -73,6 +73,7 @@ NamesAndTypesList QueryLogElement::getNamesAndTypes()
 
         {"read_rows", std::make_shared<DataTypeUInt64>()},
         {"read_bytes", std::make_shared<DataTypeUInt64>()},
+        {"disk_cache_read_bytes", std::make_shared<DataTypeUInt64>()},
         {"written_rows", std::make_shared<DataTypeUInt64>()},
         {"written_bytes", std::make_shared<DataTypeUInt64>()},
         {"result_rows", std::make_shared<DataTypeUInt64>()},
@@ -190,6 +191,7 @@ void QueryLogElement::appendToBlock(MutableColumns & columns) const
 
     columns[i++]->insert(read_rows);
     columns[i++]->insert(read_bytes);
+    columns[i++]->insert(disk_cache_read_bytes);
     columns[i++]->insert(written_rows);
     columns[i++]->insert(written_bytes);
     columns[i++]->insert(result_rows);
