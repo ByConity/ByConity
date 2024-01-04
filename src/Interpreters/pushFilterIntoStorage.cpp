@@ -4,12 +4,14 @@
 #include <Optimizer/PredicateUtils.h>
 #include <Optimizer/SelectQueryInfoHelper.h>
 #include <Storages/MergeTree/MergeTreeWhereOptimizer.h>
+#include <Optimizer/CardinalityEstimate/FilterEstimator.h>
+#include <Optimizer/PredicateUtils.h>
 
 
 namespace DB
 {
 
-ASTPtr pushFilterIntoStorage(ASTPtr query_filter, StoragePtr storage, SelectQueryInfo & query_info, ContextPtr context)
+ASTPtr pushFilterIntoStorage(ASTPtr query_filter, StoragePtr storage, SelectQueryInfo & query_info, PlanNodeStatisticsPtr storage_statistics, const NamesAndTypes & names_and_types, ContextMutablePtr context)
 {
     ASTs conjuncts = PredicateUtils::extractConjuncts(query_filter);
     const auto & settings = context->getSettingsRef();
@@ -70,6 +72,26 @@ ASTPtr pushFilterIntoStorage(ASTPtr query_filter, StoragePtr storage, SelectQuer
 
         if (!PredicateUtils::isTruePredicate(new_where))
             select_query->setExpression(ASTSelectQuery::Expression::WHERE, std::move(new_where));
+    }
+    
+    // Choose a better subset of where to set the prewhere structure in query
+    if (storage_statistics && select_query->where() && !select_query->prewhere())
+    {
+        std::vector<ASTPtr> pre_conjuncts;
+
+        for (const auto & conjunct : PredicateUtils::extractConjuncts(select_query->getWhere()))
+        {
+            double selectivity = FilterEstimator::estimateFilterSelectivity(storage_statistics, conjunct, names_and_types, context);
+            if (selectivity < context->getSettingsRef().max_active_prewhere_selectivity)
+                pre_conjuncts.push_back(conjunct);
+
+            if (pre_conjuncts.size() >= context->getSettingsRef().max_active_prewhere_size)
+                break;
+            LOG_DEBUG(&Poco::Logger::get("OptimizerActivePrewhere"), "conjunct=" + serializeAST(*conjunct) + ", selectivity=" + std::to_string(selectivity));
+        }
+
+        if (!pre_conjuncts.empty())
+            select_query->setExpression(ASTSelectQuery::Expression::PREWHERE, PredicateUtils::combineConjuncts(pre_conjuncts));
     }
 
     /// Set query.prewhere()

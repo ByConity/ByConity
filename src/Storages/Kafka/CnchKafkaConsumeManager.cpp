@@ -205,14 +205,14 @@ void CnchKafkaConsumeManager::iterate(StorageCnchKafka & kafka_table)
     std::exception_ptr exception;
     for (auto & info : consumer_infos)
     {
-        std::lock_guard lock(info.mutex);
+        std::unique_lock lock(info.mutex);
 
         if (info.worker_client)
-            checkConsumerStatus(info);
+            checkConsumerStatus(info, lock);
 
         /// DO NOT use `else if`, worker_client may be reset in `checkConsumerStatus`
         if (!info.worker_client)
-            dispatchConsumerToWorker(kafka_table, info, exception);
+            dispatchConsumerToWorker(kafka_table, info, lock, exception);
     }
     if (exception)
         std::rethrow_exception(std::move(exception));
@@ -503,12 +503,13 @@ static String replaceCreateTableQuery(ContextPtr context, String & query, const 
     return getTableDefinitionFromCreateQuery(ast, false);
 }
 
-void CnchKafkaConsumeManager::checkConsumerStatus(ConsumerInfo & info)
+void CnchKafkaConsumeManager::checkConsumerStatus(ConsumerInfo & info, std::unique_lock<std::mutex> & info_lock)
 {
     StorageID worker_storage_id(storage_id.getDatabaseName(),
                                 storage_id.getTableName() + info.table_suffix/* , storage_id.uuid */);
 
     CnchConsumerStatus status;
+    auto worker_client = info.worker_client;
     try
     {
         /// check running-status of consumer first in case of failure of stopping/starting consume
@@ -518,7 +519,20 @@ void CnchKafkaConsumeManager::checkConsumerStatus(ConsumerInfo & info)
             throw Exception("Consumer #" + toString(info.index) + " is not running now", ErrorCodes::LOGICAL_ERROR);
         }
 
-        status = info.worker_client->getConsumerStatus(worker_storage_id);
+        {
+            /// Do NOT hold lock for RPC call in case of some unexpected hang issues in rpc
+            SCOPE_EXIT({
+                info_lock.lock();
+            });
+            info_lock.unlock();
+
+            status = worker_client->getConsumerStatus(worker_storage_id);
+        }
+
+        /// Minor check again as we have unlocked for some time, during which the consumer job may be stopped by some reasons
+        if (!info.is_running || !info.worker_client)
+            throw Exception("Consumer #" + toString(info.index) + " is not running now", ErrorCodes::LOGICAL_ERROR);
+
         if (!status.last_exception.empty())
         {
             std::lock_guard lock(last_exception_mutex);
@@ -538,7 +552,7 @@ void CnchKafkaConsumeManager::checkConsumerStatus(ConsumerInfo & info)
     }
     catch (...)
     {
-        consumer_scheduler->resetWorkerClient(info.worker_client);
+        consumer_scheduler->resetWorkerClient(worker_client);
 
         /// just reset worker client to restart consumer as consumer will check validity
         auto error_msg = "Check consumer status failed for " + worker_storage_id.getNameForLogs() + " due to: " \
@@ -606,7 +620,8 @@ StoragePtr CnchKafkaConsumeManager::rewriteCreateTableSQL(const DB::StorageID & 
     return target_table;
 }
 
-void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_table, ConsumerInfo & info, std::exception_ptr & exception)
+void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_table, ConsumerInfo & info,
+                                                      std::unique_lock<std::mutex> & info_lock, std::exception_ptr & exception)
 {
     /// When cnch-server is under high load, the transaction (RPC call) may need more time to execute commit action;
     /// If ConsumeManager launches a new consumer during this period, duplication consumption may occur.
@@ -661,7 +676,16 @@ void CnchKafkaConsumeManager::dispatchConsumerToWorker(StorageCnchKafka & kafka_
     {
         worker_client = selectWorker(info.index, table_suffix);
         LOG_TRACE(log, "Selected worker {} for consumer #{}", worker_client->getRPCAddress(), info.index);
-        worker_client->submitKafkaConsumeTask(command);
+
+        {
+            /// Do NOT hold lock for RPC call in case of some unexpected hang issues in rpc
+            SCOPE_EXIT({
+                info_lock.lock();
+            });
+            info_lock.unlock();
+
+            worker_client->submitKafkaConsumeTask(command);
+        }
     }
     catch (...)
     {
@@ -709,6 +733,7 @@ void CnchKafkaConsumeManager::stopConsumerOnWorker(ConsumerInfo & info)
     command.type = KafkaTaskCommand::STOP_CONSUME;
     command.task_id = toString(info.index);
     command.rpc_port = getContext()->getRPCPort();
+    command.cnch_storage_id = storage_id;
     command.local_database_name = storage_id.getDatabaseName();
     command.local_table_name = storage_id.getTableName() + info.table_suffix;
 

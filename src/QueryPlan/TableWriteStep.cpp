@@ -194,7 +194,7 @@ void TableWriteStep::Target::toProto(Protos::TableWriteStep::Target & proto) con
     switch (getTargetType())
     {
         case TargetType::INSERT: {
-            const auto *ptr = dynamic_cast<const TableWriteStep::InsertTarget *>(this);
+            const auto * ptr = dynamic_cast<const TableWriteStep::InsertTarget *>(this);
             ptr->toProtoImpl(*proto.mutable_insert_target());
             return;
         }

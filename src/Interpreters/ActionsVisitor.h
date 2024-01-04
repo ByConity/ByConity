@@ -31,7 +31,7 @@
 #include <Parsers/ASTExpressionList.h>
 #include <Storages/MergeTree/Index/BitmapIndexHelper.h>
 #include <Storages/MergeTree/Index/MergeTreeIndexHelper.h>
-
+#include <Storages/StorageInMemoryMetadata.h>
 
 namespace DB
 {
@@ -190,6 +190,7 @@ public:
         bool build_expression_with_window_functions;
 
         MergeTreeIndexContextPtr index_context;
+        StorageMetadataPtr metadata_snapshot;
 
         /*
          * Remember the last unique column suffix to avoid quadratic behavior
@@ -212,7 +213,8 @@ public:
             bool create_source_for_in_,
             AggregationKeysInfo aggregation_keys_info_,
             bool build_expression_with_window_functions_ = false,
-            MergeTreeIndexContextPtr index_context_ = nullptr);
+            MergeTreeIndexContextPtr index_context_ = nullptr,
+            StorageMetadataPtr metadata_snapshot = nullptr);
 
         /// Does result of the calculation already exists in the block.
         bool hasColumn(const String & column_name) const;

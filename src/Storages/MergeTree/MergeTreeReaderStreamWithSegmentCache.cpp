@@ -44,6 +44,7 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
     IDiskCache* segment_cache_, size_t cache_segment_size_, const PartHostInfo & part_host_,
     const MergeTreeIndexGranularityInfo* index_granularity_info_,
     const ReadBufferFromFileBase::ProfileCallback& profile_callback_,
+    const ProgressCallback & internal_progress_cb_,
     clockid_t clock_type_, bool is_low_cardinality_dictionary_):
         IMergeTreeReaderStream(disk_, mark_cache_, mark_path_,
             stream_name_, marks_count_, *index_granularity_info_,
@@ -80,7 +81,7 @@ MergeTreeReaderStreamWithSegmentCache::MergeTreeReaderStreamWithSegmentCache(
     read_buffer_holder = std::make_unique<MergedReadBufferWithSegmentCache>(
         storage_id_, part_name_, stream_name_, disk_, data_path_, data_offset_,
         data_size_, cache_segment_size_, part_host_, segment_cache_ ? segment_cache_->getDataCache().get() : nullptr, settings_,
-        total_segment_count, marks_loader, uncompressed_cache_, profile_callback_,
+        total_segment_count, marks_loader, uncompressed_cache_, profile_callback_, internal_progress_cb_,
         clock_type_
     );
     data_buffer = read_buffer_holder.get();

@@ -298,7 +298,7 @@ PlanNodePtr RemoveRedundantAggregateVisitor::visitJoinNode(JoinNode & node, Remo
 
 PlanNodePtr RemoveRedundantAggregateVisitor::visitTableScanNode(TableScanNode & node, RemoveRedundantAggregateContext & ctx)
 {
-    auto step = node.getStep();
+    const auto * step = dynamic_cast<const TableScanStep *>(node.getStep().get());
     String database = step->getDatabase();
     auto storage = step->getStorage();
 

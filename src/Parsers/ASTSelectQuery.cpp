@@ -553,6 +553,7 @@ void ASTSelectQuery::serialize(WriteBuffer & buf) const
     writeBinary(group_by_with_cube, buf);
     writeBinary(group_by_with_constant_keys, buf);
     writeBinary(limit_with_ties, buf);
+    hints.serialize(buf);
 
     ASTPtr ast = nullptr;
 #define SERIALIZE_EXPRESSION(expr) \
@@ -589,6 +590,7 @@ void ASTSelectQuery::deserializeImpl(ReadBuffer & buf)
     readBinary(group_by_with_cube, buf);
     readBinary(group_by_with_constant_keys, buf);
     readBinary(limit_with_ties, buf);
+    hints.deserialize(buf);
 
 
 #define DESERIALIZE_EXPRESSION(expr) \

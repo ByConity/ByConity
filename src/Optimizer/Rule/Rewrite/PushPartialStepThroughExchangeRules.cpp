@@ -271,6 +271,9 @@ TransformResult PushPartialSortingThroughExchange::transformImpl(PlanNodePtr nod
         for (const auto & desc : step->getSortDescription())
         {
             auto new_desc = desc;
+            const auto & out_to_inputs = old_exchange_step->getOutToInputs();
+            if (!out_to_inputs.contains(desc.column_name) || out_to_inputs.at(desc.column_name).size() <= index)
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "PushPartialSortingThroughExchange: Can not find {} in out_to_inputs.", desc.column_name);
             new_desc.column_name = old_exchange_step->getOutToInputs().at(desc.column_name).at(index);
             new_sort_desc.emplace_back(new_desc);
         }

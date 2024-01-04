@@ -373,7 +373,7 @@ void BNModelManager::updateRowNumbers()
     for (auto & model: models)
     {
         auto storage_ptr = DatabaseCatalog::instance().tryGetTable(model.first, getContext());
-        auto storage_merge_tree = std::dynamic_pointer_cast<const MergeTreeData>(storage_ptr);
+        auto storage_merge_tree =  std::dynamic_pointer_cast<const MergeTreeData>(storage_ptr);
 
         model.second.row_number = 0;
         if (storage_merge_tree)

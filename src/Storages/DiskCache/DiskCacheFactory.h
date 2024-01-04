@@ -20,7 +20,7 @@
 #include <unordered_map>
 #include <Poco/Exception.h>
 
-namespace ErrorCodes
+namespace DB::ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
 extern const int LOGICAL_ERROR;

@@ -140,7 +140,7 @@ BlockInputStreamPtr forwardIngestPartitionToWorker(
         throw Exception("No heathy worker available", ErrorCodes::VIRTUAL_WAREHOUSE_NOT_FOUND);
     std::size_t index = std::hash<String>{}(task_id) % num_of_workers;
     auto * write_shard_ptr = &(worker_group->getShardsInfo().at(index));
-    auto worker_client = worker_group->getWorkerClients().at(index);
+    auto worker_client = worker_group->getWorkerClient(index, /*skip_busy_worker*/false).second;
     worker_client->sendCreateQueries(context,
         {create_target_cloud_merge_tree_query, create_source_cloud_merge_tree_query});
 

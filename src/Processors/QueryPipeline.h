@@ -162,6 +162,7 @@ public:
     /// For compatibility with IBlockInputStream.
     void setProgressCallback(const ProgressCallback & callback);
     void setProcessListElement(QueryStatus * elem);
+    void setInternalProgressCallback(const ProgressCallback & callback);
 
     void writeResultIntoQueryCache(std::shared_ptr<QueryCache::Writer> query_cache_writer);
     void readFromQueryCache(

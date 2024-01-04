@@ -200,7 +200,8 @@ BitmapIndexReturnType BitmapIndexHelper::getBitmapIndexReturnType(const String &
 
 void BitmapIndexInfo::buildIndexInfo(
     const ASTPtr & node,
-    MergeTreeIndexInfo::BuildIndexContext & building_context
+    MergeTreeIndexInfo::BuildIndexContext & building_context,
+    const StorageMetadataPtr & metadata_snapshot
 )
 {
     if (!node)
@@ -220,6 +221,24 @@ void BitmapIndexInfo::buildIndexInfo(
             
             if (make_set)
             {
+                // check if current column type really has bitmap index
+                for (size_t i = 0; i < arg_size; i += 2)
+                {
+                    ASTPtr arg_col = function->arguments->children.at(i);
+                    if (auto * identifier = arg_col->as<ASTIdentifier>())
+                    {
+                        const auto & index_column_name = identifier->getColumnName();
+                        if (metadata_snapshot && metadata_snapshot->getColumns().has(index_column_name))
+                        {
+                            if (!metadata_snapshot->getColumns().get(index_column_name).type->isBitmapIndex())
+                            {
+                                should_update_bitmap_index_info = false;
+                                break;
+                            }
+                        }
+                    }
+                }
+
                 auto col_name = function->getColumnName();
 
                 if (should_update_bitmap_index_info)
@@ -253,7 +272,7 @@ void BitmapIndexInfo::buildIndexInfo(
     else
     {
         for (auto & child : node->children)
-            buildIndexInfo(child, building_context);
+            buildIndexInfo(child, building_context, metadata_snapshot);
     }
 }
 

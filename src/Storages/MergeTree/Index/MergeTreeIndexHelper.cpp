@@ -169,7 +169,7 @@ std::shared_ptr<ProjectionStep> MergeTreeIndexContext::genProjectionForIndex(
     return projection;
 }
 
-MergeTreeIndexContextPtr MergeTreeIndexContext::buildFromProjection(const Assignments & inline_expressions, MergeTreeIndexInfo::BuildIndexContext & building_context)
+MergeTreeIndexContextPtr MergeTreeIndexContext::buildFromProjection(const Assignments & inline_expressions, MergeTreeIndexInfo::BuildIndexContext & building_context, const StorageMetadataPtr & metadata_snapshot)
 {
     Assignments bitmap_expressions;
 
@@ -185,7 +185,7 @@ MergeTreeIndexContextPtr MergeTreeIndexContext::buildFromProjection(const Assign
 
     for (const auto & assigment : bitmap_expressions)
     {
-        index_info->buildIndexInfo(std::const_pointer_cast<IAST>(assigment.second), building_context);
+        index_info->buildIndexInfo(std::const_pointer_cast<IAST>(assigment.second), building_context, metadata_snapshot);
     }
 
     for (const auto & assigment : bitmap_expressions)

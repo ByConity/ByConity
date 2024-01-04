@@ -79,7 +79,7 @@ private:
     ThreadPool table_partition_thread_pool{
         getContext()->getSettingsRef().part_cache_manager_thread_pool_size,
         getContext()->getSettingsRef().part_cache_manager_thread_pool_size,
-        100 * getContext()->getSettingsRef().part_cache_manager_thread_pool_size};
+        1000 * getContext()->getSettingsRef().part_cache_manager_thread_pool_size};
     ThreadPool & getTablePartitionThreadPool() { return table_partition_thread_pool; }
 
     Poco::Logger * log;

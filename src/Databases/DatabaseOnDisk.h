@@ -46,7 +46,7 @@ std::pair<String, StoragePtr> createTableFromAST(
   */
 String getObjectDefinitionFromCreateQuery(const ASTPtr & query, std::optional<bool> attach = std::nullopt);
 
-void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemoryMetadata & metadata);
+void applyMetadataChangesToCreateQuery(const ASTPtr & query, const StorageInMemoryMetadata & metadata, const ParserSettingsImpl & dialect_type);
 
 
 /* Class to provide basic operations with tables when metadata is stored on disk in .sql files.
@@ -112,10 +112,11 @@ protected:
 
     ASTPtr getCreateQueryFromMetadata(
         const String & metadata_path,
-        bool throw_on_error) const;
-        
-    ASTPtr getCreateQueryFromStorage(const String & table_name, const StoragePtr & storage, bool throw_on_error) const;
+        bool throw_on_error,
+        const ContextPtr & caller_context = nullptr) const;
 
+    ASTPtr getCreateQueryFromStorage(const String & table_name, const StoragePtr & storage, bool throw_on_error) const;
+    
     virtual void commitCreateTable(const ASTCreateQuery & query, const StoragePtr & table,
                                    const String & table_metadata_tmp_path, const String & table_metadata_path, ContextPtr query_context);
 

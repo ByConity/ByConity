@@ -88,9 +88,10 @@ private:
     void assignPartitionsToConsumers(StorageCnchKafka & kafka_table);
 
     bool checkTargetTable(const StorageCnchMergeTree *);
-    void checkConsumerStatus(ConsumerInfo & info);
+    void checkConsumerStatus(ConsumerInfo & info, std::unique_lock<std::mutex> & info_lock);
 
-    void dispatchConsumerToWorker(StorageCnchKafka & kafka_table, ConsumerInfo & info, std::exception_ptr & exception);
+    void dispatchConsumerToWorker(StorageCnchKafka & kafka_table, ConsumerInfo & info,
+                                 std::unique_lock<std::mutex> & info_lock, std::exception_ptr & exception);
     void stopConsumerOnWorker(ConsumerInfo & info);
 
     String getVWNameForConsumerTask(const StorageCnchKafka & kafka_table);

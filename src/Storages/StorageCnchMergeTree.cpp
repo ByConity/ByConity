@@ -353,7 +353,7 @@ PrepareContextResult StorageCnchMergeTree::prepareReadContext(
     }
 
     String local_table_name = getCloudTableName(local_context);
-    auto bucket_numbers = getRequiredBucketNumbers(query_info.query->as<ASTSelectQuery>()->getWhere(), local_context);
+    auto bucket_numbers = getRequiredBucketNumbers(query_info, local_context);
     collectResource(local_context, parts, local_table_name, bucket_numbers);
 
     return {std::move(local_table_name), std::move(parts), {}, {}};
@@ -928,7 +928,7 @@ std::pair<String, const Cluster::ShardInfo *> StorageCnchMergeTree::prepareLocal
             }
         }
 
-        auto worker_client = worker_group->getWorkerClients().at(index);
+        auto worker_client = worker_group->getWorkerClient(index, /*skip_busy_worker*/false).second;
         worker_clients_for_send.emplace_back(worker_client);
     }
 
@@ -2227,7 +2227,7 @@ void StorageCnchMergeTree::alter(const AlterCommands & commands, ContextPtr loca
             local_context->getSettingsRef().max_query_size,
             local_context->getSettingsRef().max_parser_depth);
 
-        applyMetadataChangesToCreateQuery(ast, new_metadata);
+        applyMetadataChangesToCreateQuery(ast, new_metadata, ParserSettings::valueOf(local_context->getSettingsRef()));
         alter_act.setNewSchema(queryToString(ast));
 
         LOG_DEBUG(log, "new schema for alter query: {}", alter_act.getNewSchema());
@@ -2513,7 +2513,7 @@ void StorageCnchMergeTree::dropPartsImpl(
         }
     }
 
-    MutableDataPartsVector drop_ranges;
+    MutableDataPartsVector drop_parts;
 
     if (svr_parts_to_drop.size() == 1)
     {
@@ -2525,14 +2525,7 @@ void StorageCnchMergeTree::dropPartsImpl(
         auto disk = getStoragePolicy(IStorage::StorageLocation::AUXILITY)->getAnyDisk();
         auto single_disk_volume = std::make_shared<SingleDiskVolume>("volume_" + drop_part_info.getPartName(), disk);
         String drop_part_name = drop_part_info.getPartName();
-        auto drop_part = createPart(
-            drop_part_name,
-            MergeTreeDataPartType::WIDE,
-            drop_part_info,
-            single_disk_volume,
-            drop_part_name,
-            nullptr,
-            StorageLocation::AUXILITY);
+        auto drop_part = createPart(drop_part_name, MergeTreeDataPartType::WIDE, drop_part_info, single_disk_volume, drop_part_name, nullptr, StorageLocation::AUXILITY);
         drop_part->partition.assign(part->partition());
         drop_part->deleted = true;
         /// Get parts chain and update `coverd_xxx` fields for metrics.
@@ -2551,18 +2544,19 @@ void StorageCnchMergeTree::dropPartsImpl(
             drop_part->secondary_txn_id = txn->getTransactionID();
         }
 
-        drop_ranges.emplace_back(std::move(drop_part));
+        drop_parts.emplace_back(std::move(drop_part));
     }
     else
     {
         // drop_range parts should belong to the primary transaction
-        drop_ranges = createDropRangesFromParts(local_context, svr_parts_to_drop, txn);
+        drop_parts = createDropRangesFromParts(local_context, svr_parts_to_drop, txn);
     }
 
-    auto bitmap_tombstones = createDeleteBitmapTombstones(drop_ranges, txn->getPrimaryTransactionID());
+    auto bitmap_tombstones = createDeleteBitmapTombstones(drop_parts, txn->getPrimaryTransactionID());
 
     CnchDataWriter cnch_writer(*this, local_context, ManipulationType::Drop);
-    cnch_writer.dumpAndCommitCnchParts(drop_ranges, bitmap_tombstones);
+    cnch_writer.dumpAndCommitCnchParts(drop_parts, bitmap_tombstones);
+    txn->commitV2();
 }
 
 StorageCnchMergeTree::MutableDataPartsVector StorageCnchMergeTree::createDropRangesFromParts(
@@ -2738,9 +2732,10 @@ Block StorageCnchMergeTree::getBlockWithVirtualPartitionColumns(
     return block;
 }
 
-std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(ASTPtr where_expression, ContextPtr local_context) const
+std::set<Int64> StorageCnchMergeTree::getRequiredBucketNumbers(const SelectQueryInfo & query_info, ContextPtr local_context) const
 {
     std::set<Int64> bucket_numbers;
+ASTPtr where_expression = query_info.query->as<ASTSelectQuery>()->getWhere();
     const Settings & settings = local_context->getSettingsRef();
     auto metadata_snapshot = getInMemoryMetadataPtr();
     // if number of bucket columns of this table > 1, skip optimisation
@@ -3074,6 +3069,7 @@ void StorageCnchMergeTree::checkMutationIsPossible(const MutationCommands & comm
         MutationCommand::MATERIALIZE_INDEX,
         MutationCommand::DELETE,
         MutationCommand::FAST_DELETE,
+        MutationCommand::UPDATE,
     };
 
     bool contains_delete = false;
@@ -3183,6 +3179,7 @@ void StorageCnchMergeTree::checkUnderlyingDictionaryTable(const BitEngineHelper:
         throw Exception("Value column type should be UInt64", ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 }
 
+
 StorageID StorageCnchMergeTree::prepareTableRead(const Names & output_columns, SelectQueryInfo & query_info, ContextPtr local_context)
 {
     auto prepare_result = prepareReadContext(output_columns, getInMemoryMetadataPtr(), query_info, local_context);
@@ -3199,4 +3196,5 @@ StorageID StorageCnchMergeTree::prepareTableWrite(ContextPtr local_context)
     storage_id.table_name = prepare_result.first;
     return storage_id;
 }
+
 } // end namespace DB

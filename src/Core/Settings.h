@@ -1689,6 +1689,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, print_graphviz_ast, false, "Whether print graphviz", 0) \
     M(Bool, print_graphviz_planner, false, "Whether print graphviz", 0) \
     M(Bool, use_sql_binding, false, "Whether use SQL binding", 0) \
+    M(Bool, enable_active_prewhere, false, "Whether to actively generate prewhere by statistics", 0) \
+    M(Float, max_active_prewhere_selectivity, 0.3, "Max Selectivity of actively generated prewheres", 0) \
+    M(UInt64, max_active_prewhere_size, 3, "Max Size of to actively generated prewheres", 0) \
     M(UInt64, global_bindings_update_time, 60*60, "Interval to update global binding cache from catalog, in seconds.", 0) \
     /** Optimizer relative settings, Plan build and RBO */ \
     M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\

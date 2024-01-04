@@ -191,13 +191,15 @@ protected:
         bool do_global_,
         SubqueriesForSets subqueries_for_sets_,
         PreparedSets prepared_sets_,
-        BitmapIndexInfoPtr bitmap_index_info_);
+        BitmapIndexInfoPtr bitmap_index_info_,
+        const StorageMetadataPtr & metadata_snapshot_ = nullptr);
 
     ASTPtr query;
     const ExtractedSettings settings;
     size_t subquery_depth;
 
     MergeTreeIndexContextPtr index_context;
+    StorageMetadataPtr metadata_snapshot;
 
     TreeRewriterResultPtr syntax;
 
@@ -350,8 +352,8 @@ public:
             do_global_,
             std::move(subqueries_for_sets_),
             std::move(prepared_sets_),
-            bitmap_index_info_)
-        , metadata_snapshot(metadata_snapshot_)
+            bitmap_index_info_,
+            metadata_snapshot_)
         , required_result_columns(required_result_columns_)
         , query_options(options_)
     {
@@ -398,7 +400,6 @@ public:
     void makeSetsForIndex(const ASTPtr & node);
 
 private:
-    StorageMetadataPtr metadata_snapshot;
     /// If non-empty, ignore all expressions not from this list.
     NameSet required_result_columns;
     SelectQueryOptions query_options;

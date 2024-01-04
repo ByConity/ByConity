@@ -45,6 +45,7 @@
 #include <Common/Exception.h>
 #include <common/getFQDNOrHostName.h>
 #include <common/types.h>
+#include "Interpreters/QueryExchangeLog.h"
 
 namespace DB
 {
@@ -157,7 +158,7 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
     ExchangeExtremesSourcePtr extremes_source;
     if (is_add_extremes)
         extremes_source = std::make_shared<ExchangeExtremesSource>(source_header);
-    auto enable_metrics = context->getSettingsRef().log_query_exchange && context->getQueryExchangeLog();
+    auto enable_metrics = context->getSettingsRef().log_query_exchange;
     auto query_exchange_log = enable_metrics ? context->getQueryExchangeLog(): nullptr;
     auto register_mode
         = context->getSettingsRef().bsp_mode ? BrpcExchangeReceiverRegistryService::DISK_READER : BrpcExchangeReceiverRegistryService::BRPC;
@@ -208,7 +209,8 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                         enable_metrics,
                         write_address,
                         collector,
-                        register_mode);
+                        register_mode,
+                        query_exchange_log);
                     receivers.emplace_back(std::move(receiver));
                 }
             }
@@ -219,7 +221,15 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                             exchange_id, write_plan_segment_id, plan_segment_id, partition_id_start, coordinator_address);
                 auto queue = std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size);
                 auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
-                    std::move(data_key), "", context, exchange_header, keep_order, name, std::move(queue), register_mode);
+                    std::move(data_key),
+                    "",
+                    context,
+                    exchange_header,
+                    keep_order,
+                    name,
+                    std::move(queue),
+                    register_mode,
+                    query_exchange_log);
                 brpc_receiver->setEnableReceiverMetrics(enable_metrics);
                 BroadcastReceiverPtr receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
                 receivers.emplace_back(std::move(receiver));
@@ -272,7 +282,8 @@ void RemoteExchangeSourceStep::initializePipeline(QueryPipeline & pipeline, cons
                         enable_metrics,
                         write_address,
                         nullptr,
-                        register_mode);
+                        register_mode,
+                        query_exchange_log);
                     auto source = std::make_shared<ExchangeSource>(source_header, std::move(receiver), options, is_final_plan_segment);
                     pipe.addSource(std::move(source));
                     source_num++;
@@ -329,7 +340,8 @@ BroadcastReceiverPtr RemoteExchangeSourceStep::createReceiver(
     bool enable_metrics,
     const String & write_address,
     MultiPathQueuePtr collector,
-    BrpcExchangeReceiverRegistryService::RegisterMode register_mode)
+    BrpcExchangeReceiverRegistryService::RegisterMode register_mode,
+    std::shared_ptr<QueryExchangeLog> query_exchange_log)
 {
     BroadcastReceiverPtr receiver;
     if (is_local_exchange)
@@ -371,7 +383,15 @@ BroadcastReceiverPtr RemoteExchangeSourceStep::createReceiver(
             auto queue = collector ? collector
                                    : std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size);
             auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
-                std::move(data_key), localhost_address, context, exchange_header, keep_order, name, std::move(queue), register_mode);
+                std::move(data_key),
+                localhost_address,
+                context,
+                exchange_header,
+                keep_order,
+                name,
+                std::move(queue),
+                register_mode,
+                query_exchange_log);
             brpc_receiver->setEnableReceiverMetrics(enable_metrics);
             receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
         }
@@ -390,7 +410,15 @@ BroadcastReceiverPtr RemoteExchangeSourceStep::createReceiver(
         auto queue = collector ? collector
                                : std::make_shared<MultiPathBoundedQueue>(context->getSettingsRef().exchange_remote_receiver_queue_size);
         auto brpc_receiver = std::make_shared<BrpcRemoteBroadcastReceiver>(
-            std::move(data_key), write_address, context, exchange_header, keep_order, name, std::move(queue), register_mode);
+            std::move(data_key),
+            write_address,
+            context,
+            exchange_header,
+            keep_order,
+            name,
+            std::move(queue),
+            register_mode,
+            query_exchange_log);
         brpc_receiver->setEnableReceiverMetrics(enable_metrics);
         receiver = std::dynamic_pointer_cast<IBroadcastReceiver>(brpc_receiver);
     }

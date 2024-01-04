@@ -200,6 +200,7 @@ void CnchPartGCThread::tryMarkExpiredPartitions(StorageCnchMergeTree & storage, 
 
     auto cnch_writer = CnchDataWriter(storage, query_context, ManipulationType::Drop);
     cnch_writer.dumpAndCommitCnchParts(drop_ranges, bitmap_tombstones);
+    txn->commitV2();
 }
 
 TxnTimestamp CnchPartGCThread::calculateGCTimestamp(UInt64 delay_second, bool in_wakeup)

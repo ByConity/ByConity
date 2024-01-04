@@ -63,7 +63,7 @@ bool ParserNestedTable::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserToken open(TokenType::OpeningRoundBracket);
     ParserToken close(TokenType::ClosingRoundBracket);
     ParserIdentifier name_p;
-    ParserNameTypePairList columns_p;
+    ParserNameTypePairList columns_p(dt);
 
     ASTPtr name;
     ASTPtr columns;
@@ -99,7 +99,7 @@ bool ParserIdentifierWithParameters::parseImpl(Pos & pos, ASTPtr & node, Expecte
 
 bool ParserNameTypePairList::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
-    return ParserList(std::make_unique<ParserNameTypePair>(), std::make_unique<ParserToken>(TokenType::Comma), false)
+    return ParserList(std::make_unique<ParserNameTypePair>(dt), std::make_unique<ParserToken>(TokenType::Comma), false)
         .parse(pos, node, expected);
 }
 
@@ -121,7 +121,7 @@ bool ParserIndexDeclaration::parseImpl(Pos & pos, ASTPtr & node, Expected & expe
     ParserKeyword s_granularity("GRANULARITY");
 
     ParserIdentifier name_p;
-    ParserDataType data_type_p;
+    ParserDataType data_type_p(dt);
     ParserExpression expression_p(dt);
     ParserUnsignedInteger granularity_p;
 

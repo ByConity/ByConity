@@ -33,15 +33,15 @@ namespace DB
 {
 LocalBroadcastChannel::LocalBroadcastChannel(
     ExchangeDataKeyPtr data_key_, LocalChannelOptions options_, const String & name_, MultiPathQueuePtr queue_, ContextPtr context_)
-    : name(name_)
+    : IBroadcastReceiver(options_.enable_metrics)
+    , IBroadcastSender(options_.enable_metrics)
+    , name(name_)
     , data_key(std::move(data_key_))
     , options(std::move(options_))
     , receive_queue(std::move(queue_))
     , context(std::move(context_))
     , logger(&Poco::Logger::get("LocalBroadcastChannel"))
 {
-    enable_sender_metrics = options.enable_metrics;
-    enable_receiver_metrics = options.enable_metrics;
 }
 
 RecvDataPacket LocalBroadcastChannel::recv(timespec timeout_ts)
@@ -186,12 +186,13 @@ LocalBroadcastChannel::~LocalBroadcastChannel()
         auto * status = broadcast_status.load(std::memory_order_acquire);
         if (status != &init_status)
             delete status;
-        if (enable_sender_metrics || enable_receiver_metrics)
+        auto query_exchange_log = context ? context->getQueryExchangeLog() : nullptr;
+        if ((enable_sender_metrics || enable_receiver_metrics) && query_exchange_log)
         {
             QueryExchangeLogElement element;
             element.initial_query_id = context->getInitialQueryId();
             element.exchange_id = std::to_string(data_key->exchange_id);
-            element.partition_id = std::to_string(data_key->parallel_index);
+            element.partition_id = std::to_string(data_key->partition_id);
             element.type = "local";
             element.event_time =
                 std::chrono::duration_cast<std::chrono::seconds>(
@@ -200,6 +201,7 @@ LocalBroadcastChannel::~LocalBroadcastChannel()
             element.send_time_ms = sender_metrics.send_time_ms.get_value();
             element.send_rows = sender_metrics.send_rows.get_value();
             element.send_uncompressed_bytes = sender_metrics.send_uncompressed_bytes.get_value();
+            element.num_send_times = sender_metrics.num_send_times.get_value();
 
             element.finish_code = sender_metrics.finish_code;
             element.is_modifier = sender_metrics.is_modifier;
@@ -210,8 +212,7 @@ LocalBroadcastChannel::~LocalBroadcastChannel()
             element.register_time_ms = receiver_metrics.register_time_ms.get_value();
             element.recv_bytes = receiver_metrics.recv_bytes.get_value();
 
-            if (auto query_exchange_log = context->getQueryExchangeLog())
-                query_exchange_log->add(element);
+            query_exchange_log->add(element);
         }
     }
     catch (...)

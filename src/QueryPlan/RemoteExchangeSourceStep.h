@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <memory>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/DistributedStages/AddressInfo.h>
 #include <Processors/Exchange/DataTrans/Brpc/BrpcRemoteBroadcastReceiver.h>
@@ -79,7 +80,8 @@ private:
         bool enable_metrics,
         const String & write_address_info,
         MultiPathQueuePtr collector,
-        BrpcExchangeReceiverRegistryService::RegisterMode register_mode);
+        BrpcExchangeReceiverRegistryService::RegisterMode register_mode,
+        std::shared_ptr<QueryExchangeLog> query_exchange_log);
     PlanSegmentInputs inputs;
     PlanSegment * plan_segment = nullptr;
     Poco::Logger * logger;

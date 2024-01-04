@@ -172,7 +172,8 @@ void CnchWorkerServiceImpl::submitManipulationTask(
         auto rpc_context = RPCHelpers::createSessionContextForRPC(getContext(), *cntl);
         rpc_context->setCurrentQueryId(request->task_id());
         rpc_context->getClientInfo().rpc_port = request->rpc_port();
-        rpc_context->setCurrentTransaction(std::make_shared<CnchWorkerTransaction>(rpc_context, txn_id));
+        auto server_client = rpc_context->getCnchServerClient(rpc_context->getClientInfo().current_address.host().toString(), request->rpc_port());
+        rpc_context->setCurrentTransaction(std::make_shared<CnchWorkerTransaction>(rpc_context, txn_id, server_client));
 
         const auto & settings = getContext()->getSettingsRef();
         UInt64 max_running_task = settings.max_threads * getContext()->getRootConfig().max_ratio_of_cnch_tasks_to_threads;
@@ -216,8 +217,8 @@ void CnchWorkerServiceImpl::submitManipulationTask(
             }
 
             rpc_context->initCnchServerResource(txn_id);
-            rpc_context->getSettingsRef().prefer_localhost_replica = false;
-            rpc_context->getSettingsRef().prefer_cnch_catalog = true;
+            rpc_context->setSetting("prefer_localhost_replica", false);
+            rpc_context->setSetting("prefer_cnch_catalog", true);
             trySetVirtualWarehouseAndWorkerGroup(data->getSettings()->cnch_vw_default.value, rpc_context);
         }
 
@@ -905,15 +906,15 @@ void CnchWorkerServiceImpl::submitKafkaConsumeTask(
         command->task_id = request->task_id();
         command->rpc_port = static_cast<UInt16>(request->rpc_port());
 
+        command->cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
+        if (command->cnch_storage_id.empty())
+            throw Exception("cnch_storage_id is required while starting consumer", ErrorCodes::BAD_ARGUMENTS);
+
         command->local_database_name = request->database();
         command->local_table_name = request->table();
 
         if (command->type == KafkaTaskCommand::START_CONSUME)
         {
-            command->cnch_storage_id = RPCHelpers::createStorageID(request->cnch_storage_id());
-            if (command->cnch_storage_id.empty())
-                throw Exception("cnch_storage_id is required while starting consumer", ErrorCodes::BAD_ARGUMENTS);
-
             command->assigned_consumer = request->assigned_consumer();
 
             if (request->create_table_command_size() < 2)
