@@ -589,31 +589,29 @@ IMergeTreeDataPart::ChecksumsPtr IMergeTreeDataPart::getChecksums() const
     ChecksumsPtr res;
     {
         std::lock_guard lock(checksums_mutex);
-        res = checksums_ptr ? checksums_ptr : checksums_from_cache.lock();
+        res = checksums_ptr;
     }
 
-    if (res)
-        return res;
+    if (!res)
+    {
+        auto cache = storage.getContext()->getChecksumsCache();
+        std::lock_guard lock(checksums_mutex);
+        if (!checksums_ptr)
+        {
+            if (cache && !is_temp)
+            {
+                const String storage_unique_id = storage.getStorageUniqueID();
+                auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true); };
+                checksums_ptr = cache->getOrSet(storage_unique_id, getChecksumsCacheKey(storage_unique_id, *this), std::move(load_func)).first;
+            }
+            else
+            {
+                checksums_ptr = const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true);
+            }
+        }
+        res = checksums_ptr;
+    }
 
-    auto cache = storage.getContext()->getChecksumsCache();
-    if (cache && !is_temp)
-    {
-        const String storage_unique_id = storage.getStorageUniqueID();
-        auto load_func = [this] { return const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true); };
-        res = cache->getOrSet(storage_unique_id, getChecksumsCacheKey(storage_unique_id, *this), std::move(load_func)).first;
-        {
-            std::lock_guard lock(checksums_mutex);
-            checksums_from_cache = res;
-        }
-    }
-    else
-    {
-        res = const_cast<IMergeTreeDataPart *>(this)->loadChecksums(true);
-        {
-            std::lock_guard lock(checksums_mutex);
-            checksums_ptr = res;
-        }
-    }
     return res;
 }
 
@@ -856,7 +854,10 @@ void IMergeTreeDataPart::loadColumnsChecksumsIndexes(bool require_columns_checks
 
     loadUUID();
     loadColumns(require_columns_checksums);
-    loadChecksums(require_columns_checksums);
+    {
+        std::lock_guard lock(checksums_mutex);
+        checksums_ptr = loadChecksums(require_columns_checksums);
+    }
     loadIndexGranularity();
     calculateColumnsSizesOnDisk();
     loadIndex();     /// Must be called after loadIndexGranularity as it uses the value of `index_granularity`

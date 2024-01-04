@@ -393,12 +393,8 @@ public:
 
 	Versions versions;
 
-    /// only be used if the storage enables persistent checksums.
     mutable ChecksumsPtr checksums_ptr;
-    /// use weak_ptr so that when checksums are removed from cache, its memory can be reclaimed
-    mutable ChecksumsWeakPtr checksums_from_cache;
-    /// Protect checksums_ptr and checksums_from_cache.
-    mutable std::mutex checksums_mutex;
+    mutable std::mutex checksums_mutex; // Protect checksums_ptr
 
     /// Columns with values, that all have been zeroed by expired ttl
     NameSet expired_columns;
