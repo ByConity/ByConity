@@ -57,7 +57,6 @@ Block InterpreterSelectQueryUseOptimizer::getSampleBlock()
     if (!block)
     {
         auto query_plan = buildQueryPlan();
-        block = query_plan->getPlanNodeRoot()->getCurrentDataStream().header;
     }
 
     return block;
