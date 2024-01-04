@@ -38,9 +38,10 @@
 #include <DataStreams/copyData.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <IO/ConnectionTimeoutsContext.h>
+#include <IO/ReadBufferFromS3.h>
+#include <IO/S3Common.h>
 #include <IO/SnappyReadBuffer.h>
 #include <Interpreters/Context.h>
-#include <IO/S3Common.h>
 #include <IO//RAReadBufferFromS3.h>
 #include <Interpreters/InterpreterSelectWithUnionQuery.h>
 #include <Interpreters/InterpreterWatchQuery.h>
@@ -673,9 +674,7 @@ BlockInputStreamPtr InterpreterInsertQuery::buildInputStreamFromSource(
                         context_ptr->getSettingsRef().s3_ak_id.toString(), context_ptr->getSettingsRef().s3_ak_secret.toString(),
                         "", "", context_ptr->getSettingsRef().s3_use_virtual_hosted_style);
                     const std::shared_ptr<Aws::S3::S3Client> client = s3_cfg.create();
-                    read_buf = std::make_unique<RAReadBufferFromS3>(client, bucket, key, 3,
-                        DBMS_DEFAULT_BUFFER_SIZE, nullptr, 0,
-                        context_ptr->getProcessList().getHDFSDownloadThrottler());
+                    read_buf = std::make_unique<ReadBufferFromS3>(client, bucket, key, context_ptr->getReadSettings());
                 }
 #endif
                 else
