@@ -127,15 +127,13 @@ static bool getDBTablesFromPredicates(const std::optional<std::vector<std::map<S
     if (!predicates)
         return false;
     
-    std::vector<std::pair<String, String>> tmp_result;
     for (const auto & item : predicates.value())
     {
         if (!item.count("database") || !item.count("name"))
             return false;
         
-        tmp_result.push_back(std::make_pair(item.at("database"), item.at("name")));
+        db_table_pairs.push_back(std::make_pair(item.at("database"), item.at("name")));
     }
-    db_table_pairs = tmp_result;
 
     return true;
 }
