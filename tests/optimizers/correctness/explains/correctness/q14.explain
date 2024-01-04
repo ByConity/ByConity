@@ -3,31 +3,24 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: a == a_3
-      ├─ Repartition Exchange Est. ? rows
-      │  │     Partition by: {a}
-      │  └─ Inner Join Est. ? rows
-      │     │     Condition: a_2 == a
-      │     ├─ Inner Join Est. ? rows
-      │     │  │     Condition: a_4 == a_2
-      │     │  ├─ Repartition Exchange Est. ? rows
-      │     │  │  │     Partition by: {a_4}
-      │     │  │  └─ TableScan correctness.q6_t5 Est. ? rows
-      │     │  │           Outputs: [f], a_4:=a
-      │     │  └─ Repartition Exchange Est. ? rows
-      │     │     │     Partition by: {a_2}
-      │     │     └─ TableScan correctness.q6_t3 Est. ? rows
-      │     │              Outputs: [d], a_2:=a
-      │     └─ Repartition Exchange Est. ? rows
-      │        │     Partition by: {a}
-      │        └─ Inner Join Est. ? rows
-      │           │     Condition: a_1 == a
-      │           ├─ TableScan correctness.q6_t2 Est. ? rows
-      │           │        Outputs: [c], a_1:=a
-      │           └─ Broadcast Exchange Est. ? rows
-      │              └─ TableScan correctness.q6_t1 Est. ? rows
-      │                       Outputs: [a, b]
-      └─ Repartition Exchange Est. ? rows
-         │     Partition by: {a_3}
+      ├─ Inner Join Est. ? rows
+      │  │     Condition: a_2 == a
+      │  ├─ Inner Join Est. ? rows
+      │  │  │     Condition: a_4 == a_2
+      │  │  ├─ TableScan correctness.q6_t5 Est. ? rows
+      │  │  │        Outputs: [f], a_4:=a
+      │  │  └─ Broadcast Exchange Est. ? rows
+      │  │     └─ TableScan correctness.q6_t3 Est. ? rows
+      │  │              Outputs: [d], a_2:=a
+      │  └─ Broadcast Exchange Est. ? rows
+      │     └─ Inner Join Est. ? rows
+      │        │     Condition: a_1 == a
+      │        ├─ TableScan correctness.q6_t2 Est. ? rows
+      │        │        Outputs: [c], a_1:=a
+      │        └─ Broadcast Exchange Est. ? rows
+      │           └─ TableScan correctness.q6_t1 Est. ? rows
+      │                    Outputs: [a, b]
+      └─ Broadcast Exchange Est. ? rows
          └─ TableScan correctness.q6_t4 Est. ? rows
                   Outputs: [e], a_3:=a
 Projection Est. ? rows
@@ -35,31 +28,24 @@ Projection Est. ? rows
 └─ Gather Exchange Est. ? rows
    └─ Inner Join Est. ? rows
       │     Condition: a_5 == a_8
-      ├─ Repartition Exchange Est. ? rows
-      │  │     Partition by: {a_5}
-      │  └─ Inner Join Est. ? rows
-      │     │     Condition: a_7 == a_5
-      │     ├─ Inner Join Est. ? rows
-      │     │  │     Condition: a_9 == a_7
-      │     │  ├─ Repartition Exchange Est. ? rows
-      │     │  │  │     Partition by: {a_9}
-      │     │  │  └─ TableScan correctness.q6_t5 Est. ? rows
-      │     │  │           Outputs: a_9:=a, f_1:=f
-      │     │  └─ Repartition Exchange Est. ? rows
-      │     │     │     Partition by: {a_7}
-      │     │     └─ TableScan correctness.q6_t3 Est. ? rows
-      │     │              Outputs: a_7:=a, d_1:=d
-      │     └─ Repartition Exchange Est. ? rows
-      │        │     Partition by: {a_5}
-      │        └─ Inner Join Est. ? rows
-      │           │     Condition: a_6 == a_5
-      │           ├─ TableScan correctness.q6_t2 Est. ? rows
-      │           │        Outputs: a_6:=a, c_1:=c
-      │           └─ Broadcast Exchange Est. ? rows
-      │              └─ TableScan correctness.q6_t1 Est. ? rows
-      │                       Outputs: a_5:=a, b_1:=b
-      └─ Repartition Exchange Est. ? rows
-         │     Partition by: {a_8}
+      ├─ Inner Join Est. ? rows
+      │  │     Condition: a_7 == a_5
+      │  ├─ Inner Join Est. ? rows
+      │  │  │     Condition: a_9 == a_7
+      │  │  ├─ TableScan correctness.q6_t5 Est. ? rows
+      │  │  │        Outputs: a_9:=a, f_1:=f
+      │  │  └─ Broadcast Exchange Est. ? rows
+      │  │     └─ TableScan correctness.q6_t3 Est. ? rows
+      │  │              Outputs: a_7:=a, d_1:=d
+      │  └─ Broadcast Exchange Est. ? rows
+      │     └─ Inner Join Est. ? rows
+      │        │     Condition: a_6 == a_5
+      │        ├─ TableScan correctness.q6_t2 Est. ? rows
+      │        │        Outputs: a_6:=a, c_1:=c
+      │        └─ Broadcast Exchange Est. ? rows
+      │           └─ TableScan correctness.q6_t1 Est. ? rows
+      │                    Outputs: a_5:=a, b_1:=b
+      └─ Broadcast Exchange Est. ? rows
          └─ TableScan correctness.q6_t4 Est. ? rows
                   Outputs: a_8:=a, e_1:=e
 Projection Est. ? rows
@@ -73,14 +59,11 @@ Projection Est. ? rows
             │     Condition: 
             ├─ Inner Join Est. ? rows
             │  │     Condition: expr#cast(sk_1, 'Nullable(Int64)') == expr#cast(sk, 'Nullable(Int64)')
-            │  ├─ Repartition Exchange Est. ? rows
-            │  │  │     Partition by: {expr#cast(sk_1, 'Nullable(Int64)')}
-            │  │  └─ Projection Est. ? rows
-            │  │     │     Expressions: expr#cast(sk_1, 'Nullable(Int64)'):=cast(sk_1, 'Nullable(Int64)')
-            │  │     └─ TableScan correctness.cust Est. ? rows
-            │  │              Outputs: sk_1:=sk
-            │  └─ Repartition Exchange Est. ? rows
-            │     │     Partition by: {expr#cast(sk, 'Nullable(Int64)')}
+            │  ├─ Projection Est. ? rows
+            │  │  │     Expressions: expr#cast(sk_1, 'Nullable(Int64)'):=cast(sk_1, 'Nullable(Int64)')
+            │  │  └─ TableScan correctness.cust Est. ? rows
+            │  │           Outputs: sk_1:=sk
+            │  └─ Broadcast Exchange Est. ? rows
             │     └─ Projection Est. ? rows
             │        │     Expressions: expr#cast(sk, 'Nullable(Int64)'):=cast(sk, 'Nullable(Int64)')
             │        └─ Filter Est. ? rows
@@ -108,21 +91,17 @@ Projection Est. ? rows
       │           │     Aggregates: expr#count()_1:=AggNull(count)()
       │           └─ Inner Join Est. ? rows
       │              │     Condition: d_2 == e_2
-      │              ├─ Repartition Exchange Est. ? rows
-      │              │  │     Partition by: {d_2}
-      │              │  └─ TableScan correctness.q6_t3 Est. ? rows
-      │              │           Outputs: d_2:=d
-      │              └─ Repartition Exchange Est. ? rows
-      │                 │     Partition by: {e_2}
+      │              ├─ TableScan correctness.q6_t3 Est. ? rows
+      │              │        Outputs: d_2:=d
+      │              └─ Broadcast Exchange Est. ? rows
       │                 └─ TableScan correctness.q6_t4 Est. ? rows
       │                          Outputs: e_2:=e
-      └─ Inner Join Est. ? rows
-         │     Condition: b_2 == c_2
-         ├─ Repartition Exchange Est. ? rows
-         │  │     Partition by: {b_2}
-         │  └─ TableScan correctness.q6_t1 Est. ? rows
-         │           Outputs: b_2:=b
-         └─ Repartition Exchange Est. ? rows
-            │     Partition by: {c_2}
-            └─ TableScan correctness.q6_t2 Est. ? rows
-                     Outputs: c_2:=c
+      └─ Repartition Exchange Est. ? rows
+         │     Partition by: {b_2}
+         └─ Inner Join Est. ? rows
+            │     Condition: b_2 == c_2
+            ├─ TableScan correctness.q6_t1 Est. ? rows
+            │        Outputs: b_2:=b
+            └─ Broadcast Exchange Est. ? rows
+               └─ TableScan correctness.q6_t2 Est. ? rows
+                        Outputs: c_2:=c

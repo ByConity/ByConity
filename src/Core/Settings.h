@@ -1844,6 +1844,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cascades_pruning, false, "Whether enable cascades pruning", 0) \
     M(Bool, enum_replicate, true, "Enum replicate join", 0) \
     M(Bool, enum_repartition, true, "Enum repartition join", 0) \
+    M(Bool, enum_replicate_no_stats, true, "Enum replicate join when statistics not exists", 0) \
     M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \
