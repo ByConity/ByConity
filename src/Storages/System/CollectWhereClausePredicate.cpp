@@ -116,7 +116,7 @@ namespace DB
     // collects columns and values for WHERE condition with OR, AND and EQUALS (case insesitive)
     // e.g for query "select ... where ((db = 'db') AND (name = 'name1')) OR ((db = 'db') AND (name = 'name2')) ", method will return a vector {'name':'name1', 'db':'db'}, {'db' : 'db', 'name':'name2'}
     // if a value of column is not a string, it will has value as an empty string
-    std::vector<std::map<String,Field>> collectWhereORClausePredicate(const ASTPtr & ast, const ContextPtr & context)
+    std::vector<std::map<String,Field>> collectWhereORClausePredicate(const ASTPtr & ast, const ContextPtr & context, bool or_ret_empty)
     {
         std::vector<std::map<String,Field>> res;
         if (!ast)
@@ -131,7 +131,7 @@ namespace DB
             const auto children = func->arguments->children;
             std::for_each(children.begin(), children.end(), [& res, & context] (const auto & child) {
                 std::map<String,Field> m = collectWhereANDClausePredicate(child, context);
-                if (!m.empty())
+                if (or_ret_empty || !m.empty())
                     res.push_back(m);
             });
         }

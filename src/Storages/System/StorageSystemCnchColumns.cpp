@@ -54,7 +54,7 @@ static std::optional<std::vector<std::map<String, String>>> parsePredicatesFromW
 {
     ASTPtr where_expression = query_info.query->as<const ASTSelectQuery &>().where();
     std::vector<std::map<String,Field>> predicates;
-    predicates = collectWhereORClausePredicate(where_expression, context);
+    predicates = collectWhereORClausePredicate(where_expression, context, true);
 
     std::optional<std::vector<std::map<String, String>>> res;
     std::vector<std::map<String, String>> tmp_res;
@@ -71,8 +71,7 @@ static std::optional<std::vector<std::map<String, String>>> parsePredicatesFromW
             tmp_map["table"] = item["table"].get<String>();
         }
 
-        if (!tmp_map.empty())
-            tmp_res.push_back(tmp_map);
+        tmp_res.push_back(tmp_map);
     }
 
     if (!tmp_res.empty())
