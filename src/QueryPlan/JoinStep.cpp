@@ -32,6 +32,7 @@
 #include <Processors/Transforms/JoiningTransform.h>
 #include <QueryPlan/JoinStep.h>
 #include "Common/ErrorCodes.h"
+#include <Common/typeid_cast.h>
 
 namespace DB
 {
@@ -252,16 +253,32 @@ QueryPipelinePtr JoinStep::updatePipeline(QueryPipelines pipelines, const BuildQ
         max_block_size = settings.context->getSettingsRef().max_block_size;
     }
 
-    auto pipeline = QueryPipeline::joinPipelines(
-        std::move(pipelines[0]),
-        std::move(pipelines[1]),
-        join,
-        max_block_size,
-        max_streams,
-        keep_left_read_in_order,
-        settings.context->getSettingsRef().join_parallel_left_right,
-        &processors,
-        need_build_runtime_filter);
+    QueryPipelinePtr pipeline;
+    {
+        if (join->pipelineType() == JoinPipelineType::YShaped)
+        {
+            pipeline = QueryPipeline::joinPipelinesYShaped(
+                std::move(pipelines[0]), 
+                std::move(pipelines[1]),
+                join, 
+                output_stream->header,
+                max_block_size, 
+                &processors);
+        }
+        else
+        {
+            pipeline = QueryPipeline::joinPipelinesRightLeft(
+                std::move(pipelines[0]),
+                std::move(pipelines[1]),
+                join,
+                max_block_size,
+                max_streams,
+                keep_left_read_in_order,
+                settings.context->getSettingsRef().join_parallel_left_right,
+                &processors,
+                need_build_runtime_filter);
+        }
+    }
 
     // if NestLoopJoin is choose, no need to add filter stream.
     if (filter && !PredicateUtils::isTruePredicate(filter) && join->getType() != JoinType::NestedLoop)

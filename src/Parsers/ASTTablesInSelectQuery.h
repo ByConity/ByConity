@@ -149,22 +149,24 @@ struct ASTTableJoin : public IAST
     static ASTPtr deserialize(ReadBuffer & buf);
 };
 
-inline bool isLeft(ASTTableJoin::Kind kind)         { return kind == ASTTableJoin::Kind::Left; }
-inline bool isRight(ASTTableJoin::Kind kind)        { return kind == ASTTableJoin::Kind::Right; }
-inline bool isInner(ASTTableJoin::Kind kind)        { return kind == ASTTableJoin::Kind::Inner; }
-inline bool isFull(ASTTableJoin::Kind kind)         { return kind == ASTTableJoin::Kind::Full; }
-inline bool isCross(ASTTableJoin::Kind kind)        { return kind == ASTTableJoin::Kind::Cross; }
-inline bool isComma(ASTTableJoin::Kind kind)        { return kind == ASTTableJoin::Kind::Comma; }
-inline bool isRightOrFull(ASTTableJoin::Kind kind)  { return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full; }
-inline bool isLeftOrFull(ASTTableJoin::Kind kind)   { return kind == ASTTableJoin::Kind::Left  || kind == ASTTableJoin::Kind::Full; }
-inline bool isInnerOrLeft(ASTTableJoin::Kind kind)  { return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Left; }
-inline bool isInnerOrRight(ASTTableJoin::Kind kind) { return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right; }
 
-inline bool isAll(ASTTableJoin::Strictness strictness)  { return strictness == ASTTableJoin::Strictness::All; }
-inline bool isAny(ASTTableJoin::Strictness strictness)  { return strictness == ASTTableJoin::Strictness::Any; }
-inline bool isSemi(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Semi; }
-inline bool isAnti(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Anti; }
-inline bool isAsof(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Asof; }
+inline constexpr bool isLeft(ASTTableJoin::Kind kind)         { return kind == ASTTableJoin::Kind::Left; }
+inline constexpr bool isRight(ASTTableJoin::Kind kind)        { return kind == ASTTableJoin::Kind::Right; }
+inline constexpr bool isInner(ASTTableJoin::Kind kind)        { return kind == ASTTableJoin::Kind::Inner; }
+inline constexpr bool isFull(ASTTableJoin::Kind kind)         { return kind == ASTTableJoin::Kind::Full; }
+inline constexpr bool isCross(ASTTableJoin::Kind kind)         { return kind == ASTTableJoin::Kind::Cross; }
+inline constexpr bool isComma(ASTTableJoin::Kind kind)         { return kind == ASTTableJoin::Kind::Comma; }
+inline constexpr bool isCrossOrComma(ASTTableJoin::Kind kind) { return kind == ASTTableJoin::Kind::Comma || kind == ASTTableJoin::Kind::Cross; }
+inline constexpr bool isRightOrFull(ASTTableJoin::Kind kind)  { return kind == ASTTableJoin::Kind::Right || kind == ASTTableJoin::Kind::Full; }
+inline constexpr bool isLeftOrFull(ASTTableJoin::Kind kind)   { return kind == ASTTableJoin::Kind::Left  || kind == ASTTableJoin::Kind::Full; }
+inline constexpr bool isInnerOrRight(ASTTableJoin::Kind kind) { return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Right; }
+inline constexpr bool isInnerOrLeft(ASTTableJoin::Kind kind)  { return kind == ASTTableJoin::Kind::Inner || kind == ASTTableJoin::Kind::Left; }
+
+inline constexpr bool isAll(ASTTableJoin::Strictness strictness)  { return strictness == ASTTableJoin::Strictness::All; }
+inline constexpr bool isAny(ASTTableJoin::Strictness strictness)  { return strictness == ASTTableJoin::Strictness::Any; }
+inline constexpr bool isSemi(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Semi; }
+inline constexpr bool isAnti(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Anti; }
+inline constexpr bool isAsof(ASTTableJoin::Strictness strictness) { return strictness == ASTTableJoin::Strictness::Asof; }
 
 /// Specification of ARRAY JOIN.
 struct ASTArrayJoin : public IAST

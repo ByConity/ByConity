@@ -406,7 +406,7 @@ bool TableJoin::applyJoinKeyConvert(const ColumnsWithTypeAndName & left_sample_c
         for (const auto & col : right_sample_columns)
             right_list.emplace_back(col.name, col.type);
 
-        need_convert = inferJoinKeyCommonType(left_list, right_list);
+        need_convert = inferJoinKeyCommonType(left_list, right_list, forceFullSortingMergeJoin());
     }
 
     if (need_convert)
@@ -418,7 +418,7 @@ bool TableJoin::applyJoinKeyConvert(const ColumnsWithTypeAndName & left_sample_c
     return need_convert;
 }
 
-bool TableJoin::inferJoinKeyCommonType(const NamesAndTypesList & left, const NamesAndTypesList & right)
+bool TableJoin::inferJoinKeyCommonType(const NamesAndTypesList & left, const NamesAndTypesList & right, bool strict)
 {
     std::unordered_map<String, DataTypePtr> left_types;
     for (const auto & col : left)
@@ -437,9 +437,9 @@ bool TableJoin::inferJoinKeyCommonType(const NamesAndTypesList & left, const Nam
 
     for (size_t i = 0; i < key_names_left.size(); ++i)
     {
-        auto ltype = left_types.find(key_names_left[i]);
-        auto rtype = right_types.find(key_names_right[i]);
-        if (ltype == left_types.end() || rtype == right_types.end())
+        auto ltypeItem = left_types.find(key_names_left[i]);
+        auto rtypeItem = right_types.find(key_names_right[i]);
+        if (ltypeItem == left_types.end() || rtypeItem == right_types.end())
         {
             /// Name mismatch, give up
             left_type_map.clear();
@@ -447,20 +447,25 @@ bool TableJoin::inferJoinKeyCommonType(const NamesAndTypesList & left, const Nam
             return false;
         }
 
-        if (JoinCommon::typesEqualUpToNullability(ltype->second, rtype->second))
-            continue;
+        const auto & ltype = ltypeItem->second;
+        const auto & rtype = rtypeItem->second;
+
+        bool type_equals = strict ? (*ltype).equals(*rtype) : JoinCommon::typesEqualUpToNullability(ltype, rtype);
+        
+        if(type_equals)
+            return true;
 
         DataTypePtr supertype;
         try
         {
-            supertype = DB::getLeastSupertype({ltype->second, rtype->second}, allow_extended_conversion);
+            supertype = DB::getLeastSupertype({ltype, rtype}, allow_extended_conversion);
         }
         catch (DB::Exception & ex)
         {
             throw Exception(
                 "Type mismatch of columns to JOIN by: " +
-                    key_names_left[i] + ": " + ltype->second->getName() + " at left, " +
-                    key_names_right[i] + ": " + rtype->second->getName() + " at right. " +
+                    key_names_left[i] + ": " + ltype->getName() + " at left, " +
+                    key_names_right[i] + ": " + rtype->getName() + " at right. " +
                     "Can't get supertype: " + ex.message(),
                 ErrorCodes::TYPE_MISMATCH);
         }
@@ -518,6 +523,29 @@ String TableJoin::renamedRightColumnName(const String & name) const
     if (const auto it = renames.find(name); it != renames.end())
         return it->second;
     return name;
+}
+
+bool TableJoin::oneDisjunct() const
+{
+    return key_asts_left.size() == 1;
+}
+
+std::unordered_map<String, String> TableJoin::leftToRightKeyRemap() const
+{
+    std::unordered_map<String, String> left_to_right_key_remap;
+    if (hasUsing())
+    {
+        assert(key_names_left.size() == key_names_right.size());
+        size_t sz = key_names_left.size(); 
+        const auto & required_right_keys = requiredRightKeys();
+
+        for(size_t i = 0; i < sz; i++)
+        {
+            if (!required_right_keys.contains(key_names_right[i]))
+                left_to_right_key_remap[key_names_left[i]] = key_names_right[i];
+        }
+    }
+    return left_to_right_key_remap;
 }
 
 }

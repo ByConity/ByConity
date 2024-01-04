@@ -59,7 +59,8 @@ IMPLEMENT_SETTING_ENUM(JoinAlgorithm, ErrorCodes::UNKNOWN_JOIN,
      {"prefer_partial_merge", JoinAlgorithm::PREFER_PARTIAL_MERGE},
      {"nested_loop",          JoinAlgorithm::NESTED_LOOP_JOIN},
      {"grace_hash",           JoinAlgorithm::GRACE_HASH},
-     {"parallel_hash",        JoinAlgorithm::PARALLEL_HASH}})
+     {"parallel_hash",        JoinAlgorithm::PARALLEL_HASH},
+     {"full_sorting_merge",   JoinAlgorithm::FULL_SORTING_MERGE}})
 
 
 IMPLEMENT_SETTING_ENUM(TotalsMode, ErrorCodes::UNKNOWN_TOTALS_MODE,

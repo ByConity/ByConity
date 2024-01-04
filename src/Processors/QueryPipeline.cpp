@@ -39,6 +39,7 @@
 #include <Processors/Transforms/ExtremesTransform.h>
 #include <Processors/Transforms/JoiningTransform.h>
 #include <Processors/Transforms/MergingAggregatedMemoryEfficientTransform.h>
+#include <Processors/Transforms/MergeJoinTransform.h>
 #include <Processors/Transforms/PartialSortingTransform.h>
 #include <Processors/Transforms/ToMainPortTransform.h>
 #include <Processors/Transforms/TotalsHavingTransform.h>
@@ -50,6 +51,7 @@ namespace DB
 namespace ErrorCodes
 {
     extern const int LOGICAL_ERROR;
+    extern const int NOT_IMPLEMENTED;
 }
 
 void QueryPipeline::checkInitialized()
@@ -308,9 +310,62 @@ QueryPipeline QueryPipeline::unitePipelines(
     return pipeline;
 }
 
-std::unique_ptr<QueryPipeline> QueryPipeline::joinPipelines(
-    std::unique_ptr<QueryPipeline> left,
-    std::unique_ptr<QueryPipeline> right,
+QueryPipelinePtr QueryPipeline::mergePipelines(
+    QueryPipelinePtr left,
+    QueryPipelinePtr right,
+    ProcessorPtr transform,
+    Processors * collected_processors)
+{
+    if (transform->getOutputs().size() != 1)
+        throw Exception(ErrorCodes::LOGICAL_ERROR, "Merge transform must have exactly 1 output, got {}", transform->getOutputs().size());
+
+    connect(*left->pipe.output_ports.front(), transform->getInputs().front());
+    connect(*right->pipe.output_ports.front(), transform->getInputs().back());
+
+    if (collected_processors)
+        collected_processors->emplace_back(transform);
+
+    left->pipe.output_ports.front() = &transform->getOutputs().front();
+    left->pipe.processors.emplace_back(transform);
+
+    left->pipe.processors.insert(left->pipe.processors.end(), right->pipe.processors.begin(), right->pipe.processors.end());
+    // left->pipe.holder = std::move(right->pipe.holder);
+    left->pipe.header = left->pipe.output_ports.front()->getHeader();
+    left->pipe.max_parallel_streams = std::max(left->pipe.max_parallel_streams, right->pipe.max_parallel_streams);
+    return left;
+}
+
+QueryPipelinePtr QueryPipeline::joinPipelinesYShaped(
+    QueryPipelinePtr left,
+    QueryPipelinePtr right,
+    JoinPtr join,
+    const Block & out_header,
+    size_t max_block_size,
+    Processors * collected_processors)
+{
+    left->checkInitializedAndNotCompleted();
+    right->checkInitializedAndNotCompleted();
+
+    left->pipe.dropExtremes();
+    right->pipe.dropExtremes();
+
+    if (left->pipe.output_ports.size() != 1 || right->pipe.output_ports.size() != 1)
+        throw Exception("Join is supported only for pipelines with one output port", ErrorCodes::LOGICAL_ERROR);
+
+    if (left->hasTotals() || right->hasTotals())
+        throw Exception(ErrorCodes::NOT_IMPLEMENTED, "Current join algorithm is supported only for pipelines without totals");
+
+    Blocks inputs = {left->getHeader(), right->getHeader()};
+
+    auto joining = std::make_shared<MergeJoinTransform>(join, inputs, out_header, max_block_size);
+
+    auto result = mergePipelines(std::move(left), std::move(right), std::move(joining), collected_processors);
+    return result;
+}
+
+QueryPipelinePtr QueryPipeline::joinPipelinesRightLeft(
+    QueryPipelinePtr left,
+    QueryPipelinePtr right,
     JoinPtr join,
     size_t max_block_size,
     size_t max_streams,

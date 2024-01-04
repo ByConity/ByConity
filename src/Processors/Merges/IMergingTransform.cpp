@@ -20,6 +20,34 @@ IMergingTransformBase::IMergingTransformBase(
 {
 }
 
+static InputPorts createPorts(const Blocks & blocks)
+{
+    InputPorts ports;
+    for (const auto & block : blocks)
+        ports.emplace_back(block);
+    return ports;
+}
+
+IMergingTransformBase::IMergingTransformBase(
+    const Blocks & input_headers,
+    const Block & output_header,
+    bool have_all_inputs_)
+    : IProcessor(createPorts(input_headers), {output_header})
+    , have_all_inputs(have_all_inputs_)
+{
+}
+
+IMergingTransformBase::IMergingTransformBase(
+    const Blocks & input_headers,
+    const Block & output_header,
+    bool have_all_inputs_,
+    UInt64 limit_hint_)
+    : IProcessor(createPorts(input_headers), {output_header})
+    , have_all_inputs(have_all_inputs_)
+    , limit_hint(limit_hint_)
+{
+}
+
 void IMergingTransformBase::onNewInput()
 {
     throw Exception("onNewInput is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
@@ -77,7 +105,13 @@ IProcessor::Status IMergingTransformBase::prepareInitializeInputs()
             continue;
         }
 
-        auto chunk = input.pull();
+        /// setNotNeeded after reading first chunk, because in optimismtic case
+        /// (e.g. with optimized 'ORDER BY primary_key LIMIT n' and small 'n')
+        /// we won't have to read any chunks anymore;
+        auto chunk = input.pull(limit_hint != 0);
+        if (limit_hint && chunk.getNumRows() < limit_hint)
+            input.setNeeded();
+
         if (!chunk.hasRows())
         {
 
@@ -163,6 +197,10 @@ IProcessor::Status IMergingTransformBase::prepare()
                 return Status::NeedData;
 
             state.has_input = true;
+        }
+        else
+        {
+            state.no_data = true;
         }
 
         state.need_data = false;
