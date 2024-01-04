@@ -77,11 +77,14 @@ BroadcastStatus BroadcastSenderProxy::finish(BroadcastStatusCode status_code, St
         if (status_code > BroadcastStatusCode::RUNNING)
         {
             std::lock_guard lock(mutex);
-            // Wakeup all pending call for waitBecomeRealSender and waitAccept
-            closed = true;
-            wait_accept.notify_all();
-            wait_become_real.notify_all();
-            return BroadcastStatus(BroadcastStatusCode::SEND_NOT_READY, false, "Sender not ready");
+            if (!real_sender)
+            {
+                // Wakeup all pending call for waitBecomeRealSender and waitAccept
+                closed = true;
+                wait_accept.notify_all();
+                wait_become_real.notify_all();
+                return BroadcastStatus(BroadcastStatusCode::SEND_NOT_READY, false, "Sender not ready");
+            }
         }
 
         waitBecomeRealSender(wait_timeout_ms);
@@ -146,6 +149,9 @@ void BroadcastSenderProxy::accept(ContextPtr context_, Block header_)
 void BroadcastSenderProxy::becomeRealSender(BroadcastSenderPtr sender)
 {
     std::lock_guard lock(mutex);
+    if (closed)
+        throw Exception(
+            ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION, "becomeRealSender failed, BroadcastSenderProxy {} already closed", *data_key);
     if (real_sender)
     {
         if (real_sender != sender)
