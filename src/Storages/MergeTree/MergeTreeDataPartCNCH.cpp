@@ -259,6 +259,9 @@ bool MergeTreeDataPartCNCH::hasColumnFiles(const NameAndTypePair & column) const
 
 void MergeTreeDataPartCNCH::loadIndexGranularity(size_t marks_count, [[maybe_unused]] const std::vector<size_t> & index_granularities)
 {
+    if (index_granularities.empty())
+        index_granularity_info.setNonAdaptive();
+
     /// init once
     if (index_granularity.isInitialized())
         return;
