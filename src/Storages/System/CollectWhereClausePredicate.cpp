@@ -129,7 +129,7 @@ namespace DB
         if ((func->name == "or") && func->arguments)
         {
             const auto children = func->arguments->children;
-            std::for_each(children.begin(), children.end(), [& res, & context] (const auto & child) {
+            std::for_each(children.begin(), children.end(), [& res, & context,  or_ret_empty] (const auto & child) {
                 std::map<String,Field> m = collectWhereANDClausePredicate(child, context);
                 if (or_ret_empty || !m.empty())
                     res.push_back(m);
