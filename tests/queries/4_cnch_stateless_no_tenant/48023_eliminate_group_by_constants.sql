@@ -39,7 +39,7 @@ ORDER BY i_item_sk;
 set dialect_type='ANSI';
 set enable_optimizer=1;
 set enable_group_by_keys_pruning=1;
-
+set enum_replicate_no_stats=0;
 
 explain select channel, nn, i_category, COUNT(*) sales_cnt FROM (
     SELECT 'store' as channel, ss_store_sk nn, i_category

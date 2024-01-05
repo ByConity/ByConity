@@ -345,7 +345,7 @@ void MergeTreeDataPartCNCH::loadFromFileSystem(bool load_hint_mutation)
     }
 
     MergeTreeDataPartChecksum meta_info_pos;
-    auto checksums_ptr = loadChecksumsForPart(false);
+    auto checksums_ptr = loadChecksumsFromRemote(false);
     meta_info_pos = checksums_ptr->files["metainfo.txt"];
 
     String data_rel_path = fs::path(getFullRelativePath()) / DATA_FILE;
@@ -716,11 +716,6 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
                 auto cache_buf = openForReading(cache_disk, segment_path, cache_disk->getFileSize(segment_path));
                 if (checksums->read(*cache_buf))
                     assertEOF(*cache_buf);
-                if (storage.getSettings()->enable_persistent_checksum || is_temp || isProjectionPart())
-                {
-                    std::lock_guard lock(checksums_mutex);
-                    checksums_ptr = checksums;
-                }
                 return checksums;
             }
             catch (...)
@@ -737,23 +732,10 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
                 segment_path);
         }
     }
-
-    checksums = loadChecksumsForPart(true);
-
-    setChecksumsPtrIfNeed(checksums);
-
-    /// store in disk cache
-    if (enableDiskCache())
-    {
-        auto segment = std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this());
-        auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
-        disk_cache->cacheSegmentsToLocalDisk({std::move(segment)});
-    }
-
-    return checksums;
+    return loadChecksumsFromRemote(true);
 }
 
-IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsForPart(bool follow_part_chain)
+IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsFromRemote(bool follow_part_chain)
 {
     ChecksumsPtr checksums = std::make_shared<Checksums>();
     checksums->storage_type = StorageType::ByteHDFS;
@@ -818,14 +800,8 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksumsForPart(boo
             ++it;
     }
 
-    if (storage.getSettings()->enable_persistent_checksum || is_temp || isProjectionPart())
-    {
-        std::lock_guard lock(checksums_mutex);
-        checksums_ptr = checksums;
-    }
-
     /// store in disk cache
-    if (enableDiskCache())
+    if (enableDiskCache() && follow_part_chain)
     {
         auto segment = std::make_shared<ChecksumsDiskCacheSegment>(shared_from_this());
         auto disk_cache = DiskCacheFactory::instance().get(DiskCacheType::MergeTree)->getMetaCache();
@@ -992,10 +968,11 @@ void MergeTreeDataPartCNCH::loadMetaInfoFromBuffer(ReadBuffer & buf, bool load_h
 void MergeTreeDataPartCNCH::calculateEachColumnSizes(
     [[maybe_unused]] ColumnSizeByName & each_columns_size, [[maybe_unused]] ColumnSize & total_size) const
 {
+    auto checksums = getChecksums();
     std::unordered_set<String> processed_substreams;
     for (const NameAndTypePair & column : *columns_ptr)
     {
-        ColumnSize size = getColumnSizeImpl(column, &processed_substreams);
+        ColumnSize size = getColumnSizeImpl(column, checksums, &processed_substreams);
         each_columns_size[column.name] = size;
         total_size.add(size);
 
@@ -1020,10 +997,9 @@ void MergeTreeDataPartCNCH::calculateEachColumnSizes(
     }
 }
 
-ColumnSize MergeTreeDataPartCNCH::getColumnSizeImpl(const NameAndTypePair & column, std::unordered_set<String> * processed_substreams) const
+ColumnSize MergeTreeDataPartCNCH::getColumnSizeImpl(const NameAndTypePair & column, const ChecksumsPtr & checksums, std::unordered_set<String> * processed_substreams) const
 {
     ColumnSize size;
-    auto checksums = getChecksums();
     if (checksums->empty())
         return size;
 
@@ -1279,7 +1255,7 @@ void MergeTreeDataPartCNCH::preload(UInt64 preload_level, ThreadPool & pool, UIn
         segments.emplace_back(std::make_shared<PrimaryIndexDiskCacheSegment>(shared_from_this(), preload_level));
     }
 
-    IDiskCache::CacheSegmentsCallback callback;
+    std::function<void(const String &, const int &)> callback;
 
     if (auto part_log = storage.getContext()->getPartLog(storage.getDatabaseName()))
     {
