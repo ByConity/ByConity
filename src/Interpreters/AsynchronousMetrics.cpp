@@ -36,6 +36,7 @@
 #include <Storages/MergeTree/ChecksumsCache.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/MergeTree/DeleteBitmapCache.h>
+#include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/UniqueKeyIndexCache.h>
 #include <IO/UncompressedCache.h>
 #include <IO/MMappedFileCache.h>
@@ -544,8 +545,16 @@ void AsynchronousMetrics::update(std::chrono::system_clock::time_point update_ti
     {
         if (auto checksum_cache = getContext()->getChecksumsCache())
         {
-            new_values["ChecksumsCacheCells"] = checksum_cache->weight();
-            new_values["ChecksumsCacheBytes"] = checksum_cache->count();
+            new_values["ChecksumsCacheBytes"] = checksum_cache->weight();
+            new_values["ChecksumsCacheFiles"] = checksum_cache->count();
+        }
+    }
+
+    {
+        if (auto primary_index_cache = getContext()->getPrimaryIndexCache())
+        {
+            new_values["PrimaryIndexCacheBytes"] = primary_index_cache->weight();
+            new_values["PrimaryIndexCacheFiles"] = primary_index_cache->count();
         }
     }
 

@@ -80,6 +80,11 @@
     M(PrimaryIndexCacheMisses, "") \
     M(QueryCacheHits, "") \
     M(QueryCacheMisses, "") \
+    M(PrimaryIndexCacheHits, "") \
+    M(PrimaryIndexCacheMisses, "") \
+    M(PrimaryIndexDiskCacheHits, "") \
+    M(PrimaryIndexDiskCacheMisses, "") \
+    M(LoadPrimaryIndexMicroseconds, "") \
     M(ChecksumsCacheHits, "") \
     M(ChecksumsCacheMisses, "") \
     M(CreatedReadBufferOrdinary, "") \
