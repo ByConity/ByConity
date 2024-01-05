@@ -575,7 +575,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
     // nodes (`from_zk`), because ZooKeeper interface uses the pool. We will
     // ignore `max_thread_pool_size` in configs we fetch from ZK, but oh well.
-    GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 10000));
+    GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 50000));
 
     do
     {
