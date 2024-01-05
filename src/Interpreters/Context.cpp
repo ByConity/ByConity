@@ -756,7 +756,7 @@ ReadSettings Context::getReadSettings() const
     res.remote_fs_prefetch = settings.remote_filesystem_read_prefetch;
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.enable_io_scheduler = settings.enable_io_scheduler;
-    res.enable_io_pfra = settings.enable_io_pfra || settings.s3_use_read_ahead;
+    res.enable_io_pfra = settings.enable_io_pfra;
     res.buffer_size = settings.max_read_buffer_size;
     res.aio_threshold = settings.min_bytes_to_use_direct_io;
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;

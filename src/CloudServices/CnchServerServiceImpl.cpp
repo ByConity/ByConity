@@ -691,7 +691,9 @@ void CnchServerServiceImpl::controlCnchBGThread(
 
             try
             {
-                auto storage_id = RPCHelpers::createStorageID(request->storage_id());
+                StorageID storage_id = StorageID::createEmpty();
+                if (!request->storage_id().table().empty())
+                    storage_id = RPCHelpers::createStorageID(request->storage_id());
                 auto type = CnchBGThreadType(request->type());
                 auto action = CnchBGThreadAction(request->action());
                 global_context.controlCnchBGThread(storage_id, type, action);

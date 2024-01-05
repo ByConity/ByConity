@@ -83,6 +83,16 @@ CnchBGThreadPtr CnchBGThreadsMap::createThread(const StorageID & storage_id)
 
 void CnchBGThreadsMap::controlThread(const StorageID & storage_id, CnchBGThreadAction action)
 {
+    if (storage_id.empty())
+    {
+        if (action == CnchBGThreadAction::Remove)
+        {
+            stopAll();
+            clear();
+        }
+        return;
+    }
+
     switch (action)
     {
         case CnchBGThreadAction::Start:

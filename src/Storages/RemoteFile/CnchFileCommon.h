@@ -132,7 +132,6 @@ struct StorageS3Configuration
 {
     S3::URI uri;
     S3ClientPtr client;
-    bool use_read_ahead{true};
     UInt64 max_list_nums{1000};
 
     S3::AuthSettings auth_settings;

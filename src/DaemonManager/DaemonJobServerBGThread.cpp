@@ -611,6 +611,14 @@ size_t checkLivenessIfNeed(
 /// every failed call on BackgroundJob in this function will be retried on next time
 bool DaemonJobServerBGThread::executeImpl()
 {
+    if (suspended())
+    {
+        LOG_DEBUG(log, "thread suspended");
+        std::shared_lock shared_lock(bg_jobs_mutex);
+        background_jobs.clear();
+        return true;
+    }
+
     Context & context = *getContext();
     std::shared_ptr<CnchTopologyMaster> topology_master = context.getCnchTopologyMaster();
     if (!topology_master)
@@ -836,8 +844,48 @@ BackgroundJobPtr DaemonJobServerBGThread::getBackgroundJob(const UUID & uuid) co
 Result DaemonJobServerBGThread::executeJobAction(const StorageID & storage_id, CnchBGThreadAction action)
 {
     Context & context = *getContext();
-    LOG_DEBUG(log, "Executing a job action for uuid: {} {}", storage_id.getNameForLogs(), toString(action));
+    LOG_DEBUG(log, "Executing a job action for storage id: {} {}", storage_id.empty() ? "empty storage" : storage_id.getNameForLogs(), toString(action));
     UUID uuid = storage_id.uuid;
+    if (storage_id.empty())
+    {
+        switch (action)
+        {
+            case CnchBGThreadAction::Remove:
+            {
+                {
+                    std::lock_guard<std::mutex> lock(suspended_mutex);
+                    is_suspended = true;
+                }
+                const std::vector<String> servers = getServersInTopology(context, log);
+                if (servers.empty())
+                {
+                    String error_msg = fmt::format("Failed to {} for all storage id because failed to get servers in topology", toString(action));
+                    LOG_WARNING(log, error_msg);
+                    return {error_msg, false};
+                }
+
+                for (auto & host_port : servers)
+                {
+                    CnchServerClientPtr server_client = context.getCnchServerClient(host_port);
+                    server_client->controlCnchBGThread(StorageID::createEmpty(), type, action);
+                    LOG_DEBUG(&Poco::Logger::get(__func__), "Succeed to {} all threads on {}",
+                        toString(action), host_port);
+                }
+
+                break;
+            }
+            case CnchBGThreadAction::Start:
+                {
+                    std::lock_guard<std::mutex> lock(suspended_mutex);
+                    is_suspended = false;
+                }
+                break;
+            default:
+                String error_msg = fmt::format("With empty storage_id, action {} is invalid", toString(action));
+                return {error_msg, false};
+        }
+        return {"", true};
+    }
 
     switch (action)
     {
@@ -1052,6 +1100,12 @@ BackgroundJobs DaemonJobServerBGThread::fetchCnchBGThreadStatus()
     if (milliseconds >= SLOW_EXECUTION_THRESHOLD_MS)
         LOG_DEBUG(log, "fetchBackgroundJobsFromServer took {} ms.", milliseconds);
     return ret;
+}
+
+bool DaemonJobServerBGThread::suspended() const
+{
+    std::lock_guard<std::mutex> lock(suspended_mutex);
+    return is_suspended;
 }
 
 bool isCnchMergeTree(const StorageTrait & storage_trait, const StorageID &, const ContextPtr &)
