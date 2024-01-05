@@ -3,6 +3,13 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Columns/ColumnsCommon.h>
 #include <Core/Field.h>
+#include "common/scope_guard.h"
+#include <Common/ProfileEvents.h>
+
+namespace ProfileEvents
+{
+    extern const Event PerfFilterElapsedMicroseconds;
+}
 
 namespace DB
 {
@@ -101,6 +108,11 @@ void FilterTransform::removeFilterIfNeed(Chunk & chunk) const
 
 void FilterTransform::transform(Chunk & chunk)
 {
+    Stopwatch watch;
+    SCOPE_EXIT({
+        ProfileEvents::increment(ProfileEvents::PerfFilterElapsedMicroseconds, watch.elapsedMicroseconds());
+    });
+
     size_t num_rows_before_filtration = chunk.getNumRows();
     auto columns = chunk.detachColumns();
 
