@@ -614,7 +614,7 @@ bool DaemonJobServerBGThread::executeImpl()
     if (suspended())
     {
         LOG_DEBUG(log, "thread suspended");
-        std::shared_lock shared_lock(bg_jobs_mutex);
+        std::unique_lock lock(bg_jobs_mutex);
         background_jobs.clear();
         return true;
     }

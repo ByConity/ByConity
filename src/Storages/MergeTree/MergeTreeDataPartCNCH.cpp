@@ -677,7 +677,7 @@ void MergeTreeDataPartCNCH::loadIndex()
                 tryLogCurrentException("Could not load index from disk cache");
             }
         }
-        else if (disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+        else if (disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE)
         {
             throw Exception(
                 ErrorCodes::DISK_CACHE_NOT_USED, "Index {} of part has no disk cache {} and 'FORCE_DISK_CACHE' is set", name, segment_path);
@@ -726,7 +726,7 @@ IMergeTreeDataPart::ChecksumsPtr MergeTreeDataPartCNCH::loadChecksums([[maybe_un
                 tryLogCurrentException("Could not load checksums from disk");
             }
         }
-        else if (disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+        else if (disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE)
         {
             throw Exception(
                 ErrorCodes::DISK_CACHE_NOT_USED,

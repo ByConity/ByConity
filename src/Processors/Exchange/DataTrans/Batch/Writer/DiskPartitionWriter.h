@@ -1,9 +1,11 @@
 #pragma once
 #include <atomic>
+#include <exception>
 #include <memory>
 #include <mutex>
 #include <Core/Types.h>
 #include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromFileBase.h>
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
@@ -12,7 +14,7 @@
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <bthread/mutex.h>
 #include <Poco/Logger.h>
-#include "IO/WriteBufferFromFileBase.h"
+#include <Common/Exception.h>
 
 namespace DB
 {
@@ -27,8 +29,6 @@ public:
     BroadcastStatus sendImpl(Chunk chunk) override;
     /// run write task
     void runWriteTask();
-    /// cancel write task
-    void cancel();
     void merge(IBroadcastSender && sender) override;
     String getName() const override
     {

@@ -118,7 +118,7 @@ std::unique_ptr<ReadBufferFromFileBase> IHiveFile::readFile(const ReadSettings &
             tryLogCurrentException(log, "Could not read from local cache");
         }
 
-        if (settings.disk_cache_mode == DiskCacheMode::FORCE_CHECKSUMS_DISK_CACHE)
+        if (settings.disk_cache_mode == DiskCacheMode::FORCE_DISK_CACHE)
         {
             throw Exception(ErrorCodes::DISK_CACHE_NOT_USED, "Hive file {}/{} has no disk cache", disk->getPath(), file_path);
         }

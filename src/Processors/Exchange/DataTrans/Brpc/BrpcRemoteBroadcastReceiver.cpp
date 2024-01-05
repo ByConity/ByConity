@@ -79,8 +79,8 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
             return;
         QueryExchangeLogElement element;
         element.initial_query_id = initial_query_id;
-        element.exchange_id = std::to_string(trans_key->exchange_id);
-        element.partition_id = std::to_string(trans_key->partition_id);
+        element.exchange_id = trans_key->exchange_id;
+        element.partition_id = trans_key->partition_id;
         element.event_time =
             std::chrono::duration_cast<std::chrono::seconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
