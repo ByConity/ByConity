@@ -35,6 +35,7 @@
 #include <DataStreams/SizeLimits.h>
 #include <DataTypes/getLeastSupertype.h>
 #include <Storages/IStorage_fwd.h>
+#include "Interpreters/ExpressionActions.h"
 
 #include <utility>
 #include <memory>
@@ -102,6 +103,8 @@ private:
     ASTs key_asts_left;
     ASTs key_asts_right;
     ASTTableJoin table_join;
+    ExpressionActionsPtr inequal_condition_actions;
+    String inequal_column_name;
 
     ASOF::Inequality asof_inequality = ASOF::Inequality::GreaterOrEquals;
 
@@ -181,8 +184,8 @@ public:
         return dictionary_reader || join_algorithm == JoinAlgorithm::HASH || join_algorithm == JoinAlgorithm::PARALLEL_HASH;
     }
 
-    bool forceNullableRight() const { return join_use_nulls && isLeftOrFull(table_join.kind); }
-    bool forceNullableLeft() const { return join_use_nulls && isRightOrFull(table_join.kind); }
+    bool forceNullableRight() const;
+    bool forceNullableLeft() const;
     size_t defaultMaxBytes() const { return default_max_bytes; }
     size_t maxJoinedBlockRows() const { return max_joined_block_rows; }
     size_t maxRowsInRightBlock() const { return partial_merge_join_rows_in_right_blocks; }
@@ -195,10 +198,15 @@ public:
     void resetCollected();
     void addUsingKey(const ASTPtr & ast, bool null_safe);
     void addOnKeys(ASTPtr & left_table_ast, ASTPtr & right_table_ast, bool null_safe);
+    void addInequalConditions(const ASTs & inequal_conditions, const NamesAndTypesList & columns_for_join, ContextPtr context);
 
     bool hasUsing() const { return table_join.using_expression_list != nullptr; }
     bool hasOn() const { return table_join.on_expression != nullptr; }
     ASTPtr getOnExpression(){ return table_join.on_expression != nullptr ? table_join.on_expression : table_join.on_expression; }
+    ExpressionActionsPtr getInequalCondition() const { return inequal_condition_actions; }
+
+    void setInequalCondition(ExpressionActionsPtr inequal_condition_actions_, String inequal_column_name_);
+    String getInequalColumnName() const { return inequal_column_name;}
 
     NamesWithAliases getNamesWithAliases(const NameSet & required_columns) const;
     NamesWithAliases getRequiredColumns(const Block & sample, const Names & action_required_columns) const;
