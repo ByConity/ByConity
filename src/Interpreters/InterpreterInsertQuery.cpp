@@ -94,9 +94,49 @@ InterpreterInsertQuery::InterpreterInsertQuery(
     checkStackSize();
 }
 
-static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local_context)
+String getTablePrefix(ContextPtr context)
 {
-    Names create_view_sqls;
+    auto txn_id = context->getCurrentTransactionID();
+    return txn_id.toString() + "_write";
+}
+
+static String replaceMaterializedViewQuery(StorageMaterializedView * mv, const String & table_suffix)
+{
+    auto query = mv->getCreateTableSql();
+
+    ParserCreateQuery parser;
+    ASTPtr ast = parseQuery(parser, query.data(), query.data() + query.size(), "", 0, DBMS_DEFAULT_MAX_PARSER_DEPTH);
+
+
+    auto & create_query = ast->as<ASTCreateQuery &>();
+    create_query.to_inner_uuid = UUIDHelpers::Nil;
+    create_query.table += "_" + table_suffix;
+    /// If creating MV is `CREATE MATERIALIZED VIEW AS SELECT ... ENGINE = CnchMergeTree()...`
+    /// Then we change the query to CREATE MATERIALIZED VIEW TO `mv_db.`.inner.mv_name`` AS SELECT ...
+    if (create_query.to_table_id.empty())
+    {
+        create_query.to_table_id.table_name = generateInnerTableName(mv->getStorageID());
+        create_query.to_table_id.database_name = mv->getDatabaseName();
+        create_query.storage = nullptr;
+    }
+    create_query.to_table_id.table_name += "_" + table_suffix;
+
+    auto & inner_query = create_query.select->list_of_selects->children.at(0);
+    if (!inner_query)
+        throw Exception("Select query is necessary for mv table", ErrorCodes::LOGICAL_ERROR);
+
+    auto & select_query = inner_query->as<ASTSelectQuery &>();
+    select_query.replaceDatabaseAndTable(
+        mv->getInMemoryMetadataPtr()->select.select_table_id.database_name,
+        mv->getInMemoryMetadataPtr()->select.select_table_id.table_name + "_" + table_suffix);
+
+    return getTableDefinitionFromCreateQuery(ast, false);
+}
+
+
+static std::set<String> genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local_context, const String & table_suffix)
+{
+    std::set<String> create_view_sqls;
     std::set<StorageID> view_dependencies;
     auto start_time = local_context->getTimestamp();
 
@@ -138,9 +178,10 @@ static Names genViewDependencyCreateQueries(StoragePtr storage, ContextPtr local
                 continue;
             }
             auto create_target_query = target_table->getCreateTableSql();
-            auto create_local_target_query = target_cnch_merge->getCreateQueryForCloudTable(create_target_query, target_cnch_merge->getTableName());
-            create_view_sqls.emplace_back(create_local_target_query);
-            create_view_sqls.emplace_back(mv->getCreateTableSql());
+            auto create_local_target_query = target_cnch_merge->getCreateQueryForCloudTable(
+                create_target_query, target_cnch_merge->getTableName() + +"_" + table_suffix);
+            create_view_sqls.insert(create_local_target_query);
+            create_view_sqls.insert(replaceMaterializedViewQuery(mv, table_suffix));
         }
     }
 
@@ -173,13 +214,13 @@ StoragePtr InterpreterInsertQuery::getTable(ASTInsertQuery & query)
                 query.table_id.database_name);
             LOG_TRACE(&Poco::Logger::get(__PRETTY_FUNCTION__), "Worker side create query: {}", create_query);
 
-            Names view_create_sqls = genViewDependencyCreateQueries(storage, getContext());
+            auto view_create_sqls = genViewDependencyCreateQueries(storage, getContext(), getTablePrefix(getContext()));
             if (!view_create_sqls.empty())
             {
                 ContextMutablePtr mutable_context = const_pointer_cast<Context>(getContext());
                 if (!mutable_context->tryGetCnchWorkerResource())
                     mutable_context->initCnchWorkerResource();
-                view_create_sqls.emplace_back(create_query);
+                view_create_sqls.insert(create_query);
                 for (const auto & create_sql : view_create_sqls)
                     mutable_context->getCnchWorkerResource()->executeCreateQuery(mutable_context, create_sql);
                 if (auto worker_txn = dynamic_pointer_cast<CnchWorkerTransaction>(mutable_context->getCurrentTransaction()); worker_txn)
