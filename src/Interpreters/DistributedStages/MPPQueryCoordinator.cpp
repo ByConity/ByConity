@@ -326,6 +326,7 @@ MPPQueryCoordinator::~MPPQueryCoordinator()
     }
     catch (...)
     {
+        tryLogCurrentException(log, fmt::format("~MPPQueryCoordinator exception for query_id:{}", query_id));
     }
 
     MPPQueryManager::instance().clearQuery(query_id);

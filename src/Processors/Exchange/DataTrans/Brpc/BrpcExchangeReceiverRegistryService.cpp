@@ -221,12 +221,13 @@ void BrpcExchangeReceiverRegistryService::cleanupExchangeData(
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
     try
     {
+        LOG_TRACE(log, "submit cleanup task for query_unique_id:{} successfully", request->query_unique_id());
         auto mgr = context->getDiskExchangeDataManager();
-        mgr->cleanup(request->query_unique_id());
+        mgr->submitCleanupTask(request->query_unique_id());
     }
     catch (...)
     {
-        auto error_msg = fmt::format("Cleanup exchange data failed for query_unique_id:{}", request->query_unique_id());
+        auto error_msg = fmt::format("submit cleanup exchange data failed for query_unique_id:{}", request->query_unique_id());
         tryLogCurrentException(log, error_msg);
         cntl->SetFailed(error_msg);
     }
