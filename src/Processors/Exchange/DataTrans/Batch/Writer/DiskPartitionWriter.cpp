@@ -54,8 +54,9 @@ DiskPartitionWriter::~DiskPartitionWriter()
         {
             QueryExchangeLogElement element;
             element.initial_query_id = context->getInitialQueryId();
-            element.exchange_id = std::to_string(key->exchange_id);
-            element.partition_id = std::to_string(key->parallel_index);
+            element.exchange_id = key->exchange_id;
+            element.partition_id = key->partition_id;
+            element.parallel_index = key->parallel_index;
             element.event_time
                 = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
             element.send_time_ms = sender_metrics.send_time_ms.get_value();

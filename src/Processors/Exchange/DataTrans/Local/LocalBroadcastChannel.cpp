@@ -191,8 +191,8 @@ LocalBroadcastChannel::~LocalBroadcastChannel()
         {
             QueryExchangeLogElement element;
             element.initial_query_id = context->getInitialQueryId();
-            element.exchange_id = std::to_string(data_key->exchange_id);
-            element.partition_id = std::to_string(data_key->partition_id);
+            element.exchange_id = data_key->exchange_id;
+            element.partition_id = data_key->partition_id;
             element.type = "local";
             element.event_time =
                 std::chrono::duration_cast<std::chrono::seconds>(
