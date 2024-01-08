@@ -29,11 +29,16 @@ public:
     std::string region;
     std::string access_key;
     std::string secret_key;
+    std::string endpoint;
     std::string security_token;
 
+    int connect_timeout_ms;
+    int request_timeout_ms;
+
     VETosConnectionParams() = default;
-    VETosConnectionParams(
-        std::string region, std::string access_key, std::string secret_key, std::string security_token = "");
+    VETosConnectionParams(std::string region, std::string access_key, std::string secret_key,
+        std::string endpoint = "",  std::string security_token = "",
+        int connect_timeout_ms = 10000, int request_timeout_ms_ = 120000);
 
     static VETosConnectionParams parseVeTosFromConfig(Poco::Util::AbstractConfiguration & config);
     //  1. use sql settings for vetos first.

@@ -517,7 +517,7 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
             dumpCnchServerStatus();
             break;
         case Type::DROP_CNCH_PART_CACHE:
-            dropCnchPartCache(query);
+            dropCnchPartCache();
             break;
         case Type::SYNC_DEDUP_WORKER:
             executeSyncDedupWorker(system_context);
@@ -1191,16 +1191,14 @@ void InterpreterSystemQuery::dumpCnchServerStatus()
         topology_master->dumpStatus();
 }
 
-void InterpreterSystemQuery::dropCnchPartCache(ASTSystemQuery & query)
+void InterpreterSystemQuery::dropCnchPartCache()
 {
-    if (!query.database.empty() && !query.table.empty() && getContext()->getPartCacheManager())
+    auto local_context = getContext();
+    if (local_context->getPartCacheManager())
     {
-        auto storage = DatabaseCatalog::instance().getTable(StorageID{query.database, query.table}, getContext());
-        if (storage)
-        {
-            getContext()->getPartCacheManager()->invalidPartCache(storage->getStorageUUID());
-            LOG_DEBUG(log, "Dropped cnch part cache of table {}.{}", query.database, query.table);
-        }
+        auto storage = DatabaseCatalog::instance().getTable(table_id, local_context);
+        local_context->getPartCacheManager()->invalidPartCache(storage->getStorageUUID());
+        LOG_DEBUG(log, "Dropped cnch part cache of table {}", table_id.getNameForLogs());
     }
 }
 

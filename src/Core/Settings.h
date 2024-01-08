@@ -1989,6 +1989,9 @@ enum PreloadLevelSettings : UInt64
     M(String, tos_secret_key, "", "The secret_key set by user when accessing ve tos.", 0) \
     M(String, tos_region, "", "The region set by user when accessing ve tos.", 0) \
     M(String, tos_security_token, "", "The security_key set by user when accessing ve tos with assume role.", 0) \
+    M(String, tos_endpoint, "", "The endpoint set by user when accessing ve tos, which should be compatible with S3.", 0) \
+    M(UInt64, tos_connection_timeout, 10000, "The connection timeout set by user when accessing ve tos.", 0) \
+    M(UInt64, tos_request_timeout, 120000, "The request timeout set by user when accessing ve tos.", 0) \
     M(String, lasfs_session_token, "", "the session_token set by user when accessing lasfs", 0) \
     M(String, lasfs_identity_id, "", "the identity_id set by user when accessing lasfs", 0) \
     M(String, lasfs_identity_type, "", "the identity_type set by user when accessing lasfs", 0) \
