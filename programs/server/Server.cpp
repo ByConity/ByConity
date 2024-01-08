@@ -575,7 +575,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Initialize global thread pool. Do it before we fetch configs from zookeeper
     // nodes (`from_zk`), because ZooKeeper interface uses the pool. We will
     // ignore `max_thread_pool_size` in configs we fetch from ZK, but oh well.
-    GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 10000));
+    GlobalThreadPool::initialize(config().getUInt("max_thread_pool_size", 50000));
 
     do
     {
@@ -1074,11 +1074,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Set up caches.
 
     /// Lower cache size on low-memory systems.
-    double cache_size_to_ram_max_ratio = config().getDouble("cache_size_to_ram_max_ratio", 0.5);
-    size_t max_cache_size = memory_amount * cache_size_to_ram_max_ratio;
+    size_t max_cache_size = memory_amount * root_config.cache_size_to_ram_max_ratio;
 
     /// Size of cache for uncompressed blocks. Zero means disabled.
-    size_t uncompressed_cache_size = config().getUInt64("uncompressed_cache_size", 0);
+    size_t uncompressed_cache_size = root_config.uncompressed_cache_size;
     if (uncompressed_cache_size > max_cache_size)
     {
         uncompressed_cache_size = max_cache_size;
@@ -1102,7 +1101,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     const Settings & settings = global_context->getSettingsRef();
 
     /// Size of cache for marks (index of MergeTree family of tables). It is mandatory.
-    size_t mark_cache_size = config().getUInt64("mark_cache_size");
+    size_t mark_cache_size = root_config.mark_cache_size;
     if (!mark_cache_size)
         LOG_ERROR(log, "Too low mark cache size will lead to server performance degradation.");
     if (mark_cache_size > max_cache_size)
@@ -1120,6 +1119,17 @@ int Server::main(const std::vector<std::string> & /*args*/)
     checksum_cache_settings.cache_shard_num = config().getUInt64("checksum_cache_shard", 8); //8
     checksum_cache_settings.lru_update_interval = config().getUInt64("checksum_cache_lru_update_interval", 60); //60 seconds
     global_context->setChecksumsCache(checksum_cache_settings);
+
+    /// A cache for part's primary index
+    size_t primary_index_cache_size = root_config.cnch_primary_index_cache_size;
+    if (primary_index_cache_size > max_cache_size)
+    {
+        primary_index_cache_size = max_cache_size;
+        LOG_INFO(log, "Primary index cache size was lowered to {} because the system has low amount of memory",
+            formatReadableSizeWithBinarySuffix(primary_index_cache_size));
+    }
+    if (primary_index_cache_size)
+        global_context->setPrimaryIndexCache(primary_index_cache_size);
 
     /// A cache for mmapped files.
     size_t mmap_cache_size = config().getUInt64("mmap_cache_size", 1000);   /// The choice of default is arbitrary.

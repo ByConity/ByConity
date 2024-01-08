@@ -123,6 +123,7 @@
 #include <Storages/MergeTree/MergeTreeData.h>
 #include <Storages/MergeTree/MergeTreeDataPartUUID.h>
 #include <Storages/MergeTree/MergeTreeSettings.h>
+#include <Storages/MergeTree/PrimaryIndexCache.h>
 #include <Storages/MergeTree/ReplicatedFetchList.h>
 #include <Storages/PartCacheManager.h>
 #include <Storages/StorageS3Settings.h>
@@ -373,6 +374,8 @@ struct ContextSharedPart
     mutable std::shared_ptr<const StoragePolicySelector> merge_tree_storage_policy_selector;
     /// global checksums cache;
     mutable ChecksumsCachePtr checksums_cache;
+    /// global primary index cache
+    mutable PrimaryIndexCachePtr primary_index_cache;
 
     mutable ServiceDiscoveryClientPtr sd;
     mutable PartCacheManagerPtr cache_manager; /// Manage cache of parts for cnch tables.
@@ -4572,6 +4575,18 @@ void Context::setChecksumsCache(const ChecksumsCacheSettings & settings)
 std::shared_ptr<ChecksumsCache> Context::getChecksumsCache() const
 {
     return shared->checksums_cache;
+}
+
+void Context::setPrimaryIndexCache(size_t cache_size_in_bytes)
+{
+    if (shared->primary_index_cache)
+        throw Exception("Primary index cache has already been created.", ErrorCodes::LOGICAL_ERROR);
+    shared->primary_index_cache = std::make_shared<PrimaryIndexCache>(cache_size_in_bytes);
+}
+
+std::shared_ptr<PrimaryIndexCache> Context::getPrimaryIndexCache() const
+{
+    return shared->primary_index_cache;
 }
 
 void Context::updateQueueManagerConfig() const

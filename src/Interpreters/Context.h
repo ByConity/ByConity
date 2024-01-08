@@ -201,6 +201,7 @@ class KeeperDispatcher;
 class SegmentScheduler;
 using SegmentSchedulerPtr = std::shared_ptr<SegmentScheduler>;
 class ChecksumsCache;
+class PrimaryIndexCache;
 struct ChecksumsCacheSettings;
 template <class T>
 class RpcClientPool;
@@ -1429,8 +1430,10 @@ public:
 
 
     void setChecksumsCache(const ChecksumsCacheSettings & settings);
-
     std::shared_ptr<ChecksumsCache> getChecksumsCache() const;
+
+    void setPrimaryIndexCache(size_t cache_size_in_bytes);
+    std::shared_ptr<PrimaryIndexCache> getPrimaryIndexCache() const;
 
     /// client for service discovery
     void initServiceDiscoveryClient();
