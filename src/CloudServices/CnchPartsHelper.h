@@ -30,25 +30,18 @@ namespace DB
 /// used in unit tests
 struct MinimumDataPart
 {
+    static std::atomic<UInt64> increment;
     /////////////////////////////
     /// Factory methods
     /////////////////////////////
 
-    static std::shared_ptr<MinimumDataPart> create(String name, UInt64 commit_time, bool is_deleted = false)
+    static std::shared_ptr<MinimumDataPart> create(String name, bool is_deleted = false)
     {
         auto res = std::make_shared<MinimumDataPart>();
         res->info = MergeTreePartInfo::fromPartName(name, MERGE_TREE_CHCH_DATA_STORAGTE_VERSION);
-        res->commit_time = commit_time;
+        res->name = name;
+        res->commit_time = increment.fetch_add(1);
         res->is_deleted = is_deleted;
-        return res;
-    }
-
-    static std::shared_ptr<MinimumDataPart> createDropRange(String partition_id, Int64 max_block, Int64 xid, UInt64 commit_time)
-    {
-        auto res = std::make_shared<MinimumDataPart>();
-        res->info = MergeTreePartInfo(partition_id, 0, max_block, MergeTreePartInfo::MAX_LEVEL, xid);
-        res->commit_time = commit_time;
-        res->is_deleted = true;
         return res;
     }
 
@@ -70,6 +63,7 @@ struct MinimumDataPart
     /// Fields
     /////////////////////////////
 
+    String name;
     MergeTreePartInfo info;
     UInt64 commit_time = 0;
     UInt64 end_time = 0;

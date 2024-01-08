@@ -93,7 +93,7 @@ private:
 
     void dumpCnchServerStatus();
 
-    void dropCnchPartCache(ASTSystemQuery & query);
+    void dropCnchPartCache();
 
     void dropChecksumsCache(const StorageID & table_id) const;
 
