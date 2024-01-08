@@ -1,7 +1,5 @@
-Projection Est. 0 rows
-│     Expressions: a:=a_4, b:=b_4
-└─ Gather Exchange Est. 0 rows
-   └─ Projection Est. 0 rows
-      │     Expressions: a_4:=a_2, b_4:=b_2
-      └─ TableScan correctness.q15_t1 Est. ? rows
-               Outputs: a_2:=a, b_2:=b
+Projection Est. ? rows
+│     Expressions: a:=a_2, b:=b_2
+└─ Gather Exchange Est. ? rows
+   └─ TableScan correctness.q15_t1 Est. ? rows
+            Outputs: a_2:=a, b_2:=b
