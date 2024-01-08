@@ -105,6 +105,24 @@ void AsynchronousBoundedReadBuffer::setReadUntilPosition(size_t position)
 {
     if (!read_until_position || position != *read_until_position)
     {
+        if (position < file_offset_of_buffer_end)
+        {
+            /// file has been read beyond new read until position already
+            if (working_buffer.size() >= file_offset_of_buffer_end - position)
+            {
+                /// new read until position is inside working buffer
+                file_offset_of_buffer_end = position;
+            }
+            else
+            {
+                /// new read until position is before working buffer begin
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Attempt to set read until position {} before already read data position {})",
+                    position,
+                    getPosition());
+            }
+        }
         read_until_position = position;
 
         /// We must wait on future and reset the prefetch here, because otherwise there might be
@@ -112,6 +130,8 @@ void AsynchronousBoundedReadBuffer::setReadUntilPosition(size_t position)
         /// which reinitializes internal remote read buffer (because if we have a new read range
         /// then we need a new range request) and in case of reading from cache we need to request
         /// and hold more file segment ranges from cache.
+        resetPrefetch();
+
         impl->setReadUntilPosition(*read_until_position);
     }
 }
@@ -264,12 +284,7 @@ off_t AsynchronousBoundedReadBuffer::seek(off_t offset, int whence)
 
 void AsynchronousBoundedReadBuffer::finalize()
 {
-    if (prefetch_future.valid())
-    {
-        ProfileEvents::increment(ProfileEvents::RemoteFSUnusedPrefetches);
-        prefetch_future.wait();
-        prefetch_future = {};
-    }
+    resetPrefetch();
 }
 
 AsynchronousBoundedReadBuffer::~AsynchronousBoundedReadBuffer()
@@ -284,4 +299,15 @@ AsynchronousBoundedReadBuffer::~AsynchronousBoundedReadBuffer()
     }
 }
 
+void AsynchronousBoundedReadBuffer::resetPrefetch()
+{
+    if (!prefetch_future.valid())
+        return;
+
+    auto [size, offset, _] = prefetch_future.get();
+    prefetch_future = {};
+
+    ProfileEvents::increment(ProfileEvents::RemoteFSPrefetchedBytes, size);
+    ProfileEvents::increment(ProfileEvents::RemoteFSUnusedPrefetches);
+}
 }
