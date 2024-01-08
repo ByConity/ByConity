@@ -2102,20 +2102,15 @@ enum PreloadLevelSettings : UInt64
     M(UInt64, output_format_avro_sync_interval, 16 * 1024, "Sync interval in bytes.", 0) \
     M(Bool, output_format_tsv_crlf_end_of_line, false, "If it is set true, end of line in TSV format will be \\r\\n instead of \\n.", 0) \
     M(String, output_format_tsv_null_representation, "\\N", "Custom NULL representation in TSV format", 0) \
-\
-    M(UInt64, \
-      input_format_allow_errors_num, \
-      0, \
-      "Maximum absolute amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative " \
-      "amount of errors is lower than corresponding value, will skip until next line and continue.", \
-      0) \
-    M(Float, \
-      input_format_allow_errors_ratio, \
-      0, \
-      "Maximum relative amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative " \
-      "amount of errors is lower than corresponding value, will skip until next line and continue.", \
-      0) \
-\
+    \
+    /** Settings for Map */ \
+    M(Bool, input_format_parse_null_map_as_empty, true, "Parse null map as empty map. Throw exception if set false.", 0) \
+    M(Bool, input_format_skip_null_map_value, true, "Skip null map value. Throw exception if set false.", 0) \
+    M(UInt64, input_format_max_map_key_long, 80, "The maximum length of map key for input data.", 0) \
+    \
+    M(UInt64, input_format_allow_errors_num, 0, "Maximum absolute amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative amount of errors is lower than corresponding value, will skip until next line and continue.", 0) \
+    M(Float, input_format_allow_errors_ratio, 0, "Maximum relative amount of errors while reading text formats (like CSV, TSV). In case of error, if at least absolute or relative amount of errors is lower than corresponding value, will skip until next line and continue.", 0) \
+    \
     M(String, format_schema, "", "Schema identifier (used by schema-based formats)", 0) \
     M(String, format_template_resultset, "", "Path to file which contains format string for result set (for Template format)", 0) \
     M(String, format_template_row, "", "Path to file which contains format string for rows (for Template format)", 0) \

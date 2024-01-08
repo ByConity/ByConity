@@ -1389,7 +1389,7 @@ size_t PartCacheManager::cleanTrashedActiveTables() {
 void PartCacheManager::shutDown()
 {
     LOG_DEBUG(&Poco::Logger::get("PartCacheManager::shutdown"), "Shutdown method of part cache manager called.");
-    table_partition_metrics.shutDown();
+    table_partition_metrics.shutDown(this);
     active_table_loader->deactivate();
     meta_lock_cleaner->deactivate();
     trashed_active_tables_cleaner->deactivate();
