@@ -14,6 +14,7 @@
  */
 
 #include <common/map.h>
+#include <common/logger_useful.h>
 
 #include <DataTypes/Serializations/SerializationByteMap.h>
 #include <DataTypes/Serializations/SerializationArray.h>
@@ -207,7 +208,7 @@ void SerializationByteMap::serializeTextImpl(
 
 template <typename KeyReader, typename ValueReader>
 void SerializationByteMap::deserializeTextImpl(
-    IColumn & column, ReadBuffer & istr, KeyReader && key_reader, ValueReader && value_reader) const
+    IColumn & column, ReadBuffer & istr, KeyReader && key_reader, ValueReader && value_reader, const FormatSettings & settings) const
 {
     auto & column_map = assert_cast<ColumnByteMap &>(column);
 
@@ -215,6 +216,14 @@ void SerializationByteMap::deserializeTextImpl(
 
     auto & key_column = column_map.getKey();
     auto & value_column = column_map.getValue();
+
+    if (settings.map.parse_null_map_as_empty && checkStringByFirstCharacterAndAssertTheRest("null", istr))
+    {
+        /// Still push a zero-length offset
+        offsets.push_back((offsets.empty() ? 0 : offsets.back()) + 0);
+        /// Early return if got a null
+        return;
+    }
 
     size_t ksize = 0, vsize = 0;
     assertChar('{', istr);
@@ -247,8 +256,35 @@ void SerializationByteMap::deserializeTextImpl(
             assertChar(':', istr);
 
             skipWhitespaceIfAny(istr);
-            value_reader(istr, value, value_column);
-            vsize++;
+
+            if (settings.map.skip_null_map_value && checkStringByFirstCharacterAndAssertTheRest("null", istr))
+            {
+                /// Pop the key read just now
+                key_column.popBack(1);
+                ksize--;
+            }
+            else
+            {
+                value_reader(istr, value, value_column);
+                vsize++;
+
+                /// Check the length of key after got key and value
+                if (auto && current_key = key_column.getDataAt(key_column.size() - 1);
+                    unlikely(current_key.size > settings.map.max_map_key_length))
+                {
+                    LOG_WARNING(
+                        &Poco::Logger::get("SerializationByteMap"),
+                        "Key of map can not be longer than {}, discard key: {}",
+                        settings.map.max_map_key_length,
+                        current_key.toString());
+
+                    /// Pop the long key with value
+                    key_column.popBack(1);
+                    ksize--;
+                    value_column.popBack(1);
+                    vsize--;
+                }
+            }
 
             skipWhitespaceIfAny(istr);
         }
@@ -287,7 +323,7 @@ void SerializationByteMap::deserializeText(IColumn & column, ReadBuffer & istr, 
         subcolumn_serialization->deserializeTextQuoted(subcolumn, buf, settings);
     };
 
-    deserializeTextImpl(column, istr, reader, reader);
+    deserializeTextImpl(column, istr, reader, reader, settings);
 }
 
 void SerializationByteMap::serializeTextJSON(
@@ -306,7 +342,7 @@ void SerializationByteMap::deserializeTextJSON(IColumn & column, ReadBuffer & is
         subcolumn_serialization->deserializeTextJSON(subcolumn, buf, settings);
     };
 
-    deserializeTextImpl(column, istr, reader, reader);
+    deserializeTextImpl(column, istr, reader, reader, settings);
 }
 
 void SerializationByteMap::serializeTextXML(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const

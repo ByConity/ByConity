@@ -129,7 +129,6 @@
         "01475_read_subcolumns_storages",
         "01475_read_subcolumns_3",
         "01550_create_map_type",
-        "01550_type_map_formats",
         "01592_length_map",
         "01651_map_functions",
         "01715_tuple_insert_null_as_default",
