@@ -45,11 +45,11 @@ CnchServerManager::CnchServerManager(ContextPtr context_, const Poco::Util::Abst
         UInt64 finish_time = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
         if (finish_time > start_time && finish_time - start_time > 1000)
             LOG_WARNING(log, "{} executed over 1000ms. Start time: {}, current time: {}", task_name, start_time, finish_time);
-        
+
         last_time = finish_time;
-        auto schedule_delay = success ? interval 
-                                      : getContext()->getSettingsRef().topology_retry_interval_ms.totalMilliseconds(); 
-        task->scheduleAfter(schedule_delay);        
+        auto schedule_delay = success ? interval
+                                      : getContext()->getSettingsRef().topology_retry_interval_ms.totalMilliseconds();
+        task->scheduleAfter(schedule_delay);
     };
 
     topology_refresh_task = getContext()->getTopologySchedulePool().createTask("TopologyRefresher", [this, task_func](){
@@ -104,7 +104,6 @@ CnchServerManager::~CnchServerManager()
     try
     {
         shutDown();
-        elector.reset();
     }
     catch (...)
     {
@@ -358,6 +357,7 @@ void CnchServerManager::shutDown()
         lease_renew_task->deactivate();
         topology_refresh_task->deactivate();
         async_query_status_check_task->deactivate();
+        elector->stop();
     }
     catch (...)
     {

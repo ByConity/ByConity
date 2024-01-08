@@ -232,7 +232,7 @@ CnchBGThreadsMapArray::~CnchBGThreadsMapArray()
 {
     try
     {
-        destroy();
+        shutdown();
     }
     catch (...)
     {
@@ -240,7 +240,7 @@ CnchBGThreadsMapArray::~CnchBGThreadsMapArray()
     }
 }
 
-void CnchBGThreadsMapArray::destroy()
+void CnchBGThreadsMapArray::shutdown()
 {
     ThreadPool pool(size_t(CnchBGThreadType::ServerMaxType) - size_t(CnchBGThreadType::ServerMinType) + 1);
 
