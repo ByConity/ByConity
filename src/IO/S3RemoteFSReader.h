@@ -62,6 +62,7 @@ private:
     const String key_;
 
     uint64_t current_offset_;
+    bool all_data_read;
 };
 
 class S3ReadAheadReader: public S3Reader {
