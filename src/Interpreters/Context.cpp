@@ -26,7 +26,7 @@
 #include <memory>
 #include <optional>
 #include <set>
-#include <Interpreters/Cache/QueryCache.h>
+#include <unordered_map>
 #include <Access/AccessControlManager.h>
 #include <Access/ContextAccess.h>
 #include <Access/Credentials.h>
@@ -64,6 +64,7 @@
 #include <IO/ReadBufferFromFile.h>
 #include <IO/UncompressedCache.h>
 #include <Interpreters/ActionLocksManager.h>
+#include <Interpreters/Cache/QueryCache.h>
 #include <Interpreters/Cluster.h>
 #include <Interpreters/CnchQueryMetrics/QueryMetricLog.h>
 #include <Interpreters/CnchQueryMetrics/QueryWorkerMetricLog.h>
@@ -132,6 +133,7 @@
 #include <Poco/Net/IPAddress.h>
 #include <Poco/UUID.h>
 #include <Poco/Util/Application.h>
+#include "common/defines.h"
 #include "common/types.h"
 #include <Common/CGroup/CGroupManagerFactory.h>
 #include <Common/Config/AbstractConfigurationComparison.h>
@@ -754,7 +756,7 @@ ReadSettings Context::getReadSettings() const
     res.remote_fs_prefetch = settings.remote_filesystem_read_prefetch;
     res.local_fs_prefetch = settings.local_filesystem_read_prefetch;
     res.enable_io_scheduler = settings.enable_io_scheduler;
-    res.enable_io_pfra = settings.enable_io_pfra || settings.s3_use_read_ahead;
+    res.enable_io_pfra = settings.enable_io_pfra;
     res.buffer_size = settings.max_read_buffer_size;
     res.aio_threshold = settings.min_bytes_to_use_direct_io;
     res.mmap_threshold = settings.min_bytes_to_use_mmap_io;
@@ -866,8 +868,20 @@ DiskExchangeDataManagerPtr Context::getDiskExchangeDataManager() const
     if (!shared->disk_exchange_data_manager)
     {
         const auto & bsp_conf = getRootConfig().bulk_synchronous_parallel;
+        String id;
+        if (getServerType() == ServerType::cnch_worker)
+        {
+            id = getenv("WORKER_ID") ? getenv("WORKER_ID") : getHostWithPorts().getTCPAddress();
+        }
+        else
+        {
+            id = getenv("SERVER_ID") ? getenv("SERVER_ID") : getHostWithPorts().getTCPAddress();
+        }
+        chassert(!id.empty());
+        String manager_path = "bsp/" + id + "/v-1.0.0";
+        LOG_DEBUG(&Poco::Logger::get("Context"), "Store exchange data with path {}", manager_path);
         DiskExchangeDataManagerOptions options{
-            .path = "bsp/v-1.0.0",
+            .path = manager_path,
             .storage_policy = bsp_conf.storage_policy,
             .volume = bsp_conf.volume,
             .gc_interval_seconds = bsp_conf.gc_interval_seconds,
@@ -2360,6 +2374,16 @@ void Context::setProgressCallback(ProgressCallback callback)
 ProgressCallback Context::getProgressCallback() const
 {
     return progress_callback;
+}
+
+void Context::setInternalProgressCallback(ProgressCallback callback)
+{
+    internal_progress_callback = callback;
+}
+
+ProgressCallback Context::getInternalProgressCallback() const
+{
+    return internal_progress_callback;
 }
 
 void Context::setProcessListEntry(std::shared_ptr<ProcessListEntry> process_list_entry_)

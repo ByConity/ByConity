@@ -59,7 +59,8 @@ public:
       const Settings & settings,
       const String & source_uri,
       const String & format,
-      bool is_enable_squash = false);
+      bool is_enable_squash = false,
+      const String & compression_method = "");
 
 private:
     StoragePtr getTable(ASTInsertQuery & query);

@@ -122,7 +122,7 @@ void SerializationMap::deserializeTextImpl(IColumn & column, ReadBuffer & istr, 
     auto & key_column = nested_tuple.getColumn(0);
     auto & value_column = nested_tuple.getColumn(1);
 
-    size_t size = 0;
+    size_t ksize = 0, vsize = 0;
     assertChar('{', istr);
 
     try
@@ -146,23 +146,36 @@ void SerializationMap::deserializeTextImpl(IColumn & column, ReadBuffer & istr, 
                 break;
 
             reader(istr, key, key_column);
+            ksize++;
+
             skipWhitespaceIfAny(istr);
+
             assertChar(':', istr);
 
-            ++size;
             skipWhitespaceIfAny(istr);
             reader(istr, value, value_column);
+            vsize++;
 
             skipWhitespaceIfAny(istr);
         }
 
-        offsets.push_back(offsets.back() + size);
         assertChar('}', istr);
     }
     catch (...)
     {
+        if (ksize)
+        {
+            key_column.popBack(ksize);
+        }
+        if (vsize)
+        {
+            value_column.popBack(vsize);
+        }
         throw;
     }
+
+    // ksize and vsize should be the same here, use anyone
+    offsets.push_back((offsets.empty() ? 0 : offsets.back()) + ksize);
 }
 
 void SerializationMap::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const

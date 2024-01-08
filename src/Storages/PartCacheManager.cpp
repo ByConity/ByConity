@@ -659,12 +659,6 @@ void PartCacheManager::insertDataPartsIntoCache(
     {
         ts = getContext()->tryGetTimestamp();
     }
-    auto update_metrics = [&](const std::shared_ptr<Protos::DataModelPart> & model, std::shared_ptr<PartitionMetrics> metrics_ptr) {
-        meta_ptr->metrics_last_update_time = ts;
-        metrics_ptr->update(*model);
-        if (!metrics_ptr->validateMetrics())
-            meta_ptr->partition_metrics_loaded = false;
-    };
 
     /// Get or create partitions from meta_ptr
     Strings partition_ids;
@@ -731,10 +725,7 @@ void PartCacheManager::insertDataPartsIntoCache(
         }
         if (should_update_metrics)
         {
-            for (const auto & part_wrapper_ptr : parts_wrapper_vector)
-            {
-                update_metrics(part_wrapper_ptr->part_model, partition_info_ptr->metrics_ptr);
-            }
+            table_partition_metrics.updateMetrics(parts_wrapper_vector, partition_info_ptr->metrics_ptr, uuid, ts);
         }
     }
 

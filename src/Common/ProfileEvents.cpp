@@ -277,7 +277,13 @@
     M(PerfInstructionTLBMisses, "Instruction TLB misses") \
     M(PerfLocalMemoryReferences, "Local NUMA node memory reads") \
     M(PerfLocalMemoryMisses, "Local NUMA node memory read misses") \
-    \
+    M(PerfInequalConditionElapsedMicroseconds, "") \
+    M(PerfInequalConditionGetRowMicroseconds, "") \
+    M(PerfInequalConditionExecuteMicroseconds, "") \
+    M(PerfInequalConditionAppendMicroseconds, "") \
+    M(PerfJoinElapsedMicroseconds, "") \
+    M(PerfFilterElapsedMicroseconds, "") \
+\
     M(CreatedHTTPConnections, "Total amount of created HTTP connections (closed or opened).") \
     \
     M(ThreadPoolReaderTaskMicroseconds, "Time spent getting the data in asynchronous reading") \

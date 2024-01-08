@@ -101,6 +101,7 @@ public:
     using Checksums = MergeTreeDataPartChecksums;
     using Checksum = MergeTreeDataPartChecksums::Checksum;
     using ChecksumsPtr = std::shared_ptr<Checksums>;
+    using ChecksumsWeakPtr = std::weak_ptr<Checksums>;
     using ValueSizeMap = std::map<std::string, double>;
 
     using MergeTreeReaderPtr = std::unique_ptr<IMergeTreeReader>;
@@ -146,7 +147,8 @@ public:
         const MergeTreeReaderSettings & reader_settings_,
         MergeTreeIndexExecutor * bitmap_index_reader = nullptr,
         const ValueSizeMap & avg_value_size_hints_ = ValueSizeMap{},
-        const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = ReadBufferFromFileBase::ProfileCallback{}) const = 0;
+        const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = ReadBufferFromFileBase::ProfileCallback{},
+        const ProgressCallback & internal_progress_cb = {}) const = 0;
 
     virtual MergeTreeWriterPtr getWriter(
         const NamesAndTypesList & columns_list,
@@ -391,8 +393,8 @@ public:
 
 	Versions versions;
 
-    /// only be used if the storage enables persistent checksums.
-    ChecksumsPtr checksums_ptr {nullptr};
+    mutable ChecksumsPtr checksums_ptr;
+    mutable std::mutex checksums_mutex; // Protect checksums_ptr
 
     /// Columns with values, that all have been zeroed by expired ttl
     NameSet expired_columns;
@@ -645,9 +647,6 @@ protected:
     // names of projections that are truly managed by current part, to distinguish from the projections gathered from the previous parts
     NameSet projection_parts_names;
 
-    /// Protect checksums_ptr. FIXME:  May need more protection in getChecksums()
-    /// to prevent checksums_ptr from being modified and corvered by multiple threads.
-    mutable std::mutex checksums_mutex;
     mutable std::mutex index_mutex;
 
     const IStorage::StorageLocation location;
@@ -672,8 +671,6 @@ protected:
     virtual UniqueKeyIndexPtr loadUniqueKeyIndex();
 
     virtual void removeImpl(bool keep_shared_data) const;
-
-    virtual void setChecksumsPtrIfNeed(const ChecksumsPtr & checksums);
 
 private:
     /// In compact parts order of columns is necessary

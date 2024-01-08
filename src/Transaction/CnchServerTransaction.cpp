@@ -56,6 +56,7 @@ namespace ErrorCodes
     extern const int CNCH_TRANSACTION_ABORT_ERROR;
     extern const int INSERTION_LABEL_ALREADY_EXISTS;
     extern const int FAILED_TO_PUT_INSERTION_LABEL;
+    extern const int BRPC_TIMEOUT;
     // extern const int BAD_CAST;
 }
 
@@ -150,6 +151,22 @@ TxnTimestamp CnchServerTransaction::commitV2()
     {
         if (!(getContext()->getSettings().ignore_duplicate_insertion_label && e.code() == ErrorCodes::INSERTION_LABEL_ALREADY_EXISTS))
             tryLogCurrentException(log, __PRETTY_FUNCTION__);
+
+        if (e.code() == ErrorCodes::BRPC_TIMEOUT)
+        {
+            try
+            {
+                auto commit_ts = abort();
+                /// the txn has been sucessfully committed for the timeout case
+                if (txn_record.status() == CnchTransactionStatus::Finished)
+                    return commit_ts;
+            }
+            catch (...)
+            {
+                tryLogCurrentException(log, __PRETTY_FUNCTION__);
+            }
+        }
+
         rollback();
         throw;
     }
@@ -401,7 +418,7 @@ TxnTimestamp CnchServerTransaction::abort()
         }
         else if (txn_record.status() == CnchTransactionStatus::Aborted)
         {
-            LOG_WARNING(log, "Transaction {} has been committed\n", txn_record.txnID().toUInt64());
+            LOG_WARNING(log, "Transaction {} has been aborted\n", txn_record.txnID().toUInt64());
         }
         else
         {

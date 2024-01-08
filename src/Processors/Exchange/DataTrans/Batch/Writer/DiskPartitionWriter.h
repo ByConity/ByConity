@@ -1,9 +1,11 @@
 #pragma once
 #include <atomic>
+#include <exception>
 #include <memory>
 #include <mutex>
 #include <Core/Types.h>
 #include <IO/WriteBuffer.h>
+#include <IO/WriteBufferFromFileBase.h>
 #include <Interpreters/Context_fwd.h>
 #include <Processors/Exchange/DataTrans/Batch/DiskExchangeDataManager.h>
 #include <Processors/Exchange/DataTrans/BoundedDataQueue.h>
@@ -12,7 +14,7 @@
 #include <Processors/Exchange/ExchangeDataKey.h>
 #include <bthread/mutex.h>
 #include <Poco/Logger.h>
-#include "IO/WriteBufferFromFileBase.h"
+#include <Common/Exception.h>
 
 namespace DB
 {
@@ -21,14 +23,12 @@ namespace DB
 class DiskPartitionWriter : public IBroadcastSender
 {
 public:
-    DiskPartitionWriter(const ContextPtr & context, DiskExchangeDataManagerPtr mgr_, Block header_, ExchangeDataKeyPtr key_);
-    ~DiskPartitionWriter() override = default;
+    DiskPartitionWriter(ContextPtr context, DiskExchangeDataManagerPtr mgr_, Block header_, ExchangeDataKeyPtr key_);
+    ~DiskPartitionWriter() override;
     /// send data to queue
     BroadcastStatus sendImpl(Chunk chunk) override;
     /// run write task
     void runWriteTask();
-    /// cancel write task
-    void cancel();
     void merge(IBroadcastSender && sender) override;
     String getName() const override
     {
@@ -46,6 +46,16 @@ public:
     }
 
 private:
+    struct DiskPartitionWriterMetrics
+    {
+        bvar::Adder<size_t> create_file_ms{};
+        bvar::Adder<size_t> pop_ms{};
+        bvar::Adder<size_t> write_ms{};
+        bvar::Adder<size_t> write_num{};
+        bvar::Adder<size_t> commit_ms{};
+    };
+    DiskPartitionWriterMetrics writer_metrics;
+    ContextPtr context;
     DiskExchangeDataManagerPtr mgr;
     DiskPtr disk;
     Block header;
@@ -61,6 +71,7 @@ private:
     bthread::ConditionVariable done_cv;
     bool done = false;
     bool low_cardinality_allow_in_native_format;
+    bool enable_disk_writer_metrics;
 };
 
 using DiskPartitionWriterPtr = std::shared_ptr<DiskPartitionWriter>;

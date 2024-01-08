@@ -20,8 +20,11 @@
  */
 
 #include <Parsers/ASTColumnDeclaration.h>
+#include <Parsers/ASTDataType.h>
 #include <Common/quoteString.h>
 #include <IO/Operators.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeNullable.h>
 
 
 namespace DB
@@ -82,6 +85,12 @@ void ASTColumnDeclaration::formatImpl(const FormatSettings & settings, FormatSta
         type_frame.indent = 0;
 
         type->formatImpl(settings, state, type_frame);
+
+        if (settings.dialect_type == DialectType::ANSI && !null_modifier && !type->as<ASTDataType>())
+        {
+            settings.ostr << (settings.hilite ? hilite_keyword : "")
+                          << " NOT NULL" << (settings.hilite ? hilite_none : "");
+        }
     }
 
     if (null_modifier)

@@ -98,6 +98,7 @@ void BrpcExchangeReceiverRegistryService::registerBRPCSenderFromDisk(
         query_context->applySettingsChanges(settings_changes);
         ClientInfo & client_info = query_context->getClientInfo();
         Decimal64 initial_query_start_time_microseconds{request->initial_query_start_time()};
+        client_info.initial_query_id = request->registry().query_id(); /// needed for query exchange log initial_query_id
         client_info.initial_query_start_time = initial_query_start_time_microseconds / 1000000;
         client_info.initial_query_start_time_microseconds = initial_query_start_time_microseconds;
         query_context->setQueryExpirationTimeStamp();
@@ -168,19 +169,18 @@ void BrpcExchangeReceiverRegistryService::acceptStream(
     try
     {
         sender->waitAccept(accept_timeout_ms);
+        if (brpc::StreamAccept(&sender_stream_id, *cntl, &stream_options) != 0)
+        {
+            sender_stream_id = brpc::INVALID_STREAM_ID;
+            String error_msg = "Fail to accept stream " + key->toString() + " for query " + query_id;
+            LOG_ERROR(log, error_msg);
+            cntl->SetFailed(error_msg);
+        }
     }
     catch (...)
     {
         String error_msg
             = "Create stream " + key->toString() + " for query " + query_id + " failed by exception: " + getCurrentExceptionMessage(false);
-        LOG_ERROR(log, error_msg);
-        cntl->SetFailed(error_msg);
-    }
-
-    if (brpc::StreamAccept(&sender_stream_id, *cntl, &stream_options) != 0)
-    {
-        sender_stream_id = brpc::INVALID_STREAM_ID;
-        String error_msg = "Fail to accept stream " + key->toString() + " for query " + query_id;
         LOG_ERROR(log, error_msg);
         cntl->SetFailed(error_msg);
     }
@@ -221,12 +221,13 @@ void BrpcExchangeReceiverRegistryService::cleanupExchangeData(
     brpc::Controller * cntl = static_cast<brpc::Controller *>(controller);
     try
     {
+        LOG_TRACE(log, "submit cleanup task for query_unique_id:{} successfully", request->query_unique_id());
         auto mgr = context->getDiskExchangeDataManager();
-        mgr->cleanup(request->query_unique_id());
+        mgr->submitCleanupTask(request->query_unique_id());
     }
     catch (...)
     {
-        auto error_msg = fmt::format("Cleanup exchange data failed for query_unique_id:{}", request->query_unique_id());
+        auto error_msg = fmt::format("submit cleanup exchange data failed for query_unique_id:{}", request->query_unique_id());
         tryLogCurrentException(log, error_msg);
         cntl->SetFailed(error_msg);
     }

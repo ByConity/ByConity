@@ -31,6 +31,7 @@
 #include <Parsers/ASTCreateSettingsProfileQuery.h>
 #include <Parsers/ASTCreateUserQuery.h>
 #include <Parsers/ASTDeleteQuery.h>
+#include <Parsers/ASTDataType.h>
 #include <Parsers/ASTDictionary.h>
 #include <Parsers/ASTDictionaryAttributeDeclaration.h>
 #include <Parsers/ASTDropAccessEntityQuery.h>

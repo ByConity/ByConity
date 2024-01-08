@@ -279,7 +279,7 @@ void insertCnchQueryMetric(
         {
             read_rows = info->read_rows;
             read_bytes = info->read_bytes;
-            read_cached_bytes = info->disk_cache_bytes;
+            read_cached_bytes = info->disk_cache_read_bytes;
 
             write_rows = info->written_rows;
             write_bytes = info->written_bytes;
@@ -348,7 +348,7 @@ void insertCnchQueryMetric(
         UInt64 peak_memory = (info) ? info->peak_memory_usage : 0;
         UInt32 read_rows = (info) ? info->read_rows : 0;
         UInt64 read_bytes = (info) ? info->read_bytes : 0;
-        UInt64 read_cached_bytes = (info) ? info->disk_cache_bytes : 0;
+        UInt64 read_cached_bytes = (info) ? info->disk_cache_read_bytes : 0;
         UInt32 write_rows = (info) ? info->written_rows : 0;
         UInt64 write_bytes = (info) ? info->written_bytes : 0;
         UInt64 write_duration = (info) ? info->written_duration : 0;

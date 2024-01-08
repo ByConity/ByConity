@@ -65,6 +65,7 @@ class ReadBuffer;
     M(ASTConstraintDeclaration) \
     M(ASTForeignKeyDeclaration) \
     M(ASTUniqueNotEnforcedDeclaration) \
+    M(ASTDataType) \
     M(ASTStorage) \
     M(ASTColumns) \
     M(ASTCreateQuery) \
@@ -184,9 +185,20 @@ public:
     String getName() const {return name;}
     StringPairs getKvOptions() const {return kv_options;}
     Strings getOptions() const {return options;}
+    void serialize(WriteBuffer & buf) const;
+    static SqlHint deserialize(ReadBuffer & buf);
 };
 
-using SqlHints = std::vector<SqlHint>;
+class SqlHints : public std::vector<SqlHint>
+{
+public:
+    using std::vector<SqlHint>::vector;
+
+    void serialize(WriteBuffer & buf) const;
+    void deserialize(ReadBuffer & buf);
+};
+
+// using SqlHints = std::vector<SqlHint>;
 
 /** Element of the syntax tree (hereinafter - directed acyclic graph with elements of semantics)
   */
@@ -364,6 +376,7 @@ public:
         bool always_quote_identifiers = false;
         bool without_alias = false;
         IdentifierQuotingStyle identifier_quoting_style = IdentifierQuotingStyle::Backticks;
+        DialectType dialect_type = DialectType::CLICKHOUSE;
 
         // Newline or whitespace.
         char nl_or_ws;

@@ -13,7 +13,6 @@ Projection Est. ? rows
       │     │     Partition by: {a_1}
       │     └─ TableScan correctness.q6_t2 Est. ? rows
       │              Outputs: [c], a_1:=a
-      └─ Repartition Exchange Est. ? rows
-         │     Partition by: {a_2}
+      └─ Broadcast Exchange Est. ? rows
          └─ TableScan correctness.q6_t3 Est. ? rows
                   Outputs: [d], a_2:=a

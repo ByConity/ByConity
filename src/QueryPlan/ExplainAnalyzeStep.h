@@ -19,8 +19,8 @@ public:
         const DataStream & input_stream_,
         ASTExplainQuery::ExplainKind explain_kind_,
         ContextMutablePtr context_,
-        std::shared_ptr<QueryPlan> query_plan_ptr_ = nullptr,
-        QueryPlanSettings settings = {});
+        std::shared_ptr<QueryPlan> query_plan_ptr_,
+        QueryPlanSettings settings);
 
     String getName() const override { return "ExplainAnalyze"; }
     Type getType() const override { return Type::ExplainAnalyze; }

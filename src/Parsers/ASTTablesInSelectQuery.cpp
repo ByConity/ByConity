@@ -97,6 +97,46 @@ ASTPtr ASTTableExpression::deserialize(ReadBuffer & buf)
     return expression;
 }
 
+String kindToString(ASTTableJoin::Kind kind)
+{
+    switch(kind)
+    {
+        case ASTTableJoin::Kind::Comma:
+            return "COMMA";
+        case ASTTableJoin::Kind::Cross:
+            return "CROSS";
+        case ASTTableJoin::Kind::Full:
+            return "FULL";
+        case ASTTableJoin::Kind::Inner:
+            return "INNER";
+        case ASTTableJoin::Kind::Left:
+            return "LEFT";
+        case ASTTableJoin::Kind::Right:
+            return "RIGHT";
+    }
+}
+
+String strictnessToString(ASTTableJoin::Strictness strictness)
+{
+    switch(strictness)
+    {
+        case ASTTableJoin::Strictness::All:
+            return "ALL";
+        case ASTTableJoin::Strictness::Anti:
+            return "ANTI";
+        case ASTTableJoin::Strictness::Any:
+            return "ANY";
+        case ASTTableJoin::Strictness::Asof:
+            return "ASOF";
+        case ASTTableJoin::Strictness::RightAny:
+            return "RIGHTANY";
+        case ASTTableJoin::Strictness::Semi:
+            return "SIMI";
+        case ASTTableJoin::Strictness::Unspecified:
+            return "UNSPECIFIED";
+    }
+}
+
 void ASTTableJoin::updateTreeHashImpl(SipHash & hash_state) const
 {
     hash_state.update(locality);
@@ -124,6 +164,7 @@ void ASTTableJoin::serialize(WriteBuffer & buf) const
 
     serializeAST(using_expression_list, buf);
     serializeAST(on_expression, buf);
+    hints.serialize(buf);
 }
 
 void ASTTableJoin::deserializeImpl(ReadBuffer & buf)
@@ -134,6 +175,7 @@ void ASTTableJoin::deserializeImpl(ReadBuffer & buf)
 
     using_expression_list = deserializeASTWithChildren(children, buf);
     on_expression = deserializeASTWithChildren(children, buf);
+    hints.deserialize(buf);
 }
 
 ASTPtr ASTTableJoin::deserialize(ReadBuffer & buf)
@@ -195,6 +237,7 @@ void ASTTablesInSelectQueryElement::serialize(WriteBuffer & buf) const
     serializeAST(table_join, buf);
     serializeAST(table_expression, buf);
     serializeAST(array_join, buf);
+    hints.serialize(buf);
 }
 
 void ASTTablesInSelectQueryElement::deserializeImpl(ReadBuffer & buf)
@@ -202,6 +245,7 @@ void ASTTablesInSelectQueryElement::deserializeImpl(ReadBuffer & buf)
     table_join = deserializeASTWithChildren(children, buf);
     table_expression = deserializeASTWithChildren(children, buf);
     array_join = deserializeASTWithChildren(children, buf);
+    hints.deserialize(buf);
 }
 
 ASTPtr ASTTablesInSelectQueryElement::deserialize(ReadBuffer & buf)
@@ -225,11 +269,13 @@ ASTPtr ASTTablesInSelectQuery::clone() const
 void ASTTablesInSelectQuery::serialize(WriteBuffer & buf) const
 {
     serializeASTs(children, buf);
+    hints.serialize(buf);
 }
 
 void ASTTablesInSelectQuery::deserializeImpl(ReadBuffer & buf)
 {
     children = deserializeASTs(buf);
+    hints.deserialize(buf);
 }
 
 ASTPtr ASTTablesInSelectQuery::deserialize(ReadBuffer & buf)

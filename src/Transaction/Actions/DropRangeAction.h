@@ -55,6 +55,7 @@ private:
 
     MutableMergeTreeDataPartsCNCHVector parts;
     DeleteBitmapMetaPtrVector delete_bitmaps;
+    bool executed{false};
 };
 
 }

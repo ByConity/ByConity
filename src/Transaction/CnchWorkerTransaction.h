@@ -42,6 +42,10 @@ public:
     // Server created a transaction and continue to execute on worker
     CnchWorkerTransaction(const ContextPtr & context_, const TxnTimestamp & txn_id, const TxnTimestamp & primary_txn_id = 0);
 
+    // ctor for server initiated transaction
+    // Server created a transaction, continue to execute on worker and support commit from worker txn
+    CnchWorkerTransaction(const ContextPtr & context_, const TxnTimestamp & txn_id, CnchServerClientPtr client, const TxnTimestamp & primary_txn_id = 0);
+
     // TODO: remove this
     // create a fake worker transaction to transfer kafka storage-id
     CnchWorkerTransaction(const ContextPtr & context_, StorageID kafka_table_id_);

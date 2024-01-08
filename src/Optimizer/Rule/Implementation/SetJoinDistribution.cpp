@@ -18,8 +18,8 @@
 
 #include <Optimizer/Cascades/CascadesOptimizer.h>
 #include <Optimizer/Rule/Patterns.h>
-#include <QueryPlan/JoinStep.h>
 #include <QueryPlan/AnyStep.h>
+#include <QueryPlan/JoinStep.h>
 
 namespace DB
 {
@@ -83,17 +83,31 @@ TransformResult SetJoinDistribution::transformImpl(PlanNodePtr node, const Captu
         return {replicate_node};
     }
 
-    if (context.context->getSettingsRef().enum_repartition)
+    // when statistics exists, enum both repartition-join and replicated-join.
+    if (left_stats && right_stats)
     {
-        result.emplace_back(repartition_node);
+        if (context.context->getSettingsRef().enum_repartition)
+        {
+            result.emplace_back(repartition_node);
+        }
+        if (context.context->getSettingsRef().enum_replicate)
+        {
+            result.emplace_back(replicate_node);
+        }
+    }
+    else
+    // when statistics not exists, default enum replicated-join.
+    {
+        if (context.context->getSettingsRef().enum_replicate_no_stats)
+        {
+            result.emplace_back(replicate_node);
+        }
+        else
+        {
+            result.emplace_back(repartition_node);
+        }
     }
 
-
-    if ((context.context->getSettingsRef().enum_replicate && left_stats && right_stats /* when no stats, not enum replicate*/) || 
-        !context.context->getSettingsRef().enum_repartition /*must enum one dist type*/)
-    {
-        result.emplace_back(replicate_node);
-    }
     return TransformResult{result};
 }
 

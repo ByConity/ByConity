@@ -15,6 +15,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <optional>
 #include <Core/Block.h>
@@ -141,7 +142,19 @@ public:
 
     void insertSourceAddress(const AddressInfo & address_info) { source_addresses.push_back(address_info); }
 
-    void insertSourceAddress(const AddressInfos & address_infos) { source_addresses.insert(source_addresses.end(), address_infos.begin(), address_infos.end()); }
+    void insertSourceAddresses(AddressInfos & address_infos, bool unique = false)
+    {
+        if (unique)
+        {
+            std::sort(address_infos.begin(), address_infos.end());
+            auto last = std::unique(address_infos.begin(), address_infos.end());
+            source_addresses.insert(source_addresses.end(), address_infos.begin(), last);
+        }
+        else
+        {
+            source_addresses.insert(source_addresses.end(), address_infos.begin(), address_infos.end());
+        }
+    }
 
     const AddressInfos & getSourceAddress() const { return source_addresses; }
 

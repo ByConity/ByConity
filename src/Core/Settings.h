@@ -235,7 +235,6 @@ enum PreloadLevelSettings : UInt64
       0) \
     M(String, s3_access_key_id, "", "S3 table access key id", 0) \
     M(String, s3_access_key_secret, "", "S3 table access key secret", 0) \
-    M(Bool, s3_use_read_ahead, true, "Enable read ahead buffer when read s3, now it is just for CnchS3", 0) \
     M(UInt64, s3_max_list_nums, 1000, "Sets the maximum number of keys returned in the response, now it is just for CnchS3", 0) \
     M(UInt64, s3_max_request_ms, 30000, "Request max timeout ms , now it is just for CnchS3", 0) \
     M(Bool, overwrite_current_file, false, "Enable overwrite current file, now it is just for CnchS3/CnchHDFS", 0) \
@@ -1689,6 +1688,9 @@ enum PreloadLevelSettings : UInt64
     M(Bool, print_graphviz_ast, false, "Whether print graphviz", 0) \
     M(Bool, print_graphviz_planner, false, "Whether print graphviz", 0) \
     M(Bool, use_sql_binding, false, "Whether use SQL binding", 0) \
+    M(Bool, enable_active_prewhere, false, "Whether to actively generate prewhere by statistics", 0) \
+    M(Float, max_active_prewhere_selectivity, 0.3, "Max Selectivity of actively generated prewheres", 0) \
+    M(UInt64, max_active_prewhere_size, 3, "Max Size of to actively generated prewheres", 0) \
     M(UInt64, global_bindings_update_time, 60*60, "Interval to update global binding cache from catalog, in seconds.", 0) \
     /** Optimizer relative settings, Plan build and RBO */ \
     M(Bool, enable_nested_loop_join, true, "Whether enable nest loop join for outer join with filter", 0)\
@@ -1841,6 +1843,7 @@ enum PreloadLevelSettings : UInt64
     M(Bool, enable_cascades_pruning, false, "Whether enable cascades pruning", 0) \
     M(Bool, enum_replicate, true, "Enum replicate join", 0) \
     M(Bool, enum_repartition, true, "Enum repartition join", 0) \
+    M(Bool, enum_replicate_no_stats, true, "Enum replicate join when statistics not exists", 0) \
     M(UInt64, max_replicate_build_size, 200000, "Max join build size, when enum replicate", 0) \
     M(UInt64, max_replicate_shuffle_size, 50000000, "Max join build size, when enum replicate", 0) \
     M(UInt64, parallel_join_threshold, 2000000, "Parallel join right source rows threshold", 0) \

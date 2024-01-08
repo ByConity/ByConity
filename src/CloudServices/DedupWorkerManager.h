@@ -65,7 +65,6 @@ private:
     String getDedupWorkerDebugInfo();
 
     mutable bthread::Mutex worker_client_mutex;
-    CnchWorkerClientPoolPtr worker_pool;
     CnchWorkerClientPtr worker_client;
     StorageID worker_storage_id;
 

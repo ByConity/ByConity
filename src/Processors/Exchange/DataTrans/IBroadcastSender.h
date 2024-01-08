@@ -36,6 +36,12 @@ enum class BroadcastSenderType
 class IBroadcastSender
 {
 public:
+    IBroadcastSender() : enable_sender_metrics(false)
+    {
+    }
+    explicit IBroadcastSender(bool enable_sender_metrics_) : enable_sender_metrics(enable_sender_metrics_)
+    {
+    }
     /// metrics for sender, bvar is used for write intensive case
     struct SenderMetrics
     {
@@ -67,7 +73,6 @@ public:
     virtual BroadcastSenderType getType() = 0;
     virtual bool needMetrics() { return true; }
     virtual ~IBroadcastSender() = default;
-    void setEnableSenderMetrics(bool enable_) { enable_sender_metrics = enable_; }
     SenderMetrics & getSenderMetrics()
     {
         return sender_metrics;
@@ -76,6 +81,8 @@ public:
 protected:
     bool enable_sender_metrics = false; // by default, metrics are disabled
     SenderMetrics sender_metrics;
+
+private:
     Stopwatch sender_timer;
 };
 

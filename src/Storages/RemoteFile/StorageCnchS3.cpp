@@ -80,9 +80,9 @@ Strings ListKeysWithRegexpMatching(
             const String & key = object.GetKey();
             if (re2::RE2::FullMatch(key, *matcher) && key.back() != '/')
                 keys.emplace_back(key);
-            request.SetContinuationToken(outcome.GetResult().GetNextContinuationToken());
-            is_finished = !outcome.GetResult().GetIsTruncated();
         }
+        request.SetContinuationToken(outcome.GetResult().GetNextContinuationToken());
+        is_finished = !outcome.GetResult().GetIsTruncated();
     }
 
     LOG_TRACE(
@@ -106,7 +106,7 @@ void StorageCnchS3::readByLocal(
         size_t max_block_size,
         unsigned num_streams)
 {
-    auto storage = StorageCloudS3::create(getContext(), getStorageID(), metadata_snapshot->getColumns(), metadata_snapshot->getConstraints(), file_list, metadata_snapshot->getSettingsChanges(), arguments, settings, config);
+    auto storage = StorageCloudS3::create(query_context, getStorageID(), metadata_snapshot->getColumns(), metadata_snapshot->getConstraints(), file_list, metadata_snapshot->getSettingsChanges(), arguments, settings, config);
     storage->loadDataParts(parts);
     return storage->read(query_plan, column_names, metadata_snapshot, query_info, query_context, processed_stage, max_block_size, num_streams);
 }
@@ -136,8 +136,7 @@ void StorageCnchS3::tryUpdateFSClient(const ContextPtr & query_context)
         || settings.s3_check_objects_after_upload.changed || settings.s3_max_connections.changed
         || settings.s3_max_single_part_upload_size.changed || settings.s3_max_single_read_retries.changed
         || settings.s3_max_unexpected_write_error_retries.changed || settings.s3_min_upload_part_size.changed
-        || settings.s3_upload_part_size_multiply_factor.changed || settings.s3_upload_part_size_multiply_parts_count_threshold.changed
-        || settings.s3_use_read_ahead.changed)
+        || settings.s3_upload_part_size_multiply_factor.changed || settings.s3_upload_part_size_multiply_parts_count_threshold.changed)
     {
         config.updateS3Client(query_context, arguments);
         config.updated = true;

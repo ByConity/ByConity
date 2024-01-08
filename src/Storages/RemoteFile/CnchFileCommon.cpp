@@ -1,6 +1,7 @@
 #include "Storages/RemoteFile/CnchFileCommon.h"
 
 #include <Interpreters/Context.h>
+#include "IO/S3Common.h"
 
 namespace DB
 {
@@ -11,8 +12,6 @@ void StorageS3Configuration::updateS3Client(const ContextPtr & ctx, const CnchFi
 
     auto s3_settings = ctx->getStorageS3Settings().getSettings(uri.endpoint);
     s3_settings.rw_settings.updateFromSettingsIfEmpty(ctx->getSettingsRef());
-
-    use_read_ahead = ctx->getSettingsRef().s3_use_read_ahead;
 
     auth_settings = s3_settings.auth_settings;
     rw_settings = s3_settings.rw_settings;
@@ -52,20 +51,25 @@ void StorageS3Configuration::updateS3Client(const ContextPtr & ctx, const CnchFi
         credentials.GetAWSSecretKey(),
         auth_settings.server_side_encryption_customer_key_base64,
         std::move(headers),
-        auth_settings.use_environment_credentials.value_or(ctx->getConfigRef().getBool("s3.use_environment_credentials", false)),
-        auth_settings.use_insecure_imds_request.value_or(ctx->getConfigRef().getBool("s3.use_insecure_imds_request", false)));
+        S3::CredentialsConfiguration
+        {
+            auth_settings.use_environment_credentials.value_or(ctx->getConfigRef().getBool("s3.use_environment_credentials", true)),
+            auth_settings.use_insecure_imds_request.value_or(ctx->getConfigRef().getBool("s3.use_insecure_imds_request", false)),
+            auth_settings.expiration_window_seconds.value_or(
+                ctx->getConfigRef().getUInt64("s3.expiration_window_seconds", S3::DEFAULT_EXPIRATION_WINDOW_SECONDS)),
+            auth_settings.no_sign_request.value_or(ctx->getConfigRef().getBool("s3.no_sign_request", false))
+        });
 
     LOG_DEBUG(
         &Poco::Logger::get("StorageS3Configuration"),
         fmt::format(
-            "update s3 client, config: {}, region = {}, endpoint = {}, bucket = {}, key = {}, ak/sk = {} -> {}, use_read_ahead = {}",
+            "update s3 client, config: {}, region = {}, endpoint = {}, bucket = {}, key = {}, ak/sk = {} -> {}",
             uri.toString(),
             auth_settings.region,
             uri.endpoint,
             uri.bucket,
             uri.key,
             auth_settings.access_key_id,
-            auth_settings.access_key_secret,
-            use_read_ahead));
+            auth_settings.access_key_secret));
 }
 }

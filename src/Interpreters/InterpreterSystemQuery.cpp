@@ -494,9 +494,13 @@ BlockIO InterpreterSystemQuery::executeCnchCommand(ASTSystemQuery & query, Conte
         case Type::STOP_MERGES:
         case Type::START_MERGES:
         case Type::REMOVE_MERGES:
+        case Type::RESUME_ALL_MERGES:
+        case Type::SUSPEND_ALL_MERGES:
         case Type::STOP_GC:
         case Type::START_GC:
         case Type::FORCE_GC:
+        case Type::RESUME_ALL_GC:
+        case Type::SUSPEND_ALL_GC:
         case Type::START_DEDUP_WORKER:
         case Type::STOP_DEDUP_WORKER:
         case Type::START_CLUSTER:
@@ -622,17 +626,36 @@ BlockIO InterpreterSystemQuery::executeLocalCommand(ASTSystemQuery & query, Cont
 
 void InterpreterSystemQuery::executeBGTaskInCnchServer(ContextMutablePtr & system_context, ASTSystemQuery::Type type) const
 {
+    using Type = ASTSystemQuery::Type;
+    auto daemon_manager = getContext()->getDaemonManagerClient();
+
     if (table_id.empty())
-        throw Exception("Table name should be specified for control background task", ErrorCodes::LOGICAL_ERROR);
+    {
+        switch (type)
+        {
+            case Type::RESUME_ALL_MERGES:
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString());
+                break;
+            case Type::SUSPEND_ALL_MERGES:
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::MergeMutate, CnchBGThreadAction::Remove, CurrentThread::getQueryId().toString());
+                break;
+            case Type::RESUME_ALL_GC:
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::PartGC, CnchBGThreadAction::Start, CurrentThread::getQueryId().toString());
+                break;
+            case Type::SUSPEND_ALL_GC:
+                daemon_manager->controlDaemonJob(StorageID::createEmpty(), CnchBGThreadType::PartGC, CnchBGThreadAction::Remove, CurrentThread::getQueryId().toString());
+                break;
+            default:
+                throw Exception("Table name should be specified for control specified background task", ErrorCodes::LOGICAL_ERROR);
+        }
+        return;
+    }
 
     auto storage = DatabaseCatalog::instance().getTable(table_id, system_context);
 
     if (!dynamic_cast<StorageCnchMergeTree *>(storage.get()))
         throw Exception("StorageCnchMergeTree is expected, but got " + storage->getName(), ErrorCodes::BAD_ARGUMENTS);
 
-    auto daemon_manager = getContext()->getDaemonManagerClient();
-
-    using Type = ASTSystemQuery::Type;
     switch (type)
     {
         case Type::START_MERGES:
@@ -876,7 +899,7 @@ StoragePtr InterpreterSystemQuery::tryRestartReplica(const StorageID & replica, 
     auto & create = create_ast->as<ASTCreateQuery &>();
     create.attach = true;
 
-    auto columns = InterpreterCreateQuery::getColumnsDescription(*create.columns_list->columns, system_context, true);
+    auto columns = InterpreterCreateQuery::getColumnsDescription(*create.columns_list->columns, system_context, true, true);
     auto constraints = InterpreterCreateQuery::getConstraintsDescription(create.columns_list->constraints);
     auto foreign_keys = InterpreterCreateQuery::getForeignKeysDescription(create.columns_list->foreign_keys);
     auto unique = InterpreterCreateQuery::getUniqueNotEnforcedDescription(create.columns_list->unique);

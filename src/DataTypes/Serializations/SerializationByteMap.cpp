@@ -216,7 +216,7 @@ void SerializationByteMap::deserializeTextImpl(
     auto & key_column = column_map.getKey();
     auto & value_column = column_map.getValue();
 
-    size_t size = 0;
+    size_t ksize = 0, vsize = 0;
     assertChar('{', istr);
 
     try
@@ -240,23 +240,36 @@ void SerializationByteMap::deserializeTextImpl(
                 break;
 
             key_reader(istr, key, key_column);
+            ksize++;
+
             skipWhitespaceIfAny(istr);
+
             assertChar(':', istr);
 
-            ++size;
             skipWhitespaceIfAny(istr);
             value_reader(istr, value, value_column);
+            vsize++;
 
             skipWhitespaceIfAny(istr);
         }
 
-        offsets.push_back(offsets.back() + size);
         assertChar('}', istr);
     }
     catch (...)
     {
+        if (ksize)
+        {
+            key_column.popBack(ksize);
+        }
+        if (vsize)
+        {
+            value_column.popBack(vsize);
+        }
         throw;
     }
+
+    // ksize and vsize should be the same here, use anyone
+    offsets.push_back((offsets.empty() ? 0 : offsets.back()) + ksize);
 }
 
 void SerializationByteMap::serializeText(const IColumn & column, size_t row_num, WriteBuffer & ostr, const FormatSettings & settings) const

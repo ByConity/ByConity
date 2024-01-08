@@ -535,7 +535,13 @@ InterpretIMResult ExpressionInterpreter::visitOrdinaryFunction(const ASTFunction
         ExpressionTypes arguments_type_provider;
 
         if (has_lambda_argument)
-            arguments_type_provider = type_analyzer.getExpressionTypes(node);
+        {
+            // Temporarily disable optimize for functions with lambda expressions,
+            // until we support optimize lambda expressions itself. This is to not break
+            // 40080_array_join_with_lambda_expression.
+            // arguments_type_provider = type_analyzer.getExpressionTypes(node);
+            return originalNode(node);
+        }
 
         for (const auto & child: function.arguments->children)
         {

@@ -21,9 +21,10 @@ from
 
 explain analyze stats=0,profile=0
 select
-    distinct t1.id
+    t1.id
 from unique_1 t1 join unique_2 t2
-on t1.id = t2.id;
+on t1.id = t2.id
+group by t1.id;
 
 DROP TABLE IF EXISTS analyze.unique_1;
 DROP TABLE IF EXISTS analyze.unique_2;

@@ -171,7 +171,7 @@ services:
 
   daemon-manager-0:
     image: ${BYCONITY_IMAGE}
-    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server-0:21557 && clickhouse daemon-manager --config-file ./config/daemon-manager.yml"
+    command: bash -c "curl --retry 10 --retry-delay 5 --retry-connrefused --retry-max-time 120 --max-time 120 server-0:21557 && clickhouse daemon-manager --config-file /config/daemon-manager.yml"
     depends_on:
       - server-0
     volumes:

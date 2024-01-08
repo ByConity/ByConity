@@ -59,7 +59,7 @@ public:
 
     BitmapIndexInfo() : MergeTreeIndexInfo(MergeTreeIndexInfo::Type::BITMAP) {}
 
-    void buildIndexInfo(const ASTPtr & node, BuildIndexContext & building_context) override;
+    void buildIndexInfo(const ASTPtr & node, BuildIndexContext & building_context, const StorageMetadataPtr & metadata_snapshot) override;
     void setNonRemovableColumn(const String & column) override;
 
     std::pair<NameSet,NameSet> getIndexColumns(const IMergeTreeDataPartPtr & data_part) override;

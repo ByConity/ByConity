@@ -162,10 +162,6 @@ ManipulationTaskPtr StorageCloudMergeTree::manipulate(const ManipulationTaskPara
         default:
             throw Exception("Unsupported manipulation task: " + String(typeToString(input_params.type)), ErrorCodes::NOT_IMPLEMENTED);
     }
-
-    /// task->execute();
-
-    /// LOG_DEBUG(log, "Finished manipulate task {}", input_params.task_id);
     return task;
 }
 
@@ -173,8 +169,6 @@ void StorageCloudMergeTree::checkMutationIsPossible(const MutationCommands & com
 {
     for (const auto & command : commands)
     {
-        if (command.type == MutationCommand::Type::UPDATE)
-            throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute UPDATE commands");
         if (command.type == MutationCommand::Type::MATERIALIZE_TTL)
             throw Exception(ErrorCodes::NOT_IMPLEMENTED, "It's not allowed to execute MATERIALIZE_TTL commands");
     }
@@ -274,7 +268,7 @@ const String& StorageCloudMergeTree::getRelativeDataPath(StorageLocation locatio
         relative_auxility_storage_path;
 }
 
-ASTs StorageCloudMergeTree::convertBucketNumbersToAstLiterals(ASTPtr where_expression, ContextPtr local_context) const
+ASTs StorageCloudMergeTree::convertBucketNumbersToAstLiterals(const ASTPtr where_expression, ContextPtr local_context) const
 {
     ASTs result;
     ASTPtr where_expression_copy = where_expression->clone();

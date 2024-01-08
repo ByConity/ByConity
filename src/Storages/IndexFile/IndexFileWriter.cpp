@@ -92,7 +92,7 @@ Status IndexFileWriter::Finish(IndexFileInfo * file_info)
 
     if (s.ok())
     {
-        s = r->file_writer->Sync();
+        s = r->file_writer->Sync(/*need_fsync*/false);
         if (s.ok())
         {
             s = r->file_writer->Close();

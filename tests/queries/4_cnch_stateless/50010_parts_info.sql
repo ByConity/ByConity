@@ -12,6 +12,8 @@ ENGINE = CnchMergeTree
 PARTITION BY name
 ORDER BY name;
 
+SYSTEM START MERGES pi;
+
 insert into pi values ('a', 'a', 1);
 insert into pi values ('a', 'a', 2);
 
@@ -34,7 +36,8 @@ select total_rows_count from system.cnch_parts_info where database = currentData
 ALTER TABLE pi DROP COLUMN asdf;
 
 -- Make sure that mutation is finished
-select sum(*) from (select sleepEachRow(3) from system.numbers limit 3);
+SYSTEM START MERGES pi;
+SYSTEM STOP MERGES pi;
 OPTIMIZE TABLE pi SETTINGS mutations_sync = 1;
 
 -- Parts' numbers and size should match.
@@ -96,6 +99,8 @@ ENGINE = CnchMergeTree
 PARTITION BY name
 ORDER BY name;
 
+SYSTEM START MERGES pi;
+
 insert into pi values ('a', 'a', 1);
 
 
@@ -118,7 +123,8 @@ select total_rows_count from system.cnch_parts_info where database = currentData
 ALTER TABLE pi DROP COLUMN asdf;
 
 -- Make sure that mutation is finished
-select sum(*) from (select sleepEachRow(3) from system.numbers limit 3);
+SYSTEM START MERGES pi;
+SYSTEM STOP MERGES pi;
 OPTIMIZE TABLE pi SETTINGS mutations_sync = 1;
 
 -- Parts' numbers and size should match.

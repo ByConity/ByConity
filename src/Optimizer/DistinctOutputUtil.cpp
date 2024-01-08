@@ -37,17 +37,17 @@ bool IsDistinctPlanVisitor::visitPlanNode(PlanNodeBase &, Void &)
 
 bool IsDistinctPlanVisitor::visitValuesNode(ValuesNode & node, Void &)
 {
-    return node.getStep()->getRows() <= 1;
+    return dynamic_cast<const ValuesStep *>(node.getStep().get())->getRows() <= 1;
 }
 
 bool IsDistinctPlanVisitor::visitLimitNode(LimitNode & node, Void &)
 {
-    return node.getStep()->getLimit() <= 1;
+    return dynamic_cast<const LimitStep *>(node.getStep().get())->getLimit() <= 1;
 }
 
 bool IsDistinctPlanVisitor::visitIntersectNode(IntersectNode & node, Void & context)
 {
-    if (node.getStep()->isDistinct())
+    if (dynamic_cast<const IntersectStep *>(node.getStep().get())->isDistinct())
         return true;
 
     for (auto & child : node.getChildren())
@@ -85,12 +85,12 @@ bool IsDistinctPlanVisitor::visitDistinctNode(DistinctNode &, Void &)
 
 bool IsDistinctPlanVisitor::visitExceptNode(ExceptNode & node, Void & context)
 {
-    return node.getStep()->isDistinct() || VisitorUtil::accept(node.getChildren()[0], *this, context);
+    return dynamic_cast<const ExceptStep *>(node.getStep().get())->isDistinct() || VisitorUtil::accept(node.getChildren()[0], *this, context);
 }
 
 bool IsDistinctPlanVisitor::visitMergingSortedNode(MergingSortedNode & node, Void &)
 {
-    return node.getStep()->getLimit() <= 1;
+    return dynamic_cast<const MergingSortedStep *>(node.getStep().get())->getLimit() <= 1;
 }
 
 }

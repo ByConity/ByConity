@@ -1542,7 +1542,7 @@ void MergeTreeMetaBase::calculateColumnSizesImpl()
         column_sizes = std::move(new_column_sizes);
     }
 
-    LOG_TRACE(log, "Calculate columns size elapsed: {} ms.", stopwatch.elapsedMilliseconds());
+    LOG_DEBUG(log, "Calculate columns size elapsed: {} ms.", stopwatch.elapsedMilliseconds());
 }
 
 

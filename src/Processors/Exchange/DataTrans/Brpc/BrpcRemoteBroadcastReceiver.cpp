@@ -52,7 +52,8 @@ BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
     MultiPathQueuePtr queue_,
     BrpcExchangeReceiverRegistryService::RegisterMode mode_,
     std::shared_ptr<QueryExchangeLog> query_exchange_log_)
-    : name(name_)
+    : IBroadcastReceiver(context_->getSettingsRef().log_query_exchange)
+    , name(name_)
     , trans_key(std::move(trans_key_))
     , registry_address(std::move(registry_address_))
     , context(std::move(context_))
@@ -78,8 +79,8 @@ BrpcRemoteBroadcastReceiver::~BrpcRemoteBroadcastReceiver()
             return;
         QueryExchangeLogElement element;
         element.initial_query_id = initial_query_id;
-        element.exchange_id = std::to_string(trans_key->exchange_id);
-        element.partition_id = std::to_string(trans_key->parallel_index);
+        element.exchange_id = trans_key->exchange_id;
+        element.partition_id = trans_key->partition_id;
         element.event_time =
             std::chrono::duration_cast<std::chrono::seconds>(
                 std::chrono::system_clock::now().time_since_epoch()).count();
@@ -125,7 +126,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
     request.set_query_id(initial_query_id);
     request.set_query_unique_id(trans_key->query_unique_id);
     request.set_exchange_id(trans_key->exchange_id);
-    request.set_parallel_id(trans_key->parallel_index);
+    request.set_parallel_id(trans_key->partition_id);
     request.set_wait_timeout_ms(context->getSettingsRef().exchange_wait_accept_max_timeout_ms);
     sendRegisterRPC(stub, cntl, &request, &response, nullptr);
 
@@ -265,6 +266,14 @@ String BrpcRemoteBroadcastReceiver::getName() const
     return name + ":" + trans_key->toString();
 }
 
+static void OnRegisterDone(Protos::RegistryResponse * /*response*/, brpc::Controller * cntl, std::function<void(void)> func)
+{
+    if (!cntl->Failed())
+    {
+        func();
+    }
+}
+
 AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 timeout_ms)
 {
     Stopwatch s;
@@ -298,11 +307,21 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
     res.request->set_query_id(initial_query_id);
     res.request->set_query_unique_id(exchange_key->query_unique_id);
     res.request->set_exchange_id(exchange_key->exchange_id);
-    res.request->set_parallel_id(exchange_key->parallel_index);
+    res.request->set_parallel_id(exchange_key->partition_id);
     res.request->set_wait_timeout_ms(timeout_ms);
-    sendRegisterRPC(stub, cntl, res.request.get(), res.response.get(), brpc::DoNothing());
-    if (enable_receiver_metrics)
-        receiver_metrics.register_time_ms << s.elapsedMilliseconds();
+    std::function<void(void)> func = [&, s_cp = s]() {
+        if (enable_receiver_metrics)
+            receiver_metrics.register_time_ms << s_cp.elapsedMilliseconds();
+    };
+    sendRegisterRPC(
+        stub, cntl, res.request.get(), res.response.get(), brpc::NewCallback(OnRegisterDone, res.response.get(), res.cntl.get(), func));
+    LOG_TRACE(
+        log,
+        "name:{} addr:{} registerToSendersAsync costs {} ms, send rpc costs {} us",
+        getName(),
+        registry_address,
+        s.elapsedMilliseconds(),
+        cntl.latency_us());
     return res;
 }
 
@@ -323,7 +342,7 @@ void BrpcRemoteBroadcastReceiver::sendRegisterRPC(
         auto settings = context->getSettingsRef().dumpToMap();
         disk_request.mutable_settings()->insert(settings.begin(), settings.end());
         disk_request.set_initial_query_start_time(context->getClientInfo().initial_query_start_time_microseconds.value);
-        stub.registerBRPCSenderFromDisk(&cntl, &disk_request, response, nullptr);
+        stub.registerBRPCSenderFromDisk(&cntl, &disk_request, response, done);
     }
     else
         throw Exception(fmt::format("unrecognized mode ", mode), ErrorCodes::LOGICAL_ERROR);

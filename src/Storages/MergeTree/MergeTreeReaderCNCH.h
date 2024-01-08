@@ -45,6 +45,7 @@ public:
         MergeTreeIndexExecutor* index_executor_,
         const ValueSizeMap & avg_value_size_hints_ = {},
         const ReadBufferFromFileBase::ProfileCallback & profile_callback_ = {},
+        const ProgressCallback & internal_progress_cb_ = {},
         clockid_t clock_type_ = CLOCK_MONOTONIC_COARSE);
 
     /// Return the number of rows has been read or zero if there is no columns to read.
@@ -60,14 +61,17 @@ private:
     using FileStreamBuilders = std::map<std::string, std::function<MergeTreeReaderStreamUniquePtr()>>;
 
     void initializeStreams(const ReadBufferFromFileBase::ProfileCallback& profile_callback,
+        const ProgressCallback & internal_progress_cb,
         clockid_t clock_type);
     void initializeStreamForColumnIfNoBurden(const NameAndTypePair& column,
         const ReadBufferFromFileBase::ProfileCallback& profile_callback,
+        const ProgressCallback & internal_progress_cb,
         clockid_t clock_type, FileStreamBuilders* stream_builders);
     void executeFileStreamBuilders(FileStreamBuilders& stream_builders);
     void addStreamsIfNoBurden(const NameAndTypePair& name_and_type,
         const std::function<String(const String&, const ISerialization::SubstreamPath&)>& file_name_getter,
         const ReadBufferFromFileBase::ProfileCallback& profile_callback,
+        const ProgressCallback & internal_progress_cb,
         clockid_t clock_type, FileStreamBuilders* stream_builders);
 
     size_t skipUnnecessaryRows(size_t num_columns, size_t from_mark,

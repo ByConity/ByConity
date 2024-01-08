@@ -24,12 +24,16 @@ namespace DB
 {
 struct ExchangeDataKey
 {
-    explicit ExchangeDataKey(UInt64 query_unique_id_, UInt64 exchange_id_, UInt64 parallel_index_)
-        : query_unique_id(query_unique_id_), exchange_id(exchange_id_), parallel_index(parallel_index_)
+    explicit ExchangeDataKey(
+        UInt64 query_unique_id_, UInt64 exchange_id_, UInt64 partition_id_, UInt64 parallel_index_ = std::numeric_limits<UInt64>::max())
+        : query_unique_id(query_unique_id_), exchange_id(exchange_id_), partition_id(partition_id_), parallel_index(parallel_index_)
     {
     }
     UInt64 query_unique_id;
     UInt64 exchange_id;
+    // id of output partition
+    UInt64 partition_id;
+    // index of this task
     UInt64 parallel_index;
 
     String toString() const
@@ -39,7 +43,8 @@ struct ExchangeDataKey
 
     bool operator==(const ExchangeDataKey & other) const
     {
-        return query_unique_id == other.query_unique_id && exchange_id == other.exchange_id && parallel_index == other.parallel_index;
+        return query_unique_id == other.query_unique_id && exchange_id == other.exchange_id && partition_id == other.partition_id
+            && parallel_index == other.parallel_index;
     }
 
     bool operator<(const ExchangeDataKey & other) const
@@ -48,6 +53,8 @@ struct ExchangeDataKey
             return query_unique_id < other.query_unique_id;
         if (exchange_id != other.exchange_id)
             return exchange_id < other.exchange_id;
+        if (partition_id != other.partition_id)
+            return partition_id < other.partition_id;
         if (parallel_index != other.parallel_index)
             return parallel_index < other.parallel_index;
         return false;
@@ -63,8 +70,9 @@ struct ExchangeDataKeyHashFunc
     {
         size_t h1 = std::hash<UInt64>()(key.query_unique_id);
         size_t h2 = std::hash<UInt64>()(key.exchange_id);
-        size_t h3 = std::hash<UInt64>()(key.parallel_index);
-        return h1 ^ h2 ^ h3;
+        size_t h3 = std::hash<UInt64>()(key.partition_id);
+        size_t h4 = std::hash<UInt64>()(key.parallel_index);
+        return h1 ^ h2 ^ h3 ^ h4;
     }
 };
 
@@ -107,6 +115,7 @@ struct fmt::formatter<DB::ExchangeDataKey>
     template <typename FormatContext>
     auto format(const DB::ExchangeDataKey & key, FormatContext & ctx)
     {
-        return format_to(ctx.out(), "ExchangeDataKey[{}_{}_{}]", key.query_unique_id, key.exchange_id, key.parallel_index);
+        return format_to(
+            ctx.out(), "ExchangeDataKey[{}_{}_{}_{}]", key.query_unique_id, key.exchange_id, key.partition_id, key.parallel_index);
     }
 };

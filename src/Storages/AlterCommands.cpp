@@ -1402,10 +1402,10 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
 
             const auto & column = all_columns.get(column_name);
 
-            if (column.type->isBitmapIndex() && !MergeTreeBitmapIndex::isValidBitmapIndexColumnType(column.type))
-                throw Exception("Unsupported type of bitmap index: " + column.type->getName() + ". Need: Array(String/Int/UInt/Float)", ErrorCodes::BAD_TYPE_OF_FIELD);
+            if (command.data_type && command.data_type->isBitmapIndex() && !MergeTreeBitmapIndex::isValidBitmapIndexColumnType(command.data_type))
+                throw Exception("Unsupported type of bitmap index: " + command.data_type->getName() + ". Need: Array(String/Int/UInt/Float)", ErrorCodes::BAD_TYPE_OF_FIELD);
 
-            // if (column.type->isSegmentBitmapIndex() && !MergeTreeSegmentBitmapIndex::isValidSegmentBitmapIndexColumnType(column.type))
+            // if (command.data_type && command.data_type->isSegmentBitmapIndex() && !MergeTreeSegmentBitmapIndex::isValidSegmentBitmapIndexColumnType(column.type))
             //     throw Exception("Unsupported type of segment bitmap index: " + column.type->getName() + ". Need: [Array | Nullable] String/Int/UInt/Float", ErrorCodes::BAD_TYPE_OF_FIELD);
 
             if (column.type->isMap() && command.data_type && command.data_type->isMapKVStore() != column.type->isMapKVStore())
@@ -1497,6 +1497,10 @@ void AlterCommands::validate(const StorageInMemoryMetadata & metadata, ContextPt
             if (modified_columns.count(column_name))
                 throw Exception{"Cannot rename and modify the same column " + backQuote(column_name) + " in a single ALTER query",
                                 ErrorCodes::NOT_IMPLEMENTED};
+
+            const auto & column = all_columns.get(command.column_name);
+            if (column.type->isBitmapIndex())
+                throw Exception{"Cannot rename column with bitmap index, please drop the index first", ErrorCodes::BAD_ARGUMENTS};
 
             String from_nested_table_name = Nested::extractTableName(command.column_name);
             String to_nested_table_name = Nested::extractTableName(command.rename_to);

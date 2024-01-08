@@ -1,3 +1,4 @@
+#include "Common/Priority.h"
 #include <Common/config.h>
 
 #if USE_AWS_S3
@@ -9,7 +10,7 @@
 #    include <DataStreams/PartitionedBlockOutputStream.h>
 #    include <DataStreams/UnionBlockInputStream.h>
 #    include <IO/ReadBufferFromS3.h>
-#    include <IO/RAReadBufferFromS3.h>
+#    include <Disks/IO/AsynchronousBoundedReadBuffer.h>
 #    include <IO/WriteBufferFromByteS3.h>
 #    include "Interpreters/Context.h"
 #    include <IO/WriteBufferFromS3.h>
@@ -31,9 +32,31 @@ namespace DB
 
 std::unique_ptr<ReadBuffer> StorageCloudS3::FileBufferClient::createReadBuffer(const DB::String & key)
 {
-    if (config.use_read_ahead)
-        return std::make_unique<RAReadBufferFromS3>(config.client, config.uri.bucket, key, config.rw_settings.max_single_read_retries);
-    return std::make_unique<ReadBufferFromS3>(config.client, config.uri.bucket, key, ReadSettings{}, config.rw_settings.max_single_read_retries);
+    const ReadSettings & read_settings = context->getReadSettings();
+    if (read_settings.remote_fs_prefetch)
+    {
+        auto impl = std::make_unique<ReadBufferFromS3>(config.client, config.uri.bucket, key,
+            read_settings, config.rw_settings.max_single_read_retries, false, /* use_external_buffer */true);
+
+        auto global_context = Context::getGlobalContextInstance();
+        auto reader = global_context->getThreadPoolReader();
+        // Create a read buffer that will prefetch the first ~1 MB of the file.
+        // When reading lots of tiny files, this prefetching almost doubles the throughput.
+        // For bigger files, parallel reading is more useful.
+        auto async_buffer = std::make_unique<AsynchronousBoundedReadBuffer>(
+            std::move(impl), *reader, read_settings);
+
+        async_buffer->setReadUntilEnd();
+        if (read_settings.remote_fs_prefetch)
+            async_buffer->prefetch(Priority{});
+
+        return async_buffer;
+    }
+    else
+    {
+        return std::make_unique<ReadBufferFromS3>(config.client, config.uri.bucket, key,
+            read_settings, config.rw_settings.max_single_read_retries, false);
+    }
 }
 
 std::unique_ptr<WriteBuffer> StorageCloudS3::FileBufferClient::createWriteBuffer(const DB::String & key)

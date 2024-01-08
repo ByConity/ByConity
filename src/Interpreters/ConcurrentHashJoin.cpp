@@ -14,10 +14,10 @@
 #include <Parsers/ExpressionListParsers.h>
 #include <Parsers/IAST_fwd.h>
 #include <Parsers/parseQuery.h>
+#include <QueryPlan/PlanSerDerHelper.h>
 #include <Common/Exception.h>
 #include <Common/WeakHash.h>
 #include <Common/typeid_cast.h>
-#include <QueryPlan/PlanSerDerHelper.h>
 
 namespace DB
 {
@@ -35,10 +35,9 @@ static UInt32 toPowerOfTwo(UInt32 x)
     return static_cast<UInt32>(1) << (32 - std::countl_zero(x - 1));
 }
 
-ConcurrentHashJoin::ConcurrentHashJoin(std::shared_ptr<TableJoin> table_join_, size_t slots_, const Block & right_sample_block_, bool any_take_last_row_)
-    : table_join(table_join_)
-    , slots(toPowerOfTwo(std::min<size_t>(slots_, 256)))
-    , right_sample_block(right_sample_block_)
+ConcurrentHashJoin::ConcurrentHashJoin(
+    std::shared_ptr<TableJoin> table_join_, size_t slots_, const Block & right_sample_block_, bool any_take_last_row_)
+    : table_join(table_join_), slots(toPowerOfTwo(std::min<size_t>(slots_, 256))), right_sample_block(right_sample_block_)
 {
     for (size_t i = 0; i < slots; ++i)
     {
@@ -157,15 +156,15 @@ bool ConcurrentHashJoin::alwaysReturnsEmptySet() const
 }
 
 
-BlockInputStreamPtr ConcurrentHashJoin::createStreamWithNonJoinedRows(const Block & , UInt64 ) const
+BlockInputStreamPtr ConcurrentHashJoin::createStreamWithNonJoinedRows(const Block &, UInt64) const
 {
-    if (table_join->strictness() == ASTTableJoin::Strictness::Asof ||
-        table_join->strictness() == ASTTableJoin::Strictness::Semi ||
-        !isRightOrFull(table_join->kind()))
+    if (table_join->strictness() == ASTTableJoin::Strictness::Asof || table_join->strictness() == ASTTableJoin::Strictness::Semi
+        || !isRightOrFull(table_join->kind()))
         return {};
 
     // todo: What if we referring to createStreamWithNonJoinedRows of hash join and constructing NonJoinedBlockInputStream here?
-    throw Exception(ErrorCodes::LOGICAL_ERROR, "Invalid join type. join kind: {}, strictness: {}", table_join->kind(), table_join->strictness());
+    throw Exception(
+        ErrorCodes::LOGICAL_ERROR, "Invalid join type. join kind: {}, strictness: {}", table_join->kind(), table_join->strictness());
 }
 
 static ALWAYS_INLINE IColumn::Selector hashToSelector(const WeakHash32 & hash, size_t num_shards)
@@ -232,14 +231,14 @@ void ConcurrentHashJoin::tryBuildRuntimeFilters(size_t total_rows) const
     {
         // need bypass
         hash_joins.front()->data->bypassRuntimeFilters(BypassType::BYPASS_EMPTY_HT);
-        return ;
+        return;
     }
 
     if (total_rows > table_join->getInBuildThreshold() && total_rows > table_join->getBloomBuildThreshold())
     {
         // need bypass
         hash_joins.front()->data->bypassRuntimeFilters(BypassType::BYPASS_LARGE_HT);
-        return ;
+        return;
     }
 
     table_join->fixRFParallel(hash_joins.size());

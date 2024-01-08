@@ -136,7 +136,7 @@ public:
     virtual Status Append(const Slice & data) = 0;
     virtual Status Close() = 0;
     virtual Status Flush() = 0;
-    virtual Status Sync() = 0;
+    virtual Status Sync(bool need_fsync = true) = 0;
 
     void calculateHash(const char * p, size_t n) { hashing_file.calculateHash(const_cast<char *>(p), n); }
 

@@ -214,6 +214,7 @@ nuraft::ptr<nuraft::buffer> getBuffer(int64_t number)
 
 TEST_P(CoordinationTest, TestSummingRaft1)
 {
+    GTEST_SKIP() << "ByConity doesn't rely on keeper any more";
     ChangelogDirTest test("./logs");
     SummingRaftServer s1(1, "localhost", 44444, "./logs", "./state");
     SCOPE_EXIT(

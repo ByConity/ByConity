@@ -21,8 +21,10 @@
 
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeCustom.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Parsers/parseQuery.h>
 #include <Parsers/ParserCreateQuery.h>
+#include <Parsers/ASTDataType.h>
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTLiteral.h>
@@ -63,6 +65,20 @@ DataTypePtr DataTypeFactory::get(const String & full_name, UInt8 flags) const
 
 DataTypePtr DataTypeFactory::get(const ASTPtr & ast, UInt8 flags) const
 {
+    if (const auto * dt = ast->as<ASTDataType>())
+    {
+        /// Instead of calling makeNullable over the nested type directly, we convert ASTDataType
+        /// back to ASTFunction(Nullable) to extract data type, because the process of type extraction
+        /// contains side effect which registers data type as a member of used_data_type_families.
+        if (dt->getNullable())
+        {
+            auto params = std::make_shared<ASTExpressionList>();
+            params->children.push_back(dt->getNestedType());
+            return get("Nullable", params, flags);
+        }
+        return get(dt->getNestedType(), flags);
+    }
+
     if (const auto * func = ast->as<ASTFunction>())
     {
         if (func->parameters)

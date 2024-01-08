@@ -9,6 +9,8 @@
 #include <Databases/MySQL/DatabaseCnchMaterializedMySQL.h>
 #include <CloudServices/ICnchBGThread.h>
 #include <CloudServices/CnchWorkerClientPools.h>
+#include <Interpreters/VirtualWarehouseHandle.h>
+#include <Interpreters/VirtualWarehousePool.h>
 
 namespace DB
 {
@@ -97,7 +99,7 @@ private:
     NameSet sync_failed_tables;
     NameSet skipped_unsupported_tables;
 
-    CnchWorkerClientPoolPtr worker_pool;
+    VirtualWarehouseHandle vw_handle;
 
     /// Sync info
     std::atomic<MaterializedMySQLSyncType> sync_type{MaterializedMySQLSyncType::PreparingSync};

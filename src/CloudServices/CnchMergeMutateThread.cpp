@@ -150,9 +150,6 @@ ManipulationTaskRecord::~ManipulationTaskRecord()
             parent.currently_synchronous_tasks.erase(task_id);
             parent.currently_synchronous_tasks_cv.notify_all();
         }
-
-        if (transaction)
-            parent.getContext()->getCnchTransactionCoordinator().finishTransaction(transaction);
     }
     catch (...)
     {
@@ -882,9 +879,7 @@ String CnchMergeMutateThread::submitFutureManipulationTask(
     */
 
     /// get specific version storage
-    /// TODO: FIXME @yuanquan
-    /// auto istorage = catalog->getTableByUUID(*local_context, toString(storage_id.uuid), future_task.calcColumnsCommitTime());
-    auto istorage = catalog->getTableByUUID(*local_context, toString(storage_id.uuid), TxnTimestamp::maxTS());
+    auto istorage = catalog->getTableByUUID(*local_context, toString(storage_id.uuid), future_task.calcColumnsCommitTime());
     auto & cnch_table = checkAndGetCnchTable(istorage);
 
     /// fill task parameters
@@ -1610,10 +1605,7 @@ void CnchMergeMutateThread::triggerPartMutate(StoragePtr storage)
     {
         std::lock_guard pool_lock(worker_pool_mutex);
         vw_name = cnch->getSettings()->cnch_vw_write;
-        /// pick_worker_algo = storage_settings->cnch_merge_pick_worker_algo;
         vw_handle = getContext()->getVirtualWarehousePool().get(vw_name);
-        if (!vw_handle)
-            return;
     }
 
     tryMutateParts(storage, *cnch);

@@ -24,6 +24,7 @@
 #include <Parsers/IParserBase.h>
 #include <Parsers/ExpressionElementParsers.h>
 #include <Parsers/ExpressionListParsers.h>
+#include <Parsers/ASTDataType.h>
 #include <Parsers/ASTNameTypePair.h>
 #include <Parsers/ASTColumnDeclaration.h>
 #include <Parsers/ASTIdentifier.h>
@@ -38,11 +39,13 @@ namespace DB
 
 /** A nested table. For example, Nested(UInt32 CounterID, FixedString(2) UserAgentMajor)
   */
-class ParserNestedTable : public IParserBase
+class ParserNestedTable : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "nested table"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 
@@ -61,11 +64,13 @@ public:
 };
 
 template <typename NameParser>
-class IParserNameTypePair : public IParserBase
+class IParserNameTypePair : public IParserDialectBase
 {
 protected:
     const char * getName() const  override{ return "name and type pair"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /** The name and type are separated by a space. For example, URL String. */
@@ -75,7 +80,7 @@ template <typename NameParser>
 bool IParserNameTypePair<NameParser>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     NameParser name_parser;
-    ParserDataType type_parser;
+    ParserDataType type_parser(dt, false);
 
     ASTPtr name, type;
     if (name_parser.parse(pos, name, expected)
@@ -93,11 +98,13 @@ bool IParserNameTypePair<NameParser>::parseImpl(Pos & pos, ASTPtr & node, Expect
 }
 
 /** List of columns. */
-class ParserNameTypePairList : public IParserBase
+class ParserNameTypePairList : public IParserDialectBase
 {
 protected:
     const char * getName() const override { return "name and type pair list"; }
     bool parseImpl(Pos & pos, ASTPtr & node, Expected & expected) override;
+public:
+    using IParserDialectBase::IParserDialectBase;
 };
 
 /** List of table names. */
@@ -142,7 +149,7 @@ template <typename NameParser>
 bool IParserColumnDeclaration<NameParser>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 {
     NameParser name_parser;
-    ParserDataType type_parser;
+    ParserDataType type_parser(dt);
     ParserKeyword s_default{"DEFAULT"};
     ParserKeyword s_null{"NULL"};
     ParserKeyword s_not{"NOT"};
