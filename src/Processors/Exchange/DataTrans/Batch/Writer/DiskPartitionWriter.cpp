@@ -10,6 +10,7 @@
 #include <Processors/Exchange/DataTrans/IBroadcastSender.h>
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
+#include <Common/time.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <common/scope_guard.h>
@@ -38,10 +39,11 @@ DiskPartitionWriter::DiskPartitionWriter(ContextPtr context_, DiskExchangeDataMa
     , key(std::move(key_))
     , log(&Poco::Logger::get("DiskPartitionWriter"))
     , data_queue(std::make_shared<BoundedDataQueue<Chunk>>(context->getSettingsRef().exchange_remote_receiver_queue_size))
-    , timeout(context->getSettingsRef().exchange_timeout_ms)
     , low_cardinality_allow_in_native_format(context->getSettings().low_cardinality_allow_in_native_format)
     , enable_disk_writer_metrics(context->getSettingsRef().log_query_exchange)
 {
+    auto query_expiration_ts = context->getQueryExpirationTimeStamp();
+    query_expiration_ms = query_expiration_ts.tv_sec * 1000 + query_expiration_ts.tv_nsec / 1000000;
     LOG_TRACE(log, "constructed for key:{}", *key);
 }
 
@@ -88,6 +90,8 @@ DiskPartitionWriter::~DiskPartitionWriter()
 
 BroadcastStatus DiskPartitionWriter::sendImpl(Chunk chunk)
 {
+    auto now = time_in_milliseconds(std::chrono::system_clock::now());
+    size_t timeout = now <= query_expiration_ms ? query_expiration_ms - now : 0;
     bool succ = data_queue->tryPush(std::move(chunk), timeout);
     if (!succ)
         return finish(BroadcastStatusCode::SEND_TIMEOUT, "send data timeout");
@@ -114,11 +118,11 @@ BroadcastStatus DiskPartitionWriter::finish(BroadcastStatusCode status_code, Str
             data_queue->close();
             buf = nullptr; /// this operation should close the file
         });
-        std::cout << "status_code:" << status_code << std::endl;
         if (status_code == BroadcastStatusCode::ALL_SENDERS_DONE)
         {
-            std::cout << "status_code:" << status_code << std::endl;
             std::unique_lock<bthread::Mutex> lock(done_mutex);
+            auto now = time_in_milliseconds(std::chrono::system_clock::now());
+            size_t timeout = now <= query_expiration_ms ? query_expiration_ms - now : 0;
             if (!done_cv.wait_for(lock, std::chrono::milliseconds(timeout), [&]() { return done || data_queue->closed(); }))
             {
                 sender_metrics.finish_code.store(BroadcastStatusCode::SEND_TIMEOUT, std::memory_order_release);

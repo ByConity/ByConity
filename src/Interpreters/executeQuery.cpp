@@ -1217,6 +1217,8 @@ static std::tuple<ASTPtr, BlockIO> executeQueryImpl(
                     {
                         QueryPipeline pipeline;
                         pipeline.readFromQueryCache(reader.getSource(), reader.getSourceTotals(), reader.getSourceExtremes());
+                        for (const auto & processor : res.pipeline.getProcessors())
+                            processor->cancel();
                         res.pipeline = std::move(pipeline);
                         read_result_from_query_cache = true;
                     }

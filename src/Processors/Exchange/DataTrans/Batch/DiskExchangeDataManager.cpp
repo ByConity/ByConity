@@ -44,6 +44,7 @@
 #include <Processors/Executors/PipelineExecutor.h>
 #include <Processors/IProcessor.h>
 #include <Processors/Pipe.h>
+#include <Protos/plan_segment_manager.pb.h>
 #include <Protos/registry.pb.h>
 #include <QueryPlan/QueryPlan.h>
 #include <ServiceDiscovery/IServiceDiscovery.h>
@@ -158,35 +159,41 @@ DiskExchangeDataManager::~DiskExchangeDataManager()
         shutdown();
 }
 
-void DiskExchangeDataManager::submitReadTask(const String & query_id, const ExchangeDataKeyPtr & key, Processors processors)
+void DiskExchangeDataManager::submitReadTask(
+    const String & query_id, const ExchangeDataKeyPtr & key, Processors processors, const String & addr)
 {
     ReadTaskPtr task;
     {
         std::unique_lock<bthread::Mutex> lock(mutex);
         auto & value = read_tasks[key];
         if (value)
-            throw Exception(
-                fmt::format("Submit read exchange data task failed duplicate key:{}", *key), ErrorCodes::EXCHANGE_DATA_TRANS_EXCEPTION);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, fmt::format("Submit read exchange data task failed duplicate key:{}", *key));
         value = std::make_shared<ReadTask>(query_id, key, std::move(processors));
         task = value;
     }
 
     try
     {
-        ThreadFromGlobalPool thread([&, task_cp = task]() mutable {
+        ThreadFromGlobalPool thread([&, task_cp = task, addr_cp = addr]() mutable {
             BroadcastStatusCode code = BroadcastStatusCode::ALL_SENDERS_DONE;
             auto msg = fmt::format("finish senders for query:{} key:{}", task_cp->query_id, *task_cp->key);
             try
             {
                 LOG_TRACE(logger, "query:{} key:{} read task starts execution", task_cp->query_id, *task_cp->key);
-                task_cp->executor->execute(2); // TODO thread number @lianxuechao
+                task_cp->executor->execute(2);
                 LOG_TRACE(logger, "query:{} key:{} read task execution done", task_cp->query_id, *task_cp->key);
             }
             catch (...)
             {
                 code = BroadcastStatusCode::SEND_UNKNOWN_ERROR;
-                msg = fmt::format("query:{} key:{} read task execution exception", task_cp->query_id, *task_cp->key);
+                msg = fmt::format(
+                    "query:{} key:{} read task execution exception {}",
+                    task_cp->query_id,
+                    *task_cp->key,
+                    getCurrentExceptionMessage(false));
                 tryLogCurrentException(logger, msg);
+                if (!addr_cp.empty())
+                    reportError(query_id, addr, code, msg);
             }
 
             finishSenders(task_cp, code, msg);
@@ -577,6 +584,28 @@ void DiskExchangeDataManager::finishSenders(const ReadTaskPtr & task, BroadcastS
                 sender->finish(code, message);
             }
         }
+    }
+}
+
+void DiskExchangeDataManager::reportError(const String & query_id, const String & coordinator_addr, Int32 code, const String & message)
+{
+    try
+    {
+        std::shared_ptr<RpcClient> rpc_client
+            = RpcChannelPool::getInstance().getClient(coordinator_addr, BrpcChannelPoolOptions::DEFAULT_CONFIG_KEY, true);
+        brpc::Controller cntl;
+        Protos::ReportPlanSegmentErrorRequest request;
+        Protos::ReportPlanSegmentErrorResponse response;
+        Protos::PlanSegmentManagerService_Stub stub(&rpc_client->getChannel());
+        request.set_code(code);
+        request.set_message(message);
+        request.set_query_id(query_id);
+        stub.reportPlanSegmentError(&cntl, &request, &response, nullptr);
+        rpc_client->assertController(cntl);
+    }
+    catch (...)
+    {
+        tryLogCurrentException(logger, __PRETTY_FUNCTION__);
     }
 }
 

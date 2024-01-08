@@ -51,7 +51,8 @@ BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
     const String & name_,
     MultiPathQueuePtr queue_,
     BrpcExchangeReceiverRegistryService::RegisterMode mode_,
-    std::shared_ptr<QueryExchangeLog> query_exchange_log_)
+    std::shared_ptr<QueryExchangeLog> query_exchange_log_,
+    String coordinator_address_)
     : IBroadcastReceiver(context_->getSettingsRef().log_query_exchange)
     , name(name_)
     , trans_key(std::move(trans_key_))
@@ -63,6 +64,7 @@ BrpcRemoteBroadcastReceiver::BrpcRemoteBroadcastReceiver(
     , initial_query_id(context->getInitialQueryId())
     , mode(mode_)
     , query_exchange_log(std::move(query_exchange_log_))
+    , coordinator_address(std::move(coordinator_address_))
 {
 }
 
@@ -123,6 +125,7 @@ void BrpcRemoteBroadcastReceiver::registerToSenders(UInt32 timeout_ms)
     Protos::RegistryRequest request;
     Protos::RegistryResponse response;
 
+    request.set_coordinator_address(coordinator_address);
     request.set_query_id(initial_query_id);
     request.set_query_unique_id(trans_key->query_unique_id);
     request.set_exchange_id(trans_key->exchange_id);
@@ -249,8 +252,27 @@ BroadcastStatus BrpcRemoteBroadcastReceiver::finish(BroadcastStatusCode status_c
         brpc::StreamFinish(stream_id, actual_status_code, new_fin_code, new_fin_code > 0);
         receiver_metrics.finish_code = new_fin_code;
         receiver_metrics.is_modifier = 1;
-        receiver_metrics.message = message;
-        return BroadcastStatus(static_cast<BroadcastStatusCode>(new_fin_code), true, message);
+        receiver_metrics.message = std::move(message);
+        if (new_fin_code > BroadcastStatusCode::RUNNING && new_fin_code != BroadcastStatusCode::RECV_CANCELLED
+            && new_fin_code != BroadcastStatusCode::RECV_REACH_LIMIT)
+        {
+            LOG_ERROR(
+                log,
+                "Broadcast {} finished and changed to {} with err:'{}'",
+                getName(),
+                static_cast<BroadcastStatusCode>(new_fin_code),
+                receiver_metrics.message);
+        }
+        else
+        {
+            LOG_TRACE(
+                log,
+                "Broadcast {} finished and changed to {} successfully. message:'{}'",
+                getName(),
+                static_cast<BroadcastStatusCode>(new_fin_code),
+                receiver_metrics.message);
+        }
+        return BroadcastStatus(static_cast<BroadcastStatusCode>(new_fin_code), true, receiver_metrics.message);
     }
     else
     {
@@ -304,6 +326,7 @@ AsyncRegisterResult BrpcRemoteBroadcastReceiver::registerToSendersAsync(UInt32 t
 
     auto exchange_key = std::dynamic_pointer_cast<ExchangeDataKey>(trans_key);
 
+    res.request->set_coordinator_address(coordinator_address);
     res.request->set_query_id(initial_query_id);
     res.request->set_query_unique_id(exchange_key->query_unique_id);
     res.request->set_exchange_id(exchange_key->exchange_id);

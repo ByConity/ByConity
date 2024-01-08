@@ -30,6 +30,7 @@
 #include <Poco/Logger.h>
 
 #include <atomic>
+#include <optional>
 #include <vector>
 
 namespace DB
@@ -46,7 +47,8 @@ public:
         const String & name_,
         MultiPathQueuePtr queue_,
         BrpcExchangeReceiverRegistryService::RegisterMode mode_ = BrpcExchangeReceiverRegistryService::RegisterMode::BRPC,
-        std::shared_ptr<QueryExchangeLog> query_exchange_log_ = nullptr);
+        std::shared_ptr<QueryExchangeLog> query_exchange_log_ = nullptr,
+        String coordinator_address_ = "");
 
     ~BrpcRemoteBroadcastReceiver() override;
 
@@ -94,6 +96,7 @@ private:
     String initial_query_id;
     BrpcExchangeReceiverRegistryService::RegisterMode mode;
     std::shared_ptr<QueryExchangeLog> query_exchange_log;
+    String coordinator_address;
 
     void sendRegisterRPC(
         Protos::RegistryService_Stub & stub,

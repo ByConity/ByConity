@@ -153,7 +153,7 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
         runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
         runtime_segment_status.parallel_index = plan_segment->getParallelIndex();
         runtime_segment_status.is_succeed = true;
-        runtime_segment_status.is_canceled = false;
+        runtime_segment_status.is_cancelled = false;
         runtime_segment_status.code = 0;
         runtime_segment_status.message = "execute success";
 
@@ -175,7 +175,7 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
         runtime_segment_status.segment_id = plan_segment->getPlanSegmentId();
         runtime_segment_status.parallel_index = plan_segment->getParallelIndex();
         runtime_segment_status.is_succeed = false;
-        runtime_segment_status.is_canceled = false;
+        runtime_segment_status.is_cancelled = false;
         runtime_segment_status.code = exception_code;
         runtime_segment_status.message = "Worker host:" + host + ", exception:" + exception_message;
         if (exception_code == ErrorCodes::MEMORY_LIMIT_EXCEEDED)
@@ -200,7 +200,7 @@ RuntimeSegmentsStatus PlanSegmentExecutor::execute(ThreadGroupStatusPtr thread_g
                     exception_code));
         }
         if (exception_code == ErrorCodes::QUERY_WAS_CANCELLED)
-            runtime_segment_status.is_canceled = true;
+            runtime_segment_status.is_cancelled = true;
         sendSegmentStatus(runtime_segment_status);
         return runtime_segment_status;
     }
@@ -860,7 +860,7 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
         request.set_segment_id(status.segment_id);
         request.set_parallel_index(status.parallel_index);
         request.set_is_succeed(status.is_succeed);
-        request.set_is_canceled(status.is_canceled);
+        request.set_is_canceled(status.is_cancelled);
         status.metrics.setProtos(*request.mutable_metrics());
         request.set_code(status.code);
         request.set_message(status.message);
@@ -892,7 +892,15 @@ void PlanSegmentExecutor::sendSegmentStatus(const RuntimeSegmentsStatus & status
 
         manager.sendPlanSegmentStatus(&cntl, &request, &response, nullptr);
         rpc_client->assertController(cntl);
-        LOG_TRACE(logger, "PlanSegment-{} send status to coordinator successfully, query id-{} status.cpu_micros-{}.", request.segment_id(), request.query_id(), status.metrics.cpu_micros);
+        LOG_TRACE(
+            logger,
+            "PlanSegment-{} send status to coordinator successfully, query id-{} cpu_micros-{} is_succeed:{} is_cancelled:{} code:{}",
+            request.segment_id(),
+            request.query_id(),
+            status.metrics.cpu_micros,
+            status.is_succeed,
+            status.is_cancelled,
+            status.code);
     }
     catch (...)
     {

@@ -278,7 +278,7 @@ void SegmentScheduler::updateQueryStatus(const RuntimeSegmentsStatus & segment_s
         segment_status.query_id,
         segment_status.segment_id,
         segment_status.is_succeed,
-        segment_status.is_canceled,
+        segment_status.is_cancelled,
         segment_status.metrics.cpu_micros);
     std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
     auto query_iter = query_status_map.find(segment_status.query_id);
@@ -288,7 +288,7 @@ void SegmentScheduler::updateQueryStatus(const RuntimeSegmentsStatus & segment_s
         status->query_id = segment_status.query_id;
         status->segment_id = segment_status.segment_id;
         status->is_succeed = segment_status.is_succeed;
-        status->is_canceled = segment_status.is_canceled;
+        status->is_cancelled = segment_status.is_cancelled;
         status->metrics.cpu_micros = segment_status.metrics.cpu_micros;
         query_status_map[segment_status.query_id] = status;
     }
@@ -296,7 +296,7 @@ void SegmentScheduler::updateQueryStatus(const RuntimeSegmentsStatus & segment_s
     {
         RuntimeSegmentsStatusPtr status = query_status_map[segment_status.query_id];
         status->is_succeed &= segment_status.is_succeed;
-        status->is_canceled |= segment_status.is_canceled;
+        status->is_cancelled |= segment_status.is_cancelled;
         status->metrics.cpu_micros += segment_status.metrics.cpu_micros;
     }
 }
@@ -309,7 +309,7 @@ void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment
         segment_status.query_id,
         segment_status.segment_id,
         segment_status.is_succeed,
-        segment_status.is_canceled,
+        segment_status.is_cancelled,
         segment_status.metrics.cpu_micros);
     std::unique_lock<bthread::Mutex> lock(segment_status_mutex);
     auto query_iter = segment_status_map.find(segment_status.query_id);
@@ -324,7 +324,7 @@ void SegmentScheduler::updateSegmentStatus(const RuntimeSegmentsStatus & segment
     status->query_id = segment_status.query_id;
     status->segment_id = segment_status.segment_id;
     status->is_succeed = segment_status.is_succeed;
-    status->is_canceled = segment_status.is_canceled;
+    status->is_cancelled = segment_status.is_cancelled;
     status->metrics.cpu_micros += segment_status.metrics.cpu_micros;
     status->message = segment_status.message;
     status->code = segment_status.code;
@@ -447,7 +447,7 @@ void SegmentScheduler::onSegmentFinished(const RuntimeSegmentsStatus & status)
     std::unique_lock<bthread::Mutex> lock(bsp_scheduler_map_mutex);
     if (auto bsp_scheduler_map_iterator = bsp_scheduler_map.find(status.query_id); bsp_scheduler_map_iterator != bsp_scheduler_map.end())
     {
-        bsp_scheduler_map_iterator->second->onSegmentFinished(status.segment_id, status.is_succeed, status.is_canceled);
+        bsp_scheduler_map_iterator->second->onSegmentFinished(status.segment_id, status.is_succeed, status.is_cancelled);
     }
 }
 
