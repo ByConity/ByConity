@@ -38,10 +38,10 @@ namespace ErrorCodes {
 
 S3TrivialReader::S3TrivialReader(const std::shared_ptr<Aws::S3::S3Client>& client,
     const String& bucket, const String& key):
-        client_(client), bucket_(bucket), key_(key), current_offset_(0), all_data_read(false) {}
+        client_(client), bucket_(bucket), key_(key), current_offset_(0), completed_(false) {}
 
 uint64_t S3TrivialReader::read(char* buffer, uint64_t size) {
-    if (size == 0 || all_data_read) {
+    if (size == 0 || completed_) {
         return 0;
     }
 
@@ -64,6 +64,7 @@ uint64_t S3TrivialReader::readFragment(char* buffer, uint64_t offset, uint64_t s
     req.SetRange(range);
 
     std::optional<Aws::S3::Model::GetObjectResult> result;
+    bool all_data_read = false;
     SCOPE_EXIT_SAFE({ S3::resetSessionIfNeeded(all_data_read, result); });
 
     Aws::S3::Model::GetObjectOutcome outcome = client_->GetObject(req);
@@ -86,8 +87,11 @@ uint64_t S3TrivialReader::readFragment(char* buffer, uint64_t offset, uint64_t s
             throw Exception("Unexpected state of istream", ErrorCodes::S3_ERROR);
         }
         if (stream.eof()) {
-            all_data_read = true;
+            completed_ = true;
         }
+        /// Read remaining bytes after the end of the payload for chunked encoding
+        stream.ignore(INT64_MAX);
+        all_data_read = true;
         return last_read_count;
     } else {
         if (outcome.GetError().GetResponseCode() == Aws::Http::HttpResponseCode::REQUESTED_RANGE_NOT_SATISFIABLE) {
@@ -98,8 +102,8 @@ uint64_t S3TrivialReader::readFragment(char* buffer, uint64_t offset, uint64_t s
 }
 
 uint64_t S3TrivialReader::seek(uint64_t offset) {
-    if (all_data_read && offset < current_offset_) {
-        all_data_read = false;
+    if (completed_ && offset < current_offset_) {
+        completed_ = false;
     }
     current_offset_ = offset;
     return offset;
