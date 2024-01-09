@@ -37,8 +37,9 @@ void PlanCacheManager::initialize(UInt64 max_size, std::chrono::seconds expire_t
     cache = std::make_unique<CacheType>(max_size, the_time);
 }
 
-UInt128 PlanCacheManager::hash(const ASTPtr & query_ast, const Settings & settings)
+UInt128 PlanCacheManager::hash(const ASTPtr & query_ast, ContextMutablePtr & context)
 {
+    const auto & settings = context->getSettingsRef();
     String query;
     WriteBufferFromString query_buffer(query);
     serializeAST(query_ast, query_buffer);
@@ -51,6 +52,10 @@ UInt128 PlanCacheManager::hash(const ASTPtr & query_ast, const Settings & settin
     SipHash hash;
     hash.update(query.data(), query.size());
     hash.update(settings_string.data(), settings_string.size());
+
+    String current_database = context->getCurrentDatabase();
+    hash.update(current_database.data(), current_database.size());
+
     hash.get128(key);
 
     return key;
