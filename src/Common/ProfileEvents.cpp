@@ -985,7 +985,12 @@
     M(GinIndexCacheHit, "Cache hit of gin index") \
     M(GinIndexCacheMiss, "Cache miss of gin index") \
     M(PostingReadBytes, "Readed postings list size in bytes") \
-
+\
+    M(QueryRewriterTime, "Total elapsed time spent on QueryRewriter in milliseconds") \
+    M(QueryAnalyzerTime, "Total elapsed time spent on QueryAnalyzer in milliseconds") \
+    M(QueryPlannerTime, "Total elapsed time spent on QueryPlanner in milliseconds") \
+    M(QueryOptimizerTime, "Total elapsed time spent on QueryOptimizer in milliseconds") \
+    M(PlanSegmentSplitterTime, "Total elapsed time spent on PlanSegmentSplitter in milliseconds")
 
 namespace ProfileEvents
 {
