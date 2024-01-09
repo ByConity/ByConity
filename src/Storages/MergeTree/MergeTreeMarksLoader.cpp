@@ -144,8 +144,8 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
         LOG_TRACE(
             &Poco::Logger::get(__func__),
             "Current node host vs disk cache host: {} vs {}",
-            getHostFromHostPort(part_host.assign_compute_host_port),
-            getHostFromHostPort(part_host.disk_cache_host_port));
+            parseAddress(part_host.assign_compute_host_port).first,
+            parseAddress(part_host.disk_cache_host_port).first);
         auto buffer = [&, this]() -> std::unique_ptr<ReadBufferFromFileBase> {
             if (disk_cache)
             {
@@ -171,7 +171,7 @@ MarkCache::MappedPtr MergeTreeMarksLoader::loadMarksImpl()
                     }
                     else if (
                         (!part_host.disk_cache_host_port.empty()
-                         && getHostFromHostPort(part_host.assign_compute_host_port) != getHostFromHostPort(part_host.disk_cache_host_port)
+                         && parseAddress(part_host.assign_compute_host_port).first != parseAddress(part_host.disk_cache_host_port).first
                          && (settings.remote_disk_cache_stealing == StealingCacheMode::READ_WRITE
                              || settings.remote_disk_cache_stealing == StealingCacheMode::READ_ONLY))
                         || settings.read_settings.disk_cache_mode == DiskCacheMode::FORCE_STEAL_DISK_CACHE)

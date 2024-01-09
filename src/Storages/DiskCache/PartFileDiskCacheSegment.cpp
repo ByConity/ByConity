@@ -181,7 +181,7 @@ void PartFileDiskCacheSegment::cacheToDisk(IDiskCache & disk_cache, bool throw_e
             || ((merge_tree_reader_settings.remote_disk_cache_stealing == StealingCacheMode::READ_WRITE
                  || merge_tree_reader_settings.remote_disk_cache_stealing == StealingCacheMode::WRITE_ONLY)
                 && !data_part->disk_cache_host_port.empty()
-                && getHostFromHostPort(data_part->assign_compute_host_port) != getHostFromHostPort(data_part->disk_cache_host_port)))
+                && parseAddress(data_part->assign_compute_host_port).first != parseAddress(data_part->disk_cache_host_port).first))
         {
             std::vector<WriteFile> files{
                 {getMarkName(), data_path, static_cast<UInt64>(mrk_file_pos.file_offset), mrk_file_pos.file_size},

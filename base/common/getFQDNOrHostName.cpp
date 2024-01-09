@@ -67,14 +67,3 @@ const std::string & getIPOrFQDNOrHostName()
     return result;
 }
 
-std::string getHostFromHostPort(const std::string & host_port)
-{
-    if (host_port.starts_with("["))
-    {
-        auto pos = host_port.find(']');
-        return host_port.substr(1, pos);
-    }
-
-    auto pos = host_port.find(':');
-    return host_port.substr(0, pos);
-}

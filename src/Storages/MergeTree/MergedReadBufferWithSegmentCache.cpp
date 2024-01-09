@@ -331,12 +331,12 @@ bool MergedReadBufferWithSegmentCache::seekToMarkInSegmentCache(size_t segment_i
         return seekToMarkInRemoteSegmentCache(segment_idx, mark_pos, segment_key);
 
     std::pair<DiskPtr, String> cache_entry = segment_cache->get(segment_key);
-    LOG_TRACE(&Poco::Logger::get(__func__), "Current node host vs disk cache host: {} vs {}", getHostFromHostPort(part_host.assign_compute_host_port), getHostFromHostPort(part_host.disk_cache_host_port));
+    LOG_TRACE(&Poco::Logger::get(__func__), "Current node host vs disk cache host: {} vs {}", parseAddress(part_host.assign_compute_host_port).first, parseAddress(part_host.disk_cache_host_port).first);
     if (cache_entry.first == nullptr)
     {
         if ((settings.remote_disk_cache_stealing == StealingCacheMode::READ_WRITE
              || settings.remote_disk_cache_stealing == StealingCacheMode::READ_ONLY)
-            && !part_host.disk_cache_host_port.empty() && getHostFromHostPort(part_host.assign_compute_host_port) != getHostFromHostPort(part_host.disk_cache_host_port))
+            && !part_host.disk_cache_host_port.empty() && parseAddress(part_host.assign_compute_host_port).first != parseAddress(part_host.disk_cache_host_port).first)
             return seekToMarkInRemoteSegmentCache(segment_idx, mark_pos, segment_key);
         return false;
     }
